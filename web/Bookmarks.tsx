@@ -9,12 +9,10 @@ import { IconButton } from './IconButton.js';
 import { api } from './api.js';
 import './bookmarks.css';
 
-/** Registers only bookmark edits with the reader's existing editing boundary. */
-export const BookmarkEditingContext = createContext<(id: string, editing: boolean) => void>(
-  () => {}
-);
+/** Registers reader edits with the existing editing boundary. */
+export const ReaderEditingContext = createContext<(id: string, editing: boolean) => void>(() => {});
 function useBookmarkEditing(id: string, editing: boolean) {
-  const register = useContext(BookmarkEditingContext);
+  const register = useContext(ReaderEditingContext);
   useLayoutEffect(() => {
     if (!editing) return;
     register(id, true);

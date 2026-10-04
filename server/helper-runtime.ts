@@ -795,6 +795,8 @@ export class HelperRuntime {
         const toolStarted = performance.now();
         let call = wireCall;
         toolSignal.throwIfAborted();
+        // HTTP corrections enter the next model request. Checking each tool also
+        // stops later writes when the instruction arrives during an earlier read.
         if (
           task.snapshot.model.connection.protocol !== 'codex-app-server-v1' &&
           this.workspace.instructions(id).some((item) => item.status === 'pending')
@@ -1318,36 +1320,6 @@ export class HelperRuntime {
         );
         await nativeState?.pending;
         helperCalls++;
-        // HTTP providers accept changed input at the next request boundary. Do not run
-        // newly proposed tools from a response that predates the user's correction.
-        if (
-          target.connection.protocol !== 'codex-app-server-v1' &&
-          this.workspace.instructions(id).some((item) => item.status === 'pending') &&
-          result.status === 'tool_calls'
-        ) {
-          opaqueState = result.opaqueState ?? undefined;
-          for (const call of result.toolCalls) {
-            if (callIds.has(call.id)) throw new Error('DUPLICATE_TOOL_ID');
-            callIds.add(call.id);
-          }
-          results.push(
-            ...result.toolCalls.map(
-              (call): ToolEvent => ({
-                callId: call.id,
-                name: call.name,
-                args: call.arguments,
-                denied: true,
-                errorKind: 'recoverable',
-                result: {
-                  error: 'USER_INSTRUCTION_UPDATED',
-                  guidance:
-                    'This tool was not run. Reconsider it using the additional user instruction.',
-                },
-              })
-            )
-          );
-          continue;
-        }
         if (result.status !== 'tool_calls') {
           writer.flush();
           const status =
