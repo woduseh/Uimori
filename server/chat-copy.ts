@@ -14,6 +14,7 @@ import { validateChatVariableState } from '../core/chat-variables.js';
 import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
 import { readChatVariables } from './chat-variables.js';
 import { HttpError } from './request-validation.js';
+import { sceneTitles, restoreSceneTitles } from './scene-titles.js';
 
 /** Capture user-visible state through a selected source. No future notes/variables leak into an old copy. */
 export function captureChatCopy(store: Store, chatId: string, sourceId?: string | null): ChatCopy {
@@ -36,9 +37,14 @@ export function captureChatCopy(store: Store, chatId: string, sourceId?: string 
   const messages = captureCopiedMessages(store, history);
   mapCopiedMessageTexts(messages, (text) => independentTextMedia(store, text));
   const illustrations = captureIllustrations(store, history);
+  const titles = sceneTitles(store, chatId);
   return {
     transcript,
     state: {
+      sceneTitles: history.flatMap((source, atIndex) => {
+        const title = titles.get(source.revision);
+        return title ? [{ atIndex, title }] : [];
+      }),
       bookmarks: captureBookmarks(
         store,
         chatId,
@@ -101,6 +107,11 @@ export function restoreChatCopy(
       .run(chatId, variables.revision, JSON.stringify(variables.values));
     if (copy.state.authoring) restoreChatAuthoring(store, chatId, history, copy.state.authoring);
     if (copy.state.messages) restoreCopiedMessages(store, copy.state.messages, history);
+    restoreSceneTitles(
+      store,
+      history.map((source) => source.revision),
+      copy.state.sceneTitles
+    );
     restoreBookmarks(
       store,
       chatId,

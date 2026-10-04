@@ -3,9 +3,11 @@ import { BookmarkList } from './Bookmarks.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { BackIcon, ForwardIcon, DownIcon, ListIcon } from './ui-icons.js';
-import type { ReaderDetail } from '../core/types.js';
+import { BackIcon, ForwardIcon, DownIcon, ListIcon, EditIcon } from './ui-icons.js';
+import type { ReaderDetail, ReaderNavigationItem } from '../core/types.js';
 import { Dialog } from './Dialog.js';
+import { IconButton } from './IconButton.js';
+import { SceneTitleEditor } from './SceneTitleEditor.js';
 import './scene-navigator.css';
 
 export function SceneNavigator({
@@ -39,6 +41,7 @@ export function SceneNavigator({
   const [awayFromBottom, setAwayFromBottom] = useState(false);
   const [ownOpen, setOwnOpen] = useState(false);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState<ReaderNavigationItem | null>(null);
   const open = compact ? listOpen : ownOpen;
   const setOpen = (next: boolean) => {
     if (compact) onListOpenChange?.(next);
@@ -139,7 +142,9 @@ export function SceneNavigator({
     const term = query.trim().toLocaleLowerCase();
     return term
       ? entries.filter((entry) =>
-          `${entry.number} ${entry.label}`.toLocaleLowerCase().includes(term)
+          `${entry.number} ${entry.label} ${entry.requestLabel ?? ''}`
+            .toLocaleLowerCase()
+            .includes(term)
         )
       : entries;
   }, [entries, query]);
@@ -154,6 +159,13 @@ export function SceneNavigator({
     setOffset(next);
   }
   if (!entries.length) return null;
+  const titleEditor = editingTitle && (
+    <SceneTitleEditor
+      key={editingTitle.id}
+      item={editingTitle}
+      onClose={() => setEditingTitle(null)}
+    />
+  );
   const dialog = (
     <Dialog open={open} title="장면 목록" onClose={() => setOpen(false)} className="scene-dialog">
       {onTarget && (
@@ -187,8 +199,8 @@ export function SceneNavigator({
       <label className="scene-search">
         <input
           type="search"
-          aria-label="장면 번호 또는 요청으로 찾기"
-          placeholder="장면 번호 또는 요청으로 찾기"
+          aria-label="장면 번호, 이름 또는 요청으로 찾기"
+          placeholder="장면 번호, 이름 또는 요청으로 찾기"
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -203,15 +215,22 @@ export function SceneNavigator({
             <button
               type="button"
               aria-current={entry.id === active.id ? 'location' : undefined}
-              aria-label={entry.opening ? '첫 메시지' : `${entry.number}번째 장면 · ${entry.label}`}
+              aria-label={entry.opening ? entry.label : `${entry.number}번째 장면 · ${entry.label}`}
               onClick={() => select(entry.id)}
             >
               <span className="scene-list-number" aria-hidden="true">
                 {entry.opening ? <ListIcon size={16} /> : entry.number}
               </span>
-              <span className="scene-list-title">{entry.opening ? '첫 메시지' : entry.label}</span>
+              <span className="scene-list-title">{entry.label}</span>
               {entry.id === active.id && <small>읽는 중</small>}
             </button>
+            <IconButton
+              label={`${entry.opening ? '첫 메시지' : `${entry.number}번째 장면`} 이름 편집`}
+              icon={EditIcon}
+              size={16}
+              className="scene-title-edit"
+              onClick={() => setEditingTitle(entry)}
+            />
           </li>
         ))}
       </ol>
@@ -286,6 +305,7 @@ export function SceneNavigator({
             <DownIcon size={20} aria-hidden="true" />
           </button>
         )}
+        {titleEditor}
         {dialog}
       </>
     );
@@ -317,7 +337,7 @@ export function SceneNavigator({
             .map((i) => {
               const entry = entries[i];
               const label = entry.opening
-                ? '첫 메시지'
+                ? entry.label
                 : `${entry.number}번째 장면 · ${entry.label}`;
               return (
                 <button
@@ -347,6 +367,7 @@ export function SceneNavigator({
           <DownIcon size={18} />
         </button>
       </nav>
+      {titleEditor}
       {dialog}
     </>
   );

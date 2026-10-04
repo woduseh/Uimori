@@ -112,8 +112,8 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       );
     for (const sourceId of ids('sources'))
       store.db
-        .prepare('DELETE FROM app_metadata WHERE key=?')
-        .run(`illustration-presentation:${sourceId}`);
+        .prepare('DELETE FROM app_metadata WHERE key IN (?,?)')
+        .run(`illustration-presentation:${sourceId}`, `source-title:${sourceId}`);
     removeRunArtifacts(store, ids('runs'), ids('sources'), ids('jobs'));
     store.db
       .prepare(

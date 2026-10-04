@@ -77,3 +77,35 @@
 .selection-revision .form-actions {
   flex-wrap: wrap;
 }
+
+.source-versions {
+  margin-block: 12px;
+}
+.source-versions > summary {
+  cursor: pointer;
+}
+.source-versions > label {
+  margin-top: 12px;
+}
+.source-versions-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin-block: 12px;
+}
+.source-versions-comparison > div {
+  min-width: 0;
+}
+.source-versions-comparison pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+  max-height: 320px;
+  padding: 10px;
+  background: var(--bg);
+  border-radius: 8px;
+  font-family: inherit;
+}
+.source-versions .form-actions {
+  flex-wrap: wrap;
+}

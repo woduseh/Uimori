@@ -28,6 +28,7 @@ export type ChatCopyAuthoring = {
   > & { atIndex: number | null })[];
 };
 export type ChatCopyState = {
+  sceneTitles?: { atIndex: number; title: string }[];
   bookmarks?: import('./reading-state.js').PortableBookmark[];
   authoring?: ChatCopyAuthoring;
   messages?: CopiedMessageState[];

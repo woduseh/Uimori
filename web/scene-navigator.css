@@ -139,6 +139,8 @@
 }
 .scene-list li {
   margin: 4px 0;
+  display: flex;
+  align-items: center;
 }
 .scene-list button {
   width: 100%;
@@ -151,6 +153,16 @@
   color: var(--text);
   border: 1px solid transparent;
   box-shadow: none;
+}
+.scene-list > li > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.scene-list .scene-title-edit {
+  flex: 0 0 auto;
+  width: var(--control-h);
+  padding: 8px;
+  justify-content: center;
 }
 .scene-list-number {
   flex: 0 0 2em;

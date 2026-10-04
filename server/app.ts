@@ -18,7 +18,8 @@ import { ChatTranscriptError } from '../core/chat-transcript.js';
 import { PackageStartError } from '../core/package-start.js';
 import { RisuContentError } from '../core/risu-content.js';
 import { resourceRoutes } from './resource-routes.js';
-import { rejudgeTranslation } from './source-editing.js';
+import { rejudgeTranslation, sourceVersions } from './source-editing.js';
+import { setSceneTitle } from './scene-titles.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
@@ -1154,6 +1155,14 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish(job.chatId);
     pumpJobs();
     return job;
+  });
+  app.get<{ Params: { id: string } }>('/api/sources/:id/versions', async (request) =>
+    sourceVersions(store, request.params.id)
+  );
+  app.patch<{ Params: { id: string } }>('/api/sources/:id/title', async (request) => {
+    const result = setSceneTitle(store, request.params.id, request.body);
+    publish(result.chatId);
+    return result;
   });
   app.put<{ Params: { id: string } }>(
     '/api/sources/:id/text',

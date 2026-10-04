@@ -201,6 +201,67 @@ for (const [label, viewport] of [
   });
 }
 
+test('C04V saved versions stay read-only until saved, preserve the previous draft, and named scenes remain searchable', async ({
+  page,
+  request,
+}) => {
+  const before = await seed(request, 'saved versions');
+  const source = before.sources[0];
+  expect(
+    (
+      await request.put(`/api/sources/${source.id}/text`, {
+        data: { text: 'Current saved manuscript.', expectedRevision: source.editRevision },
+      })
+    ).ok()
+  ).toBe(true);
+  await page.goto(`/?chat=${before.chat.id}`);
+  const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
+  await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+  const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
+  await field.fill('My unsaved wording.');
+  await scene.getByText('저장본 비교', { exact: true }).click();
+  await expect(scene.getByRole('combobox', { name: '비교할 저장본' })).toHaveValue(
+    String(source.editRevision)
+  );
+  const load = scene.getByRole('button', { name: '선택본을 초안에 불러오기' });
+  await load.click();
+  await expect(field).toHaveValue(source.text);
+  expect((await detail(request, before.chat.id)).sources[0].text).toBe('Current saved manuscript.');
+  await scene.getByRole('button', { name: '불러오기 전 초안으로 돌아가기' }).click();
+  await expect(field).toHaveValue('My unsaved wording.');
+  await load.click();
+  await scene.getByRole('button', { name: '원문 저장', exact: true }).click();
+  await expect(field).toHaveCount(0);
+  expect((await detail(request, before.chat.id)).sources[0].text).toBe(source.text);
+
+  await page
+    .getByRole('navigation', { name: '장면 탐색' })
+    .getByRole('button', { name: '장면 목록 열기', exact: true })
+    .click();
+  const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
+  await list.getByRole('button', { name: '1번째 장면 이름 편집' }).click();
+  const name = page.getByRole('dialog', { name: '장면 이름', exact: true });
+  await name.getByRole('textbox', { name: '장면 이름', exact: true }).fill('The quiet lighthouse');
+  await name.getByRole('button', { name: '이름 저장' }).click();
+  await expect(
+    list.getByRole('button', { name: '1번째 장면 · The quiet lighthouse', exact: true })
+  ).toBeVisible();
+  const search = list.getByRole('searchbox', { name: '장면 번호, 이름 또는 요청으로 찾기' });
+  await search.fill('lighthouse');
+  await expect(list.getByText('The quiet lighthouse', { exact: true })).toBeVisible();
+  await search.fill('source editor focus');
+  await expect(list.getByText('The quiet lighthouse', { exact: true })).toBeVisible();
+  await page.reload();
+  await page
+    .getByRole('navigation', { name: '장면 탐색' })
+    .getByRole('button', { name: '장면 목록 열기', exact: true })
+    .click();
+  await expect(list.getByText('The quiet lighthouse', { exact: true })).toBeVisible();
+  const after = await detail(request, before.chat.id);
+  expect(after.runs).toEqual(before.runs);
+  expect(after.attempts).toEqual(before.attempts);
+});
+
 test('C04E failed source save keeps the draft available and a later save restores focus without generation', async ({
   page,
   request,

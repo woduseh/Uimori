@@ -865,7 +865,7 @@ test('LOADUI07 synthetic navigation metadata covers long-list paging, search and
   await expect(list.getByRole('button', { name: '다음 목록', exact: true })).toBeDisabled();
   await list.getByRole('button', { name: '이전 목록', exact: true }).click();
   await expect(list.getByRole('button', { name: /^1번째 장면 ·/ })).toBeFocused();
-  const search = list.getByRole('searchbox', { name: '장면 번호 또는 요청으로 찾기' });
+  const search = list.getByRole('searchbox', { name: '장면 번호, 이름 또는 요청으로 찾기' });
   await search.fill('65');
   await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(1);
   await expect(
