@@ -50,6 +50,7 @@
     "verify:native-transfer": "node scripts/verify-native-transfer.mjs",
     "verify:visual": "node scripts/verify-visual.mjs",
     "verify:gallery": "node scripts/verify-gallery.mjs",
+    "verify:copy": "node scripts/check-ui-copy.mjs",
     "verify:selfhost": "node scripts/verify-self-host.mjs",
     "test:personal": "vitest run tests/personal-workspace-flow.test.ts tests/database-schema.test.ts tests/access-session.test.ts",
     "verify:personal": "node scripts/verify-personal.mjs",
