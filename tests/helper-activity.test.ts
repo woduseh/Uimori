@@ -34,6 +34,10 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
       persona: '',
       limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
     });
+    workspace.event(conversation.id, task.id, 'attempt.started', {
+      id: 'native',
+      purpose: 'helper',
+    });
     for (let index = 0; index < 81; index++)
       workspace.event(conversation.id, task.id, 'tool.finished', {
         name: 'resource.read',
@@ -72,9 +76,42 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
     expect(helperActivityStages(retained).find((stage) => stage.state === 'issue')).toMatchObject({
       label: '자료·설정 변경',
     });
+    workspace.event(conversation.id, task.id, 'attempt.finished', {
+      id: 'native',
+      status: 'error',
+    });
+    const truncated = readHelperActivity(store, task.id);
+    expect(truncated.events).toHaveLength(80);
+    expect(truncated.events.some((event) => event.kind === 'attempt.started')).toBe(false);
+    expect(helperActivityStages(truncated).at(-1)).toMatchObject({
+      state: 'issue',
+      events: [{ kind: 'attempt.finished', status: 'error' }],
+    });
   } finally {
     store.close();
     directory.remove();
+  }
+});
+
+test.each([
+  ['error', 'issue'],
+  ['cancelled', 'stopped'],
+  ['completed', 'completed'],
+  ['tool_calls', 'completed'],
+  ['unknown', 'issue'],
+])('attempt status %s has state %s with or without its start', (status, state) => {
+  for (const hasStart of [true, false]) {
+    const activity: HelperActivity = {
+      taskId: 'task',
+      status: 'running',
+      hasEarlier: !hasStart,
+      events: [
+        ...(hasStart ? [{ seq: 1, kind: 'attempt.started', attemptId: 'attempt' }] : []),
+        { seq: 2, kind: 'attempt.finished', attemptId: 'attempt', status },
+      ],
+    };
+    expect(helperActivityStages(activity)).toMatchObject([{ state, events: activity.events }]);
+    expect(helperActivitySummary(activity)).toBeUndefined();
   }
 });
 
