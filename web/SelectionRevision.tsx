@@ -4,6 +4,8 @@ import { validRevisionRange, type SelectionRevisionResult } from '../core/select
 import { api } from './api.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
+import { IconButton } from './IconButton.js';
+import { CheckIcon, CloseIcon, EditIcon, RefreshIcon, StopIcon } from './ui-icons.js';
 
 type Selection = { start: number; end: number; version: number };
 type Props = {
@@ -136,12 +138,16 @@ export function SelectionRevision(props: Props) {
               setError('');
             }}
           >
-            선택 구절 퇴고
+            <EditIcon size={18} aria-hidden="true" /> 선택 구절 퇴고
           </button>
           <p className="muted">원문에서 구절을 선택하면 도우미 모델에 퇴고를 부탁할 수 있어요.</p>
         </>
       ) : (
         <>
+          <div className="selection-revision-heading">
+            <strong>선택 구절 퇴고</strong>
+            <IconButton label="퇴고 닫기" icon={CloseIcon} onClick={close} />
+          </div>
           <div className="selection-revision-comparison">
             <div>
               <strong>선택한 원문</strong>
@@ -184,26 +190,32 @@ export function SelectionRevision(props: Props) {
             </p>
           )}
           <div className="form-actions">
-            <button type="button" className="secondary" onClick={close}>
-              퇴고 닫기
-            </button>
             {busy ? (
               <button type="button" className="secondary" onClick={cancel}>
-                퇴고 요청 취소
+                <StopIcon size={18} aria-hidden="true" /> 퇴고 요청 취소
               </button>
+            ) : proposal !== null ? (
+              <IconButton
+                label="다시 제안 받기"
+                icon={RefreshIcon}
+                disabled={stale || !instruction.trim()}
+                onClick={() => void requestProposal()}
+              />
             ) : (
               <button
                 type="button"
-                className="secondary"
+                className="primary"
+                aria-label="퇴고 제안 받기"
                 disabled={stale || !instruction.trim()}
                 onClick={() => void requestProposal()}
               >
-                {proposal === null ? '퇴고 제안 받기' : '다시 제안 받기'}
+                <EditIcon size={18} aria-hidden="true" /> 제안 받기
               </button>
             )}
             {proposal !== null && (
               <button
                 type="button"
+                className="primary"
                 disabled={busy || stale}
                 onClick={() => {
                   if (!matches(captured)) return;
@@ -216,7 +228,7 @@ export function SelectionRevision(props: Props) {
                   close();
                 }}
               >
-                선택 구간에 반영
+                <CheckIcon size={18} aria-hidden="true" /> 초안에 반영
               </button>
             )}
           </div>

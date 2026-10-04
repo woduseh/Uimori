@@ -7,12 +7,15 @@ export function LazyDiagnostics<T>({
   revision,
   title,
   initiallyOpen = false,
+  actions,
   children,
 }: {
   path: string;
   revision: number | string;
   title: ReactNode;
   initiallyOpen?: boolean;
+  /** Kept mounted during reloads so an action's open dialog retains its state. */
+  actions?: ReactNode;
   children: (value: T) => ReactNode;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
@@ -49,6 +52,7 @@ export function LazyDiagnostics<T>({
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
       <summary>{title}</summary>
+      {actions && <div className="form-actions">{actions}</div>}
       {open &&
         (error ? (
           <p role="alert">

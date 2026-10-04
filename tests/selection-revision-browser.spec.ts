@@ -137,7 +137,7 @@ for (const width of [360, 1440]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
-    await scene.getByRole('button', { name: '선택 구간에 반영', exact: true }).click();
+    await scene.getByRole('button', { name: '초안에 반영', exact: true }).click();
     const revised = `문은 열려 있었다.\n${proposal}\n바람이 지나갔다.`;
     await expect(field).toHaveValue(revised);
     expect((await detail(request, before.chat.id)).sources[0].text).toBe(original);
@@ -197,9 +197,7 @@ test('SREV a late proposal cannot overwrite edits or an edit reverted to its ori
     released.release();
     await finished.promise;
     await expect(page.getByTestId('selection-revision-proposal')).toHaveText(proposal);
-    await expect(
-      page.getByRole('button', { name: '선택 구간에 반영', exact: true })
-    ).toBeDisabled();
+    await expect(page.getByRole('button', { name: '초안에 반영', exact: true })).toBeDisabled();
     await expect(field).toHaveValue(original);
     expect((await detail(request, before.chat.id)).sources[0].text).toBe(original);
   } finally {

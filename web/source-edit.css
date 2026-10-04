@@ -44,6 +44,13 @@
 .selection-revision p {
   margin-block: 8px;
 }
+.selection-revision-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
 .source-text-editor .selection-revision textarea {
   min-height: 6em;
   height: auto;

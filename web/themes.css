@@ -36,11 +36,11 @@
   gap: 14px;
 }
 .theme-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   border: 1px solid var(--line);
   border-radius: 14px;
-  overflow: hidden;
   background: var(--panel);
   min-width: 0;
 }
@@ -54,7 +54,7 @@
   width: 100%;
   text-align: left;
   border: 0;
-  border-radius: 0;
+  border-radius: 14px 14px 0 0;
   padding: 12px;
   display: grid;
   gap: 6px;
@@ -107,6 +107,7 @@
 }
 .theme-card-actions {
   display: flex;
+  align-items: center;
   gap: 2px;
   padding: 0 8px 8px;
 }
@@ -114,10 +115,39 @@
   background: transparent;
   border-color: transparent;
   padding: 8px;
-  min-width: 40px;
+  min-width: var(--control-h);
+  white-space: nowrap;
 }
 .theme-card-actions button:first-child {
   margin-right: auto;
+}
+.theme-card-menu {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+}
+.theme-card-menu > summary {
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.theme-editor-actions {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.theme-editor-actions > button {
+  flex: none;
+  padding-inline: 6px;
+  white-space: nowrap;
+}
+.theme-editor-actions > .settings-save-button,
+.theme-editor-actions > .ui-icon-button {
+  width: var(--control-h);
+  min-width: var(--control-h);
+  padding: 0;
+}
+.theme-editor-actions > .ui-icon-button {
+  background: transparent;
+  color: var(--muted);
 }
 .theme-editor {
   border: 1px solid var(--line);
@@ -214,15 +244,6 @@
     width: 100%;
     margin: 0;
     padding: 0;
-  }
-  .theme-card-actions {
-    flex-wrap: wrap;
-  }
-  .theme-card-actions button {
-    min-width: 44px;
-  }
-  .theme-card-actions:has(button:nth-child(4)) button:first-child {
-    width: 100%;
   }
 }
 

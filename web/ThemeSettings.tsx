@@ -1,7 +1,20 @@
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeBackgroundSettings } from './ThemeBackgroundSettings.js';
-import { Plus, Upload, Download, Copy, Trash2, Eye, RotateCcw } from 'lucide-react';
+import { ActionMenu } from './ActionMenu.js';
+import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
+import {
+  AddIcon,
+  UploadIcon,
+  DownloadIcon,
+  CopyIcon,
+  DeleteIcon,
+  DisplayIcon,
+  ResetIcon,
+  StopIcon,
+  CloseIcon,
+} from './ui-icons.js';
 import {
   THEME_COLOR_KEYS,
   emptyTheme,
@@ -369,42 +382,47 @@ export function ThemeSettings({
                 <small>{theme.description || '사용자 테마'}</small>
               </button>
               <div className="theme-card-actions">
-                <button disabled={busy || backgroundDirty} onClick={() => edit(theme)}>
-                  {theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
-                </button>
-                {!theme.id.startsWith('builtin:') && (
-                  <button
-                    aria-label={`${theme.title} 복제`}
-                    title="복제"
-                    disabled={busy || backgroundDirty}
-                    onClick={() => edit(theme, true)}
-                  >
-                    <Copy size={16} />
-                  </button>
-                )}
                 <button
-                  aria-label={`${theme.title} 내보내기`}
-                  title="내보내기"
+                  aria-label={theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
+                  title={theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
+                  disabled={busy || backgroundDirty}
+                  onClick={() => edit(theme)}
+                >
+                  {theme.id.startsWith('builtin:') ? '꾸미기' : '편집'}
+                </button>
+                <IconButton
+                  label={`${theme.title} 내보내기`}
+                  icon={DownloadIcon}
                   onClick={() =>
                     saveDownload(
                       `${theme.title}.uimori-theme.json`,
                       themeFile(themeDefinition(theme))
                     )
                   }
-                >
-                  <Download size={16} />
-                </button>
-                {!theme.id.startsWith('builtin:') && (
-                  <button
-                    aria-label={`${theme.title} 삭제`}
-                    title="삭제"
-                    disabled={busy || dirty}
-                    onClick={() => setDeleting(theme)}
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                )}
+                />
               </div>
+              {!theme.id.startsWith('builtin:') && (
+                <ActionMenu label={`${theme.title} 관리`} className="theme-card-menu" viewport>
+                  <button
+                    aria-label={`${theme.title} 복제`}
+                    disabled={busy || backgroundDirty}
+                    onClick={() => edit(theme, true)}
+                  >
+                    <CopyIcon size={18} aria-hidden="true" /> 복제해서 편집
+                  </button>
+                  <button
+                    className="danger"
+                    aria-label={`${theme.title} 삭제`}
+                    disabled={busy || dirty}
+                    onClick={(event) => {
+                      event.currentTarget.closest('details')?.querySelector('summary')?.focus();
+                      setDeleting(theme);
+                    }}
+                  >
+                    <DeleteIcon size={18} aria-hidden="true" /> 삭제
+                  </button>
+                </ActionMenu>
+              )}
             </article>
           ))}
         </div>
@@ -476,14 +494,14 @@ export function ThemeSettings({
         </div>
         <div className="theme-library-actions">
           <button className="primary" disabled={busy || backgroundDirty} onClick={() => edit()}>
-            <Plus size={16} /> 새 커스텀 테마
+            <AddIcon size={16} aria-hidden="true" /> 새 커스텀 테마
           </button>
           <button
             className="secondary"
             disabled={busy || backgroundDirty}
             onClick={() => input.current?.click()}
           >
-            <Upload size={16} /> 테마 가져오기
+            <UploadIcon size={16} aria-hidden="true" /> 테마 가져오기
           </button>
           <input
             ref={input}
@@ -543,19 +561,17 @@ export function ThemeSettings({
                         })
                       }
                     />
-                    <button
-                      type="button"
+                    <IconButton
+                      icon={ResetIcon}
                       title="기본값 상속"
-                      aria-label={`${mode} ${key} 초기화`}
+                      label={`${mode} ${key} 초기화`}
                       disabled={!draft.model.colors[mode][key]}
                       onClick={() => {
                         const colors = { ...draft.model.colors[mode] };
                         delete colors[key];
                         patch({ colors: { ...draft.model.colors, [mode]: colors } });
                       }}
-                    >
-                      <RotateCcw size={14} />
-                    </button>
+                    />
                   </div>
                 </label>
               ))}
@@ -596,10 +612,13 @@ export function ThemeSettings({
               ))}
             </details>
           </fieldset>
-          <div className="theme-toolbar">
-            <button className="primary" disabled={busy || !dirty} onClick={() => void save()}>
-              테마 저장
-            </button>
+          <div className="theme-toolbar theme-editor-actions">
+            <SaveButton
+              type="button"
+              label="테마 저장"
+              disabled={busy || !dirty}
+              onClick={() => void save()}
+            />
             <button
               disabled={busy || backgroundDirty}
               onClick={() => {
@@ -614,19 +633,25 @@ export function ThemeSettings({
                 }
               }}
             >
-              <Eye size={16} /> 미리 적용
+              <DisplayIcon size={18} aria-hidden="true" /> 미리 적용
             </button>
-            {state.preview && <button onClick={() => setPreview(null)}>미리보기 끝내기</button>}
-            <button
+            {state.preview && (
+              <IconButton
+                label="미리보기 끝내기"
+                icon={StopIcon}
+                onClick={() => setPreview(null)}
+              />
+            )}
+            <IconButton
+              label="편집 취소"
+              icon={CloseIcon}
               disabled={busy || backgroundDirty}
               onClick={() => {
                 setDraft(null);
                 setPreview(null);
                 setError('');
               }}
-            >
-              편집 취소
-            </button>
+            />
           </div>
         </section>
       )}

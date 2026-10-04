@@ -85,6 +85,17 @@
 .illustration-preset-editor .control-grid {
   min-width: 0;
 }
+.illustration-preset-editor-actions {
+  gap: 6px;
+}
+.illustration-preset-editor-actions > button {
+  flex: none;
+  justify-content: center;
+}
+.illustration-preset-editor-actions > .illustration-preset-copy-save {
+  gap: 6px;
+  padding-inline: 8px;
+}
 
 .illustration-preset-list-actions {
   display: flex;

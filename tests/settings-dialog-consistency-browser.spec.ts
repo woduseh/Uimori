@@ -44,10 +44,21 @@ async function expectShell(page: Page, dialog: Locator, preferredWidth: number) 
 }
 
 async function expectPrimary(button: Locator, cancel?: Locator) {
-  await expect(button).toHaveClass(/\bprimary\b/);
+  await expect(button).toHaveClass(/\b(primary|settings-save-button)\b/);
   await expect(button).not.toHaveClass(/\bsecondary\b/);
+  const colors = await button.evaluate((node) => {
+    const actual = getComputedStyle(node);
+    const expected = document.createElement('span').style;
+    expected.backgroundColor = actual.getPropertyValue('--accent');
+    expected.color = actual.getPropertyValue('--accent-ink');
+    return {
+      actual: [actual.backgroundColor, actual.color],
+      expected: [expected.backgroundColor, expected.color],
+    };
+  });
+  expect(colors.actual).toEqual(colors.expected);
   if (cancel) {
-    await expect(cancel).not.toHaveClass(/\bprimary\b/);
+    await expect(cancel).not.toHaveClass(/\b(primary|settings-save-button)\b/);
     const backgrounds = await Promise.all(
       [button, cancel].map((locator) =>
         locator.evaluate((node) => getComputedStyle(node).backgroundColor)
@@ -74,6 +85,7 @@ for (const width of [412, 1440]) {
     await page.getByRole('button', { name: '테마 저장', exact: true }).click();
     await expect(page.getByRole('button', { name: '테마 저장', exact: true })).toBeDisabled();
     await page.getByRole('button', { name: '편집 취소', exact: true }).click();
+    const menu = page.getByLabel(`${title} 관리`, { exact: true });
     const trigger = page.getByRole('button', { name: `${title} 삭제`, exact: true });
     const dialog = page.getByRole('alertdialog', { name: '테마 삭제', exact: true });
     const cancel = dialog.getByRole('button', { name: '취소', exact: true });
@@ -88,6 +100,7 @@ for (const width of [412, 1440]) {
     });
 
     for (const dismissal of ['cancel', 'Escape', 'backdrop'] as const) {
+      await menu.click();
       await trigger.click();
       await expectShell(page, dialog, 480);
       await expect(cancel).toBeFocused();
@@ -111,7 +124,7 @@ for (const width of [412, 1440]) {
       else await page.mouse.click(4, 4);
       await expect(dialog).toBeHidden();
       await expect(settings).toBeVisible();
-      await expect(trigger).toBeFocused();
+      await expect(menu).toBeFocused();
       expect(deleted).toEqual([]);
       expect(
         (await read<ThemeCatalog>(request, '/themes')).themes.some((item) => item.id === theme.id)
@@ -122,6 +135,7 @@ for (const width of [412, 1440]) {
     await page.route(`**/api/themes/${theme.id}`, (route) =>
       route.fulfill({ status: 503, json: { error: 'Synthetic theme delete failure' } })
     );
+    await menu.click();
     await trigger.click();
     await remove.click();
     await expect(dialog.getByRole('alert')).toContainText('(503)');
