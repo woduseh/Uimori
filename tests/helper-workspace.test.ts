@@ -12,6 +12,7 @@ import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readResource, saveResource } from '../server/resource-service.js';
+import { putImageBlob } from '../server/package-images.js';
 import * as transport from '../core/transport.js';
 import type { HelperTaskSnapshot } from '../core/helper.js';
 import Fastify from 'fastify';
@@ -260,6 +261,131 @@ test('an unsaved editor is analysis input and only mutations of that same resour
       model: { ...draft, description: '재전송하면서 바뀐 입력' },
     })
   ).toThrow('같은 요청 키');
+});
+
+test('image metadata protects its unsaved content owner and receipts only the other content write', async () => {
+  const f = fixture();
+  const blob = putImageBlob(f.store.product, {
+    mime: 'image/png',
+    base64:
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
+  });
+  const [saved, other] = ['편집 중인 자료', '다른 자료'].map((title) => {
+    const input = fixtureBotInput(title);
+    input.package.images = [
+      {
+        id: 'portrait',
+        title: '원래 이미지',
+        description: '원래 설명',
+        blobHash: blob.hash,
+        mime: blob.mime,
+        allowedUse: 'profile',
+      },
+    ];
+    return f.store.product.content(input);
+  });
+  mockSend((request, _options, index) => {
+    if (index === 0)
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        toolCalls: [saved, other].map((resource) => ({
+          id: resource.id,
+          name: 'app.call',
+          arguments: {
+            name: 'image.update-metadata',
+            arguments: {
+              contentId: resource.id,
+              imageId: 'portrait',
+              expectedRevision: resource.revision,
+              title: '새 이미지 이름',
+              description: '새 설명',
+            },
+          },
+        })),
+      };
+    expect(request.input.results).toMatchObject([
+      { callId: saved.id, denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
+      { callId: other.id, denied: false, result: { id: other.id, revision: other.revision + 1 } },
+    ]);
+    return structuredClone(success);
+  });
+  const task = f.runtime.enqueue(f.conversation.id, 'image-draft-target', '이미지 설명을 바꿔줘', {
+    kind: 'content',
+    source: 'unsaved',
+    targetId: saved.id,
+    revision: saved.revision,
+    title: saved.title,
+    model: editableResource('content', readResource(f.store, 'content', saved.id)),
+  });
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  expect(readResource(f.store, 'content', saved.id)).toMatchObject({
+    revision: saved.revision,
+    package: { images: [{ title: '원래 이미지', description: '원래 설명' }] },
+  });
+  expect(readResource(f.store, 'content', other.id)).toMatchObject({
+    revision: other.revision + 1,
+    package: { images: [{ title: '새 이미지 이름', description: '새 설명' }] },
+  });
+  expect(
+    f.store.db
+      .prepare('SELECT COUNT(*) AS count FROM helper_operations WHERE task_id=?')
+      .get(task.id)
+  ).toEqual({ count: 1 });
+});
+
+test('current prompt draft protection follows the actual saved target even when the caller supplies another ID', async () => {
+  const f = fixture();
+  const saved = readResource(f.store, 'prompt-workspace', 'current');
+  const model = editableResource('prompt-workspace', saved);
+  mockSend((request, _options, index) => {
+    if (index === 0)
+      return {
+        ...structuredClone(success),
+        status: 'tool_calls',
+        toolCalls: [undefined, 'current', 'another-id'].map((id, index) => ({
+          id: `workspace-${index}`,
+          name: 'app.call',
+          arguments: {
+            name: 'resource.save',
+            arguments: {
+              kind: 'prompt-workspace',
+              ...(id === undefined ? {} : { id }),
+              expectedRevision: saved.revision,
+              model: model as transport.Json,
+            },
+          },
+        })),
+      };
+    expect(request.input.results).toMatchObject([
+      { denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
+      { denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
+      { denied: true, result: { code: 'EDITOR_SAVE_REQUIRED' } },
+    ]);
+    return structuredClone(success);
+  });
+  const task = f.runtime.enqueue(
+    f.conversation.id,
+    'workspace-draft-target',
+    '현재 프롬프트를 저장해줘',
+    {
+      kind: 'prompt-workspace',
+      source: 'unsaved',
+      targetId: 'current',
+      revision: saved.revision,
+      title: '현재 프롬프트',
+      model,
+    }
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  expect(readResource(f.store, 'prompt-workspace', 'current')).toEqual(saved);
+  expect(
+    f.store.db
+      .prepare('SELECT COUNT(*) AS count FROM helper_operations WHERE task_id=?')
+      .get(task.id)
+  ).toEqual({ count: 0 });
 });
 function mockSend(
   action?: (

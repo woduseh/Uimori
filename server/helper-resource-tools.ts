@@ -18,33 +18,55 @@ const kind = {
 };
 const string = { type: 'string' };
 const revision = { type: 'integer', minimum: 1 };
-export const RESOURCE_TOOLS: ProviderTool[] = [
+type ResourceMutationTarget = { kind: ResourceKind; id: string | null };
+type ResourceToolDefinition = ProviderTool &
+  (
+    | { effect: 'read' }
+    | {
+        effect: 'mutation';
+        target: (args: Record<string, unknown>) => ResourceMutationTarget | null;
+      }
+  );
+function resourceTarget(args: Record<string, unknown>): ResourceMutationTarget | null {
+  if (!kind.enum.includes(String(args.kind))) return null;
+  if (args.id != null && typeof args.id !== 'string') return null;
+  return {
+    kind: args.kind as ResourceKind,
+    id: args.kind === 'prompt-workspace' ? 'current' : ((args.id as string | null) ?? null),
+  };
+}
+const resourceTools: ResourceToolDefinition[] = [
   {
     name: 'illustration-preset.list',
+    effect: 'read',
     description:
       'List illustration preset names, revisions and selections. Read a recipe with resource.read kind=illustration-preset.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'illustration-preset.guide',
+    effect: 'read',
     description:
       'Read the portable illustration preset authoring contract. Saving and selecting are separate; this tool never generates images.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'theme.list',
+    effect: 'read',
     description:
       'List saved and built-in presentation themes with current selections. Themes do not affect model inputs.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'theme.guide',
+    effect: 'read',
     description:
       'Read the theme authoring contract and example before editing. Save with resource.save kind=theme; selecting it is separate.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
     name: 'resource.read',
+    effect: 'read',
     description:
       'Read a compact resource overview, then follow JSON Pointer paths into its authored fields. Use path for one read or paths for 1-16 reads of the same resource revision, never both. Batch items keep individual results/errors; resubmit paths.slice(nextIndex) for unreturned paths. Shared fields/offset/limit and textOffset/textLimit apply to every path; each item nextOffset continues its own page. Object and array pages list paths and exact small scalar values. A missing optional field returns exists:false with its patchable path. The complete response stays within 24000 serialized characters. Revision is required for resource.patch.',
     inputSchema: {
@@ -71,6 +93,8 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   },
   {
     name: 'resource.patch',
+    effect: 'mutation',
+    target: resourceTarget,
     description:
       'Edit existing native card/module or prompt-preset authored fields with the latest revision. Use resource.read paths or a library editTarget. set changes a simple typed field, including native prompt text/options and preset values; replaceText changes one unique literal excerpt. Set source.translationGuidePath from resource.read to {instructions:string,terms:[{source:string,target:string,note?:string}]} to create or replace a card/module translation guide. insert/remove use an indexed path only in card character_book/entries, module lorebook, or translationGuide/terms. Insert one entry object or remove the indexed entry. A missing card book or module lorebook is created on first insert. All changes save together with one undo. Projection fields such as package.lore/body/starts are read only.',
     inputSchema: {
@@ -102,6 +126,8 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   },
   {
     name: 'resource.save',
+    effect: 'mutation',
+    target: resourceTarget,
     description:
       'Create an application resource, or save a complete editable model for kinds without partial editing. For existing native card/module content use resource.read then resource.patch, so unrelated authored fields stay intact. Use latest revision for existing IDs; omit id/revision to create. There is no server draft or separate apply step. A draft/proposal request does not authorize saving.',
     inputSchema: {
@@ -113,6 +139,8 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   },
   {
     name: 'resource.undo',
+    effect: 'mutation',
+    target: resourceTarget,
     description: 'Restore the immediately previous saved resource using its current revision.',
     inputSchema: {
       type: 'object',
@@ -123,6 +151,8 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   },
   {
     name: 'resource.delete',
+    effect: 'mutation',
+    target: resourceTarget,
     description:
       'Remove a bot/persona/module or preset from the library using its current revision.',
     inputSchema: {
@@ -141,6 +171,9 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
   },
   {
     name: 'image.update-metadata',
+    effect: 'mutation',
+    target: (args) =>
+      typeof args.contentId === 'string' ? { kind: 'content', id: args.contentId } : null,
     description:
       'Edit an image display name and description used for JEV image selection. Does not change image bytes, IDs, or native script reference names. Read the owning content first.',
     inputSchema: {
@@ -157,6 +190,26 @@ export const RESOURCE_TOOLS: ProviderTool[] = [
     },
   },
 ];
+export const RESOURCE_TOOLS: ProviderTool[] = resourceTools.map((definition) => {
+  const { effect: _effect, ...tool } = definition;
+  if ('target' in tool) {
+    const { target: _target, ...schema } = tool;
+    return schema;
+  }
+  return tool;
+});
+
+/** Shared resource effects: draft protection and receipts follow the same tool definition. */
+export function helperResourceOperation(
+  name: string,
+  args: Record<string, unknown> = {}
+): { readOnly: true } | { readOnly: false; target: ResourceMutationTarget | null } | undefined {
+  const definition = resourceTools.find((tool) => tool.name === name);
+  if (!definition) return undefined;
+  return definition.effect === 'read'
+    ? { readOnly: true }
+    : { readOnly: false, target: definition.target(args) };
+}
 const summary = (result: ReturnType<typeof saveResource>) => ({
   created: result.created,
   revision: result.saved.revision,

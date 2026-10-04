@@ -17,6 +17,7 @@ import type { Usage } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
+import type { SynchronousResult } from './synchronous-transaction.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -490,8 +491,13 @@ export class HelperWorkspace {
     const row = this.store.db.prepare('SELECT status FROM helper_tasks WHERE id=?').get(taskId);
     if (row?.status !== 'running') throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
   }
-  operation<T>(taskId: string, operationId: string, input: unknown, apply: () => T): T {
-    return this.store.transaction(() => {
+  operation<T>(
+    taskId: string,
+    operationId: string,
+    input: unknown,
+    apply: () => SynchronousResult<T>
+  ): SynchronousResult<T> {
+    return this.store.transaction<T>(() => {
       const hash = createHash('sha256').update(json(input)).digest('hex');
       const prior = this.store.db
         .prepare('SELECT * FROM helper_operations WHERE id=?')
@@ -501,7 +507,7 @@ export class HelperWorkspace {
           throw new HttpError(409, 'OPERATION_ID_CONFLICT');
         const result = JSON.parse(prior.result);
         if (result?.detailsOmitted) throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
-        return result as T;
+        return result as SynchronousResult<T>;
       }
       if (this.task(taskId).status !== 'running')
         throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');

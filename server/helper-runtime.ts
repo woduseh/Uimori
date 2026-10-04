@@ -11,7 +11,7 @@ import {
   describeHelperTools,
 } from './helper-app-tools.js';
 import { HELPER_DATA_TOOLS, invokeDataTool } from './helper-data-tools.js';
-import { invokeResourceTool } from './helper-resource-tools.js';
+import { invokeResourceTool, helperResourceOperation } from './helper-resource-tools.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HELPER_SETTINGS_TOOLS, invokeHelperSettingsTool } from './helper-settings-tools.js';
 import type {
@@ -753,19 +753,15 @@ export class HelperRuntime {
           const { chatId: _chatId, ...appArgs } = arguments_;
           const toolArgs = traits.direct ? arguments_ : appArgs;
           const editor = task.snapshot.editor;
-          const editsResource =
-            ['resource.save', 'resource.patch', 'resource.undo', 'resource.delete'].includes(
-              call.name
-            ) &&
-            toolArgs.kind === editor?.kind &&
-            (toolArgs.id ?? (toolArgs.kind === 'prompt-workspace' ? 'current' : null)) ===
-              editor?.targetId;
+          const resourceOperation = helperResourceOperation(call.name, toolArgs);
+          const mutationTarget =
+            resourceOperation && !resourceOperation.readOnly ? resourceOperation.target : null;
           if (
             editor?.targetId &&
             editor.model &&
             editor.source !== 'saved' &&
-            (editsResource ||
-              (call.name === 'image.update-metadata' && toolArgs.contentId === editor.targetId))
+            mutationTarget?.kind === editor.kind &&
+            mutationTarget.id === editor.targetId
           )
             throw new HttpError(
               409,
@@ -1496,21 +1492,22 @@ export class HelperRuntime {
     if (HELPER_DATA_TOOLS.some((tool) => tool.name === name))
       return invokeDataTool(this.store, task, name, args, hooks.signal);
     if (name === 'chat.list') return this.store.chats();
-    if (
-      name.startsWith('resource.') ||
-      name.startsWith('theme.') ||
-      name.startsWith('illustration-preset.') ||
-      name === 'image.update-metadata'
-    ) {
+    const resourceOperation = helperResourceOperation(name, args);
+    if (resourceOperation) {
       const invoke = () => invokeResourceTool(this.store, name, args);
-      const result = helperToolTraits(name, args).readOnly
+      const result = resourceOperation.readOnly
         ? invoke()
         : this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, invoke);
       if (
-        (args.kind === 'theme' || args.kind === 'illustration-preset') &&
-        ['resource.save', 'resource.undo', 'resource.delete'].includes(name)
+        !resourceOperation.readOnly &&
+        (resourceOperation.target?.kind === 'theme' ||
+          resourceOperation.target?.kind === 'illustration-preset')
       )
-        this.workspace.event(task.conversationId, task.id, `${args.kind}.updated`);
+        this.workspace.event(
+          task.conversationId,
+          task.id,
+          `${resourceOperation.target.kind}.updated`
+        );
       return result;
     }
     const scope = task.snapshot.scope;

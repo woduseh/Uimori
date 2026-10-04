@@ -1,6 +1,6 @@
 import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { RESOURCE_TOOLS } from './helper-resource-tools.js';
+import { RESOURCE_TOOLS, helperResourceOperation } from './helper-resource-tools.js';
 import { HELPER_SETTINGS_TOOLS } from './helper-settings-tools.js';
 import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { HELPER_DATA_TOOLS } from './helper-data-tools.js';
@@ -278,11 +278,6 @@ const readNames = new Set([
   'task.list',
   'app.tools',
   'editor.read',
-  'resource.read',
-  'illustration-preset.list',
-  'illustration-preset.guide',
-  'theme.list',
-  'theme.guide',
   'chat.list',
   'chat.read',
   'context.read',
@@ -305,6 +300,7 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
   const writingRead = writingReadNames.has(name);
   return {
     readOnly:
+      helperResourceOperation(name, args)?.readOnly ||
       readNames.has(name) ||
       ((name === 'chat.lore' || name === 'library.organize') && args.action === 'read'),
     reviewAllowed: data || name === 'app.tools' || name === 'outline.read' || writingRead,

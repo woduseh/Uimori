@@ -109,6 +109,15 @@
                   {
                     "group": ["**/web", "**/web/**"],
                     "message": "Server code cannot import the browser layer, including types."
+                  },
+                  {
+                    "group": [
+                      "**/core/provider-http",
+                      "**/core/provider-http.*",
+                      "**/core/vertex",
+                      "**/core/vertex.*"
+                    ],
+                    "message": "Provider execution must use core/transport instead of transport internals."
                   }
                 ]
               }
@@ -133,6 +142,15 @@
                   {
                     "group": ["**/server", "**/server/**"],
                     "message": "Browser contracts belong in core; do not import server code or types."
+                  },
+                  {
+                    "group": [
+                      "**/core/provider-http",
+                      "**/core/provider-http.*",
+                      "**/core/vertex",
+                      "**/core/vertex.*"
+                    ],
+                    "message": "Provider execution must use core/transport instead of transport internals."
                   },
                   {
                     "group": [
