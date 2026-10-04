@@ -6,6 +6,7 @@ import {
 } from '../core/openai-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
 import { STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION } from '../core/provider-format.js';
+import { validateRequest } from '../core/provider-request.js';
 const record = (value: Json) => value as Record<string, any>;
 const request = (): ProviderRequest => ({
   role: 'main',
@@ -92,6 +93,37 @@ function next(input: ProviderRequest, result: ProviderResult): ProviderRequest {
 }
 
 describe('native Responses pure protocol (no live calls)', () => {
+  test('appends changed budget and user instructions after tool results without changing the binding', () => {
+    const input = request();
+    const update = JSON.stringify({
+      controls: { helperCallsRemaining: 2 },
+      instructions: ['설명만 해줘'],
+    });
+    expect(() => encodeResponses({ ...input, continuationInput: update })).toThrow(
+      'INVALID_CONTINUATION_INPUT'
+    );
+    const initial = first(input);
+    initial.decoder.accept(terminal([call()]));
+    const continued = next(input, initial.decoder.finish());
+    continued.continuationInput = update;
+    const second = first(validateRequest(continued));
+    const appended = { role: 'user', content: [{ type: 'input_text', text: update }] };
+    expect(record(second.body).input.slice(-2)).toEqual([
+      { type: 'function_call_output', call_id: 'Call-A.Original', output: '0' },
+      appended,
+    ]);
+    expect(second.context.bindingHash).toBe(initial.context.bindingHash);
+    second.decoder.accept(terminal([{ ...record(call('Call-B.Original')), id: 'fc-B' }]));
+    const thirdInput = next(continued, second.decoder.finish());
+    delete thirdInput.continuationInput;
+    const third = record(encodeResponses(thirdInput).body);
+    expect(third.input.filter((item: any) => item.role === 'user')).toEqual([
+      record(initial.body).input[0],
+      appended,
+    ]);
+    thirdInput.input.task = 'Replace the original task';
+    expect(() => encodeResponses(thirdInput)).toThrow('OPENAI_CONTINUATION_MISMATCH');
+  });
   test('bootstrap uses registered aliases while retaining retired tool names and exact receipts', () => {
     const input = request();
     input.bootstrap = [

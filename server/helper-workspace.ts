@@ -12,6 +12,7 @@ import type {
   HelperTask,
   HelperTaskSnapshot,
   HelperStatus,
+  HelperInstruction,
 } from '../core/helper.js';
 import type { Usage } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
@@ -310,6 +311,7 @@ export class HelperWorkspace {
     return {
       ...taskData(row, completedEffects),
       snapshot: JSON.parse(row.snapshot),
+      instructions: this.instructions(id),
     };
   }
   /** Live execution counters and identity never need to hydrate the reserved manuscript. */
@@ -347,10 +349,74 @@ export class HelperWorkspace {
         FROM page LEFT JOIN effects ON effects.task_id=page.id ORDER BY page.task_order DESC`
       )
       .all(...args) as Row[];
+    const instructions = this.readInstructions(rows.map((row) => String(row.id)));
     return rows.map((row) => ({
       ...taskData(row, Number(row.completed_effects)),
       modelTitle: row.model_title as string,
+      instructions: instructions.get(String(row.id)) ?? [],
     }));
+  }
+  private readInstructions(taskIds: string[]) {
+    const result = new Map<string, HelperInstruction[]>();
+    if (!taskIds.length) return result;
+    const rows = this.store.db
+      .prepare(`SELECT e.seq,e.task_id,e.data,t.status
+      FROM helper_events e JOIN helper_tasks t ON t.id=e.task_id
+      WHERE e.kind='task.instruction' AND e.task_id IN (${taskIds.map(() => '?').join(',')})
+      ORDER BY e.seq`)
+      .all(...taskIds);
+    for (const row of rows) {
+      const instruction = {
+        ...JSON.parse(String(row.data)),
+        id: Number(row.seq),
+      } as HelperInstruction;
+      if (instruction.status === 'pending' && row.status !== 'running')
+        instruction.status = 'not-delivered';
+      const list = result.get(String(row.task_id)) ?? [];
+      list.push(instruction);
+      result.set(String(row.task_id), list);
+    }
+    return result;
+  }
+  instructions(taskId: string): HelperInstruction[] {
+    return this.readInstructions([taskId]).get(taskId) ?? [];
+  }
+  /** Existing events hold the delivery receipt; the conversation keeps confirmed user input. */
+  addInstruction(taskId: string, requestKey: string, text: string): HelperInstruction {
+    return this.store.transaction(() => {
+      const previous = this.instructions(taskId).find((item) => item.requestKey === requestKey);
+      if (previous) {
+        if (previous.text !== text)
+          throw new HttpError(409, '같은 요청 키로 내용을 바꿀 수 없어요.');
+        return previous;
+      }
+      this.assertRunning(taskId);
+      const task = this.taskState(taskId);
+      this.event(task.conversationId, taskId, 'task.instruction', {
+        requestKey,
+        text,
+        status: 'pending',
+      });
+      return this.instructions(taskId).at(-1)!;
+    });
+  }
+  instructionStatus(taskId: string, instructionId: number, status: HelperInstruction['status']) {
+    return this.store.transaction(() => {
+      const instruction = this.instructions(taskId).find((item) => item.id === instructionId);
+      if (!instruction || instruction.status === 'delivered') return;
+      const { id: _id, ...data } = instruction;
+      this.store.db
+        .prepare('UPDATE helper_events SET data=? WHERE seq=? AND task_id=?')
+        .run(json({ ...data, status }), instructionId, taskId);
+      if (status === 'delivered')
+        this.store.db
+          .prepare("UPDATE helper_messages SET text=text || ? WHERE task_id=? AND role='user'")
+          .run(`\n\n추가 사용자 지시:\n${instruction.text}`, taskId);
+      this.event(this.taskState(taskId).conversationId, taskId, 'task.instruction-updated', {
+        instructionId,
+        status,
+      });
+    });
   }
   taskSummary(id: string) {
     const task = this.readTaskSummaries('t.id=?', [id])[0];

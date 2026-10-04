@@ -126,6 +126,8 @@ export type CodexAgentExecutionOptions = CodexExecutionOptions & {
   ): Promise<CodexToolOutcome>;
   /** Intermediate public assistant messages, separate from final-answer streaming. */
   onCommentary?: (text: string) => void | Promise<void>;
+  /** Active-turn user input; resolving confirms acceptance, never completion of the instruction. */
+  onSteerReady?: (steer: (text: string) => Promise<void>) => (() => void) | undefined;
 };
 /** One illustration turn: the official image generation tool renders, Uimori stores the bytes. */
 export type CodexImageRequest = {
@@ -199,6 +201,7 @@ type TurnPlan = {
   onToolCall?: CodexAgentExecutionOptions['onToolCall'];
   toolNames?: Map<string, string>;
   onCommentary?: CodexAgentExecutionOptions['onCommentary'];
+  onSteerReady?: CodexAgentExecutionOptions['onSteerReady'];
   onItem?: (item: Record<string, unknown>, method: 'item/started' | 'item/completed') => void;
 };
 type TurnOutcome =
@@ -780,6 +783,7 @@ export class CodexRuntime implements CodexRuntimeService {
         toolNames,
         onToolCall: options.onToolCall,
         onCommentary: options.onCommentary,
+        onSteerReady: options.onSteerReady,
       };
     } catch (caught) {
       return failure(options.signal.aborted ? 'CANCELLED' : safeError(caught));
@@ -1014,7 +1018,8 @@ export class CodexRuntime implements CodexRuntimeService {
       slot = false;
     let offNotification = () => {},
       offExit = () => {},
-      offTools = () => {};
+      offTools = () => {},
+      offSteering = () => {};
     const toolAbort = new AbortController();
     const toolSignal = AbortSignal.any([signal, toolAbort.signal]);
     let ended = false;
@@ -1382,6 +1387,27 @@ export class CodexRuntime implements CodexRuntimeService {
       )
         error('CODEX_EVENT_MISMATCH');
       turnId = (turn as { turn: { id: string } }).turn.id;
+      if (!ended && submitted === undefined && !signal.aborted && plan.onSteerReady) {
+        const activeProcess = process;
+        const activeThreadId = threadId;
+        const activeTurnId = turnId;
+        offSteering =
+          plan.onSteerReady(async (text) => {
+            if (ended || submitted !== undefined || signal.aborted)
+              error('CODEX_STEER_UNAVAILABLE');
+            const accepted = await activeProcess.request<unknown>(
+              'turn/steer',
+              {
+                threadId: activeThreadId,
+                expectedTurnId: activeTurnId,
+                input: [{ type: 'text', text, text_elements: [] }],
+              },
+              { signal }
+            );
+            if (!object(accepted) || accepted.turnId !== activeTurnId)
+              error('CODEX_EVENT_MISMATCH');
+          }) ?? (() => {});
+      }
       await completed;
       await Promise.race([progress, stopped]);
       if (progressError) throw progressError;
@@ -1408,6 +1434,7 @@ export class CodexRuntime implements CodexRuntimeService {
       offNotification();
       offExit();
       offTools();
+      offSteering();
       if (process) {
         // Closing the isolated process prevents a late or uncertain turn being reused.
         // A request can already be executing upstream; it is never replayed here.

@@ -217,6 +217,20 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   app.post<{ Params: { id: string } }>('/api/helper/tasks/:id/cancel', (request) =>
     publicTask(runtime.cancel(request.params.id))
   );
+  app.post<{ Params: { id: string } }>(
+    '/api/helper/tasks/:id/steer',
+    { bodyLimit: 8 * 1024 * 1024 },
+    (request) => {
+      const body = record(request.body);
+      fields(body, ['requestKey', 'text']);
+      runtime.steer(
+        request.params.id,
+        text(body.requestKey, 'request key', 100),
+        text(body.text, 'additional instruction', REQUEST_TEXT_MAX_CHARS)
+      );
+      return store.taskSummary(request.params.id);
+    }
+  );
   app.get<{ Params: { id: string }; Querystring: { after?: string } }>(
     '/api/helper/conversations/:id/events',
     (request) => {

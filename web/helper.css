@@ -493,3 +493,17 @@
     padding-inline: 12px;
   }
 }
+.helper-instruction {
+  margin-block: 12px;
+  padding: 10px 12px;
+  border-inline-start: 2px solid var(--border);
+}
+.helper-instruction p {
+  margin-block: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.helper-steer {
+  font-size: 12px;
+  white-space: nowrap;
+}

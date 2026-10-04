@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
+import { helperHistory } from '../server/helper-context.js';
 import { runDataProcess } from '../server/helper-data-tools.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import type { DataOperation, DataRef } from '../server/helper-data-worker.js';
@@ -83,6 +84,98 @@ async function readOne(
   expect(batch.nextIndex).toBeNull();
   return item.read;
 }
+
+test('conversation search recovers exact earlier dialogue with message roles and paged reads', async () => {
+  const f = fixture();
+  const workspace = new HelperWorkspace(f.store);
+  const text =
+    '말투 규칙: 존댓말을 사용해요.\n' + '긴 논의. '.repeat(300) + '\n마지막 합의: 이름은 그대로.';
+  workspace.start(f.task.id, 'owner');
+  workspace.finish(f.task.id, 'owner', 1, 'completed', text, null);
+  // Completed reservations release their copied history; the original dialogue remains stored.
+  const history = helperHistory(f.store, f.task.conversationId);
+  const current = workspace.enqueue(f.task.conversationId, 'current', '지난 합의를 찾아줘', {
+    ...f.task.snapshot,
+    history,
+  });
+  const invoke = (name: DataOperation['name'], args: Record<string, unknown>) =>
+    runDataProcess({ path: f.store.path, taskId: current.id, name, args }) as Promise<any>;
+  const first = await invoke('data.search', { scope: 'conversation', limit: 1 });
+  expect(first.items[0]).toMatchObject({
+    ref: { id: history[0].id, scope: 'conversation', kind: 'helper-message' },
+    metadata: { role: 'user', taskId: f.task.id },
+  });
+  expect(first.nextOffset).toBe(1);
+  const next = await invoke('data.search', {
+    scope: 'conversation',
+    offset: first.nextOffset,
+    limit: 1,
+  });
+  expect(next.items[0]).toMatchObject({
+    ref: { id: history[1].id },
+    metadata: { role: 'assistant' },
+  });
+  expect(next.nextOffset).toBeNull();
+  const found = await invoke('data.search', {
+    scope: 'conversation',
+    patterns: ['마지막 합의'],
+  });
+  const hit = found.items[0];
+  expect(hit.ref).toMatchObject({ id: history[1].id, field: '/text', hash: hash(text) });
+  expect(hit.text).toContain('마지막 합의: 이름은 그대로.');
+  expect(hit).not.toHaveProperty('editTarget');
+  const read = await readOne({ ...f, invoke }, hit.ref, { offset: hit.matchRange.start, limit: 6 });
+  expect(read).toMatchObject({
+    text: '마지막 합의',
+    range: { start: text.indexOf('마지막 합의'), end: text.indexOf('마지막 합의') + 6 },
+    metadata: { role: 'assistant', taskId: f.task.id },
+  });
+  expect(read.nextOffset).toBe(text.indexOf('마지막 합의') + 6);
+});
+
+test('conversation retrieval follows effective request history without superseded or later requests', async () => {
+  const f = fixture();
+  const workspace = new HelperWorkspace(f.store);
+  workspace.start(f.task.id, 'owner');
+  workspace.finish(f.task.id, 'owner', 1, 'failed', '폐기된 답변', 'UNEXPECTED_EOF');
+  const discarded = helperHistory(f.store, f.task.conversationId);
+  const retry = workspace.enqueue(f.task.conversationId, 'retry', '수정된 요청', {
+    ...f.task.snapshot,
+    retryOf: f.task.id,
+  });
+  workspace.start(retry.id, 'owner');
+  workspace.finish(retry.id, 'owner', 1, 'completed', '유효한 답변', null);
+  const history = helperHistory(f.store, f.task.conversationId);
+  const current = workspace.enqueue(f.task.conversationId, 'current', '현재 요청', {
+    ...f.task.snapshot,
+    history,
+  });
+  workspace.enqueue(f.task.conversationId, 'later', '아직 실행하지 않은 요청', f.task.snapshot);
+  const other = workspace.open({ kind: 'library', workId: 'other-conversation' });
+  workspace.enqueue(other.id, 'other', '다른 대화의 요청', f.task.snapshot);
+  const invoke = (name: DataOperation['name'], args: Record<string, unknown>) =>
+    runDataProcess({ path: f.store.path, taskId: current.id, name, args }) as Promise<any>;
+  const result = await invoke('data.search', { scope: 'conversation', patterns: ['요청', '답변'] });
+  expect(result.items.map((item: any) => item.text)).toEqual(['수정된 요청', '유효한 답변']);
+  expect(result.items.map((item: any) => item.ref.id)).toEqual(
+    history.map((message) => message.id)
+  );
+  // A copied reference from an excluded message cannot read around the reserved history.
+  const [old] = discarded;
+  const refused = await invoke('data.read', {
+    refs: [
+      {
+        scope: 'conversation',
+        kind: 'helper-message',
+        id: old.id,
+        revision: hash(old.text),
+        field: '/text',
+        hash: hash(old.text),
+      },
+    ],
+  });
+  expect(refused.items[0].error).toBe('DATA_RESOURCE_UNAVAILABLE');
+});
 
 test('grep returns authored excerpts once, supports two-character Korean queries, and reads exact ranges', async () => {
   const f = fixture(),

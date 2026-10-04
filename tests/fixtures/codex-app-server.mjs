@@ -259,6 +259,23 @@ input.on('line', (line) => {
     });
     return;
   }
+  if (method === 'turn/steer') {
+    if (!native || params.threadId !== native.threadId || params.expectedTurnId !== native.turnId) {
+      send({ id, error: { code: -32600, message: 'active turn mismatch' } });
+      return;
+    }
+    if (mode === 'agent-steer-exit') return process.exit(1);
+    send({ id, result: { turnId: native.turnId } });
+    send({
+      method: 'item/completed',
+      params: {
+        threadId: native.threadId,
+        turnId: native.turnId,
+        item: { type: 'userMessage', id: 'steering-message', content: params.input },
+      },
+    });
+    return;
+  }
   if (method === 'turn/start') {
     const threadId = params.threadId;
     const turnId = 'fixture-turn-' + ++nextTurn;

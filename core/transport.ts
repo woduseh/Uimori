@@ -90,6 +90,8 @@ export type ProviderRequest = {
     history?: Json;
   };
   opaqueState?: Json;
+  /** New user input appended after this round's tool results; the original request stays bound. */
+  continuationInput?: string;
 };
 export type ProviderUsage = {
   inputTokens: number | null;

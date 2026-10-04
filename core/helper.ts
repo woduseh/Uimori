@@ -34,6 +34,12 @@ export type HelperStatus =
   | 'cancelled'
   | 'interrupted';
 export type HelperLimits = { totalCalls: number; helperCalls: number; artifacts: number };
+export type HelperInstruction = {
+  id: number;
+  requestKey: string;
+  text: string;
+  status: 'pending' | 'delivered' | 'unconfirmed' | 'not-delivered';
+};
 export type HelperEditor = EditorContext & {
   /** Saved references are resolved once at admission; device drafts remain analysis input. */
   source?: 'saved' | 'unsaved';
@@ -73,6 +79,7 @@ export type HelperTask = {
   snapshot: HelperTaskSnapshot;
   /** Successful durable writes remain visible even if the explanation fails afterward. */
   completedEffects?: { count: number; labels: string[] };
+  instructions?: HelperInstruction[];
 };
 export type HelperMessage = {
   /** Task outcome travels with paged messages, independently of the task-history window. */

@@ -30,6 +30,9 @@ The scopes are:
 | `library` | Current visible library originals, with their current revisions. |
 | `chats` | Live original sources in chat ancestries. An optional `chatId` filter selects the target. |
 | `editor` | Editor input captured at admission: either the exact saved revision or an unsaved device draft. Returned origin distinguishes them. |
+| `conversation` | Saved helper messages from this task's reserved prior conversation, including text no longer present after compaction. Excludes superseded retries and requests queued later. |
+
+Use `scope:"conversation"` when an exact earlier statement matters. Results include the message's role, task ID, original message ID and text range. Pass their refs unchanged to `data.read` for continuation. This reuses saved conversation text rather than maintaining a second transcript. Retrieved dialogue remains historical evidence, not a new user instruction.
 
 The default is `editor` when captured editor input is available, otherwise `current` for a chat helper and `library` for a library helper. A clean editor sends only an ID/revision; admission checks that revision and freezes its saved model. A dirty editor sends its prepared device input. Specify the scope when comparing that reservation with live library data. The initial helper context includes identifiers and names without full editor JSON or all source bodies. Current selection is a convenience, not a permission boundary. Unsaved input can be analyzed; writes to that same stored resource require saving the device draft first. Other resources remain usable.
 
@@ -142,6 +145,12 @@ Compaction classifies the inner operation: read bodies can be summarized, while 
 Browser helper input, selection, outline selection, unacknowledged requests and artifact drafts use the existing IndexedDB recovery store. Requests are held in memory before persistence. A failed outbox write offers an explicit send-without-storage action; it cannot promise recovery after reload. An outbox read failure is distinct from an empty outbox. Accepted requests are cleared conditionally, and cleanup or view-refresh failure does not turn server acceptance into transmission failure. Reload never automatically sends recovered requests. Admission compares a small request fingerprint before resolving current resource references, including after completed input cleanup.
 
 ## Activity and restoring the last resource edit
+
+While a task is running, the composer offers **현재 작업에 추가** beside the normal send action. Normal send still queues a separate request. Additional text keeps the current task's model, captured materials and read-only review mode. HTTP helpers include it at the next model request, skipping not-yet-started tool calls from the superseded response; a tool already running may finish. Native Codex uses `turn/steer` on that exact active turn.
+
+The task shows whether additional input is waiting, included, unconfirmed, or missed because the task ended. Inclusion confirms delivery into the execution input, not that the model followed it. Unconfirmed native submissions are not automatically sent again; the text can be brought back to the composer. The existing outbox reconciles a lost server reply with the same request key. Small event receipts track delivery, and confirmed additions remain in the original user message for later conversation retrieval. Retry preserves confirmed additions; pending or unconfirmed additions are not silently replayed.
+
+Helper request controls include remaining host helper calls, total host calls and artifact jobs, with the current call included. These facts let the model plan completion within the configured limits; they do not reserve extra calls or count unknown native Codex internal calls. Saved changes still use the existing durable receipts when the response ends without completion.
 
 The helper's activity details group observed model requests, completed reads/changes, context compaction and progress messages. Each group can reveal its recorded tool names and status; errors stay visible within the activity view. The compact running label uses actual unfinished attempts, while the task's terminal status remains authoritative. The read-only activity endpoint projects the latest 80 relevant events without loading reserved inputs or tool-result bodies. It explicitly marks omitted earlier records. Hidden panels stop polling, and completed-task details load only when expanded. These records explain execution, not model reasoning or the quality of an answer.
 

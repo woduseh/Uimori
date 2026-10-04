@@ -210,6 +210,62 @@ const requestData = (wire: any) =>
       .content.replace(/^Request data \(JSON\):\n/, '')
   );
 
+test('native Chat continuation receives new user instructions and budget without replaying a stale write', async () => {
+  const f = fixture();
+  const conversation = f.runtime.workspace.open({ kind: 'library', workId: 'steer-wire' });
+  f.runtime.workspace.update(conversation.id, conversation.revision, {
+    limits: { helperCalls: 3, totalCalls: 4, artifacts: 2 },
+  });
+  const before = authoredState(f);
+  const bodies = provider((wire, round) => {
+    if (round === 0) {
+      const taskId = String(
+        f.store.db.prepare("SELECT id FROM helper_tasks WHERE status='running'").get()!.id
+      );
+      f.runtime.steer(taskId, 'wire-correction', '저장하지 말고 설명만 해줘.');
+      return answer(
+        '',
+        [
+          {
+            id: 'stale-write',
+            name: 'app.call',
+            args: {
+              name: 'library.organize',
+              arguments: {
+                action: 'create-folder',
+                body: {
+                  expectedRevision: f.store.libraryOrganization.snapshot().revision,
+                  category: 'bot',
+                  title: 'Must not be created',
+                },
+              },
+            },
+          },
+        ],
+        wire
+      );
+    }
+    expect(toolResult(wire, 'stale-write')).toMatchObject({ error: 'USER_INSTRUCTION_UPDATED' });
+    const update = JSON.parse(
+      wire.messages.findLast((message: any) => message.role === 'user').content
+    );
+    expect(update.additionalUserInstructions).toEqual(['저장하지 말고 설명만 해줘.']);
+    expect(update.controls).toMatchObject({
+      helperCallsRemaining: 2,
+      totalCallsRemaining: 3,
+      artifactsRemaining: 2,
+    });
+    return answer('자료는 저장하지 않았어요.');
+  });
+  const task = f.runtime.enqueue(conversation.id, 'wire-steering', '봇 폴더를 하나 만들어줘.');
+  await Promise.all(f.work);
+  const completed = f.runtime.workspace.task(task.id);
+  expect(completed.status).toBe('completed');
+  expect(bodies).toHaveLength(2);
+  expectNoSave(f, completed, before);
+  expect(completed.instructions).toEqual([expect.objectContaining({ status: 'delivered' })]);
+});
+
 test('independent helper data reads refill a free slot while results, budgets and mutations retain call order', async () => {
   const f = fixture();
   const releases: (() => void)[] = [];

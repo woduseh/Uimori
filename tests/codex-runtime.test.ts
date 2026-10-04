@@ -142,6 +142,80 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       },
     ]);
   });
+  it('steers user input into the active native turn and detaches when it finishes', async () => {
+    const { runtime, records } = setup('agent-normal');
+    let steer!: (text: string) => Promise<void>;
+    let ready!: () => void;
+    const registered = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const cleanup = vi.fn();
+    const result = runtime.executeAgent(connection, agentRequest(), {
+      signal: new AbortController().signal,
+      onToolCall: async () => {
+        await gate;
+        return { success: true, text: 'host result' };
+      },
+      onSteerReady: (send) => {
+        steer = send;
+        ready();
+        return cleanup;
+      },
+    });
+    await registered;
+    await steer('지금은 설명문만 확인해줘.');
+    expect(records().filter((row) => row.method === 'turn/steer')).toEqual([
+      expect.objectContaining({
+        params: {
+          threadId: 'fixture-thread-1',
+          expectedTurnId: 'fixture-turn-1',
+          input: [{ type: 'text', text: '지금은 설명문만 확인해줘.', text_elements: [] }],
+        },
+      }),
+    ]);
+    release();
+    expect(await result).toMatchObject({ status: 'completed', text: 'Saved the draft.' });
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    await expect(steer('이미 끝난 작업의 추가 지시')).rejects.toThrow('CODEX_STEER_UNAVAILABLE');
+    expect(records().filter((row) => row.method === 'turn/steer')).toHaveLength(1);
+    expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+  });
+  it('does not replay steering when the native process exits before acknowledging it', async () => {
+    const { runtime, records } = setup('agent-steer-exit');
+    let steer!: (text: string) => Promise<void>;
+    let ready!: () => void;
+    const registered = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const cleanup = vi.fn();
+    const result = runtime.executeAgent(connection, agentRequest(), {
+      signal: new AbortController().signal,
+      onToolCall: async () => {
+        await gate;
+        return { success: true, text: 'late result' };
+      },
+      onSteerReady: (send) => {
+        steer = send;
+        ready();
+        return cleanup;
+      },
+    });
+    await registered;
+    await expect(steer('추가 지시')).rejects.toThrow();
+    expect(await result).toMatchObject({ status: 'error' });
+    release();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(records().filter((row) => row.method === 'turn/steer')).toHaveLength(1);
+    expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
+  });
   it.each([
     'agent-wrong-thread',
     'agent-wrong-turn',

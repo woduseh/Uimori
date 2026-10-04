@@ -15,6 +15,7 @@ import type {
   ProviderUsage,
 } from './transport.js';
 import {
+  continuationInputText,
   nativeHostInstruction,
   nativeMessageMetadata,
   requestDataBlocks,
@@ -97,6 +98,7 @@ function prepare(
     ? 'openai-chat-v1'
     : 'openai-responses-v1'
 ) {
+  const continuationInput = continuationInputText(request);
   if (!nonempty(request.modelId) || request.modelId.length > 200) reject('INVALID_MODEL_ID');
   if (request.providerOptions !== undefined) {
     if (protocol !== 'vercel-chat-v1') reject('UNSUPPORTED_PROVIDER_OPTIONS');
@@ -226,6 +228,7 @@ function prepare(
     instructions,
     plan,
     bootstrap,
+    continuationInput,
   };
 }
 function argumentsObject(value: unknown): Record<string, Json> {
@@ -386,7 +389,8 @@ export function encodeResponses(request: ProviderRequest): {
   messageMetadata?: NativeMessageMetadata;
 } {
   const prepared = prepare(request, 'openai-responses-turn-v1', 'openai-responses-v1');
-  const { generation, aliases, schema, previous, fresh, plan, bootstrap } = prepared;
+  const { generation, aliases, schema, previous, fresh, plan, bootstrap, continuationInput } =
+    prepared;
   const cache = plan ? undefined : planProviderCache(request, 'openai-responses-v1');
   const stableCachePoint =
     generation?.cacheMode === 'automatic' &&
@@ -461,6 +465,8 @@ export function encodeResponses(request: ProviderRequest): {
               },
             ]),
       ];
+  if (continuationInput !== undefined)
+    input.push({ role: 'user', content: [{ type: 'input_text', text: continuationInput }] });
   const reasoning: Record<string, Json> = {
     ...(generation?.reasoningEffort !== undefined ? { effort: generation.reasoningEffort } : {}),
     ...(generation?.reasoningMode !== undefined ? { mode: generation.reasoningMode } : {}),

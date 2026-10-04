@@ -24,6 +24,7 @@ import { validateContextBudget } from './context-budget.js';
 import { validatePricingSnapshot } from './model-pricing.js';
 import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
 import type { CatalogModel, ProviderConnection, ProviderRequest } from './transport.js';
+import { continuationInputText } from './provider-messages.js';
 
 export function reject(code: string): never {
   throw new ProviderContractError(code);
@@ -119,11 +120,13 @@ export function validateRequest(value: unknown): ProviderRequest {
     'providerOptions',
     'input',
     'opaqueState',
+    'continuationInput',
     'prompt',
     'bootstrap',
     'toolChoice',
   ]);
   if (value.pricingSnapshot !== undefined) validatePricingSnapshot(value.pricingSnapshot);
+  continuationInputText(value as ProviderRequest);
   if (value.prompt !== undefined) {
     try {
       validateProviderPrompt(value.prompt);

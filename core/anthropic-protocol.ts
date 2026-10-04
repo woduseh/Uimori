@@ -16,6 +16,7 @@ import type {
   ProviderUsage,
 } from './transport.js';
 import {
+  continuationInputText,
   nativeHostInstruction,
   nativeMessageMetadata,
   requestDataBlocks,
@@ -123,6 +124,7 @@ export function encodeAnthropic(request: ProviderRequest): {
   context: AnthropicTurn;
   messageMetadata?: NativeMessageMetadata;
 } {
+  const continuationInput = continuationInputText(request);
   if (
     !nonempty(request.modelId) ||
     request.modelId.length > 200 ||
@@ -266,7 +268,16 @@ export function encodeAnthropic(request: ProviderRequest): {
       };
     });
     if (fresh.size) reject('TOOL_RESULT_MISMATCH');
-    messages = [...previous.messages, { role: 'user', content: responses }];
+    messages = [
+      ...previous.messages,
+      {
+        role: 'user',
+        content: [
+          ...responses,
+          ...(continuationInput !== undefined ? [{ type: 'text', text: continuationInput }] : []),
+        ],
+      },
+    ];
     usedIds = previous.usedIds;
   } else {
     if (results.length) reject('ANTHROPIC_CONTINUATION_REQUIRED');
