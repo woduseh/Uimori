@@ -98,7 +98,8 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     });
     const bot = attachments.find((ref) => ref.role === 'bot');
     if (!bot) throw new HttpError(400, '채팅을 이어 쓸 봇이 필요해요.');
-    const chat = store.createChat(title, { botId: bot.id });
+    // Restore the transcript's attachments without applying defaults for new chats.
+    const chat = store.createChat(title, { botId: bot.id, persona: null });
     const profile = store.product.profile(chat.id);
     store.product.updateProfile(chat.id, {
       expectedRevision: profile.revision,

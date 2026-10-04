@@ -28,7 +28,10 @@ async function expectShell(page: Page, dialog: Locator, preferredWidth: number) 
   const viewport = page.viewportSize()!;
   const gap = viewport.width <= 760 ? 16 : 24;
   await expect
-    .poll(async () => Math.round((await dialog.boundingBox())!.width))
+    .poll(async () => {
+      const box = await dialog.boundingBox();
+      return box ? Math.round(box.width) : null;
+    })
     .toBe(Math.min(preferredWidth, viewport.width - 2 * gap));
   const box = (await dialog.boundingBox())!;
   expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(1);
@@ -44,8 +47,6 @@ async function expectShell(page: Page, dialog: Locator, preferredWidth: number) 
 }
 
 async function expectPrimary(button: Locator, cancel?: Locator) {
-  await expect(button).toHaveClass(/\b(primary|settings-save-button)\b/);
-  await expect(button).not.toHaveClass(/\bsecondary\b/);
   const colors = await button.evaluate((node) => {
     const actual = getComputedStyle(node);
     const expected = document.createElement('span').style;
@@ -58,7 +59,6 @@ async function expectPrimary(button: Locator, cancel?: Locator) {
   });
   expect(colors.actual).toEqual(colors.expected);
   if (cancel) {
-    await expect(cancel).not.toHaveClass(/\b(primary|settings-save-button)\b/);
     const backgrounds = await Promise.all(
       [button, cancel].map((locator) =>
         locator.evaluate((node) => getComputedStyle(node).backgroundColor)

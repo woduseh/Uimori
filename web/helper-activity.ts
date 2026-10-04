@@ -32,6 +32,12 @@ const attemptLabel = (purpose?: string) =>
     : purpose === 'artifact' || purpose === 'writing'
       ? '가정 장면 작성'
       : '요청 처리';
+const finishedAttemptState = (status?: string): Stage['state'] =>
+  status === 'completed' || status === 'tool_calls'
+    ? 'completed'
+    : status === 'cancelled'
+      ? 'stopped'
+      : 'issue';
 
 /** Only observed starts and finishes become stages; a finished tool is never called running. */
 export function helperActivityStages(activity: HelperActivity): Stage[] {
@@ -42,11 +48,7 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
       const stage = event.attemptId ? attempts.get(event.attemptId) : undefined;
       if (stage) {
         stage.events.push(event);
-        stage.state = ['completed', 'tool_calls'].includes(event.status ?? '')
-          ? 'completed'
-          : event.status === 'cancelled'
-            ? 'stopped'
-            : 'issue';
+        stage.state = finishedAttemptState(event.status);
         continue;
       }
     }
@@ -63,11 +65,13 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
     const state: Stage['state'] =
       event.kind === 'attempt.started'
         ? 'running'
-        : event.error || event.denied || ['failed', 'refused'].includes(event.status ?? '')
-          ? 'issue'
-          : event.kind === 'tool.finished'
-            ? 'completed'
-            : 'recorded';
+        : event.kind === 'attempt.finished'
+          ? finishedAttemptState(event.status)
+          : event.error || event.denied || ['failed', 'refused'].includes(event.status ?? '')
+            ? 'issue'
+            : event.kind === 'tool.finished'
+              ? 'completed'
+              : 'recorded';
     const previous = stages.at(-1);
     // Adjacent successful reads/edits share one heading; every original record remains below it.
     if (

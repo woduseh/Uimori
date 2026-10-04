@@ -20,6 +20,7 @@ import type { RunSnapshot } from '../core/types.js';
 import { exportManuscript, manuscriptExportMetadata } from '../server/manuscript-export.js';
 import { readerDetail } from '../server/reader.js';
 import { apiErrorDiagnostic } from '../web/api-errors.js';
+import { deleteLibraryItem } from '../server/library-deletion.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(async () => {
@@ -244,6 +245,43 @@ describe('Markdown manuscript export', () => {
 });
 
 describe('chat transcript export and import', () => {
+  test('transcript import and fork preserve authored data despite a deleted unrelated bot default', async () => {
+    const store = await database();
+    const { chat, second } = authoredChat(store);
+    const original = exportChatTranscript(store, chat.id);
+    const bot = original.packageAttachments.find((item) => item.role === 'bot')!;
+    const persona = store.product.content({
+      kind: 'persona',
+      title: 'Unrelated default',
+      description: 'Synthetic',
+      text: 'Only for new chats',
+      loading: 'pinned',
+      relatedIds: [],
+    }) as Content;
+    store.organization.updateDefaults(bot.id, {
+      expectedRevision: 1,
+      persona: { mode: 'persona', persona: { id: persona.id, revision: persona.revision } },
+    });
+    deleteLibraryItem(store, 'content', persona.id, { expectedRevision: persona.revision });
+
+    const imported = importChatTranscript(store, {
+      transcript: original,
+      idempotencyKey: 'deleted-default-import',
+    });
+    const fork = forkChat(store, chat.id, {
+      fromRevision: second.id,
+      idempotencyKey: 'deleted-default-fork',
+    });
+    for (const copied of [imported.chat, fork]) {
+      const transcript = exportChatTranscript(store, copied.id);
+      expect(transcript.entries).toEqual(original.entries);
+      expect(transcript.notes).toEqual(original.notes);
+      expect(transcript.packageAttachments).toEqual(original.packageAttachments);
+      expect(transcript.packageAttachments.some((item) => item.role === 'persona')).toBe(false);
+    }
+    expect(exportChatTranscript(store, chat.id).entries).toEqual(original.entries);
+  });
+
   test('one package keeps its bot and persona roles through transcript, fork and backup', async () => {
     const store = await database();
     const { chat } = authoredChat(store);

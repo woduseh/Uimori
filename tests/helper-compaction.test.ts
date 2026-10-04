@@ -12,6 +12,7 @@ import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace
 import { publishHelperContext } from '../server/helper-context.js';
 import { encodeMainPreview } from '../server/main-request.js';
 import { assertContextBudget, estimateContextTokens } from '../core/context-budget.js';
+import { decodeAnthropicMessage, encodeAnthropic } from '../core/anthropic-protocol.js';
 import {
   CONTEXT_CONTINUATION_GUIDANCE,
   CONTEXT_RETRIEVAL_GUIDANCE,
@@ -302,6 +303,97 @@ test('a fitting recent turn does not spend a summary call when nothing older can
   );
   expect(compactions(f, task)).toEqual([]);
 });
+
+test.each([false, true])(
+  'oversized write-only Anthropic continuation starts a fitting segment without a summary model (recent history: %s)',
+  async (withHistory) => {
+    const f = await fixture({ fixed: false });
+    if (withHistory) {
+      const seed = script(f, () => structuredClone(success));
+      const previous = f.runtime.enqueue(f.conversation.id, randomUUID(), '이름은 바꾸지 마.');
+      await Promise.all(f.work);
+      expect(f.workspace.task(previous.id).status).toBe('completed');
+      seed.spy.mockRestore();
+    }
+    const recent = f.workspace
+      .messages(f.conversation.id)
+      .map(({ id, role, text }) => ({ id, role, text }));
+    const connection = f.store.product.connection({
+      title: 'Synthetic Anthropic helper',
+      protocol: 'anthropic-messages-v1',
+      endpoint: 'https://api.anthropic.com/v1/messages',
+      apiKey: 'SYNTHETIC_ANTHROPIC_TOKEN',
+      enabled: true,
+    });
+    f.updateModel(f.helperModel.id, {
+      connectionId: connection.id,
+      modelId: 'claude-sonnet-4-20250514',
+      maxOutputTokens: 8192,
+      tokenizer: 'openai-o200k',
+    });
+    const selected = modelWorkspace(f.store);
+    updateModelWorkspace(f.store, {
+      expectedRevision: selected.revision,
+      routes: selected.routes,
+      translationPolicy: selected.translationPolicy,
+      helperModel: { id: f.helperModel.id },
+      contextModel: null,
+    });
+    const writeArgs = { kind: 'content', id: f.saved.id, expectedRevision: 1 };
+    const log = script(f, (request, index) => {
+      expect(request.role).toBe('helper');
+      expect(request.input.history).toEqual(recent);
+      if (index === 0) {
+        const encoded = encodeAnthropic(request);
+        return decodeAnthropicMessage(
+          {
+            id: 'synthetic-long-write',
+            type: 'message',
+            role: 'assistant',
+            model: request.modelId,
+            stop_reason: 'tool_use',
+            usage: { input_tokens: 11, output_tokens: 7200 },
+            content: [
+              { type: 'text', text: 'Plan and verify the proposed correction. '.repeat(900) },
+              {
+                type: 'tool_use',
+                id: 'write-once',
+                name: encoded.context.toolNames.find((item) => item.name === 'app.call')!.wireName,
+                input: { name: 'resource.save', arguments: writeArgs },
+              },
+            ],
+          },
+          encoded.context
+        );
+      }
+      expect(request).not.toHaveProperty('opaqueState');
+      expect(events(request)).toEqual([]);
+      expect(carried(request)).toEqual([
+        {
+          callId: 'write-once',
+          name: 'app.call',
+          args: { name: 'resource.save', arguments: writeArgs },
+          result: { status: 'saved', id: f.saved.id, revision: 2, payload: '' },
+          denied: false,
+        },
+      ]);
+      expect(continuation(request)).toMatchObject({ segment: 1, completedReads: [] });
+      return structuredClone(success);
+    });
+    const task = await f.run();
+    expect(task, task.error ?? '').toMatchObject({ status: 'completed', usage: { modelCalls: 2 } });
+    expect(log.requests).toHaveLength(2);
+    const decisions = compactions(f, task);
+    expect(decisions).toHaveLength(1);
+    const [decision] = decisions;
+    expect(decision.applied).toBe(true);
+    expect(decision.beforeTokens).toBeGreaterThan(8192);
+    expect(decision.afterTokens).toBeLessThanOrEqual(8192);
+    expect(checkpointRows(f)).toEqual([]);
+    expect(f.mutations).toBe(1);
+    expect(f.store.product.get<Content>('content', f.saved.id).revision).toBe(2);
+  }
+);
 
 test.each([false, true])(
   'helper compaction preserves a bounded exact recent suffix and reloads it (oversized recent turn: %s)',

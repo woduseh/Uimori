@@ -25,7 +25,7 @@ import { readResource } from './resource-service.js';
 import { editableResource } from '../core/resource-editing.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { HelperEditor, HelperTask, HelperSelection } from '../core/helper.js';
-import type { RunSnapshot, ToolEvent } from '../core/types.js';
+import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
 import {
   contextBudgetForModel,
@@ -1024,9 +1024,7 @@ export class HelperRuntime {
         const shouldCompact =
           estimate > inputLimit * 0.85 &&
           (readRevision !== lastCompactedReadRevision || estimate > inputLimit);
-        if (estimate > inputLimit && !hasSummaryInput)
-          throw new Error('HELPER_FIXED_CONTEXT_TOO_LARGE');
-        if (shouldCompact && hasSummaryInput) {
+        if (shouldCompact && (hasSummaryInput || estimate > inputLimit)) {
           const preserved = [
             ...completedToolHistory,
             ...results.filter((event) => !helperRead(event)),
@@ -1055,27 +1053,35 @@ export class HelperRuntime {
             input: { ...fixedRequest.input, history: asJson(recent) },
           });
           lastCompactedReadRevision = readRevision;
-          // Keeping every previous message exact leaves nothing new to summarize.
-          if (older.length || previousSummary || results.some(helperRead)) {
-            const context = task.snapshot.contextModel;
-            if (!context) throw new Error('MODEL_REQUIRED:context');
-            if (this.workspace.taskState(id).usage.modelCalls + 2 > task.snapshot.limits.totalCalls)
-              throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
-            const summaryStarted = performance.now();
-            const summary = await this.summarize(
-              task,
-              context,
-              previousSummary,
-              older,
-              results,
-              hooks('context'),
-              retainedFixedTokens
-            );
-            summaryElapsedMs += performance.now() - summaryStarted;
+          const needsSummary = older.length || previousSummary || results.some(helperRead);
+          // A provider continuation can overflow even when all history and receipts
+          // still fit exactly. Restart that segment without a summary call.
+          if (needsSummary || estimate > inputLimit) {
+            let summary: { text: string; usage: Usage } | undefined;
+            if (needsSummary) {
+              const context = task.snapshot.contextModel;
+              if (!context) throw new Error('MODEL_REQUIRED:context');
+              if (
+                this.workspace.taskState(id).usage.modelCalls + 2 >
+                task.snapshot.limits.totalCalls
+              )
+                throw new Error('MODEL_CALL_BUDGET_EXHAUSTED');
+              const summaryStarted = performance.now();
+              summary = await this.summarize(
+                task,
+                context,
+                previousSummary,
+                older,
+                results,
+                hooks('context'),
+                retainedFixedTokens
+              );
+              summaryElapsedMs += performance.now() - summaryStarted;
+            }
             const nextRequest = this.request(
               task,
               recent,
-              summary.text,
+              summary?.text ?? previousSummary,
               [],
               undefined,
               preserved,
@@ -1095,16 +1101,18 @@ export class HelperRuntime {
               retainedMessages: recent.length,
             });
             if (applied) {
-              contextBase = publishHelperContext(
-                this.store,
-                task,
-                summary.text,
-                summary.usage,
-                nextEstimate,
-                contextBase,
-                recent
-              );
-              previousSummary = summary.text;
+              if (summary) {
+                contextBase = publishHelperContext(
+                  this.store,
+                  task,
+                  summary.text,
+                  summary.usage,
+                  nextEstimate,
+                  contextBase,
+                  recent
+                );
+                previousSummary = summary.text;
+              }
               completedToolHistory = preserved;
               completedReads = retainedReads;
               history = recent;
