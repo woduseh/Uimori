@@ -81,7 +81,7 @@ export function LoreContextDefaultsEditor({
   return (
     <section className="settings-section" aria-label="로어 문맥 기본값">
       <p className="muted">새 채팅의 기본값이에요. 기존 채팅은 바뀌지 않아요.</p>
-      <fieldset disabled={busy} className="control-grid">
+      <fieldset disabled={busy} className="lore-context-fields">
         <LoreContextPolicyEditor
           value={policyOf(draft)}
           onChange={(policy) => {

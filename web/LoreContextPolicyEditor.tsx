@@ -12,6 +12,7 @@ import type { PromptCompilation } from '../core/risu-prompt.js';
 import { api } from './api.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import './lore-context.css';
+import './settings-layout.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
 
 const tokenFields = [
@@ -22,7 +23,13 @@ const tokenFields = [
     max: 200_000,
     unit: '추정 토큰',
   },
-  { key: 'maxRetainedEntries', label: '조회 로어 구간 한도', min: 0, max: 256, unit: '구간' },
+  {
+    key: 'maxRetainedEntries',
+    label: '조회 로어 구간 한도',
+    min: 0,
+    max: 256,
+    unit: '구간',
+  },
   {
     key: 'maxPinnedTokens',
     label: '고정 자료 토큰 한도',
@@ -123,7 +130,10 @@ export function LoreContextPolicyEditor({
   const effective = value ?? DEFAULT_LORE_CONTEXT,
     serialized = JSON.stringify(effective);
   const [draft, setDraft] = useState(() => draftOf(effective)),
-    [preview, setPreview] = useState<{ value: Preview; fingerprint: string } | null>(null),
+    [preview, setPreview] = useState<{
+      value: Preview;
+      fingerprint: string;
+    } | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const previous = useRef(serialized),
@@ -204,93 +214,98 @@ export function LoreContextPolicyEditor({
     }
   }
   return (
-    <section className="lore-context-panel full" aria-label="로어 문맥 정책">
-      <div className="lore-context-heading">
-        <div>
-          <h3>로어 사용</h3>
-          <p className="muted">조회한 로어를 다음 생성에서도 유지해요.</p>
+    <section className="lore-context-panel settings-group full" aria-label="로어 문맥 정책">
+      <h3 className="settings-group-heading">로어 사용</h3>
+      <div className="settings-group-body">
+        <div className="lore-context-heading settings-row settings-row-toggle">
+          <div className="settings-row-copy">
+            <span>조회 로어 유지</span>
+            <p className="muted">조회한 로어를 다음 생성에서도 유지해요.</p>
+          </div>
+          <div className="settings-row-control">
+            <Switch
+              aria-label="조회한 로어를 다음 생성에 유지"
+              checked={draft.enabled}
+              onChange={(event) => change({ ...draft, enabled: event.target.checked })}
+            />
+          </div>
         </div>
-        <Switch
-          aria-label="조회한 로어를 다음 생성에 유지"
-          checked={draft.enabled}
-          onChange={(event) => change({ ...draft, enabled: event.target.checked })}
-        />
-      </div>
-      <details className="lore-context-advanced">
-        <summary>선별 기준과 용량</summary>
-        <h4>문맥 유지 한도</h4>
-        <div className="lore-context-policy-grid">
-          {tokenFields.map((field) => (
-            <label key={field.key}>
-              {field.label}
+        <details className="lore-context-advanced">
+          <summary>선별 기준과 용량</summary>
+          <h4>문맥 유지 한도</h4>
+          <div className="lore-context-policy-grid">
+            {tokenFields.map((field) => (
+              <label key={field.key}>
+                {field.label}
+                <input
+                  aria-label={field.label}
+                  inputMode="numeric"
+                  value={draft[field.key]}
+                  onChange={(event) => change({ ...draft, [field.key]: event.target.value })}
+                  aria-invalid={validation.startsWith(field.label)}
+                />
+              </label>
+            ))}
+          </div>
+          <h4>관련성 판단</h4>
+          <div className="lore-context-policy-grid">
+            <label>
+              관련성 기준
               <input
-                aria-label={field.label}
-                inputMode="numeric"
-                value={draft[field.key]}
-                onChange={(event) => change({ ...draft, [field.key]: event.target.value })}
-                aria-invalid={validation.startsWith(field.label)}
+                aria-label="Jev 관련성 기준"
+                type="number"
+                min="0"
+                max="1"
+                step="0.05"
+                value={draft.threshold}
+                onChange={(event) => change({ ...draft, threshold: event.target.value })}
+              />
+              <small>0–1, 높일수록 관련성이 높은 로어만 포함해요.</small>
+            </label>
+            <label>
+              선택 로어 토큰 한도
+              <input
+                aria-label="Jev 선택 로어 토큰 한도"
+                type="number"
+                min="0"
+                max="100000"
+                value={draft.maxSelectedTokens}
+                onChange={(event) => change({ ...draft, maxSelectedTokens: event.target.value })}
               />
             </label>
-          ))}
-        </div>
-        <h4>관련성 판단</h4>
-        <div className="lore-context-policy-grid">
-          <label>
-            관련성 기준
-            <input
-              aria-label="Jev 관련성 기준"
-              type="number"
-              min="0"
-              max="1"
-              step="0.05"
-              value={draft.threshold}
-              onChange={(event) => change({ ...draft, threshold: event.target.value })}
-            />
-            <small>0–1, 높일수록 관련성이 높은 로어만 포함해요.</small>
-          </label>
-          <label>
-            선택 로어 토큰 한도
-            <input
-              aria-label="Jev 선택 로어 토큰 한도"
-              type="number"
-              min="0"
-              max="100000"
-              value={draft.maxSelectedTokens}
-              onChange={(event) => change({ ...draft, maxSelectedTokens: event.target.value })}
-            />
-          </label>
-          <label>
-            판단 입력 토큰 한도
-            <input
-              aria-label="Jev 판단 입력 토큰 한도"
-              type="number"
-              min="1000"
-              max="30000"
-              value={draft.maxInputTokens}
-              onChange={(event) => change({ ...draft, maxInputTokens: event.target.value })}
-            />
-          </label>
-        </div>
-        <details className="lore-context-units">
-          <summary>단위와 예산 설명</summary>
-          <p className="muted">로어를 유지할 최대 크기를 정해요.</p>
-          <ul>
-            {tokenFields.map((field) => (
-              <li key={field.key}>
-                {field.label}: {field.min.toLocaleString()}–{field.max.toLocaleString()}{' '}
-                {field.unit}
-              </li>
-            ))}
-          </ul>
-          <p className="muted">토큰은 로컬 추정값으로, 모델의 실제 사용량과 다를 수 있어요.</p>
-          <p className="muted">
-            조회 로어는 한도에 맞춰 정리하고, 고정 자료는 초과 시 자르지 않고 알려요.
-          </p>
-          <p className="muted">
-            관련성 판단은 JEV를 사용해요. 전체 입력 한도와 프롬프트 배치는 별도예요.
-          </p>
+            <label>
+              판단 입력 토큰 한도
+              <input
+                aria-label="Jev 판단 입력 토큰 한도"
+                type="number"
+                min="1000"
+                max="30000"
+                value={draft.maxInputTokens}
+                onChange={(event) => change({ ...draft, maxInputTokens: event.target.value })}
+              />
+            </label>
+          </div>
+          <details className="lore-context-units">
+            <summary>단위와 예산 설명</summary>
+            <p className="muted">로어를 유지할 최대 크기를 정해요.</p>
+            <ul>
+              {tokenFields.map((field) => (
+                <li key={field.key}>
+                  {field.label}: {field.min.toLocaleString()}–{field.max.toLocaleString()}{' '}
+                  {field.unit}
+                </li>
+              ))}
+            </ul>
+            <p className="muted">토큰은 로컬 추정값으로, 모델의 실제 사용량과 다를 수 있어요.</p>
+            <p className="muted">
+              조회 로어는 한도에 맞춰 정리하고, 고정 자료는 초과 시 자르지 않고 알려요.
+            </p>
+            <p className="muted">
+              관련성 판단은 JEV를 사용해요. 전체 입력 한도와 프롬프트 배치는 별도예요.
+            </p>
+          </details>
         </details>
-      </details>
+      </div>
       {validation && (
         <p className="error" role="alert">
           선별 기준과 용량의 입력을 확인해 주세요. {validation}

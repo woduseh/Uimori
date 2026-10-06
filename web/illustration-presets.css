@@ -6,8 +6,6 @@
 }
 .illustration-preset-settings {
   margin-bottom: 28px;
-  padding-bottom: 28px;
-  border-bottom: 1px solid var(--line);
 }
 .illustration-preset-settings h3,
 .illustration-preset-settings h4,
@@ -103,26 +101,14 @@
   gap: 8px;
 }
 .illustration-preset-toolbar {
-  padding-block: 12px;
-  border-block: 1px solid var(--line);
-  align-items: center;
-}
-.illustration-preset-toolbar > label {
-  min-width: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex: 1 1 100%;
+  display: block;
 }
 .illustration-preset-toolbar select {
-  width: min(210px, 65%);
+  width: 210px;
+  max-width: 100%;
 }
 .illustration-preset-current {
   overflow-wrap: anywhere;
-  flex: 1 1 180px;
-  order: 2;
   color: var(--muted);
   font-size: 0.875rem;
 }
@@ -172,9 +158,8 @@
   }
 }
 
-.illustration-preset-toolbar > button {
-  order: 3;
-  margin-left: auto;
+.illustration-preset-editor-body {
+  padding: 16px;
 }
 
 .illustration-preset-editor textarea {

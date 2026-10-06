@@ -51,14 +51,21 @@ html[data-theme="dark"] .theme-background-preview::after {
 }
 .theme-background-controls {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
-  gap: 16px;
-  margin: 16px 0;
+  gap: 20px;
+  margin: 0;
 }
-.theme-background-controls label {
+.theme-background-sliders {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.theme-background-sliders label {
   display: grid;
   gap: 6px;
   min-width: 0;
+}
+.theme-background-file {
+  padding: 0;
 }
 .theme-background-controls input {
   max-width: 100%;
@@ -108,4 +115,10 @@ fieldset.theme-background-controls {
   color: var(--text);
   font: inherit;
   cursor: pointer;
+}
+@container (max-width: 520px) {
+  .theme-background-sliders {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
 }

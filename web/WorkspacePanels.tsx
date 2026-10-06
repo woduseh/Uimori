@@ -15,6 +15,7 @@ import { CodexAgentSettings } from './CodexAgentSettings.js';
 import { AppAbout } from './AppAbout.js';
 import { Info } from 'lucide-react';
 import './recovery-settings.css';
+import './settings-layout.css';
 import { IllustrationSettingsEditor } from './IllustrationSettingsEditor.js';
 import { LoreContextDefaultsEditor } from './LoreContextDefaultsEditor.js';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -584,64 +585,77 @@ export function AppSettingsPanel({
                     <section
                       id={`${id}-general-display`}
                       tabIndex={-1}
-                      className="settings-section"
+                      className="settings-section settings-group"
                     >
                       <h3>
                         화면과 입력
                         <span className="scope-badge">이 기기</span>
                       </h3>
-                      <label>
-                        화면 테마
-                        <select
-                          aria-label="앱 화면 테마"
-                          value={theme}
-                          onChange={(event) =>
-                            setTheme(event.target.value as 'system' | 'dark' | 'light')
-                          }
-                        >
-                          <option value="system">기기 설정 따르기</option>
-                          <option value="dark">어둡게</option>
-                          <option value="light">밝게</option>
-                        </select>
-                      </label>
-                      <label className="check">
-                        <Switch
-                          checked={enterSend}
-                          onChange={(event) => setEnterSend(event.target.checked)}
-                        />
-                        Enter로 보내기
-                      </label>
-                      <small>
-                        {enterSend
-                          ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.'
-                          : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}
-                      </small>
-                      <label>
-                        좌측 사이드바 폭
-                        <select
-                          aria-label="좌측 사이드바 폭"
-                          value={sidebarWidth}
-                          onChange={(event) => setSidebarWidth(Number(event.target.value))}
-                        >
-                          <option value={248}>보통</option>
-                          <option value={320}>넓게</option>
-                          <option value={400}>매우 넓게</option>
-                        </select>
-                      </label>
-                      <small>데스크톱에서 펼친 사이드바에 적용돼요.</small>
-                      <label>
-                        도우미·창작 옵션 패널 폭
-                        <select
-                          aria-label="도우미·창작 옵션 패널 폭"
-                          value={panelWidth}
-                          onChange={(event) => setPanelWidth(Number(event.target.value))}
-                        >
-                          <option value={360}>좁게</option>
-                          <option value={384}>보통</option>
-                          <option value={480}>넓게</option>
-                        </select>
-                      </label>
-                      <small>공간이 부족하면 패널이 원고 위에 겹쳐 열려요.</small>
+                      <div className="settings-group-body">
+                        <label className="settings-row">
+                          <span className="settings-row-copy">
+                            <strong>화면 테마</strong>
+                          </span>
+                          <select
+                            aria-label="앱 화면 테마"
+                            value={theme}
+                            onChange={(event) =>
+                              setTheme(event.target.value as 'system' | 'dark' | 'light')
+                            }
+                          >
+                            <option value="system">기기 설정 따르기</option>
+                            <option value="dark">어둡게</option>
+                            <option value="light">밝게</option>
+                          </select>
+                        </label>
+                        <label className="settings-row settings-row-toggle">
+                          <span className="settings-row-copy">
+                            <strong>Enter로 보내기</strong>
+                            <small>
+                              {enterSend
+                                ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.'
+                                : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}
+                            </small>
+                          </span>
+                          <span className="settings-row-control">
+                            <Switch
+                              aria-label="Enter로 보내기"
+                              checked={enterSend}
+                              onChange={(event) => setEnterSend(event.target.checked)}
+                            />
+                          </span>
+                        </label>
+                        <label className="settings-row">
+                          <span className="settings-row-copy">
+                            <strong>좌측 사이드바 폭</strong>
+                            <small>데스크톱에서 펼친 사이드바에 적용돼요.</small>
+                          </span>
+                          <select
+                            aria-label="좌측 사이드바 폭"
+                            value={sidebarWidth}
+                            onChange={(event) => setSidebarWidth(Number(event.target.value))}
+                          >
+                            <option value={248}>보통</option>
+                            <option value={320}>넓게</option>
+                            <option value={400}>매우 넓게</option>
+                          </select>
+                        </label>
+                        <label className="settings-row">
+                          <span className="settings-row-copy">
+                            <strong>도우미·창작 옵션 패널 폭</strong>
+                            <small>공간이 부족하면 패널이 원고 위에 겹쳐 열려요.</small>
+                          </span>
+                          <select
+                            aria-label="도우미·창작 옵션 패널 폭"
+                            value={panelWidth}
+                            onChange={(event) => setPanelWidth(Number(event.target.value))}
+                          >
+                            <option value={360}>좁게</option>
+                            <option value={384}>보통</option>
+                            <option value={480}>넓게</option>
+                          </select>
+                        </label>
+                      </div>
                     </section>
                   )}
                   {key === 'general' && (

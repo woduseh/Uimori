@@ -868,7 +868,7 @@ export function ConnectionEditor({
         onStatusChange={setJevStatus}
       />
       <section hidden={screen !== 'connections'} aria-label="저장한 프로바이더">
-        <div className="connection-list provider-saved-list">
+        <div className="connection-list provider-saved-list settings-group-body">
           {jevMatches && (
             <article className="provider-saved-item" aria-label="TypeSafe AI 프로바이더">
               <div className="provider-item-heading">
@@ -914,11 +914,21 @@ export function ConnectionEditor({
                   onClick={() => showConnection(item)}
                 >
                   <strong>{item.title}</strong>
-                  <span className="provider-item-subtitle">
-                    {providerDefinition(item.protocol).label}
-                    {item.protocol === 'vertex-gemini-v1' ? ' · global' : ''}
-                    {!item.enabled && ' · 비활성'}
-                  </span>
+                  {(item.title !== providerDefinition(item.protocol).label ||
+                    item.protocol === 'vertex-gemini-v1' ||
+                    !item.enabled) && (
+                    <span className="provider-item-subtitle">
+                      {[
+                        item.title !== providerDefinition(item.protocol).label
+                          ? providerDefinition(item.protocol).label
+                          : '',
+                        item.protocol === 'vertex-gemini-v1' ? 'global' : '',
+                        !item.enabled ? '비활성' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  )}
                 </button>
                 <ActionMenu label={item.title + ' 프로바이더 메뉴'}>
                   <button
@@ -990,7 +1000,7 @@ export function ConnectionEditor({
         className="registered-models"
         aria-label="저장한 모델 프리셋"
       >
-        <div className="provider-saved-list">
+        <div className="provider-saved-list settings-group-body">
           {jevMatches && (
             <details
               className="provider-model-group"

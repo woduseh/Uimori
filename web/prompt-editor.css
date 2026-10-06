@@ -157,7 +157,21 @@
   justify-content: flex-end;
   gap: 8px;
 }
-.prompt-current-options {
+.prompt-current-settings .prompt-current-links {
+  padding-block: 12px;
+  border-top: 1px solid var(--line);
+}
+.prompt-current-settings .prompt-current-links:empty {
+  display: none;
+}
+.prompt-current-settings .pc-composer-fold {
+  border: 0;
+}
+.prompt-current-settings .pc-composer-fold > summary {
+  padding: 0;
+  min-height: var(--control-h);
+}
+.prompt-current-settings .prompt-current-options {
   display: grid;
   gap: 16px;
   padding-block: 16px;

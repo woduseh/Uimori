@@ -1,0 +1,40 @@
+.app-about {
+  display: grid;
+  gap: 20px;
+  container-type: inline-size;
+}
+.app-about .recovery-settings-brand {
+  padding-bottom: 0;
+}
+.app-about-details .settings-row > div {
+  min-width: 0;
+}
+.app-about-details .settings-row p {
+  margin: 6px 0 0;
+}
+.app-about-details code {
+  max-width: 100%;
+  justify-self: end;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
+.app-about-details a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: end;
+}
+.app-about .recovery-settings-disclosure {
+  border-top: 0;
+  padding-block: 0;
+}
+.app-about-details .app-about-build-id {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+@container (max-width: 520px) {
+  .app-about-details code,
+  .app-about-details a {
+    justify-self: start;
+  }
+}
