@@ -49,6 +49,24 @@ test('batched preparation preserves field, greeting and message variable order a
   expect(input.context.variables).toEqual({});
 });
 
+test('history preparation retains assistant scenes and authored greeting before a user input', async () => {
+  const result = await prepareNativeRisuText({
+    native: nativeContent().nativeRisu!,
+    fields: [],
+    greeting: '{{#if {{equal::{{role}}::char}}}}OPENING{{/if}}',
+    context: {
+      variables: {},
+      messages: [
+        { role: 'char', data: '{{#if {{equal::{{role}}::char}}}}PREVIOUS SCENE{{/if}}' },
+        { role: 'user', data: '{{#if {{equal::{{role}}::user}}}}CONTINUE{{/if}}' },
+      ],
+    },
+  });
+  expect(result.texts).toEqual(['PREVIOUS SCENE', 'CONTINUE']);
+  expect(result.greeting).toBe('OPENING');
+  expect(result.issues).toEqual([]);
+});
+
 test('an aborted or timed-out batch returns no partial preparation', async () => {
   const input = {
     native: nativeContent().nativeRisu!,

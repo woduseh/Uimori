@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RisuContentSource } from '../core/risu-native.js';
 import { createNativeRisuCbsSession, evaluateNativeRisuFields } from '../server/risu-native-cbs.js';
-import { renderNativeRisuMessage } from '../server/risu-native-render.js';
+import { processNativeRisuText, renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { cardZip } from '../server/character-card-file.js';
 import { readEmbeddedRisuModule } from '../server/risu-module-file.js';
 
@@ -30,6 +30,23 @@ test('native CBS preserves shared variable writes across fields and native butto
   expect(result.fields.two).toContain('risu-trigger="go"');
   expect(result.variables.route).toBe('2');
 });
+test('explicit preset field roles override the indexed conversation role', async () => {
+  const result = await evaluateNativeRisuFields({
+    native: native(),
+    fields: { system: '{{role}}', user: '{{role}}', assistant: '{{role}}' },
+    fieldRoles: { system: 'system', user: 'user', assistant: 'assistant' },
+    context: {
+      variables: {},
+      messageIndex: 0,
+      messages: [
+        { role: 'user', data: 'Earlier request' },
+        { role: 'char', data: 'Later scene' },
+      ],
+    },
+  });
+  expect(result.fields).toEqual({ system: 'system', user: 'user', assistant: 'char' });
+});
+
 test('CBS sessions propagate variable writes while each call uses its latest context', async () => {
   const session = createNativeRisuCbsSession();
   const context = {
@@ -88,6 +105,51 @@ test.each(['closed', 'cancelled'] as const)(
     }
   }
 );
+test.each([
+  ['editinput', 1, 'user'],
+  ['editoutput', 1, 'char'],
+  ['editprocess', 0, 'char'],
+  ['editprocess', 1, 'user'],
+  ['editdisplay', 0, 'char'],
+  ['editprocess', -1, 'char'],
+] as const)(
+  '%s evaluates initial text and regex CBS with message %i role %s',
+  async (mode, messageIndex, expectedRole) => {
+    const input = native({
+      module: {
+        regex: [
+          {
+            type: mode,
+            in: 'MARKER_{{role}}',
+            out: 'AFTER_{{role}}',
+            ableFlag: true,
+            flag: 'g<cbs>',
+          },
+        ],
+      },
+    });
+    const result = await processNativeRisuText({
+      native: input,
+      mode,
+      text:
+        '{{#if {{equal::{{role}}::' + expectedRole + '}}}}INITIAL{{/if}}|MARKER_' + expectedRole,
+      context: {
+        variables: {},
+        messageIndex,
+        messages:
+          mode === 'editinput'
+            ? [{ role: 'char', data: 'Previous scene' }]
+            : [
+                { role: 'char', data: 'Previous scene' },
+                { role: 'user', data: 'Current input' },
+              ],
+      },
+    });
+    expect(result.text).toBe(`INITIAL|AFTER_${expectedRole}`);
+    expect(result.issues).toEqual([]);
+  }
+);
+
 test('native display follows CBS/regex/assets and keeps HTML CSS without mutating durable vars', async () => {
   const input = native({
     assets: [{ name: 'room', uri: 'embeded://room.png', imageId: 'room' }],
