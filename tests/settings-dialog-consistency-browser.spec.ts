@@ -324,6 +324,24 @@ for (const width of [412, 1440]) {
       await page.goto('/');
       await navigationAction(page, '설정');
       await selectSettingsSection(page, '테마·색상');
+      const background = page.getByRole('region', { name: '배경 이미지', exact: true });
+      const effects = background.getByRole('group', { name: '배경 효과', exact: true });
+      await expect(effects.getByRole('slider')).toHaveCount(3);
+      const fileBox = (await background.getByLabel('배경 이미지 선택').boundingBox())!;
+      const effectsBox = (await effects.boundingBox())!;
+      expect(effectsBox.y).toBeGreaterThan(fileBox.y + fileBox.height);
+      const sliderBoxes = await Promise.all(
+        (await effects.getByRole('slider').all()).map((slider) => slider.boundingBox())
+      );
+      if (width > 760) {
+        for (const box of sliderBoxes.slice(1))
+          expect(Math.abs(box!.y - sliderBoxes[0]!.y)).toBeLessThanOrEqual(1);
+      } else {
+        expect(sliderBoxes[1]!.y).toBeGreaterThan(sliderBoxes[0]!.y + sliderBoxes[0]!.height);
+        expect(sliderBoxes[2]!.y).toBeGreaterThan(sliderBoxes[1]!.y + sliderBoxes[1]!.height);
+      }
+      await background.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: info.outputPath(`background-grouped-${width}.png`) });
       const blur = page.getByLabel('배경 흐림', { exact: true });
       const original = await blur.inputValue();
       const changed = original === '7' ? '8' : '7';

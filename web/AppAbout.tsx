@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import './app-about.css';
 import { api } from './api.js';
 import { ExternalLinkIcon, LibraryIcon } from './ui-icons.js';
 import license from '../LICENSE?raw';
@@ -35,53 +36,55 @@ export function AppAbout() {
           <p className="muted">앱 정보 · 실행 버전과 라이선스</p>
         </div>
       </div>
-      <div className="recovery-settings-row">
-        <div>
-          <strong>실행 버전</strong>
-          <p className="muted">현재 서버의 앱 버전</p>
+      <div className="settings-group-body app-about-details">
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <strong>실행 버전</strong>
+            <p className="muted">현재 서버의 앱 버전</p>
+          </div>
+          <code data-testid="app-version">
+            {build ? `v${build.version}` : error ? '확인 실패' : '확인 중…'}
+          </code>
         </div>
-        <code data-testid="app-version">
-          {build ? `v${build.version}` : error ? '확인 실패' : '확인 중…'}
-        </code>
-      </div>
-      <div className="recovery-settings-row">
-        <div>
-          <strong>빌드 식별자</strong>
-          <p className="muted">같은 버전 안의 소스 변경을 구분해요.</p>
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <strong>빌드 식별자</strong>
+            <p className="muted">같은 버전 안의 소스 변경을 구분해요.</p>
+          </div>
+          <code className="muted app-about-build-id" data-testid="app-build-id">
+            {build?.buildId ?? (error ? '확인 실패' : '확인 중…')}
+          </code>
         </div>
-        <code data-testid="app-build-id">
-          {build?.buildId ?? (error ? '확인 실패' : '확인 중…')}
-        </code>
-      </div>
-      {error && (
-        <p role="alert">
-          실행 버전을 확인하지 못했어요.{' '}
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => setRefresh((value) => value + 1)}
-          >
-            다시 확인
-          </button>
-        </p>
-      )}
-      <div className="recovery-settings-row">
-        <div>
-          <strong>라이선스</strong>
-          <p className="muted">GNU Affero General Public License v3</p>
+        {error && (
+          <p role="alert">
+            실행 버전을 확인하지 못했어요.{' '}
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setRefresh((value) => value + 1)}
+            >
+              다시 확인
+            </button>
+          </p>
+        )}
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <strong>라이선스</strong>
+            <p className="muted">GNU Affero General Public License v3</p>
+          </div>
+          <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">
+            <ExternalLinkIcon size={16} aria-hidden="true" /> 전문 보기
+          </a>
         </div>
-        <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">
-          <ExternalLinkIcon size={16} aria-hidden="true" /> 전문 보기
-        </a>
-      </div>
-      <div className="recovery-settings-row">
-        <div>
-          <strong>소스 저장소</strong>
-          <p className="muted">Uimori 프로젝트 소스 코드</p>
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <strong>소스 저장소</strong>
+            <p className="muted">Uimori 프로젝트 소스 코드</p>
+          </div>
+          <a href="https://github.com/woduseh/Uimori" target="_blank" rel="noreferrer">
+            <ExternalLinkIcon size={16} aria-hidden="true" /> 소스 보기
+          </a>
         </div>
-        <a href="https://github.com/woduseh/Uimori" target="_blank" rel="noreferrer">
-          <ExternalLinkIcon size={16} aria-hidden="true" /> 소스 보기
-        </a>
       </div>
       <details className="recovery-settings-disclosure">
         <summary>라이선스 전문</summary>

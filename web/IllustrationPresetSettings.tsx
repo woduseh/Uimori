@@ -36,8 +36,13 @@ import { SaveButton } from './SaveButton.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './illustration-presets.css';
+import './settings-layout.css';
 
-type Draft = { id: string | null; revision?: number; model: IllustrationPresetDefinition };
+type Draft = {
+  id: string | null;
+  revision?: number;
+  model: IllustrationPresetDefinition;
+};
 const changedKey = 'uimori:illustration-presets-changed';
 const messageOf = (error: unknown) => {
   const message = (error as Error).message;
@@ -295,33 +300,37 @@ export function IllustrationPresetSettings({
           </button>
         </div>
       </div>
-      <div className="illustration-preset-toolbar">
-        <label>
-          적용 범위
-          <select
-            aria-label="삽화 프리셋 적용 범위"
-            value={target}
-            disabled={busy || dirty}
-            onChange={(event) => setTarget(event.target.value as typeof target)}
-          >
-            <option value="global">작업실 기본</option>
-            {scope.botId && <option value="bot">현재 봇의 기본</option>}
-            {scope.chatId && <option value="chat">현재 채팅만</option>}
-          </select>
-        </label>
-        {target !== 'global' && (
-          <button disabled={busy || dirty || !selectedId} onClick={() => void choose(null)}>
-            <RotateCcw size={16} aria-hidden="true" /> 상위 설정 따르기
-          </button>
-        )}
-        <p
-          className="illustration-preset-current"
-          title="채팅 → 봇 → 작업실 순으로 적용해요. 새 생성부터 사용돼요."
-        >
-          {scope.chatId ? '현재 채팅' : '작업실 기본'} · <strong>{effective.title}</strong>
-          {' · '}
-          {effective.generator === 'comfyui' ? 'ComfyUI' : 'Codex'}
-        </p>
+      <div className="illustration-preset-toolbar settings-group-body">
+        <div className="settings-row">
+          <div className="settings-row-copy">
+            <span>적용 범위</span>
+            <p
+              className="illustration-preset-current"
+              title="채팅 → 봇 → 작업실 순으로 적용해요. 새 생성부터 사용돼요."
+            >
+              {scope.chatId ? '현재 채팅' : '작업실 기본'} · <strong>{effective.title}</strong>
+              {' · '}
+              {effective.generator === 'comfyui' ? 'ComfyUI' : 'Codex'}
+            </p>
+          </div>
+          <div className="settings-row-control">
+            <select
+              aria-label="삽화 프리셋 적용 범위"
+              value={target}
+              disabled={busy || dirty}
+              onChange={(event) => setTarget(event.target.value as typeof target)}
+            >
+              <option value="global">작업실 기본</option>
+              {scope.botId && <option value="bot">현재 봇의 기본</option>}
+              {scope.chatId && <option value="chat">현재 채팅만</option>}
+            </select>
+            {target !== 'global' && (
+              <button disabled={busy || dirty || !selectedId} onClick={() => void choose(null)}>
+                <RotateCcw size={16} aria-hidden="true" /> 상위 설정 따르기
+              </button>
+            )}
+          </div>
+        </div>
       </div>
       {(error || loadError) && (
         <p role="alert" className="error">
@@ -447,7 +456,7 @@ export function IllustrationPresetSettings({
       {draft && (
         <section
           ref={editor}
-          className="settings-card illustration-preset-editor"
+          className="settings-group illustration-preset-editor"
           aria-label="삽화 프리셋 편집기"
         >
           <div className="illustration-preset-heading">
@@ -462,7 +471,10 @@ export function IllustrationPresetSettings({
               편집 내용은 유지했어요. 사본으로 저장하거나 편집을 닫고 최신 항목을 다시 열어 주세요.
             </p>
           )}
-          <fieldset className="control-grid" disabled={busy}>
+          <fieldset
+            className="control-grid settings-group-body illustration-preset-editor-body"
+            disabled={busy}
+          >
             <label className="full">
               프리셋 이름
               <input
@@ -487,7 +499,9 @@ export function IllustrationPresetSettings({
                 aria-label="프리셋 삽화 생성기"
                 value={draft.model.generator}
                 onChange={(event) =>
-                  patch({ generator: event.target.value as IllustrationPresetGenerator })
+                  patch({
+                    generator: event.target.value as IllustrationPresetGenerator,
+                  })
                 }
               >
                 <option value="codex">Codex · ChatGPT 구독의 이미지 생성</option>
@@ -565,7 +579,10 @@ export function IllustrationPresetSettings({
                       value={draft.model.comfyui.negativeGuidance}
                       onChange={(event) =>
                         patch({
-                          comfyui: { ...draft.model.comfyui, negativeGuidance: event.target.value },
+                          comfyui: {
+                            ...draft.model.comfyui,
+                            negativeGuidance: event.target.value,
+                          },
                         })
                       }
                     />
@@ -587,7 +604,10 @@ export function IllustrationPresetSettings({
                       onChange={(event) => {
                         setWorkflowError('');
                         patch({
-                          comfyui: { ...draft.model.comfyui, workflow: event.target.value },
+                          comfyui: {
+                            ...draft.model.comfyui,
+                            workflow: event.target.value,
+                          },
                         });
                       }}
                     />

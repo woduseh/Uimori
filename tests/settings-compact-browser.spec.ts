@@ -11,12 +11,33 @@ import {
   startProviderConnection,
 } from './ui-navigation.js';
 
-test('SCUI04 recovery settings expose real build information and grouped data at desktop and phone sizes', async ({
+test('SCUI04 all settings stay usable in light and dark desktop and phone layouts', async ({
   page,
   request,
 }, info) => {
+  test.setTimeout(90_000);
   const health = await (await request.get('/api/health')).json();
   expect(health.version).toBe(packageJson.version);
+  const connectionResponse = await request.post('/api/connections', {
+    data: {
+      title: '설정 배치 확인용 프로바이더',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9/not-called',
+      enabled: true,
+    },
+  });
+  expect(connectionResponse.ok()).toBe(true);
+  const connection = await connectionResponse.json();
+  const modelResponse = await request.post('/api/model-presets', {
+    data: {
+      title: '설정 배치 확인용 모델',
+      connectionId: connection.id,
+      modelId: 'settings-layout-fixture',
+      maxOutputTokens: 1000,
+      temperature: null,
+    },
+  });
+  expect(modelResponse.ok()).toBe(true);
   await page.route('**/api/agent-runtimes/codex', (route) =>
     route.fulfill({
       json: {
@@ -28,89 +49,122 @@ test('SCUI04 recovery settings expose real build information and grouped data at
       },
     })
   );
-  for (const viewport of [
-    { width: 2560, height: 1440 },
-    { width: 412, height: 915 },
-  ]) {
-    await page.setViewportSize(viewport);
-    await page.goto('/');
-    await navigationAction(page, '설정');
-    const dialog = page.getByRole('dialog', { name: '설정', exact: true });
-    for (const section of [
-      '일반',
-      '테마·색상',
-      '로어 문맥',
-      '데이터 관리',
-      'Codex 연결',
-      '앱 정보·라이선스',
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const viewport of [
+      { width: 2560, height: 1440 },
+      { width: 412, height: 915 },
     ]) {
-      await selectSettingsSection(page, section);
-      const pane = dialog.getByRole('tabpanel');
-      if (section === '일반') {
-        await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
-      } else if (section === '테마·색상') {
-        const controls = pane.locator('.theme-control-bar select');
-        await expect(controls).toHaveCount(3);
-        await expect(
-          pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
-        ).toBeVisible();
-      } else if (section === '로어 문맥') {
-        await expect(pane.getByRole('heading', { name: '로어 사용', exact: true })).toBeVisible();
-        await expect(pane.locator('fieldset.control-grid')).toBeVisible();
-      } else if (section === '데이터 관리') {
-        await expect(pane.getByRole('heading', { name: '백업 · 복원', exact: true })).toBeVisible();
-        await expect(
-          pane.getByRole('button', { name: '백업 다운로드', exact: true })
-        ).toBeVisible();
-        const restore = pane
-          .locator('details')
-          .filter({ has: page.locator('summary', { hasText: '전체 복원 방법' }) });
-        await expect(
-          pane.getByRole('heading', { name: '자료 가져오기', exact: true })
-        ).toBeVisible();
-        await expect(
-          pane.getByRole('heading', { name: '채팅 가져오기', exact: true })
-        ).toBeVisible();
-        await expect(restore).not.toHaveAttribute('open', '');
-        await restore.locator('summary').click();
-        await expect(restore).toContainText('서버를 종료하고');
-        await restore.locator('summary').click();
-      } else if (section === 'Codex 연결') {
-        await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
-        await expect(pane.locator('.codex-connection-guide')).not.toHaveAttribute('open', '');
-        await pane.getByText('연결 절차', { exact: true }).click();
-        await expect(
-          pane.getByRole('list', { name: 'Codex 연결 단계' }).getByRole('listitem')
-        ).toHaveCount(3);
-        await pane.getByText('연결 절차', { exact: true }).click();
-        await expect(
-          pane.getByRole('button', { name: 'ChatGPT로 로그인', exact: true })
-        ).toHaveCount(0);
-        await expect(pane.locator('.provider-actions')).toBeHidden();
-      } else {
-        await expect(pane.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
-        await expect(pane.getByTestId('app-build-id')).toHaveText(health.buildId);
-        await pane.getByText('라이선스 전문', { exact: true }).click();
-        await expect(pane.locator('.app-about-document').first()).toContainText(
-          'GNU AFFERO GENERAL PUBLIC LICENSE'
-        );
-        await pane.getByText('라이선스 전문', { exact: true }).click();
-        await pane.getByText('저작권·제3자 고지', { exact: true }).click();
-        await expect(pane.locator('.app-about-document').last()).toContainText('RisuAI');
-        await pane.getByText('저작권·제3자 고지', { exact: true }).click();
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await navigationAction(page, '설정');
+      const dialog = page.getByRole('dialog', { name: '설정', exact: true });
+      for (const section of [
+        '일반',
+        '테마·색상',
+        '역할별 모델',
+        '현재 프롬프트',
+        '프로바이더·모델',
+        '로어 문맥',
+        'Codex 연결',
+        '삽화',
+        '사용량',
+        '데이터 관리',
+        '접근 보안',
+        '앱 정보·라이선스',
+      ]) {
+        await selectSettingsSection(page, section);
+        const pane = dialog.getByRole('tabpanel');
+        if (section === '일반') {
+          await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
+          const toggle = pane.getByLabel('Enter로 보내기', { exact: true });
+          const toggleBox = (await toggle.boundingBox())!;
+          const rowBox = (await toggle.locator('xpath=ancestor::label').boundingBox())!;
+          expect(
+            Math.abs(rowBox.x + rowBox.width - toggleBox.x - toggleBox.width)
+          ).toBeLessThanOrEqual(1);
+        } else if (section === '테마·색상') {
+          const controls = pane.locator('.theme-control-bar select');
+          await expect(controls).toHaveCount(3);
+          await expect(
+            pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
+          ).toBeVisible();
+        } else if (section === '로어 문맥') {
+          await expect(pane.getByRole('heading', { name: '로어 사용', exact: true })).toBeVisible();
+          await expect(pane.getByLabel('조회한 로어를 다음 생성에 유지')).toBeVisible();
+        } else if (section === '데이터 관리') {
+          await expect(
+            pane.getByRole('heading', { name: '백업 · 복원', exact: true })
+          ).toBeVisible();
+          await expect(
+            pane.getByRole('button', { name: '백업 다운로드', exact: true })
+          ).toBeVisible();
+          const restore = pane
+            .locator('details')
+            .filter({ has: page.locator('summary', { hasText: '전체 복원 방법' }) });
+          await expect(
+            pane.getByRole('heading', { name: '자료 가져오기', exact: true })
+          ).toBeVisible();
+          await expect(
+            pane.getByRole('heading', { name: '채팅 가져오기', exact: true })
+          ).toBeVisible();
+          await expect(restore).not.toHaveAttribute('open', '');
+          await restore.locator('summary').click();
+          await expect(restore).toContainText('서버를 종료하고');
+          await restore.locator('summary').click();
+        } else if (section === 'Codex 연결') {
+          await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
+          await expect(pane.locator('.codex-connection-guide')).not.toHaveAttribute('open', '');
+          await pane.getByText('연결 절차', { exact: true }).click();
+          await expect(
+            pane.getByRole('list', { name: 'Codex 연결 단계' }).getByRole('listitem')
+          ).toHaveCount(3);
+          await pane.getByText('연결 절차', { exact: true }).click();
+          await expect(
+            pane.getByRole('button', { name: 'ChatGPT로 로그인', exact: true })
+          ).toHaveCount(0);
+          await expect(pane.locator('.provider-actions')).toBeHidden();
+        } else if (section === '역할별 모델') {
+          await expect(pane.getByLabel('원문 모델', { exact: true })).toBeVisible();
+        } else if (section === '현재 프롬프트') {
+          await expect(pane.getByLabel('현재 프롬프트 역할', { exact: true })).toBeVisible();
+        } else if (section === '프로바이더·모델') {
+          await expect(pane.getByLabel('프로바이더·모델 검색', { exact: true })).toBeVisible();
+        } else if (section === '삽화') {
+          await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeVisible();
+        } else if (section === '사용량') {
+          await expect(
+            pane.getByRole('button', { name: '사용량 새로고침', exact: true })
+          ).toBeVisible();
+        } else if (section === '접근 보안') {
+          await expect(pane.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
+        } else {
+          await expect(pane.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
+          await expect(pane.getByTestId('app-build-id')).toHaveText(health.buildId);
+          await pane.getByText('라이선스 전문', { exact: true }).click();
+          await expect(pane.locator('.app-about-document').first()).toContainText(
+            'GNU AFFERO GENERAL PUBLIC LICENSE'
+          );
+          await pane.getByText('라이선스 전문', { exact: true }).click();
+          await pane.getByText('저작권·제3자 고지', { exact: true }).click();
+          await expect(pane.locator('.app-about-document').last()).toContainText('RisuAI');
+          await pane.getByText('저작권·제3자 고지', { exact: true }).click();
+        }
+        expect(
+          await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
+        ).toBeLessThanOrEqual(1);
+        const bounds = (await dialog.boundingBox())!;
+        expect(Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(2);
+        if (viewport.width > 760) expect(bounds.width).toBeLessThan(1300);
+        await pane.evaluate((node) => {
+          node.scrollTop = 0;
+        });
+        await page.screenshot({
+          path: info.outputPath(`settings-${section}-${colorScheme}-${viewport.width}.png`),
+        });
       }
-      expect(
-        await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
-      ).toBeLessThanOrEqual(1);
-      const bounds = (await dialog.boundingBox())!;
-      expect(Math.abs(bounds.x + bounds.width / 2 - viewport.width / 2)).toBeLessThanOrEqual(2);
-      if (viewport.width > 760) expect(bounds.width).toBeLessThan(1300);
-      await pane.evaluate((node) => {
-        node.scrollTop = 0;
-      });
-      await page.screenshot({ path: info.outputPath(`recovery-${section}-${viewport.width}.png`) });
+      await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
     }
-    await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
   }
 });
 
@@ -542,7 +596,11 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
     );
     await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
     await expect(count).toHaveValue('0');
+    await count.fill('');
     await count.fill(String(nextCount));
+    await expect(
+      settings.getByRole('button', { name: '삽화 설정 저장', exact: true })
+    ).toBeEnabled();
     let release!: () => void;
     const held = new Promise<void>((resolve) => {
       release = resolve;

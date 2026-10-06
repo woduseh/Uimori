@@ -8,7 +8,7 @@
 }
 .reading-settings {
   display: grid;
-  gap: 16px;
+  gap: 24px;
   min-width: 0;
 }
 .reading-preview {
@@ -16,6 +16,7 @@
   padding: 14px 16px;
   border-radius: 12px;
   background: var(--surface-raised);
+  border: 1px solid var(--line);
 }
 .reading-preview .prose > p:last-of-type {
   margin-bottom: 0;
@@ -76,34 +77,22 @@
 .reading-preferences {
   container-type: inline-size;
   display: grid;
-  gap: 16px;
+  gap: 24px;
   min-width: 0;
 }
 .reading-settings-group {
-  display: grid;
-  gap: 0;
-  padding-block: 0;
+  padding: 0;
 }
-.reading-settings-group-heading {
-  padding: 14px 0 10px;
-}
-.reading-settings-group-heading h4,
-.reading-settings-group-heading p {
-  margin: 0;
-}
-.reading-settings-group-heading p {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.reading-settings-group > label,
+.reading-settings-rows > label,
 .reading-spacing > label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 44%);
   align-items: center;
   gap: 16px;
-  padding-block: 12px;
+  padding-block: 16px;
+}
+.reading-settings-rows > * + *,
+.reading-spacing > label + label {
   border-top: 1px solid var(--line);
 }
 .reading-settings-group select {
@@ -130,8 +119,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding-block: 12px;
-  border-top: 1px solid var(--line);
+  padding-block: 16px;
 }
 .reading-option-toggle > .check {
   flex: none;
@@ -142,22 +130,13 @@
   gap: 4px;
   min-width: 0;
 }
-.reading-option-toggle small,
-.reading-group-note {
+.reading-option-toggle small {
   color: var(--muted);
   line-height: 1.5;
 }
-.reading-group-note {
-  display: block;
-  padding: 0 0 12px;
-}
-.reading-settings-group > .reading-toggles,
-.reading-settings-group > .reading-quote-settings {
-  border-top: 1px solid var(--line);
-  padding-block: 12px;
-}
-.reading-preview-group {
-  padding-bottom: 14px;
+.reading-settings-rows > .reading-toggles,
+.reading-settings-rows > .reading-quote-settings {
+  padding-block: 16px;
 }
 .reading-preview-group .reading-preview {
   padding: 14px;
@@ -166,10 +145,7 @@
   justify-self: start;
 }
 @container (max-width: 420px) {
-  .reading-settings-group {
-    padding-inline: 12px;
-  }
-  .reading-settings-group > label,
+  .reading-settings-rows > label,
   .reading-spacing > label {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;

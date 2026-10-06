@@ -641,6 +641,8 @@
 }
 .connection-editor .provider-model-section > .provider-field-heading:first-child {
   margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
 }
 .connection-editor .provider-model-section > fieldset {
   margin: 8px 0 0;
@@ -689,7 +691,10 @@
 }
 
 .provider-model-group {
-  border-bottom: 1px solid var(--line);
+  border: 0;
+}
+.provider-model-group + .provider-model-group {
+  border-top: 1px solid var(--line);
 }
 .provider-model-group > summary {
   display: flex;
@@ -711,7 +716,12 @@
 }
 .provider-model-group-list {
   padding-left: 12px;
-  border-left: 2px solid var(--line);
+}
+.provider-saved-list .provider-saved-item {
+  border-bottom: 0;
+}
+.provider-saved-item + .provider-saved-item {
+  border-top: 1px solid var(--line);
 }
 .provider-model-row-actions {
   display: flex;
