@@ -36,11 +36,9 @@ test('PLR02 every package category is editable from card and list controls', asy
     const library = page.getByTestId('library-panel');
     await library.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(item.title);
     for (const view of ['카드', '목록']) {
-      const options = library.locator('.library-list-options > summary');
-      if (!(await options.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
-        await options.click();
-      await library.getByRole('button', { name: view, exact: true }).click();
-      await options.click();
+      const viewButton = library.getByRole('button', { name: view, exact: true });
+      await viewButton.click();
+      await expect(viewButton).toHaveAttribute('aria-pressed', 'true');
       const directEdit = library.getByRole('button', { name: `${item.title} 편집`, exact: true });
       if (await directEdit.isVisible()) await directEdit.click();
       else {

@@ -143,7 +143,7 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
     .click();
   await page
     .getByRole('dialog', { name: '장면 목록', exact: true })
-    .getByRole('button', { name: /^6번째 장면/ })
+    .getByRole('button', { name: /^6번째 장면 ·/ })
     .click();
   await expect
     .poll(() => new URL(page.url()).searchParams.get('source'))

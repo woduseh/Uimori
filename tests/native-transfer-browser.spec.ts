@@ -76,6 +76,7 @@ atWidths(
       buffer: Buffer.from(JSON.stringify(card(title))),
     });
     await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
     const applied = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
@@ -101,7 +102,9 @@ atWidths(
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(card(title))),
     });
-    await expect(dialog.locator('.risu-import-hero small')).toHaveText('페르소나');
+    await expect(dialog.locator('.risu-import-processing > summary')).toHaveText(
+      '페르소나로 가져오기 · 변경'
+    );
     const applied = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/risu-imports/apply') && response.request().method() === 'POST'
