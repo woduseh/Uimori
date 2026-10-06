@@ -2,16 +2,17 @@
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1.55;
-  margin-block: 6px;
+  margin: 0;
   overflow-wrap: anywhere;
 }
 .scene-usage summary {
   cursor: pointer;
-  width: fit-content;
-  max-width: 100%;
 }
 .scene-usage p {
   margin-block: 6px;
+}
+.scene-usage-body {
+  padding: 2px 14px 14px;
 }
 .scene-usage meter {
   display: block;
@@ -29,11 +30,30 @@
 }
 .scene-receipt dd {
   margin: 0;
+  color: var(--text);
 }
 .scene-receipt-lore {
   padding-inline-start: 20px;
   margin-block: 6px;
 }
 .scene-usage-help {
-  margin-top: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.scene-usage-help > summary {
+  min-height: var(--control-h);
+  align-content: center;
+}
+@media (max-width: 600px) {
+  .scene-usage-body {
+    padding-inline: 12px;
+  }
+  .scene-receipt {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .scene-receipt dd:not(:last-child) {
+    margin-bottom: 8px;
+  }
 }

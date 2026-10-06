@@ -182,11 +182,10 @@ function CacheUsage({ attempt }: { attempt: Attempt }) {
 const loreVia = {
   pinned: '고정 자료',
   selected: '자동 선택',
-  retained: '이전 요청에서 유지',
+  retained: '이전 요청 포함',
   'tool-result': '도구 조회',
 };
 const loreDelivery = {
-  full: '전체 본문',
   excerpt: '읽은 구간',
   summary: '요약만',
   unverified: '포함 여부 미확인',
@@ -200,7 +199,8 @@ export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
         <li key={`${entry.id}:${entry.via}:${index}`}>
           <strong>{entry.title || entry.id}</strong>
           <span>
-            {loreVia[entry.via]} · {loreDelivery[entry.delivery]}
+            {loreVia[entry.via]}
+            {entry.delivery !== 'full' && <> · {loreDelivery[entry.delivery]}</>}
           </span>
           {entry.source && <small>출처: {entry.source.sourceName || entry.source.contentId}</small>}
           <small>{entry.id}</small>

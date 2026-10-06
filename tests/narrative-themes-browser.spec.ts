@@ -339,6 +339,8 @@ for (const layout of layouts) {
           const composer = await page.locator('.composer-dock').boundingBox();
           expect(manuscript!.y + manuscript!.height).toBeLessThanOrEqual(composer!.y + 1);
           // Expanded receipts use the outer reader without hiding the scene actions.
+          const activityDisclosure = scene.getByTestId('turn-activity').locator(':scope > summary');
+          await activityDisclosure.click();
           const usage = scene.getByTestId('scene-usage');
           const disclosure = usage.locator('summary').first();
           await disclosure.click();
@@ -351,6 +353,7 @@ for (const layout of layouts) {
           await page.screenshot({ path: info.outputPath(`${layout}-${mode}-usage-expanded.png`) });
           await disclosure.click();
           await expect(usage).not.toHaveAttribute('open', '');
+          await activityDisclosure.click();
           await reader.evaluate((node) => {
             node.scrollTop = 0;
           });

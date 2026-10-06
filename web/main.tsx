@@ -1173,9 +1173,6 @@ function App() {
                                 s.detail!.runs.find((run) => run.id === source.runId)
                                   ?.contextSummary
                               }
-                              sceneUsage={
-                                s.detail!.runs.find((run) => run.id === source.runId)?.sceneUsage
-                              }
                               estimatedCost={
                                 s.detail!.runs.find((run) => run.id === source.runId)?.estimatedCost
                               }

@@ -220,9 +220,13 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       page.on('request', captureDetail);
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/?chat=${chat.id}`);
+      const activity = page.getByTestId('turn-activity');
       const usage = page.getByTestId('scene-usage');
+      await expect(usage).toHaveCount(0);
+      await activity.locator(':scope > summary').click();
+      await expect(activity.getByTestId('scene-usage')).toBeVisible();
       await expect(usage).toContainText('요청 1,234 · 응답 87 토큰');
-      await expect(usage.locator(':scope > summary')).toContainText('문맥 1.9%');
+      await expect(usage.locator(':scope > summary')).toContainText('컨텍스트 사용량 1.9%');
       expect(detailRequests).toHaveLength(0);
       await usage.locator(':scope > summary').click();
       await expect(usage).toContainText('전송 로어 · 1개 기록');
@@ -232,28 +236,25 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await expect(usage).toContainText('프롬프트 선택');
       await expect(usage).toContainText('Synthetic scene diagnostics prompt');
       await expect(usage).toContainText('호출 당시 미라');
-      await expect(usage).toContainText('Gemini · Gemma 4 토크나이저');
-      await expect(usage).toContainText(`${loreTitle} · 고정 자료 · 전체 본문`);
-      await expect(usage).toContainText('입력 한도 65,536 토큰');
-      await expect(usage.getByRole('meter', { name: '입력 한도 대비 보고 문맥' })).toHaveAttribute(
+      await expect(usage).toContainText(`${loreTitle} · 고정 자료`);
+      await expect(usage).toContainText('입력 1,234 / 컨텍스트 한도 65,536');
+      await expect(usage.getByRole('meter', { name: '컨텍스트 한도 대비 입력' })).toHaveAttribute(
         'value',
         '1234'
-      );
-      await expect(usage).toContainText(
-        `전송 전 로컬 추정은 ${context.estimatedInputTokens.toLocaleString('ko-KR')} 토큰`
       );
       await page.screenshot({ path: info.outputPath(`scene-usage-known-${width}.png`) });
       await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
       await page.getByRole('button', { name: '마지막 장면의 로어', exact: true }).click();
       const lore = page.getByRole('dialog', { name: '마지막 장면의 로어', exact: true });
       await expect(lore.getByText(loreTitle, { exact: true })).toBeVisible();
-      await expect(lore).toContainText('고정 자료 · 전체 본문');
+      await expect(lore).toContainText('고정 자료');
       await expect(lore).not.toContainText('로어 포함 기록이 없어요');
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
       ).toBe(true);
       await page.screenshot({ path: info.outputPath(`scene-lore-known-${width}.png`) });
       await lore.getByRole('button', { name: '마지막 장면의 로어 닫기', exact: true }).click();
+      await activity.locator(':scope > summary').click();
       page.off('request', captureDetail);
     }
   } finally {
