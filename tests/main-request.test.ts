@@ -295,7 +295,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       ]);
     });
     closes.push(server.close);
-    const work = await snapshot(server.origin + '/v1/chat/completions');
+    const work = await snapshot(server.origin + '/v1');
     work.profile!.models.main!.connection.protocol = 'vercel-chat-v1';
     work.profile!.models.main!.connection.credentialRef = 'SYNTHETIC_HISTORY_CREDENTIAL';
     work.profile!.models.main!.modelId = 'openai/gpt-5.6-sol';
@@ -317,6 +317,10 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       text: 'Continued synthetic prose.',
     });
     expect(server.requests).toHaveLength(2);
+    expect(server.requests.map((request) => request.url)).toEqual([
+      '/v1/chat/completions',
+      '/v1/chat/completions',
+    ]);
     const bodies = server.requests.map((request) => JSON.parse(request.body));
     expect(bodies[0]).toEqual(preview.body);
     expect(log.attempts.map((attempt) => attempt.body)).toEqual(bodies);
