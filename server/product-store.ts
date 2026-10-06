@@ -572,6 +572,7 @@ export class ProductStore {
       'packageAttachments',
       'loreContext',
       'pinned',
+      'authorNote',
     ]);
     const image = boolean(b.image);
     let requestedLore: ReturnType<typeof validateLoreContextPolicy> | undefined;
@@ -586,6 +587,10 @@ export class ProductStore {
       if (prior.revision !== number(b.expectedRevision, 'profile revision'))
         throw new HttpError(409, 'Profile revision conflict');
       const pinned = b.pinned === undefined ? prior.pinned : validatePinnedProfile(b.pinned);
+      const authorNote =
+        b.authorNote === undefined
+          ? (prior.authorNote ?? '')
+          : text(b.authorNote, 'author note', 32_000, true);
       if (
         pinned?.mainPromptPresetId &&
         pinned.mainPromptPresetId !== prior.pinned?.mainPromptPresetId
@@ -615,6 +620,7 @@ export class ProductStore {
         chatId,
         revision: prior.revision + 1,
         ...(pinned && Object.keys(pinned).length ? { pinned } : {}),
+        ...(authorNote ? { authorNote } : {}),
         routes: {
           ...promptWorkspace(this.store).modelRoutes,
           ...(pinned?.mainModel ? { main: structuredClone(pinned.mainModel) } : {}),

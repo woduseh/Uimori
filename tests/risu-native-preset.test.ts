@@ -239,6 +239,7 @@ test('slot wrappers and fallback notes keep ordering without retired role overri
     preset('', {
       promptTemplate: [
         { type: 'description', role2: 'system', innerFormat: '<box>{{slot}}</box>' },
+        { type: 'plain', role: 'system', text: 'CBS={{authornote}}' },
         { type: 'authornote', role2: 'system', defaultText: 'default note' },
         { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
       ],
@@ -249,9 +250,63 @@ test('slot wrappers and fallback notes keep ordering without retired role overri
     result.compiled.messages.map((message) => [message.role, message.content[0]!.text])
   ).toEqual([
     ['system', '<box>BOT</box>'],
+    ['system', 'CBS=default note'],
     ['system', 'default note'],
     ['user', 'CURRENT'],
   ]);
+});
+
+test('chat author note overrides the Risu slot and CBS while translation keeps its own fallback', async () => {
+  const source = snapshot(
+    preset('', {
+      promptTemplate: [
+        { type: 'plain', role: 'system', text: 'CBS={{authornote}}' },
+        {
+          type: 'authornote',
+          role2: 'system',
+          innerFormat: '<note>{{slot}}</note>',
+          defaultText: 'main default',
+        },
+        { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+      ],
+    })
+  );
+  source.profile!.authorNote = 'chat note';
+  expect(nativePromptSlots(source).authorNote).toBe('chat note');
+  const prepared = await prepareNativeRisuPreset(source);
+  const program = projectNativeRisuPresetProgram(
+    prepared,
+    prepared.profile!.promptPresets!.main!.program
+  );
+  const compiled = compileRisuPrompt(program, {
+    slots: nativePromptSlots(prepared),
+    history: [{ id: 'current', role: 'user', text: 'CURRENT', current: true }],
+  });
+  expect(compiled.messages.map((message) => [message.role, message.content[0]!.text])).toEqual([
+    ['system', 'CBS=chat note'],
+    ['system', '<note>chat note</note>'],
+    ['user', 'CURRENT'],
+  ]);
+
+  const translation = importRisuPresetProgram(
+    preset('', {
+      promptTemplate: [
+        { type: 'plain', role: 'system', text: 'T={{authornote}}' },
+        { type: 'authornote', role2: 'system', defaultText: 'translation default' },
+      ],
+    })
+  );
+  source.profile!.promptPresets!.translation = {
+    id: 'translation',
+    revision: 1,
+    title: 'Translation',
+    role: 'translation',
+    program: translation.program,
+  };
+  const translated = await prepareNativeRisuTranslationPrompt(source);
+  const translatedTemplate = translated.profile!.promptPresets!.translation!.program
+    .nativeRisuPreset!.preset.promptTemplate as Record<string, unknown>[];
+  expect(translatedTemplate[0]).toMatchObject({ text: 'T=translation default' });
 });
 test('native regex keeps captures and evaluates CBS after substitution in every supported stage', async () => {
   const regex = ['editinput', 'editoutput', 'editprocess', 'editdisplay'].map((type) => ({

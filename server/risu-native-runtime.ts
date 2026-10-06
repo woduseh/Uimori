@@ -47,6 +47,7 @@ export interface NativeRisuExecutionInput {
   request?: NativeRisuRequestMessage[];
   meta?: Record<string, unknown>;
   globalVariables?: Record<string, string>;
+  authorNote?: string;
   assetUrls?: Record<string, string>;
 }
 export interface NativeRisuExecutionResult {

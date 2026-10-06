@@ -73,6 +73,12 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
   if (!bot && !preset?.program.nativeRisuPreset) return undefined;
   const presetSource = preset?.program.nativeRisuPreset?.preset;
   const presetRegex = presetSource?.regex ?? presetSource?.presetRegex;
+  const presetAuthorNote = Array.isArray(presetSource?.promptTemplate)
+    ? (presetSource.promptTemplate as Record<string, unknown>[]).find(
+        (entry) =>
+          entry.type === 'authornote' && typeof entry.defaultText === 'string' && entry.defaultText
+      )?.defaultText
+    : undefined;
   const natives = entries.map((entry) => entry.native);
   const effectiveTriggers = natives.flatMap(nativeRisuTriggers);
   const base = bot?.native ?? {
@@ -130,6 +136,9 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
       typeof base.card.post_history_instructions === 'string'
         ? base.card.post_history_instructions
         : '',
+    authorNote:
+      snapshot.profile?.authorNote ||
+      (typeof presetAuthorNote === 'string' ? presetAuthorNote : ''),
     variables: {
       ...resolveTemplateVariableContext(snapshot.profile).variables,
       ...snapshot.nativeRisuExecution?.variables,
