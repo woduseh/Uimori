@@ -105,6 +105,8 @@ ComfyUI에서 Anima용 프롬프트를 작성할 때:
 
 한 응답에서 컷을 고르는 계획은 하나만 진행돼요(`ILLUSTRATION_PLAN_ACTIVE`). 다른 컷은 독립 예약할 수 있지만 같은 컷의 중복 실행은 막아요(`ILLUSTRATION_ACTIVE`). 기존 삽화 pump 안에서 텍스트 작업 1개와 렌더 1개를 독립 실행하고, 같은 계획의 대표 컷부터 순서대로 그려요. 본문 작업 슬롯이나 입력 상태를 잠그지 않아요. 설정은 **예약 시점에 작업 안에 고정**되며, 저장을 바꿔도 진행 중인 작업과 과거 결과는 바뀌지 않아요. 새 삽화 생성이 실패해도 이전에 완료된 삽화는 그대로 남아요.
 
+장면당 최대 삽화 개수를 비우거나 범위 밖 값으로 입력해도 자동으로 고를 최대 컷 수는 보존해요. 유효한 1~8 정수로 고쳤을 때만 연관 한도를 맞추므로, 자동 생성이 꺼져 해당 입력이 숨겨진 상태에서도 최대 개수를 고쳐 저장할 수 있어요.
+
 ## 저장과 표시 계약
 
 - 실행 표는 `illustration_settings`, `illustration_references`, `illustration_jobs`, `illustration_images`예요. 프리셋은 공통 `versions`의 `illustration-preset` 자료이고 선택은 `app_metadata`의 `illustration-preset-preferences`예요. 선택을 저장하지 않은 새 작업실은 내장 기본 프리셋을 사용해요. 기존 프리셋·선택과 작업 입력은 유지하며, 부팅 시 옛 설정을 다시 변환하지 않아요. [데이터 형식](DATA-MIGRATIONS.md)을 참고해요.

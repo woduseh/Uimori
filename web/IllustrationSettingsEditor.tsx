@@ -292,7 +292,10 @@ function IllustrationEnvironmentEditor({
           change({
             ...draft,
             maxPerSource: value,
-            automaticMaxTargets: Math.min(value, draft.automaticMaxTargets),
+            automaticMaxTargets:
+              Number.isInteger(value) && value >= 1 && value <= 8
+                ? Math.min(value, draft.automaticMaxTargets)
+                : draft.automaticMaxTargets,
           })
         )}
         {draft.automatic &&
