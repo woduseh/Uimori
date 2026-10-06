@@ -188,9 +188,6 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     evaluationTools: { maximumToolRounds: 2 },
     source: { kind: 'manual', catalogUpdatedAt: null },
   });
-  await expect(page.getByRole('region', { name: '등록한 모델 사용 방법' })).toContainText(
-    '설정 → 역할별 모델에서 사용할 역할을 선택하고 저장해요.'
-  );
   expect(observed.errors).toEqual([]);
   expect(observed.generations).toEqual([]);
   expect(observed.legacyReads).toEqual([]);
@@ -1412,7 +1409,9 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await selectSettingsSection(page, 'Codex 연결');
   const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
   await expect(panel).toContainText('로그인 필요');
-  const help = panel.locator('details');
+  const help = panel
+    .locator('details')
+    .filter({ has: page.getByText('연결 도움말', { exact: true }) });
   await expect(help).not.toHaveAttribute('open', '');
   const executionHelp = help.getByText('Codex는 Uimori 서버에서 실행해요.', { exact: false });
   await expect(executionHelp).toBeHidden();
@@ -1475,9 +1474,9 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await modelForm.getByLabel('출력 토큰 예산', { exact: true }).fill('2048');
   await expect(modelForm.getByLabel('Temperature', { exact: true })).toBeHidden();
   await modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
-  await expect(page.getByRole('region', { name: '등록한 모델 사용 방법' })).toContainText(
-    'PMUI10 Codex 모델'
-  );
+  await expect(
+    page.getByRole('status').filter({ hasText: 'PMUI10 Codex 모델 모델 프리셋 등록됨' })
+  ).toBeVisible();
   const savedModel = (await library(request)).models.find(
     (item) => item.title === 'PMUI10 Codex 모델'
   )!;

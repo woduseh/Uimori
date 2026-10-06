@@ -524,7 +524,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ).toBe(true);
   });
 
-  test('NMR09 native pinned context slots have no duplicate host-envelope bodies', async () => {
+  test('NMR09 native pinned and selected context slots have no duplicate host-envelope bodies', async () => {
     const server = await loopbackProvider(async (_request, response) =>
       writeSse(response, [complete('Synthetic final prose.'), '[DONE]'])
     );
@@ -544,6 +544,13 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
                 constant: true,
                 enabled: true,
               },
+              {
+                id: 'harbor',
+                comment: 'Selected harbor fact',
+                content: 'SYNTHETIC_CANON_SELECTED',
+                constant: false,
+                enabled: true,
+              },
             ],
           },
         },
@@ -555,6 +562,19 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       { id: 'bot', revision: 1, role: 'bot' },
       { id: 'canon', revision: 1, role: 'module' },
     ];
+    work.loreSelection = {
+      version: 1,
+      entries: [
+        {
+          key: 'canon@1:module',
+          inputHash: 'a'.repeat(64),
+          budget: 16_000,
+          selected: ['lore-1'],
+          omitted: [],
+          model: 'jev-latest',
+        },
+      ],
+    };
     (
       work.profile!.promptPresets!.main!.program!.nativeRisuPreset.preset.promptTemplate as Record<
         string,
@@ -569,7 +589,11 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
 
     const expected = encodeMainPreview(built.request, work.profile!.models.main!).body;
     const wire = JSON.stringify(expected);
-    for (const marker of ['SYNTHETIC_PINNED_BOT', 'SYNTHETIC_CANON_ALWAYS_PINNED'])
+    for (const marker of [
+      'SYNTHETIC_PINNED_BOT',
+      'SYNTHETIC_CANON_ALWAYS_PINNED',
+      'SYNTHETIC_CANON_SELECTED',
+    ])
       expect(wire.split(marker).length - 1).toBe(1);
     const log = hooks(server.origin);
     expect((await runMain(built.snapshot, log.value)).status).toBe('completed');
@@ -577,9 +601,15 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       status: 'complete',
       entries: [
         { title: 'Canon fact', via: 'pinned', delivery: 'full', source: { contentId: 'canon' } },
+        {
+          title: 'Selected harbor fact',
+          via: 'selected',
+          delivery: 'full',
+          source: { contentId: 'canon' },
+        },
       ],
     });
-    expect(log.attempts[0].requestLore!.entries).toHaveLength(1);
+    expect(log.attempts[0].requestLore!.entries).toHaveLength(2);
     expect(log.attempts[0].body).toEqual(expected);
     expect(JSON.parse(server.requests[0].body)).toEqual(expected);
     expect(server.requests[0].body).not.toContain('requestLore');

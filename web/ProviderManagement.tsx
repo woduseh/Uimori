@@ -68,7 +68,6 @@ export function ConnectionEditor({
   onSaveHandlerChange,
   modelToEdit,
   onModelEditHandled,
-  onRoleModels,
 }: {
   library: Library;
   reload: () => Promise<void>;
@@ -77,7 +76,6 @@ export function ConnectionEditor({
   onSaveHandlerChange?: SettingsSaveRegistration;
   modelToEdit?: string | null;
   onModelEditHandled?: () => void;
-  onRoleModels?: () => void;
 }) {
   const modelTests = useProviderModelTests();
   const [forcedVertexTier, setForcedVertexTier] = useState<VertexRequestTier>();
@@ -199,7 +197,6 @@ export function ConnectionEditor({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   const setBusy = setOperationBusy;
-  const [registeredModel, setRegisteredModel] = useState<ModelPreset>();
   const operationLock = useRef(false);
   const jevSave = useRef<(() => Promise<boolean>) | null>(null);
   const connectionForm = useRef<HTMLFormElement>(null);
@@ -262,8 +259,6 @@ export function ConnectionEditor({
   async function deletedModel(item: ModelPreset) {
     if (editingModel?.id === item.id && screen === 'model') navigate('models');
     dispatchDraft({ type: 'model.deleted', id: item.id });
-    if (registeredModel?.id === item.id) setRegisteredModel(undefined);
-
     setConflict(null);
     setError('');
     onError('');
@@ -404,7 +399,6 @@ export function ConnectionEditor({
     );
     if (fromForm) {
       dispatchDraft({ type: 'model.open', value: modelDraft(saved), editing: saved });
-      setRegisteredModel(saved);
       returnItem.current = { screen: 'models', id: saved.id };
       setSetup(false);
       if (!leave) navigate('models');
@@ -1058,7 +1052,6 @@ export function ConnectionEditor({
                       >
                         테스트 보기
                       </button>
-                      <small>요금이 발생할 수 있어요.</small>
                     </div>
                   </section>
                 </article>
@@ -1225,26 +1218,6 @@ export function ConnectionEditor({
         </p>
       )}
       <p role="status">{message}</p>
-      {registeredModel && screen === 'models' && (
-        <section className="provider-next-step" aria-label="등록한 모델 사용 방법">
-          <strong>{registeredModel.title} · 다음으로 역할에 배정하세요</strong>
-          <p>비활성 프로바이더로 등록했다면 프로바이더를 활성화한 뒤 역할에 배정해 주세요.</p>
-          <ol>
-            <li>설정 → 역할별 모델에서 사용할 역할을 선택하고 저장해요.</li>
-            <li>모든 채팅의 이후 요청에 적용해요.</li>
-          </ol>
-          <small>
-            {registeredModel.enabled === false
-              ? '지금은 새 선택에서 제외된 모델이에요. 활성화한 뒤 새로 배정할 수 있어요.'
-              : '역할 선택 전에는 현재 전역 모델 설정을 바꾸지 않아요.'}
-          </small>
-          {onRoleModels && (
-            <button type="button" className="secondary" onClick={onRoleModels}>
-              역할별 모델 열기 <ForwardIcon size={18} aria-hidden="true" />
-            </button>
-          )}
-        </section>
-      )}
     </section>
   );
 }
