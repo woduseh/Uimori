@@ -143,6 +143,7 @@ export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
                     {
                       {
                         pinned: '고정 자료',
+                        selected: '자동 선택',
                         retained: '이전 요청에서 유지',
                         'tool-result': '도구 조회',
                       }[entry.via]

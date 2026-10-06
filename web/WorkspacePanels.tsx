@@ -705,7 +705,6 @@ export function AppSettingsPanel({
                           onSaveHandlerChange={saveGroup.registrations.connection}
                           modelToEdit={modelToEdit}
                           onModelEditHandled={() => setModelToEdit(null)}
-                          onRoleModels={() => select('models')}
                         />
                       ) : (
                         <p role="status">프로바이더 목록을 불러오는 중이에요…</p>

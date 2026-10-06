@@ -138,7 +138,6 @@ export function ProviderModelTest({
               ? '테스트 상태 다시 확인'
               : '응답 테스트'}
         </button>
-        <small>요금이 발생할 수 있어요.</small>
       </div>
       {!available && <small>모델과 프로바이더를 활성화해 주세요.</small>}
       {record?.error ? (

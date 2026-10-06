@@ -179,7 +179,12 @@ function CacheUsage({ attempt }: { attempt: Attempt }) {
   );
 }
 
-const loreVia = { pinned: '고정 자료', retained: '이전 요청에서 유지', 'tool-result': '도구 조회' };
+const loreVia = {
+  pinned: '고정 자료',
+  selected: '자동 선택',
+  retained: '이전 요청에서 유지',
+  'tool-result': '도구 조회',
+};
 const loreDelivery = {
   full: '전체 본문',
   excerpt: '읽은 구간',

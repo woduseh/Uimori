@@ -364,7 +364,7 @@ export function JevProviderSettings({
                     ? 'JEV 테스트 상태 확인'
                     : 'JEV 연결 테스트'}
               </button>
-              <small>짧은 예제의 관련성을 판단해요. 요금이 발생할 수 있어요.</small>
+              <small>짧은 예제의 관련성을 판단해요.</small>
             </div>
             {apiKey && <small>입력한 키를 저장하거나 지운 뒤 테스트해 주세요.</small>}
             {testError && (
