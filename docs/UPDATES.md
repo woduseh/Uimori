@@ -10,6 +10,8 @@ Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재
 
 **v0.7.0 keeps the same schema 15 used by v0.6.1, v0.6.0, v0.5.2, v0.5.1, v0.5.0 and v0.4.0.** A workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
 
+The tag-based commands below apply after `v0.7.0` is published. Preparing the candidate does not create that tag or update an installed app.
+
 From a clean source checkout, with the existing server stopped:
 
 ```sh
