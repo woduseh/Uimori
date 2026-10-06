@@ -15,6 +15,8 @@ For an offline install with a populated npm cache, add `--offline`. `dev` builds
 
 Run `npm run doctor` when diagnosing the environment. It checks Node, child processes, SQLite, loopback HTTP, and Chromium. `--no-browser` checks only the API environment. Set `UIMORI_BROWSER_PATH` to use a browser outside the discovered locations. The shared resolver falls back to an installed Playwright Chromium. `doctor`, the shared browser harness and `verify:selfhost` launch the resolved browser and check a synthetic loopback page and nonzero text geometry before app tests. Missing libraries, fonts or executables report `BLOCKED`; this basic layout check does not prove complete glyph coverage. Configure an environment-specific wrapper with `UIMORI_BROWSER_PATH`, not a hardcoded workspace path.
 
+Video-recording motion cases in the full browser and UI suites also require Playwright's FFmpeg binary. After `npm ci`, run `npx playwright install ffmpeg` to install the matching test binary in Playwright's cache. The browser doctor's launch/layout probe does not exercise video recording.
+
 ## Verification
 
 Choose checks that can expose failures caused by the change. Completing a feature or making a commit does not, by itself, require a full suite.

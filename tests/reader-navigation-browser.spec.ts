@@ -195,7 +195,7 @@ test('CHATREC03 mobile mini navigator follows source IDs and keeps the opening o
   expect(await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop)).toBe(before);
   await list.click();
   const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
-  await dialog.getByRole('button', { name: '첫 메시지', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Opening', exact: true }).click();
   await expect(selected).toHaveText('opening:id');
   await expect(previous).toBeDisabled();
   const reader = await page.locator('.reader-scrollport').boundingBox();
