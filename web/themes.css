@@ -267,15 +267,11 @@
   width: 100%;
 }
 .theme-library-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+  display: grid;
+  gap: 12px;
   padding: 16px 0;
 }
 .theme-library-copy {
-  flex: 1 1 240px;
   min-width: 0;
 }
 .theme-library-copy h4,
@@ -306,16 +302,6 @@
   .theme-control-bar > label > select {
     width: 100%;
     min-width: 0;
-  }
-  .theme-library-tools {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .theme-library-copy {
-    flex-basis: auto;
-  }
-  .theme-library-actions {
-    flex-wrap: wrap;
   }
 }
 
