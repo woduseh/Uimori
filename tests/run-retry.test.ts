@@ -151,6 +151,7 @@ test('failed retry after the original head advances copies a chat at its origina
   store.finishRun(original.id, 'failed', 'Synthetic failure');
   const later = complete(store, chat.id, 'Later response');
   const retry = store.retryRun(original.id, 'historical-retry').run;
+  expect(store.chat(retry.chatId).title).toBe('Historical failure · 사본 1');
   expect(retry.parentRevision).toBe(original.parentRevision);
   expect(retry.chatId).not.toBe(original.chatId);
   expect(retry.snapshot.chatId).toBe(retry.chatId);

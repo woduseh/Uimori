@@ -76,8 +76,7 @@ export function retryRun(
       const chat = copied
         ? forkChat(store, original.chatId, {
             fromRevision: original.parentRevision,
-            title:
-              options.title ?? `${store.chat(original.chatId).title} · 새 이야기`.slice(0, 200),
+            ...(options.title !== undefined ? { title: options.title } : {}),
             idempotencyKey: createHash('sha256').update(requestKey).digest('hex'),
           })
         : store.chat(original.chatId);

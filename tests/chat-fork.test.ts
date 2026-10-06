@@ -76,7 +76,7 @@ function source(store: Store, chatId: string, value: string) {
 }
 
 describe('independent stored-story fork without generation', () => {
-  test('makes repeated keys durable, uses independent IDs even with identical automatic titles and rejects conflicting selections', async () => {
+  test('numbers independent copies while repeated keys remain durable and conflicting selections are rejected', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Names');
     const first = source(store, chat.id, 'First scene.');
@@ -91,7 +91,7 @@ describe('independent stored-story fork without generation', () => {
     expect(
       store.db.prepare('SELECT count(*) AS n FROM attempts WHERE chat_id=?').get(a.id)!.n
     ).toBe(0);
-    expect([a.title, b.title]).toEqual(['Names (사본)', 'Names (사본)']);
+    expect([a.title, b.title]).toEqual(['Names · 사본 1', 'Names · 사본 2']);
     expect(forkChat(store, chat.id, body)).toEqual(a);
     expect(() => forkChat(store, chat.id, { ...body, fromRevision: second.id })).toThrow(
       '다른 채팅에 같은 가져오기 ID'
@@ -115,4 +115,22 @@ describe('independent stored-story fork without generation', () => {
     ).toBe('Chosen title');
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  test.each(['Names · 새 이야기 · 새 이야기', 'Names (사본)', 'Names · 사본 2'])(
+    'copying %s continues the numbered family without stacking suffixes',
+    async (title) => {
+      const store = await database();
+      const chat = createFixtureChat(store, title);
+      createFixtureChat(store, 'Names · 사본 3');
+      const first = source(store, chat.id, 'First scene.');
+      const copy = forkChat(store, chat.id, { fromRevision: first.id, idempotencyKey: 'copy' });
+      expect(copy.title).toBe('Names · 사본 4');
+      const next = forkChat(store, copy.id, {
+        fromRevision: copy.headRevision,
+        idempotencyKey: 'copy-again',
+      });
+      expect(next.title).toBe('Names · 사본 5');
+      expect(store.chat(chat.id).title).toBe(title);
+    }
+  );
 });
