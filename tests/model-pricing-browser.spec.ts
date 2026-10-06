@@ -180,6 +180,12 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
             via: 'pinned',
             delivery: 'full',
           },
+          {
+            id: 'package:harbor:bot:lore:port',
+            title: '이번 장면의 항구',
+            via: 'selected',
+            delivery: 'full',
+          },
           { id: 'letter', title: '등대지기의 편지', via: 'retained', delivery: 'excerpt' },
           { id: 'voyage', title: '이전 항해', via: 'tool-result', delivery: 'summary' },
           {
@@ -295,9 +301,15 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     await expect(tokenUsage.filter({ hasText: /^1,500토큰$/ })).toBeVisible();
     await expect(tokenUsage.filter({ hasText: /^100토큰$/ })).toBeVisible();
     const lore = usage.getByRole('region', { name: '요청에 포함된 로어' });
-    await expect(lore).toContainText('포함된 로어 · 3건');
+    await expect(lore).toContainText('포함된 로어 · 4건');
     await expect(lore).toContainText('항구의 지도와 오래된 등대');
     await expect(lore).toContainText('출처: 항구 이야기');
+    await expect(
+      lore.getByRole('listitem').filter({ hasText: '항구의 지도와 오래된 등대' })
+    ).toContainText('고정 자료 · 전체 본문');
+    await expect(lore.getByRole('listitem').filter({ hasText: '이번 장면의 항구' })).toContainText(
+      '자동 선택 · 전체 본문'
+    );
     await expect(lore).toContainText('전체 본문');
     await expect(lore).toContainText('읽은 구간');
     await expect(lore).toContainText('요약만');

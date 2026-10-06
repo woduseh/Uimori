@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { DEFAULT_LORE_CONTEXT, type RetainedLore } from '../core/lore-context.js';
-import { executeTool, knowledgeReadResults } from '../core/provider.js';
+import { buildMainInput, executeTool, knowledgeReadResults } from '../core/provider.js';
+import { defaultProfile } from '../core/product.js';
 import { serializeRisuLoreSources } from '../core/risu-context-source.js';
 import type { Json, ProviderRequest, WireRecord } from '../core/transport.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
@@ -43,6 +44,95 @@ const wire = (...texts: string[]): WireRecord => ({
   body: { messages: [{ role: 'user', content: texts.map((text) => ({ type: 'text', text })) }] },
   bodySha256: 'a'.repeat(64),
   stablePrefixSha256: 'b'.repeat(64),
+});
+
+test('JEV-selected lore is distinct from always-pinned lore and attachment roles', () => {
+  const fixed = snapshot([]);
+  fixed.profile = {
+    ...defaultProfile(fixed.chatId),
+    models: {},
+    packageAttachments: [
+      { id: 'card', revision: 1, role: 'bot' },
+      { id: 'card', revision: 1, role: 'module' },
+    ],
+    packages: [
+      {
+        version: 2,
+        id: 'card',
+        revision: 1,
+        title: 'Card',
+        description: '',
+        nativeRisu: { version: 1, card: {}, assets: [], sourceHash: 'a'.repeat(64) },
+        loreActivation: { mode: 'model' },
+        lore: [
+          {
+            id: 'always',
+            title: 'Always',
+            description: '',
+            text: 'Always sent.',
+            loading: 'pinned',
+          },
+          {
+            id: 'harbor',
+            title: 'Harbor',
+            description: '',
+            text: 'Harbor selected.',
+            loading: 'discoverable',
+          },
+          {
+            id: 'omitted',
+            title: 'Omitted',
+            description: '',
+            text: 'Not selected.',
+            loading: 'discoverable',
+          },
+        ],
+      },
+    ],
+  };
+  fixed.loreSelection = {
+    version: 1,
+    entries: [
+      {
+        key: 'card@1:bot',
+        inputHash: 'b'.repeat(64),
+        budget: 16_000,
+        selected: ['harbor'],
+        omitted: [{ id: 'omitted', reason: 'irrelevant' }],
+        model: 'jev-latest',
+      },
+    ],
+  };
+  const before = structuredClone(fixed);
+  const input = buildMainInput(fixed);
+  const sent = wire(serializeRisuLoreSources(input.pinnedSources!));
+  expect(requestLore(fixed, request(), sent, { pinned: input.pinnedSources! })).toEqual({
+    status: 'complete',
+    entries: [
+      {
+        id: 'package:card:bot:lore:always',
+        title: 'Always',
+        source: { contentId: 'card', entryId: 'always', sourceName: 'Card' },
+        via: 'pinned',
+        delivery: 'full',
+      },
+      {
+        id: 'package:card:bot:lore:harbor',
+        title: 'Harbor',
+        source: { contentId: 'card', entryId: 'harbor', sourceName: 'Card' },
+        via: 'selected',
+        delivery: 'full',
+      },
+      {
+        id: 'package:card:module:lore:always',
+        title: 'Always',
+        source: { contentId: 'card', entryId: 'always', sourceName: 'Card' },
+        via: 'pinned',
+        delivery: 'full',
+      },
+    ],
+  });
+  expect(fixed).toEqual(before);
 });
 
 test('pinned evidence distinguishes source and entry markers despite identical short bodies', () => {
