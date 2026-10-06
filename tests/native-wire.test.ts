@@ -388,10 +388,24 @@ describe('native provider wire (synthetic, no live calls)', () => {
         protocol === 'openai-responses-v1'
           ? wire(encodeResponses(r).body).input
           : wire(encodeChat(r, protocol).body).messages.slice(1);
-      expect(encoded).toEqual(mapped);
-      expect(encoded.map((m: any) => m.content[0].text)).toEqual(
-        before.prompt!.messages.map((m) => m.content[0].text)
-      );
+      const expectedEncoded =
+        protocol === 'vercel-chat-v1'
+          ? mapped.map((message) => {
+              const value = wire(message);
+              return value.role === 'assistant'
+                ? {
+                    ...value,
+                    content: value.content.map((part: any) => part.text).join(''),
+                  }
+                : value;
+            })
+          : mapped;
+      expect(encoded).toEqual(expectedEncoded);
+      expect(
+        encoded.map((message: any) =>
+          typeof message.content === 'string' ? message.content : message.content[0].text
+        )
+      ).toEqual(before.prompt!.messages.map((m) => m.content[0].text));
     }
     for (const other of ['gpt-5.6', 'claude-opus-5', 'custom-gemini-proxy']) {
       expect(

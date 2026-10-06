@@ -659,7 +659,7 @@ for (const width of DEFAULT_WIDTHS) {
     expect((await updated.json()).title).toBe(renamed);
     expect((await models(request)).routes).toEqual(savedRoutes);
 
-    // Registering another preset offers navigation, without assigning or saving a role.
+    // Registering another preset keeps role assignments and their independent drafts.
     await form.getByRole('button', { name: '모델 편집 끝내기', exact: true }).click();
     const providers = page.getByTestId('connection-editor');
     await providers.getByRole('button', { name: '새 모델 입력', exact: true }).click();
@@ -669,9 +669,10 @@ for (const width of DEFAULT_WIDTHS) {
     await form.getByLabel('모델 ID', { exact: true }).fill('synthetic-shortcut-C');
     await form.getByLabel('최대 출력 토큰', { exact: true }).fill('1000');
     await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
-    const next = providers.getByRole('region', { name: '등록한 모델 사용 방법', exact: true });
-    await expect(next).toContainText(newTitle);
-    await next.getByRole('button', { name: '역할별 모델 열기', exact: true }).click();
+    await expect(
+      providers.getByRole('status').filter({ hasText: newTitle + ' 모델 프리셋 등록됨' })
+    ).toBeVisible();
+    await selectSettingsSection(page, '역할별 모델');
     await expect(main).toHaveValue(second.id);
     await expect(translation).toHaveValue(first.id);
     expect((await models(request)).routes).toEqual(savedRoutes);

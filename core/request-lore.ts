@@ -5,7 +5,7 @@ export type RequestLore = {
     id: string;
     title: string;
     source?: { contentId: string; entryId?: string; sourceName: string };
-    via: 'pinned' | 'retained' | 'tool-result';
+    via: 'pinned' | 'selected' | 'retained' | 'tool-result';
     delivery: 'full' | 'excerpt' | 'summary' | 'unverified';
   }[];
 };

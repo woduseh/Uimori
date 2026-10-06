@@ -2,6 +2,11 @@ import type { RequestLore } from '../core/request-lore.js';
 import type { Json, ProviderRequest, WireRecord } from '../core/transport.js';
 import type { RunSnapshot } from '../core/types.js';
 import { serializeRisuLoreSources, type RisuContextSource } from '../core/risu-context-source.js';
+import {
+  loreSelectionKey,
+  loreSelectionLore,
+  projectLoreSelectionReceipt,
+} from '../core/lore-selection.js';
 
 type LoreIdentity = {
   id: string;
@@ -80,6 +85,22 @@ export function requestLore(
     return evidence().some((part) => part.includes(text) || part.includes(encoded));
   };
   const entries: RequestLore['entries'] = [];
+  // Both always-pinned and JEV-selected bodies share the delivery list. Keep their
+  // origin distinct using this run's frozen receipt, without recompiling packages.
+  const selected = new Set<string>();
+  const sourceKey = (contentId: string, role: string, entryId: string) =>
+    JSON.stringify([contentId, role, entryId]);
+  for (const attachment of snapshot.profile?.packageAttachments ?? []) {
+    const pkg = snapshot.profile?.packages?.find(
+      (item) => item.id === attachment.id && item.revision === attachment.revision
+    );
+    const chosen =
+      snapshot.loreSelection &&
+      projectLoreSelectionReceipt(snapshot.loreSelection, loreSelectionKey(attachment));
+    if (!pkg || !chosen) continue;
+    for (const lore of loreSelectionLore(pkg))
+      if (chosen.has(lore.id)) selected.add(sourceKey(pkg.id, attachment.role, lore.id));
+  }
   const add = (
     identity: LoreIdentity,
     via: RequestLore['entries'][number]['via'],
@@ -113,7 +134,13 @@ export function requestLore(
   };
   for (const item of options.pinned) {
     if (!item.text.trim()) continue;
-    add(item, 'pinned', () =>
+    const source = item.risuSource;
+    const via =
+      source?.entryId &&
+      selected.has(sourceKey(source.contentId, source.sourceRole, source.entryId))
+        ? 'selected'
+        : 'pinned';
+    add(item, via, () =>
       contains(item) || hasLoreEntry(evidence(), item) ? 'full' : 'unverified'
     );
   }
