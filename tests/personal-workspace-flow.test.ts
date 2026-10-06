@@ -227,6 +227,12 @@ test('independent copies and portable restores retain inline images, notes and c
     base64: image.bytes.toString('base64'),
   });
   const chat = story(source, `A scene\n![image](${asset.url})`, bot);
+  const profile = source.product.profile(chat.id);
+  source.product.updateProfile(chat.id, {
+    expectedRevision: profile.revision,
+    image: profile.image,
+    authorNote: 'Keep the rain tense and understated.',
+  });
   const copy = forkChat(source, chat.id, {
     fromRevision: chat.headRevision,
     idempotencyKey: randomUUID(),
@@ -247,6 +253,9 @@ test('independent copies and portable restores retain inline images, notes and c
       .entries(target.story.notes.scope(restored.chat.id, restored.chat.headRevision))
       .map((note) => note.text)
   ).toContain('Remember the blue key.');
+  expect(target.product.profile(restored.chat.id).authorNote).toBe(
+    'Keep the rain tense and understated.'
+  );
   const next = target.createRun(
     restored.chat.id,
     {

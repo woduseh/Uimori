@@ -35,7 +35,10 @@ export type ChatCopyState = {
   variables: ChatVariableState;
   checkpoints: (ChatVariableState | null)[];
   settings: Settings;
-  profile: Pick<ChatProfile, 'image' | 'imageTranslation' | 'loreContext' | 'pinned'>;
+  profile: Pick<
+    ChatProfile,
+    'image' | 'imageTranslation' | 'loreContext' | 'pinned' | 'authorNote'
+  >;
 };
 export type PortableIllustrationAnchor = { index: number; textHash: string };
 export type PortableIllustration = {

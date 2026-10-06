@@ -29,6 +29,7 @@ export type NativeRisuCbsContext = {
   jailbreak?: string;
   templateDefaultVariables?: string;
   globalNote?: string;
+  authorNote?: string;
   assetUrls?: Record<string, string>;
 };
 const string = (value: unknown) => (typeof value === 'string' ? value : '');
@@ -46,7 +47,7 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
   const messages = context.messages ?? [];
   const chat = {
     message: messages,
-    note: '',
+    note: context.authorNote ?? '',
     name: 'main',
     localLore: [],
     fmIndex: -1,

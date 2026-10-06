@@ -28,8 +28,8 @@ export function nativePromptSlots(
     notes: input.notes ? JSON.stringify(modelAuthorNotes(input.notes)) : '',
     outline: input.outline ? JSON.stringify(input.outline) : '',
     globalNote: '',
-    authorNote: '',
-    authornote: '',
+    authorNote: snapshot.profile?.authorNote ?? '',
+    authornote: snapshot.profile?.authorNote ?? '',
     postEverything: '',
     slot: '',
     backgroundLore: pinnedSlotSources(input, 'backgroundLore')

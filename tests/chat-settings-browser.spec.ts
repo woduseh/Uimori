@@ -136,6 +136,7 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
       await expectNoOverflow(page, dialog);
       if (name === '프롬프트·모델') {
         await expect(dialog.getByLabel('원문 모델', { exact: true })).toHaveCount(0);
+        await expect(dialog.getByLabel('작가 노트', { exact: true })).toBeVisible();
         await expect(
           dialog.getByRole('button', { name: '전역 모델 설정', exact: true })
         ).toBeVisible();
@@ -461,6 +462,37 @@ for (const mainId of [null, 'missing-model']) {
     await expectUnchanged(request, before, writes, errors);
   });
 }
+
+test('CSUI07 chat author note saves with prompt settings and can be cleared', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  const { chat, errors } = await prepare(page, request, 'CSUI07 ' + Date.now());
+  const read = async () =>
+    (await (await request.get('/api/chats/' + chat.id)).json()) as ChatDetail;
+  let dialog = await openSettings(page);
+  await selectChatSettingsSection(page, '프롬프트·모델');
+  let note = dialog.getByLabel('작가 노트', { exact: true });
+  await expect(note).toHaveValue('');
+  const value = '채팅별 작가 노트 ' + Date.now();
+  await note.fill(value);
+  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
+  await expect.poll(async () => (await read()).profile?.authorNote).toBe(value);
+
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  dialog = await openSettings(page);
+  await selectChatSettingsSection(page, '프롬프트·모델');
+  note = dialog.getByLabel('작가 노트', { exact: true });
+  await expect(note).toHaveValue(value);
+  await note.fill('');
+  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
+  await expect
+    .poll(async () => Object.hasOwn((await read()).profile ?? {}, 'authorNote'))
+    .toBe(false);
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  expect(errors).toEqual([]);
+});
 
 test('CSUI05 save and close persists a valid user note and keeps an invalid note draft open', async ({
   page,
