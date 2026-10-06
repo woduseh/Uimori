@@ -108,13 +108,12 @@ describe('native provider wire (synthetic, no live calls)', () => {
     expect(responses.input.map((m: any) => m.content.map((part: any) => part.type))).toEqual([
       ['input_text'],
       ['input_text'],
-      ['output_text'],
+      ['input_text'],
       ['input_text'],
     ]);
     expect(responses.input[2].content[0]).toEqual({
-      type: 'output_text',
+      type: 'input_text',
       text: 'COMPLETED_PROSE',
-      annotations: [],
     });
     const chat = wire(encodeChat(r).body);
     expect(chat.messages.map((m: any) => m.role)).toEqual([
@@ -139,7 +138,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
     }
     expect(r).toEqual(before);
   });
-  test('Responses keeps assistant-first and multi-part history as output text', () => {
+  test('Responses keeps assistant-first and multi-part history as input text', () => {
     const r = request();
     r.prompt!.messages = [
       message('assistant-first', 'assistant', 'FIRST_OUTPUT'),
@@ -156,10 +155,10 @@ describe('native provider wire (synthetic, no live calls)', () => {
     const body = wire(encodeResponses(r).body);
     expect(body.input.map((m: any) => m.role)).toEqual(['assistant', 'assistant', 'user']);
     expect(body.input.map((m: any) => m.content)).toEqual([
-      [{ type: 'output_text', text: 'FIRST_OUTPUT', annotations: [] }],
+      [{ type: 'input_text', text: 'FIRST_OUTPUT' }],
       [
-        { type: 'output_text', text: 'SECOND_OUTPUT_ONE', annotations: [] },
-        { type: 'output_text', text: 'SECOND_OUTPUT_TWO', annotations: [] },
+        { type: 'input_text', text: 'SECOND_OUTPUT_ONE' },
+        { type: 'input_text', text: 'SECOND_OUTPUT_TWO' },
       ],
       [{ type: 'input_text', text: 'CURRENT_REQUEST' }],
     ]);
@@ -389,10 +388,24 @@ describe('native provider wire (synthetic, no live calls)', () => {
         protocol === 'openai-responses-v1'
           ? wire(encodeResponses(r).body).input
           : wire(encodeChat(r, protocol).body).messages.slice(1);
-      expect(encoded).toEqual(mapped);
-      expect(encoded.map((m: any) => m.content[0].text)).toEqual(
-        before.prompt!.messages.map((m) => m.content[0].text)
-      );
+      const expectedEncoded =
+        protocol === 'vercel-chat-v1'
+          ? mapped.map((message) => {
+              const value = wire(message);
+              return value.role === 'assistant'
+                ? {
+                    ...value,
+                    content: value.content.map((part: any) => part.text).join(''),
+                  }
+                : value;
+            })
+          : mapped;
+      expect(encoded).toEqual(expectedEncoded);
+      expect(
+        encoded.map((message: any) =>
+          typeof message.content === 'string' ? message.content : message.content[0].text
+        )
+      ).toEqual(before.prompt!.messages.map((m) => m.content[0].text));
     }
     for (const other of ['gpt-5.6', 'claude-opus-5', 'custom-gemini-proxy']) {
       expect(

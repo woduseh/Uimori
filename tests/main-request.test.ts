@@ -282,6 +282,62 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     ).toBe(true);
   });
 
+  test('Vercel preview, journal and HTTP preserve prior scene text through a tool round', async () => {
+    const history = '이전 장면의 원문 🌙\n'.repeat(3000) + 'LAST_SCENE_LINE';
+    let count = 0;
+    const server = await loopbackProvider(async (request, response) => {
+      const body = JSON.parse(request.body);
+      await writeSse(response, [
+        ++count === 1
+          ? toolTurn([toolOutput(body, 'knowledge.search', { query: '' }, 'Call.History')])
+          : complete('Continued synthetic prose.'),
+        '[DONE]',
+      ]);
+    });
+    closes.push(server.close);
+    const work = await snapshot(server.origin + '/v1');
+    work.profile!.models.main!.connection.protocol = 'vercel-chat-v1';
+    work.profile!.models.main!.connection.credentialRef = 'SYNTHETIC_HISTORY_CREDENTIAL';
+    work.profile!.models.main!.modelId = 'openai/gpt-5.6-sol';
+    work.logicalHistory = [
+      { id: 'prior-request', role: 'user', text: '이전 요청.' },
+      { id: 'prior-scene', role: 'assistant', text: history },
+    ];
+    await refreshNativeSnapshot(work);
+    const frozen = compileSnapshotPrompt(work);
+    const built = buildMainProviderRequest(frozen);
+    const preview = encodeMainPreview(built.request, work.profile!.models.main!);
+    expect(server.requests).toHaveLength(0);
+    const log = hooks(server.origin);
+    log.value.resolveCredential = () => 'synthetic-history-token';
+    const result = await runMain(frozen, log.value);
+    expect(result.error).toBeNull();
+    expect(result).toMatchObject({
+      status: 'completed',
+      text: 'Continued synthetic prose.',
+    });
+    expect(server.requests).toHaveLength(2);
+    expect(server.requests.map((request) => request.url)).toEqual([
+      '/v1/chat/completions',
+      '/v1/chat/completions',
+    ]);
+    const bodies = server.requests.map((request) => JSON.parse(request.body));
+    expect(bodies[0]).toEqual(preview.body);
+    expect(log.attempts.map((attempt) => attempt.body)).toEqual(bodies);
+    expect(bodies[1].messages.slice(0, bodies[0].messages.length)).toEqual(bodies[0].messages);
+    for (const body of bodies) {
+      expect(body.messages.filter((message: any) => message.content === history)).toEqual([
+        { role: 'assistant', content: history },
+      ]);
+      expect(JSON.stringify(body).split('LAST_SCENE_LINE')).toHaveLength(2);
+      expect(JSON.stringify(body).split(work.request)).toHaveLength(2);
+    }
+    expect(bodies[1].messages.slice(-2)).toMatchObject([
+      { role: 'assistant', tool_calls: [expect.objectContaining({ id: 'Call.History' })] },
+      { role: 'tool', tool_call_id: 'Call.History' },
+    ]);
+  });
+
   test('shared model metadata reaches the writer wire without exposing settings or repricing the snapshot', async () => {
     const server = await loopbackProvider(async (_request, response) =>
       writeSse(response, [complete('Synthetic final prose.'), '[DONE]'])
