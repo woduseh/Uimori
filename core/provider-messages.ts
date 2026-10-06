@@ -126,12 +126,11 @@ export function planNativeMessages(
       message.role !== 'system'
     )
       note('PROVIDER_COMBINES_SAME_ROLE_TURNS', message, index);
+    // Authored assistant history is input data; real provider outputs replay through opaque state.
     const parts = message.content.map(
       (part): Record<string, Json> =>
         responses
-          ? role === 'assistant'
-            ? { type: 'output_text', text: part.text, annotations: [] }
-            : { type: 'input_text', text: part.text }
+          ? { type: 'input_text', text: part.text }
           : vertex
             ? { text: part.text }
             : { type: 'text', text: part.text }

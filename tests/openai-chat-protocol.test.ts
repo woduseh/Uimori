@@ -153,6 +153,81 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     ]);
     expect(input.bootstrap).toEqual(original);
   });
+  test('Vercel sends multipart assistant history as exact text through tool continuation', () => {
+    const input = request();
+    input.modelId = 'openai/gpt-5.6-sol';
+    const firstPart = '이전 장면 🌙\n'.repeat(4000);
+    const lastPart = '\n마지막 문장.';
+    input.prompt = {
+      compilerVersion: 'risu-native-prompt-2',
+      values: {},
+      cachePlan: [],
+      messages: [
+        {
+          id: 'history',
+          role: 'assistant',
+          content: [
+            { type: 'text', text: firstPart },
+            { type: 'text', text: lastPart },
+          ],
+          completion: 'complete',
+          provenance: { blockId: 'history', origin: 'history' },
+        },
+        {
+          id: 'current',
+          role: 'user',
+          content: [{ type: 'text', text: '다음 장면을 이어 써줘.' }],
+          completion: 'complete',
+          provenance: { blockId: 'current', origin: 'current' },
+        },
+      ],
+    };
+    input.bootstrap = [
+      {
+        callId: 'bootstrap-1',
+        name: 'knowledge.read',
+        args: { id: 'lore-1' },
+        result: 0,
+        denied: false,
+      },
+    ];
+    const original = structuredClone(input);
+    const encoded = encodeChat(input, 'vercel-chat-v1');
+    const body = record(encoded.body);
+    expect(body.messages.slice(-2)).toEqual([
+      { role: 'assistant', content: firstPart + lastPart },
+      { role: 'user', content: [{ type: 'text', text: '다음 장면을 이어 써줘.' }] },
+    ]);
+    expect(body.messages[1]).toMatchObject({
+      role: 'assistant',
+      content: null,
+      tool_calls: [expect.objectContaining({ id: 'bootstrap-1' })],
+    });
+    expect(input).toEqual(original);
+    // Direct OpenAI Chat permits authored content parts and keeps its existing encoding.
+    expect(record(encodeChat(input).body).messages.at(-2).content).toEqual(
+      input.prompt.messages[0].content
+    );
+    const decoder = new ChatDecoder(encoded.context);
+    decoder.accept(
+      chunk({ reasoning_content: 'opaque reasoning', tool_calls: [tool()] }, 'tool_calls')
+    );
+    decoder.accept('[DONE]');
+    const continued = record(encodeChat(next(input, decoder.finish()), 'vercel-chat-v1').body);
+    expect(continued.messages.slice(0, body.messages.length)).toEqual(body.messages);
+    expect(
+      continued.messages.filter((message: any) => message.content === firstPart + lastPart)
+    ).toHaveLength(1);
+    expect(continued.messages.slice(-2)).toMatchObject([
+      {
+        role: 'assistant',
+        content: null,
+        reasoning_content: 'opaque reasoning',
+        tool_calls: [expect.objectContaining({ id: 'Call-A.Original' })],
+      },
+      { role: 'tool', tool_call_id: 'Call-A.Original', content: '0' },
+    ]);
+  });
   test('Vercel Sol sends Flex and preserves the selected tier across tool continuation', () => {
     const input = request();
     input.modelId = 'openai/gpt-5.6-sol';

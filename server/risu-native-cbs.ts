@@ -155,7 +155,7 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
             ? role === 'assistant'
               ? 'char'
               : role
-            : (messages.at(-1)?.role ?? 'char'),
+            : (messages[context.messageIndex ?? messages.length - 1]?.role ?? 'char'),
         },
       });
       if (result.error) throw new Error(result.error);

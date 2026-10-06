@@ -93,6 +93,82 @@ function next(input: ProviderRequest, result: ProviderResult): ProviderRequest {
 }
 
 describe('native Responses pure protocol (no live calls)', () => {
+  test('manual assistant history uses input text with exact multipart prose and cache; provider outputs replay unchanged', () => {
+    const input = request();
+    input.modelId = 'gpt-5.6-sol';
+    input.generation = {
+      maxOutputTokens: 8192,
+      temperature: null,
+      cacheMode: 'explicit',
+      cacheTtl: '30m',
+    };
+    const parts = [
+      '',
+      'SCENE_BEGIN\n' + '이전 장면 원문과 줄바꿈 🌊\n'.repeat(2000),
+      '\nSCENE_END',
+    ];
+    input.prompt = {
+      compilerVersion: 'risu-native-prompt-2',
+      values: {},
+      messages: [
+        {
+          id: 'empty-history',
+          role: 'assistant',
+          content: [{ type: 'text', text: '' }],
+          completion: 'complete',
+          provenance: { blockId: 'empty-history', origin: 'history' },
+        },
+        {
+          id: 'history',
+          role: 'assistant',
+          content: parts.map((text) => ({ type: 'text', text })),
+          completion: 'complete',
+          provenance: { blockId: 'history', origin: 'history' },
+        },
+        {
+          id: 'current',
+          role: 'user',
+          content: [{ type: 'text', text: 'Continue.' }],
+          completion: 'complete',
+          provenance: { blockId: 'current', origin: 'current' },
+        },
+      ],
+      cachePlan: [{ blockId: 'cache-history', afterMessageId: 'history', policy: 'require' }],
+    };
+    const original = structuredClone(input);
+    const initial = first(input);
+    const history = {
+      role: 'assistant',
+      content: [
+        { type: 'input_text', text: parts[0] },
+        { type: 'input_text', text: parts[1] },
+        { type: 'input_text', text: parts[2], prompt_cache_breakpoint: { mode: 'explicit' } },
+      ],
+    };
+    const expected = [
+      { role: 'assistant', content: [{ type: 'input_text', text: '' }] },
+      history,
+      { role: 'user', content: [{ type: 'input_text', text: 'Continue.' }] },
+    ];
+    expect(record(initial.body).input).toEqual(expected);
+    expect(record(initial.body).prompt_cache_options).toEqual({ mode: 'explicit', ttl: '30m' });
+    const output = [
+      { ...record(message('Provider text.')), phase: 'commentary' },
+      { type: 'reasoning', id: 'rs-A', summary: [], encrypted_content: 'SIGNED_REASONING' },
+      call(),
+    ];
+    initial.decoder.accept(terminal(output));
+    const continued = record(encodeResponses(next(input, initial.decoder.finish())).body);
+    expect(continued.input.slice(0, expected.length)).toEqual(expected);
+    expect(continued.input.slice(expected.length, -1)).toEqual(output);
+    expect(continued.input.at(-1)).toEqual({
+      type: 'function_call_output',
+      call_id: 'Call-A.Original',
+      output: '0',
+    });
+    expect(continued.prompt_cache_options).toEqual({ mode: 'explicit', ttl: '30m' });
+    expect(input).toEqual(original);
+  });
   test('appends changed budget and user instructions after tool results without changing the binding', () => {
     const input = request();
     const update = JSON.stringify({

@@ -177,8 +177,10 @@ export function processNativeRisuTextInWorker(input: NativeRisuTextInput): Nativ
     variables: { ...input.context.variables },
   };
   const cbs = createNativeRisuCbs(context);
+  const role =
+    input.mode === 'editinput' ? 'user' : input.mode === 'editoutput' ? 'assistant' : undefined;
   const issues: string[] = [];
-  let text = cbs.parse(input.text);
+  let text = cbs.parse(input.text, role);
   const scripts = nativeRisuRegex(input.native)
     .filter((script) => script.type === input.mode)
     .map((script, index) => {
@@ -209,7 +211,7 @@ export function processNativeRisuTextInWorker(input: NativeRisuTextInput): Nativ
       let flags = [...new Set(flag.replace(/[^dgimsuvy]/gu, '').split(''))].join('') || 'u';
       if (moving) flags = flags.replaceAll('g', '');
       if (replacement.endsWith('>') && !actions.includes('no_end_nl')) replacement += '\n';
-      const pattern = actions.includes('cbs') ? cbs.parse(script.in) : script.in;
+      const pattern = actions.includes('cbs') ? cbs.parse(script.in, role) : script.in;
       const regex = new RegExp(pattern, flags);
       if (moving) {
         const found = regex.exec(text);
@@ -228,7 +230,7 @@ export function processNativeRisuTextInWorker(input: NativeRisuTextInput): Nativ
         issues.push(`regex-command:${index}`);
       } else text = text.replace(regex, replacement);
       if (text.length > 2_000_000) throw new Error('RISU_NATIVE_TEXT_LIMIT');
-      text = cbs.parse(text);
+      text = cbs.parse(text, role);
     } catch (error) {
       if (error instanceof Error && /LIMIT|TIMEOUT/u.test(error.message)) throw error;
       issues.push(`regex:${index}`);
