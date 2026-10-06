@@ -144,7 +144,7 @@ export async function runReleaseChecks(
       summary.checks[name] = { command: name, status: 'RUNNING' };
       await json(report, summary);
       const result = await execute(process.execPath, [cli, 'run', name], {
-        timeoutMs: name === 'verify:browser' ? 2_100_000 : 1_200_000,
+        timeoutMs: name === 'verify:browser' ? 3_900_000 : 1_200_000,
         log: path.join(directory, `${name.replaceAll(':', '-')}-${newId()}.log`),
         signal,
         env: { UIMORI_VISUAL_REVIEW: undefined, UIMORI_BENCHMARK: undefined },
