@@ -142,7 +142,9 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
     'true'
   );
   await composer.getByRole('tab', { name: '기본 옵션', exact: true }).click();
-  await expect(composer.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(title);
+  await expect(
+    page.getByTestId('prompt-editor').getByLabel('프롬프트 이름', { exact: true })
+  ).toHaveValue(title);
   await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('"0"');
   await expect(composer.getByRole('option', { name: '미설정', exact: true })).toHaveCount(0);
   await expect(composer.getByRole('button', { name: /미설정/ })).toHaveCount(0);

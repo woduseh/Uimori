@@ -1091,7 +1091,8 @@ test('UI03 starting without a model explains setup and creates a chat without ex
       settings.getByRole('button', { name: '설정 목록으로', exact: true })
     ).toBeVisible();
   }
-  await nav(page, '새 이야기');
+  await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(dialog).toBeVisible();
   await openNewStoryOptions(page);
   await dialog.getByLabel('새 채팅 이름').fill(title);
   const accepted = page.waitForResponse(

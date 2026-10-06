@@ -368,6 +368,11 @@ async function helperFixture(page: Page, before: ChatDetail) {
         return route.fulfill({ json: tasks });
       if (path === `/api/helper/conversations/${conversation.id}/events`)
         return route.fulfill({ json: [] });
+      for (const task of tasks)
+        if (path === `/api/helper/tasks/${task.id}/activity`)
+          return route.fulfill({
+            json: { taskId: task.id, status: task.status, events: [], hasEarlier: false },
+          });
       if (path === `/api/helper/artifacts/${artifact.id}`) return route.fulfill({ json: artifact });
     }
     unexpected.push(`${request.method()} ${path}`);
@@ -428,10 +433,10 @@ test('READUI02 helper answers, independent scenes and public streams share readi
       await expect(panel.getByTestId('source-request')).toHaveCount(2);
       await expect(panel.getByTestId('source-request').locator('.reading-quote')).toHaveCount(0);
       const status = panel.getByTestId('helper-task-activity');
-      await status.locator('summary').click();
+      await status.locator(':scope > summary').click();
       await expect(status).toContainText('“상태 카드의 모델 이름”');
       await expect(status.locator('.reading-quote')).toHaveCount(0);
-      await status.locator('summary').click();
+      await status.locator(':scope > summary').click();
       await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
       await expect(panel.getByRole('textbox', { name: '도우미 말투', exact: true })).toHaveValue(
         helperPersona

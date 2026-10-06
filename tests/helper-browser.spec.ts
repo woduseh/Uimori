@@ -793,6 +793,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   await input.fill('첫 작업');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
   await expect(panel.getByText('첫 작업', { exact: true }).first()).toBeVisible();
+  await expect.poll(() => state.current().tasks.length).toBe(1);
   const first = state.current().tasks[0];
   await state.progress(first, '실제 공개 조각', 8);
   await expect(panel.locator('.streaming-text')).toHaveText('실제 공개 조각');
