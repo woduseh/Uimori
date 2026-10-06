@@ -60,6 +60,7 @@ export function captureChatCopy(store: Store, chatId: string, sourceId?: string 
         imageTranslation: profile.imageTranslation,
         loreContext: profile.loreContext,
         pinned: profile.pinned,
+        authorNote: profile.authorNote,
       },
     },
     illustrations,

@@ -60,6 +60,7 @@ export function nativeRisuInputHash(snapshot: RunSnapshot): string {
         variables: snapshot.profile?.variableState,
         identity: snapshot.profile ? packageIdentityFromProfile(snapshot.profile) : null,
         image: snapshot.profile?.image,
+        authorNote: snapshot.profile?.authorNote,
         preset: snapshot.profile?.promptPresets?.main,
         promptControls: snapshot.profile?.promptControls,
         historyRevision: snapshot.nativeRisuHistoryRevision,

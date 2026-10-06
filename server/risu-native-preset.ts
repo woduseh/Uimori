@@ -83,6 +83,7 @@ export async function prepareNativeRisuPreset(snapshot: RunSnapshot): Promise<Ru
         })),
       ...nativeRisuPromptContext(snapshot),
       globalNote: context.globalNoteReplacement,
+      authorNote: base?.authorNote ?? '',
       templateDefaultVariables: string(source.preset.templateDefaultVariables),
     },
   });
@@ -140,6 +141,7 @@ export async function prepareNativeRisuTranslationPrompt(
     nativeRisuPresetProgram: undefined,
     profile: {
       ...snapshot.profile!,
+      authorNote: undefined,
       promptPresets: { ...snapshot.profile!.promptPresets, main: preset },
     },
   });

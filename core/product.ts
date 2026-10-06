@@ -213,6 +213,8 @@ export type ModelSnapshot = ModelPreset & {
 export type ChatProfile = {
   /** Optional live selections. Future main runs follow the selected IDs' latest saved contents. */
   pinned?: { mainPromptPresetId?: string; mainModel?: ModelRef };
+  /** Chat-scoped Risu author-note override. Empty/absent falls back to the preset default. */
+  authorNote?: string;
   /** Read-only notices from adapting saved options to current definitions. Never execution evidence. */
   optionAdjustments?: string[];
   loreContext?: import('./lore-context.js').LoreContextPolicy;

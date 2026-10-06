@@ -138,6 +138,7 @@ export function ProfileEditor({
   const profileBody = (next: ChatProfile) => ({
     expectedRevision: next.revision,
     pinned: next.pinned ?? {},
+    authorNote: next.authorNote ?? '',
     image: next.image,
     imageTranslation: next.imageTranslation !== false,
     ...(next.packageAttachments ? { packageAttachments: next.packageAttachments } : {}),
@@ -364,6 +365,20 @@ export function ProfileEditor({
                 직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요.
                 모델·프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 과거·진행 중인 작업은 바뀌지
                 않고, 창작 옵션은 선택한 프롬프트를 따라요.
+              </small>
+              <label>
+                작가 노트
+                <textarea
+                  aria-label="작가 노트"
+                  rows={5}
+                  maxLength={32000}
+                  value={value.authorNote ?? ''}
+                  onChange={(event) => change({ ...value, authorNote: event.target.value })}
+                />
+              </label>
+              <small>
+                Risu 프롬프트의 작가 노트 위치에 넣어요. 비워 두면 프롬프트에 저장된 기본값을
+                사용해요.
               </small>
             </div>
             <div hidden={tab !== 'prompts'} className="settings-inherited">
