@@ -118,11 +118,12 @@ export function encodeChat(
             ]),
       ];
   if (continuationInput !== undefined) messages.push({ role: 'user', content: continuationInput });
-  if (deepseek) {
+  if (deepseek || protocol === 'vercel-chat-v1') {
     for (const message of messages) {
       if (!object(message)) continue;
-      // DeepSeek's text assistant/system messages require strings, not content part arrays.
-      if (Array.isArray(message.content))
+      // Gateway assistant parts can be silently omitted; send their text as one string.
+      // DeepSeek requires strings for every text message role.
+      if ((deepseek || message.role === 'assistant') && Array.isArray(message.content))
         message.content = message.content
           .map((part) => {
             if (!object(part) || part.type !== 'text' || typeof part.text !== 'string')
@@ -131,7 +132,12 @@ export function encodeChat(
           })
           .join('');
       // Authored history and synthetic bootstrap calls have no provider reasoning to replay.
-      if (message.role === 'assistant' && aliases.length && message.reasoning_content === undefined)
+      if (
+        deepseek &&
+        message.role === 'assistant' &&
+        aliases.length &&
+        message.reasoning_content === undefined
+      )
         message.reasoning_content = '';
     }
   }
