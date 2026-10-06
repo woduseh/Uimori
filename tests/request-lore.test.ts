@@ -186,7 +186,7 @@ test('pinned evidence distinguishes source and entry markers despite identical s
   ).toEqual([{ id: 'legacy', title: 'Preserved catalog title', via: 'pinned', delivery: 'full' }]);
 });
 
-test('retained lore requires the exact delivered reference and remains a retained excerpt', () => {
+test('retained lore requires exact delivery and distinguishes full text from a partial range', () => {
   const item = resource('retained', '0123456789');
   for (const [start, end] of [
     [2, 8],
@@ -234,7 +234,14 @@ test('retained lore requires the exact delivered reference and remains a retaine
     const { lastUsed: _lastUsed, ...sent } = retained;
     expect(requestLore(fixed, input, wire(JSON.stringify([sent])), { pinned: [] })).toEqual({
       status: 'complete',
-      entries: [{ id: item.id, title: item.title, via: 'retained', delivery: 'excerpt' }],
+      entries: [
+        {
+          id: item.id,
+          title: item.title,
+          via: 'retained',
+          delivery: start === 0 ? 'full' : 'excerpt',
+        },
+      ],
     });
   }
 });

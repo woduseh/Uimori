@@ -8,6 +8,8 @@ import { ProviderRejectionNotice } from './provider-rejection.js';
 import { JobCard } from './SourceReader.js';
 import { DiagnosticReport } from './DiagnosticReport.js';
 import { mainJudgmentError } from './main-judgment-error.js';
+import { SceneUsage } from './SceneUsage.js';
+import './run-task-details.css';
 
 /**
  * One line per attached package the 모델 선별 step decided for. The receipt records ids, so the chars
@@ -152,35 +154,40 @@ export function RunTaskDetails({
           )
         )}
       {afterJobs}
-      <LazyDiagnostics<Run>
-        path={`/runs/${run.id}`}
-        revision={revision}
-        initiallyOpen={initiallyInspect}
-        title="실행과 실제 입력 확인"
-        actions={<DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />}
-      >
-        {(full) => (
-          <>
-            <p>
-              Run {full.id} · 실행 요청 {full.usage.modelCalls}회 · 입력{' '}
-              {full.usage.inputTokens ?? '미확인'} / 출력 {full.usage.outputTokens ?? '미확인'} 토큰
-              · 비용 {full.usage.costUsd === null ? '미확인' : `$${full.usage.costUsd}`}
-            </p>
-            <LoreContextDiagnostics
-              snapshot={full.snapshot.loreContext}
-              reset={full.snapshot.loreContextReset}
-            />
-            <LoreSelectionStatus snapshot={full.snapshot} />
-            <pre>
-              {JSON.stringify(
-                { snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents },
-                null,
-                2
-              )}
-            </pre>
-          </>
-        )}
-      </LazyDiagnostics>
+      {run.sourceRevision && <SceneUsage usage={run.sceneUsage} />}
+      <div className="run-input-details">
+        <LazyDiagnostics<Run>
+          path={`/runs/${run.id}`}
+          revision={revision}
+          initiallyOpen={initiallyInspect}
+          title="실행과 실제 입력 확인"
+          actions={
+            <DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />
+          }
+        >
+          {(full) => (
+            <>
+              <p>
+                Run {full.id} · 실행 요청 {full.usage.modelCalls}회 · 입력{' '}
+                {full.usage.inputTokens ?? '미확인'} / 출력 {full.usage.outputTokens ?? '미확인'}{' '}
+                토큰 · 비용 {full.usage.costUsd === null ? '미확인' : `$${full.usage.costUsd}`}
+              </p>
+              <LoreContextDiagnostics
+                snapshot={full.snapshot.loreContext}
+                reset={full.snapshot.loreContextReset}
+              />
+              <LoreSelectionStatus snapshot={full.snapshot} />
+              <pre>
+                {JSON.stringify(
+                  { snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents },
+                  null,
+                  2
+                )}
+              </pre>
+            </>
+          )}
+        </LazyDiagnostics>
+      </div>
     </div>
   );
 }

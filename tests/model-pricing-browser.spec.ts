@@ -306,11 +306,12 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     await expect(lore).toContainText('출처: 항구 이야기');
     await expect(
       lore.getByRole('listitem').filter({ hasText: '항구의 지도와 오래된 등대' })
-    ).toContainText('고정 자료 · 전체 본문');
+    ).toContainText('고정 자료');
     await expect(lore.getByRole('listitem').filter({ hasText: '이번 장면의 항구' })).toContainText(
-      '자동 선택 · 전체 본문'
+      '자동 선택'
     );
-    await expect(lore).toContainText('전체 본문');
+    await expect(lore).not.toContainText('전체 본문');
+    await expect(lore).toContainText('이전 요청 포함 · 읽은 구간');
     await expect(lore).toContainText('읽은 구간');
     await expect(lore).toContainText('요약만');
     await expect(lore.getByText('프롬프트에서 가공한 로어', { exact: true })).toBeHidden();

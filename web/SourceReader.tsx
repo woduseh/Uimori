@@ -36,7 +36,6 @@ import './source-edit.css';
 import { SourceVersions } from './SourceVersions.js';
 import { RequestMessage } from './RequestMessage.js';
 import { SelectionRevision } from './SelectionRevision.js';
-import { SceneUsage } from './SceneUsage.js';
 
 type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
@@ -69,7 +68,6 @@ type ReaderProps = {
   onAskHelper?: (sourceId: string, text: string) => void;
   contextSummary?: ReaderRun['contextSummary'];
   estimatedCost?: ReaderRun['estimatedCost'];
-  sceneUsage?: ReaderRun['sceneUsage'];
   packageStart?: { mode: 'authored'; title: string };
   /** Wraps the scene header in the per-response activity panel; falsy keeps a plain header. */
   activity?: (slots: SceneHeaderSlots) => ReactNode;
@@ -185,7 +183,6 @@ function SourceReaderContent({
   onAskHelper,
   contextSummary,
   estimatedCost,
-  sceneUsage,
   packageStart,
   activity,
   hasPackages,
@@ -625,7 +622,6 @@ function SourceReaderContent({
             <div className="scene-header-tools">{trailing}</div>
           </div>
           {!activityNode && <ContextSummaryStatus summary={contextSummary} />}
-          <SceneUsage usage={sceneUsage} />
         </div>
         <div slot="body" data-uimori-part="body">
           {editor && (
