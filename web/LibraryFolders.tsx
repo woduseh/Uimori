@@ -13,12 +13,10 @@ import { ActionMenu } from './ActionMenu.js';
 import {
   CheckIcon,
   CloseIcon,
-  DownIcon,
   EditIcon,
   FolderAddIcon,
   FolderIcon,
   MoreIcon,
-  UpIcon,
   MoveIcon,
 } from './ui-icons.js';
 import './library-folders.css';
@@ -156,6 +154,10 @@ export function LibraryFolders({
 }) {
   const [edit, setEdit] = useState<{ folder: LibraryFolder | null; revision: number } | null>(null);
   const [title, setTitle] = useState('');
+  const draggedFolder = useRef<string | null>(null);
+  const [folderDrop, setFolderDrop] = useState<{ id: string; edge: 'before' | 'after' } | null>(
+    null
+  );
   const { organization, busy, mutate } = organizer;
   const folders =
     organization?.folders
@@ -167,7 +169,6 @@ export function LibraryFolders({
     setEdit({ folder, revision: organization.revision });
   }
   function folderActions(folder: LibraryFolder) {
-    const index = folders.findIndex((item) => item.id === folder.id);
     return (
       <>
         <button
@@ -178,36 +179,6 @@ export function LibraryFolders({
         >
           <EditIcon size={18} aria-hidden="true" />
           이름 변경
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy || index === 0}
-          onClick={() =>
-            void mutate(
-              `/library/folders/${encodeURIComponent(folder.id)}`,
-              { beforeFolderId: folders[index - 1]?.id },
-              'PATCH'
-            )
-          }
-        >
-          <UpIcon size={18} aria-hidden="true" />
-          위로
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy || index === folders.length - 1}
-          onClick={() =>
-            void mutate(
-              `/library/folders/${encodeURIComponent(folder.id)}`,
-              { beforeFolderId: folders[index + 2]?.id ?? null },
-              'PATCH'
-            )
-          }
-        >
-          <DownIcon size={18} aria-hidden="true" />
-          아래로
         </button>
         <DeleteButton
           path={`/library/folders/${encodeURIComponent(folder.id)}`}
@@ -226,6 +197,36 @@ export function LibraryFolders({
     );
   }
   const selectedFolder = folders.find((item) => item.id === value);
+  function clearFolderDrag() {
+    draggedFolder.current = null;
+    setFolderDrop(null);
+  }
+  function edgeOf(event: DragEvent<HTMLElement>) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return (
+      view === 'list'
+        ? event.clientY < bounds.top + bounds.height / 2
+        : event.clientX < bounds.left + bounds.width / 2
+    )
+      ? ('before' as const)
+      : ('after' as const);
+  }
+  function dropFolder(folderId: string, event: DragEvent<HTMLElement>) {
+    const id = draggedFolder.current;
+    if (!id) {
+      onFolderDrop?.(folderId, event);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const remaining = folders.filter((folder) => folder.id !== id);
+    const index = remaining.findIndex((folder) => folder.id === folderId);
+    const beforeFolderId =
+      edgeOf(event) === 'before' ? folderId : (remaining[index + 1]?.id ?? null);
+    clearFolderDrag();
+    if (id === folderId || busy) return;
+    void mutate(`/library/folders/${encodeURIComponent(id)}`, { beforeFolderId }, 'PATCH');
+  }
   return (
     <aside
       className={presentation === 'cards' ? 'library-folder-grid' : 'library-folders'}
@@ -239,9 +240,35 @@ export function LibraryFolders({
             key={folder.id}
             data-folder-id={folder.id}
             data-drop-target={dropFolderId === folder.id ? 'true' : undefined}
-            onDragOver={(event) => onFolderDragOver?.(folder.id, event)}
-            onDragLeave={(event) => onFolderDragLeave?.(folder.id, event)}
-            onDrop={(event) => onFolderDrop?.(folder.id, event)}
+            data-drop-position={folderDrop?.id === folder.id ? folderDrop.edge : undefined}
+            draggable={!busy}
+            onDragStart={(event) => {
+              if ((event.target as HTMLElement).closest('.action-menu')) {
+                event.preventDefault();
+                return;
+              }
+              draggedFolder.current = folder.id;
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', folder.title);
+            }}
+            onDragEnd={clearFolderDrag}
+            onDragOver={(event) => {
+              if (!draggedFolder.current) {
+                onFolderDragOver?.(folder.id, event);
+                return;
+              }
+              if (draggedFolder.current === folder.id || busy) return;
+              event.preventDefault();
+              event.stopPropagation();
+              event.dataTransfer.dropEffect = 'move';
+              setFolderDrop({ id: folder.id, edge: edgeOf(event) });
+            }}
+            onDragLeave={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+              setFolderDrop(null);
+              onFolderDragLeave?.(folder.id, event);
+            }}
+            onDrop={(event) => dropFolder(folder.id, event)}
           >
             <button
               type="button"

@@ -3,13 +3,12 @@ import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { Dialog } from './Dialog.js';
 import { ActionMenu } from './ActionMenu.js';
 import type { useChatActivities } from './useChatActivities.js';
-import type { DragEvent, MouseEvent, ReactNode } from 'react';
+import type { DragEvent, MouseEvent, HTMLAttributes } from 'react';
 import { DeleteButton } from './DeleteButton.js';
 import { IconButton } from './IconButton.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   AddIcon,
-  DownIcon,
   EditIcon,
   ExpandIcon,
   FolderAddIcon,
@@ -18,10 +17,8 @@ import {
   CloseIcon,
   LibraryIcon,
   MoreIcon,
-  MoveIcon,
   RunningIcon,
   SearchIcon,
-  UpIcon,
 } from './ui-icons.js';
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
@@ -66,7 +63,7 @@ export function BotBranch(
     botId: string;
     expanded: boolean;
     onToggle: () => void;
-    managementActions?: ReactNode;
+    headingDrag?: HTMLAttributes<HTMLDivElement>;
     activities: ReturnType<typeof useChatActivities>;
   }
 ) {
@@ -84,12 +81,11 @@ export function BotBranch(
     botId,
     expanded,
     onToggle,
-    managementActions,
+    headingDrag,
     activities,
   } = props;
   const [searching, setSearching] = useState(false);
   const [editingDefaults, setEditingDefaults] = useState(false);
-  const [movingId, setMovingId] = useState<string | null>(null);
   const [folders, setFolders] = useState<ChatFolder[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -148,7 +144,7 @@ export function BotBranch(
     .filter((chat) => chat.botId === botId)
     .sort((a, b) => (a.sortPosition ?? 0) - (b.sortPosition ?? 0));
   const visible = scoped;
-  const shouldLoad = expanded || searching || creating || !!movingId;
+  const shouldLoad = expanded || searching || creating;
   const [requested, setRequested] = useState(false);
   useEffect(() => {
     if (shouldLoad) setRequested(true);
@@ -318,6 +314,7 @@ export function BotBranch(
               data-chat-id={chat.id}
               draggable={!busy && !loading}
               onDragStart={(event) => {
+                event.stopPropagation();
                 if ((event.target as HTMLElement).closest('.bot-row-actions')) {
                   event.preventDefault();
                   return;
@@ -348,13 +345,6 @@ export function BotBranch(
                   >
                     <EditIcon size={18} aria-hidden="true" />
                     이름 변경
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(event) => openFromMenu(event, () => setMovingId(chat.id))}
-                  >
-                    <MoveIcon size={18} aria-hidden="true" />
-                    채팅 이동
                   </button>
                   <DeleteButton
                     path={`/chats/${encodeURIComponent(chat.id)}`}
@@ -449,11 +439,6 @@ export function BotBranch(
     );
   }
   const menuChat = scoped.find((chat) => chat.id === menuId);
-  const movingChat = scoped.find((chat) => chat.id === movingId);
-  const menuSiblings = scoped.filter(
-    (chat) => (chat.folderId ?? null) === (movingChat?.folderId ?? null)
-  );
-  const menuIndex = menuSiblings.findIndex((chat) => chat.id === movingId);
   const settingsFolder = folders.find((folder) => folder.id === settingsId);
   return (
     <div
@@ -470,7 +455,7 @@ export function BotBranch(
         }
       }}
     >
-      <div className="bot-branch-heading">
+      <div {...headingDrag} className={`bot-branch-heading ${headingDrag?.className ?? ''}`}>
         <button
           className="bot-branch-toggle"
           aria-label={`${bot?.title ?? '봇'} 채팅 목록`}
@@ -520,7 +505,6 @@ export function BotBranch(
               <LibraryIcon size={18} aria-hidden="true" />
               서재에서 관리
             </button>
-            {managementActions}
             {bot && library && (
               <button
                 type="button"
@@ -675,55 +659,6 @@ export function BotBranch(
               onChatsChanged={onChatsChanged}
               onClose={() => setMenuId(null)}
             />
-          </div>
-        )}
-      </Dialog>
-      <Dialog
-        open={!!movingChat}
-        title="채팅 이동"
-        onClose={() => setMovingId(null)}
-        className="bot-organize-dialog"
-      >
-        {movingChat && (
-          <div className="bot-chat-menu">
-            <label>
-              폴더로 이동
-              <select
-                aria-label={`${movingChat.title} 폴더 이동`}
-                value={movingChat.folderId ?? ''}
-                disabled={busy || loading}
-                onChange={(event) => moveChat(movingChat, event.target.value || null)}
-              >
-                <option value="">미분류</option>
-                {folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="bot-chat-menu-actions">
-              <IconButton
-                label="위로 이동"
-                icon={UpIcon}
-                disabled={busy || menuIndex <= 0}
-                onClick={() =>
-                  moveChat(movingChat, movingChat.folderId ?? null, menuSiblings[menuIndex - 1].id)
-                }
-              />
-              <IconButton
-                label="아래로 이동"
-                icon={DownIcon}
-                disabled={busy || menuIndex >= menuSiblings.length - 1}
-                onClick={() =>
-                  moveChat(
-                    movingChat,
-                    movingChat.folderId ?? null,
-                    menuSiblings[menuIndex + 2]?.id ?? null
-                  )
-                }
-              />
-            </div>
           </div>
         )}
       </Dialog>
