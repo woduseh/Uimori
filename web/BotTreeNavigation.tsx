@@ -1,6 +1,6 @@
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
 import type { Content, Library } from '../core/product.js';
 import type { Chat } from '../core/types.js';
@@ -15,7 +15,6 @@ import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import {
   AddIcon,
-  DownIcon,
   ExpandIcon,
   FolderAddIcon,
   FolderIcon,
@@ -24,7 +23,6 @@ import {
   RunningIcon,
   SearchIcon,
   SettingsIcon,
-  UpIcon,
   EditIcon,
 } from './ui-icons.js';
 import { api } from './api.js';
@@ -187,6 +185,10 @@ export function BotNavigation(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const lock = useRef(false);
+  const dragEntry = useRef<{ entry: Entry; revision: number } | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dropKey, setDropKey] = useState<string | null>(null);
+  const [dropSide, setDropSide] = useState<'before' | 'after' | 'inside'>('inside');
   const latest = useMemo(() => {
     const result = new Map<string, string>();
     for (const chat of chats)
@@ -236,14 +238,15 @@ export function BotNavigation(
   const recent = (bot: Content) => latest.get(bot.id) ?? '';
   type Entry = { key: string; title: string; at: string; bot?: Content; folder?: LibraryFolder };
   const sort = (entries: Entry[]) =>
-    entries.sort((a, b) =>
-      view.sort === 'recent'
+    entries.sort((a, b) => {
+      if (a.folder && b.folder) return a.folder.sortPosition - b.folder.sortPosition;
+      if (a.folder || b.folder) return a.folder ? -1 : 1;
+      return view.sort === 'recent'
         ? b.at.localeCompare(a.at) || a.title.localeCompare(b.title)
         : (view.order.indexOf(a.key) < 0 ? Number.MAX_SAFE_INTEGER : view.order.indexOf(a.key)) -
             (view.order.indexOf(b.key) < 0 ? Number.MAX_SAFE_INTEGER : view.order.indexOf(b.key)) ||
-          (a.folder && b.folder ? a.folder.sortPosition - b.folder.sortPosition : 0) ||
-          a.title.localeCompare(b.title)
-    );
+            a.title.localeCompare(b.title);
+    });
   const botEntries = (folderId: string | null): Entry[] =>
     sort(
       bots
@@ -256,64 +259,144 @@ export function BotNavigation(
     );
   const roots = sort([
     ...botEntries(null),
-    ...folders
-      .filter((folder) => bots.some((bot) => folderOf(bot) === folder.id))
-      .map((folder) => ({
-        key: `folder:${folder.id}`,
-        title: folder.title,
-        at: bots
-          .filter((bot) => folderOf(bot) === folder.id)
-          .reduce((latest, bot) => (recent(bot) > latest ? recent(bot) : latest), ''),
-        folder,
-      })),
+    ...folders.map((folder) => ({
+      key: `folder:${folder.id}`,
+      title: folder.title,
+      at: bots
+        .filter((bot) => folderOf(bot) === folder.id)
+        .reduce((latest, bot) => (recent(bot) > latest ? recent(bot) : latest), ''),
+      folder,
+    })),
   ]);
-  function ordering(entry: Entry, siblings: Entry[]) {
-    const index = siblings.findIndex((item) => item.key === entry.key);
-    function move(offset: number) {
-      const ordered = siblings.map((item) => item.key);
-      [ordered[index], ordered[index + offset]] = [ordered[index + offset], ordered[index]];
-      setView((current) => ({
-        ...current,
-        order: [...current.order.filter((key) => !ordered.includes(key)), ...ordered],
-      }));
-    }
-    return (
-      view.sort === 'manual' && (
-        <div className="bot-tree-order">
-          <IconButton
-            label={`${entry.title} 위로 이동`}
-            icon={UpIcon}
-            disabled={index === 0}
-            onClick={() => move(-1)}
-          />
-          <IconButton
-            label={`${entry.title} 아래로 이동`}
-            icon={DownIcon}
-            disabled={index === siblings.length - 1}
-            onClick={() => move(1)}
-          />
-        </div>
-      )
-    );
-  }
-  async function mutate(path: string, body: object, method = 'POST') {
+  async function mutate(
+    path: string,
+    body: object,
+    method = 'POST',
+    revision = library?.organization?.revision
+  ) {
     if (lock.current || !library?.organization) return;
     lock.current = true;
     setBusy(true);
     setError('');
     try {
-      await api(path, { expectedRevision: library.organization.revision, ...body }, method);
+      await api(path, { expectedRevision: revision, ...body }, method);
       await onLibraryChanged();
       setEditing(null);
+      return true;
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : '폴더를 저장하지 못했어요.';
       setError(message);
       onError(message);
       await onLibraryChanged().catch(() => {});
+      return false;
     } finally {
       lock.current = false;
       setBusy(false);
     }
+  }
+  function clearDrag() {
+    dragEntry.current = null;
+    setDragKey(null);
+    setDropKey(null);
+  }
+  function startDrag(event: DragEvent, entry: Entry) {
+    if (
+      busy ||
+      !library?.organization ||
+      (event.target as HTMLElement).closest('.bot-row-actions, .bot-branch-actions')
+    ) {
+      event.preventDefault();
+      return;
+    }
+    event.stopPropagation();
+    dragEntry.current = { entry, revision: library.organization.revision };
+    setDragKey(entry.key);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('application/x-uimori-bot-tree', entry.key);
+  }
+  function overEntry(event: DragEvent, key: string) {
+    if (!dragEntry.current || busy) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    setDropKey(key);
+    const box = event.currentTarget.getBoundingClientRect();
+    setDropSide(
+      key === 'unfiled' || (key.startsWith('folder:') && dragEntry.current.entry.bot)
+        ? 'inside'
+        : event.clientY < box.top + box.height / 2
+          ? 'before'
+          : 'after'
+    );
+    const scroll = event.currentTarget.closest('.bot-navigation-scroll');
+    if (scroll) {
+      const box = scroll.getBoundingClientRect();
+      if (event.clientY < box.top + 36) scroll.scrollTop -= 12;
+      if (event.clientY > box.bottom - 36) scroll.scrollTop += 12;
+    }
+  }
+  async function dropEntry(event: DragEvent, target: Entry | null, siblings: Entry[] = roots) {
+    const source = dragEntry.current;
+    if (!source || busy) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const after =
+      event.clientY >=
+      event.currentTarget.getBoundingClientRect().top +
+        event.currentTarget.getBoundingClientRect().height / 2;
+    clearDrag();
+    if (source.entry.key === target?.key) return;
+    if (source.entry.folder) {
+      if (!target?.folder) return;
+      const ordered = folders.filter((folder) => folder.id !== source.entry.folder!.id);
+      const index = ordered.findIndex((folder) => folder.id === target.folder!.id);
+      const beforeFolderId = after ? (ordered[index + 1]?.id ?? null) : target.folder.id;
+      if (
+        await mutate(
+          `/library/folders/${source.entry.folder.id}`,
+          { beforeFolderId },
+          'PATCH',
+          source.revision
+        )
+      )
+        setView((current) => ({
+          ...current,
+          order: current.order.filter((key) => !key.startsWith('folder:')),
+        }));
+      return;
+    }
+    const bot = source.entry.bot!;
+    const destinationFolder = target?.folder?.id ?? (target?.bot ? folderOf(target.bot) : null);
+    if (folderOf(bot) !== destinationFolder) {
+      if (!library || libraryCategory(library, bot) !== 'bot') return;
+      if (
+        !(await mutate(
+          '/library/organization/move',
+          {
+            items: [{ kind: 'content', id: bot.id }],
+            category: 'bot',
+            folderId: destinationFolder,
+          },
+          'POST',
+          source.revision
+        ))
+      )
+        return;
+    }
+    const ordered = (target?.folder ? botEntries(target.folder.id) : siblings)
+      .filter((entry) => entry.bot && entry.key !== source.entry.key)
+      .map((entry) => entry.key);
+    const index = target?.bot ? ordered.indexOf(target.key) + (after ? 1 : 0) : ordered.length;
+    ordered.splice(index < 0 ? ordered.length : index, 0, source.entry.key);
+    setView((current) => ({
+      ...current,
+      sort: 'manual',
+      order: [...current.order.filter((key) => !ordered.includes(key)), ...ordered],
+      open: {
+        ...current.open,
+        ...(destinationFolder ? { [`folder:${destinationFolder}`]: true } : {}),
+      },
+    }));
   }
   function renderBot(entry: Entry, siblings: Entry[]) {
     const bot = entry.bot!;
@@ -325,38 +408,14 @@ export function BotNavigation(
         botId={bot.id}
         expanded={!!view.open[entry.key]}
         onToggle={() => toggle(entry.key)}
-        managementActions={
-          <>
-            {library && libraryCategory(library, bot) === 'bot' ? (
-              <label className="bot-tree-move">
-                봇 폴더로 이동
-                <select
-                  aria-label={`${bot.title} 봇 폴더 이동`}
-                  value={folderOf(bot) ?? ''}
-                  disabled={busy}
-                  onChange={(event) =>
-                    void mutate('/library/organization/move', {
-                      items: [{ kind: 'content', id: bot.id }],
-                      category: 'bot',
-                      folderId: event.target.value || null,
-                    })
-                  }
-                >
-                  <option value="">미분류</option>
-                  {folders.map((folder) => (
-                    <option key={folder.id} value={folder.id}>
-                      {folder.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : (
-              <small>서재에서 봇으로 분류하면 폴더로 정리할 수 있어요.</small>
-            )}
-            <small>서재와 공유하는 폴더예요.</small>
-            {ordering(entry, siblings)}
-          </>
-        }
+        headingDrag={{
+          draggable: !busy,
+          className: `${dragKey === entry.key ? 'tree-dragging' : ''} ${dropKey === entry.key ? `tree-drop-target tree-drop-${dropSide}` : ''}`,
+          onDragStart: (event) => startDrag(event, entry),
+          onDragEnd: clearDrag,
+          onDragOver: (event) => overEntry(event, entry.key),
+          onDrop: (event) => void dropEntry(event, entry, siblings),
+        }}
       />
     );
   }
@@ -465,7 +524,11 @@ export function BotNavigation(
           프롬프트
         </button>
       </nav>
-      <div className="bot-tree-section-heading">
+      <div
+        className={`bot-tree-section-heading ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
+        onDragOver={(event) => overEntry(event, 'unfiled')}
+        onDrop={(event) => void dropEntry(event, null)}
+      >
         <button
           className="bot-folder-toggle"
           aria-label="봇"
@@ -509,7 +572,12 @@ export function BotNavigation(
       </div>
       <div className="bot-navigation-scroll">
         {view.open.section && (
-          <nav aria-label="봇별 채팅">
+          <nav
+            aria-label="봇별 채팅"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') clearDrag();
+            }}
+          >
             {roots.map((entry) =>
               entry.bot ? (
                 renderBot(entry, roots)
@@ -519,7 +587,14 @@ export function BotNavigation(
                   key={entry.key}
                   data-bot-folder-id={entry.folder!.id}
                 >
-                  <div className="bot-tree-folder-heading">
+                  <div
+                    className={`bot-tree-folder-heading ${dragKey === entry.key ? 'tree-dragging' : ''} ${dropKey === entry.key ? `tree-drop-target tree-drop-${dropSide}` : ''}`}
+                    draggable={!busy}
+                    onDragStart={(event) => startDrag(event, entry)}
+                    onDragEnd={clearDrag}
+                    onDragOver={(event) => overEntry(event, entry.key)}
+                    onDrop={(event) => void dropEntry(event, entry)}
+                  >
                     <button
                       className="bot-folder-toggle"
                       aria-label={`${entry.title} 봇 폴더`}
@@ -549,7 +624,6 @@ export function BotNavigation(
                         >
                           폴더 해제 · 봇 유지
                         </button>
-                        {ordering(entry, roots)}
                       </ActionMenu>
                     </div>
                   </div>
@@ -562,6 +636,15 @@ export function BotNavigation(
                   )}
                 </section>
               )
+            )}
+            {dragKey?.startsWith('bot:') && (
+              <div
+                className={`bot-tree-unfiled-drop ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
+                onDragOver={(event) => overEntry(event, 'unfiled')}
+                onDrop={(event) => void dropEntry(event, null)}
+              >
+                미분류로 이동
+              </div>
             )}
             {!bots.length && (
               <p className="bot-navigation-empty">
