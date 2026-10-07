@@ -1380,6 +1380,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
             }
           : null,
         planType: authenticated ? 'plus' : null,
+        credits: authenticated ? { balance: 61842, hasCredits: true, unlimited: false } : null,
         limits: authenticated
           ? [
               {
@@ -1449,6 +1450,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(subscription).toContainText('5시간 사용량');
   await expect(subscription).toContainText('75% 남음');
   await expect(subscription).toContainText('25% 사용');
+  await expect(subscription).toContainText('61,842 크레딧');
   await expect(panel.getByRole('list', { name: 'Codex 연결 단계' })).toHaveCount(0);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });

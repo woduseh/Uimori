@@ -6,6 +6,7 @@ export type CodexRuntimeStatus = {
   error: string | null;
   login: { id: string; verificationUrl: string; userCode: string } | null;
   planType: string | null;
+  credits?: { balance: number | null; hasCredits: boolean; unlimited: boolean } | null;
   limits: {
     name: string;
     usedPercent: number;

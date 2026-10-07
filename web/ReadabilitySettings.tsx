@@ -7,6 +7,7 @@ import {
   type QuoteRole,
 } from './reading-preferences.js';
 import './reading.css';
+import './settings-layout.css';
 
 const previewText =
   '그녀는 문 앞에서 돌아섰다. “정말 같이 갈 거야?” 나는 고개를 끄덕였다. ‘이번에는 도망치지 않겠어.’\n\n「그럼 출발하자.」 그녀는 『별의 기록』을 가방에 넣었다.';
@@ -134,22 +135,24 @@ export function ReadabilitySettings({
           </div>
         </header>
         <div className="settings-group-body reading-settings-rows">
-          <div className="reading-toggles">
-            <label className="check">
+          <label className="settings-row settings-row-toggle">
+            <span>대사 줄바꿈</span>
+            <span className="settings-row-control">
               <Switch
                 checked={value.dialogueBreaks}
                 onChange={(event) => onChange({ ...value, dialogueBreaks: event.target.checked })}
               />
-              대사 줄바꿈
-            </label>
-            <label className="check">
+            </span>
+          </label>
+          <label className="settings-row settings-row-toggle">
+            <span>생각 줄바꿈</span>
+            <span className="settings-row-control">
               <Switch
                 checked={value.thoughtBreaks}
                 onChange={(event) => onChange({ ...value, thoughtBreaks: event.target.checked })}
               />
-              생각 줄바꿈
-            </label>
-          </div>
+            </span>
+          </label>
           <details className="reading-quote-settings">
             <summary>표기별 스타일</summary>
             <p>부호에 따라 표시해요. 대사나 생각의 실제 의미를 판단하지 않아요.</p>

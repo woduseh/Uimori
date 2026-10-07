@@ -84,6 +84,7 @@
   min-width: 0;
 }
 .illustration-preset-editor-actions {
+  justify-content: flex-end;
   gap: 6px;
 }
 .illustration-preset-editor-actions > button {

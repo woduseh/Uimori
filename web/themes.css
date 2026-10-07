@@ -131,6 +131,7 @@
   border: 1px solid var(--line);
 }
 .theme-editor-actions {
+  justify-content: flex-end;
   flex-wrap: nowrap;
   gap: 4px;
 }
@@ -285,6 +286,7 @@
 }
 .theme-library-actions {
   display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;

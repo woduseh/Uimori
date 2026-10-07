@@ -106,6 +106,17 @@ test('SPUI01 usage dashboard keeps partial bills honest, filters atomically, and
       expect(
         await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
       ).toBe(true);
+      const meters = await panel.locator('.usage-model-meter').evaluateAll((elements) =>
+        elements.map((element) => {
+          const bounds = element.getBoundingClientRect();
+          return { left: bounds.left, right: bounds.right };
+        })
+      );
+      expect(meters.length).toBeGreaterThan(1);
+      for (const meter of meters.slice(1)) {
+        expect(Math.abs(meter.left - meters[0].left)).toBeLessThanOrEqual(1);
+        expect(Math.abs(meter.right - meters[0].right)).toBeLessThanOrEqual(1);
+      }
       await page.screenshot({ path: info.outputPath(`usage-dashboard-${theme}-${width}.png`) });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });

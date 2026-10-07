@@ -34,15 +34,6 @@
 .reading-settings label {
   min-width: 0;
 }
-.reading-toggles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
-}
-.reading-toggles label.check {
-  margin: 0;
-  min-height: var(--control-h);
-}
 .reading-quote-settings summary {
   min-height: var(--control-h);
   padding-block: 10px;
@@ -83,7 +74,7 @@
 .reading-settings-group {
   padding: 0;
 }
-.reading-settings-rows > label,
+.reading-settings-rows > label:not(.settings-row-toggle),
 .reading-spacing > label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 44%);
@@ -134,7 +125,6 @@
   color: var(--muted);
   line-height: 1.5;
 }
-.reading-settings-rows > .reading-toggles,
 .reading-settings-rows > .reading-quote-settings {
   padding-block: 16px;
 }
@@ -145,7 +135,7 @@
   justify-self: start;
 }
 @container (max-width: 420px) {
-  .reading-settings-rows > label,
+  .reading-settings-rows > label:not(.settings-row-toggle),
   .reading-spacing > label {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;

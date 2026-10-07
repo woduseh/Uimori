@@ -266,6 +266,22 @@ export function CodexAgentSettings({
                   연결은 정상이에요. 현재 사용량 정보는 제공되지 않아요.
                 </p>
               )}
+              {status.credits && (
+                <div className="codex-limit-row codex-credit-row">
+                  <div className="codex-limit-heading">
+                    <strong>사용 가능한 크레딧</strong>
+                    <span>
+                      {status.credits.unlimited
+                        ? '무제한'
+                        : status.credits.balance !== null
+                          ? `${status.credits.balance.toLocaleString('ko-KR', { maximumFractionDigits: 8 })} 크레딧`
+                          : status.credits.hasCredits
+                            ? '사용 가능'
+                            : '없음'}
+                    </span>
+                  </div>
+                </div>
+              )}
             </section>
           )}
           <div className="provider-actions">
