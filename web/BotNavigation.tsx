@@ -344,7 +344,7 @@ export function BotBranch(
                     onClick={(event) => openFromMenu(event, () => setMenuId(chat.id))}
                   >
                     <EditIcon size={18} aria-hidden="true" />
-                    이름 변경
+                    제목 변경
                   </button>
                   <DeleteButton
                     path={`/chats/${encodeURIComponent(chat.id)}`}

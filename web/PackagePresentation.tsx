@@ -64,7 +64,7 @@ export function usePackagePresentation(
         }
         const data = (await response.json()) as PackagePresentation;
         if (data.sourceRevision !== source.id || data.sourceHash !== source.hash)
-          throw new Error('표시 결과의 원문 버전이 달라요.');
+          throw new Error('표시 결과의 원문 저장본이 달라요.');
         if (!['plain-text', 'risu-html'].includes(data.format))
           throw new Error('지원하지 않는 표시 형식이에요.');
         if (
@@ -72,7 +72,7 @@ export function usePackagePresentation(
           (data.translationId !== translation?.id ||
             data.translationRevision !== (translation?.revision ?? 0))
         )
-          throw new Error('표시 결과의 번역 버전이 달라요.');
+          throw new Error('표시 결과의 번역 저장본이 달라요.');
         if (!controller.signal.aborted && sequence.current === requestId)
           setResult({ key, identity, sourceIdentity, data });
       } catch (error) {

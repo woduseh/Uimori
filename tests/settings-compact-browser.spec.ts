@@ -80,50 +80,50 @@ test('CSUILAYOUT all six chat settings sections fit shared desktop and phone set
   }
 });
 
-test('SCUI04 all settings stay usable in light and dark desktop and phone layouts', async ({
-  page,
-  request,
-}, info) => {
-  test.setTimeout(90_000);
-  const health = await (await request.get('/api/health')).json();
-  expect(health.version).toBe(packageJson.version);
-  const connectionResponse = await request.post('/api/connections', {
-    data: {
-      title: '설정 배치 확인용 프로바이더',
-      protocol: 'fixture-sse-v1',
-      endpoint: 'http://127.0.0.1:9/not-called',
-      enabled: true,
-    },
-  });
-  expect(connectionResponse.ok()).toBe(true);
-  const connection = await connectionResponse.json();
-  const modelResponse = await request.post('/api/model-presets', {
-    data: {
-      title: '설정 배치 확인용 모델',
-      connectionId: connection.id,
-      modelId: 'settings-layout-fixture',
-      maxOutputTokens: 1000,
-      temperature: null,
-    },
-  });
-  expect(modelResponse.ok()).toBe(true);
-  await page.route('**/api/agent-runtimes/codex', (route) =>
-    route.fulfill({
-      json: {
-        available: false,
-        authenticated: false,
-        authMode: null,
-        limits: [],
-        error: 'CODEX_DISABLED',
-      },
-    })
-  );
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme });
-    for (const viewport of [
-      { width: 2560, height: 1440 },
-      { width: 412, height: 915 },
-    ]) {
+for (const colorScheme of ['light', 'dark'] as const) {
+  for (const viewport of [
+    { width: 2560, height: 1440 },
+    { width: 412, height: 915 },
+  ]) {
+    test(`SCUI04 all settings stay usable in ${colorScheme} ${viewport.width}px layout`, async ({
+      page,
+      request,
+    }, info) => {
+      test.setTimeout(90_000);
+      const health = await (await request.get('/api/health')).json();
+      expect(health.version).toBe(packageJson.version);
+      const connectionResponse = await request.post('/api/connections', {
+        data: {
+          title: '설정 배치 확인용 프로바이더',
+          protocol: 'fixture-sse-v1',
+          endpoint: 'http://127.0.0.1:9/not-called',
+          enabled: true,
+        },
+      });
+      expect(connectionResponse.ok()).toBe(true);
+      const connection = await connectionResponse.json();
+      const modelResponse = await request.post('/api/model-presets', {
+        data: {
+          title: '설정 배치 확인용 모델',
+          connectionId: connection.id,
+          modelId: 'settings-layout-fixture',
+          maxOutputTokens: 1000,
+          temperature: null,
+        },
+      });
+      expect(modelResponse.ok()).toBe(true);
+      await page.route('**/api/agent-runtimes/codex', (route) =>
+        route.fulfill({
+          json: {
+            available: false,
+            authenticated: false,
+            authMode: null,
+            limits: [],
+            error: 'CODEX_DISABLED',
+          },
+        })
+      );
+      await page.emulateMedia({ colorScheme });
       await page.setViewportSize(viewport);
       await page.goto('/');
       await navigationAction(page, '설정');
@@ -233,9 +233,9 @@ test('SCUI04 all settings stay usable in light and dark desktop and phone layout
         });
       }
       await dialog.getByRole('button', { name: '설정 닫기', exact: true }).click();
-    }
+    });
   }
-});
+}
 
 test('SCUIVERSION app version lookup reports a failure and recovers on retry', async ({ page }) => {
   await page.goto('/');

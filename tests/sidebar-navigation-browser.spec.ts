@@ -154,7 +154,6 @@ test('SIDENAV02 sidebar states keep titles steady and keyboard menus reachable w
     await page.getByLabel('앱 화면 테마', { exact: true }).selectOption(theme);
     await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
     await page.mouse.move(900, 90);
-    const titleBox = await folderToggle.boundingBox();
     const selection = await selected.evaluate((node) => getComputedStyle(node).backgroundColor);
     await other.hover();
     expect(await other.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
@@ -164,6 +163,9 @@ test('SIDENAV02 sidebar states keep titles steady and keyboard menus reachable w
     expect(await selected.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe(
       selection
     );
+    await folderToggle.scrollIntoViewIfNeeded();
+    await page.mouse.move(900, 90);
+    const titleBox = await folderToggle.boundingBox();
     await folderToggle.hover();
     await expect(actions).toHaveCSS('opacity', '1');
     expect(await folderToggle.boundingBox()).toEqual(titleBox);

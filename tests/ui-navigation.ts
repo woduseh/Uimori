@@ -259,12 +259,17 @@ export async function openChatSettings(page: Page) {
   if (compactLayout(page)) {
     const menu = await openChatMenu(page);
     await menu.getByRole('button', { name: '채팅 설정', exact: true }).click();
-    return;
+  } else {
+    await page
+      .locator('.workspace-header')
+      .getByRole('button', { name: '채팅 설정', exact: true })
+      .click();
   }
-  await page
-    .locator('.workspace-header')
-    .getByRole('button', { name: '채팅 설정', exact: true })
-    .click();
+  await expect(
+    page
+      .getByRole('dialog', { name: '채팅 설정', exact: true })
+      .getByRole('region', { name: '채팅 설정 내용', exact: true })
+  ).toBeVisible();
 }
 /** Opens the conditionally available advanced settings for package variables, state and actions. */
 export async function openPackageBehaviorSettings(page: Page) {

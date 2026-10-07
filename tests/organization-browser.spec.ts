@@ -131,8 +131,8 @@ for (const width of DEFAULT_WIDTHS) {
     await row.hover();
     await row.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
     const actions = row.locator('.action-menu-body');
-    await expect(actions.getByRole('button')).toHaveText(['이름 변경', '채팅 삭제']);
-    await actions.getByRole('button', { name: '이름 변경', exact: true }).click();
+    await expect(actions.getByRole('button')).toHaveText(['제목 변경', '채팅 삭제']);
+    await actions.getByRole('button', { name: '제목 변경', exact: true }).click();
     const menu = page.getByRole('dialog', { name: '채팅 제목 변경', exact: true });
     const title = menu.getByRole('textbox', { name: '채팅 제목', exact: true });
     await title.fill('저장하지 않을 제목');
@@ -142,7 +142,7 @@ for (const width of DEFAULT_WIDTHS) {
     expect((await (await request.get(`/api/chats/${chat.id}`)).json()).chat.title).toBe(chat.title);
     await row.hover();
     await row.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
-    await actions.getByRole('button', { name: '이름 변경', exact: true }).click();
+    await actions.getByRole('button', { name: '제목 변경', exact: true }).click();
     await expect(title).toHaveValue(chat.title);
     const renamed = `직접 정한 제목 ${width}`;
     await title.fill(renamed);
@@ -160,7 +160,7 @@ for (const width of DEFAULT_WIDTHS) {
     await visibleNavigation(page);
     await row.hover();
     await row.getByLabel(`${concurrent} 채팅 메뉴`, { exact: true }).click();
-    await actions.getByRole('button', { name: '이름 변경', exact: true }).click();
+    await actions.getByRole('button', { name: '제목 변경', exact: true }).click();
     await expect(title).toHaveValue(concurrent);
     await title.fill(renamed);
     await menu.getByRole('button', { name: '제목 저장', exact: true }).click();
