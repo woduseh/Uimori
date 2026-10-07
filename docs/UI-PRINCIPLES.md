@@ -16,3 +16,19 @@ Apply the same grouping to chat settings and helper settings. Picker dialogs own
 Use the current components and styles as the starting point. [Library](LIBRARY.md) and [usage](USAGE.md) describe feature behavior; [DEVELOPMENT](DEVELOPMENT.md#verification) covers verification selection.
 
 Detailed editor behavior is in [LIBRARY](LIBRARY.md#저장과-취소); helper sessions are in [READING](READING.md#helper-sessions).
+
+## Korean terminology
+
+Use the same terms in visible copy, accessible names and user documentation.
+
+| Meaning | Term |
+| --- | --- |
+| Provider connections and services | 프로바이더 |
+| Model input context | 컨텍스트 |
+| Input preview for writing from an outline | 입력 컨텍스트 |
+| Chat title | 채팅 제목 |
+| Creating a chat | 새 채팅 |
+| Numeric revision | 수정 번호 |
+| Saved text or resource contents | 저장본 |
+
+Keep application, file-format and authored card versions distinct from revisions. Preserve protocol identifiers and existing data. Cancellation and server interruption, presets and templates, and source text and manuscripts retain their separate meanings.
