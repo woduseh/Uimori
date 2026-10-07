@@ -326,6 +326,12 @@ test('UI08 UI12 native dialog focus, composition, URL and draft selection stay l
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(dialog).toBeVisible();
   // Common-dialog coverage owns focus wrapping; this case owns IME and caret persistence.
+  await expect(dialog.getByRole('region', { name: '채팅 설정 내용', exact: true })).toBeVisible();
+  await expect
+    .poll(() =>
+      dialog.evaluate((node) => node.matches(':modal') && node.contains(document.activeElement))
+    )
+    .toBe(true);
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
   await expect(page.locator('.chat-menu > summary')).toBeFocused();
