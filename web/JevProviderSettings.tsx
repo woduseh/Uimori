@@ -36,12 +36,16 @@ function relevance(test: ProviderConnectionTest): number | null {
 
 export function JevProviderSettings({
   active,
+  view,
+  onConnectionOpen,
   onDirtyChange,
   onBusyChange,
   onStatusChange,
   onSaveHandlerChange,
 }: {
   active: boolean;
+  view: 'connection' | 'model';
+  onConnectionOpen: () => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   onDirtyChange: (dirty: boolean) => void;
   onBusyChange: (busy: boolean) => void;
@@ -161,11 +165,7 @@ export function JevProviderSettings({
       setStatus(next);
       setApiKey('');
       setTest(next.latestTest);
-      setMessage(
-        remove
-          ? '저장한 키를 삭제했어요.'
-          : 'TypeSafe AI와 JEV를 등록했어요. 연결 테스트를 실행할 수 있어요.'
-      );
+      setMessage(remove ? '저장한 키를 삭제했어요.' : '키를 저장했어요.');
       return true;
     } catch (caught) {
       if (!alive.current) return false;
@@ -236,10 +236,14 @@ export function JevProviderSettings({
     <section
       hidden={!active}
       className="jev-provider-settings provider-management-form"
-      aria-label="TypeSafe AI 프로바이더 설정"
+      aria-label={view === 'connection' ? 'TypeSafe AI 프로바이더 설정' : 'JEV 모델 설정'}
     >
       <div className="provider-section-heading">
-        <h3>{JEV_PROVIDER_DEFINITION.label}</h3>
+        <h3>
+          {view === 'connection'
+            ? JEV_PROVIDER_DEFINITION.label
+            : JEV_PROVIDER_DEFINITION.modelLabel}
+        </h3>
         <button
           type="button"
           className="secondary"
@@ -253,6 +257,7 @@ export function JevProviderSettings({
       {status && (
         <>
           <form
+            hidden={view !== 'connection'}
             className="editor-grid provider-management-form"
             onSubmit={(event) => {
               event.preventDefault();
@@ -264,10 +269,6 @@ export function JevProviderSettings({
               <label>
                 프로바이더
                 <input value={JEV_PROVIDER_DEFINITION.label} readOnly />
-              </label>
-              <label>
-                모델
-                <input value={`JEV · ${status.modelId} · 판단 전용`} readOnly />
               </label>
               <label>
                 JEV API 키{status.configured ? ' 교체' : ''}
@@ -294,13 +295,6 @@ export function JevProviderSettings({
               <div className="jev-provider-links">
                 <a href="https://console.typesafe.ai" target="_blank" rel="noreferrer">
                   TypeSafe에서 API 키 발급
-                </a>
-                <a
-                  href="https://typesafe.ai/blog/introducing-system-one-models-and-jev"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  JEV 안내
                 </a>
               </div>
               <details className="provider-auth-settings">
@@ -349,7 +343,41 @@ export function JevProviderSettings({
               />
             </div>
           </form>
-          <section className="jev-provider-test provider-model-test" aria-label="JEV 연결 테스트">
+          {view === 'model' && (
+            <fieldset className="editor-fields provider-connection-fields">
+              <legend>모델 정보</legend>
+              <label>
+                프로바이더
+                <input value={JEV_PROVIDER_DEFINITION.label} readOnly />
+              </label>
+              <label>
+                모델 ID
+                <input value={status.modelId} readOnly />
+              </label>
+              <div className="provider-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={onConnectionOpen}
+                >
+                  프로바이더 설정
+                </button>
+                <a
+                  href="https://typesafe.ai/blog/introducing-system-one-models-and-jev"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  JEV 안내
+                </a>
+              </div>
+            </fieldset>
+          )}
+          <section
+            hidden={view !== 'model'}
+            className="jev-provider-test provider-model-test"
+            aria-label="JEV 연결 테스트"
+          >
             <h4>판단 응답 테스트</h4>
             <div className="provider-actions">
               <button
@@ -419,7 +447,7 @@ export function JevProviderSettings({
               </div>
             )}
           </section>
-          <details className="provider-auth-settings">
+          <details hidden={view !== 'model'} className="provider-auth-settings">
             <summary>JEV가 맡는 판단</summary>
             <div className="provider-auth-settings-body">
               <p>
