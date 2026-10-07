@@ -202,18 +202,36 @@
 }
 .helper-settings {
   margin: 0 12px 8px;
-  padding: 12px 14px;
+  padding: 12px 2px;
   max-height: 35dvh;
   overflow: auto;
-  border-radius: 12px;
-  background: var(--panel);
+  display: grid;
+  gap: 20px;
+  flex-shrink: 0;
+}
+.helper-settings .settings-group-heading h3 {
+  font-size: 14px;
+}
+.helper-persona {
+  padding-block: 14px;
+}
+.helper-persona p,
+.helper-limits > p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
 }
 .helper-settings textarea {
   min-height: 70px;
   font-size: 16px;
+  width: 100%;
 }
-.helper-settings button {
-  margin-right: 8px;
+.helper-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
 }
 .streaming-response {
   margin-top: 10px;
@@ -252,16 +270,10 @@
   background: var(--panel);
   font-size: 14px;
 }
-.helper-settings > label,
-.helper-limits label {
-  display: grid;
-  gap: 6px;
-}
 .helper-limits {
-  margin: 12px 0;
+  margin: 0;
 }
 .helper-limits label {
-  margin-top: 10px;
   font-size: 13px;
 }
 .helper-limits input {
@@ -271,6 +283,10 @@
 .helper-limits summary {
   min-height: var(--control-h);
   align-content: center;
+  cursor: pointer;
+}
+.helper-limits[open] > .settings-group-body {
+  margin-top: 12px;
 }
 .helper-task-history .task-request {
   margin: 8px 0 0;
@@ -347,7 +363,7 @@
 /* Global model management lives with session settings, keeping the conversation compact. */
 .helper-model {
   display: flex;
-  padding: 0 0 12px;
+  padding-block: 14px;
 }
 .helper-model .model-chip {
   max-width: 100%;

@@ -86,36 +86,47 @@ export function SettingsEditor({
           void save();
         }}
       >
-        <fieldset className="editor-fields full" disabled={saving}>
-          <label className="check">
-            <Switch
-              aria-label="장면 해설 자동 생성"
-              checked={value.status}
-              onChange={(event) => update('status', event.target.checked)}
-            />
-            장면 해설 자동 생성
-          </label>
-          <small className="full">
-            원고가 완성되면 짧은 요약과 분위기를 덧붙여요. 다음 생성의 문맥에는 쓰지 않아요. 모델은
-            역할별 모델 설정을 따라요.
-          </small>
-          <label className="full">
-            작업당 모델 호출 한도
-            <input
-              type="number"
-              aria-label="작업당 모델 호출 한도"
-              min={1}
-              max={32}
-              step={1}
-              required
-              value={Number.isFinite(value.maxCalls) ? value.maxCalls : ''}
-              onChange={(event) => update('maxCalls', event.target.valueAsNumber)}
-            />
-          </label>
-          <small className="full">
-            1~32회. 본문의 조회 후속 호출과 문맥 요약을 함께 세어요. 번역·도우미는 각 기능의 별도
-            호출 한도를 사용해요.
-          </small>
+        <fieldset className="editor-fields full chat-runtime-fields" disabled={saving}>
+          <div className="settings-group full">
+            <h4 className="settings-group-heading">실행 옵션</h4>
+            <div className="settings-group-body">
+              <label className="settings-row settings-row-toggle">
+                <span className="settings-row-copy">
+                  <strong>장면 해설 자동 생성</strong>
+                  <small>
+                    원고가 완성되면 짧은 요약과 분위기를 덧붙여요. 다음 생성의 문맥에는 쓰지 않아요.
+                    모델은 역할별 모델 설정을 따라요.
+                  </small>
+                </span>
+                <span className="settings-row-control">
+                  <Switch
+                    aria-label="장면 해설 자동 생성"
+                    checked={value.status}
+                    onChange={(event) => update('status', event.target.checked)}
+                  />
+                </span>
+              </label>
+              <label className="settings-row">
+                <span className="settings-row-copy">
+                  <strong>작업당 모델 호출 한도</strong>
+                  <small>
+                    1~32회. 본문의 조회 후속 호출과 문맥 요약을 함께 세어요. 번역·도우미는 각 기능의
+                    별도 호출 한도를 사용해요.
+                  </small>
+                </span>
+                <input
+                  type="number"
+                  aria-label="작업당 모델 호출 한도"
+                  min={1}
+                  max={32}
+                  step={1}
+                  required
+                  value={Number.isFinite(value.maxCalls) ? value.maxCalls : ''}
+                  onChange={(event) => update('maxCalls', event.target.valueAsNumber)}
+                />
+              </label>
+            </div>
+          </div>
           <div className="form-actions full settings-save-actions">
             {dirty && (
               <button

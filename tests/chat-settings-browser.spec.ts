@@ -291,6 +291,13 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await openChatMenu(page);
   await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
   const reading = page.getByRole('dialog', { name: '읽기 설정', exact: true });
+  const focusStart = reading.getByRole('button', { name: '집중 읽기 시작', exact: true });
+  await focusStart.scrollIntoViewIfNeeded();
+  const focusBox = (await focusStart.boundingBox())!;
+  const preferencesBox = (await reading.locator('.reading-preferences').boundingBox())!;
+  expect(
+    Math.abs(preferencesBox.x + preferencesBox.width - focusBox.x - focusBox.width)
+  ).toBeLessThanOrEqual(1);
   await reading.getByLabel('새 원고의 기본 보기', { exact: true }).selectOption('original');
   await reading.getByLabel('본문 글꼴', { exact: true }).selectOption('serif');
   const navigatorToggle = reading.getByRole('switch', {
@@ -356,6 +363,20 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
     if (!(await quick.isVisible()))
       await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await quick.click();
+    for (const width of [1440, MOBILE_WIDTH]) {
+      await page.setViewportSize({ width, height: 844 });
+      const search = picker.getByRole('searchbox');
+      const folder = picker.getByRole('combobox', { name: '빠른 페르소나 폴더', exact: true });
+      for (const control of [search, folder]) {
+        const box = (await control.boundingBox())!;
+        const labelBox = (await control.locator('xpath=ancestor::label').boundingBox())!;
+        expect(Math.abs(box.width - labelBox.width)).toBeLessThanOrEqual(1);
+        expect(box.height).toBeGreaterThanOrEqual(44);
+      }
+      expect(
+        Math.abs((await search.boundingBox())!.height - (await folder.boundingBox())!.height)
+      ).toBeLessThanOrEqual(1);
+    }
     if (none) await picker.getByRole('button', { name: '페르소나 없음', exact: true }).click();
     else {
       await picker.getByRole('searchbox').fill(title);
