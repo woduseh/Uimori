@@ -650,16 +650,22 @@ test('LOADUI04 offline edits reappear on reconnect and connected SSE sends only 
     );
   } finally {
     // onopen only means the transport is connected; wait for its full reader catch-up too.
-    const catchUpRequest = page.waitForRequest((request) => {
-      const url = new URL(request.url());
-      return (
-        url.pathname === `/api/chats/${seeded.chat.id}/reader` && !url.searchParams.has('since')
+    const catchUpResponse = page.waitForResponse(async (response) => {
+      const url = new URL(response.url());
+      if (
+        !response.ok() ||
+        url.pathname !== `/api/chats/${seeded.chat.id}/reader` ||
+        url.searchParams.has('since')
+      )
+        return false;
+      const body = await response.json();
+      return body.sources.some(
+        (source: { id: string; text: string }) =>
+          source.id === first.id && source.text === 'Source changed while browser was offline.'
       );
     });
     await context.setOffline(false);
-    const catchUpResponse = await (await catchUpRequest).response();
-    expect(catchUpResponse?.ok()).toBe(true);
-    await catchUpResponse!.finished();
+    await (await catchUpResponse).finished();
   }
   await expect(article(page, first.id).getByTestId('source-text')).toContainText(
     'Source changed while browser was offline.'
