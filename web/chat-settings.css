@@ -247,3 +247,148 @@
 .chat-settings-image-management > .workspace-tools > p.muted {
   display: none;
 }
+
+/* Chat overrides use the same groups as app settings. Scope this treatment to the
+   dialog so compact inline resource editors keep their own layout. */
+.chat-settings-panel .profile-fields,
+.chat-settings-panel .chat-runtime-fields {
+  display: grid;
+  gap: 24px;
+}
+.chat-settings-panel .settings-row {
+  max-width: none;
+}
+.chat-settings-panel .chat-profile-model-options > .form-actions,
+.chat-settings-panel .chat-profile-model-options > p {
+  margin: 0;
+}
+.chat-settings-panel .settings-group-heading {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+  letter-spacing: normal;
+}
+.chat-settings-panel .form-actions,
+.chat-settings-panel .lore-context-actions {
+  justify-content: flex-end;
+}
+.chat-settings-panel .profile-savebar,
+.chat-settings-panel .settings-inherited,
+.chat-settings-panel .chat-settings-memory,
+.chat-settings-panel .chat-settings-images,
+.chat-settings-panel .context-panel,
+.chat-settings-panel .illustration-references,
+.chat-settings-panel .lore-context-preview {
+  border-top: 0;
+  padding-top: 0;
+}
+.chat-settings-panel .chat-profile-prompt-options,
+.chat-settings-panel .settings-inherited {
+  margin-top: 0;
+}
+.chat-settings-panel .profile-savebar {
+  margin-top: 20px;
+}
+.chat-settings-panel .settings-inherited > dl {
+  margin: 0;
+}
+.chat-settings-panel .settings-inherited > dl > div {
+  border-bottom: 0;
+  padding-block: 16px;
+}
+.chat-settings-panel .settings-inherited > dl > div + div {
+  border-top: 1px solid var(--line);
+}
+.chat-settings-panel .package-attachments,
+.chat-settings-panel .context-content,
+.chat-settings-panel .illustration-reference-options:not(:empty),
+.chat-settings-panel .workspace-tools > form {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 0 16px;
+  min-width: 0;
+}
+.chat-settings-panel .chat-composition-row {
+  border-bottom: 0;
+}
+.chat-settings-panel .chat-composition-row:not(.package-attachment-fixed-bot),
+.chat-settings-panel .chat-composition-add {
+  border-top: 1px solid var(--line);
+}
+.chat-settings-panel .chat-composition-persona {
+  margin-block: 0;
+  padding-block: 16px;
+  border-top: 1px solid var(--line);
+}
+.chat-settings-panel .chat-composition-add {
+  margin-top: 0;
+  padding-top: 12px;
+}
+.chat-settings-panel .chat-composition-persona .content-picker {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 44%);
+  align-items: center;
+  gap: 20px;
+}
+.chat-settings-panel .context-content {
+  display: grid;
+  gap: 12px;
+  padding-block: 16px;
+}
+.chat-settings-panel .context-content > p {
+  margin: 0;
+}
+.chat-settings-panel .chat-settings-memory,
+.chat-settings-panel .chat-settings-images {
+  margin-top: 28px;
+}
+.chat-settings-panel .chat-settings-memory > h3 {
+  margin: 0 0 12px;
+}
+.chat-settings-panel .story-panel details {
+  border-top: 0;
+  padding-top: 0;
+}
+.chat-settings-panel .context-content > details,
+.chat-settings-panel .context-notes,
+.chat-settings-panel .story-panel > details {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.chat-settings-panel .chat-settings-image-management {
+  margin-bottom: 28px;
+}
+.chat-settings-panel .illustration-reference-options:empty {
+  display: none;
+}
+.chat-settings-panel .illustration-reference-options:not(:empty) {
+  padding-block: 16px;
+}
+.chat-settings-panel .workspace-tools,
+.chat-settings-panel .workspace-tools > form > fieldset {
+  border: 0;
+  padding: 0;
+}
+.chat-settings-panel .workspace-tools > form {
+  padding: 16px;
+}
+.chat-settings-panel .chat-variable-row {
+  border-bottom: 0;
+  padding-block: 16px;
+}
+.chat-settings-panel .chat-variable-row + .chat-variable-row {
+  border-top: 1px solid var(--line);
+}
+.chat-settings-panel .chat-variable-rows:empty {
+  display: none;
+}
+.chat-settings-panel .chat-variable-editor > .form-actions {
+  border-top: 0;
+}
+@media (max-width: 760px) {
+  .chat-settings-panel .chat-composition-persona .content-picker {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}

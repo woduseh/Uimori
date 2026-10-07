@@ -132,7 +132,7 @@
   padding: 14px;
 }
 .reading-focus-start {
-  justify-self: start;
+  justify-self: end;
 }
 @container (max-width: 420px) {
   .reading-settings-rows > label:not(.settings-row-toggle),

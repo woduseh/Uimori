@@ -26,7 +26,15 @@ import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { CopyIcon, EditIcon, IllustrationIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
-import { GitFork, Info, MessageCircleQuestion, ReceiptText, Save, X } from 'lucide-react';
+import {
+  GitFork,
+  Info,
+  Languages,
+  MessageCircleQuestion,
+  ReceiptText,
+  Save,
+  X,
+} from 'lucide-react';
 import { Dialog } from './Dialog.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
@@ -886,7 +894,7 @@ function SourceReaderContent({
                 disabled={!!pending || !!editor}
                 onClick={retranslate}
               >
-                <RefreshIcon size={18} aria-hidden="true" />
+                <Languages size={18} aria-hidden="true" />
                 현재 설정으로 새 번역
               </button>
             )}

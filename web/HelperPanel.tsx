@@ -46,6 +46,7 @@ import {
   writeHelperRecovery,
 } from './helper-recovery.js';
 import './helper.css';
+import './settings-layout.css';
 
 type Props = {
   enterSend: boolean;
@@ -910,64 +911,78 @@ export function HelperPanel(props: Props) {
       )}
       {settings && conversation && (
         <div className="helper-settings">
-          <div className="helper-model">
-            <button
-              type="button"
-              className="model-chip secondary"
-              aria-label={`현재 도우미 모델 · ${props.modelDescription}`}
-              title="모든 채팅의 도우미 요청에 적용되는 전역 모델 설정"
-              onClick={props.onModelSettings}
-            >
-              <span>{props.modelDescription}</span>
-            </button>
-          </div>
-          <label>
-            도우미 말투
-            <textarea
-              value={persona.text}
-              maxLength={HELPER_PERSONA_MAX_CHARS}
-              onChange={(event) =>
-                setPersonas((old) => ({
-                  ...old,
-                  [scopeKey]: { ...persona, text: event.target.value },
-                }))
-              }
-              placeholder="비워 두면 담백한 도우미로 응답해요."
-            />
-          </label>
-          <p className="muted">
-            이 도우미 대화에만 적용해요. 저장 후 새로 접수한 요청부터 반영되며, 작품과 저장 자료의
-            문체는 바꾸지 않아요.
-          </p>
-          <details className="helper-limits">
+          <section className="settings-group">
+            <header className="settings-group-heading">
+              <h3>도우미 모델</h3>
+            </header>
+            <div className="settings-group-body helper-model">
+              <button
+                type="button"
+                className="model-chip secondary"
+                aria-label={`현재 도우미 모델 · ${props.modelDescription}`}
+                title="모든 채팅의 도우미 요청에 적용되는 전역 모델 설정"
+                onClick={props.onModelSettings}
+              >
+                <span>{props.modelDescription}</span>
+              </button>
+            </div>
+          </section>
+          <section className="settings-group">
+            <header className="settings-group-heading">
+              <h3>도우미 말투</h3>
+              <p>이 도우미 대화에만 적용해요.</p>
+            </header>
+            <div className="settings-group-body helper-persona">
+              <textarea
+                aria-label="도우미 말투"
+                value={persona.text}
+                maxLength={HELPER_PERSONA_MAX_CHARS}
+                onChange={(event) =>
+                  setPersonas((old) => ({
+                    ...old,
+                    [scopeKey]: { ...persona, text: event.target.value },
+                  }))
+                }
+                placeholder="비워 두면 담백한 도우미로 응답해요."
+              />
+              <p className="muted">
+                저장 후 새로 접수한 요청부터 반영해요. 작품과 저장 자료의 문체는 바꾸지 않아요.
+              </p>
+            </div>
+          </section>
+          <details className="helper-limits settings-group">
             <summary>작업 한도</summary>
-            <p>새 요청부터 적용해요.</p>
-            {(
-              [
-                ['totalCalls', '전체 호출 한도', 2, 100],
-                ['helperCalls', '도우미 판단 한도', 1, persona.limits.totalCalls],
-                ['artifacts', '가정 장면 작업 한도', 1, 10],
-              ] as const
-            ).map(([field, label, min, max]) => (
-              <label key={field}>
-                {label}
-                <input
-                  type="number"
-                  min={min}
-                  max={max}
-                  value={Number.isFinite(persona.limits[field]) ? persona.limits[field] : ''}
-                  onChange={(event) =>
-                    setPersonas((old) => ({
-                      ...old,
-                      [scopeKey]: {
-                        ...persona,
-                        limits: { ...persona.limits, [field]: event.target.valueAsNumber },
-                      },
-                    }))
-                  }
-                />
-              </label>
-            ))}
+            <div className="settings-group-body">
+              {(
+                [
+                  ['totalCalls', '전체 호출 한도', 2, 100],
+                  ['helperCalls', '도우미 판단 한도', 1, persona.limits.totalCalls],
+                  ['artifacts', '가정 장면 작업 한도', 1, 10],
+                ] as const
+              ).map(([field, label, min, max]) => (
+                <label key={field} className="settings-row">
+                  <span className="settings-row-copy">{label}</span>
+                  <span className="settings-row-control">
+                    <input
+                      type="number"
+                      min={min}
+                      max={max}
+                      value={Number.isFinite(persona.limits[field]) ? persona.limits[field] : ''}
+                      onChange={(event) =>
+                        setPersonas((old) => ({
+                          ...old,
+                          [scopeKey]: {
+                            ...persona,
+                            limits: { ...persona.limits, [field]: event.target.valueAsNumber },
+                          },
+                        }))
+                      }
+                    />
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="muted">새 요청부터 적용해요.</p>
           </details>
           {persona.revision !== conversation.revision && (
             <p role="alert">
@@ -987,74 +1002,77 @@ export function HelperPanel(props: Props) {
             </p>
           )}
 
-          <button
-            type="button"
-            className="secondary"
-            onClick={() =>
-              setPersonas((old) => ({
-                ...old,
-                [scopeKey]: { ...persona, text: UI_HELPER_PERSONA },
-              }))
-            }
-          >
-            우이 프리셋 불러오기
-          </button>
-          <button
-            type="button"
-            aria-label="도우미 설정 저장"
-            title="도우미 설정 저장"
-            disabled={
-              props.ready === false ||
-              scopeMismatch ||
-              savingPersona ||
-              persona.revision !== conversation.revision ||
-              persona.limits.totalCalls < 2 ||
-              persona.limits.totalCalls > 100 ||
-              persona.limits.helperCalls < 1 ||
-              persona.limits.helperCalls > persona.limits.totalCalls ||
-              persona.limits.artifacts < 1 ||
-              persona.limits.artifacts > 10
-            }
-            onClick={() => {
-              if (props.ready === false || scopeMismatch) return;
-              setSavingPersona(true);
-              void api<HelperConversation>(
-                `/helper/conversations/${conversation.id}`,
-                {
-                  expectedRevision: persona.revision,
-                  persona: persona.text,
-                  limits: persona.limits,
-                },
-                'PATCH'
-              )
-                .then((value) => {
-                  data.updateConversation(value);
-                  setPersonas((old) => ({
-                    ...old,
-                    [scopeKey]: {
-                      text: value.persona,
-                      revision: value.revision,
-                      limits: value.limits,
-                    },
-                  }));
-                })
-                .catch(async (cause) => {
-                  setError(cause.message);
-                  if (cause instanceof ApiError && cause.status === 409) {
-                    try {
-                      data.updateConversation(
-                        await api<HelperConversation>(`/helper/conversations/${conversation.id}`)
-                      );
-                    } catch {
-                      /* Keep the local settings draft. */
+          <div className="helper-settings-actions">
+            <button
+              type="button"
+              className="secondary"
+              onClick={() =>
+                setPersonas((old) => ({
+                  ...old,
+                  [scopeKey]: { ...persona, text: UI_HELPER_PERSONA },
+                }))
+              }
+            >
+              우이 프리셋 불러오기
+            </button>
+            <button
+              type="button"
+              aria-label="도우미 설정 저장"
+              title="도우미 설정 저장"
+              disabled={
+                props.ready === false ||
+                scopeMismatch ||
+                savingPersona ||
+                persona.revision !== conversation.revision ||
+                persona.limits.totalCalls < 2 ||
+                persona.limits.totalCalls > 100 ||
+                persona.limits.helperCalls < 1 ||
+                persona.limits.helperCalls > persona.limits.totalCalls ||
+                persona.limits.artifacts < 1 ||
+                persona.limits.artifacts > 10
+              }
+              onClick={() => {
+                if (props.ready === false || scopeMismatch) return;
+                setSavingPersona(true);
+                void api<HelperConversation>(
+                  `/helper/conversations/${conversation.id}`,
+                  {
+                    expectedRevision: persona.revision,
+                    persona: persona.text,
+                    limits: persona.limits,
+                  },
+                  'PATCH'
+                )
+                  .then((value) => {
+                    data.updateConversation(value);
+                    setPersonas((old) => ({
+                      ...old,
+                      [scopeKey]: {
+                        text: value.persona,
+                        revision: value.revision,
+                        limits: value.limits,
+                      },
+                    }));
+                  })
+                  .catch(async (cause) => {
+                    setError(cause.message);
+                    if (cause instanceof ApiError && cause.status === 409) {
+                      try {
+                        data.updateConversation(
+                          await api<HelperConversation>(`/helper/conversations/${conversation.id}`)
+                        );
+                      } catch {
+                        /* Keep the local settings draft. */
+                      }
                     }
-                  }
-                })
-                .finally(() => setSavingPersona(false));
-            }}
-          >
-            <SaveIcon size={18} aria-hidden="true" />
-          </button>
+                  })
+                  .finally(() => setSavingPersona(false));
+              }}
+            >
+              <SaveIcon size={18} aria-hidden="true" />
+              저장
+            </button>
+          </div>
         </div>
       )}
       <div

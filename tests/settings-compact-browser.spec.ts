@@ -11,6 +11,75 @@ import {
   startProviderConnection,
 } from './ui-navigation.js';
 
+test('CSUILAYOUT all six chat settings sections fit shared desktop and phone settings styles', async ({
+  page,
+  request,
+}, info) => {
+  test.setTimeout(90000);
+  const botInput = fixtureBotInput('채팅 설정 화면 검토');
+  botInput.package.nativeRisu.card.extensions = { risuai: { defaultVariables: 'mood=0' } };
+  const botResponse = await request.post('/api/content', { data: botInput });
+  expect(botResponse.ok()).toBe(true);
+  const bot = await botResponse.json();
+  const chatResponse = await request.post('/api/chats', {
+    data: { title: '채팅 설정 화면 검토', botId: bot.id },
+  });
+  expect(chatResponse.ok()).toBe(true);
+  const chat = await chatResponse.json();
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    for (const width of [1440, 412]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto(`/?chat=${chat.id}`);
+      await openChatSettings(page);
+      const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+      for (const section of [
+        '대화 구성',
+        '프롬프트·모델',
+        '기억·로어',
+        '이미지',
+        '자동 작업',
+        '카드 변수',
+      ]) {
+        await selectChatSettingsSection(page, section);
+        const pane = dialog.getByRole('tabpanel');
+        expect(
+          await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
+        ).toBeLessThanOrEqual(1);
+        if (section === '자동 작업') {
+          const fields = (await pane.locator('.chat-runtime-fields').boundingBox())!;
+          const group = (await pane
+            .locator('.chat-runtime-fields > .settings-group')
+            .boundingBox())!;
+          expect(Math.abs(fields.width - group.width)).toBeLessThanOrEqual(1);
+        }
+        for (const toggle of await pane.locator('.settings-row-toggle [role="switch"]').all()) {
+          if (!(await toggle.isVisible())) continue;
+          const bounds = (await toggle.boundingBox())!;
+          const row = await toggle.evaluate((node) => {
+            const bounds = node.closest('.settings-row-toggle')!.getBoundingClientRect();
+            return { x: bounds.x, width: bounds.width };
+          });
+          expect(Math.abs(row.x + row.width - bounds.x - bounds.width)).toBeLessThanOrEqual(1);
+        }
+        await pane.evaluate((node) => {
+          node.scrollTop = 0;
+        });
+        await page.screenshot({
+          path: info.outputPath(`chat-${section}-${colorScheme}-${width}-top.png`),
+        });
+        await pane.evaluate((node) => {
+          node.scrollTop = node.scrollHeight;
+        });
+        await page.screenshot({
+          path: info.outputPath(`chat-${section}-${colorScheme}-${width}-bottom.png`),
+        });
+      }
+      await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+    }
+  }
+});
+
 test('SCUI04 all settings stay usable in light and dark desktop and phone layouts', async ({
   page,
   request,
