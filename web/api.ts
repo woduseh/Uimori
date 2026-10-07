@@ -132,7 +132,7 @@ export const labels: Record<string, string> = {
   cancelled: '취소됨',
   interrupted: '서버 중단 · 자동 재생성 안 함',
   stale: '이전 자료의 결과',
-  refused: '공급자 거절',
+  refused: '프로바이더 거절',
   partial: '부분 결과',
 };
 

@@ -44,7 +44,7 @@ for (const viewport of [
       const dialog = await open(page, chat.id);
       await selectChatSettingsSection(page, '대화 구성');
       await expect(dialog.getByLabel('원문 이미지 자동 배치', { exact: true })).toBeHidden();
-      await expect(dialog.getByRole('region', { name: '로어 문맥 정책' })).toBeHidden();
+      await expect(dialog.getByRole('region', { name: '로어 컨텍스트 정책' })).toBeHidden();
       await selectChatSettingsSection(page, '기억·로어');
       await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toBeHidden();
       await dialog.getByText('선별 기준과 용량', { exact: true }).click();
@@ -184,7 +184,7 @@ for (const viewport of [
       await dialog.getByRole('button', { name: /새로고침/, exact: false }).click();
       await expect(
         dialog.getByText(
-          '서버의 변수 개정이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.',
+          '서버의 변수 수정 번호나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.',
           { exact: true }
         )
       ).toBeVisible();

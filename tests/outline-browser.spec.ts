@@ -140,7 +140,7 @@ for (const width of WIDTHS) {
     await choose(page, '1화 · 열람권의 대가', width);
     await expect(panel.locator('.outline-intent-card')).toContainText('멈출 지점');
     await page.screenshot({ path: info.outputPath(`outline-detail-light-${width}.png`) });
-    await panel.getByRole('button', { name: '이번 구성의 집필 맥락 보기' }).click();
+    await panel.getByRole('button', { name: '이번 구성의 입력 컨텍스트 보기' }).click();
     await expect(panel.locator('.outline-brief')).toContainText('감춰진 이름과 되찾는 선택');
     expect(await sourceCount(request, chat.id)).toBe(0);
     await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();

@@ -94,7 +94,7 @@ export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
             />
           </>
         ) : (
-          <p>이 호출의 문맥 기록이 없어 사용 비율을 확인할 수 없어요.</p>
+          <p>이 호출의 컨텍스트 기록이 없어 사용 비율을 확인할 수 없어요.</p>
         )}
         {attemptId &&
           (recordedDetail ? (

@@ -84,7 +84,7 @@ export function usageCsv(report: UsageReport, group: 'day' | 'model' | 'kind' = 
     '입력 미확인 호출',
     '확인된 출력 토큰',
     '출력 미확인 호출',
-    '공급자 보고 USD',
+    '프로바이더 보고 USD',
     '완전 추정 USD',
     '부분 추정 USD',
     '부분 추정 호출',

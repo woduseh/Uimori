@@ -53,7 +53,7 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
               code: 'RISU_PRESET_HOST_MEMORY',
               level: 'warning' as const,
               message:
-                'memory 블록의 위치·감싸는 문구는 적용하지 않아요. 요약과 기억은 Uimori의 문맥 정책으로 전달해요.',
+                'memory 블록의 위치·감싸는 문구는 적용하지 않아요. 요약과 기억은 Uimori의 컨텍스트 정책으로 전달해요.',
             },
           ]
         : []),

@@ -14,7 +14,7 @@ const roleLabels: Record<Attempt['role'], string> = {
   status: '장면 해설',
   image: '이미지 배치',
   script: '카드 스크립트',
-  context: '문맥 압축',
+  context: '컨텍스트 압축',
   helper: '도우미',
   title: '채팅 제목',
   illustration: '삽화',
@@ -78,13 +78,13 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
   const estimate = attempt.estimatedCost;
   return (
     <section className="attempt-pricing" aria-label="호출 추정 비용">
-      <p>공급자 보고 비용: {formatUsd(attempt.costUsd)}</p>
+      <p>프로바이더 보고 비용: {formatUsd(attempt.costUsd)}</p>
       <p>
         <strong>추정 비용: {estimatedTotal([attempt])}</strong>
       </p>
       <p className="muted">
-        호출 후 공급자가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며 실제
-        청구액과 다를 수 있어요.
+        호출 후 프로바이더가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며
+        실제 청구액과 다를 수 있어요.
       </p>
       {attempt.pricingSnapshot ? (
         <>
@@ -96,7 +96,7 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
             {attempt.pricingSnapshot.source === 'manual'
               ? '직접 입력 요금'
               : attempt.pricingSnapshot.source === 'catalog'
-                ? '공급자 목록 요금'
+                ? '프로바이더 목록 요금'
                 : '공식 요금'}
             {attempt.pricingSnapshot.sourceUrl && (
               <>
@@ -127,7 +127,7 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
               <thead>
                 <tr>
                   <th>항목</th>
-                  <th>공급자 토큰</th>
+                  <th>프로바이더 토큰</th>
                   <th>USD / 100만 토큰</th>
                   <th>추정 비용</th>
                 </tr>
@@ -163,7 +163,7 @@ function CacheUsage({ attempt }: { attempt: Attempt }) {
   if (!usage) return null;
   return (
     <p className="muted">
-      공급자 보고 캐시 토큰 · 읽기 {usage.readTokens ?? '미확인'} / 쓰기{' '}
+      프로바이더 보고 캐시 토큰 · 읽기 {usage.readTokens ?? '미확인'} / 쓰기{' '}
       {usage.writeTokens ?? '미확인'}
       {usage.write5mTokens !== undefined && (
         <>
@@ -293,14 +293,14 @@ function AttemptTable({
     <div>
       <p>
         전송 시도 {attempts.length}회 · 입력 {totals.input ?? '미확인'} / 출력{' '}
-        {totals.output ?? '미확인'} 토큰 · 공급자 보고 비용{' '}
+        {totals.output ?? '미확인'} 토큰 · 프로바이더 보고 비용{' '}
         {totals.cost === null ? '미확인' : `$${totals.cost}`}
       </p>
       <p>
         <strong>추정 비용: {estimatedTotal(attempts)}</strong>
       </p>
       <p className="muted">
-        호출 후 공급자가 보고한 토큰으로 계산해요. 참고용 추정 금액이며 실제 청구액과 다를 수
+        호출 후 프로바이더가 보고한 토큰으로 계산해요. 참고용 추정 금액이며 실제 청구액과 다를 수
         있어요.
       </p>
       <p className="muted">
@@ -315,7 +315,7 @@ function AttemptTable({
               <th>전송 시도</th>
               <th>입력 토큰</th>
               <th>출력 토큰</th>
-              <th>공급자 보고 비용</th>
+              <th>프로바이더 보고 비용</th>
               <th>추정 비용</th>
             </tr>
           </thead>

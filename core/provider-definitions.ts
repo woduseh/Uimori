@@ -78,7 +78,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/transport.ts#executeProvider',
     limitations: [
       '이 컴퓨터의 127.0.0.1 또는 [::1] 주소에서만 사용하는 검사용 연결이에요.',
-      '모델 목록은 로컬 검사 서버에서 가져와요. 실제 공급자 호환성과 모델의 옵션 지원은 별도로 확인해야 해요.',
+      '모델 목록은 로컬 검사 서버에서 가져와요. 실제 프로바이더 호환성과 모델의 옵션 지원은 별도로 확인해야 해요.',
       '인증이 필요한 검사 서버에는 서버 환경변수 이름을 지정할 수 있어요.',
     ],
   }),
@@ -124,7 +124,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/openai-protocol.ts#encodeResponses',
     limitations: [
       '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
-      'Responses API 호환 여부와 개별 모델의 옵션·도구 지원은 공급자에서 확인해야 해요. 실제 외부 호환성은 확인하지 않았어요.',
+      'Responses API 호환 여부와 개별 모델의 옵션·도구 지원은 프로바이더에서 확인해야 해요. 실제 외부 호환성은 확인하지 않았어요.',
       '번역 구조화 출력을 켜면 source-bound JSON Schema를 Responses의 text.format으로 보내요. 기본값은 자유 텍스트예요.',
     ],
   }),
@@ -175,7 +175,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
       '번역 구조화 출력을 켜면 source-bound JSON Schema를 response_format으로 보내요. 기본값은 자유 텍스트예요. 모델별 옵션·도구 지원은 미확인이에요.',
-      '모델 계열을 선택하면 OpenAI·Anthropic·Google·DeepSeek·xAI 계열의 생성 옵션을 같은 게이트웨이에서 사용할 수 있어요. providerOptions는 추가 라우팅이나 새 공급자 옵션용이에요.',
+      '모델 계열을 선택하면 OpenAI·Anthropic·Google·DeepSeek·xAI 계열의 생성 옵션을 같은 게이트웨이에서 사용할 수 있어요. providerOptions는 추가 라우팅이나 새 프로바이더 옵션용이에요.',
     ],
   }),
   definition({
@@ -195,7 +195,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
   }),
   definition({
     id: 'openai-chat-v1',
-    label: 'OpenAI 호환 · 별도 공급자',
+    label: 'OpenAI 호환 · 별도 프로바이더',
     endpointDefault: '',
     credentialRefDefault: 'PROVIDER_API_KEY',
     auth: 'bearer',
@@ -204,8 +204,8 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
-      '인증이 필요한 공급자에는 서버 환경변수 이름을 지정해 주세요.',
-      'Chat Completions 지원 여부는 공급자에서 확인해 주세요. 번역 구조화 출력은 켜면 response_format으로 source-bound JSON Schema를 보내요.',
+      '인증이 필요한 프로바이더에는 서버 환경변수 이름을 지정해 주세요.',
+      'Chat Completions 지원 여부는 프로바이더에서 확인해 주세요. 번역 구조화 출력은 켜면 response_format으로 source-bound JSON Schema를 보내요.',
     ],
   }),
 ]);

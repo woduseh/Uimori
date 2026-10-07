@@ -26,7 +26,7 @@ async function settings(page: Page) {
   await selectSettingsSection(page, '프로바이더·모델');
   await startProviderConnection(page);
   await page
-    .getByRole('region', { name: '제공자 선택', exact: true })
+    .getByRole('region', { name: '프로바이더 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })
     .click();
   await expect(page.getByLabel('프로바이더 프로토콜')).toBeVisible();
@@ -116,14 +116,14 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await expect(page.getByLabel('명확한 거절 제출은 한 번 재요청')).toHaveCount(0);
   await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI · 프로바이더 자동 선택');
   await expect(page.getByLabel('평가 메타데이터')).not.toBeEditable();
-  await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
+  await page.getByLabel('평가 컨텍스트 제공').selectOption('preloaded');
   await page.getByLabel('첫 case 라운드 추론').selectOption('economized');
   await page.getByLabel('최대 평가 도구 라운드').fill('3');
   await page.getByLabel('제출 원고의 정확한 문자열 교정 허용').check();
   await page.getByRole('button', { name: '기본', exact: true }).click();
   await page.getByLabel('사고 강도', { exact: true }).selectOption('high');
   await page.getByRole('button', { name: '고급', exact: true }).click();
-  await page.getByLabel('평가 문맥 제공').scrollIntoViewIfNeeded();
+  await page.getByLabel('평가 컨텍스트 제공').scrollIntoViewIfNeeded();
   if (visualReview)
     await page.screenshot({ path: info.outputPath('evaluation-desktop-options.png') });
   const model = await saveModel(page, request, connection);
@@ -144,7 +144,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
     .getByRole('dialog', { name: '새 채팅', exact: true })
     .locator('.new-story-options > summary')
     .click();
-  await page.getByLabel('새 채팅 이름').fill(title + ' 이야기');
+  await page.getByLabel('새 채팅 제목').fill(title + ' 이야기');
   const ref = `${model.id}`;
   await page.getByRole('button', { name: '채팅 만들기', exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBeTruthy();
@@ -203,10 +203,10 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
   await page.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
-  await expect(page.getByLabel('평가 문맥 제공')).toHaveValue('model-selected');
-  await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
+  await expect(page.getByLabel('평가 컨텍스트 제공')).toHaveValue('model-selected');
+  await page.getByLabel('평가 컨텍스트 제공').selectOption('preloaded');
   await page.getByLabel('첫 case 라운드 추론').selectOption('economized');
-  await page.getByLabel('평가 문맥 제공').selectOption('source-bound');
+  await page.getByLabel('평가 컨텍스트 제공').selectOption('source-bound');
   await expect(page.getByLabel('첫 case 라운드 추론')).toHaveCount(0);
   await page.getByRole('button', { name: '기본', exact: true }).click();
   await page.getByLabel('프로바이더', { exact: true }).selectOption(manualConnection.id);
@@ -231,7 +231,7 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
     '모델 ID',
     '최대 출력 토큰',
     '응답 제한 시간 (초)',
-    '평가 문맥 제공',
+    '평가 컨텍스트 제공',
     '평가 메타데이터',
     '최대 평가 도구 라운드',
   ];
@@ -258,7 +258,7 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   if (visualReview) {
     // Viewport containment alone missed a clipped native-select label in the first visual review.
     // Check the displayed choice as well; screenshots still need direct visual inspection.
-    for (const label of ['평가 문맥 제공']) {
+    for (const label of ['평가 컨텍스트 제공']) {
       const measured = await page.getByLabel(label, { exact: true }).evaluate((element) => {
         const select = element as HTMLSelectElement,
           style = getComputedStyle(select),
@@ -305,14 +305,14 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await openProviderModel(page, model.title);
   await page.getByRole('button', { name: '고급', exact: true }).click();
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).toBeChecked();
-  await expect(page.getByLabel('평가 문맥 제공')).toHaveValue('source-bound');
+  await expect(page.getByLabel('평가 컨텍스트 제공')).toHaveValue('source-bound');
   await expect(page.getByLabel('평가 메타데이터')).toHaveValue('deepmind');
   await expect(page.getByLabel('첫 case 라운드 추론')).toHaveCount(0);
-  await page.getByLabel('평가 문맥 제공').selectOption('preloaded');
+  await page.getByLabel('평가 컨텍스트 제공').selectOption('preloaded');
   await expect(page.getByLabel('첫 case 라운드 추론')).toHaveValue('economized');
-  await page.getByLabel('평가 문맥 제공').selectOption('source-bound');
+  await page.getByLabel('평가 컨텍스트 제공').selectOption('source-bound');
   await page.getByLabel('이 모델 프리셋에 평가 도구 사용').uncheck();
-  await expect(page.getByLabel('평가 문맥 제공')).toHaveCount(0);
+  await expect(page.getByLabel('평가 컨텍스트 제공')).toHaveCount(0);
   await page.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   await expect
     .poll(async () => {

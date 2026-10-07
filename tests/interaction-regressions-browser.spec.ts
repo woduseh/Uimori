@@ -56,7 +56,7 @@ for (const width of [390, 1440]) {
     await navigationAction(page, '새 채팅', bot.title);
     const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
     await dialog.locator('.new-story-options summary').click();
-    const title = dialog.getByLabel('새 채팅 이름', { exact: true });
+    const title = dialog.getByLabel('새 채팅 제목', { exact: true });
     await title.fill('설정을 다녀와도 남길 제목');
     const opening = dialog.getByLabel('첫 메시지 선택', { exact: true });
     await opening.selectOption('');

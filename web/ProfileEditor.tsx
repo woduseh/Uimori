@@ -107,7 +107,7 @@ export function ProfileEditor({
   };
   async function save(work: () => Promise<ChatProfile>, message = '채팅 설정을 저장했어요.') {
     if (lorePending) {
-      setError('로어 문맥 정책의 숫자 초안을 먼저 확인해 주세요.');
+      setError('로어 컨텍스트 정책의 숫자 초안을 먼저 확인해 주세요.');
       return false;
     }
     setSaving(true);

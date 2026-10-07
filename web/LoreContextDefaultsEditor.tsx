@@ -69,8 +69,8 @@ export function LoreContextDefaultsEditor({
   useSettingsSaveHandler(onSaveHandlerChange, save);
   if (!draft)
     return (
-      <section className="settings-section" aria-label="로어 문맥 기본값">
-        <p role="status">{error || '로어 문맥 기본값을 불러오는 중이에요…'}</p>
+      <section className="settings-section" aria-label="로어 컨텍스트 기본값">
+        <p role="status">{error || '로어 컨텍스트 기본값을 불러오는 중이에요…'}</p>
         {error && (
           <button type="button" className="secondary" onClick={() => void load()}>
             다시 불러오기
@@ -79,7 +79,7 @@ export function LoreContextDefaultsEditor({
       </section>
     );
   return (
-    <section className="settings-section" aria-label="로어 문맥 기본값">
+    <section className="settings-section" aria-label="로어 컨텍스트 기본값">
       <p className="muted">새 채팅의 기본값이에요. 기존 채팅은 바뀌지 않아요.</p>
       <fieldset disabled={busy} className="lore-context-fields">
         <LoreContextPolicyEditor
@@ -95,7 +95,7 @@ export function LoreContextDefaultsEditor({
           footerAction={
             <SaveButton
               type="button"
-              label="로어 문맥 기본값 저장"
+              label="로어 컨텍스트 기본값 저장"
               text="저장"
               aria-busy={busy}
               disabled={!dirty || invalid || busy}

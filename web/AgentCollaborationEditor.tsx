@@ -374,8 +374,8 @@ export function AgentCollaborationEditor({
                         <fieldset className="ac-options">
                           <legend>{agentLabel}의 추가 조회</legend>
                           <p className="muted">
-                            현재 요청과 작문에 쓰는 문맥은 함께 받아요. 필요한 내용을 더 찾아볼 조회
-                            도구를 선택해요.
+                            현재 요청과 작문에 쓰는 컨텍스트는 함께 받아요. 필요한 내용을 더 찾아볼
+                            조회 도구를 선택해요.
                           </p>
                           <div className="ac-checks">
                             {toolScopes.map((scope) => (

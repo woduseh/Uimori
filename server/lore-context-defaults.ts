@@ -50,7 +50,7 @@ export function updateLoreContextDefaults(store: Store, value: unknown): LoreCon
   return store.transaction(() => {
     const prior = loreContextDefaults(store);
     if (prior.revision !== number(expectedRevision, 'lore context defaults revision'))
-      throw new HttpError(409, '로어 문맥 기본값이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
+      throw new HttpError(409, '로어 컨텍스트 기본값이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
     const revision = prior.revision + 1;
     store.db
       .prepare('UPDATE lore_context_defaults SET revision=?,body=? WHERE id=1')

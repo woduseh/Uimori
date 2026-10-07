@@ -170,7 +170,7 @@ export function LoreContextPolicyEditor({
     },
     []
   );
-  const previewRequest = request.trim() ? request : '현재 로어 문맥을 확인해요.';
+  const previewRequest = request.trim() ? request : '현재 로어 컨텍스트를 확인해요.';
   const fingerprint = JSON.stringify({
       chatId,
       profileRevision,
@@ -214,7 +214,7 @@ export function LoreContextPolicyEditor({
     }
   }
   return (
-    <section className="lore-context-panel settings-group full" aria-label="로어 문맥 정책">
+    <section className="lore-context-panel settings-group full" aria-label="로어 컨텍스트 정책">
       <h3 className="settings-group-heading">로어 사용</h3>
       <div className="settings-group-body">
         <div className="lore-context-heading settings-row settings-row-toggle">
@@ -232,7 +232,7 @@ export function LoreContextPolicyEditor({
         </div>
         <details className="lore-context-advanced">
           <summary>선별 기준과 용량</summary>
-          <h4>문맥 유지 한도</h4>
+          <h4>컨텍스트 유지 한도</h4>
           <div className="lore-context-policy-grid">
             {tokenFields.map((field) => (
               <label key={field.key}>

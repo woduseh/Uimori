@@ -78,7 +78,7 @@ test('PCUI01 empty connections and empty models each expose one relevant startin
   await editor.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await expect(editor.getByRole('button', { name: '프로바이더 추가', exact: true })).toHaveCount(1);
   await editor.getByRole('button', { name: '프로바이더 추가', exact: true }).click();
-  await expect(editor.getByRole('region', { name: '제공자 선택', exact: true })).toBeVisible();
+  await expect(editor.getByRole('region', { name: '프로바이더 선택', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: '목록으로', exact: true }).click();
   value.connections = [connection];
   await editor.getByRole('button', { name: '목록 새로고침', exact: true }).click();

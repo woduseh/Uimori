@@ -133,7 +133,7 @@ for (const width of DEFAULT_WIDTHS) {
     const actions = row.locator('.action-menu-body');
     await expect(actions.getByRole('button')).toHaveText(['이름 변경', '채팅 삭제']);
     await actions.getByRole('button', { name: '이름 변경', exact: true }).click();
-    const menu = page.getByRole('dialog', { name: '채팅 이름 변경', exact: true });
+    const menu = page.getByRole('dialog', { name: '채팅 제목 변경', exact: true });
     const title = menu.getByRole('textbox', { name: '채팅 제목', exact: true });
     await title.fill('저장하지 않을 제목');
     await menu.getByRole('button', { name: '취소', exact: true }).click();

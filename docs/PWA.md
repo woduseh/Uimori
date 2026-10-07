@@ -46,6 +46,6 @@ DB 백업에는 VAPID 비밀 키와 구독 capability도 포함되므로 비공�
 
 `npm run verify:push`의 선택형 알림 UI 시나리오는 브라우저 권한/PushManager와 중계 API 응답을 합성해 명시 동의·설정 저장 실패·서버 해제·장면 이동·편집 보존을 검사해요. 서비스워커 자체는 실제 브라우저에서 등록해요. **물리적 휴대폰의 설치·잠금 화면 수신·절전/강제 종료 뒤 수신과 실 Push 중계 전달은 배포 후 별도 확인이 필요해요.** 테스트에서 외부 모델이나 실제 Push 중계를 호출하지 않아요.
 
-API: `GET /api/push?clientId=...`, `POST /api/push/prepare`, `POST/PUT/DELETE /api/push/subscription`, `POST /api/push/test`. 구독 수정은 기존 개정을 확인해요. GET과 구독 응답은 공개 VAPID 키·기기 상태·선택 항목만 반환하며 비밀 키·endpoint·암호화 capability는 반환하지 않아요.
+API: `GET /api/push?clientId=...`, `POST /api/push/prepare`, `POST/PUT/DELETE /api/push/subscription`, `POST /api/push/test`. 구독 수정은 기존 수정 번호를 확인해요. GET과 구독 응답은 공개 VAPID 키·기기 상태·선택 항목만 반환하며 비밀 키·endpoint·암호화 capability는 반환하지 않아요.
 
 참고: [Web Push 암호화·VAPID 구현](https://github.com/web-push-libs/web-push), [WebKit의 명시적 동의와 홈 화면 Push](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/), [Mozilla Push 서비스](https://mozilla-push-service.readthedocs.io/en/latest/http.html).

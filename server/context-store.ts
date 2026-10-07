@@ -264,7 +264,7 @@ export class ContextStore {
     )
       throw new HttpError(
         409,
-        '문맥이나 원문이 변경됐어요. 최신 내용을 확인한 뒤 다시 적용해 주세요.'
+        '컨텍스트나 원문이 변경됐어요. 최신 내용을 확인한 뒤 다시 적용해 주세요.'
       );
     return { scopeKey, chat };
   }
@@ -331,7 +331,7 @@ export class ContextStore {
           .prepare("SELECT 1 FROM context_jobs WHERE chat_id=? AND status IN ('queued','running')")
           .get(chatId)
       )
-        throw new HttpError(409, '문맥 정리가 이미 진행 중이에요.');
+        throw new HttpError(409, '컨텍스트 정리가 이미 진행 중이에요.');
       const id = randomUUID(),
         time = new Date().toISOString();
       this.db

@@ -20,7 +20,8 @@ export function CodexContentWarningDialog({ gate }: { gate: CodexContentWarningG
             : '이 요청을 이어서 작성하면 성적으로 노골적인 표현이 포함될 가능성이 높아요.'}
       </p>
       <p className="muted">
-        Codex로 전송하면 공급자 정책에 따라 요청이 거절될 수 있어요. 이 안내는 전송을 막지 않아요.
+        Codex로 전송하면 프로바이더 정책에 따라 요청이 거절될 수 있어요. 이 안내는 전송을 막지
+        않아요.
       </p>
       <div className="form-actions">
         <button type="button" className="secondary" onClick={gate.cancelRequest}>

@@ -360,7 +360,7 @@ export function UsagePanel({
           <details className="usage-section usage-help">
             <summary>집계 기준</summary>
             <p>
-              공급자 보고액을 우선하며, 없으면 호출 당시 요금으로 추정해요. 부분 추정·미확인은
+              프로바이더 보고액을 우선하며, 없으면 호출 당시 요금으로 추정해요. 부분 추정·미확인은
               무료가 아니에요.
             </p>
             <p>

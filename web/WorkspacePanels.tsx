@@ -276,7 +276,7 @@ const settingsCategories: SettingsCategory[] = [
     label: '역할별 모델',
     icon: ModelIcon,
     terms:
-      '원문 작문 번역 도우미 문맥 요약 채팅 제목 장면 해설 확장 호출 스크립트 거절 판정 모델 선택',
+      '원문 작문 번역 도우미 컨텍스트 요약 채팅 제목 장면 해설 확장 호출 스크립트 거절 판정 모델 선택',
   },
   { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon, terms: '프리셋 기본 옵션' },
   {
@@ -285,7 +285,7 @@ const settingsCategories: SettingsCategory[] = [
     icon: ConnectionIcon,
     terms: 'API 연결 키 주소 사고 강도 추론 강도 Reasoning Effort 생성 옵션',
   },
-  { key: 'lore', label: '로어 문맥', icon: LibraryIcon, terms: '기본값 토큰 선별 예산' },
+  { key: 'lore', label: '로어 컨텍스트', icon: LibraryIcon, terms: '기본값 토큰 선별 예산' },
   { key: 'agents', label: 'Codex 연결', icon: AgentIcon, terms: '로그인 실행기' },
   { key: 'illustrations', label: '삽화', icon: IllustrationIcon, terms: '이미지 생성 ComfyUI' },
   { key: 'usage', label: '사용량', icon: ChartNoAxesColumn, terms: '비용 토큰' },

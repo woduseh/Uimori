@@ -948,7 +948,7 @@ export function OutlinePanel({
                           className="secondary"
                           onClick={() => setPreviewing(!previewing)}
                         >
-                          집필 맥락 {previewing ? '접기' : '미리보기'}
+                          입력 컨텍스트 {previewing ? '접기' : '미리보기'}
                         </button>
                         <button
                           type="submit"
@@ -966,7 +966,7 @@ export function OutlinePanel({
                       onClick={() => void prepareWriting(true)}
                     >
                       <BookOpen size={15} />
-                      이번 구성의 집필 맥락 보기
+                      이번 구성의 입력 컨텍스트 보기
                     </button>
                   )}
                   {previewing && brief && (

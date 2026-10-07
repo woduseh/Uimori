@@ -104,13 +104,13 @@ test('CTXUI01 summary authoring without a Run, edits replace the current summary
 }, info) => {
   const { chat, panel } = await create(page, 'CTXUI01 합성 요약');
   await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
-  await panel.getByLabel('편집할 문맥 요약').fill('첫 요약: 항구의 종이 울렸다.');
+  await panel.getByLabel('편집할 컨텍스트 요약').fill('첫 요약: 항구의 종이 울렸다.');
   await panel.getByRole('button', { name: '요약 저장', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
     '첫 요약: 항구의 종이 울렸다.'
   );
   await panel.getByRole('button', { name: '요약 편집', exact: true }).click();
-  await panel.getByLabel('편집할 문맥 요약').fill('두 번째 요약: 배가 출발했다.');
+  await panel.getByLabel('편집할 컨텍스트 요약').fill('두 번째 요약: 배가 출발했다.');
   await panel.getByRole('button', { name: '요약 저장', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
     '두 번째 요약: 배가 출발했다.'
@@ -141,11 +141,11 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
 }) => {
   const { chat, panel } = await create(page, 'CTXUI02 합성 충돌');
   await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
-  await panel.getByLabel('편집할 문맥 요약').fill('내 요약 초안');
+  await panel.getByLabel('편집할 컨텍스트 요약').fill('내 요약 초안');
   await saveSummary(request, chat.id, '다른 창에서 저장한 요약');
   await panel.getByRole('button', { name: '새로 확인', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText('다른 창에서 저장한 요약');
-  await expect(panel.getByLabel('편집할 문맥 요약')).toHaveValue('내 요약 초안');
+  await expect(panel.getByLabel('편집할 컨텍스트 요약')).toHaveValue('내 요약 초안');
   await expect(panel.getByRole('button', { name: '요약 저장', exact: true })).toBeDisabled();
   await panel
     .getByRole('button', { name: '최신 요약을 확인했어요 · 내 초안 유지', exact: true })

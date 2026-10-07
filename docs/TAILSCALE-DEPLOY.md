@@ -2,13 +2,13 @@
 
 이미 구성된 Oracle 인스턴스의 주소는 [https://uimori.taila7874d.ts.net/](https://uimori.taila7874d.ts.net/)예요. 기본 HTTPS 포트 443을 사용하므로 주소에 포트 번호를 붙이지 않아요. 앱 업데이트는 [커밋·푸시·Oracle 업데이트](ORACLE-RELEASE.md)를 봐요. 아래는 최초 구성과 일반 운영 안내예요.
 
-[개인 서버 안내](SELF-HOST.md)의 인증·공급자·저장 조건을 유지하고, 호스트의 Tailscale이 HTTPS를 처리하는 배포 방법이에요. Docker와 Tailscale이 설치되고 같은 tailnet에 연결된 Linux 서버를 전제로 해요.
+[개인 서버 안내](SELF-HOST.md)의 인증·프로바이더·저장 조건을 유지하고, 호스트의 Tailscale이 HTTPS를 처리하는 배포 방법이에요. Docker와 Tailscale이 설치되고 같은 tailnet에 연결된 Linux 서버를 전제로 해요.
 
 `compose.tailscale.yaml`은 기본 `compose.yaml`과 합치지 않고 단독으로 사용해요. 앱은 호스트의 `127.0.0.1:4310`에서만 접근할 수 있고 DB는 고정 프로젝트 `uimori`의 `data` named volume에 보관해요. Nginx나 별도 TLS 파일은 필요하지 않아요. 기존 서비스가 443을 사용하면 다른 허용 포트인 8443으로 구분할 수 있어요.
 
 ## 앱 시작
 
-저장소 루트의 `.env.self-host`를 권한 600으로 만들고 아래 값을 설정해요. 이 파일은 Git과 Docker 빌드 문맥에서 제외돼요.
+저장소 루트의 `.env.self-host`를 권한 600으로 만들고 아래 값을 설정해요. 이 파일은 Git과 Docker 빌드 컨텍스트에서 제외돼요.
 
 ```dotenv
 UIMORI_PUBLIC_ORIGIN=https://machine.tail-example.ts.net

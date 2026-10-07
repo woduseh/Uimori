@@ -22,7 +22,7 @@ chmod 600 .env.self-host
 openssl rand -hex 32
 ```
 
-마지막 명령의 결과를 `.env.self-host`의 `UIMORI_ACCESS_TOKEN`에 넣고 아래 값을 실제 서버에 맞춰 편집해요. 빈 토큰으로는 시작하지 않아요. 이 파일은 Git과 Docker 빌드 문맥에서 제외돼요.
+마지막 명령의 결과를 `.env.self-host`의 `UIMORI_ACCESS_TOKEN`에 넣고 아래 값을 실제 서버에 맞춰 편집해요. 빈 토큰으로는 시작하지 않아요. 이 파일은 Git과 Docker 빌드 컨텍스트에서 제외돼요.
 
 | 변수 | 값과 의미 |
 | --- | --- |

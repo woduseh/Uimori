@@ -82,7 +82,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
     await expect(editor.getByText('핵심 작업', { exact: true })).toBeVisible();
     await expect(editor.getByLabel('도우미 모델', { exact: true })).toBeHidden();
-    await expect(editor.getByLabel('문맥 요약 모델', { exact: true })).toBeHidden();
+    await expect(editor.getByLabel('컨텍스트 요약 모델', { exact: true })).toBeHidden();
     await expect(editor.getByLabel('장면 해설 모델', { exact: true })).toBeHidden();
     await expect(editor.getByLabel('채팅 제목 모델', { exact: true })).toBeHidden();
     await expect(editor.getByLabel('확장 호출 모델', { exact: true })).toBeHidden();

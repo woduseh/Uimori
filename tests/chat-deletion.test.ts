@@ -86,7 +86,7 @@ test('active run or outstanding provider attempt blocks deletion until completio
     )
     .run(pending.id, time, time);
   expect(() => deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request)).toThrow(
-    '공급자 요청'
+    '프로바이더 요청'
   );
   store.db.prepare("UPDATE attempts SET status='cancelled'").run();
   deleteChat(store, chat.id, chatDeletionImpact(store, chat.id).request);

@@ -19,9 +19,9 @@ const estimateNotes: Record<string, string> = {
   PRICING_VERSION_UNSUPPORTED: '저장된 요금 형식을 현재 추정 계산에서 지원하지 않아요.',
   PRICING_PROTOCOL_UNSUPPORTED: '이 프로바이더의 토큰 요금 계산은 아직 지원하지 않아요.',
   SERVICE_TIER_MISMATCH:
-    '공급자가 보고한 요청 등급이 고정된 요금의 등급과 달라 금액을 추정하지 않았어요.',
+    '프로바이더가 보고한 요청 등급이 고정된 요금의 등급과 달라 금액을 추정하지 않았어요.',
   INCONSISTENT_INPUT_USAGE:
-    '공급자가 보고한 입력·캐시 토큰 수가 서로 맞지 않아 해당 금액을 미확인으로 표시해요.',
+    '프로바이더가 보고한 입력·캐시 토큰 수가 서로 맞지 않아 해당 금액을 미확인으로 표시해요.',
   PRICING_START_TIME_INVALID: '호출 시작 시각을 확인하지 못해 시간대별 요금을 계산하지 못했어요.',
   PRICING_SCHEDULE_INVALID: '시간대별 요금 기준이 올바르지 않아 금액을 추정하지 않았어요.',
   PEAK_RATES_APPLIED: '호출 시작 시각에 해당하는 혼잡 시간대 요금을 적용했어요.',

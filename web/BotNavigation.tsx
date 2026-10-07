@@ -646,7 +646,7 @@ export function BotBranch(
       </Dialog>
       <Dialog
         open={!!menuChat}
-        title="채팅 이름 변경"
+        title="채팅 제목 변경"
         onClose={() => setMenuId(null)}
         className="bot-organize-dialog"
       >

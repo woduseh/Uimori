@@ -208,7 +208,7 @@ export function PromptWorkspaceEditor({
                     disabled={busy || dirty || conflict}
                     onClick={() => void applyPreset(preset.id)}
                   >
-                    최신 버전 적용
+                    최신 저장본 적용
                   </button>
                 )}
                 {onEditPrompt && (

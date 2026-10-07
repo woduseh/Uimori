@@ -285,7 +285,7 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
   await expect(dialog.getByLabel('채팅의 봇')).toContainText(title);
   await selectStartPrompt(page, choice);
   await expect(dialog.getByText('이전 창작 제어', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('새 채팅 이름')).toHaveValue('');
+  await expect(page.getByLabel('새 채팅 제목')).toHaveValue('');
   await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
   await expect(dialog.getByRole('alert')).toContainText('하나만 만들었어요');
   await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
@@ -873,7 +873,7 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('채팅의 봇')).toContainText(title);
     await selectStartPrompt(page, choice);
-    await page.getByLabel('새 채팅 이름').fill(`${title} story`);
+    await page.getByLabel('새 채팅 제목').fill(`${title} story`);
     await dialog.getByRole('button', { name: '채팅 만들기', exact: true }).click();
     const chat = await chatWaiting;
     await expect(dialog.getByRole('button', { name: /준비하는 중/ })).toBeVisible();
@@ -884,7 +884,7 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
       .toBe(true);
     await expect(page.getByLabel('시작 프롬프트')).toHaveCount(0);
     await expect(page.getByLabel('시작 옵션 조합')).toHaveCount(0);
-    expect.soft(await page.getByLabel('새 채팅 이름').isDisabled()).toBe(true);
+    expect.soft(await page.getByLabel('새 채팅 제목').isDisabled()).toBe(true);
     releaseChat();
     await expect(dialog.getByRole('alert')).toContainText('하나만 만들었어요');
     const refreshed = page.waitForResponse(
@@ -1100,7 +1100,7 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(dialog).toBeVisible();
   await openNewStoryOptions(page);
-  await dialog.getByLabel('새 채팅 이름').fill(title);
+  await dialog.getByLabel('새 채팅 제목').fill(title);
   const accepted = page.waitForResponse(
     (item) => /\/api\/chats$/.test(item.url()) && item.request().method() === 'POST'
   );
@@ -1134,7 +1134,7 @@ test('UI03 UI12 global model choices survive chat creation and disabled connecti
   await nav(page, '새 이야기');
   await expect(page.getByLabel('시작 본문 모델')).toHaveCount(0);
   await openNewStoryOptions(page);
-  await page.getByLabel('새 채팅 이름').fill(title);
+  await page.getByLabel('새 채팅 제목').fill(title);
   const response = page.waitForResponse(
     (item) => /\/api\/chats$/.test(item.url()) && item.request().method() === 'POST'
   );
@@ -1270,12 +1270,12 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
     createDefaultRisuPrompt(originalText, 'main')
   );
-  await editor.getByRole('button', { name: '최신 버전 적용', exact: true }).click();
+  await editor.getByRole('button', { name: '최신 저장본 적용', exact: true }).click();
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
     .toEqual(createDefaultRisuPrompt('Latest library writing prompt.', 'main'));
   // The API can finish before the editor's refresh clears its busy/dirty projection.
-  await expect(editor.getByRole('button', { name: '최신 버전 적용', exact: true })).toBeEnabled();
+  await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
   await nav(page, '프롬프트');

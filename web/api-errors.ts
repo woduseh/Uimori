@@ -60,7 +60,7 @@ const messages: Record<string, string> = {
   NATIVE_TRANSFER_MODULE_BINDINGS:
     '연결된 모듈 정보가 맞지 않아요. 필요한 모듈을 포함해 자료 파일을 다시 내보내 주세요.',
   NATIVE_TRANSFER_SOURCE_CHANGED:
-    '자료의 개정이 달라졌어요. 최신 자료를 확인한 뒤 다시 내보내 주세요.',
+    '자료의 수정 번호가 달라졌어요. 최신 자료를 확인한 뒤 다시 내보내 주세요.',
   PINNED_PROMPT_UNAVAILABLE:
     '이 채팅에 고정한 작문 프롬프트를 사용할 수 없어요. 채팅 설정에서 사용 가능한 프롬프트를 다시 선택하거나 고정을 해제해 주세요.',
   HELPER_EFFECTS_ALREADY_COMMITTED:
@@ -83,7 +83,7 @@ const messages: Record<string, string> = {
   CHAT_TRANSCRIPT_INVALID_TEXT: '본문 파일에 비어 있거나 허용 길이를 넘은 응답이 있어요.',
   CHAT_TRANSCRIPT_INVALID_TRANSLATION: '본문 파일의 번역 형식이나 길이를 확인해 주세요.',
   CONTEXT_FIXED_INPUT_TOO_LARGE:
-    '고정된 입력만으로 모델의 문맥 한도를 넘었어요. 프롬프트·첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
+    '고정된 입력만으로 모델의 컨텍스트 한도를 넘었어요. 프롬프트·첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
 };
 for (const suffix of [
   'INVALID',
@@ -132,7 +132,7 @@ const roles: Record<string, string> = {
   'translation-refusal': '번역 거절 판정',
   status: '장면 해설',
   image: '이미지 배치',
-  context: '문맥 압축',
+  context: '컨텍스트 압축',
   helper: '도우미',
   illustration: '삽화',
 };

@@ -1162,8 +1162,8 @@ function SourceReaderContent({
                 : `· 확인분 부분합 ${estimatedCost.subtotalUsd === 0 && estimatedCost.unknownCount === estimatedCost.attemptCount ? '미확인' : formatUsd(estimatedCost.subtotalUsd)} · 미확인 ${estimatedCost.unknownCount}회 포함`}
             </p>
             <p>
-              호출 후 공급자가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며
-              실제 청구액과 다를 수 있어요.
+              호출 후 프로바이더가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정
+              금액이며 실제 청구액과 다를 수 있어요.
             </p>
             <p>본문과 작문 보조 호출 기준 · 번역·제목 등 후속 작업은 작업 현황에서 확인해요.</p>
             {estimatedCost.unknownCount > 0 && (

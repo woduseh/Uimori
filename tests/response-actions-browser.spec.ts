@@ -339,7 +339,7 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
       '장면 해설',
       '이미지 배치',
       '카드 스크립트',
-      '문맥 압축',
+      '컨텍스트 압축',
       '도우미',
       '채팅 제목',
       '삽화',

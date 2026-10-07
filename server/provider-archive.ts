@@ -138,7 +138,7 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
         value.evaluationTools?.contextMode === 'preloaded'
       )
         throw new Error(
-          '이 모델은 강제 도구 호출을 지원하지 않아요. 평가 문맥을 모델 선택으로 설정해 주세요.'
+          '이 모델은 강제 도구 호출을 지원하지 않아요. 평가 컨텍스트를 모델 선택으로 설정해 주세요.'
         );
     } else validateGenerationShape(generation);
   } catch (error) {

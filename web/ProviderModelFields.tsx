@@ -144,7 +144,7 @@ function ModelOptionSelect({
         {choices && rest.length > 0 ? (
           <>
             <optgroup label="문서로 확인한 값">{documented.map(option)}</optgroup>
-            <optgroup label="미확인 값 · 공급자가 판정">{rest.map(option)}</optgroup>
+            <optgroup label="미확인 값 · 프로바이더가 판정">{rest.map(option)}</optgroup>
           </>
         ) : (
           documented.map(option)
@@ -354,7 +354,7 @@ export function ProviderModelFields({
       ['topP', 'Top P'],
       ['cacheMode', '캐시 방식'],
       ['cacheTtl', '캐시 유지 시간'],
-      ['providerOptions', '추가 공급자 옵션 (JSON)'],
+      ['providerOptions', '추가 프로바이더 옵션 (JSON)'],
     ] as const
   )
     .filter(([field]) => value[field] !== '' && !(field === 'timeoutSeconds' && fixture))
@@ -541,7 +541,7 @@ export function ProviderModelFields({
             </ul>
           </details>
         )}
-        <h4 className="provider-field-heading full">문맥과 시간 제한</h4>
+        <h4 className="provider-field-heading full">컨텍스트와 시간 제한</h4>
         <label className="full">
           토크나이저
           <select
@@ -576,7 +576,7 @@ export function ProviderModelFields({
             onChange={(event) => update({ inputTokenLimit: event.target.value })}
           />
           {hints?.inputTokenLimit !== undefined && (
-            <small>공급자 목록 기준 {hints.inputTokenLimit.toLocaleString()}토큰</small>
+            <small>프로바이더 목록 기준 {hints.inputTokenLimit.toLocaleString()}토큰</small>
           )}
         </label>
         {!fixture && (
@@ -595,10 +595,10 @@ export function ProviderModelFields({
           </label>
         )}
         <details className="provider-setting-help full">
-          <summary>문맥과 토큰 계산 도움말</summary>
+          <summary>컨텍스트와 토큰 계산 도움말</summary>
           {!value.tokenizer && <p>{tokenizer?.description}</p>}
           <p>
-            로컬에서만 계산해요. 토큰 계산 API를 호출하지 않으며, 생성 후에는 공급자가 보고한
+            로컬에서만 계산해요. 토큰 계산 API를 호출하지 않으며, 생성 후에는 프로바이더가 보고한
             사용량을 표시해요.
           </p>
           <p>입력 한도를 비우면 272,000토큰을 사용해요. 한도에 가까워지면 앞선 대화를 요약해요.</p>
@@ -606,7 +606,7 @@ export function ProviderModelFields({
         <h4 className="provider-field-heading full">생성 옵션</h4>
         {protocol === 'vercel-chat-v1' && (
           <details className="full provider-extra-options" open={!!value.providerOptions}>
-            <summary>추가 공급자 옵션 (JSON)</summary>
+            <summary>추가 프로바이더 옵션 (JSON)</summary>
             <label>
               providerOptions (JSON)
               <textarea
@@ -621,7 +621,8 @@ export function ProviderModelFields({
                 placeholder={'{\n  "gateway": {\n    "only": ["openai"]\n  }\n}'}
               />
               <small>
-                라우팅이나 추가 옵션을 직접 지정해요. 같은 공급자 옵션은 이 JSON의 값이 우선해요.
+                라우팅이나 추가 옵션을 직접 지정해요. 같은 프로바이더 옵션은 이 JSON의 값이
+                우선해요.
               </small>
             </label>
           </details>
@@ -758,7 +759,7 @@ export function ProviderModelFields({
               choices={capability?.cacheModes}
               vocabulary={sends('cacheMode') ? PROTOCOL_OPTION_VALUES.cacheMode : []}
               onChange={(cacheMode) => update({ cacheMode })}
-              defaultLabel="프롬프트 기준 / 공급자 기본값"
+              defaultLabel="프롬프트 기준 / 프로바이더 기본값"
               format={(mode) =>
                 mode === 'disabled'
                   ? '캐시 끄기'
@@ -781,13 +782,13 @@ export function ProviderModelFields({
                 cacheTtlAvailable && sends('cacheMode') ? protocolCacheTtls(protocol) : []
               }
               onChange={(cacheTtl) => update({ cacheTtl })}
-              defaultLabel="공급자 기본값"
+              defaultLabel="프로바이더 기본값"
               format={(ttl) =>
                 ttl === '5m' ? '5분' : ttl === '30m' ? '30분' : ttl === '1h' ? '60분' : ttl
               }
               invalidMessage={
                 !cacheTtlAvailable
-                  ? '유지 시간을 지정하려면 캐시 기준점 또는 자동 캐싱 방식을 선택하세요. 현재 방식은 유지 시간을 공급자 기본값으로 되돌려야 해요.'
+                  ? '유지 시간을 지정하려면 캐시 기준점 또는 자동 캐싱 방식을 선택하세요. 현재 방식은 유지 시간을 프로바이더 기본값으로 되돌려야 해요.'
                   : undefined
               }
             />
@@ -845,14 +846,14 @@ export function ProviderModelFields({
                   </select>
                 )}
                 <small>
-                  평가 문맥·검토자 결과를 제공할 때 사용해요. 원본 기반 직접 작성에서는 사용하지
+                  평가 컨텍스트·검토자 결과를 제공할 때 사용해요. 원본 기반 직접 작성에서는 사용하지
                   않아요.
                 </small>
               </label>
               <label className="full">
-                평가 문맥 제공
+                평가 컨텍스트 제공
                 <select
-                  aria-label="평가 문맥 제공"
+                  aria-label="평가 컨텍스트 제공"
                   value={evaluation.contextMode}
                   onChange={(event) =>
                     setEvaluation({
@@ -864,17 +865,19 @@ export function ProviderModelFields({
                   <option value="model-selected">모델이 네 도구 중 선택</option>
                   <option value="source-bound">원본 기반 직접 작성</option>
                   <option value="preloaded" disabled={capability?.forcedTools === false}>
-                    문맥·검토자 결과를 먼저 제공
+                    컨텍스트·검토자 결과를 먼저 제공
                     {capability?.forcedTools === false ? ' · 이 모델 미지원' : ''}
                   </option>
                 </select>
                 {capability?.forcedTools === false && (
-                  <small>이 모델은 문맥·검토자 결과를 먼저 제공하는 방식을 지원하지 않아요.</small>
+                  <small>
+                    이 모델은 컨텍스트·검토자 결과를 먼저 제공하는 방식을 지원하지 않아요.
+                  </small>
                 )}
                 {evaluation.contextMode === 'source-bound' && (
                   <small>
-                    평가 문맥·검토자·case 단계를 생략하고 원본 문맥으로 바로 작성해요. 자료 조회와
-                    조언은 사용할 수 있고, 결과는 제출 도구로 완료해야 해요. 내부 처리 메모는
+                    평가 컨텍스트·검토자·case 단계를 생략하고 원본 컨텍스트로 바로 작성해요. 자료
+                    조회와 조언은 사용할 수 있고, 결과는 제출 도구로 완료해야 해요. 내부 처리 메모는
                     선택사항이에요.
                   </small>
                 )}

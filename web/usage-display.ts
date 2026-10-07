@@ -22,7 +22,7 @@ export const usageUsd = (value: number) =>
 export const usageCost = (item: UsageTotals) =>
   item.calls > 0 && item.calls === item.unknownCostCalls ? '미확인' : usageUsd(knownCost(item));
 export const exactCost = (item: UsageTotals) =>
-  `공급자 보고 US$${item.reportedUsd} · 추정 US$${item.estimatedUsd} · 부분 추정 US$${item.partialUsd}`;
+  `프로바이더 보고 US$${item.reportedUsd} · 추정 US$${item.estimatedUsd} · 부분 추정 US$${item.partialUsd}`;
 export const shortDay = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8, 10))}`;
 const DAY = 86_400_000;
 export const kstToday = () => new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);

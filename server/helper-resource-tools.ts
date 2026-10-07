@@ -308,7 +308,7 @@ export function invokeResourceTool(
       })
     );
   if (!id || expectedRevision === undefined)
-    throw new HttpError(400, '자료 ID와 개정 번호가 필요해요.');
+    throw new HttpError(400, '자료 ID와 수정 번호가 필요해요.');
   if (name === 'resource.undo') return summary(undoResource(store, kind, id, expectedRevision));
   if (name === 'resource.delete' && kind === 'illustration-preset')
     return deleteIllustrationPreset(store, id, expectedRevision);

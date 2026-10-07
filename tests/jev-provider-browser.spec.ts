@@ -47,7 +47,7 @@ async function openJev(page: Page) {
     .or(page.getByRole('button', { name: '프로바이더 추가', exact: true }))
     .click();
   await page
-    .getByRole('region', { name: '제공자 선택' })
+    .getByRole('region', { name: '프로바이더 선택' })
     .getByRole('button', { name: 'TypeSafe AI 서버 API 키 인증' })
     .click();
   const section = page.getByRole('region', { name: 'TypeSafe AI 프로바이더 설정', exact: true });
