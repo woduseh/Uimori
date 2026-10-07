@@ -64,6 +64,8 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** Replace this head only on successful completion; generation starts at its parent. */
+  replacement?: { sourceRevision: string; sourceHash: string };
   /** Compact Lua-authored message edits retained after execution inputs are released. */
   messageChanges?: import('./message-changes.js').MessageChanges;
   /** A completed message can store just display metadata instead of execution input. */

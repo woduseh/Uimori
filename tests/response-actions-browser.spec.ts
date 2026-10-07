@@ -52,6 +52,121 @@ async function noHorizontalOverflow(page: Page, region: Locator) {
   expect(await region.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
 }
 
+test('RACOM04 last response retry chooses replacement or copy and preserves the response until success', async ({
+  page,
+  request,
+}, info) => {
+  test.setTimeout(60_000);
+  const before = await seed(request, '재요청 방식 합성 채팅', ['첫 장면', '마지막 장면']);
+  const old = before.sources.at(-1)!;
+  const modes: string[] = [];
+  page.on('request', (event) => {
+    if (event.method() === 'POST' && event.url().endsWith('/retry'))
+      modes.push(event.postDataJSON().mode);
+  });
+  const control = async (action: string, extra: Record<string, string>) => {
+    const response = await request.post('/api/test/control', { data: { action, ...extra } });
+    expect(response.ok(), await response.text()).toBe(true);
+  };
+  await page.goto(`/?chat=${before.chat.id}`);
+  const oldScene = page.locator(`[data-testid="source"][data-source-id="${old.id}"]`);
+  const reopen = async () => {
+    await openSourceActions(oldScene);
+    await oldScene.getByRole('button', { name: '현재 설정으로 다시 요청', exact: true }).click();
+  };
+  await reopen();
+  const dialog = page.getByRole('dialog', { name: '현재 설정으로 다시 요청', exact: true });
+  await expect(
+    dialog.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true })
+  ).toBeVisible();
+  for (const width of [412, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await noHorizontalOverflow(page, dialog);
+    await page.screenshot({
+      path: info.outputPath(`retry-choice-${width}.png`),
+      animations: 'disabled',
+    });
+  }
+  await page.setViewportSize({ width: 412, height: 900 });
+  await dialog.getByRole('button', { name: '취소', exact: true }).click();
+  expect(modes).toHaveLength(0);
+  await expect(oldScene).toBeVisible();
+
+  // An admitted replacement that fails before source commit leaves the original readable.
+  await control('fail-next', { point: 'source-transaction' });
+  await reopen();
+  await dialog.getByRole('button', { name: '기존 응답 교체', exact: true }).click();
+  await expect
+    .poll(async () =>
+      (await detail(request, before.chat.id)).runs.some(
+        (run) => run.snapshot.replacement?.sourceRevision === old.id && run.status === 'failed'
+      )
+    )
+    .toBe(true);
+  await expect(oldScene).toBeVisible();
+  expect((await detail(request, before.chat.id)).chat.headRevision).toBe(old.id);
+
+  await control('hold', { barrier: 'run' });
+  try {
+    await reopen();
+    await dialog.getByRole('button', { name: '기존 응답 교체', exact: true }).click();
+    await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
+    await expect(oldScene).toBeVisible();
+    await page.getByRole('button', { name: '원문 생성 취소', exact: true }).click();
+    await expect
+      .poll(async () =>
+        (await detail(request, before.chat.id)).runs.some(
+          (run) => run.snapshot.replacement?.sourceRevision === old.id && run.status === 'cancelled'
+        )
+      )
+      .toBe(true);
+    expect((await detail(request, before.chat.id)).chat.headRevision).toBe(old.id);
+    await expect(oldScene).toBeVisible();
+  } finally {
+    await control('release', { barrier: 'run' });
+  }
+
+  await control('hold', { barrier: 'run' });
+  try {
+    await reopen();
+    await dialog.getByRole('button', { name: '기존 응답 교체', exact: true }).click();
+    await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
+    await expect(dialog).not.toBeVisible();
+    await expect(oldScene).toBeVisible();
+    expect((await detail(request, before.chat.id)).chat.headRevision).toBe(old.id);
+  } finally {
+    await control('release', { barrier: 'run' });
+  }
+  await expect
+    .poll(async () => (await detail(request, before.chat.id)).chat.headRevision)
+    .not.toBe(old.id);
+  await expect(oldScene).toHaveCount(0);
+  await expect(page.getByTestId('source')).toHaveCount(2);
+  expect(new URL(page.url()).searchParams.get('chat')).toBe(before.chat.id);
+  expect(modes).toEqual(['replace', 'replace', 'replace']);
+
+  const replaced = (await detail(request, before.chat.id)).sources.at(-1)!;
+  const replacedScene = page.locator(`[data-testid="source"][data-source-id="${replaced.id}"]`);
+  await openSourceActions(replacedScene);
+  await replacedScene.getByRole('button', { name: '현재 설정으로 다시 요청', exact: true }).click();
+  await dialog.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(before.chat.id);
+  const copiedChatId = new URL(page.url()).searchParams.get('chat')!;
+  await expect.poll(async () => (await detail(request, copiedChatId)).sources.length).toBe(2);
+  expect(modes.at(-1)).toBe('copy');
+  expect((await detail(request, before.chat.id)).chat.headRevision).toBe(replaced.id);
+  await page.goto(`/?chat=${before.chat.id}`);
+
+  // Earlier scenes still take the existing copy path without offering destructive replacement.
+  const first = page.locator(`[data-testid="source"][data-source-id="${before.sources[0].id}"]`);
+  await openSourceActions(first);
+  await first.getByRole('button', { name: '현재 설정으로 다시 요청', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(before.chat.id);
+  const earlierCopyChatId = new URL(page.url()).searchParams.get('chat')!;
+  await expect.poll(async () => (await detail(request, earlierCopyChatId)).sources.length).toBe(1);
+});
+
 test('RACOM01 source footer stays compact and its menu supports touch, keyboard and dismissal at representative widths with optional six-width review', async ({
   page,
   request,

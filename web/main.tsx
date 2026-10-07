@@ -1229,11 +1229,12 @@ function App() {
                               }
                               onRetry={
                                 s.canReuseRun(source.runId)
-                                  ? async () => {
-                                      await s.generate(source.runId);
+                                  ? async (mode) => {
+                                      await s.generate(source.runId, undefined, false, mode);
                                     }
                                   : undefined
                               }
+                              retryCanReplace={source.id === s.detail!.chat.headRevision}
                               onEditRequest={
                                 s.canReuseRun(source.runId)
                                   ? (text) => s.generate(source.runId, text)

@@ -10,6 +10,8 @@ import { loreSelectionPending } from './lore-selection.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import { nativeRisuPending } from './risu-native-run.js';
 import { nativeRisuPresetPending } from './risu-native-preset.js';
+import { readChatVariables } from './chat-variables.js';
+import { validateChatVariableState } from '../core/chat-variables.js';
 
 export type ReservationPurpose =
   | {
@@ -75,6 +77,21 @@ export function freezeReservationSnapshot(
   }
   if (base.profile && !translationPreview) {
     base = { ...base, profile: chatVariableProfile(store, base.chatId, base.profile) };
+    if (base.replacement) {
+      const live = readChatVariables(store, base.chatId);
+      const checkpoint = base.parentRevision
+        ? store.db
+            .prepare('SELECT body FROM chat_variable_outputs WHERE source_id=?')
+            .get(base.parentRevision)
+        : undefined;
+      // Historical values seed this request, while the live revision still owns completion CAS.
+      base.profile!.variableState = {
+        revision: live.revision,
+        values: checkpoint
+          ? validateChatVariableState(JSON.parse(String(checkpoint.body))).values
+          : {},
+      };
+    }
     if ((reserved || base.profile?.variableState) && base.profile?.packageAttachments?.length)
       base.resources = [
         ...base.resources.filter((resource) => !resource.id.startsWith('package:')),

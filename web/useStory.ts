@@ -63,6 +63,7 @@ function initialView(restore = false) {
 }
 type RunPayload = {
   retryOf?: string;
+  retryMode?: 'replace' | 'copy';
   judgmentRecovery?: true;
   editedRequest?: boolean;
   loreContextReset?: boolean;
@@ -108,6 +109,13 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
     )
       return null;
     if (payload.retryOf !== undefined && (typeof payload.retryOf !== 'string' || !payload.retryOf))
+      return null;
+    if (
+      payload.retryMode !== undefined &&
+      (!payload.retryOf ||
+        !['replace', 'copy'].includes(payload.retryMode) ||
+        payload.judgmentRecovery)
+    )
       return null;
     if (payload.editedRequest !== undefined && (payload.editedRequest !== true || !payload.retryOf))
       return null;
@@ -859,7 +867,8 @@ export function useStory() {
   async function generate(
     retryRunId?: string,
     editedRequest?: string,
-    judgmentRecovery = false
+    judgmentRecovery = false,
+    retryMode?: 'replace' | 'copy'
   ): Promise<boolean> {
     if (
       !detail ||
@@ -886,7 +895,11 @@ export function useStory() {
       request: editedRequest ?? retryRun?.request ?? draft,
       ...(editedRequest !== undefined ? { editedRequest: true } : {}),
       ...(retryRun
-        ? { retryOf: retryRun.id, ...(judgmentRecovery ? { judgmentRecovery: true as const } : {}) }
+        ? {
+            retryOf: retryRun.id,
+            ...(retryMode ? { retryMode } : {}),
+            ...(judgmentRecovery ? { judgmentRecovery: true as const } : {}),
+          }
         : {}),
       ...((retryRun ? retryRun.snapshot.loreContextReset : loreResetDraft)
         ? { loreContextReset: true }
@@ -959,6 +972,7 @@ export function useStory() {
             {
               idempotencyKey,
               ...(payload.editedRequest ? { request: payload.request } : {}),
+              ...(payload.retryMode ? { mode: payload.retryMode } : {}),
             }
           )
         : await api<Run>(`/chats/${chat.id}/runs`, { ...payload, idempotencyKey });
