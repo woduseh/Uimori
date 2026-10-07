@@ -36,7 +36,6 @@ describe('safe auxiliary error diagnostics', () => {
     for (const [role, label] of [
       ['main', '본문'],
       ['translation', '번역'],
-      ['status', '장면 해설'],
     ]) {
       const diagnostic = auxiliaryErrorDiagnostic(`MODEL_REQUIRED:${role}`);
       expect(diagnostic.code).toBe(`MODEL_REQUIRED:${role}`);

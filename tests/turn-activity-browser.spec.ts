@@ -24,7 +24,7 @@ async function seed(request: APIRequestContext, count = 1) {
   expect(
     (
       await request.patch(`/api/chats/${chat.id}/settings`, {
-        data: { ...chat.settings, status: false, expectedSettingsRevision: 1 },
+        data: { ...chat.settings, expectedSettingsRevision: 1 },
       })
     ).ok()
   ).toBeTruthy();
@@ -255,7 +255,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   const otherSource = seeded.sources.find((item) => item.id !== source.id)!;
   const other = page.locator(`[data-testid="turn-activity"][data-run-id="${otherSource.runId}"]`);
   await expect(panel.locator(':scope > summary')).toContainText(/번역.*중/);
-  await expect(panel.locator(':scope > summary')).toContainText('장면 해설 진행 중');
+  await expect(panel.locator(':scope > summary')).not.toContainText('장면 해설');
   await expect(panel.locator(':scope > summary')).toContainText('장면 선택 중');
   await expect(panel.locator(':scope > summary')).toContainText('원문 이미지 배치 진행 중');
   await expect(panel.locator(':scope > summary')).toContainText('번역 이미지 배치 진행 중');
@@ -267,9 +267,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   await expect(other.locator(':scope > summary')).not.toContainText('장면 해설');
   await expect(panel).not.toHaveAttribute('open');
   await panel.locator(':scope > summary').click();
-  await expect(panel.getByTestId('job-status').getByRole('heading')).toContainText(
-    '장면 해설 실패'
-  );
+  await expect(panel.getByTestId('job-status')).toHaveCount(0);
   await expect(panel.getByRole('region', { name: '이 응답의 삽화 작업' })).toContainText(
     /장면 선택.*실패/s
   );
@@ -277,7 +275,7 @@ test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and
   await expect(panel.locator(':scope > summary')).not.toContainText('실패');
   await expect(panel.locator(':scope > summary')).not.toContainText('이전 자료의 결과');
   await expect(panel).not.toHaveClass(/turn-activity-issue/);
-  await expect(panel.getByTestId('job-status')).toHaveCount(1);
+  await expect(panel.getByTestId('job-status')).toHaveCount(0);
   await expect(panel.locator(`[data-job-id="synthetic-previous-status-${source.id}"]`)).toHaveCount(
     0
   );

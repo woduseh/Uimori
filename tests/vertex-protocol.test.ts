@@ -181,17 +181,14 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(decoder.finish()).toMatchObject({ status: 'completed', text: prose });
   });
 
-  test.each(['main', 'status'] as const)(
-    'does not add translation format constraints to %s',
-    (role) => {
-      const input = request();
-      input.role = role;
-      const wire = bodyObject(encodeVertex(input).body);
-      expect(wire.generationConfig).not.toHaveProperty('responseMimeType');
-      expect(wire.generationConfig).not.toHaveProperty('responseSchema');
-      expect(wire.systemInstruction.parts).toHaveLength(2);
-    }
-  );
+  test.each(['main'] as const)('does not add translation format constraints to %s', (role) => {
+    const input = request();
+    input.role = role;
+    const wire = bodyObject(encodeVertex(input).body);
+    expect(wire.generationConfig).not.toHaveProperty('responseMimeType');
+    expect(wire.generationConfig).not.toHaveProperty('responseSchema');
+    expect(wire.systemInstruction.parts).toHaveLength(2);
+  });
 
   test.each(['LOW', 'MEDIUM', 'HIGH'] as const)(
     'supports explicit %s thinking level',

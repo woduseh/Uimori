@@ -513,7 +513,7 @@ describe('native Responses pure protocol (no live calls)', () => {
       const continued = next(input, run.decoder.finish());
       if (field === 'stable') continued.stable.contract += ' changed';
       else if (field === 'generation') continued.generation!.temperature = 1;
-      else if (field === 'role') continued.role = 'status';
+      else if (field === 'role') continued.role = 'helper';
       else if (field === 'model') continued.modelId += '-changed';
       else if (field === 'task') continued.input.task += ' changed';
       else continued.input[field] = { changed: true };

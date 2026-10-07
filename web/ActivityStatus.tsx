@@ -35,14 +35,13 @@ const names: Record<string, string> = {
   main: '장면을 쓰는 중',
   translation: '번역하는 중',
   image: '이미지 만드는 중',
-  status: '장면 해설 중',
   illustration: '삽화 만드는 중',
 };
 const doneNames: Record<string, string> = {
   main: '본문',
   translation: '번역',
   image: '이미지',
-  status: '장면 해설',
+  status: '이전 보조 작업',
   illustration: '삽화',
   request: '요청',
 };
@@ -133,20 +132,22 @@ export function ActivityStatus({
     if (!previous || item.generation > previous.generation || item.updatedAt >= previous.updatedAt)
       merged.set(item.id, item);
   }
-  const items: Item[] = [...merged.values()].map((item) => ({
-    key: request?.runId === item.id ? request.id : `${item.id}:${item.startedAt}`,
-    acknowledgementKey: activityAcknowledgementKey(item),
-    status: item.status,
-    startedAt: request?.runId === item.id ? request.startedAt : item.startedAt,
-    finishedAt: item.finishedAt,
-    kind: item.kind,
-    runId: item.id,
-    sourceRevision: item.sourceRevision,
-    sourceHash: item.sourceHash,
-    generation: item.generation,
-    superseded: item.superseded,
-    executionUncertain: item.executionUncertain,
-  }));
+  const items: Item[] = [...merged.values()]
+    .filter((item) => item.kind !== 'status')
+    .map((item) => ({
+      key: request?.runId === item.id ? request.id : `${item.id}:${item.startedAt}`,
+      acknowledgementKey: activityAcknowledgementKey(item),
+      status: item.status,
+      startedAt: request?.runId === item.id ? request.startedAt : item.startedAt,
+      finishedAt: item.finishedAt,
+      kind: item.kind,
+      runId: item.id,
+      sourceRevision: item.sourceRevision,
+      sourceHash: item.sourceHash,
+      generation: item.generation,
+      superseded: item.superseded,
+      executionUncertain: item.executionUncertain,
+    }));
   if (request && !activities.some((item) => item.id === request.runId))
     items.unshift({
       key: request.id,
@@ -362,7 +363,7 @@ export function ActivityStatus({
 
 export function ActivityDetails({ activities }: { activities: ReaderActivity[] }) {
   const [now, setNow] = useState(Date.now);
-  const running = activities.filter((item) => active(item.status));
+  const running = activities.filter((item) => item.kind !== 'status' && active(item.status));
   useEffect(() => {
     if (!running.length) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);

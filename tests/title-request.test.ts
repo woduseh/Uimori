@@ -40,7 +40,6 @@ test.each(['openai-responses-v1', 'anthropic-messages-v1', 'fixture-sse-v1'] as 
       stable: { contract: input.contract, tools: [] },
       input: { task: input.task, controls: {} },
     });
-    expect(request.generation).not.toHaveProperty('thinkingBudgetTokens');
     expect(request).not.toHaveProperty('providerOptions');
     expect({ connection, model }).toEqual(original);
   }

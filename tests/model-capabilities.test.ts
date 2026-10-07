@@ -69,11 +69,18 @@ test('options the encoder cannot send and values outside the protocol vocabulary
   ).toThrow();
   expect(() => validateModelOptions({ ...base, verbosity: 'low' }, 'openai-chat-v1')).toThrow();
   expect(() =>
-    validateModelOptions({ ...base, thinkingMode: 'enabled' }, 'anthropic-messages-v1')
+    validateModelOptions(
+      { ...base, thinkingMode: 'enabled' } as unknown as ModelGeneration,
+      'anthropic-messages-v1'
+    )
   ).toThrow();
   expect(() =>
     validateModelOptions(
-      { ...base, thinkingMode: 'adaptive', thinkingBudgetTokens: 2048 },
+      {
+        ...base,
+        thinkingMode: 'adaptive',
+        thinkingBudgetTokens: 2048,
+      } as unknown as ModelGeneration,
       'anthropic-messages-v1'
     )
   ).toThrow();

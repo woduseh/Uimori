@@ -34,15 +34,7 @@ const encode = (kind: string, text: string, toolCalls: unknown[] = []) =>
 
 test('all provider roles use injected Codex execution without HTTP authority or credentials', async () => {
   const run = vi.fn(async () => decodeCodexOutput(encode('final', 'result'), request()));
-  for (const role of [
-    'main',
-    'translation',
-    'status',
-    'image',
-    'script',
-    'context',
-    'helper',
-  ] as const) {
+  for (const role of ['main', 'translation', 'image', 'script', 'context', 'helper'] as const) {
     const result = await executeProvider(
       connection,
       { ...request(), role },
@@ -51,7 +43,7 @@ test('all provider roles use injected Codex execution without HTTP authority or 
     expect(result.status).toBe('completed');
     expect(result.usage.costUsd).toBeNull();
   }
-  expect(run).toHaveBeenCalledTimes(7);
+  expect(run).toHaveBeenCalledTimes(6);
   expect(
     (
       await executeProvider(connection, request(), {
@@ -121,15 +113,7 @@ test('text roles use writing base instructions while helper keeps its applicatio
     baseInstructions: built.baseInstructions,
     developerInstructions: built.developerInstructions,
   });
-  for (const role of [
-    'main',
-    'translation',
-    'status',
-    'image',
-    'script',
-    'context',
-    'title',
-  ] as const) {
+  for (const role of ['main', 'translation', 'image', 'script', 'context', 'title'] as const) {
     const selected = { ...request(), role };
     expect(buildCodexTurn(selected).baseInstructions).toBe(TEXT_BASE_INSTRUCTIONS);
     expect(buildCodexDescriptor(selected)).toMatchObject({

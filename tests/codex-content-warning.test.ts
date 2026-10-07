@@ -146,7 +146,6 @@ test('Codex preflight warns through JEV for main and translation while remaining
   await setFixtureModelRoutes(app, {
     main: ref(model),
     translation: ref(model),
-    status: null,
   });
   const chat = await api(app, '/api/chats', { title: 'Content preflight' });
 

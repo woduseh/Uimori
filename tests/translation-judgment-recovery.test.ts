@@ -130,12 +130,12 @@ test.each(['SQLite crash snapshot', 'graceful server shutdown'])(
       })
     ).run;
     app.store.startRun(run.id);
-    const source = app.store.completeRun(
-      run.id,
-      'The original manuscript.',
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings
-    );
+    const source = app.store.completeRun(run.id, 'The original manuscript.', {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    });
     const job = await api(app, `/api/sources/${source.id}/translation`, {});
     await expect.poll(() => judged.length, { timeout: 6000 }).toBe(1);
     if (stop === 'SQLite crash snapshot')

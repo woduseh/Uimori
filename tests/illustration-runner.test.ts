@@ -1,3 +1,4 @@
+import { reserveIllustration } from './fixtures/illustration.js';
 import { fixtureIllustrationPreset } from './fixtures/illustration.js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
@@ -14,7 +15,6 @@ import {
   reserveIllustrationPlan,
   queuedIllustrations,
   illustrationsForSources,
-  reserveIllustration,
   retryIllustration,
   updateIllustrationReferences,
 } from '../server/illustrations.js';

@@ -96,7 +96,7 @@ const knowledgeBrowsers = new WeakMap<
 >();
 export function roleResources(
   snapshot: RunSnapshot,
-  role: 'main' | 'translation' | 'status' | 'image' = 'main'
+  role: 'main' | 'translation' | 'image' = 'main'
 ) {
   return collectRoleResources(snapshot, compiledPackages(snapshot, role));
 }
@@ -304,7 +304,7 @@ export function executeTool(
   snapshot: RunSnapshot,
   action: ToolAction,
   signal?: AbortSignal,
-  role: 'main' | 'translation' | 'status' | 'image' = 'main'
+  role: 'main' | 'translation' | 'image' = 'main'
 ): ToolEvent {
   checkAbort(signal);
   if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name))

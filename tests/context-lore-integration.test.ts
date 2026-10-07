@@ -150,12 +150,12 @@ async function seed(
     expect((event.result as any).items[0].read.text).toBe(lore.text.slice(0, 4096));
     store.tool(run.id, event);
   }
-  return store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-    run.snapshot.settings
-  );
+  return store.completeRun(run.id, text, {
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  });
 }
 
 async function lorePressureBudget(store: Store, chatId: string) {
@@ -217,7 +217,7 @@ async function fixture(kind: 'lore-pressure' | 'history-pressure') {
   let chat = createFixtureChat(app.store, '문맥 요약과 조회 자료 합성 검증');
   chat = app.store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,
-    status: false,
+
     maxCalls: 16,
   });
   const modules = (kind === 'lore-pressure' ? ['A', 'B', 'C'] : ['A']).map(

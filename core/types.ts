@@ -1,5 +1,4 @@
 export type Settings = {
-  status: boolean;
   maxCalls: number;
 };
 export type Chat = {

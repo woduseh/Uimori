@@ -970,7 +970,6 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
       await request.patch(`/api/chats/${chat.id}/settings`, {
         data: {
           ...chat.settings,
-          status: false,
           expectedSettingsRevision: chat.settingsRevision,
         },
       })

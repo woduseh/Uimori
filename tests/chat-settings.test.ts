@@ -22,7 +22,7 @@ test('only active settings survive old DB and backup projections', () => {
       status: true,
       maxCalls: 7,
     })
-  ).toEqual({ status: true, maxCalls: 7 });
+  ).toEqual({ maxCalls: 7 });
   for (const maxCalls of [0, 33, 2.5, '8', null])
     expect(() => normalizeChatSettings({ status: false, maxCalls })).toThrow('Invalid settings');
 });
@@ -47,18 +47,18 @@ test('existing database settings are normalized on read/save and public settings
     }),
     chat.id
   );
-  expect(app.store.chat(chat.id).settings).toEqual({ status: false, maxCalls: 6 });
+  expect(app.store.chat(chat.id).settings).toEqual({ maxCalls: 6 });
   const saved = await app.inject({
     method: 'PATCH',
     url: `/api/chats/${chat.id}/settings`,
-    payload: { expectedSettingsRevision: 1, status: true, maxCalls: 4 },
+    payload: { expectedSettingsRevision: 1, maxCalls: 4 },
   });
   expect(saved.statusCode).toBe(200);
   expect(
     JSON.parse(
       String(app.store.db.prepare('SELECT settings FROM chats WHERE id=?').get(chat.id)!.settings)
     )
-  ).toEqual({ status: true, maxCalls: 4 });
+  ).toEqual({ maxCalls: 4 });
   const invalid = await app.inject({
     method: 'PATCH',
     url: `/api/chats/${chat.id}/settings`,
@@ -66,6 +66,13 @@ test('existing database settings are normalized on read/save and public settings
   });
   expect(invalid.statusCode).toBe(400);
   expect(app.store.chat(chat.id).settingsRevision).toBe(2);
+  expect(app.hasRoute({ method: 'POST', url: '/api/sources/:id/status' })).toBe(false);
+  const retired = await app.inject({
+    method: 'POST',
+    url: '/api/sources/legacy/status',
+    payload: {},
+  });
+  expect(retired.statusCode).toBe(404);
   const control = await app.inject({
     method: 'POST',
     url: '/api/test/control',
@@ -73,5 +80,5 @@ test('existing database settings are normalized on read/save and public settings
   });
   expect(control.statusCode).toBe(200);
   expect(app.controls.fixture.mode).toBe('research');
-  expect(app.store.chat(chat.id).settings).toEqual({ status: true, maxCalls: 4 });
+  expect(app.store.chat(chat.id).settings).toEqual({ maxCalls: 4 });
 });

@@ -460,7 +460,6 @@ test.describe('actual local native Risu cards', () => {
       app.store.settings(chat.id, current.settingsRevision, {
         ...current.settings,
 
-        status: false,
         maxCalls: 8,
       });
       await page.goto(`${origin}/?chat=${encodeURIComponent(chat.id)}`);

@@ -669,7 +669,7 @@ export class ProductStore {
     })();
     const models: ProfileSnapshot['models'] = {};
     const routes = { ...p.routes };
-    for (const role of ['main', 'translation', 'status'] as const) {
+    for (const role of ['main', 'translation'] as const) {
       const r = workspaceModelRef(workspace, role);
       if (!r) continue;
       try {
@@ -749,7 +749,7 @@ export class ProductStore {
       resolved.translationGuide = structuredClone(
         (input as { translationGuide: RunSnapshot['translationGuide'] }).translationGuide
       );
-    for (const role of ['translation', 'status'] as const) {
+    for (const role of ['translation'] as const) {
       const key = `${role}ModelSelection`;
       if (
         input &&

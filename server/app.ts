@@ -130,6 +130,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   };
   const requireJobModel = (id: string) => {
     const job = store.job(id);
+    if (job.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
     const source = store.sourceAtHash(job.sourceRevision, job.sourceHash);
     const snapshot = store.product.resolveJobPrompt(
       readRunSnapshot(store, source.runId),
@@ -498,6 +499,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           let chatId = '';
           try {
             const queued = store.job(id);
+            if (queued.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
             chatId = queued.chatId;
             const source = store.sourceAtHash(queued.sourceRevision, queued.sourceHash);
             const snapshot = store.product.resolveJobPrompt(
@@ -541,7 +543,7 @@ export async function createApp(options: AppOptions): Promise<App> {
               },
               onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
               onInput: (_id, input) => {
-                if (queued.kind !== 'image' && !snapshot.profile?.models[queued.kind])
+                if (queued.kind === 'translation' && !snapshot.profile?.models.translation)
                   store.product.mockAttempt(chatId, null, id, queued.kind, input);
               },
               onProgress: () => publish(chatId),
@@ -971,7 +973,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   );
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body: RecordBody = record(request.body);
-    fields(body, ['expectedSettingsRevision', 'status', 'maxCalls']);
+    fields(body, ['expectedSettingsRevision', 'maxCalls']);
     const chat = store.settings(
       request.params.id,
       number(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
@@ -1130,19 +1132,6 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish(job.chatId);
     return job;
   });
-  app.post<{ Params: { id: string } }>('/api/sources/:id/status', async (request) => {
-    const body: RecordBody = record(request.body);
-    fields(body, ['expectedSourceHash', 'expectedJobId']);
-    const job = store.requestStatus(
-      request.params.id,
-      text(body.expectedSourceHash, 'source hash', 64),
-      body.expectedJobId === null ? null : text(body.expectedJobId, 'status job', 100),
-      requireJobModel
-    );
-    publish(job.chatId);
-    pumpJobs();
-    return job;
-  });
   app.post<{ Params: { id: string } }>('/api/sources/:id/translation', async (request) => {
     const body: RecordBody = record(request.body ?? {});
     fields(body, []);
@@ -1264,7 +1253,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         };
       } else if (body.action === 'hold' || body.action === 'release') {
         if (
-          !['run', 'translation', 'status', 'image', 'state', 'context', 'illustration'].includes(
+          !['run', 'translation', 'image', 'state', 'context', 'illustration'].includes(
             String(body.barrier)
           )
         )
@@ -1276,7 +1265,6 @@ export async function createApp(options: AppOptions): Promise<App> {
             'source-transaction',
             'job-transaction',
             'translation',
-            'status',
             'image',
             'state',
             'context',

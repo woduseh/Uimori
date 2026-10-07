@@ -48,12 +48,12 @@ function queued(store: Store, chatId: string) {
 function complete(store: Store, chatId: string, sourceText: string) {
   const run = queued(store, chatId);
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    sourceText,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  const source = store.completeRun(run.id, sourceText, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   return { run: store.run(run.id), source };
 }
 

@@ -68,7 +68,7 @@ async function snapshot(): Promise<RunSnapshot> {
       chatId: 'synthetic-context-tools-chat',
       parentRevision: history.at(-1)!.revision,
       settingsRevision: 1,
-      settings: { status: false, maxCalls: 8 },
+      settings: { maxCalls: 8 },
       request: 'CURRENT_REQUEST_CANARY: 등불 약속을 이어서 써 주세요.',
       history,
       resources: [],
@@ -97,7 +97,7 @@ async function snapshot(): Promise<RunSnapshot> {
       profile: {
         ...defaultProfile('synthetic-context-tools-chat'),
         models: { main: target },
-        routes: { main: { id: target.id }, translation: null, status: null },
+        routes: { main: { id: target.id }, translation: null },
         promptPresets: {
           main: {
             id: 'synthetic-prompt',
@@ -270,21 +270,17 @@ describe('host read compaction and provider continuation inside one main run', (
       consumerLimit: 65536,
       summaryLimit: 8192,
       output: 8192,
-      thinking: 7168,
       goal: 2048,
-      budget: 2048,
     },
     {
       consumerLimit: 8192,
       summaryLimit: 32768,
       output: 1500,
-      thinking: 1200,
-      goal: 476,
-      budget: 1024,
+      goal: 750,
     },
   ])(
     'read compaction sends the $goal-token consumer goal with an independently sized $summaryLimit-token summarizer',
-    async ({ consumerLimit, summaryLimit, output, thinking, goal, budget }) => {
+    async ({ consumerLimit, summaryLimit, output, goal }) => {
       const fixed = await snapshot();
       fixed.contextPlan!.budget.inputTokenLimit = consumerLimit;
       fixed.profile!.models.main!.inputTokenLimit = consumerLimit;
@@ -293,7 +289,6 @@ describe('host read compaction and provider continuation inside one main run', (
         id: 'summary-model',
         inputTokenLimit: summaryLimit,
         maxOutputTokens: output,
-        thinkingBudgetTokens: thinking,
       };
       delete fixed.promptCompilation;
       const original = structuredClone(fixed),
@@ -306,7 +301,7 @@ describe('host read compaction and provider continuation inside one main run', (
       const bodies = script([
         (body) => {
           expect(body).toMatchObject({
-            generation: { maxOutputTokens: Math.min(output, 4096), thinkingBudgetTokens: budget },
+            generation: { maxOutputTokens: Math.min(output, 4096) },
             stable: { contract: expect.stringContaining(CONTEXT_SUMMARY_SEMANTICS) },
             input: { controls: { targetSummaryTokens: goal }, task: fixed.request },
           });
@@ -341,7 +336,7 @@ describe('host read compaction and provider continuation inside one main run', (
           },
         ],
       });
-      expect(goal + budget).toBeLessThanOrEqual(Math.min(output, 4096));
+      expect(goal).toBeLessThanOrEqual(Math.min(output, 4096));
       expect(fixed).toEqual(original);
     }
   );

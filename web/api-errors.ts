@@ -130,7 +130,7 @@ const roles: Record<string, string> = {
   main: '본문',
   translation: '번역',
   'translation-refusal': '번역 거절 판정',
-  status: '장면 해설',
+  status: '이전 보조 작업',
   image: '이미지 배치',
   context: '컨텍스트 압축',
   helper: '도우미',

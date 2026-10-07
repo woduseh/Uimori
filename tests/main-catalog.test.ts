@@ -39,7 +39,7 @@ function snapshot(resources: Resource[]): RunSnapshot {
     parentRevision: null,
     settingsRevision: 1,
     request: 'Continue the scene at the harbor.',
-    settings: { status: false, maxCalls: 4 },
+    settings: { maxCalls: 4 },
     history: [],
     resources,
     profile: {

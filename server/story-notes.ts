@@ -128,10 +128,6 @@ export class StoryNotes {
       } catch {
         throw new HttpError(400, 'Invalid note kind or origin');
       }
-      if (replacesId)
-        this.db
-          .prepare('UPDATE author_notes SET retired_at=? WHERE id=? AND chat_id=?')
-          .run(new Date().toISOString(), replacesId, chatId);
       this.db
         .prepare('INSERT INTO author_notes VALUES(?,?,?,NULL,?)')
         .run(note.id, chatId, JSON.stringify(note), replacesId ?? null);

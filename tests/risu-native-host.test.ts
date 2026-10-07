@@ -148,12 +148,12 @@ async function appendNativeSource(store: Store, chatId: string, text: string) {
     text
   );
   store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(output), run.id);
-  return store.completeRun(
-    run.id,
-    output.nativeRisuExecution!.output!.text,
-    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-    chat.settings
-  );
+  return store.completeRun(run.id, output.nativeRisuExecution!.output!.text, {
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  });
 }
 
 test('later native output preserves Lua history edits until a newer user source edit replaces them', async () => {
@@ -274,12 +274,12 @@ test('last response replacement runs native input and output from ancestor state
     'Replacement story'
   );
   store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(output), retry.id);
-  const saved = store.completeRun(
-    retry.id,
-    output.nativeRisuExecution!.output!.text,
-    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-    retry.snapshot.settings
-  );
+  const saved = store.completeRun(retry.id, output.nativeRisuExecution!.output!.text, {
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  });
   expect(saved.parentRevision).toBe(opening);
   expect(saved.text).toBe('Replacement story OUTPUT');
   expect(readChatVariables(store, chatId).revision).toBe(live.revision + 1);
@@ -326,12 +326,12 @@ test('native choices feed the next prompt and output variables commit with the s
   store.db
     .prepare('UPDATE runs SET snapshot=? WHERE id=?')
     .run(JSON.stringify(output), created.run.id);
-  const saved = store.completeRun(
-    created.run.id,
-    output.nativeRisuExecution!.output!.text,
-    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-    chat.settings
-  );
+  const saved = store.completeRun(created.run.id, output.nativeRisuExecution!.output!.text, {
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  });
   expect(saved.text).toBe('Story OUTPUT');
   expect(readChatVariables(store, chatId).values.finished).toBe('yes');
   expect(await prepareNativeRisuRun(output)).toBe(output);

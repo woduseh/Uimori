@@ -65,12 +65,12 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
     [first.id, second.id].sort().map((chatId) => ({ chatId, kind: 'main', count: 1 }))
   );
   store.startRun(firstRun.id);
-  const source = store.completeRun(
-    firstRun.id,
-    'Private source',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    firstRun.snapshot.settings
-  );
+  const source = store.completeRun(firstRun.id, 'Private source', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   store.db.prepare("UPDATE jobs SET status='completed' WHERE chat_id=?").run(first.id);
   let revision = 1;
   const add = (hash: string, status: string) => {

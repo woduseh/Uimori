@@ -42,7 +42,7 @@ function readerActivity(
     SELECT id,'main' AS kind,status,created_at AS createdAt,updated_at AS updatedAt,source_revision AS sourceRevision,0 AS generation,NULL AS sourceHash,CASE WHEN source_revision IS NULL THEN EXISTS(SELECT 1 FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id) ELSE 0 END AS superseded,(status='interrupted' OR COALESCE(error,'') LIKE '%PROVIDER_UNCERTAIN%') AS executionUncertain FROM runs WHERE chat_id=?
     UNION ALL
     SELECT j.id,j.kind,j.status,j.created_at,j.updated_at,j.source_revision,j.generation,j.source_hash,CASE WHEN j.kind='translation' AND j.status IN ('failed','partial','stale') AND COALESCE(j.error,'') NOT LIKE '%PROVIDER_UNCERTAIN%' THEN EXISTS(SELECT 1 FROM jobs newer WHERE newer.chat_id=j.chat_id AND newer.source_revision=j.source_revision AND newer.source_hash=j.source_hash AND newer.kind='translation' AND newer.status='completed' AND (newer.revision,newer.created_at,newer.id) > (j.revision,j.created_at,j.id)) ELSE 0 END,(j.status='interrupted' OR COALESCE(j.error,'') LIKE '%PROVIDER_UNCERTAIN%') FROM jobs j JOIN sources s ON s.id=j.source_revision
-      WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
+      WHERE j.chat_id=? AND j.kind!='status' AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
     UNION ALL
     SELECT j.id,'illustration',j.status,j.created_at,j.updated_at,j.source_revision,j.generation,j.source_hash,0,(j.status='interrupted') FROM illustration_jobs j
       WHERE j.chat_id=?

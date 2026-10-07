@@ -18,7 +18,6 @@ async function seed(request: APIRequestContext, title: string, requests: string[
   const configured = await request.patch(`/api/chats/${chat.id}/settings`, {
     data: {
       ...chat.settings,
-      status: false,
       expectedSettingsRevision: chat.settingsRevision,
     },
   });
@@ -336,7 +335,6 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     await expect(usage.getByRole('rowheader')).toHaveText([
       '원문',
       '번역',
-      '장면 해설',
       '이미지 배치',
       '카드 스크립트',
       '컨텍스트 압축',

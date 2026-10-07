@@ -210,7 +210,6 @@ test('app routes every agent role through Codex and keeps source results and rec
         output = {
           sourceRevision: source.sourceRevision,
           sourceHash: source.sourceHash,
-          ...(request.role === 'status' ? { kind: 'display-only' } : {}),
           entries: [],
         };
       return {
@@ -286,14 +285,13 @@ test('app routes every agent role through Codex and keeps source results and rec
   const chat = await api(
     app,
     `/api/chats/${initial.id}/settings`,
-    { expectedSettingsRevision: initial.settingsRevision, ...initial.settings, status: true },
+    { expectedSettingsRevision: initial.settingsRevision, ...initial.settings },
     'PATCH'
   );
   const profile = await api(app, `/api/chats/${chat.id}/profile`);
   await setFixtureModelRoutes(app, {
     main: ref(model),
     translation: ref(model),
-    status: ref(model),
   });
   await api(
     app,
@@ -338,7 +336,7 @@ test('app routes every agent role through Codex and keeps source results and rec
   await api(app, `/api/sources/${source.id}/translation`, {});
   await expect
     .poll(() => [...new Set(calls.map((call) => call.role))].sort(), { timeout: 6000 })
-    .toEqual(['main', 'status', 'translation']);
+    .toEqual(['main', 'translation']);
   await expect
     .poll(
       () =>
@@ -347,7 +345,7 @@ test('app routes every agent role through Codex and keeps source results and rec
       { timeout: 6000 }
     )
     .toBe(0);
-  expect(app.store.product.attempts(chat.id)).toHaveLength(6);
+  expect(app.store.product.attempts(chat.id)).toHaveLength(5);
   expect(judgments).toHaveLength(3);
   expect(judgments.find((item) => item.questions.explicitRefusal)?.state.response).toBe(
     'The keeper opened the gate.'

@@ -22,20 +22,10 @@ async function control(
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   return (await request.get(`/api/chats/${id}`)).json();
 }
-async function newStatusChat(page: Page, title: string): Promise<Chat> {
-  // These M0 cases exercise automatic status jobs, so select that setting explicitly.
+async function newChat(page: Page, title: string): Promise<Chat> {
   const response = await postFixtureChat(page.request, { data: { title } });
   expect(response.ok()).toBeTruthy();
-  const created = (await response.json()) as Chat;
-  const settings = await page.request.patch(`/api/chats/${created.id}/settings`, {
-    data: {
-      ...created.settings,
-      status: true,
-      expectedSettingsRevision: created.settingsRevision,
-    },
-  });
-  expect(settings.ok()).toBeTruthy();
-  const chat = (await settings.json()) as Chat;
+  const chat = (await response.json()) as Chat;
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   return chat;
@@ -62,7 +52,7 @@ async function expectSourceRaw(page: Page, text: string) {
 async function storySettings(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible())) await openChatSettings(page);
-  await selectChatSettingsSection(page, '자동 작업');
+  await selectChatSettingsSection(page, '실행 옵션');
 }
 async function openWork(page: Page) {
   await closeDialog(page);
@@ -89,8 +79,7 @@ async function send(page: Page, prompt: string): Promise<Run> {
 
 test.afterEach(async ({ request }) => {
   await control(request, 'fixture', {});
-  for (const barrier of ['run', 'translation', 'status'])
-    await control(request, 'release', { barrier });
+  for (const barrier of ['run', 'translation']) await control(request, 'release', { barrier });
 });
 
 test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source jobs and reconnection isolated', async ({
@@ -108,8 +97,8 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
   // A new independent context needs the same explicit server URL, no shared browser storage.
   await bPage.goto(base);
   try {
-    const a = await newStatusChat(page, '합성 A · 등대');
-    const b = await newStatusChat(bPage, '합성 B · 정원');
+    const a = await newChat(page, '합성 A · 등대');
+    const b = await newChat(bPage, '합성 B · 정원');
     await storySettings(bPage);
     await bPage.getByLabel('작업당 모델 호출 한도').fill('6');
     await bPage.getByRole('button', { name: '설정 저장', exact: true }).click();
@@ -124,7 +113,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await aSecondTab.getByLabel('작업당 모델 호출 한도').fill('6');
     await control(request, 'hold', { barrier: 'run' });
     await control(request, 'hold', { barrier: 'translation' });
-    await control(request, 'hold', { barrier: 'status' });
     const aRun = await send(page, '(OOC: Write a quiet lighthouse scene.) SYNTHETIC_A');
     await control(request, 'fixture', { mode: 'research', preset: 'vivid' });
     const bRun = await send(
@@ -197,7 +185,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     expect(
       aDone.jobs.every((j) => j.sourceRevision === aSource.id && j.status !== 'completed')
     ).toBeTruthy();
-    // Original source is already readable while BOTH auxiliary workers remain held.
+    // Original source is already readable while the translation worker remains held.
     await closeDialog(aSecondTab);
     await sourceDetails(aSecondTab);
     await expectSourceRaw(aSecondTab, aSource.text);
@@ -208,10 +196,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     );
     await aSecondTab.goto(`/?chat=${b.id}`); // same context's tab changes its own view only
     await expect(aSecondTab.getByRole('heading', { name: b.title, exact: true })).toBeVisible();
-    await control(request, 'release', { barrier: 'status' });
-    await expect
-      .poll(async () => (await detail(request, a.id)).jobs.find((j) => j.kind === 'status')?.status)
-      .toBe('completed');
+    expect((await detail(request, a.id)).jobs.some((job) => job.kind === 'status')).toBe(false);
     expect(
       (await detail(request, a.id)).jobs.find((j) => j.kind === 'translation')?.status
     ).not.toBe('completed');
@@ -226,10 +211,6 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await closeDialog(returned);
     await sourceDetails(returned);
     await expectSourceRaw(returned, aSource.text);
-    await expect(returned.getByTestId('source').getByTestId('job-status')).toHaveAttribute(
-      'data-source-id',
-      aSource.id
-    );
     await expect(returned.getByTestId('source').getByTestId('job-translation')).toHaveAttribute(
       'data-source-id',
       aSource.id
@@ -291,8 +272,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await returned.close();
     await aSecondTab.close();
   } finally {
-    for (const barrier of ['run', 'translation', 'status'])
-      await control(request, 'release', { barrier });
+    for (const barrier of ['run', 'translation']) await control(request, 'release', { barrier });
     await other.close();
   }
 });
@@ -301,7 +281,7 @@ test('F05 failed auxiliary result retries independently while a later source is 
   page,
   request,
 }) => {
-  const chat = await newStatusChat(page, '합성 · 보조 재시도');
+  const chat = await newChat(page, '합성 · 보조 재시도');
   await control(request, 'fail-next', { point: 'translation' });
   await send(page, 'SYNTHETIC_FIRST: A letter rests on the desk.');
   await expect(page.getByTestId('source')).toHaveCount(1);
@@ -376,7 +356,7 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
   page,
   request,
 }) => {
-  const chat = await newStatusChat(page, '합성 · 역순 응답');
+  const chat = await newChat(page, '합성 · 역순 응답');
   // End the old document's SSE first: otherwise its last refresh can be
   // intercepted and then cancelled by navigation, so no delayed response arrives.
   await page.goto('about:blank');
@@ -436,7 +416,7 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
       .toBe(true);
     const source = (await detail(request, chat.id)).sources[0];
     await sourceDetails(page);
-    await expect(page.getByTestId('source').getByTestId('job-status')).toContainText('완료');
+    await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('완료');
     await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('완료');
     await expect.poll(() => pending.size).toBe(1);
     // Deliver the stale network response after latest source/job events have ended.
@@ -453,7 +433,7 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
     await page.getByLabel('다음 장면 요청').fill('local draft after the stale response');
     await expectSourceRaw(page, source.text);
     await sourceDetails(page);
-    await expect(page.getByTestId('source').getByTestId('job-status')).toContainText('완료');
+    await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('완료');
   } finally {
     release();
     // On timeout the runner can already have closed the page. Preserve the

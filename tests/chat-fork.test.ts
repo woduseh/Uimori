@@ -66,12 +66,12 @@ function source(store: Store, chatId: string, value: string) {
   ).run;
   store.startRun(run.id);
   return store.source(
-    store.completeRun(
-      run.id,
-      value,
-      { modelCalls: 3, inputTokens: 70, outputTokens: 90, costUsd: 0.04 },
-      run.snapshot.settings
-    ).id
+    store.completeRun(run.id, value, {
+      modelCalls: 3,
+      inputTokens: 70,
+      outputTokens: 90,
+      costUsd: 0.04,
+    }).id
   );
 }
 

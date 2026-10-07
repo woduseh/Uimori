@@ -331,9 +331,9 @@ test('source completion clears the staged duplicate atomically and rollback reta
   const controls = new Controls();
   controls.failures.add('source-transaction');
 
-  expect(() =>
-    store.completeRun(run.id, 'Published prose', noUsage, run.snapshot.settings, controls)
-  ).toThrow('source-transaction');
+  expect(() => store.completeRun(run.id, 'Published prose', noUsage, controls)).toThrow(
+    'source-transaction'
+  );
   expect(rawRun(store, run.id)).toEqual({
     status: 'running',
     source_revision: null,
@@ -342,7 +342,7 @@ test('source completion clears the staged duplicate atomically and rollback reta
   });
   expect(store.db.prepare('SELECT count(*) AS count FROM sources').get()).toEqual({ count: 0 });
 
-  const source = store.completeRun(run.id, 'Published prose', noUsage, run.snapshot.settings);
+  const source = store.completeRun(run.id, 'Published prose', noUsage);
   expect(source.text).toBe('Published prose');
   expect(rawRun(store, run.id)).toEqual({
     status: 'completed',

@@ -9,7 +9,7 @@ const snapshot: RunSnapshot = {
   chatId: 'chat-a',
   parentRevision: null,
   settingsRevision: 1,
-  settings: { status: false, maxCalls: 8 },
+  settings: { maxCalls: 8 },
   request: 'Synthetic',
   history: [],
   resources: syntheticResources('chat-a'),

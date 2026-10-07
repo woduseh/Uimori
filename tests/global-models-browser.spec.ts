@@ -83,7 +83,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(editor.getByText('핵심 작업', { exact: true })).toBeVisible();
     await expect(editor.getByLabel('도우미 모델', { exact: true })).toBeHidden();
     await expect(editor.getByLabel('컨텍스트 요약 모델', { exact: true })).toBeHidden();
-    await expect(editor.getByLabel('장면 해설 모델', { exact: true })).toBeHidden();
+    await expect(editor.getByLabel('장면 해설 모델', { exact: true })).toHaveCount(0);
     await expect(editor.getByLabel('채팅 제목 모델', { exact: true })).toBeHidden();
     await expect(editor.getByLabel('확장 호출 모델', { exact: true })).toBeHidden();
     const behaviorSummary = editor.locator('summary').filter({ hasText: /^작업 동작/ });
@@ -140,7 +140,7 @@ for (const width of DEFAULT_WIDTHS) {
       .locator('summary')
       .filter({ hasText: /^자동 작업/ })
       .click();
-    for (const label of ['원문 모델', '번역 모델', '장면 해설 모델', '채팅 제목 모델'])
+    for (const label of ['원문 모델', '번역 모델', '채팅 제목 모델'])
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
     await translationLimit.fill('12');

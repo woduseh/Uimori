@@ -25,8 +25,7 @@ export type ModelGeneration = {
   structuredOutput?: boolean;
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   outputEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-  thinkingMode?: 'disabled' | 'enabled' | 'adaptive';
-  thinkingBudgetTokens?: number;
+  thinkingMode?: 'disabled' | 'adaptive';
   verbosity?: 'low' | 'medium' | 'high';
   reasoningMode?: 'standard' | 'pro';
   reasoningContext?: 'auto' | 'all_turns' | 'current_turn';
@@ -113,12 +112,11 @@ export type PromptWorkspace = {
     maxCalls: number;
   };
 };
-export type TaskRole = 'main' | 'translation' | 'status' | 'image';
+export type TaskRole = 'main' | 'translation' | 'image';
 export type TaskModelRole = Exclude<TaskRole, 'image'>;
 export const MODEL_ROLES = [
   'main',
   'translation',
-  'status',
   'image',
   'script',
   'context',
@@ -308,7 +306,7 @@ export const defaultProfile = (chatId: string): ChatProfile => ({
   revision: 1,
   loreContext: structuredClone(DEFAULT_LORE_CONTEXT),
   packageAttachments: [],
-  routes: { main: null, translation: null, status: null },
+  routes: { main: null, translation: null },
   image: false,
   imageTranslation: true,
 });

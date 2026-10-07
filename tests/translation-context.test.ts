@@ -68,12 +68,12 @@ function source(store: Store, chatId: string, text = 'Mira spoke softly to Capta
   ).run;
   store.startRun(run.id);
   return store.source(
-    store.completeRun(
-      run.id,
-      text,
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings
-    ).id
+    store.completeRun(run.id, text, {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    }).id
   );
 }
 function configure(store: Store, chatId: string, endpoint: string) {
@@ -303,7 +303,7 @@ test('translation tools support empty memory with disabled indexing, bounded pag
     parentRevision: 'a',
     history: [{ revision: 'a', text: 'Captain speaks.' }],
     settingsRevision: 1,
-    settings: { status: false, maxCalls: 8 },
+    settings: { maxCalls: 8 },
     request: '',
     resources: [],
   };

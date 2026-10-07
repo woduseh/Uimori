@@ -142,7 +142,7 @@ function completedSource(
 ) {
   const run = queuedRun(store, product, chatId);
   store.startRun(run.id);
-  return store.completeRun(run.id, text, noUsage, run.snapshot.settings);
+  return store.completeRun(run.id, text, noUsage);
 }
 const pixel =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWPY3RH6HwAGMgKYxcNPSgAAAABJRU5ErkJggg==';
@@ -247,7 +247,7 @@ describe('M1 product data with actual file SQLite', () => {
       temperature: null,
     }) as ModelPreset;
     profile(product, chat, [], {
-      routes: { main: { id: model.id }, translation: null, status: null },
+      routes: { main: { id: model.id }, translation: null },
     });
     const snapshot = product.snapshot(chat.id)!;
     expect(snapshot.models.main?.modelId).toBe('user-entered-unknown-model');
@@ -336,7 +336,7 @@ describe('M1 product data with actual file SQLite', () => {
       temperature: null,
     }) as ModelPreset;
     profile(product, chat, [], {
-      routes: { main: { id: model.id }, translation: null, status: null },
+      routes: { main: { id: model.id }, translation: null },
     });
     for (const expected of ['refused', 'partial'] as const) {
       const run = queuedRun(store, product, chat.id);
@@ -547,7 +547,7 @@ describe('M1 real HTTP application boundaries', () => {
       {
         expectedSettingsRevision: created.settingsRevision,
         ...created.settings,
-        status: false,
+
         maxCalls: 8,
       },
       { method: 'PATCH' }
@@ -580,7 +580,6 @@ describe('M1 real HTTP application boundaries', () => {
       routes: {
         main: { id: main.id },
         translation: { id: translation.id },
-        status: null,
       },
     });
     await api(url, '/api/test/control', { action: 'hold', barrier: 'translation' });
@@ -672,7 +671,6 @@ describe('M1 real HTTP application boundaries', () => {
     const initial = createFixtureChat(store, 'Invalid queued translation fixture');
     const chat = store.settings(initial.id, initial.settingsRevision, {
       ...initial.settings,
-      status: false,
     });
     const connection = product.connection({
       title: 'Valid local fixture',
@@ -688,7 +686,7 @@ describe('M1 real HTTP application boundaries', () => {
       temperature: null,
     }) as ModelPreset;
     profile(product, chat, [], {
-      routes: { main: null, translation: { id: model.id }, status: null },
+      routes: { main: null, translation: { id: model.id } },
     });
     const source = completedSource(
       store,
@@ -749,7 +747,7 @@ describe('M1 real HTTP application boundaries', () => {
     const chat = await api<Chat>(
       url,
       `/api/chats/${initial.id}/settings`,
-      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings, status: true },
+      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings },
       { method: 'PATCH' }
     );
     const bound = app.store.product.connection({
@@ -766,7 +764,7 @@ describe('M1 real HTTP application boundaries', () => {
       temperature: null,
     }) as ModelPreset;
     const configured = profile(app.store.product, chat, [], {
-      routes: { main: { id: model.id }, translation: null, status: null },
+      routes: { main: { id: model.id }, translation: null },
     });
     async function create(request: string) {
       const current = app.store.chat(chat.id);
@@ -784,7 +782,7 @@ describe('M1 real HTTP application boundaries', () => {
     const success = await api<ChatDetail>(url, `/api/chats/${chat.id}`);
     expect(success.sources).toHaveLength(1);
     expect(success.sources[0].text).toBe('HTTP_PROVIDER_ORIGINAL');
-    expect(success.jobs.map((job) => job.kind)).toEqual(['status']);
+    expect(success.jobs).toEqual([]);
     expect(success.attempts?.[0]).toMatchObject({
       modelId: 'fixture-http-main',
       status: 'completed',
@@ -802,7 +800,7 @@ describe('M1 real HTTP application boundaries', () => {
     }
     const preserved = await api<ChatDetail>(url, `/api/chats/${chat.id}`);
     expect(preserved.sources).toEqual(success.sources);
-    expect(preserved.jobs.map((job) => job.kind)).toEqual(['status']);
+    expect(preserved.jobs).toEqual([]);
     expect(preserved.runs.find((run) => run.status === 'partial')?.partialText).toBe(
       'PARTIAL_NOT_SOURCE'
     );

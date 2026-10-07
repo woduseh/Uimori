@@ -103,12 +103,12 @@ async function capture(store: Store, chatId: string) {
   ).run;
   await prepareNativeFixtureRun(store, run);
   store.startRun(run.id);
-  store.completeRun(
-    run.id,
-    'Synthetic original',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  store.completeRun(run.id, 'Synthetic original', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   return observedExecution(store, run.id);
 }
 test('native source normalizes execution input and preserves completed metadata and output after editing', async () => {

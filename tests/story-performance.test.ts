@@ -63,7 +63,6 @@ const manuscript = (length: number) =>
   `old-source-begin\n${'Synthetic scene. '.repeat(Math.ceil(length / 17))}`.slice(0, length - 17) +
   '\nold-source-end!!';
 const fixedSettings = {
-  status: false,
   maxCalls: 8,
 };
 
@@ -92,12 +91,12 @@ function source(store: Store, chatId: string, text: string) {
       }) satisfies RunSnapshot
   ).run;
   store.startRun(run.id);
-  return store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  return store.completeRun(run.id, text, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
 }
 function addArchived(store: Store, chatId: string, start: number, end: number) {
   // These are complete, off-ancestry storage fixtures, not an assertion about an archive UI operation.

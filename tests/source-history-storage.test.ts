@@ -50,12 +50,12 @@ function append(store: Store, chatId: string, text: string) {
     })
   ).run;
   store.startRun(run.id);
-  return store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  return store.completeRun(run.id, text, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
 }
 
 test('history still rejects missing ancestors and ancestry cycles', () => {

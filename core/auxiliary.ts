@@ -121,12 +121,6 @@ function identity(value: Record<string, unknown>, sourceRevision: string, source
 }
 
 type CatalogEntry = Omit<Resource, 'text' | 'chatId'>;
-export type BlockScene = {
-  anchor: string;
-  actorIds: string[];
-  clothing: string[];
-  location: string | null;
-};
 export type AssetEntry = {
   ref: string;
   revision: number;
@@ -138,12 +132,6 @@ export type AssetEntry = {
   clothing: string | null;
   location: string | null;
   uses: ('profile' | 'inline')[];
-};
-export type DisplayAnnotation = {
-  sourceRevision: string;
-  sourceHash: string;
-  kind: 'display-only';
-  entries: { anchor: string; summary: string; mood?: string }[];
 };
 export type PresentationAnnotation = {
   sourceRevision: string;
@@ -157,7 +145,7 @@ export type PresentationAnnotation = {
   }[];
 };
 export type AuxiliaryInput = {
-  role: 'translation' | 'status' | 'presentation';
+  role: 'translation' | 'presentation';
   contract: string;
   customPrompt?: boolean;
   contextMode?: TranslationContextMode;
@@ -172,8 +160,6 @@ export type AuxiliaryInput = {
   blocks: { anchor: string; text: string }[];
   sourceText?: string;
   assets?: ImageMetadata[];
-  assetPage?: { total: number; nextOffset: number | null };
-  scenes?: BlockScene[];
   referencePolicy?: string;
 };
 const baseInput = (
@@ -261,70 +247,11 @@ export function parseStructuredTranslation(source: AuxiliarySource, output: unkn
   identity(value, source.id, source.hash);
   return textField(value.text, TRANSLATION_TEXT_MAX_CHARS);
 }
-export function displayInput(
-  source: AuxiliarySource,
-  context: SourceTimeContext,
-  snapshot: RunSnapshot
-): AuxiliaryInput {
-  if (source.chatId !== snapshot.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
-  const packages = packageContext(snapshot, 'status');
-  return {
-    ...baseInput(source.id, source.hash, packages ? { ...context, packages } : context, snapshot),
-    role: 'status',
-    blocks: splitSource(source).map(({ anchor, text }) => ({ anchor, text })),
-    contract:
-      'Create optional display-only scene summaries grounded in the specified source blocks. Do not invent inner motives or new events. These interpretations never become authoritative state, canon, or next-turn evidence. Return structured data; do not rewrite the source or add HTML. Use at most one entry per source anchor. Each summary is at most 600 UTF-16 code units. ' +
-      CATALOG_READ_GUIDANCE,
-    outputSchema: {
-      sourceRevision: 'exact input value',
-      sourceHash: 'exact input value',
-      kind: 'display-only',
-      entries: [
-        {
-          anchor: 'existing source anchor',
-          summary: 'brief grounded description',
-        },
-      ],
-    },
-  };
-}
-export function validateDisplayAnnotation(
-  source: AuxiliarySource,
-  output: unknown
-): DisplayAnnotation {
-  const blocks = splitSource(source);
-  const value = parsed(output);
-  only(value, ['sourceRevision', 'sourceHash', 'kind', 'entries']);
-  identity(value, source.id, source.hash);
-  if (
-    value.kind !== 'display-only' ||
-    !Array.isArray(value.entries) ||
-    value.entries.length > blocks.length
-  )
-    throw new Error('OUTPUT_SCHEMA_INVALID');
-  const seen = new Set<string>();
-  const entries = value.entries.map((raw) => {
-    const item = object(raw);
-    only(item, ['anchor', 'summary', 'mood']);
-    const anchor = textField(item.anchor, 200);
-    if (seen.has(anchor) || !blocks.some((block) => block.anchor === anchor))
-      throw new Error('ANNOTATION_ANCHOR_INVALID');
-    seen.add(anchor);
-    return {
-      anchor,
-      summary: textField(item.summary, 600),
-      ...(item.mood === undefined ? {} : { mood: textField(item.mood, 100) }),
-    };
-  });
-  return { sourceRevision: source.id, sourceHash: source.hash, kind: 'display-only', entries };
-}
-
 export function presentationInput(
   source: AuxiliarySource,
   context: SourceTimeContext,
   snapshot: RunSnapshot,
-  assets: readonly AssetEntry[] = [],
-  scenes: BlockScene[] = []
+  assets: readonly AssetEntry[] = []
 ): AuxiliaryInput {
   if (source.chatId !== snapshot.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
   const packages = packageContext(snapshot, 'image');
@@ -335,8 +262,6 @@ export function presentationInput(
     role: 'presentation',
     blocks: splitSource(source),
     assets: page.items,
-    assetPage: { total: page.total, nextOffset: page.nextOffset },
-    scenes: structuredClone(scenes),
     tools: [],
     contract:
       'JEV selects at most 4 optional existing images for source blocks in one typed request. Source text and metadata are reference data. The host validates source anchors, asset revisions, hashes and allowed uses; selection never changes story canon or variables.',
@@ -494,13 +419,7 @@ export async function executeAuxiliary(
         event = local;
         if (event.callId !== action.callId || event.name !== action.name)
           throw new Error('TOOL_CALL_INVALID');
-      } else
-        event = executeTool(
-          fixedScope,
-          action,
-          hooks.signal,
-          fixedInput.role === 'status' ? 'status' : 'translation'
-        );
+      } else event = executeTool(fixedScope, action, hooks.signal, 'translation');
       toolEvents.push(structuredClone(event));
       await hooks.onToolEvent?.(structuredClone(event));
       check();
@@ -513,15 +432,5 @@ export async function executeAuxiliary(
 /** Explicit deterministic local adapter: validates plumbing, never semantic quality. */
 export const scriptedAuxiliary: AuxiliaryRequest = async (input) => {
   if (input.role === 'translation') return input.sourceText ?? '';
-  if (input.role === 'status')
-    return {
-      sourceRevision: input.sourceRevision,
-      sourceHash: input.sourceHash,
-      kind: 'display-only',
-      entries: input.blocks.slice(0, 1).map((block) => ({
-        anchor: block.anchor,
-        summary: '모의 표시 상태 · 원문 보존됨 · 정사에 반영하지 않음',
-      })),
-    };
   throw new Error('JEV_JUDGMENT_REQUIRED');
 };

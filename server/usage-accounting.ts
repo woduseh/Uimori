@@ -3,7 +3,9 @@ import type { UsageKind } from '../core/usage-report.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import type { CostEstimate } from '../core/pricing-types.js';
 
-export function inferUsageKind(wire: Pick<WireRecord, 'role'> & Partial<WireRecord>): UsageKind {
+export function inferUsageKind(
+  wire: Omit<Partial<WireRecord>, 'role'> & { role: WireRecord['role'] | 'status' }
+): UsageKind {
   if (
     wire.judgment ||
     wire.protocol === 'typesafe-systemone-v1' ||

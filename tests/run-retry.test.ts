@@ -68,12 +68,12 @@ function queued(store: Store, chatId: string, request = 'Requested scene') {
 function complete(store: Store, chatId: string, text: string) {
   const run = queued(store, chatId);
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  const source = store.completeRun(run.id, text, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   return { run: store.run(run.id), source };
 }
 test('last response replacement keeps old prose until commit, excludes it from inputs, and preserves immutable history', () => {
@@ -103,12 +103,7 @@ test('last response replacement keeps old prose until commit, excludes it from i
     store.retryRun(selected.run.id, 'replace-last', undefined, 'Edited request', 'copy')
   ).toThrow(/Idempotency/);
   store.startRun(result.run.id);
-  const replacement = store.completeRun(
-    result.run.id,
-    'New response',
-    selected.run.usage!,
-    result.run.snapshot.settings
-  );
+  const replacement = store.completeRun(result.run.id, 'New response', selected.run.usage!);
   expect(replacement.parentRevision).toBe(ancestor.source.id);
   expect(store.history(store.chat(chat.id).headRevision).map((item) => item.text)).toEqual([
     'Ancestor',
@@ -142,9 +137,9 @@ test.each(['failed', 'cancelled', 'refused'] as const)(
     store.finishRun(retry.id, status, 'Fixture failure');
     expect(store.chat(chat.id).headRevision).toBe(selected.source.id);
     expect(store.source(selected.source.id).text).toBe('Keep me');
-    expect(() =>
-      store.completeRun(retry.id, 'Late response', selected.run.usage!, retry.snapshot.settings)
-    ).toThrow(/owns completion/);
+    expect(() => store.completeRun(retry.id, 'Late response', selected.run.usage!)).toThrow(
+      /owns completion/
+    );
     const repeated = store.retryRun(retry.id, 'retry-replacement').run;
     expect(repeated.chatId).toBe(chat.id);
     expect(repeated.snapshot.replacement?.sourceRevision).toBe(selected.source.id);
@@ -165,9 +160,9 @@ test('replacement completion rejects edits to the retained head and does not ove
   ).run;
   store.startRun(retry.id);
   editSource(store, selected.source.id, { expectedRevision: 0, text: 'User correction' });
-  expect(() =>
-    store.completeRun(retry.id, 'New response', selected.run.usage!, retry.snapshot.settings)
-  ).toThrow(/revision changed/);
+  expect(() => store.completeRun(retry.id, 'New response', selected.run.usage!)).toThrow(
+    /revision changed/
+  );
   expect(store.chat(chat.id).headRevision).toBe(selected.source.id);
   expect(store.source(selected.source.id).text).toBe('User correction');
 });
@@ -202,7 +197,7 @@ test('replacement seeds ancestor variables and swaps state only after completion
   });
   expect(readChatVariables(store, chat.id)).toEqual({ revision: 2, values: { scene: 'after' } });
   store.startRun(retry.id);
-  store.completeRun(retry.id, 'New response', selected.run.usage!, retry.snapshot.settings);
+  store.completeRun(retry.id, 'New response', selected.run.usage!);
   expect(readChatVariables(store, chat.id)).toEqual({ revision: 3, values: { scene: 'before' } });
 });
 test('completed replacements can be replaced again and failed judgment recovery preserves replacement ownership', () => {
@@ -217,12 +212,7 @@ test('completed replacements can be replaced again and failed judgment recovery 
     'replace'
   ).run;
   store.startRun(retry.id);
-  const newer = store.completeRun(
-    retry.id,
-    'First replacement',
-    selected.run.usage!,
-    retry.snapshot.settings
-  );
+  const newer = store.completeRun(retry.id, 'First replacement', selected.run.usage!);
   const next = store.retryRun(newer.runId, 'replace-second', undefined, undefined, 'replace').run;
   expect(next.snapshot.replacement?.sourceRevision).toBe(newer.id);
   const snapshot = {
@@ -249,12 +239,7 @@ test('completed replacements can be replaced again and failed judgment recovery 
   expect(recovered.snapshot.judgmentRecovery).toBe(true);
   expect(recovered.snapshot.replacement?.sourceRevision).toBe(newer.id);
   store.startRun(recovered.id);
-  const final = store.completeRun(
-    recovered.id,
-    'Preserved candidate',
-    selected.run.usage!,
-    recovered.snapshot.settings
-  );
+  const final = store.completeRun(recovered.id, 'Preserved candidate', selected.run.usage!);
   expect(store.history(final.id).map((source) => source.text)).toEqual(['Preserved candidate']);
   const copy = store.candidate(next.id, 'candidate-failed-replacement', 'Explicit candidate').run;
   expect(copy.chatId).not.toBe(chat.id);
@@ -322,12 +307,7 @@ test.each(['compacted', 'recent'] as const)(
     ).toEqual(active);
     const retry = store.retryRun(cancelled.id, 'checkpoint-success').run;
     store.startRun(retry.id);
-    const source = store.completeRun(
-      retry.id,
-      'Replacement',
-      selected.run.usage!,
-      retry.snapshot.settings
-    );
+    const source = store.completeRun(retry.id, 'Replacement', selected.run.usage!);
     expect(source.parentRevision).toBe(ancestor.source.id);
     expect(
       store.db
@@ -390,7 +370,7 @@ test('successful replacement revokes old unfinished auxiliaries while preserving
   );
   const retry = store.retryRun(failed.id, 'replace-aux-success').run;
   store.startRun(retry.id);
-  store.completeRun(retry.id, 'New response', selected.run.usage!, retry.snapshot.settings);
+  store.completeRun(retry.id, 'New response', selected.run.usage!);
   for (const table of ['jobs', 'illustration_jobs']) {
     for (const status of ['queued', 'running']) {
       const job = store.db
@@ -515,12 +495,12 @@ test.each([4001, 20001])(
     expect(retry.run.snapshot.request).toBe(edited);
     expect(retry.run.chatId).not.toBe(imported.chat.id);
     store.startRun(retry.run.id);
-    store.completeRun(
-      retry.run.id,
-      'Revised scene',
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      retry.run.snapshot.settings
-    );
+    store.completeRun(retry.run.id, 'Revised scene', {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    });
     expect(exportChatTranscript(store, retry.run.chatId).entries[0]).toMatchObject({
       request: edited,
       text: 'Revised scene',

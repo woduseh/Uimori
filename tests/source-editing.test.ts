@@ -62,12 +62,12 @@ function source(
   ).run;
   store.startRun(run.id);
   return store.source(
-    store.completeRun(
-      run.id,
-      text,
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings
-    ).id
+    store.completeRun(run.id, text, {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    }).id
   );
 }
 

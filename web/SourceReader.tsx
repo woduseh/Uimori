@@ -140,7 +140,7 @@ const jobTitle = (job: Job) =>
   job.kind === 'translation'
     ? '한국어 번역'
     : job.kind === 'status'
-      ? '장면 해설'
+      ? '이전 보조 작업'
       : `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`;
 const translationPlaceholderMessages: Partial<Record<Job['status'], string>> = {
   queued: '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.',
@@ -220,12 +220,6 @@ function SourceReaderContent({
   const restoreAnchor = useRef<AnchorPosition | undefined>(undefined);
   const translation = latestTranslation(source, jobs);
   const displayTranslation = displayTranslationJob(source, translation);
-  const latestStatus = jobs
-    .filter(
-      (job) =>
-        job.kind === 'status' && job.sourceRevision === source.id && job.sourceHash === source.hash
-    )
-    .sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
   const presentation = usePackagePresentation(
     source,
     displayTranslation,
@@ -386,7 +380,7 @@ function SourceReaderContent({
     (job) =>
       job.sourceHash === source.hash &&
       (job.kind !== 'translation' || job.id === translation?.id) &&
-      (job.kind !== 'status' || job.id === latestStatus?.id) &&
+      job.kind !== 'status' &&
       (job.kind !== 'image' ||
         (job.id === latestImageJob?.id && matchesImageTarget(job.imageTarget)))
   );
@@ -437,12 +431,6 @@ function SourceReaderContent({
   const [retryDialog, setRetryDialog] = useState(false);
   const [illustrationCount, setIllustrationCount] = useState(1);
   const illustrationRequestKey = useRef('');
-  const status = latestStatus?.status === 'completed' ? latestStatus : undefined;
-  const sceneStatus =
-    status?.result?.sourceRevision === source.id && status.result.sourceHash === source.hash
-      ? (status.result.label ?? status.result.text)
-      : '';
-
   const previousHash = useRef(source.hash);
   useLayoutEffect(() => {
     if (previousHash.current !== source.hash) {
@@ -796,12 +784,6 @@ function SourceReaderContent({
             </p>
           )}
           <PackagePresentationIssues data={presentation?.data} />
-          {sceneStatus && (
-            <aside className="scene-status" aria-label="현재 장면의 해설">
-              <small>장면 해설</small>
-              <span>{sceneStatus}</span>
-            </aside>
-          )}
           {!activityNode && (
             <div className="derived-summary" aria-label="이 장면의 후속 작업">
               {attentionJobs.length
@@ -1422,17 +1404,12 @@ function JobActions({
 }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
-  const perform = async (operation: 'retry' | 'cancel' | 'status' | 'rejudge') => {
+  const perform = async (operation: 'retry' | 'cancel' | 'rejudge') => {
     setPending(true);
     setError('');
     onError('');
     try {
-      if (operation === 'status')
-        await api(`/sources/${job.sourceRevision}/status`, {
-          expectedSourceHash: job.sourceHash,
-          expectedJobId: job.id,
-        });
-      else await api(`/jobs/${job.id}/${operation}`, {});
+      await api(`/jobs/${job.id}/${operation}`, {});
       await refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : '요청을 완료하지 못했어요.';
@@ -1454,7 +1431,7 @@ function JobActions({
           번역 판정만 다시 시도
         </button>
       )}
-      {retryable(job.status) && (
+      {job.kind !== 'status' && retryable(job.status) && (
         <button
           type="button"
           className="secondary"
@@ -1470,7 +1447,7 @@ function JobActions({
               : '이 작업만 재시도'}
         </button>
       )}
-      {activeJob(job) && (
+      {job.kind !== 'status' && activeJob(job) && (
         <button
           type="button"
           className="secondary"
@@ -1481,24 +1458,6 @@ function JobActions({
         >
           {jobTitle(job)} 취소
         </button>
-      )}
-      {job.kind === 'status' && retryable(job.status) && (
-        <>
-          <button
-            type="button"
-            className="secondary"
-            disabled={pending}
-            onClick={() => void perform('status')}
-          >
-            현재 설정으로 장면 해설 새로 실행
-          </button>
-          {!compact && (
-            <small>
-              전역 모델 설정에서 장면 해설 모델을 저장한 뒤 새로 실행해요. 기존 작업 재시도는 당시
-              설정을 사용해요.
-            </small>
-          )}
-        </>
       )}
       {error && (
         <small className="error" role="alert">
@@ -1563,9 +1522,6 @@ export function JobCard({
           </pre>
         )}
       </LazyDiagnostics>
-      {job.kind === 'status' && (
-        <small>현재 장면의 표시예요. 다음 이야기의 사실에는 반영하지 않아요.</small>
-      )}
     </section>
   );
 }

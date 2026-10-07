@@ -15,6 +15,33 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import { Store, type Source } from '../../server/store.js';
 import { defaultIllustrationSettings, type IllustrationSettings } from '../../core/illustration.js';
 import { createFixtureChat } from './chat.js';
+import {
+  illustrationJob,
+  illustrationSettings,
+  illustrationSlots,
+  reserveIllustrationPlan,
+  type ReserveOptions,
+} from '../../server/illustrations.js';
+import { HttpError } from '../../server/request-validation.js';
+
+/** Legacy single-render jobs keep renderer/retry coverage; production now reserves storyboards. */
+export function reserveIllustration(
+  store: Store,
+  source: Source,
+  origin: 'automatic' | 'manual',
+  options: ReserveOptions = {}
+) {
+  const settings = options.settings ?? illustrationSettings(store);
+  const slots = illustrationSlots(store, source.id);
+  if (slots.active > 0) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+  if (slots.total >= settings.maxPerSource) throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+  const job = reserveIllustrationPlan(store, source, origin, { ...options, maxTargets: 1 });
+  const { task: _task, plan: _plan, ...input } = job.input;
+  store.db
+    .prepare('UPDATE illustration_jobs SET input=? WHERE id=?')
+    .run(JSON.stringify(input), job.id);
+  return illustrationJob(store, job.id);
+}
 
 /** Illustration tests own a temporary SQLite file under the resolved temp root. */
 export function illustrationDatabases(prefix: string) {
@@ -64,7 +91,7 @@ export function completedSource(
       chatId,
       parentRevision: selected.headRevision,
       settingsRevision: selected.settingsRevision,
-      settings: { ...selected.settings, status: false },
+      settings: selected.settings,
       request,
       history: store.history(selected.headRevision),
       profile,
@@ -73,12 +100,12 @@ export function completedSource(
   ).run;
   store.startRun(run.id);
   return store.source(
-    store.completeRun(
-      run.id,
-      text,
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings
-    ).id
+    store.completeRun(run.id, text, {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    }).id
   );
 }
 export function chatWithSource(store: Store, title = 'Synthetic illustration chat') {

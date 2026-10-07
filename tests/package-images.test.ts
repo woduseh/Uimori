@@ -118,7 +118,7 @@ function begin(store: Store, chatId: string) {
       chatId,
       parentRevision: selected.headRevision,
       settingsRevision: selected.settingsRevision,
-      settings: { ...selected.settings, status: false },
+      settings: { ...selected.settings },
       request: 'Synthetic scene.',
       history: store.history(selected.headRevision),
       resources: store.product.resources(chatId, profile),
@@ -130,12 +130,12 @@ function begin(store: Store, chatId: string) {
 }
 function finish(store: Store, run: ReturnType<typeof begin>) {
   return store.source(
-    store.completeRun(
-      run.id,
-      'A smile by the window.',
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings
-    ).id
+    store.completeRun(run.id, 'A smile by the window.', {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    }).id
   );
 }
 function imageJob(store: Store, sourceId: string) {

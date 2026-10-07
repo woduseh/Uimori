@@ -83,7 +83,7 @@
 
 ## 저장·실행 경계
 
-모델 revision은 생성 옵션을 보관해요. Run/job snapshot은 이를 고정하며, main/translation/status/image/state/context/helper는 공통 추출기로 같은 필드를 전달해요. 호출 시 현재 프로바이더의 활성 상태와 인증을 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
+모델 revision은 생성 옵션을 보관해요. Run/job snapshot은 이를 고정하며, 본문·번역·컨텍스트 정리·도우미·카드 스크립트 보조 등의 모델 호출은 공통 추출기로 같은 필드를 전달해요. 호출 시 현재 프로바이더의 활성 상태와 인증을 확인해요. 평가 절약 모드는 명시 opt-in일 때만 출력 한도·effort를 줄이고 나머지 binding을 바꾸지 않아요.
 
 ## 공식 근거
 

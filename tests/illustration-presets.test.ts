@@ -1,3 +1,4 @@
+import { reserveIllustration } from './fixtures/illustration.js';
 import { afterEach, expect, test } from 'vitest';
 import { Store } from '../server/store.js';
 import { createApp, type App } from '../server/app.js';
@@ -26,7 +27,6 @@ import {
   completeIllustration,
   illustrationJob,
   illustrationSettings,
-  reserveIllustration,
   retryIllustration,
   scheduleAutomaticIllustration,
   updateIllustrationSettings,

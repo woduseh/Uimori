@@ -27,7 +27,7 @@ export function contextSummaryPolicy(options: {
   // Conversation compaction keeps its existing soft fixed-input boundary. In-run readers
   // and helpers can use a valid smaller candidate above 85%, up to their actual input limit.
   const headroomRatio = options.purpose === 'conversation' ? 0.85 : 1;
-  let targetSummaryTokens = Math.max(
+  const targetSummaryTokens = Math.max(
     1,
     Math.floor(
       Math.min(
@@ -38,19 +38,5 @@ export function contextSummaryPolicy(options: {
       )
     )
   );
-  if (generation.thinkingBudgetTokens !== undefined) {
-    if (generation.maxOutputTokens <= 1024) {
-      delete generation.thinkingBudgetTokens;
-      if (generation.thinkingMode === 'enabled') generation.thinkingMode = 'disabled';
-    } else {
-      // Numeric thinking budgets have a 1024-token minimum. Keep useful output room as
-      // well as a valid provider option, even when the original budget nearly filled its cap.
-      targetSummaryTokens = Math.min(targetSummaryTokens, generation.maxOutputTokens - 1024);
-      generation.thinkingBudgetTokens = Math.min(
-        generation.thinkingBudgetTokens,
-        generation.maxOutputTokens - targetSummaryTokens
-      );
-    }
-  }
   return { targetSummaryTokens, generation };
 }

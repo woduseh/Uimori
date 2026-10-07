@@ -278,8 +278,7 @@ export async function applyNativeRisuAction(
         const source = store.completeRunInTransaction(
           id,
           output,
-          index === first ? usage : zeroUsage,
-          chat.settings
+          index === first ? usage : zeroUsage
         );
         head = source.id;
         lastRunId = id;

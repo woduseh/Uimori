@@ -32,9 +32,9 @@ export function executionContext(
     .reverse();
   const refs = profile?.packageAttachments ?? [];
   const model =
-    profile?.models[
-      target === 'translation' ? 'translation' : target === 'status' ? 'status' : 'main'
-    ];
+    target === 'status'
+      ? undefined
+      : profile?.models[target === 'translation' ? 'translation' : 'main'];
   const mainModel = model && 'connection' in model ? model : undefined;
   const capabilities =
     mainModel?.connection.catalog.find((c) => c.id === mainModel.modelId)?.capabilities ?? {};

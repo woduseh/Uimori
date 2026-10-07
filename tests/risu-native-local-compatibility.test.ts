@@ -119,7 +119,6 @@ test.runIf(paths.length > 0 && !!presetPath)(
         parentRevision: null,
         settingsRevision: 1,
         settings: {
-          status: false,
           maxCalls: 1,
         },
         request: 'LOCAL_COMPATIBILITY_CONTINUE',

@@ -87,7 +87,7 @@ test('visible jobs match the original hash/kind/latest-translation filtering and
   state.insert('foreign-source', 'hash', 'translation', 3, 'other-source');
   assert.deepEqual(
     readerJobIds(state, 'source', 'hash').map((row) => row.id),
-    ['current-status', 'new-translation', 'stale-image']
+    ['new-translation', 'stale-image']
   );
 });
 

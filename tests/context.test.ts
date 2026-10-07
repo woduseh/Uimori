@@ -9,7 +9,7 @@ const snapshot = (): RunSnapshot => ({
   chatId: 'chat-a',
   parentRevision: null,
   settingsRevision: 1,
-  settings: { status: true, maxCalls: 6 },
+  settings: { maxCalls: 6 },
   request: 'Listen beside the pier without deciding the reader response.',
   history: [],
   resources: [

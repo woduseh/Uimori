@@ -134,12 +134,12 @@ export function createPackageStart(
     store.db
       .prepare("UPDATE runs SET status='running' WHERE id=? AND status='queued'")
       .run(result.run.id);
-    store.completeRunInTransaction(
-      result.run.id,
-      startText(result.run.snapshot),
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      result.run.snapshot.settings
-    );
+    store.completeRunInTransaction(result.run.id, startText(result.run.snapshot), {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    });
     return { run: store.run(result.run.id), created: true };
   });
 }

@@ -36,7 +36,7 @@ export function changedReaderSources(
 export function readerJobIds(store: Pick<Store, 'db'>, sourceId: string, sourceHash: string) {
   return store.db
     .prepare(`SELECT j.id FROM jobs j
-      WHERE j.source_revision=? AND (j.source_hash=? OR j.kind='image')
+      WHERE j.source_revision=? AND j.kind!='status' AND (j.source_hash=? OR j.kind='image')
         AND (j.kind!='translation' OR j.id=(
           SELECT id FROM jobs WHERE source_revision=j.source_revision AND kind='translation'
           ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1

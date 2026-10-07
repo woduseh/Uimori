@@ -104,14 +104,6 @@ export function illustrationErrorMessage(code: string | null | undefined): strin
     return '삽화 모델 또는 연결을 사용할 수 없어요. 모델 프리셋과 연결 상태를 확인해 주세요.';
   return '삽화 생성을 완료하지 못했어요.';
 }
-export const illustrationStatusLabels: Record<Illustration['status'], string> = {
-  queued: '대기',
-  running: '생성 중',
-  completed: '완료',
-  failed: '실패',
-  cancelled: '취소됨',
-  interrupted: '서버 중단 · 자동 재생성 안 함',
-};
 export const illustrationGeneratorLabels: Record<Illustration['generator'], string> = {
   codex: 'Codex',
   comfyui: 'ComfyUI',

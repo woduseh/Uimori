@@ -44,7 +44,6 @@ type TestOptions = Pick<
  */
 export function connectionTestRequest(model: ModelPreset, connection: Connection): ProviderRequest {
   const generation: ModelGeneration = { ...generationFromModel(model), maxOutputTokens: 256 };
-  delete generation.thinkingBudgetTokens;
   if (protocolOptionKeys(connection.protocol).includes('cacheMode')) {
     generation.cacheMode = 'disabled';
     delete generation.cacheTtl;

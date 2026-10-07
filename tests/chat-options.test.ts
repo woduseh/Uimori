@@ -100,12 +100,12 @@ function run(f: ReturnType<typeof fixture>, cmd = command(f)) {
 }
 function complete(f: ReturnType<typeof fixture>, id: string) {
   f.store.startRun(id);
-  return f.store.completeRun(
-    id,
-    `Synthetic ${id}`,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    { ...f.store.run(id).snapshot.settings, status: false }
-  );
+  return f.store.completeRun(id, `Synthetic ${id}`, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
 }
 test('global, chat fixed and oneoff values resolve once in the reservation transaction', () => {
   const f = fixture();

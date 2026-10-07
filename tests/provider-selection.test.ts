@@ -90,12 +90,12 @@ test('disabled models retain assigned IDs but block new assignments and new snap
     })
   ).run;
   s.startRun(run.id);
-  const source = s.completeRun(
-    run.id,
-    'Synthetic immutable original',
-    { modelCalls: 1, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  const source = s.completeRun(run.id, 'Synthetic immutable original', {
+    modelCalls: 1,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   const snapshot = readStoredRunSnapshot(s, run.id),
     original = s.source(source.id);
   const disabled = s.product.model(

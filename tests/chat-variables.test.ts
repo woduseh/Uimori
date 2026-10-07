@@ -63,12 +63,12 @@ function reserve(store: Store, chatId: string) {
 function append(store: Store, chatId: string, text = 'Synthetic source') {
   const run = reserve(store, chatId);
   store.startRun(run.id);
-  return store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  return store.completeRun(run.id, text, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
 }
 
 test('untouched chat reads are pure and chat states stay separate', () => {

@@ -80,7 +80,7 @@ test('normal translation and candidate requests with no model roll back without 
       chatId: current.id,
       parentRevision: null,
       settingsRevision: current.settingsRevision,
-      settings: { ...current.settings, status: false },
+      settings: { ...current.settings },
       request: 'Authored fixture',
       history: [],
       resources: [],
@@ -89,17 +89,12 @@ test('normal translation and candidate requests with no model roll back without 
   );
   await prepareNativeFixtureRun(store, run);
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    'Authored source',
-    {
-      modelCalls: 0,
-      inputTokens: null,
-      outputTokens: null,
-      costUsd: null,
-    },
-    run.snapshot.settings
-  );
+  const source = store.completeRun(run.id, 'Authored source', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   const jobsBefore = store.db.prepare('SELECT count(*) AS n FROM jobs').get();
   for (const action of ['translation', 'retranslate']) {
     const response = await app.inject({

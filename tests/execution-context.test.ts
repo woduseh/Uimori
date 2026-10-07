@@ -9,7 +9,7 @@ function snapshot(): RunSnapshot {
     chatId: 'chat',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { status: false, maxCalls: 4 },
+    settings: { maxCalls: 4 },
     request: 'Continue',
     history: [],
     resources: [],

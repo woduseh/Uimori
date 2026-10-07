@@ -72,7 +72,7 @@ test('independent rewrites start from the copied checkpoint rather than later va
   const old = await f.reserve();
   expect(old.snapshot.profile).not.toHaveProperty('variableState');
   f.store.startRun(old.id);
-  const source = f.store.completeRun(old.id, 'Historical source', noUsage, old.snapshot.settings);
+  const source = f.store.completeRun(old.id, 'Historical source', noUsage);
   const current = readChatVariables(f.store, f.chat.id);
   const saved = await f.app.inject({
     method: 'PUT',

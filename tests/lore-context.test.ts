@@ -129,12 +129,12 @@ function read(
 }
 function complete(f: ReturnType<typeof fixture>, run: Run, text = 'Synthetic source.') {
   f.store.startRun(run.id);
-  return f.store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 1, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  return f.store.completeRun(run.id, text, {
+    modelCalls: 1,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
 }
 test('only successful main reads retain the exact observed range; search, denied, forged and unread text do not', async () => {
   const f = fixture(),

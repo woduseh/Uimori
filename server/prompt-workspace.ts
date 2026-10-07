@@ -204,7 +204,7 @@ export function chatPromptWorkspace(
 }
 
 export function emptyModelRoutes(): ModelWorkspace['routes'] {
-  return { main: null, translation: null, status: null };
+  return { main: null, translation: null };
 }
 function validateTitleModel(value: unknown): ModelWorkspace['titleModel'] {
   if (value === null) return null;
@@ -214,6 +214,7 @@ function validateTitleModel(value: unknown): ModelWorkspace['titleModel'] {
 }
 function validateModelRoutes(value: unknown): ModelWorkspace['routes'] {
   const input = record(value);
+  // Old saved workspaces can still contain the retired scene-commentary route.
   fields(input, ['main', 'translation', 'status']);
   return Object.fromEntries(
     Object.keys(emptyModelRoutes()).map((role) => {

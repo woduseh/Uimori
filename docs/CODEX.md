@@ -1,6 +1,6 @@
 # Codex 에이전트 연결
 
-Uimori 서버에서 공식 Codex CLI의 App Server를 실행하고 개인 ChatGPT 구독으로 로그인해요. 프로토콜은 `codex-app-server-v1`, 프로바이더 주소는 고정값 `codex://local`이에요. 본문·번역·장면 상태 표시·이미지 작업 지시·상태 계산·컨텍스트 정리·도우미에서 같은 Codex 모델 프리셋을 선택할 수 있어요. 이미지 역할은 기존 Uimori의 이미지 작업 지시(배치)를 만들어요. Codex의 공식 이미지 생성 도구는 **설정 → 삽화**의 장면 삽화 생성에서만 사용하며, 텍스트 판단 턴에는 `features.image_generation=false`를 명시해요. 삽화 턴의 계약은 [장면 삽화](ILLUSTRATIONS.md)를 봐요.
+Uimori 서버에서 공식 Codex CLI의 App Server를 실행하고 개인 ChatGPT 구독으로 로그인해요. 프로토콜은 `codex-app-server-v1`, 프로바이더 주소는 고정값 `codex://local`이에요. 본문·번역·컨텍스트 정리·도우미·카드 스크립트 보조에서 같은 Codex 모델 프리셋을 선택할 수 있어요. 등록된 이미지의 배치는 별도 JEV가 담당해요. Codex의 공식 이미지 생성 도구는 **설정 → 삽화**의 장면 삽화 생성에서만 사용하며, 텍스트 판단 턴에는 `features.image_generation=false`를 명시해요. 삽화 턴의 계약은 [장면 삽화](ILLUSTRATIONS.md)를 봐요.
 
 ## 준비와 로그인
 
@@ -33,7 +33,7 @@ Linux Docker의 실제 이미지 빌드·기동과 실계정 로그인·구독 �
 
 ## 실행 계약과 한계
 
-- App Server `initialize`, `account/*`, `model/list`, `thread/start`, `turn/start`를 사용해요. 실제 본문 Run의 Codex 작가·Codex 조언자·도우미는 각각 **작업 하나를 하나의 thread/turn**에서 끝까지 실행하고 도구 결과를 같은 턴에 돌려줘요. 번역·상태 계산·컨텍스트 정리와 도우미의 독립 가정 장면은 기존 요청별 ephemeral 실행을 유지해요. 본문 평가의 `preloaded + economized` 첫 단계만 기존 low 요청으로 처리한 뒤 원래 추론 수준의 native 작문으로 이어가요. 작업 간 native thread 재개 정보나 opaque continuation은 저장하지 않아요.
+- App Server `initialize`, `account/*`, `model/list`, `thread/start`, `turn/start`를 사용해요. 실제 본문 Run의 Codex 작가·Codex 조언자·도우미는 각각 **작업 하나를 하나의 thread/turn**에서 끝까지 실행하고 도구 결과를 같은 턴에 돌려줘요. 번역·컨텍스트 정리와 도우미의 독립 가정 장면은 기존 요청별 ephemeral 실행을 유지해요. 본문 평가의 `preloaded + economized` 첫 단계만 기존 low 요청으로 처리한 뒤 원래 추론 수준의 native 작문으로 이어가요. 작업 간 native thread 재개 정보나 opaque continuation은 저장하지 않아요.
 - 일반 텍스트 실행은 기본 2개까지 동시에 진행해요. native 작가·도우미가 호스트 도구의 조언·본문 생성·컨텍스트 정리를 기다리는 동안에는 그 도구 안의 Codex 텍스트 및 native 조언 호출에 전용 슬롯 1개를 제공해요. 두 도우미가 일반 슬롯을 모두 점유해도 자식 호출이 시작할 수 있고, 자식끼리는 순서대로 실행해요. 독립 작업은 이 슬롯을 사용하지 않으며 대기 중 취소·인증 변경·서버 종료 경계도 동일하게 적용해요.
 - 텍스트 역할은 `thread/start.baseInstructions`로 짧은 Uimori 작문·번역·요약 지침을 지정해 모델의 기본 코딩 지침을 대체해요. 도우미(`helper`)는 자료 조회·편집과 저장 결과 확인에 맞는 전용 지침을 사용해요. 초기 요청에 작업·이전 대화·자료 범위와 등록된 도구를 전달해요. 도우미의 초기 이력이 입력 예산을 넘으면 Uimori가 시작 전에 컨텍스트 정리를 수행할 수 있어요. native 턴이 시작된 뒤 도구 결과를 받을 때마다 Uimori가 이력을 다시 묶거나 새 턴을 만들지는 않으며, 턴 내부 진행·컨텍스트 정리는 Codex가 담당해요. 로컬 입력 추정에는 Codex 내부 도구 설명과 추가 컨텍스트가 모두 포함되지는 않으므로 실제 프로바이더 입력 토큰과 차이가 있을 수 있어요.
 - 전용 Codex home과 빈 임시 작업 폴더를 사용해요. 기존 사용자 home/config와 서버의 provider API 키 환경변수를 넘기지 않아요. `environments: []`, `selectedCapabilityRoots: []`, read-only/never 정책은 유지해요. 내장 도구 전체 금지는 제거하고 `web_search=cached`와 `features.code_mode=true`로 검색과 격리된 JavaScript 계산을 사용할 수 있게 해요. Code Mode에서는 기본 `functions` namespace를 제외해 셸·파일 계열 도구가 중첩 실행 경로로 다시 노출되지 않게 하고, Uimori 호스트 도구는 별도 `uimori` namespace로만 등록해요. 실제 도구 제공 여부는 설치된 CLI·모델에 따라 달라요.

@@ -18,20 +18,11 @@ const schema = (properties: Record<string, Json>, required: string[] = []): Json
   required,
   additionalProperties: false,
 });
-const modelRoles = [
-  'main',
-  'translation',
-  'status',
-  'helper',
-  'context',
-  'script',
-  'title',
-] as const;
+const modelRoles = ['main', 'translation', 'helper', 'context', 'script', 'title'] as const;
 const settings = [
   ...modelRoles.map((role) => `global.${role}Model`),
   'chat.mainModel',
   'chat.mainPromptPreset',
-  'chat.status',
   'chat.maxCalls',
 ] as const;
 
@@ -45,13 +36,13 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'settings.read',
     description:
-      'Read compact global and selected-chat model and prompt references, pinned versus effective selections, chat status/call limit, and the revisions needed to update them. Prompt bodies and credentials are omitted.',
+      'Read compact global and selected-chat model and prompt references, pinned versus effective selections, chat call limit, and the revisions needed to update them. Prompt bodies and credentials are omitted.',
     inputSchema: schema({}),
   },
   {
     name: 'settings.update',
     description:
-      'Change one requested setting using the revision from settings.read. Global model targets accept a saved model ID or null; chat.mainModel and chat.mainPromptPreset accept an ID or null; chat.status accepts a boolean; chat.maxCalls accepts an integer from 1 to 32. Global choices affect future requests across chats; reserved jobs keep their frozen models. Existing services preserve unrelated settings. The selected chat is required for chat targets.',
+      'Change one requested setting using the revision from settings.read. Global model targets accept a saved model ID or null; chat.mainModel and chat.mainPromptPreset accept an ID or null; chat.maxCalls accepts an integer from 1 to 32. Global choices affect future requests across chats; reserved jobs keep their frozen models. Existing services preserve unrelated settings. The selected chat is required for chat targets.',
     inputSchema: schema(
       {
         setting: { type: 'string', enum: [...settings] },
@@ -151,7 +142,6 @@ export function invokeHelperSettingsTool(
             revision: effective.revision,
           },
         },
-        status: chat.settings.status,
         maxCalls: chat.settings.maxCalls,
       },
     };
@@ -171,7 +161,7 @@ export function invokeHelperSettingsTool(
     const routes = { ...current.routes };
     const ref = modelId === null ? null : { id: modelId };
     const optional: Record<string, unknown> = {};
-    if (role === 'main' || role === 'translation' || role === 'status') routes[role] = ref;
+    if (role === 'main' || role === 'translation') routes[role] = ref;
     else optional[`${role}Model`] = ref;
     const updated = updateModelWorkspace(store, {
       expectedRevision,
@@ -212,19 +202,13 @@ export function invokeHelperSettingsTool(
     };
   }
   const chat = store.chat(chatId);
-  let next: Settings;
-  if (setting === 'chat.status') {
-    if (typeof args.value !== 'boolean') throw new HttpError(400, 'INVALID_STATUS');
-    next = { ...chat.settings, status: args.value };
-  } else {
-    if (!Number.isSafeInteger(args.value) || Number(args.value) < 1 || Number(args.value) > 32)
-      throw new HttpError(400, 'INVALID_MAX_CALLS');
-    next = { ...chat.settings, maxCalls: Number(args.value) };
-  }
+  if (!Number.isSafeInteger(args.value) || Number(args.value) < 1 || Number(args.value) > 32)
+    throw new HttpError(400, 'INVALID_MAX_CALLS');
+  const next: Settings = { ...chat.settings, maxCalls: Number(args.value) };
   const updated = store.settings(chatId, expectedRevision, next);
   return {
     setting,
     revision: updated.settingsRevision,
-    value: setting === 'chat.status' ? updated.settings.status : updated.settings.maxCalls,
+    value: updated.settings.maxCalls,
   };
 }

@@ -579,32 +579,6 @@ function frozenInput(
     };
   throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
 }
-/** Low-level single-render reservation used by existing jobs and focused generator tests. */
-export function reserveIllustration(
-  store: Store,
-  source: Source,
-  origin: 'automatic' | 'manual',
-  options: ReserveOptions = {}
-): IllustrationJobRow {
-  return store.transaction(() => {
-    const settings = options.settings ?? illustrationSettings(store);
-    const slots = illustrationSlots(store, source.id);
-    if (slots.active > 0) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
-    if (slots.total >= settings.maxPerSource)
-      throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
-    const input = frozenInput(store, source, settings, options);
-    const id = randomUUID(),
-      time = now();
-    store.db
-      .prepare(
-        "INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,generation,owner,attempt,input,diagnostic,error,created_at,updated_at) VALUES(?,?,?,?,?,'queued',0,NULL,1,?,NULL,NULL,?,?)"
-      )
-      .run(id, source.chatId, source.id, source.hash, origin, json(input), time, time);
-    store.event(source.chatId, 'illustration.queued', id);
-    return illustrationJob(store, id);
-  });
-}
-
 /** The plan reserves its cut budget before any model call. Existing single renders remain readable. */
 export function reserveIllustrationPlan(
   store: Store,

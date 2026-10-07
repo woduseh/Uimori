@@ -1,6 +1,5 @@
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { RefreshIcon } from './ui-icons.js';
-import { Switch } from './BooleanControls.js';
 import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
 import { useEffect, useState } from 'react';
@@ -61,7 +60,7 @@ export function SettingsEditor({
       setValue(saved.settings);
       setRevision(saved.settingsRevision);
       setDirty(false);
-      setMessage('후속 작업 설정을 저장했어요.');
+      setMessage('실행 설정을 저장했어요.');
       onError('');
       // Persisted; the refresh below is not an unsaved draft.
       setSaving(false);
@@ -78,7 +77,7 @@ export function SettingsEditor({
   }
   return (
     <section className="settings">
-      {!hideHeading && <h3>자동 후속 작업</h3>}
+      {!hideHeading && <h3>실행 옵션</h3>}
       <small>저장한 설정은 다음 실행부터 적용해요.</small>
       <form
         onSubmit={(event) => {
@@ -88,24 +87,8 @@ export function SettingsEditor({
       >
         <fieldset className="editor-fields full chat-runtime-fields" disabled={saving}>
           <div className="settings-group full">
-            <h4 className="settings-group-heading">실행 옵션</h4>
+            <h4 className="settings-group-heading">모델 호출</h4>
             <div className="settings-group-body">
-              <label className="settings-row settings-row-toggle">
-                <span className="settings-row-copy">
-                  <strong>장면 해설 자동 생성</strong>
-                  <small>
-                    원고가 완성되면 짧은 요약과 분위기를 덧붙여요. 다음 생성의 컨텍스트에는 쓰지
-                    않아요. 모델은 역할별 모델 설정을 따라요.
-                  </small>
-                </span>
-                <span className="settings-row-control">
-                  <Switch
-                    aria-label="장면 해설 자동 생성"
-                    checked={value.status}
-                    onChange={(event) => update('status', event.target.checked)}
-                  />
-                </span>
-              </label>
               <label className="settings-row">
                 <span className="settings-row-copy">
                   <strong>작업당 모델 호출 한도</strong>

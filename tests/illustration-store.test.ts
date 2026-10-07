@@ -1,3 +1,4 @@
+import { reserveIllustration } from './fixtures/illustration.js';
 import { fixtureIllustrationPreset } from './fixtures/illustration.js';
 import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import { saveResource } from '../server/resource-service.js';
@@ -21,7 +22,6 @@ import {
   recoverIllustrations,
   removeIllustration,
   requeueIllustration,
-  reserveIllustration,
   retryIllustration,
   updateIllustrationReferences,
   updateIllustrationSettings,

@@ -495,7 +495,6 @@ export function createRunExecutor({
               id,
               nativeOutput.nativeRisuExecution?.output?.text ?? result.text,
               priorUsage,
-              run.snapshot.settings,
               controls
             );
           });

@@ -1,14 +1,12 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import {
-  displayInput,
   executeAuxiliary,
   parseStructuredTranslation,
   presentationInput,
   scriptedAuxiliary,
   splitSource,
   translationInput,
-  validateDisplayAnnotation,
   validatePresentation,
   type AuxiliaryInput,
   type AuxiliarySource,
@@ -43,7 +41,7 @@ const snapshot = (): RunSnapshot => ({
   chatId: 'chat-a',
   parentRevision: 'source-previous',
   settingsRevision: 1,
-  settings: { status: true, maxCalls: 6 },
+  settings: { maxCalls: 6 },
   request: 'A quiet fictional scene',
   history: [],
   resources: [
@@ -327,7 +325,6 @@ describe('M1 source-bound auxiliary roles', () => {
     const raw = source('Mira stood beside the harbor.');
     const input = presentationInput(raw, context(), snapshot());
     expect(input.assets).toEqual([]);
-    expect(input.scenes).toEqual([]);
     expect(
       validatePresentation(raw, { sourceRevision: raw.id, sourceHash: raw.hash, entries: [] })
         .entries
@@ -453,7 +450,7 @@ describe('M1 source-bound auxiliary roles', () => {
     expect(JSON.stringify(ctx.references)).toBe(canonBefore);
   });
 
-  test('P13 authored metadata does not require literal scene cues and display annotations cannot smuggle authoritative fields', async () => {
+  test('P13 authored image metadata does not require literal scene cues', async () => {
     const raw = source('Mira wore a blue coat by the pier.\n\nMira wore a red cloak by the pier.');
     const blocks = splitSource(raw);
     const assets = [{ ...BUILTIN_ASSETS[0], clothing: 'blue coat', uses: ['inline' as const] }];
@@ -485,62 +482,7 @@ describe('M1 source-bound auxiliary roles', () => {
         assets
       )
     ).toThrow('ASSET_REFERENCE_INVALID');
-    const input = displayInput(raw, context(), snapshot());
-    expect(input.role).toBe('status');
-    expect(input.blocks).toEqual(blocks.map(({ anchor, text }) => ({ anchor, text })));
-    expect(JSON.stringify(input.outputSchema)).not.toContain('mood');
-    expect(input).not.toHaveProperty('assets');
-    expect(JSON.stringify(input)).not.toContain('data:image');
-    const result = await executeAuxiliary(input, snapshot(), scriptedAuxiliary);
-    expect(validateDisplayAnnotation(raw, result.output)).toMatchObject({
-      kind: 'display-only',
-      entries: [
-        {
-          anchor: blocks[0].anchor,
-          summary: '모의 표시 상태 · 원문 보존됨 · 정사에 반영하지 않음',
-        },
-      ],
-    });
-    expect(() =>
-      validateDisplayAnnotation(raw, { ...(result.output as object), coins: 100 })
-    ).toThrow('OUTPUT_SCHEMA_INVALID');
-    expect(() =>
-      validateDisplayAnnotation(raw, { ...(result.output as object), kind: 'authoritative' })
-    ).toThrow('OUTPUT_SCHEMA_INVALID');
   });
-});
-
-test('annotation JSON may have one outer fence but malformed fields and oversized results are never truncated or partly accepted', () => {
-  const raw = source('A source.'),
-    input = displayInput(raw, context(), snapshot()),
-    entry = { anchor: input.blocks[0].anchor, summary: 'A source.', mood: 'quiet' },
-    output = {
-      sourceRevision: raw.id,
-      sourceHash: raw.hash,
-      kind: 'display-only',
-      entries: [entry],
-    };
-  expect(validateDisplayAnnotation(raw, `\`\`\`json\n${JSON.stringify(output)}\n\`\`\``)).toEqual(
-    output
-  );
-  expect(() => validateDisplayAnnotation(raw, `Explanation\n${JSON.stringify(output)}`)).toThrow(
-    'OUTPUT_SCHEMA_INVALID'
-  );
-  expect(() => validateDisplayAnnotation(raw, { ...output, sourceHash: 'wrong' })).toThrow(
-    'SOURCE_DEPENDENCY_MISMATCH'
-  );
-  for (const tooLong of [{ summary: 'x'.repeat(601) }, { mood: 'x'.repeat(101) }])
-    expect(() =>
-      validateDisplayAnnotation(raw, { ...output, entries: [{ ...entry, ...tooLong }] })
-    ).toThrow('OUTPUT_SCHEMA_INVALID');
-  expect(output.entries[0]).toEqual(entry);
-  expect(
-    validatePresentation(
-      raw,
-      `\`\`\`json\n${JSON.stringify({ sourceRevision: raw.id, sourceHash: raw.hash, entries: [] })}\n\`\`\``,
-      BUILTIN_ASSETS
-    ).entries
-  ).toEqual([]);
 });
 
 test('image selection uses IDs for duplicate names and rejects a different content hash', () => {

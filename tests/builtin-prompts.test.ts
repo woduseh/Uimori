@@ -82,7 +82,6 @@ test('bundled native presets are editable independent copies and compile in all 
         parentRevision: null,
         settingsRevision: 1,
         settings: {
-          status: false,
           maxCalls: 8,
         },
         request: 'CURRENT_REQUEST_MARKER',
@@ -135,7 +134,7 @@ test('Pheme remains usable with automatic caching after two prior user turns', a
     chatId: 'cache-history',
     parentRevision: 'scene-2',
     settingsRevision: 1,
-    settings: { status: false, maxCalls: 8 },
+    settings: { maxCalls: 8 },
     request: 'Continue the scene.',
     history: [
       { revision: 'scene-1', text: 'First scene.' },

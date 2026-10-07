@@ -414,20 +414,19 @@ export function ProfileEditor({
             <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
               <h4 className="settings-group-heading">전체 채팅 설정에서 사용하는 모델</h4>
               <dl className="settings-group-body">
-                {(['translation', 'status'] as const).map((role, index) => (
-                  <div key={role}>
-                    <dt>{['번역', '장면 해설'][index]}</dt>
-                    <dd>
-                      {library.models.find((item) => item.id === workspace?.modelRoutes[role]?.id)
-                        ?.title ??
-                        (workspace
-                          ? workspace.modelRoutes[role]?.id
-                            ? '사용 불가 · 등록된 모델을 찾을 수 없어요'
-                            : '사용할 모델 미지정'
-                          : '불러오는 중…')}
-                    </dd>
-                  </div>
-                ))}
+                <div>
+                  <dt>번역</dt>
+                  <dd>
+                    {library.models.find(
+                      (item) => item.id === workspace?.modelRoutes.translation?.id
+                    )?.title ??
+                      (workspace
+                        ? workspace.modelRoutes.translation?.id
+                          ? '사용 불가 · 등록된 모델을 찾을 수 없어요'
+                          : '사용할 모델 미지정'
+                        : '불러오는 중…')}
+                  </dd>
+                </div>
                 <div>
                   <dt>로어·번역 거절·이미지 배치 판단</dt>
                   <dd>JEV</dd>

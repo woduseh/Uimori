@@ -23,7 +23,6 @@ import {
   editSource,
   editTranslation,
   requestTranslation,
-  requestStatus,
   latestTranslation,
 } from './source-editing.js';
 import { validateTranslationArtifact } from './translation-artifacts.js';
@@ -257,7 +256,6 @@ export class Store {
     const id = internalId === undefined ? randomUUID() : text(internalId, 'internal chat ID', 100);
     if (!IDENTITY_PATTERN.test(id)) throw new HttpError(400, 'Invalid internal chat ID');
     const settings: Settings = {
-      status: false,
       maxCalls: 8,
     };
     this.transaction(() => {
@@ -589,25 +587,11 @@ export class Store {
       return this.run(id);
     });
   }
-  completeRun(
-    id: string,
-    text: string,
-    usage: Usage,
-    settings: Settings,
-    controls?: Controls
-  ): Source {
-    return this.transaction(() =>
-      this.completeRunInTransaction(id, text, usage, settings, controls)
-    );
+  completeRun(id: string, text: string, usage: Usage, controls?: Controls): Source {
+    return this.transaction(() => this.completeRunInTransaction(id, text, usage, controls));
   }
   /** Provider completion and authored openings share source/chat CAS and source hashing. */
-  completeRunInTransaction(
-    id: string,
-    text: string,
-    usage: Usage,
-    settings: Settings,
-    controls?: Controls
-  ): Source {
+  completeRunInTransaction(id: string, text: string, usage: Usage, controls?: Controls): Source {
     const run = this.run(id);
     if (run.status !== 'running') throw new HttpError(409, 'Run no longer owns completion');
     const chat = this.chat(run.chatId);
@@ -686,38 +670,34 @@ export class Store {
           );
       }
     }
-    for (const kind of ['status', 'image'] as const) {
-      if (
-        run.snapshot.packageStart?.mode === 'authored' ||
-        run.snapshot.transcriptImport ||
-        run.snapshot.nativeRisuAuthored
-      )
-        continue;
-      if (!(kind === 'image' ? run.snapshot.profile?.image : settings[kind])) continue;
-      if (kind === 'image' && !imageJobInput(this, run.snapshot).imageCatalog.entries.length)
-        continue;
-      const jobId = randomUUID();
-      const time = now();
-      this.db
-        .prepare(
-          "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,created_at,updated_at) VALUES(?,?,?,?,?,'queued',?,?,?)"
-        )
-        .run(
-          jobId,
-          source.chatId,
-          source.id,
-          source.hash,
-          kind,
-          kind === 'image'
-            ? json({
-                ...imageJobInput(this, run.snapshot),
-                imageTarget: { mode: 'original', textHash: source.hash },
-              })
-            : null,
-          time,
-          time
-        );
-      this.event(source.chatId, 'job.queued', jobId);
+    if (
+      run.snapshot.packageStart?.mode !== 'authored' &&
+      !run.snapshot.transcriptImport &&
+      !run.snapshot.nativeRisuAuthored &&
+      run.snapshot.profile?.image
+    ) {
+      const imageInput = imageJobInput(this, run.snapshot);
+      if (imageInput.imageCatalog.entries.length) {
+        const jobId = randomUUID();
+        const time = now();
+        this.db
+          .prepare(
+            "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,created_at,updated_at) VALUES(?,?,?,?,'image','queued',?,?,?)"
+          )
+          .run(
+            jobId,
+            source.chatId,
+            source.id,
+            source.hash,
+            json({
+              ...imageInput,
+              imageTarget: { mode: 'original', textHash: source.hash },
+            }),
+            time,
+            time
+          );
+        this.event(source.chatId, 'job.queued', jobId);
+      }
     }
     if (
       !run.snapshot.packageStart &&
@@ -831,14 +811,6 @@ export class Store {
   requestTranslation(id: string, validate?: (id: string) => void): Job {
     return requestTranslation(this, id, false, validate);
   }
-  requestStatus(
-    id: string,
-    expectedSourceHash: string,
-    expectedJobId: string | null,
-    validate?: (id: string) => void
-  ): Job {
-    return requestStatus(this, id, expectedSourceHash, expectedJobId, validate);
-  }
   job(id: string, view: 'execution' | 'reader' = 'execution'): Job {
     const row = this.db
       .prepare(
@@ -915,11 +887,14 @@ export class Store {
   queuedJobs(): string[] {
     return (
       this.db
-        .prepare("SELECT id FROM jobs WHERE status='queued' ORDER BY created_at,id")
+        .prepare(
+          "SELECT id FROM jobs WHERE status='queued' AND kind!='status' ORDER BY created_at,id"
+        )
         .all() as Row[]
     ).map((row) => row.id);
   }
   claimJob(id: string, owner: string, input: unknown): Job | null {
+    if (this.job(id).kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
     return this.transaction(() => {
       const pending = this.job(id);
       if (pending.kind === 'image') imageTargetSource(this, pending, true);
@@ -965,19 +940,11 @@ export class Store {
   }
   retryJob(id: string, validate?: (id: string) => void): Job {
     const job = this.job(id);
+    if (job.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
     if (job.kind === 'translation')
       return requestTranslation(this, job.sourceRevision, true, validate);
     return this.transaction(() => {
       const job = this.job(id);
-      if (job.kind === 'status') {
-        const latest = this.db
-          .prepare(
-            "SELECT id FROM jobs WHERE source_revision=? AND kind='status' ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1"
-          )
-          .get(job.sourceRevision) as { id: string } | undefined;
-        if (latest?.id !== id)
-          throw new HttpError(409, 'Status job was replaced; refresh before retrying');
-      }
       if (job.kind === 'image') {
         imageTargetSource(this, job, true);
         const mode = job.imageTarget?.mode ?? 'original';
@@ -1084,6 +1051,12 @@ export class Store {
         this.story.finishCommandInTransaction(run.id, 'failed');
         this.event(run.chatId, 'run.interrupted', run.id);
       }
+      // Retired commentary jobs retain their receipts but can never resume provider work.
+      this.db
+        .prepare(
+          "UPDATE jobs SET status='interrupted',generation=generation+1,owner=NULL,error='SCENE_COMMENTARY_RETIRED',updated_at=? WHERE kind='status' AND status IN ('queued','running')"
+        )
+        .run(now());
       for (const row of this.db
         .prepare("SELECT id,source_revision,kind FROM jobs WHERE status='running'")
         .all() as Row[]) {
@@ -1092,7 +1065,7 @@ export class Store {
           readRunSnapshot(this, source.runId),
           this.job(row.id).input
         );
-        const live = !!snapshot.profile?.models[row.kind as 'translation' | 'status' | 'image'];
+        const live = !!snapshot.profile?.models[row.kind as 'translation' | 'image'];
         this.db
           .prepare('UPDATE jobs SET status=?,owner=NULL,error=?,updated_at=? WHERE id=?')
           .run(

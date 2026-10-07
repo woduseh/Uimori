@@ -57,12 +57,12 @@ async function run(store: Store, chatId: string, finish = true) {
   const run = await prepareNativeFixtureRun(store, created.run);
   if (!finish) return { run, source: null };
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    'Synthetic scene.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    { ...run.snapshot.settings, status: false }
-  );
+  const source = store.completeRun(run.id, 'Synthetic scene.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   return { run, source };
 }
 

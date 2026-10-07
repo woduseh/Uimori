@@ -128,9 +128,7 @@ export function encodeAnthropic(request: ProviderRequest): {
   if (
     !nonempty(request.modelId) ||
     request.modelId.length > 200 ||
-    !['main', 'translation', 'status', 'image', 'script', 'context', 'helper', 'title'].includes(
-      request.role
-    )
+    !['main', 'translation', 'image', 'script', 'context', 'helper', 'title'].includes(request.role)
   )
     reject('INVALID_ANTHROPIC_REQUEST');
   const generation = request.generation;

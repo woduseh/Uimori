@@ -14,7 +14,7 @@ const attention = (status: string) =>
 const names: Record<string, string> = {
   translation: '번역',
   image: '이미지',
-  status: '장면 해설',
+  status: '이전 보조 작업',
   illustration: '삽화',
 };
 
@@ -69,7 +69,11 @@ function TurnActivityContent({
     ...new Map(
       jobs
         .filter(
-          (job) => source && job.sourceRevision === source.id && job.sourceHash === source.hash
+          (job) =>
+            job.kind !== 'status' &&
+            source &&
+            job.sourceRevision === source.id &&
+            job.sourceHash === source.hash
         )
         .sort((a, b) => (a.revision ?? 1) - (b.revision ?? 1))
         .map((job) => [
@@ -78,8 +82,10 @@ function TurnActivityContent({
         ])
     ).values(),
   ];
-  const related = activities.filter((item) =>
-    item.kind === 'main' ? item.id === run.id : !!source && item.sourceRevision === source.id
+  const related = activities.filter(
+    (item) =>
+      item.kind !== 'status' &&
+      (item.kind === 'main' ? item.id === run.id : !!source && item.sourceRevision === source.id)
   );
   // Illustrations attach to the response text; the reader strip owns their actions.
   const illustrations = allIllustrations.filter(
