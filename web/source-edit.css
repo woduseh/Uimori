@@ -26,6 +26,9 @@
   min-height: 140px;
 }
 
+.app-dialog.source-retry-dialog {
+  --dialog-size: 520px;
+}
 .app-dialog.source-info-dialog {
   min-width: 0;
   --dialog-size: 620px;

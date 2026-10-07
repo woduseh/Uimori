@@ -64,7 +64,8 @@ type ReaderProps = {
   onError: (error: string) => void;
   onNativeNotice?: (messages: string[]) => void;
   onFork: (sourceId: string) => Promise<void>;
-  onRetry?: () => Promise<void>;
+  onRetry?: (mode?: 'replace' | 'copy') => Promise<void>;
+  retryCanReplace?: boolean;
   onModelSettings?: () => void;
   retryDisabled?: boolean;
   onEditingChange?: (sourceId: string, editing: boolean) => void;
@@ -181,6 +182,7 @@ function SourceReaderContent({
   onNativeNotice,
   onFork,
   onRetry,
+  retryCanReplace = false,
   onModelSettings,
   retryDisabled,
   onEditingChange,
@@ -432,6 +434,7 @@ function SourceReaderContent({
     onError: setActionError,
   });
   const [illustrationDialog, setIllustrationDialog] = useState(false);
+  const [retryDialog, setRetryDialog] = useState(false);
   const [illustrationCount, setIllustrationCount] = useState(1);
   const illustrationRequestKey = useRef('');
   const status = latestStatus?.status === 'completed' ? latestStatus : undefined;
@@ -881,7 +884,10 @@ function SourceReaderContent({
                 type="button"
                 className="secondary"
                 disabled={!!editor || !!pending || retryDisabled}
-                onClick={() => void action('retry', onRetry)}
+                onClick={() => {
+                  if (retryCanReplace) setRetryDialog(true);
+                  else void action('retry', () => onRetry('copy'));
+                }}
               >
                 <RefreshIcon size={18} aria-hidden="true" />
                 현재 설정으로 다시 요청
@@ -996,6 +1002,45 @@ function SourceReaderContent({
               </button>
             )}
           </ActionMenu>
+          <Dialog
+            open={retryDialog}
+            onClose={() => setRetryDialog(false)}
+            title="현재 설정으로 다시 요청"
+            className="source-retry-dialog"
+          >
+            <p>새 응답을 어디에 남길까요?</p>
+            <p className="muted">
+              기존 응답 교체는 새 생성이 성공했을 때만 적용해요. 실패하거나 취소하면 기존 응답을
+              유지해요.
+            </p>
+            <div className="form-actions">
+              <button type="button" className="secondary" onClick={() => setRetryDialog(false)}>
+                취소
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={!!pending || retryDisabled}
+                onClick={() => {
+                  setRetryDialog(false);
+                  void action('retry', () => onRetry?.('copy') ?? Promise.resolve());
+                }}
+              >
+                <GitFork size={18} aria-hidden="true" />새 채팅에서 다시 요청
+              </button>
+              <button
+                type="button"
+                disabled={!!pending || retryDisabled || !retryCanReplace}
+                onClick={() => {
+                  setRetryDialog(false);
+                  void action('retry', () => onRetry?.('replace') ?? Promise.resolve());
+                }}
+              >
+                <RefreshIcon size={18} aria-hidden="true" />
+                기존 응답 교체
+              </button>
+            </div>
+          </Dialog>
           <Dialog
             open={illustrationDialog}
             onClose={() => {

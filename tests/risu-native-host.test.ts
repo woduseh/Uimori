@@ -250,6 +250,43 @@ test('native first-message button renders, checkpoints state, and survives sourc
   }
 });
 
+test('last response replacement runs native input and output from ancestor state without replaying the old response', async () => {
+  const { store, chatId } = await setup();
+  const opening = store.chat(chatId).headRevision!;
+  const old = await appendNativeSource(store, chatId, 'Old story');
+  const live = readChatVariables(store, chatId);
+  expect(live.values.finished).toBe('yes');
+  const retry = store.retryRun(old.runId, 'native-replace', undefined, undefined, 'replace').run;
+  expect(retry.parentRevision).toBe(opening);
+  expect(retry.snapshot.profile!.variableState!.revision).toBe(live.revision);
+  expect(retry.snapshot.profile!.variableState!.values.finished).toBeUndefined();
+  expect(store.chat(chatId).headRevision).toBe(old.id);
+  store.startRun(retry.id);
+  const prepared = await prepareNativeRisuRun(retry.snapshot);
+  expect(prepared.nativeRisuExecution!.beforeVariableRevision).toBe(live.revision);
+  expect(
+    prepared.nativeRisuExecution!.messages.some(
+      (message) => message.role === 'char' && message.data === old.text
+    )
+  ).toBe(false);
+  const output = await prepareNativeRisuOutput(
+    compileSnapshotPrompt(prepared),
+    'Replacement story'
+  );
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(output), retry.id);
+  const saved = store.completeRun(
+    retry.id,
+    output.nativeRisuExecution!.output!.text,
+    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    retry.snapshot.settings
+  );
+  expect(saved.parentRevision).toBe(opening);
+  expect(saved.text).toBe('Replacement story OUTPUT');
+  expect(readChatVariables(store, chatId).revision).toBe(live.revision + 1);
+  expect(readChatVariables(store, chatId).values.finished).toBe('yes');
+  expect(store.source(old.id).text).toBe('Old story OUTPUT');
+});
+
 test('native choices feed the next prompt and output variables commit with the source', async () => {
   const { store, chatId } = await setup();
   const first = store.chat(chatId).headRevision!;
