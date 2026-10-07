@@ -339,7 +339,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
           </button>
         </div>
         <div hidden={showJson}>
-          <div className="chat-variable-rows">
+          <div className="chat-variable-rows settings-group-body">
             {visibleKeys.map((key) => {
               const overridden = Object.hasOwn(overrides ?? {}, key);
               return (

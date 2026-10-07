@@ -141,9 +141,9 @@ export function CodexAgentSettings({
     }
   })();
   return (
-    <section className="settings-section codex-agent-settings" aria-label="Codex 에이전트 연결">
+    <section className="codex-agent-settings" aria-label="Codex 에이전트 연결">
       <div className="codex-agent-heading">
-        <h3>Codex</h3>
+        <p className="muted">Uimori 서버에서 사용하는 ChatGPT 구독 연결</p>
         <IconButton
           icon={RefreshIcon}
           label="Codex 상태 다시 확인"
@@ -153,7 +153,6 @@ export function CodexAgentSettings({
           onClick={() => setRefresh((value) => value + 1)}
         />
       </div>
-      <p className="muted">Uimori 서버에서 사용하는 ChatGPT 구독 연결</p>
       {!status ? (
         <p role="status">{error ? '상태 확인 실패' : '상태 확인 중…'}</p>
       ) : (
@@ -266,6 +265,22 @@ export function CodexAgentSettings({
                 <p className="codex-limit-unavailable muted">
                   연결은 정상이에요. 현재 사용량 정보는 제공되지 않아요.
                 </p>
+              )}
+              {status.credits && (
+                <div className="codex-limit-row codex-credit-row">
+                  <div className="codex-limit-heading">
+                    <strong>사용 가능한 크레딧</strong>
+                    <span>
+                      {status.credits.unlimited
+                        ? '무제한'
+                        : status.credits.balance !== null
+                          ? `${status.credits.balance.toLocaleString('ko-KR', { maximumFractionDigits: 8 })} 크레딧`
+                          : status.credits.hasCredits
+                            ? '사용 가능'
+                            : '없음'}
+                    </span>
+                  </div>
+                </div>
               )}
             </section>
           )}

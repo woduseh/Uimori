@@ -5,6 +5,9 @@
   border-top: 1px solid var(--border);
   padding-top: 20px;
 }
+.context-content {
+  display: contents;
+}
 .context-heading {
   display: flex;
   align-items: center;
@@ -13,7 +16,8 @@
   gap: 12px;
 }
 .context-panel .context-heading h4,
-.context-panel > p {
+.context-panel > p,
+.context-content > p {
   margin: 0;
 }
 .context-text {

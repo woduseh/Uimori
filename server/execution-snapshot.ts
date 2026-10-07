@@ -11,6 +11,7 @@ export function settleSnapshot(snapshot: RunSnapshot): RunSnapshot {
     displayModelTitle: snapshot.profile?.models.main?.title ?? snapshot.displayModelTitle,
     chatId: snapshot.chatId,
     parentRevision: snapshot.parentRevision,
+    ...(snapshot.replacement ? { replacement: snapshot.replacement } : {}),
     request: snapshot.request,
     settingsRevision: snapshot.settingsRevision,
     settings: snapshot.settings,

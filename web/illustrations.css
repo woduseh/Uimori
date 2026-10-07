@@ -115,12 +115,33 @@
   max-width: none;
   min-width: 0;
 }
-/* The neighbouring cell stacks a caption over its select, so centring leaves the switch floating
-   between the two. Sit at the end of the row to share the select's baseline. */
-.illustration-settings label.check {
-  align-self: end;
-  min-height: var(--control-h);
-  margin: 0;
+.illustration-environment-fields {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.illustration-environment-options {
+  min-width: 0;
+}
+.illustration-environment .settings-row-control :is(input, select) {
+  width: min(100%, 340px);
+}
+.illustration-environment .settings-row-control input[type="number"] {
+  width: 120px;
+}
+.illustration-environment .settings-row-control > small {
+  max-width: 340px;
+}
+.illustration-environment .illustration-test {
+  padding-bottom: 14px;
+}
+.illustration-environment .illustration-test + .settings-row {
+  border-top: 1px solid var(--line);
+}
+.illustration-environment .illustration-environment-disclosure {
+  border-top: 0;
 }
 .illustration-settings details p + p {
   margin-top: 8px;

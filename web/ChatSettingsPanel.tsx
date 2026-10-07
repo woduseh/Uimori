@@ -16,6 +16,7 @@ import { useSettingsHistory } from './useSettingsHistory.js';
 import type { StoryState } from './useStory.js';
 import { BackIcon, BotIcon, PromptIcon, LoreIcon, ImagesIcon, BehaviorIcon } from './ui-icons.js';
 import './chat-settings.css';
+import './settings-layout.css';
 
 const saveSections = ['story', 'profile', 'image', 'reference', 'runtime'] as const;
 

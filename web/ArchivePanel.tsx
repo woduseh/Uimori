@@ -51,57 +51,59 @@ export function ArchivePanel({
       aria-label="백업과 가져오기"
     >
       {!expanded && <summary>내보내기와 복원</summary>}
-      <section className="settings-card archive-management-card" aria-label="백업과 복원">
-        <header className="archive-card-heading">
+      <section className="settings-group" aria-label="백업과 복원">
+        <header className="settings-group-heading archive-card-heading">
           <h3>백업 · 복원</h3>
         </header>
-        <div className="archive-action-row">
-          <div>
-            <strong>작업실 전체 백업</strong>
-            <p className="muted">
-              설정·원고·이미지를 저장해요. API 키가 포함된 개인 보관용 파일이에요.
-            </p>
+        <div className="settings-group-body archive-management-card">
+          <div className="archive-action-row settings-row">
+            <div className="settings-row-copy">
+              <strong>작업실 전체 백업</strong>
+              <p className="muted">
+                설정·원고·이미지를 저장해요. API 키가 포함된 개인 보관용 파일이에요.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError('');
+                onError('');
+                try {
+                  const response = await fetch('/api/backup');
+                  if (!response.ok) throw new Error(`백업을 만들지 못했어요. (${response.status})`);
+                  const url = URL.createObjectURL(await response.blob());
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'uimori-backup.sqlite';
+                  link.click();
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                } catch (caught) {
+                  setError((caught as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <DownloadIcon size={18} aria-hidden="true" />
+              {busy ? '백업 준비 중…' : '백업 다운로드'}
+            </button>
           </div>
-          <button
-            type="button"
-            className="secondary"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              setError('');
-              onError('');
-              try {
-                const response = await fetch('/api/backup');
-                if (!response.ok) throw new Error(`백업을 만들지 못했어요. (${response.status})`);
-                const url = URL.createObjectURL(await response.blob());
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = 'uimori-backup.sqlite';
-                link.click();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              } catch (caught) {
-                setError((caught as Error).message);
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <DownloadIcon size={18} aria-hidden="true" />
-            {busy ? '백업 준비 중…' : '백업 다운로드'}
-          </button>
+          <details className="archive-restore-details">
+            <summary>전체 복원 방법</summary>
+            <p className="muted">
+              서버를 종료하고 백업 DB를 별도 경로에 둔 뒤 UIMORI_DB에 지정해 다시 시작해요. 복원을
+              확인할 때까지 기존 DB는 보관해 주세요.
+            </p>
+          </details>
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
         </div>
-        <details className="archive-restore-details">
-          <summary>전체 복원 방법</summary>
-          <p className="muted">
-            서버를 종료하고 백업 DB를 별도 경로에 둔 뒤 UIMORI_DB에 지정해 다시 시작해요. 복원을
-            확인할 때까지 기존 DB는 보관해 주세요.
-          </p>
-        </details>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
       </section>
       <BackupSettings onDirtyChange={setBackupDirty} onSaveHandlerChange={registerBackupSave} />
       <ResourceBundleImport onImported={onImported} onDirtyChange={setResourceDirty} />

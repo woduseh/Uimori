@@ -136,14 +136,19 @@ export function ThemeBackgroundSettings({
       {scope !== 'global' && !selected && (
         <p className="theme-inherited">이 범위의 배경은 상위 설정을 따라요.</p>
       )}
-      <div
-        className="theme-background-preview"
-        aria-label="배경 이미지 미리보기"
-        style={backgroundStyle(draft)}
-      />
+      {draft.imageHash && (
+        <div
+          className="theme-background-preview"
+          aria-label="배경 이미지 미리보기"
+          style={backgroundStyle(draft)}
+        />
+      )}
       <fieldset className="theme-background-controls" disabled={disabled || busy || state.loading}>
-        <label>
-          배경 이미지 선택
+        <label className="settings-row theme-background-file">
+          <span className="settings-row-copy">
+            <strong>배경 이미지 선택</strong>
+            {!draft.imageHash && <small>선택한 배경 이미지가 없어요.</small>}
+          </span>
           <input
             type="file"
             aria-label="배경 이미지 선택"
@@ -155,39 +160,41 @@ export function ThemeBackgroundSettings({
             }}
           />
         </label>
-        <label>
-          배경 흐림 · {draft.blur}px
-          <input
-            aria-label="배경 흐림"
-            type="range"
-            min="0"
-            max="30"
-            value={draft.blur}
-            onChange={(event) => setDraft({ ...draft, blur: Number(event.target.value) })}
-          />
-        </label>
-        <label>
-          밝은 모드 흰 덮개 · {draft.lightOverlay}%
-          <input
-            aria-label="밝은 모드 배경 덮개"
-            type="range"
-            min="0"
-            max="100"
-            value={draft.lightOverlay}
-            onChange={(event) => setDraft({ ...draft, lightOverlay: Number(event.target.value) })}
-          />
-        </label>
-        <label>
-          어두운 모드 검은 덮개 · {draft.darkOverlay}%
-          <input
-            aria-label="어두운 모드 배경 덮개"
-            type="range"
-            min="0"
-            max="100"
-            value={draft.darkOverlay}
-            onChange={(event) => setDraft({ ...draft, darkOverlay: Number(event.target.value) })}
-          />
-        </label>
+        <div className="theme-background-sliders" role="group" aria-label="배경 효과">
+          <label>
+            배경 흐림 · {draft.blur}px
+            <input
+              aria-label="배경 흐림"
+              type="range"
+              min="0"
+              max="30"
+              value={draft.blur}
+              onChange={(event) => setDraft({ ...draft, blur: Number(event.target.value) })}
+            />
+          </label>
+          <label>
+            밝은 모드 흰 덮개 · {draft.lightOverlay}%
+            <input
+              aria-label="밝은 모드 배경 덮개"
+              type="range"
+              min="0"
+              max="100"
+              value={draft.lightOverlay}
+              onChange={(event) => setDraft({ ...draft, lightOverlay: Number(event.target.value) })}
+            />
+          </label>
+          <label>
+            어두운 모드 검은 덮개 · {draft.darkOverlay}%
+            <input
+              aria-label="어두운 모드 배경 덮개"
+              type="range"
+              min="0"
+              max="100"
+              value={draft.darkOverlay}
+              onChange={(event) => setDraft({ ...draft, darkOverlay: Number(event.target.value) })}
+            />
+          </label>
+        </div>
       </fieldset>
       <div className="theme-toolbar theme-background-actions">
         <SaveButton

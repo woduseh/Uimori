@@ -10,6 +10,7 @@ import {
 
 type LoreIdentity = {
   id: string;
+  text?: string;
   title?: string;
   kind?: string;
   sourceKind?: string;
@@ -147,9 +148,12 @@ export function requestLore(
   if (request.role === 'main')
     for (const retained of snapshot.loreContext?.entries ?? []) {
       const { lastUsed: _lastUsed, ...sent } = retained;
-      add({ id: retained.id, title: retained.title, kind: 'lore' }, 'retained', () =>
-        contains(sent) ? 'excerpt' : 'unverified'
-      );
+      add({ id: retained.id, title: retained.title, kind: 'lore' }, 'retained', () => {
+        if (!contains(sent)) return 'unverified';
+        return retained.start === 0 && retained.text === resources.get(retained.id)?.text
+          ? 'full'
+          : 'excerpt';
+      });
     }
   const source = object(request.input.source);
   const events = [

@@ -228,7 +228,11 @@ export function createRunExecutor({
             if (controller.signal.aborted || readRunStatus(store, id) !== 'running')
               throw new Error('CONTEXT_CANCELLED');
             if (
-              store.chat(run.chatId).headRevision !== run.parentRevision ||
+              store.chat(run.chatId).headRevision !==
+                (run.snapshot.replacement?.sourceRevision ?? run.parentRevision) ||
+              (run.snapshot.replacement &&
+                store.source(run.snapshot.replacement.sourceRevision).hash !==
+                  run.snapshot.replacement.sourceHash) ||
               JSON.stringify(contextSourceRefs(run.snapshot)) !==
                 JSON.stringify(
                   contextSourceRefs({

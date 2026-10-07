@@ -7,7 +7,7 @@ import { HttpError, text } from './request-validation.js';
 import { forkChat } from './chat-fork.js';
 import type { Store, Run } from './store.js';
 
-/** Retries use current resources. Rewriting existing prose starts an independent chat copy. */
+/** Current-resource retry; explicit last-response replacement defers head changes until commit. */
 export function retryRun(
   store: Store,
   runId: string,
@@ -17,6 +17,7 @@ export function retryRun(
     title?: string;
     alwaysCopy?: boolean;
     judgmentOnly?: boolean;
+    mode?: 'replace' | 'copy';
     validate?: (snapshot: RunSnapshot) => void;
   } = {}
 ): { run: Run; created: boolean } {
@@ -28,6 +29,7 @@ export function retryRun(
       title: options.title,
       alwaysCopy: !!options.alwaysCopy,
       judgmentOnly: !!options.judgmentOnly,
+      ...(options.mode ? { mode: options.mode } : {}),
     });
     const digest = createHash('sha256').update(command).digest('hex');
     const previous = readImportReceipt<{ runId: string }>(
@@ -43,11 +45,43 @@ export function retryRun(
     if (original.snapshot.packageStart?.mode === 'authored' || original.snapshot.nativeRisuAuthored)
       throw new HttpError(409, '작성된 시작문은 생성 요청이 아니에요. 새 장면을 요청해 주세요.');
     const originalChat = store.chat(original.chatId);
+    const replace =
+      options.mode === 'replace' ||
+      (options.mode !== 'copy' &&
+        !options.alwaysCopy &&
+        !original.sourceRevision &&
+        !!original.snapshot.replacement);
+    const replacement = replace
+      ? original.sourceRevision
+        ? store.source(original.sourceRevision)
+        : original.snapshot.replacement
+          ? store.source(original.snapshot.replacement.sourceRevision)
+          : null
+      : null;
+    if (
+      replace &&
+      (!replacement ||
+        (!original.snapshot.replacement && original.status !== 'completed') ||
+        originalChat.headRevision !== replacement.id ||
+        (!original.sourceRevision &&
+          original.snapshot.replacement &&
+          replacement.hash !== original.snapshot.replacement.sourceHash))
+    )
+      throw new HttpError(
+        409,
+        '마지막 완료 응답만 교체할 수 있어요. 이전 장면은 새 채팅에서 다시 요청해 주세요.'
+      );
     let run: Run;
     if (options.judgmentOnly) {
       if (!canRecoverMainJudgment(original))
         throw new HttpError(409, '보존된 본문의 판정 실패만 다시 판정할 수 있어요.');
-      if (originalChat.headRevision !== original.parentRevision)
+      if (
+        originalChat.headRevision !==
+          (original.snapshot.replacement?.sourceRevision ?? original.parentRevision) ||
+        (original.snapshot.replacement &&
+          store.source(original.snapshot.replacement.sourceRevision).hash !==
+            original.snapshot.replacement.sourceHash)
+      )
         throw new HttpError(409, '이야기가 이미 진행됐어요. 현재 내용에서 새 요청을 보내 주세요.');
       const id = randomUUID(),
         at = new Date().toISOString();
@@ -70,18 +104,20 @@ export function retryRun(
       run = store.run(id);
     } else {
       const copied =
-        options.alwaysCopy ||
-        !!original.sourceRevision ||
-        originalChat.headRevision !== original.parentRevision;
+        !replacement &&
+        (options.mode === 'copy' ||
+          options.alwaysCopy ||
+          !!original.sourceRevision ||
+          originalChat.headRevision !== original.parentRevision);
       const chat = copied
         ? forkChat(store, original.chatId, {
             fromRevision: original.parentRevision,
-            title:
-              options.title ?? `${store.chat(original.chatId).title} · 새 이야기`.slice(0, 200),
+            ...(options.title !== undefined ? { title: options.title } : {}),
             idempotencyKey: createHash('sha256').update(requestKey).digest('hex'),
           })
         : store.chat(original.chatId);
-      const profile = store.product.snapshot(chat.id);
+      const parentRevision = replacement ? replacement.parentRevision : chat.headRevision;
+      const profile = store.product.snapshot(chat.id, 'main', parentRevision);
       const request =
         options.request === undefined
           ? original.request
@@ -101,10 +137,13 @@ export function retryRun(
           const snapshot: RunSnapshot = {
             chatId: chat.id,
             request,
-            parentRevision: current.headRevision,
+            parentRevision,
+            ...(replacement
+              ? { replacement: { sourceRevision: replacement.id, sourceHash: replacement.hash } }
+              : {}),
             settingsRevision: current.settingsRevision,
             settings: current.settings,
-            history: store.history(current.headRevision),
+            history: store.history(parentRevision),
             profile,
             resources: store.product.resources(chat.id, profile),
           };

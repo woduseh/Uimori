@@ -22,13 +22,18 @@
 }
 .backup-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 0;
 }
 .backup-fields label {
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(140px, 44%);
+  align-items: center;
+  gap: 16px;
+  padding-block: 14px;
+  border-top: 1px solid var(--line);
 }
-.backup-fields label > small {
+.backup-fields label small {
   display: inline;
   color: var(--muted);
   font-weight: 400;
@@ -97,7 +102,8 @@
   font-size: 0.875rem;
 }
 @media (max-width: 480px) {
-  .backup-fields {
+  .backup-fields label {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 }

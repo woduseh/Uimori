@@ -434,7 +434,7 @@ export class Store {
       .run(
         id,
         chatId,
-        command.expectedRevision,
+        frozen.replacement ? frozen.parentRevision : command.expectedRevision,
         status,
         command.request,
         json(frozen),
@@ -451,9 +451,10 @@ export class Store {
     runId: string,
     key: string,
     validate?: (snapshot: RunSnapshot) => void,
-    editedRequest?: string
+    editedRequest?: string,
+    mode?: 'replace' | 'copy'
   ) {
-    return retryPersonalRun(this, runId, key, { request: editedRequest, validate });
+    return retryPersonalRun(this, runId, key, { request: editedRequest, validate, mode });
   }
   candidate(
     runId: string,
@@ -610,7 +611,11 @@ export class Store {
     const run = this.run(id);
     if (run.status !== 'running') throw new HttpError(409, 'Run no longer owns completion');
     const chat = this.chat(run.chatId);
-    if (chat.headRevision !== run.parentRevision)
+    const replacement = run.snapshot.replacement;
+    if (
+      chat.headRevision !== (replacement?.sourceRevision ?? run.parentRevision) ||
+      (replacement && this.source(replacement.sourceRevision).hash !== replacement.sourceHash)
+    )
       throw new HttpError(409, 'Source revision changed');
     const source: Source = {
       id: randomUUID(),
@@ -622,12 +627,17 @@ export class Store {
       createdAt: now(),
     };
     const native = run.snapshot.nativeRisuExecution;
-    if (native)
+    if (native || replacement)
       writeChatVariablesInTransaction(this, run.chatId, {
-        expectedRevision: native.beforeVariableRevision,
+        expectedRevision:
+          native?.beforeVariableRevision ?? run.snapshot.profile?.variableState?.revision ?? 0,
         expectedSourceHash: chat.headRevision ? this.source(chat.headRevision).hash : null,
         idempotencyKey: `native-run:${run.id}`,
-        values: native.output?.variables ?? native.variables,
+        values:
+          native?.output?.variables ??
+          native?.variables ??
+          run.snapshot.profile?.variableState?.values ??
+          {},
       });
     this.db
       .prepare('INSERT INTO sources VALUES(?,?,?,?,?,?,?)')
@@ -647,6 +657,35 @@ export class Store {
       .run(source.id, json(usage), now(), id);
     controls?.fail('source-transaction');
     this.db.prepare('UPDATE chats SET head_revision=? WHERE id=?').run(source.id, source.chatId);
+    if (replacement) {
+      this.db
+        .prepare(`UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL
+        WHERE chat_id=? AND EXISTS (SELECT 1 FROM context_checkpoints c
+          WHERE c.id=context_heads.checkpoint_id AND (
+            EXISTS (SELECT 1 FROM json_each(c.plan,'$.compacted') item WHERE json_extract(item.value,'$.revision')=?)
+            OR EXISTS (SELECT 1 FROM json_each(c.plan,'$.recentSourceRevisions') item WHERE item.value=?)
+          ))`)
+        .run(source.chatId, replacement.sourceRevision, replacement.sourceRevision);
+      // Revoke only unfinished work for the displaced source. Completed artifacts remain history.
+      for (const table of ['jobs', 'illustration_jobs']) {
+        const cancelled = this.db
+          .prepare(
+            `SELECT id FROM ${table} WHERE source_revision=? AND status IN ('queued','running')`
+          )
+          .all(replacement.sourceRevision);
+        this.db
+          .prepare(
+            `UPDATE ${table} SET status='cancelled',generation=generation+1,owner=NULL,updated_at=? WHERE source_revision=? AND status IN ('queued','running')`
+          )
+          .run(now(), replacement.sourceRevision);
+        for (const job of cancelled)
+          this.event(
+            source.chatId,
+            table === 'jobs' ? 'job.cancelled' : 'illustration.cancelled',
+            String(job.id)
+          );
+      }
+    }
     for (const kind of ['status', 'image'] as const) {
       if (
         run.snapshot.packageStart?.mode === 'authored' ||

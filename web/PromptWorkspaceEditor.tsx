@@ -160,65 +160,72 @@ export function PromptWorkspaceEditor({
         <p className="muted">변경사항은 자동 저장하며 모든 채팅의 다음 요청부터 사용해요.</p>
         {showRecovery && <ResourceEditorStatus value={shared} hideSyncError />}
         <div className="prompt-editor-fields">
-          <label>
-            역할
-            <select
-              aria-label="현재 프롬프트 역할"
-              value={role}
-              disabled={busy || dirty}
-              onChange={(event) => {
-                setRole(event.target.value as PromptRole);
-                setSelectedCombo('');
-              }}
-            >
-              <option value="main">작문</option>
-              <option value="translation">번역</option>
-            </select>
-          </label>
-          <label>
-            프롬프트
-            <select
-              aria-label="현재 프롬프트 프리셋"
-              value={preset?.id ?? ''}
-              disabled={busy || dirty || conflict}
-              onChange={(event) => {
-                if (event.target.value) void applyPreset(event.target.value);
-              }}
-            >
-              {!preset && <option value="">{current.title}</option>}
-              {library.promptPresets
-                ?.filter((item) => item.role === role)
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.id === current.presetId ? current.title : item.title}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <div className="prompt-current-links">
-            {preset && (
-              <button
-                type="button"
-                className="ghost"
-                disabled={busy || dirty || conflict}
-                onClick={() => void applyPreset(preset.id)}
-              >
-                최신 버전 적용
-              </button>
-            )}
-            {onEditPrompt && (
-              <button
-                type="button"
-                className="ghost"
-                disabled={busy || dirty || navigationDisabled}
-                onClick={() => onEditPrompt(preset?.id)}
-              >
-                <ExternalLinkIcon size={16} aria-hidden="true" /> 프롬프트 편집
-              </button>
-            )}
-          </div>
-          <details className="pc-composer-fold">
-            <summary>
+          <section className="settings-group">
+            <div className="settings-group-heading">
+              <h4>프롬프트 선택</h4>
+            </div>
+            <div className="settings-group-body">
+              <label className="settings-row">
+                <span className="settings-row-copy">역할</span>
+                <select
+                  aria-label="현재 프롬프트 역할"
+                  value={role}
+                  disabled={busy || dirty}
+                  onChange={(event) => {
+                    setRole(event.target.value as PromptRole);
+                    setSelectedCombo('');
+                  }}
+                >
+                  <option value="main">작문</option>
+                  <option value="translation">번역</option>
+                </select>
+              </label>
+              <label className="settings-row">
+                <span className="settings-row-copy">프롬프트</span>
+                <select
+                  aria-label="현재 프롬프트 프리셋"
+                  value={preset?.id ?? ''}
+                  disabled={busy || dirty || conflict}
+                  onChange={(event) => {
+                    if (event.target.value) void applyPreset(event.target.value);
+                  }}
+                >
+                  {!preset && <option value="">{current.title}</option>}
+                  {library.promptPresets
+                    ?.filter((item) => item.role === role)
+                    .map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.id === current.presetId ? current.title : item.title}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <div className="prompt-current-links">
+                {preset && (
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={busy || dirty || conflict}
+                    onClick={() => void applyPreset(preset.id)}
+                  >
+                    최신 버전 적용
+                  </button>
+                )}
+                {onEditPrompt && (
+                  <button
+                    type="button"
+                    className="ghost"
+                    disabled={busy || dirty || navigationDisabled}
+                    onClick={() => onEditPrompt(preset?.id)}
+                  >
+                    <ExternalLinkIcon size={16} aria-hidden="true" /> 프롬프트 편집
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+          <details className="pc-composer-fold settings-group">
+            <summary className="settings-group-heading">
               <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
               <strong>창작 옵션</strong>
               <small>
@@ -230,7 +237,7 @@ export function PromptWorkspaceEditor({
               </small>
             </summary>
             {promptControls(current.program).length || combinations.length ? (
-              <div className="prompt-current-options">
+              <div className="settings-group-body prompt-current-options">
                 <div className="prompt-combination-toolbar">
                   <label>
                     옵션 조합
@@ -306,34 +313,38 @@ export function PromptWorkspaceEditor({
             )}
           </details>
           {role === 'main' && (
-            <label className="toggle-row full">
-              <span className="toggle-row-text">
-                <span>에이전트 협업</span>
-                {!current.program.collaboration?.agents.length && (
-                  <small>프롬프트 편집에서 협업을 구성해 주세요.</small>
-                )}
-              </span>
-              <Switch
-                aria-label="협업 사용"
-                checked={current.program.collaboration?.enabled ?? false}
-                disabled={!current.program.collaboration?.agents.length || busy || conflict}
-                onChange={(event) =>
-                  edit((draft) => ({
-                    ...draft,
-                    main: {
-                      ...draft.main,
-                      program: {
-                        ...draft.main.program,
-                        collaboration: {
-                          ...draft.main.program.collaboration!,
-                          enabled: event.target.checked,
+            <div className="settings-group-body">
+              <label className="settings-row settings-row-toggle full">
+                <span className="settings-row-copy">
+                  <span>에이전트 협업</span>
+                  {!current.program.collaboration?.agents.length && (
+                    <small>프롬프트 편집에서 협업을 구성해 주세요.</small>
+                  )}
+                </span>
+                <span className="settings-row-control">
+                  <Switch
+                    aria-label="협업 사용"
+                    checked={current.program.collaboration?.enabled ?? false}
+                    disabled={!current.program.collaboration?.agents.length || busy || conflict}
+                    onChange={(event) =>
+                      edit((draft) => ({
+                        ...draft,
+                        main: {
+                          ...draft.main,
+                          program: {
+                            ...draft.main.program,
+                            collaboration: {
+                              ...draft.main.program.collaboration!,
+                              enabled: event.target.checked,
+                            },
+                          },
                         },
-                      },
-                    },
-                  }))
-                }
-              />
-            </label>
+                      }))
+                    }
+                  />
+                </span>
+              </label>
+            </div>
           )}
         </div>
         {(conflict || saveError) && (

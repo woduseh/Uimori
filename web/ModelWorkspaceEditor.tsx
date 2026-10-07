@@ -1,5 +1,5 @@
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
@@ -24,6 +24,7 @@ export function ModelWorkspaceEditor({
   onEditModel: (id: string) => void;
 }) {
   const { workspace, error, refresh } = usePromptWorkspace();
+  const id = useId();
   const [draft, setDraft] = useState<ModelWorkspace | null>(null);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -123,15 +124,27 @@ export function ModelWorkspaceEditor({
   const selector = (
     label: string,
     selected: ModelRef | null,
-    onChange: (ref: ModelRef | null) => void
+    onChange: (ref: ModelRef | null) => void,
+    description?: string
   ) => {
     const model = library.models.find((item) => item.id === selected?.id);
     const displayLabel = label === '원문 모델' ? '본문 모델' : label;
+    const fieldId = `${id}-${label.replaceAll(' ', '-')}`;
     return (
-      <div className="model-role-setting">
-        <label>
-          {displayLabel}
+      <div className="settings-row model-role-setting">
+        <div className="settings-row-copy">
+          <label htmlFor={fieldId}>{displayLabel}</label>
+          {description && <small>{description}</small>}
+          {selected && (!model || !canSelect(model)) && (
+            <small role="status">
+              이 모델을 사용할 수 없어 새 작업을 시작할 수 없어요. 모델 프리셋과 프로바이더를
+              확인하거나 다른 모델을 선택해 주세요.
+            </small>
+          )}
+        </div>
+        <div className="settings-row-control">
           <select
+            id={fieldId}
             aria-label={label}
             value={selected?.id ?? ''}
             onChange={(event) => onChange(event.target.value ? { id: event.target.value } : null)}
@@ -152,21 +165,15 @@ export function ModelWorkspaceEditor({
                 </option>
               ))}
           </select>
-        </label>
-        {model && (
-          <IconButton
-            icon={EditIcon}
-            label={`${displayLabel}의 선택 모델 편집`}
-            className="secondary"
-            onClick={() => onEditModel(model.id)}
-          />
-        )}
-        {selected && (!model || !canSelect(model)) && (
-          <small role="status">
-            이 모델을 사용할 수 없어 새 작업을 시작할 수 없어요. 모델 프리셋과 프로바이더를
-            확인하거나 다른 모델을 선택해 주세요.
-          </small>
-        )}
+          {model && (
+            <IconButton
+              icon={EditIcon}
+              label={`${displayLabel}의 선택 모델 편집`}
+              className="secondary"
+              onClick={() => onEditModel(model.id)}
+            />
+          )}
+        </div>
       </div>
     );
   };
@@ -180,81 +187,71 @@ export function ModelWorkspaceEditor({
     Number(draft.mainJudgmentEnabled === true) +
     Number(draft.translationPolicy.judgment.enabled !== false);
   return (
-    <section aria-label="역할별 모델 설정" className="settings-section">
+    <section aria-label="역할별 모델 설정" className="settings-section model-workspace-settings">
       <p>
         모든 채팅의 이후 요청에 적용해요. 진행 중인 작업과 과거 실행·결과의 설정은 바뀌지 않아요.
       </p>
-      <fieldset disabled={busy} className="control-grid">
-        <fieldset className="control-grid full model-primary-settings">
-          <legend>핵심 작업</legend>
-          {selector('원문 모델', draft.routes.main, (ref) =>
-            change({ ...draft, routes: { ...draft.routes, main: ref } })
-          )}
-          {selector('번역 모델', draft.routes.translation, (ref) =>
-            change({ ...draft, routes: { ...draft.routes, translation: ref } })
-          )}
+      <fieldset disabled={busy} className="control-grid model-workspace-controls">
+        <fieldset className="settings-group full model-primary-settings">
+          <legend className="settings-group-heading">핵심 작업</legend>
+          <div className="settings-group-body">
+            {selector('원문 모델', draft.routes.main, (ref) =>
+              change({ ...draft, routes: { ...draft.routes, main: ref } })
+            )}
+            {selector('번역 모델', draft.routes.translation, (ref) =>
+              change({ ...draft, routes: { ...draft.routes, translation: ref } })
+            )}
+          </div>
         </fieldset>
-        <details className="full model-secondary-settings">
-          <summary>
+        <details className="settings-group full model-secondary-settings">
+          <summary className="settings-group-heading">
             대화와 자료 지원
             <small>{configuredSummary([draft.helperModel, draft.contextModel])}</small>
           </summary>
-          <div className="control-grid">
-            <div>
-              {selector('도우미 모델', draft.helperModel ?? null, (ref) =>
-                change({ ...draft, helperModel: ref })
-              )}
-              <small>
-                작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.
-              </small>
-            </div>
-            <div>
-              {selector('문맥 요약 모델', draft.contextModel ?? null, (ref) =>
-                change({ ...draft, contextModel: ref })
-              )}
-              <small>
-                자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로
-                대체하지 않아요.
-              </small>
-            </div>
+          <div className="settings-group-body">
+            {selector(
+              '도우미 모델',
+              draft.helperModel ?? null,
+              (ref) => change({ ...draft, helperModel: ref }),
+              '작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.'
+            )}
+            {selector(
+              '문맥 요약 모델',
+              draft.contextModel ?? null,
+              (ref) => change({ ...draft, contextModel: ref }),
+              '자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지 않아요.'
+            )}
           </div>
         </details>
-        <details className="full model-secondary-settings">
-          <summary>
+        <details className="settings-group full model-secondary-settings">
+          <summary className="settings-group-heading">
             자동 작업
             <small>{configuredSummary([draft.routes.status, draft.titleModel])}</small>
           </summary>
-          <div className="control-grid">
-            <div>
-              {selector('장면 해설 모델', draft.routes.status, (ref) =>
-                change({ ...draft, routes: { ...draft.routes, status: ref } })
-              )}
-            </div>
-            <div>
-              {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
-                change({ ...draft, titleModel: ref })
-              )}
-            </div>
+          <div className="settings-group-body">
+            {selector('장면 해설 모델', draft.routes.status, (ref) =>
+              change({ ...draft, routes: { ...draft.routes, status: ref } })
+            )}
+            {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
+              change({ ...draft, titleModel: ref })
+            )}
           </div>
         </details>
-        <details className="full model-secondary-settings">
-          <summary>
+        <details className="settings-group full model-secondary-settings">
+          <summary className="settings-group-heading">
             확장 기능 <small>{draft.scriptModel ? '설정됨' : '미지정'}</small>
           </summary>
-          <div className="control-grid">
-            <div>
-              {selector('확장 호출 모델', draft.scriptModel ?? null, (ref) =>
-                change({ ...draft, scriptModel: ref })
-              )}
-              <small>
-                사용자가 허용한 패키지 코드의 추가 생성 요청에 사용해요. 미지정하면 추가 호출을
-                시작하지 않아요.
-              </small>
-            </div>
+          <div className="settings-group-body">
+            {selector(
+              '확장 호출 모델',
+              draft.scriptModel ?? null,
+              (ref) => change({ ...draft, scriptModel: ref }),
+              '사용자가 허용한 패키지 코드의 추가 생성 요청에 사용해요. 미지정하면 추가 호출을 시작하지 않아요.'
+            )}
           </div>
         </details>
-        <details className="full model-secondary-settings task-behavior-settings">
-          <summary>
+        <details className="settings-group full model-secondary-settings task-behavior-settings">
+          <summary className="settings-group-heading">
             작업 동작
             <small>
               번역{' '}
@@ -264,7 +261,7 @@ export function ModelWorkspaceEditor({
               회{' · '}거절 감지 {enabledJudgments}/2
             </small>
           </summary>
-          <div className="task-behavior-settings-body">
+          <div className="settings-group-body task-behavior-settings-body">
             <section aria-labelledby="translation-task-heading" className="task-behavior-section">
               <h4 id="translation-task-heading">번역 작업</h4>
               <label>

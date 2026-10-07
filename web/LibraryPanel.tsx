@@ -1056,7 +1056,7 @@ export function LibraryPanel({
                   />
                 </section>
               )}
-              {folder === 'all' && !query.trim() && folders.length > 0 && (
+              {folder === 'all' && !query.trim() && folders.length > 0 && filtered.length > 0 && (
                 <h2 className="library-section-title">미분류 {contentLabels[tab]}</h2>
               )}
               <div
@@ -1145,51 +1145,56 @@ export function LibraryPanel({
                     {!selecting && itemMenu(item)}
                   </article>
                 ))}
-                {filtered.length === 0 && (
-                  <div className="library-empty">
-                    <h2>
-                      {query
-                        ? '찾는 자료가 없어요'
-                        : folder !== 'all'
-                          ? '이 폴더는 비어 있어요'
-                          : folders.length > 0
-                            ? '미분류 자료가 없어요'
-                            : `새 ${contentLabels[tab]} 만들기`}
-                    </h2>
-                    {!query && (
-                      <p className="library-role-guide">{contentGuidance[tab].description}</p>
-                    )}
-                    <p>
-                      {query
-                        ? '다른 이름이나 설명으로 찾아보세요.'
-                        : folder !== 'all'
-                          ? '자료를 만들거나 다른 폴더의 자료를 옮겨 보세요.'
-                          : contentGuidance[tab].example}
-                    </p>
-                    <div className="library-empty-actions">
-                      {query && (
-                        <button type="button" className="secondary" onClick={() => setQuery('')}>
-                          검색 지우기
-                        </button>
-                      )}
-                      {folder !== 'all' && (
-                        <button
-                          type="button"
-                          className="secondary"
-                          onClick={() => changeFolder('all')}
-                        >
-                          전체 보기
-                        </button>
-                      )}
+                {filtered.length === 0 &&
+                  !(
+                    (folder === 'all' || folder === 'unclassified') &&
+                    !query.trim() &&
+                    categoryItems.length > 0
+                  ) && (
+                    <div className="library-empty">
+                      <h2>
+                        {query
+                          ? '찾는 자료가 없어요'
+                          : folder !== 'all'
+                            ? '이 폴더는 비어 있어요'
+                            : folders.length > 0
+                              ? '미분류 자료가 없어요'
+                              : `새 ${contentLabels[tab]} 만들기`}
+                      </h2>
                       {!query && (
-                        <button type="button" onClick={openNew}>
-                          <AddIcon size={20} aria-hidden="true" />
-                          {contentLabels[tab]} 만들기
-                        </button>
+                        <p className="library-role-guide">{contentGuidance[tab].description}</p>
                       )}
+                      <p>
+                        {query
+                          ? '다른 이름이나 설명으로 찾아보세요.'
+                          : folder !== 'all'
+                            ? '자료를 만들거나 다른 폴더의 자료를 옮겨 보세요.'
+                            : contentGuidance[tab].example}
+                      </p>
+                      <div className="library-empty-actions">
+                        {query && (
+                          <button type="button" className="secondary" onClick={() => setQuery('')}>
+                            검색 지우기
+                          </button>
+                        )}
+                        {folder !== 'all' && (
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={() => changeFolder('all')}
+                          >
+                            전체 보기
+                          </button>
+                        )}
+                        {!query && (
+                          <button type="button" onClick={openNew}>
+                            <AddIcon size={20} aria-hidden="true" />
+                            {contentLabels[tab]} 만들기
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             </div>
           </div>

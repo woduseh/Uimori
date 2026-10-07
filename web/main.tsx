@@ -646,121 +646,135 @@ function App() {
   function renderReadingSettings(onStartFocus?: () => void) {
     return (
       <div className="settings-stack reading-preferences">
-        <section className="settings-card reading-settings-group" aria-label="기본 보기">
-          <header className="reading-settings-group-heading">
+        <section className="settings-group reading-settings-group" aria-label="기본 보기">
+          <header className="settings-group-heading">
             <h4>기본 보기</h4>
           </header>
-          <label>
-            본문 글꼴
-            <select
-              aria-label="본문 글꼴"
-              value={font}
-              onChange={(event) => reading.changeLayout(() => setFont(event.target.value))}
-            >
-              <option value="sans">기본 고딕</option>
-              <option value="serif">명조</option>
-            </select>
-          </label>
-          <label>
-            본문 크기
-            <span className="reading-range-control">
-              <input
-                aria-label="본문 크기"
-                type="range"
-                min={9}
-                max={28}
-                step={1}
-                value={fontSize}
+          <div className="settings-group-body reading-settings-rows">
+            <label>
+              본문 글꼴
+              <select
+                aria-label="본문 글꼴"
+                value={font}
+                onChange={(event) => reading.changeLayout(() => setFont(event.target.value))}
+              >
+                <option value="sans">기본 고딕</option>
+                <option value="serif">명조</option>
+              </select>
+            </label>
+            <label>
+              본문 크기
+              <span className="reading-range-control">
+                <input
+                  aria-label="본문 크기"
+                  type="range"
+                  min={9}
+                  max={28}
+                  step={1}
+                  value={fontSize}
+                  onChange={(event) =>
+                    reading.changeLayout(() => setFontSize(Number(event.target.value)))
+                  }
+                />
+                <output>{fontSize}px</output>
+              </span>
+            </label>
+            <label>
+              본문 폭
+              <select
+                aria-label="본문 폭"
+                value={readingWidth}
                 onChange={(event) =>
-                  reading.changeLayout(() => setFontSize(Number(event.target.value)))
+                  reading.changeLayout(() => setReadingWidth(Number(event.target.value)))
                 }
-              />
-              <output>{fontSize}px</output>
-            </span>
-          </label>
-          <label>
-            본문 폭
-            <select
-              aria-label="본문 폭"
-              value={readingWidth}
-              onChange={(event) =>
-                reading.changeLayout(() => setReadingWidth(Number(event.target.value)))
-              }
-            >
-              <option value={760}>좁게</option>
-              <option value={880}>기본</option>
-              <option value={1040}>넓게</option>
-            </select>
-          </label>
-          <div className="reading-option-toggle">
-            <div>
-              <strong>채팅 네비게이터</strong>
-              <small>장면 이동 컨트롤을 표시해요. 집중 읽기에서는 항상 숨겨요.</small>
+              >
+                <option value={760}>좁게</option>
+                <option value={880}>기본</option>
+                <option value={1040}>넓게</option>
+              </select>
+            </label>
+            <div className="reading-option-toggle">
+              <div>
+                <strong>채팅 네비게이터</strong>
+                <small>장면 이동 컨트롤을 표시해요. 집중 읽기에서는 항상 숨겨요.</small>
+              </div>
+              <label className="check">
+                <Switch
+                  aria-label="채팅 네비게이터 표시"
+                  checked={sceneNavigatorEnabled}
+                  onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
+                />
+                표시
+              </label>
             </div>
-            <label className="check">
-              <Switch
-                aria-label="채팅 네비게이터 표시"
-                checked={sceneNavigatorEnabled}
-                onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
-              />
-              표시
+          </div>
+        </section>
+
+        <section className="settings-group" aria-label="응답 표시">
+          <div className="settings-group-body">
+            <label className="settings-row">
+              <span className="settings-row-copy">
+                <strong>응답 표시 방식</strong>
+                <small>
+                  본문과 도우미 응답에 적용해요. 생성 방식은 그대로이며, 진행 상태와 취소는 계속
+                  사용할 수 있어요.
+                </small>
+              </span>
+              <select
+                aria-label="응답 표시 방식"
+                value={responseDisplay}
+                onChange={(event) => setResponseDisplay(event.target.value as ResponseDisplayMode)}
+              >
+                <option value="stream">실시간 표시</option>
+                <option value="complete">완료 후 한 번에 표시</option>
+              </select>
             </label>
           </div>
         </section>
 
-        <section className="settings-card reading-settings-group" aria-label="응답 표시">
-          <label>
-            응답 표시 방식
-            <select
-              aria-label="응답 표시 방식"
-              value={responseDisplay}
-              onChange={(event) => setResponseDisplay(event.target.value as ResponseDisplayMode)}
-            >
-              <option value="stream">실시간 표시</option>
-              <option value="complete">완료 후 한 번에 표시</option>
-            </select>
-          </label>
-          <small className="reading-group-note">
-            본문과 도우미 응답에 적용해요. 생성 방식은 그대로이며, 진행 상태와 취소는 계속 사용할 수
-            있어요.
-          </small>
-        </section>
-
-        <section className="settings-card reading-settings-group" aria-label="번역">
-          <header className="reading-settings-group-heading">
+        <section className="settings-group" aria-label="번역">
+          <header className="settings-group-heading">
             <h4>번역</h4>
           </header>
-          <label>
-            새 원고의 기본 보기
-            <select
-              aria-label="새 원고의 기본 보기"
-              value={readingLanguage}
-              onChange={(event) => setReadingLanguage(event.target.value)}
-            >
-              <option value="translation">한국어 번역</option>
-              <option value="original">원문</option>
-            </select>
-          </label>
-          <small className="reading-group-note">
-            번역이 없으면 원문을 먼저 보여 줘요. 저장된 번역은 다시 호출하지 않아요.
-          </small>
+          <div className="settings-group-body">
+            <label className="settings-row">
+              <span className="settings-row-copy">
+                <strong>새 원고의 기본 보기</strong>
+                <small>
+                  번역이 없으면 원문을 먼저 보여 줘요. 저장된 번역은 다시 호출하지 않아요.
+                </small>
+              </span>
+              <select
+                aria-label="새 원고의 기본 보기"
+                value={readingLanguage}
+                onChange={(event) => setReadingLanguage(event.target.value)}
+              >
+                <option value="translation">한국어 번역</option>
+                <option value="original">원문</option>
+              </select>
+            </label>
+          </div>
         </section>
 
-        <section className="settings-card reading-settings-group" aria-label="삽화 표시">
-          <label>
-            삽화 기본 표시
-            <select
-              aria-label="삽화 기본 표시"
-              value={String(illustrationsCollapsed)}
-              onChange={(event) => setIllustrationsCollapsed(event.target.value === 'true')}
-            >
-              <option value="false">펼쳐서 읽기</option>
-              <option value="true">접어서 읽기</option>
-            </select>
-          </label>
-          <small className="reading-group-note">
-            직접 접거나 펼친 컷의 선택은 유지해요. 그림 생성과 저장에는 영향을 주지 않아요.
-          </small>
+        <section className="settings-group" aria-label="삽화 표시">
+          <div className="settings-group-body">
+            <label className="settings-row">
+              <span className="settings-row-copy">
+                <strong>삽화 기본 표시</strong>
+                <small>
+                  직접 접거나 펼친 컷의 선택은 유지해요. 그림 생성과 저장에는 영향을 주지 않아요.
+                </small>
+              </span>
+              <select
+                aria-label="삽화 기본 표시"
+                value={String(illustrationsCollapsed)}
+                onChange={(event) => setIllustrationsCollapsed(event.target.value === 'true')}
+              >
+                <option value="false">펼쳐서 읽기</option>
+                <option value="true">접어서 읽기</option>
+              </select>
+            </label>
+          </div>
         </section>
         <ReadabilitySettings value={reading.settings} onChange={reading.update} />
         {onStartFocus && (
@@ -1173,9 +1187,6 @@ function App() {
                                 s.detail!.runs.find((run) => run.id === source.runId)
                                   ?.contextSummary
                               }
-                              sceneUsage={
-                                s.detail!.runs.find((run) => run.id === source.runId)?.sceneUsage
-                              }
                               estimatedCost={
                                 s.detail!.runs.find((run) => run.id === source.runId)?.estimatedCost
                               }
@@ -1218,11 +1229,12 @@ function App() {
                               }
                               onRetry={
                                 s.canReuseRun(source.runId)
-                                  ? async () => {
-                                      await s.generate(source.runId);
+                                  ? async (mode) => {
+                                      await s.generate(source.runId, undefined, false, mode);
                                     }
                                   : undefined
                               }
+                              retryCanReplace={source.id === s.detail!.chat.headRevision}
                               onEditRequest={
                                 s.canReuseRun(source.runId)
                                   ? (text) => s.generate(source.runId, text)

@@ -1,0 +1,93 @@
+.settings-group {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  container-type: inline-size;
+}
+.settings-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.settings-group-heading h3,
+.settings-group-heading h4,
+.settings-group-heading p {
+  margin: 0;
+}
+.settings-group-heading p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settings-group-body {
+  min-width: 0;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 44%);
+  align-items: center;
+  gap: 20px;
+  min-width: 0;
+  margin: 0;
+  padding: 16px 0;
+}
+.settings-section .settings-row {
+  max-width: none;
+}
+.settings-row + .settings-row {
+  border-top: 1px solid var(--line);
+}
+.settings-row-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.settings-row-copy > strong {
+  font-weight: 500;
+}
+.settings-row-copy p,
+.settings-row-copy small {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.settings-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.settings-row > select,
+.settings-row-control > select,
+.settings-row-control > input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 0;
+}
+.settings-row-toggle {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.settings-page > .settings-section + .settings-section {
+  margin-top: 28px;
+}
+@container (max-width: 520px) {
+  .settings-row:not(.settings-row-toggle) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .settings-row-control {
+    justify-content: flex-start;
+  }
+  .settings-row-toggle > .settings-row-control {
+    justify-content: flex-end;
+  }
+}

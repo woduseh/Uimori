@@ -100,27 +100,51 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
   await expect(panel.getByRole('tab')).toHaveText(['봇', '페르소나', '모듈']);
   const folder = await createFolder(page, panel, `${prefix} Adventure`);
   const otherFolder = await createFolder(page, panel, `${prefix} Draft`);
-  // Folder actions live in the manage menu next to the dropdown and apply to the chosen folder.
-  await chooseFolder(panel, otherFolder.title);
-  await revealFolderActions(panel);
-  await panel.getByRole('button', { name: '위로', exact: true }).click();
+  await chooseFolder(panel, '전체');
+  await panel
+    .locator(`[data-folder-id="${otherFolder.id}"]`)
+    .dragTo(panel.locator(`[data-folder-id="${folder.id}"]`), { targetPosition: { x: 4, y: 4 } });
   await expect
-    .poll(async () =>
-      (await organization(request)).folders
+    .poll(async () => {
+      const order = (await organization(request)).folders
         .filter((item) => item.category === 'bot')
         .sort((a, b) => a.sortPosition - b.sortPosition)
-        .map((item) => item.id)
-        .indexOf(otherFolder.id)
-    )
-    .toBeLessThan(
-      (await organization(request)).folders.filter((item) => item.category === 'bot').length
-    );
+        .map((item) => item.id);
+      return order.indexOf(otherFolder.id) < order.indexOf(folder.id);
+    })
+    .toBe(true);
   const ordered = (await organization(request)).folders
     .filter((item) => item.category === 'bot')
     .sort((a, b) => a.sortPosition - b.sortPosition);
   expect(ordered.findIndex((item) => item.id === otherFolder.id)).toBeLessThan(
     ordered.findIndex((item) => item.id === folder.id)
   );
+  await panel.getByRole('button', { name: '목록', exact: true }).click();
+  const targetFolder = panel.locator(`[data-folder-id="${folder.id}"]`);
+  const targetBox = (await targetFolder.boundingBox())!;
+  await panel.locator(`[data-folder-id="${otherFolder.id}"]`).dragTo(targetFolder, {
+    targetPosition: { x: 4, y: targetBox.height - 4 },
+  });
+  await expect
+    .poll(async () => {
+      const order = (await organization(request)).folders
+        .filter((item) => item.category === 'bot')
+        .sort((a, b) => a.sortPosition - b.sortPosition)
+        .map((item) => item.id);
+      return order.indexOf(folder.id) < order.indexOf(otherFolder.id);
+    })
+    .toBe(true);
+  await page.reload();
+  const displayedFolders = await panel
+    .locator('.library-folder-card')
+    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-folder-id')));
+  expect(displayedFolders.indexOf(folder.id)).toBeLessThan(
+    displayedFolders.indexOf(otherFolder.id)
+  );
+  await panel.getByLabel(`${otherFolder.title} 폴더 메뉴`, { exact: true }).click();
+  await expect(panel.getByRole('button', { name: '위로', exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '아래로', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await chooseFolder(panel, '전체');
   await panel.getByLabel('서재 검색', { exact: true }).fill(prefix);
   await moveItems(page, panel, [a.title, b.title], 'bot', folder);
@@ -674,6 +698,20 @@ test('LIBUI08 manual order persists and a bot card can be dropped into a folder'
   await expect(panel.locator(`[data-library-item-id="${beta.id}"]`)).toHaveCount(0);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('library-folder-drop-desktop.png') });
+  await item(alpha.id).dragTo(panel.locator(`[data-folder-id="${folder.id}"]`));
+  await expect
+    .poll(
+      async () =>
+        (await organization(request)).items.find((entry) => entry.id === alpha.id)?.folderId
+    )
+    .toBe(folder.id);
+  await expect(panel.locator('[data-library-item-id]')).toHaveCount(0);
+  await expect(panel.locator('.library-empty')).toHaveCount(0);
+  await expect(
+    panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true })
+  ).toBeVisible();
+  await page.reload();
+  await expect(panel.locator('.library-empty')).toHaveCount(0);
 });
 
 for (const kind of ['bot', 'persona'] as const) {

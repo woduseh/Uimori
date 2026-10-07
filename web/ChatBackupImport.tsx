@@ -125,73 +125,77 @@ export function ChatBackupImport({
     }
   }
   return (
-    <section
-      className="settings-card chat-backup-import archive-management-card"
-      aria-label="채팅 가져오기"
-    >
-      <header className="archive-card-heading">
-        <h3>채팅 가져오기</h3>
-        <p className="muted" id={`${id}-help`}>
-          채팅 백업 파일을 새 채팅으로 복원해 이어서 사용할 수 있어요.
-        </p>
-      </header>
-      <div className="archive-file-field">
-        <label>
-          채팅 백업 파일 선택
-          <input
-            ref={input}
-            type="file"
-            accept=".json,application/json"
-            aria-label="채팅 백업 파일 선택"
-            aria-describedby={`${id}-help`}
-            disabled={disabled || busy || reading || uncertain}
-            onChange={(event) => {
-              void read(event.currentTarget.files?.[0]);
-            }}
-          />
-        </label>
-      </div>
-      {reading && <p role="status">백업 파일을 읽고 있어요…</p>}
-      {selection && (
-        <div className="archive-file-summary">
-          <p>
-            {selection.backup.title} · 채팅 {selection.backup.chats.length}개 · 본문{' '}
-            {selection.backup.chats.reduce((sum, chat) => sum + chat.transcript.entries.length, 0)}
-            개
+    <section className="settings-group chat-backup-import" aria-label="채팅 가져오기">
+      <header className="settings-group-heading archive-card-heading">
+        <div>
+          <h3>채팅 가져오기</h3>
+          <p className="muted" id={`${id}-help`}>
+            채팅 백업 파일을 새 채팅으로 복원해 이어서 사용할 수 있어요.
           </p>
-          <div className="archive-import-actions">
-            <button type="button" disabled={disabled || busy} onClick={() => void restore()}>
-              {busy ? '복원 중…' : uncertain ? '같은 요청 확인' : '새 채팅으로 가져오기'}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy || uncertain}
-              onClick={() => {
-                setSelection(null);
-                if (input.current) input.current.value = '';
-              }}
-            >
-              선택 취소
-            </button>
-          </div>
         </div>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {uncertain && (
-        <p role="status">
-          복원 결과가 아직 확인되지 않았어요. 같은 요청 확인으로 중복 없이 결과를 확인해 주세요.
-        </p>
-      )}
-      {message && <p role="status">{message}</p>}
-      <small className="muted archive-import-note">
-        전역 프롬프트·역할 모델은 현재 작업실 설정을 사용하며 실행 기록과 도우미 내부 작업은
-        가져오지 않아요.
-      </small>
+      </header>
+      <div className="settings-group-body archive-management-card">
+        <div className="archive-file-field">
+          <label>
+            채팅 백업 파일 선택
+            <input
+              ref={input}
+              type="file"
+              accept=".json,application/json"
+              aria-label="채팅 백업 파일 선택"
+              aria-describedby={`${id}-help`}
+              disabled={disabled || busy || reading || uncertain}
+              onChange={(event) => {
+                void read(event.currentTarget.files?.[0]);
+              }}
+            />
+          </label>
+        </div>
+        {reading && <p role="status">백업 파일을 읽고 있어요…</p>}
+        {selection && (
+          <div className="archive-file-summary">
+            <p>
+              {selection.backup.title} · 채팅 {selection.backup.chats.length}개 · 본문{' '}
+              {selection.backup.chats.reduce(
+                (sum, chat) => sum + chat.transcript.entries.length,
+                0
+              )}
+              개
+            </p>
+            <div className="archive-import-actions">
+              <button type="button" disabled={disabled || busy} onClick={() => void restore()}>
+                {busy ? '복원 중…' : uncertain ? '같은 요청 확인' : '새 채팅으로 가져오기'}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy || uncertain}
+                onClick={() => {
+                  setSelection(null);
+                  if (input.current) input.current.value = '';
+                }}
+              >
+                선택 취소
+              </button>
+            </div>
+          </div>
+        )}
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        {uncertain && (
+          <p role="status">
+            복원 결과가 아직 확인되지 않았어요. 같은 요청 확인으로 중복 없이 결과를 확인해 주세요.
+          </p>
+        )}
+        {message && <p role="status">{message}</p>}
+        <small className="muted archive-import-note">
+          전역 프롬프트·역할 모델은 현재 작업실 설정을 사용하며 실행 기록과 도우미 내부 작업은
+          가져오지 않아요.
+        </small>
+      </div>
     </section>
   );
 }

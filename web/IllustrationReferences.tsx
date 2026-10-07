@@ -102,7 +102,7 @@ export function IllustrationReferencesEditor({
       {!loaded.candidates.length && (
         <p className="muted">이 채팅에 등록한 이미지나 장착한 자료의 이미지가 없어요.</p>
       )}
-      <div className="asset-grid">
+      <div className="asset-grid illustration-reference-options">
         {loaded.candidates.map((item) => (
           <figure key={item.ref}>
             <img src={item.url} alt={item.title} loading="lazy" />

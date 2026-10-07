@@ -71,13 +71,31 @@
 .bot-tree-folder {
   margin-bottom: 6px;
 }
-.bot-tree-order {
-  display: flex;
-  gap: 4px;
+.bot-branch-heading[draggable="true"],
+.bot-tree-folder-heading[draggable="true"] {
+  cursor: grab;
 }
-.bot-tree-move {
-  display: grid;
-  gap: 6px;
+.tree-dragging {
+  opacity: 0.45;
+}
+.tree-drop-target {
+  background: var(--nav-item-selected);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: 8px;
+}
+.tree-drop-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+.tree-drop-after {
+  box-shadow: 0 2px 0 var(--accent);
+}
+.bot-tree-unfiled-drop {
+  padding: 12px;
+  margin: 6px 0;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
 }
 .bot-tree-navigation .action-menu-body select {
   width: 100%;

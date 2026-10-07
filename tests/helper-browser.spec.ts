@@ -557,12 +557,35 @@ test('HELPUI13 completed helper response renders common Markdown and copies its 
 test('HELPUI12 helper settings event refreshes an open model editor without replacing its draft', async ({
   page,
   request,
-}) => {
+}, info) => {
   const state = await harness(page);
   await page.goto('/');
   await navigationAction(page, '서재');
   const panel = await open(page);
   await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+  await panel.locator('.helper-limits > summary').click();
+  for (const width of [1440, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: 900 });
+    const settings = panel.locator('.helper-settings');
+    await expect(settings.locator('input[type="number"]')).toHaveCount(3);
+    expect(
+      await settings.evaluate((node) => node.scrollWidth - node.clientWidth)
+    ).toBeLessThanOrEqual(1);
+    await settings.evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+    });
+    const save = panel.getByRole('button', { name: '도우미 설정 저장', exact: true });
+    await expect(save).toBeInViewport();
+    const saveBox = (await save.boundingBox())!;
+    const actionBox = (await settings.locator('.helper-settings-actions').boundingBox())!;
+    expect(Math.abs(actionBox.x + actionBox.width - saveBox.x - saveBox.width)).toBeLessThanOrEqual(
+      1
+    );
+    await page.screenshot({ path: info.outputPath(`helper-settings-${width}.png`) });
+    await settings.evaluate((node) => {
+      node.scrollTop = 0;
+    });
+  }
   await panel.getByRole('button', { name: /^현재 도우미 모델/ }).click();
   const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
   await expect(editor).toBeVisible();
