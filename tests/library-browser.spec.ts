@@ -135,12 +135,19 @@ test('LIBUI01 library folders move and classify without changing revisions or ow
     })
     .toBe(true);
   await page.reload();
-  const displayedFolders = await panel
-    .locator('.library-folder-card')
-    .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-folder-id')));
-  expect(displayedFolders.indexOf(folder.id)).toBeLessThan(
-    displayedFolders.indexOf(otherFolder.id)
-  );
+  await expect
+    .poll(() =>
+      panel
+        .locator('.library-folder-card')
+        .evaluateAll(
+          (nodes, expected) =>
+            nodes
+              .map((node) => node.getAttribute('data-folder-id'))
+              .filter((id) => expected.includes(id ?? '')),
+          [folder.id, otherFolder.id]
+        )
+    )
+    .toEqual([folder.id, otherFolder.id]);
   await panel.getByLabel(`${otherFolder.title} 폴더 메뉴`, { exact: true }).click();
   await expect(panel.getByRole('button', { name: '위로', exact: true })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: '아래로', exact: true })).toHaveCount(0);

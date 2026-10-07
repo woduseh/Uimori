@@ -59,7 +59,7 @@ for (const viewport of [
       expect(budgetBox).not.toBeNull();
       expect(Math.abs(thresholdBox!.height - budgetBox!.height)).toBeLessThanOrEqual(1);
       if (viewport.width === DESKTOP_WIDTH)
-        expect(Math.abs(thresholdBox!.y - budgetBox!.y)).toBeLessThanOrEqual(1);
+        expect(Math.abs(thresholdBox!.x - budgetBox!.x)).toBeLessThanOrEqual(1);
 
       await dialog.getByLabel('조회 로어 토큰 한도', { exact: true }).fill('');
       await selectChatSettingsSection(page, '이미지');
