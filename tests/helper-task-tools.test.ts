@@ -94,12 +94,12 @@ test('completed run inspection is compact and retry returns the forked chat and 
   const chat = createFixtureChat(f.store, '작업 조회');
   const run = queuedRun(f.store, chat.id);
   f.store.startRun(run.id);
-  f.store.completeRun(
-    run.id,
-    '완성된 장면',
-    { modelCalls: 1, inputTokens: 3, outputTokens: 4, costUsd: null },
-    run.snapshot.settings
-  );
+  f.store.completeRun(run.id, '완성된 장면', {
+    modelCalls: 1,
+    inputTokens: 3,
+    outputTokens: 4,
+    costUsd: null,
+  });
   const inspection = f.invoke('task.inspect', 'run', run.id);
   expect(inspection).toMatchObject({
     id: run.id,
@@ -175,17 +175,17 @@ test('failed auxiliary job keeps its kind and usage while retrying through the j
   const chat = createFixtureChat(f.store, '보조 작업');
   const run = queuedRun(f.store, chat.id);
   f.store.startRun(run.id);
-  const source = f.store.completeRun(
-    run.id,
-    '원문',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  const source = f.store.completeRun(run.id, '원문', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   const id = randomUUID();
   const at = new Date().toISOString();
   f.store.db
     .prepare(
-      "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,input,error,created_at,updated_at) VALUES(?,?,?,?,'status','failed',1,'{}','provider failed',?,?)"
+      "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,input,error,created_at,updated_at) VALUES(?,?,?,?,'translation','failed',1,'{}','provider failed',?,?)"
     )
     .run(id, chat.id, source.id, source.hash, at, at);
   for (const [input, cost] of [
@@ -194,21 +194,23 @@ test('failed auxiliary job keeps its kind and usage while retrying through the j
   ] as const)
     f.store.db
       .prepare(
-        "INSERT INTO attempts(id,job_id,role,connection_id,model_id,status,request,input_tokens,output_tokens,cost_usd) VALUES(? ,?,'status','synthetic','synthetic','failed','{}',?,4,?)"
+        "INSERT INTO attempts(id,job_id,role,connection_id,model_id,status,request,input_tokens,output_tokens,cost_usd) VALUES(? ,?,'translation','synthetic','synthetic','failed','{}',?,4,?)"
       )
       .run(randomUUID(), id, input, cost);
   expect(f.invoke('task.inspect', 'job', id)).toMatchObject({
     id,
-    jobKind: 'status',
+    jobKind: 'translation',
     status: 'failed',
     error: 'provider failed',
     canRetry: true,
     usage: { modelCalls: 2, inputTokens: null, outputTokens: 8, costUsd: null },
   });
-  expect(f.invoke('task.retry', 'job', id)).toMatchObject({
+  const retried = f.invoke('task.retry', 'job', id);
+  expect(retried).toMatchObject({
     previousTaskId: id,
-    task: { id, status: 'queued', canRetry: false },
+    task: { status: 'queued', canRetry: false },
   });
+  expect((retried as { task: { id: string } }).task.id).not.toBe(id);
 });
 
 test('a helper retry replaces only one failed task and makes the old task ineligible', () => {

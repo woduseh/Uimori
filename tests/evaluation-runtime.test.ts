@@ -87,7 +87,6 @@ async function fixture(
     contextMode?: 'preloaded' | 'model-selected' | 'source-bound';
     metadataProfile?: EvaluationMetadataProfile;
     structuredOutput?: boolean;
-    status?: boolean;
   } = {}
 ) {
   vi.stubEnv(credentialRef, bearer);
@@ -134,7 +133,6 @@ async function fixture(
     {
       expectedSettingsRevision: chat.settingsRevision,
       ...chat.settings,
-      status: settings.status ?? false,
       maxCalls: settings.maxCalls ?? 8,
     },
     'PATCH'
@@ -202,7 +200,6 @@ async function fixture(
   await setFixtureModelRoutes(app, {
     main: { id: model.id },
     translation: { id: model.id },
-    status: settings.status ? { id: model.id } : null,
   });
   const profile = await api<ChatProfile>(
     app,
@@ -827,67 +824,6 @@ test.each(['plain', 'wrong-source', 'duplicate-submit'] as const)(
       hash: source.hash,
       text: source.text,
     });
-    expect(state.provider.requests).toHaveLength(2);
-  }
-);
-
-test.each(['valid', 'invalid-anchor'] as const)(
-  'source-bound display submission keeps source and anchor validation: %s',
-  async (mode) => {
-    const state = await fixture(
-      async (body, target) => {
-        const source = packet(body).source;
-        if (!source.sourceRevision)
-          await send(target, [
-            call(
-              body,
-              'eval_submit_artifact',
-              { content: 'Original harbor scene.' },
-              'main-submit'
-            ),
-          ]);
-        else
-          await send(
-            target,
-            [
-              call(
-                body,
-                'eval_submit_artifact',
-                {
-                  content: JSON.stringify({
-                    sourceRevision: source.sourceRevision,
-                    sourceHash: source.sourceHash,
-                    kind: 'display-only',
-                    entries: [
-                      {
-                        anchor: mode === 'valid' ? source.blocks[0].anchor : 'missing-anchor',
-                        summary: '항구 장면',
-                      },
-                    ],
-                  }),
-                },
-                'display-submit'
-              ),
-            ],
-            true
-          );
-      },
-      { contextMode: 'source-bound', status: true }
-    );
-    await settled(state, (await state.start()).id);
-    await expect
-      .poll(async () => (await state.detail()).jobs.find((job) => job.kind === 'status')?.status, {
-        timeout: 6000,
-      })
-      .toBe(mode === 'valid' ? 'completed' : 'failed');
-    const detail = await state.detail();
-    expect(state.failures).toEqual([]);
-    const job = detail.jobs.find((job) => job.kind === 'status')!;
-    if (mode === 'valid')
-      expect(job).toMatchObject({
-        result: { label: '항구 장면', sourceHash: detail.sources[0].hash },
-      });
-    else expect(job).toMatchObject({ error: 'ANNOTATION_ANCHOR_INVALID', result: null });
     expect(state.provider.requests).toHaveLength(2);
   }
 );

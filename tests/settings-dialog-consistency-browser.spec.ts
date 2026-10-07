@@ -271,7 +271,7 @@ for (const width of [412, 1440]) {
     await expect(remove).toBeHidden();
     await expect(imageTrigger).toBeFocused();
 
-    await selectChatSettingsSection(page, '자동 작업');
+    await selectChatSettingsSection(page, '실행 옵션');
     const limit = page.getByLabel('작업당 모델 호출 한도', { exact: true });
     const original = await limit.inputValue();
     await limit.fill(original === '21' ? '22' : '21');
@@ -289,7 +289,7 @@ for (const width of [412, 1440]) {
     await confirmation.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '자동 작업');
+    await selectChatSettingsSection(page, '실행 옵션');
     await expect(limit).toHaveValue(original);
     await selectChatSettingsSection(page, '이미지');
     await page.locator('.chat-settings-image-management > summary').click();

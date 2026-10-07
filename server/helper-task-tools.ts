@@ -228,7 +228,7 @@ function listTasks(store: Store, current: HelperTask, args: Record<string, unkno
     .prepare(
       `SELECT kind,id,chatId,status,jobKind,updatedAt FROM (
       SELECT 'run' AS kind,id,chat_id AS chatId,status,NULL AS jobKind,updated_at AS updatedAt FROM runs
-      UNION ALL SELECT 'job',id,chat_id,status,kind,updated_at FROM jobs
+      UNION ALL SELECT 'job',id,chat_id,status,kind,updated_at FROM jobs WHERE kind!='status'
       UNION ALL SELECT 'illustration',id,chat_id,status,NULL,updated_at FROM illustration_jobs
       UNION ALL SELECT 'helper',t.id,c.chat_id,t.status,NULL,t.updated_at
         FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id
@@ -380,7 +380,8 @@ function inspect(
       error: job.error,
       usage: attemptUsage(store, 'job_id', id),
       canCancel: active,
-      canRetry: eligible,
+      canRetry: eligible && job.kind !== 'status',
+      ...(job.kind === 'status' ? { retryBlock: 'SCENE_COMMENTARY_RETIRED' } : {}),
       createdAt: job.created_at,
       updatedAt: job.updated_at,
     };

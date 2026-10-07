@@ -86,7 +86,7 @@ function fixture(
       chatId: chat.id,
       parentRevision: selected.headRevision,
       settingsRevision: selected.settingsRevision,
-      settings: { ...selected.settings, status: false },
+      settings: { ...selected.settings },
       request: 'Synthetic scene',
       history: [],
       profile,
@@ -95,12 +95,12 @@ function fixture(
   ).run;
   store.startRun(run.id);
   const source = store.source(
-    store.completeRun(
-      run.id,
-      'Original window.\n\nOriginal garden.',
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings
-    ).id
+    store.completeRun(run.id, 'Original window.\n\nOriginal garden.', {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    }).id
   );
   return { store, source, chat };
 }

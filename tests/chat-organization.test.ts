@@ -251,12 +251,12 @@ test('fork inherits original owner/folder/profile without reapplying changed def
     })
   );
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    'Synthetic scene.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    { ...run.snapshot.settings, status: false }
-  );
+  const source = store.completeRun(run.id, 'Synthetic scene.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   store.organization.updateFolder(bot.id, folder.id, {
     expectedRevision: 1,
     defaultPersona: ref(nextPersona),

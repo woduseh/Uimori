@@ -139,7 +139,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .locator('.section-navigation')
       .filter({ visible: true })
       .locator('button .section-navigation-title')
-  ).toHaveText(['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '자동 작업']);
+  ).toHaveText(['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '실행 옵션']);
   await selectChatSettingsSection(page, '대화 구성');
   await page.getByText('함께 사용하는 모듈 · 자료 추가', { exact: true }).click();
   await selectContent(page, '추가할 패키지', added.title);

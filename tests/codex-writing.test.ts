@@ -68,7 +68,7 @@ async function fixture(scripts: Record<string, Step[]>, terminal = true) {
     chatId: 'chat',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { maxCalls: 3, status: false },
+    settings: { maxCalls: 3 },
     request: 'Write the next synthetic scene.',
     history: [],
     logicalHistory: [],

@@ -237,7 +237,7 @@ describe('file SQLite HTTP runtime', () => {
     const configured = await api<Chat>(
       url,
       `/api/chats/${chat.id}/settings`,
-      { expectedSettingsRevision: 1, ...chat.settings, status: false },
+      { expectedSettingsRevision: 1, ...chat.settings },
       'PATCH'
     );
     const next = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(configured));
@@ -252,11 +252,10 @@ describe('file SQLite HTTP runtime', () => {
     const chat = await api<Chat>(
       url,
       `/api/chats/${initial.id}/settings`,
-      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings, status: true },
+      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings },
       'PATCH'
     );
     await control(url, { action: 'hold', barrier: 'translation' });
-    await control(url, { action: 'hold', barrier: 'status' });
     const first = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(chat));
     await completed(url, first.id);
     const original = await detail(url, chat);
@@ -265,7 +264,7 @@ describe('file SQLite HTTP runtime', () => {
     await api(url, `/api/sources/${source.id}/translation`, {});
     await until(
       () => api(url, '/api/test/control'),
-      (value) => value.waiting.translation === 1 && value.waiting.status === 1
+      (value) => value.waiting.translation === 1
     );
     const second = await api<Run>(url, `/api/chats/${chat.id}/runs`, command(original.chat));
     await completed(url, second.id);
@@ -275,28 +274,32 @@ describe('file SQLite HTTP runtime', () => {
     await api(url, `/api/sources/${secondSource.id}/translation`, {});
     await until(
       () => api(url, '/api/test/control'),
-      (value) => value.waiting.translation === 2 && value.waiting.status === 2
+      (value) => value.waiting.translation === 2
     );
     await control(url, { action: 'fail-next', point: 'job-transaction' });
-    await control(url, { action: 'release', barrier: 'status' });
+    await control(url, { action: 'release', barrier: 'translation' });
     const failedDetail = await until(
       () => detail(url, chat),
       (value) =>
         value.jobs
-          .filter((job) => job.kind === 'status')
+          .filter((job) => job.kind === 'translation')
           .every((job) => ['failed', 'completed'].includes(job.status))
     );
     const failed = failedDetail.jobs.find((job) => job.status === 'failed')!;
     expect(failed.error).toBe('AUXILIARY_EXECUTION_FAILED');
     expect(failedDetail.jobs.filter((job) => job.status === 'failed')).toHaveLength(1);
     expect((await api(url, '/api/test/control')).failures).not.toContain('job-transaction');
-    expect(failed.result).toBeNull();
+    expect(failed.result).toMatchObject({
+      sourceRevision: failed.sourceRevision,
+      sourceHash: failed.sourceHash,
+    });
     expect(
-      failedDetail.jobs
-        .filter((job) => job.kind === 'translation')
-        .every((job) => job.status === 'running')
-    ).toBe(true);
-    await api(url, `/api/jobs/${failed.id}/retry`, {});
+      failedDetail.sources.find((value) => value.id === failed.sourceRevision)?.translationRevision
+    ).toBe(failed.revision);
+    expect(failedDetail.jobs.filter((job) => job.status === 'completed')).toHaveLength(1);
+    const retry = await api(url, `/api/jobs/${failed.id}/retry`, {});
+    expect(retry.id).not.toBe(failed.id);
+    expect(retry.revision).toBe(failed.revision! + 1);
     await control(url, { action: 'release', barrier: 'translation' });
     const all = await until(
       () => detail(url, chat),
@@ -316,10 +319,11 @@ describe('file SQLite HTTP runtime', () => {
       expect(job.result!.sourceRevision).toBe(job.sourceRevision);
       expect(job.result!.sourceHash).toBe(job.sourceHash);
     }
-    const retried = all.jobs.find((job) => job.id === failed.id)!;
-    expect(retried.attempt).toBe(2);
-    const retryAgain = await api(url, `/api/jobs/${failed.id}/retry`, {});
-    expect(retryAgain.attempt).toBe(2);
+    const retried = all.jobs.find((job) => job.id === retry.id)!;
+    expect(retried.attempt).toBe(1);
+    const requestedAgain = await api(url, `/api/sources/${failed.sourceRevision}/translation`, {});
+    expect(requestedAgain.id).toBe(retried.id);
+    expect(requestedAgain.attempt).toBe(1);
     expect(
       app.store.finishAuxiliary(failed.id, 1, 'wrong-owner', {
         status: 'completed',
@@ -334,17 +338,17 @@ describe('file SQLite HTTP runtime', () => {
         error: null,
       })
     ).toBe(false);
-    const ownership = app.store.db.prepare('SELECT owner FROM jobs WHERE id=?').get(failed.id) as {
+    const ownership = app.store.db.prepare('SELECT owner FROM jobs WHERE id=?').get(retried.id) as {
       owner: string;
     };
     expect(
-      app.store.finishAuxiliary(failed.id, 2, ownership.owner, {
+      app.store.finishAuxiliary(retried.id, 1, ownership.owner, {
         status: 'completed',
         result: retried.result,
         error: null,
       })
     ).toBe(false);
-    expect(app.store.db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 4 });
+    expect(app.store.db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 3 });
     expect(all.runs.map((value) => value.inputs.length)).toEqual([0, 0]);
   });
 
@@ -580,7 +584,6 @@ describe('built server process boundary', () => {
         {
           expectedSettingsRevision: initial.settingsRevision,
           ...initial.settings,
-          status: false,
         },
         'PATCH'
       );
@@ -605,7 +608,7 @@ describe('built server process boundary', () => {
         '/api/model-workspace',
         {
           expectedRevision: workspace.revision,
-          routes: { main: { id: model.id }, translation: null, status: null },
+          routes: { main: { id: model.id }, translation: null },
           translationPolicy: workspace.translationPolicy,
           mainJudgmentEnabled: false,
         },
@@ -747,14 +750,14 @@ describe('built server process boundary', () => {
     }
   });
 
-  it('F03 F05 restarts after source commit before worker wake, without regenerating source', async () => {
+  it('F03 restarts after source commit without regenerating source or creating auxiliary jobs', async () => {
     const directory = await mkdtemp(join(tmpdir(), '서사 M0 crash '));
     const first = await startChild(directory);
     const initial = await api<Chat>(first.url, '/api/chats', { title: '합성 커밋 경계' });
     const chat = await api<Chat>(
       first.url,
       `/api/chats/${initial.id}/settings`,
-      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings, status: true },
+      { expectedSettingsRevision: initial.settingsRevision, ...initial.settings },
       'PATCH'
     );
     await control(first.url, { action: 'hold', barrier: 'run' });
@@ -771,7 +774,7 @@ describe('built server process boundary', () => {
         expect(db.prepare('SELECT status FROM runs').get()).toEqual({ status: 'completed' });
         expect(db.prepare('SELECT count(*) AS n FROM sources').get()).toEqual({ n: 1 });
         expect(db.prepare("SELECT count(*) AS n FROM jobs WHERE status='queued'").get()).toEqual({
-          n: 1,
+          n: 0,
         });
         expect(db.prepare('SELECT count(*) AS n FROM job_results').get()).toEqual({ n: 0 });
         const originalText = db.prepare('SELECT text,hash FROM sources').get();
@@ -801,8 +804,7 @@ describe('built server process boundary', () => {
     expect({ text: recovered.sources[0].text, hash: recovered.sources[0].hash }).toEqual(
       originalText
     );
-    expect(recovered.jobs.map((job) => job.attempt)).toEqual([1]);
-    expect(recovered.jobs.map((job) => job.kind)).toEqual(['status']);
+    expect(recovered.jobs).toEqual([]);
     const held = await control(second.url, { action: 'hold', barrier: 'run' });
     expect(held.held).toContain('run');
     const interrupted = await api<Run>(

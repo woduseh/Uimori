@@ -614,7 +614,7 @@ test('current scope retains reservation facts, complete old prose, source roles,
     chatId: 'chat-A',
     parentRevision: 'scene-A',
     settingsRevision: 1,
-    settings: { status: false, maxCalls: 16 },
+    settings: { maxCalls: 16 },
     request: 'inspect',
     history: [{ revision: 'scene-A', text, contentHash: hash(text) }],
     resources: [],
@@ -807,12 +807,12 @@ test('live chat grep and SQL follow each actual ancestry and preserve scene numb
         })
       ).run;
       f.store.startRun(run.id);
-      f.store.completeRun(
-        run.id,
-        `나이 기록 ${chatIndex}-${index}: 27세`,
-        { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-        run.snapshot.settings
-      );
+      f.store.completeRun(run.id, `나이 기록 ${chatIndex}-${index}: 27세`, {
+        modelCalls: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+      });
     }
   }
   const found = await f.invoke('data.search', {

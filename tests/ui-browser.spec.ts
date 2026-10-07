@@ -42,21 +42,13 @@ async function seed(
   title: string,
   prompt: string,
   count = 1,
-  botId?: string,
-  automaticStatus = false
+  botId?: string
 ) {
   const response = botId
     ? await request.post('/api/chats', { data: { title, botId } })
     : await postFixtureChat(request, { data: { title } });
   expect(response.ok()).toBeTruthy();
-  let chat = (await response.json()) as Chat;
-  if (automaticStatus) {
-    const selected = await request.patch(`/api/chats/${chat.id}/settings`, {
-      data: { ...chat.settings, status: true, expectedSettingsRevision: chat.settingsRevision },
-    });
-    expect(selected.ok()).toBe(true);
-    chat = (await selected.json()) as Chat;
-  }
+  const chat = (await response.json()) as Chat;
   for (let index = 0; index < count; index++) {
     const before = await data(request, chat.id);
     const response = await request.post(`/api/chats/${chat.id}/runs`, {
@@ -374,21 +366,13 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
   page,
   request,
 }) => {
-  await request.post('/api/test/control', { data: { action: 'hold', barrier: 'status' } });
   await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } });
   let releasePresentation = () => {};
   const presentationGate = new Promise<void>((resolve) => {
     releasePresentation = resolve;
   });
   try {
-    const chat = await seed(
-      request,
-      `합성 UI arrivals ${Date.now()}`,
-      longPrompt,
-      1,
-      undefined,
-      true
-    );
+    const chat = await seed(request, `합성 UI arrivals ${Date.now()}`, longPrompt, 1);
     await page.goto(`/?chat=${chat.id}`);
     await expect(page.getByTestId('source')).toHaveCount(1);
     await page.getByRole('button', { name: '번역 보기', exact: true }).click();
@@ -429,7 +413,6 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
         await route.fulfill({ response });
       }
     );
-    await request.post('/api/test/control', { data: { action: 'release', barrier: 'status' } });
     await request.post('/api/test/control', {
       data: { action: 'release', barrier: 'translation' },
     });
@@ -1369,7 +1352,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
   });
   expect(changed.ok()).toBeTruthy();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '자동 작업');
+  await selectChatSettingsSection(page, '실행 옵션');
   await expect(
     page.getByText('저장한 설정은 다음 실행부터 적용해요.', { exact: true })
   ).toBeVisible();
@@ -1784,7 +1767,7 @@ test('UI whole-source translation retains completed results across retry and can
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '자동 작업');
+  await selectChatSettingsSection(page, '실행 옵션');
   await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
   if (visualReview)
@@ -1887,10 +1870,10 @@ test('UI chat settings close right after saving does not warn while the refresh 
   await page.goto(`/?chat=${chat.id}`);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '자동 작업');
+  await selectChatSettingsSection(page, '실행 옵션');
   const runtime = dialog.locator('section.settings');
-  const statusEnabled = !(await data(request, chat.id)).chat.settings.status;
-  await runtime.getByLabel('장면 해설 자동 생성', { exact: true }).setChecked(statusEnabled);
+  const maxCalls = (await data(request, chat.id)).chat.settings.maxCalls === 6 ? 7 : 6;
+  await runtime.getByLabel('작업당 모델 호출 한도', { exact: true }).fill(String(maxCalls));
   // Hold the post-save reader refresh so the close arrives while it is still in flight.
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
@@ -1902,14 +1885,14 @@ test('UI chat settings close right after saving does not warn while the refresh 
     await route.continue();
   });
   await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
-  await expect(runtime.getByRole('status')).toContainText('후속 작업 설정을 저장했어요.');
+  await expect(runtime.getByRole('status')).toContainText('실행 설정을 저장했어요.');
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인' })).toHaveCount(0);
   release();
   await expect
-    .poll(async () => (await data(request, chat.id)).chat.settings.status)
-    .toBe(statusEnabled);
+    .poll(async () => (await data(request, chat.id)).chat.settings.maxCalls)
+    .toBe(maxCalls);
 });
 
 preservePromptWorkspace();

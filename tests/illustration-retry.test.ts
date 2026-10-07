@@ -1,3 +1,4 @@
+import { reserveIllustration } from './fixtures/illustration.js';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -11,7 +12,6 @@ import {
   completeIllustrationStoryboard,
   illustrationJob,
   queuedIllustrations,
-  reserveIllustration,
   reserveIllustrationPlan,
 } from '../server/illustrations.js';
 import type { Store } from '../server/store.js';

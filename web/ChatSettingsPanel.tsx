@@ -54,9 +54,9 @@ const categories = [
   },
   {
     id: 'runtime',
-    title: '자동 작업',
+    title: '실행 옵션',
     icon: BehaviorIcon,
-    description: '장면 해설과 호출 한도',
+    description: '작업당 모델 호출 한도',
     group: '고급',
   },
   {

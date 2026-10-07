@@ -36,7 +36,7 @@ const snapshot = (): RunSnapshot => ({
   chatId: 'test',
   parentRevision: null,
   settingsRevision: 1,
-  settings: { status: false, maxCalls: 4 },
+  settings: { maxCalls: 4 },
   request: 'Visit the harbor',
   history: [],
   resources: [],

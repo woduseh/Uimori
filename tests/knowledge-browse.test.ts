@@ -60,7 +60,7 @@ function fixture(): RunSnapshot {
     chatId: 'chat',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { status: false, maxCalls: 8 },
+    settings: { maxCalls: 8 },
     request: '설정 확인',
     history: [],
     resources: [loose, { ...loose, id: 'foreign', chatId: 'elsewhere', title: '누출 금지' }],

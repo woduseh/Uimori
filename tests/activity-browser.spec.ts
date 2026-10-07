@@ -38,7 +38,7 @@ async function seed(request: APIRequestContext) {
   expect(
     (
       await request.patch(`/api/chats/${chat.id}/settings`, {
-        data: { ...chat.settings, status: false, expectedSettingsRevision: 1 },
+        data: { ...chat.settings, expectedSettingsRevision: 1 },
       })
     ).ok()
   ).toBeTruthy();
@@ -242,7 +242,8 @@ test('ACTUI02 auxiliary concurrency, mobile bounds and connection uncertainty', 
   ]);
   const status = page.getByTestId('activity-status');
   await expect(status).toContainText('번역하는 중');
-  await expect(status).toContainText('외 2개');
+  await expect(status).toContainText('외 1개');
+  await expect(status).not.toContainText('이전 보조 작업');
   await expect(page.getByRole('button', { name: '작업 상세 보기', exact: true })).toBeVisible();
   const bounds = await status.boundingBox();
   expect(bounds).not.toBeNull();

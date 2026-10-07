@@ -51,7 +51,7 @@ const chatLabels = {
   prompts: '프롬프트·모델',
   story: '기억·로어',
   images: '이미지',
-  runtime: '자동 작업',
+  runtime: '실행 옵션',
 };
 
 const chatSettings = (section, title) => ({

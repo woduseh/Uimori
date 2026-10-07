@@ -19,7 +19,6 @@ const programs = (): RisuPrompt => createDefaultRisuPrompt('Translate faithfully
 function seed(program?: RisuPrompt, source = sourceMarker) {
   const value = bundle(source);
   value.snapshot.story = {
-    lineageHash: '',
     canonHash: '',
     notes: [
       {

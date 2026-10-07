@@ -9,7 +9,7 @@ const snapshot = (text = sourceText): RunSnapshot => ({
   chatId: 'chat',
   parentRevision: 'source',
   settingsRevision: 1,
-  settings: { status: false, maxCalls: 8 },
+  settings: { maxCalls: 8 },
   request: 'Continue.',
   resources: [],
   history: [{ revision: 'source', text, contentHash: sourceHash(text) }],

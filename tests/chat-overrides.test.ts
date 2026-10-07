@@ -124,12 +124,12 @@ function run(store: Store, chatId: string) {
 }
 function complete(store: Store, value: ReturnType<typeof run>) {
   store.startRun(value.id);
-  return store.completeRun(
-    value.id,
-    `Synthetic ${value.id}`,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    { ...value.snapshot.settings, status: false }
-  );
+  return store.completeRun(value.id, `Synthetic ${value.id}`, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
 }
 const selector = (
   content: Content,

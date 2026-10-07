@@ -8,10 +8,10 @@ import { formatUsd, pricingRateLabels, pricingNote } from './pricing-display.js'
 import './model-pricing.css';
 import './lore-context.css';
 
-const roleLabels: Record<Attempt['role'], string> = {
+const roleLabels: Record<string, string> = {
   main: '원문',
   translation: '번역',
-  status: '장면 해설',
+  status: '이전 보조 작업',
   image: '이미지 배치',
   script: '카드 스크립트',
   context: '컨텍스트 압축',
@@ -320,20 +320,25 @@ function AttemptTable({
             </tr>
           </thead>
           <tbody>
-            {(Object.keys(roleLabels) as Attempt['role'][]).map((role) => {
-              const selected = attempts.filter((attempt) => attempt.role === role);
-              const cost = total(selected, 'costUsd');
-              return (
-                <tr key={role}>
-                  <th>{roleLabels[role]}</th>
-                  <td>{selected.length}</td>
-                  <td>{total(selected, 'inputTokens') ?? '미확인'}</td>
-                  <td>{total(selected, 'outputTokens') ?? '미확인'}</td>
-                  <td>{cost === null ? '미확인' : `$${cost}`}</td>
-                  <td>{estimatedTotal(selected)}</td>
-                </tr>
-              );
-            })}
+            {Object.keys(roleLabels)
+              .filter(
+                (role) =>
+                  role !== 'status' || attempts.some((attempt) => String(attempt.role) === role)
+              )
+              .map((role) => {
+                const selected = attempts.filter((attempt) => attempt.role === role);
+                const cost = total(selected, 'costUsd');
+                return (
+                  <tr key={role}>
+                    <th>{roleLabels[role]}</th>
+                    <td>{selected.length}</td>
+                    <td>{total(selected, 'inputTokens') ?? '미확인'}</td>
+                    <td>{total(selected, 'outputTokens') ?? '미확인'}</td>
+                    <td>{cost === null ? '미확인' : `$${cost}`}</td>
+                    <td>{estimatedTotal(selected)}</td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
       </div>

@@ -230,13 +230,13 @@ ${
     {
       expectedSettingsRevision: chat.settingsRevision,
       ...chat.settings,
-      status: false,
+
       maxCalls,
     },
     'PATCH'
   );
   const profile = await api(app, `/api/chats/${chat.id}/profile`);
-  await setFixtureModelRoutes(app, { main: { id: model.id }, translation: null, status: null });
+  await setFixtureModelRoutes(app, { main: { id: model.id }, translation: null });
   await api(
     app,
     `/api/chats/${chat.id}/profile`,

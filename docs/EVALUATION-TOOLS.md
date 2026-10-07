@@ -1,6 +1,6 @@
 # Optional evaluation tools
 
-Evaluation tools are an opt-in model preset setting, disabled by default. Main, translation, and status runs use the selected evaluation mode. The setting belongs to the preset, independently of the provider connection.
+Evaluation tools are an opt-in model preset setting, disabled by default. Main and translation runs use the selected evaluation mode. The setting belongs to the preset, independently of the provider connection.
 
 ## Configuration and behavior
 
@@ -17,7 +17,7 @@ Main runs derive the session from the reserved Run ID and execution time, and ca
 
 In `model-selected` and `preloaded`, submission requires `content` (1–2,000,000 characters) and `userFacingNotice` (1–67,108,864). The host returns `content` as the result and records only the notice's presence and length. These modes also accept plain-text completion.
 
-In `source-bound`, submission requires only `content` (1–2,000,000 characters). `internalProcessingNote` is optional (0–67,108,864 characters), for internal self-checking or correction planning. The host records only its presence and length, without retaining the note text in tool receipts or attempt diagnostics. Submit the artifact alone, without other tool calls in the same response. The host returns the submitted content as the result. Translation and status submissions continue through their existing output validation before being accepted.
+In `source-bound`, submission requires only `content` (1–2,000,000 characters). `internalProcessingNote` is optional (0–67,108,864 characters), for internal self-checking or correction planning. The host records only its presence and length, without retaining the note text in tool receipts or attempt diagnostics. Submit the artifact alone, without other tool calls in the same response. The host returns the submitted content as the result. Translation submissions continue through their existing output validation before being accepted.
 
 Optional correction applies up to eight exact, unique string replacements. Validation errors return to the model within the remaining round budget. A completed response without a valid submission in `source-bound` fails with `EVALUATION_SUBMISSION_REQUIRED` rather than silently accepting plain text or automatically replaying the writer. Native turns accept a completed callback after a successful terminal submission.
 

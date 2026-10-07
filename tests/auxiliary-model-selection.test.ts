@@ -53,12 +53,12 @@ test('new auxiliary reservations use current generation models while JEV judgmen
     })
   ).run;
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    'Synthetic source with no external provider call.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  const source = store.completeRun(run.id, 'Synthetic source with no external provider call.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   const priorSnapshot = readRunSnapshot(store, run.id);
   const persisted = readStoredRunSnapshot(store, run.id);
   expect(priorSnapshot.profile?.models).toEqual({});
@@ -70,7 +70,7 @@ test('new auxiliary reservations use current generation models while JEV judgmen
     enabled: true,
   });
   const models = Object.fromEntries(
-    ['translation', 'status'].map((role) => {
+    ['translation'].map((role) => {
       const model = store.product.model({
         title: role,
         connectionId: connection.id,
@@ -88,20 +88,16 @@ test('new auxiliary reservations use current generation models while JEV judgmen
     routes: {
       main: null,
       translation: { id: models.translation.id },
-      status: { id: models.status.id },
     },
     translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
   });
   const translation = store.requestTranslation(source.id);
-  const status = store.requestStatus(source.id, source.hash, null);
   const imageInput = frozenImageSelection(store, priorSnapshot);
   const imageSnapshot = store.product.resolveJobPrompt(priorSnapshot, imageInput);
   const bridge = auxiliaryBridge(store, new Controls(), new AbortController().signal);
   const translationBundle = await bridge.load(translation.id);
-  const statusBundle = await bridge.load(status.id);
   const targets = {
     translation: translationBundle.snapshot.profile?.models.translation,
-    status: statusBundle.snapshot.profile?.models.status,
   };
   for (const [role, target] of Object.entries(targets)) {
     expect(target).toEqual({ ...models[role], tokenizer: 'gemini-gemma4', connection });
@@ -111,7 +107,6 @@ test('new auxiliary reservations use current generation models while JEV judgmen
   expect(translationBundle.translationPolicy?.judgment).toMatchObject({ threshold: 0.9 });
   expect(Object.keys(imageSnapshot.profile?.models ?? {})).not.toContain('image');
   expect(translationBundle.snapshot.profile?.models.main).toBeUndefined();
-  expect(statusBundle.snapshot.profile?.models.main).toBeUndefined();
   expect(imageSnapshot.profile?.models.main).toBeUndefined();
   expect(readStoredRunSnapshot(store, run.id)).toEqual(persisted);
   expect(store.db.prepare('SELECT * FROM provider_settings ORDER BY kind,id').all()).toEqual(

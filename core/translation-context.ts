@@ -29,7 +29,7 @@ export function translationSnapshot(
             chatId: profile.chatId,
             revision: profile.revision,
             image: false,
-            routes: { main: null, translation: profile.routes.translation, status: null },
+            routes: { main: null, translation: profile.routes.translation },
             models: profile.models.translation ? { translation: profile.models.translation } : {},
             ...(preset ? { promptPresets: { translation: preset } } : {}),
             ...(preset && controls

@@ -213,7 +213,7 @@ async function setup(app: App, translation = true) {
     {
       expectedSettingsRevision: chat.settingsRevision,
       ...chat.settings,
-      status: false,
+
       maxCalls: 12,
     },
     'PATCH'
@@ -273,7 +273,6 @@ async function setup(app: App, translation = true) {
   await setFixtureModelRoutes(app, {
     main: { id: main.id },
     translation: translation ? { id: auxiliary.id } : null,
-    status: null,
   });
   const profile = await api<ChatProfile>(
     app,

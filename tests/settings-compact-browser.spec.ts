@@ -38,7 +38,7 @@ test('CSUILAYOUT all six chat settings sections fit shared desktop and phone set
         '프롬프트·모델',
         '기억·로어',
         '이미지',
-        '자동 작업',
+        '실행 옵션',
         '카드 변수',
       ]) {
         await selectChatSettingsSection(page, section);
@@ -46,7 +46,7 @@ test('CSUILAYOUT all six chat settings sections fit shared desktop and phone set
         expect(
           await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
         ).toBeLessThanOrEqual(1);
-        if (section === '자동 작업') {
+        if (section === '실행 옵션') {
           const fields = (await pane.locator('.chat-runtime-fields').boundingBox())!;
           const group = (await pane
             .locator('.chat-runtime-fields > .settings-group')

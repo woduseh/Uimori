@@ -90,7 +90,7 @@ async function snapshot(
     chatId: profile.chatId,
     parentRevision: null,
     settingsRevision: 1,
-    settings: { status: false, maxCalls: 3 },
+    settings: { maxCalls: 3 },
     request: 'SYNTHETIC_CURRENT_ONCE',
     history: [],
     resources: [],
@@ -402,7 +402,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
         declaration: { author: 'Synthetic author', text: 'SYNTHETIC_MEMORY_SENTINEL' },
       };
     work.story = {
-      lineageHash: 'synthetic',
       canonHash: 'synthetic',
       notes: [entry],
     };

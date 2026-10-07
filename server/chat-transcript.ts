@@ -145,12 +145,12 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
           }) satisfies RunSnapshot
       );
       store.db.prepare("UPDATE runs SET status='running' WHERE id=?").run(run.id);
-      const source = store.completeRunInTransaction(
-        run.id,
-        entry.text,
-        { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-        run.snapshot.settings
-      );
+      const source = store.completeRunInTransaction(run.id, entry.text, {
+        modelCalls: 0,
+        inputTokens: null,
+        outputTokens: null,
+        costUsd: null,
+      });
       head = source.id;
       if (entry.translation !== null) {
         const id = randomUUID(),

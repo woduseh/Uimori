@@ -15,7 +15,7 @@ const snapshot = (summary: string): RunSnapshot => ({
   chatId: 'scope-chat',
   parentRevision: 'scene-3',
   settingsRevision: 1,
-  settings: { status: false, maxCalls: 8 },
+  settings: { maxCalls: 8 },
   request: '현재 장면만 이어 써 주세요.',
   resources: [],
   history: [1, 2, 3].map((n) => ({

@@ -13,14 +13,12 @@ import { contextBudgetForModel } from '../core/context-budget.js';
 import { withNativeHostContext } from '../core/provider-messages.js';
 import {
   compileTranslationPrompt,
-  displayInput,
   executeAuxiliary,
   parseStructuredTranslation,
   presentationInput,
   scriptedAuxiliary,
   translationInput,
   translationPromptContext,
-  validateDisplayAnnotation,
   validatePresentation,
   type AssetEntry,
   type AuxiliaryInput,
@@ -83,7 +81,6 @@ export type AuxiliaryJobResult = {
   sourceHash: string;
   text?: string;
   judgmentPending?: true;
-  label?: string;
   annotations?: {
     blockAnchor: string;
     assetRef: string;
@@ -92,7 +89,6 @@ export type AuxiliaryJobResult = {
     presentationIntent: 'inline' | 'profile';
     caption?: string;
   }[];
-  display?: { anchor: string; summary: string; mood?: string }[];
 };
 export type AuxiliaryOutcome = {
   status: 'completed' | 'partial' | 'failed' | 'cancelled' | 'interrupted';
@@ -216,9 +212,7 @@ export function sourceTimeContext(snapshot: RunSnapshot, kind: JobKind): SourceT
         ? profile?.promptPresets?.translation
           ? `prompt:${profile.promptPresets.translation.id}@${profile.promptPresets.translation.revision}`
           : 'default-translation-1'
-        : kind === 'status'
-          ? 'display-only-1'
-          : 'source-presentation-1',
+        : 'source-presentation-1',
     modelPresetRevision:
       kind === 'image'
         ? 'jev-latest'
@@ -237,12 +231,9 @@ function providerInput(
   evaluation?: ReturnType<typeof createEvaluationToolSession>
 ): ProviderRequest {
   if (input.role === 'presentation') throw new AuxiliaryExecutionError('JEV_JUDGMENT_REQUIRED');
-  const task =
-    input.role === 'translation'
-      ? input.customPrompt
-        ? 'Translate the entire source according to the selected prompt. Return only translated text.'
-        : 'Translate the entire source into Korean. Return only translated text.'
-      : 'Return optional display-only annotations for the source blocks.';
+  const task = input.customPrompt
+    ? 'Translate the entire source according to the selected prompt. Return only translated text.'
+    : 'Translate the entire source into Korean. Return only translated text.';
   const compilation = compileTranslationPrompt(input, snapshot, task);
   // Omit a fallback only after its complete value was rendered by a declared slot.
   // Inactive slots and templates that trim or otherwise omit content keep the full fallback.
@@ -267,7 +258,7 @@ function providerInput(
         (input.referencePolicy ? '\n' + input.referencePolicy : '') +
         (evaluation
           ? evaluation.requiresSubmission
-            ? '\nThe source-bound evaluation tool set is scoped to this model preset and this source-time task. Complete the requested translation or display annotation directly from the supplied source and task instructions; no evaluation case or continuation direction is needed. Permitted reference reads remain available. Finish by calling eval_submit_artifact with the complete task output in content, preserving the requested output format and source identity. internalProcessingNote is optional separate metadata; ordinary assistant text does not complete the task.'
+            ? '\nThe source-bound evaluation tool set is scoped to this model preset and this source-time task. Complete the requested translation directly from the supplied source and task instructions; no evaluation case or continuation direction is needed. Permitted reference reads remain available. Finish by calling eval_submit_artifact with the complete task output in content, preserving the requested output format and source identity. internalProcessingNote is optional separate metadata; ordinary assistant text does not complete the task.'
             : '\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns content as the completed task output; userFacingNotice remains separate metadata.'
           : ''),
       tools: [
@@ -327,7 +318,6 @@ function providerInput(
             : {}
           : { blocks: input.blocks }),
         ...(notes?.length && !delivered('notes', JSON.stringify(notes)) ? { notes } : {}),
-        ...(input.scenes ? { scenes: input.scenes } : {}),
         ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
         outputSchema: input.outputSchema,
       }),
@@ -393,9 +383,7 @@ export async function runAuxiliaryJob(
   const input =
     job.kind === 'translation'
       ? translationInput(source, context, snapshot, mode)
-      : job.kind === 'status'
-        ? displayInput(source, context, snapshot)
-        : presentationInput(imageSource, context, snapshot, assets);
+      : presentationInput(imageSource, context, snapshot, assets);
   const generation = await store.claim(jobId, owner, { input });
   if (generation === null) return null;
   await hooks.onProgress?.();
@@ -730,19 +718,7 @@ export async function runAuxiliaryJob(
         return outcome;
       }
     }
-    const output = (await runInput(input)).output;
-    const validated = validateDisplayAnnotation(source, output);
-    const result: AuxiliaryJobResult = {
-      mock,
-      sourceRevision: source.id,
-      sourceHash: source.hash,
-      label: validated.entries.map((entry) => entry.summary).join(' · '),
-      display: validated.entries,
-    };
-    const outcome: AuxiliaryOutcome = { status: 'completed', result, error: null };
-    await store.finish(jobId, generation, owner, outcome);
-    await hooks.onProgress?.();
-    return outcome;
+    throw new AuxiliaryExecutionError('AUXILIARY_KIND_INVALID');
   } catch (error) {
     const code = hooks.signal.aborted ? 'AUXILIARY_CANCELLED' : safeError(error);
     // IDs are local authored identifiers, not error messages or provider response excerpts.

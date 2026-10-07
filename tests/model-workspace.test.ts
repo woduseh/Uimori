@@ -63,7 +63,7 @@ function select(store: Store, id: string) {
   const current = modelWorkspace(store);
   return updateModelWorkspace(store, {
     expectedRevision: current.revision,
-    routes: { main: { id }, translation: { id }, status: { id } },
+    routes: { main: { id }, translation: { id } },
     translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
   });
 }
@@ -90,12 +90,12 @@ function complete(store: Store, chatId: string) {
     })
   ).run;
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    'Synthetic source.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  const source = store.completeRun(run.id, 'Synthetic source.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   return {
     run: observedExecution(store, run.id),
     source,
@@ -206,25 +206,6 @@ test('current global selection is shared and CAS protected while completed outpu
   expect(manual.input).toMatchObject({ translationModelSelection: { id: b.id } });
 });
 
-test('status retry retains its reservation while a new explicit status request uses current global models', () => {
-  const store = database(),
-    chat = createFixtureChat(store, 'Status'),
-    a = model(store, 'A'),
-    b = model(store, 'B');
-  select(store, a.id);
-  const first = complete(store, chat.id);
-  const status = store.requestStatus(first.source.id, first.source.hash, null);
-  store.cancelJob(status.id);
-  select(store, b.id);
-  expect(store.retryJob(status.id).input).toEqual(status.input);
-  expect(
-    store.product.resolveJobPrompt(first.run.snapshot, status.input).profile?.models.status?.id
-  ).toBe(a.id);
-  store.cancelJob(status.id);
-  const next = store.requestStatus(first.source.id, first.source.hash, status.id);
-  expect(next.input).toMatchObject({ statusModelSelection: { id: b.id } });
-});
-
 test('disabled and deleted selections block new work without rewriting historical snapshots or selecting substitutes', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Revocation'),
@@ -276,7 +257,7 @@ function mainPreset(store: Store, title: string) {
 
 test('workspace role resolution keeps optional generation selections separate from execution roles', () => {
   const workspace = promptWorkspace(database());
-  const roles = ['main', 'translation', 'status', 'helper', 'context', 'script', 'title'] as const;
+  const roles = ['main', 'translation', 'helper', 'context', 'script', 'title'] as const;
   expect(roles.map((role) => workspaceModelRef(workspace, role))).toEqual(roles.map(() => null));
   workspace.modelRoutes.main = { id: 'main' };
   workspace.helperModel = { id: 'helper' };
@@ -285,7 +266,6 @@ test('workspace role resolution keeps optional generation selections separate fr
   workspace.titleModel = { id: 'title' };
   expect(roles.map((role) => workspaceModelRef(workspace, role)?.id ?? null)).toEqual([
     'main',
-    null,
     null,
     'helper',
     'context',
@@ -517,4 +497,62 @@ test('model management impact attributes a pinned chat to its effective main mod
   expect(managementImpact(store.product, 'connection', local.connectionId).profiles).toEqual([
     { chatId: pinnedChat.id, title: pinnedChat.title, roles: ['main'] },
   ]);
+});
+
+test('retired commentary routes are ignored while old job receipts and prose remain readable', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Legacy commentary');
+  store.db
+    .prepare('UPDATE chats SET settings=? WHERE id=?')
+    .run(JSON.stringify({ status: true, maxCalls: 6 }), chat.id);
+  const first = complete(store, chat.id);
+  expect(
+    store.db
+      .prepare("SELECT id FROM jobs WHERE source_revision=? AND kind='status'")
+      .all(first.source.id)
+  ).toEqual([]);
+  store.db
+    .prepare(
+      "UPDATE prompt_workspace SET body=json_set(body,'$.modelRoutes.status',json(?)) WHERE id=1"
+    )
+    .run(JSON.stringify({ id: 'deleted-commentary-model' }));
+  expect(modelWorkspace(store).routes).toEqual({ main: null, translation: null });
+  expect(store.product.snapshot(chat.id).models).not.toHaveProperty('status');
+  const before = store.source(first.source.id);
+  const receipt = {
+    mock: false,
+    sourceRevision: before.id,
+    sourceHash: before.hash,
+    label: 'Archived commentary',
+  };
+  for (const state of ['queued', 'running', 'completed']) {
+    store.db
+      .prepare(
+        "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,created_at,updated_at) VALUES(?,?,?,?,'status',?,?,?,?)"
+      )
+      .run(
+        'legacy-' + state,
+        chat.id,
+        before.id,
+        before.hash,
+        state,
+        ['queued', 'running', 'completed'].indexOf(state) + 1,
+        'legacy',
+        'legacy'
+      );
+  }
+  store.db
+    .prepare('INSERT INTO job_results(job_id,generation,result,created_at) VALUES(?,1,?,?)')
+    .run('legacy-completed', JSON.stringify(receipt), 'legacy');
+  expect(store.queuedJobs()).not.toContain('legacy-queued');
+  expect(() => store.claimJob('legacy-queued', 'server', {})).toThrow('SCENE_COMMENTARY_RETIRED');
+  expect(() => store.retryJob('legacy-completed')).toThrow('SCENE_COMMENTARY_RETIRED');
+  store.recover();
+  for (const state of ['queued', 'running'])
+    expect(store.job('legacy-' + state)).toMatchObject({
+      status: 'interrupted',
+      error: 'SCENE_COMMENTARY_RETIRED',
+    });
+  expect(store.job('legacy-completed').result).toEqual(receipt);
+  expect(store.source(before.id)).toEqual(before);
 });

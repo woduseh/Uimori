@@ -357,12 +357,12 @@ function capture(app: App, chatId: string) {
 }
 function complete(app: App, run: ReturnType<typeof capture>) {
   app.store.startRun(run.id);
-  return app.store.completeRun(
-    run.id,
-    'Mira waits by the quiet harbor.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  return app.store.completeRun(run.id, 'Mira waits by the quiet harbor.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
 }
 
 async function workspace(app: App) {
@@ -811,49 +811,5 @@ describe('translation prompt preview uses the job compiler without writes', () =
     expect(changed.compilation.messages[0].content[0].text).toContain('PREVIEW OVERRIDE');
     expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
     expect(fetch).not.toHaveBeenCalled();
-  });
-});
-
-describe('explicit status recovery with current model', () => {
-  test('rolls back validation failures and rejects changed source or active older workers', async () => {
-    const app = await application();
-    const store = app.store;
-    const chat = createFixtureChat(store, 'Synthetic status safety');
-    store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
-    const run = capture(app, chat.id);
-    const source = complete(app, run);
-    const original = store.detail(chat.id).jobs.find((job) => job.kind === 'status')!;
-    store.failQueuedJob(original.id, original.generation, 'MODEL_REQUIRED:status');
-    const before = store.detail(chat.id).jobs;
-    expect(() =>
-      store.requestStatus(source.id, source.hash, original.id, () => {
-        throw new Error('MODEL_REQUIRED:status');
-      })
-    ).toThrow('MODEL_REQUIRED:status');
-    expect(store.detail(chat.id).jobs).toEqual(before);
-    await request(
-      app,
-      `/sources/${source.id}/status`,
-      { expectedSourceHash: '0'.repeat(64), expectedJobId: original.id },
-      409
-    );
-    expect(store.detail(chat.id).jobs).toEqual(before);
-    const created = store.requestStatus(source.id, source.hash, original.id);
-    const claimed = store.claimJob(created.id, 'old-worker', {})!;
-    store.cancelJob(created.id);
-    const edited = store.editSource(source.id, { text: 'A changed source.', expectedRevision: 0 });
-    expect(() => store.requestStatus(source.id, source.hash, created.id)).toThrow(/changed/);
-    const replacement = store.requestStatus(source.id, edited.hash, created.id);
-    expect(replacement.sourceHash).toBe(edited.hash);
-    expect(
-      store.finishAuxiliary(created.id, claimed.generation, 'old-worker', {
-        status: 'completed',
-        result: {},
-        error: null,
-      })
-    ).toBe(false);
-    store.cancelJob(replacement.id);
-    store.db.prepare("UPDATE jobs SET status='running' WHERE id=?").run(original.id);
-    expect(() => store.requestStatus(source.id, edited.hash, replacement.id)).toThrow(/active/);
   });
 });

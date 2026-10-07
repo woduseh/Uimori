@@ -238,59 +238,6 @@ export function translationRecovery(input: unknown, sourceHash: string): string 
   return text(recovery.text, 'translation recovery', TRANSLATION_TEXT_MAX_CHARS);
 }
 
-export function requestStatus(
-  store: Store,
-  id: string,
-  expectedSourceHash: string,
-  expectedJobId: string | null,
-  validate?: (id: string) => void
-): Job {
-  return store.transaction(() => {
-    const source = store.source(id);
-    const latest = store.db
-      .prepare(
-        "SELECT id,status FROM jobs WHERE source_revision=? AND kind='status' ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1"
-      )
-      .get(id) as { id: string; status: string } | undefined;
-    if (source.hash !== expectedSourceHash || (latest?.id ?? null) !== expectedJobId)
-      throw new HttpError(409, 'Status source or job changed; refresh before creating a new job');
-    if (
-      store.db
-        .prepare(
-          "SELECT 1 FROM jobs WHERE source_revision=? AND kind='status' AND status IN ('queued','running')"
-        )
-        .get(id)
-    )
-      throw new HttpError(409, 'Status job is already active');
-    const selected = promptWorkspace(store).modelRoutes.status;
-    const input = {
-      statusModelSelection: selected,
-      ...(selected
-        ? { statusModelSnapshot: store.product.modelSnapshot(selected.id, 'status') }
-        : {}),
-    };
-    store.product.resolveJobPrompt(readRunSnapshot(store, source.runId), input);
-    const jobId = randomUUID();
-    const time = new Date().toISOString();
-    store.db
-      .prepare(
-        "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,input,created_at,updated_at) VALUES(?,?,?,?,'status','queued',?,?,?,?)"
-      )
-      .run(
-        jobId,
-        source.chatId,
-        id,
-        source.hash,
-        latest ? (store.job(latest.id).revision ?? 1) + 1 : 1,
-        JSON.stringify(input),
-        time,
-        time
-      );
-    validate?.(jobId);
-    store.event(source.chatId, 'job.queued', jobId);
-    return store.job(jobId);
-  });
-}
 export function editTranslation(store: Store, id: string, value: unknown): Job {
   const b = record(value);
   fields(b, ['text', 'expectedRevision', 'expectedSourceHash']);

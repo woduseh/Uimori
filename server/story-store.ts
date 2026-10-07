@@ -1,21 +1,12 @@
 import { HttpError, fields, text, record } from './request-validation.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { Store, Source, Run } from './store.js';
 import type { StorySnapshot, StoryDetail, SceneCommand } from '../core/story.js';
 import type { RunSnapshot } from '../core/types.js';
 import { StoryNotes } from './story-notes.js';
 
 type Row = Record<string, any>;
-export const lineageHash = (history: RunSnapshot['history']) =>
-  createHash('sha256')
-    .update(
-      JSON.stringify(
-        history.map((item) => [item.revision, createHash('sha256').update(item.text).digest('hex')])
-      )
-    )
-    .digest('hex');
-
 /** User notes and explicit scene commands; authored card variables belong to the Risu runtime. */
 export class StoryStore {
   readonly notes: StoryNotes;
@@ -37,7 +28,6 @@ export class StoryStore {
       notes = this.notes.entries(scope);
     return notes.length
       ? {
-          lineageHash: lineageHash(snapshot.history),
           canonHash: this.notes.canonHash(scope),
           notes,
         }

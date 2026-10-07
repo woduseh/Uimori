@@ -12,7 +12,6 @@ export const GENERATION_KEYS = [
   'reasoningEffort',
   'outputEffort',
   'thinkingMode',
-  'thinkingBudgetTokens',
   'verbosity',
   'reasoningMode',
   'reasoningContext',
@@ -340,13 +339,6 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
       !(values as readonly unknown[]).includes(g[key as keyof ModelGeneration])
     )
       reject();
-  if (
-    g.thinkingBudgetTokens !== undefined &&
-    (!Number.isSafeInteger(g.thinkingBudgetTokens) ||
-      g.thinkingBudgetTokens < 1024 ||
-      g.thinkingBudgetTokens >= g.maxOutputTokens)
-  )
-    reject();
   if (
     g.topP !== undefined &&
     (typeof g.topP !== 'number' || !Number.isFinite(g.topP) || g.topP < 0 || g.topP > 1)

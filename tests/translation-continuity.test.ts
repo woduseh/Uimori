@@ -28,7 +28,7 @@ function bundle(count = 5): AuxiliaryBundle {
       chatId: source.chatId,
       parentRevision: null,
       settingsRevision: 1,
-      settings: { status: false, maxCalls: 8 },
+      settings: { maxCalls: 8 },
       request: 'Synthetic translation continuity',
       history: [],
       resources: [],

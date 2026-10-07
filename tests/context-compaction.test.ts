@@ -66,7 +66,7 @@ async function snapshot(texts: string[] = []): Promise<RunSnapshot> {
       chatId: 'synthetic-compaction-chat',
       parentRevision: history.at(-1)?.revision ?? null,
       settingsRevision: 1,
-      settings: { status: false, maxCalls: 16 },
+      settings: { maxCalls: 16 },
       request: currentRequest,
       history,
       resources: [],
@@ -90,7 +90,7 @@ async function snapshot(texts: string[] = []): Promise<RunSnapshot> {
         ...defaultProfile('synthetic-compaction-chat'),
         models: { main: target },
         contextModel: target,
-        routes: { main: { id: target.id }, translation: null, status: null },
+        routes: { main: { id: target.id }, translation: null },
         promptPresets: {
           main: {
             id: 'synthetic-fixed-prompt',
@@ -285,29 +285,23 @@ describe('input context projection and durable summary calls', () => {
       consumerLimit: 65536,
       summaryLimit: 8192,
       output: 8192,
-      thinking: 7168,
       goal: 2048,
-      budget: 2048,
     },
     {
       consumerLimit: 8192,
       summaryLimit: 65536,
       output: 8192,
-      thinking: 7168,
       goal: 1024,
-      budget: 3072,
     },
     {
       consumerLimit: 16384,
       summaryLimit: 8192,
       output: 1500,
-      thinking: 1200,
-      goal: 476,
-      budget: 1024,
+      goal: 750,
     },
   ])(
-    'a $consumerLimit-token consumer and $summaryLimit-token summarizer send one consistent goal and thinking policy',
-    async ({ consumerLimit, summaryLimit, output, thinking, goal, budget }) => {
+    'a $consumerLimit-token consumer and $summaryLimit-token summarizer send one consistent summary goal and output cap',
+    async ({ consumerLimit, summaryLimit, output, goal }) => {
       const source = await snapshot([
         'OLD_ACTOR → RECIPIENT: PROMISE',
         'CURRENT_UNRESOLVED_REQUEST',
@@ -319,7 +313,6 @@ describe('input context projection and durable summary calls', () => {
         ...model('summary-model'),
         inputTokenLimit: summaryLimit,
         maxOutputTokens: output,
-        thinkingBudgetTokens: thinking,
       };
       source.contextPlan!.budget.inputTokenLimit = consumerLimit;
       const original = structuredClone(source),
@@ -328,11 +321,11 @@ describe('input context projection and durable summary calls', () => {
       await prepareInputContext(source, log.hooks);
       expect(log.wires).toHaveLength(1);
       expect(log.wires[0].body).toMatchObject({
-        generation: { maxOutputTokens: Math.min(output, 4096), thinkingBudgetTokens: budget },
+        generation: { maxOutputTokens: Math.min(output, 4096) },
         stable: { contract: expect.stringContaining(CONTEXT_SUMMARY_SEMANTICS) },
         input: { controls: { targetSummaryTokens: goal } },
       });
-      expect(goal + budget).toBeLessThanOrEqual(Math.min(output, 4096));
+      expect(goal).toBeLessThanOrEqual(Math.min(output, 4096));
       expect(source).toEqual(original);
     }
   );
@@ -560,7 +553,6 @@ describe('input context projection and durable summary calls', () => {
       correction =
         'USER_CORRECTION: 발언자는 Darcy, 대상은 Elizabeth예요. Mira의 코드는 Q7x-α9예요.';
     first.story = {
-      lineageHash: 'lineage',
       canonHash: 'canon-with-correction',
       notes: [
         {
@@ -905,7 +897,6 @@ describe('input context projection and durable summary calls', () => {
     const memory: ModelSnapshot = { ...model('memory-model'), tokenizer: 'openai-cl100k' };
     source.profile!.models.main!.tokenizer = 'openai-o200k';
     source.story = {
-      lineageHash: 'lineage',
       canonHash: 'canon',
       notes: [],
     };

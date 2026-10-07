@@ -131,16 +131,8 @@ describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
     expect(images?.result?.annotations).toEqual([]);
     expect(images?.result).not.toHaveProperty('text');
     expect(images?.result).not.toHaveProperty('display');
-    seed.job.kind = 'status';
-    const displayState = bridge(seed);
-    const annotation = await runAuxiliaryJob(
-      displayState.store,
-      seed.job.id,
-      'server-a',
-      observed.options
-    );
-    expect(annotation?.result?.display?.[0].summary).toContain('정사에 반영하지 않음');
     expect(sourceTimeContext(seed.snapshot, 'image').references).toEqual([]);
+    seed.job.kind = 'translation';
     const controller = new AbortController();
     controller.abort('PRIVATE_ABORT_REASON');
     observed.options.signal = controller.signal;

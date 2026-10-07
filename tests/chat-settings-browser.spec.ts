@@ -8,7 +8,7 @@ import { postFixtureChat } from './fixtures/chat.js';
 import { openChatMenu, selectChatSettingsSection } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
-const sections = ['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '자동 작업'];
+const sections = ['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '실행 옵션'];
 
 async function prepare(page: Page, request: APIRequestContext, title: string) {
   const response = await postFixtureChat(request, { data: { title } });
@@ -194,10 +194,12 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   const originalImage = await image.isChecked();
   await image.setChecked(!originalImage);
   await translationImage.uncheck();
-  await selectChatSettingsSection(page, '자동 작업');
-  const status = dialog.getByRole('switch', { name: '장면 해설 자동 생성', exact: true });
-  const originalStatus = await status.isChecked();
-  await status.setChecked(!originalStatus);
+  await selectChatSettingsSection(page, '실행 옵션');
+  await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toHaveCount(0);
+  const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
+  const originalCalls = await calls.inputValue();
+  const draftCalls = originalCalls === '6' ? '7' : '6';
+  await calls.fill(draftCalls);
   await page.evaluate(() => history.back());
   await expect(nav).toBeVisible();
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
@@ -210,20 +212,20 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '이미지');
   await expect(image).toBeChecked({ checked: !originalImage });
   await expect(translationImage).not.toBeChecked();
-  await selectChatSettingsSection(page, '자동 작업');
-  await expect(status).toBeChecked({ checked: !originalStatus });
-  await status.focus();
+  await selectChatSettingsSection(page, '실행 옵션');
+  await expect(calls).toHaveValue(draftCalls);
+  await calls.focus();
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  await expect(status).toBeFocused();
+  await expect(calls).toBeFocused();
   await selectChatSettingsSection(page, '이미지');
   await expect(image).toBeChecked({ checked: !originalImage });
   await expect(translationImage).not.toBeChecked();
-  await selectChatSettingsSection(page, '자동 작업');
-  await expect(status).toBeChecked({ checked: !originalStatus });
-  await status.focus();
+  await selectChatSettingsSection(page, '실행 옵션');
+  await expect(calls).toHaveValue(draftCalls);
+  await calls.focus();
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  await expect(status).toBeVisible();
-  await expect(status).toBeFocused();
+  await expect(calls).toBeVisible();
+  await expect(calls).toBeFocused();
   await expectNoOverflow(page, dialog);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
@@ -231,7 +233,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
     await page.screenshot({ path: info.outputPath(`chat-settings-dirty-${MOBILE_WIDTH}.png`) });
   await page.keyboard.press('Escape');
   await expect(confirm).toBeHidden();
-  await expect(status).toBeChecked({ checked: !originalStatus });
+  await expect(calls).toHaveValue(draftCalls);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await confirm.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -242,8 +244,8 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '이미지');
   await expect(image).toBeChecked({ checked: originalImage });
   await expect(translationImage).toBeChecked();
-  await selectChatSettingsSection(page, '자동 작업');
-  await expect(status).toBeChecked({ checked: originalStatus });
+  await selectChatSettingsSection(page, '실행 옵션');
+  await expect(calls).toHaveValue(originalCalls);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(confirm).toBeHidden();
@@ -270,11 +272,11 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await expect(nav.locator('[tabindex="0"]')).toHaveCount(1);
   // Reading settings are no longer a chat settings section; the last section keeps its panel.
   await expect(dialog.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveCount(0);
-  await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('작업당 모델 호출 한도', { exact: true })).toBeVisible();
   await last.focus();
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(dialog.getByRole('tabpanel')).toBeFocused();
-  await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('작업당 모델 호출 한도', { exact: true })).toBeVisible();
   await page.evaluate(() => history.back());
   await expect(
     dialog.getByRole('navigation', { name: '채팅 설정 분류', exact: true })

@@ -100,7 +100,6 @@ function fixture() {
   const created = createFixtureChat(store, 'Synthetic advisor snapshot');
   const chat = store.settings(created.id, created.settingsRevision, {
     ...created.settings,
-    status: false,
   });
   const connection = product.connection({
     title: 'Synthetic connection',
@@ -200,12 +199,12 @@ test('reservation freezes each advisor and prompt; later current settings apply 
     main: { title: edited.title, program: edited.program, values: { shared: 'selected' } },
   });
   f.store.startRun(run.id);
-  f.store.completeRun(
-    run.id,
-    'Only the writer becomes a source.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  f.store.completeRun(run.id, 'Only the writer becomes a source.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   const next = f.capture();
   expect(next.snapshot.profile!.collaborationModels!.actor).toMatchObject({
     revision: 2,

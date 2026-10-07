@@ -1,6 +1,7 @@
 import { stageTranslationJudgment, translationRecovery } from './source-editing.js';
 import { translationPolicy, type TranslationPolicy } from '../core/translation-settings.js';
 import type { Store } from './store.js';
+import { HttpError } from './request-validation.js';
 import { readRunSnapshot } from './run-projections.js';
 import { type AssetEntry } from '../core/auxiliary.js';
 import type { AuxiliaryStoreBridge } from './product-auxiliary.js';
@@ -16,6 +17,7 @@ export function auxiliaryBridge(
   return {
     load(id) {
       const job = store.job(id);
+      if (job.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
       const policy =
         job.kind === 'translation' &&
         job.input &&
@@ -41,7 +43,7 @@ export function auxiliaryBridge(
         uses: a.allowedUse === 'both' ? ['profile', 'inline'] : [a.allowedUse],
       }));
       return {
-        job,
+        job: { ...job, kind: job.kind },
         source,
         snapshot,
         ...(job.kind === 'image' ? { imageSource: imageTargetSource(store, job, true) } : {}),
@@ -63,6 +65,7 @@ export function auxiliaryBridge(
         toolEvents: [],
       });
       if (!job) return null;
+      if (job.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
       await controls.wait(job.kind, signal);
       signal.throwIfAborted();
       controls.fail(job.kind);

@@ -180,7 +180,7 @@ export async function fixture(
     {
       ...chat.settings,
       expectedSettingsRevision: chat.settingsRevision,
-      status: false,
+
       maxCalls: options.maxCalls ?? 8,
     },
     'PATCH'
@@ -265,7 +265,7 @@ export async function fixture(
     program,
   });
   const prior = await api<ChatProfile>(app, `/api/chats/${chat.id}/profile`);
-  await setFixtureModelRoutes(app, { main: { id: mainModel.id }, translation: null, status: null });
+  await setFixtureModelRoutes(app, { main: { id: mainModel.id }, translation: null });
   const profile = await api<ChatProfile>(
     app,
     `/api/chats/${chat.id}/profile`,

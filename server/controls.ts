@@ -1,10 +1,9 @@
 import type { FixtureGeneration } from '../core/fixture-provider.js';
-export type Barrier = 'run' | 'translation' | 'status' | 'image' | 'state' | 'illustration';
+export type Barrier = 'run' | 'translation' | 'image' | 'state' | 'illustration';
 export type FailurePoint =
   | 'source-transaction'
   | 'job-transaction'
   | 'translation'
-  | 'status'
   | 'image'
   | 'state'
   | 'illustration';

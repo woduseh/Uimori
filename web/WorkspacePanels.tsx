@@ -275,8 +275,7 @@ const settingsCategories: SettingsCategory[] = [
     key: 'models',
     label: '역할별 모델',
     icon: ModelIcon,
-    terms:
-      '원문 작문 번역 도우미 컨텍스트 요약 채팅 제목 장면 해설 확장 호출 스크립트 거절 판정 모델 선택',
+    terms: '원문 작문 번역 도우미 컨텍스트 요약 채팅 제목 확장 호출 스크립트 거절 판정 모델 선택',
   },
   { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon, terms: '프리셋 기본 옵션' },
   {

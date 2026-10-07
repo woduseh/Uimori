@@ -164,7 +164,7 @@ Browser checks use Playwright's live list reporter and a JSON report. If a run i
 
 ### Synthetic generation
 
-`core/fixture-provider.ts` exposes explicit fixture behavior separately from product chat settings. Unit tests pass options to `executeFixtureMain` or `MainHooks.fixture`; HTTP scenarios use `app.controls.fixture` or `/api/test/control` with `action: "fixture"`. The controls are exposed only in test mode, captured before execution waits, and never saved in chat settings or provider inputs. Normal generation still requires a configured model. Test settings conflicts with current `maxCalls`/`status`, not mock style fields.
+`core/fixture-provider.ts` exposes explicit fixture behavior separately from product chat settings. Unit tests pass options to `executeFixtureMain` or `MainHooks.fixture`; HTTP scenarios use `app.controls.fixture` or `/api/test/control` with `action: "fixture"`. The controls are exposed only in test mode, captured before execution waits, and never saved in chat settings or provider inputs. Normal generation still requires a configured model. Test settings conflicts with current `maxCalls`, not mock style fields.
 
 Storage regressions are grouped by their owner: reader projections, chat option receipts, execution retention, text retention, and database initialization. The storage measurement tools use `scripts/synthetic-story.mjs`; the pre-native loading runner has been removed.
 

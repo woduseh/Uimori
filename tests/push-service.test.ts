@@ -92,7 +92,7 @@ function start(store: Store, chatId: string) {
       chatId,
       parentRevision: selected.headRevision,
       settingsRevision: selected.settingsRevision,
-      settings: { ...selected.settings, status: false },
+      settings: { ...selected.settings },
       request: 'Synthetic actual-write request',
       history: store.history(selected.headRevision),
       profile,
@@ -127,12 +127,12 @@ function complete(store: Store, chatId: string) {
     usage: { inputTokens: 1, outputTokens: 1, costUsd: null, priceRevision: null, raw: null },
   });
   return store.source(
-    store.completeRun(
-      run.id,
-      'SECRET_PROSE_CANARY',
-      { modelCalls: 1, inputTokens: 1, outputTokens: 1, costUsd: null },
-      run.snapshot.settings
-    ).id
+    store.completeRun(run.id, 'SECRET_PROSE_CANARY', {
+      modelCalls: 1,
+      inputTokens: 1,
+      outputTokens: 1,
+      costUsd: null,
+    }).id
   );
 }
 afterEach(async () => {

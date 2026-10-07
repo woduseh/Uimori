@@ -72,7 +72,7 @@ export function readerRoutes(app: FastifyInstance, store: Store) {
     store.chat(request.params.id);
     return store.db
       .prepare(
-        `SELECT j.id,j.source_revision AS sourceRevision,j.kind,j.status,j.error,j.generation AS attempt FROM jobs j JOIN sources s ON s.id=j.source_revision WHERE j.chat_id=? AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AND (j.kind!='translation' OR j.id=(SELECT id FROM jobs WHERE source_revision=s.id AND kind='translation' ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1)) ORDER BY j.created_at,j.id`
+        `SELECT j.id,j.source_revision AS sourceRevision,j.kind,j.status,j.error,j.generation AS attempt FROM jobs j JOIN sources s ON s.id=j.source_revision WHERE j.chat_id=? AND j.kind!='status' AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AND (j.kind!='translation' OR j.id=(SELECT id FROM jobs WHERE source_revision=s.id AND kind='translation' ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1)) ORDER BY j.created_at,j.id`
       )
       .all(request.params.id);
   });

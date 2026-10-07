@@ -58,7 +58,7 @@ async function setup() {
   const chat = await api<Chat>('/api/chats', { title: 'Illustrated chat' });
   await api(
     `/api/chats/${chat.id}/settings`,
-    { ...chat.settings, status: false, expectedSettingsRevision: chat.settingsRevision },
+    { ...chat.settings, expectedSettingsRevision: chat.settingsRevision },
     'PATCH'
   );
   const respond = async (request = `Scene ${randomUUID()}`) => {

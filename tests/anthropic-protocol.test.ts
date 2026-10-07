@@ -399,7 +399,7 @@ describe('Anthropic Messages request and opaque continuation', () => {
     expect(end(decoder)).toMatchObject({ status: 'completed', text: prose });
   });
 
-  test.each(['main', 'status'] as const)('does not send translation formatting for %s', (role) => {
+  test.each(['main', 'helper'] as const)('does not send translation formatting for %s', (role) => {
     const input = request();
     input.role = role;
     input.generation!.structuredOutput = true;

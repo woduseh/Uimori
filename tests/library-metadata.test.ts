@@ -93,7 +93,7 @@ test('current profiles refresh attachment revisions without loading authored bod
   expect(current.packageAttachments).toEqual([
     { ...original.packageAttachments![0], revision: changed.revision },
   ]);
-  expect(current.routes).toEqual({ main: null, translation: null, status: null });
+  expect(current.routes).toEqual({ main: null, translation: null });
   const loaded = JSON.stringify(returnedRows);
   expect(loaded.includes('ATTACHED_BODY_NOT_NEEDED_FOR_PROFILE')).toBe(false);
   expect(loaded.includes('PROMPT_BODY_NOT_NEEDED_FOR_PROFILE')).toBe(false);

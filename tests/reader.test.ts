@@ -43,10 +43,10 @@ async function setup() {
   owned.push({ app, directory });
   return app;
 }
-test('new chats leave automatic status off until explicitly enabled', async () => {
+test('new chats have no scene commentary setting or automatic job', async () => {
   const app = await setup();
   const chat = createFixtureChat(app.store, 'Synthetic initial settings');
-  expect(chat.settings.status).toBe(false);
+  expect(chat.settings).toEqual({ maxCalls: 8 });
   const result = source(app.store, chat.id);
   expect(app.store.chat(chat.id).settingsRevision).toBe(1);
   expect(
@@ -77,12 +77,12 @@ function source(store: Store, chatId: string, text = 'Synthetic paragraph.') {
     })
   ).run;
   store.startRun(run.id);
-  return store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  return store.completeRun(run.id, text, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
 }
 function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
   // This scale case checks persisted reader projection, not prompt compilation.
@@ -125,12 +125,12 @@ function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
       );
       store.event(chatId, 'run.queued', runId);
       store.event(chatId, 'run.running', runId);
-      const completed = store.completeRunInTransaction(
-        runId,
-        text,
-        { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-        chat.settings
-      );
+      const completed = store.completeRunInTransaction(runId, text, {
+        modelCalls: 0,
+        inputTokens: null,
+        outputTokens: null,
+        costUsd: null,
+      });
       history.push({ revision: completed.id, text, contentHash: completed.hash });
       return completed;
     })
@@ -426,8 +426,9 @@ test('restoring any source retains its whole fixed page, including all of a shor
 test('activity remains page independent and retains active work beyond the terminal limit', async () => {
   const { store } = await setup(),
     chat = createFixtureChat(store, 'Activity');
-  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
   const items = Array.from({ length: 35 }, () => source(store, chat.id));
+  for (const item of items) store.requestTranslation(item.id);
   const first = readerDetail(store, chat.id, {});
   const activities = first.reader.activity;
   expect(activities.filter((a) => !['queued', 'running'].includes(a.status))).toHaveLength(30);
@@ -465,8 +466,9 @@ test('activity remains page independent and retains active work beyond the termi
 test('activity completion time ignores subsequent usage updates and retries restart queue time', async () => {
   const { store } = await setup(),
     chat = createFixtureChat(store, 'Activity time');
-  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
   const item = source(store, chat.id);
+  store.requestTranslation(item.id);
   const before = readerDetail(store, chat.id, {}).reader.activity.find((a) => a.id === item.runId)!;
   store.db
     .prepare('UPDATE runs SET updated_at=? WHERE id=?')
@@ -485,7 +487,7 @@ test('activity completion time ignores subsequent usage updates and retries rest
 test('response activity retains older page work without expanding global activity or other pages', async () => {
   const { store } = await setup(),
     chat = createFixtureChat(store, 'Response activity');
-  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
   const items = Array.from({ length: 35 }, () => source(store, chat.id));
   store.db
     .prepare("UPDATE jobs SET status='completed',updated_at='2000-01-01' WHERE chat_id=?")
@@ -577,8 +579,9 @@ test('activity history pages past recent thirty and validates chat-scoped cursor
 test('translation resolution uses same source hash and revision beyond the recent window', async () => {
   const { store } = await setup();
   const chat = createFixtureChat(store, 'Activity resolution');
-  store.settings(chat.id, chat.settingsRevision, { ...chat.settings, status: true });
+  store.settings(chat.id, chat.settingsRevision, { ...chat.settings });
   const item = source(store, chat.id);
+  store.requestTranslation(item.id);
   const original = store.db.prepare('SELECT id FROM jobs WHERE source_revision=?').get(item.id) as {
     id: string;
   };

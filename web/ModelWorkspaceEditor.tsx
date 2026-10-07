@@ -226,12 +226,9 @@ export function ModelWorkspaceEditor({
         <details className="settings-group full model-secondary-settings">
           <summary className="settings-group-heading">
             자동 작업
-            <small>{configuredSummary([draft.routes.status, draft.titleModel])}</small>
+            <small>{configuredSummary([draft.titleModel])}</small>
           </summary>
           <div className="settings-group-body">
-            {selector('장면 해설 모델', draft.routes.status, (ref) =>
-              change({ ...draft, routes: { ...draft.routes, status: ref } })
-            )}
             {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
               change({ ...draft, titleModel: ref })
             )}

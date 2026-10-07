@@ -64,7 +64,7 @@ function chatWithMainModel(store: Store, title: string) {
   const profile = store.product.profile(chat.id);
   updateTestProfile(store.product, chat.id, {
     expectedRevision: profile.revision,
-    routes: { main: { id: model.id }, translation: null, status: null },
+    routes: { main: { id: model.id }, translation: null },
     image: profile.image,
   });
   return chat;
@@ -184,12 +184,12 @@ function reserve(store: Store, chatId: string, commandId: string, key = randomUU
 function write(store: Store, chatId: string, commandId: string, text: string) {
   const run = reserve(store, chatId, commandId);
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    text,
-    { modelCalls: 1, inputTokens: 10, outputTokens: 20, costUsd: null },
-    run.snapshot.settings
-  );
+  const source = store.completeRun(run.id, text, {
+    modelCalls: 1,
+    inputTokens: 10,
+    outputTokens: 20,
+    costUsd: null,
+  });
   return { run: observedExecution(store, run.id), source };
 }
 
@@ -222,12 +222,12 @@ describe('hierarchical composition', () => {
         }) satisfies RunSnapshot
     ).run;
     store.startRun(run.id);
-    const source = store.completeRun(
-      run.id,
-      '미라는 지도를 펼쳤다.',
-      { modelCalls: 1, inputTokens: 5, outputTokens: 9, costUsd: null },
-      run.snapshot.settings
-    );
+    const source = store.completeRun(run.id, '미라는 지도를 펼쳤다.', {
+      modelCalls: 1,
+      inputTokens: 5,
+      outputTokens: 9,
+      costUsd: null,
+    });
     // No composition exists, so nothing is frozen and no composition input is required.
     expect(observedExecution(store, run.id).snapshot.outline).toBeUndefined();
     expect(store.chat(chat.id).headRevision).toBe(source.id);
@@ -432,12 +432,12 @@ describe('hierarchical composition', () => {
         )
       ).statusCode
     ).toBe(409);
-    const source = store.completeRun(
-      run.id,
-      '구멍이 없었다.',
-      { modelCalls: 1, inputTokens: 10, outputTokens: 20, costUsd: null },
-      run.snapshot.settings
-    );
+    const source = store.completeRun(run.id, '구멍이 없었다.', {
+      modelCalls: 1,
+      inputTokens: 10,
+      outputTokens: 20,
+      costUsd: null,
+    });
     const written = store.outline.node(beat.id);
     store.outline.apply(
       chat.id,
@@ -644,12 +644,12 @@ describe('hierarchical composition', () => {
       });
     expect(replay()).toMatchObject({ created: false, run: { id: run.id, snapshot: run.snapshot } });
     store.startRun(run.id);
-    store.completeRun(
-      run.id,
-      '원래 계획으로 집필한 원문',
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings
-    );
+    store.completeRun(run.id, '원래 계획으로 집필한 원문', {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    });
     expect(replay().run.id).toBe(run.id);
     expect(observedExecution(store, run.id).snapshot.outline).toEqual(run.snapshot.outline);
     expect(store.run(run.id).inputs).toEqual([]);

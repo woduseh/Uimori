@@ -103,7 +103,7 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
   let chat = createFixtureChat(app.store, '합성 긴 한국어 대화');
   chat = app.store.settings(chat.id, chat.settingsRevision, {
     ...chat.settings,
-    status: false,
+
     maxCalls: 16,
   });
   const sources: Source[] = [];
@@ -134,8 +134,7 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
       app.store.completeRun(
         run.id,
         `과거 장면 ${index}.\n${paragraph.repeat(options.short ? 1 : 60)}`,
-        usage,
-        run.snapshot.settings
+        usage
       )
     );
   }
@@ -160,7 +159,7 @@ async function setup(options: { evaluated?: boolean; count?: number; short?: boo
   const profile = app.store.product.profile(chat.id);
   updateTestProfile(app.store.product, chat.id, {
     expectedRevision: profile.revision,
-    routes: { main: { id: model.id }, translation: null, status: null },
+    routes: { main: { id: model.id }, translation: null },
     image: profile.image,
   });
   const workspace = modelWorkspace(app.store);

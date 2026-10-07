@@ -69,12 +69,12 @@ function turn(store: Store, chatId: string, request: string, value: string) {
   ).run;
   store.startRun(run.id);
   return store.source(
-    store.completeRun(
-      run.id,
-      value,
-      { modelCalls: 2, inputTokens: 50, outputTokens: 80, costUsd: 0.02 },
-      run.snapshot.settings
-    ).id
+    store.completeRun(run.id, value, {
+      modelCalls: 2,
+      inputTokens: 50,
+      outputTokens: 80,
+      costUsd: 0.02,
+    }).id
   );
 }
 function authoredChat(store: Store) {

@@ -45,7 +45,7 @@ function fixture(): RunSnapshot {
     chatId: 'chat',
     parentRevision: 'old',
     settingsRevision: 1,
-    settings: { status: false, maxCalls: 4 },
+    settings: { maxCalls: 4 },
     request: 'CURRENT_SENTINEL',
     history: [{ revision: 'old', text: 'HISTORY_SENTINEL' }],
     resources: [],

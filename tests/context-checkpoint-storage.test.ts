@@ -73,7 +73,7 @@ function fixture() {
       chatId: chat.id,
       parentRevision: history.at(-1)?.revision ?? null,
       settingsRevision: chat.settingsRevision,
-      settings: { ...chat.settings, status: false, maxCalls: 16 },
+      settings: { ...chat.settings, maxCalls: 16 },
       request: '다음 장면을 이어 주세요.',
       history: structuredClone(history),
       resources: [],

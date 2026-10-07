@@ -21,7 +21,7 @@ function fixture() {
     chatId: 'chat',
     parentRevision: 'latest',
     settingsRevision: 1,
-    settings: { status: false, maxCalls: 8 },
+    settings: { maxCalls: 8 },
     request: 'Synthetic read-only contract check.',
     resources: [],
     history,

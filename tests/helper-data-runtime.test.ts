@@ -1128,12 +1128,12 @@ test('an entire selected passage reaches the native helper without keyword retri
     })
   ).run;
   f.store.startRun(run.id);
-  f.store.completeRun(
-    run.id,
-    fullText,
-    { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-    run.snapshot.settings
-  );
+  f.store.completeRun(run.id, fullText, {
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+  });
   const source = f.store.history(f.store.chat(chat.id).headRevision)[0]!;
   const sourceHash = createHash('sha256').update(fullText).digest('hex');
   const conversation = f.runtime.workspace.open({

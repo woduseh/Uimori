@@ -79,12 +79,12 @@ async function fixture() {
       })
     ).run;
     store.startRun(run.id);
-    store.completeRun(
-      run.id,
-      `Synthetic source ${index}. The promise remains unresolved.`,
-      { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
-      run.snapshot.settings
-    );
+    store.completeRun(run.id, `Synthetic source ${index}. The promise remains unresolved.`, {
+      modelCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+    });
   }
   const snapshot = await prepareNativeRisuReadOnly(
     helperWritingSnapshot(store, chat.id, 'context'),

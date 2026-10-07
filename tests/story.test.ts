@@ -55,7 +55,6 @@ function chat(store: Store) {
   const created = createFixtureChat(store, 'Synthetic story notes');
   store.settings(created.id, created.settingsRevision, {
     ...created.settings,
-    status: false,
   });
   return created.id;
 }
@@ -115,7 +114,6 @@ test('S01 source transaction failure rolls back original, Run completion and all
       run.id,
       '[[event:buy-ticket]]',
       { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings,
       controls
     )
   ).toThrow('source-transaction');
@@ -130,12 +128,12 @@ test('S01 source transaction failure rolls back original, Run completion and all
       throw new Error('Crash after durable story reservation');
     });
   expect(() =>
-    store.completeRun(
-      run.id,
-      '[[event:buy-ticket]]',
-      { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-      run.snapshot.settings
-    )
+    store.completeRun(run.id, '[[event:buy-ticket]]', {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    })
   ).toThrow('Crash after durable story reservation');
   spy.mockRestore();
   expect(store.db.prepare('SELECT count(*) AS n FROM sources').get()?.n).toBe(0);
@@ -160,12 +158,12 @@ test('S06 scene commands are consumed only with successful source commit; cancel
   const retry = queued(store, id, command.request);
   store.transaction(() => store.story.bindCommandInTransaction(command.id, retry.id));
   store.startRun(retry.id);
-  const result = store.completeRun(
-    retry.id,
-    'A ticket.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    retry.snapshot.settings
-  );
+  const result = store.completeRun(retry.id, 'A ticket.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   expect(store.story.command(command.id)).toMatchObject({
     status: 'consumed',
     runId: retry.id,

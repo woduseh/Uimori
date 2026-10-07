@@ -119,7 +119,6 @@ async function seed(request: APIRequestContext, squareBot = false) {
   const settings = await request.patch(`/api/chats/${chat.id}/settings`, {
     data: {
       ...chat.settings,
-      status: false,
       expectedSettingsRevision: chat.settingsRevision,
     },
   });

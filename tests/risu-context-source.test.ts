@@ -148,7 +148,7 @@ test('CHARX-shaped bot, persona, and native module retain provenance through res
     chatId: 'source-pipeline',
     parentRevision: null,
     settingsRevision: 1,
-    settings: { maxCalls: 4, status: false },
+    settings: { maxCalls: 4 },
     request: 'Continue',
     history: [],
     resources: [],

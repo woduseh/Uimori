@@ -79,12 +79,12 @@ function setup(request = 'A scene', sourceText = 'A synthetic source.') {
     })
   ).run;
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    sourceText,
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    run.snapshot.settings
-  );
+  const source = store.completeRun(run.id, sourceText, {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   return { store, chat, run, source, service, work, publish, connection, options };
 }
 const success: transport.ProviderResult = {

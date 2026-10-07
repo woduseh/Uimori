@@ -26,7 +26,7 @@ async function seed(request: APIRequestContext, backgroundHTML = '') {
   expect(
     (
       await request.patch(`/api/chats/${chat.id}/settings`, {
-        data: { ...chat.settings, status: false, expectedSettingsRevision: 1 },
+        data: { ...chat.settings, expectedSettingsRevision: 1 },
       })
     ).ok()
   ).toBeTruthy();

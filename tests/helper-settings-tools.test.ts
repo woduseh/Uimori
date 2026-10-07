@@ -84,7 +84,7 @@ test('global model update preserves other selections and rejects stale or unknow
     value: b.id,
   });
   const next = promptWorkspace(store);
-  expect(next.modelRoutes).toEqual({ main: { id: b.id }, translation: { id: a.id }, status: null });
+  expect(next.modelRoutes).toEqual({ main: { id: b.id }, translation: { id: a.id } });
   expect(next.translationPolicy).toEqual(prior.translationPolicy);
   expect(next.main.program).toEqual(prior.main.program);
   expect(() =>

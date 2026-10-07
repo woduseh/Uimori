@@ -4,7 +4,7 @@ import { postFixtureChat } from './fixtures/chat.js';
 import { nativeProse } from './fixtures/native-message.js';
 import type { ChatDetail, Job, ReaderDetail } from '../core/types.js';
 
-test('auxiliary failures show separate safe causes and recreate status with current settings', async ({
+test('translation failures show safe causes while retired status jobs stay hidden', async ({
   page,
   request,
 }, info) => {
@@ -55,38 +55,13 @@ test('auxiliary failures show separate safe causes and recreate status with curr
       body.jobs = jobs;
       await route.fulfill({ response, json: body });
     });
-    let recoveryBody: unknown;
-    await page.route(`**/api/sources/${source.id}/status`, async (route) => {
-      recoveryBody = route.request().postDataJSON();
-      await route.fulfill({ json: { ...jobs[0], id: 'synthetic-new-status', status: 'queued' } });
-    });
-    await page.route('**/api/jobs/synthetic-status/retry', async (route) => {
-      await route.fulfill({ status: 409, json: { error: 'MODEL_REQUIRED:status' } });
-    });
     await page.goto(`/?chat=${chat.id}`);
     const panel = page.getByTestId('turn-activity').first();
     await panel.locator(':scope > summary').click();
-    const status = panel.getByTestId('job-status');
+    await expect(panel.getByTestId('job-status')).toHaveCount(0);
     const translation = panel.getByTestId('job-translation');
-    await expect(status).toContainText('MODEL_REQUIRED:status');
     await expect(translation).toContainText('인증');
-    await expect(translation).not.toContainText('장면 해설 모델');
     await expect(translation).toContainText('AUXILIARY_PROVIDER_HTTP_401');
-    await status.getByRole('button', { name: '이 작업만 재시도', exact: true }).click();
-    await expect(
-      page.getByText('장면 해설: 전역 모델 설정에서 장면 해설 모델을 선택해 주세요.', {
-        exact: true,
-      })
-    ).toBeVisible();
-    await status.getByRole('button', { name: '현재 설정으로 장면 해설 새로 실행' }).click();
-    await expect
-      .poll(() => recoveryBody)
-      .toEqual({ expectedSourceHash: source.hash, expectedJobId: 'synthetic-status' });
-    await expect(
-      page.getByText('장면 해설: 전역 모델 설정에서 장면 해설 모델을 선택해 주세요.', {
-        exact: true,
-      })
-    ).toHaveCount(0);
     expect(
       await translation.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
     ).toBe(true);

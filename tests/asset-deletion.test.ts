@@ -105,12 +105,12 @@ test('deletion preserves active execution and immutable completed image catalogs
   expect(() => deleteChatAsset(store, chat.id, asset.id, {})).not.toThrow();
   expect(store.product.assets(chat.id)).toEqual([]);
   store.startRun(run.id);
-  const source = store.completeRun(
-    run.id,
-    'Synthetic source.',
-    { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null },
-    { ...run.snapshot.settings, status: false }
-  );
+  const source = store.completeRun(run.id, 'Synthetic source.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
   const now = new Date().toISOString();
   store.db
     .prepare(

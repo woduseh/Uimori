@@ -10,7 +10,7 @@ const snapshot = (): RunSnapshot => ({
   chatId: 'lore-test',
   parentRevision: null,
   settingsRevision: 1,
-  settings: { status: false, maxCalls: 2 },
+  settings: { maxCalls: 2 },
   request: 'Visit the harbor',
   history: [],
   resources: [],
