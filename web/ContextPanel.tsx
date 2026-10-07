@@ -92,7 +92,7 @@ export function ContextPanel({
     onDirtyChange(draft !== null || notesDirty || busy);
   }, [draft, notesDirty, busy, onDirtyChange]);
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : '문맥을 불러오지 못했어요.';
+    const text = caught instanceof Error ? caught.message : '컨텍스트를 불러오지 못했어요.';
     setError(text);
     onError(text);
   }
@@ -205,9 +205,9 @@ export function ContextPanel({
     return saveSummary();
   });
   return (
-    <section className="context-panel" aria-label="문맥 관리" data-testid="context-panel">
+    <section className="context-panel" aria-label="컨텍스트 관리" data-testid="context-panel">
       <div className="context-heading">
-        <h4>문맥 요약</h4>
+        <h4>컨텍스트 요약</h4>
         <button
           type="button"
           className="secondary"
@@ -228,7 +228,7 @@ export function ContextPanel({
         )}
         {message && <p role="status">{message}</p>}
         {!detail ? (
-          <p className="muted">문맥을 불러오고 있어요.</p>
+          <p className="muted">컨텍스트를 불러오고 있어요.</p>
         ) : (
           <>
             {summary ? (
@@ -252,7 +252,7 @@ export function ContextPanel({
             )}
             {!current && (
               <p role="status">
-                대상 장면의 최신 문맥을 확인하고 있어요. 작성 중인 초안은 유지해요.
+                대상 장면의 최신 컨텍스트를 확인하고 있어요. 작성 중인 초안은 유지해요.
               </p>
             )}
             <details className="context-priorities">
@@ -272,7 +272,7 @@ export function ContextPanel({
                 이번 압축에만 사용해요. 새 설정이나 사건을 추가하는 메모는 아니에요.
               </small>
             </details>
-            <p className="muted">정리할 구간이 있으면 문맥 모델을 호출해요.</p>
+            <p className="muted">정리할 구간이 있으면 컨텍스트 모델을 호출해요.</p>
             <div className="form-actions">
               {mode === 'full' && !draft && (
                 <button
@@ -298,7 +298,7 @@ export function ContextPanel({
                       `${base}/compact`,
                       keyed(command()),
                       'POST',
-                      '문맥 압축을 요청했어요.'
+                      '컨텍스트 압축을 요청했어요.'
                     )
                   }
                 >
@@ -325,8 +325,8 @@ export function ContextPanel({
             {working ? (
               <p role="status">
                 {working.status === 'queued'
-                  ? '문맥 압축을 기다리고 있어요.'
-                  : '문맥을 정리하고 있어요.'}{' '}
+                  ? '컨텍스트 압축을 기다리고 있어요.'
+                  : '컨텍스트를 정리하고 있어요.'}{' '}
                 이 화면을 닫아도 작업은 계속돼요.
               </p>
             ) : (
@@ -335,12 +335,12 @@ export function ContextPanel({
                   {latest.noop
                     ? '정리할 구간이 없어 원문과 요약을 유지했어요.'
                     : latest.status === 'completed'
-                      ? '문맥 압축을 마쳤어요.'
+                      ? '컨텍스트 압축을 마쳤어요.'
                       : latest.status === 'cancelled'
                         ? '압축을 취소했어요. 마지막 유효한 요약을 유지해요.'
                         : latest.status === 'interrupted'
                           ? '작업이 중단됐어요. 자동으로 다시 실행하지 않아요.'
-                          : '문맥을 정리하지 못했어요. 기존 요약을 유지해요.'}
+                          : '컨텍스트를 정리하지 못했어요. 기존 요약을 유지해요.'}
                   {latest.error && (
                     <details>
                       <summary>오류 상세</summary>
@@ -378,7 +378,7 @@ export function ContextPanel({
                   </div>
                 )}
                 <label>
-                  편집할 문맥 요약
+                  편집할 컨텍스트 요약
                   <textarea
                     rows={8}
                     required
@@ -414,7 +414,7 @@ export function ContextPanel({
           </>
         )}
         <details className="context-help">
-          <summary>문맥 관리 도움말</summary>
+          <summary>컨텍스트 관리 도움말</summary>
           <p className="muted">사용할 수 있는 요약과 그 이후의 원문을 다음 요청에 사용해요.</p>
           <p className="muted">압축해도 원문은 그대로 보존해요.</p>
           {mode === 'full' && <p className="muted">지속적인 설정 정정은 아래 메모에 남겨요.</p>}

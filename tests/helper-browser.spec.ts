@@ -348,7 +348,7 @@ async function harness(page: Page, seedCount = 0) {
       if (request.method() === 'PATCH') {
         const latest = revisions.at(-1)!;
         if (body.expectedRevision !== latest.revision)
-          return route.fulfill({ status: 409, json: { error: '다른 장면 개정이 저장됐어요.' } });
+          return route.fulfill({ status: 409, json: { error: '다른 장면 변경이 저장됐어요.' } });
         const next = {
           ...latest,
           revision: latest.revision + 1,

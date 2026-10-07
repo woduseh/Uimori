@@ -197,8 +197,8 @@ function StoryPanelEditor({
     return saveCommand();
   });
   return (
-    <section className="story-panel" aria-label="이야기 기억과 문맥">
-      {!hideHeading && <h3>기억과 문맥</h3>}
+    <section className="story-panel" aria-label="이야기 기억과 컨텍스트">
+      {!hideHeading && <h3>기억과 컨텍스트</h3>}
       <p className="muted">
         이야기에서 일어난 일을 요약·메모로 관리해요. 카드 변수는 봇의 원본 스크립트가 관리해요.
       </p>

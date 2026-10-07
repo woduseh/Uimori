@@ -412,7 +412,7 @@ for (const width of [412, 1440]) {
     await selectChatSettingsSection(page, '기억·로어');
     const panel = page.getByTestId('context-panel');
     await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
-    const summary = panel.getByLabel('편집할 문맥 요약', { exact: true });
+    const summary = panel.getByLabel('편집할 컨텍스트 요약', { exact: true });
     await summary.fill('Cancelled summary draft');
     const summaryForm = panel.locator('.context-summary-editor');
     const summarySave = summaryForm.getByRole('button', { name: '요약 저장', exact: true });

@@ -92,7 +92,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     modelForm = page.getByRole('form', { name: '모델 편집 양식' });
   await startProviderConnection(page);
   await page
-    .getByRole('region', { name: '제공자 선택', exact: true })
+    .getByRole('region', { name: '프로바이더 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })
     .click();
   await form.getByLabel('프로바이더 프로토콜').selectOption('openai-responses-v1');
@@ -142,7 +142,9 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
       .screenshot({ path: info.outputPath('model-evaluation-switch.png') });
 
   await modelForm.getByLabel('최대 평가 도구 라운드').fill('2');
-  await expect(modelForm.getByLabel('이 모델 프리셋에 문맥 메모·전환 도구 사용')).toHaveCount(0);
+  await expect(modelForm.getByLabel('이 모델 프리셋에 컨텍스트 메모·전환 도구 사용')).toHaveCount(
+    0
+  );
   await modelForm.getByText('요금과 추정 비용', { exact: true }).click();
   await modelForm.getByLabel('요금 기준', { exact: true }).selectOption('manual');
   await modelForm.getByLabel('Standard 입력 요금', { exact: true }).fill('2');
@@ -151,7 +153,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     '모델 프리셋 이름',
     '프로바이더',
     '모델 ID',
-    '평가 문맥 제공',
+    '평가 컨텍스트 제공',
     'Standard 입력 요금',
     'Standard 출력 요금',
   ]) {
@@ -219,7 +221,7 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   await form.getByRole('button', { name: '고급', exact: true }).click();
   const providerOptions = form.getByLabel('providerOptions (JSON)', { exact: true });
   await expect(providerOptions).toBeHidden();
-  await form.locator('summary').filter({ hasText: '추가 공급자 옵션 (JSON)' }).click();
+  await form.locator('summary').filter({ hasText: '추가 프로바이더 옵션 (JSON)' }).click();
   await expect(providerOptions).toBeVisible();
   await form.getByLabel('사고 모드', { exact: true }).selectOption('adaptive');
   await providerOptions.fill('{"gateway":{"only":["openai"]}}');
@@ -668,7 +670,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     observed = observe(page);
   await startProviderConnection(page);
   await page
-    .getByRole('region', { name: '제공자 선택', exact: true })
+    .getByRole('region', { name: '프로바이더 선택', exact: true })
     .getByRole('button', { name: /Google Agent Platform/ })
     .click();
   const form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
@@ -999,13 +1001,13 @@ for (const [index, item] of providerOptionCases.entries()) {
         '적응형 · adaptive',
       ]);
       await expect(
-        mode.locator('optgroup[label="미확인 값 · 공급자가 판정"] option[value="disabled"]')
+        mode.locator('optgroup[label="미확인 값 · 프로바이더가 판정"] option[value="disabled"]')
       ).toHaveCount(1);
       await form.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
       await expect(
-        form.getByLabel('평가 문맥 제공').locator('option[value="preloaded"]')
+        form.getByLabel('평가 컨텍스트 제공').locator('option[value="preloaded"]')
       ).toHaveJSProperty('disabled', true);
-      await expect(form.getByLabel('평가 문맥 제공')).toHaveValue('model-selected');
+      await expect(form.getByLabel('평가 컨텍스트 제공')).toHaveValue('model-selected');
     }
     await form.getByRole('button', { name: '기본', exact: true }).click();
     expect(
@@ -1399,7 +1401,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await settings(page);
   await startProviderConnection(page);
   await page
-    .getByRole('region', { name: '제공자 선택', exact: true })
+    .getByRole('region', { name: '프로바이더 선택', exact: true })
     .getByRole('button', { name: /Codex/ })
     .click();
   const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
@@ -1522,7 +1524,7 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
   await settings(page);
   await startProviderConnection(page);
   await page
-    .getByRole('region', { name: '제공자 선택', exact: true })
+    .getByRole('region', { name: '프로바이더 선택', exact: true })
     .getByRole('button', { name: /DeepSeek/ })
     .click();
   const connectionForm = page.getByRole('form', { name: '프로바이더 편집 양식' });

@@ -471,7 +471,7 @@ export function helperWritingSnapshot(
     parentRevision: chat.headRevision,
     settingsRevision: chat.settingsRevision,
     settings: structuredClone(chat.settings),
-    request: '도우미의 작품 문맥 조회',
+    request: '도우미의 작품 컨텍스트 조회',
     history: store.history(chat.headRevision),
     resources: store.product.resources(chatId, profile),
     profile,
@@ -657,7 +657,7 @@ export class HelperRuntime {
       if (!this.deletionImpact(id).canDelete)
         throw new HttpError(
           409,
-          '진행 중인 작업을 중지하고 공급자 요청이 종료된 뒤 삭제해 주세요.'
+          '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 삭제해 주세요.'
         );
       return this.workspace.delete(id, expected);
     });
@@ -1797,7 +1797,7 @@ export class HelperRuntime {
     }
     if (name.startsWith('context.') || name === 'notes.write') {
       if (scope.kind !== 'chat' || !this.options.services?.context)
-        throw new HttpError(404, '채팅 문맥이 필요해요.');
+        throw new HttpError(404, '채팅 컨텍스트가 필요해요.');
       if (name !== 'context.read') this.workspace.assertRunning(task.id);
       return await this.options.services.context(task, name, args, hooks, operationId);
     }

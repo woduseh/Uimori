@@ -330,7 +330,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     await raw.getByText('원시 요청·응답 보기', { exact: true }).click();
     await expect(raw.locator('pre')).toHaveCount(0);
     const pricing = usage.getByRole('region', { name: '호출 추정 비용' });
-    await expect(pricing).toContainText('공급자 보고 비용: $0.125');
+    await expect(pricing).toContainText('프로바이더 보고 비용: $0.125');
     await expect(pricing).toContainText('추정 비용: $0.004995');
     const table = pricing.getByRole('table', { name: '호출 추정 비용 계산 내역' });
     await expect(table.getByRole('rowheader')).toHaveText([
@@ -341,7 +341,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     ]);
     await expect(table.getByRole('row').filter({ hasText: '캐시 읽기' })).toContainText('400');
     await expect(table.getByRole('row').filter({ hasText: '캐시 쓰기' })).toContainText('100');
-    await expect(usage).toContainText('공급자 보고 캐시 토큰 · 읽기 400 / 쓰기 100');
+    await expect(usage).toContainText('프로바이더 보고 캐시 토큰 · 읽기 400 / 쓰기 100');
     await expect(pricing).toContainText('실제 청구액과 다를 수 있어요');
     expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
     await pricing.screenshot({ path: info.outputPath(`estimate-cost-${width}.png`) });
@@ -356,7 +356,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     await expect(usage.getByRole('region', { name: '요청에 포함된 로어' }).last()).toContainText(
       '이 요청에는 로어 포함 기록이 없어요. 로어를 보내지 않았다는 뜻은 아니에요.'
     );
-    await expect(unavailable).toContainText('공급자 보고 비용: 미확인');
+    await expect(unavailable).toContainText('프로바이더 보고 비용: 미확인');
     await expect(unavailable).toContainText('추정 비용: 미확인');
     await expect(unavailable).toContainText('이 호출에 사용할 요금을 확인하지 못했어요');
     await expect(unavailable).not.toContainText('PRICING_UNAVAILABLE');

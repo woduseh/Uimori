@@ -146,12 +146,12 @@ test('SPUI02 lore reset is an unsaved form action and incomplete backup input ne
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '로어 문맥');
-  const lore = page.getByRole('region', { name: '로어 문맥 기본값', exact: true });
+  await selectSettingsSection(page, '로어 컨텍스트');
+  const lore = page.getByRole('region', { name: '로어 컨텍스트 기본값', exact: true });
   const before = await (await request.get('/api/lore-context-defaults')).json();
   await lore.getByText('선별 기준과 용량', { exact: true }).click();
   await lore.getByLabel('조회 로어 토큰 한도', { exact: true }).fill('');
-  await expect(lore.getByRole('button', { name: '로어 문맥 기본값 저장' })).toBeDisabled();
+  await expect(lore.getByRole('button', { name: '로어 컨텍스트 기본값 저장' })).toBeDisabled();
   await lore.getByRole('button', { name: '초기값으로 되돌리기', exact: true }).click();
   await expect(lore.getByLabel('조회 로어 토큰 한도', { exact: true })).toHaveValue('16000');
   expect(await (await request.get('/api/lore-context-defaults')).json()).toEqual(before);

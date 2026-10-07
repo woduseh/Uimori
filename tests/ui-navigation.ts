@@ -99,7 +99,7 @@ export async function startProviderConnection(page: Page) {
     await editor.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
     await editor.getByRole('button', { name: '새 프로바이더 입력', exact: true }).click();
   }
-  await expect(editor.getByRole('region', { name: '제공자 선택', exact: true })).toBeVisible();
+  await expect(editor.getByRole('region', { name: '프로바이더 선택', exact: true })).toBeVisible();
 }
 /** Open the owning provider group before targeting a model in a collapsed list. */
 export async function revealProviderModel(page: Page, title: string) {

@@ -70,7 +70,10 @@ function assertIdle(store: Store, chatId: string) {
       .prepare("SELECT 1 FROM attempts WHERE chat_id=? AND status='running' LIMIT 1")
       .get(chatId)
   )
-    throw new HttpError(409, '공급자 요청이 아직 종료되지 않았어요. 요청 종료 후 삭제해 주세요.');
+    throw new HttpError(
+      409,
+      '프로바이더 요청이 아직 종료되지 않았어요. 요청 종료 후 삭제해 주세요.'
+    );
 }
 
 function removeIds(store: Store, table: string, column: string, ids: string[]) {

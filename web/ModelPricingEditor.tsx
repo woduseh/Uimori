@@ -39,7 +39,7 @@ function PricingSummary({
         {snapshot.source === 'manual'
           ? '직접 입력 요금'
           : snapshot.source === 'catalog'
-            ? '공급자 목록 요금'
+            ? '프로바이더 목록 요금'
             : '공식 요금'}
       </p>
       <small>
@@ -177,8 +177,8 @@ export function ModelPricingEditor({
       <summary>요금과 추정 비용</summary>
       <div className="model-pricing-body">
         <p>
-          호출 후 공급자가 보고한 토큰에 이 요금을 적용해 추정 비용을 계산해요. 단위는 USD / 100만
-          토큰이에요.
+          호출 후 프로바이더가 보고한 토큰에 이 요금을 적용해 추정 비용을 계산해요. 단위는 USD /
+          100만 토큰이에요.
         </p>
         <p className="muted">참고용 추정 금액이며 실제 청구액과 다를 수 있어요.</p>
         <label>

@@ -49,7 +49,7 @@ const NOTICES = {
   position: {
     level: 'unsupported' as const,
     message: (decorator: string) =>
-      `로어의 \`@@${decorator}\` 위치·삽입 지시문은 원본에 보존하지만 현재 문맥 배치에는 적용하지 않아요.`,
+      `로어의 \`@@${decorator}\` 위치·삽입 지시문은 원본에 보존하지만 현재 컨텍스트 배치에는 적용하지 않아요.`,
   },
   activation: {
     level: 'info' as const,

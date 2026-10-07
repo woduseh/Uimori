@@ -425,7 +425,7 @@ test('LIBUI04 role selection creates a chat with the selected persona and module
     persona.title
   );
   await selectContent(page, '추가할 시작 모듈', module.title);
-  await dialog.getByLabel('새 채팅 이름', { exact: true }).fill(prefix);
+  await dialog.getByLabel('새 채팅 제목', { exact: true }).fill(prefix);
   await expect(dialog.getByText('시작 자료를 불러오는 중이에요…', { exact: true })).toBeHidden();
   const created = page.waitForResponse(
     (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'

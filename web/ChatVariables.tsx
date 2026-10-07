@@ -254,7 +254,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
         <strong>현재 채팅</strong>
         {view && (
           <small>
-            재정의 {Object.keys(view.values).length}개 · 개정 {view.revision}
+            재정의 {Object.keys(view.values).length}개 · 수정 번호 {view.revision}
           </small>
         )}
         <button
@@ -284,7 +284,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
       )}
       {conflict && !hasUncertainSave && (
         <div className="behavior-action-result" role="alert">
-          <p>서버의 변수 개정이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.</p>
+          <p>서버의 변수 수정 번호나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.</p>
           <button
             type="button"
             className="secondary"

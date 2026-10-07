@@ -316,11 +316,11 @@ for (const [viewportName, viewport] of [
       await centered();
     }
     const customTitle = '추가 설정에 남긴 합성 제목';
-    await dialog.getByLabel('새 채팅 이름', { exact: true }).fill(customTitle);
+    await dialog.getByLabel('새 채팅 제목', { exact: true }).fill(customTitle);
     await options.locator('summary').click();
-    await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).not.toBeVisible();
+    await expect(dialog.getByLabel('새 채팅 제목', { exact: true })).not.toBeVisible();
     await options.locator('summary').click();
-    await expect(dialog.getByLabel('새 채팅 이름', { exact: true })).toHaveValue(customTitle);
+    await expect(dialog.getByLabel('새 채팅 제목', { exact: true })).toHaveValue(customTitle);
     await options.locator('summary').click();
     const created = page.waitForResponse(
       (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'

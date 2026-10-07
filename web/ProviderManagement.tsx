@@ -707,7 +707,7 @@ export function ConnectionEditor({
                   placeholder={
                     screen === 'models'
                       ? '프리셋 이름, 모델 ID로 검색'
-                      : '프로바이더 이름, 제공자, 주소로 검색'
+                      : '프로바이더 이름, 종류, 주소로 검색'
                   }
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -813,7 +813,7 @@ export function ConnectionEditor({
         </div>
       )}
       {screen === 'providers' && (
-        <section className="provider-selection" aria-label="제공자 선택">
+        <section className="provider-selection" aria-label="프로바이더 선택">
           <h4>프로바이더를 선택하세요.</h4>
           <p className="muted">
             현재 지원하는 프로바이더 방식이에요. 선택하면 주소와 인증 참조의 기본값을 채워요.

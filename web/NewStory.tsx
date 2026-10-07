@@ -477,7 +477,7 @@ export function NewStory({
         <details className="new-story-options">
           <summary>
             <span>추가 설정</span>
-            <small>{additionalSummary || '모듈 · 채팅 이름'}</small>
+            <small>{additionalSummary || '모듈 · 채팅 제목'}</small>
           </summary>
           <div className="new-story-options-content">
             <fieldset>
@@ -518,9 +518,9 @@ export function NewStory({
               />
             </fieldset>
             <label>
-              채팅 이름 <small>비워 두면 자동으로 정해요</small>
+              채팅 제목 <small>비워 두면 자동으로 정해요</small>
               <input
-                aria-label="새 채팅 이름"
+                aria-label="새 채팅 제목"
                 value={title}
                 maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}

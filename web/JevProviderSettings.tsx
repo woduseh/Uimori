@@ -439,7 +439,7 @@ export function JevProviderSettings({
                   )}
                   {test.usage.costUsd !== null && (
                     <div>
-                      <dt>공급자 보고 비용</dt>
+                      <dt>프로바이더 보고 비용</dt>
                       <dd>${test.usage.costUsd.toFixed(6)}</dd>
                     </div>
                   )}

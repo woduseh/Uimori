@@ -216,7 +216,7 @@ export function ModelWorkspaceEditor({
               '작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.'
             )}
             {selector(
-              '문맥 요약 모델',
+              '컨텍스트 요약 모델',
               draft.contextModel ?? null,
               (ref) => change({ ...draft, contextModel: ref }),
               '자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지 않아요.'

@@ -192,7 +192,7 @@ test(
       { times: 1 }
     );
     try {
-      await editor.getByRole('button', { name: '최신 버전 적용', exact: true }).click();
+      await editor.getByRole('button', { name: '최신 저장본 적용', exact: true }).click();
       await applying;
       await expect(tone).toBeDisabled();
       await expect(editor.getByLabel('현재 프롬프트 프리셋')).toBeDisabled();

@@ -19,7 +19,7 @@ export const USAGE_KIND_LABELS: Record<UsageKind, string> = {
   writing: '본문 작성',
   translation: '번역',
   'input-translation': '입력 번역',
-  summary: '문맥 요약',
+  summary: '컨텍스트 요약',
   advisor: '협업 조언',
   helper: '도우미',
   'helper-artifact': '도우미 산출물',

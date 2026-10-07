@@ -273,7 +273,7 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
         .getByRole('dialog', { name: '새 채팅', exact: true })
         .locator('.new-story-options > summary')
         .click();
-      await pc.getByLabel('새 채팅 이름', { exact: true }).fill(title);
+      await pc.getByLabel('새 채팅 제목', { exact: true }).fill(title);
       const created = pc.waitForResponse(
         (item) =>
           new URL(item.url()).pathname === '/api/chats' && item.request().method() === 'POST'

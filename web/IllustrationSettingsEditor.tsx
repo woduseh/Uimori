@@ -365,7 +365,7 @@ function IllustrationEnvironmentEditor({
               codexModels,
               (ref) => change({ ...draft, codex: { ...draft.codex, model: ref } }),
               codexModels.length ? '모델 미지정' : 'Codex 프로바이더의 모델 프리셋이 없어요',
-              'Codex 연결에서 로그인한 모델을 선택해요. 이미지 생성 전 JEV가 노골적인 성적 묘사를 판정하면 해당 컷을 전송하지 않아요. JEV 미설정·판정 오류 시에는 공급자 판단에 맡겨요.'
+              'Codex 연결에서 로그인한 모델을 선택해요. 이미지 생성 전 JEV가 노골적인 성적 묘사를 판정하면 해당 컷을 전송하지 않아요. JEV 미설정·판정 오류 시에는 프로바이더 판단에 맡겨요.'
             )}
             <label className="settings-row settings-row-toggle">
               <span className="settings-row-copy">채팅의 참조 이미지 사용</span>

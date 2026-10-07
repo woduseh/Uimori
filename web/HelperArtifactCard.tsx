@@ -130,7 +130,7 @@ export function HelperArtifactCard({
       if (!alive.current) return;
       setArtifact(value);
       setDraft(null);
-      setMessage('편집한 장면을 새 개정으로 저장했어요.');
+      setMessage('편집한 장면을 새 저장본으로 저장했어요.');
       window.dispatchEvent(new Event('uimori-helper-updated'));
     } catch (cause) {
       if (!alive.current) return;
@@ -152,7 +152,7 @@ export function HelperArtifactCard({
       <header>
         <strong>가정 장면</strong>
         <small>
-          개정 {artifact?.revision ?? revision} ·{' '}
+          수정 번호 {artifact?.revision ?? revision} ·{' '}
           {artifact?.origin === 'edit' ? '직접 편집' : '생성한 장면'} · 본편과 별도
         </small>
       </header>
@@ -173,7 +173,7 @@ export function HelperArtifactCard({
             >
               {conflict && (
                 <div className="context-conflict" role="alert">
-                  <p>다른 개정이 저장됐어요. 위의 최신 장면과 입력한 초안을 비교해 주세요.</p>
+                  <p>다른 변경이 저장됐어요. 위의 최신 장면과 입력한 초안을 비교해 주세요.</p>
                   <button
                     type="button"
                     disabled={busy}
@@ -258,7 +258,7 @@ export function HelperArtifactCard({
                 className="secondary"
                 onClick={() => void latest().catch((cause) => setError(cause.message))}
               >
-                최신 개정 확인
+                최신 저장본 확인
               </button>
             </footer>
           )}

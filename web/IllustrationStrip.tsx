@@ -580,7 +580,7 @@ function IllustrationCard({
             )}
             {detail.preset && (
               <p>
-                프리셋 · {detail.preset.title} · 개정 {detail.preset.revision}
+                프리셋 · {detail.preset.title} · 수정 번호 {detail.preset.revision}
               </p>
             )}
             {detail.diagnostic?.contentCheck && (
@@ -590,7 +590,7 @@ function IllustrationCard({
                   ? '차단 · Codex 이미지 생성 요청 없음'
                   : detail.diagnostic.contentCheck.status === 'allowed'
                     ? '통과'
-                    : '미확인 · 공급자 판단에 맡겼어요.'}
+                    : '미확인 · 프로바이더 판단에 맡겼어요.'}
                 {detail.diagnostic.contentCheck.code && ` (${detail.diagnostic.contentCheck.code})`}
               </p>
             )}

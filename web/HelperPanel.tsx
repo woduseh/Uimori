@@ -1165,7 +1165,7 @@ export function HelperPanel(props: Props) {
                     readOnly={scopeMismatch}
                     onRevise={(value) => {
                       editDraft(
-                        `가정 장면 ${value.id} 개정 ${value.revision}을 다음과 같이 수정해줘: `
+                        `가정 장면 ${value.id} 수정 번호 ${value.revision}을 다음과 같이 수정해줘: `
                       );
                       input.current?.focus();
                     }}

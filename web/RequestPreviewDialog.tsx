@@ -114,7 +114,7 @@ export function RequestPreviewDialog({
       onClose={onClose}
     >
       {!request.trim() ? (
-        <p>장면 요청을 입력하면 다음 생성의 설정과 문맥을 확인할 수 있어요.</p>
+        <p>장면 요청을 입력하면 다음 생성의 설정과 컨텍스트를 확인할 수 있어요.</p>
       ) : unavailable ? (
         <p role="status">현재 작업을 마치고 미리보기를 다시 확인해 주세요.</p>
       ) : (
@@ -137,7 +137,7 @@ export function RequestPreviewDialog({
           ) : !preview ? (
             <p role="status">다음 요청을 확인하고 있어요.</p>
           ) : preview.snapshot.stale ? (
-            <p role="status">확인 중에 문맥이나 설정이 바뀌었어요. 다시 확인해 주세요.</p>
+            <p role="status">확인 중에 컨텍스트나 설정이 바뀌었어요. 다시 확인해 주세요.</p>
           ) : (
             <div data-testid="request-preview">
               {preview.error && (
@@ -170,7 +170,7 @@ export function RequestPreviewDialog({
                   </dd>
                 </div>
                 <div>
-                  <dt>문맥 요약</dt>
+                  <dt>컨텍스트 요약</dt>
                   <dd>
                     {preview.summary.inUse
                       ? `${entries(preview.summary.compactedSources)} 장면 요약 사용`
@@ -196,7 +196,7 @@ export function RequestPreviewDialog({
                 </p>
                 {percent !== null && tokens?.inputTokenLimit && (
                   <meter
-                    aria-label="다음 요청의 입력 한도 대비 추정 문맥"
+                    aria-label="다음 요청의 입력 한도 대비 추정 컨텍스트"
                     min={0}
                     max={tokens.inputTokenLimit}
                     value={Math.min(tokens.estimatedInputTokens!, tokens.inputTokenLimit)}
@@ -204,7 +204,7 @@ export function RequestPreviewDialog({
                 )}
                 {tokenizer && <small className="muted">{tokenizer.label} · 로컬 추정</small>}
                 {preview.summary.compactionPending && (
-                  <p role="status">문맥 정리가 필요해 실제 전송량은 달라질 수 있어요.</p>
+                  <p role="status">컨텍스트 정리가 필요해 실제 전송량은 달라질 수 있어요.</p>
                 )}
                 {tokens?.tokenizerInfo?.fallback && (
                   <p role="status">선택한 토크나이저를 불러오지 못해 일반 추정치를 사용했어요.</p>

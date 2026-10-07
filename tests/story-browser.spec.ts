@@ -39,7 +39,7 @@ async function panel(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible())) await openChatSettings(page);
   await selectChatSettingsSection(page, '기억·로어');
-  const section = dialog.getByRole('region', { name: '이야기 기억과 문맥', exact: true });
+  const section = dialog.getByRole('region', { name: '이야기 기억과 컨텍스트', exact: true });
   await expect(section).toBeVisible();
   return section;
 }

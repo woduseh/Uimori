@@ -134,7 +134,7 @@ test('SCUI04 all settings stay usable in light and dark desktop and phone layout
         '역할별 모델',
         '현재 프롬프트',
         '프로바이더·모델',
-        '로어 문맥',
+        '로어 컨텍스트',
         'Codex 연결',
         '삽화',
         '사용량',
@@ -158,7 +158,7 @@ test('SCUI04 all settings stay usable in light and dark desktop and phone layout
           await expect(
             pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
           ).toBeVisible();
-        } else if (section === '로어 문맥') {
+        } else if (section === '로어 컨텍스트') {
           await expect(pane.getByRole('heading', { name: '로어 사용', exact: true })).toBeVisible();
           await expect(pane.getByLabel('조회한 로어를 다음 생성에 유지')).toBeVisible();
         } else if (section === '데이터 관리') {
@@ -488,16 +488,16 @@ test('SCUI05 global lore defaults are saved and copied only to new chats', async
   const first = await firstResponse.json();
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '로어 문맥');
+  await selectSettingsSection(page, '로어 컨텍스트');
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  const section = settings.getByRole('region', { name: '로어 문맥 기본값', exact: true });
+  const section = settings.getByRole('region', { name: '로어 컨텍스트 기본값', exact: true });
   await section.getByText('선별 기준과 용량', { exact: true }).click();
   const retained = section.getByLabel('조회 로어 토큰 한도', { exact: true });
   await expect(retained).toBeVisible();
   await expect(retained).toHaveValue(String(original.maxRetainedTokens));
   const nextLimit = original.maxRetainedTokens === 24_000 ? 20_000 : 24_000;
   await retained.fill(String(nextLimit));
-  await section.getByRole('button', { name: '로어 문맥 기본값 저장', exact: true }).click();
+  await section.getByRole('button', { name: '로어 컨텍스트 기본값 저장', exact: true }).click();
   await expect(section.getByRole('status')).toContainText('새 채팅부터 적용돼요');
   const secondResponse = await request.post('/api/chats', {
     data: { botId: bot.id, title: '기본값 변경 후 채팅' },

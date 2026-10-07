@@ -213,7 +213,7 @@ export class HelperWorkspace {
       if (!impact.canDelete)
         throw new HttpError(
           409,
-          '진행 중인 작업을 중지하고 공급자 요청이 종료된 뒤 삭제해 주세요.'
+          '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 삭제해 주세요.'
         );
       const tasks = this.store.db
         .prepare('SELECT id FROM helper_tasks WHERE conversation_id=?')
@@ -798,7 +798,10 @@ export class HelperWorkspace {
       );
       if (old) return this.artifact(old.artifactRef.id, old.artifactRef.revision);
       if (previous.revision !== revision)
-        throw new HttpError(409, '가정 장면이 다른 곳에서 수정됐어요. 최신 개정을 확인해 주세요.');
+        throw new HttpError(
+          409,
+          '가정 장면이 다른 곳에서 수정됐어요. 최신 저장본을 확인해 주세요.'
+        );
       const updated = {
         ...previous,
         revision: revision + 1,

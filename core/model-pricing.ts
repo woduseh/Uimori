@@ -289,7 +289,7 @@ export function resolveModelPricing(
         rates: value,
         sourceUrl: 'https://platform.claude.com/docs/en/about-claude/pricing',
         notes: [
-          '1M 문맥까지 같은 단가예요. 캐시 쓰기는 5분과 1시간을 구분해요.',
+          '1M 컨텍스트까지 같은 단가예요. 캐시 쓰기는 5분과 1시간을 구분해요.',
           '전역 추론 기준이며 US-only 추론과 Fast 모드의 추가 요금은 포함하지 않아요.',
         ],
       },
@@ -398,7 +398,7 @@ export function resolveModelPricing(
           }
         : {}),
       notes: [
-        '공급자 모델 목록의 참고 단가예요. 자동 라우팅과 공급자별 요금에 따라 달라질 수 있어요.',
+        '프로바이더 모델 목록의 참고 단가예요. 자동 라우팅과 프로바이더별 요금에 따라 달라질 수 있어요.',
       ],
     });
   }
