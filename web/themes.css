@@ -131,6 +131,7 @@
   border: 1px solid var(--line);
 }
 .theme-editor-actions {
+  justify-content: flex-end;
   flex-wrap: nowrap;
   gap: 4px;
 }
@@ -218,7 +219,7 @@
   font-size: 13px;
 }
 .theme-sample {
-  border-block: 1px solid var(--line);
+  border: 0;
   padding-block: 10px;
 }
 .theme-sample .theme-frame {
@@ -267,17 +268,11 @@
   width: 100%;
 }
 .theme-library-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+  display: grid;
+  gap: 12px;
   padding: 16px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
 }
 .theme-library-copy {
-  flex: 1 1 240px;
   min-width: 0;
 }
 .theme-library-copy h4,
@@ -291,6 +286,7 @@
 }
 .theme-library-actions {
   display: flex;
+  justify-content: flex-end;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
@@ -308,16 +304,6 @@
   .theme-control-bar > label > select {
     width: 100%;
     min-width: 0;
-  }
-  .theme-library-tools {
-    align-items: stretch;
-    flex-direction: column;
-  }
-  .theme-library-copy {
-    flex-basis: auto;
-  }
-  .theme-library-actions {
-    flex-wrap: wrap;
   }
 }
 
@@ -351,7 +337,6 @@
 }
 .theme-dimension + .theme-dimension {
   padding-top: 20px;
-  border-top: 1px solid var(--line);
 }
 .theme-dimension-heading {
   display: flex;

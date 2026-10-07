@@ -14,7 +14,7 @@
   display: none;
 }
 .codex-account-card {
-  margin-top: 18px;
+  margin: 0;
   padding: 0;
   overflow: hidden;
   border-radius: 12px;
@@ -103,11 +103,17 @@
   margin: 0;
   padding: 16px 18px;
 }
+.codex-credit-row {
+  border-top: 1px solid var(--line);
+}
 .codex-account-card + .provider-actions {
-  margin-top: 16px;
+  margin-top: 0;
+  justify-content: flex-end;
 }
 .codex-agent-help {
-  margin-top: 20px;
+  margin-top: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
 }
 .codex-agent-help summary,
 .codex-connection-guide summary {
@@ -139,4 +145,12 @@
   .codex-agent-refreshing svg {
     animation: none;
   }
+}
+.codex-agent-settings {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.codex-agent-settings p {
+  margin: 0;
 }

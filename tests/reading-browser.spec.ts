@@ -170,6 +170,14 @@ test('READUI01 native source and translation keep text and copies while shared r
     await expect.poll(() => copied.at(-1)).toBe(sourceText);
 
     let settings = await readingDialog(page);
+    for (const name of ['대사 줄바꿈', '생각 줄바꿈']) {
+      const toggle = settings.getByRole('switch', { name, exact: true });
+      const toggleBox = (await toggle.boundingBox())!;
+      const rowBox = (await toggle.locator('xpath=ancestor::label').boundingBox())!;
+      expect(Math.abs(rowBox.x + rowBox.width - toggleBox.x - toggleBox.width)).toBeLessThanOrEqual(
+        1
+      );
+    }
     await settings.getByLabel('읽기 스타일', { exact: true }).selectOption({ label: '여유롭게' });
     const slider = settings.getByRole('slider', { name: '본문 크기' });
     await slider.focus();
@@ -368,11 +376,16 @@ async function helperFixture(page: Page, before: ChatDetail) {
         return route.fulfill({ json: tasks });
       if (path === `/api/helper/conversations/${conversation.id}/events`)
         return route.fulfill({ json: [] });
-      for (const task of tasks)
-        if (path === `/api/helper/tasks/${task.id}/activity`)
-          return route.fulfill({
-            json: { taskId: task.id, status: task.status, events: [], hasEarlier: false },
-          });
+      const activityTask = tasks.find((task) => path === `/api/helper/tasks/${task.id}/activity`);
+      if (activityTask)
+        return route.fulfill({
+          json: {
+            taskId: activityTask.id,
+            status: activityTask.status,
+            events: [],
+            hasEarlier: false,
+          },
+        });
       if (path === `/api/helper/artifacts/${artifact.id}`) return route.fulfill({ json: artifact });
     }
     unexpected.push(`${request.method()} ${path}`);

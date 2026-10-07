@@ -48,10 +48,23 @@ async function openJev(page: Page) {
     .click();
   await page
     .getByRole('region', { name: '제공자 선택' })
-    .getByRole('button', { name: 'TypeSafe AI JEV · 판단 전용 모델' })
+    .getByRole('button', { name: 'TypeSafe AI 서버 API 키 인증' })
     .click();
   const section = page.getByRole('region', { name: 'TypeSafe AI 프로바이더 설정', exact: true });
   await expect(section.getByLabel('JEV API 키', { exact: true })).toBeEnabled();
+  return section;
+}
+
+async function openJevModel(page: Page) {
+  await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
+  const group = page
+    .getByRole('region', { name: '저장한 모델 프리셋', exact: true })
+    .locator('.provider-model-group')
+    .filter({ hasText: 'TypeSafe AI' });
+  if ((await group.getAttribute('open')) === null) await group.locator(':scope > summary').click();
+  await page.getByRole('button', { name: 'JEV 모델 설정', exact: true }).click();
+  const section = page.getByRole('region', { name: 'JEV 모델 설정', exact: true });
+  await expect(section.getByLabel('모델 ID', { exact: true })).toHaveValue('jev-latest');
   return section;
 }
 
@@ -100,14 +113,16 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   const save = section.getByRole('button', { name: 'JEV API 키 저장', exact: true });
   await expect(key).toHaveAttribute('type', 'password');
   await expect(save).toBeDisabled();
-  await expect(
-    section.getByRole('button', { name: 'JEV 연결 테스트', exact: true })
-  ).toBeDisabled();
+  await expect(section.getByRole('button', { name: 'JEV 연결 테스트', exact: true })).toHaveCount(
+    0
+  );
   await key.fill(syntheticKey);
   await save.click();
   await expect(key).toHaveValue('');
   await expect(section.getByText('Uimori에 저장한 키', { exact: true })).toBeVisible();
-  await expect(section.getByRole('button', { name: 'JEV 연결 테스트', exact: true })).toBeEnabled();
+  await expect(section.getByRole('button', { name: 'JEV 연결 테스트', exact: true })).toHaveCount(
+    0
+  );
   const saved = await connection(request);
   expect(saved).toMatchObject({ configured: true, hasSavedKey: true, credentialSource: 'saved' });
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
@@ -129,6 +144,14 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
     await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
   }
   await page.getByRole('button', { name: 'JEV 모델 설정', exact: true }).click();
+  const modelSection = page.getByRole('region', { name: 'JEV 모델 설정', exact: true });
+  await expect(modelSection).toBeVisible();
+  await expect(modelSection.getByLabel('모델 ID', { exact: true })).toHaveValue('jev-latest');
+  await expect(modelSection.getByLabel('JEV API 키', { exact: true })).toBeHidden();
+  await expect(
+    modelSection.getByRole('button', { name: 'JEV 연결 테스트', exact: true })
+  ).toBeEnabled();
+  await modelSection.getByRole('button', { name: '프로바이더 설정', exact: true }).click();
   await expect(section).toBeVisible();
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await expect(
@@ -161,9 +184,9 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   }
   await section.getByRole('button', { name: '저장한 JEV 키 삭제', exact: true }).click();
   await expect(section.getByText('등록되지 않음', { exact: true })).toBeVisible();
-  await expect(
-    section.getByRole('button', { name: 'JEV 연결 테스트', exact: true })
-  ).toBeDisabled();
+  await expect(section.getByRole('button', { name: 'JEV 연결 테스트', exact: true })).toHaveCount(
+    0
+  );
   expect(await connection(request)).toMatchObject({ configured: false, hasSavedKey: false });
 });
 
@@ -187,6 +210,14 @@ test('JEVUI02 stale key edits preserve the draft until explicit refresh and save
   await expect(save).toBeDisabled();
   await section.getByRole('button', { name: '연결 상태 새로고침', exact: true }).click();
   await expect(save).toBeEnabled();
+  await expect(key).toHaveValue(draft);
+  await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
+  const modelSection = await openJevModel(page);
+  await expect(modelSection.getByLabel('JEV API 키', { exact: true })).toBeHidden();
+  await expect(
+    modelSection.getByRole('button', { name: 'JEV 연결 테스트', exact: true })
+  ).toBeDisabled();
+  await modelSection.getByRole('button', { name: '프로바이더 설정', exact: true }).click();
   await expect(key).toHaveValue(draft);
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await page.getByRole('button', { name: 'TypeSafe AI 편집 이어서', exact: true }).click();
@@ -264,7 +295,8 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
       },
     });
   });
-  const section = await openJev(page);
+  await openJev(page);
+  const section = await openJevModel(page);
   await expect(
     section.getByText('이 결과는 이전 연결 정보로 실행한 테스트예요.', { exact: true })
   ).toBeVisible();
@@ -272,7 +304,7 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
   await expect(section.getByRole('alert')).toContainText('같은 요청을 복구');
   expect(submissions).toHaveLength(1);
   await section.getByRole('button', { name: 'JEV 테스트 상태 확인', exact: true }).click();
-  await expect(section.getByLabel('JEV API 키', { exact: true })).toBeDisabled();
+  await expect(section.getByLabel('JEV API 키', { exact: true })).toBeHidden();
   await expect(
     section.getByRole('button', { name: 'JEV 응답 확인 중…', exact: true })
   ).toBeDisabled();

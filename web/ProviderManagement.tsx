@@ -732,7 +732,7 @@ export function ConnectionEditor({
               type="button"
               className="provider-resume secondary"
               disabled={busy}
-              onClick={() => openJev(screen === 'models' ? 'models' : 'connections')}
+              onClick={() => openJev('connections')}
             >
               TypeSafe AI 편집 이어서
             </button>
@@ -833,11 +833,11 @@ export function ConnectionEditor({
                 <strong>{item.label}</strong>
                 <small>
                   {item.kind === 'judgment'
-                    ? 'JEV · 판단 전용 모델'
+                    ? '서버 API 키 인증'
                     : item.id === 'codex-app-server-v1'
                       ? '개인 ChatGPT 구독 · 서버 실행'
                       : item.id === 'vertex-gemini-v1'
-                        ? 'Gemini 프로바이더 · global'
+                        ? 'Gemini 프로바이더'
                         : item.id === 'openai-chat-v1'
                           ? '호환 API 또는 로컬 서버'
                           : '서버 API 키 인증'}
@@ -863,12 +863,14 @@ export function ConnectionEditor({
           jevSave.current = handler;
         }}
         active={screen === 'jev'}
+        view={jevReturn === 'models' ? 'model' : 'connection'}
+        onConnectionOpen={() => openJev('connections')}
         onDirtyChange={setJevDirty}
         onBusyChange={setJevBusy}
         onStatusChange={setJevStatus}
       />
       <section hidden={screen !== 'connections'} aria-label="저장한 프로바이더">
-        <div className="connection-list provider-saved-list">
+        <div className="connection-list provider-saved-list settings-group-body">
           {jevMatches && (
             <article className="provider-saved-item" aria-label="TypeSafe AI 프로바이더">
               <div className="provider-item-heading">
@@ -881,9 +883,6 @@ export function ConnectionEditor({
                   onClick={() => openJev('connections')}
                 >
                   <strong>TypeSafe AI</strong>
-                  <span className="provider-item-subtitle">
-                    JEV · 판단 전용 · {jevStatus?.configured ? '등록한 API 키' : 'API 키 없음'}
-                  </span>
                 </button>
                 <ActionMenu label="TypeSafe AI 프로바이더 메뉴">
                   <button
@@ -914,11 +913,18 @@ export function ConnectionEditor({
                   onClick={() => showConnection(item)}
                 >
                   <strong>{item.title}</strong>
-                  <span className="provider-item-subtitle">
-                    {providerDefinition(item.protocol).label}
-                    {item.protocol === 'vertex-gemini-v1' ? ' · global' : ''}
-                    {!item.enabled && ' · 비활성'}
-                  </span>
+                  {(item.title !== providerDefinition(item.protocol).label || !item.enabled) && (
+                    <span className="provider-item-subtitle">
+                      {[
+                        item.title !== providerDefinition(item.protocol).label
+                          ? providerDefinition(item.protocol).label
+                          : '',
+                        !item.enabled ? '비활성' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  )}
                 </button>
                 <ActionMenu label={item.title + ' 프로바이더 메뉴'}>
                   <button
@@ -990,7 +996,7 @@ export function ConnectionEditor({
         className="registered-models"
         aria-label="저장한 모델 프리셋"
       >
-        <div className="provider-saved-list">
+        <div className="provider-saved-list settings-group-body">
           {jevMatches && (
             <details
               className="provider-model-group"
@@ -1021,7 +1027,7 @@ export function ConnectionEditor({
                     >
                       <strong>{JEV_PROVIDER_DEFINITION.modelLabel}</strong>
                       <span className="provider-item-subtitle">
-                        {JEV_PROVIDER_DEFINITION.modelId} · 판단 전용
+                        {JEV_PROVIDER_DEFINITION.modelId}
                       </span>
                     </button>
                     <ActionMenu label="JEV 모델 메뉴">
@@ -1034,7 +1040,7 @@ export function ConnectionEditor({
                           openJev('models');
                         }}
                       >
-                        <ConnectionIcon size={18} aria-hidden="true" /> 연결 설정
+                        <ModelIcon size={18} aria-hidden="true" /> 모델 설정
                       </button>
                     </ActionMenu>
                   </div>

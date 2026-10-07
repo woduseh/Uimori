@@ -37,36 +37,43 @@
   height: 20px;
   stroke-width: 1.7;
 }
-.model-secondary-settings {
-  border-top: 1px solid var(--line);
-  padding-top: 4px;
+.model-workspace-settings .model-workspace-controls {
+  border: 0;
+  padding: 0;
+  gap: 24px;
 }
-.model-secondary-settings > summary small {
-  display: block;
-  margin-left: 22px;
-  font-weight: 400;
+.model-primary-settings {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }
-.model-secondary-settings > .control-grid {
-  padding: 8px 0 12px;
-}
-
 .model-primary-settings > legend {
+  padding: 0;
+  margin-bottom: 10px;
   color: var(--text);
 }
-.model-role-setting {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 8px;
+.model-secondary-settings > summary small {
+  color: var(--muted);
+  font-weight: 400;
+  float: right;
+  margin-left: 12px;
 }
-.model-role-setting > small {
-  grid-column: 1 / -1;
+.model-secondary-settings > summary {
+  display: list-item;
+  cursor: pointer;
+  min-height: var(--control-h);
+  align-content: center;
 }
-
-.task-behavior-settings-body {
+.model-role-setting .settings-row-control > select {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+.model-workspace-settings .task-behavior-settings-body {
   display: grid;
   gap: 20px;
-  padding: 12px 0;
+  padding-block: 16px;
 }
 
 .task-behavior-section {

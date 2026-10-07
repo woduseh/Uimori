@@ -1053,14 +1053,17 @@ export async function createApp(options: AppOptions): Promise<App> {
     { bodyLimit: 16 * 1024 * 1024 },
     async (request) => {
       const body = record(request.body);
-      fields(body, ['idempotencyKey', 'request']);
+      fields(body, ['idempotencyKey', 'request', 'mode']);
+      if (body.mode !== undefined && body.mode !== 'replace' && body.mode !== 'copy')
+        throw new HttpError(400, 'Invalid retry mode');
       const result = store.retryRun(
         request.params.id,
         text(body.idempotencyKey, 'idempotency key', 120),
         (snapshot) => requireModel(snapshot.profile?.models.main, 'main'),
         body.request === undefined
           ? undefined
-          : text(body.request, 'request', REQUEST_TEXT_MAX_CHARS)
+          : text(body.request, 'request', REQUEST_TEXT_MAX_CHARS),
+        body.mode as 'replace' | 'copy' | undefined
       );
       if (result.created) {
         publish(result.run.chatId);

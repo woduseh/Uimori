@@ -315,6 +315,7 @@ test('READERREC rejudgment survives an uncertain response and reload without sen
     await expect(page.getByRole('textbox', { name: '다음 장면 요청', exact: true })).toHaveValue(
       'Keep this new draft'
     );
+    await expect(page.getByTestId('source')).toHaveCount(1);
     expect(writerRequests).toBe(0);
   } finally {
     await page.unrouteAll({ behavior: 'wait' });

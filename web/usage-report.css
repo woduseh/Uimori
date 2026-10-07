@@ -193,7 +193,7 @@
 }
 .usage-model-row {
   display: grid;
-  grid-template-columns: minmax(130px, 1.2fr) minmax(50px, 1fr) minmax(90px, auto);
+  grid-template-columns: minmax(130px, 1.2fr) minmax(50px, 1fr) 120px;
   align-items: center;
   gap: 18px;
   padding-block: 12px;

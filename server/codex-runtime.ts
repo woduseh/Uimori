@@ -424,6 +424,7 @@ export class CodexRuntime implements CodexRuntimeService {
   private loginError: string | null = null;
   private authAction?: Promise<CodexRuntimeStatus>;
   private limitValue: CodexRuntimeStatus['limits'] = [];
+  private creditValue: CodexRuntimeStatus['credits'] = null;
   private limitsAt = 0;
   constructor(
     dbPath: string,
@@ -582,16 +583,20 @@ export class CodexRuntime implements CodexRuntimeService {
       login: null,
       planType: null,
       limits: [],
+      credits: null,
     };
     try {
       const process = await this.control(),
         account = await this.account(process);
       if (account.type === 'chatgpt' && Date.now() - this.limitsAt > 30_000) {
         try {
-          this.limitValue = parseRateLimits(await process.request('account/rateLimits/read', {}));
+          const usage = await process.request('account/rateLimits/read', {});
+          this.limitValue = parseRateLimits(usage);
+          this.creditValue = parseCredits(usage);
           this.limitsAt = Date.now();
         } catch {
           this.limitValue = [];
+          this.creditValue = null;
         }
       }
       return {
@@ -602,6 +607,7 @@ export class CodexRuntime implements CodexRuntimeService {
         login: this.loginValue ? { ...this.loginValue } : null,
         planType: account.plan,
         limits: account.type === 'chatgpt' ? structuredClone(this.limitValue) : [],
+        credits: account.type === 'chatgpt' ? structuredClone(this.creditValue) : null,
       };
     } catch (caught) {
       return { ...base, error: safeError(caught) };
@@ -667,6 +673,7 @@ export class CodexRuntime implements CodexRuntimeService {
       this.revision++;
       this.loginValue = null;
       this.limitValue = [];
+      this.creditValue = null;
       this.limitsAt = 0;
       this.rejectWaiting('CODEX_AUTH_CHANGED');
       await Promise.allSettled([...this.active].map((process) => process.close()));
@@ -1501,4 +1508,25 @@ function parseRateLimits(value: unknown): CodexRuntimeStatus['limits'] {
           });
       }
   return result;
+}
+
+function parseCredits(value: unknown): CodexRuntimeStatus['credits'] {
+  if (!object(value)) return null;
+  const snapshot =
+    object(value.rateLimitsByLimitId) && object(value.rateLimitsByLimitId.codex)
+      ? value.rateLimitsByLimitId.codex
+      : value.rateLimits;
+  if (!object(snapshot) || !object(snapshot.credits)) return null;
+  const credits = snapshot.credits;
+  if (typeof credits.hasCredits !== 'boolean' || typeof credits.unlimited !== 'boolean')
+    return null;
+  const balance =
+    typeof credits.balance === 'string' && /^\d+(?:\.\d+)?$/u.test(credits.balance)
+      ? Number(credits.balance)
+      : null;
+  return {
+    balance: balance !== null && Number.isFinite(balance) ? balance : null,
+    hasCredits: credits.hasCredits,
+    unlimited: credits.unlimited,
+  };
 }

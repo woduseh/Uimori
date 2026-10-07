@@ -206,7 +206,9 @@ input.on('line', (line) => {
       limitName: 'Codex',
       primary: { usedPercent: 12, windowDurationMins: 300, resetsAt: 1800000000 },
       secondary: null,
-      credits: null,
+      credits: process.env.UIMORI_CODEX_FIXTURE_CREDITS
+        ? JSON.parse(process.env.UIMORI_CODEX_FIXTURE_CREDITS)
+        : null,
       individualLimit: null,
       spendControlReached: null,
       planType: 'plus',
@@ -216,7 +218,7 @@ input.on('line', (line) => {
       id,
       result: {
         rateLimits,
-        rateLimitsByLimitId: { codex: rateLimits },
+        rateLimitsByLimitId: mode === 'credits-legacy' ? {} : { codex: rateLimits },
         rateLimitResetCredits: null,
         accountId: null,
         rateLimitUpsell: null,

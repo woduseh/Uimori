@@ -17,11 +17,6 @@ async function openBotChatSearch(nav: Locator, title: string) {
   await nav.getByLabel(`${title} 관리`, { exact: true }).click();
   await nav.getByRole('button', { name: '채팅 검색', exact: true }).click();
 }
-/** Chat rows keep a single ⋯; rename, move and delete live inside it. */
-async function openChatRowMenu(row: Locator, title: string) {
-  await row.hover();
-  await row.getByLabel(`${title} 채팅 메뉴`, { exact: true }).click();
-}
 test('ORG01 mobile navigation groups by owner and preserves chats when a folder is released', async ({
   page,
   request,
@@ -66,13 +61,12 @@ test('ORG01 mobile navigation groups by owner and preserves chats when a folder 
   await expect(branchA.getByText('채팅이 없어요.', { exact: true })).toHaveCount(1);
   const folderResponse = await request.get(`/api/bots/${a.id}/folders`);
   const [folder] = await folderResponse.json();
-  await openChatRowMenu(nav.locator(`.bot-chat-item[data-chat-id="${first.id}"]`), first.title);
-  await nav.getByRole('button', { name: '채팅 이동', exact: true }).click();
-  await page.getByLabel(`${first.title} 폴더 이동`, { exact: true }).selectOption(folder.id);
+  await nav
+    .locator(`.bot-chat-item[data-chat-id="${first.id}"]`)
+    .dragTo(nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true }));
   await expect
     .poll(async () => (await (await request.get(`/api/chats/${first.id}`)).json()).chat.folderId)
     .toBe(folder.id);
-  await page.keyboard.press('Escape');
   await expect(branchA.getByText('채팅이 없어요.', { exact: true })).toHaveCount(0);
   await nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true }).hover();
   await nav.getByRole('button', { name: `${folder.title} 폴더 설정`, exact: true }).click();
@@ -137,7 +131,7 @@ for (const width of DEFAULT_WIDTHS) {
     await row.hover();
     await row.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
     const actions = row.locator('.action-menu-body');
-    await expect(actions.getByRole('button')).toHaveText(['이름 변경', '채팅 이동', '채팅 삭제']);
+    await expect(actions.getByRole('button')).toHaveText(['이름 변경', '채팅 삭제']);
     await actions.getByRole('button', { name: '이름 변경', exact: true }).click();
     const menu = page.getByRole('dialog', { name: '채팅 이름 변경', exact: true });
     const title = menu.getByRole('textbox', { name: '채팅 제목', exact: true });
@@ -271,11 +265,11 @@ test('ORG02 desktop compact rows support drag ordering, folder drops, collapse a
   if (visualReview) await page.screenshot({ path: info.outputPath('navigation-desktop.png') });
 });
 
-test('ORG03 touch menu offers folder movement and ordering and keeps deletion confirmation', async ({
+test('ORG03 touch menu keeps rename and deletion confirmation without a separate move dialog', async ({
   browser,
   request,
 }, info) => {
-  const { chats, folder } = await navigationFixture(request);
+  const { chats } = await navigationFixture(request);
   const context = await browser.newContext({
     baseURL: test.info().project.use.baseURL,
     viewport: { width: MOBILE_WIDTH, height: 844 },
@@ -288,25 +282,11 @@ test('ORG03 touch menu offers folder movement and ordering and keeps deletion co
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
     const nav = page.getByTestId('bot-navigation').filter({ visible: true });
     await expect(rows(nav)).toHaveCount(3);
-    const first = rows(nav).first();
-    const firstId = await first.getAttribute('data-chat-id');
+    const first = nav.locator(`.bot-chat-item[data-chat-id="${chats[0].id}"]`);
     await expect(first.locator('.bot-row-actions')).toHaveCSS('opacity', '1');
     await first.getByLabel(/채팅 메뉴$/).click();
-    await first.getByRole('button', { name: '채팅 이동', exact: true }).click();
-    await page.getByRole('button', { name: '아래로 이동', exact: true }).click();
-    await expect.poll(() => rows(nav).nth(1).getAttribute('data-chat-id')).toBe(firstId);
-    await page.keyboard.press('Escape');
+    await expect(first.getByRole('button', { name: '채팅 이동', exact: true })).toHaveCount(0);
     const selectedRow = nav.locator(`.bot-chat-item[data-chat-id="${chats[0].id}"]`);
-    await selectedRow.getByLabel(`${chats[0].title} 채팅 메뉴`, { exact: true }).click();
-    await selectedRow.getByRole('button', { name: '채팅 이동', exact: true }).click();
-    await page.getByLabel(`${chats[0].title} 폴더 이동`, { exact: true }).selectOption(folder.id);
-    await expect
-      .poll(
-        async () => (await (await request.get(`/api/chats/${chats[0].id}`)).json()).chat.folderId
-      )
-      .toBe(folder.id);
-    await page.keyboard.press('Escape');
-    await selectedRow.getByLabel(`${chats[0].title} 채팅 메뉴`, { exact: true }).click();
     await selectedRow
       .getByRole('button', { name: `${chats[0].title} 채팅 삭제`, exact: true })
       .click();
@@ -410,6 +390,15 @@ for (const width of DEFAULT_WIDTHS) {
       },
     });
     expect(placement.ok()).toBe(true);
+    organization = await placement.json();
+    const emptyTitle = `빈 봇 폴더 ${crypto.randomUUID()}`;
+    const emptyResponse = await request.post('/api/library/folders', {
+      data: { expectedRevision: organization.revision, category: 'bot', title: emptyTitle },
+    });
+    expect(emptyResponse.ok()).toBe(true);
+    const emptyFolder = (await emptyResponse.json()).folders.find(
+      (item: { title: string }) => item.title === emptyTitle
+    );
     // Keep this navigation assertion independent of bots created by other browser cases.
     await page.route(/\/api\/library(?:\?|$)/, async (route) => {
       const response = await route.fetch();
@@ -435,9 +424,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(branches).toHaveCount(3);
     await expect(nav.locator(`[data-bot-id="${unusedBot.id}"]`)).toBeVisible();
     const branchA = nav.locator(`[data-bot-id="${a.owner.id}"]`);
-    await revealBotActions(branchA);
-    await branchA.getByLabel(`${a.owner.title} 관리`, { exact: true }).click();
-    await branchA.getByLabel(`${a.owner.title} 봇 폴더 이동`, { exact: true }).selectOption('');
+    await branchA.locator('.bot-branch-heading').dragTo(nav.locator('.bot-tree-section-heading'));
     await expect
       .poll(async () => {
         const state = await (await request.get('/api/library/organization')).json();
@@ -445,24 +432,17 @@ for (const width of DEFAULT_WIDTHS) {
       })
       .toBeNull();
     await expect(folder.locator(`[data-bot-id="${a.owner.id}"]`)).toHaveCount(0);
-    await revealBotActions(branchA);
-    await branchA.getByLabel(`${a.owner.title} 관리`, { exact: true }).click();
-    await branchA
-      .getByLabel(`${a.owner.title} 봇 폴더 이동`, { exact: true })
-      .selectOption(shared.id);
+    await branchA.locator('.bot-branch-heading').dragTo(folder.locator('.bot-tree-folder-heading'));
     await expect(branches).toHaveCount(3);
     await nav.locator('.bot-tree-section-heading').hover();
     await nav.getByLabel('봇 목록 메뉴', { exact: true }).click();
     await nav.getByLabel('봇 정렬 기준', { exact: true }).selectOption('manual');
     await page.keyboard.press('Escape');
     const firstId = await branches.first().getAttribute('data-bot-id');
-    const firstOwner = [a.owner, b.owner, unusedBot].find((bot) => bot.id === firstId)!;
-    await revealBotActions(branches.first());
-    await branches.first().getByLabel(`${firstOwner.title} 관리`, { exact: true }).click();
     await branches
       .first()
-      .getByRole('button', { name: `${firstOwner.title} 아래로 이동`, exact: true })
-      .click();
+      .locator('.bot-branch-heading')
+      .dragTo(branches.nth(1).locator('.bot-branch-heading'), { targetPosition: { x: 40, y: 35 } });
     const manualOrder = await branches.evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute('data-bot-id'))
     );
@@ -482,6 +462,38 @@ for (const width of DEFAULT_WIDTHS) {
           .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-bot-id')))
       )
       .toEqual(manualOrder);
+    // Empty folders remain usable destinations, and folder ordering is shared with the library.
+    await nav.locator('.bot-tree-section-heading').hover();
+    await nav.getByLabel('봇 목록 메뉴', { exact: true }).click();
+    await nav.getByLabel('봇 정렬 기준', { exact: true }).selectOption('recent');
+    await page.keyboard.press('Escape');
+    const emptyHeading = nav.locator(
+      `[data-bot-folder-id="${emptyFolder.id}"] .bot-tree-folder-heading`
+    );
+    await expect(emptyHeading).toBeVisible();
+    await emptyHeading.dragTo(folder.locator('.bot-tree-folder-heading'), {
+      targetPosition: { x: 40, y: 2 },
+    });
+    await expect
+      .poll(async () => {
+        const state = await (await request.get('/api/library/organization')).json();
+        const before = state.folders.find((item: { id: string }) => item.id === emptyFolder.id);
+        const after = state.folders.find((item: { id: string }) => item.id === shared.id);
+        return before.sortPosition < after.sortPosition;
+      })
+      .toBe(true);
+    await page.reload();
+    nav = await visibleNavigation(page);
+    const folderIds = await nav
+      .locator('[data-bot-folder-id]')
+      .evaluateAll((elements) =>
+        elements.map((element) => element.getAttribute('data-bot-folder-id'))
+      );
+    expect(folderIds.indexOf(emptyFolder.id)).toBeLessThan(folderIds.indexOf(shared.id));
+    await nav.locator('.bot-tree-section-heading').hover();
+    await nav.getByLabel('봇 목록 메뉴', { exact: true }).click();
+    await expect(nav.getByLabel('봇 정렬 기준', { exact: true })).toHaveValue('recent');
+    await page.keyboard.press('Escape');
     await openBotChatSearch(nav, a.owner.title);
     const search = page.getByRole('dialog', { name: '이 봇의 채팅 검색', exact: true });
     await search.getByRole('searchbox', { name: '채팅 검색', exact: true }).fill('첫째');

@@ -402,6 +402,7 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       authMode: 'chatgpt',
       planType: 'plus',
       limits: [{ usedPercent: 12, windowDurationMins: 300 }],
+      credits: null,
     });
     expect(JSON.stringify(status)).not.toMatch(/synthetic@example|SECRET|auth\.json/);
     expect(await runtime.catalog()).toMatchObject([
@@ -410,6 +411,23 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(records().some((row) => row.method === 'turn/start')).toBe(false);
     expect((await runtime.logout()).authenticated).toBe(false);
   });
+  it.each([
+    [{ balance: '61842.25', hasCredits: true, unlimited: false }, 61842.25, 'normal'],
+    [{ balance: '0', hasCredits: false, unlimited: false }, 0, 'normal'],
+    [{ balance: null, hasCredits: true, unlimited: true }, null, 'normal'],
+    [{ balance: 'invalid', hasCredits: true, unlimited: false }, null, 'normal'],
+    [{ balance: '100', hasCredits: true, unlimited: false }, 100, 'credits-legacy'],
+  ])(
+    'exposes reported credits without inferring an unknown balance: %j',
+    async (credits, balance, mode) => {
+      const { runtime, records } = setup(mode, {
+        UIMORI_CODEX_FIXTURE_CREDITS: JSON.stringify(credits),
+      });
+      expect((await runtime.status()).credits).toEqual({ ...credits, balance });
+      expect(records().some((row) => row.method === 'turn/start')).toBe(false);
+      expect((await runtime.logout()).credits).toBeNull();
+    }
+  );
   it('delegates device login to Codex and cancels it without accepting a token', async () => {
     const { runtime, records } = setup('logged-out');
     expect(await runtime.status()).toMatchObject({

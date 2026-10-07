@@ -215,7 +215,8 @@ export function ProfileEditor({
           aria-labelledby={hideNavigation ? undefined : `profile-tab-${tab}`}
         >
           <fieldset className="profile-fields" disabled={saving}>
-            <div hidden={tab !== 'characters'}>
+            <div hidden={tab !== 'characters'} className="settings-group">
+              <h3 className="settings-group-heading">대화 자료</h3>
               <ContentAttachments
                 ownerBotId={ownerBotId}
                 profile={value}
@@ -225,31 +226,44 @@ export function ProfileEditor({
                 onPendingChange={setAttachmentPending}
               />
             </div>
-            <div hidden={tab !== 'images'} className="chat-profile-image-options">
-              <h3>사용 가능한 이미지 자동 배치</h3>
-              <label className="check">
-                <Switch
-                  aria-label="원문 이미지 자동 배치"
-                  checked={value.image}
-                  onChange={(event) => change({ ...value, image: event.target.checked })}
-                />
-                원문 이미지 자동 배치
-              </label>
-              <small>
-                새 원문이 완성되면 채팅 이미지와 봇·페르소나·모듈의 본문용 이미지 중 어울리는
-                이미지를 골라 문단 사이에 배치해요.
-              </small>
-              <label className="check">
-                <Switch
-                  checked={value.imageTranslation !== false}
-                  onChange={(event) => change({ ...value, imageTranslation: event.target.checked })}
-                />
-                번역 이미지 자동 배치
-              </label>
-              <small>
-                새 번역이 완성되면 번역문에 맞춰 이미지를 별도로 배치해요. 꺼도 각 보기의 장면
-                메뉴에서 직접 실행할 수 있어요.
-              </small>
+            <div hidden={tab !== 'images'} className="chat-profile-image-options settings-group">
+              <h3 className="settings-group-heading">사용 가능한 이미지 자동 배치</h3>
+              <div className="settings-group-body">
+                <label className="settings-row settings-row-toggle">
+                  <span className="settings-row-copy">
+                    <strong>원문 이미지 자동 배치</strong>
+                    <small>
+                      새 원문이 완성되면 채팅 이미지와 봇·페르소나·모듈의 본문용 이미지 중 어울리는
+                      이미지를 골라 문단 사이에 배치해요.
+                    </small>
+                  </span>
+                  <span className="settings-row-control">
+                    <Switch
+                      aria-label="원문 이미지 자동 배치"
+                      checked={value.image}
+                      onChange={(event) => change({ ...value, image: event.target.checked })}
+                    />
+                  </span>
+                </label>
+                <label className="settings-row settings-row-toggle">
+                  <span className="settings-row-copy">
+                    <strong>번역 이미지 자동 배치</strong>
+                    <small>
+                      새 번역이 완성되면 번역문에 맞춰 이미지를 별도로 배치해요. 꺼도 각 보기의 장면
+                      메뉴에서 직접 실행할 수 있어요.
+                    </small>
+                  </span>
+                  <span className="settings-row-control">
+                    <Switch
+                      aria-label="번역 이미지 자동 배치"
+                      checked={value.imageTranslation !== false}
+                      onChange={(event) =>
+                        change({ ...value, imageTranslation: event.target.checked })
+                      }
+                    />
+                  </span>
+                </label>
+              </div>
             </div>
             <div hidden={tab !== 'story'}>
               {!loreDefaults &&
@@ -283,36 +297,40 @@ export function ProfileEditor({
                 defaults={loreDefaults}
               />
             </div>
-            <div hidden={tab !== 'prompts'} className="chat-profile-model-options">
-              <label>
-                이 채팅의 본문 모델
-                <select
-                  value={modelId ?? ''}
-                  onChange={(event) =>
-                    change({
-                      ...value,
-                      pinned: {
-                        ...value.pinned,
-                        mainModel: event.target.value ? { id: event.target.value } : undefined,
-                      },
-                    })
-                  }
-                >
-                  <option value="">
-                    전역 따르기 ·{' '}
-                    {library.models.find((item) => item.id === workspace?.modelRoutes.main?.id)
-                      ?.title ?? '미지정 또는 확인 필요'}
-                  </option>
-                  {modelId && !modelChoices.some((item) => item.id === modelId) && (
-                    <option value={modelId}>사용 불가 · {selectedModel?.title ?? modelId}</option>
-                  )}
-                  {modelChoices.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {modelLabel(item, library)}
+            <div hidden={tab !== 'prompts'} className="chat-profile-model-options settings-group">
+              <h3 className="settings-group-heading">본문 모델</h3>
+              <div className="settings-group-body">
+                <label className="settings-row">
+                  <span>이 채팅의 본문 모델</span>
+                  <select
+                    aria-label="이 채팅의 본문 모델"
+                    value={modelId ?? ''}
+                    onChange={(event) =>
+                      change({
+                        ...value,
+                        pinned: {
+                          ...value.pinned,
+                          mainModel: event.target.value ? { id: event.target.value } : undefined,
+                        },
+                      })
+                    }
+                  >
+                    <option value="">
+                      전역 따르기 ·{' '}
+                      {library.models.find((item) => item.id === workspace?.modelRoutes.main?.id)
+                        ?.title ?? '미지정 또는 확인 필요'}
                     </option>
-                  ))}
-                </select>
-              </label>
+                    {modelId && !modelChoices.some((item) => item.id === modelId) && (
+                      <option value={modelId}>사용 불가 · {selectedModel?.title ?? modelId}</option>
+                    )}
+                    {modelChoices.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {modelLabel(item, library)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               {!modelAvailable && workspace && (
                 <p className="error" role="alert">
                   {!selectedModelId
@@ -320,70 +338,82 @@ export function ProfileEditor({
                     : '선택한 본문 모델을 사용할 수 없어 새 본문 실행이 차단돼요. 사용 가능한 모델을 고르거나 전체 설정을 확인해 주세요.'}
                 </p>
               )}
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => onGlobalSettings('models')}
-              >
-                <SettingsIcon size={18} aria-hidden="true" />
-                전역 모델 설정
-              </button>
-            </div>
-            <div hidden={tab !== 'prompts'} className="chat-profile-prompt-options">
-              <label>
-                이 채팅의 작문 프롬프트
-                <select
-                  value={promptId ?? ''}
-                  onChange={(event) =>
-                    change({
-                      ...value,
-                      pinned: {
-                        ...value.pinned,
-                        mainPromptPresetId: event.target.value || undefined,
-                      },
-                    })
-                  }
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => onGlobalSettings('models')}
                 >
-                  <option value="">전역 따르기 · {workspace?.main.title ?? '불러오는 중…'}</option>
-                  {promptId && !pinnedPrompt && (
-                    <option value={promptId}>사용 불가 · {promptId}</option>
-                  )}
-                  {promptChoices.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {promptId && !pinnedPrompt && (
-                <p className="error" role="alert">
-                  고정한 작문 프리셋을 사용할 수 없어 새 본문 실행이 차단돼요. 다른 프리셋을
-                  고르거나 전역 따르기로 바꿔 저장해 주세요.
-                </p>
-              )}
-              <small>
-                직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요.
-                모델·프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 과거·진행 중인 작업은 바뀌지
-                않고, 창작 옵션은 선택한 프롬프트를 따라요.
-              </small>
-              <label>
-                작가 노트
-                <textarea
-                  aria-label="작가 노트"
-                  rows={5}
-                  maxLength={32000}
-                  value={value.authorNote ?? ''}
-                  onChange={(event) => change({ ...value, authorNote: event.target.value })}
-                />
-              </label>
-              <small>
-                Risu 프롬프트의 작가 노트 위치에 넣어요. 비워 두면 프롬프트에 저장된 기본값을
-                사용해요.
-              </small>
+                  <SettingsIcon size={18} aria-hidden="true" />
+                  전역 모델 설정
+                </button>
+              </div>
             </div>
-            <div hidden={tab !== 'prompts'} className="settings-inherited">
-              <h4>전체 채팅 설정에서 사용하는 모델</h4>
-              <dl>
+            <div hidden={tab !== 'prompts'} className="chat-profile-prompt-options settings-group">
+              <h3 className="settings-group-heading">작문 프롬프트</h3>
+              <div className="settings-group-body">
+                <label className="settings-row">
+                  <span className="settings-row-copy">
+                    <strong>이 채팅의 작문 프롬프트</strong>
+                    <small>
+                      직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요.
+                      모델·프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 과거·진행 중인 작업은
+                      바뀌지 않고, 창작 옵션은 선택한 프롬프트를 따라요.
+                    </small>
+                  </span>
+                  <select
+                    aria-label="이 채팅의 작문 프롬프트"
+                    value={promptId ?? ''}
+                    onChange={(event) =>
+                      change({
+                        ...value,
+                        pinned: {
+                          ...value.pinned,
+                          mainPromptPresetId: event.target.value || undefined,
+                        },
+                      })
+                    }
+                  >
+                    <option value="">
+                      전역 따르기 · {workspace?.main.title ?? '불러오는 중…'}
+                    </option>
+                    {promptId && !pinnedPrompt && (
+                      <option value={promptId}>사용 불가 · {promptId}</option>
+                    )}
+                    {promptChoices.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {promptId && !pinnedPrompt && (
+                  <p className="error" role="alert">
+                    고정한 작문 프리셋을 사용할 수 없어 새 본문 실행이 차단돼요. 다른 프리셋을
+                    고르거나 전역 따르기로 바꿔 저장해 주세요.
+                  </p>
+                )}
+                <label className="settings-row">
+                  <span className="settings-row-copy">
+                    <strong>작가 노트</strong>
+                    <small>
+                      Risu 프롬프트의 작가 노트 위치에 넣어요. 비워 두면 프롬프트에 저장된 기본값을
+                      사용해요.
+                    </small>
+                  </span>
+                  <textarea
+                    aria-label="작가 노트"
+                    rows={5}
+                    maxLength={32000}
+                    value={value.authorNote ?? ''}
+                    onChange={(event) => change({ ...value, authorNote: event.target.value })}
+                  />
+                </label>
+              </div>
+            </div>
+            <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
+              <h4 className="settings-group-heading">전체 채팅 설정에서 사용하는 모델</h4>
+              <dl className="settings-group-body">
                 {(['translation', 'status'] as const).map((role, index) => (
                   <div key={role}>
                     <dt>{['번역', '장면 해설'][index]}</dt>
@@ -404,22 +434,24 @@ export function ProfileEditor({
                 </div>
               </dl>
             </div>
-            <div hidden={tab !== 'prompts'} className="settings-inherited">
-              <h4>전체 채팅 설정에서 사용하는 프롬프트</h4>
-              <dl>
+            <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
+              <h4 className="settings-group-heading">전체 채팅 설정에서 사용하는 프롬프트</h4>
+              <dl className="settings-group-body">
                 <div>
                   <dt>번역</dt>
                   <dd>{workspace?.translation.title ?? '불러오는 중…'}</dd>
                 </div>
               </dl>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => onGlobalSettings('prompts')}
-              >
-                <SettingsIcon size={18} aria-hidden="true" />
-                전역 프롬프트 설정
-              </button>
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => onGlobalSettings('prompts')}
+                >
+                  <SettingsIcon size={18} aria-hidden="true" />
+                  전역 프롬프트 설정
+                </button>
+              </div>
             </div>
           </fieldset>
         </div>

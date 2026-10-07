@@ -14,6 +14,13 @@ import { createFixtureChat } from './fixtures/chat.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
+import { editSource } from '../server/source-editing.js';
+import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
+import {
+  contextSourceRefs,
+  validateContextPlan,
+  withContextProjection,
+} from '../server/context-planning.js';
 
 const owned: { path: string; store: Store }[] = [];
 function database() {
@@ -69,6 +76,336 @@ function complete(store: Store, chatId: string, text: string) {
   );
   return { run: store.run(run.id), source };
 }
+test('last response replacement keeps old prose until commit, excludes it from inputs, and preserves immutable history', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Replace last');
+  const ancestor = complete(store, chat.id, 'Ancestor'),
+    selected = complete(store, chat.id, 'Old response');
+  const beforeChats = store.db.prepare('SELECT count(*) AS total FROM chats').get()!.total;
+  const result = store.retryRun(
+    selected.run.id,
+    'replace-last',
+    undefined,
+    'Edited request',
+    'replace'
+  );
+  expect(result.run.chatId).toBe(chat.id);
+  expect(result.run.parentRevision).toBe(ancestor.source.id);
+  expect(result.run.snapshot.history.map((item) => item.text)).toEqual(['Ancestor']);
+  expect(result.run.snapshot.logicalHistory?.some((item) => item.text === 'Old response')).toBe(
+    false
+  );
+  expect(store.chat(chat.id).headRevision).toBe(selected.source.id);
+  expect(
+    store.retryRun(selected.run.id, 'replace-last', undefined, 'Edited request', 'replace')
+  ).toMatchObject({ created: false, run: { id: result.run.id } });
+  expect(() =>
+    store.retryRun(selected.run.id, 'replace-last', undefined, 'Edited request', 'copy')
+  ).toThrow(/Idempotency/);
+  store.startRun(result.run.id);
+  const replacement = store.completeRun(
+    result.run.id,
+    'New response',
+    selected.run.usage!,
+    result.run.snapshot.settings
+  );
+  expect(replacement.parentRevision).toBe(ancestor.source.id);
+  expect(store.history(store.chat(chat.id).headRevision).map((item) => item.text)).toEqual([
+    'Ancestor',
+    'New response',
+  ]);
+  expect(store.source(selected.source.id).text).toBe('Old response');
+  expect(store.run(selected.run.id).status).toBe('completed');
+  expect(store.db.prepare('SELECT count(*) AS total FROM chats').get()!.total).toBe(beforeChats);
+  expect(() =>
+    store.retryRun(selected.run.id, 'replace-middle', undefined, undefined, 'replace')
+  ).toThrow(/마지막/);
+  expect(
+    store.retryRun(selected.run.id, 'copy-old', undefined, undefined, 'copy').run.chatId
+  ).not.toBe(chat.id);
+});
+
+test.each(['failed', 'cancelled', 'refused'] as const)(
+  'replacement %s retains the old response and retry keeps replacement intent',
+  (status) => {
+    const store = database(),
+      chat = createFixtureChat(store, 'Replace failure');
+    const selected = complete(store, chat.id, 'Keep me');
+    const retry = store.retryRun(
+      selected.run.id,
+      `replace-${status}`,
+      undefined,
+      undefined,
+      'replace'
+    ).run;
+    store.startRun(retry.id);
+    store.finishRun(retry.id, status, 'Fixture failure');
+    expect(store.chat(chat.id).headRevision).toBe(selected.source.id);
+    expect(store.source(selected.source.id).text).toBe('Keep me');
+    expect(() =>
+      store.completeRun(retry.id, 'Late response', selected.run.usage!, retry.snapshot.settings)
+    ).toThrow(/owns completion/);
+    const repeated = store.retryRun(retry.id, 'retry-replacement').run;
+    expect(repeated.chatId).toBe(chat.id);
+    expect(repeated.snapshot.replacement?.sourceRevision).toBe(selected.source.id);
+    expect(repeated.snapshot.history).toEqual([]);
+  }
+);
+
+test('replacement completion rejects edits to the retained head and does not overwrite user prose', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Replace conflict');
+  const selected = complete(store, chat.id, 'Original');
+  const retry = store.retryRun(
+    selected.run.id,
+    'replace-edit',
+    undefined,
+    undefined,
+    'replace'
+  ).run;
+  store.startRun(retry.id);
+  editSource(store, selected.source.id, { expectedRevision: 0, text: 'User correction' });
+  expect(() =>
+    store.completeRun(retry.id, 'New response', selected.run.usage!, retry.snapshot.settings)
+  ).toThrow(/revision changed/);
+  expect(store.chat(chat.id).headRevision).toBe(selected.source.id);
+  expect(store.source(selected.source.id).text).toBe('User correction');
+});
+
+test('replacement seeds ancestor variables and swaps state only after completion', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Replace variables');
+  writeChatVariables(store, chat.id, {
+    expectedRevision: 0,
+    expectedSourceHash: null,
+    idempotencyKey: 'base-vars',
+    values: { scene: 'before' },
+  });
+  const ancestor = complete(store, chat.id, 'Ancestor');
+  writeChatVariables(store, chat.id, {
+    expectedRevision: 1,
+    expectedSourceHash: ancestor.source.hash,
+    idempotencyKey: 'next-vars',
+    values: { scene: 'after' },
+  });
+  const selected = complete(store, chat.id, 'Old response');
+  const retry = store.retryRun(
+    selected.run.id,
+    'replace-vars',
+    undefined,
+    undefined,
+    'replace'
+  ).run;
+  expect(retry.snapshot.profile?.variableState).toEqual({
+    revision: 2,
+    values: { scene: 'before' },
+  });
+  expect(readChatVariables(store, chat.id)).toEqual({ revision: 2, values: { scene: 'after' } });
+  store.startRun(retry.id);
+  store.completeRun(retry.id, 'New response', selected.run.usage!, retry.snapshot.settings);
+  expect(readChatVariables(store, chat.id)).toEqual({ revision: 3, values: { scene: 'before' } });
+});
+test('completed replacements can be replaced again and failed judgment recovery preserves replacement ownership', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Replace twice');
+  const selected = complete(store, chat.id, 'Old response');
+  const retry = store.retryRun(
+    selected.run.id,
+    'replace-first',
+    undefined,
+    undefined,
+    'replace'
+  ).run;
+  store.startRun(retry.id);
+  const newer = store.completeRun(
+    retry.id,
+    'First replacement',
+    selected.run.usage!,
+    retry.snapshot.settings
+  );
+  const next = store.retryRun(newer.runId, 'replace-second', undefined, undefined, 'replace').run;
+  expect(next.snapshot.replacement?.sourceRevision).toBe(newer.id);
+  const snapshot = {
+    ...next.snapshot,
+    mainJudgmentEnabled: true,
+    mainJudgment: {
+      version: 'main-refusal-jev-v2',
+      candidateHash: newer.hash,
+      response: 'Preserved candidate',
+      threshold: 0.5,
+    },
+  };
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(JSON.stringify(snapshot), next.id);
+  store.startRun(next.id);
+  store.finishRun(next.id, 'failed', 'JEV_CONNECTION_FAILED', 'Preserved candidate');
+  const recovered = store.candidate(
+    next.id,
+    'rejudge-replacement',
+    'Unused title',
+    undefined,
+    true
+  ).run;
+  expect(recovered.chatId).toBe(chat.id);
+  expect(recovered.snapshot.judgmentRecovery).toBe(true);
+  expect(recovered.snapshot.replacement?.sourceRevision).toBe(newer.id);
+  store.startRun(recovered.id);
+  const final = store.completeRun(
+    recovered.id,
+    'Preserved candidate',
+    selected.run.usage!,
+    recovered.snapshot.settings
+  );
+  expect(store.history(final.id).map((source) => source.text)).toEqual(['Preserved candidate']);
+  const copy = store.candidate(next.id, 'candidate-failed-replacement', 'Explicit candidate').run;
+  expect(copy.chatId).not.toBe(chat.id);
+  expect(copy.snapshot.replacement).toBeUndefined();
+});
+
+test.each(['compacted', 'recent'] as const)(
+  'replacement clears an active checkpoint with the old response in %s only after success and preserves its record',
+  (location) => {
+    const store = database(),
+      chat = createFixtureChat(store, 'Replace checkpoint');
+    const ancestor = complete(store, chat.id, 'Ancestor');
+    const selected = complete(store, chat.id, 'Old response');
+    const connection = store.product.connection({
+      title: 'Synthetic context',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9',
+      enabled: true,
+    });
+    const model = store.product.model({
+      title: 'Synthetic context',
+      connectionId: connection.id,
+      modelId: 'fixture',
+      maxOutputTokens: 1024,
+      temperature: null,
+    });
+    const profile = store.product.profile(chat.id);
+    updateTestProfile(store.product, chat.id, {
+      expectedRevision: profile.revision,
+      packageAttachments: profile.packageAttachments,
+      routes: { ...profile.routes, main: { id: model.id } },
+      image: false,
+    });
+    const candidate = queued(store, chat.id);
+    store.finishRun(candidate.id, 'cancelled', 'Fixture reservation only');
+    const captured = store.context.prepareRun(candidate.snapshot);
+    const snapshot = withContextProjection(
+      captured,
+      contextSourceRefs(captured).slice(0, location === 'compacted' ? 2 : 1),
+      location === 'compacted' ? 'Ancestor and old response summary' : 'Ancestor summary'
+    );
+    snapshot.contextPlan!.estimatedInputTokens = 100;
+    validateContextPlan(snapshot);
+    const published = store.context.publishPrepared(snapshot, { origin: 'automatic' });
+    const checkpoint = published.contextPlan!.checkpoint!;
+    const scopeKey = `chat:${chat.id}`;
+    const active = store.db
+      .prepare('SELECT revision,checkpoint_id FROM context_heads WHERE scope_key=?')
+      .get(scopeKey)!;
+    expect(active.checkpoint_id).toBe(checkpoint.id);
+    expect(store.context.checkpoint(checkpoint).activated).toBe(true);
+    const cancelled = store.retryRun(
+      selected.run.id,
+      'checkpoint-cancelled',
+      undefined,
+      undefined,
+      'replace'
+    ).run;
+    store.startRun(cancelled.id);
+    store.finishRun(cancelled.id, 'cancelled', 'Cancelled');
+    expect(
+      store.db
+        .prepare('SELECT revision,checkpoint_id FROM context_heads WHERE scope_key=?')
+        .get(scopeKey)
+    ).toEqual(active);
+    const retry = store.retryRun(cancelled.id, 'checkpoint-success').run;
+    store.startRun(retry.id);
+    const source = store.completeRun(
+      retry.id,
+      'Replacement',
+      selected.run.usage!,
+      retry.snapshot.settings
+    );
+    expect(source.parentRevision).toBe(ancestor.source.id);
+    expect(
+      store.db
+        .prepare('SELECT revision,checkpoint_id FROM context_heads WHERE scope_key=?')
+        .get(scopeKey)
+    ).toMatchObject({ revision: Number(active.revision) + 1, checkpoint_id: null });
+    expect(store.context.checkpoint(checkpoint).plan).toEqual(snapshot.contextPlan);
+  }
+);
+
+test('successful replacement revokes old unfinished auxiliaries while preserving completed artifacts', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Replace auxiliaries');
+  const selected = complete(store, chat.id, 'Old response');
+  const at = new Date().toISOString();
+  for (const [index, status] of ['queued', 'running', 'completed'].entries()) {
+    store.db
+      .prepare(
+        'INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,owner,generation,created_at,updated_at,revision) VALUES(?,?,?,?,?,?,?,?,?,?,?)'
+      )
+      .run(
+        `old-${status}`,
+        chat.id,
+        selected.source.id,
+        selected.source.hash,
+        'status',
+        status,
+        status === 'running' ? 'old-worker' : null,
+        2,
+        at,
+        at,
+        index + 50
+      );
+    store.db
+      .prepare(
+        "INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,owner,generation,input,created_at,updated_at) VALUES(?,?,?,?,'automatic',?,?,2,'{}',?,?)"
+      )
+      .run(
+        `image-${status}`,
+        chat.id,
+        selected.source.id,
+        selected.source.hash,
+        status,
+        status === 'running' ? 'old-worker' : null,
+        at,
+        at
+      );
+  }
+  const failed = store.retryRun(
+    selected.run.id,
+    'replace-aux-failed',
+    undefined,
+    undefined,
+    'replace'
+  ).run;
+  store.startRun(failed.id);
+  store.finishRun(failed.id, 'cancelled', 'Cancelled');
+  expect(store.db.prepare("SELECT status FROM jobs WHERE id='old-running'").get()!.status).toBe(
+    'running'
+  );
+  const retry = store.retryRun(failed.id, 'replace-aux-success').run;
+  store.startRun(retry.id);
+  store.completeRun(retry.id, 'New response', selected.run.usage!, retry.snapshot.settings);
+  for (const table of ['jobs', 'illustration_jobs']) {
+    for (const status of ['queued', 'running']) {
+      const job = store.db
+        .prepare(`SELECT status,generation,owner FROM ${table} WHERE id=?`)
+        .get(`${table === 'jobs' ? 'old' : 'image'}-${status}`);
+      expect(job).toMatchObject({ status: 'cancelled', generation: 3, owner: null });
+    }
+    expect(
+      store.db
+        .prepare(`SELECT status,generation FROM ${table} WHERE id=?`)
+        .get(`${table === 'jobs' ? 'old' : 'image'}-completed`)
+    ).toMatchObject({ status: 'completed', generation: 2 });
+  }
+});
+
 test('successful request repeats with current settings in an independent chat and idempotency reuses the original retry snapshot', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Retry current settings');
@@ -151,6 +488,7 @@ test('failed retry after the original head advances copies a chat at its origina
   store.finishRun(original.id, 'failed', 'Synthetic failure');
   const later = complete(store, chat.id, 'Later response');
   const retry = store.retryRun(original.id, 'historical-retry').run;
+  expect(store.chat(retry.chatId).title).toBe('Historical failure · 사본 1');
   expect(retry.parentRevision).toBe(original.parentRevision);
   expect(retry.chatId).not.toBe(original.chatId);
   expect(retry.snapshot.chatId).toBe(retry.chatId);

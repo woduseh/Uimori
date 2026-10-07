@@ -1646,8 +1646,6 @@ input[type="checkbox"] {
 }
 .settings-page-title {
   margin: 0 0 24px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
   font-size: 19px;
 }
 .settings-page .settings-section {

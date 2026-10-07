@@ -22,6 +22,7 @@ import { useModelSelection } from './model-selection.js';
 import { useTestMode } from './useTestMode.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import './settings-actions.css';
+import './settings-layout.css';
 import './illustrations.css';
 
 type Draft = Omit<IllustrationSettings, 'revision'> & { revision: number };
@@ -106,36 +107,42 @@ function IllustrationEnvironmentEditor({
     selected: ModelRef | null,
     models: Library['models'],
     onChange: (ref: ModelRef | null) => void,
-    emptyLabel = '모델 미지정'
+    emptyLabel = '모델 미지정',
+    description = ''
   ) => {
     const model = library.models.find((item) => item.id === selected?.id);
     return (
-      <label>
-        {label}
-        <select
-          aria-label={label}
-          value={selected?.id ?? ''}
-          onChange={(event) => onChange(event.target.value ? { id: event.target.value } : null)}
-        >
-          <option value="">{emptyLabel}</option>
-          {selected && !models.some((item) => item.id === selected.id) && (
-            <option value={selected.id}>선택한 모델 · 삭제되었거나 확인 필요</option>
+      <label className="settings-row">
+        <span className="settings-row-copy">
+          <span>{label}</span>
+          {description && <small>{description}</small>}
+        </span>
+        <span className="settings-row-control">
+          <select
+            aria-label={label}
+            value={selected?.id ?? ''}
+            onChange={(event) => onChange(event.target.value ? { id: event.target.value } : null)}
+          >
+            <option value="">{emptyLabel}</option>
+            {selected && !models.some((item) => item.id === selected.id) && (
+              <option value={selected.id}>선택한 모델 · 삭제되었거나 확인 필요</option>
+            )}
+            {models
+              .filter((item) => canSelect(item) || item.id === selected?.id)
+              .map((item) => (
+                <option key={item.id} value={item.id} disabled={!canSelect(item)}>
+                  {item.title} ·{' '}
+                  {canSelect(item)
+                    ? library.connections.find((connection) => connection.id === item.connectionId)
+                        ?.title
+                    : '모델 또는 프로바이더 비활성'}
+                </option>
+              ))}
+          </select>
+          {selected && (!model || !canSelect(model)) && (
+            <small role="status">이 모델을 사용할 수 없어 새 삽화 작업을 시작할 수 없어요.</small>
           )}
-          {models
-            .filter((item) => canSelect(item) || item.id === selected?.id)
-            .map((item) => (
-              <option key={item.id} value={item.id} disabled={!canSelect(item)}>
-                {item.title} ·{' '}
-                {canSelect(item)
-                  ? library.connections.find((connection) => connection.id === item.connectionId)
-                      ?.title
-                  : '모델 또는 프로바이더 비활성'}
-              </option>
-            ))}
-        </select>
-        {selected && (!model || !canSelect(model)) && (
-          <small role="status">이 모델을 사용할 수 없어 새 삽화 작업을 시작할 수 없어요.</small>
-        )}
+        </span>
       </label>
     );
   };
@@ -145,19 +152,25 @@ function IllustrationEnvironmentEditor({
     min: number,
     max: number,
     onChange: (value: number) => void,
-    step = 1
+    step = 1,
+    description = ''
   ) => (
-    <label>
-      {label}
-      <input
-        aria-label={label}
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={Number.isFinite(value) ? value : ''}
-        onChange={(event) => onChange(event.target.valueAsNumber)}
-      />
+    <label className="settings-row">
+      <span className="settings-row-copy">
+        <span>{label}</span>
+        {description && <small>{description}</small>}
+      </span>
+      <span className="settings-row-control">
+        <input
+          aria-label={label}
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={Number.isFinite(value) ? value : ''}
+          onChange={(event) => onChange(event.target.valueAsNumber)}
+        />
+      </span>
     </label>
   );
   const valid =
@@ -251,136 +264,181 @@ function IllustrationEnvironmentEditor({
     }
   };
   return (
-    <section aria-label="삽화 설정" className="settings-section illustration-settings">
-      <h3>생성 환경·자동 생성</h3>
-      <p>
-        생성기는 선택한 프리셋을 따라가요. 아래 연결·모델은 같은 생성기의 프리셋들이 함께 사용하며,
-        변경은 다음 예약부터 적용돼요.
-      </p>
-      <fieldset disabled={busy} className="control-grid">
-        {testMode && (
-          <label>
-            테스트 생성기
-            <select
-              aria-label="테스트 삽화 생성기"
-              value={draft.generator === 'fixture' ? 'fixture' : ''}
-              onChange={(event) =>
-                change({
-                  ...draft,
-                  generator: event.target.value === 'fixture' ? 'fixture' : undefined,
-                })
-              }
-            >
-              <option value="">선택한 프리셋 사용</option>
-              <option value="fixture">모의 생성기 (테스트 모드)</option>
-            </select>
-          </label>
-        )}
-        <label className="check">
-          <Switch
-            aria-label="응답 완료 후 자동 삽화 생성"
-            checked={draft.automatic}
-            onChange={(event) => change({ ...draft, automatic: event.target.checked })}
-          />
-          자동 생성
-        </label>
-        <small className="full">
-          서로 다른 순간을 골라 대표 컷과 문단 삽화를 만들어요. 생성 중에도 다음 채팅은 계속할 수
-          있어요.
-        </small>
-        {numberField('장면당 최대 삽화 개수', draft.maxPerSource, 1, 8, (value) =>
-          change({
-            ...draft,
-            maxPerSource: value,
-            automaticMaxTargets:
-              Number.isInteger(value) && value >= 1 && value <= 8
-                ? Math.min(value, draft.automaticMaxTargets)
-                : draft.automaticMaxTargets,
-          })
-        )}
-        {draft.automatic &&
-          numberField(
-            '자동으로 고를 최대 컷 수',
-            draft.automaticMaxTargets,
-            1,
-            draft.maxPerSource,
-            (value) => change({ ...draft, automaticMaxTargets: value })
+    <section
+      aria-label="삽화 설정"
+      className="settings-section settings-group illustration-settings illustration-environment"
+    >
+      <div className="settings-group-heading">
+        <div>
+          <h3>생성 환경·자동 생성</h3>
+          <p>
+            생성기는 선택한 프리셋을 따라가요. 아래 연결·모델은 같은 생성기의 프리셋들이 함께
+            사용하며, 변경은 다음 예약부터 적용돼요.
+          </p>
+        </div>
+      </div>
+      <fieldset disabled={busy} className="illustration-environment-fields">
+        <div className="settings-group-body illustration-automatic-settings">
+          {testMode && (
+            <label className="settings-row">
+              <span className="settings-row-copy">테스트 생성기</span>
+              <span className="settings-row-control">
+                <select
+                  aria-label="테스트 삽화 생성기"
+                  value={draft.generator === 'fixture' ? 'fixture' : ''}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      generator: event.target.value === 'fixture' ? 'fixture' : undefined,
+                    })
+                  }
+                >
+                  <option value="">선택한 프리셋 사용</option>
+                  <option value="fixture">모의 생성기 (테스트 모드)</option>
+                </select>
+              </span>
+            </label>
           )}
-        <small className="full">
-          최대 개수는 서로 다른 컷 기준이에요. 자동 생성은 기본 1컷이며, 선택한 수와 응답당 한도
-          안에서 필요한 만큼만 만들어요.
-        </small>
-        {numberField('자동 재요청 횟수', draft.maxAutoRetries, 0, 5, (value) =>
-          change({ ...draft, maxAutoRetries: value })
-        )}
-        <small className="full">일시적인 오류가 나면 설정한 횟수만큼 다시 시도해요.</small>
-        <details className="full illustration-preset-disclosure" open={activeGenerator === 'codex'}>
+          <label className="settings-row settings-row-toggle">
+            <span className="settings-row-copy">
+              <span>자동 생성</span>
+              <small>
+                서로 다른 순간을 골라 대표 컷과 문단 삽화를 만들어요. 생성 중에도 다음 채팅은 계속할
+                수 있어요.
+              </small>
+            </span>
+            <span className="settings-row-control">
+              <Switch
+                aria-label="응답 완료 후 자동 삽화 생성"
+                checked={draft.automatic}
+                onChange={(event) => change({ ...draft, automatic: event.target.checked })}
+              />
+            </span>
+          </label>
+          {numberField(
+            '장면당 최대 삽화 개수',
+            draft.maxPerSource,
+            1,
+            8,
+            (value) =>
+              change({
+                ...draft,
+                maxPerSource: value,
+                automaticMaxTargets:
+                  Number.isInteger(value) && value >= 1 && value <= 8
+                    ? Math.min(value, draft.automaticMaxTargets)
+                    : draft.automaticMaxTargets,
+              }),
+            1,
+            '최대 개수는 서로 다른 컷 기준이에요. 자동 생성은 기본 1컷이며, 선택한 수와 응답당 한도 안에서 필요한 만큼만 만들어요.'
+          )}
+          {draft.automatic &&
+            numberField(
+              '자동으로 고를 최대 컷 수',
+              draft.automaticMaxTargets,
+              1,
+              draft.maxPerSource,
+              (value) => change({ ...draft, automaticMaxTargets: value })
+            )}
+          {numberField(
+            '자동 재요청 횟수',
+            draft.maxAutoRetries,
+            0,
+            5,
+            (value) => change({ ...draft, maxAutoRetries: value }),
+            1,
+            '일시적인 오류가 나면 설정한 횟수만큼 다시 시도해요.'
+          )}
+        </div>
+        <details
+          className="illustration-preset-disclosure illustration-environment-disclosure"
+          open={activeGenerator === 'codex'}
+        >
           <summary>
-            Codex 생성 환경{activeGenerator === 'codex' && <small>현재 프리셋에서 사용</small>}
+            Codex 생성 환경
+            {activeGenerator === 'codex' && <small>현재 프리셋에서 사용</small>}
           </summary>
-          <fieldset className="control-grid full">
+          <fieldset className="settings-group-body illustration-environment-options">
             {selector(
               'Codex 삽화 모델',
               draft.codex.model,
               codexModels,
               (ref) => change({ ...draft, codex: { ...draft.codex, model: ref } }),
-              codexModels.length ? '모델 미지정' : 'Codex 프로바이더의 모델 프리셋이 없어요'
+              codexModels.length ? '모델 미지정' : 'Codex 프로바이더의 모델 프리셋이 없어요',
+              'Codex 연결에서 로그인한 모델을 선택해요. 이미지 생성 전 JEV가 노골적인 성적 묘사를 판정하면 해당 컷을 전송하지 않아요. JEV 미설정·판정 오류 시에는 공급자 판단에 맡겨요.'
             )}
-            <small className="full">
-              Codex 연결에서 로그인한 모델을 선택해요. 이미지 생성 전 JEV가 노골적인 성적 묘사를
-              판정하면 해당 컷을 전송하지 않아요. JEV 미설정·판정 오류 시에는 공급자 판단에 맡겨요.
-            </small>
-            <label className="check">
-              <Switch
-                aria-label="채팅의 참조 이미지 사용"
-                checked={draft.codex.useReferences}
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    codex: { ...draft.codex, useReferences: event.target.checked },
-                  })
-                }
-              />
-              채팅의 참조 이미지 사용
+            <label className="settings-row settings-row-toggle">
+              <span className="settings-row-copy">채팅의 참조 이미지 사용</span>
+              <span className="settings-row-control">
+                <Switch
+                  aria-label="채팅의 참조 이미지 사용"
+                  checked={draft.codex.useReferences}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      codex: {
+                        ...draft.codex,
+                        useReferences: event.target.checked,
+                      },
+                    })
+                  }
+                />
+              </span>
             </label>
           </fieldset>
         </details>
         <details
-          className="full illustration-preset-disclosure"
+          className="illustration-preset-disclosure illustration-environment-disclosure"
           open={activeGenerator === 'comfyui'}
         >
           <summary>
-            ComfyUI 생성 환경{activeGenerator === 'comfyui' && <small>현재 프리셋에서 사용</small>}
+            ComfyUI 생성 환경
+            {activeGenerator === 'comfyui' && <small>현재 프리셋에서 사용</small>}
           </summary>
-          <fieldset className="control-grid full">
-            <label className="full">
-              ComfyUI 주소
-              <input
-                aria-label="ComfyUI 주소"
-                type="url"
-                placeholder="http://192.168.0.10:8188"
-                value={draft.comfyui.baseUrl}
-                onChange={(event) =>
-                  change({ ...draft, comfyui: { ...draft.comfyui, baseUrl: event.target.value } })
-                }
-              />
+          <fieldset className="settings-group-body illustration-environment-options">
+            <label className="settings-row">
+              <span className="settings-row-copy">ComfyUI 주소</span>
+              <span className="settings-row-control">
+                <input
+                  aria-label="ComfyUI 주소"
+                  type="url"
+                  placeholder="http://192.168.0.10:8188"
+                  value={draft.comfyui.baseUrl}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      comfyui: {
+                        ...draft.comfyui,
+                        baseUrl: event.target.value,
+                      },
+                    })
+                  }
+                />
+              </span>
             </label>
-            <label>
-              인증 헤더 환경변수 (선택)
-              <input
-                aria-label="ComfyUI 인증 환경변수"
-                type="text"
-                placeholder="UIMORI_COMFYUI_AUTHORIZATION"
-                value={draft.comfyui.authorizationEnv}
-                onChange={(event) =>
-                  change({
-                    ...draft,
-                    comfyui: { ...draft.comfyui, authorizationEnv: event.target.value },
-                  })
-                }
-              />
+            <label className="settings-row">
+              <span className="settings-row-copy">
+                인증 헤더 환경변수 (선택)
+                <small>인증이 필요한 서버에서만 입력해요.</small>
+              </span>
+              <span className="settings-row-control">
+                <input
+                  aria-label="ComfyUI 인증 환경변수"
+                  type="text"
+                  placeholder="UIMORI_COMFYUI_AUTHORIZATION"
+                  value={draft.comfyui.authorizationEnv}
+                  onChange={(event) =>
+                    change({
+                      ...draft,
+                      comfyui: {
+                        ...draft.comfyui,
+                        authorizationEnv: event.target.value,
+                      },
+                    })
+                  }
+                />
+              </span>
             </label>
-            <small className="full">인증이 필요한 서버에서만 입력해요.</small>
             <div className="illustration-test full">
               <button
                 type="button"
@@ -400,10 +458,18 @@ function IllustrationEnvironmentEditor({
                 </span>
               )}
             </div>
-            {selector('프롬프트 모델', draft.comfyui.promptModel, library.models, (ref) =>
-              change({ ...draft, comfyui: { ...draft.comfyui, promptModel: ref } })
+            {selector(
+              '프롬프트 모델',
+              draft.comfyui.promptModel,
+              library.models,
+              (ref) =>
+                change({
+                  ...draft,
+                  comfyui: { ...draft.comfyui, promptModel: ref },
+                }),
+              '모델 미지정',
+              '장면을 그림 설명으로 바꿀 모델이에요.'
             )}
-            <small className="full">장면을 그림 설명으로 바꿀 모델이에요.</small>
             {numberField(
               '시간 제한 (초)',
               draft.comfyui.timeoutMs / 1000,
@@ -412,7 +478,10 @@ function IllustrationEnvironmentEditor({
               (value) =>
                 change({
                   ...draft,
-                  comfyui: { ...draft.comfyui, timeoutMs: Math.round(value * 1000) },
+                  comfyui: {
+                    ...draft.comfyui,
+                    timeoutMs: Math.round(value * 1000),
+                  },
                 }),
               1
             )}
@@ -424,7 +493,10 @@ function IllustrationEnvironmentEditor({
               (value) =>
                 change({
                   ...draft,
-                  comfyui: { ...draft.comfyui, pollIntervalMs: Math.round(value * 1000) },
+                  comfyui: {
+                    ...draft.comfyui,
+                    pollIntervalMs: Math.round(value * 1000),
+                  },
                 }),
               0.25
             )}

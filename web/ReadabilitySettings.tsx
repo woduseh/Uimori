@@ -7,6 +7,7 @@ import {
   type QuoteRole,
 } from './reading-preferences.js';
 import './reading.css';
+import './settings-layout.css';
 
 const previewText =
   '그녀는 문 앞에서 돌아섰다. “정말 같이 갈 거야?” 나는 고개를 끄덕였다. ‘이번에는 도망치지 않겠어.’\n\n「그럼 출발하자.」 그녀는 『별의 기록』을 가방에 넣었다.';
@@ -46,137 +47,146 @@ export function ReadabilitySettings({
 }) {
   return (
     <section className="reading-settings" aria-label="읽기 스타일 설정">
-      <section className="settings-card reading-settings-group" aria-label="스타일과 간격">
-        <header className="reading-settings-group-heading">
+      <section className="settings-group reading-settings-group" aria-label="스타일과 간격">
+        <header className="settings-group-heading">
           <h4>읽기 스타일</h4>
         </header>
-        <label>
-          스타일
-          <select
-            aria-label="읽기 스타일"
-            value={currentPreset(value)}
-            onChange={(event) =>
-              onChange({ ...preset(event.target.value), quoteRoles: value.quoteRoles })
-            }
-          >
-            <option value="default">기본</option>
-            <option value="relaxed">여유롭게</option>
-            <option value="dialogue">대사 중심</option>
-            <option value="custom" disabled>
-              사용자 설정
-            </option>
-          </select>
-        </label>
-        <label>
-          인용 강조
-          <select
-            aria-label="인용 강조"
-            value={value.emphasis}
-            onChange={(event) =>
-              onChange({ ...value, emphasis: event.target.value as ReadingStyle['emphasis'] })
-            }
-          >
-            <option value="off">끄기</option>
-            <option value="subtle">은은하게</option>
-            <option value="strong">뚜렷하게</option>
-          </select>
-        </label>
-        <div className="reading-spacing">
+        <div className="settings-group-body reading-settings-rows">
           <label>
-            줄 간격
+            스타일
             <select
-              aria-label="줄 간격"
-              value={value.lineHeight ?? 'default'}
+              aria-label="읽기 스타일"
+              value={currentPreset(value)}
               onChange={(event) =>
-                onChange({
-                  ...value,
-                  lineHeight: event.target.value === 'default' ? null : Number(event.target.value),
-                })
+                onChange({ ...preset(event.target.value), quoteRoles: value.quoteRoles })
               }
             >
               <option value="default">기본</option>
-              <option value="1.6">촘촘하게</option>
-              <option value="1.9">보통</option>
-              <option value="2.2">여유롭게</option>
+              <option value="relaxed">여유롭게</option>
+              <option value="dialogue">대사 중심</option>
+              <option value="custom" disabled>
+                사용자 설정
+              </option>
             </select>
           </label>
           <label>
-            문단 간격
+            인용 강조
             <select
-              aria-label="문단 간격"
-              value={value.paragraphSpacing ?? 'default'}
+              aria-label="인용 강조"
+              value={value.emphasis}
               onChange={(event) =>
-                onChange({
-                  ...value,
-                  paragraphSpacing:
-                    event.target.value === 'default' ? null : Number(event.target.value),
-                })
+                onChange({ ...value, emphasis: event.target.value as ReadingStyle['emphasis'] })
               }
             >
-              <option value="default">기본</option>
-              <option value="0.5">좁게</option>
-              <option value="1">보통</option>
-              <option value="1.5">여유롭게</option>
-              <option value="2">넓게</option>
+              <option value="off">끄기</option>
+              <option value="subtle">은은하게</option>
+              <option value="strong">뚜렷하게</option>
             </select>
           </label>
+          <div className="reading-spacing">
+            <label>
+              줄 간격
+              <select
+                aria-label="줄 간격"
+                value={value.lineHeight ?? 'default'}
+                onChange={(event) =>
+                  onChange({
+                    ...value,
+                    lineHeight:
+                      event.target.value === 'default' ? null : Number(event.target.value),
+                  })
+                }
+              >
+                <option value="default">기본</option>
+                <option value="1.6">촘촘하게</option>
+                <option value="1.9">보통</option>
+                <option value="2.2">여유롭게</option>
+              </select>
+            </label>
+            <label>
+              문단 간격
+              <select
+                aria-label="문단 간격"
+                value={value.paragraphSpacing ?? 'default'}
+                onChange={(event) =>
+                  onChange({
+                    ...value,
+                    paragraphSpacing:
+                      event.target.value === 'default' ? null : Number(event.target.value),
+                  })
+                }
+              >
+                <option value="default">기본</option>
+                <option value="0.5">좁게</option>
+                <option value="1">보통</option>
+                <option value="1.5">여유롭게</option>
+                <option value="2">넓게</option>
+              </select>
+            </label>
+          </div>
         </div>
       </section>
 
-      <section className="settings-card reading-settings-group" aria-label="보조 표시">
-        <header className="reading-settings-group-heading">
-          <h4>보조 표시</h4>
-          <p>대사·생각 앞뒤에 문단 여백을 넣어요. 원문은 바뀌지 않아요.</p>
-        </header>
-        <div className="reading-toggles">
-          <label className="check">
-            <Switch
-              checked={value.dialogueBreaks}
-              onChange={(event) => onChange({ ...value, dialogueBreaks: event.target.checked })}
-            />
-            대사 줄바꿈
-          </label>
-          <label className="check">
-            <Switch
-              checked={value.thoughtBreaks}
-              onChange={(event) => onChange({ ...value, thoughtBreaks: event.target.checked })}
-            />
-            생각 줄바꿈
-          </label>
-        </div>
-        <details className="reading-quote-settings">
-          <summary>표기별 스타일</summary>
-          <p>부호에 따라 표시해요. 대사나 생각의 실제 의미를 판단하지 않아요.</p>
-          <div className="reading-quote-rules">
-            {QUOTE_PAIRS.map(({ id, label }) => (
-              <label key={id}>
-                {label}
-                <select
-                  aria-label={`${label} 스타일`}
-                  value={value.quoteRoles[id]}
-                  onChange={(event) =>
-                    onChange({
-                      ...value,
-                      quoteRoles: { ...value.quoteRoles, [id]: event.target.value as QuoteRole },
-                    })
-                  }
-                >
-                  <option value="dialogue">대사</option>
-                  <option value="thought">생각</option>
-                  <option value="quote">일반 인용</option>
-                  <option value="off">처리 안 함</option>
-                </select>
-              </label>
-            ))}
+      <section className="settings-group reading-settings-group" aria-label="보조 표시">
+        <header className="settings-group-heading">
+          <div>
+            <h4>보조 표시</h4>
+            <p>대사·생각 앞뒤에 문단 여백을 넣어요. 원문은 바뀌지 않아요.</p>
           </div>
-        </details>
+        </header>
+        <div className="settings-group-body reading-settings-rows">
+          <label className="settings-row settings-row-toggle">
+            <span>대사 줄바꿈</span>
+            <span className="settings-row-control">
+              <Switch
+                checked={value.dialogueBreaks}
+                onChange={(event) => onChange({ ...value, dialogueBreaks: event.target.checked })}
+              />
+            </span>
+          </label>
+          <label className="settings-row settings-row-toggle">
+            <span>생각 줄바꿈</span>
+            <span className="settings-row-control">
+              <Switch
+                checked={value.thoughtBreaks}
+                onChange={(event) => onChange({ ...value, thoughtBreaks: event.target.checked })}
+              />
+            </span>
+          </label>
+          <details className="reading-quote-settings">
+            <summary>표기별 스타일</summary>
+            <p>부호에 따라 표시해요. 대사나 생각의 실제 의미를 판단하지 않아요.</p>
+            <div className="reading-quote-rules">
+              {QUOTE_PAIRS.map(({ id, label }) => (
+                <label key={id}>
+                  {label}
+                  <select
+                    aria-label={`${label} 스타일`}
+                    value={value.quoteRoles[id]}
+                    onChange={(event) =>
+                      onChange({
+                        ...value,
+                        quoteRoles: { ...value.quoteRoles, [id]: event.target.value as QuoteRole },
+                      })
+                    }
+                  >
+                    <option value="dialogue">대사</option>
+                    <option value="thought">생각</option>
+                    <option value="quote">일반 인용</option>
+                    <option value="off">처리 안 함</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+          </details>
+        </div>
       </section>
 
       <section
-        className="settings-card reading-settings-group reading-preview-group"
+        className="settings-group reading-settings-group reading-preview-group"
         aria-label="미리보기"
       >
-        <header className="reading-settings-group-heading">
+        <header className="settings-group-heading">
           <h4>미리보기</h4>
         </header>
         <div className="reading-preview" aria-label="읽기 스타일 미리보기">

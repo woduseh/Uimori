@@ -225,7 +225,7 @@ export function ContentPicker({
             </span>
           </label>
           <label>
-            폴더
+            <span className="content-picker-filter-label">폴더</span>
             <select
               aria-label={`${label} 폴더`}
               value={activeFolder}
