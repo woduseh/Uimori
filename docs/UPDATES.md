@@ -8,15 +8,15 @@ Use this path for source installations; see [SELF-HOST](SELF-HOST.md#저장과-�
 
 Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재-버전) before updating. Finish active generation and edits. Download the app's consistent SQLite snapshot, record the running app/image version, and preserve external Codex login files separately. Stop the server before switching code or restoring data. Do not use `reset:dev` or `docker compose down -v` to update an existing workspace.
 
-**v0.7.2 keeps the same schema 15 used by v0.7.1, v0.7.0, v0.6.1, v0.6.0, v0.5.2, v0.5.1, v0.5.0 and v0.4.0.** A workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
+**v0.8.0 keeps the same schema 15 used by v0.7.2, v0.7.1, v0.7.0, v0.6.1, v0.6.0, v0.5.2, v0.5.1, v0.5.0 and v0.4.0.** A workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
 
-Use the published `v0.7.2` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
+Use the published `v0.8.0` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
 
 From a clean source checkout, with the existing server stopped:
 
 ```sh
 git fetch origin --tags
-git switch --detach v0.7.2
+git switch --detach v0.8.0
 npm ci
 npm run dev
 ```

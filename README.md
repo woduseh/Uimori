@@ -2,7 +2,7 @@
 
 긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별 채팅·폴더, Risu 원본 봇·페르소나·모듈, 프롬프트와 모델의 독립 설정, 원문·번역 편집, 독립 채팅 복사, 이야기 기억과 백업을 제공해요.
 
-이 소스의 앱 버전은 **`v0.7.2`**예요. 검색·원고 읽기 복구·저장 충돌 확인창·알림 및 설정 화면을 다듬은 유지보수 릴리스예요. 개인용 초기 개발 릴리스이며 기능과 데이터 형식은 앞으로 바뀔 수 있어요. **DB 스키마는 계속 15**라서 현재 스키마 15 작업실은 기존 데이터를 유지해 업데이트할 수 있어요. 자세한 변경과 제한은 [릴리스 노트](docs/releases/v0.7.2.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
+이 소스의 앱 버전은 **`v0.8.0`**예요. Google AI Studio 직접 연결과 Gemini PDF 입력 옵션, 대규모 로어·이미지 후보 검색, 드래그 정렬 및 화면 로딩·복구를 개선한 기능 릴리스예요. 개인용 초기 개발 릴리스이며 기능과 데이터 형식은 앞으로 바뀔 수 있어요. **DB 스키마는 계속 15**라서 현재 스키마 15 작업실은 기존 데이터를 유지해 업데이트할 수 있어요. 자세한 변경과 제한은 [릴리스 노트](docs/releases/v0.8.0.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
 
 개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → Codex 연결**에서 로그인해요.
 
@@ -10,10 +10,10 @@
 
 Node **24.14 이상 24.x**, npm, Chrome 또는 Edge가 필요해요. SQLite는 Node에 포함된 기능을 사용해요.
 
-태그 기반 설치는 공개된 `v0.7.2` 태그를 사용해요. 릴리스 공개 여부는 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 확인해요.
+태그 기반 설치는 공개된 `v0.8.0` 태그를 사용해요. 릴리스 공개 여부는 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 확인해요.
 
 ```powershell
-git clone --branch v0.7.2 --single-branch https://github.com/woduseh/Uimori.git
+git clone --branch v0.8.0 --single-branch https://github.com/woduseh/Uimori.git
 cd Uimori
 npm ci
 npm run dev
@@ -51,7 +51,7 @@ npm run dev
 | [자동 백업](docs/AUTOMATIC-BACKUPS.md) | 한국 시간 일일 스냅샷, 검증·보관·다운로드 |
 | [문제 보고용 진단](docs/DIAGNOSTICS.md) | 원문·키를 제외한 보고서 미리보기와 다운로드 |
 | [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
-| [프로바이더](docs/PROVIDERS.md) | Vertex, Responses·Chat 호환, Anthropic 실시간·Batch, Vercel, Codex 프로바이더와 선택형 평가 도구·합성 시험 |
+| [프로바이더](docs/PROVIDERS.md) | Vertex·Google AI Studio Gemini, Responses·Chat 호환, Anthropic 실시간·Batch, Vercel, Codex 프로바이더와 선택형 평가 도구·합성 시험 |
 | [개발과 검증](docs/DEVELOPMENT.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |
 | [개인 서버 배포](docs/SELF-HOST.md) | Docker Compose, HTTPS, 로그인, 영구 데이터, 모델 API 키와 업데이트 |
 | [Oracle 릴리스](docs/ORACLE-RELEASE.md) | 검증·배포 명령, 데이터 보존과 실패 복구 |
