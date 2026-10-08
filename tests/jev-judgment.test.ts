@@ -1,6 +1,11 @@
 import { estimateContextTokens } from '../core/context-budget.js';
 import { describe, expect, it, vi } from 'vitest';
-import { executeJevJudgment, JEV_ENDPOINT, type JevRequest } from '../server/jev-judgment.js';
+import {
+  executeJevJudgment,
+  JEV_CHOICE_OPTION_LIMIT,
+  JEV_ENDPOINT,
+  type JevRequest,
+} from '../server/jev-judgment.js';
 import { prepareLoreSelection, loreSelectionAttemptInputHashes } from '../server/lore-selection.js';
 import { defaultProfile } from '../core/product.js';
 import { DEFAULT_LORE_CONTEXT, validateLoreContextPolicy } from '../core/lore-context.js';
@@ -484,5 +489,80 @@ describe('documented JEV input admission limits', () => {
     ).rejects.toThrow('JEV_INPUT_BUDGET');
     expect(send).not.toHaveBeenCalled();
     expect(h.onAttemptStart).not.toHaveBeenCalled();
+  });
+});
+
+describe('documented JEV choice option admission', () => {
+  const criteria = (count: number): Record<string, string | null> =>
+    Object.fromEntries(
+      Array.from({ length: count }, (_, i) => [`option_${i}`, i % 2 ? `Option ${i}` : null])
+    );
+  const choiceRequest = (options: Record<string, string | null>): JevRequest => ({
+    state: 'Example',
+    questions: {
+      selected: { type: 'choice', instructions: 'Choose the best option.', criteria: options },
+    },
+  });
+
+  it('sends all 255 serialized options in one request at the official limit', async () => {
+    expect(JEV_CHOICE_OPTION_LIMIT).toBe(255);
+    const options = criteria(255),
+      value = choiceRequest(options);
+    const h = hooks(),
+      send = vi.fn(
+        async (_url: unknown, _init?: RequestInit) =>
+          new Response(
+            JSON.stringify({
+              model: 'jev-latest',
+              answers: {
+                selected: {
+                  type: 'choice',
+                  choice: 'option_254',
+                  probabilities: Object.fromEntries(
+                    Array.from({ length: 255 }, (_, i) => [`option_${i}`, i === 254 ? 1 : 0])
+                  ),
+                  confidence: 1,
+                },
+              },
+            }),
+            { status: 200 }
+          )
+      );
+    await expect(
+      executeJevJudgment(value, 'f'.repeat(64), null, { ...h, fetch: send })
+    ).resolves.toMatchObject({ choices: { selected: { choice: 'option_254' } } });
+    expect(send).toHaveBeenCalledTimes(1);
+    const sent = JSON.parse(String(send.mock.calls[0]?.[1]?.body));
+    expect(Object.keys(sent.questions.selected.criteria)).toHaveLength(255);
+    expect(sent.questions.selected.criteria).toEqual(options);
+    expect(h.onAttemptFinish).toHaveBeenCalledWith(
+      'attempt-1',
+      expect.objectContaining({ status: 'completed' })
+    );
+  });
+
+  it.each([
+    ['256 options', criteria(256)],
+    ['empty options', {}],
+    ['missing options', undefined],
+    ['array options', ['one', 'two']],
+  ])('rejects %s before credentials, attempts, or HTTP', async (_label, options) => {
+    const h = hooks(),
+      credential = vi.fn(() => 'test-key'),
+      onStarted = vi.fn(),
+      send = vi.fn();
+    await expect(
+      executeJevJudgment(
+        choiceRequest(options as Record<string, string | null>),
+        'f'.repeat(64),
+        null,
+        { ...h, credential, onStarted, fetch: send }
+      )
+    ).rejects.toMatchObject({ code: 'JEV_REQUEST_INVALID', attempted: false });
+    expect(credential).not.toHaveBeenCalled();
+    expect(h.onAttemptStart).not.toHaveBeenCalled();
+    expect(h.onAttemptFinish).not.toHaveBeenCalled();
+    expect(onStarted).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 });

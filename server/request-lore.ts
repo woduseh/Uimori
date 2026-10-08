@@ -201,6 +201,28 @@ export function requestLore(
   }
   return {
     status: entries.some((item) => item.delivery === 'unverified') ? 'partial' : 'complete',
+    ...selectionCoverage(snapshot, request),
     entries,
   };
+}
+
+/** Old receipts cannot establish how much of the complete catalog was judged. */
+function selectionCoverage(
+  snapshot: RunSnapshot,
+  request: ProviderRequest
+): Pick<RequestLore, 'selection'> {
+  const receipts = snapshot.loreSelection?.entries;
+  if (request.role !== 'main' || !receipts?.length || receipts.some((item) => !item.coverage))
+    return {};
+  let total = 0,
+    evaluated = 0,
+    selected = 0,
+    failed = 0;
+  for (const receipt of receipts) {
+    total += receipt.coverage!.total;
+    evaluated += receipt.coverage!.evaluated;
+    if (receipt.error !== undefined) failed++;
+    else selected += receipt.selected.length;
+  }
+  return { selection: { total, evaluated, selected, ...(failed ? { failed } : {}) } };
 }

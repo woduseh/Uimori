@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import { DEFAULT_LORE_CONTEXT, type RetainedLore } from '../core/lore-context.js';
 import { buildMainInput, executeTool, knowledgeReadResults } from '../core/provider.js';
 import { defaultProfile } from '../core/product.js';
+import type { LoreSelectionEntry } from '../core/lore-selection.js';
 import { serializeRisuLoreSources } from '../core/risu-context-source.js';
 import type { Json, ProviderRequest, WireRecord } from '../core/transport.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
@@ -133,6 +134,104 @@ test('JEV-selected lore is distinct from always-pinned lore and attachment roles
     ],
   });
   expect(fixed).toEqual(before);
+});
+
+test('selection coverage aggregates complete catalogs and actual judgments without altering delivery evidence', () => {
+  const fixed = snapshot([]);
+  fixed.loreSelection = {
+    version: 1,
+    entries: [
+      {
+        key: 'card@1:bot',
+        inputHash: 'b'.repeat(64),
+        budget: 16_000,
+        selected: ['harbor'],
+        omitted: [{ id: 'road', reason: 'irrelevant' }],
+        coverage: { total: 80, evaluated: 2 },
+        partial: 'catalog',
+      },
+      {
+        key: 'module@1:module',
+        inputHash: 'c'.repeat(64),
+        budget: 16_000,
+        selected: ['harbor', 'tower'],
+        omitted: [],
+        coverage: { total: 2, evaluated: 2 },
+      },
+    ],
+  };
+  const before = structuredClone(fixed);
+  expect(requestLore(fixed, request(), wire(), { pinned: [] })).toEqual({
+    status: 'complete',
+    selection: { total: 82, evaluated: 4, selected: 3 },
+    entries: [],
+  });
+  expect(fixed).toEqual(before);
+});
+
+test('failed selection preserves candidate totals and excludes abandoned selected ids', () => {
+  const fixed = snapshot([]);
+  fixed.loreSelection = {
+    version: 1,
+    entries: [
+      {
+        key: 'card@1:bot',
+        inputHash: 'b'.repeat(64),
+        budget: 16_000,
+        selected: ['harbor'],
+        omitted: [],
+        coverage: { total: 10, evaluated: 3 },
+      },
+      {
+        key: 'module@1:module',
+        inputHash: 'c'.repeat(64),
+        budget: 16_000,
+        selected: ['abandoned'],
+        omitted: [],
+        coverage: { total: 20, evaluated: 0 },
+        error: 'MODEL_RESPONSE_INVALID',
+      },
+    ],
+  };
+  expect(requestLore(fixed, request(), wire(), { pinned: [] })).toEqual({
+    status: 'complete',
+    selection: { total: 30, evaluated: 3, selected: 1, failed: 1 },
+    entries: [],
+  });
+});
+
+test('coverage is absent for unknown legacy totals and attempts that do not perform story selection', () => {
+  const fixed = snapshot([]);
+  const entry: LoreSelectionEntry = {
+    key: 'card@1:bot',
+    inputHash: 'b'.repeat(64),
+    budget: 16_000,
+    selected: ['harbor'],
+    omitted: [],
+    coverage: { total: 10, evaluated: 3 },
+  };
+  for (const entries of [
+    [],
+    [{ ...entry, coverage: undefined }],
+    [entry, { ...entry, key: 'legacy@1:module', coverage: undefined }],
+  ]) {
+    fixed.loreSelection = { version: 1, entries };
+    expect(requestLore(fixed, request(), wire(), { pinned: [] })).toEqual({
+      status: 'complete',
+      entries: [],
+    });
+  }
+  fixed.loreSelection = { version: 1, entries: [entry] };
+  expect(requestLore(fixed, request(), wire(), { pinned: [], sourceOnly: true })).toEqual({
+    status: 'complete',
+    entries: [],
+  });
+  expect(requestLore(fixed, { ...request(), role: 'translation' }, wire(), { pinned: [] })).toEqual(
+    {
+      status: 'complete',
+      entries: [],
+    }
+  );
 });
 
 test('pinned evidence distinguishes source and entry markers despite identical short bodies', () => {

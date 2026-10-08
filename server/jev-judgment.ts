@@ -8,6 +8,8 @@ export const JEV_MODEL = 'jev-latest';
 // not a guaranteed provider tokenizer; explicit provider budget failures also remain fatal.
 export const JEV_REQUEST_TOKEN_LIMIT = 64_000;
 export const JEV_STATE_QUESTION_TOKEN_LIMIT = 32_000;
+// https://docs.typesafe.ai/api (2026-10-08): maximum options per Choice.
+export const JEV_CHOICE_OPTION_LIMIT = 255;
 export type JevQuestion =
   | { type: 'noul'; instructions: string }
   | { type: 'choice'; instructions: string; criteria: Record<string, string | null> };
@@ -70,7 +72,12 @@ export async function executeJevJudgment(
   if (
     !/^[a-f0-9]{64}$/u.test(inputHash) ||
     !Object.keys(request.questions).length ||
-    Object.keys(request.questions).length > 2000
+    Object.keys(request.questions).length > 2000 ||
+    Object.values(request.questions).some((question) => {
+      if (question.type !== 'choice') return false;
+      const optionCount = Object.keys(object(question.criteria)).length;
+      return optionCount === 0 || optionCount > JEV_CHOICE_OPTION_LIMIT;
+    })
   )
     throw new JevError('JEV_REQUEST_INVALID');
   const body = { model: JEV_MODEL, ...request };

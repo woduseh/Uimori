@@ -26,6 +26,8 @@ export type LoreSelectionEntry = {
   model?: string;
   /** The candidate list reached the judgment token or question-count budget and was cut. */
   partial?: 'catalog';
+  /** Host coverage only: unjudged candidates are not model-declared irrelevant. */
+  coverage?: { total: number; evaluated: number };
   error?: string;
 };
 export type LoreSelectionReceipt = { version: 1; entries: LoreSelectionEntry[] };
