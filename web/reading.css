@@ -99,6 +99,7 @@
 }
 .reading-range-control input {
   width: 100%;
+  accent-color: var(--accent);
 }
 .reading-range-control output {
   text-align: right;

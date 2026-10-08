@@ -43,7 +43,7 @@ export function AssetMetadataEditor({
           onChange={(event) => setDraft({ ...draft, description: event.target.value })}
         />
       </label>
-      <small>저장하면 다음 JEV 이미지 선택에 반영돼요.</small>
+      <small>저장하면 다음 이미지 자동 배치에 반영돼요.</small>
       <button
         type="button"
         className="primary"

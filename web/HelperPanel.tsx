@@ -523,7 +523,7 @@ export function HelperPanel(props: Props) {
   }, [props.open, compact]);
   useLayoutEffect(() => {
     const node = scroll.current;
-    if (!props.open || !node || !data.current) return;
+    if (!props.open || settings || !node || !data.current) return;
     if (displayedScope.current !== scopeKey) {
       displayedScope.current = scopeKey;
       const saved = positions.current.get(scopeKey);
@@ -533,16 +533,17 @@ export function HelperPanel(props: Props) {
       node.scrollTop = prepend.current.top + node.scrollHeight - prepend.current.height;
       prepend.current = null;
     } else if (following.current) node.scrollTop = node.scrollHeight;
-  }, [props.open, scopeKey, data.current]);
+    else node.scrollTop = positions.current.get(scopeKey)?.top ?? node.scrollTop;
+  }, [props.open, settings, scopeKey, data.current]);
   useEffect(() => {
-    if (!props.open || !content.current) return;
+    if (!props.open || settings || !content.current) return;
     const observer = new ResizeObserver(() => {
       if (following.current && scroll.current)
         scroll.current.scrollTop = scroll.current.scrollHeight;
     });
     observer.observe(content.current);
     return () => observer.disconnect();
-  }, [props.open]);
+  }, [props.open, settings]);
   async function send(
     saved?: Outbox,
     withoutStorage = false,
@@ -916,97 +917,100 @@ export function HelperPanel(props: Props) {
       )}
       {settings && conversation && (
         <div className="helper-settings">
-          <section className="settings-group">
-            <header className="settings-group-heading">
-              <h3>도우미 모델</h3>
-            </header>
-            <div className="settings-group-body helper-model">
-              <button
-                type="button"
-                className="model-chip secondary"
-                aria-label={`현재 도우미 모델 · ${props.modelDescription}`}
-                title="모든 채팅의 도우미 요청에 적용되는 전역 모델 설정"
-                onClick={props.onModelSettings}
-              >
-                <span>{props.modelDescription}</span>
-              </button>
-            </div>
-          </section>
-          <section className="settings-group">
-            <header className="settings-group-heading">
-              <h3>도우미 말투</h3>
-              <p>이 도우미 대화에만 적용해요.</p>
-            </header>
-            <div className="settings-group-body helper-persona">
-              <textarea
-                aria-label="도우미 말투"
-                value={persona.text}
-                maxLength={HELPER_PERSONA_MAX_CHARS}
-                onChange={(event) =>
-                  setPersonas((old) => ({
-                    ...old,
-                    [scopeKey]: { ...persona, text: event.target.value },
-                  }))
-                }
-                placeholder="비워 두면 담백한 도우미로 응답해요."
-              />
-              <p className="muted">
-                저장 후 새로 접수한 요청부터 반영해요. 작품과 저장 자료의 문체는 바꾸지 않아요.
+          <div className="helper-settings-body">
+            <section className="settings-group">
+              <header className="settings-group-heading">
+                <h3>도우미 모델</h3>
+              </header>
+              <div className="settings-group-body helper-model">
+                <button
+                  type="button"
+                  className="model-chip secondary"
+                  aria-label={`현재 도우미 모델 · ${props.modelDescription}`}
+                  title="모든 채팅의 도우미 요청에 적용되는 전역 모델 설정"
+                  onClick={props.onModelSettings}
+                >
+                  <span>{props.modelDescription}</span>
+                </button>
+              </div>
+            </section>
+            <section className="settings-group">
+              <header className="settings-group-heading">
+                <h3>도우미 말투</h3>
+                <p>이 도우미 대화에만 적용해요.</p>
+              </header>
+              <div className="settings-group-body helper-persona">
+                <textarea
+                  aria-label="도우미 말투"
+                  value={persona.text}
+                  maxLength={HELPER_PERSONA_MAX_CHARS}
+                  onChange={(event) =>
+                    setPersonas((old) => ({
+                      ...old,
+                      [scopeKey]: { ...persona, text: event.target.value },
+                    }))
+                  }
+                  placeholder="비워 두면 담백한 도우미로 응답해요."
+                />
+                <p className="muted">
+                  저장 후 새로 접수한 요청부터 반영해요. 작품과 저장 자료의 문체는 바꾸지 않아요.
+                </p>
+              </div>
+            </section>
+            <details className="helper-limits settings-group">
+              <summary>작업 한도</summary>
+              <div className="settings-group-body">
+                {(
+                  [
+                    ['totalCalls', '전체 호출 한도', 2, 100],
+                    ['helperCalls', '도우미 판단 한도', 1, persona.limits.totalCalls],
+                    ['artifacts', '가정 장면 작업 한도', 1, 10],
+                  ] as const
+                ).map(([field, label, min, max]) => (
+                  <label key={field} className="settings-row">
+                    <span className="settings-row-copy">{label}</span>
+                    <span className="settings-row-control">
+                      <input
+                        type="number"
+                        min={min}
+                        max={max}
+                        value={Number.isFinite(persona.limits[field]) ? persona.limits[field] : ''}
+                        onChange={(event) =>
+                          setPersonas((old) => ({
+                            ...old,
+                            [scopeKey]: {
+                              ...persona,
+                              limits: { ...persona.limits, [field]: event.target.valueAsNumber },
+                            },
+                          }))
+                        }
+                      />
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p className="muted">새 요청부터 적용해요.</p>
+            </details>
+            {persona.revision !== conversation.revision && (
+              <p role="alert">
+                도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.{' '}
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() =>
+                    setPersonas((old) => ({
+                      ...old,
+                      [scopeKey]: { ...persona, revision: conversation.revision },
+                    }))
+                  }
+                >
+                  최신 설정을 확인했어요
+                </button>
               </p>
-            </div>
-          </section>
-          <details className="helper-limits settings-group">
-            <summary>작업 한도</summary>
-            <div className="settings-group-body">
-              {(
-                [
-                  ['totalCalls', '전체 호출 한도', 2, 100],
-                  ['helperCalls', '도우미 판단 한도', 1, persona.limits.totalCalls],
-                  ['artifacts', '가정 장면 작업 한도', 1, 10],
-                ] as const
-              ).map(([field, label, min, max]) => (
-                <label key={field} className="settings-row">
-                  <span className="settings-row-copy">{label}</span>
-                  <span className="settings-row-control">
-                    <input
-                      type="number"
-                      min={min}
-                      max={max}
-                      value={Number.isFinite(persona.limits[field]) ? persona.limits[field] : ''}
-                      onChange={(event) =>
-                        setPersonas((old) => ({
-                          ...old,
-                          [scopeKey]: {
-                            ...persona,
-                            limits: { ...persona.limits, [field]: event.target.valueAsNumber },
-                          },
-                        }))
-                      }
-                    />
-                  </span>
-                </label>
-              ))}
-            </div>
-            <p className="muted">새 요청부터 적용해요.</p>
-          </details>
-          {persona.revision !== conversation.revision && (
-            <p role="alert">
-              도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.{' '}
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  setPersonas((old) => ({
-                    ...old,
-                    [scopeKey]: { ...persona, revision: conversation.revision },
-                  }))
-                }
-              >
-                최신 설정을 확인했어요
-              </button>
-            </p>
-          )}
+            )}
 
+            {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+          </div>
           <div className="helper-settings-actions">
             <button
               type="button"
@@ -1083,7 +1087,9 @@ export function HelperPanel(props: Props) {
       <div
         ref={scroll}
         className="helper-messages"
+        hidden={settings && !!conversation}
         onScroll={() => {
+          if (settings) return;
           const node = scroll.current;
           if (node) {
             following.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
@@ -1298,7 +1304,7 @@ export function HelperPanel(props: Props) {
           </button>
         </div>
       </Dialog>
-      <footer className="helper-composer">
+      <footer className="helper-composer" hidden={settings && !!conversation}>
         {conversation && data.current?.lastResourceEdit && (
           <HelperResourceUndo
             key={`${conversation.id}:${data.current.lastResourceEdit.editSeq}`}

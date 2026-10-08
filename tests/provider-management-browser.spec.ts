@@ -583,7 +583,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await page.getByText('개발·검사용 프로바이더', { exact: true }).click();
     await page.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
     await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
-    await form.getByLabel('로컬 endpoint').fill('http://127.0.0.1:9/turn');
+    await form.getByLabel('로컬 요청 주소').fill('http://127.0.0.1:9/turn');
     await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
     await expect(form).not.toBeVisible();
     await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
@@ -687,7 +687,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   const originalEndpoint =
     'https://aiplatform.googleapis.com/v1/projects/synthetic-original/locations/global/publishers/google/models';
   await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
-  await form.getByLabel('Google Agent Platform endpoint').fill(originalEndpoint);
+  await form.getByLabel('Google Agent Platform 요청 주소').fill(originalEndpoint);
   const projectId = 'synthetic-project',
     clientEmail = 'test@synthetic-project.iam.gserviceaccount.com';
   let uploads = 0;
@@ -710,7 +710,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     });
     await expect(upload.getByRole('alert')).toContainText(message);
     await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
-    await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(originalEndpoint);
+    await expect(form.getByLabel('Google Agent Platform 요청 주소')).toHaveValue(originalEndpoint);
     await expect(form.getByLabel('API 키', { exact: true })).toHaveCount(0);
     await expect(form.getByLabel('모델 목록 API 키', { exact: true })).toHaveCount(0);
     expect(uploads).toBe(0);
@@ -750,7 +750,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
   await expect(form.getByLabel('모델 목록 API 키', { exact: true })).toHaveCount(0);
   await expect(upload.getByRole('status')).toContainText(projectId);
   const endpoint = `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models`;
-  await expect(form.getByLabel('Google Agent Platform endpoint')).toHaveValue(endpoint);
+  await expect(form.getByLabel('Google Agent Platform 요청 주소')).toHaveValue(endpoint);
   expect(
     await page.getByRole('dialog', { name: '설정', exact: true }).evaluate((node) => node.outerHTML)
   ).not.toContain(serviceAccount.private_key);

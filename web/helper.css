@@ -17,6 +17,10 @@
 .helper-panel[hidden] {
   display: none;
 }
+.helper-messages[hidden],
+.helper-composer[hidden] {
+  display: none;
+}
 .helper-header {
   display: flex;
   align-items: center;
@@ -202,12 +206,20 @@
 }
 .helper-settings {
   margin: 0 12px 8px;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.helper-settings-body {
+  min-height: 0;
+  flex: 1;
   padding: 12px 2px;
-  max-height: 35dvh;
   overflow: auto;
   display: grid;
+  align-content: start;
   gap: 20px;
-  flex-shrink: 0;
 }
 .helper-settings .settings-group-heading h3 {
   font-size: 14px;
@@ -227,6 +239,8 @@
   width: 100%;
 }
 .helper-settings-actions {
+  flex-shrink: 0;
+  padding-block: 12px;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;

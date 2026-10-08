@@ -41,6 +41,11 @@ for (const width of DEFAULT_WIDTHS) {
       .click();
     const dialog = page.getByRole('dialog', { name: '진단 보고서 미리보기', exact: true });
     await expect(dialog.getByRole('status')).toContainText('선택한 실행');
+    const coverage = dialog.locator('details').filter({ hasText: '보고서에 담기는 정보' });
+    await expect(coverage).toHaveJSProperty('open', false);
+    await coverage.locator('summary').click();
+    await expect(coverage).toContainText('서버·브라우저 로그는 포함하지 않아요');
+    await coverage.locator('summary').click();
     await dialog.getByText('파일 내용 확인', { exact: true }).click();
     await expect(dialog.locator('pre')).toContainText('uimori-diagnostic-report');
     await expect(dialog.locator('pre')).not.toContainText(privateMarker);
@@ -79,7 +84,7 @@ for (const width of DEFAULT_WIDTHS) {
     ).toBeLessThanOrEqual(1);
     await page.screenshot({ path: info.outputPath(`diagnostics-${width}.png`) });
     const downloadEvent = page.waitForEvent('download');
-    await dialog.getByRole('button', { name: '진단 JSON 다운로드', exact: true }).click();
+    await dialog.getByRole('button', { name: '진단 파일 다운로드', exact: true }).click();
     const download = await downloadEvent;
     const bytes = await readFile((await download.path())!);
     const report = JSON.parse(bytes.toString()) as DiagnosticReport;
@@ -123,7 +128,7 @@ for (const width of DEFAULT_WIDTHS) {
       await page.getByRole('button', { name: '시스템 진단 만들기', exact: true }).click();
       await expect(dialog.getByRole('alert')).toContainText('만들지 못했어요');
       await expect(dialog).not.toContainText('PRIVATE_ERROR_MUST_NOT_DISPLAY');
-      await expect(dialog.getByRole('button', { name: '진단 JSON 다운로드' })).toHaveCount(0);
+      await expect(dialog.getByRole('button', { name: '진단 파일 다운로드' })).toHaveCount(0);
       await page.unroute(pattern);
       await dialog.getByRole('button', { name: '다시 시도', exact: true }).click();
       await expect(dialog.getByRole('status')).toContainText('시스템 정보');

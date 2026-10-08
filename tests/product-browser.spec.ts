@@ -231,7 +231,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   await library.getByText('개발·검사용 프로바이더', { exact: true }).click();
   await library.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
   await page.getByLabel('프로바이더 이름', { exact: true }).fill(`격리 연결 ${unique}`);
-  await page.getByLabel('로컬 endpoint').fill('http://127.0.0.1:9/turn');
+  await page.getByLabel('로컬 요청 주소').fill('http://127.0.0.1:9/turn');
   await page.getByLabel('API 키').fill('UIMORI_PROVIDER_SYNTHETIC');
   const connectionResponse = page.waitForResponse(
     (response) =>
