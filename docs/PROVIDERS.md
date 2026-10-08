@@ -50,6 +50,10 @@ TypeSafe AI 프로바이더 화면에서는 키를 관리하고, **모델 프리
 
 Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 등록하고 프로젝트 ID를 global endpoint에 반영해요. 등록한 Vertex 인증을 생성과 Google Model Garden 모델 목록 조회에 함께 사용해요.
 
+모델 프리셋의 **고급 → 텍스트 대화를 PDF로 전송**을 켜면 이 Google 연결의 초기 텍스트 대화를 순서와 역할이 표시된 PDF 하나로 묶어 사용자 입력으로 보내요. 기본값은 꺼짐이고 다른 프로토콜에는 적용하지 않아요. 시스템 지침, 도구 정의·호출·결과, 프로바이더가 반환한 사고 서명과 후속 대화는 기존 Gemini 형식으로 유지해요. 파일 업로드 서비스를 따로 사용하지 않고 PDF를 요청 안에 넣어요.
+
+PDF는 사람이 읽을 문서가 아니라 모델이 텍스트를 추출할 수 있도록 1pt 글자로 조밀하게 만든 문서예요. 실제 줄바꿈과 원문에 있던 문자 `\n`은 JSON 문자열 이스케이프로 구분해요. PDF 입력은 원래 대화의 네이티브 user/model 역할 구분을 문서 안의 표시로 바꾸므로 응답 품질이 달라질 수 있어요. 로컬 컨텍스트 계산은 원문을 기준으로 유지하며, 토큰 절약·비용 감소·품질 개선을 보장하지 않아요. 실제 사용량과 비용은 Google이 반환한 usage로 확인해요. [Gemini 문서 처리 안내](https://ai.google.dev/gemini-api/docs/document-processing)와 [Agent Platform 문서 이해](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/document-understanding)를 참고해요. Uimori는 PDF 자체에 50MB·1,000페이지의 보수적인 한도를 두고, [Flex PayGo](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/flex-paygo)의 인라인 요청 전체에는 20MB 한도를 적용해요. 한도를 넘으면 자동으로 다른 전송 방식으로 바꾸지 않고 요청 전에 중단해요.
+
 ## Codex
 
 Codex는 API 키를 입력하는 연결이 아니라 전용 실행기의 로그인 상태를 사용해요. [Codex 안내](CODEX.md)를 따라 등록해요. 외부 실행기의 로그인 파일은 SQLite 백업과 별개예요.

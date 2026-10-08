@@ -1073,13 +1073,13 @@ export class HelperRuntime {
           task.request,
           ...instructions.map((item) => `추가 사용자 지시:\n${item.text}`),
         ].join('\n\n');
-        const estimateRequest = (value: ProviderRequest) =>
-          estimateContextTokens(
+        const estimateRequest = (value: ProviderRequest) => {
+          const preview =
             target.connection.protocol === 'codex-app-server-v1'
-              ? nativeHelperRequest(value)
-              : encodeMainPreview(value, target).body,
-            value.contextBudget
-          );
+              ? { body: nativeHelperRequest(value), contextBody: undefined }
+              : encodeMainPreview(value, target);
+          return estimateContextTokens(preview.contextBody ?? preview.body, value.contextBudget);
+        };
         let request = this.request(
           task,
           history,
@@ -1261,7 +1261,8 @@ export class HelperRuntime {
           this.workspace.event(task.conversationId, id, 'input.measured', {
             attemptId,
             ...metrics,
-            estimatedInputTokens: estimateContextTokens(wire.body, budget),
+            estimatedInputTokens:
+              wire.requestContext?.estimatedInputTokens ?? estimateContextTokens(wire.body, budget),
             execution:
               target.connection.protocol === 'codex-app-server-v1'
                 ? 'codex-native'
@@ -1603,12 +1604,13 @@ export class HelperRuntime {
           source: asJson({ previousSummary: summary, part }),
         },
       });
-      const fits = (size: number) =>
-        estimateContextTokens(
-          encodeMainPreview(requestFor(remaining.slice(0, size)), target).body,
-          budget
-        ) <=
-        budget.inputTokenLimit * 0.8;
+      const fits = (size: number) => {
+        const preview = encodeMainPreview(requestFor(remaining.slice(0, size)), target);
+        return (
+          estimateContextTokens(preview.contextBody ?? preview.body, budget) <=
+          budget.inputTokenLimit * 0.8
+        );
+      };
       let lo = fits(remaining.length) ? remaining.length : 0,
         hi = lo || remaining.length;
       while (lo < hi) {

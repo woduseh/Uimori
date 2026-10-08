@@ -9,6 +9,7 @@ export const GENERATION_KEYS = [
   'temperature',
   'thinkingLevel',
   'structuredOutput',
+  'pdfInput',
   'reasoningEffort',
   'outputEffort',
   'thinkingMode',
@@ -332,6 +333,7 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
   )
     reject();
   if (g.structuredOutput !== undefined && typeof g.structuredOutput !== 'boolean') reject();
+  if (g.pdfInput !== undefined && typeof g.pdfInput !== 'boolean') reject();
   const enums = { ...PROTOCOL_OPTION_VALUES, cacheTtl: ['5m', '30m', '1h'] } as const;
   for (const [key, values] of Object.entries(enums))
     if (

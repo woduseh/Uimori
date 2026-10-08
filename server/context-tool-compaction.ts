@@ -160,8 +160,9 @@ export async function compactToolReads(
   });
   const fits = (part: string): boolean => {
     try {
+      const preview = encodeMainPreview(requestFor(part), target);
       return (
-        estimateContextTokens(encodeMainPreview(requestFor(part), target).body, budget) <=
+        estimateContextTokens(preview.contextBody ?? preview.body, budget) <=
         budget.inputTokenLimit * 0.8
       );
     } catch (error) {

@@ -8,6 +8,7 @@ import {
 } from '../core/vertex-protocol.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
 import { TRANSLATION_FORMAT_INSTRUCTION } from '../core/provider-format.js';
+import { PROMPT_COMPILER_VERSION } from '../core/risu-prompt.js';
 
 const request = (): ProviderRequest => ({
   role: 'main',
@@ -89,6 +90,106 @@ function translationRequest() {
 
 // Pure recorded-object fixtures: these checks do not call a live model or assess prose quality.
 describe('Vertex 3.8 request and continuation protocol', () => {
+  test('opt-in PDF packs authored conversation, preserving system, bootstrap and signed tool replay', () => {
+    const input = request();
+    input.generation!.pdfInput = true;
+    input.bootstrap = [
+      {
+        callId: 'bootstrap',
+        name: 'knowledge.read',
+        args: {},
+        result: { text: 'Pre-read' },
+        denied: false,
+      },
+    ];
+    input.prompt = {
+      compilerVersion: PROMPT_COMPILER_VERSION,
+      values: {},
+      messages: [
+        {
+          id: 'system',
+          role: 'system',
+          content: [{ type: 'text', text: 'System stays native.' }],
+          completion: 'complete',
+          provenance: { blockId: 's', origin: 'prompt' },
+        },
+        {
+          id: 'user',
+          role: 'user',
+          content: [{ type: 'text', text: '한글 🌊\nreal newline and literal \\n\t  whitespace' }],
+          completion: 'complete',
+          provenance: { blockId: 'u', origin: 'prompt' },
+        },
+        {
+          id: 'assistant',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Earlier assistant.' }],
+          completion: 'complete',
+          provenance: { blockId: 'a', origin: 'prompt' },
+        },
+        {
+          id: 'latest',
+          role: 'user',
+          content: [{ type: 'text', text: 'Continue.' }],
+          completion: 'complete',
+          provenance: { blockId: 'l', origin: 'prompt' },
+        },
+      ],
+      cachePlan: [],
+    };
+    const original = structuredClone(input);
+    const { body, context, contextBody } = encodeVertex(input);
+    const wire = bodyObject(body);
+    expect(input).toEqual(original);
+    expect(wire.systemInstruction.parts).toContainEqual({ text: 'System stays native.' });
+    expect(wire.contents.slice(0, 2)).toEqual(bodyObject(contextBody!).contents.slice(0, 2));
+    expect(wire.contents).toHaveLength(3);
+    const document = wire.contents[2].parts[0].inlineData;
+    expect(document.mimeType).toBe('application/pdf');
+    expect(Buffer.from(document.data, 'base64').subarray(0, 8).toString()).toBe('%PDF-1.7');
+    expect(bodyObject(contextBody!).contents[2].parts[0].text).toBe(
+      input.prompt!.messages[1].content[0].text
+    );
+    expect(wire.generationConfig).not.toHaveProperty('pdfInput');
+    const decoder = new VertexDecoder(context);
+    const providerParts = [
+      { thoughtSignature: 'opaque-signature+/=', ...bodyObject(call('read-pdf')) },
+    ];
+    decoder.accept(event(providerParts, 'STOP'));
+    const output = decoder.finish();
+    const next = encodeVertex({
+      ...continued(input, output),
+      continuationInput: 'Fresh native input.',
+    });
+    const nextWire = bodyObject(next.body);
+    expect(nextWire.contents[2]).toEqual(wire.contents[2]);
+    expect(nextWire.contents[3].parts).toEqual(providerParts);
+    expect(nextWire.contents[4].parts[0].functionResponse.id).toBe('read-pdf');
+    expect(nextWire.contents[4].parts.at(-1)).toEqual({ text: 'Fresh native input.' });
+    expect(nextWire.tools).toEqual(wire.tools);
+    expect(bodyObject(next.contextBody!).contents[2].parts[0].text).toBe(
+      input.prompt!.messages[1].content[0].text
+    );
+    expect(() =>
+      encodeVertex({
+        ...continued(input, output),
+        generation: { ...input.generation!, pdfInput: false },
+      })
+    ).toThrow('VERTEX_CONTINUATION_MISMATCH');
+  });
+
+  test('explicit PDF off has the same body and context as existing text requests', () => {
+    const input = request();
+    const baseline = encodeVertex(input);
+    const disabled = encodeVertex({
+      ...input,
+      generation: { ...input.generation!, pdfInput: false },
+    });
+    expect(disabled.body).toEqual(baseline.body);
+    expect(disabled.contextBody).toBeUndefined();
+    expect(disabled.context.contents).toEqual(baseline.context.contents);
+  });
+
   test('encodes contract, complete input JSON and function schemas without unsupported sampling fields', () => {
     const input = request();
     const original = structuredClone(input);

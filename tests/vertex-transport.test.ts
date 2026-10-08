@@ -8,6 +8,8 @@ import {
   type WireRecord,
 } from '../core/transport.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
+import { encodeVertex } from '../core/vertex-protocol.js';
+import { estimateContextTokens, CONTEXT_ESTIMATOR } from '../core/context-budget.js';
 
 const origin = 'https://aiplatform.googleapis.com';
 const connection: ProviderConnection = {
@@ -82,6 +84,95 @@ const options = (extra: Record<string, unknown> = {}) => ({
 });
 
 describe('Vertex native wire through real local HTTP streams (no live calls)', () => {
+  test('PDF Flex payload includes native bootstrap bytes and fails before credentials', async () => {
+    const input = request();
+    input.generation = { ...input.generation!, pdfInput: true, serviceTier: 'flex' };
+    input.bootstrap = [
+      {
+        callId: 'large-bootstrap',
+        name: 'knowledge.read',
+        args: {},
+        result: { text: 'x'.repeat(20_000_000) },
+        denied: false,
+      },
+    ];
+    const fetch = vi.fn(),
+      resolveCredential = vi.fn(() => token),
+      onWire = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const result = await executeProvider(connection, input, options({ resolveCredential, onWire }));
+    expect(result.error?.code).toBe('PDF_INPUT_PAYLOAD_TOO_LARGE');
+    expect(resolveCredential).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onWire).not.toHaveBeenCalled();
+  });
+
+  test('sends inline PDF over HTTP and journals text-based budget evidence without leaking the sidecar', async () => {
+    const input = request();
+    input.generation!.pdfInput = true;
+    input.input.source = { text: '한글 🌊\n literal \\n\t  spaces'.repeat(120) };
+    input.contextBudget = { inputTokenLimit: 8192, estimator: CONTEXT_ESTIMATOR };
+    const prepared = encodeVertex(input);
+    const records: WireRecord[] = [];
+    const evidenceBodies: unknown[] = [];
+    let observedBody: unknown;
+    await redirectedFixture(async (captured, response) => {
+      observedBody = JSON.parse(captured.body);
+      await writeSse(response, [
+        {
+          candidates: [
+            {
+              index: 0,
+              content: { role: 'model', parts: [{ text: 'PDF response.' }] },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: usage,
+        },
+      ]);
+    });
+    const result = await executeProvider(
+      connection,
+      input,
+      options({
+        onWire: (
+          wire: WireRecord,
+          _resume: string | undefined,
+          evidence: { contextBody?: unknown } | undefined
+        ) => {
+          records.push(wire);
+          evidenceBodies.push(evidence?.contextBody);
+        },
+      })
+    );
+    expect(result.status).toBe('completed');
+    expect(result.text).toBe('PDF response.');
+    expect(observedBody).toEqual(prepared.body);
+    expect(JSON.stringify(observedBody)).toContain('application/pdf');
+    expect(evidenceBodies).toEqual([prepared.contextBody]);
+    expect(records[0].requestContext?.estimatedInputTokens).toBe(
+      estimateContextTokens(prepared.contextBody, input.contextBudget)
+    );
+    expect(records[0]).not.toHaveProperty('contextBody');
+    expect(records[0].body).toEqual(observedBody);
+  });
+
+  test('PDF conversion preserves the original input admission limit before credentials or HTTP', async () => {
+    const input = request();
+    input.generation!.pdfInput = true;
+    input.contextBudget = { inputTokenLimit: 8192, estimator: CONTEXT_ESTIMATOR };
+    input.input.source = { text: '원문을 보존해요. '.repeat(10000) };
+    const fetch = vi.fn(),
+      resolveCredential = vi.fn(() => token),
+      onWire = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const result = await executeProvider(connection, input, options({ resolveCredential, onWire }));
+    expect(result.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
+    expect(resolveCredential).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(onWire).not.toHaveBeenCalled();
+  });
+
   test('the well-known Google credential variable remains an ADC file reference', async () => {
     vi.stubEnv('GOOGLE_APPLICATION_CREDENTIALS', 'Z:\\missing\\synthetic-service-account.json');
     const resolveCredential = vi.fn(() => token);

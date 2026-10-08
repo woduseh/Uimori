@@ -253,7 +253,7 @@ export function encodeMainPreview(
 ) {
   const checked = validateRequest(request),
     protocol = target.connection.protocol;
-  let encoded: { body: Json; messageMetadata?: NativeMessageMetadata };
+  let encoded: { body: Json; contextBody?: Json; messageMetadata?: NativeMessageMetadata };
   if (protocol === 'openai-responses-v1') encoded = encodeResponses(checked);
   else if (protocol === 'anthropic-messages-v1') encoded = encodeAnthropic(checked);
   else if (protocol === 'vertex-gemini-v1') encoded = encodeVertex(checked);
@@ -280,6 +280,7 @@ export function encodeMainPreview(
     modelId: target.modelId,
     kind: 'exact-request-body' as const,
     body: encoded.body,
+    ...(encoded.contextBody ? { contextBody: encoded.contextBody } : {}),
     diagnostics: encoded.messageMetadata?.diagnostics ?? [],
     capabilityVersion: encoded.messageMetadata?.capabilityVersion ?? 'fixture-only',
   };

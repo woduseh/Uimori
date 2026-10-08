@@ -23,6 +23,8 @@ export type ModelGeneration = {
   temperature: number | null;
   thinkingLevel?: 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH';
   structuredOutput?: boolean;
+  /** Opt-in Google Gemini text-conversation PDF encoding; never a provider generationConfig field. */
+  pdfInput?: boolean;
   reasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   outputEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   thinkingMode?: 'disabled' | 'adaptive';

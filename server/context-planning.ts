@@ -86,8 +86,11 @@ export function measureMainContext(snapshot: RunSnapshot): {
   try {
     const built = buildMainProviderRequest(snapshot);
     const target = built.snapshot.profile!.models.main!;
-    const body = encodeMainPreview(built.request, target).body;
-    let estimatedInputTokens = estimateContextTokens(body, built.request.contextBudget);
+    const preview = encodeMainPreview(built.request, target);
+    let estimatedInputTokens = estimateContextTokens(
+      preview.contextBody ?? preview.body,
+      built.request.contextBudget
+    );
     // Shared preparation also serves helper artifacts and the economized bootstrap.
     // Cover both Codex envelopes without persisting a transport mode in story state.
     if (target.connection.protocol === 'codex-app-server-v1')
