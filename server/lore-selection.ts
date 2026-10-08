@@ -9,7 +9,7 @@ import {
   type LoreSelectionEntry,
 } from '../core/lore-selection.js';
 import { compiledPackages } from '../core/package-context.js';
-import type { RunSnapshot, Usage } from '../core/types.js';
+import type { Resource, RunSnapshot, Usage } from '../core/types.js';
 import type { MainHooks } from './model-runner.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { createCandidateSearch } from '../core/candidate-search.js';
@@ -33,7 +33,8 @@ export type LoreSelectionTarget = {
 };
 const sha256 = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
 const emptyUsage = (): Usage => ({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
-const selectedLoreTokens = countTextTokens;
+const selectedLoreTokens = (entry: Candidate) =>
+  entry.parts.reduce((sum, part) => sum + countTextTokens(part.text), 0);
 /**
  * Every attached package this snapshot owes a selection for, in attachment order: the ones in model
  * mode that still offer at least one discoverable entry. Preparation asks about these; archive
@@ -65,10 +66,17 @@ export function loreSelectionPending(snapshot: RunSnapshot): boolean {
   return loreSelectionTargets(snapshot).length > 0;
 }
 
-type Candidate = { id: string; title: string; summary: string; chars: number; text?: string };
+type CandidatePart = Pick<Resource, 'id' | 'title' | 'description' | 'text'>;
+type Candidate = {
+  id: string;
+  title: string;
+  description: string;
+  text: string;
+  parts: CandidatePart[];
+};
 /**
- * The catalog as the model reads it. The text is the one this snapshot's own compilation renders, so
- * `chars` counts exactly what pinning the entry would send.
+ * Selection still pins a lore ID across its link paths. Keep every effective resource in that
+ * group: different overrides must all be judged, hashed and charged for the bodies pinning sends.
  */
 function candidateCatalog(
   target: LoreSelectionTarget,
@@ -83,33 +91,53 @@ function candidateCatalog(
       item.attachment.revision === target.attachment.revision &&
       item.attachment.role === target.attachment.role
   );
-  const rendered = new Map<string, string>();
+  const rendered = new Map<string, CandidatePart[]>();
   for (const resource of compiled?.resources ?? []) {
     if (resource.sourceKind !== 'lore') continue;
     const marker = resource.id.lastIndexOf(':lore:');
     if (marker < 0) continue;
     const id = resource.id.slice(marker + ':lore:'.length);
-    if (!rendered.has(id)) rendered.set(id, resource.text);
+    const parts = rendered.get(id) ?? [];
+    parts.push({
+      id: resource.id,
+      title: resource.title,
+      description: resource.description,
+      text: resource.text,
+    });
+    rendered.set(id, parts);
   }
   const catalog = loreSelectionLore(target.package)
     .slice(0, LORE_SELECTION_LIMITS.ids)
     .map((lore) => {
-      // Empty CBS output remains empty even when compilation omits the resource entirely.
-      const text =
-        rendered.get(lore.id) ??
-        compiled?.package.lore.find((entry) => entry.id === lore.id)?.text ??
-        lore.text;
+      let parts = rendered.get(lore.id);
+      if (!parts) {
+        // Empty CBS output stays empty. The fallback also uses the effective metadata.
+        const effective = compiled?.package.lore.find((entry) => entry.id === lore.id) ?? lore;
+        parts = [
+          {
+            id: lore.id,
+            title: effective.title,
+            description: effective.description,
+            text: effective.text,
+          },
+        ];
+      }
       return {
         id: lore.id,
-        title: lore.title,
-        summary: textTokenExcerpt(lore.description || text, LORE_SELECTION_LIMITS.summaryTokens, {
-          marker: '…',
-        }).text,
-        chars: text.length,
-        text,
+        title: [...new Set(parts.map((part) => part.title))].join(' / '),
+        description: [...new Set(parts.map((part) => part.description))].filter(Boolean).join('\n'),
+        text:
+          parts.length === 1
+            ? parts[0].text
+            : parts
+                .map((part) => [part.title, part.description, part.text].filter(Boolean).join('\n'))
+                .join('\n\n'),
+        parts,
       };
     })
-    .filter((item) => !target.package.nativeRisu || item.chars > 0);
+    .filter(
+      (item) => !target.package.nativeRisu || item.parts.some((part) => part.text.length > 0)
+    );
   return { catalog };
 }
 
@@ -154,7 +182,7 @@ function selectionInputs(
   };
   const inputHash = sha256(
     JSON.stringify({
-      version: 'lore-selection-jev-v4-token-excerpts',
+      version: 'lore-selection-jev-v5-effective-groups',
       tokenEstimator: policy.tokenEstimator,
       judgment: policy.judgment,
       key: loreSelectionKey(target.attachment),
@@ -235,7 +263,7 @@ async function selectOne(
     let eligibleTokens = 0;
     const textTokens = new Map<string, number>();
     const eligible = payload.catalog.filter((entry) => {
-      const tokens = selectedLoreTokens(entry.text ?? entry.summary);
+      const tokens = selectedLoreTokens(entry);
       if (policy.maxRetainedEntries > 0 && tokens <= entryTokenLimit) {
         eligibleTokens += tokens;
         textTokens.set(entry.id, tokens);
@@ -254,7 +282,8 @@ async function selectOne(
     const modelEntry = (entry: Candidate) => ({
       id: entry.id,
       title: entry.title,
-      text: entry.text ?? entry.summary,
+      ...(entry.description ? { description: entry.description } : {}),
+      text: entry.text,
     });
     const makeRequest = (catalog: Candidate[]): JevRequest => ({
       state: {
@@ -281,7 +310,7 @@ async function selectOne(
         eligible.map((entry) => ({
           id: entry.id,
           title: entry.title,
-          text: `${entry.summary}\n${entry.text ?? ''}`,
+          text: `${entry.description}\n${entry.text}`,
         }))
       );
       const ids = search.rank([
@@ -348,7 +377,7 @@ async function selectOne(
           omitted.push({ id: entry.id, reason: 'irrelevant' });
           continue;
         }
-        const tokens = selectedLoreTokens(entry.text ?? entry.summary);
+        const tokens = textTokens.get(entry.id)!;
         if (
           selectedTokens + tokens > policy.judgment.maxSelectedTokens ||
           retainedCost + tokens > policy.maxRetainedTokens ||
@@ -445,7 +474,7 @@ export async function prepareLoreSelection(
                 ...selected.judgment,
                 selectedTokens: original.payload.catalog
                   .filter((entry) => selectedIds.includes(entry.id))
-                  .reduce((sum, entry) => sum + selectedLoreTokens(entry.text ?? entry.summary), 0),
+                  .reduce((sum, entry) => sum + selectedLoreTokens(entry), 0),
                 scores: selected.judgment.scores.flatMap((score) => {
                   const mapped = batch.mapping.get(score.id);
                   return mapped?.owner === owner ? [{ ...score, id: mapped.entry.id }] : [];

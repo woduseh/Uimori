@@ -34,7 +34,6 @@ export type LoreSelectionReceipt = { version: 1; entries: LoreSelectionEntry[] }
 export const LORE_SELECTION_LIMITS = {
   entries: 200,
   ids: 2000,
-  summaryTokens: 80,
   historyMessages: 12,
   messageTokens: 500,
 };

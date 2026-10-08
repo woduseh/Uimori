@@ -30,19 +30,23 @@ export const IMAGE_JUDGMENT_LIMITS = {
   candidatesPerBlock: 16,
 } as const;
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+type ImageSelectionVersion = 'image-selection-jev-v2' | 'image-selection-jev-v3';
 export const imageJudgmentInputHash = (request: JevRequest) =>
   digest({
     version:
-      record(request.state).selectionVersion === 'image-selection-jev-v2'
-        ? 'image-selection-jev-v2'
-        : 'image-selection-jev-v1',
+      record(request.state).selectionVersion === 'image-selection-jev-v3'
+        ? 'image-selection-jev-v3'
+        : record(request.state).selectionVersion === 'image-selection-jev-v2'
+          ? 'image-selection-jev-v2'
+          : 'image-selection-jev-v1',
     request,
   });
 /** The plan owns sampled blocks, frozen metadata and model IDs for the whole paid call. */
 function prepareImageJudgment(
   source: AuxiliarySource,
   assets: readonly AssetEntry[],
-  guidance: string
+  guidance: string,
+  version: ImageSelectionVersion = 'image-selection-jev-v3'
 ) {
   const allBlocks = splitSource(source);
   if (!allBlocks.length || !assets.length) return null;
@@ -69,7 +73,7 @@ function prepareImageJudgment(
     const included = new Set(selected.flat());
     return {
       state: {
-        selectionVersion: 'image-selection-jev-v2',
+        selectionVersion: version,
         sourceHash: source.hash,
         guidance,
         evaluatedAssets: included.size,
@@ -132,31 +136,66 @@ function prepareImageJudgment(
   const included = new Set<string>();
   const metadataCost = new Map<string, number>();
   const admissions: { block: number; id: string }[] = [];
-  // Round-robin admission reserves a fair first choice for every sampled scene.
   // Cached record costs avoid repeatedly tokenizing a growing catalog. The final body is checked below.
+  const additionCost = (id: string) => {
+    let cost = metadataCost.get(id);
+    if (cost === undefined) {
+      const { revision: _revision, hash: _hash, ...metadata } = assetMetadata(byId.get(id)!);
+      cost = estimateContextTokens({ id, ...metadata }) + 16;
+      metadataCost.set(id, cost);
+    }
+    return (included.has(id) ? 0 : cost) + estimateContextTokens({ [id]: null }) + 8;
+  };
+  const admit = (block: number, id: string, cost: number) => {
+    tokenEstimate += cost;
+    included.add(id);
+    selected[block].push(id);
+    admissions.push({ block, id });
+  };
+  // v2 must retain its original packing for paid attempt verification.
+  // Reserve an affordable first candidate before any paragraph consumes spare depth.
+  if (version === 'image-selection-jev-v3') {
+    const firstChoiceBudget = (IMAGE_JUDGMENT_LIMITS.inputTokens - tokenEstimate) / blocks.length;
+    for (let i = 0; i < blocks.length; i++) {
+      for (const id of rankings[i]) {
+        const cost = additionCost(id);
+        if (cost > firstChoiceBudget) continue;
+        admit(i, id, cost);
+        break;
+      }
+    }
+    // A paragraph may have no candidate within its initial share. Use remaining
+    // coverage budget for its cheapest candidate before adding depth elsewhere.
+    for (let i = 0; i < blocks.length; i++) {
+      if (selected[i].length) continue;
+      let cheapest: { id: string; cost: number } | undefined;
+      for (const id of rankings[i]) {
+        const cost = additionCost(id);
+        if (!cheapest || cost < cheapest.cost) cheapest = { id, cost };
+      }
+      if (cheapest && tokenEstimate + cheapest.cost <= IMAGE_JUDGMENT_LIMITS.inputTokens)
+        admit(i, cheapest.id, cheapest.cost);
+    }
+  }
   for (let rank = 0; rank < IMAGE_JUDGMENT_LIMITS.candidatesPerBlock * 4; rank++) {
     for (let i = 0; i < blocks.length; i++) {
       if (selected[i].length >= IMAGE_JUDGMENT_LIMITS.candidatesPerBlock) continue;
       const id = rankings[i][rank];
-      if (!id) continue;
-      let cost = metadataCost.get(id);
-      if (cost === undefined) {
-        const { revision: _revision, hash: _hash, ...metadata } = assetMetadata(byId.get(id)!);
-        cost = estimateContextTokens({ id, ...metadata }) + 16;
-        metadataCost.set(id, cost);
-      }
-      const addition = (included.has(id) ? 0 : cost) + estimateContextTokens({ [id]: null }) + 8;
+      if (!id || selected[i].includes(id)) continue;
+      const addition = additionCost(id);
       if (tokenEstimate + addition > IMAGE_JUDGMENT_LIMITS.inputTokens) continue;
-      tokenEstimate += addition;
-      included.add(id);
-      selected[i].push(id);
-      admissions.push({ block: i, id });
+      admit(i, id, addition);
     }
   }
   let request = build();
   while (measuredTokens(request) > IMAGE_JUDGMENT_LIMITS.inputTokens && admissions.length) {
-    const last = admissions.pop()!;
-    selected[last.block].pop();
+    const expendable =
+      version === 'image-selection-jev-v3'
+        ? admissions.findLastIndex(({ block }) => selected[block].length > 1)
+        : -1;
+    const index = expendable >= 0 ? expendable : admissions.length - 1;
+    const [last] = admissions.splice(index, 1);
+    selected[last.block].splice(selected[last.block].indexOf(last.id), 1);
     request = build();
   }
   if (!selected.some((ids) => ids.length)) throw new JevError('JEV_INPUT_BUDGET');
@@ -251,11 +290,13 @@ export function validateImageJudgmentWire(
   const expected =
     typeof guidance !== 'string'
       ? null
-      : version === 'image-selection-jev-v2'
+      : version === 'image-selection-jev-v3'
         ? imageJudgmentRequest(source, assets, guidance)
-        : version === undefined
-          ? imageJudgmentLegacyRequest(source, assets, guidance)
-          : null;
+        : version === 'image-selection-jev-v2'
+          ? (prepareImageJudgment(source, assets, guidance, version)?.request ?? null)
+          : version === undefined
+            ? imageJudgmentLegacyRequest(source, assets, guidance)
+            : null;
   const bodyHash = digest(wire.body);
   if (
     !expected ||
@@ -269,7 +310,7 @@ export function validateImageJudgmentWire(
     wire.agentId ||
     wire.nativeScript ||
     wire.judgment.inputHash !== imageJudgmentInputHash(expected) ||
-    // Previously captured attempts keep their original full body and the same v1 input hash.
+    // Previously captured attempts keep their original full/projected body and versioned input hash.
     (bodyHash !== digest({ model: JEV_MODEL, ...modelRequest(expected) }) &&
       bodyHash !== digest({ model: JEV_MODEL, ...expected }))
   )
