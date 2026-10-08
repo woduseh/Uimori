@@ -18,6 +18,11 @@ const emptyFields = {
   location: '',
   allowedUse: 'both' as Asset['allowedUse'],
 };
+const imageUseLabels: Record<Asset['allowedUse'], string> = {
+  both: '프로필과 본문',
+  profile: '프로필',
+  inline: '본문',
+};
 
 export function AssetEditor({
   chatId,
@@ -116,8 +121,9 @@ export function AssetEditor({
                 {!asset.packageOwner && <AssetMetadataEditor asset={asset} onSaved={refresh} />}
                 {asset.title}
                 <small>
-                  {[asset.actor, asset.outfit, asset.location].filter(Boolean).join(' · ')} ·{' '}
-                  {asset.allowedUse}
+                  {[asset.actor, asset.outfit, asset.location, imageUseLabels[asset.allowedUse]]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </small>
                 {!asset.packageOwner && asset.url === `/api/assets/${asset.id}` && (
                   <DeleteButton
@@ -229,9 +235,9 @@ export function AssetEditor({
                 setValue({ ...value, allowedUse: event.target.value as Asset['allowedUse'] })
               }
             >
-              <option value="both">프로필과 본문</option>
-              <option value="profile">프로필</option>
-              <option value="inline">본문</option>
+              <option value="both">{imageUseLabels.both}</option>
+              <option value="profile">{imageUseLabels.profile}</option>
+              <option value="inline">{imageUseLabels.inline}</option>
             </select>
           </label>
           <div className="form-actions full settings-save-actions">

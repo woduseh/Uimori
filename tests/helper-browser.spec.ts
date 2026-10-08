@@ -577,7 +577,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
     expect(
       await settings.evaluate((node) => node.scrollWidth - node.clientWidth)
     ).toBeLessThanOrEqual(1);
-    await settings.evaluate((node) => {
+    await settings.locator('.helper-settings-body').evaluate((node) => {
       node.scrollTop = node.scrollHeight;
     });
     const save = panel.getByRole('button', { name: '도우미 설정 저장', exact: true });
@@ -588,7 +588,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
       1
     );
     await page.screenshot({ path: info.outputPath(`helper-settings-${width}.png`) });
-    await settings.evaluate((node) => {
+    await settings.locator('.helper-settings-body').evaluate((node) => {
       node.scrollTop = 0;
     });
   }
@@ -614,7 +614,17 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
 
   await expect(editor.getByRole('alert')).toContainText('초안은 유지했어요', { timeout: 15000 });
   await expect(draft).toHaveValue('9');
-  await expect(editor.getByRole('button', { name: '역할별 모델 설정 저장' })).toBeDisabled();
+  await editor.getByRole('button', { name: '역할별 모델 설정 저장' }).click();
+  const conflict = page.getByRole('alertdialog', {
+    name: '역할별 모델 저장 내용 확인',
+    exact: true,
+  });
+  await expect(conflict).toBeVisible();
+  const saved = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+  expect(saved.revision).toBe(before.revision + 1);
+  expect(saved.translationPolicy.maxCalls).toBe(12);
+  await conflict.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+  await expect(draft).toHaveValue('9');
 });
 
 test(`HELPUI01 helper panel preserves separate input, reading position and Back behavior at ${MOBILE_WIDTH}/${DESKTOP_WIDTH}`, async ({
@@ -649,6 +659,31 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
     if (width === DESKTOP_WIDTH)
       await expect(page.getByRole('button', { name: '도우미 열기', exact: true })).toBeHidden();
     await expect(input).toHaveValue('도우미 입력 초안');
+    await list.evaluate((node) => {
+      node.scrollTop = 400;
+    });
+    const readingPosition = await list.evaluate((node) => node.scrollTop);
+    await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+    const settings = panel.locator('.helper-settings');
+    await expect(settings).toBeVisible();
+    await expect(list).toBeHidden();
+    await expect(input).toBeHidden();
+    await expect(
+      panel.getByRole('button', { name: '도우미 설정 저장', exact: true })
+    ).toBeInViewport();
+    const settingsBox = (await settings.boundingBox())!;
+    const panelBox = (await panel.boundingBox())!;
+    expect(settingsBox.height).toBeGreaterThan(panelBox.height / 2);
+    await page.screenshot({ path: info.outputPath(`helper-settings-open-${width}.png`) });
+    await panel.getByLabel('도우미 말투', { exact: true }).fill('설정 화면에서 남긴 말투 초안');
+    await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+    await expect(input).toHaveValue('도우미 입력 초안');
+    await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(readingPosition);
+    await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+    await expect(panel.getByLabel('도우미 말투', { exact: true })).toHaveValue(
+      '설정 화면에서 남긴 말투 초안'
+    );
+    await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
     const box = await panel.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);

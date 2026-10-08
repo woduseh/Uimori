@@ -98,7 +98,7 @@
 .new-story-main-model {
   gap: 12px;
   padding-block: 16px;
-  border-block: 1px solid var(--line);
+  border-top: 1px solid var(--line);
 }
 .new-story-main-model > p {
   margin: 0;
@@ -143,7 +143,7 @@
 }
 .new-story-options {
   min-width: 0;
-  border-block: 1px solid var(--line);
+  border-top: 1px solid var(--line);
 }
 .new-story-options > summary > span {
   font-weight: 600;

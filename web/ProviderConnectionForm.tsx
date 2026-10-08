@@ -47,9 +47,9 @@ export function ProviderConnectionForm({
   const endpointLabel = codex
     ? 'Codex 실행 위치'
     : vertex
-      ? 'Google Agent Platform endpoint'
+      ? 'Google Agent Platform 요청 주소'
       : connection.protocol === 'fixture-sse-v1'
-        ? '로컬 endpoint'
+        ? '로컬 요청 주소'
         : 'API 기본 주소';
   return (
     <form
@@ -167,7 +167,7 @@ export function ProviderConnectionForm({
                 })
               }
             />
-            <small>프로젝트 ID를 입력하면 global 주소를 채워요.</small>
+            <small>프로젝트 ID를 입력하면 요청 주소를 자동으로 채워요.</small>
           </label>
         )}
         <label className="full">

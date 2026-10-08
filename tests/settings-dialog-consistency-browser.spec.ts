@@ -246,6 +246,12 @@ for (const width of [412, 1440]) {
 
     await selectChatSettingsSection(page, '이미지');
     await page.locator('.chat-settings-image-management > summary').click();
+    await expect(
+      settings.locator('.asset-grid figure').first().locator('figcaption')
+    ).toContainText('프로필과 본문');
+    await expect(
+      settings.locator('.asset-grid figure').first().locator('figcaption')
+    ).not.toContainText('both');
     await page.getByText('이름·설명 편집', { exact: true }).click();
     const metadataSave = page.getByRole('button', { name: '이미지 정보 저장', exact: true });
     await expectPrimary(metadataSave);

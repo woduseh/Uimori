@@ -180,6 +180,7 @@ test('READUI01 native source and translation keep text and copies while shared r
     }
     await settings.getByLabel('읽기 스타일', { exact: true }).selectOption({ label: '여유롭게' });
     const slider = settings.getByRole('slider', { name: '본문 크기' });
+    expect(await slider.evaluate((node) => getComputedStyle(node).accentColor)).not.toBe('auto');
     await slider.focus();
     await page.keyboard.press('End');
     await expect(slider).toHaveValue('28');
