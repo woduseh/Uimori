@@ -1,0 +1,31 @@
+.loading-state {
+  min-height: min(50dvh, 360px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.loading-state-compact {
+  min-height: 0;
+  padding: 16px;
+}
+.loading-state [role="status"],
+.loading-state [role="alert"] {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 440px;
+}
+.loading-state [role="alert"] {
+  color: var(--text);
+  gap: 8px;
+}
+.loading-state p {
+  margin: 0;
+}

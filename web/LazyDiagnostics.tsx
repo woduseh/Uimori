@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { api } from './api.js';
@@ -54,15 +55,14 @@ export function LazyDiagnostics<T>({
       <summary>{title}</summary>
       {actions && <div className="form-actions">{actions}</div>}
       {open &&
-        (error ? (
-          <p role="alert">
-            {error}{' '}
-            <button type="button" onClick={() => setRetry((value) => value + 1)}>
-              다시 불러오기
-            </button>
-          </p>
-        ) : value === null ? (
-          <p role="status">상세를 불러오는 중이에요…</p>
+        (error || value === null ? (
+          <LoadingState
+            compact
+            loading={!error}
+            error={error}
+            label="상세를 불러오는 중이에요…"
+            onRetry={() => setRetry((value) => value + 1)}
+          />
         ) : (
           children(value)
         ))}

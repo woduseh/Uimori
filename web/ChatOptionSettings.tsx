@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { promptControls, type PromptControl } from '../core/risu-prompt.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -217,16 +218,14 @@ export function ChatOptionSettings(props: Props) {
   if (!base)
     return (
       <div className="chat-options-body">
-        {error ? (
-          <>
-            <p role="alert">{error}</p>
-            <button type="button" disabled={loading} onClick={() => void refresh()}>
-              채팅 옵션 다시 불러오기
-            </button>
-          </>
-        ) : (
-          <p role="status">채팅 옵션을 불러오는 중이에요…</p>
-        )}
+        <LoadingState
+          compact
+          loading={loading}
+          error={error}
+          label="채팅 옵션을 불러오는 중이에요…"
+          onRetry={() => void refresh()}
+          retryLabel="채팅 옵션 다시 불러오기"
+        />
       </div>
     );
   const disabled = busy || props.disabled || !!uncertain;

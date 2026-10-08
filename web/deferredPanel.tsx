@@ -1,4 +1,5 @@
 import { Component, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
+import { LoadingState } from './LoadingState.js';
 
 class PanelErrorBoundary extends Component<
   { children: ReactNode; fallback: ReactNode },
@@ -28,13 +29,14 @@ export function deferredPanel<Props extends object>(
     return (
       <PanelErrorBoundary
         fallback={wrap(
-          <p role="alert">
-            화면을 불러오지 못했어요. 작성 중인 내용은 먼저 보관하고 연결을 확인한 뒤 새로고침해
-            주세요.
-          </p>
+          <LoadingState
+            loading={false}
+            error="작성 중인 내용은 먼저 보관하고 연결을 확인한 뒤 새로고침해 주세요."
+            errorLabel="화면을 불러오지 못했어요."
+          />
         )}
       >
-        <Suspense fallback={wrap(<p role="status">{label} 화면을 불러오는 중이에요…</p>)}>
+        <Suspense fallback={wrap(<LoadingState label={`${label} 화면을 불러오는 중이에요…`} />)}>
           <Panel {...props} />
         </Suspense>
       </PanelErrorBoundary>

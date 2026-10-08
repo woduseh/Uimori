@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import type { RisuContent, ContentAttachment, ContentRole } from '../core/risu-content.js';
@@ -142,7 +143,9 @@ export function ContentAttachments({
           {profile.optionAdjustments.join(' · ')}
         </p>
       )}
-      {busy && <p role="status">패키지와 필수 모듈을 확인하는 중이에요…</p>}
+      {busy && !loadError && (
+        <LoadingState compact label="패키지와 필수 모듈을 불러오는 중이에요…" />
+      )}
       {loadError && (
         <div>
           <p className="error" role="alert">

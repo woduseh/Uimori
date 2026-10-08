@@ -158,6 +158,8 @@ export type Connection = ContentRef & {
   endpoint: string;
   credentialRef?: string;
   enabled: boolean;
+  /** User-controlled provider display order; excluded from execution snapshots. */
+  displayOrder?: number;
   catalog: {
     id: string;
     name: string;

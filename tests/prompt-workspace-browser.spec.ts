@@ -332,6 +332,8 @@ test('PWS04 shared workspace load failures recover in model and prompt settings'
   await selectSettingsSection(page, '역할별 모델');
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
   const reload = settings.getByRole('button', { name: '다시 불러오기', exact: true });
+  await expect(settings.getByRole('alert')).toContainText('불러오지 못했어요.');
+  await expect(settings.getByRole('status').filter({ hasText: '불러오는 중' })).toHaveCount(0);
   await expect(reload).toHaveAccessibleName(/\S/u);
   const reloadBox = await reload.boundingBox();
   expect(reloadBox!.width).toBeGreaterThanOrEqual(44);
@@ -351,6 +353,8 @@ test('PWS04 shared workspace load failures recover in model and prompt settings'
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '현재 프롬프트');
   await expect(reload).toBeVisible();
+  await expect(settings.getByRole('alert')).toContainText('불러오지 못했어요.');
+  await expect(settings.getByRole('status').filter({ hasText: '불러오는 중' })).toHaveCount(0);
   ready = true;
   await reload.click();
   const prompts = settings.getByRole('region', { name: '현재 프롬프트 설정' });

@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { SceneUsageDetail, SceneUsageReceipt } from '../core/scene-usage.js';
 import { api } from './api.js';
@@ -153,11 +154,13 @@ export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
               )}
             </>
           ) : open ? (
-            <p role="status">
-              {failedId === attemptId
-                ? '캐시·로어 기록을 불러오지 못했어요. 다시 펼치면 재시도해요.'
-                : '캐시·로어 기록을 불러오는 중이에요.'}
-            </p>
+            <LoadingState
+              compact
+              loading={failedId !== attemptId}
+              error={failedId === attemptId ? '다시 펼치면 재시도해요.' : ''}
+              errorLabel="캐시·로어 기록을 불러오지 못했어요."
+              label="캐시·로어 기록을 불러오는 중이에요…"
+            />
           ) : null)}
         {usage && (
           <details className="scene-usage-help">

@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseIcon, RefreshIcon } from './ui-icons.js';
@@ -14,6 +15,8 @@ type Props = {
   open: boolean;
   modal?: boolean;
   workspace: PromptWorkspace | null;
+  workspaceError?: string;
+  onRetryWorkspace?: () => void;
   promptRevision?: string;
   library: Library | null;
   disabled: boolean;
@@ -177,7 +180,13 @@ export function ChatPromptOptions(props: Props) {
             onBusyChange={globalBusy}
           />
         ) : (
-          <p role="status">현재 프롬프트를 불러오는 중이에요…</p>
+          <LoadingState
+            compact
+            loading={!props.workspaceError}
+            error={props.workspaceError}
+            label="현재 프롬프트를 불러오는 중이에요…"
+            onRetry={props.onRetryWorkspace}
+          />
         )}
       </div>
       {contexts.map((context) => (

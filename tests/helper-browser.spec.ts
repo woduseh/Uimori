@@ -458,7 +458,7 @@ async function open(page: Page) {
   const panel = page.locator('#helper-panel');
   await expect(panel).toBeVisible();
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-  await expect(panel.getByText('대화를 불러오는 중…', { exact: true })).toHaveCount(0);
+  await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
   return panel;
 }
 
@@ -1518,7 +1518,7 @@ test('HELPUNDO blocks a dirty editor and a changed saved revision without losing
       .click();
     const panel = page.locator('#helper-panel');
     await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-    await expect(panel.getByText('대화를 불러오는 중…', { exact: true })).toHaveCount(0);
+    await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
     return panel;
   };
   await openEditor();

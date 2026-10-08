@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
@@ -270,7 +271,7 @@ export function JevProviderSettings({
           <RefreshIcon size={16} aria-hidden="true" /> 연결 상태 새로고침
         </button>
       </div>
-      {loading && <p role="status">연결 상태를 불러오는 중이에요…</p>}
+      {loading && <LoadingState compact label="연결 상태를 불러오는 중이에요…" />}
       {status && (
         <>
           <form

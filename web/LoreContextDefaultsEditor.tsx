@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -71,12 +72,13 @@ export function LoreContextDefaultsEditor({
   if (!draft)
     return (
       <section className="settings-section" aria-label="로어 컨텍스트 기본값">
-        <p role="status">{error || '로어 컨텍스트 기본값을 불러오는 중이에요…'}</p>
-        {error && (
-          <button type="button" className="secondary" onClick={() => void load()}>
-            다시 불러오기
-          </button>
-        )}
+        <LoadingState
+          compact
+          loading={!error}
+          error={error}
+          label="로어 컨텍스트 기본값을 불러오는 중이에요…"
+          onRetry={() => void load()}
+        />
       </section>
     );
   return (

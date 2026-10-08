@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ReaderActivity } from '../core/types.js';
 import { Dialog } from './Dialog.js';
@@ -158,7 +159,7 @@ export function ActivityNotifications({
         })}
       </ul>
       {!visible.length && <p role="status">확인할 알림이 없어요.</p>}
-      {loading && <p role="status">이전 작업을 불러오는 중이에요…</p>}
+      {loading && !error && <LoadingState compact label="이전 작업을 불러오는 중이에요…" />}
       {error && (
         <p role="alert">
           {error}{' '}
@@ -232,8 +233,10 @@ function NotificationDetail({
       current = false;
     };
   }, [chatId, kind, runId, generation]);
-  if (error) return <p role="alert">{error}</p>;
-  if (!result) return <p role="status">상세를 불러오는 중이에요…</p>;
+  if (error || !result)
+    return (
+      <LoadingState compact loading={!error} error={error} label="상세를 불러오는 중이에요…" />
+    );
   const diagnostic = result.error ? auxiliaryErrorDiagnostic(result.error) : null;
   return (
     <div className="activity-notification-detail">

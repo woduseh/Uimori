@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -56,15 +57,13 @@ export function ModelWorkspaceEditor({
   useSettingsSaveHandler(onSaveHandlerChange, async () => (!draft ? false : save()));
   if (!draft)
     return (
-      <p role="status" className="settings-loading-status">
-        {error || '역할별 모델 설정을 불러오는 중이에요…'}{' '}
-        <IconButton
-          icon={RefreshIcon}
-          label="다시 불러오기"
-          className="secondary"
-          onClick={() => void refresh()}
-        />
-      </p>
+      <LoadingState
+        compact
+        loading={!error}
+        error={error}
+        label="역할별 모델 설정을 불러오는 중이에요…"
+        onRetry={() => void refresh()}
+      />
     );
   const conflict = !!workspace && workspace.revision > draft.revision;
   const invalid =

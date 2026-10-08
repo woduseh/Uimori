@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { SourceVersions as Versions } from '../core/source-versions.js';
 import { api } from './api.js';
@@ -49,7 +50,7 @@ export function SourceVersions({
               {error}
             </p>
           )}
-          {!versions && !error && <p role="status">저장본을 불러오는 중…</p>}
+          {!versions && !error && <LoadingState compact label="저장본을 불러오는 중이에요…" />}
           {versions && version && (
             <>
               <label>

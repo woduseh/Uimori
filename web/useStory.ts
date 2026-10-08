@@ -132,7 +132,11 @@ function clearCommand(key: string, id: string) {
 
 type Position = ReadingPosition;
 export function useStory() {
-  const { workspace: promptWorkspace } = usePromptWorkspace();
+  const {
+    workspace: promptWorkspace,
+    error: promptWorkspaceError,
+    refresh: refreshPromptWorkspace,
+  } = usePromptWorkspace();
   const [initial] = useState(() => initialView(true));
   const [chats, setChats] = useState<Chat[]>([]);
   const [view, setView] = useState<ReaderNavigation>(() => ({ ...initial, epoch: 0 }));
@@ -385,6 +389,7 @@ export function useStory() {
   const loadLibrary = useCallback((): Promise<void> => {
     libraryDirty.current = true;
     if (libraryFlight.current) return libraryFlight.current;
+    setLibraryError('');
     const request = ++libraryRequest.current;
     const work = async () => {
       do {
@@ -1344,6 +1349,8 @@ export function useStory() {
       : undefined);
   return {
     promptWorkspace,
+    promptWorkspaceError,
+    refreshPromptWorkspace,
     currentPrompt,
     pinnedPromptRevision: pinnedPrompt?.revision,
     requestActivity,

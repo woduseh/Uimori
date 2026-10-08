@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ManuscriptExportMetadata,
@@ -158,9 +159,16 @@ export function ManuscriptExportDialog({
       {mode === 'translation' && (
         <p className="muted">범위 안에 유효한 번역이 없는 장면이 있으면 다운로드하지 않아요.</p>
       )}
-      {!metadata && !error && <p role="status">원고 목록을 불러오고 있어요.</p>}
+      {!metadata && (
+        <LoadingState
+          compact
+          loading={!error}
+          error={error}
+          label="원고 목록을 불러오는 중이에요…"
+        />
+      )}
       {metadata && !metadata.scenes.length && <p role="status">내보낼 원고가 아직 없어요.</p>}
-      {error && (
+      {metadata && error && (
         <p className="error" role="alert">
           {error}
         </p>

@@ -488,6 +488,10 @@ input[type="checkbox"] {
 }
 .workspace-fallback-body {
   padding: 16px 24px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .header-title h1 {
   font-size: 18px;
@@ -1180,6 +1184,10 @@ input[type="checkbox"] {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+.destination-scroll:has(> .workspace-fallback-body) {
+  display: flex;
+  flex-direction: column;
 }
 .focus-reading {
   grid-template-columns: minmax(0, 1fr);

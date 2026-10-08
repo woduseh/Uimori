@@ -20,7 +20,15 @@ import {
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Dialog } from './Dialog.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
-import { useEffect, useRef, useState, useReducer, type SetStateAction } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useReducer,
+  type SetStateAction,
+  type DragEvent,
+  type KeyboardEvent,
+} from 'react';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import {
@@ -30,11 +38,10 @@ import {
   CopyIcon,
   ForwardIcon,
   ModelIcon,
+  MoveIcon,
   PowerIcon,
   RefreshIcon,
   SearchIcon,
-  UpIcon,
-  DownIcon,
 } from './ui-icons.js';
 import type {
   Connection,
@@ -94,6 +101,21 @@ export function ConnectionEditor({
     };
   }, []);
   const [query, setQuery] = useState('');
+  const [jevPosition, setJevPosition] = useState(() => {
+    try {
+      return Math.max(0, Number(localStorage.getItem('uimori-jev-display-position')) || 0);
+    } catch {
+      return 0;
+    }
+  });
+  const dragged = useRef<{ kind: 'connection' | 'model'; id: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [movingDisplay, setMovingDisplay] = useState<{
+    kind: 'connection' | 'model';
+    id: string;
+  } | null>(null);
+  const [moveTarget, setMoveTarget] = useState('');
+  const [movePosition, setMovePosition] = useState<'before' | 'after'>('before');
   const [screen, setScreen] = useState<
     'models' | 'connections' | 'providers' | 'connection' | 'model' | 'jev'
   >('models');
@@ -232,6 +254,15 @@ export function ConnectionEditor({
   const connections = library.connections.filter((item) =>
     matches(filter, item.title, item.endpoint, providerDefinition(item.protocol).label)
   );
+  const providerIds = library.connections.map((item) => item.id);
+  if (
+    library.models.some(
+      (item) => !library.connections.some((connection) => connection.id === item.connectionId)
+    )
+  )
+    providerIds.push('missing-provider');
+  if (hasJev)
+    providerIds.splice(Math.min(jevPosition, providerIds.length), 0, JEV_PROVIDER_DEFINITION.id);
   const models = library.models.filter((item) =>
     matches(
       filter,
@@ -437,12 +468,151 @@ export function ConnectionEditor({
       saveModel(editableModelBody(item, { enabled: item.enabled === false }), item.id, false)
     );
   }
-  function reorderModel(item: ModelPreset, direction: -1 | 1) {
+  function moveDisplay(
+    kind: 'connection' | 'model',
+    id: string,
+    targetId: string,
+    position: 'before' | 'after'
+  ) {
+    if (id === targetId || busy || filter) return;
     void perform(async () => {
-      await api(`/model-presets/${item.id}/move`, { direction: direction === -1 ? 'up' : 'down' });
-      setMessage('모델 표시 순서를 저장했어요.');
+      if (kind === 'connection') {
+        const next = providerIds.filter((value) => value !== id);
+        next.splice(next.indexOf(targetId) + (position === 'after' ? 1 : 0), 0, id);
+        const regular = next.filter((value) =>
+          library.connections.some((item) => item.id === value)
+        );
+        if (id !== JEV_PROVIDER_DEFINITION.id) {
+          const index = regular.indexOf(id);
+          const anchor = regular[index + 1] ?? regular[index - 1];
+          if (anchor)
+            await api(`/connections/${id}/move`, {
+              targetId: anchor,
+              position: index < regular.length - 1 ? 'before' : 'after',
+              expectedOrder: library.connections.map((item) => item.id),
+            });
+        }
+        if (hasJev) {
+          const index = next.indexOf(JEV_PROVIDER_DEFINITION.id);
+          setJevPosition(index);
+          try {
+            localStorage.setItem('uimori-jev-display-position', String(index));
+          } catch {
+            /* Session choice stays usable. */
+          }
+        }
+      } else {
+        const model = library.models.find((item) => item.id === id);
+        const group = library.models.filter((item) => item.connectionId === model?.connectionId);
+        if (!group.some((item) => item.id === targetId)) return;
+        await api(`/model-presets/${id}/move`, {
+          targetId,
+          position,
+          expectedOrder: group.map((item) => item.id),
+        });
+      }
+      setMessage('표시 순서를 저장했어요.');
     });
   }
+  function dragAttributes(kind: 'connection' | 'model', id: string) {
+    return {
+      draggable: !busy && !filter,
+      tabIndex: 0,
+      'data-display-id': id,
+      'data-drop-target': dropTarget === id || undefined,
+      onDragStart(event: DragEvent<HTMLElement>) {
+        event.stopPropagation();
+        dragged.current = { kind, id };
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', id);
+      },
+      onDragEnd() {
+        dragged.current = null;
+        setDropTarget(null);
+      },
+      onDragOver(event: DragEvent<HTMLElement>) {
+        const source = dragged.current;
+        if (!source || source.kind !== kind || source.id === id || busy || filter) return;
+        if (
+          kind === 'model' &&
+          library.models.find((item) => item.id === source.id)?.connectionId !==
+            library.models.find((item) => item.id === id)?.connectionId
+        )
+          return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.dataTransfer.dropEffect = 'move';
+        setDropTarget(id);
+      },
+      onDrop(event: DragEvent<HTMLElement>) {
+        const source = dragged.current;
+        if (!source || source.kind !== kind) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rectangle = event.currentTarget.getBoundingClientRect();
+        moveDisplay(
+          kind,
+          source.id,
+          id,
+          event.clientY < rectangle.top + rectangle.height / 2 ? 'before' : 'after'
+        );
+        dragged.current = null;
+        setDropTarget(null);
+      },
+      onKeyDown(event: KeyboardEvent<HTMLElement>) {
+        if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const group =
+          kind === 'connection'
+            ? providerIds
+            : library.models
+                .filter(
+                  (item) =>
+                    item.connectionId ===
+                    library.models.find((item) => item.id === id)?.connectionId
+                )
+                .map((item) => item.id);
+        const offset = event.key === 'ArrowUp' ? -1 : 1;
+        const target = group[group.indexOf(id) + offset];
+        if (target) moveDisplay(kind, id, target, offset < 0 ? 'before' : 'after');
+      },
+    };
+  }
+  function orderMenu(kind: 'connection' | 'model', id: string) {
+    return (
+      <button
+        type="button"
+        className="secondary"
+        disabled={busy || !!filter}
+        onClick={() => {
+          setMovingDisplay({ kind, id });
+          setMoveTarget('');
+          setMovePosition('before');
+        }}
+      >
+        <MoveIcon size={18} aria-hidden="true" /> 순서 조정
+      </button>
+    );
+  }
+  const moveChoices = !movingDisplay
+    ? []
+    : movingDisplay.kind === 'connection'
+      ? providerIds
+          .filter((id) => id !== movingDisplay.id && id !== 'missing-provider')
+          .map((id) => ({
+            id,
+            title:
+              id === JEV_PROVIDER_DEFINITION.id
+                ? 'TypeSafe AI'
+                : library.connections.find((item) => item.id === id)!.title,
+          }))
+      : library.models.filter(
+          (item) =>
+            item.id !== movingDisplay.id &&
+            item.connectionId ===
+              library.models.find((model) => model.id === movingDisplay.id)?.connectionId
+        );
   async function latest(kind: 'connection' | 'model') {
     if (kind === 'connection' && editingConnection) {
       const value = await api<Connection>(`/connections/${editingConnection.id}`);
@@ -586,12 +756,147 @@ export function ConnectionEditor({
     else void showModel(target);
   }, [modelToEdit, busy]);
 
+  const jevConnectionRow = jevMatches ? (
+    <article
+      key={JEV_PROVIDER_DEFINITION.id}
+      className="provider-saved-item"
+      aria-label="TypeSafe AI 프로바이더"
+      {...dragAttributes('connection', JEV_PROVIDER_DEFINITION.id)}
+    >
+      <div className="provider-item-heading">
+        <button
+          type="button"
+          className="provider-item-open secondary"
+          disabled={busy}
+          aria-label="TypeSafe AI 프로바이더 수정"
+          data-provider-id={JEV_PROVIDER_DEFINITION.id}
+          onClick={() => openJev('connections')}
+        >
+          <strong>TypeSafe AI</strong>
+        </button>
+        <ActionMenu label="TypeSafe AI 프로바이더 메뉴">
+          {orderMenu('connection', JEV_PROVIDER_DEFINITION.id)}
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => openJev('connections')}
+          >
+            <ConnectionIcon size={18} aria-hidden="true" /> 연결 설정
+          </button>
+        </ActionMenu>
+      </div>
+    </article>
+  ) : null;
+  const jevModelRow = jevMatches ? (
+    <details
+      key={JEV_PROVIDER_DEFINITION.id}
+      className="provider-model-group"
+      open={modelGroupOpen(JEV_PROVIDER_DEFINITION.id)}
+      onToggle={(event) => toggleModelGroup(JEV_PROVIDER_DEFINITION.id, event.currentTarget.open)}
+    >
+      <summary {...dragAttributes('connection', JEV_PROVIDER_DEFINITION.id)}>
+        <span>
+          <strong>{JEV_PROVIDER_DEFINITION.label}</strong>
+          <small>1개 모델</small>
+        </span>
+      </summary>
+      <div className="provider-model-group-list">
+        <article className="provider-saved-item" aria-label="JEV 모델">
+          <div className="provider-item-heading">
+            <button
+              type="button"
+              className="provider-item-open secondary"
+              disabled={busy}
+              aria-label="JEV 모델 설정"
+              data-provider-id={JEV_PROVIDER_DEFINITION.id}
+              onClick={() => {
+                setSetup(false);
+                openJev('models');
+              }}
+            >
+              <strong>{JEV_PROVIDER_DEFINITION.modelLabel}</strong>
+              <span className="provider-item-subtitle">{JEV_PROVIDER_DEFINITION.modelId}</span>
+            </button>
+            <ActionMenu label="JEV 모델 메뉴">
+              {orderMenu('connection', JEV_PROVIDER_DEFINITION.id)}
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => {
+                  setSetup(false);
+                  openJev('models');
+                }}
+              >
+                <ModelIcon size={18} aria-hidden="true" /> 모델 설정
+              </button>
+            </ActionMenu>
+          </div>
+          <section className="provider-model-test" aria-label="JEV 응답 테스트 설정">
+            <div className="provider-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                aria-label="JEV 응답 테스트 설정 열기"
+                onClick={() => {
+                  setSetup(false);
+                  openJev('models');
+                }}
+              >
+                테스트 보기
+              </button>
+            </div>
+          </section>
+        </article>
+      </div>
+    </details>
+  ) : null;
   return (
     <section
       className="connection-editor"
       data-testid="connection-editor"
       aria-label="프로바이더·모델 등록"
     >
+      <Dialog open={!!movingDisplay} title="표시 순서 조정" onClose={() => setMovingDisplay(null)}>
+        <div className="control-grid">
+          <label className="full">
+            기준 항목
+            <select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}>
+              <option value="">항목 선택</option>
+              {moveChoices.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="full">
+            배치 위치
+            <select
+              value={movePosition}
+              onChange={(event) => setMovePosition(event.target.value as 'before' | 'after')}
+            >
+              <option value="before">기준 항목 앞</option>
+              <option value="after">기준 항목 뒤</option>
+            </select>
+          </label>
+        </div>
+        <div className="form-actions">
+          <button
+            type="button"
+            disabled={!moveTarget || busy}
+            onClick={() => {
+              if (movingDisplay)
+                moveDisplay(movingDisplay.kind, movingDisplay.id, moveTarget, movePosition);
+              setMovingDisplay(null);
+            }}
+          >
+            옮기기
+          </button>
+        </div>
+      </Dialog>
       <SaveConflictDialog
         open={saveConflict !== null}
         title="저장 내용 변경 확인"
@@ -911,115 +1216,103 @@ export function ConnectionEditor({
         onStatusChange={setJevStatus}
       />
       <section hidden={screen !== 'connections'} aria-label="저장한 프로바이더">
+        {providerIds.length > 1 && (
+          <p className="muted">끌어서 순서를 바꿔요. 키보드에서는 Alt + ↑ / ↓를 사용해요.</p>
+        )}
         <div className="connection-list provider-saved-list settings-group-body">
-          {jevMatches && (
-            <article className="provider-saved-item" aria-label="TypeSafe AI 프로바이더">
-              <div className="provider-item-heading">
-                <button
-                  type="button"
-                  className="provider-item-open secondary"
-                  disabled={busy}
-                  aria-label="TypeSafe AI 프로바이더 수정"
-                  data-provider-id={JEV_PROVIDER_DEFINITION.id}
-                  onClick={() => openJev('connections')}
-                >
-                  <strong>TypeSafe AI</strong>
-                </button>
-                <ActionMenu label="TypeSafe AI 프로바이더 메뉴">
+          {providerIds.map((id) => {
+            if (id === JEV_PROVIDER_DEFINITION.id) return jevConnectionRow;
+            const item = connections.find((value) => value.id === id);
+            if (!item) return null;
+            return (
+              <article
+                className="provider-saved-item"
+                key={versionRef(item)}
+                aria-label={item.title + ' 프로바이더'}
+                {...dragAttributes('connection', item.id)}
+              >
+                <div className="provider-item-heading">
                   <button
                     type="button"
-                    className="secondary"
+                    className="provider-item-open secondary"
                     disabled={busy}
-                    onClick={() => openJev('connections')}
+                    aria-label={item.title + ' 프로바이더 수정'}
+                    data-provider-id={item.id}
+                    onClick={() => showConnection(item)}
                   >
-                    <ConnectionIcon size={18} aria-hidden="true" /> 연결 설정
+                    <strong>{item.title}</strong>
+                    {(item.title !== providerDefinition(item.protocol).label || !item.enabled) && (
+                      <span className="provider-item-subtitle">
+                        {[
+                          item.title !== providerDefinition(item.protocol).label
+                            ? providerDefinition(item.protocol).label
+                            : '',
+                          !item.enabled ? '비활성' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    )}
                   </button>
-                </ActionMenu>
-              </div>
-            </article>
-          )}
-          {connections.map((item) => (
-            <article
-              className="provider-saved-item"
-              key={versionRef(item)}
-              aria-label={item.title + ' 프로바이더'}
-            >
-              <div className="provider-item-heading">
-                <button
-                  type="button"
-                  className="provider-item-open secondary"
-                  disabled={busy}
-                  aria-label={item.title + ' 프로바이더 수정'}
-                  data-provider-id={item.id}
-                  onClick={() => showConnection(item)}
-                >
-                  <strong>{item.title}</strong>
-                  {(item.title !== providerDefinition(item.protocol).label || !item.enabled) && (
-                    <span className="provider-item-subtitle">
-                      {[
-                        item.title !== providerDefinition(item.protocol).label
-                          ? providerDefinition(item.protocol).label
-                          : '',
-                        !item.enabled ? '비활성' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </span>
-                  )}
-                </button>
-                <ActionMenu label={item.title + ' 프로바이더 메뉴'}>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    aria-label={item.title + ' 프로바이더 복제'}
-                    onClick={() => showConnection(item, true)}
-                  >
-                    <CopyIcon size={18} aria-hidden="true" /> 복제
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    aria-label={item.title + ' 프로바이더 ' + (item.enabled ? '비활성' : '활성화')}
-                    onClick={() => statusConnection(item)}
-                  >
-                    <PowerIcon size={18} aria-hidden="true" /> {item.enabled ? '비활성' : '활성화'}
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    aria-label={item.title + ' 모델 입력에 사용'}
-                    onClick={() => {
-                      setSetup(false);
-                      replaceDraft('model', () => startModelFor(item));
-                    }}
-                  >
-                    <ModelIcon size={18} aria-hidden="true" /> 모델 입력에 사용
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy}
-                    aria-label={item.title + ' 모델 목록 새로고침'}
-                    onClick={() => {
-                      void perform(() => catalog(item));
-                    }}
-                  >
-                    <RefreshIcon size={18} aria-hidden="true" />
-                    모델 목록 새로고침
-                  </button>
-                  {deleteConnection(item)}
-                </ActionMenu>
-              </div>
-              {item.catalogError && (
-                <p className="error provider-item-notice">
-                  모델 목록 조회 실패 · 마지막 저장 목록을 유지해요.
-                </p>
-              )}
-            </article>
-          ))}
+                  <ActionMenu label={item.title + ' 프로바이더 메뉴'}>
+                    {orderMenu('connection', item.id)}
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      aria-label={item.title + ' 프로바이더 복제'}
+                      onClick={() => showConnection(item, true)}
+                    >
+                      <CopyIcon size={18} aria-hidden="true" /> 복제
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      aria-label={
+                        item.title + ' 프로바이더 ' + (item.enabled ? '비활성' : '활성화')
+                      }
+                      onClick={() => statusConnection(item)}
+                    >
+                      <PowerIcon size={18} aria-hidden="true" />{' '}
+                      {item.enabled ? '비활성' : '활성화'}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      aria-label={item.title + ' 모델 입력에 사용'}
+                      onClick={() => {
+                        setSetup(false);
+                        replaceDraft('model', () => startModelFor(item));
+                      }}
+                    >
+                      <ModelIcon size={18} aria-hidden="true" /> 모델 입력에 사용
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={busy}
+                      aria-label={item.title + ' 모델 목록 새로고침'}
+                      onClick={() => {
+                        void perform(() => catalog(item));
+                      }}
+                    >
+                      <RefreshIcon size={18} aria-hidden="true" />
+                      모델 목록 새로고침
+                    </button>
+                    {deleteConnection(item)}
+                  </ActionMenu>
+                </div>
+                {item.catalogError && (
+                  <p className="error provider-item-notice">
+                    모델 목록 조회 실패 · 마지막 저장 목록을 유지해요.
+                  </p>
+                )}
+              </article>
+            );
+          })}
+
           {connections.length === 0 &&
             !jevMatches &&
             (library.connections.length > 0 || hasJev) && (
@@ -1037,75 +1330,18 @@ export function ConnectionEditor({
         className="registered-models"
         aria-label="저장한 모델 프리셋"
       >
+        {library.models.length > 1 && (
+          <p className="muted">
+            끌어서 순서를 바꾸면 모델 선택 목록에도 반영돼요. 키보드에서는 Alt + ↑ / ↓를 사용해요.
+          </p>
+        )}
         <div className="provider-saved-list settings-group-body">
-          {jevMatches && (
-            <details
-              className="provider-model-group"
-              open={modelGroupOpen(JEV_PROVIDER_DEFINITION.id)}
-              onToggle={(event) =>
-                toggleModelGroup(JEV_PROVIDER_DEFINITION.id, event.currentTarget.open)
-              }
-            >
-              <summary>
-                <span>
-                  <strong>{JEV_PROVIDER_DEFINITION.label}</strong>
-                  <small>1개 모델</small>
-                </span>
-              </summary>
-              <div className="provider-model-group-list">
-                <article className="provider-saved-item" aria-label="JEV 모델">
-                  <div className="provider-item-heading">
-                    <button
-                      type="button"
-                      className="provider-item-open secondary"
-                      disabled={busy}
-                      aria-label="JEV 모델 설정"
-                      data-provider-id={JEV_PROVIDER_DEFINITION.id}
-                      onClick={() => {
-                        setSetup(false);
-                        openJev('models');
-                      }}
-                    >
-                      <strong>{JEV_PROVIDER_DEFINITION.modelLabel}</strong>
-                      <span className="provider-item-subtitle">
-                        {JEV_PROVIDER_DEFINITION.modelId}
-                      </span>
-                    </button>
-                    <ActionMenu label="JEV 모델 메뉴">
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy}
-                        onClick={() => {
-                          setSetup(false);
-                          openJev('models');
-                        }}
-                      >
-                        <ModelIcon size={18} aria-hidden="true" /> 모델 설정
-                      </button>
-                    </ActionMenu>
-                  </div>
-                  <section className="provider-model-test" aria-label="JEV 응답 테스트 설정">
-                    <div className="provider-actions">
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={busy}
-                        aria-label="JEV 응답 테스트 설정 열기"
-                        onClick={() => {
-                          setSetup(false);
-                          openJev('models');
-                        }}
-                      >
-                        테스트 보기
-                      </button>
-                    </div>
-                  </section>
-                </article>
-              </div>
-            </details>
-          )}
-          {modelGroups.map((group) => {
+          {providerIds.map((id) => {
+            if (id === JEV_PROVIDER_DEFINITION.id) return jevModelRow;
+            const group = modelGroups.find(
+              (value) => (value.connection?.id ?? 'missing-provider') === id
+            );
+            if (!group) return null;
             const groupKey = group.connection?.id ?? 'missing-provider';
             return (
               <details
@@ -1114,18 +1350,21 @@ export function ConnectionEditor({
                 open={modelGroupOpen(groupKey)}
                 onToggle={(event) => toggleModelGroup(groupKey, event.currentTarget.open)}
               >
-                <summary>
+                <summary
+                  {...(group.connection ? dragAttributes('connection', group.connection.id) : {})}
+                >
                   <span>
                     <strong>{group.connection?.title ?? '프로바이더 확인 필요'}</strong>
                     <small>{group.models.length}개 모델</small>
                   </span>
                 </summary>
                 <div className="provider-model-group-list">
-                  {group.models.map((item, index) => (
+                  {group.models.map((item) => (
                     <article
                       className="provider-saved-item"
                       key={versionRef(item)}
                       aria-label={item.title + ' 모델'}
+                      {...dragAttributes('model', item.id)}
                     >
                       <div className="provider-item-heading">
                         <button
@@ -1149,19 +1388,8 @@ export function ConnectionEditor({
                           </span>
                         </button>
                         <div className="provider-model-row-actions">
-                          <IconButton
-                            icon={UpIcon}
-                            label={item.title + ' 모델 위로 이동'}
-                            disabled={busy || !!filter || index === 0}
-                            onClick={() => reorderModel(item, -1)}
-                          />
-                          <IconButton
-                            icon={DownIcon}
-                            label={item.title + ' 모델 아래로 이동'}
-                            disabled={busy || !!filter || index === group.models.length - 1}
-                            onClick={() => reorderModel(item, 1)}
-                          />
                           <ActionMenu label={item.title + ' 모델 메뉴'}>
+                            {orderMenu('model', item.id)}
                             <button
                               type="button"
                               className="secondary"

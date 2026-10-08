@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
@@ -183,7 +184,7 @@ export function HelperArtifactCard({
           {artifact?.origin === 'edit' ? '직접 편집' : '생성한 장면'} · 본편과 별도
         </small>
       </header>
-      {error && <p role="alert">{error}</p>}
+      {artifact && error && <p role="alert">{error}</p>}
       <TransientNotice message={message} />
       {artifact ? (
         <>
@@ -291,7 +292,12 @@ export function HelperArtifactCard({
           )}
         </>
       ) : (
-        <p>가정 장면을 불러오는 중…</p>
+        <LoadingState
+          compact
+          loading={!error}
+          error={error}
+          label="가정 장면을 불러오는 중이에요…"
+        />
       )}
     </section>
   );

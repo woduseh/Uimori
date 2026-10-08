@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
@@ -271,7 +272,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
         카드와 스크립트가 이 채팅에서 함께 읽는 문자열 값이에요. 서재 원본은 바꾸지 않아요. 빈
         문자열도 값으로 저장하며, 키를 지우면 자료의 기본값을 다시 사용해요.
       </p>
-      {loading && <p role="status">공유 변수를 읽고 있어요…</p>}
+      {loading && <LoadingState compact label="공유 변수를 불러오는 중이에요…" />}
       {view?.pending && (
         <p role="status">
           원문 생성이나 자료 코드 작업이 현재 값을 사용하고 있어요. 새 편집과 저장은 완료 뒤 할 수

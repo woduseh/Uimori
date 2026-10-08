@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { SaveIcon } from './ui-icons.js';
 import { RisuNativeFields } from './RisuNativeFields.js';
 import { RisuExportButton } from './RisuExportButton.js';
@@ -171,6 +172,7 @@ function savedManualOrders(): Record<PrimaryLibraryTab, string[]> {
 export function LibraryPanel({
   library,
   reload,
+  libraryError = '',
   onError,
   onStartStory,
   onUseContent,
@@ -185,6 +187,7 @@ export function LibraryPanel({
 }: {
   library: Library | null;
   reload: () => Promise<void>;
+  libraryError?: string;
   onError: (error: string) => void;
   onStartStory?: (bot: Content) => void;
   onUseContent?: (content: Content, role: PrimaryLibraryTab) => void;
@@ -645,7 +648,7 @@ export function LibraryPanel({
   return (
     <section
       ref={panelRef}
-      className={`library-page${editing ? ' library-page-editing' : ''}`}
+      className={`library-page${editing ? ' library-page-editing' : ''}${!library ? ' library-page-loading' : ''}`}
       data-testid="library-panel"
       aria-label="서재"
     >
@@ -700,9 +703,15 @@ export function LibraryPanel({
           setSelecting(false);
         }}
       />
-      {loading && <p role="status">자료 본문을 불러오는 중이에요…</p>}
+      {loading && <LoadingState label="자료 본문을 불러오는 중이에요…" compact />}
       {!library ? (
-        <p role="status">서재를 불러오는 중이에요…</p>
+        <LoadingState
+          loading={!libraryError}
+          error={libraryError}
+          label="서재를 불러오는 중이에요…"
+          errorLabel="서재를 불러오지 못했어요."
+          onRetry={() => void reload().catch(() => {})}
+        />
       ) : editing ? (
         <ContentEditor
           key={editing.item ? refValue(editing.item) : `new-${editing.kind}`}

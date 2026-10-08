@@ -1,7 +1,8 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { promptControls } from '../core/risu-prompt.js';
-import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon, CloseIcon } from './ui-icons.js';
+import { ExpandIcon, ExternalLinkIcon, SaveIcon, CloseIcon } from './ui-icons.js';
 import { useCallback, useEffect, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceEditModel } from '../core/resource-editing.js';
@@ -15,7 +16,6 @@ import { Switch } from './BooleanControls.js';
 import { ActionMenu } from './ActionMenu.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
-import { IconButton } from './IconButton.js';
 import {
   ResourceEditorProvider,
   ResourceEditorStatus,
@@ -136,14 +136,13 @@ export function PromptWorkspaceEditor({
   }
   if (!state.ready)
     return (
-      <p role="status">
-        {state.error || '현재 프롬프트를 불러오는 중이에요…'}{' '}
-        <IconButton
-          icon={ResetIcon}
-          label="다시 불러오기"
-          onClick={() => void session.open().catch(() => {})}
-        />
-      </p>
+      <LoadingState
+        compact
+        loading={!state.error}
+        error={state.error}
+        label="현재 프롬프트를 불러오는 중이에요…"
+        onRetry={() => void session.open().catch(() => {})}
+      />
     );
   const current = draft[role];
   const preset = library.promptPresets?.find(

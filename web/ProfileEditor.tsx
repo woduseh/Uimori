@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { Switch } from './BooleanControls.js';
@@ -282,9 +283,7 @@ export function ProfileEditor({
                     </button>
                   </div>
                 ) : (
-                  <p className="muted" role="status">
-                    전역 로어 기본값을 불러오는 중이에요.
-                  </p>
+                  <LoadingState compact label="전역 로어 기본값을 불러오는 중이에요…" />
                 ))}
               <LoreContextPolicyEditor
                 key={`${profile.chatId}:${loreResetVersion}`}
