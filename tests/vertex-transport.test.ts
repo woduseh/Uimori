@@ -9,6 +9,7 @@ import {
 } from '../core/transport.js';
 import { loopbackProvider, sse, writeSse } from './fixtures/loopback-provider.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
+import * as vertexPdf from '../core/vertex-pdf.js';
 import { estimateContextTokens, CONTEXT_ESTIMATOR } from '../core/context-budget.js';
 
 const origin = 'https://aiplatform.googleapis.com';
@@ -55,6 +56,7 @@ const usage = {
 };
 const callbacks: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   for (const close of callbacks.splice(0)) await close();
@@ -158,6 +160,7 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
   });
 
   test('PDF conversion preserves the original input admission limit before credentials or HTTP', async () => {
+    const createPdf = vi.spyOn(vertexPdf, 'createVertexPdf');
     const input = request();
     input.generation!.pdfInput = true;
     input.contextBudget = { inputTokenLimit: 8192, estimator: CONTEXT_ESTIMATOR };
@@ -168,6 +171,7 @@ describe('Vertex native wire through real local HTTP streams (no live calls)', (
     vi.stubGlobal('fetch', fetch);
     const result = await executeProvider(connection, input, options({ resolveCredential, onWire }));
     expect(result.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
+    expect(createPdf).not.toHaveBeenCalled();
     expect(resolveCredential).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
     expect(onWire).not.toHaveBeenCalled();

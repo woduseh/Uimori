@@ -335,7 +335,6 @@ export function productRoutes(
         for (let page = 0; page < 5; page++) {
           product.authorize(previous);
           const response = await fetch(url, { method: 'GET', signal, redirect: 'error', headers });
-          if (c.protocol === 'google-gemini-v1') product.authorize(previous);
           if (!response.ok || !response.body) throw new Error('Catalog unavailable');
           const reader = response.body.getReader();
           const parts: Uint8Array[] = [];
@@ -347,7 +346,6 @@ export function productRoutes(
             if (signal.aborted) throw new Error('Catalog timeout');
             while (true) {
               const next = await reader.read();
-              if (c.protocol === 'google-gemini-v1') product.authorize(previous);
               if (signal.aborted) throw new Error('Catalog timeout');
               if (next.done) break;
               totalSize += next.value.length;
@@ -416,7 +414,6 @@ export function productRoutes(
           if (cursor !== payload.data.at(-1).id) throw new Error('Invalid model cursor');
           url.searchParams.set('after_id', cursor);
         }
-        if (c.protocol === 'google-gemini-v1') product.authorize(previous);
         catalog = collected;
       }
     } catch {

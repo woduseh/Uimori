@@ -88,16 +88,18 @@ function readTurn(value: Json): VertexTurn {
   return structuredClone(value) as unknown as VertexTurn;
 }
 
-/** Pure REST encoding. The host owns connection authority and executes all requested tools. */
-export function encodeVertex(
-  request: ProviderRequest,
-  protocol: Extract<ProviderProtocol, 'vertex-gemini-v1' | 'google-gemini-v1'> = 'vertex-gemini-v1'
-): {
+export type PreparedGeminiRequest = {
   body: Json;
-  contextBody?: Json;
   context: VertexTurn;
   messageMetadata?: NativeMessageMetadata;
-} {
+  pdfInput?: { initialMessages: Json[]; bootstrapLength: number };
+};
+
+/** Prepare native text once, without generating an attachment. Admission uses this body. */
+export function prepareGeminiRequest(
+  request: ProviderRequest,
+  protocol: Extract<ProviderProtocol, 'vertex-gemini-v1' | 'google-gemini-v1'> = 'vertex-gemini-v1'
+): PreparedGeminiRequest {
   const continuationInput = continuationInputText(request);
   const generation = request.generation;
   if (generation) validateModelOptions(generation, protocol);
@@ -301,30 +303,11 @@ export function encodeVertex(
     },
     contents,
   };
-  let contextBody: Json | undefined;
-  if (generation?.pdfInput) {
-    // Only the immutable authored text is packed. Bootstrap and real provider
-    // turns (including thought signatures and function responses) stay native.
-    const pdf = createVertexPdf(JSON.stringify(initialMessages));
-    contextBody = copy(body, 'INVALID_VERTEX_REQUEST');
-    const bootstrapLength = bootstrap.length * 2;
-    body.contents = [
-      ...contents.slice(0, bootstrapLength),
-      {
-        role: 'user',
-        parts: [
-          { inlineData: { mimeType: 'application/pdf', data: pdf.data } },
-          {
-            text: 'Continue the ordered conversation in the attached PDF according to the system instructions.',
-          },
-        ],
-      },
-      ...contents.slice(bootstrapLength + initialMessages.length),
-    ];
-  }
   return {
     body: copy(body, 'INVALID_VERTEX_REQUEST'),
-    ...(contextBody ? { contextBody } : {}),
+    ...(generation?.pdfInput
+      ? { pdfInput: { initialMessages, bootstrapLength: bootstrap.length * 2 } }
+      : {}),
     messageMetadata: nativeMessageMetadata(plan),
     context: seal({
       version: VERSION,
@@ -337,6 +320,61 @@ export function encodeVertex(
       usedIds: [...usedIds],
     }),
   };
+}
+
+/** Package an admitted request or an explicitly requested exact wire preview. */
+export function encodePreparedGeminiRequest(prepared: PreparedGeminiRequest): {
+  body: Json;
+  contextBody?: Json;
+  context: VertexTurn;
+  messageMetadata?: NativeMessageMetadata;
+} {
+  const { body, context, messageMetadata, pdfInput } = prepared;
+  if (!pdfInput) return { body, context, messageMetadata };
+  if (!object(body) || !Array.isArray(body.contents)) reject('INVALID_VERTEX_REQUEST');
+  const { initialMessages, bootstrapLength } = pdfInput;
+  // Native PDF readers collapse spaces and discard invisible format characters.
+  // Compact JSON has whitespace only inside strings; escape those characters
+  // so JSON decoding restores the source, including emoji joiners/selectors.
+  const transcript = JSON.stringify(initialMessages).replace(
+    /[\p{White_Space}\p{Default_Ignorable_Code_Point}]/gu,
+    (value) =>
+      value
+        .split('')
+        .map((unit) => `\\u${unit.charCodeAt(0).toString(16).padStart(4, '0')}`)
+        .join('')
+  );
+  const pdf = createVertexPdf(transcript);
+  // Only authored text is packed; native bootstrap and signed provider turns stay intact.
+  return {
+    body: {
+      ...body,
+      contents: [
+        ...body.contents.slice(0, bootstrapLength),
+        {
+          role: 'user',
+          parts: [
+            { inlineData: { mimeType: 'application/pdf', data: pdf.data } },
+            {
+              text: 'Continue the ordered conversation in the attached PDF according to the system instructions.',
+            },
+          ],
+        },
+        ...body.contents.slice(bootstrapLength + initialMessages.length),
+      ],
+    },
+    contextBody: body,
+    context,
+    messageMetadata,
+  };
+}
+
+/** Pure REST encoding; preserve the existing exact-wire interface. */
+export function encodeVertex(
+  request: ProviderRequest,
+  protocol: Extract<ProviderProtocol, 'vertex-gemini-v1' | 'google-gemini-v1'> = 'vertex-gemini-v1'
+) {
+  return encodePreparedGeminiRequest(prepareGeminiRequest(request, protocol));
 }
 
 const refusalReasons = new Set([
