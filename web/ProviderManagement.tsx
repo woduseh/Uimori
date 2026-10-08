@@ -565,7 +565,7 @@ export function ConnectionEditor({
         event.stopPropagation();
         const group =
           kind === 'connection'
-            ? providerIds
+            ? providerIds.filter((item) => item !== 'missing-provider')
             : library.models
                 .filter(
                   (item) =>

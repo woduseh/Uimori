@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import type { Library, PromptPreset } from '../core/product.js';
+import type { Content, Library, PromptPreset } from '../core/product.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
@@ -24,6 +24,22 @@ for (const width of DEFAULT_WIDTHS) {
       expect(response.ok(), await response.text()).toBe(true);
       presets.push(await response.json());
     }
+    const bots: Content[] = [];
+    for (const suffix of ['Alpha', 'Beta']) {
+      const response = await request.post('/api/content', {
+        data: {
+          kind: 'bot',
+          title: `${prefix} Bot ${suffix}`,
+          description: 'Synthetic ordering fixture',
+          text: 'Synthetic only.',
+          loading: 'pinned',
+          relatedIds: [],
+        },
+      });
+      expect(response.ok()).toBe(true);
+      bots.push(await response.json());
+    }
+    const botIds = bots.map((bot) => bot.id);
     const readOrganization = async () => {
       const response = await request.get('/api/library/organization');
       expect(response.ok()).toBe(true);
@@ -52,13 +68,16 @@ for (const width of DEFAULT_WIDTHS) {
         response: upstream,
         json: {
           ...library,
+          contents: library.contents.filter((content) => botIds.includes(content.id)),
           promptPresets: library.promptPresets?.filter((preset) => ids.includes(preset.id)),
           organization: {
             ...library.organization,
             folders: library.organization!.folders.filter((folder) =>
               folderIds.includes(folder.id)
             ),
-            items: library.organization!.items.filter((item) => ids.includes(item.id)),
+            items: library.organization!.items.filter(
+              (item) => ids.includes(item.id) || botIds.includes(item.id)
+            ),
           },
         },
       });
@@ -83,6 +102,25 @@ for (const width of DEFAULT_WIDTHS) {
       await item(ids[1]).getByRole('button', { name: '위로 이동', exact: true }).click();
       await page.keyboard.press('Escape');
     }
+    await expect.poll(displayedIds).toEqual([ids[1], ids[0], ids[2]]);
+    // Library and prompt categories share preference records. Saving one must retain the other.
+    await navigationAction(page, '봇');
+    const libraryPanel = page.getByTestId('library-panel');
+    const libraryOptions = libraryPanel.getByLabel('목록 관리', { exact: true });
+    await libraryOptions.click();
+    await libraryPanel.getByLabel('자료 정렬', { exact: true }).selectOption('name-desc');
+    await libraryPanel.getByLabel('자료 정렬', { exact: true }).selectOption('manual');
+    await page.keyboard.press('Escape');
+    const botItem = libraryPanel.locator(`[data-library-item-id="${botIds[1]}"]`);
+    await botItem.getByLabel(`${bots[1].title} 메뉴`, { exact: true }).click();
+    await botItem.getByRole('button', { name: '위로 이동', exact: true }).click();
+    await page.keyboard.press('Escape');
+    const displayedBotIds = () =>
+      libraryPanel
+        .locator('[data-library-item-id]')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-library-item-id')));
+    await expect.poll(displayedBotIds).toEqual([botIds[1], botIds[0]]);
+    await navigationAction(page, '프롬프트');
     await expect.poll(displayedIds).toEqual([ids[1], ids[0], ids[2]]);
     await page.reload();
     await navigationAction(page, '프롬프트');

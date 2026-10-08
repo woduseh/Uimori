@@ -655,7 +655,7 @@ function App() {
       }}
       onLibrary={showLibrary}
       onChatsChanged={s.loadChats}
-      onLibraryChanged={s.loadLibrary}
+      onLibraryChanged={s.retryLibrary}
       onError={s.setError}
       onSettings={() => {
         setSettingsTab('general');
@@ -1095,10 +1095,7 @@ function App() {
                     error={s.libraryError}
                     label="프롬프트를 불러오는 중이에요…"
                     errorLabel="프롬프트 목록을 불러오지 못했어요."
-                    onRetry={() => {
-                      if (s.error === s.libraryError) s.setError('');
-                      void s.loadLibrary().catch(() => {});
-                    }}
+                    onRetry={() => void s.retryLibrary().catch(() => {})}
                   />
                 )
               )
@@ -1107,10 +1104,7 @@ function App() {
                 headerLeading={navigationControls}
                 headerTrailing={destinationHelperControl}
                 library={s.library}
-                reload={() => {
-                  if (s.error === s.libraryError) s.setError('');
-                  return s.loadLibrary();
-                }}
+                reload={s.retryLibrary}
                 libraryError={s.libraryError}
                 onError={s.setError}
                 onStartStory={newStory}

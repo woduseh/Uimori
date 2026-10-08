@@ -9,12 +9,6 @@
 .profile-savebar.settings-save-actions > [role="status"] {
   width: auto;
 }
-.settings-loading-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
 .provider-model-save-actions {
   justify-content: flex-end;
 }

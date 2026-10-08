@@ -508,7 +508,9 @@ export class ProductStore {
   }
   private moveProviderSetting(kind: 'model' | 'connection', id: string, value: unknown) {
     const body = record(value);
-    fields(body, ['direction', 'targetId', 'position', 'expectedOrder']);
+    fields(body, ['targetId', 'position', 'expectedOrder']);
+    const targetId = text(body.targetId, 'display order target', 100);
+    const position = choice(body.position, ['before', 'after'], 'display order position');
     return this.store.transaction(() => {
       this.assertAvailable(kind, id);
       const model = this.get<ModelPreset | Connection>(kind, id);
@@ -524,28 +526,16 @@ export class ProductStore {
             : compareModelDisplayOrder(a as ModelPreset, b as ModelPreset)
         );
       if (
-        body.expectedOrder !== undefined &&
-        (!Array.isArray(body.expectedOrder) ||
-          JSON.stringify(body.expectedOrder) !== JSON.stringify(group.map((item) => item.id)))
+        !Array.isArray(body.expectedOrder) ||
+        JSON.stringify(body.expectedOrder) !== JSON.stringify(group.map((item) => item.id))
       )
         throw new HttpError(409, '표시 순서가 변경됐어요. 목록을 새로고침한 뒤 다시 옮겨 주세요.');
       const index = group.findIndex((item) => item.id === id);
-      if (body.targetId !== undefined) {
-        if (body.direction !== undefined || body.expectedOrder === undefined)
-          throw new HttpError(400, 'Invalid display move');
-        const targetId = text(body.targetId, 'display order target', 100);
-        const position = choice(body.position, ['before', 'after'], 'display order position');
-        if (targetId === id) return { moved: false };
-        const [moving] = group.splice(index, 1);
-        const target = group.findIndex((item) => item.id === targetId);
-        if (target < 0) throw new HttpError(409, '같은 목록 안에서만 순서를 바꿀 수 있어요.');
-        group.splice(target + (position === 'after' ? 1 : 0), 0, moving!);
-      } else {
-        const direction = choice(body.direction, ['up', 'down'], 'display move direction');
-        const target = index + (direction === 'up' ? -1 : 1);
-        if (index < 0 || target < 0 || target >= group.length) return { moved: false };
-        [group[index], group[target]] = [group[target]!, group[index]!];
-      }
+      if (targetId === id) return { moved: false };
+      const [moving] = group.splice(index, 1);
+      const target = group.findIndex((item) => item.id === targetId);
+      if (target < 0) throw new HttpError(409, '같은 목록 안에서만 순서를 바꿀 수 있어요.');
+      group.splice(target + (position === 'after' ? 1 : 0), 0, moving!);
       const update = this.db.prepare(
         "UPDATE provider_settings SET body=json_set(body, '$.displayOrder', ?) WHERE kind=? AND id=?"
       );

@@ -56,6 +56,11 @@ import {
   type FolderFilter,
 } from './LibraryFolders.js';
 import './library.css';
+import {
+  saveLibrarySort,
+  saveLibraryManualOrder,
+  type LibrarySort,
+} from './library-list-preferences.js';
 
 const contentLabels: Record<ContentKind, string> = {
   bot: '봇',
@@ -97,7 +102,7 @@ const contentGuidance: Record<PrimaryLibraryTab, { description: string; example:
   },
 };
 type ViewMode = 'cards' | 'list';
-type SortMode = 'name' | 'name-desc' | 'manual';
+type SortMode = LibrarySort;
 type CardRatio = '1:1' | '2:3' | '3:4' | '9:16';
 const cardRatios: CardRatio[] = ['1:1', '2:3', '3:4', '9:16'];
 function savedViews(): Record<PrimaryLibraryTab, ViewMode> {
@@ -452,20 +457,12 @@ export function LibraryPanel({
   function setSort(mode: SortMode) {
     const next = { ...sortByTab, [tab]: mode };
     setSortByTab(next);
-    try {
-      localStorage.setItem('uimori-library-sorts', JSON.stringify(next));
-    } catch {
-      /* Keep this session's choice. */
-    }
+    saveLibrarySort(tab, mode);
   }
   function saveManualOrder(ids: string[]) {
     const next = { ...manualOrderByTab, [tab]: ids };
     setManualOrderByTab(next);
-    try {
-      localStorage.setItem('uimori-library-manual-orders', JSON.stringify(next));
-    } catch {
-      /* Keep this session's choice. */
-    }
+    saveLibraryManualOrder(tab, ids);
   }
   function orderedCategoryIds() {
     const ids = new Set(categoryItems.map((item) => item.id));
