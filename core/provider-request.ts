@@ -19,6 +19,7 @@ import {
   isVertexFileReference,
   validVertexFileReference,
   validCredentialRef,
+  VERTEX_ADC_ENV,
 } from './credential-reference.js';
 import { validateContextBudget } from './context-budget.js';
 import { validatePricingSnapshot } from './model-pricing.js';
@@ -85,10 +86,14 @@ export function validateConnection(value: unknown): ProviderConnection {
     reject(
       value.protocol === 'vertex-gemini-v1'
         ? 'INVALID_VERTEX_ENDPOINT'
-        : 'INVALID_PROVIDER_ENDPOINT'
+        : value.protocol === 'google-gemini-v1'
+          ? 'INVALID_GEMINI_ENDPOINT'
+          : 'INVALID_PROVIDER_ENDPOINT'
     );
   }
   if (value.credentialRef !== undefined && !validCredentialRef(value.credentialRef))
+    reject('INVALID_CREDENTIAL_REFERENCE');
+  if (value.protocol === 'google-gemini-v1' && value.credentialRef === VERTEX_ADC_ENV)
     reject('INVALID_CREDENTIAL_REFERENCE');
   if (
     typeof value.credentialRef === 'string' &&

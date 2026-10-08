@@ -44,9 +44,9 @@ export function providerCacheUsage(
           : record(raw.prompt_tokens_details).cache_write_tokens
       ),
     };
-  if (protocol === 'vertex-gemini-v1')
+  if (protocol === 'vertex-gemini-v1' || protocol === 'google-gemini-v1')
     return {
-      // Vertex's proto3 scalar defaults to zero when omitted from valid usage metadata.
+      // Gemini's proto3 scalar defaults to zero when omitted from valid usage metadata.
       readTokens:
         !Object.hasOwn(raw, 'cachedContentTokenCount') && token(raw.promptTokenCount) !== null
           ? 0

@@ -198,7 +198,9 @@ export function ProviderConnectionForm({
               placeholder={
                 connection.credentialRef
                   ? '등록됨 · 변경할 때 입력'
-                  : 'API 키 입력 · 인증 없는 서버는 생략'
+                  : connection.protocol === 'google-gemini-v1'
+                    ? 'Google AI Studio에서 발급한 API 키'
+                    : 'API 키 입력 · 인증 없는 서버는 생략'
               }
               value={connection.apiKey ?? ''}
               onChange={(event) => onChange({ ...connection, apiKey: event.target.value })}

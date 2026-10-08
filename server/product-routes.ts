@@ -6,7 +6,11 @@ import { nativeRisuPreview } from './risu-native-preview.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { chatDeletionRoutes } from './chat-deletion.js';
 import { assetDeletionRoutes } from './asset-deletion.js';
-import { catalogEntryMetadata, vertexPublisherModelEntry } from '../core/provider-catalog.js';
+import {
+  catalogEntryMetadata,
+  googleGeminiModelEntry,
+  vertexPublisherModelEntry,
+} from '../core/provider-catalog.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
@@ -301,7 +305,9 @@ export function productRoutes(
         const credential = c.credentialRef ? store.credentials.get(c.credentialRef) : undefined;
         if (
           (c.credentialRef ||
-            ['openai-responses-v1', 'anthropic-messages-v1'].includes(c.protocol)) &&
+            ['openai-responses-v1', 'anthropic-messages-v1', 'google-gemini-v1'].includes(
+              c.protocol
+            )) &&
           (!credential || /[\r\n]/.test(credential))
         )
           throw new Error('Credential unavailable');
@@ -309,19 +315,24 @@ export function productRoutes(
         if (c.protocol === 'anthropic-messages-v1') {
           headers['anthropic-version'] = '2023-06-01';
           headers['x-api-key'] = credential!;
+        } else if (c.protocol === 'google-gemini-v1') {
+          headers['x-goog-api-key'] = credential!;
         } else if (credential) headers.Authorization = 'Bearer ' + credential;
         const url =
           c.protocol === 'fixture-sse-v1'
             ? new URL('models', c.endpoint)
             : new URL(c.endpoint.replace(/\/$/u, '') + '/models');
         if (c.protocol === 'anthropic-messages-v1') url.searchParams.set('limit', '1000');
+        if (c.protocol === 'google-gemini-v1') url.searchParams.set('pageSize', '1000');
         const signal = AbortSignal.timeout(5000);
         const collected: Connection['catalog'] = [];
         const ids = new Set<string>();
         let totalSize = 0;
+        let totalModels = 0;
         for (let page = 0; page < 5; page++) {
           product.authorize(previous);
           const response = await fetch(url, { method: 'GET', signal, redirect: 'error', headers });
+          if (c.protocol === 'google-gemini-v1') product.authorize(previous);
           if (!response.ok || !response.body) throw new Error('Catalog unavailable');
           const reader = response.body.getReader();
           const parts: Uint8Array[] = [];
@@ -333,6 +344,7 @@ export function productRoutes(
             if (signal.aborted) throw new Error('Catalog timeout');
             while (true) {
               const next = await reader.read();
+              if (c.protocol === 'google-gemini-v1') product.authorize(previous);
               if (signal.aborted) throw new Error('Catalog timeout');
               if (next.done) break;
               totalSize += next.value.length;
@@ -359,6 +371,21 @@ export function productRoutes(
             break;
           }
           const payload = record(body);
+          if (c.protocol === 'google-gemini-v1') {
+            if (!Array.isArray(payload.models)) throw new Error('Invalid model catalog');
+            totalModels += payload.models.length;
+            if (totalModels > 5000) throw new Error('Catalog too large');
+            for (const item of payload.models) {
+              const entry = googleGeminiModelEntry(record(item));
+              if (!entry || ids.has(entry.id)) continue;
+              ids.add(entry.id);
+              collected.push(entry);
+            }
+            if (payload.nextPageToken === undefined || payload.nextPageToken === '') break;
+            if (page === 4) throw new Error('Incomplete model catalog');
+            url.searchParams.set('pageToken', text(payload.nextPageToken, 'model cursor', 2000));
+            continue;
+          }
           if (!Array.isArray(payload.data) || collected.length + payload.data.length > 5000)
             throw new Error('Invalid model catalog');
           for (const item of payload.data) {
@@ -386,11 +413,13 @@ export function productRoutes(
           if (cursor !== payload.data.at(-1).id) throw new Error('Invalid model cursor');
           url.searchParams.set('after_id', cursor);
         }
+        if (c.protocol === 'google-gemini-v1') product.authorize(previous);
         catalog = collected;
       }
     } catch {
       error = 'CATALOG_UNAVAILABLE';
     }
+    if (previous.protocol === 'google-gemini-v1') product.authorize(previous);
     return product.save(
       'connection',
       {

@@ -197,3 +197,35 @@ export function vertexPublisherModelEntry(raw: Record<string, unknown>): Catalog
     priceRevision: null,
   };
 }
+
+/** Gemini API models.list entry; expose only models usable by generateContent. */
+export function googleGeminiModelEntry(raw: Record<string, unknown>): CatalogEntry | undefined {
+  const name = typeof raw.name === 'string' ? raw.name : '';
+  if (!name.startsWith('models/')) return undefined;
+  const id = name.slice('models/'.length);
+  if (
+    !/^gemini-[a-z0-9][a-z0-9.-]{0,299}$/u.test(id) ||
+    !Array.isArray(raw.supportedGenerationMethods) ||
+    !raw.supportedGenerationMethods.includes('generateContent')
+  )
+    return undefined;
+  const inputTokenLimit = limit(raw.inputTokenLimit);
+  const maxOutputTokens = limit(raw.outputTokenLimit);
+  return {
+    id,
+    name:
+      typeof raw.displayName === 'string' && raw.displayName.trim() && raw.displayName.length <= 400
+        ? raw.displayName
+        : id,
+    capabilities: { tools: null, structuredOutput: null },
+    ...(inputTokenLimit || maxOutputTokens
+      ? {
+          limits: {
+            ...(inputTokenLimit ? { inputTokenLimit } : {}),
+            ...(maxOutputTokens ? { maxOutputTokens } : {}),
+          },
+        }
+      : {}),
+    priceRevision: null,
+  };
+}

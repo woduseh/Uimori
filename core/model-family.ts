@@ -69,6 +69,7 @@ export function defaultModelFamily(protocol: ProviderProtocol): ModelFamily | un
     case 'anthropic-messages-v1':
       return 'anthropic';
     case 'vertex-gemini-v1':
+    case 'google-gemini-v1':
       return 'google';
     case 'deepseek-chat-v1':
       return 'deepseek';

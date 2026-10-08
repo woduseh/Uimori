@@ -253,6 +253,88 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   expect(updated).not.toHaveProperty('thinkingMode');
 });
 
+test('PMUI Google AI Studio registers an API key and preserves PDF model settings on reopen', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  const title = 'PMUI AI Studio ' + Date.now(),
+    observed = observe(page),
+    outboundActions: string[] = [];
+  page.on('request', (request) => {
+    if (/\/(?:catalog|test)$/.test(new URL(request.url()).pathname))
+      outboundActions.push(request.url());
+  });
+  await settings(page);
+  await startProviderConnection(page);
+  await page
+    .getByRole('region', { name: '프로바이더 선택', exact: true })
+    .getByRole('button', { name: /Google AI Studio/ })
+    .click();
+  const connectionForm = page.getByRole('form', { name: '프로바이더 편집 양식' }),
+    modelForm = page.getByRole('form', { name: '모델 편집 양식' });
+  await expect(connectionForm.getByLabel('프로바이더 프로토콜')).toHaveValue('google-gemini-v1');
+  await expect(connectionForm.getByRole('region', { name: 'Google 서비스 계정 JSON' })).toHaveCount(
+    0
+  );
+  await expect(connectionForm.getByLabel('Google 키 JSON 파일')).toHaveCount(0);
+  await expect(connectionForm.getByLabel('Google Cloud 프로젝트 ID')).toHaveCount(0);
+  if (visualReview)
+    await connectionForm.screenshot({
+      path: info.outputPath('google-ai-studio-connection-mobile.png'),
+    });
+  await connectionForm.getByLabel('프로바이더 이름', { exact: true }).fill(title);
+  await connectionForm.getByLabel('API 키', { exact: true }).fill('SYNTHETIC_AI_STUDIO_KEY');
+  await connectionForm.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
+  await expect(modelForm).toBeVisible();
+  const connection = (await library(request)).connections.find((item) => item.title === title)!;
+  expect(connection).toMatchObject({
+    protocol: 'google-gemini-v1',
+    endpoint: 'https://generativelanguage.googleapis.com/v1beta',
+  });
+  expect(connection.credentialRef).toBeTruthy();
+  expect(JSON.stringify(connection)).not.toContain('SYNTHETIC_AI_STUDIO_KEY');
+  await expect(modelForm.getByLabel('프로바이더', { exact: true })).toHaveValue(connection.id);
+  await modelForm.getByLabel('모델 프리셋 이름', { exact: true }).fill(title + ' model');
+  await modelForm.getByLabel('모델 ID', { exact: true }).fill('gemini-3.8-flash');
+  await modelForm.getByRole('button', { name: '고급', exact: true }).click();
+  const pdf = modelForm.getByRole('switch', { name: /텍스트 대화를 PDF로 전송/ });
+  await expect(pdf).toBeVisible();
+  await expect(pdf).not.toBeChecked();
+  await pdf.check();
+  if (visualReview) {
+    await pdf.scrollIntoViewIfNeeded();
+    await modelForm.screenshot({ path: info.outputPath('google-ai-studio-pdf-mobile.png') });
+  }
+  await modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
+  await expect
+    .poll(async () =>
+      (await library(request)).models.find((item) => item.title === title + ' model')
+    )
+    .toMatchObject({ connectionId: connection.id, pdfInput: true });
+  await settings(page);
+  await openProviderModel(page, title + ' model');
+  await modelForm.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(pdf).toBeChecked();
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  await page.getByRole('button', { name: title + ' 프로바이더 수정', exact: true }).click();
+  await expect(connectionForm.getByLabel('API 키', { exact: true })).toHaveValue('');
+  await expect(connectionForm.getByLabel('API 키', { exact: true })).toHaveAttribute(
+    'type',
+    'password'
+  );
+  await expect(connectionForm.getByLabel('API 키', { exact: true })).toHaveAttribute(
+    'placeholder',
+    '등록됨 · 변경할 때 입력'
+  );
+  await expect(
+    connectionForm.getByRole('button', { name: '등록한 키 삭제', exact: true })
+  ).toBeVisible();
+  expect(outboundActions).toEqual([]);
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
+});
+
 test('PMUI PDF input is Google-only, defaults off and survives save and reopen', async ({
   page,
   request,

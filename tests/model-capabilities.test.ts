@@ -6,17 +6,23 @@ import {
   supportedModels,
   validateModelOptions,
 } from '../core/model-capabilities.js';
-import { PROVIDER_PROTOCOLS, type ModelGeneration, type ModelPreset } from '../core/product.js';
+import {
+  isGeminiProtocol,
+  PROVIDER_PROTOCOLS,
+  type ModelGeneration,
+  type ModelPreset,
+} from '../core/product.js';
 import { validateRequest } from '../core/transport.js';
 import { createEvaluationToolSession } from '../server/evaluation-session.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 
 const base: ModelGeneration = { maxOutputTokens: 8192, temperature: null };
 
-test('PDF input accepts boolean values only on the direct Google protocol', () => {
+test('PDF input accepts boolean values only on the direct Gemini protocols', () => {
   for (const pdfInput of [true, false]) {
     expect(() => validateModelOptions({ ...base, pdfInput }, 'vertex-gemini-v1')).not.toThrow();
-    for (const protocol of PROVIDER_PROTOCOLS.filter((value) => value !== 'vertex-gemini-v1'))
+    expect(() => validateModelOptions({ ...base, pdfInput }, 'google-gemini-v1')).not.toThrow();
+    for (const protocol of PROVIDER_PROTOCOLS.filter((value) => !isGeminiProtocol(value)))
       expect(() => validateModelOptions({ ...base, pdfInput }, protocol)).toThrow();
   }
   expect(() =>
@@ -26,6 +32,18 @@ test('PDF input accepts boolean values only on the direct Google protocol', () =
     )
   ).toThrow();
   expect(generationFromModel({ ...base, pdfInput: true })).toMatchObject({ pdfInput: true });
+});
+
+test('AI Studio reuses Gemini model hints with its own service tiers', () => {
+  const capability = modelCapability('google-gemini-v1', 'gemini-3.1-pro-preview');
+  expect(capability?.thinkingLevels).toEqual(['LOW', 'MEDIUM', 'HIGH']);
+  expect(capability?.serviceTiers).toEqual(['standard', 'flex', 'priority']);
+  expect(() =>
+    validateModelOptions({ ...base, serviceTier: 'priority' }, 'google-gemini-v1')
+  ).not.toThrow();
+  expect(() =>
+    validateModelOptions({ ...base, serviceTier: 'default' }, 'google-gemini-v1')
+  ).toThrow();
 });
 
 test('validation is protocol-level: any listed or unlisted model may use every option its encoder sends', () => {

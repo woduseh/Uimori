@@ -1065,6 +1065,7 @@ export class HelperRuntime {
           'deepseek-chat-v1',
           'anthropic-messages-v1',
           'vertex-gemini-v1',
+          'google-gemini-v1',
         ].includes(target.connection.protocol);
         const instructions = this.workspace
           .instructions(id)

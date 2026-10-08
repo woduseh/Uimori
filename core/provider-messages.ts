@@ -1,4 +1,4 @@
-import type { ProviderProtocol } from './product.js';
+import { isGeminiProtocol, type ProviderProtocol } from './product.js';
 import { validateProviderPrompt, type LogicalMessage } from './risu-prompt.js';
 import type { Json, ProviderRequest } from './transport.js';
 import { ProviderContractError } from './provider-errors.js';
@@ -91,7 +91,7 @@ export function planNativeMessages(
     });
   const responses = protocol === 'openai-responses-v1';
   const anthropic = protocol === 'anthropic-messages-v1';
-  const vertex = protocol === 'vertex-gemini-v1';
+  const vertex = isGeminiProtocol(protocol);
   // Temporary Gemini workaround, including namespaced IDs used by compatible gateways.
   // Revisit per-model wire capabilities when a new Gemini model supports mid-system;
   // remove this fallback for verified models without changing authored prompts.

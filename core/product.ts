@@ -4,6 +4,7 @@ import { DEFAULT_LORE_CONTEXT } from './lore-context.js';
 export const PROVIDER_PROTOCOLS = [
   'fixture-sse-v1',
   'vertex-gemini-v1',
+  'google-gemini-v1',
   'openai-responses-v1',
   'anthropic-messages-v1',
   'vercel-chat-v1',
@@ -12,6 +13,11 @@ export const PROVIDER_PROTOCOLS = [
   'codex-app-server-v1',
 ] as const;
 export type ProviderProtocol = (typeof PROVIDER_PROTOCOLS)[number];
+export function isGeminiProtocol(
+  protocol: string | undefined
+): protocol is 'vertex-gemini-v1' | 'google-gemini-v1' {
+  return protocol === 'vertex-gemini-v1' || protocol === 'google-gemini-v1';
+}
 export const MODEL_FAMILIES = ['openai', 'anthropic', 'google', 'deepseek', 'xai'] as const;
 export type ModelFamily = (typeof MODEL_FAMILIES)[number];
 export type VertexRequestTier = 'standard' | 'flex';
@@ -345,6 +351,11 @@ export function validateProviderEndpoint(protocol: ProviderProtocol, value: stri
     return value;
   }
   if (protocol === 'vertex-gemini-v1') return validateVertexEndpoint(value);
+  if (protocol === 'google-gemini-v1') {
+    if (!/^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/?$/.test(value))
+      throw new Error('INVALID_GEMINI_ENDPOINT');
+    return 'https://generativelanguage.googleapis.com/v1beta';
+  }
   const url = new URL(value);
   if (url.username || url.password || url.search || url.hash) throw new Error('INVALID_ENDPOINT');
   if (protocol === 'fixture-sse-v1') {

@@ -4,7 +4,7 @@
 
 **설정 → 프로바이더·모델 → 프로바이더 관리**에서 연결을 등록해요. 일반 API 연결은 API 키를 앱에서 바로 저장하고, Vertex는 서비스 계정 JSON을 등록하며, Codex는 전용 로그인 상태를 사용해요. 수정 시 비워 둔 일반 키 입력은 기존 키를 유지하고 키 삭제 동작은 저장된 연결에서 키를 해제해요.
 
-OpenAI Responses·Chat 호환, Anthropic Messages 등 프로토콜과 주소를 구분해요. 공식 주소는 초기값이고 사용자 지정 호환 주소도 입력할 수 있어요. LAN HTTP 주소도 지원해요. 컨테이너 안의 localhost는 컨테이너 자신이므로 다른 PC의 주소를 직접 지정해야 해요.
+OpenAI Responses·Chat 호환, Anthropic Messages 등 프로토콜과 주소를 구분해요. 일반 연결은 사용자 지정 호환 주소와 LAN HTTP 주소도 지원해요. Google AI Studio 연결은 공식 Gemini API 주소만 사용해요. 컨테이너 안의 localhost는 컨테이너 자신이므로 다른 PC의 주소를 직접 지정해야 해요.
 
 모델 프리셋에는 프로바이더 모델 ID와 출력·사고·생성 옵션을 저장하고, **역할별 모델**에서 작문·번역·도우미 등의 모델을 선택해요. 목록에 없는 모델 ID도 수동 입력할 수 있어요. 저장만으로 외부 요청을 시작하지 않아요.
 
@@ -50,7 +50,15 @@ TypeSafe AI 프로바이더 화면에서는 키를 관리하고, **모델 프리
 
 Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 등록하고 프로젝트 ID를 global endpoint에 반영해요. 등록한 Vertex 인증을 생성과 Google Model Garden 모델 목록 조회에 함께 사용해요.
 
-모델 프리셋의 **고급 → 텍스트 대화를 PDF로 전송**을 켜면 이 Google 연결의 초기 텍스트 대화를 순서와 역할이 표시된 PDF 하나로 묶어 사용자 입력으로 보내요. 기본값은 꺼짐이고 다른 프로토콜에는 적용하지 않아요. 시스템 지침, 도구 정의·호출·결과, 프로바이더가 반환한 사고 서명과 후속 대화는 기존 Gemini 형식으로 유지해요. 파일 업로드 서비스를 따로 사용하지 않고 PDF를 요청 안에 넣어요.
+## Google AI Studio / Gemini API
+
+**프로바이더 추가 → Google AI Studio · Gemini**에서 AI Studio가 발급한 API 키를 등록해요. `google-gemini-v1` 연결은 공식 주소 `https://generativelanguage.googleapis.com/v1beta`를 사용하며 서비스 계정이나 프로젝트 ID가 필요하지 않아요. 환경변수를 사용할 때는 `GEMINI_API_KEY`를 지정해요. 같은 키로 모델 목록을 조회하고, 목록에 없는 모델 ID도 직접 입력할 수 있어요.
+
+사고 수준·출력 한도·생성 옵션과 PDF 입력을 설정할 수 있어요. Service Tier는 Standard·Flex·Priority를 제안하며 실제 지원은 모델과 계정 설정을 따라요. Standard와 모델 기본값은 필드를 생략하고, Flex·Priority는 Gemini API의 `service_tier`로 보내요. 서버의 Vertex 서비스 등급 제한은 이 연결에 적용하지 않아요. 단가는 자동으로 추정하지 않으며 모델 프리셋에서 직접 설정해요. [Gemini API 키](https://ai.google.dev/gemini-api/docs/api-key), [Flex](https://ai.google.dev/gemini-api/docs/generate-content/flex-inference), [Priority](https://ai.google.dev/gemini-api/docs/generate-content/priority-inference)를 참고해요.
+
+## Gemini PDF 입력
+
+모델 프리셋의 **고급 → 텍스트 대화를 PDF로 전송**을 켜면 Google Agent Platform 또는 Google AI Studio 연결의 초기 텍스트 대화를 순서와 역할이 표시된 PDF 하나로 묶어 사용자 입력으로 보내요. 기본값은 꺼짐이고 다른 프로토콜에는 적용하지 않아요. 시스템 지침, 도구 정의·호출·결과, 프로바이더가 반환한 사고 서명과 후속 대화는 기존 Gemini 형식으로 유지해요. 파일 업로드 서비스를 따로 사용하지 않고 PDF를 요청 안에 넣어요.
 
 PDF는 사람이 읽을 문서가 아니라 모델이 텍스트를 추출할 수 있도록 1pt 글자로 조밀하게 만든 문서예요. 실제 줄바꿈과 원문에 있던 문자 `\n`은 JSON 문자열 이스케이프로 구분해요. PDF 입력은 원래 대화의 네이티브 user/model 역할 구분을 문서 안의 표시로 바꾸므로 응답 품질이 달라질 수 있어요. 로컬 컨텍스트 계산은 원문을 기준으로 유지하며, 토큰 절약·비용 감소·품질 개선을 보장하지 않아요. 실제 사용량과 비용은 Google이 반환한 usage로 확인해요. [Gemini 문서 처리 안내](https://ai.google.dev/gemini-api/docs/document-processing)와 [Agent Platform 문서 이해](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/document-understanding)를 참고해요. Uimori는 PDF 자체에 50MB·1,000페이지의 보수적인 한도를 두고, [Flex PayGo](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/flex-paygo)의 인라인 요청 전체에는 20MB 한도를 적용해요. 한도를 넘으면 자동으로 다른 전송 방식으로 바꾸지 않고 요청 전에 중단해요.
 

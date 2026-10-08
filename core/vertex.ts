@@ -3,7 +3,7 @@ import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provi
 import { createHash } from 'node:crypto';
 import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
-import { validateVertexEndpoint } from './product.js';
+import { isGeminiProtocol, validateProviderEndpoint, validateVertexEndpoint } from './product.js';
 import { assertContextBudget, estimateContextTokens } from './context-budget.js';
 import { tokenizerInfo } from './text-tokens.js';
 import { createPublicTextProgress, publicProgressAllowed } from './provider-progress.js';
@@ -131,8 +131,8 @@ export async function consumeSse(
   }
 }
 
-/** One Vertex model HTTP request. No SDK generation client, redirects or automatic retries. */
-export async function executeVertexProvider(
+/** One native Gemini HTTP request, using either Cloud credentials or a Studio API key. */
+export async function executeGeminiProvider(
   connectionValue: ProviderConnection,
   requestValue: unknown,
   options: ProviderExecutionOptions
@@ -161,17 +161,23 @@ export async function executeVertexProvider(
   };
   try {
     const connection = validateConnection(connectionValue);
+    if (!isGeminiProtocol(connection.protocol))
+      throw new ProviderContractError('UNSUPPORTED_PROTOCOL');
+    const vertex = connection.protocol === 'vertex-gemini-v1';
     const request = validateRequest(requestValue);
-    const prepared = encodeVertex(request);
+    const prepared = encodeVertex(request, connection.protocol);
     const requestedTier = request.generation?.serviceTier;
-    const tier = options.vertexRequestTier ?? requestedTier ?? 'standard';
+    const tier = (vertex ? options.vertexRequestTier : undefined) ?? requestedTier ?? 'standard';
     if (
-      !['standard', 'flex'].includes(tier) ||
-      (options.vertexRequestTier !== undefined &&
+      !(vertex ? ['standard', 'flex'] : ['standard', 'flex', 'priority']).includes(tier) ||
+      (vertex &&
+        options.vertexRequestTier !== undefined &&
         requestedTier !== undefined &&
         options.vertexRequestTier !== requestedTier)
     )
-      throw new ProviderContractError('INVALID_VERTEX_REQUEST_TIER');
+      throw new ProviderContractError(
+        vertex ? 'INVALID_VERTEX_REQUEST_TIER' : 'INVALID_GEMINI_REQUEST_TIER'
+      );
     decoder = new VertexDecoder(prepared.context);
     if (signal.aborted) return failure('CANCELLED');
     assertContextBudget(prepared.contextBody ?? prepared.body, request.contextBudget);
@@ -179,29 +185,45 @@ export async function executeVertexProvider(
     // Flex limits the complete inline payload, including base64 and native tool turns.
     if (
       request.generation?.pdfInput &&
+      vertex &&
       tier === 'flex' &&
       Buffer.byteLength(body, 'utf8') > 20_000_000
     )
       throw new ProviderContractError('PDF_INPUT_PAYLOAD_TOO_LARGE');
+    if (!vertex && !connection.credentialRef)
+      throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     // Google's well-known variable contains an ADC file path, never a bearer token.
-    const token = isVertexAdcReference(connection.credentialRef)
-      ? await vertexAccessToken(signal)
-      : await (options.resolveCredential ?? ((name) => process.env[name]))(
-          connection.credentialRef!,
-          connection,
-          signal
-        );
+    const token =
+      vertex && isVertexAdcReference(connection.credentialRef)
+        ? await vertexAccessToken(signal)
+        : await (options.resolveCredential ?? ((name) => process.env[name]))(
+            connection.credentialRef!,
+            connection,
+            signal
+          );
     if (!token || /[\r\n]/u.test(token)) throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     if (signal.aborted) return failure('CANCELLED');
-    const endpoint = `${validateVertexEndpoint(connection.endpoint)}/${encodeURIComponent(request.modelId)}:streamGenerateContent?alt=sse`;
+    // Catalog names are models/{id}; presets store the bare model ID.
+    const modelId = vertex ? request.modelId : request.modelId.replace(/^models\//u, '');
+    if (!vertex && !/^gemini-[A-Za-z0-9._-]+$/u.test(modelId))
+      throw new ProviderContractError('INVALID_GEMINI_MODEL_ID');
+    const endpoint = vertex
+      ? `${validateVertexEndpoint(connection.endpoint)}/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse`
+      : `${validateProviderEndpoint(connection.protocol, connection.endpoint)}/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse`;
     const tierHeaders: Record<string, string> =
-      tier === 'flex'
+      vertex && tier === 'flex'
         ? {
             'x-vertex-ai-llm-request-type': 'shared',
             'x-vertex-ai-llm-shared-request-type': 'flex',
             'x-server-timeout': String(Math.ceil(timeoutMs / 1000)),
           }
         : {};
+    const authHeaders: Record<string, string> = vertex
+      ? { authorization: `Bearer ${token}` }
+      : { 'x-goog-api-key': token };
+    const diagnosticAuth: Record<string, string> = vertex
+      ? { authorization: '[REDACTED]' }
+      : { 'x-goog-api-key': '[REDACTED]' };
     // The diagnostic view does not become the actual request. Signatures remain byte-for-byte in body.
     const diagnostic = redactDiagnosticJson(diagnosticVertexBody(prepared.body), token);
     await options.onWire?.(
@@ -216,7 +238,7 @@ export async function executeVertexProvider(
           'content-type': 'application/json',
           accept: 'text/event-stream',
           ...tierHeaders,
-          authorization: '[REDACTED]',
+          ...diagnosticAuth,
         },
         body: diagnostic,
         ...(prepared.contextBody && request.contextBudget
@@ -254,7 +276,7 @@ export async function executeVertexProvider(
           'content-type': 'application/json',
           accept: 'text/event-stream',
           ...tierHeaders,
-          authorization: `Bearer ${token}`,
+          ...authHeaders,
         },
         signal,
         redirect: 'error',
@@ -290,6 +312,7 @@ export async function executeVertexProvider(
     progress?.finish(result.text);
     const raw = result.usage.raw;
     if (
+      vertex &&
       tier === 'flex' &&
       ['completed', 'tool_calls'].includes(result.status) &&
       (!raw ||
@@ -313,3 +336,6 @@ export async function executeVertexProvider(
     }
   }
 }
+
+// Preserve the existing transport entry point for callers of the Cloud adapter.
+export const executeVertexProvider = executeGeminiProvider;

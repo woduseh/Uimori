@@ -876,10 +876,12 @@ export function ConnectionEditor({
                     : item.id === 'codex-app-server-v1'
                       ? '개인 ChatGPT 구독 · 서버 실행'
                       : item.id === 'vertex-gemini-v1'
-                        ? 'Gemini 프로바이더'
-                        : item.id === 'openai-chat-v1'
-                          ? '호환 API 또는 로컬 서버'
-                          : '서버 API 키 인증'}
+                        ? 'Gemini · 서비스 계정 인증'
+                        : item.id === 'google-gemini-v1'
+                          ? 'Gemini · AI Studio API 키 인증'
+                          : item.id === 'openai-chat-v1'
+                            ? '호환 API 또는 로컬 서버'
+                            : '서버 API 키 인증'}
                 </small>
                 <ForwardIcon size={16} />
               </button>

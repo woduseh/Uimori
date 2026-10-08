@@ -42,6 +42,7 @@ import {
   defaultProfile,
   workspaceModelRef,
   VERTEX_GEMINI_DEFAULT_TIMEOUT_MS,
+  isGeminiProtocol,
   type Content,
   type ContentRef,
   type ModelRef,
@@ -455,7 +456,7 @@ export class ProductStore {
     const connection = validationConnection ?? this.get<Connection>('connection', connectionId);
     const modelId = text(b.modelId, 'model ID', 300);
     validateModelGeneration(b, connection.protocol);
-    const vertex = connection.protocol === 'vertex-gemini-v1';
+    const gemini = isGeminiProtocol(connection.protocol);
     const prepared: Omit<ModelPreset, 'id' | 'revision'> = {
       title: text(b.title, 'title', 200),
       connectionId,
@@ -473,7 +474,7 @@ export class ProductStore {
       capabilityProtocol: connection.protocol,
       ...(b.inputTokenLimit !== undefined ? { inputTokenLimit: b.inputTokenLimit } : {}),
       ...(b.tokenizer !== undefined ? { tokenizer: b.tokenizer } : {}),
-      ...(vertex || b.timeoutMs !== undefined
+      ...(gemini || b.timeoutMs !== undefined
         ? { timeoutMs: b.timeoutMs ?? VERTEX_GEMINI_DEFAULT_TIMEOUT_MS }
         : {}),
       ...(b.evaluationTools !== undefined

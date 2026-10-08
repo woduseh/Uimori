@@ -39,6 +39,7 @@ const protocols = [
   'typesafe-systemone-v1',
   'fixture-sse-v1',
   'vertex-gemini-v1',
+  'google-gemini-v1',
   'openai-responses-v1',
   'anthropic-messages-v1',
   'vercel-chat-v1',

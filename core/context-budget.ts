@@ -1,7 +1,7 @@
 import { countTextTokens } from './text-tokens.js';
 import { ProviderContractError } from './provider-errors.js';
 import { modelCapability } from './model-capabilities.js';
-import type { ProviderProtocol } from './product.js';
+import { isGeminiProtocol, type ProviderProtocol } from './product.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 
 export const DEFAULT_INPUT_TOKEN_LIMIT = 272_000;
@@ -77,16 +77,14 @@ export function contextBudgetForModel(model: {
     protocol && model.modelId ? modelCapability(protocol, model.modelId) : undefined;
   // These registered API families have reviewed windows. A routed/custom model or
   // the Codex app-server runtime never inherits a native API model's window.
-  const window =
-    capability?.protocol === 'vertex-gemini-v1'
-      ? 1_048_576
-      : capability?.protocol === 'anthropic-messages-v1' ||
-          capability?.protocol === 'deepseek-chat-v1'
-        ? 1_000_000
-        : capability?.protocol === 'openai-responses-v1' ||
-            capability?.protocol === 'openai-chat-v1'
-          ? 1_050_000
-          : undefined;
+  const window = isGeminiProtocol(capability?.protocol)
+    ? 1_048_576
+    : capability?.protocol === 'anthropic-messages-v1' ||
+        capability?.protocol === 'deepseek-chat-v1'
+      ? 1_000_000
+      : capability?.protocol === 'openai-responses-v1' || capability?.protocol === 'openai-chat-v1'
+        ? 1_050_000
+        : undefined;
   if (window === undefined) return configured;
   const reservedOutput = model.maxOutputTokens ?? capability!.maxOutputTokens;
   if (

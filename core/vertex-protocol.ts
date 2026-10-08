@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { CUSTOM_TRANSLATION_FORMAT_INSTRUCTION } from './provider-format.js';
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { createVertexPdf, PDF_INPUT_GUIDANCE } from './vertex-pdf.js';
+import type { ProviderProtocol } from './product.js';
 import type {
   Json,
   ProviderRequest,
@@ -88,7 +89,10 @@ function readTurn(value: Json): VertexTurn {
 }
 
 /** Pure REST encoding. The host owns connection authority and executes all requested tools. */
-export function encodeVertex(request: ProviderRequest): {
+export function encodeVertex(
+  request: ProviderRequest,
+  protocol: Extract<ProviderProtocol, 'vertex-gemini-v1' | 'google-gemini-v1'> = 'vertex-gemini-v1'
+): {
   body: Json;
   contextBody?: Json;
   context: VertexTurn;
@@ -96,15 +100,15 @@ export function encodeVertex(request: ProviderRequest): {
 } {
   const continuationInput = continuationInputText(request);
   const generation = request.generation;
-  if (generation) validateModelOptions(generation, 'vertex-gemini-v1');
+  if (generation) validateModelOptions(generation, protocol);
   const maxOutputTokens =
     generation?.maxOutputTokens ??
-    modelCapability('vertex-gemini-v1', request.modelId)?.maxOutputTokens ??
+    modelCapability(protocol, request.modelId)?.maxOutputTokens ??
     8192;
   const { results: rawResults, ...input } = request.input;
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) reject('TOOL_RESULT_MISMATCH');
-  const plan = planNativeMessages(request, 'vertex-gemini-v1');
+  const plan = planNativeMessages(request, protocol);
   const bootstrap = copy(request.bootstrap ?? [], 'INVALID_BOOTSTRAP');
   if (!Array.isArray(bootstrap)) reject('INVALID_BOOTSTRAP');
   const initialMessages: Json[] = plan
@@ -114,6 +118,8 @@ export function encodeVertex(request: ProviderRequest): {
     copy(
       {
         role: request.role,
+        // Preserve existing Vertex bindings while keeping Studio continuations separate.
+        ...(protocol === 'google-gemini-v1' ? { protocol } : {}),
         modelId: request.modelId,
         stable: request.stable,
         generation: request.generationBinding ?? request.generation ?? null,
@@ -236,6 +242,11 @@ export function encodeVertex(request: ProviderRequest): {
   });
   const body: Json = {
     ...plan?.options,
+    ...(protocol === 'google-gemini-v1' &&
+    generation?.serviceTier &&
+    generation.serviceTier !== 'standard'
+      ? { service_tier: generation.serviceTier }
+      : {}),
     systemInstruction: {
       parts: [
         ...(request.stable.contract === '' ? [] : [{ text: request.stable.contract }]),
@@ -258,14 +269,21 @@ export function encodeVertex(request: ProviderRequest): {
     ...(declarations.length
       ? {
           tools: [{ functionDeclarations: declarations }],
-          toolConfig: {
-            functionCallingConfig: {
-              streamFunctionCallArguments: false,
-              ...(request.toolChoice && request.toolChoice !== 'auto'
-                ? { mode: 'ANY', allowedFunctionNames: [request.toolChoice] }
-                : {}),
-            },
-          },
+          ...(protocol === 'vertex-gemini-v1' ||
+          (request.toolChoice && request.toolChoice !== 'auto')
+            ? {
+                toolConfig: {
+                  functionCallingConfig: {
+                    ...(protocol === 'vertex-gemini-v1'
+                      ? { streamFunctionCallArguments: false }
+                      : {}),
+                    ...(request.toolChoice && request.toolChoice !== 'auto'
+                      ? { mode: 'ANY', allowedFunctionNames: [request.toolChoice] }
+                      : {}),
+                  },
+                },
+              }
+            : {}),
         }
       : {}),
     generationConfig: {

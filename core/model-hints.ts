@@ -54,6 +54,7 @@ export function thinkingWireField(protocol: ProviderProtocol): string | undefine
     case 'anthropic-messages-v1':
       return 'output_config.effort';
     case 'vertex-gemini-v1':
+    case 'google-gemini-v1':
       return 'generationConfig.thinkingConfig.thinkingLevel';
     case 'codex-app-server-v1':
       return 'effort';
