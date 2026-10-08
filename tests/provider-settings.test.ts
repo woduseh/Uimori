@@ -498,6 +498,14 @@ describe('provider settings, catalogs and archive contracts', () => {
       moved: false,
     });
     await request(app, `/model-presets/${beta.id}/move`, { direction: 'up' });
+    for (const summary of [false, true]) {
+      expect(
+        app.store.product
+          .library(summary)
+          .models.filter((model) => model.connectionId === connection.id)
+          .map((model) => model.id)
+      ).toEqual([beta.id, alpha.id, models[2].id]);
+    }
     for (const original of models) {
       const { displayOrder, ...current } = app.store.product.get<ModelPreset>('model', original.id);
       expect(current).toEqual(original);
@@ -522,6 +530,74 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(() => app.store.product.moveModel(beta.id, { direction: 'down' })).toThrow();
     expect(app.store.product.all('model')).toEqual(beforeFailure);
     app.store.db.exec('DROP TRIGGER fail_order');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  test('provider drag order is atomic, rejects stale lists and preserves edits and execution snapshots', async () => {
+    const app = await application();
+    await Promise.all(
+      ['Alpha', 'Beta', 'Gamma'].map((title) =>
+        request<Connection>(app, '/connections', connectionBody('openai-responses-v1', { title }))
+      )
+    );
+    const connections = app.store.product.library().connections;
+    const [alpha, beta, gamma] = connections;
+    const model = await request<ModelPreset>(app, '/model-presets', modelBody(beta));
+    const beforeSnapshot = app.store.product.modelSnapshot(model.id);
+    const expectedOrder = connections.map((item) => item.id);
+    await request(app, `/connections/${gamma.id}/move`, {
+      targetId: alpha.id,
+      position: 'before',
+      expectedOrder,
+    });
+    const order = [gamma.id, alpha.id, beta.id];
+    for (const summary of [false, true])
+      expect(app.store.product.library(summary).connections.map((item) => item.id)).toEqual(order);
+    for (const original of connections) {
+      const { displayOrder, ...current } = app.store.product.get<Connection>(
+        'connection',
+        original.id
+      );
+      expect(current).toEqual(original);
+      expect(displayOrder).toBeDefined();
+    }
+    expect(app.store.product.modelSnapshot(model.id)).toEqual(beforeSnapshot);
+    await request(
+      app,
+      `/connections/${beta.id}/move`,
+      { targetId: alpha.id, position: 'before', expectedOrder },
+      409
+    );
+    await request(
+      app,
+      `/connections/${beta.id}`,
+      connectionBody(beta.protocol, { title: 'Edited Beta', expectedRevision: beta.revision }),
+      200,
+      'PUT'
+    );
+    expect(app.store.product.get<Connection>('connection', beta.id).displayOrder).toBe(2);
+    const beforeFailure = app.store.product.all('connection');
+    app.store.db.exec(
+      "CREATE TRIGGER fail_provider_order BEFORE UPDATE ON provider_settings WHEN NEW.kind='connection' AND NEW.id='" +
+        beta.id +
+        "' BEGIN SELECT RAISE(ABORT, 'injected ordering failure'); END"
+    );
+    expect(() =>
+      app.store.product.moveConnection(beta.id, {
+        targetId: gamma.id,
+        position: 'before',
+        expectedOrder: order,
+      })
+    ).toThrow();
+    expect(app.store.product.all('connection')).toEqual(beforeFailure);
+    app.store.db.exec('DROP TRIGGER fail_provider_order');
+    const otherModel = await request<ModelPreset>(app, '/model-presets', modelBody(alpha));
+    await request(
+      app,
+      `/model-presets/${model.id}/move`,
+      { targetId: otherModel.id, position: 'before', expectedOrder: [model.id] },
+      409
+    );
     expect(fetch).not.toHaveBeenCalled();
   });
 

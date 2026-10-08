@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import { CalendarDays, Download, RefreshCw } from 'lucide-react';
 import { USAGE_KIND_LABELS, type UsageReport, type UsageTotals } from '../core/usage-report.js';
@@ -237,11 +238,7 @@ export function UsagePanel({
       <p className="usage-period-label">
         {range.from} — {range.to} · 한국 시간
       </p>
-      {busy && (
-        <p role="status" className="muted">
-          사용량을 불러오는 중…
-        </p>
-      )}
+      {busy && !error && <LoadingState compact label="사용량을 불러오는 중이에요…" />}
       {error && (
         <p role="alert" className="error">
           {error}

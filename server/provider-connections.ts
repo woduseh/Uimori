@@ -15,6 +15,7 @@ export function prepareConnection(product: ProductStore, value: unknown, id?: st
     'credentialRef',
     'apiKey',
     'enabled',
+    'displayOrder',
     'expectedRevision',
   ]);
   const protocol = choice(body.protocol, [...PROVIDER_PROTOCOLS], 'protocol');
@@ -64,6 +65,7 @@ export function prepareConnection(product: ProductStore, value: unknown, id?: st
     endpoint,
     ...(credentialRef ? { credentialRef } : {}),
     enabled: body.enabled === undefined ? true : boolean(body.enabled),
+    ...(prior?.displayOrder !== undefined ? { displayOrder: prior.displayOrder } : {}),
     catalog: sameConnection ? prior.catalog : [],
     catalogError: sameConnection ? prior.catalogError : null,
     catalogUpdatedAt: sameConnection ? (prior.catalogUpdatedAt ?? null) : null,

@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -251,8 +252,14 @@ export function IllustrationPresetSettings({
   if (!catalog)
     return (
       <section aria-label="삽화 프리셋">
-        <p role="status">{loadError || '삽화 프리셋을 불러오는 중이에요…'}</p>
-        <button onClick={() => void refresh()}>프리셋 다시 불러오기</button>
+        <LoadingState
+          compact
+          loading={!loadError}
+          error={loadError}
+          label="삽화 프리셋을 불러오는 중이에요…"
+          onRetry={() => void refresh()}
+          retryLabel="프리셋 다시 불러오기"
+        />
       </section>
     );
   const p = catalog.preferences;

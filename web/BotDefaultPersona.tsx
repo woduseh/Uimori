@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type { BotDefaults, BotPersonaDefault } from '../core/bot-defaults.js';
 import type { Content, Library } from '../core/product.js';
@@ -81,7 +82,7 @@ export function BotDefaultPersona({
         }}
       >
         <p>{bot.title}의 새 채팅을 시작할 때 사용할 페르소나예요. 기존 채팅은 바뀌지 않아요.</p>
-        {!saved && !error && <p role="status">기본 설정을 불러오는 중이에요…</p>}
+        {!saved && !error && <LoadingState compact label="기본 설정을 불러오는 중이에요…" />}
         <label>
           기본 페르소나
           <select

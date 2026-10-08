@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { HelperActivity as Activity } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
@@ -85,8 +86,15 @@ export function HelperActivityDetails({
       <summary>활동 내역</summary>
       {open && (
         <>
-          {error && <p className="error">활동 내역을 새로 읽지 못했어요. {error}</p>}
-          {!data && !error && <p className="muted">활동 내역을 불러오는 중…</p>}
+          {(!data || error) && (
+            <LoadingState
+              compact
+              loading={!error}
+              error={error}
+              errorLabel="활동 내역을 새로 읽지 못했어요."
+              label="활동 내역을 불러오는 중이에요…"
+            />
+          )}
           {data?.hasEarlier && (
             <p className="muted">최근 활동 80건을 표시해요. 이전 활동은 생략됐어요.</p>
           )}

@@ -159,6 +159,7 @@ export function validateProviderSettingVersion(row: Row): void {
       'endpoint',
       'credentialRef',
       'enabled',
+      'displayOrder',
       'catalog',
       'catalogError',
       'catalogUpdatedAt',
@@ -169,6 +170,8 @@ export function validateProviderSettingVersion(row: Row): void {
     if (protocol === 'codex-app-server-v1' && body.credentialRef !== undefined)
       throw new HttpError(400, 'Invalid Codex authority');
     boolean(body.enabled);
+    if (body.displayOrder !== undefined)
+      number(body.displayOrder, 'provider display order', 0, 1_000_000_000);
     if (
       body.credentialRef !== undefined &&
       !validCredentialRef(text(body.credentialRef, 'credential reference', 200))

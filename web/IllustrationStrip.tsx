@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { readingScrollport } from './theme-body-scroll.js';
 import { cutsFor, type Cut } from './illustration-progress.js';
 import { IllustrationUsageLine, IllustrationPlacementButton } from './IllustrationActivity.js';
@@ -555,9 +556,7 @@ function IllustrationCard({
         className="source-info-dialog"
       >
         {detailError ? (
-          <p className="error" role="alert">
-            {detailError}
-          </p>
+          <LoadingState compact loading={false} error={detailError} />
         ) : detail ? (
           <div className="illustration-diagnostic">
             <p>
@@ -616,7 +615,7 @@ function IllustrationCard({
             {!detail.diagnostic && <p>저장된 추가 생성 정보가 없어요.</p>}
           </div>
         ) : (
-          <p role="status">생성 정보를 불러오고 있어요.</p>
+          <LoadingState compact label="생성 정보를 불러오는 중이에요…" />
         )}
       </Dialog>
     </article>

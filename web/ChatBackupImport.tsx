@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   CHAT_BACKUP_FORMAT,
@@ -151,7 +152,7 @@ export function ChatBackupImport({
             />
           </label>
         </div>
-        {reading && <p role="status">백업 파일을 읽고 있어요…</p>}
+        {reading && <LoadingState compact label="백업 파일을 읽고 있어요…" />}
         {selection && (
           <div className="archive-file-summary">
             <p>

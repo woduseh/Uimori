@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type { PromptPreset, PromptRole } from '../core/product.js';
 import { api } from './api.js';
@@ -81,15 +82,15 @@ export function PromptTemplatesDialog({
       <p className="muted prompt-templates-description">
         프리셋으로 추가해 자유롭게 편집하고, 현재 프롬프트 설정에서 불러와 사용할 수 있어요.
       </p>
-      {loadError ? (
-        <div className="prompt-templates-error">
-          <p role="alert">기본 프롬프트를 불러오지 못했어요. {loadError}</p>
-          <button type="button" className="secondary" onClick={() => setLoadAttempt((n) => n + 1)}>
-            다시 불러오기
-          </button>
-        </div>
-      ) : templates === null ? (
-        <p role="status">기본 프롬프트를 불러오는 중이에요…</p>
+      {loadError || templates === null ? (
+        <LoadingState
+          compact
+          loading={!loadError}
+          error={loadError}
+          errorLabel="기본 프롬프트를 불러오지 못했어요."
+          label="기본 프롬프트를 불러오는 중이에요…"
+          onRetry={() => setLoadAttempt((n) => n + 1)}
+        />
       ) : (
         <ul className="prompt-template-list" aria-label="기본 프롬프트 목록">
           {templates.map((template) => (

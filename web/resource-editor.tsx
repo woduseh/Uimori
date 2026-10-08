@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { IconButton } from './IconButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { UndoIcon } from './ui-icons.js';
@@ -348,17 +349,25 @@ export function ResourceEditorStatus({
   const { state, session } = value;
   return (
     <div className="resource-editor-status">
-      <span role="status">
-        {!state.ready
-          ? '자료를 불러오는 중…'
-          : state.saving
+      {!state.ready ? (
+        <LoadingState
+          compact
+          loading={!state.error}
+          error={state.error}
+          label="자료를 불러오는 중이에요…"
+          onRetry={() => void session.open().catch(() => {})}
+        />
+      ) : (
+        <span role="status">
+          {state.saving
             ? '저장 중…'
             : state.dirty
               ? '미저장 변경'
               : state.document.targetId
                 ? '저장됨'
                 : '등록 전'}
-      </span>
+        </span>
+      )}
       {state.dirty && state.recovery === 'saved' && <small>이 기기에 복구용 입력 보관됨</small>}
       {state.recovery === 'failed' && (
         <small role="alert">복구용 입력을 보관하지 못했어요. 닫기 전에 저장해 주세요.</small>
@@ -375,12 +384,7 @@ export function ResourceEditorStatus({
           </button>
         </small>
       )}
-      {!hideSyncError && state.error && <small role="alert">{state.error}</small>}
-      {!state.ready && state.error && (
-        <button type="button" onClick={() => void session.open().catch(() => {})}>
-          다시 불러오기
-        </button>
-      )}
+      {state.ready && !hideSyncError && state.error && <small role="alert">{state.error}</small>}
     </div>
   );
 }

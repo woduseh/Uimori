@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import type { OutlineTarget } from '../core/outline.js';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -1120,7 +1121,12 @@ export function HelperPanel(props: Props) {
             </button>
           )}
           {data.loading ? (
-            <p>대화를 불러오는 중…</p>
+            <LoadingState
+              compact
+              loading={!data.error}
+              error={data.error}
+              label="대화를 불러오는 중이에요…"
+            />
           ) : (
             messages.length === 0 && (
               <p className="helper-empty">

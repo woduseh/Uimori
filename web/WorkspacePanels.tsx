@@ -1,4 +1,5 @@
 import { PushSettings } from './PushSettings.js';
+import { LoadingState } from './LoadingState.js';
 import { InstallApp } from './InstallApp.js';
 import { UsagePanel } from './UsagePanel.js';
 import { ThemeSettings } from './ThemeSettings.js';
@@ -150,19 +151,15 @@ export function TasksPanel({
         </p>
       )}
       <ActivityDetails activities={detail.reader.activity ?? []} />
-      {(!listed || listed.loading) && <p role="status">작업 목록을 불러오는 중이에요…</p>}
-      {listed?.error && (
-        <div role="alert">
-          <p>작업 목록: {listed.error}</p>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => setRunRetry((value) => value + 1)}
-          >
-            작업 목록 다시 불러오기
-          </button>
-        </div>
-      )}
+      <LoadingState
+        loading={!listed || listed.loading}
+        error={listed?.error}
+        label="작업 목록을 불러오는 중이에요…"
+        errorLabel="작업 목록을 불러오지 못했어요."
+        onRetry={() => setRunRetry((value) => value + 1)}
+        retryLabel="작업 목록 다시 불러오기"
+        compact
+      />
       {allRuns && !listed?.loading && !listed?.error && !runs.length && (
         <p className="muted">
           {inspectedRun ? '선택한 작업을 찾을 수 없어요.' : '아직 실행한 작업이 없어요.'}
@@ -218,8 +215,13 @@ export function TasksPanel({
           </article>
         ))}
       </div>
-      {jobsError && <p role="alert">보조 작업 목록: {jobsError}</p>}
-      {!jobs && !jobsError && <p role="status">보조 작업 목록을 불러오는 중이에요…</p>}
+      <LoadingState
+        loading={!jobs && !jobsError}
+        error={jobsError}
+        label="보조 작업 목록을 불러오는 중이에요…"
+        errorLabel="보조 작업 목록을 불러오지 못했어요."
+        compact
+      />
       {allRuns && (
         <AttemptInspector
           key={detail.chat.id}
@@ -720,7 +722,14 @@ export function AppSettingsPanel({
                           onModelEditHandled={() => setModelToEdit(null)}
                         />
                       ) : (
-                        <p role="status">프로바이더 목록을 불러오는 중이에요…</p>
+                        <LoadingState
+                          loading={!state.libraryError}
+                          error={state.libraryError}
+                          label="프로바이더 목록을 불러오는 중이에요…"
+                          errorLabel="프로바이더 목록을 불러오지 못했어요."
+                          onRetry={() => void state.loadLibrary().catch(() => {})}
+                          compact
+                        />
                       )}
                     </div>
                   )}

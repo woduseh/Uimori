@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
 import type { Content, Library } from '../core/product.js';
@@ -215,8 +216,8 @@ export function PackageFeaturesEditor({
         </footer>
       </section>
       <div className="package-module-status" aria-live="polite">
-        {loading && <p role="status">자료와 기능 목록을 확인하는 중이에요…</p>}
-        {busy && <p role="status">선택한 자료를 확인하는 중이에요…</p>}
+        {loading && <LoadingState compact label="자료와 기능 목록을 불러오는 중이에요…" />}
+        {busy && <LoadingState compact label="선택한 자료를 불러오는 중이에요…" />}
       </div>
       {error && (
         <p className="error" role="alert">

@@ -1,11 +1,14 @@
 import { IconButton } from './IconButton.js';
+import { LoadingState } from './LoadingState.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import {
   AddIcon,
   BackIcon,
   CopyIcon,
+  DownIcon,
+  UpIcon,
   EditIcon,
   MoveIcon,
   OptionsIcon,
@@ -37,6 +40,34 @@ import {
 } from './LibraryFolders.js';
 import './library.css';
 
+type PromptSort = 'name' | 'name-desc' | 'manual';
+function savedPromptSort(): PromptSort {
+  try {
+    const value = JSON.parse(localStorage.getItem('uimori-library-sorts') ?? '{}').prompts;
+    if (value === 'name' || value === 'name-desc' || value === 'manual') return value;
+  } catch {
+    /* Keep a sensible default in restricted browsers. */
+  }
+  return 'name';
+}
+function savedPromptOrder(): string[] {
+  try {
+    const value = JSON.parse(localStorage.getItem('uimori-library-manual-orders') ?? '{}').prompts;
+    if (Array.isArray(value)) return value.filter((id): id is string => typeof id === 'string');
+  } catch {
+    /* Keep a sensible default in restricted browsers. */
+  }
+  return [];
+}
+function savePromptPreference(key: string, value: PromptSort | string[]) {
+  try {
+    const current = JSON.parse(localStorage.getItem(key) ?? '{}');
+    localStorage.setItem(key, JSON.stringify({ ...current, prompts: value }));
+  } catch {
+    /* Keep this session's choice. */
+  }
+}
+
 export function PromptLibrary({
   library,
   reload,
@@ -64,7 +95,13 @@ export function PromptLibrary({
   const [folder, setFolder] = useState<FolderFilter>('all');
   const [query, setQuery] = useState('');
   const [role, setRole] = useState<'all' | PromptRole>('all');
-  const [sort, setSort] = useState('name');
+  const [sort, setSort] = useState<PromptSort>(savedPromptSort);
+  const [manualOrder, setManualOrder] = useState(savedPromptOrder);
+  const draggedItem = useRef<string | null>(null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ kind: 'item' | 'folder'; id: string } | null>(
+    null
+  );
   const [editing, setEditing] = useState<{ preset: PromptPreset | null; role: PromptRole } | null>(
     null
   );
@@ -168,11 +205,98 @@ export function PromptLibrary({
         item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())
       );
     })
-    .sort((a, b) => (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko'));
+    .sort((a, b) => {
+      if (sort !== 'manual')
+        return (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko');
+      const aIndex = manualOrder.indexOf(a.id);
+      const bIndex = manualOrder.indexOf(b.id);
+      return (
+        (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
+          (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) || a.title.localeCompare(b.title, 'ko')
+      );
+    });
   const folders =
     organizer.organization?.folders.filter((item) => item.category === 'prompts') ?? [];
   const showFolders = folder === 'all' && !query.trim() && !selecting;
   const categoryEmpty = !!library && presets.length === 0 && !query;
+  function changeSort(next: PromptSort) {
+    setSort(next);
+    savePromptPreference('uimori-library-sorts', next);
+  }
+  function moveManualItem(id: string, beforeId: string | null) {
+    const available = new Set(presets.map((item) => item.id));
+    const ordered = [
+      ...manualOrder.filter((itemId) => available.has(itemId)),
+      ...presets
+        .filter((item) => !manualOrder.includes(item.id))
+        .sort((a, b) => a.title.localeCompare(b.title, 'ko'))
+        .map((item) => item.id),
+    ].filter((itemId) => itemId !== id);
+    const index = beforeId === null ? ordered.length : ordered.indexOf(beforeId);
+    ordered.splice(index < 0 ? ordered.length : index, 0, id);
+    setManualOrder(ordered);
+    savePromptPreference('uimori-library-manual-orders', ordered);
+  }
+  function moveByOffset(id: string, offset: number) {
+    const index = filtered.findIndex((item) => item.id === id);
+    const target = filtered[index + offset];
+    if (target) moveManualItem(id, offset < 0 ? target.id : (filtered[index + 2]?.id ?? null));
+  }
+  function clearDragging() {
+    draggedItem.current = null;
+    setDraggedItemId(null);
+    setDropTarget(null);
+  }
+  function startDragging(id: string, event: DragEvent<HTMLElement>) {
+    if (
+      selecting ||
+      organizer.busy ||
+      busy ||
+      (event.target as HTMLElement).closest('.action-menu')
+    ) {
+      event.preventDefault();
+      return;
+    }
+    draggedItem.current = id;
+    setDraggedItemId(id);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', id);
+  }
+  function dragOverItem(id: string, event: DragEvent<HTMLElement>) {
+    if (sort !== 'manual' || !draggedItem.current || draggedItem.current === id) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget({ kind: 'item', id });
+  }
+  function dropOnItem(id: string, event: DragEvent<HTMLElement>) {
+    const source = draggedItem.current;
+    if (sort !== 'manual' || !source || source === id) return;
+    event.preventDefault();
+    moveManualItem(source, id);
+    clearDragging();
+  }
+  function dragOverFolder(id: string, event: DragEvent<HTMLElement>) {
+    if (!draggedItem.current) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget({ kind: 'folder', id });
+  }
+  function dragLeaveFolder(id: string, event: DragEvent<HTMLElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setDropTarget((current) => (current?.kind === 'folder' && current.id === id ? null : current));
+  }
+  async function dropOnFolder(folderId: string, event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    const id = draggedItem.current;
+    clearDragging();
+    if (!id || !organized || libraryFolderOf(organized, { kind: 'prompt-preset', id }) === folderId)
+      return;
+    await organizer.mutate('/library/organization/move', {
+      items: [{ kind: 'prompt-preset', id }],
+      category: 'prompts',
+      folderId,
+    });
+  }
   async function editPreset(item: PromptPresetSummary) {
     if (mutation.current) return;
     mutation.current = true;
@@ -350,7 +474,7 @@ export function PromptLibrary({
         }}
       />
       {!library ? (
-        <p role="status">프롬프트를 불러오는 중이에요…</p>
+        <LoadingState label="프롬프트를 불러오는 중이에요…" />
       ) : editing ? (
         <div className="library-prompt-editor">
           <PromptEditor
@@ -473,10 +597,11 @@ export function PromptLibrary({
                           <select
                             aria-label="프롬프트 정렬"
                             value={sort}
-                            onChange={(event) => setSort(event.target.value)}
+                            onChange={(event) => changeSort(event.target.value as PromptSort)}
                           >
                             <option value="name">이름순</option>
                             <option value="name-desc">이름 역순</option>
+                            <option value="manual">수동 정렬</option>
                           </select>
                         </label>
                         <button
@@ -551,6 +676,11 @@ export function PromptLibrary({
                 <h2>폴더</h2>
                 <LibraryFolders
                   presentation="cards"
+                  draggedItemId={draggedItemId}
+                  dropFolderId={dropTarget?.kind === 'folder' ? dropTarget.id : null}
+                  onFolderDragOver={dragOverFolder}
+                  onFolderDragLeave={dragLeaveFolder}
+                  onFolderDrop={(id, event) => void dropOnFolder(id, event)}
                   category="prompts"
                   organizer={organizer}
                   value={folder}
@@ -565,12 +695,25 @@ export function PromptLibrary({
               </section>
             )}
             {showFolders && folders.length > 0 && (
-              <h2 className="library-section-title">미분류 프롬프트</h2>
+              <h2 className="library-section-title">전체 프롬프트</h2>
             )}
 
             <div className="library-list">
               {filtered.map((item) => (
-                <article className="library-list-item" key={item.id}>
+                <article
+                  className="library-list-item"
+                  key={item.id}
+                  data-library-item-id={item.id}
+                  data-dragging={draggedItemId === item.id ? 'true' : undefined}
+                  data-drop-target={
+                    dropTarget?.kind === 'item' && dropTarget.id === item.id ? 'true' : undefined
+                  }
+                  draggable={!selecting && !organizer.busy && !busy}
+                  onDragStart={(event) => startDragging(item.id, event)}
+                  onDragEnd={clearDragging}
+                  onDragOver={(event) => dragOverItem(item.id, event)}
+                  onDrop={(event) => dropOnItem(item.id, event)}
+                >
                   {selecting && (
                     <label className="library-select-check">
                       <span className="sr-only">{item.title} 선택</span>
@@ -617,6 +760,26 @@ export function PromptLibrary({
                     >
                       <MoveIcon size={18} aria-hidden="true" /> 폴더 이동
                     </button>
+                    {sort === 'manual' && (
+                      <>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={filtered[0]?.id === item.id}
+                          onClick={() => moveByOffset(item.id, -1)}
+                        >
+                          <UpIcon size={18} aria-hidden="true" /> 위로 이동
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={filtered.at(-1)?.id === item.id}
+                          onClick={() => moveByOffset(item.id, 1)}
+                        >
+                          <DownIcon size={18} aria-hidden="true" /> 아래로 이동
+                        </button>
+                      </>
+                    )}
                     <button
                       type="button"
                       className="secondary"

@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { Content } from '../core/product.js';
 import { api } from './api.js';
@@ -38,8 +39,16 @@ export function RisuStartPreview({
       active = false;
     };
   }, [content.id, content.revision, startId, userName]);
-  if (error) return <p role="alert">시작 화면을 미리 볼 수 없어요: {error}</p>;
-  if (!preview) return <p role="status">시작 화면을 불러오는 중이에요…</p>;
+  if (!preview || error)
+    return (
+      <LoadingState
+        compact
+        loading={!error}
+        error={error}
+        errorLabel="시작 화면을 미리 볼 수 없어요."
+        label="시작 화면을 불러오는 중이에요…"
+      />
+    );
   return (
     <>
       <RisuMessageSurface

@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/content-limits.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
@@ -222,14 +223,23 @@ export function ContextPanel({
         </button>
       </div>
       <div className="context-content">
-        {error && (
+        {detail && error && (
           <p className="error" role="alert">
             {error}
           </p>
         )}
         <TransientNotice message={message} />
         {!detail ? (
-          <p className="muted">컨텍스트를 불러오고 있어요.</p>
+          <LoadingState
+            compact
+            loading={!error}
+            error={error}
+            label="컨텍스트를 불러오는 중이에요…"
+            onRetry={() => {
+              setError('');
+              void refreshAll();
+            }}
+          />
         ) : (
           <>
             {summary ? (

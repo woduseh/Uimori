@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
 import type { Content } from '../core/product.js';
@@ -89,6 +90,7 @@ export function NavigationQuickActions({
 export function BotNavigation(
   props: Props & {
     onLibraryChanged: () => Promise<void>;
+    libraryError?: string;
     onSearch: () => void;
     quickActions?: boolean;
     libraryTab?: 'bot' | 'persona' | 'module' | 'prompts';
@@ -605,11 +607,18 @@ export function BotNavigation(
                 미분류로 이동
               </div>
             )}
-            {!bots.length && (
-              <p className="bot-navigation-empty">
-                {library ? '서재에서 새 채팅을 시작해 보세요.' : '봇을 불러오는 중이에요…'}
-              </p>
-            )}
+            {!bots.length &&
+              (library ? (
+                <p className="bot-navigation-empty">서재에서 새 채팅을 시작해 보세요.</p>
+              ) : (
+                <LoadingState
+                  compact
+                  loading={!props.libraryError}
+                  error={props.libraryError}
+                  label="봇을 불러오는 중이에요…"
+                  onRetry={() => void onLibraryChanged().catch(() => {})}
+                />
+              ))}
           </nav>
         )}
         {error && (

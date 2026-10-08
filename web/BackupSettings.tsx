@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import './scheduled-backups.css';
 import { useEffect, useState } from 'react';
 import { DatabaseBackup, Download, RefreshCw } from 'lucide-react';
@@ -265,7 +266,7 @@ export function BackupSettings({
             <small className="muted">서버 장애에 대비한 백업은 별도 기기에 보관해 주세요.</small>
           </>
         )}
-        {!status && !error && <p role="status">백업 설정을 불러오는 중…</p>}
+        {!status && !error && <LoadingState compact label="백업 설정을 불러오는 중이에요…" />}
         {error && (
           <div className="settings-service-error">
             <p role="alert" className="error">

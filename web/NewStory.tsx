@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Chat } from '../core/types.js';
@@ -404,7 +405,7 @@ export function NewStory({
           disabled={locked}
         />
         {!defaultsReady && !defaultsError && (
-          <p role="status">기본 페르소나를 확인하는 중이에요…</p>
+          <LoadingState compact label="기본 페르소나를 불러오는 중이에요…" />
         )}
         {defaultsError && (
           <p className="error" role="alert">
@@ -436,7 +437,7 @@ export function NewStory({
             전역 모델 설정
           </button>
         </div>
-        {packageLoading && <p role="status">시작 자료를 불러오는 중이에요…</p>}
+        {packageLoading && <LoadingState compact label="시작 자료를 불러오는 중이에요…" />}
         {!!activeBot?.package?.starts?.length && (
           <section className="new-story-opening" aria-label="첫 메시지">
             <label>

@@ -76,6 +76,7 @@ import { reconcilePromptValues } from '../core/risu-prompt.js';
 import { api, saveDownload } from './api.js';
 import { refValue } from './content-ref.js';
 import { deferredPanel } from './deferredPanel.js';
+import { LoadingState } from './LoadingState.js';
 import { ContentPicker } from './ContentPicker.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ReaderGallery, ReaderPortraitButton } from './ReaderGallery.js';
@@ -636,6 +637,7 @@ function App() {
   };
   const navigation = (quickActions: boolean, collapsed = false) => (
     <BotNavigation
+      libraryError={s.libraryError}
       quickActions={quickActions}
       onSearch={openChatSearch}
       collapsed={collapsed}
@@ -1088,11 +1090,16 @@ function App() {
                 workspaceFallback(
                   '프롬프트',
                   navigationControls,
-                  <p role="status">
-                    {s.libraryError
-                      ? '프롬프트 목록을 불러오지 못했어요.'
-                      : '프롬프트를 불러오는 중이에요…'}
-                  </p>
+                  <LoadingState
+                    loading={!s.libraryError}
+                    error={s.libraryError}
+                    label="프롬프트를 불러오는 중이에요…"
+                    errorLabel="프롬프트 목록을 불러오지 못했어요."
+                    onRetry={() => {
+                      if (s.error === s.libraryError) s.setError('');
+                      void s.loadLibrary().catch(() => {});
+                    }}
+                  />
                 )
               )
             ) : (
@@ -1100,7 +1107,11 @@ function App() {
                 headerLeading={navigationControls}
                 headerTrailing={destinationHelperControl}
                 library={s.library}
-                reload={s.loadLibrary}
+                reload={() => {
+                  if (s.error === s.libraryError) s.setError('');
+                  return s.loadLibrary();
+                }}
+                libraryError={s.libraryError}
                 onError={s.setError}
                 onStartStory={newStory}
                 onUseContent={useContent}
@@ -1112,7 +1123,10 @@ function App() {
                 onDirtyChange={setLibraryDirty}
               />
             )}
-            <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
+            <DismissibleError
+              message={!s.library && s.error === s.libraryError ? '' : s.error}
+              onDismiss={() => s.setError('')}
+            />
           </div>
         ) : (
           <>
@@ -1845,6 +1859,8 @@ function App() {
         chatId={s.selected || undefined}
         open={optionsOpen && s.destination === 'story' && !!s.selected}
         workspace={s.promptWorkspace}
+        workspaceError={s.promptWorkspaceError}
+        onRetryWorkspace={() => void s.refreshPromptWorkspace()}
         promptRevision={`${s.detail?.profile?.revision ?? 0}:${s.pinnedPromptRevision ?? 0}`}
         library={s.library}
         disabled={

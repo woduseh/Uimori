@@ -1,6 +1,6 @@
 import { inferUsageKind, usageOnlyWire, usageOnlyResult } from './usage-accounting.js';
 import type { UsageKind } from '../core/usage-report.js';
-import { compareModelDisplayOrder } from '../core/model-order.js';
+import { compareConnectionDisplayOrder, compareModelDisplayOrder } from '../core/model-order.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { encodedImage, storeImage } from './image-storage.js';
 import { prepareConnection, saveConnection } from './provider-connections.js';
@@ -501,22 +501,56 @@ export class ProductStore {
   }
   /** Presentation-only ordering must not revise model generation settings or credentials. */
   moveModel(id: string, value: unknown) {
+    return this.moveProviderSetting('model', id, value);
+  }
+  moveConnection(id: string, value: unknown) {
+    return this.moveProviderSetting('connection', id, value);
+  }
+  private moveProviderSetting(kind: 'model' | 'connection', id: string, value: unknown) {
     const body = record(value);
-    const direction = choice(body.direction, ['up', 'down'], 'model move direction');
+    fields(body, ['direction', 'targetId', 'position', 'expectedOrder']);
     return this.store.transaction(() => {
-      const model = this.get<ModelPreset>('model', id);
-      const group = (this.all('model') as ModelPreset[])
-        .filter((item) => item.connectionId === model.connectionId)
-        .sort(compareModelDisplayOrder);
+      this.assertAvailable(kind, id);
+      const model = this.get<ModelPreset | Connection>(kind, id);
+      const group = (this.all(kind) as (ModelPreset | Connection)[])
+        .filter(
+          (item) =>
+            kind === 'connection' ||
+            (item as ModelPreset).connectionId === (model as ModelPreset).connectionId
+        )
+        .sort((a, b) =>
+          kind === 'connection'
+            ? compareConnectionDisplayOrder(a as Connection, b as Connection)
+            : compareModelDisplayOrder(a as ModelPreset, b as ModelPreset)
+        );
+      if (
+        body.expectedOrder !== undefined &&
+        (!Array.isArray(body.expectedOrder) ||
+          JSON.stringify(body.expectedOrder) !== JSON.stringify(group.map((item) => item.id)))
+      )
+        throw new HttpError(409, '표시 순서가 변경됐어요. 목록을 새로고침한 뒤 다시 옮겨 주세요.');
       const index = group.findIndex((item) => item.id === id);
-      const target = index + (direction === 'up' ? -1 : 1);
-      if (index < 0 || target < 0 || target >= group.length) return { moved: false };
-      [group[index], group[target]] = [group[target]!, group[index]!];
+      if (body.targetId !== undefined) {
+        if (body.direction !== undefined || body.expectedOrder === undefined)
+          throw new HttpError(400, 'Invalid display move');
+        const targetId = text(body.targetId, 'display order target', 100);
+        const position = choice(body.position, ['before', 'after'], 'display order position');
+        if (targetId === id) return { moved: false };
+        const [moving] = group.splice(index, 1);
+        const target = group.findIndex((item) => item.id === targetId);
+        if (target < 0) throw new HttpError(409, '같은 목록 안에서만 순서를 바꿀 수 있어요.');
+        group.splice(target + (position === 'after' ? 1 : 0), 0, moving!);
+      } else {
+        const direction = choice(body.direction, ['up', 'down'], 'display move direction');
+        const target = index + (direction === 'up' ? -1 : 1);
+        if (index < 0 || target < 0 || target >= group.length) return { moved: false };
+        [group[index], group[target]] = [group[target]!, group[index]!];
+      }
       const update = this.db.prepare(
-        "UPDATE provider_settings SET body=json_set(body, '$.displayOrder', ?) WHERE kind='model' AND id=?"
+        "UPDATE provider_settings SET body=json_set(body, '$.displayOrder', ?) WHERE kind=? AND id=?"
       );
       group.forEach((item, order) => {
-        if (item.displayOrder !== order) update.run(order, item.id);
+        if (item.displayOrder !== order) update.run(order, kind, item.id);
       });
       return { moved: true };
     });
@@ -527,7 +561,10 @@ export class ProductStore {
       const { displayOrder: _displayOrder, ...model } = this.get<ModelPreset>('model', id);
       if (authorize && model.enabled === false) throw new HttpError(403, 'Model disabled');
       this.assertAvailable('connection', model.connectionId);
-      const connection = this.get<Connection>('connection', model.connectionId);
+      const { displayOrder: _connectionOrder, ...connection } = this.get<Connection>(
+        'connection',
+        model.connectionId
+      );
       if (authorize) this.authorize(connection);
       if (
         authorize &&
@@ -1043,6 +1080,16 @@ export class ProductStore {
     return result;
   }
   library(summary = false): Library {
+    const connections = (this.all('connection') as Connection[]).sort(
+      compareConnectionDisplayOrder
+    );
+    const connectionOrder = new Map(connections.map((connection, index) => [connection.id, index]));
+    const models = (this.all('model') as ModelPreset[]).sort(
+      (a, b) =>
+        (connectionOrder.get(a.connectionId) ?? Number.MAX_SAFE_INTEGER) -
+          (connectionOrder.get(b.connectionId) ?? Number.MAX_SAFE_INTEGER) ||
+        compareModelDisplayOrder(a, b)
+    );
     // Project inside SQLite so large bodies never cross into JS for list requests.
     const contents = summary
       ? (
@@ -1070,8 +1117,8 @@ export class ProductStore {
       promptPresets: summary ? this.libraryMetadata().prompts : this.all('prompt-preset'),
       promptCombinations: this.all('prompt-combination'),
       contents,
-      connections: this.all('connection'),
-      models: this.all('model'),
+      connections,
+      models,
       assets: summary ? [] : this.assets(),
     };
   }

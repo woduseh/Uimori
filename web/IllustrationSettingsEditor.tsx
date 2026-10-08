@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { IllustrationPresetSettings } from './IllustrationPresetSettings.js';
 import type {
@@ -84,15 +85,13 @@ function IllustrationEnvironmentEditor({
   useSettingsSaveHandler(onSaveHandlerChange, async () => (!draft ? false : save()));
   if (!draft)
     return (
-      <p role="status" className="settings-loading-status">
-        {loadError || '삽화 설정을 불러오는 중이에요…'}{' '}
-        <IconButton
-          icon={RefreshIcon}
-          label="다시 불러오기"
-          className="secondary"
-          onClick={() => void load()}
-        />
-      </p>
+      <LoadingState
+        compact
+        loading={!loadError}
+        error={loadError}
+        label="삽화 설정을 불러오는 중이에요…"
+        onRetry={() => void load()}
+      />
     );
   const conflict = !!saved && saved.revision > draft.revision;
   const change = (next: Draft) => {

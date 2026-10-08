@@ -222,6 +222,9 @@ export function productRoutes(
   app.post<{ Params: { id: string } }>('/api/model-presets/:id/move', (request) =>
     product.moveModel(request.params.id, request.body)
   );
+  app.post<{ Params: { id: string } }>('/api/connections/:id/move', (request) =>
+    product.moveConnection(request.params.id, request.body)
+  );
   app.post('/api/model-presets', async (request) => product.model(request.body));
   app.put<{ Params: { id: string } }>('/api/model-presets/:id', async (request) =>
     product.model(request.body, request.params.id)

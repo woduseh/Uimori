@@ -1922,7 +1922,7 @@ test('SAVEACK saving both provider drafts stops on a failed write but continues 
 test('PMUI model presets group by provider, start collapsed and persist manual order', async ({
   page,
   request,
-}) => {
+}, info) => {
   const suffix = Date.now().toString();
   const firstConnection = await api<Connection>(request, '/connections', {
     ...connectionInput(`PMUI group A ${suffix}`),
@@ -1942,7 +1942,7 @@ test('PMUI model presets group by provider, start collapsed and persist manual o
     modelFamily: 'openai',
     displayOrder: 100,
   });
-  await api<ModelPreset>(request, '/model-presets', {
+  const gamma = await api<ModelPreset>(request, '/model-presets', {
     ...modelInput(secondConnection, `Gamma ${suffix}`),
     modelId: `gpt-gamma-${suffix}`,
     modelFamily: 'openai',
@@ -1979,11 +1979,14 @@ test('PMUI model presets group by provider, start collapsed and persist manual o
     if (['POST', 'PUT'].includes(r.method()) && r.url().includes('/api/model-presets'))
       mutations.push(new URL(r.url()).pathname);
   });
+  await expect(firstGroup.getByRole('button', { name: /모델 (위로|아래로) 이동/ })).toHaveCount(0);
   await firstGroup
-    .getByRole('button', { name: `${beta.title} 모델 위로 이동`, exact: true })
-    .click();
+    .getByRole('article', { name: `${beta.title} 모델`, exact: true })
+    .dragTo(firstGroup.getByRole('article', { name: `${alpha.title} 모델`, exact: true }), {
+      targetPosition: { x: 10, y: 10 },
+    });
   await expect(
-    page.getByRole('status').filter({ hasText: '모델 표시 순서를 저장했어요.' })
+    page.getByRole('status').filter({ hasText: '표시 순서를 저장했어요.' })
   ).toBeVisible();
   const after = await library(request);
   expect(mutations).toEqual([`/api/model-presets/${beta.id}/move`]);
@@ -1999,4 +2002,31 @@ test('PMUI model presets group by provider, start collapsed and persist manual o
   await expect(
     firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
   ).toBeVisible();
+  await page.getByLabel('프로바이더·모델 검색').fill('');
+  await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+  const providers = page.getByRole('region', { name: '저장한 프로바이더', exact: true });
+  await providers
+    .getByRole('article', { name: `${secondConnection.title} 프로바이더`, exact: true })
+    .dragTo(
+      providers.getByRole('article', { name: `${firstConnection.title} 프로바이더`, exact: true }),
+      { targetPosition: { x: 10, y: 10 } }
+    );
+  await expect
+    .poll(async () =>
+      (await library(request)).connections
+        .filter((item) => [firstConnection.id, secondConnection.id].includes(item.id))
+        .map((item) => item.id)
+    )
+    .toEqual([secondConnection.id, firstConnection.id]);
+  await page.screenshot({ path: info.outputPath('provider-drag-order.png') });
+  await page.goto('/');
+  await selectCurrentSettingsSection(page, '역할별 모델');
+  const selector = page.getByLabel('원문 모델', { exact: true });
+  expect(
+    (
+      await selector
+        .locator('option')
+        .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))
+    ).filter((id) => [alpha.id, beta.id, gamma.id].includes(id))
+  ).toEqual([gamma.id, beta.id, alpha.id]);
 });

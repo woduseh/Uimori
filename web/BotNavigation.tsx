@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { Dialog } from './Dialog.js';
@@ -535,7 +536,7 @@ export function BotBranch(
       {expanded && (
         <div className="bot-branch-chats">
           {loading ? (
-            <p role="status">폴더를 불러오는 중이에요…</p>
+            <LoadingState compact label="폴더를 불러오는 중이에요…" />
           ) : (
             <nav aria-label={`${bot?.title ?? '봇'}의 채팅 목록`}>
               {folderSection(null)}

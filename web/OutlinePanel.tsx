@@ -1,3 +1,4 @@
+import { LoadingState } from './LoadingState.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BookOpen,
@@ -478,7 +479,7 @@ export function OutlinePanel({
           <IconButton label="계층형 구성 닫기" icon={X} onClick={onClose} />
         </div>
       </header>
-      <DismissibleError message={error} onDismiss={() => setError('')} />
+      {outline && <DismissibleError message={error} onDismiss={() => setError('')} />}
       {pending && !busy && (
         <div className="outline-pending" role="status">
           <p>접수 결과를 아직 확인하지 못했어요. 입력은 보관했어요.</p>
@@ -488,14 +489,12 @@ export function OutlinePanel({
         </div>
       )}
       {!outline && (
-        <p className="outline-loading" role="status">
-          구성을 불러오는 중이에요…{' '}
-          {error && (
-            <button type="button" onClick={() => void load()}>
-              다시 불러오기
-            </button>
-          )}
-        </p>
+        <LoadingState
+          loading={!error}
+          error={error}
+          label="구성을 불러오는 중이에요…"
+          onRetry={() => void load()}
+        />
       )}
       {outline && !nodes.length && !adding ? (
         <div className="outline-welcome">
