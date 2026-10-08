@@ -139,6 +139,7 @@ export function useStory() {
   const navigation = useRef(view);
   const { chat: selected, source: readSource, destination } = view;
   const [loadedDetail, setDetail] = useState<ReaderDetail | null>(null);
+  const [readerLoad, setReaderLoad] = useState({ key: '', epoch: -1, pending: false, error: '' });
   const [library, setLibrary] = useState<Library | null>(null);
   const [libraryError, setLibraryError] = useState('');
   const detail = loadedDetail?.chat.id === selected ? loadedDetail : null;
@@ -252,74 +253,99 @@ export function useStory() {
         }
         return true;
       };
-      const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
-      const params = new URLSearchParams({ source: cached?.reader?.order[0] || query.source });
-      if (incremental && cached?.reader) {
-        params.set('since', String(cached.reader.cursor));
-        params.set('known', cached.reader.order.join(','));
-      }
-      let value: ReaderDetail;
-      let replacementSource: string | undefined;
+      setReaderLoad((old) => ({
+        key: query.key,
+        epoch,
+        pending: true,
+        error: old.key === query.key && old.epoch === epoch ? old.error : '',
+      }));
       try {
-        value = await api<ReaderDetail>(`/chats/${id}/reader?${params}`);
-      } catch (error) {
-        // Native card actions replace an immutable suffix. An SSE refresh can arrive
-        // before the action response, while this page still names the old source.
-        // Only rebase a page we already read; invalid explicit navigation stays an error.
-        if (!applicable()) return;
-        if (!cached || !(error instanceof ApiError) || error.status !== 404) throw error;
-        const rebasedParams = new URLSearchParams();
-        value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
-        if (!applicable()) return;
-        replacementSource =
-          value.reader.navigation[Math.min(cached.reader.start, value.reader.navigation.length - 1)]
-            ?.id ?? '';
-        if (replacementSource && !value.reader.order.includes(replacementSource)) {
-          rebasedParams.set('source', replacementSource);
+        const cached = readerCache.current?.key === query.key ? readerCache.current.detail : null;
+        const params = new URLSearchParams({ source: cached?.reader?.order[0] || query.source });
+        if (incremental && cached?.reader) {
+          params.set('since', String(cached.reader.cursor));
+          params.set('known', cached.reader.order.join(','));
+        }
+        let value: ReaderDetail;
+        let replacementSource: string | undefined;
+        try {
+          value = await api<ReaderDetail>(`/chats/${id}/reader?${params}`);
+        } catch (error) {
+          // Native card actions replace an immutable suffix. An SSE refresh can arrive
+          // before the action response, while this page still names the old source.
+          // Only rebase a page we already read; invalid explicit navigation stays an error.
+          if (!applicable()) return;
+          if (!cached || !(error instanceof ApiError) || error.status !== 404) throw error;
+          const rebasedParams = new URLSearchParams();
           value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
+          if (!applicable()) return;
+          replacementSource =
+            value.reader.navigation[
+              Math.min(cached.reader.start, value.reader.navigation.length - 1)
+            ]?.id ?? '';
+          if (replacementSource && !value.reader.order.includes(replacementSource)) {
+            rebasedParams.set('source', replacementSource);
+            value = await api<ReaderDetail>(`/chats/${id}/reader?${rebasedParams}`);
+          }
         }
-      }
-      if (applicable()) {
-        const changed = new Set(value.sources.map((source) => source.id));
-        const available = new Map(
-          [...(cached?.sources ?? []), ...value.sources].map((source) => [source.id, source])
-        );
-        const merged = {
-          ...value,
-          assets: value.assets ?? cached?.assets ?? [],
-          sources: value.reader!.order.map((id) => available.get(id)!).filter(Boolean),
-          jobs: [
-            ...(cached?.jobs ?? []).filter(
-              (job) =>
-                !changed.has(job.sourceRevision) && value.reader!.order.includes(job.sourceRevision)
-            ),
-            ...value.jobs,
-          ],
-          illustrations: [
-            ...(cached?.illustrations ?? []).filter(
-              (item) =>
-                !changed.has(item.sourceRevision) &&
-                value.reader!.order.includes(item.sourceRevision)
-            ),
-            ...(value.illustrations ?? []),
-          ],
-        };
-        let cacheKey = query.key;
-        if (replacementSource !== undefined) {
-          restoredView.current = '';
-          sessionStorage.removeItem(`reading:${id}`);
-          cacheKey = `${id}:${replacementSource}`;
-          readerQuery.current = { ...query, source: replacementSource, key: cacheKey };
-          navigate({ kind: 'rebase-source', source: replacementSource });
-          const url = new URL(location.href);
-          if (replacementSource) url.searchParams.set('source', replacementSource);
-          else url.searchParams.delete('source');
-          history.replaceState(null, '', url);
+        if (applicable()) {
+          const changed = new Set(value.sources.map((source) => source.id));
+          const available = new Map(
+            [...(cached?.sources ?? []), ...value.sources].map((source) => [source.id, source])
+          );
+          const merged = {
+            ...value,
+            assets: value.assets ?? cached?.assets ?? [],
+            sources: value.reader!.order.map((id) => available.get(id)!).filter(Boolean),
+            jobs: [
+              ...(cached?.jobs ?? []).filter(
+                (job) =>
+                  !changed.has(job.sourceRevision) &&
+                  value.reader!.order.includes(job.sourceRevision)
+              ),
+              ...value.jobs,
+            ],
+            illustrations: [
+              ...(cached?.illustrations ?? []).filter(
+                (item) =>
+                  !changed.has(item.sourceRevision) &&
+                  value.reader!.order.includes(item.sourceRevision)
+              ),
+              ...(value.illustrations ?? []),
+            ],
+          };
+          let cacheKey = query.key;
+          if (replacementSource !== undefined) {
+            restoredView.current = '';
+            sessionStorage.removeItem(`reading:${id}`);
+            cacheKey = `${id}:${replacementSource}`;
+            readerQuery.current = { ...query, source: replacementSource, key: cacheKey };
+            navigate({ kind: 'rebase-source', source: replacementSource });
+            const url = new URL(location.href);
+            if (replacementSource) url.searchParams.set('source', replacementSource);
+            else url.searchParams.delete('source');
+            history.replaceState(null, '', url);
+          }
+          readerCache.current = { key: cacheKey, detail: merged };
+          setDetail(merged);
+          setReaderLoad({
+            key: cacheKey,
+            epoch: navigation.current.epoch,
+            pending: false,
+            error: '',
+          });
+          setChats((old) => old.map((chat) => (chat.id === id ? value.chat : chat)));
+          return true;
         }
-        readerCache.current = { key: cacheKey, detail: merged };
-        setDetail(merged);
-        setChats((old) => old.map((chat) => (chat.id === id ? value.chat : chat)));
-        return true;
+      } catch (error) {
+        if (applicable())
+          setReaderLoad({
+            key: query.key,
+            epoch,
+            pending: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        throw error;
       }
     },
     [navigate]
@@ -413,7 +439,12 @@ export function useStory() {
     const sync = createReaderSync({
       refresh: (incremental) => refresh(selected, incremental),
       cursor: () => readerCache.current?.detail.reader.cursor ?? -1,
-      onError: (error) => setError(error instanceof Error ? error.message : String(error)),
+      onError: (error) => {
+        // A missing page owns its centered error; background refresh failures keep
+        // the visible manuscript and use the ordinary error outlet.
+        if (readerCache.current?.key === readerQuery.current.key)
+          setError(error instanceof Error ? error.message : String(error));
+      },
       active: navigation.current.destination === 'story' && !document.hidden,
     });
     readerSync.current = sync;
@@ -497,7 +528,12 @@ export function useStory() {
         return;
       }
       void refresh(selected).catch((e) => {
-        if (alive && navigation.current.epoch === epoch) setError(e.message);
+        if (
+          alive &&
+          navigation.current.epoch === epoch &&
+          readerCache.current?.key === readerQuery.current.key
+        )
+          setError(e.message);
       });
     }
     return () => {
@@ -1316,6 +1352,14 @@ export function useStory() {
     readSource,
     // Do not mount provisional sources before the selected page is loaded.
     detail: readerCache.current?.key === readerQuery.current.key ? detail : null,
+    readerLoading:
+      readerLoad.key === readerQuery.current.key &&
+      readerLoad.epoch === view.epoch &&
+      readerLoad.pending,
+    readerLoadError:
+      readerLoad.key === readerQuery.current.key && readerLoad.epoch === view.epoch
+        ? readerLoad.error
+        : '',
     library,
     libraryError,
     draft,

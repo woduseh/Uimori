@@ -3,6 +3,68 @@ import { postFixtureChat } from './fixtures/chat.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { navigationAction, visibleNavigation } from './ui-navigation.js';
 
+test('READERREC initial reader loading becomes a recoverable error without losing the draft', async ({
+  page,
+  request,
+}, info) => {
+  const { chat } = await createReadingChat(request, 'Initial reader loading recovery', 1);
+  const clockStart = Date.now();
+  await page.clock.install({ time: clockStart });
+  await page.clock.pauseAt(clockStart + 1000);
+  let releaseRead!: () => void;
+  const heldRead = new Promise<void>((resolve) => {
+    releaseRead = resolve;
+  });
+  let failed = true;
+  await page.addInitScript((id) => {
+    sessionStorage.setItem(`draft:${id}`, '본문 재조회 중에도 남을 초안');
+    // Isolate initial loading and the explicit retry from unrelated SSE wakeups.
+    Object.defineProperty(window, 'EventSource', {
+      value: class {
+        close() {}
+      },
+    });
+  }, chat.id);
+  await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+    if (!failed) return route.continue();
+    await heldRead;
+    await route.fulfill({ status: 503, json: { error: 'Reader temporarily unavailable' } });
+  });
+  try {
+    await page.goto(`/?chat=${chat.id}`);
+    const loading = page.getByRole('status').filter({ hasText: '본문을 불러오는 중이에요…' });
+    await expect(page.locator('.reader-awaiting')).toHaveAttribute('aria-busy', 'true');
+    await page.clock.runFor(50);
+    await expect(loading).toHaveCount(0);
+    await page.clock.fastForward(250);
+    await expect(loading).toBeVisible();
+    await expect(page.getByRole('button', { name: '본문 다시 불러오기', exact: true })).toHaveCount(
+      0
+    );
+    if (process.env.UIMORI_VISUAL_REVIEW === '1')
+      await page.screenshot({ path: info.outputPath('reader-loading.png') });
+    releaseRead();
+    const error = page.getByRole('alert').filter({ hasText: '본문을 불러오지 못했어요.' });
+    await expect(error).toBeVisible();
+    await expect(error).toContainText('서버 작업을 완료하지 못했어요. (503)');
+    await expect(loading).toHaveCount(0);
+    if (process.env.UIMORI_VISUAL_REVIEW === '1')
+      await page.screenshot({ path: info.outputPath('reader-loading-error.png') });
+    failed = false;
+    await page.getByRole('button', { name: '본문 다시 불러오기', exact: true }).click();
+    await expect(page.getByTestId('source')).toHaveCount(1);
+    await expect(page.getByTestId('source-request')).toContainText('검증 장면 1');
+    await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toHaveValue(
+      '본문 재조회 중에도 남을 초안'
+    );
+    await expect(error).toHaveCount(0);
+    await expect(loading).toHaveCount(0);
+  } finally {
+    releaseRead();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
 test('READERREC confirming an uncertain request never turns into cancelling its admitted run', async ({
   page,
   request,

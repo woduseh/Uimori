@@ -19,6 +19,7 @@ import { combinationOwner, matchesPromptCombination } from '../core/prompt-combi
 import { DismissibleError } from './DismissibleError.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice, TransientNoticeProvider } from './TransientNotice.js';
+import { ReaderLoadingState } from './ReaderLoadingState.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
@@ -1127,7 +1128,11 @@ function App() {
                 data-reader-scrollport
                 onScroll={s.savePosition}
               >
-                <section className="reader" aria-label="원고">
+                <section
+                  className={`reader${s.selected && !s.detail ? ' reader-awaiting' : ''}`}
+                  aria-label="원고"
+                  aria-busy={!!s.selected && !s.detail && s.readerLoading}
+                >
                   {!s.selected ? (
                     <div className="empty-state">
                       <BookOpen size={32} />
@@ -1139,7 +1144,16 @@ function App() {
                       </button>
                     </div>
                   ) : !s.detail ? (
-                    <p role="status">채팅을 불러오는 중이에요…</p>
+                    <ReaderLoadingState
+                      key={s.viewKey}
+                      loading={s.readerLoading}
+                      error={s.readerLoadError}
+                      onRetry={() =>
+                        void s.refresh(s.selected).catch(() => {
+                          // The selected reader owns its load failure and recovery action.
+                        })
+                      }
+                    />
                   ) : (
                     <>
                       {(s.profileAsset ||
