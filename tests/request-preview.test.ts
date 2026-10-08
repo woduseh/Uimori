@@ -7,6 +7,7 @@ import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import type { RequestPreview } from '../core/request-preview.js';
 import * as transport from '../core/transport.js';
+import * as vertexPdf from '../core/vertex-pdf.js';
 import { createApp, type App } from '../server/app.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { contextSourceRefs } from '../server/context-planning.js';
@@ -223,10 +224,40 @@ test('draft and refreshed current settings/models affect provenance and estimate
   expect(refreshed.tokens.inputTokenLimit).toBe(16000);
 });
 
-test.each([false, true])(
-  'checks encoded summary inclusion and invalidated checkpoints (current-only prompt: %s)',
-  async (currentOnly) => {
+test.each([
+  { currentOnly: false, pdfProtocol: null },
+  { currentOnly: true, pdfProtocol: null },
+  { currentOnly: false, pdfProtocol: 'google-gemini-v1' as const },
+  { currentOnly: false, pdfProtocol: 'vertex-gemini-v1' as const },
+])(
+  'checks summary inclusion and invalidated checkpoints ($currentOnly, $pdfProtocol)',
+  async ({ currentOnly, pdfProtocol }) => {
     const f = await fixture();
+    if (pdfProtocol) {
+      const connection = f.store.product.connection({
+        title: 'Gemini PDF preview',
+        protocol: pdfProtocol,
+        endpoint:
+          pdfProtocol === 'google-gemini-v1'
+            ? 'https://generativelanguage.googleapis.com/v1beta'
+            : 'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
+        enabled: true,
+      });
+      f.store.product.model(
+        {
+          ...f.modelInput,
+          connectionId: connection.id,
+          modelId: 'gemini-3.8-flash',
+          pdfInput: true,
+          expectedRevision: f.model.revision,
+        },
+        f.model.id
+      );
+      // Estimating a request and its source inclusion must work without creating its PDF.
+      vi.spyOn(vertexPdf, 'createVertexPdf').mockImplementation(() => {
+        throw new Error('PDF packing forbidden during measurement');
+      });
+    }
     if (currentOnly) {
       const workspace = promptWorkspace(f.store);
       updatePromptWorkspace(f.store, {

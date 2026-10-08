@@ -61,7 +61,7 @@ import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { previousContextPlan, seedContextPlan } from './context-planning.js';
 import { prepareInputContext } from './context-compaction.js';
 import { runMain, type MainHooks } from './model-runner.js';
-import { encodeMainPreview } from './main-request.js';
+import { measureProviderRequest } from './main-request.js';
 import { HelperWorkspace, helperCallOperationId } from './helper-workspace.js';
 import { forkChat } from './chat-fork.js';
 import { HttpError, number, record, text } from './request-validation.js';
@@ -1074,13 +1074,10 @@ export class HelperRuntime {
           task.request,
           ...instructions.map((item) => `추가 사용자 지시:\n${item.text}`),
         ].join('\n\n');
-        const estimateRequest = (value: ProviderRequest) => {
-          const preview =
-            target.connection.protocol === 'codex-app-server-v1'
-              ? { body: nativeHelperRequest(value), contextBody: undefined }
-              : encodeMainPreview(value, target);
-          return estimateContextTokens(preview.contextBody ?? preview.body, value.contextBudget);
-        };
+        const estimateRequest = (value: ProviderRequest) =>
+          target.connection.protocol === 'codex-app-server-v1'
+            ? estimateContextTokens(nativeHelperRequest(value), value.contextBudget)
+            : measureProviderRequest(value, target).estimatedInputTokens;
         let request = this.request(
           task,
           history,
@@ -1606,9 +1603,9 @@ export class HelperRuntime {
         },
       });
       const fits = (size: number) => {
-        const preview = encodeMainPreview(requestFor(remaining.slice(0, size)), target);
         return (
-          estimateContextTokens(preview.contextBody ?? preview.body, budget) <=
+          measureProviderRequest(requestFor(remaining.slice(0, size)), target)
+            .estimatedInputTokens <=
           budget.inputTokenLimit * 0.8
         );
       };

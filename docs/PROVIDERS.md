@@ -60,7 +60,7 @@ Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 
 
 모델 프리셋의 **고급 → 텍스트 대화를 PDF로 전송**을 켜면 Google Agent Platform 또는 Google AI Studio 연결의 초기 텍스트 대화를 순서와 역할이 표시된 PDF 하나로 묶어 사용자 입력으로 보내요. 기본값은 꺼짐이고 다른 프로토콜에는 적용하지 않아요. 시스템 지침, 도구 정의·호출·결과, 프로바이더가 반환한 사고 서명과 후속 대화는 기존 Gemini 형식으로 유지해요. 파일 업로드 서비스를 따로 사용하지 않고 PDF를 요청 안에 넣어요.
 
-PDF는 사람이 읽을 문서가 아니라 모델이 텍스트를 추출할 수 있도록 1pt 글자로 조밀하게 만든 문서예요. 실제 줄바꿈과 원문에 있던 문자 `\n`은 JSON 문자열 이스케이프로 구분해요. PDF 입력은 원래 대화의 네이티브 user/model 역할 구분을 문서 안의 표시로 바꾸므로 응답 품질이 달라질 수 있어요. 로컬 컨텍스트 계산은 원문을 기준으로 유지하며, 토큰 절약·비용 감소·품질 개선을 보장하지 않아요. 실제 사용량과 비용은 Google이 반환한 usage로 확인해요. [Gemini 문서 처리 안내](https://ai.google.dev/gemini-api/docs/document-processing)와 [Agent Platform 문서 이해](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/document-understanding)를 참고해요. Uimori는 PDF 자체에 50MB·1,000페이지의 보수적인 한도를 두고, [Flex PayGo](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/flex-paygo)의 인라인 요청 전체에는 20MB 한도를 적용해요. 한도를 넘으면 자동으로 다른 전송 방식으로 바꾸지 않고 요청 전에 중단해요.
+PDF는 사람이 읽을 문서가 아니라 모델이 텍스트를 추출할 수 있도록 1pt 글자로 조밀하게 만든 문서예요. 실제 줄바꿈과 원문에 있던 문자 `\n`은 JSON 문자열 이스케이프로 구분해요. 공백과 이모지 결합·표시 문자는 PDF 텍스트 추출 시 달라지지 않도록 Unicode 이스케이프로 보존하며, JSON을 해석하면 원문으로 복원돼요. PDF 입력은 원래 대화의 네이티브 user/model 역할 구분을 문서 안의 표시로 바꾸므로 응답 품질이 달라질 수 있어요. 로컬 컨텍스트 계산은 원문을 기준으로 유지하며, 토큰 절약·비용 감소·품질 개선을 보장하지 않아요. 실제 사용량과 비용은 Google이 반환한 usage로 확인해요. [Gemini 문서 처리 안내](https://ai.google.dev/gemini-api/docs/document-processing)와 [Agent Platform 문서 이해](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/document-understanding)를 참고해요. Uimori는 PDF 자체에 50MB·1,000페이지의 보수적인 한도를 두고, [Flex PayGo](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/flex-paygo)의 인라인 요청 전체에는 20MB 한도를 적용해요. 한도를 넘으면 자동으로 다른 전송 방식으로 바꾸지 않고 요청 전에 중단해요.
 
 ## Codex
 
@@ -72,7 +72,9 @@ Codex는 API 키를 입력하는 연결이 아니라 전용 실행기의 로그�
 
 `server/provider-connections.ts`는 연결 입력·키 저장을, `server/credentials.ts`는 DB 키 읽기/쓰기를 맡아요. 프로토콜별 encoder와 transport는 모델 요청 형식과 응답 파싱을 맡아요. 자료 편집과 과거 백업 검증이 프로바이더 전송 경로에 개입하지 않아요. 실제 지원 옵션과 응답 품질은 해당 서비스에서 확인해야 해요.
 
-본문 미리보기와 컨텍스트 예산 측정은 encoder가 실제 body와 함께 만든 메시지 배치 진단을 사용해요. 프롬프트 형상 검증은 원문을 복사하거나 수정하지 않고, 수정이 필요한 입력과 프로바이더 연속 상태는 소유 경계에서 복사해요. 공개 스트림을 소비하지 않는 호출에서는 중간 표시용 본문을 조립하지 않으며 최종 결과·사용량·취소 처리는 유지해요.
+`server/main-request.ts`의 공통 측정 경로가 프로바이더별 텍스트 요청과 모델별 토크나이저·예산을 함께 처리해요. 컨텍스트 계획·압축·다음 요청 분량 미리보기는 이 경로를 사용하고, Gemini PDF 입력에서도 원문 요청을 기준으로 측정하고 요약 포함 여부를 확인해요. 측정이나 압축 범위 탐색에서는 PDF를 생성하지 않으며, 실제 전송은 원문 예산 검사를 통과한 뒤 PDF를 만들어요. 원시 요청 미리보기는 실제 전송할 PDF 본문을 만들고, 실행 기록은 실제 전송 본문과 원문 포함 근거를 유지해요. Codex의 보수적인 두 실행 형식 측정과 도우미 전용 입력 형식도 유지해요.
+
+프롬프트 형상 검증은 원문을 복사하거나 수정하지 않고, 수정이 필요한 입력과 프로바이더 연속 상태는 소유 경계에서 복사해요. 공개 스트림을 소비하지 않는 호출에서는 중간 표시용 본문을 조립하지 않으며 최종 결과·사용량·취소 처리는 유지해요.
 
 Vercel Chat은 이전 assistant 메시지의 텍스트 조각을 순서대로 합쳐 문자열로 전송해요. OpenAI Responses의 수동 대화 이력은 assistant를 포함해 `input_text` 조각으로 구성하고, 조각별 캐시 기준점을 유지해요. 도구 후속 요청에서는 프로바이더가 실제로 반환한 메시지·사고·도구 호출 항목을 원래 형식과 식별자로 이어 보내요.
 

@@ -3,7 +3,7 @@ import { generationFromModel } from '../core/model-capabilities.js';
 import { AGENT_CONTEXT_REFS_MAX } from '../core/agent-collaboration.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { evaluationToolDefinitions } from '../core/evaluation-tools.js';
-import { contextBudgetForModel } from '../core/context-budget.js';
+import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import {
   CONTEXT_CONTINUATION_GUIDANCE,
   CONTEXT_DERIVED_GUIDANCE,
@@ -33,7 +33,7 @@ import {
 import { encodeResponses } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
-import { encodeVertex } from '../core/vertex-protocol.js';
+import { encodeVertex, prepareGeminiRequest } from '../core/vertex-protocol.js';
 import {
   buildCodexDescriptor,
   buildCodexNativeRequest,
@@ -283,5 +283,21 @@ export function encodeMainPreview(
     ...(encoded.contextBody ? { contextBody: encoded.contextBody } : {}),
     diagnostics: encoded.messageMetadata?.diagnostics ?? [],
     capabilityVersion: encoded.messageMetadata?.capabilityVersion ?? 'fixture-only',
+  };
+}
+
+/** Measure the provider's text projection without producing an attachment for transport. */
+export function measureProviderRequest(
+  request: ProviderRequest,
+  target: ModelPreset & { connection: Connection },
+  options: { codexNative?: boolean } = {}
+): { body: Json; modelId: string; estimatedInputTokens: number } {
+  const body = isGeminiProtocol(target.connection.protocol)
+    ? prepareGeminiRequest(validateRequest(request), target.connection.protocol).body
+    : encodeMainPreview(request, target, options).body;
+  return {
+    body,
+    modelId: target.modelId,
+    estimatedInputTokens: estimateContextTokens(body, request.contextBudget),
   };
 }

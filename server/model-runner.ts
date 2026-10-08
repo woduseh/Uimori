@@ -24,7 +24,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { attachMainHostContext } from './main-host-context.js';
 import {
   buildMainProviderRequest,
-  encodeMainPreview,
+  measureProviderRequest,
   storySubmissionEnabled,
   STORY_SUBMIT_MAX_CHARS,
 } from './main-request.js';
@@ -390,18 +390,16 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     // Continuation preflight must use the prompt actually sent after editRequest.
     // Do not execute authored callbacks for estimates; the next real send is still
     // prepared once and validated against the provider's continuation binding.
-    const preview = (request: ProviderRequest) => {
-      const encoded = encodeMainPreview(
+    const measure = (request: ProviderRequest) =>
+      measureProviderRequest(
         request.opaqueState != null ? { ...request, prompt: continuationPrompt } : request,
         target,
         { codexNative: !!native }
-      );
-      return encoded.contextBody ?? encoded.body;
-    };
+      ).estimatedInputTokens;
     let built = build();
     const latestRead = results.findLast(compactableRead)?.callId;
     if (!native && !evaluation && fixed.contextPlan && latestRead) {
-      const before = estimateContextTokens(preview(built.request), built.request.contextBudget);
+      const before = measure(built.request);
       const inputLimit = fixed.contextPlan.budget.inputTokenLimit;
       if (latestRead === lastUnhelpfulRead && before > inputLimit)
         return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
@@ -410,14 +408,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           const history = [...completedToolHistory, ...results];
           const compacted = await compactToolReads(fixed, history, hooks, usage, (projection) => {
             const projected = build(projection).request;
-            return estimateContextTokens(preview(projected), projected.contextBudget);
+            return measure(projected);
           });
           // Completed work becomes ordinary host reference data, not unsigned native tool calls.
           const candidate = build(compacted);
-          const after = estimateContextTokens(
-            preview(candidate.request),
-            candidate.request.contextBudget
-          );
+          const after = measure(candidate.request);
           // 85% is a soft trigger, not a second admission limit. Keep a valid original
           // continuation when summarization fails to reduce it; never admit an oversized body.
           const applied = after < before && after <= inputLimit;

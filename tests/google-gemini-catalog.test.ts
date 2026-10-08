@@ -141,3 +141,59 @@ test.each([
   expect(JSON.stringify(failed)).not.toContain(connectionBody.apiKey);
   if (failure === 'incomplete pagination') expect(fetch).toHaveBeenCalledTimes(6);
 });
+
+test('revoking AI Studio while reading prevents further pages and both success and failure saves', async () => {
+  const app = await application();
+  const fetch = vi.spyOn(globalThis, 'fetch');
+  for (const payload of [
+    { models: [model] },
+    { models: {} },
+    { models: [model], nextPageToken: 'second-page' },
+  ]) {
+    fetch.mockResolvedValue(jsonResponse({ models: [model] }));
+    const connection = await request(app, '/connections', connectionBody);
+    const listed = await request(app, `/connections/${connection.id}/catalog`, {});
+    let reading!: () => void;
+    const begun = new Promise<void>((resolve) => {
+      reading = resolve;
+    });
+    let finish!: () => void;
+    const stream = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          reading();
+          return new Promise<void>((resolve) => {
+            finish = () => {
+              controller.enqueue(new TextEncoder().encode(JSON.stringify(payload)));
+              controller.close();
+              resolve();
+            };
+          });
+        },
+      },
+      { highWaterMark: 0 }
+    );
+    fetch.mockClear();
+    fetch.mockResolvedValue(new Response(stream));
+    const refresh = request(app, `/connections/${connection.id}/catalog`, {}, 403);
+    await begun;
+    const disabled = app.store.product.connection(
+      {
+        title: listed.title,
+        protocol: listed.protocol,
+        endpoint: listed.endpoint,
+        credentialRef: listed.credentialRef,
+        enabled: false,
+        expectedRevision: listed.revision,
+      },
+      listed.id
+    );
+    finish();
+    await refresh;
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(app.store.product.get('connection', listed.id)).toEqual(disabled);
+    expect(disabled.catalog).toEqual(listed.catalog);
+    expect(disabled.catalogUpdatedAt).toBe(listed.catalogUpdatedAt);
+    expect(disabled.catalogError).toBeNull();
+  }
+});

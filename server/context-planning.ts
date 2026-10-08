@@ -5,12 +5,8 @@ import { countTextTokens } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import type { ContextPlan } from '../core/context-plan.js';
 import type { RunSnapshot } from '../core/types.js';
-import {
-  contextBudgetForModel,
-  estimateContextTokens,
-  validateContextBudget,
-} from '../core/context-budget.js';
-import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
+import { contextBudgetForModel, validateContextBudget } from '../core/context-budget.js';
+import { buildMainProviderRequest, measureProviderRequest } from './main-request.js';
 import type { Store } from './store.js';
 import type { ModelSnapshot } from '../core/product.js';
 
@@ -86,20 +82,13 @@ export function measureMainContext(snapshot: RunSnapshot): {
   try {
     const built = buildMainProviderRequest(snapshot);
     const target = built.snapshot.profile!.models.main!;
-    const preview = encodeMainPreview(built.request, target);
-    let estimatedInputTokens = estimateContextTokens(
-      preview.contextBody ?? preview.body,
-      built.request.contextBudget
-    );
+    let estimatedInputTokens = measureProviderRequest(built.request, target).estimatedInputTokens;
     // Shared preparation also serves helper artifacts and the economized bootstrap.
     // Cover both Codex envelopes without persisting a transport mode in story state.
     if (target.connection.protocol === 'codex-app-server-v1')
       estimatedInputTokens = Math.max(
         estimatedInputTokens,
-        estimateContextTokens(
-          encodeMainPreview(built.request, target, { codexNative: true }).body,
-          built.request.contextBudget
-        )
+        measureProviderRequest(built.request, target, { codexNative: true }).estimatedInputTokens
       );
     return { snapshot: built.snapshot, estimatedInputTokens };
   } catch (error) {

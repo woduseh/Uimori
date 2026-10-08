@@ -1,5 +1,5 @@
 import { modelRequestFields } from '../core/model-request-fields.js';
-import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
+import { contextBudgetForModel } from '../core/context-budget.js';
 import { STORY_READ_NAMES } from '../core/story-context.js';
 import {
   CONTEXT_RETRIEVAL_GUIDANCE,
@@ -15,7 +15,7 @@ import {
   type ProviderRequest,
 } from '../core/transport.js';
 import type { RunSnapshot, ToolEvent, Usage } from '../core/types.js';
-import { encodeMainPreview } from './main-request.js';
+import { measureProviderRequest } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
 
 /** Only completed reads may be replaced. Mutation receipts and advisor outputs stay exact. */
@@ -160,9 +160,8 @@ export async function compactToolReads(
   });
   const fits = (part: string): boolean => {
     try {
-      const preview = encodeMainPreview(requestFor(part), target);
       return (
-        estimateContextTokens(preview.contextBody ?? preview.body, budget) <=
+        measureProviderRequest(requestFor(part), target).estimatedInputTokens <=
         budget.inputTokenLimit * 0.8
       );
     } catch (error) {

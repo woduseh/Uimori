@@ -1,11 +1,6 @@
 import { modelRequestFields } from '../core/model-request-fields.js';
 import { createHash } from 'node:crypto';
-import { buildCodexDescriptor } from '../core/codex-protocol.js';
-import {
-  contextBudgetForModel,
-  estimateContextTokens,
-  validateContextBudget,
-} from '../core/context-budget.js';
+import { contextBudgetForModel, validateContextBudget } from '../core/context-budget.js';
 import type { ContextPlan } from '../core/context-plan.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { CONTEXT_SUMMARY_SEMANTICS, contextSummaryPolicy } from '../core/context-summary-policy.js';
@@ -28,7 +23,7 @@ import {
   measureMainContext,
   withContextProjection,
 } from './context-planning.js';
-import { encodeMainPreview } from './main-request.js';
+import { measureProviderRequest } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
 import { modelAuthorNotes } from '../core/notes.js';
 
@@ -141,11 +136,7 @@ function summaryRequest(
   };
 }
 function summaryInputTokens(request: ProviderRequest, target: ModelSnapshot): number {
-  if (target.connection.protocol === 'codex-app-server-v1') {
-    return estimateContextTokens(buildCodexDescriptor(request), request.contextBudget);
-  }
-  const preview = encodeMainPreview(request, target);
-  return estimateContextTokens(preview.contextBody ?? preview.body, request.contextBudget);
+  return measureProviderRequest(request, target).estimatedInputTokens;
 }
 function utf16End(text: string, start: number, size: number): number {
   let end = Math.min(text.length, start + size);

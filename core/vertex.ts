@@ -9,7 +9,8 @@ import { tokenizerInfo } from './text-tokens.js';
 import { createPublicTextProgress, publicProgressAllowed } from './provider-progress.js';
 import { vertexAccessToken } from './vertex-auth.js';
 import {
-  encodeVertex,
+  prepareGeminiRequest,
+  encodePreparedGeminiRequest,
   diagnosticVertexBody,
   VertexDecoder,
   VertexProtocolError,
@@ -165,7 +166,7 @@ export async function executeGeminiProvider(
       throw new ProviderContractError('UNSUPPORTED_PROTOCOL');
     const vertex = connection.protocol === 'vertex-gemini-v1';
     const request = validateRequest(requestValue);
-    const prepared = encodeVertex(request, connection.protocol);
+    const native = prepareGeminiRequest(request, connection.protocol);
     const requestedTier = request.generation?.serviceTier;
     const tier = (vertex ? options.vertexRequestTier : undefined) ?? requestedTier ?? 'standard';
     if (
@@ -178,9 +179,10 @@ export async function executeGeminiProvider(
       throw new ProviderContractError(
         vertex ? 'INVALID_VERTEX_REQUEST_TIER' : 'INVALID_GEMINI_REQUEST_TIER'
       );
-    decoder = new VertexDecoder(prepared.context);
+    decoder = new VertexDecoder(native.context);
     if (signal.aborted) return failure('CANCELLED');
-    assertContextBudget(prepared.contextBody ?? prepared.body, request.contextBudget);
+    assertContextBudget(native.body, request.contextBudget);
+    const prepared = encodePreparedGeminiRequest(native);
     const body = JSON.stringify(prepared.body);
     // Flex limits the complete inline payload, including base64 and native tool turns.
     if (

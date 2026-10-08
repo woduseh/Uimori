@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { EXECUTION_INPUT_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
+import { contextBudgetForModel } from '../core/context-budget.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import type { RequestPreview } from '../core/request-preview.js';
 import type { Connection, ModelPreset, PromptPreset } from '../core/product.js';
@@ -10,7 +10,7 @@ import type { RunSnapshot } from '../core/types.js';
 import { contextSourceRefs, withContextProjection } from './context-planning.js';
 import { CONTEXT_COMPACTION_TRIGGER_RATIO } from './context-compaction.js';
 import { loreSelectionPending } from './lore-selection.js';
-import { buildMainProviderRequest, encodeMainPreview } from './main-request.js';
+import { buildMainProviderRequest, measureProviderRequest } from './main-request.js';
 import { promptWorkspace } from './prompt-workspace.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
@@ -136,7 +136,7 @@ export async function previewNextRequest(
       const built = buildMainProviderRequest(snapshot);
       // This follows the current transport choice without changing evaluation policy.
       const evaluation = target.evaluationTools;
-      const wire = encodeMainPreview(built.request, target, {
+      const measured = measureProviderRequest(built.request, target, {
         codexNative:
           target.connection.protocol === 'codex-app-server-v1' &&
           !(
@@ -144,11 +144,8 @@ export async function previewNextRequest(
             evaluation.approvalReasoningMode === 'economized'
           ),
       });
-      const estimated = estimateContextTokens(wire.contextBody ?? wire.body, budget);
-      const summary = requestReceipt(built.snapshot, {
-        ...wire,
-        body: wire.contextBody ?? wire.body,
-      }).summary;
+      const estimated = measured.estimatedInputTokens;
+      const summary = requestReceipt(built.snapshot, measured).summary;
       result.summary.inUse =
         summary?.status === 'unverified' ? null : summary?.status === 'included';
       if (previous?.summary && result.summary.inUse !== true)

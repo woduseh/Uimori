@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
+import * as vertexPdf from '../core/vertex-pdf.js';
 import {
   executeProvider,
   validateConnection,
@@ -20,6 +21,7 @@ const connection: ProviderConnection = {
 const key = 'SYNTHETIC_GEMINI_KEY';
 const callbacks: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   for (const close of callbacks.splice(0)) await close();
 });
@@ -221,12 +223,14 @@ test('Studio rejects Cloud credential references, missing keys and oversized ori
   const input = request();
   input.generation!.pdfInput = true;
   input.input.source = { text: '원문 한도 보호. '.repeat(10000) };
+  const createPdf = vi.spyOn(vertexPdf, 'createVertexPdf');
   const large = await executeProvider(connection, input, {
     ...options(),
     resolveCredential,
     onWire,
   });
   expect(large.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
+  expect(createPdf).not.toHaveBeenCalled();
   expect(resolveCredential).not.toHaveBeenCalled();
   expect(onWire).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
