@@ -40,6 +40,7 @@ export function estimateCost(
     'vercel-chat-v1',
     'deepseek-chat-v1',
     'vertex-gemini-v1',
+    'google-gemini-v1',
     'anthropic-messages-v1',
   ];
   if (!supported.includes(pricing.protocol)) return unavailable('PRICING_PROTOCOL_UNSUPPORTED');

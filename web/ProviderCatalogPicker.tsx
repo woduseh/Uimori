@@ -42,9 +42,11 @@ export function ProviderCatalogPicker({
           <small>
             {connection.protocol === 'vertex-gemini-v1'
               ? '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회해요.'
-              : connection.protocol === 'codex-app-server-v1'
-                ? '로그인한 Codex 실행기의 모델 목록을 조회해요.'
-                : '저장한 프로바이더에서 모델 목록을 조회해요.'}
+              : connection.protocol === 'google-gemini-v1'
+                ? '등록한 AI Studio API 키로 Gemini API 모델 목록을 조회해요.'
+                : connection.protocol === 'codex-app-server-v1'
+                  ? '로그인한 Codex 실행기의 모델 목록을 조회해요.'
+                  : '저장한 프로바이더에서 모델 목록을 조회해요.'}
           </small>
         </div>
         <button

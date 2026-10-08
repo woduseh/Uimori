@@ -25,7 +25,12 @@ import {
   type AuxiliarySource,
   type SourceTimeContext,
 } from '../core/auxiliary.js';
-import type { Connection, ModelSnapshot, TaskRole } from '../core/product.js';
+import {
+  isGeminiProtocol,
+  type Connection,
+  type ModelSnapshot,
+  type TaskRole,
+} from '../core/product.js';
 import {
   executeProvider,
   type Json,
@@ -438,7 +443,7 @@ export async function runAuxiliaryJob(
         remainingTimeout ??
         hooks.timeoutMs ??
         target.timeoutMs ??
-        (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
+        (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
       onWire: async (wire, _resumeAttemptId, evidence) => {
         attemptId = await hooks.onAttemptStart(
           job.kind === 'translation'

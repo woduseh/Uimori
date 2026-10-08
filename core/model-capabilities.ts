@@ -240,6 +240,10 @@ const capabilities: readonly ModelCapability[] = [
   },
 ];
 export function supportedModels(protocol: ProviderProtocol): readonly ModelCapability[] {
+  if (protocol === 'google-gemini-v1')
+    return capabilities
+      .filter((item) => item.protocol === 'vertex-gemini-v1')
+      .map((item) => ({ ...item, protocol, serviceTiers: ['standard', 'flex', 'priority'] }));
   if (protocol === 'openai-chat-v1')
     return capabilities
       .filter((item) => item.protocol === 'openai-responses-v1')
@@ -297,17 +301,19 @@ export function protocolCacheTtls(
 ): readonly NonNullable<ModelGeneration['cacheTtl']>[] | undefined {
   return cacheTtls[protocol];
 }
-/** Service tiers to suggest; Gemini's two tiers are enforced by its transport, the rest are provider strings. */
+/** Service tiers to suggest; native Gemini tiers use each API's vocabulary. */
 export function protocolServiceTiers(protocol: ProviderProtocol): readonly string[] | undefined {
   return protocol === 'vertex-gemini-v1'
     ? ['standard', 'flex']
-    : protocol === 'anthropic-messages-v1'
-      ? ['auto', 'standard_only']
-      : ['openai-responses-v1', 'openai-chat-v1', 'vercel-chat-v1', 'deepseek-chat-v1'].includes(
-            protocol
-          )
-        ? ['auto', 'default', 'flex', 'priority']
-        : undefined;
+    : protocol === 'google-gemini-v1'
+      ? ['standard', 'flex', 'priority']
+      : protocol === 'anthropic-messages-v1'
+        ? ['auto', 'standard_only']
+        : ['openai-responses-v1', 'openai-chat-v1', 'vercel-chat-v1', 'deepseek-chat-v1'].includes(
+              protocol
+            )
+          ? ['auto', 'default', 'flex', 'priority']
+          : undefined;
 }
 
 export function validateGenerationShape(value: unknown): asserts value is ModelGeneration {
@@ -368,6 +374,12 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
  */
 export function validateModelOptions(g: ModelGeneration, protocol: ProviderProtocol): void {
   validateGenerationShape(g);
+  if (
+    protocol === 'google-gemini-v1' &&
+    g.serviceTier !== undefined &&
+    !['standard', 'flex', 'priority'].includes(g.serviceTier)
+  )
+    reject();
   const keys = protocolOptionKeys(protocol);
   for (const key of Object.keys(g)) {
     if (key === 'modelFamily' || key === 'maxOutputTokens' || key === 'temperature') continue;

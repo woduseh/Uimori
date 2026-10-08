@@ -8,7 +8,8 @@ import type {
   ProviderProtocol,
   VertexRequestTier,
 } from './product.js';
-import { executeVertexProvider } from './vertex.js';
+import { executeGeminiProvider } from './vertex.js';
+import { isGeminiProtocol } from './product.js';
 import { executeNativeProvider } from './provider-http.js';
 import type { ProviderPrompt } from './risu-prompt.js';
 import { ProviderContractError } from './provider-errors.js';
@@ -308,8 +309,8 @@ export async function executeProvider(
       opaqueState: null,
     };
   }
-  if (connectionValue.protocol === 'vertex-gemini-v1')
-    return executeVertexProvider(connectionValue, requestValue, options);
+  if (isGeminiProtocol(connectionValue.protocol))
+    return executeGeminiProvider(connectionValue, requestValue, options);
   if (connectionValue.protocol !== 'fixture-sse-v1')
     return executeNativeProvider(connectionValue, requestValue, options);
   const result: ProviderResult = {

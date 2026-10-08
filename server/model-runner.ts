@@ -7,7 +7,7 @@ import { estimateContextTokens } from '../core/context-budget.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
 import { executeTool } from '../core/provider.js';
 import { executeFixtureMain, type FixtureGeneration } from '../core/fixture-provider.js';
-import type { Connection } from '../core/product.js';
+import { isGeminiProtocol, type Connection } from '../core/product.js';
 import {
   executeProvider,
   type Json,
@@ -495,7 +495,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         remainingTimeout ??
         hooks.timeoutMs ??
         target.timeoutMs ??
-        (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
+        (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
       onWire: async (wire, resumeAttemptId, evidence) => {
         const contextWire = evidence?.contextBody ? { ...wire, body: evidence.contextBody } : wire;
         attemptId = await hooks.onAttemptStart(

@@ -45,6 +45,7 @@ describe('local provider definitions (no network or provider capability inferenc
       'temperature',
       'timeoutMs',
       'thinkingLevel',
+      'pdfInput',
       'topP',
       'stopSequences',
       'serviceTier',
@@ -59,9 +60,13 @@ describe('local provider definitions (no network or provider capability inferenc
         item.id === 'anthropic-messages-v1' || item.id === 'vercel-chat-v1'
       );
       expect(item.optionKeys).not.toContain('thinkingBudgetTokens');
-      if (!['vertex-gemini-v1', 'fixture-sse-v1', 'vercel-chat-v1'].includes(item.id))
+      if (
+        !['vertex-gemini-v1', 'google-gemini-v1', 'fixture-sse-v1', 'vercel-chat-v1'].includes(
+          item.id
+        )
+      )
         expect(item.optionKeys).not.toContain('thinkingLevel');
-      if (['vertex-gemini-v1', 'fixture-sse-v1'].includes(item.id))
+      if (['vertex-gemini-v1', 'google-gemini-v1', 'fixture-sse-v1'].includes(item.id))
         expect(item.optionKeys).not.toContain('reasoningEffort');
       if (item.id !== 'anthropic-messages-v1' && item.id !== 'vercel-chat-v1')
         expect(item.optionKeys).not.toContain('outputEffort');
@@ -70,6 +75,27 @@ describe('local provider definitions (no network or provider capability inferenc
     }
     expect(providerDefinition('anthropic-messages-v1').auth).toBe('api-key');
     expect(providerDefinition('vertex-gemini-v1').auth).toBe('adc-or-bearer');
+    expect(providerDefinition('google-gemini-v1').auth).toBe('api-key');
+    expect(providerDefinition('google-gemini-v1').credentialRefDefault).toBe('GEMINI_API_KEY');
+    expect(providerDefinition('google-gemini-v1').optionKeys).toContain('pdfInput');
+    expect(providerDefinition('google-gemini-v1').optionKeys).toContain('serviceTier');
+  });
+  test('AI Studio keys are restricted to the official Gemini API root', () => {
+    expect(
+      validateProviderEndpoint(
+        'google-gemini-v1',
+        'https://generativelanguage.googleapis.com/v1beta/'
+      )
+    ).toBe('https://generativelanguage.googleapis.com/v1beta');
+    for (const endpoint of [
+      'https://example.com/v1beta',
+      'https://generativelanguage.googleapis.com/v1beta?key=secret',
+      'https://generativelanguage.googleapis.com/v1beta/models',
+      'http://generativelanguage.googleapis.com/v1beta',
+    ])
+      expect(() => validateProviderEndpoint('google-gemini-v1', endpoint)).toThrow(
+        'INVALID_GEMINI_ENDPOINT'
+      );
   });
   test('callers cannot mutate shared definitions or their nested capability/option metadata', () => {
     expect(Object.isFrozen(PROVIDER_DEFINITIONS)).toBe(true);

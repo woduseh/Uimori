@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import {
   catalogEntryMetadata,
   catalogPricing,
+  googleGeminiModelEntry,
   vertexPublisherModelEntry,
 } from '../core/provider-catalog.js';
 import { modelHints, thinkingField, thinkingWireField } from '../core/model-hints.js';
@@ -11,6 +12,43 @@ const connection = (
   protocol: Connection['protocol'],
   catalog: Connection['catalog'] = []
 ): Pick<Connection, 'protocol' | 'catalog'> => ({ protocol, catalog });
+
+test('Gemini models.list exposes generation IDs and published limits without inventing capabilities', () => {
+  expect(
+    googleGeminiModelEntry({
+      name: 'models/gemini-2.5-flash',
+      displayName: 'Gemini 2.5 Flash',
+      supportedGenerationMethods: ['generateContent', 'countTokens'],
+      inputTokenLimit: 1048576,
+      outputTokenLimit: 65536,
+      thinking: true,
+    })
+  ).toEqual({
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    capabilities: { tools: null, structuredOutput: null },
+    limits: { inputTokenLimit: 1048576, maxOutputTokens: 65536 },
+    priceRevision: null,
+  });
+  for (const name of ['models/embedding-001', 'gemini-2.5-flash', 'models/gemini-evil/path'])
+    expect(
+      googleGeminiModelEntry({ name, supportedGenerationMethods: ['generateContent'] })
+    ).toBeUndefined();
+  expect(
+    googleGeminiModelEntry({
+      name: 'models/gemini-2.5-flash',
+      supportedGenerationMethods: ['embedContent'],
+    })
+  ).toBeUndefined();
+  expect(
+    googleGeminiModelEntry({
+      name: 'models/gemini-2.5-flash',
+      supportedGenerationMethods: ['generateContent'],
+      inputTokenLimit: 0,
+      outputTokenLimit: '65536',
+    })
+  ).not.toHaveProperty('limits');
+});
 
 const gatewayPricing = () => ({
   input: '0.000002',

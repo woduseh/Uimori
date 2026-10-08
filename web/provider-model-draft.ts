@@ -5,6 +5,7 @@ import type {
   ModelPreset,
   VertexRequestTier,
 } from '../core/product.js';
+import { isGeminiProtocol } from '../core/product.js';
 import { effectiveModelFamily, modelFamilyOptionKeys } from '../core/model-family.js';
 import { TOKENIZER_PROFILES, type TokenizerProfileId } from '../core/tokenizer-profiles.js';
 import type { ModelPricing, TokenRates } from '../core/pricing-types.js';
@@ -242,7 +243,7 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
     ...(draft.structuredOutput !== 'default'
       ? { structuredOutput: draft.structuredOutput === 'on' }
       : {}),
-    ...(connection.protocol === 'vertex-gemini-v1' && draft.pdfInput ? { pdfInput: true } : {}),
+    ...(isGeminiProtocol(connection.protocol) && draft.pdfInput ? { pdfInput: true } : {}),
     ...(draft.reasoningEffort ? { reasoningEffort: draft.reasoningEffort } : {}),
     ...(draft.outputEffort ? { outputEffort: draft.outputEffort } : {}),
     ...(draft.verbosity ? { verbosity: draft.verbosity } : {}),

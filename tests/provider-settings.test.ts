@@ -28,6 +28,7 @@ const roots: Record<ProviderProtocol, string> = {
   'fixture-sse-v1': 'http://127.0.0.1:9/turn',
   'vertex-gemini-v1':
     'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
+  'google-gemini-v1': 'https://generativelanguage.googleapis.com/v1beta',
   'openai-responses-v1': 'https://api.openai.com/v1',
   'codex-app-server-v1': 'codex://local',
   'anthropic-messages-v1': 'https://api.anthropic.com/v1',
@@ -109,7 +110,7 @@ const modelBody = (connection: Connection, changes: Record<string, unknown> = {}
   title: 'Synthetic model',
   connectionId: connection.id,
   modelId:
-    connection.protocol === 'vertex-gemini-v1'
+    connection.protocol === 'vertex-gemini-v1' || connection.protocol === 'google-gemini-v1'
       ? 'gemini-3.8-flash'
       : connection.protocol === 'anthropic-messages-v1'
         ? 'claude-opus-5'
@@ -134,6 +135,42 @@ const response = (value: unknown) =>
   new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
 
 describe('provider settings, catalogs and archive contracts', () => {
+  test('Google AI Studio saves credentials without returning the key and accepts only the native API root', async () => {
+    const app = await application();
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      connectionBody('google-gemini-v1', {
+        endpoint: roots['google-gemini-v1'] + '/',
+        apiKey: 'SYNTHETIC_STUDIO_KEY',
+      })
+    );
+    expect(connection.endpoint).toBe(roots['google-gemini-v1']);
+    expect(connection.credentialRef).toBeTruthy();
+    expect(JSON.stringify(connection)).not.toContain('SYNTHETIC_STUDIO_KEY');
+    const model = await request<ModelPreset>(
+      app,
+      '/model-presets',
+      modelBody(connection, { pdfInput: true, thinkingLevel: 'HIGH' })
+    );
+    expect(app.store.product.modelSnapshot(model.id)).toMatchObject({
+      pdfInput: true,
+      thinkingLevel: 'HIGH',
+      connection: { protocol: 'google-gemini-v1', credentialRef: connection.credentialRef },
+    });
+    for (const endpoint of [
+      'http://generativelanguage.googleapis.com/v1beta',
+      'https://synthetic.invalid/v1beta',
+      roots['google-gemini-v1'] + '/models',
+      roots['google-gemini-v1'] + '?key=SYNTHETIC_STUDIO_KEY',
+      roots['google-gemini-v1'] + '#fragment',
+      'https://user@generativelanguage.googleapis.com/v1beta',
+    ])
+      await request(app, '/connections', connectionBody('google-gemini-v1', { endpoint }), 400);
+    expect(app.store.product.all('connection')).toHaveLength(1);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test('accepts old contextTools values without exposing or resaving the retired setting', async () => {
     const app = await application();
     const connection = await request<Connection>(
@@ -366,7 +403,9 @@ describe('provider settings, catalogs and archive contracts', () => {
     for (const protocol of PROVIDER_PROTOCOLS) {
       const connection = await request<Connection>(app, '/connections', connectionBody(protocol));
       const forbidden =
-        protocol === 'fixture-sse-v1' || protocol === 'vertex-gemini-v1'
+        protocol === 'fixture-sse-v1' ||
+        protocol === 'vertex-gemini-v1' ||
+        protocol === 'google-gemini-v1'
           ? [
               { structuredOutput: true },
               { reasoningEffort: 'high' },

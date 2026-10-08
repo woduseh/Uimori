@@ -88,19 +88,22 @@ test.each(['openai-chat-v1', 'vercel-chat-v1'] as const)(
   }
 );
 
-test('Vertex output is already candidates plus thoughts; cached input is included', () => {
-  const result = estimateCost(
-    snapshot('vertex-gemini-v1'),
-    {
-      inputTokens: 1000,
-      outputTokens: 100,
-      raw: { cachedContentTokenCount: 200, candidatesTokenCount: 60, thoughtsTokenCount: 40 },
-    },
-    started
-  );
-  expect(result.usd).toBeCloseTo(0.0025, 8);
-  expect(value(result, 'output')?.tokens).toBe(100);
-});
+test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
+  '%s output includes thoughts and uses the supplied manual cache rate',
+  (protocol) => {
+    const result = estimateCost(
+      snapshot(protocol),
+      {
+        inputTokens: 1000,
+        outputTokens: 100,
+        raw: { cachedContentTokenCount: 200, candidatesTokenCount: 60, thoughtsTokenCount: 40 },
+      },
+      started
+    );
+    expect(result.usd).toBeCloseTo(0.0025, 8);
+    expect(value(result, 'output')?.tokens).toBe(100);
+  }
+);
 
 test('Vertex omitted zero cache scalar still prices confirmed input and output', () => {
   const raw = { promptTokenCount: 1000, candidatesTokenCount: 100, totalTokenCount: 1100 };

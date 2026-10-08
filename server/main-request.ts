@@ -16,7 +16,7 @@ import { nativeRisuPending } from './risu-native-run.js';
 import { attachMainHostContext, requestInput } from './main-host-context.js';
 import { buildMainInput, CATALOG_READ_GUIDANCE, type MainInput } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
-import type { Connection, ModelPreset } from '../core/product.js';
+import { isGeminiProtocol, type Connection, type ModelPreset } from '../core/product.js';
 import {
   nativeMessageMetadata,
   planNativeMessages,
@@ -256,7 +256,7 @@ export function encodeMainPreview(
   let encoded: { body: Json; contextBody?: Json; messageMetadata?: NativeMessageMetadata };
   if (protocol === 'openai-responses-v1') encoded = encodeResponses(checked);
   else if (protocol === 'anthropic-messages-v1') encoded = encodeAnthropic(checked);
-  else if (protocol === 'vertex-gemini-v1') encoded = encodeVertex(checked);
+  else if (isGeminiProtocol(protocol)) encoded = encodeVertex(checked, protocol);
   else if (
     protocol === 'openai-chat-v1' ||
     protocol === 'vercel-chat-v1' ||

@@ -118,7 +118,7 @@ function encodedBody(request: ProviderRequest, value: AuxiliaryBundle, protocol:
   model.modelId =
     protocol === 'anthropic-messages-v1'
       ? 'claude-opus-5'
-      : protocol === 'vertex-gemini-v1'
+      : protocol === 'vertex-gemini-v1' || protocol === 'google-gemini-v1'
         ? 'gemini-3.8-flash'
         : 'gpt-6-astra';
   return encodeMainPreview({ ...request, modelId: model.modelId }, model).body;
