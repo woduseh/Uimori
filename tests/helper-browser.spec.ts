@@ -481,11 +481,17 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
     if (width === DESKTOP_WIDTH) state.loseNext();
     await panel.getByRole('button', { name: '현재 작업에 추가', exact: true }).click();
     if (width === DESKTOP_WIDTH) {
-      await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toBeVisible();
+      await expect(
+        panel.getByRole('button', { name: '이전 요청 확인', exact: true })
+      ).toBeVisible();
       await expect(panel.getByLabel('도우미에게 요청')).toHaveValue(instructionText);
       await page.reload();
       panel = await open(page);
-      await panel.getByRole('button', { name: '접수 확인·다시 시도' }).click();
+      await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+      await page
+        .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
+        .getByRole('button', { name: '접수 확인·다시 시도' })
+        .click();
       await expect(panel.locator('.helper-outbox')).toHaveCount(0);
       expect(state.steerPosts).toHaveLength(2);
       expect(state.steerPosts[1]).toEqual(state.steerPosts[0]);
@@ -795,10 +801,23 @@ test('HELPUI11 an IndexedDB write failure retains the exact request for explicit
   });
   await input.fill('보관에 실패한 첫 요청');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
-  await expect(panel.getByRole('button', { name: '보관 없이 보내기' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '도우미 요청 보관' })).toHaveCount(0);
   expect(state.posts).toHaveLength(0);
   await input.fill('보내는 동안 남길 새 입력');
-  await panel.getByRole('button', { name: '보관 없이 보내기' }).click();
+  await panel.getByRole('button', { name: '도우미 이전 요청 확인', exact: true }).click();
+  const decision = page.getByRole('dialog', { name: '도우미 요청 보관', exact: true });
+  await expect(decision).toContainText('아직 보내지 않았어요');
+  await decision.getByRole('button', { name: '닫기', exact: true }).last().click();
+  expect(state.posts).toHaveLength(0);
+  await expect(input).toHaveValue('보내는 동안 남길 새 입력');
+  await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await decision.getByRole('button', { name: '다시 보관하고 보내기' }).click();
+  await expect(decision).toBeHidden();
+  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();
+  expect(state.posts).toHaveLength(0);
+  await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await decision.getByRole('button', { name: '보관 없이 보내기' }).click();
   await expect.poll(() => state.posts.length).toBe(1);
   expect(state.posts[0].text).toBe('보관에 실패한 첫 요청');
   await expect(input).toHaveValue('보내는 동안 남길 새 입력');
@@ -866,17 +885,29 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   state.loseNext();
   await input.fill('접수 응답을 잃은 작업');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
-  await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
   const key = state.posts.at(-1)!.requestKey;
   expect(state.current().tasks).toHaveLength(3);
   await page.reload();
   await open(page);
   await expect(panel.locator('.streaming-text')).toHaveText(`실제 공개 조각${continuation}`);
-  await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toBeVisible();
-  await panel.getByRole('button', { name: '접수 확인·다시 시도' }).click();
-  await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await input.fill('접수 확인 중에도 보존할 새 입력');
+  const postsBeforeConfirmation = state.posts.length;
+  await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  const decision = page.getByRole('dialog', { name: '도우미 요청 확인', exact: true });
+  await decision.getByRole('button', { name: '닫기', exact: true }).last().click();
+  expect(state.posts).toHaveLength(postsBeforeConfirmation);
+  await expect(input).toHaveValue('접수 확인 중에도 보존할 새 입력');
+  await panel.getByRole('button', { name: '도우미 이전 요청 확인', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
+    .getByRole('button', { name: '접수 확인·다시 시도' })
+    .click();
+  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toHaveCount(0);
   expect(state.posts.at(-1)!.requestKey).toBe(key);
   expect(state.current().tasks).toHaveLength(3);
+  await expect(input).toHaveValue('접수 확인 중에도 보존할 새 입력');
   await state.complete(first);
   await expect(panel.getByText('합성 완료 응답', { exact: true })).toBeVisible();
   const reads = state.eventReads,
@@ -940,8 +971,19 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
     .get(artifact.id)!
     .push({ ...artifact, revision: 2, origin: 'edit', text: '다른 창의 편집' });
   await card.getByRole('button', { name: '장면 편집 저장' }).click();
+  const conflict = page.getByRole('alertdialog', { name: '가정 장면 저장 충돌' });
+  await expect(conflict).toBeVisible();
+  await conflict.getByRole('button', { name: '현재 입력 유지' }).click();
   await expect(card.getByLabel('가정 장면 직접 편집')).toHaveValue('내 장면 편집 초안');
-  await card.getByRole('button', { name: '최신 장면을 확인했어요 · 내 초안 유지' }).click();
+  await card.getByRole('button', { name: '장면 편집 저장' }).click();
+  await conflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(conflict.getByLabel('현재 저장본')).toContainText('다른 창의 편집');
+  expect(state.artifacts.get(artifact.id)!.at(-1)!.revision).toBe(2);
+  await conflict.getByRole('button', { name: '현재 입력 유지' }).click();
+  await card.getByRole('button', { name: '장면 편집 저장' }).click();
+  await expect(conflict).toBeVisible();
+  await conflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await conflict.getByRole('button', { name: '저장본 확인 완료', exact: true }).click();
   await card.getByRole('button', { name: '장면 편집 저장' }).click();
   await expect(card.locator('.helper-prose')).toHaveText('내 장면 편집 초안');
   expect(state.artifacts.get(artifact.id)!.at(-1)!.revision).toBe(3);
@@ -1078,12 +1120,16 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await panel.getByLabel('요청 수정 내용').fill('고친 요청');
   state.loseNext();
   await panel.getByRole('button', { name: '수정한 요청 보내기', exact: true }).click();
-  await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
   const key = state.posts.at(-1)!.requestKey;
   await page.reload();
   panel = await open(page);
-  await expect(panel.getByRole('button', { name: '접수 확인·다시 시도' })).toBeVisible();
-  await panel.getByRole('button', { name: '접수 확인·다시 시도' }).click();
+  await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
+    .getByRole('button', { name: '접수 확인·다시 시도' })
+    .click();
   await expect.poll(() => state.posts.length).toBe(2);
   expect(state.posts[1].requestKey).toBe(key);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('새 요청 작성 중');

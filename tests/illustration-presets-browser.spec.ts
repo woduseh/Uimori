@@ -179,6 +179,13 @@ test('IPUI02 stale edits are not overwritten and can be saved as a new copy', as
   });
   expect(remote.ok()).toBe(true);
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  const conflictDialog = page.getByRole('alertdialog', { name: '삽화 프리셋 저장 내용 확인' });
+  await conflictDialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('saved in another window');
+  await expect(conflictDialog.getByLabel('현재 저장본')).not.toContainText(
+    'unsaved local direction'
+  );
+  await conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
   await expect(editor.getByRole('alert')).toContainText('다른 곳');
   await expect(editor.getByLabel('삽화 그림 지침')).toHaveValue('unsaved local direction');
   expect(

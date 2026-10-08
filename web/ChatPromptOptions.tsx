@@ -4,7 +4,9 @@ import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import type { Library, PromptWorkspace } from '../core/product.js';
 import { resolvePromptValues, reconcilePromptValues } from '../core/risu-prompt.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
-import { api } from './api.js';
+import { api, ApiError } from './api.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
+import { promptControls } from '../core/risu-prompt.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { ChatOptionSettings } from './ChatOptionSettings.js';
 import './chat-prompt-options.css';
@@ -244,6 +246,7 @@ function ChatScopeEditor({
 }
 
 function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorkspace }) {
+  const [saveConflict, setSaveConflict] = useState(false);
   const [base, setBase] = useState(workspace);
   const [values, setValues] = useState(workspace.main.values);
   const [busy, setBusy] = useState(false);
@@ -273,7 +276,11 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
     return () => removeEventListener('beforeunload', warn);
   }, [dirty]);
   async function save() {
-    if (lock.current || props.disabled || conflict) return;
+    if (lock.current || props.disabled) return;
+    if (conflict) {
+      setSaveConflict(true);
+      return;
+    }
     lock.current = true;
     setBusy(true);
     props.onBusyChange(true);
@@ -291,6 +298,7 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
       setValues(accepted.main.values);
     } catch (caught) {
       setError(`${(caught as Error).message} 입력한 옵션은 유지했어요.`);
+      if (caught instanceof ApiError && caught.status === 409) setSaveConflict(true);
     } finally {
       lock.current = false;
       setBusy(false);
@@ -299,6 +307,21 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
   }
   return (
     <>
+      <SaveConflictDialog
+        open={saveConflict}
+        title="프롬프트 옵션 저장 내용 확인"
+        onClose={() => setSaveConflict(false)}
+        readSaved={async () => {
+          const value = await api<PromptWorkspace>('/prompt-workspace');
+          return [
+            { label: '프롬프트', value: value.main.title },
+            ...promptControls(value.main.program).map((control) => ({
+              label: control.label,
+              value: String(value.main.values[control.id] ?? control.default ?? ''),
+            })),
+          ];
+        }}
+      />
       <div className="chat-options-body">
         <h3>{base.main.title}</h3>
         <fieldset disabled={busy || props.disabled} className="chat-options-fields">
@@ -376,7 +399,7 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
         </button>
         <button
           type="button"
-          disabled={!dirty || busy || props.disabled || conflict}
+          disabled={!dirty || busy || props.disabled}
           onClick={() => void save()}
         >
           {busy ? '적용 중…' : '현재 옵션 적용'}

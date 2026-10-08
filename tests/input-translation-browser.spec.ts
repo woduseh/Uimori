@@ -415,6 +415,10 @@ test('ITRAN uncertain admission retains undo across reload and cleans it only af
   await expect(composer(page)).toHaveValue(translated);
   await expect(page.getByRole('button', { name: '되돌리기', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+    .getByRole('button', { name: '접수 확인', exact: true })
+    .click();
   await expect(composer(page)).toHaveValue('');
   await expect(page.getByText('번역 전 원문 보기', { exact: true })).toHaveCount(0);
   expect(calls).toHaveLength(2);

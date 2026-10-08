@@ -2,7 +2,8 @@ import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
-import { api } from './api.js';
+import { api, ApiError } from './api.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useModelSelection } from './model-selection.js';
 import { EditIcon, RefreshIcon, SettingsIcon } from './ui-icons.js';
@@ -32,6 +33,7 @@ export function ModelWorkspaceEditor({
   const lock = useRef(false);
   const [message, setMessage] = useState('');
   const [saveError, setSaveError] = useState('');
+  const [saveConflict, setSaveConflict] = useState(false);
   const { canSelect } = useModelSelection(library.models, library.connections);
   useEffect(() => {
     if (workspace && !dirty && !busy)
@@ -66,7 +68,6 @@ export function ModelWorkspaceEditor({
     );
   const conflict = !!workspace && workspace.revision > draft.revision;
   const invalid =
-    conflict ||
     !Number.isFinite(draft.mainJudgmentThreshold) ||
     (draft.mainJudgmentThreshold ?? 0.9) <= 0.5 ||
     (draft.mainJudgmentThreshold ?? 0.9) > 1 ||
@@ -81,6 +82,10 @@ export function ModelWorkspaceEditor({
     draft.translationPolicy.judgment.threshold > 1;
   async function save() {
     if (!draft || lock.current || invalid) return false;
+    if (conflict) {
+      setSaveConflict(true);
+      return false;
+    }
     if (!dirty) return true;
     lock.current = true;
     setBusy(true);
@@ -110,6 +115,7 @@ export function ModelWorkspaceEditor({
       })
       .catch((caught: Error) => {
         setSaveError(caught.message);
+        if (caught instanceof ApiError && caught.status === 409) setSaveConflict(true);
         return false;
       })
       .finally(() => {
@@ -463,6 +469,25 @@ export function ModelWorkspaceEditor({
           />
         </div>
       </fieldset>
+      <SaveConflictDialog
+        open={saveConflict}
+        title="역할별 모델 저장 내용 확인"
+        onClose={() => setSaveConflict(false)}
+        readSaved={async () => {
+          const value = await api<ModelWorkspace>('/model-workspace');
+          const modelName = (ref: ModelRef | null | undefined) =>
+            library.models.find((model) => model.id === ref?.id)?.title ??
+            (ref ? '확인 필요' : '기본값');
+          return [
+            { label: '제목 모델', value: modelName(value.titleModel) },
+            { label: '도우미 모델', value: modelName(value.helperModel) },
+            { label: '요약 모델', value: modelName(value.contextModel) },
+            { label: '스크립트 모델', value: modelName(value.scriptModel) },
+            { label: '응답 재검토', value: value.mainJudgmentEnabled ? '켜짐' : '꺼짐' },
+            { label: '번역 자동 재요청 횟수', value: String(value.translationPolicy.maxRetries) },
+          ];
+        }}
+      />
       {conflict && dirty && (
         <p role="alert">
           다른 곳에서 전역 설정이 바뀌었어요. 초안은 유지했어요. 최신 설정을 불러온 뒤 다시 적용해

@@ -28,6 +28,7 @@ import {
   type Theme,
   type ThemeColorKey,
   type ThemeDefinition,
+  type ThemeCatalog,
 } from '../core/themes.js';
 import { BUILTIN_PALETTES, THEME_PALETTE_ID } from '../core/theme-palettes.js';
 import { api, ApiError, saveDownload } from './api.js';
@@ -36,6 +37,7 @@ import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { Dialog } from './Dialog.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import './themes.css';
 import './deletion.css';
 
@@ -67,6 +69,7 @@ export function ThemeSettings({
   onSaveHandlerChange?: SettingsSaveRegistration;
   active?: boolean;
 }) {
+  const [saveConflict, setSaveConflict] = useState(false);
   const state = useThemes();
   const [draft, setDraft] = useState<Draft | null>(null);
   const [baseline, setBaseline] = useState('');
@@ -144,7 +147,7 @@ export function ThemeSettings({
     },
     ...BUILTIN_PALETTES,
   ];
-  async function action(work: () => Promise<void>) {
+  async function action(work: () => Promise<void>, saveAttempt = false) {
     if (locked.current) return;
     locked.current = true;
     setBusy(true);
@@ -154,7 +157,10 @@ export function ThemeSettings({
     try {
       await work();
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 409) await state.refresh();
+      if (cause instanceof ApiError && cause.status === 409) {
+        await state.refresh();
+        if (saveAttempt) setSaveConflict(true);
+      }
       setError((cause as Error).message);
     } finally {
       locked.current = false;
@@ -206,7 +212,7 @@ export function ThemeSettings({
       await state.refresh(true);
       setNotice('테마를 저장했어요. 적용 버튼으로 사용할 수 있어요.');
       saved = true;
-    });
+    }, true);
     return saved;
   }
   useSettingsSaveHandler(onSaveHandlerChange, save);
@@ -271,6 +277,21 @@ export function ThemeSettings({
   }
   return (
     <section className="theme-settings" aria-label="테마와 색상">
+      <SaveConflictDialog
+        open={saveConflict}
+        title="테마 저장 내용 확인"
+        onClose={() => setSaveConflict(false)}
+        readSaved={async () => {
+          const value = (await api<ThemeCatalog>('/themes')).themes.find(
+            (theme) => theme.id === draft?.id
+          );
+          if (!value) throw new Error('저장본을 찾을 수 없어요. 현재 입력은 유지돼요.');
+          return [
+            { label: '이름', value: value.title },
+            { label: '설명', value: value.description },
+          ];
+        }}
+      />
       <p className="theme-intro">
         레이아웃은 화면 배치를, 팔레트는 색상을 바꿔요. 화면 모드와 각각 따로 선택할 수 있어요.
       </p>

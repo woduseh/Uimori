@@ -205,6 +205,11 @@ test('JEVUI02 stale key edits preserve the draft until explicit refresh and save
   ).not.toContain(draft);
   await saveKey(request, syntheticKey + '-other-window');
   await save.click();
+  const conflictDialog = page.getByRole('alertdialog', { name: 'TypeSafe AI 저장 내용 확인' });
+  await conflictDialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('설정됨');
+  await expect(conflictDialog).not.toContainText(syntheticKey);
+  await conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
   await expect(section.getByRole('alert')).toContainText('입력한 키는 유지돼요');
   await expect(key).toHaveValue(draft);
   await expect(save).toBeDisabled();

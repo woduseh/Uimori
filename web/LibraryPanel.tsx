@@ -9,6 +9,8 @@ import {
   ResourceEditorProvider,
   ResourceEditorStatus,
   ResourceEditorActions,
+  ResourceEditorLeaveWarning,
+  requestResourceConflictReview,
   discardActiveEditor,
   saveActiveEditor,
   useEditorSaveCommand,
@@ -662,6 +664,7 @@ export function LibraryPanel({
         }}
       >
         <p>이동하면 저장하지 않은 편집 내용이 사라져요.</p>
+        <ResourceEditorLeaveWarning />
         <DraftDiscardActions
           open={!!pendingNavigation}
           onSavingChange={setSavingNavigation}
@@ -1310,6 +1313,7 @@ function ContentEditor({
         });
       return !session.snapshot().dirty;
     } catch (caught) {
+      requestResourceConflictReview(session);
       const message = (caught as Error).message;
       setError(message);
       onError(message);

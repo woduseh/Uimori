@@ -20,6 +20,69 @@ const viewports = [
 ];
 const flows = ['content-list', 'prompt-list', 'global-navigation'] as const;
 
+for (const viewport of viewports) {
+  test(`DECISION resource conflict review and failed recovery preserve input at ${viewport.width}px`, async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize(viewport);
+    const title = `Decision ${randomUUID().slice(0, 8)}`;
+    const response = await request.post('/api/prompt-presets', {
+      data: { title, role: 'main', program: nativePrompt('Original instructions'), values: {} },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    const preset = (await response.json()) as PromptPreset;
+    await page.goto('/');
+    await navigationAction(page, '프롬프트');
+    await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+    await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+    const editor = page.getByTestId('prompt-editor');
+    await page.evaluate(() => {
+      const original = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function (...args) {
+        if (this.name === 'uimori-editor-recovery' && args[1] === 'readwrite')
+          throw new DOMException('Disk full', 'QuotaExceededError');
+        return original.apply(this, args);
+      };
+    });
+    const body = editor.getByLabel('1번 프롬프트 본문', { exact: true });
+    await body.fill('Keep my unsaved instructions');
+    await expect(
+      editor.getByRole('alert').filter({ hasText: '복구용 입력을 보관하지 못했어요' })
+    ).toBeVisible();
+    const updated = await request.post('/api/resources/save', {
+      data: {
+        kind: 'prompt-preset',
+        id: preset.id,
+        expectedRevision: preset.revision,
+        model: { title, role: 'main', program: nativePrompt('Changed elsewhere'), values: {} },
+      },
+    });
+    expect(updated.ok(), await updated.text()).toBe(true);
+    const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
+    await expect(review).toBeHidden();
+    let saves = 0;
+    page.on('request', (request) => {
+      if (isResourceSaveRequest(request) && request.postDataJSON().kind === 'prompt-preset')
+        saves++;
+    });
+    await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+    await expect(review).toBeVisible();
+    await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
+    await expect(review).toContainText('Changed elsewhere');
+    await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+    await expect(body).toHaveValue('Keep my unsaved instructions');
+    expect(saves).toBe(1);
+    await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
+    const leave = page.getByRole('alertdialog', { name: '미저장 프롬프트 확인', exact: true });
+    await expect(leave.getByRole('alert')).toContainText('현재 입력을 복구할 수 없어요');
+    await leave.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(body).toHaveValue('Keep my unsaved instructions');
+    const persisted = await (await request.get(`/api/prompt-presets/${preset.id}`)).json();
+    expect(JSON.stringify(persisted.program)).toContain('Changed elsewhere');
+  });
+}
+
 async function expectDraftLeaveDialogLayout(guard: Locator, viewportWidth: number) {
   const dialog = await guard.boundingBox();
   expect(dialog).not.toBeNull();

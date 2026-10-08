@@ -1,4 +1,5 @@
 import { IconButton } from './IconButton.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { UndoIcon } from './ui-icons.js';
 import {
   createContext,
@@ -14,6 +15,7 @@ import {
   type SetStateAction,
 } from 'react';
 import type { EditorContext, ResourceModel } from '../core/resource-editing.js';
+import type { RisuPrompt } from '../core/risu-prompt.js';
 import type { ResourceEditorSession, EditorState } from './resource-editor-session.js';
 import { libraryChangedKey } from './api.js';
 import './resource-editor.css';
@@ -25,6 +27,27 @@ export const editorContextChanged = 'uimori-editor-context-changed';
 const changed = () => window.dispatchEvent(new Event(editorContextChanged));
 const activeSession = () =>
   (focused ? sessions.get(focused) : null) ?? [...sessions.values()].at(-1) ?? null;
+const conflictReviewEvent = 'uimori-resource-conflict-review';
+export function requestResourceConflictReview(session: ResourceEditorSession) {
+  if (session.snapshot().conflict)
+    window.dispatchEvent(new CustomEvent(conflictReviewEvent, { detail: session }));
+}
+export function ResourceEditorLeaveWarning() {
+  const subscribe = useCallback((listener: () => void) => {
+    window.addEventListener(editorContextChanged, listener);
+    return () => window.removeEventListener(editorContextChanged, listener);
+  }, []);
+  const warning = useSyncExternalStore(subscribe, () => {
+    const state = activeSession()?.snapshot();
+    return state?.dirty && state.recovery === 'failed';
+  });
+  return warning ? (
+    <p role="alert" className="error">
+      이 기기에 복구용 입력을 보관하지 못했어요. 저장하지 않고 이동하면 현재 입력을 복구할 수
+      없어요.
+    </p>
+  ) : null;
+}
 export type ActiveEditorContext = EditorContext & { editorKey: string; dirty: boolean };
 function context(session: ResourceEditorSession | null): ActiveEditorContext | null {
   const state = session?.snapshot();
@@ -71,6 +94,10 @@ export function useEditorSaveCommand(session: ResourceEditorSession, save: () =>
 }
 export const saveActiveEditor = () => {
   const session = activeSession();
+  if (session?.snapshot().conflict) {
+    requestResourceConflictReview(session);
+    return Promise.resolve(false);
+  }
   return (session && saveCommands.get(session)?.()) || Promise.resolve(false);
 };
 
@@ -136,6 +163,51 @@ export function useResourceEditor<Model extends ResourceModel>(session: Resource
 }
 
 const EditorContextValue = createContext<ResourceEditorValue | null>(null);
+function SavedResourcePreview({ model }: { model: ResourceModel }) {
+  const promptText = (program: RisuPrompt) => {
+    const blocks = program.nativeRisuPreset.preset.promptTemplate;
+    return Array.isArray(blocks)
+      ? blocks
+          .flatMap((block) => {
+            if (!block || typeof block !== 'object' || typeof block.text !== 'string') return [];
+            return [block.text];
+          })
+          .join('\n\n')
+      : '';
+  };
+  const sections =
+    'program' in model
+      ? [{ title: model.title, text: promptText(model.program) }]
+      : 'main' in model && 'translation' in model
+        ? [
+            { title: `작문 · ${model.main.title}`, text: promptText(model.main.program) },
+            {
+              title: `번역 · ${model.translation.title}`,
+              text: promptText(model.translation.program),
+            },
+          ]
+        : 'text' in model
+          ? [
+              {
+                title: model.title,
+                text: [model.description, model.text || model.package.body]
+                  .filter(Boolean)
+                  .join('\n\n'),
+              },
+            ]
+          : [];
+  return (
+    <section aria-label="최신 저장본 내용" className="resource-saved-preview">
+      <p className="muted">제목과 주요 본문을 확인할 수 있어요.</p>
+      {sections.map((section, index) => (
+        <section key={index}>
+          <h3>{section.title}</h3>
+          <p>{section.text || '저장된 본문이 없어요.'}</p>
+        </section>
+      ))}
+    </section>
+  );
+}
 export function ResourceEditorProvider({
   value,
   children,
@@ -143,10 +215,39 @@ export function ResourceEditorProvider({
   value: ResourceEditorValue;
   children: ReactNode;
 }) {
+  const [reviewOpen, setReviewOpen] = useState(false);
+  useEffect(() => {
+    const review = (event: Event) => {
+      if ((event as CustomEvent<ResourceEditorSession>).detail === value.session)
+        setReviewOpen(true);
+    };
+    window.addEventListener(conflictReviewEvent, review);
+    return () => window.removeEventListener(conflictReviewEvent, review);
+  }, [value.session]);
   return (
     <EditorContextValue.Provider value={value}>
       <div className="resource-editor" onFocusCapture={value.activate}>
         {children}
+        <SaveConflictDialog
+          open={reviewOpen}
+          title="변경된 저장본 확인"
+          onClose={() => setReviewOpen(false)}
+          readSaved={async () => {
+            const saved = await value.session.readSaved();
+            return {
+              content: saved ? (
+                <>
+                  <SavedResourcePreview model={saved.model} />
+                  <p className="muted">
+                    현재 입력을 유지한 뒤, 편집 취소를 선택하면 최신 저장본으로 돌아갈 수 있어요.
+                  </p>
+                </>
+              ) : (
+                <p>저장된 자료가 없어요.</p>
+              ),
+            };
+          }}
+        />
       </div>
     </EditorContextValue.Provider>
   );
@@ -263,7 +364,16 @@ export function ResourceEditorStatus({
         <small role="alert">복구용 입력을 보관하지 못했어요. 닫기 전에 저장해 주세요.</small>
       )}
       {state.conflict && (
-        <small role="alert">저장된 자료가 변경됐어요. 현재 입력은 유지돼요.</small>
+        <small role="alert">
+          저장된 자료가 변경됐어요. 현재 입력은 유지돼요.{' '}
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => requestResourceConflictReview(session)}
+          >
+            저장본 확인
+          </button>
+        </small>
       )}
       {!hideSyncError && state.error && <small role="alert">{state.error}</small>}
       {!state.ready && state.error && (

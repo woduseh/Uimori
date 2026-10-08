@@ -265,6 +265,10 @@ export function HelperPanel(props: Props) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [outboxes, setOutboxes] = useState<Record<string, Outbox | null>>({});
   const [unpersisted, setUnpersisted] = useState<Record<string, boolean>>({});
+  const [outboxDecision, setOutboxDecision] = useState<Outbox | null>(null);
+  useEffect(() => {
+    setOutboxDecision((old) => (old && (!props.open || old.scope !== scopeKey) ? null : old));
+  }, [scopeKey, props.open]);
   const [hydrated, setHydrated] = useState<Record<string, boolean>>({});
   const [recoveryAttempt, setRecoveryAttempt] = useState(0);
   const [outlineSelections, setOutlineSelections] = useState<
@@ -1246,6 +1250,54 @@ export function HelperPanel(props: Props) {
           </button>
         )}
       </Dialog>
+      <Dialog
+        open={
+          props.open &&
+          !!outboxDecision &&
+          outboxDecision.scope === scopeKey &&
+          outboxDecision.requestKey === outbox?.requestKey
+        }
+        title={unpersisted[scopeKey] ? '도우미 요청 보관' : '도우미 요청 확인'}
+        variant="confirmation"
+        onClose={() => setOutboxDecision(null)}
+      >
+        <p>
+          {unpersisted[scopeKey]
+            ? '요청을 이 기기에 보관하지 못해 아직 보내지 않았어요. 다시 보관한 뒤 보내거나, 보관 없이 보낼 수 있어요.'
+            : '이전 요청의 접수 여부를 확인하지 못했어요. 같은 요청으로 확인할까요? 이미 접수됐다면 중복으로 실행하지 않아요.'}
+        </p>
+        <p>새로 작성한 입력은 유지돼요.</p>
+        <div className="form-actions">
+          <button type="button" className="secondary" onClick={() => setOutboxDecision(null)}>
+            닫기
+          </button>
+          {unpersisted[scopeKey] && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                if (!outboxDecision) return;
+                const request = outboxDecision;
+                setOutboxDecision(null);
+                void send(request, true);
+              }}
+            >
+              보관 없이 보내기
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              if (!outboxDecision) return;
+              const request = outboxDecision;
+              setOutboxDecision(null);
+              void send(request);
+            }}
+          >
+            {unpersisted[scopeKey] ? '다시 보관하고 보내기' : '접수 확인·다시 시도'}
+          </button>
+        </div>
+      </Dialog>
       <footer className="helper-composer">
         {conversation && data.current?.lastResourceEdit && (
           <HelperResourceUndo
@@ -1327,8 +1379,8 @@ export function HelperPanel(props: Props) {
           <div className="helper-outbox" role="status">
             <p>
               {unpersisted[scopeKey]
-                ? '요청을 이 기기에 보관하지 못했어요. 같은 요청을 다시 보관하거나 바로 보낼 수 있어요.'
-                : '이전 요청의 접수 여부를 확인하지 못했어요. 같은 요청으로 다시 확인해요.'}
+                ? '보내지 못한 요청이 있어요.'
+                : '접수 확인이 필요한 요청이 있어요.'}
             </p>
             <button
               type="button"
@@ -1340,26 +1392,10 @@ export function HelperPanel(props: Props) {
                 !conversation ||
                 conversation.id !== outbox.targetConversationId
               }
-              onClick={() => void send(outbox)}
+              onClick={() => setOutboxDecision(outbox)}
             >
-              접수 확인·다시 시도
+              이전 요청 확인
             </button>
-            {unpersisted[scopeKey] && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={
-                  props.ready === false ||
-                  !hydrated[scopeKey] ||
-                  scopeMismatch ||
-                  !conversation ||
-                  conversation.id !== outbox.targetConversationId
-                }
-                onClick={() => void send(outbox, true)}
-              >
-                보관 없이 보내기
-              </button>
-            )}
           </div>
         )}
         {pending.length > 0 && (
@@ -1440,7 +1476,8 @@ export function HelperPanel(props: Props) {
         <ChatComposer
           onSubmit={(event) => {
             event.preventDefault();
-            void send();
+            if (outbox) setOutboxDecision(outbox);
+            else void send();
           }}
         >
           <ComposerInput
@@ -1452,7 +1489,10 @@ export function HelperPanel(props: Props) {
             placeholder="도우미에게 요청하기"
             maxLength={REQUEST_TEXT_MAX_CHARS}
             onChange={(event) => editDraft(event.target.value)}
-            onSend={() => void send()}
+            onSend={() => {
+              if (outbox) setOutboxDecision(outbox);
+              else void send();
+            }}
           />
           <div className="quick-controls">
             <ActionMenu label="도우미 대화 더보기" placement="top" viewport>
@@ -1487,7 +1527,7 @@ export function HelperPanel(props: Props) {
               />
             )}
           </div>
-          {running && !draft.trim() ? (
+          {running && !draft.trim() && !outbox ? (
             <button
               className="send-button"
               type="button"
@@ -1500,8 +1540,10 @@ export function HelperPanel(props: Props) {
             <button
               className="send-button"
               type="submit"
-              aria-label="도우미 요청 보내기"
-              title={running ? '다음 요청으로 보내기' : '도우미 요청 보내기'}
+              aria-label={outbox ? '도우미 이전 요청 확인' : '도우미 요청 보내기'}
+              title={
+                outbox ? '이전 요청 확인' : running ? '다음 요청으로 보내기' : '도우미 요청 보내기'
+              }
               disabled={
                 props.ready === false ||
                 !hydrated[scopeKey] ||
@@ -1509,8 +1551,7 @@ export function HelperPanel(props: Props) {
                 busy ||
                 data.loading ||
                 !conversation ||
-                !draft.trim() ||
-                Boolean(outbox)
+                (!draft.trim() && !outbox)
               }
             >
               <ArrowUp size={20} />

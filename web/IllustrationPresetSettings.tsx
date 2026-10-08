@@ -31,6 +31,7 @@ import {
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { api, ApiError, saveDownload } from './api.js';
 import { Dialog } from './Dialog.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
@@ -71,6 +72,7 @@ export function IllustrationPresetSettings({
   const [importNotice, setImportNotice] = useState('');
   const [deleting, setDeleting] = useState<IllustrationPreset | null>(null);
   const [discard, setDiscard] = useState(false);
+  const [saveConflict, setSaveConflict] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const editor = useRef<HTMLElement>(null);
   const [workflowError, setWorkflowError] = useState('');
@@ -132,7 +134,7 @@ export function IllustrationPresetSettings({
     if ((target === 'bot' && !scope.botId) || (target === 'chat' && !scope.chatId))
       setTarget('global');
   }, [target, scope.botId, scope.chatId]);
-  async function action(work: () => Promise<void>): Promise<boolean> {
+  async function action(work: () => Promise<void>, saveAttempt = false): Promise<boolean> {
     if (locked.current) return false;
     locked.current = true;
     setBusy(true);
@@ -144,7 +146,10 @@ export function IllustrationPresetSettings({
       return true;
     } catch (cause) {
       setError(`${messageOf(cause)}${draft ? ' 편집 내용은 유지했어요.' : ''}`);
-      if (cause instanceof ApiError && cause.status === 409) await refresh();
+      if (cause instanceof ApiError && cause.status === 409) {
+        await refresh();
+        if (saveAttempt) setSaveConflict(true);
+      }
       return false;
     } finally {
       locked.current = false;
@@ -194,7 +199,7 @@ export function IllustrationPresetSettings({
           : '저장했어요. 사용할 범위에 적용해 주세요.'
       );
       await refresh(true);
-    });
+    }, !asCopy);
   }
   useSettingsSaveHandler(onSaveHandlerChange, () => save());
   function edit(preset?: IllustrationPreset, copy = false) {
@@ -663,6 +668,23 @@ export function IllustrationPresetSettings({
           </fieldset>
         </section>
       )}
+      <SaveConflictDialog
+        open={saveConflict}
+        title="삽화 프리셋 저장 내용 확인"
+        onClose={() => setSaveConflict(false)}
+        readSaved={async () => {
+          const value = (
+            await api<IllustrationPresetCatalog>('/illustration-presets')
+          ).presets.find((preset) => preset.id === draft?.id);
+          if (!value) throw new Error('저장본을 찾을 수 없어요. 현재 입력은 유지돼요.');
+          return [
+            { label: '이름', value: value.title },
+            { label: '생성기', value: value.generator === 'comfyui' ? 'ComfyUI' : 'Codex' },
+            { label: '설명', value: value.description },
+            { label: '그림 지침', value: value.styleGuidance },
+          ];
+        }}
+      />
       <Dialog
         open={discard}
         title="프리셋 편집 닫기"

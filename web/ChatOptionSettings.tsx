@@ -10,6 +10,7 @@ import {
 } from '../core/risu-prompt.js';
 import { api, ApiError } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 
 type Values = Record<string, PromptValue>;
 type Props = {
@@ -59,6 +60,7 @@ export function ChatOptionSettings(props: Props) {
   const [message, setMessage] = useState('');
   const [completion, setCompletion] = useState('');
   const [conflict, setConflict] = useState(false);
+  const [saveConflict, setSaveConflict] = useState(false);
   const [uncertain, setUncertain] = useState<Operation | null>(null);
   const lock = useRef(false),
     requestVersion = useRef(0),
@@ -182,7 +184,10 @@ export function ChatOptionSettings(props: Props) {
     } catch (caught) {
       const known = caught instanceof ApiError && caught.status < 500;
       setUncertain(known ? null : operation);
-      if (caught instanceof ApiError && caught.status === 409) setConflict(true);
+      if (caught instanceof ApiError && caught.status === 409) {
+        setConflict(true);
+        setSaveConflict(true);
+      }
       setError(
         known
           ? `${(caught as Error).message} 입력한 초안은 유지했어요.`
@@ -194,7 +199,11 @@ export function ChatOptionSettings(props: Props) {
     }
   }
   function submit(kind: Operation['kind'], suffix: string, input: Record<string, unknown> = {}) {
-    if (!base || conflict || uncertain || loading) return;
+    if (!base || uncertain || loading) return;
+    if (conflict) {
+      setSaveConflict(true);
+      return;
+    }
     void execute({
       kind,
       path: `${path}/${suffix}`,
@@ -229,6 +238,22 @@ export function ChatOptionSettings(props: Props) {
 
   return (
     <>
+      <SaveConflictDialog
+        open={saveConflict}
+        title="채팅 옵션 저장 내용 확인"
+        onClose={() => setSaveConflict(false)}
+        readSaved={async () => {
+          const value = await api<ChatOptionState>(path);
+          const controls = value.controls ?? promptControls(value.program);
+          return controls.map((control) => ({
+            label: control.label,
+            value: optionText(
+              control,
+              value.fixedValues[control.id] ?? value.globalValues[control.id]
+            ),
+          }));
+        }}
+      />
       <div className="chat-options-body chat-specific-options">
         <section aria-label="이 채팅 고정 옵션">
           <h3>고정 옵션</h3>
@@ -350,7 +375,7 @@ export function ChatOptionSettings(props: Props) {
           </button>
           <button
             type="button"
-            disabled={!fixedDirty || blocked}
+            disabled={!fixedDirty || disabled || loading}
             onClick={() => submit('fixed', 'fixed', { binding: base.binding, values: fixed })}
           >
             {busy ? '적용 중…' : '채팅 고정 옵션 저장'}

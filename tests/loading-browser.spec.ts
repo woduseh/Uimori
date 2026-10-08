@@ -534,7 +534,16 @@ test('LOADUI02 same-source tabs keep CAS drafts and isolate another chat, manual
   await expect(page.getByLabel('원문 수정 내용')).toHaveCount(0);
   await expect(second.getByRole('alert')).toContainText('편집 중 저장된 내용이 바뀌었어요');
   await expect(second.getByLabel('원문 수정 내용')).toHaveValue('Stale tab draft must survive.');
-  await expect(second.getByRole('button', { name: '원문 저장', exact: true })).toBeDisabled();
+  await second.getByRole('button', { name: '원문 저장', exact: true }).click();
+  const sourceConflict = second.getByRole('alertdialog', { name: '원문 저장 충돌', exact: true });
+  await expect(sourceConflict).toBeVisible();
+  await sourceConflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(
+    sourceConflict.getByText('Accepted source revision from first tab.', { exact: true })
+  ).toBeVisible();
+  await second.keyboard.press('Escape');
+  await expect(sourceConflict).not.toBeVisible();
+  await expect(second.getByLabel('원문 수정 내용')).toHaveValue('Stale tab draft must survive.');
   const rejected = await request.put(`/api/sources/${source.id}/text`, {
     data: { text: 'Stale CAS overwrite', expectedRevision: 0 },
   });

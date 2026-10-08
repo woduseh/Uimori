@@ -9,12 +9,12 @@ import { resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placemen
 import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { Asset } from '../core/product.js';
 import type { Illustration } from '../core/illustration.js';
-import type { ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
+import type { ChatDetail, ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
 import { useIllustrationLayout } from './IllustrationStrip.js';
 import { illustrationActive } from './illustration-labels.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { formatUsd } from './pricing-display.js';
-import { api, labels } from './api.js';
+import { api, ApiError, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
@@ -36,6 +36,7 @@ import {
   X,
 } from 'lucide-react';
 import { Dialog } from './Dialog.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
 
@@ -1211,6 +1212,7 @@ function TextEditor({
     readDraft(key, { text: savedText, expectedRevision: revision, expectedSourceHash: source.hash })
   );
   const [saving, setSaving] = useState(false);
+  const [conflictOpen, setConflictOpen] = useState(false);
   const draftVersion = useRef(0);
   const [selection, setSelection] = useState({ start: 0, end: 0, version: 0 });
   const [error, setError] = useState('');
@@ -1262,6 +1264,7 @@ function TextEditor({
     <form
       className="source-text-editor"
       onKeyDown={(event) => {
+        if (event.target instanceof Element && event.target.closest('dialog')) return;
         if (event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229)
           return;
         event.preventDefault();
@@ -1271,6 +1274,10 @@ function TextEditor({
       onSubmit={async (event) => {
         event.preventDefault();
         if (busy.current) return;
+        if (conflict) {
+          setConflictOpen(true);
+          return;
+        }
         busy.current = true;
         setSaving(true);
         setError('');
@@ -1285,6 +1292,7 @@ function TextEditor({
           await onSaved();
           clear();
         } catch (cause) {
+          if (cause instanceof ApiError && cause.status === 409) setConflictOpen(true);
           setError(
             cause instanceof Error ? cause.message : '저장하지 못했어요. 작성한 내용은 유지돼요.'
           );
@@ -1345,24 +1353,13 @@ function TextEditor({
       {conflict && (
         <div role="alert" className="error">
           <p>편집 중 저장된 내용이 바뀌었어요. 작성한 내용은 유지돼요.</p>
-          <details>
-            <summary>현재 저장된 {title} 확인</summary>
-            <pre>{savedText || '저장된 번역 없음'}</pre>
-          </details>
           <button
             type="button"
             className="secondary"
             disabled={saving}
-            onClick={() => {
-              persist({
-                text: savedText,
-                expectedRevision: revision,
-                expectedSourceHash: source.hash,
-              });
-              setError('');
-            }}
+            onClick={() => setConflictOpen(true)}
           >
-            작성한 내용을 버리고 저장된 내용 다시 불러오기
+            저장 충돌 확인
           </button>
         </div>
       )}
@@ -1379,9 +1376,37 @@ function TextEditor({
           className="source-edit-save"
           label={saving ? '저장 중…' : `${title} 저장`}
           type="submit"
-          disabled={saving || conflict || !draft.text.trim()}
+          disabled={saving || !draft.text.trim()}
         />
       </div>
+      <SaveConflictDialog
+        open={conflictOpen}
+        title={`${title} 저장 충돌`}
+        onClose={() => setConflictOpen(false)}
+        readSaved={async () => {
+          const detail = await api<ChatDetail>(`/chats/${source.chatId}`);
+          const current = detail.sources.find((item) => item.id === source.id);
+          if (!current) throw new Error('현재 장면을 찾지 못했어요. 작성한 내용은 유지돼요.');
+          const currentTranslation = displayTranslationJob(
+            current,
+            latestTranslation(current, detail.jobs)
+          );
+          const text =
+            role === 'original'
+              ? current.text
+              : (currentTranslation?.result?.text ?? '저장된 번역 없음');
+          return {
+            content: (
+              <>
+                <p className="source-saved-review-text">{text}</p>
+                <p className="muted">
+                  현재 입력을 유지한 뒤 수정 취소를 선택하면 저장된 본문으로 돌아갈 수 있어요.
+                </p>
+              </>
+            ),
+          };
+        }}
+      />
       {error && (
         <p className="error" role="alert">
           {error} 작성한 내용은 유지돼요.

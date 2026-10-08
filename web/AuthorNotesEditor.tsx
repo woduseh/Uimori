@@ -4,6 +4,7 @@ import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js
 import { useEffect, useRef, useState } from 'react';
 import type { AuthorNote, ImportedMemoryOrigin } from '../core/notes.js';
 import { ApiError } from './api.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 
 type AuthorNoteCommand = {
   expectedHeadRevision: string | null;
@@ -51,6 +52,12 @@ export function AuthorNotesEditor({
   const [draft, setDraft] = useState<NoteDraft | null>(null);
   const [retiring, setRetiring] = useState<NoteDraft | null>(null);
   const [busy, setBusy] = useState(false);
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const reviewed = useRef<{
+    revision: number;
+    headRevision: string | null;
+    originalExists: boolean;
+  } | null>(null);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const alive = useRef(true);
@@ -99,7 +106,11 @@ export function AuthorNotesEditor({
     }
   }
   async function save(value: NoteDraft, retired = false) {
-    if (locked.current || conflict || disabled) return false;
+    if (locked.current || disabled) return false;
+    if (conflict) {
+      setConflictOpen(true);
+      return false;
+    }
     if (
       !retired &&
       (!value.text.trim() ||
@@ -142,7 +153,10 @@ export function AuthorNotesEditor({
       const text = caught instanceof Error ? caught.message : '메모를 저장하지 못했어요.';
       setError(text);
       onError(text);
-      if (caught instanceof ApiError && caught.status === 409) await refresh();
+      if (caught instanceof ApiError && caught.status === 409) {
+        setConflictOpen(true);
+        await refresh();
+      }
       return false;
     } finally {
       locked.current = false;
@@ -226,36 +240,14 @@ export function AuthorNotesEditor({
             저장된 메모나 대상 장면이 바뀌었어요. 입력한 내용은 유지했어요. 위의 최신 메모를 확인해
             주세요.
           </p>
-          {originalExists ? (
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy || disabled}
-              onClick={() => {
-                const update = (current: NoteDraft | null) =>
-                  current ? { ...current, revision, headRevision } : null;
-                setDraft(update);
-                setRetiring(update);
-                setError('');
-              }}
-            >
-              최신 내용을 확인했어요 · 내 초안 유지
-            </button>
-          ) : (
-            draft && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy || disabled}
-                onClick={() => {
-                  setDraft({ ...draft, originalId: null, revision, headRevision });
-                  setError('');
-                }}
-              >
-                내 초안을 새 메모로 남기기
-              </button>
-            )
-          )}
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy || disabled}
+            onClick={() => setConflictOpen(true)}
+          >
+            저장 충돌 확인
+          </button>
         </div>
       )}
       {draft && (
@@ -290,7 +282,7 @@ export function AuthorNotesEditor({
           <div className="form-actions full">
             <button
               className="primary"
-              disabled={busy || disabled || conflict || !draft.text.trim() || !draft.author.trim()}
+              disabled={busy || disabled || !draft.text.trim() || !draft.author.trim()}
             >
               {draft.originalId ? '메모 수정 저장' : '새 메모 저장'}
             </button>
@@ -309,6 +301,48 @@ export function AuthorNotesEditor({
           </div>
         </form>
       )}
+      <SaveConflictDialog
+        open={conflictOpen}
+        title="메모 저장 충돌"
+        onClose={() => {
+          setConflictOpen(false);
+          reviewed.current = null;
+        }}
+        readSaved={async () => {
+          reviewed.current = { revision, headRevision, originalExists };
+          return {
+            content: (
+              <>
+                {notes.length ? (
+                  notes.map((note) => <blockquote key={note.id}>{note.text}</blockquote>)
+                ) : (
+                  <p>저장된 메모가 없어요.</p>
+                )}
+              </>
+            ),
+          };
+        }}
+        onAcceptSaved={
+          draft || originalExists
+            ? () => {
+                const saved = reviewed.current;
+                if (!saved) return;
+                const update = (current: NoteDraft | null) =>
+                  current
+                    ? {
+                        ...current,
+                        revision: saved.revision,
+                        headRevision: saved.headRevision,
+                        ...(!saved.originalExists ? { originalId: null } : {}),
+                      }
+                    : null;
+                setDraft(update);
+                if (saved.originalExists) setRetiring(update);
+                setError('');
+              }
+            : undefined
+        }
+      />
       {retiring && (
         <div role="group" aria-label="메모 사용 중단 확인">
           <p>이 채팅의 이후 요청에서 이 메모를 제외해요. 이전 실행과 메모 이력은 보존해요.</p>
@@ -317,7 +351,7 @@ export function AuthorNotesEditor({
             <button
               type="button"
               className="secondary"
-              disabled={busy || disabled || conflict}
+              disabled={busy || disabled}
               onClick={() => void save(retiring, true)}
             >
               확인했어요 · 사용 중단

@@ -1,6 +1,14 @@
 .resource-editor {
   min-width: 0;
 }
+.resource-saved-preview {
+  max-height: 45vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+.resource-saved-preview p {
+  white-space: pre-wrap;
+}
 .resource-editor-status {
   display: flex;
   flex-wrap: wrap;
