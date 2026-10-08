@@ -4,7 +4,13 @@ import { defaultProfile } from '../core/product.js';
 import type { RisuLoreProjection } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
 import { estimateContextTokens } from '../core/context-budget.js';
-import { prepareLoreSelection } from '../server/lore-selection.js';
+import { compiledPackages } from '../core/package-context.js';
+import { countTextTokens } from '../core/text-tokens.js';
+import {
+  loreSelectionInputHash,
+  loreSelectionTargets,
+  prepareLoreSelection,
+} from '../server/lore-selection.js';
 import type { MainHooks } from '../server/model-runner.js';
 
 const lore = (id: string, text: string, title = 'Archive'): RisuLoreProjection => ({
@@ -47,7 +53,31 @@ function snapshot(catalogs: RisuLoreProjection[][], request: string): RunSnapsho
     },
   };
 }
-async function select(input: RunSnapshot) {
+function projectLore(input: RunSnapshot, catalogs: RisuLoreProjection[][]) {
+  const attachment = input.profile!.packageAttachments![0];
+  const pkg = input.profile!.packages![0];
+  input.profile!.chatOverrides = {
+    version: 1,
+    revision: 1,
+    roots: [],
+    entries: [],
+    headRevision: null,
+    headHash: null,
+    conflicts: [],
+    projections: catalogs.map((entries, index) => ({
+      scope: {
+        id: 'root',
+        role: index === 0 ? 'bot' : 'persona',
+        modulePath: [pkg.id],
+      },
+      attachment,
+      package: { ...pkg, lore: entries },
+      overrideIds: [],
+      conflicts: [],
+    })),
+  };
+}
+async function select(input: RunSnapshot, expectedCalls = 1) {
   const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     return new Response(
@@ -59,7 +89,7 @@ async function select(input: RunSnapshot) {
             key,
             {
               type: 'noul',
-              noul: body.state.entries[index].text.includes('청월인장') ? 0.95 : 0.1,
+              noul: JSON.stringify(body.state.entries[index]).includes('청월인장') ? 0.95 : 0.1,
             },
           ])
         ),
@@ -80,12 +110,13 @@ async function select(input: RunSnapshot) {
     reserveCalls: 1,
     jev: { credential: () => 'synthetic-key', fetch },
   });
-  expect(fetch).toHaveBeenCalledTimes(1);
-  const body = JSON.parse(String(fetch.mock.calls[0][1]?.body));
-  expect(estimateContextTokens(body)).toBeLessThanOrEqual(
-    input.profile!.loreContext!.judgment.maxInputTokens
-  );
-  expect(result.usage.modelCalls).toBe(1);
+  expect(fetch).toHaveBeenCalledTimes(expectedCalls);
+  const body = expectedCalls ? JSON.parse(String(fetch.mock.calls[0][1]?.body)) : undefined;
+  if (body)
+    expect(estimateContextTokens(body)).toBeLessThanOrEqual(
+      input.profile!.loreContext!.judgment.maxInputTokens
+    );
+  expect(result.usage.modelCalls).toBe(expectedCalls);
   return { ...result, body };
 }
 
@@ -140,4 +171,125 @@ test('skips a relevant entry too large for the judgment request and still evalua
   const { snapshot: result, body } = await select(input);
   expect(body.state.entries.map((entry: { id: string }) => entry.id)).toEqual(['small']);
   expect(result.loreSelection!.entries[0].selected).toEqual(['small']);
+});
+
+test.each(['title', 'description'] as const)(
+  'retrieves frozen chat-overridden %s within a narrow JEV budget',
+  async (field) => {
+    const filler = 'Ordinary weather, flour, rain and deliveries. '.repeat(50);
+    const entries = [lore('first', filler), lore('target', filler)];
+    const input = snapshot([entries], '청월인장');
+    input.profile!.loreContext!.judgment.maxInputTokens = 1000;
+    projectLore(input, [[entries[0], { ...entries[1], [field]: '청월인장' }]]);
+    const before = structuredClone(input);
+    const { snapshot: result, body } = await select(input);
+    expect(body.state.entries.map((entry: { id: string }) => entry.id)).toEqual(['target']);
+    expect(JSON.stringify(body.state.entries[0])).toContain('청월인장');
+    expect(result.loreSelection!.entries[0].selected).toEqual(['target']);
+    expect(result.loreSelection!.entries[0].coverage).toEqual({ total: 2, evaluated: 1 });
+    expect(input).toEqual(before);
+  }
+);
+
+test('searches and judges every scoped body sharing one selected lore id', async () => {
+  const filler = 'Ordinary weather, flour, rain and deliveries. '.repeat(120);
+  const ordinary = lore('ordinary', filler);
+  const fact = lore('fact', filler);
+  const input = snapshot([[ordinary, fact]], '청월인장');
+  input.profile!.loreContext!.judgment.maxInputTokens = 1000;
+  projectLore(input, [
+    [ordinary, { ...fact, text: 'Ordinary weather.' }],
+    [ordinary, { ...fact, text: 'Hidden 청월인장 is kept at the north tower.' }],
+  ]);
+  const { snapshot: result, body } = await select(input);
+  expect(body.state.entries[0].id).toBe('fact');
+  const sent = JSON.stringify(body.state.entries[0]);
+  expect(sent).toContain('Ordinary weather.');
+  expect(sent).toContain('Hidden 청월인장 is kept at the north tower.');
+  expect(result.loreSelection!.entries[0].selected).toEqual(['fact']);
+  expect(compiledPackages(result, 'main')[0].pinned.map((entry) => entry.text)).toEqual([
+    'Ordinary weather.',
+    'Hidden 청월인장 is kept at the north tower.',
+  ]);
+});
+
+test('budgets all scoped pinned bodies before a paid judgment and records their actual token sum', async () => {
+  const fact = lore('fact', 'Original record.');
+  const input = snapshot([[fact]], '청월인장');
+  projectLore(input, [
+    [{ ...fact, text: '청월인장' }],
+    [{ ...fact, text: '청월인장 '.repeat(1000) }],
+  ]);
+  input.profile!.loreContext!.maxRetainedTokens = 100;
+  input.profile!.loreContext!.judgment.maxSelectedTokens = 100;
+  const rejected = await select(input, 0);
+  expect(rejected.snapshot.loreSelection!.entries[0]).toMatchObject({
+    selected: [],
+    omitted: [{ id: 'fact', reason: 'budget' }],
+    coverage: { total: 1, evaluated: 0 },
+  });
+  input.profile!.loreContext!.maxRetainedTokens = 5000;
+  input.profile!.loreContext!.judgment.maxSelectedTokens = 5000;
+  const accepted = await select(input);
+  const receipt = accepted.snapshot.loreSelection!.entries[0];
+  const pinned = compiledPackages(accepted.snapshot, 'main')[0].pinned;
+  expect(pinned).toHaveLength(2);
+  const tokens = pinned.reduce((sum, entry) => sum + countTextTokens(entry.text), 0);
+  expect(tokens).toBeGreaterThan(100);
+  expect(receipt.selected).toEqual(['fact']);
+  expect(receipt.judgment!.selectedTokens).toBe(tokens);
+});
+
+test('counts equal bodies twice when distinct scoped metadata makes both bodies pinned', async () => {
+  const fact = lore('fact', '청월인장');
+  const input = snapshot([[fact]], '청월인장');
+  projectLore(input, [[{ ...fact, title: 'Bot record' }], [{ ...fact, title: 'Persona record' }]]);
+  const singleBodyTokens = countTextTokens(fact.text);
+  input.profile!.loreContext!.maxRetainedTokens = singleBodyTokens;
+  input.profile!.loreContext!.judgment.maxSelectedTokens = singleBodyTokens;
+  const rejected = await select(input, 0);
+  expect(rejected.snapshot.loreSelection!.entries[0].selected).toEqual([]);
+  input.profile!.loreContext!.maxRetainedTokens = singleBodyTokens * 2;
+  input.profile!.loreContext!.judgment.maxSelectedTokens = singleBodyTokens * 2;
+  const accepted = await select(input);
+  const pinned = compiledPackages(accepted.snapshot, 'main')[0].pinned;
+  expect(pinned.map((entry) => entry.text)).toEqual([fact.text, fact.text]);
+  expect(accepted.snapshot.loreSelection!.entries[0].judgment!.selectedTokens).toBe(
+    singleBodyTokens * 2
+  );
+});
+
+test.each(['title', 'description', 'text'] as const)(
+  'binds the selection input hash to a nonfirst scoped %s',
+  (field) => {
+    const fact = lore('fact', 'Original record.');
+    const input = snapshot([[fact]], '청월인장');
+    projectLore(input, [[{ ...fact, text: 'First connection.' }], [{ ...fact }]]);
+    const before = loreSelectionInputHash(loreSelectionTargets(input)[0]);
+    input.profile!.chatOverrides!.projections[1].package.lore[0][field] = 'Changed 청월인장';
+    expect(loreSelectionInputHash(loreSelectionTargets(input)[0])).not.toBe(before);
+  }
+);
+
+test('reuses a frozen older selection receipt without another paid judgment', async () => {
+  const input = snapshot([[lore('fact', '청월인장')]], '청월인장');
+  input.loreSelection = {
+    version: 1,
+    entries: [
+      {
+        key: 'card-0@1:module',
+        inputHash: 'b'.repeat(64),
+        budget: 16000,
+        selected: ['fact'],
+        omitted: [],
+        model: 'jev-latest',
+      },
+    ],
+  };
+  const before = structuredClone(input);
+  const result = await select(input, 0);
+  expect(result.snapshot).toEqual(before);
+  expect(compiledPackages(result.snapshot, 'main')[0].pinned.map((entry) => entry.text)).toEqual([
+    '청월인장',
+  ]);
 });
