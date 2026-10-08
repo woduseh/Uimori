@@ -1,40 +1,149 @@
+.app-dialog.manuscript-search-dialog {
+  --dialog-size: 640px;
+}
+.manuscript-search-dialog > .dialog-body {
+  padding: 20px 24px 24px;
+}
 .manuscript-search {
   min-width: 0;
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 .manuscript-search form {
   display: grid;
-  gap: 10px;
+  gap: 14px;
 }
-.manuscript-search-input,
-.manuscript-search-filters {
+.manuscript-search-input {
   display: flex;
   gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
 }
-.manuscript-search-input input {
-  flex: 1;
-  min-width: 160px;
-}
-.manuscript-search-filters label {
-  display: inline-flex;
+.manuscript-search-field {
+  position: relative;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
+.manuscript-search-field > svg {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.manuscript-search-field > input {
+  width: 100%;
+  min-width: 0;
+  padding-left: 37px;
+}
+.manuscript-search-input > button {
+  flex-shrink: 0;
+}
+.manuscript-search-filters {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.65fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: end;
+}
+.manuscript-search .manuscript-search-scope {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+}
+.manuscript-search-filter-label,
+.manuscript-search-kinds legend {
+  color: var(--muted);
+  font-size: 13px;
+  min-height: 22px;
+}
+.manuscript-search-scope > select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-h);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 32px 10px 12px;
+  font-size: 14px;
+  color: var(--text);
+}
+.manuscript-search-kinds {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.manuscript-search-kinds legend {
+  padding: 0;
+  margin-bottom: 6px;
+}
+.manuscript-search-kind-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: var(--control-h);
+  gap: 4px 14px;
+}
+.manuscript-search .manuscript-search-kind {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  min-height: var(--control-h);
+  width: auto;
+  max-width: none;
+  cursor: pointer;
+}
+.manuscript-search-kind > input {
+  margin: 0;
+  flex-shrink: 0;
+}
+.manuscript-search-titles > summary {
+  color: var(--muted);
+  font-size: 13px;
+}
+.manuscript-search-title-results,
 .manuscript-search-results {
   display: grid;
-  gap: 16px;
+  gap: 6px;
+}
+.manuscript-search-title-results {
+  margin-bottom: 10px;
+}
+.manuscript-search-title-choice {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  min-height: 54px;
+  padding: 12px;
+  text-align: left;
+  white-space: normal;
+}
+.manuscript-search-title-choice strong,
+.manuscript-search-title-choice small {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.manuscript-search-results {
+  gap: 12px;
+}
+.manuscript-search-results:empty {
+  display: none;
 }
 .manuscript-search-results article {
-  padding: 12px;
-  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  padding: 16px;
+  border: 1px solid var(--line);
   border-radius: 10px;
+  background: var(--surface);
   min-width: 0;
 }
 .manuscript-search-results h4 {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   overflow-wrap: anywhere;
 }
 .manuscript-search-results p {
@@ -42,9 +151,27 @@
   overflow-wrap: anywhere;
 }
 .manuscript-search-results article > div + div {
-  margin-top: 14px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 .manuscript-search-results mark {
-  background: color-mix(in srgb, #e6c45c 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
   color: inherit;
+}
+.manuscript-search > p {
+  margin: 0;
+  font-size: 13px;
+}
+@media (max-width: 520px) {
+  .manuscript-search-dialog > .dialog-body {
+    padding: 18px;
+  }
+  .manuscript-search-filters {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .manuscript-search-results article {
+    padding: 12px;
+  }
 }

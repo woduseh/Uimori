@@ -8,6 +8,7 @@ import type {
 import type { Chat } from '../core/types.js';
 import type { Library, ChatFolder } from '../core/product.js';
 import { api } from './api.js';
+import { SearchIcon } from './ui-icons.js';
 import './manuscript-search.css';
 
 const labels: Record<SearchKind, string> = {
@@ -114,33 +115,40 @@ export function ManuscriptSearchPanel({
         }}
       >
         <div className="manuscript-search-input">
-          <input
-            type="search"
-            aria-label={label}
-            placeholder="제목·본문·번역·요청으로 찾기"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229)
-                return;
-              const dialog = event.currentTarget.closest('dialog');
-              if (!dialog) return;
-              // Chromium's search input otherwise consumes Escape just to clear text,
-              // leaving the modal open and the underlying navigation inert.
-              event.preventDefault();
-              event.stopPropagation();
-              dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
-            }}
-            onCompositionStart={() => setComposing(true)}
-            onCompositionEnd={() => setComposing(false)}
-          />
+          <span className="manuscript-search-field">
+            <SearchIcon size={18} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label={label}
+              placeholder="제목·본문·번역·요청으로 찾기"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (
+                  event.key !== 'Escape' ||
+                  event.nativeEvent.isComposing ||
+                  event.keyCode === 229
+                )
+                  return;
+                const dialog = event.currentTarget.closest('dialog');
+                if (!dialog) return;
+                // Chromium's search input otherwise consumes Escape just to clear text,
+                // leaving the modal open and the underlying navigation inert.
+                event.preventDefault();
+                event.stopPropagation();
+                dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+              }}
+              onCompositionStart={() => setComposing(true)}
+              onCompositionEnd={() => setComposing(false)}
+            />
+          </span>
           <button type="submit" disabled={composing || busy || !query.trim() || !kinds.length}>
             검색
           </button>
         </div>
         <div className="manuscript-search-filters">
-          <label>
-            검색 범위{' '}
+          <label className="manuscript-search-scope">
+            <span className="manuscript-search-filter-label">검색 범위</span>
             <select
               value={scope}
               onChange={(event) => setScope(event.target.value as ManuscriptSearchQuery['scope'])}
@@ -150,29 +158,37 @@ export function ManuscriptSearchPanel({
               {chatId && <option value="chat">현재 채팅</option>}
             </select>
           </label>
-          {(['original', 'translation', 'request'] as const).map((kind) => (
-            <label key={kind}>
-              <input
-                type="checkbox"
-                checked={kinds.includes(kind)}
-                onChange={(event) =>
-                  setKinds((old) =>
-                    event.target.checked ? [...old, kind] : old.filter((value) => value !== kind)
-                  )
-                }
-              />
-              {labels[kind]}
-            </label>
-          ))}
+          <fieldset className="manuscript-search-kinds">
+            <legend>검색 대상</legend>
+            <div className="manuscript-search-kind-options">
+              {(['original', 'translation', 'request'] as const).map((kind) => (
+                <label className="manuscript-search-kind" key={kind}>
+                  <input
+                    type="checkbox"
+                    checked={kinds.includes(kind)}
+                    onChange={(event) =>
+                      setKinds((old) =>
+                        event.target.checked
+                          ? [...old, kind]
+                          : old.filter((value) => value !== kind)
+                      )
+                    }
+                  />
+                  {labels[kind]}
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </div>
       </form>
       {onChat && !!titleMatches.length && (
-        <details open>
+        <details className="manuscript-search-titles" open>
           <summary>채팅 제목 {titleMatches.length}개</summary>
-          <nav className="bot-search-results">
+          <nav className="manuscript-search-title-results">
             {titleMatches.slice(0, titleLimit).map((chat) => (
               <button
                 type="button"
+                className="secondary manuscript-search-title-choice"
                 data-chat-id={chat.id}
                 key={chat.id}
                 onClick={() => onChat(chat.id)}
@@ -187,7 +203,11 @@ export function ManuscriptSearchPanel({
             ))}
           </nav>
           {titleMatches.length > titleLimit && (
-            <button type="button" onClick={() => setTitleLimit((old) => old + 30)}>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => setTitleLimit((old) => old + 30)}
+            >
               채팅 제목 더 보기 · {titleMatches.length - titleLimit}개 남음
             </button>
           )}
@@ -228,6 +248,7 @@ export function ManuscriptSearchPanel({
                 </p>
                 <button
                   type="button"
+                  className="secondary"
                   onClick={() =>
                     onNavigate({
                       ...item.target,

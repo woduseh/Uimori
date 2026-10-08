@@ -96,7 +96,7 @@ export function NavigationQuickActions({
         open={searching}
         title="전체 채팅 검색"
         onClose={() => setSearching(false)}
-        className="bot-organize-dialog"
+        className="manuscript-search-dialog"
       >
         {searching && (
           <ManuscriptSearchPanel
