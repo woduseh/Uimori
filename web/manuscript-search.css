@@ -91,7 +91,7 @@
   flex-direction: row;
   align-items: center;
   gap: 6px;
-  min-height: 38px;
+  min-height: var(--control-h);
   padding: 7px 11px;
   border-radius: 18px;
   border: 1px solid var(--line);

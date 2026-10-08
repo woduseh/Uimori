@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RunningIcon } from './ui-icons.js';
 import './reader-loading.css';
+import './activity-status.css';
 
 /** Short reads leave the space quiet; failed reads keep an explicit recovery action. */
 export function ReaderLoadingState({
@@ -33,7 +34,7 @@ export function ReaderLoadingState({
     );
   return visible && loading ? (
     <div className="reader-loading-state" role="status">
-      <RunningIcon size={22} aria-hidden="true" />
+      <RunningIcon size={22} className="activity-spinner" aria-hidden="true" />
       <p>본문을 불러오는 중이에요…</p>
     </div>
   ) : null;

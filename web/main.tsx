@@ -26,6 +26,7 @@ import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { ChatContextDialog } from './ChatContextDialog.js';
 import { RequestPreviewDialog } from './RequestPreviewDialog.js';
 import { ManuscriptExportDialog } from './ManuscriptExportDialog.js';
+import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { IconButton } from './IconButton.js';
 import { PinIcon, CloseIcon } from './ui-icons.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -244,6 +245,12 @@ function App() {
   const sourceEditing = editingSources.length > 0;
   const optionsButton = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<Panel>('');
+  const [searchingChats, setSearchingChats] = useState(false);
+  const searchOpener = useRef<HTMLElement | null>(null);
+  const openChatSearch = () => {
+    searchOpener.current = document.activeElement as HTMLElement | null;
+    setSearchingChats(true);
+  };
   // biome-ignore lint/correctness/useExhaustiveDependencies: A new chat starts with the list closed and nothing seen yet.
   useEffect(() => {
     setSceneList(false);
@@ -598,6 +605,7 @@ function App() {
   const navigation = (quickActions: boolean, collapsed = false) => (
     <BotNavigation
       quickActions={quickActions}
+      onSearch={openChatSearch}
       collapsed={collapsed}
       onToggleCollapse={toggleSidebar}
       library={s.library}
@@ -1904,6 +1912,43 @@ function App() {
         />
       </Dialog>
       <Dialog
+        open={searchingChats}
+        title="전체 채팅 검색"
+        onClose={() => setSearchingChats(false)}
+        onAfterClose={() => {
+          const opener = searchOpener.current;
+          searchOpener.current = null;
+          if (opener?.isConnected && opener.checkVisibility()) {
+            opener.focus();
+            return;
+          }
+          // A width change may have removed the sidebar that opened this dialog.
+          const target = [
+            ...document.querySelectorAll<HTMLButtonElement>(
+              'button[aria-label="전체 채팅 검색"], button[aria-label="탐색 메뉴"]'
+            ),
+          ].find((button) => button.checkVisibility());
+          target?.focus();
+        }}
+        className="manuscript-search-dialog"
+      >
+        {searchingChats && (
+          <ManuscriptSearchPanel
+            label="전체 채팅 검색"
+            chats={s.chats}
+            library={s.library}
+            onChat={(id) => {
+              setSearchingChats(false);
+              select(id);
+            }}
+            onNavigate={(target) => {
+              setSearchingChats(false);
+              select(target.chatId, target);
+            }}
+          />
+        )}
+      </Dialog>
+      <Dialog
         open={panel === 'navigation'}
         title="탐색"
         onClose={() => {
@@ -1920,12 +1965,7 @@ function App() {
         className="navigation-dialog"
         headerLeading={
           panel === 'navigation' ? (
-            <NavigationQuickActions
-              chats={s.chats}
-              library={s.library}
-              onSelect={select}
-              onLibrary={showLibrary}
-            />
+            <NavigationQuickActions onSearch={openChatSearch} onLibrary={showLibrary} />
           ) : undefined
         }
       >

@@ -37,8 +37,10 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
     for (const name of ['원문', '번역', '요청']) {
       const filter = dialog.getByRole('button', { name, exact: true });
       await expect(filter).toHaveAttribute('aria-pressed', 'true');
+      expect((await filter.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     }
     await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+    await dialog.getByRole('button', { name: '요청', exact: true }).click();
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
       true
     );
@@ -66,6 +68,20 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
     await expect(
       dialog.getByRole('heading', { name: '본문 검색 결과', exact: true })
     ).toBeVisible();
+    for (const resizedWidth of [width === DESKTOP_WIDTH ? MOBILE_WIDTH : DESKTOP_WIDTH, width]) {
+      await page.setViewportSize({ width: resizedWidth, height: 900 });
+      await expect(dialog).toBeVisible();
+      await expect(search).toHaveValue('미카');
+      await expect(scope).toHaveValue('workspace');
+      await expect(dialog.getByRole('button', { name: '요청', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'false'
+      );
+      await expect(result).toContainText('보라색 우산');
+      await page.screenshot({
+        path: info.outputPath(`search-${width}-resized-${resizedWidth}.png`),
+      });
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
@@ -79,6 +95,21 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
     await expect(page.getByRole('heading', { name: chat.title, exact: true })).toBeVisible();
     expect(new URL(page.url()).searchParams.get('mode')).toBe('translation');
     await page.screenshot({ path: info.outputPath(`reader-target-${width}.png`) });
+    await visibleNavigation(page);
+    const opener = page
+      .getByRole('button', { name: '전체 채팅 검색', exact: true })
+      .filter({ visible: true })
+      .first();
+    await opener.click();
+    await expect(dialog).toBeVisible();
+    if (width === DESKTOP_WIDTH) await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    if (width === DESKTOP_WIDTH) {
+      await expect(page.getByRole('button', { name: '탐색 메뉴', exact: true })).toBeFocused();
+      await page.setViewportSize({ width, height: 900 });
+    } else await expect(opener).toBeFocused();
+    if (width === MOBILE_WIDTH) await page.keyboard.press('Escape');
   }
   expect(modelCalls).toEqual([]);
 });
