@@ -25,7 +25,40 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
       .first()
       .click();
     const dialog = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
+    const search = dialog.getByRole('searchbox', { name: '전체 채팅 검색', exact: true });
+    const scope = dialog.getByRole('combobox', { name: '검색 범위' });
+    await expect(scope).toHaveValue('workspace');
+    const inputBox = (await search.boundingBox())!;
+    const buttonBox = (await dialog
+      .getByRole('button', { name: '검색', exact: true })
+      .boundingBox())!;
+    expect(Math.abs(inputBox.height - buttonBox.height)).toBeLessThanOrEqual(2);
+    expect(Math.abs(inputBox.y - buttonBox.y)).toBeLessThanOrEqual(2);
+    for (const name of ['원문', '번역', '요청']) {
+      const checkbox = dialog.getByRole('checkbox', { name, exact: true });
+      await expect(checkbox).toBeChecked();
+      const aligned = await checkbox.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const label = element.closest('label')!;
+        const text = document.createRange();
+        text.selectNodeContents(label.lastChild!);
+        const words = text.getBoundingClientRect();
+        return (
+          words.left >= box.right &&
+          Math.abs(words.top + words.height / 2 - box.top - box.height / 2) <= 3
+        );
+      });
+      expect(aligned).toBe(true);
+    }
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true
+    );
+    await dialog.getByRole('checkbox', { name: '번역', exact: true }).uncheck();
     await dialog.getByLabel('전체 채팅 검색', { exact: true }).fill('미카');
+    await dialog.getByRole('button', { name: '검색', exact: true }).click();
+    await expect(dialog.getByText('일치하는 원고가 없어요.', { exact: true })).toBeVisible();
+    await expect(search).toHaveValue('미카');
+    await dialog.getByRole('checkbox', { name: '번역', exact: true }).check();
     await dialog.getByRole('button', { name: '검색', exact: true }).click();
     const result = dialog
       .locator('.manuscript-search-results article')

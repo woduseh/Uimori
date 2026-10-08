@@ -556,7 +556,7 @@ export function BotBranch(
         open={searching}
         title="이 봇의 채팅 검색"
         onClose={() => setSearching(false)}
-        className="bot-organize-dialog"
+        className="manuscript-search-dialog"
       >
         {searching && (
           <ManuscriptSearchPanel
