@@ -1,0 +1,23 @@
+.reader.reader-awaiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.reader-loading-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 440px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.reader-loading-state p {
+  margin: 0;
+}
+.reader-loading-state [role="alert"] {
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+}
