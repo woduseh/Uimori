@@ -411,6 +411,10 @@ export function useStory() {
     });
     return libraryFlight.current;
   }, []);
+  const retryLibrary = useCallback(() => {
+    setError((current) => (current === libraryError ? '' : current));
+    return loadLibrary();
+  }, [libraryError, loadLibrary]);
   useEffect(() => {
     const refreshLibrary = () => {
       void loadLibrary().catch((caught) => setError(caught.message));
@@ -1408,6 +1412,7 @@ export function useStory() {
     refresh: refreshView,
     loadChats,
     loadLibrary,
+    retryLibrary,
     savePosition,
     rememberCursor,
     editDraft,

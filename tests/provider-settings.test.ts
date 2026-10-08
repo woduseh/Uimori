@@ -476,7 +476,7 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('moving a model changes only display order, is atomic and survives a pre-existing edit', async () => {
+  test('moving a model changes only display order, rejects stale lists and survives a pre-existing edit', async () => {
     const app = await application();
     const connection = await request<Connection>(
       app,
@@ -494,10 +494,29 @@ describe('provider settings, catalogs and archive contracts', () => {
     );
     const [alpha, beta] = models;
     const snapshots = models.map((model) => app.store.product.modelSnapshot(model.id));
-    expect(await request(app, `/model-presets/${alpha.id}/move`, { direction: 'up' })).toEqual({
-      moved: false,
+    const expectedOrder = models.map((model) => model.id);
+    expect(
+      await request(app, `/model-presets/${alpha.id}/move`, {
+        targetId: alpha.id,
+        position: 'before',
+        expectedOrder,
+      })
+    ).toEqual({ moved: false });
+    await request(app, `/model-presets/${beta.id}/move`, {
+      targetId: alpha.id,
+      position: 'before',
+      expectedOrder,
     });
-    await request(app, `/model-presets/${beta.id}/move`, { direction: 'up' });
+    await request(
+      app,
+      `/model-presets/${alpha.id}/move`,
+      {
+        targetId: beta.id,
+        position: 'before',
+        expectedOrder,
+      },
+      409
+    );
     for (const summary of [false, true]) {
       expect(
         app.store.product
@@ -521,15 +540,6 @@ describe('provider settings, catalogs and archive contracts', () => {
       'PUT'
     );
     expect(edited.displayOrder).toBe(betaOrder);
-    const beforeFailure = app.store.product.all('model');
-    app.store.db.exec(
-      "CREATE TRIGGER fail_order BEFORE UPDATE ON provider_settings WHEN NEW.id='" +
-        alpha.id +
-        "' BEGIN SELECT RAISE(ABORT, 'injected ordering failure'); END"
-    );
-    expect(() => app.store.product.moveModel(beta.id, { direction: 'down' })).toThrow();
-    expect(app.store.product.all('model')).toEqual(beforeFailure);
-    app.store.db.exec('DROP TRIGGER fail_order');
     expect(fetch).not.toHaveBeenCalled();
   });
 

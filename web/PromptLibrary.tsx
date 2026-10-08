@@ -39,8 +39,13 @@ import {
   type FolderFilter,
 } from './LibraryFolders.js';
 import './library.css';
+import {
+  saveLibrarySort,
+  saveLibraryManualOrder,
+  type LibrarySort,
+} from './library-list-preferences.js';
 
-type PromptSort = 'name' | 'name-desc' | 'manual';
+type PromptSort = LibrarySort;
 function savedPromptSort(): PromptSort {
   try {
     const value = JSON.parse(localStorage.getItem('uimori-library-sorts') ?? '{}').prompts;
@@ -58,14 +63,6 @@ function savedPromptOrder(): string[] {
     /* Keep a sensible default in restricted browsers. */
   }
   return [];
-}
-function savePromptPreference(key: string, value: PromptSort | string[]) {
-  try {
-    const current = JSON.parse(localStorage.getItem(key) ?? '{}');
-    localStorage.setItem(key, JSON.stringify({ ...current, prompts: value }));
-  } catch {
-    /* Keep this session's choice. */
-  }
 }
 
 export function PromptLibrary({
@@ -221,7 +218,7 @@ export function PromptLibrary({
   const categoryEmpty = !!library && presets.length === 0 && !query;
   function changeSort(next: PromptSort) {
     setSort(next);
-    savePromptPreference('uimori-library-sorts', next);
+    saveLibrarySort('prompts', next);
   }
   function moveManualItem(id: string, beforeId: string | null) {
     const available = new Set(presets.map((item) => item.id));
@@ -235,7 +232,7 @@ export function PromptLibrary({
     const index = beforeId === null ? ordered.length : ordered.indexOf(beforeId);
     ordered.splice(index < 0 ? ordered.length : index, 0, id);
     setManualOrder(ordered);
-    savePromptPreference('uimori-library-manual-orders', ordered);
+    saveLibraryManualOrder('prompts', ordered);
   }
   function moveByOffset(id: string, offset: number) {
     const index = filtered.findIndex((item) => item.id === id);

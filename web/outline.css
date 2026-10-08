@@ -592,10 +592,6 @@
 .outline-panel > .dismissible-error {
   margin: 10px 20px;
 }
-.outline-loading {
-  padding: 20px 28px;
-  color: var(--muted);
-}
 .helper-outline-selection {
   padding: 10px 12px;
   border: 1px solid var(--line);

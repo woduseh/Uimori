@@ -727,7 +727,7 @@ export function AppSettingsPanel({
                           error={state.libraryError}
                           label="프로바이더 목록을 불러오는 중이에요…"
                           errorLabel="프로바이더 목록을 불러오지 못했어요."
-                          onRetry={() => void state.loadLibrary().catch(() => {})}
+                          onRetry={() => void state.retryLibrary().catch(() => {})}
                           compact
                         />
                       )}
