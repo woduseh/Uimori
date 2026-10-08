@@ -230,10 +230,19 @@ test('ITRAN typing, including edit-then-revert, cannot be overwritten by a late 
     finished.release();
   });
   try {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
     await open(page, chat.id);
     await composer(page).fill(original);
     await translate(page).click();
     await started.promise;
+    const spinner = page.locator('.input-translation-feedback [role="status"] svg');
+    await expect(spinner).toHaveCSS('animation-name', 'activity-spin');
+    const transform = await spinner.evaluate((node) => getComputedStyle(node).transform);
+    await expect
+      .poll(() => spinner.evaluate((node) => getComputedStyle(node).transform))
+      .not.toBe(transform);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(spinner).toHaveCSS('animation-name', 'none');
     await composer(page).fill('바꾼 초안');
     await composer(page).fill(original);
     released.release();

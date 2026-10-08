@@ -2,6 +2,7 @@ import { Languages, LoaderCircle, Square, Undo2 } from 'lucide-react';
 import { INPUT_TRANSLATION_LANGUAGES } from '../core/input-translation.js';
 import type { InputTranslationState } from './useInputTranslation.js';
 import './input-translation.css';
+import './activity-status.css';
 
 type Props = { translation: InputTranslationState; disabled: boolean };
 export function InputTranslationControls({
@@ -91,8 +92,8 @@ export function InputTranslationFeedback({ translation, disabled }: Props) {
     <section className="input-translation-feedback" aria-label="입력 번역 상태">
       {translation.busy && (
         <p role="status">
-          <LoaderCircle size={14} aria-hidden="true" /> 입력을 번역하고 있어요. 계속 수정해도
-          괜찮아요.
+          <LoaderCircle size={14} className="activity-spinner" aria-hidden="true" /> 입력을 번역하고
+          있어요. 계속 수정해도 괜찮아요.
         </p>
       )}
       {translation.original !== null && (
