@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
@@ -469,7 +470,8 @@ export function ModelWorkspaceEditor({
         </p>
       )}
       {saveError && <p role="alert">{saveError} 초안은 유지했어요.</p>}
-      <p role="status">{message || error}</p>
+      <TransientNotice message={message} />
+      {error && <p role="status">{error}</p>}
       <button type="button" className="secondary" onClick={onManage}>
         <SettingsIcon size={18} aria-hidden="true" />
         모델 프리셋·프로바이더 관리{' '}

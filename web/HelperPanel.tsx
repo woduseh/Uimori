@@ -16,6 +16,7 @@ import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
 import { ActionMenu } from './ActionMenu.js';
 import { ActivityBar } from './ActivityBar.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { HelperActivityDetails, useHelperActivity } from './HelperActivity.js';
 import { helperActivitySummary } from './helper-activity.js';
 import { Dialog } from './Dialog.js';
@@ -905,9 +906,9 @@ export function HelperPanel(props: Props) {
         }}
       />
       {scopeMismatch && scope.kind === 'chat' && (
-        <div className="helper-scope-notice" role="status">
-          <p>현재 채팅과 다른 도우미 기록이에요. 새 요청과 변경은 현재 채팅의 세션에서 진행해요.</p>
-        </div>
+        <NoticeBanner className="helper-scope-notice">
+          현재 채팅과 다른 도우미 기록이에요. 새 요청과 변경은 현재 채팅의 세션에서 진행해요.
+        </NoticeBanner>
       )}
       {settings && conversation && (
         <div className="helper-settings">
@@ -1394,42 +1395,47 @@ export function HelperPanel(props: Props) {
           />
         )}
         {error && (
-          <div className="helper-notice" role="alert">
-            <p>{error}</p>
-            <div className="form-actions">
-              {/모델|MODEL_REQUIRED/u.test(error) && (
-                <button
-                  type="button"
-                  className="secondary helper-notice-lead"
-                  onClick={props.onModelSettings}
-                >
-                  <SettingsIcon size={18} aria-hidden="true" />
-                  모델 설정{' '}
-                </button>
-              )}
-              {!hydrated[scopeKey] && (
+          <NoticeBanner
+            tone="error"
+            className="helper-notice"
+            actions={
+              <>
+                {/모델|MODEL_REQUIRED/u.test(error) && (
+                  <button
+                    type="button"
+                    className="secondary helper-notice-lead"
+                    onClick={props.onModelSettings}
+                  >
+                    <SettingsIcon size={18} aria-hidden="true" />
+                    모델 설정{' '}
+                  </button>
+                )}
+                {!hydrated[scopeKey] && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => setRecoveryAttempt((old) => old + 1)}
+                  >
+                    초안 다시 불러오기
+                  </button>
+                )}
                 <button
                   type="button"
                   className="secondary"
-                  onClick={() => setRecoveryAttempt((old) => old + 1)}
+                  onClick={() => {
+                    setError('');
+                    data.setError('');
+                    sessions.clearError();
+                  }}
                 >
-                  초안 다시 불러오기
+                  <CloseIcon size={18} aria-hidden="true" />
+                  닫기
                 </button>
-              )}
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setError('');
-                  data.setError('');
-                  sessions.clearError();
-                }}
-              >
-                <CloseIcon size={18} aria-hidden="true" />
-                닫기
-              </button>
-            </div>
-          </div>
+              </>
+            }
+          >
+            {error}
+          </NoticeBanner>
         )}
         <ChatComposer
           onSubmit={(event) => {

@@ -336,7 +336,7 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
 test('CSUI04 quick persona and chat settings share persisted attachments and none preserves the composer', async ({
   page,
   request,
-}) => {
+}, info) => {
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = `CSUI04 persona ${Date.now()}`;
   const seeded = await request.post('/api/content', {
@@ -405,8 +405,18 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
   await expect(attached).toBeVisible();
   await attached.getByRole('button', { name: '해제', exact: true }).click();
   await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
-  await expect(dialog.getByText('채팅 설정을 저장했어요.', { exact: true })).toBeVisible();
+  const completion = page
+    .locator('.transient-notice')
+    .filter({ hasText: '채팅 설정을 저장했어요.' });
+  await expect(completion).toBeVisible();
+  await expect(completion.getByRole('button')).toHaveCount(0);
+  await page.screenshot({
+    path: info.outputPath('saved-settings-notice.png'),
+    animations: 'disabled',
+  });
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await expect(completion).toBeVisible();
+  await expect(completion).toHaveCount(0, { timeout: 6000 });
   await expect.poll(selected).toEqual([]);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await expect(quick).toContainText('페르소나 없음');

@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { ExpandIcon, ExternalLinkIcon, ResetIcon, SaveIcon, CloseIcon } from './ui-icons.js';
@@ -365,9 +366,12 @@ export function PromptWorkspaceEditor({
           </button>
         )}
         {conflict && !showRecovery && <ResourceEditorStatus value={shared} hideSyncError />}
-        <p role="status" className="muted">
-          {busy || (dirty && !showRecovery) ? '저장 중…' : message}
-        </p>
+        {(busy || (dirty && !showRecovery)) && (
+          <p role="status" className="muted">
+            저장 중…
+          </p>
+        )}
+        <TransientNotice message={busy || dirty ? '' : message} />
         <Dialog
           open={manageCombinations}
           title="옵션 조합 관리"

@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IllustrationReferenceRole, IllustrationReferences } from '../core/illustration.js';
@@ -136,7 +137,7 @@ export function IllustrationReferencesEditor({
           onClick={() => void save()}
         />
       </div>
-      {message && <p role="status">{message}</p>}
+      <TransientNotice message={message} />
     </section>
   );
 }

@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -207,7 +208,7 @@ function StoryPanelEditor({
           {error}
         </p>
       )}
-      {message && <p role="status">{message}</p>}
+      <TransientNotice message={message} />
       <ContextPanel
         chatId={chatId}
         headRevision={headRevision}

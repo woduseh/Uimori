@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useCallback, useEffect, useState } from 'react';
 import {
   DEFAULT_LORE_CONTEXT,
@@ -104,7 +105,7 @@ export function LoreContextDefaultsEditor({
           }
         />
       </fieldset>
-      {message && <p role="status">{message}</p>}
+      <TransientNotice message={message} />
       {error && (
         <p className="error" role="alert">
           {error}

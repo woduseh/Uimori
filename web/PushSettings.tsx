@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import './push-settings.css';
 import { useEffect, useState } from 'react';
 import { Bell, BellOff, RefreshCw, Send } from 'lucide-react';
@@ -26,6 +27,7 @@ export function PushSettings() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [warning, setWarning] = useState('');
   const [refresh, setRefresh] = useState(0);
   const supported =
     isSecureContext &&
@@ -61,6 +63,7 @@ export function PushSettings() {
     setBusy(true);
     setError('');
     setNotice('');
+    setWarning('');
     try {
       // Invoke the permission UI in this user gesture, before a network round-trip.
       const granted =
@@ -69,7 +72,7 @@ export function PushSettings() {
           : Notification.permission;
       setPermission(granted);
       if (granted !== 'granted') {
-        setNotice('알림을 허용하지 않았어요. 브라우저의 사이트 알림 설정에서 변경할 수 있어요.');
+        setWarning('알림을 허용하지 않았어요. 브라우저의 사이트 알림 설정에서 변경할 수 있어요.');
         return;
       }
       const prepared = await api<PushInfo>('/push/prepare', { clientId });
@@ -115,6 +118,7 @@ export function PushSettings() {
     setBusy(true);
     setError('');
     setNotice('');
+    setWarning('');
     try {
       // Stop server sends first. Browser-side unsubscribe failure must not restore server consent.
       const saved = await api<PushInfo>(
@@ -129,7 +133,8 @@ export function PushSettings() {
         const subscription = await registration?.pushManager.getSubscription();
         await subscription?.unsubscribe();
       } catch {
-        setNotice('서버 알림은 껐어요. 브라우저 연결 해제는 다음 접속 때 다시 확인해 주세요.');
+        setNotice('');
+        setWarning('서버 알림은 껐어요. 브라우저 연결 해제는 다음 접속 때 다시 확인해 주세요.');
       }
     } catch (caught) {
       setError((caught as Error).message);
@@ -142,6 +147,7 @@ export function PushSettings() {
     setBusy(true);
     setError('');
     setNotice('');
+    setWarning('');
     try {
       setInfo(
         await api<PushInfo>(
@@ -165,6 +171,7 @@ export function PushSettings() {
     setBusy(true);
     setError('');
     setNotice('');
+    setWarning('');
     try {
       await api('/push/test', { clientId });
       setNotice('테스트 알림을 발송 대기열에 넣었어요. 기기에서 수신되는지 확인해 주세요.');
@@ -250,7 +257,8 @@ export function PushSettings() {
         </details>
       )}
       {info?.device?.lastError && <p role="status">{info.device.lastError}</p>}
-      {notice && <p role="status">{notice}</p>}
+      <TransientNotice message={notice} />
+      {warning && <p role="status">{warning}</p>}
       {error && (
         <div className="settings-service-error">
           <p role="alert" className="error">

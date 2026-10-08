@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { ProviderConnectionForm } from './ProviderConnectionForm.js';
 import { ProviderModelForm } from './ProviderModelForm.js';
 import {
@@ -186,6 +187,7 @@ export function ConnectionEditor({
   const [jevBusy, setJevBusy] = useState(false);
   const [operationBusy, setOperationBusy] = useState(false),
     [message, setMessage] = useState(''),
+    [refreshWarning, setRefreshWarning] = useState(''),
     [error, setError] = useState('');
   const busy = operationBusy || uploadingCredential || jevBusy;
   const dirty =
@@ -301,6 +303,7 @@ export function ConnectionEditor({
     setError('');
     onError('');
     setMessage('');
+    setRefreshWarning('');
     try {
       await work();
       // The command has completed. A failed read must not ask the caller to repeat it.
@@ -309,7 +312,8 @@ export function ConnectionEditor({
       } catch (caught) {
         const detail = caught instanceof Error ? caught.message : '목록 조회 실패';
         const warning = `작업은 완료됐어요. 목록을 다시 불러오지 못했어요. ${detail}`;
-        setMessage(warning);
+        setMessage('');
+        setRefreshWarning(warning);
         onError(warning);
       }
       return true;
@@ -1223,7 +1227,8 @@ export function ConnectionEditor({
           {error}
         </p>
       )}
-      <p role="status">{message}</p>
+      <TransientNotice message={message} />
+      {refreshWarning && <p role="status">{refreshWarning}</p>}
     </section>
   );
 }

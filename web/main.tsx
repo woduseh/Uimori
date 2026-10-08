@@ -17,6 +17,8 @@ import { RetryFailure } from './RetryFailure.js';
 import { isModelSelectable } from './model-selection.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { DismissibleError } from './DismissibleError.js';
+import { NoticeBanner } from './NoticeBanner.js';
+import { TransientNotice, TransientNoticeProvider } from './TransientNotice.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
@@ -24,7 +26,7 @@ import { ChatContextDialog } from './ChatContextDialog.js';
 import { RequestPreviewDialog } from './RequestPreviewDialog.js';
 import { ManuscriptExportDialog } from './ManuscriptExportDialog.js';
 import { IconButton } from './IconButton.js';
-import { PinIcon } from './ui-icons.js';
+import { PinIcon, CloseIcon } from './ui-icons.js';
 import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
@@ -464,7 +466,7 @@ function App() {
   const composerStatus = [
     s.pendingRequest && !s.submitting.includes(s.viewKey)
       ? '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.'
-      : s.notice,
+      : '',
     s.cancelling ? '원문 생성 취소 중…' : '',
     s.profileDirty ? '채팅 설정에 미저장 변경' : '',
   ]
@@ -999,22 +1001,28 @@ function App() {
           </header>
         )}
         {pendingNotification && (
-          <aside className="reading-sync-notice" aria-label="알림의 장면 이동">
-            <span>알림이 도착했어요. 현재 편집을 마친 뒤 해당 장면으로 이동할 수 있어요.</span>
-            <button
-              type="button"
-              disabled={notificationBlocked}
-              onClick={() => {
-                select(pendingNotification.chatId, pendingNotification.target);
-                setPendingNotification(null);
-              }}
-            >
-              알림으로 이동
-            </button>
-            <button type="button" onClick={() => setPendingNotification(null)}>
-              알림 이동 닫기
-            </button>
-          </aside>
+          <NoticeBanner
+            label="알림의 장면 이동"
+            actions={
+              <>
+                <button
+                  type="button"
+                  disabled={notificationBlocked}
+                  onClick={() => {
+                    select(pendingNotification.chatId, pendingNotification.target);
+                    setPendingNotification(null);
+                  }}
+                >
+                  알림으로 이동
+                </button>
+                <button type="button" onClick={() => setPendingNotification(null)}>
+                  알림 이동 닫기
+                </button>
+              </>
+            }
+          >
+            편집을 마친 뒤 알림의 장면으로 이동할 수 있어요.
+          </NoticeBanner>
         )}
         {s.destination === 'library' ? (
           <div className="destination-scroll">
@@ -1067,28 +1075,44 @@ function App() {
           </div>
         ) : (
           <>
-            {(s.readingSync.other || s.readingSync.error) && (
-              <aside className="reading-sync-notice" aria-label="읽기 위치 동기화">
-                {s.readingSync.other && (
+            {s.readingSync.other && (
+              <NoticeBanner
+                label="읽기 위치 동기화"
+                actions={
                   <>
-                    <span>저장된 읽기 위치가 있어요. 현재 화면은 그대로 유지해요.</span>
-                    <button type="button" onClick={s.readingSync.resumeOther}>
-                      {s.readingSync.resumeLabel}
+                    <button
+                      type="button"
+                      aria-label={s.readingSync.resumeLabel}
+                      onClick={s.readingSync.resumeOther}
+                    >
+                      이어 읽기
                     </button>
+                    <IconButton
+                      label="읽기 위치 안내 닫기"
+                      icon={CloseIcon}
+                      className="secondary"
+                      onClick={s.readingSync.dismiss}
+                    />
                   </>
-                )}
-                {s.readingSync.error && (
-                  <>
-                    <span>{s.readingSync.error}</span>
-                    <button type="button" onClick={s.readingSync.refresh}>
-                      연결 다시 확인
-                    </button>
-                  </>
-                )}
-                <button type="button" onClick={s.readingSync.dismiss}>
-                  닫기
-                </button>
-              </aside>
+                }
+              >
+                {s.readingSync.resumeLabel.startsWith('다른 기기')
+                  ? '다른 기기에 저장된 읽기 위치가 있어요.'
+                  : '저장된 읽기 위치가 있어요.'}
+              </NoticeBanner>
+            )}
+            {s.readingSync.error && (
+              <NoticeBanner
+                label="읽기 위치 연결 오류"
+                tone="error"
+                actions={
+                  <button type="button" onClick={s.readingSync.refresh}>
+                    연결 다시 확인
+                  </button>
+                }
+              >
+                {s.readingSync.error}
+              </NoticeBanner>
             )}
             <div
               className={`reader-stage ${showSceneNavigator && s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
@@ -1142,11 +1166,14 @@ function App() {
                           {s.bot && <strong className="reader-bot-name">{s.bot.title}</strong>}
                         </div>
                       )}
-                      {!s.connected && (
-                        <p className="connection-note" role="status">
-                          연결을 다시 확인하는 중이에요.
-                        </p>
-                      )}
+                      {!s.connected &&
+                        !s.detail?.reader.activity?.some((item) =>
+                          ['queued', 'running'].includes(item.status)
+                        ) && (
+                          <p className="connection-note" role="status">
+                            연결을 다시 확인하는 중이에요.
+                          </p>
+                        )}
                       {!s.sources.length && !s.visibleRuns.length && !s.active && (
                         <div className="first-scene">
                           {s.bot && (
@@ -2058,6 +2085,7 @@ function App() {
   );
   return (
     <ReadingPreferencesContext value={reading.settings}>
+      <TransientNotice message={s.notice} />
       <ReaderEditingContext value={onSourceEditing}>{workspace}</ReaderEditingContext>
       <Dialog
         open={nativeNotices.length > 0}
@@ -2075,7 +2103,9 @@ createRoot(document.getElementById('root')!).render(
   <SessionGate>
     <MaintenanceBanner />
     <ThemeProvider>
-      <App />
+      <TransientNoticeProvider>
+        <App />
+      </TransientNoticeProvider>
     </ThemeProvider>
   </SessionGate>
 );

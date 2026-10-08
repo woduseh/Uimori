@@ -39,15 +39,6 @@
   opacity: 0.75;
   margin-block: 6px;
 }
-.reading-sync-notice {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 16px;
-  font-size: 0.9em;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-}
 .bookmark-list blockquote {
   display: -webkit-box;
   -webkit-line-clamp: 3;

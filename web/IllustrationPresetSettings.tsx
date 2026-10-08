@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
@@ -67,11 +68,7 @@ export function IllustrationPresetSettings({
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState('');
-  useEffect(() => {
-    if (!notice) return;
-    const timer = setTimeout(() => setNotice(''), 4500);
-    return () => clearTimeout(timer);
-  }, [notice]);
+  const [importNotice, setImportNotice] = useState('');
   const [deleting, setDeleting] = useState<IllustrationPreset | null>(null);
   const [discard, setDiscard] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -141,6 +138,7 @@ export function IllustrationPresetSettings({
     setBusy(true);
     setError('');
     setNotice('');
+    setImportNotice('');
     try {
       await work();
       return true;
@@ -158,6 +156,7 @@ export function IllustrationPresetSettings({
     setWorkflowError('');
     setError('');
     setNotice('');
+    setImportNotice('');
     let model: IllustrationPresetDefinition;
     try {
       model = validateIllustrationPreset(
@@ -217,12 +216,14 @@ export function IllustrationPresetSettings({
     setBaseline(preset && !isCopy ? JSON.stringify(model) : '');
     setError('');
     setNotice('');
+    setImportNotice('');
   }
   function patch(patch: Partial<IllustrationPresetDefinition>) {
     setDraft((current) =>
       current ? { ...current, model: { ...current.model, ...patch } } : current
     );
     setNotice('');
+    setImportNotice('');
   }
   async function importFile(file: File) {
     if (dirty) {
@@ -236,7 +237,7 @@ export function IllustrationPresetSettings({
       resetEditorDetails();
       setDraft({ id: null, model });
       setBaseline('');
-      setNotice('가져왔어요. 내용을 확인한 뒤 저장해 주세요.');
+      setImportNotice('가져왔어요. 내용을 확인한 뒤 저장해 주세요.');
     });
   }
   useEffect(() => {
@@ -342,11 +343,8 @@ export function IllustrationPresetSettings({
           <RefreshCw size={16} aria-hidden="true" /> 다시 불러오기
         </button>
       )}
-      {notice && (
-        <p className="settings-feedback" role="status">
-          {notice}
-        </p>
-      )}
+      <TransientNotice message={notice} />
+      {importNotice && <p role="status">{importNotice}</p>}
       <div className="illustration-preset-grid" aria-label="저장된 삽화 프리셋">
         {catalog.presets.map((preset) => (
           <article

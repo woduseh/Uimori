@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import { Copy } from 'lucide-react';
@@ -157,7 +158,7 @@ export function HelperArtifactCard({
         </small>
       </header>
       {error && <p role="alert">{error}</p>}
-      {message && <p role="status">{message}</p>}
+      <TransientNotice message={message} />
       {artifact ? (
         <>
           <div className="helper-prose">

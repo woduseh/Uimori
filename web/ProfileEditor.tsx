@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { Switch } from './BooleanControls.js';
 import { SettingsIcon } from './ui-icons.js';
@@ -487,11 +488,9 @@ export function ProfileEditor({
               장착 설정 다시 불러오기
             </button>
           )}
-          <span role="status">
-            {saving
-              ? '저장 중…'
-              : status || (dirty || lorePending ? '저장하지 않은 변경이 있어요.' : '')}
-          </span>
+          {(saving || dirty || lorePending) && (
+            <span role="status">{saving ? '저장 중…' : '저장하지 않은 변경이 있어요.'}</span>
+          )}
           {(dirty || lorePending) && (
             <small>대화 구성·프롬프트·모델·로어 정책·자동 배치의 변경을 함께 저장해요.</small>
           )}
@@ -501,7 +500,7 @@ export function ProfileEditor({
             aria-busy={saving}
           />
         </div>
-        {tab !== 'characters' && !dirty && !lorePending && status && <p role="status">{status}</p>}
+        <TransientNotice message={status} />
       </form>
     </section>
   );

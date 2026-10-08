@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { IllustrationPresetSettings } from './IllustrationPresetSettings.js';
 import type {
   IllustrationPresetScope,
@@ -549,7 +550,8 @@ function IllustrationEnvironmentEditor({
         </p>
       )}
       {saveError && <p role="alert">{saveError} 초안은 유지했어요.</p>}
-      <p role="status">{message || loadError}</p>
+      <TransientNotice message={message} />
+      {loadError && <p role="status">{loadError}</p>}
     </section>
   );
 }

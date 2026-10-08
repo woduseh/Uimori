@@ -1,17 +1,8 @@
 .dismissible-error {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
-.dismissible-error > div {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.dismissible-error p {
-  margin: 0;
-}
-.dismissible-error > button {
-  flex: 0 0 auto;
+.dismissible-error .notice-banner-actions button {
   color: inherit;
 }

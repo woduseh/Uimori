@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
@@ -170,7 +171,7 @@ export function AuthorNotesEditor({
           {error}
         </p>
       )}
-      {message && <p role="status">{message}</p>}
+      <TransientNotice message={message} />
       {notes.length > 0 ? (
         <ul className="story-records">
           {notes.map((note) => (

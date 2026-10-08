@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import type { Library, PromptWorkspace } from '../core/product.js';
@@ -337,7 +338,7 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
             적용해 주세요.
           </p>
         )}
-        {message && <p role="status">{message}</p>}
+        <TransientNotice message={message} />
         {error && <p role="alert">{error}</p>}
         {(error || conflict) && (
           <button

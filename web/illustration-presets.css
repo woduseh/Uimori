@@ -146,10 +146,6 @@
 .illustration-preset-card .illustration-preset-actions > button {
   background: transparent;
 }
-.settings-feedback {
-  color: var(--muted);
-  font-size: 0.875rem;
-}
 @media (max-width: 600px) {
   .illustration-preset-heading {
     align-items: flex-start;

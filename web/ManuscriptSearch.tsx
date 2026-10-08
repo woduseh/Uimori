@@ -8,7 +8,7 @@ import type {
 import type { Chat } from '../core/types.js';
 import type { Library, ChatFolder } from '../core/product.js';
 import { api } from './api.js';
-import { SearchIcon } from './ui-icons.js';
+import { CheckIcon, SearchIcon } from './ui-icons.js';
 import './manuscript-search.css';
 
 const labels: Record<SearchKind, string> = {
@@ -84,7 +84,7 @@ export function ManuscriptSearchPanel({
   useEffect(() => {
     currentRequest.current?.abort();
     setResult(null);
-    setTitleLimit(30);
+    setTitleLimit(query.trim() ? 5 : 30);
     setError('');
     setBusy(false);
     if (composing || [...query.trim()].length < 3) return;
@@ -162,29 +162,34 @@ export function ManuscriptSearchPanel({
             <legend>검색 대상</legend>
             <div className="manuscript-search-kind-options">
               {(['original', 'translation', 'request'] as const).map((kind) => (
-                <label className="manuscript-search-kind" key={kind}>
-                  <input
-                    type="checkbox"
-                    checked={kinds.includes(kind)}
-                    onChange={(event) =>
-                      setKinds((old) =>
-                        event.target.checked
-                          ? [...old, kind]
-                          : old.filter((value) => value !== kind)
-                      )
-                    }
-                  />
+                <button
+                  type="button"
+                  className="secondary manuscript-search-kind"
+                  aria-pressed={kinds.includes(kind)}
+                  key={kind}
+                  onClick={() =>
+                    setKinds((old) =>
+                      old.includes(kind) ? old.filter((value) => value !== kind) : [...old, kind]
+                    )
+                  }
+                >
+                  <CheckIcon size={16} aria-hidden="true" />
                   {labels[kind]}
-                </label>
+                </button>
               ))}
             </div>
           </fieldset>
         </div>
       </form>
       {onChat && !!titleMatches.length && (
-        <details className="manuscript-search-titles" open>
-          <summary>채팅 제목 {titleMatches.length}개</summary>
-          <nav className="manuscript-search-title-results">
+        <details className="manuscript-search-titles" data-searching={!!needle} open>
+          <summary>
+            {needle ? '제목 일치' : '채팅 제목'} {titleMatches.length}개
+          </summary>
+          <nav
+            className="manuscript-search-title-results"
+            aria-label={needle ? '제목 일치 결과' : '채팅 제목 목록'}
+          >
             {titleMatches.slice(0, titleLimit).map((chat) => (
               <button
                 type="button"
@@ -206,7 +211,7 @@ export function ManuscriptSearchPanel({
             <button
               className="secondary"
               type="button"
-              onClick={() => setTitleLimit((old) => old + 30)}
+              onClick={() => setTitleLimit((old) => old + (needle ? 5 : 30))}
             >
               채팅 제목 더 보기 · {titleMatches.length - titleLimit}개 남음
             </button>
@@ -228,6 +233,7 @@ export function ManuscriptSearchPanel({
           </button>
         </p>
       )}
+      {result && <h3 className="manuscript-search-result-heading">본문 검색 결과</h3>}
       <div className="manuscript-search-results">
         {result?.items.map((item) => (
           <article key={`${item.target.chatId}:${item.target.sourceId}`}>

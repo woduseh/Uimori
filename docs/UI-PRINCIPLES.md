@@ -13,6 +13,10 @@ Keep settings action groups aligned to the right below their content, and toggle
 
 Apply the same grouping to chat settings and helper settings. Picker dialogs own their filter layout; compact controls in the surrounding composer must not shrink or restyle the dialog's search and folder fields.
 
+Non-modal notices follow their purpose. Save and other completed-action feedback uses the shared bottom notice for four seconds without moving content or taking focus; it can remain visible after its settings panel closes. Unsaved drafts, conflicts, uncertain admission and failures stay near their affected operation until resolved or explicitly dismissed. Persistent reading and maintenance banners share message and action spacing, while execution progress keeps its compact activity bar. Maintenance details are available through a disclosure.
+
+Manuscript search uses independent pressed-state filter buttons for original text, translation and requests; multiple kinds can be selected. Empty-query title browsing remains available. With a query, matching chat titles are shown compactly in batches of five above a separate manuscript-results section.
+
 Use the current components and styles as the starting point. [Library](LIBRARY.md) and [usage](USAGE.md) describe feature behavior; [DEVELOPMENT](DEVELOPMENT.md#verification) covers verification selection.
 
 Detailed editor behavior is in [LIBRARY](LIBRARY.md#저장과-취소); helper sessions are in [READING](READING.md#helper-sessions).
