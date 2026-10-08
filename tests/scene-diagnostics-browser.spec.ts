@@ -222,6 +222,8 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await page.goto(`/?chat=${chat.id}`);
       const activity = page.getByTestId('turn-activity');
       const usage = page.getByTestId('scene-usage');
+      await expect(activity).toBeVisible();
+      await expect(activity).not.toHaveAttribute('open', '');
       await expect(usage).toHaveCount(0);
       await activity.locator(':scope > summary').click();
       await expect(activity.getByTestId('scene-usage')).toBeVisible();
@@ -230,6 +232,7 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       expect(detailRequests).toHaveLength(0);
       await usage.locator(':scope > summary').click();
       await expect(usage).toContainText('전송 로어 · 1개 기록');
+      await expect(usage).not.toContainText('자동 선별');
       expect(detailRequests).toHaveLength(1);
       await expect(usage).toContainText('Scene diagnostics writer · scene-diagnostics-writer');
       await expect(usage).not.toContainText('오늘 바꾼 모델 이름');
@@ -256,6 +259,42 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await lore.getByRole('button', { name: '마지막 장면의 로어 닫기', exact: true }).click();
       await activity.locator(':scope > summary').click();
       page.off('request', captureDetail);
+
+      // Rendering proof only: the automatic-selection summary is an API fixture,
+      // while the source, token and pinned-lore persistence above use the real app.
+      const detailPath = `**/api/attempts/${attempt.id}/scene-detail`;
+      await page.route(detailPath, async (route) => {
+        const response = await route.fetch();
+        const detail = (await response.json()) as SceneUsageDetail;
+        await route.fulfill({
+          response,
+          json: {
+            ...detail,
+            lore: {
+              ...detail.lore!,
+              selection: { total: 1234, evaluated: 30, selected: 2, failed: 1 },
+            },
+          } satisfies SceneUsageDetail,
+        });
+      });
+      await page.reload();
+      await activity.locator(':scope > summary').click();
+      await usage.locator(':scope > summary').click();
+      await expect(usage).toContainText('자동 선별 · 대상 1,234 · 판단 30 · 선택 2 · 실패 1건');
+      const selectionSummary = usage.getByText(
+        '자동 선별 · 대상 1,234 · 판단 30 · 선택 2 · 실패 1건'
+      );
+      await selectionSummary.scrollIntoViewIfNeeded();
+      await expect(selectionSummary).toBeVisible();
+      await expect(usage).toContainText(`${loreTitle} · 고정 자료`);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
+      ).toBe(true);
+      await page.screenshot({ path: info.outputPath(`scene-selection-coverage-${width}.png`) });
+      // TurnActivity restores its open state on reload. Close it before the next width.
+      await activity.locator(':scope > summary').click();
+      await expect(activity).not.toHaveAttribute('open', '');
+      await page.unroute(detailPath);
     }
   } finally {
     await peer.close();

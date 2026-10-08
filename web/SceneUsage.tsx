@@ -112,6 +112,15 @@ export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
                     : '본문 포함 기록 없음'
                   : '기록 없음'}
               </p>
+              {recordedDetail.lore?.selection && (
+                <p>
+                  자동 선별 · 대상 {amount(recordedDetail.lore.selection.total)} · 판단{' '}
+                  {amount(recordedDetail.lore.selection.evaluated)} · 선택{' '}
+                  {amount(recordedDetail.lore.selection.selected)}
+                  {!!recordedDetail.lore.selection.failed &&
+                    ` · 실패 ${amount(recordedDetail.lore.selection.failed)}건`}
+                </p>
+              )}
               {!!recordedDetail.lore?.entries.length && (
                 <ul className="scene-receipt-lore">
                   {recordedDetail.lore.entries.map((entry, index) => (
