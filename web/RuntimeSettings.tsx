@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { RefreshIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
@@ -130,11 +131,7 @@ export function SettingsEditor({
             <SaveButton label="설정 저장" disabled={!dirty || saving} aria-busy={saving} />
           </div>
         </fieldset>
-        {message && (
-          <p role="status" className="full">
-            {message}
-          </p>
-        )}
+        <TransientNotice message={message} />
         {localError && <p className="error full">{localError}</p>}
       </form>
     </section>

@@ -6,6 +6,19 @@ import { browserClientId } from './browser-client.js';
 import { api } from './api.js';
 import { readReadingPosition } from './story-storage.js';
 
+function positionIdentity(position: ReadingPosition): string {
+  const target = position.target;
+  // Saving the same location again changes its revision, but is not a new reading suggestion.
+  return JSON.stringify([
+    target.chatId,
+    target.sourceId,
+    target.representation,
+    target.contentHash ?? null,
+    target.blockAnchor ?? null,
+    target.offsetRatio ?? null,
+  ]);
+}
+
 /** Source/paragraph identity survives viewport and font-size differences; pixels stay local. */
 export function captureReaderLocation(
   reader: HTMLElement,
@@ -44,6 +57,7 @@ export function useReadingSync(options: {
   const key = options.chatId;
   const current = useRef(options);
   current.current = options;
+  const acknowledged = useRef(new Map<string, string>());
   const [state, setState] = useState<{
     key: string;
     own: ReadingPosition | null;
@@ -215,9 +229,31 @@ export function useReadingSync(options: {
     state.key === key && state.other && (!state.own || state.other.updatedAt > state.own.updatedAt)
       ? state.other
       : null;
-  const resume =
+  const candidate =
     other ??
     (state.key === key && !readReadingPosition(options.storageKey)?.source ? state.own : null);
+  const acknowledgmentKey = `uimori:reading-suggestion:${key}`;
+  let acknowledgedIdentity = acknowledged.current.get(key);
+  if (acknowledgedIdentity === undefined) {
+    try {
+      acknowledgedIdentity = sessionStorage.getItem(acknowledgmentKey) ?? undefined;
+    } catch {
+      // The mounted reader still remembers acknowledgments when session storage is unavailable.
+    }
+  }
+  const resume =
+    candidate && positionIdentity(candidate) !== acknowledgedIdentity ? candidate : null;
+  const acknowledge = () => {
+    if (!resume) return;
+    const identity = positionIdentity(resume);
+    acknowledged.current.set(key, identity);
+    try {
+      sessionStorage.setItem(acknowledgmentKey, identity);
+    } catch {
+      // Reading and local position preservation never depend on optional session storage.
+    }
+    setState((old) => ({ ...old }));
+  };
   return {
     remember,
     other: resume,
@@ -225,11 +261,11 @@ export function useReadingSync(options: {
     error: state.key === key ? state.error : '',
     resumeOther: () => {
       if (resume) {
+        acknowledge();
         current.current.onResume(resume.target);
-        setState((old) => ({ ...old, other: null }));
       }
     },
-    dismiss: () => setState((old) => ({ ...old, own: null, other: null, error: '' })),
+    dismiss: acknowledge,
     refresh: () => {
       void actions.current?.load();
     },

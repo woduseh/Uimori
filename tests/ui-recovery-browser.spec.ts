@@ -799,7 +799,9 @@ for (const viewport of viewports) {
         (saved.program.nativeRisuPreset.preset.promptTemplate as Record<string, unknown>[])[0]
       ).toMatchObject({ text: body });
       await expect(
-        editor.getByRole('status').filter({ hasText: '프롬프트를 저장했어요.' })
+        page
+          .locator('.transient-notice[role="status"]')
+          .filter({ hasText: '프롬프트를 저장했어요.' })
       ).toBeVisible();
       await expect(save).toBeDisabled();
       await editorFits(page, editor, save);

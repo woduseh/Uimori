@@ -35,36 +35,37 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
     expect(Math.abs(inputBox.height - buttonBox.height)).toBeLessThanOrEqual(2);
     expect(Math.abs(inputBox.y - buttonBox.y)).toBeLessThanOrEqual(2);
     for (const name of ['원문', '번역', '요청']) {
-      const checkbox = dialog.getByRole('checkbox', { name, exact: true });
-      await expect(checkbox).toBeChecked();
-      const aligned = await checkbox.evaluate((element) => {
-        const box = element.getBoundingClientRect();
-        const label = element.closest('label')!;
-        const text = document.createRange();
-        text.selectNodeContents(label.lastChild!);
-        const words = text.getBoundingClientRect();
-        return (
-          words.left >= box.right &&
-          Math.abs(words.top + words.height / 2 - box.top - box.height / 2) <= 3
-        );
-      });
-      expect(aligned).toBe(true);
+      const filter = dialog.getByRole('button', { name, exact: true });
+      await expect(filter).toHaveAttribute('aria-pressed', 'true');
     }
+    await expect(dialog.getByRole('checkbox')).toHaveCount(0);
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
       true
     );
-    await dialog.getByRole('checkbox', { name: '번역', exact: true }).uncheck();
+    await dialog.getByRole('button', { name: '번역', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: '번역', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'false'
+    );
     await dialog.getByLabel('전체 채팅 검색', { exact: true }).fill('미카');
     await dialog.getByRole('button', { name: '검색', exact: true }).click();
     await expect(dialog.getByText('일치하는 원고가 없어요.', { exact: true })).toBeVisible();
     await expect(search).toHaveValue('미카');
-    await dialog.getByRole('checkbox', { name: '번역', exact: true }).check();
+    await dialog.getByRole('button', { name: '번역', exact: true }).focus();
+    await page.keyboard.press('Space');
+    await expect(dialog.getByRole('button', { name: '번역', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     await dialog.getByRole('button', { name: '검색', exact: true }).click();
     const result = dialog
       .locator('.manuscript-search-results article')
       .filter({ hasText: chat.title })
       .first();
     await expect(result).toContainText('보라색 우산');
+    await expect(
+      dialog.getByRole('heading', { name: '본문 검색 결과', exact: true })
+    ).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
@@ -209,11 +210,51 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
     const resume = phone.getByRole('button', { name: '다른 기기에서 이어 읽기', exact: true });
     await expect(resume).toBeVisible();
     expect(phone.url()).toBe(before);
+    await phone.screenshot({
+      path: info.outputPath('reading-position-banner.png'),
+      animations: 'disabled',
+    });
+    await phone.getByRole('button', { name: '읽기 위치 안내 닫기', exact: true }).click();
+    const refreshPosition = async () => {
+      const refreshed = phone.waitForResponse(
+        (response) =>
+          response.url().includes('/reading-position?') && response.request().method() === 'GET'
+      );
+      await phone.evaluate(() => window.dispatchEvent(new Event('online')));
+      await refreshed;
+    };
+    await refreshPosition();
+    await expect(resume).toBeHidden();
+    const previous = (await (await request.get(path)).json()).own;
+    const repeated = await request.put(`/api/chats/${chat.id}/reading-position`, {
+      data: { clientId, expectedRevision: previous.revision, target: previous.target },
+    });
+    expect(repeated.ok()).toBe(true);
+    await refreshPosition();
+    await expect(resume).toBeHidden();
+    const advanced = await request.put(`/api/chats/${chat.id}/reading-position`, {
+      data: {
+        clientId,
+        expectedRevision: (await repeated.json()).revision,
+        target: {
+          chatId: chat.id,
+          sourceId: detail.sources[6].id,
+          representation: 'original',
+          contentHash: detail.sources[6].hash,
+        },
+      },
+    });
+    expect(advanced.ok()).toBe(true);
+    await refreshPosition();
+    await expect(resume).toBeVisible();
     await resume.click();
     await expect
       .poll(() => new URL(phone.url()).searchParams.get('source'))
-      .toBe(detail.sources[5].id);
-    await expect(phone.locator(`[data-source-id="${detail.sources[5].id}"]`)).toBeVisible();
+      .toBe(detail.sources[6].id);
+    await expect(phone.locator(`[data-source-id="${detail.sources[6].id}"]`)).toBeVisible();
+    await refreshPosition();
+    await expect(resume).toBeHidden();
+    await expect(phone.getByRole('status', { name: '읽기 위치 동기화', exact: true })).toBeHidden();
     await phone.screenshot({ path: info.outputPath('real-cross-device-resume.png') });
   } finally {
     release();
@@ -449,11 +490,15 @@ test('PWUI08 title matches report all saved chats and the next page remains sele
     .click();
   const dialog = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
   await dialog.getByRole('searchbox', { name: '전체 채팅 검색', exact: true }).fill(prefix);
-  await expect(dialog.locator('summary').filter({ hasText: '채팅 제목' })).toHaveText(
-    '채팅 제목 35개'
+  await expect(dialog.locator('summary').filter({ hasText: '제목 일치' })).toHaveText(
+    '제목 일치 35개'
   );
-  await expect(dialog.locator('[data-chat-id]')).toHaveCount(30);
-  await dialog.getByRole('button', { name: '채팅 제목 더 보기 · 5개 남음', exact: true }).click();
+  await expect(dialog.locator('[data-chat-id]')).toHaveCount(5);
+  for (let remaining = 30; remaining > 0; remaining -= 5) {
+    await dialog
+      .getByRole('button', { name: `채팅 제목 더 보기 · ${remaining}개 남음`, exact: true })
+      .click();
+  }
   await expect(dialog.locator('[data-chat-id]')).toHaveCount(35);
   await dialog.locator(`[data-chat-id="${last}"]`).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(last);

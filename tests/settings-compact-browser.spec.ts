@@ -498,7 +498,9 @@ test('SCUI05 global lore defaults are saved and copied only to new chats', async
   const nextLimit = original.maxRetainedTokens === 24_000 ? 20_000 : 24_000;
   await retained.fill(String(nextLimit));
   await section.getByRole('button', { name: '로어 컨텍스트 기본값 저장', exact: true }).click();
-  await expect(section.getByRole('status')).toContainText('새 채팅부터 적용돼요');
+  await expect(
+    page.locator('.transient-notice[role="status"]').filter({ hasText: '새 채팅부터 적용돼요' })
+  ).toBeVisible();
   const secondResponse = await request.post('/api/chats', {
     data: { botId: bot.id, title: '기본값 변경 후 채팅' },
   });

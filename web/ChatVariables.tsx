@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
 import { api, ApiError } from './api.js';
@@ -311,7 +312,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
           확인해요.
         </p>
       )}
-      {notice && <p role="status">{notice}</p>}
+      <TransientNotice message={notice} />
       {error && (
         <p role="alert" className="error">
           {error}

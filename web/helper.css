@@ -400,16 +400,6 @@
   }
 }
 
-.helper-scope-notice {
-  padding: 10px 16px;
-  font-size: 13px;
-  line-height: 1.6;
-  background: var(--accent-soft);
-  border-bottom: 1px solid var(--line);
-}
-.helper-scope-notice p {
-  margin: 0 0 8px;
-}
 .helper-work-selector {
   align-items: center;
 }
@@ -436,16 +426,9 @@
   font-size: inherit;
 }
 
-/* The notice keeps its message on one line and splits its two actions to the edges. */
 .helper-notice {
-  display: grid;
-  gap: 8px;
-}
-.helper-notice > .form-actions {
-  margin-top: 0;
-}
-.helper-notice .helper-notice-lead {
-  margin-right: auto;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 /* The docked helper reads as one conversation surface instead of stacked boxes. */

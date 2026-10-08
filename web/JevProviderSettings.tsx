@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { JEV_PROVIDER_DEFINITION, type JevProviderStatus } from '../core/jev-provider.js';
@@ -470,7 +471,7 @@ export function JevProviderSettings({
           {error}
         </p>
       )}
-      {message && <p role="status">{message}</p>}
+      <TransientNotice message={message} />
     </section>
   );
 }

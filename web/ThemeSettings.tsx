@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemeBackgroundSettings } from './ThemeBackgroundSettings.js';
@@ -74,6 +75,7 @@ export function ThemeSettings({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [importNotice, setImportNotice] = useState('');
   const [deleting, setDeleting] = useState<Theme | null>(null);
   const deleteCancel = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -148,6 +150,7 @@ export function ThemeSettings({
     setBusy(true);
     setError('');
     setNotice('');
+    setImportNotice('');
     try {
       await work();
     } catch (cause) {
@@ -174,6 +177,7 @@ export function ThemeSettings({
     setBaseline(theme && !isCopy ? JSON.stringify(model) : '');
     setError('');
     setNotice('');
+    setImportNotice('');
     setPreview(null);
   }
   function patch(next: Partial<ThemeDefinition>) {
@@ -260,7 +264,7 @@ export function ThemeSettings({
       themeTemplate(model.templateHtml);
       setDraft({ id: null, model });
       setBaseline('');
-      setNotice(
+      setImportNotice(
         '새 테마로 가져왔어요. 내용을 확인하고 저장해 주세요. 기존 테마는 덮어쓰지 않아요.'
       );
     });
@@ -682,7 +686,8 @@ export function ThemeSettings({
           {error}
         </p>
       )}
-      {notice && <p role="status">{notice}</p>}
+      <TransientNotice message={notice} />
+      {importNotice && <p role="status">{importNotice}</p>}
       <p className="theme-help">
         꾸미다가 화면이 깨지면 <kbd>Ctrl/Cmd + .</kbd>로 이 탭의 테마를 끄세요. 주소에{' '}
         <code>?theme-safe=1</code>을 붙여 열어도 돼요.

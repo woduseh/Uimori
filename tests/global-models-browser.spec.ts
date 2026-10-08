@@ -670,7 +670,9 @@ for (const width of DEFAULT_WIDTHS) {
     await form.getByLabel('최대 출력 토큰', { exact: true }).fill('1000');
     await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
     await expect(
-      providers.getByRole('status').filter({ hasText: newTitle + ' 모델 프리셋 등록됨' })
+      page
+        .locator('.transient-notice[role="status"]')
+        .filter({ hasText: newTitle + ' 모델 프리셋 등록됨' })
     ).toBeVisible();
     await selectSettingsSection(page, '역할별 모델');
     await expect(main).toHaveValue(second.id);

@@ -177,7 +177,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await section.getByLabel('자동 재요청 횟수', { exact: true }).fill('2');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(
-    section.getByRole('status').filter({ hasText: '삽화 설정을 저장했어요' })
+    page.locator('.transient-notice[role="status"]').filter({ hasText: '삽화 설정을 저장했어요' })
   ).toBeVisible();
   const saved = await request.get('/api/illustration-settings');
   expect((await saved.json()) as IllustrationSettings).toMatchObject({
@@ -263,7 +263,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await section.getByLabel('테스트 삽화 생성기', { exact: true }).selectOption('');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(
-    section.getByRole('status').filter({ hasText: '삽화 설정을 저장했어요' })
+    page.locator('.transient-notice[role="status"]').filter({ hasText: '삽화 설정을 저장했어요' })
   ).toBeVisible();
   const saved = await (await request.get('/api/illustration-settings')).json();
   expect(saved.comfyui).toMatchObject({ timeoutMs: 60000, pollIntervalMs: 250 });

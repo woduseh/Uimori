@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { promptControls, type PromptControl } from '../core/risu-prompt.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatOptionState } from '../core/chat-options.js';
@@ -56,6 +57,7 @@ export function ChatOptionSettings(props: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [completion, setCompletion] = useState('');
   const [conflict, setConflict] = useState(false);
   const [uncertain, setUncertain] = useState<Operation | null>(null);
   const lock = useRef(false),
@@ -159,6 +161,7 @@ export function ChatOptionSettings(props: Props) {
     setBusy(true);
     setLoading(false);
     setError('');
+    setCompletion('');
     try {
       const accepted = await api<ChatOptionState>(operation.path, operation.body);
       setBase(accepted);
@@ -167,7 +170,8 @@ export function ChatOptionSettings(props: Props) {
       if (operation.kind === 'oneoff') setOneoff({});
       setConflict(false);
       setUncertain(null);
-      setMessage(
+      setMessage('');
+      setCompletion(
         {
           fixed: '이 채팅의 고정 옵션을 저장했어요.',
           oneoff: '다음 생성에 한 번 사용할 옵션을 예약했어요.',
@@ -316,6 +320,7 @@ export function ChatOptionSettings(props: Props) {
         )}
         {error && <p role="alert">{error}</p>}
         {message && <p role="status">{message}</p>}
+        <TransientNotice message={completion} />
         {uncertain && (
           <button
             type="button"

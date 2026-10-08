@@ -93,7 +93,7 @@ const longPrompt =
   );
 
 test.afterEach(async ({ request }) => {
-  for (const barrier of ['run', 'translation', 'status']) {
+  for (const barrier of ['run', 'translation']) {
     const response = await request.post('/api/test/control', {
       data: { action: 'release', barrier },
     });
@@ -1885,7 +1885,9 @@ test('UI chat settings close right after saving does not warn while the refresh 
     await route.continue();
   });
   await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
-  await expect(runtime.getByRole('status')).toContainText('실행 설정을 저장했어요.');
+  await expect(
+    page.locator('.transient-notice[role="status"]').filter({ hasText: '실행 설정을 저장했어요.' })
+  ).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인' })).toHaveCount(0);

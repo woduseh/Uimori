@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { useEffect, useRef, useState } from 'react';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import {
@@ -229,7 +230,7 @@ export function ThemeBackgroundSettings({
           {error}
         </p>
       )}
-      {notice && <p role="status">{notice}</p>}
+      <TransientNotice message={notice} />
     </section>
   );
 }

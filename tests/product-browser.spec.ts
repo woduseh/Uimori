@@ -148,7 +148,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await expect
     .poll(async () => (await getDetail(request, chat.id)).profile?.packageAttachments)
     .toEqual([owner, { id: added.id, revision: 1, role: 'module' }]);
-  await expect(profile.getByRole('status')).toContainText('채팅 설정을 저장했어요.');
+  await expect(
+    page.locator('.transient-notice').filter({ hasText: '채팅 설정을 저장했어요.' })
+  ).toBeVisible();
   const library = await openDetails(page, 'library-panel');
   await library.getByRole('tab', { name: '모듈', exact: true }).click();
   await editLibraryContent(page, `Mira ${unique}`);
@@ -180,7 +182,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     await expect
       .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
       .toEqual(combination.values);
-    await expect(editor.getByText('변경사항을 자동 저장했어요.', { exact: true })).toBeVisible();
+    await expect(
+      page.locator('.transient-notice').getByText('변경사항을 자동 저장했어요.', { exact: true })
+    ).toBeVisible();
   }
   await expect(composer.getByRole('combobox', { name: '합성 공동 서술', exact: true })).toHaveValue(
     JSON.stringify('0')

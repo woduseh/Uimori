@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/content-limits.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
@@ -226,7 +227,7 @@ export function ContextPanel({
             {error}
           </p>
         )}
-        {message && <p role="status">{message}</p>}
+        <TransientNotice message={message} />
         {!detail ? (
           <p className="muted">컨텍스트를 불러오고 있어요.</p>
         ) : (

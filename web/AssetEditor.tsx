@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { AssetMetadataEditor } from './AssetMetadataEditor.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
@@ -234,7 +235,7 @@ export function AssetEditor({
             </select>
           </label>
           <div className="form-actions full settings-save-actions">
-            <span role="status">{message}</span>
+            <TransientNotice message={message} />
             <SaveButton
               icon={ImageAddIcon}
               label="이미지 등록"

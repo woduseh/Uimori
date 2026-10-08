@@ -1,3 +1,4 @@
+import { TransientNotice } from './TransientNotice.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -412,11 +413,12 @@ export function PromptEditor({
             />
           </fieldset>
         </fieldset>
-        {(busy || status) && (
+        {busy && (
           <p role="status" className="prompt-status">
-            {busy ? '처리 중…' : status}
+            처리 중…
           </p>
         )}
+        <TransientNotice message={busy ? '' : status} />
         {pendingTemplate && (
           <p className="muted">
             원문 입력은 저장할 때 함께 검증해요. 오류가 있으면 입력을 유지하고 알려드려요.
