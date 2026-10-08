@@ -43,7 +43,11 @@ import {
   writePresentationSetting,
   type ResponseDisplayMode,
 } from './presentation-settings.js';
-import { discardActiveEditor, saveActiveEditor } from './resource-editor.js';
+import {
+  discardActiveEditor,
+  saveActiveEditor,
+  ResourceEditorLeaveWarning,
+} from './resource-editor.js';
 import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
@@ -243,6 +247,34 @@ function App() {
     );
   }, []);
   const sourceEditing = editingSources.length > 0;
+  const [requestDecision, setRequestDecision] = useState<{
+    scope: string;
+    kind: 'profile' | 'admission';
+  } | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState('');
+  const currentRequestDecision =
+    requestDecision?.scope === s.viewKey &&
+    (requestDecision.kind === 'profile' ? s.pendingProfile : !!s.pendingRequest)
+      ? requestDecision.kind
+      : null;
+  useEffect(() => {
+    if (requestDecision && !currentRequestDecision) setRequestDecision(null);
+  }, [requestDecision, currentRequestDecision]);
+  const submitRequest = async (checkingEditedRequest = false) => {
+    if (
+      optionsBusy ||
+      (sourceEditing && !checkingEditedRequest) ||
+      s.submitting.includes(s.viewKey)
+    )
+      return false;
+    if (s.pendingProfile || s.pendingRequest) {
+      setProfileSaveError('');
+      setRequestDecision({ scope: s.viewKey, kind: s.pendingProfile ? 'profile' : 'admission' });
+      return false;
+    }
+    return s.generate();
+  };
   const optionsButton = useRef<HTMLButtonElement>(null);
   const [panel, setPanel] = useState<Panel>('');
   const [searchingChats, setSearchingChats] = useState(false);
@@ -1291,7 +1323,7 @@ function App() {
                               }
                               onCheckRequest={
                                 s.pendingEditedRunId === source.runId
-                                  ? () => s.generate()
+                                  ? () => submitRequest(true)
                                   : undefined
                               }
                               onAskHelper={(sourceId, text) => {
@@ -1364,7 +1396,9 @@ function App() {
                                   : undefined
                               }
                               onConfirm={
-                                s.pendingEditedRunId === run.id ? () => s.generate() : undefined
+                                s.pendingEditedRunId === run.id
+                                  ? () => submitRequest(true)
+                                  : undefined
                               }
                             />
                             <div className="run-outcome">
@@ -1455,25 +1489,18 @@ function App() {
             {s.selected && (
               <div className="composer-dock">
                 {s.pendingProfile && (
-                  <div className="error" role="alert">
+                  <NoticeBanner tone="error">
                     시작 설정 저장이 끝나지 않았어요.
                     <button
                       className="secondary"
                       onClick={() => {
-                        void (async () => {
-                          try {
-                            const chatId = s.selected;
-                            await completePendingStoryProfile(chatId);
-                            await s.refresh(chatId);
-                          } catch (err) {
-                            s.setError((err as Error).message);
-                          }
-                        })();
+                        setProfileSaveError('');
+                        setRequestDecision({ scope: s.viewKey, kind: 'profile' });
                       }}
                     >
                       시작 설정 다시 저장
                     </button>
-                  </div>
+                  </NoticeBanner>
                 )}
                 <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
                 {s.error.includes('전역 모델 설정') && (
@@ -1551,7 +1578,7 @@ function App() {
                   hidden={sourceEditing}
                   onSubmit={(event) => {
                     event.preventDefault();
-                    if (!optionsBusy) void s.generate();
+                    void submitRequest();
                   }}
                 >
                   <LoreResetChip
@@ -1578,7 +1605,7 @@ function App() {
                     onSelect={s.rememberCursor}
                     onChange={(event) => s.editDraft(event.target.value)}
                     onSend={() => {
-                      if (!s.active && !optionsBusy) void s.generate();
+                      if (!s.active || s.pendingRequest) void submitRequest();
                     }}
                     placeholder={
                       // A wrapping placeholder would grow the one-row composer on narrow screens.
@@ -1724,8 +1751,9 @@ function App() {
                         s.submitting.includes(s.viewKey) ||
                         (!s.draft.trim() && !s.pendingRequest) ||
                         !s.detail ||
-                        s.pendingProfile ||
-                        (((!testMode && !mainAvailable) || !promptAvailable) && !s.pendingRequest)
+                        (((!testMode && !mainAvailable) || !promptAvailable) &&
+                          !s.pendingRequest &&
+                          !s.pendingProfile)
                       }
                     >
                       {s.pendingRequest ? <RefreshCw size={21} /> : <ArrowUp size={21} />}
@@ -1862,6 +1890,71 @@ function App() {
       <CodexContentWarningDialog gate={s.codexWarning} />
       <CodexContentWarningDialog gate={s.inputTranslation.codexWarning} />
       <Dialog
+        open={!!currentRequestDecision}
+        title={currentRequestDecision === 'profile' ? '시작 설정 저장' : '이전 요청 접수 확인'}
+        variant="confirmation"
+        onClose={() => {
+          if (!profileSaving) setRequestDecision(null);
+        }}
+      >
+        {currentRequestDecision === 'profile' ? (
+          <>
+            <p>시작 설정 저장이 끝나지 않았어요. 설정을 저장한 뒤 본문을 생성할 수 있어요.</p>
+            {profileSaveError && <NoticeBanner tone="error">{profileSaveError}</NoticeBanner>}
+            <div className="form-actions">
+              <button
+                className="secondary"
+                disabled={profileSaving}
+                onClick={() => setRequestDecision(null)}
+              >
+                닫기
+              </button>
+              <button
+                disabled={profileSaving}
+                onClick={() => {
+                  const chatId = s.selected;
+                  setProfileSaving(true);
+                  setProfileSaveError('');
+                  void (async () => {
+                    try {
+                      await completePendingStoryProfile(chatId);
+                      await s.refresh(chatId);
+                      setRequestDecision(null);
+                    } catch (error) {
+                      setProfileSaveError((error as Error).message);
+                    } finally {
+                      setProfileSaving(false);
+                    }
+                  })();
+                }}
+              >
+                {profileSaving ? '저장 중…' : '시작 설정 다시 저장'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p>
+              이전 요청의 접수 여부를 확인하지 못했어요. 같은 요청으로 다시 확인해요. 현재 입력한
+              초안은 유지돼요.
+            </p>
+            <div className="form-actions">
+              <button className="secondary" onClick={() => setRequestDecision(null)}>
+                닫기
+              </button>
+              <button
+                onClick={() => {
+                  setRequestDecision(null);
+                  void s.generate();
+                }}
+              >
+                접수 확인
+              </button>
+            </div>
+          </>
+        )}
+      </Dialog>
+      <Dialog
         open={!!pendingNavigation}
         title="편집 중인 자료"
         variant="confirmation"
@@ -1870,6 +1963,7 @@ function App() {
         }}
       >
         <p>이동하면 저장하지 않은 편집 내용이 사라져요.</p>
+        <ResourceEditorLeaveWarning />
         {navigationDiscardError && (
           <p role="alert" className="error">
             {navigationDiscardError}

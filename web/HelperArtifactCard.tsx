@@ -6,6 +6,7 @@ import type { HelperArtifact } from '../core/helper.js';
 import { api, ApiError } from './api.js';
 import { IconButton } from './IconButton.js';
 import { PlainProse } from './Prose.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import {
   cachedHelperRecovery,
   clearHelperRecoveryIf,
@@ -56,6 +57,8 @@ export function HelperArtifactCard({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [conflictDialog, setConflictDialog] = useState(false);
+  const reviewedArtifact = useRef<HelperArtifactView | null>(null);
   const alive = useRef(true),
     locked = useRef(false);
   const conflict = Boolean(draft && artifact && draft.revision !== artifact.revision);
@@ -97,7 +100,12 @@ export function HelperArtifactCard({
     return value;
   }
   async function save() {
-    if (readOnly || !draft || locked.current || conflict) return;
+    if (readOnly || !draft || locked.current) return;
+    if (conflict) {
+      reviewedArtifact.current = null;
+      setConflictDialog(true);
+      return;
+    }
     locked.current = true;
     setBusy(true);
     setError('');
@@ -137,6 +145,8 @@ export function HelperArtifactCard({
       if (!alive.current) return;
       setError(cause instanceof Error ? cause.message : '장면을 저장하지 못했어요.');
       if (cause instanceof ApiError && cause.status === 409) {
+        reviewedArtifact.current = null;
+        setConflictDialog(true);
         try {
           await latest();
         } catch {
@@ -150,6 +160,22 @@ export function HelperArtifactCard({
   }
   return (
     <section className="helper-artifact" aria-label="독립 가정 장면">
+      <SaveConflictDialog
+        open={conflictDialog}
+        title="가정 장면 저장 충돌"
+        onClose={() => setConflictDialog(false)}
+        readSaved={async () => {
+          const value = await latest();
+          reviewedArtifact.current = value;
+          return { content: <PlainProse text={value.text} /> };
+        }}
+        onAcceptSaved={() => {
+          const value = reviewedArtifact.current;
+          if (!value) return;
+          setDraft((current) => current && { text: current.text, revision: value.revision });
+          setError('');
+        }}
+      />
       <header>
         <strong>가정 장면</strong>
         <small>
@@ -174,16 +200,16 @@ export function HelperArtifactCard({
             >
               {conflict && (
                 <div className="context-conflict" role="alert">
-                  <p>다른 변경이 저장됐어요. 위의 최신 장면과 입력한 초안을 비교해 주세요.</p>
+                  <p>다른 변경이 저장됐어요. 현재 입력은 유지돼요.</p>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => {
-                      setDraft({ text: draft.text, revision: artifact.revision });
-                      setError('');
+                      reviewedArtifact.current = null;
+                      setConflictDialog(true);
                     }}
                   >
-                    최신 장면을 확인했어요 · 내 초안 유지
+                    저장본 확인
                   </button>
                 </div>
               )}
@@ -200,7 +226,7 @@ export function HelperArtifactCard({
                 />
               </label>
               <div className="form-actions">
-                <button disabled={readOnly || busy || conflict || !draft.text.trim()}>
+                <button disabled={readOnly || busy || !draft.text.trim()}>
                   <CheckIcon size={18} aria-hidden="true" />
                   장면 편집 저장{' '}
                 </button>

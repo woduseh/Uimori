@@ -1,6 +1,10 @@
 .source-text-editor {
   scroll-margin-block: 12px;
 }
+.source-saved-review-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .source-action-error {
   display: flex;
   align-items: center;

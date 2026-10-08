@@ -363,6 +363,14 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   );
   await form.getByRole('button', { name: '프로바이더 변경 저장', exact: true }).click();
   expect((await put).postDataJSON().expectedRevision).toBe(1);
+  const conflictDialog = page.getByRole('alertdialog', { name: '저장 내용 변경 확인' });
+  await expect(
+    conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true })
+  ).toBeFocused();
+  await conflictDialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText(changed.title);
+  await expect(conflictDialog.getByLabel('현재 저장본')).not.toContainText(title + ' 내 초안');
+  await conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
   await expect(form.getByRole('alert')).toContainText('초안은 유지했어요');
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 내 초안');
   expect((await library(request)).connections.find((item) => item.id === original.id)).toEqual(

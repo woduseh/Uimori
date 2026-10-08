@@ -18,6 +18,7 @@ import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useModelSelection } from './model-selection.js';
 import { useTestMode } from './useTestMode.js';
@@ -51,6 +52,7 @@ function IllustrationEnvironmentEditor({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
+  const [saveConflict, setSaveConflict] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
@@ -189,7 +191,11 @@ function IllustrationEnvironmentEditor({
     Number.isInteger(draft.comfyui.pollIntervalMs) &&
     draft.comfyui.pollIntervalMs >= 250;
   const save = async () => {
-    if (lock.current || conflict || !valid) return false;
+    if (lock.current || !valid) return false;
+    if (conflict) {
+      setSaveConflict(true);
+      return false;
+    }
     if (!dirty) return true;
     lock.current = true;
     setBusy(true);
@@ -210,6 +216,7 @@ function IllustrationEnvironmentEditor({
       })
       .catch((caught: Error) => {
         setSaveError(caught.message);
+        if (caught instanceof ApiError && caught.status === 409) setSaveConflict(true);
         return false;
       })
       .finally(() => {
@@ -515,11 +522,25 @@ function IllustrationEnvironmentEditor({
             type="button"
             label="삽화 설정 저장"
             aria-busy={busy}
-            disabled={!dirty || conflict || !valid}
+            disabled={!dirty || !valid}
             onClick={save}
           />
         </div>
       </fieldset>
+      <SaveConflictDialog
+        open={saveConflict}
+        title="삽화 설정 저장 내용 확인"
+        onClose={() => setSaveConflict(false)}
+        readSaved={async () => {
+          const value = await api<IllustrationSettings>('/illustration-settings');
+          return [
+            { label: '본문당 삽화 수', value: String(value.maxPerSource) },
+            { label: '자동 배치 대상 수', value: String(value.automaticMaxTargets) },
+            { label: '자동 재시도 횟수', value: String(value.maxAutoRetries) },
+            { label: 'ComfyUI 주소', value: value.comfyui.baseUrl },
+          ];
+        }}
+      />
       <Dialog
         open={confirmReload}
         title="삽화 설정 다시 불러오기"

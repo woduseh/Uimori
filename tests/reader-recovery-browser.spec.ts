@@ -172,6 +172,10 @@ test('READERREC confirming an uncertain request never turns into cancelling its 
   await expect(page.getByTestId('pending-run')).toBeVisible();
   await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+    .getByRole('button', { name: '접수 확인', exact: true })
+    .click();
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
   expect(confirmed).toBe(true);
   expect(cancellations).toBe(0);
@@ -415,6 +419,10 @@ test('READERREC rejudgment survives an uncertain response and reload without sen
     await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
     await page.reload();
     await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+      .getByRole('button', { name: '접수 확인', exact: true })
+      .click();
     await expect.poll(() => payloads.length).toBe(2);
     expect(payloads[0]).toEqual(payloads[1]);
     expect(payloads[0]).toEqual({ idempotencyKey: expect.any(String) });

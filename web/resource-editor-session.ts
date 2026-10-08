@@ -293,6 +293,13 @@ export class ResourceEditorSession {
     );
     await this.queueRecovery(true);
   }
+  /** Read a comparison copy without adopting it or changing local recovery input. */
+  async readSaved() {
+    const id = this.state.document.targetId;
+    if (!id) return null;
+    const saved = await api<SavedResource>(this.path());
+    return { revision: saved.revision, model: editableResource(this.options.kind, saved) };
+  }
   async save(model?: ResourceModel, options?: { copy?: boolean }): Promise<ResourceSaveResult> {
     await this.open();
     if (this.state.saving) throw new Error('저장 중이에요.');

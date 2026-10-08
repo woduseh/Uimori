@@ -23,7 +23,11 @@ import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
 import { RisuPresetImport } from './RisuPresetImport.js';
 import { PromptTemplatesDialog, type PromptTemplate } from './PromptTemplatesDialog.js';
-import { discardActiveEditor, saveActiveEditor } from './resource-editor.js';
+import {
+  discardActiveEditor,
+  saveActiveEditor,
+  ResourceEditorLeaveWarning,
+} from './resource-editor.js';
 import {
   LibraryFolders,
   LibraryItemMenu,
@@ -308,6 +312,7 @@ export function PromptLibrary({
         }}
       >
         <p>이동하면 저장하지 않은 프롬프트 편집 내용이 사라져요.</p>
+        <ResourceEditorLeaveWarning />
         <DraftDiscardActions
           open={discard}
           onSavingChange={setSavingNavigation}

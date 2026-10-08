@@ -1,4 +1,5 @@
 import { TransientNotice } from './TransientNotice.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { JEV_PROVIDER_DEFINITION, type JevProviderStatus } from '../core/jev-provider.js';
@@ -60,6 +61,7 @@ export function JevProviderSettings({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [conflict, setConflict] = useState(false);
+  const [saveConflict, setSaveConflict] = useState(false);
   const [test, setTest] = useState<ProviderConnectionTest | null>(null);
   const [testError, setTestError] = useState('');
   const [attempt, setAttempt] = useState<Attempt | null>(null);
@@ -172,6 +174,7 @@ export function JevProviderSettings({
       if (!alive.current) return false;
       if (caught instanceof ApiError && caught.status === 409) {
         setConflict(true);
+        setSaveConflict(true);
         setError(
           '다른 화면에서 연결 정보가 바뀌었어요. 새로고침한 뒤 다시 저장해 주세요. 입력한 키는 유지돼요.'
         );
@@ -239,6 +242,19 @@ export function JevProviderSettings({
       className="jev-provider-settings provider-management-form"
       aria-label={view === 'connection' ? 'TypeSafe AI 프로바이더 설정' : 'JEV 모델 설정'}
     >
+      <SaveConflictDialog
+        open={saveConflict}
+        title="TypeSafe AI 저장 내용 확인"
+        onClose={() => setSaveConflict(false)}
+        readSaved={async () => {
+          const value = await api<JevProviderStatus>(path);
+          return [
+            { label: '연결 키', value: value.configured ? '설정됨' : '없음' },
+            { label: '모델', value: value.modelId },
+            { label: '주소', value: value.endpoint },
+          ];
+        }}
+      />
       <div className="provider-section-heading">
         <h3>
           {view === 'connection'

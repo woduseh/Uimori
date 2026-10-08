@@ -22,6 +22,7 @@ import {
   ResourceEditorProvider,
   ResourceEditorStatus,
   ResourceEditorActions,
+  requestResourceConflictReview,
   useResourceEditor,
   useEditorSaveCommand,
 } from './resource-editor.js';
@@ -208,6 +209,7 @@ export function PromptEditor({
       }
       return !session.snapshot().dirty;
     } catch (caught) {
+      requestResourceConflictReview(session);
       setError((caught as Error).message);
       return false;
     } finally {

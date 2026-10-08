@@ -1,0 +1,7 @@
+.saved-version-review {
+  container-type: inline-size;
+}
+.saved-version-review .settings-row-control {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

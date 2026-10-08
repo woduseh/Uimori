@@ -65,6 +65,10 @@ test('failed request edit, draft protection and uncertain retry reuse one admiss
   await expect(input).toHaveValue('보존할 초안');
   await page.reload();
   await page.getByRole('button', { name: '이전 요청 확인' }).click();
+  await page
+    .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+    .getByRole('button', { name: '접수 확인', exact: true })
+    .click();
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
   expect(payloads).toHaveLength(2);
   expect(payloads[1]).toEqual(payloads[0]);

@@ -19,6 +19,8 @@ import { IconButton } from './IconButton.js';
 import {
   ResourceEditorProvider,
   ResourceEditorStatus,
+  ResourceEditorActions,
+  requestResourceConflictReview,
   useResourceEditor,
 } from './resource-editor.js';
 import './prompt-editor.css';
@@ -88,7 +90,15 @@ export function PromptWorkspaceEditor({
       return false;
     }
   }, [session, applying]);
-  useSettingsSaveHandler(onSaveHandlerChange, save);
+  useSettingsSaveHandler(onSaveHandlerChange, async () => {
+    if (session.snapshot().conflict) {
+      requestResourceConflictReview(session);
+      return false;
+    }
+    const result = await save();
+    if (!result) requestResourceConflictReview(session);
+    return result;
+  });
 
   // The session distinguishes new edits from recovered input and acknowledges only
   // the model sent by a save. Later edits schedule the next save when that one finishes.
@@ -159,7 +169,7 @@ export function PromptWorkspaceEditor({
     <ResourceEditorProvider value={shared}>
       <section aria-label="현재 프롬프트 설정" className="prompt-editor prompt-current-settings">
         <p className="muted">변경사항은 자동 저장하며 모든 채팅의 다음 요청부터 사용해요.</p>
-        {showRecovery && <ResourceEditorStatus value={shared} hideSyncError />}
+        {showRecovery && <ResourceEditorActions value={shared} hideSyncError />}
         <div className="prompt-editor-fields">
           <section className="settings-group">
             <div className="settings-group-heading">
@@ -351,7 +361,7 @@ export function PromptWorkspaceEditor({
         {(conflict || saveError) && (
           <p role="alert">
             {conflict
-              ? '다른 곳에서 현재 프롬프트가 바뀌었어요. 현재 선택을 보존했어요. 복구 메뉴에서 저장본을 확인해 주세요.'
+              ? '다른 곳에서 현재 프롬프트가 바뀌었어요. 현재 선택을 보존했어요. 저장본을 확인하거나 편집 취소로 돌아갈 수 있어요.'
               : saveError}
           </p>
         )}

@@ -170,15 +170,21 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   await panel.getByRole('button', { name: '새로 확인', exact: true }).click();
   await expect(notes.getByText('다른 창의 메모', { exact: true })).toBeVisible();
   await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
-  await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeDisabled();
+  await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeEnabled();
   // A mobile section-back changes visibility only, preserving text and its conflict state.
   await page.getByRole('button', { name: '채팅 설정 목록으로', exact: true }).click();
   await selectChatSettingsSection(page, '프롬프트·모델');
   await selectChatSettingsSection(page, '기억·로어');
   await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
-  await notes
-    .getByRole('button', { name: '최신 내용을 확인했어요 · 내 초안 유지', exact: true })
-    .click();
+  await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
+  const noteConflict = page.getByRole('alertdialog', { name: '메모 저장 충돌', exact: true });
+  await expect(noteConflict).toBeVisible();
+  await noteConflict.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+  await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
+  await notes.getByRole('button', { name: '저장 충돌 확인', exact: true }).click();
+  await noteConflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(noteConflict.getByText('다른 창의 메모', { exact: true })).toBeVisible();
+  await noteConflict.getByRole('button', { name: '저장본 확인 완료', exact: true }).click();
   await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
   await expect
     .poll(async () =>

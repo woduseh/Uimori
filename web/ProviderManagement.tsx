@@ -19,6 +19,7 @@ import {
 } from '../core/jev-provider.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Dialog } from './Dialog.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { useEffect, useRef, useState, useReducer, type SetStateAction } from 'react';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
@@ -150,6 +151,7 @@ export function ConnectionEditor({
   const conflict = drafts.conflict;
   const setConflict = (kind: typeof conflict) => dispatchDraft({ type: 'conflict', kind });
   const [discard, setDiscard] = useState<{ kind: 'connection' | 'model'; proceed: () => void }>();
+  const [saveConflict, setSaveConflict] = useState<'connection' | 'model' | null>(null);
   function replaceDraft(kind: 'connection' | 'model', proceed: () => void) {
     const dirty =
       kind === 'connection'
@@ -295,7 +297,8 @@ export function ConnectionEditor({
 
   async function perform(
     work: () => Promise<void>,
-    scope: 'connection' | 'model' | 'status' = 'status'
+    scope: 'connection' | 'model' | 'status' = 'status',
+    saveAttempt = false
   ) {
     if (operationLock.current) return false;
     operationLock.current = true;
@@ -321,8 +324,10 @@ export function ConnectionEditor({
       const detail = caught instanceof Error ? caught.message : '작업을 완료하지 못했어요.';
       setError(detail);
       onError(detail);
-      if (caught instanceof ApiError && caught.status === 409 && scope !== 'status')
+      if (caught instanceof ApiError && caught.status === 409 && scope !== 'status') {
         setConflict(scope);
+        if (saveAttempt) setSaveConflict(scope);
+      }
       await reload().catch(() => undefined);
       return false;
     } finally {
@@ -500,7 +505,11 @@ export function ConnectionEditor({
       ...connectionPayload(connection),
       ...(editingConnection ? { expectedRevision: editingConnection.revision } : {}),
     };
-    return perform(() => saveConnection(body, editingConnection?.id, true, leave), 'connection');
+    return perform(
+      () => saveConnection(body, editingConnection?.id, true, leave),
+      'connection',
+      true
+    );
   }
   async function submitModel(leave = false): Promise<boolean> {
     if (busy || !modelForm.current) return false;
@@ -541,7 +550,7 @@ export function ConnectionEditor({
       ...modelPayload(model, chosen),
       ...(editingModel ? { expectedRevision: editingModel.revision } : {}),
     };
-    return perform(() => saveModel(body, editingModel?.id, true, leave), 'model');
+    return perform(() => saveModel(body, editingModel?.id, true, leave), 'model', true);
   }
   const savePending = async (): Promise<boolean> => {
     if (busy) return false;
@@ -583,6 +592,32 @@ export function ConnectionEditor({
       data-testid="connection-editor"
       aria-label="프로바이더·모델 등록"
     >
+      <SaveConflictDialog
+        open={saveConflict !== null}
+        title="저장 내용 변경 확인"
+        onClose={() => setSaveConflict(null)}
+        readSaved={async () => {
+          if (saveConflict === 'connection' && editingConnection) {
+            const value = await api<Connection>(`/connections/${editingConnection.id}`);
+            return [
+              { label: '프로바이더 이름', value: value.title },
+              { label: '종류', value: providerDefinition(value.protocol).label },
+              { label: '주소', value: value.endpoint },
+              { label: '사용', value: value.enabled ? '켜짐' : '꺼짐' },
+            ];
+          }
+          if (saveConflict === 'model' && editingModel) {
+            const value = await api<ModelPreset>(`/model-presets/${editingModel.id}`);
+            return [
+              { label: '모델 프리셋 이름', value: value.title },
+              { label: '모델', value: value.modelId },
+              { label: '최대 출력 토큰', value: String(value.maxOutputTokens) },
+              { label: '컨텍스트 한도', value: String(value.inputTokenLimit ?? '미지정') },
+            ];
+          }
+          throw new Error('저장본을 찾을 수 없어요. 현재 입력은 유지돼요.');
+        }}
+      />
       <Dialog
         open={!!discard}
         role="alertdialog"

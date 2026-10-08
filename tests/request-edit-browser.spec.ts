@@ -121,6 +121,10 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(field).toHaveValue('수정한 합성 요청');
     await expect(field).toBeDisabled();
     await page.getByRole('button', { name: '이전 요청 확인' }).click();
+    await page
+      .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+      .getByRole('button', { name: '접수 확인', exact: true })
+      .click();
     await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(chat.id);
     const copiedChatId = new URL(page.url()).searchParams.get('chat')!;
     expect(copiedChatId).toBeTruthy();

@@ -213,7 +213,9 @@ for (const viewport of [
       await expect(value('trust')).toBeDisabled();
       await dialog.getByRole('button', { name: '저장 결과 확인', exact: true }).click();
       await expect(
-        dialog.getByText('공유 변수를 저장했어요. 다음 생성부터 적용해요.', { exact: true })
+        page
+          .getByRole('status')
+          .filter({ hasText: '공유 변수를 저장했어요. 다음 생성부터 적용해요.' })
       ).toBeVisible();
       expect(bodies).toHaveLength(2);
       expect(bodies[1]).toEqual(bodies[0]);

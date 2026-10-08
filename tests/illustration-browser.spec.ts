@@ -190,6 +190,15 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await settings(request, { maxAutoRetries: 3 });
   await limit.fill('4');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
+  const conflictDialog = page.getByRole('alertdialog', { name: '삽화 설정 저장 내용 확인' });
+  await expect(
+    conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true })
+  ).toBeFocused();
+  await conflictDialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('자동 재시도 횟수');
+  await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('3');
+  expect(await conflictDialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await conflictDialog.press('Escape');
   await expect(section.getByRole('alert').filter({ hasText: '초안은 유지했어요' })).toBeVisible();
   await expect(limit).toHaveValue('4');
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true }).click();

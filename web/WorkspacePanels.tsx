@@ -9,7 +9,7 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { Switch } from './BooleanControls.js';
 import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
 import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
-import { discardActiveEditor } from './resource-editor.js';
+import { discardActiveEditor, ResourceEditorLeaveWarning } from './resource-editor.js';
 import { ActivityDetails } from './ActivityStatus.js';
 import { CodexAgentSettings } from './CodexAgentSettings.js';
 import { AppAbout } from './AppAbout.js';
@@ -821,6 +821,7 @@ export function AppSettingsPanel({
         }}
       >
         <p>저장하지 않은 편집 내용이나 선택한 파일이 있어요. 닫으면 이 초안이 사라져요.</p>
+        {promptDirty && <ResourceEditorLeaveWarning />}
         {discardError && (
           <p role="alert" className="error">
             {discardError}

@@ -508,6 +508,16 @@ test('UI12 lost response reconfirms the original command and preserves a newer d
   await expect(page.getByTestId('source')).toHaveCount(1);
   await page.getByLabel('다음 장면 요청').fill('합성 새 초안은 원래 요청과 달라요');
   await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  const admission = page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true });
+  await expect(admission).toBeVisible();
+  expect(commands).toHaveLength(1);
+  await admission.getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(page.getByLabel('다음 장면 요청')).toHaveValue('합성 새 초안은 원래 요청과 달라요');
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+    .getByRole('button', { name: '접수 확인', exact: true })
+    .click();
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
   expect(commands).toHaveLength(2);
   expect(commands[1]).toEqual(commands[0]);
@@ -988,8 +998,14 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   expect(update.ok()).toBeTruthy();
   await page.goto(`/?chat=${chat.id}`);
   await page.getByLabel('다음 장면 요청').fill('복구 전에는 보내지 않는 합성 초안');
-  await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).click();
+  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+  const recovery = page.getByRole('dialog', { name: '시작 설정 저장', exact: true });
+  await expect(recovery).toBeVisible();
+  expect((await data(request, chat.id)).runs).toHaveLength(0);
+  await recovery.getByRole('button', { name: '닫기', exact: true }).click();
+  await expect(page.getByLabel('다음 장면 요청')).toHaveValue('복구 전에는 보내지 않는 합성 초안');
+  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+  await recovery.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).click();
   await expect(page.getByRole('button', { name: '시작 설정 다시 저장', exact: true })).toHaveCount(
     0
   );
@@ -1561,12 +1577,26 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
     await expect(second.getByLabel('원문 수정 내용')).toHaveCount(0);
     sendEdit();
     await conflicted;
+    await expect(
+      page.getByRole('alertdialog', { name: '원문 저장 충돌', exact: true })
+    ).toBeVisible();
+    await page
+      .getByRole('alertdialog', { name: '원문 저장 충돌', exact: true })
+      .getByRole('button', { name: '현재 입력 유지', exact: true })
+      .click();
     await expect(page.getByLabel('원문 수정 내용')).toHaveValue(draft);
     await expect(page.getByText(/다른 요청이 먼저 반영됐어요/)).toBeVisible();
     await page.reload();
     await openSourceEditor(page);
     await expect(page.getByLabel('원문 수정 내용')).toHaveValue(draft);
-    await expect(page.getByRole('button', { name: '원문 저장', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: '원문 저장', exact: true }).click();
+    await expect(
+      page.getByRole('alertdialog', { name: '원문 저장 충돌', exact: true })
+    ).toBeVisible();
+    await page
+      .getByRole('alertdialog', { name: '원문 저장 충돌', exact: true })
+      .getByRole('button', { name: '현재 입력 유지', exact: true })
+      .click();
     expect((await data(request, chat.id)).sources[0].text).toBe(winner);
     await page.getByRole('button', { name: '수정 취소', exact: true }).click();
     expect(
