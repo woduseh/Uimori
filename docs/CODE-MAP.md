@@ -18,7 +18,10 @@
 | Native Risu execution | `server/risu-native-runtime.ts`, `server/risu-native-lua-session.ts`, `server/risu-native-render.ts`, `server/risu-native-projection.ts` | [Risu import](RISU-IMPORT.md) |
 | Model request fields and provider protocols | `core/model-request-fields.ts`, `core/provider-request.ts`, `core/provider-http.ts`, `core/*-protocol.ts` | [Providers](PROVIDERS.md) |
 | Composer translation and request copying | `core/input-translation.ts`, `server/input-translation.ts`, `web/useInputTranslation.ts`, `web/InputTranslation.tsx`, `web/RequestMessage.tsx` | [Input translation](INPUT-TRANSLATION.md) |
-| Reader and application | `web/useStory.ts`, `web/SourceReader.tsx`, `server/reader.ts`, `server/app.ts` | [Usage](USAGE.md) |
+| Reader and application, delayed loading and retry | `web/useStory.ts`, `web/SourceReader.tsx`, `web/ReaderLoadingState.tsx`, `server/reader.ts`, `server/app.ts` | [Reading](READING.md), [UI principles](UI-PRINCIPLES.md) |
+| Shared save conflicts and recovery decisions | `web/SaveConflictDialog.tsx`, `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `web/main.tsx` | [Editing](EDITING.md), [Usage](USAGE.md) |
+| Notices and execution feedback | `web/NoticeBanner.tsx`, `web/TransientNotice.tsx`, `web/DismissibleError.tsx` | [UI principles](UI-PRINCIPLES.md) |
+| Workspace, bot, and manuscript search UI | `web/ManuscriptSearch.tsx`, `web/BotTreeNavigation.tsx`, `web/BotNavigation.tsx` | [Manuscript search](MANUSCRIPT-SEARCH.md), [UI principles](UI-PRINCIPLES.md) |
 | Retained manuscript comparison and scene names | `web/SourceVersions.tsx`, `web/SceneTitleEditor.tsx`, `server/source-editing.ts`, `server/scene-titles.ts` | [Editing](EDITING.md), [Reading state](READING-STATE.md) |
 | Tests and local verification | `tests/`, `scripts/verify-*.mjs` | [Development](DEVELOPMENT.md) |
 | Bot translation guides | `core/translation-guide.ts`, `server/translation-guide.ts`, `web/TranslationGuideEditor.tsx` | [Translation guides](TRANSLATION-GUIDES.md) |
