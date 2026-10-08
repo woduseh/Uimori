@@ -375,6 +375,12 @@ export function ProviderModelFields({
       text: value.structuredOutput === 'on' ? 'JSON Schema 사용' : '지침과 결과 검증만 사용',
       reset: () => update({ structuredOutput: 'default' }),
     });
+  if (value.pdfInput)
+    specified.push({
+      label: '텍스트 대화를 PDF로 전송',
+      text: vertex ? '사용' : 'Google 연결에서만 적용',
+      reset: () => update({ pdfInput: false }),
+    });
   if (value.stopSequences.length > 0)
     specified.push({
       label: '생성 중단 문자열',
@@ -604,6 +610,14 @@ export function ProviderModelFields({
           <p>입력 한도를 비우면 272,000토큰을 사용해요. 한도에 가까워지면 앞선 대화를 요약해요.</p>
         </details>
         <h4 className="provider-field-heading full">생성 옵션</h4>
+        {vertex && (
+          <ToggleRow
+            label="텍스트 대화를 PDF로 전송"
+            description="요청의 텍스트 대화를 PDF로 묶어요. 시스템 지침과 도구 호출은 그대로 전달해요. 비용과 응답 품질은 모델에 따라 달라요."
+            checked={value.pdfInput}
+            onChange={(pdfInput) => update({ pdfInput })}
+          />
+        )}
         {protocol === 'vercel-chat-v1' && (
           <details className="full provider-extra-options" open={!!value.providerOptions}>
             <summary>추가 프로바이더 옵션 (JSON)</summary>

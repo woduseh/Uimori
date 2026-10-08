@@ -13,6 +13,21 @@ import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js'
 
 const base: ModelGeneration = { maxOutputTokens: 8192, temperature: null };
 
+test('PDF input accepts boolean values only on the direct Google protocol', () => {
+  for (const pdfInput of [true, false]) {
+    expect(() => validateModelOptions({ ...base, pdfInput }, 'vertex-gemini-v1')).not.toThrow();
+    for (const protocol of PROVIDER_PROTOCOLS.filter((value) => value !== 'vertex-gemini-v1'))
+      expect(() => validateModelOptions({ ...base, pdfInput }, protocol)).toThrow();
+  }
+  expect(() =>
+    validateModelOptions(
+      { ...base, pdfInput: 'true' } as unknown as ModelGeneration,
+      'vertex-gemini-v1'
+    )
+  ).toThrow();
+  expect(generationFromModel({ ...base, pdfInput: true })).toMatchObject({ pdfInput: true });
+});
+
 test('validation is protocol-level: any listed or unlisted model may use every option its encoder sends', () => {
   // Unlisted values on reviewed models and reviewed values on unlisted models both pass locally.
   expect(() =>

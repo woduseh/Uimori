@@ -94,6 +94,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
       'temperature',
       'timeoutMs',
       'thinkingLevel',
+      'pdfInput',
       'topP',
       'stopSequences',
       'serviceTier',

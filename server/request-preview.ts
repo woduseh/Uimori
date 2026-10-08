@@ -144,8 +144,11 @@ export async function previewNextRequest(
             evaluation.approvalReasoningMode === 'economized'
           ),
       });
-      const estimated = estimateContextTokens(wire.body, budget);
-      const summary = requestReceipt(built.snapshot, wire).summary;
+      const estimated = estimateContextTokens(wire.contextBody ?? wire.body, budget);
+      const summary = requestReceipt(built.snapshot, {
+        ...wire,
+        body: wire.contextBody ?? wire.body,
+      }).summary;
       result.summary.inUse =
         summary?.status === 'unverified' ? null : summary?.status === 'included';
       if (previous?.summary && result.summary.inUse !== true)

@@ -390,19 +390,18 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     // Continuation preflight must use the prompt actually sent after editRequest.
     // Do not execute authored callbacks for estimates; the next real send is still
     // prepared once and validated against the provider's continuation binding.
-    const preview = (request: ProviderRequest) =>
-      encodeMainPreview(
+    const preview = (request: ProviderRequest) => {
+      const encoded = encodeMainPreview(
         request.opaqueState != null ? { ...request, prompt: continuationPrompt } : request,
         target,
         { codexNative: !!native }
       );
+      return encoded.contextBody ?? encoded.body;
+    };
     let built = build();
     const latestRead = results.findLast(compactableRead)?.callId;
     if (!native && !evaluation && fixed.contextPlan && latestRead) {
-      const before = estimateContextTokens(
-        preview(built.request).body,
-        built.request.contextBudget
-      );
+      const before = estimateContextTokens(preview(built.request), built.request.contextBudget);
       const inputLimit = fixed.contextPlan.budget.inputTokenLimit;
       if (latestRead === lastUnhelpfulRead && before > inputLimit)
         return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
@@ -411,12 +410,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           const history = [...completedToolHistory, ...results];
           const compacted = await compactToolReads(fixed, history, hooks, usage, (projection) => {
             const projected = build(projection).request;
-            return estimateContextTokens(preview(projected).body, projected.contextBudget);
+            return estimateContextTokens(preview(projected), projected.contextBudget);
           });
           // Completed work becomes ordinary host reference data, not unsigned native tool calls.
           const candidate = build(compacted);
           const after = estimateContextTokens(
-            preview(candidate.request).body,
+            preview(candidate.request),
             candidate.request.contextBudget
           );
           // 85% is a soft trigger, not a second admission limit. Keep a valid original
@@ -497,14 +496,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         hooks.timeoutMs ??
         target.timeoutMs ??
         (target.connection.protocol === 'vertex-gemini-v1' ? 300_000 : undefined),
-      onWire: async (wire, resumeAttemptId) => {
+      onWire: async (wire, resumeAttemptId, evidence) => {
+        const contextWire = evidence?.contextBody ? { ...wire, body: evidence.contextBody } : wire;
         attemptId = await hooks.onAttemptStart(
           {
             ...wire,
-            requestReceipt: requestReceipt(fixed, wire),
+            requestReceipt: requestReceipt(fixed, contextWire),
             ...(request.contextBudget
               ? {
-                  requestContext: {
+                  requestContext: wire.requestContext ?? {
                     estimatedInputTokens: estimateContextTokens(wire.body, request.contextBudget),
                     inputTokenLimit: request.contextBudget.inputTokenLimit,
                     estimator: request.contextBudget.estimator,
@@ -518,7 +518,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
                   },
                 }
               : {}),
-            requestLore: requestLore(fixed, request, wire, {
+            requestLore: requestLore(fixed, request, contextWire, {
               pinned: input.pinnedSources ?? [],
               catalog: input.catalog,
             }),

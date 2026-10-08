@@ -253,6 +253,73 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   expect(updated).not.toHaveProperty('thinkingMode');
 });
 
+test('PMUI PDF input is Google-only, defaults off and survives save and reopen', async ({
+  page,
+  request,
+}, info) => {
+  const title = 'PMUI PDF input ' + Date.now(),
+    observed = observe(page);
+  const google = await api<Connection>(request, '/connections', {
+    title,
+    protocol: 'vertex-gemini-v1',
+    endpoint:
+      'https://aiplatform.googleapis.com/v1/projects/synthetic-pdf/locations/global/publishers/google/models',
+    apiKey: 'PM_SYNTHETIC_KEY',
+    enabled: false,
+  });
+  const gateway = await api<Connection>(request, '/connections', {
+    title: title + ' gateway',
+    protocol: 'vercel-chat-v1',
+    endpoint: 'https://ai-gateway.vercel.sh/v1',
+    apiKey: 'PM_SYNTHETIC_KEY',
+    enabled: false,
+  });
+  const direct = await api<ModelPreset>(request, '/model-presets', {
+    ...modelInput(google, title),
+    modelId: 'gemini-3.8-flash',
+  });
+  const routed = await api<ModelPreset>(request, '/model-presets', {
+    ...modelInput(gateway, title + ' routed'),
+    modelId: 'google/gemini-3.8-flash',
+  });
+  await settings(page);
+  await openProviderModel(page, direct.title);
+  const form = page.getByRole('form', { name: '모델 편집 양식' }),
+    pdf = form.getByRole('switch', { name: /텍스트 대화를 PDF로 전송/ });
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(pdf).toBeVisible();
+  await expect(pdf).not.toBeChecked();
+  expect(direct).not.toHaveProperty('pdfInput');
+  await pdf.check();
+  if (visualReview) {
+    await pdf.scrollIntoViewIfNeeded();
+    await form.screenshot({ path: info.outputPath('provider-pdf-input.png') });
+  }
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await api<ModelPreset>(request, `/model-presets/${direct.id}`)).pdfInput)
+    .toBe(true);
+  await settings(page);
+  await openProviderModel(page, direct.title);
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(pdf).toBeChecked();
+  await pdf.uncheck();
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await api<ModelPreset>(request, `/model-presets/${direct.id}`)).pdfInput)
+    .toBeUndefined();
+  await settings(page);
+  await openProviderModel(page, direct.title);
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(pdf).not.toBeChecked();
+  await settings(page);
+  await openProviderModel(page, routed.title);
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(pdf).toHaveCount(0);
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
+});
+
 test('PMUI tokenizer advanced selection survives save and model edits and can return to automatic', async ({
   page,
   request,

@@ -210,7 +210,12 @@ export type ProviderExecutionOptions = {
   /** Awaited after Codex thread setup and before turn/start; never records another attempt.
    * Synchronous callbacks may return an ignored value. */
   beforeTurn?: () => unknown;
-  onWire?: (record: WireRecord, resumeAttemptId?: string) => unknown | Promise<unknown>;
+  /** Context evidence is transient and must not be persisted as a second request body. */
+  onWire?: (
+    record: WireRecord,
+    resumeAttemptId?: string,
+    evidence?: { contextBody?: Json }
+  ) => unknown | Promise<unknown>;
   /** Decoder-selected public answer deltas; excludes tools, reasoning and final-only envelopes. */
   onProgress?: (progress: ProviderProgress) => void | Promise<void>;
 };
@@ -246,10 +251,11 @@ export async function executeProvider(
     const onWire = options.onWire;
     options = {
       ...options,
-      onWire: (wire, resumeAttemptId) =>
+      onWire: (wire, resumeAttemptId, evidence) =>
         onWire?.(
           { ...wire, pricingSnapshot, pricingStartedAt: new Date().toISOString() },
-          resumeAttemptId
+          resumeAttemptId,
+          evidence
         ),
     };
   }
