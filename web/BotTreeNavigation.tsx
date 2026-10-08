@@ -1,9 +1,6 @@
-import type { ReaderTarget } from '../core/reader-target.js';
-import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
-import type { Content, Library } from '../core/product.js';
-import type { Chat } from '../core/types.js';
+import type { Content } from '../core/product.js';
 import {
   libraryCategory,
   libraryFolderOf,
@@ -48,27 +45,21 @@ function readView(): View {
 }
 /** First row of the sidebar and the drawer: choose a bot in the library or find any chat. */
 export function NavigationQuickActions({
-  chats,
-  library,
-  onSelect,
+  onSearch,
   onLibrary,
   compact = false,
 }: {
-  chats: Chat[];
-  library: Library | null;
-  onSelect: (id: string, target?: ReaderTarget) => void;
+  onSearch: () => void;
   onLibrary: (tab: 'bot') => void;
   /** The collapsed rail shows the same two actions as icons. */
   compact?: boolean;
 }) {
-  const [searching, setSearching] = useState(false);
-  const openSearch = () => setSearching(true);
   return (
     <div className={`navigation-quick-actions${compact ? ' compact' : ''}`}>
       {compact ? (
         <>
           <IconButton label="새 채팅" icon={AddIcon} onClick={() => onLibrary('bot')} />
-          <IconButton label="전체 채팅 검색" icon={SearchIcon} onClick={openSearch} />
+          <IconButton label="전체 채팅 검색" icon={SearchIcon} onClick={onSearch} />
         </>
       ) : (
         <>
@@ -85,41 +76,20 @@ export function NavigationQuickActions({
             type="button"
             className="nav-button"
             aria-label="전체 채팅 검색"
-            onClick={openSearch}
+            onClick={onSearch}
           >
             <SearchIcon size={20} aria-hidden="true" />
             <span>채팅 검색</span>
           </button>
         </>
       )}
-      <Dialog
-        open={searching}
-        title="전체 채팅 검색"
-        onClose={() => setSearching(false)}
-        className="manuscript-search-dialog"
-      >
-        {searching && (
-          <ManuscriptSearchPanel
-            label="전체 채팅 검색"
-            chats={chats}
-            library={library}
-            onChat={(id) => {
-              setSearching(false);
-              onSelect(id);
-            }}
-            onNavigate={(target) => {
-              setSearching(false);
-              onSelect(target.chatId, target);
-            }}
-          />
-        )}
-      </Dialog>
     </div>
   );
 }
 export function BotNavigation(
   props: Props & {
     onLibraryChanged: () => Promise<void>;
+    onSearch: () => void;
     quickActions?: boolean;
     libraryTab?: 'bot' | 'persona' | 'module' | 'prompts';
     /** Collapsed navigation renders an icon rail instead of the full tree. */
@@ -434,13 +404,7 @@ export function BotNavigation(
             onClick={props.onToggleCollapse}
           />
         </div>
-        <NavigationQuickActions
-          compact
-          chats={chats}
-          library={library}
-          onSelect={onSelect}
-          onLibrary={onLibrary}
-        />
+        <NavigationQuickActions compact onSearch={props.onSearch} onLibrary={onLibrary} />
         <nav className="sidebar-rail-destinations" aria-label="작업 공간">
           <IconButton
             label="서재"
@@ -492,12 +456,7 @@ export function BotNavigation(
       </div>
       {quickActions && (
         <div className="sidebar-quick-actions">
-          <NavigationQuickActions
-            chats={chats}
-            library={library}
-            onSelect={onSelect}
-            onLibrary={onLibrary}
-          />
+          <NavigationQuickActions onSearch={props.onSearch} onLibrary={onLibrary} />
         </div>
       )}
       <nav className="sidebar-destinations" aria-label="작업 공간">

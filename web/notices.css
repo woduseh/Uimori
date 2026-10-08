@@ -32,7 +32,7 @@
   font-size: inherit;
 }
 .notice-error {
-  color: var(--error-ink);
+  color: var(--error);
   background: var(--error-bg);
   border-color: color-mix(in srgb, var(--error) 30%, var(--line));
 }
