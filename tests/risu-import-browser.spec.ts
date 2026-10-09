@@ -167,6 +167,7 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
   await dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true }).click();
   await expect(dialog.getByRole('button', { name: '같은 요청으로 다시 확인' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '가져오지 않고 닫기' })).toBeDisabled();
   await expect(await revealKind()).toBeDisabled();
   await expect(dialog.getByLabel('Risu 파일 선택', { exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
@@ -183,6 +184,62 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   expect(saved?.chat).toBeTruthy();
   const chats = (await (await request.get('/api/chats')).json()) as { id: string }[];
   expect(chats.filter((chat) => chat.id === saved?.chat?.id)).toHaveLength(1);
+});
+
+test('RISUDISCARDUI01 discarding a review closes and resets it while ordinary close retains it', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  const title = `Discarded card ${crypto.randomUUID()}`;
+  const file = {
+    name: 'discard.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(card(title))),
+  };
+  const beforeChats = await (await request.get('/api/chats')).json();
+  await page.route('**/api/risu-imports/discard', async (route) => {
+    const response = await route.fetch();
+    expect(response.ok(), await response.text()).toBe(true);
+    await route.fulfill({ status: 503, json: { error: 'Synthetic lost cleanup response' } });
+  });
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  const trigger = page.getByRole('button', { name: '자료 가져오기', exact: true });
+  const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
+  await trigger.click();
+  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles(file);
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
+  await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
+  await trigger.click();
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await expect(dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' })).toBeChecked();
+  const discarded = page.waitForResponse((response) =>
+    response.url().endsWith('/api/risu-imports/discard')
+  );
+  await dialog.getByRole('button', { name: '가져오지 않고 닫기', exact: true }).click();
+  expect((await discarded).status()).toBe(503);
+  await expect(dialog).not.toBeVisible();
+  expect(await (await request.get('/api/chats')).json()).toEqual(beforeChats);
+  const library = await (await request.get('/api/library')).json();
+  expect(JSON.stringify(library)).not.toContain(title);
+  await trigger.click();
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('Risu 파일 선택', { exact: true })).toBeEnabled();
+  await expect(dialog.getByRole('button', { name: '봇 가져오기', exact: true })).toHaveCount(0);
+  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles(file);
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await expect(
+    dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' })
+  ).not.toBeChecked();
+  const applied = page.waitForResponse((response) =>
+    response.url().endsWith('/api/risu-imports/apply')
+  );
+  await dialog.getByRole('button', { name: '봇 가져오기', exact: true }).click();
+  expect((await applied).status()).toBe(201);
+  await expect(dialog.getByText('봇을 서재에 등록했어요.', { exact: false })).toBeVisible();
+  expect(await (await request.get('/api/chats')).json()).toEqual(beforeChats);
 });
 
 test('RISUKINDUI03 bot import defaults to the library and appears in navigation without a chat', async ({

@@ -22,7 +22,7 @@ function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
   return entry.loading === 'pinned' ? '항상 포함' : 'JEV 관련성 판단 · 필요할 때 추가 조회';
 }
 
-/** Closing the dialog retains the reviewed file and any uncertain apply request. */
+/** Ordinary close retains the review; explicit discard clears only an unapplied, certain draft. */
 export function RisuImport({
   showTrigger = true,
   defaultKind = '',
@@ -230,6 +230,30 @@ export function RisuImport({
       active.current = false;
       setBusy(false);
     }
+  }
+
+  function discardAndClose() {
+    if (active.current || uncertain || result) return;
+    const preparedId = preview?.preparedId;
+    const uploadId = source?.uploadId;
+    setSource(null);
+    setPreview(null);
+    setKind(defaultKind);
+    setImageHandoffIds([]);
+    setAllowPartial(false);
+    setCreateChat(false);
+    setError('');
+    setNotice('');
+    submission.current = null;
+    requestKey.current = null;
+    setOpen(false);
+    if (preparedId || uploadId)
+      void api('/risu-imports/discard', {
+        ...(preparedId ? { preparedId } : {}),
+        ...(uploadId ? { uploadId } : {}),
+      }).catch(() => {
+        // Local discard is complete; expiry cleanup handles an unreachable server or locked files.
+      });
   }
 
   return (
@@ -452,6 +476,17 @@ export function RisuImport({
                       : createChat
                         ? '가져오고 새 채팅 열기'
                         : '봇 가져오기'}
+                </button>
+              )}
+              {!result && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy || uncertain}
+                  title={uncertain ? '가져오기 완료 여부를 먼저 확인해 주세요.' : undefined}
+                  onClick={discardAndClose}
+                >
+                  가져오지 않고 닫기
                 </button>
               )}
             </>

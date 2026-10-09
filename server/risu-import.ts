@@ -4,6 +4,7 @@ import {
   prepareStoredRisuImport,
   readPreparedRisuImport,
   deletePreparedRisuImport,
+  discardPreparedRisuImport,
   findPreparedRisuImport,
 } from './risu-import-prepared.js';
 import type { PreparedNativeTransferFile } from '../core/native-transfer-validation.js';
@@ -40,6 +41,25 @@ export function prepareRisuImport(
   const body = record(value);
   fields(body, ['source', 'kind']);
   return analyze(body.source, body.kind as RisuImportKind | undefined, readStaged).preview;
+}
+
+export function discardRisuImport(dbPath: string, value: unknown) {
+  const body = record(value);
+  fields(body, ['preparedId', 'uploadId']);
+  for (const id of [body.preparedId, body.uploadId]) {
+    if (id !== undefined && (typeof id !== 'string' || !/^[a-f0-9]{32}$/u.test(id)))
+      throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  }
+  // An active prepared review owns its source upload until the worker finishes.
+  if (body.preparedId !== undefined) discardPreparedRisuImport(dbPath, body.preparedId);
+  if (body.uploadId !== undefined) {
+    try {
+      deleteUpload(dbPath, body.uploadId);
+    } catch {
+      // Closing the review succeeds; upload expiry cleanup retries a locked file.
+    }
+  }
+  return { discarded: true };
 }
 
 export async function applyRisuImport(
@@ -168,6 +188,9 @@ export async function applyRisuImport(
 export function risuImportRoutes(app: FastifyInstance, store: Store) {
   const bodyLimit = Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4 + 1024 * 1024;
   const readStaged = (uploadId: string) => readUpload(store.path, uploadId);
+  app.post('/api/risu-imports/discard', async (request) =>
+    discardRisuImport(store.path, request.body)
+  );
   app.post('/api/risu-imports/prepare', { bodyLimit }, async (request, reply) => {
     const abort = new AbortController();
     const closed = () => {
