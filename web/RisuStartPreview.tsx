@@ -65,6 +65,7 @@ export function RisuStartPreview({
       <RisuMessageSurface
         html={preview.html}
         css={preview.css}
+        revisionKey={identity}
         disabled
         onAction={async () => {}}
       />

@@ -8,12 +8,104 @@ export type RisuAction = (kind: 'trigger' | 'button', name: string) => Promise<v
 export type RisuActionState = { busy: boolean; issue: string };
 const styles = new WeakMap<Document, CSSStyleSheet>();
 
+type CardControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLDetailsElement;
+function authoredControls(content: HTMLElement) {
+  const controls = new Map<string, { node: CardControl; defaults: string }>();
+  const duplicates = new Set<string>();
+  for (const node of content.querySelectorAll<CardControl>('input,textarea,select,details')) {
+    const id = node.id || node.getAttribute('risu-id');
+    const name = node.getAttribute('name');
+    if (!id && !name) continue;
+    if (node instanceof HTMLInputElement && node.type === 'file') continue;
+    const key = JSON.stringify([
+      node.tagName,
+      id ? ['id', id] : ['name', name],
+      node instanceof HTMLInputElement ? node.type : '',
+      node instanceof HTMLInputElement && node.type === 'radio' ? node.value : '',
+    ]);
+    const defaults = JSON.stringify(
+      node instanceof HTMLInputElement
+        ? [node.defaultValue, node.defaultChecked]
+        : node instanceof HTMLTextAreaElement
+          ? node.defaultValue
+          : node instanceof HTMLSelectElement
+            ? [
+                node.multiple,
+                [...node.options].map((option) => [option.value, option.defaultSelected]),
+              ]
+            : node.open
+    );
+    if (controls.has(key) || duplicates.has(key)) {
+      controls.delete(key);
+      duplicates.add(key);
+    } else controls.set(key, { node, defaults });
+  }
+  return controls;
+}
+
+function rememberControls(previous: ReturnType<typeof authoredControls>, focused: Element | null) {
+  const snapshots = [...previous].map(([key, saved]) => ({
+    key,
+    ...saved,
+    scrollTop: saved.node.scrollTop,
+    scrollLeft: saved.node.scrollLeft,
+    selection:
+      saved.node instanceof HTMLInputElement || saved.node instanceof HTMLTextAreaElement
+        ? ([
+            saved.node.selectionStart,
+            saved.node.selectionEnd,
+            saved.node.selectionDirection,
+          ] as const)
+        : null,
+  }));
+  return (next: ReturnType<typeof authoredControls>) => {
+    for (const saved of snapshots) {
+      const { key } = saved;
+      const replacement = next.get(key);
+      // Authored value changes take priority, even within the same display revision.
+      if (!replacement || replacement.defaults !== saved.defaults) continue;
+      const old = saved.node;
+      const node = replacement.node;
+      if (old instanceof HTMLInputElement && node instanceof HTMLInputElement) {
+        node.value = old.value;
+        node.checked = old.checked;
+      } else if (old instanceof HTMLTextAreaElement && node instanceof HTMLTextAreaElement) {
+        node.value = old.value;
+      } else if (old instanceof HTMLSelectElement && node instanceof HTMLSelectElement) {
+        [...old.options].forEach((option, index) => {
+          node.options[index]!.selected = option.selected;
+        });
+      } else if (old instanceof HTMLDetailsElement && node instanceof HTMLDetailsElement) {
+        node.open = old.open;
+      }
+      if (old === focused) {
+        node.focus({ preventScroll: true });
+        if (
+          (old instanceof HTMLInputElement || old instanceof HTMLTextAreaElement) &&
+          (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) &&
+          saved.selection?.[0] !== null &&
+          saved.selection
+        ) {
+          node.setSelectionRange(
+            saved.selection[0],
+            saved.selection[1],
+            saved.selection[2] ?? undefined
+          );
+        }
+      }
+      node.scrollTop = saved.scrollTop;
+      node.scrollLeft = saved.scrollLeft;
+    }
+  };
+}
+
 /** A single message tree. Updates never re-parse HTML just to change reading or action state. */
 export function mountRisuMessageSurface(
   host: HTMLElement,
-  prepared: PreparedRisuMessage,
+  initial: PreparedRisuMessage,
   onState: (state: RisuActionState) => void
 ) {
+  let prepared = initial;
   const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
   let sheet = styles.get(host.ownerDocument);
   if (!sheet) {
@@ -30,13 +122,16 @@ export function mountRisuMessageSurface(
   content.innerHTML = prepared.html;
   root.replaceChildren(authorStyle, content);
   const slots = new Map<string, HTMLSlotElement>();
-  const boundaries = new Map(
-    [...content.querySelectorAll<HTMLElement>('[data-uimori-illustration-after]')].map((node) => [
-      node.dataset.uimoriIllustrationAfter!,
-      node.tagName === 'CODE' ? node.closest('pre')! : node,
-    ])
-  );
-  const reading = createReadingDecorator(content);
+  const findBoundaries = () =>
+    new Map(
+      [...content.querySelectorAll<HTMLElement>('[data-uimori-illustration-after]')].map((node) => [
+        node.dataset.uimoriIllustrationAfter!,
+        node.tagName === 'CODE' ? node.closest('pre')! : node,
+      ])
+    );
+  let boundaries = findBoundaries();
+  let controls = authoredControls(content);
+  let reading = createReadingDecorator(content);
   let action: RisuAction | undefined;
   let disabled = true;
   let locked = false;
@@ -76,6 +171,22 @@ export function mountRisuMessageSurface(
   return {
     root,
     content,
+    updateMessage(next: PreparedRisuMessage, preserveControls: boolean) {
+      authorStyle.textContent = next.css;
+      if (prepared.html !== next.html) {
+        const restore = preserveControls
+          ? rememberControls(controls, root.activeElement)
+          : undefined;
+        content.innerHTML = next.html;
+        const nextControls = authoredControls(content);
+        restore?.(nextControls);
+        controls = nextControls;
+        boundaries = findBoundaries();
+        slots.clear();
+        reading = createReadingDecorator(content);
+      }
+      prepared = next;
+    },
     updateIllustrations(anchors: string[]) {
       const requested = new Set(anchors);
       for (const [anchor, slot] of slots) {

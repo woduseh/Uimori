@@ -186,7 +186,8 @@ test('RSURFACE fixed panels open and close against the viewport without enlargin
       .poll(() => panel.evaluate((node) => Math.round(node.getBoundingClientRect().right)))
       .toBe(viewport.width);
     await expect(panel).toHaveCSS('width', `${viewport.width < 700 ? viewport.width : 420}px`);
-    await draft.fill('Preserved card draft');
+    if (viewport.width === DESKTOP_WIDTH) await draft.fill('Preserved card draft');
+    await expect(draft).toHaveValue('Preserved card draft');
     await page.evaluate(() => window.scrollTo(0, 500));
     await expect
       .poll(() => toolbar.evaluate((node) => Math.round(node.getBoundingClientRect().top)))
@@ -201,11 +202,13 @@ test('RSURFACE fixed panels open and close against the viewport without enlargin
   }
 });
 
-test('RSURFACE viewport projections retain their content and disable actions while resizing', async ({
+test('RSURFACE viewport projections retain local controls and action locks until a native revision', async ({
   page,
 }) => {
   const requests: { width: number; height: number }[] = [];
   const previews: { width: number; height: number }[] = [];
+  let nativeRevision = 0;
+  let draftDefault = 'Original draft';
   let waitForResize = false;
   let releaseResize!: () => void;
   const resizeGate = new Promise<void>((resolve) => {
@@ -227,9 +230,25 @@ test('RSURFACE viewport projections retain their content and disable actions whi
         sourceRevision: 'source',
         sourceHash: 'source-hash',
         format: 'risu-html',
+        nativeAction: {
+          expectedHeadRevision: 'source',
+          expectedHeadHash: 'source-hash',
+          expectedVariableRevision: nativeRevision,
+        },
         original: {
           text: `Width ${viewport.width}`,
-          html: `<p>Width ${viewport.width}</p><button risu-trigger="one">One</button>`,
+          html: `<p>Width ${viewport.width}</p>
+            <input id="draft" aria-label="Card draft" value="${draftDefault}">
+            <textarea risu-id="notes" aria-label="Card notes">Original notes ${nativeRevision}</textarea>
+            <select name="choice" aria-label="Card choice">
+              <option value="first" ${nativeRevision === 0 ? 'selected' : ''}>First</option>
+              <option value="second">Second</option>
+              <option value="third" ${nativeRevision === 1 ? 'selected' : ''}>Third</option>
+            </select>
+            <input id="panel-toggle" type="checkbox" aria-label="Panel open">
+            <details id="details"><summary>Card details</summary>Extra information</details>
+            <button risu-trigger="one">One</button>`,
+          css: `#draft { max-width: ${viewport.height}px; }`,
           changed: true,
           applied: [],
         },
@@ -257,6 +276,18 @@ test('RSURFACE viewport projections retain their content and disable actions whi
   const presentation = page.getByRole('region', { name: 'Presentation', exact: true });
   await expect(presentation).toContainText(`Width ${DESKTOP_WIDTH}`);
   expect(requests).toEqual([{ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }]);
+  const draft = presentation.getByRole('textbox', { name: 'Card draft', exact: true });
+  const notes = presentation.getByRole('textbox', { name: 'Card notes', exact: true });
+  const choice = presentation.getByRole('combobox', { name: 'Card choice', exact: true });
+  const panelToggle = presentation.getByRole('checkbox', { name: 'Panel open', exact: true });
+  const details = presentation.locator('#details');
+  await draft.fill('Unsaved card draft');
+  await notes.fill('Unsaved card notes');
+  await choice.selectOption('second');
+  await panelToggle.check();
+  await details.getByText('Card details', { exact: true }).click();
+  await draft.focus();
+  await draft.evaluate((node: HTMLInputElement) => node.setSelectionRange(2, 7));
 
   waitForResize = true;
   await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
@@ -279,16 +310,68 @@ test('RSURFACE viewport projections retain their content and disable actions whi
   releaseResize();
   await expect(presentation).toContainText(`Width ${MOBILE_WIDTH}`);
   await expect(page.getByLabel('Presentation status')).toHaveText('ready');
-  await expect(presentation.locator('.risu-message-content')).toHaveAttribute(
-    'data-risu-disabled',
-    'false'
-  );
+  await expect(draft).toHaveValue('Unsaved card draft');
+  await expect(notes).toHaveValue('Unsaved card notes');
+  await expect(choice).toHaveValue('second');
+  await expect(panelToggle).toBeChecked();
+  await expect(details).toHaveAttribute('open', '');
+  expect(
+    await draft.evaluate((node: HTMLInputElement) => ({
+      focused: (node.getRootNode() as ShadowRoot).activeElement === node,
+      start: node.selectionStart,
+      end: node.selectionEnd,
+    }))
+  ).toEqual({ focused: true, start: 2, end: 7 });
+  await presentation.getByRole('button', { name: 'One', exact: true }).click();
+  await expect(page.getByLabel('Action calls')).toHaveText('1');
+
+  // A CSS-only projection keeps the actual input node and the successful action lock.
+  const draftNode = await draft.elementHandle();
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT + 60 });
+  await expect
+    .poll(() => requests.at(-1))
+    .toEqual({
+      width: MOBILE_WIDTH,
+      height: MOBILE_HEIGHT + 60,
+    });
+  await expect(draft).toHaveCSS('max-width', `${MOBILE_HEIGHT + 60}px`);
+  await expect(page.getByLabel('Presentation status')).toHaveText('ready');
+  expect(
+    await draftNode!.evaluate(
+      (node) =>
+        node.isConnected && (node.getRootNode() as ShadowRoot).querySelector('#draft') === node
+    )
+  ).toBe(true);
+  await presentation
+    .getByRole('button', { name: 'One', exact: true })
+    .evaluate((button: HTMLButtonElement) => button.click());
+  await expect(page.getByLabel('Action calls')).toHaveText('1');
+
+  // An authored default change wins over a stale local value even at the same revision.
+  draftDefault = 'Updated authored default';
+  await page.setViewportSize({ width: MOBILE_WIDTH + 1, height: MOBILE_HEIGHT });
+  await expect(presentation).toContainText(`Width ${MOBILE_WIDTH + 1}`);
+  await expect(draft).toHaveValue('Updated authored default');
+  await expect(notes).toHaveValue('Unsaved card notes');
+  await expect(panelToggle).toBeChecked();
+
+  // A real native revision starts a fresh card state and allows its next action.
+  nativeRevision = 1;
+  draftDefault = 'New native draft';
+  await page.getByRole('button', { name: 'Refresh native revision', exact: true }).click();
+  await expect(draft).toHaveValue('New native draft');
+  await expect(notes).toHaveValue('Original notes 1');
+  await expect(choice).toHaveValue('third');
+  await expect(panelToggle).not.toBeChecked();
+  await expect(details).not.toHaveAttribute('open', '');
+  await presentation.getByRole('button', { name: 'One', exact: true }).click();
+  await expect(page.getByLabel('Action calls')).toHaveText('2');
 
   await page.getByRole('button', { name: 'Toggle preview', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Preview', exact: true })).toContainText(
-    `Preview ${MOBILE_WIDTH}`
+    `Preview ${MOBILE_WIDTH + 1}`
   );
-  expect(previews).toEqual([{ width: MOBILE_WIDTH, height: MOBILE_HEIGHT }]);
+  expect(previews).toEqual([{ width: MOBILE_WIDTH + 1, height: MOBILE_HEIGHT }]);
   await page.getByRole('button', { name: 'Toggle preview', exact: true }).click();
   await page.getByRole('button', { name: 'Toggle presentation', exact: true }).click();
   await expect(presentation).toHaveText('Saved original');

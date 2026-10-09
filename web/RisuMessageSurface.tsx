@@ -34,20 +34,26 @@ export function RisuMessageSurface({
   const mounted = useRef<{
     prepared: ReturnType<typeof prepareRisuMessage>;
     view: ReturnType<typeof mountRisuMessageSurface>;
+    revision: string;
     reading?: ReadabilitySettings;
   } | null>(null);
   const [state, setState] = useState<RisuActionState>({ busy: false, issue: '' });
   useLayoutEffect(() => {
     if (!host.current) return;
-    if (mounted.current?.prepared !== prepared) {
-      mounted.current?.view.destroy();
+    if (!mounted.current) {
       mounted.current = {
         prepared,
+        revision: revisionKey,
         view: mountRisuMessageSurface(host.current, prepared, setState),
       };
-      setState({ busy: false, issue: '' });
     }
     const current = mounted.current;
+    if (current.prepared !== prepared) {
+      current.view.updateMessage(prepared, !!revisionKey && current.revision === revisionKey);
+      current.prepared = prepared;
+      current.reading = undefined;
+    }
+    current.revision = revisionKey;
     current.view.updateAction({ action: onAction, disabled, revision: revisionKey });
     current.view.updateIllustrations(illustrations.map((item) => item.anchor));
     if (current.reading !== settings) {
