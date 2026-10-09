@@ -12,6 +12,8 @@ import {
   importNormalizedResourceBundle,
   inspectBundle,
 } from './resource-bundle.js';
+import { nativeTransferArchiveRoutes } from './native-transfer-archive.js';
+import type { PreparedNativeTransferFile } from '../core/native-transfer-validation.js';
 
 export const applyNativeTransfer = importResourceBundle;
 export function prepareNativeTransfer(value: unknown): NativeTransferPrepare {
@@ -19,7 +21,17 @@ export function prepareNativeTransfer(value: unknown): NativeTransferPrepare {
   fields(body, ['file']);
   return inspectBundle(body.file);
 }
-export function exportNativeTransfer(store: Store, value: unknown): NativeTransferFile {
+export function exportNativeTransfer(store: Store, value: unknown): NativeTransferFile;
+export function exportNativeTransfer(
+  store: Store,
+  value: unknown,
+  metadataOnly: true
+): PreparedNativeTransferFile;
+export function exportNativeTransfer(
+  store: Store,
+  value: unknown,
+  metadataOnly = false
+): NativeTransferFile | PreparedNativeTransferFile {
   const body = record(value);
   fields(body, ['items']);
   if (!Array.isArray(body.items) || !body.items.length || body.items.length > 1000)
@@ -33,10 +45,13 @@ export function exportNativeTransfer(store: Store, value: unknown): NativeTransf
       id: text(item.id, 'resource ID', 100),
     };
   });
-  return exportResourceBundle(store, items);
+  return metadataOnly
+    ? exportResourceBundle(store, items, true)
+    : exportResourceBundle(store, items);
 }
 
 export function nativeTransferRoutes(app: FastifyInstance, store: Store) {
+  nativeTransferArchiveRoutes(app, store, (value) => exportNativeTransfer(store, value, true));
   app.post('/api/native-transfers/export', (request) => exportNativeTransfer(store, request.body));
   app.post('/api/native-transfers/prepare', { bodyLimit: NATIVE_TRANSFER_MAX_BYTES }, (request) =>
     prepareNativeTransfer(request.body)

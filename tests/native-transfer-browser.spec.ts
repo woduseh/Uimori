@@ -17,8 +17,8 @@ function atWidths(name: string, run: (args: BrowserArgs, width: number) => Promi
 }
 
 const card = (title: string) => ({
-  spec: 'chara_card_v2',
-  spec_version: '2.0',
+  spec: 'chara_card_v3',
+  spec_version: '3.0',
   data: {
     name: title,
     description: 'Synthetic native import card.',

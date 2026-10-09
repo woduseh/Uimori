@@ -75,6 +75,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "sharp": "0.35.4",
+    "stream-json": "3.7.0",
     "tiktoken": "1.0.22",
     "undici": "7.29.1",
     "wasmoon": "1.16.0",

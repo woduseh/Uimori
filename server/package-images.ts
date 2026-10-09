@@ -14,6 +14,7 @@ import type { ProductStore } from './product-store.js';
 import type { Store, Job, Source } from './store.js';
 import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
 import { validateRisuContent, type RisuContent } from '../core/risu-content.js';
+import { RISU_AGGREGATE_IMAGES_MAX } from '../core/risu-limits.js';
 
 export type PackageImageBlob = {
   id: string;
@@ -136,7 +137,7 @@ export function imageJobInput(store: Store, snapshot: RunSnapshot): { imageCatal
           .map(assetEntry)
       : []),
   ];
-  if (entries.length > 10_000) throw new HttpError(400, 'Image catalog limit');
+  if (entries.length > RISU_AGGREGATE_IMAGES_MAX) throw new HttpError(400, 'Image catalog limit');
   return {
     imageCatalog: {
       version: 1,
@@ -153,7 +154,7 @@ export function imageCatalog(input: unknown): AssetEntry[] {
   if (
     catalog.version !== 1 ||
     !Array.isArray(catalog.entries) ||
-    catalog.entries.length > 10_000 ||
+    catalog.entries.length > RISU_AGGREGATE_IMAGES_MAX ||
     catalog.hash !== createHash('sha256').update(JSON.stringify(catalog.entries)).digest('hex')
   )
     throw new HttpError(400, 'Invalid frozen image catalog');

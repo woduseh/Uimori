@@ -1,10 +1,32 @@
 import type { RisuContent } from '../core/risu-content.js';
 import type { NativeTransferFile } from '../core/native-transfer.js';
+import type { PreparedNativeTransferFile } from '../core/native-transfer-validation.js';
 import { RISU_IMPORT_MAX_ASSETS, type RisuImportKind } from '../core/risu-import.js';
 import { decodeImage } from './package-images.js';
 import { HttpError } from './request-validation.js';
 import { object, string, type RisuCard, type RisuCardAsset } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
+
+export type PreparedRisuAsset = { hash: string; mime: 'image/webp' };
+type AssetInput = {
+  card: RisuCard;
+  kind: RisuImportKind;
+  members: Map<string, () => Buffer>;
+  findings: RisuImportFindings;
+  native?: boolean;
+};
+type AssetResult<I> = {
+  images: I[];
+  packageImages: NonNullable<RisuContent['images']>;
+  assetUrls: Map<string, string>;
+  portraitImageId?: string;
+};
+export function importRisuAssets(
+  input: AssetInput & { preparedAssets: Map<string, PreparedRisuAsset | null> }
+): AssetResult<PreparedNativeTransferFile['images'][number]>;
+export function importRisuAssets(
+  input: AssetInput & { preparedAssets?: undefined }
+): AssetResult<NativeTransferFile['images'][number]>;
 
 /**
  * Reads the images stored inside the file. Nothing is fetched: an asset that names a file the
@@ -17,24 +39,27 @@ export function importRisuAssets({
   members,
   findings,
   native = false,
+  preparedAssets,
 }: {
   card: RisuCard;
   kind: RisuImportKind;
   members: Map<string, () => Buffer>;
   findings: RisuImportFindings;
   native?: boolean;
+  preparedAssets?: Map<string, PreparedRisuAsset | null>;
 }): {
-  images: NativeTransferFile['images'];
+  images: PreparedNativeTransferFile['images'];
   packageImages: NonNullable<RisuContent['images']>;
   assetUrls: Map<string, string>;
   portraitImageId?: string;
 } {
-  const images: NativeTransferFile['images'] = [];
+  const images: PreparedNativeTransferFile['images'] = [];
   const packageImages: NonNullable<RisuContent['images']> = [];
   const assetUrls = new Map<string, string>();
   let portraitImageId: string | undefined;
   // A package image carries no role field, so a typed asset keeps only its bytes and its name.
   let typedAsset = false;
+  const included = new Set<string>();
   const assets = Array.isArray(card.assets) ? card.assets : [];
   if (assets.length > RISU_IMPORT_MAX_ASSETS) throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   for (const [index, raw] of assets.entries()) {
@@ -51,47 +76,62 @@ export function importRisuAssets({
       );
       continue;
     }
-    const bytes = read();
-    // Some cards retain a .png asset name after converting its bytes to WebP.
-    const mime = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-      ? 'image/png'
-      : bytes[0] === 255 && bytes[1] === 216
-        ? 'image/jpeg'
-        : bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
-          ? 'image/webp'
-          : bytes.toString('ascii', 4, 8) === 'ftyp'
-            ? 'image/avif'
-            : ['GIF87a', 'GIF89a'].includes(bytes.toString('ascii', 0, 6))
-              ? 'image/gif'
-              : null;
-    if (!mime) {
-      findings.add(
-        'asset-format',
-        'unsupported',
-        'PNG·JPEG·WebP·AVIF·GIF 이외의 첨부 자료는 아직 사용할 수 없어요.'
-      );
-      continue;
+    let image: { hash: string; mime: NativeTransferFile['images'][number]['mime']; bytes?: Buffer };
+    if (preparedAssets) {
+      const prepared = preparedAssets.get(uri);
+      if (!prepared) {
+        findings.add(
+          'asset-invalid',
+          'unsupported',
+          '읽을 수 없거나 처리 범위를 넘는 이미지는 제외해요.'
+        );
+        continue;
+      }
+      image = prepared;
+    } else {
+      const bytes = read();
+      // Some cards retain a .png asset name after converting its bytes to WebP.
+      const mime = bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+        ? 'image/png'
+        : bytes[0] === 255 && bytes[1] === 216
+          ? 'image/jpeg'
+          : bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP'
+            ? 'image/webp'
+            : bytes.toString('ascii', 4, 8) === 'ftyp'
+              ? 'image/avif'
+              : ['GIF87a', 'GIF89a'].includes(bytes.toString('ascii', 0, 6))
+                ? 'image/gif'
+                : null;
+      if (!mime) {
+        findings.add(
+          'asset-format',
+          'unsupported',
+          'PNG·JPEG·WebP·AVIF·GIF 이외의 첨부 자료는 아직 사용할 수 없어요.'
+        );
+        continue;
+      }
+      try {
+        image = decodeImage(mime, bytes.toString('base64'));
+      } catch (error) {
+        if (!(error instanceof HttpError)) throw error;
+        findings.add(
+          'asset-invalid',
+          'unsupported',
+          '읽을 수 없거나 처리 범위를 넘는 이미지는 제외해요.'
+        );
+        continue;
+      }
     }
-    let image: ReturnType<typeof decodeImage>;
-    try {
-      image = decodeImage(mime, bytes.toString('base64'));
-    } catch (error) {
-      if (!(error instanceof HttpError)) throw error;
-      findings.add(
-        'asset-invalid',
-        'unsupported',
-        '읽을 수 없거나 처리 범위를 넘는 이미지는 제외해요.'
-      );
-      continue;
-    }
-    if (!images.some((item) => item.hash === image.hash))
+    if (!included.has(image.hash)) {
+      included.add(image.hash);
       images.push({
         id: image.hash,
         hash: image.hash,
         revision: 1,
         mime: image.mime,
-        base64: image.bytes.toString('base64'),
+        ...(image.bytes ? { base64: image.bytes.toString('base64') } : {}),
       });
+    }
     const id = `image-${index}`;
     packageImages.push({
       id,

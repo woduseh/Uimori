@@ -25,6 +25,8 @@ test('pinned prompt failures preserve the safe code and point to chat settings, 
 
 test.each([
   [400, 'PACKAGE_START_TEXT_TOO_LONG', '2,000,000자'],
+  [413, 'RISU_IMPORT_TOO_LARGE', '512 MiB'],
+  [413, 'RISU_IMPORT_IMAGES_TOO_LARGE', '448 MiB'],
   [400, 'CHAT_TRANSCRIPT_INVALID_REQUEST', '요청 문장'],
   [400, 'CHAT_TRANSCRIPT_UNSUPPORTED_VERSION', '앱의 버전'],
   [409, 'MODEL_REQUIRED:translation-refusal', '번역 거절 판정'],

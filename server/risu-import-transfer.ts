@@ -7,6 +7,10 @@ import {
 } from '../core/native-transfer.js';
 import type { RisuImportPreview } from '../core/risu-import.js';
 import { prepareNativeTransfer } from './native-transfer.js';
+import {
+  validatePreparedNativeTransfer,
+  type PreparedNativeTransferFile,
+} from '../core/native-transfer-validation.js';
 import { string, type RisuCard, type RisuCardInput } from './risu-import-card.js';
 import type { RisuImportFindings } from './risu-import-findings.js';
 
@@ -14,6 +18,20 @@ import type { RisuImportFindings } from './risu-import-findings.js';
  * Assembles the transfer file the import applies and the preview the import screen shows. The
  * digest covers everything the reader agreed to, so a file or a finding that changed invalidates it.
  */
+type TransferInput = {
+  input: Pick<RisuCardInput, 'hash' | 'source' | 'kind'> & { format: RisuImportPreview['format'] };
+  card: RisuCard;
+  pkg: RisuContent;
+  title: string;
+  lore: RisuImportPreview['lore'];
+  findings: RisuImportFindings;
+};
+export function buildRisuTransfer(
+  value: TransferInput & { images: PreparedNativeTransferFile['images']; prepared: true }
+): { file: PreparedNativeTransferFile; preview: RisuImportPreview };
+export function buildRisuTransfer(
+  value: TransferInput & { images: NativeTransferFile['images']; prepared?: false }
+): { file: NativeTransferFile; preview: RisuImportPreview };
 export function buildRisuTransfer({
   input,
   card,
@@ -22,6 +40,7 @@ export function buildRisuTransfer({
   images,
   lore,
   findings,
+  prepared = false,
 }: {
   /** Every reader that reaches this builder: a character card or a module. */
   input: Pick<RisuCardInput, 'hash' | 'source' | 'kind'> & {
@@ -30,12 +49,13 @@ export function buildRisuTransfer({
   card: RisuCard;
   pkg: RisuContent;
   title: string;
-  images: NativeTransferFile['images'];
+  images: PreparedNativeTransferFile['images'];
   lore: RisuImportPreview['lore'];
   findings: RisuImportFindings;
-}): { file: NativeTransferFile; preview: RisuImportPreview } {
+  prepared?: boolean;
+}): { file: PreparedNativeTransferFile; preview: RisuImportPreview } {
   const { kind } = input;
-  const file: NativeTransferFile = {
+  const file: PreparedNativeTransferFile = {
     format: NATIVE_TRANSFER_FORMAT,
     version: NATIVE_TRANSFER_VERSION,
     roots: [{ kind: 'content', key: kind }],
@@ -60,7 +80,13 @@ export function buildRisuTransfer({
     prompts: [],
     images,
   };
-  const transfer = prepareNativeTransfer({ file });
+  const transfer = prepared
+    ? {
+        digest: createHash('sha256')
+          .update(JSON.stringify(validatePreparedNativeTransfer(file).file))
+          .digest('hex'),
+      }
+    : prepareNativeTransfer({ file });
   const digest = createHash('sha256')
     .update(
       JSON.stringify({ version: 8, transfer: transfer.digest, kind, findings: findings.list, lore })

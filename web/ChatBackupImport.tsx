@@ -7,7 +7,8 @@ import {
   type ChatBackup,
   type ChatBackupImport as ImportResult,
 } from '../core/chat-backup.js';
-import { api, ApiError } from './api.js';
+import { api, apiBinary, ApiError } from './api.js';
+import { NATIVE_ARCHIVE_MAX_BYTES, type NativeArchivePrepare } from '../core/native-archive.js';
 
 export function ChatBackupImport({
   onImported,
@@ -21,7 +22,8 @@ export function ChatBackupImport({
   disabled?: boolean;
 }) {
   const [selection, setSelection] = useState<{
-    backup: ChatBackup;
+    backup?: ChatBackup;
+    archive?: NativeArchivePrepare;
     requestKey: string;
   } | null>(null);
   const [reading, setReading] = useState(false);
@@ -56,8 +58,22 @@ export function ChatBackupImport({
     setReading(!!file);
     if (!file) return;
     try {
-      if (file.size > CHAT_BACKUP_MAX_BYTES)
-        throw new Error('채팅 백업은 256MB까지 가져올 수 있어요.');
+      const archive = /\.(?:uimori|zip)$/iu.test(file.name);
+      if (file.size > (archive ? NATIVE_ARCHIVE_MAX_BYTES : CHAT_BACKUP_MAX_BYTES))
+        throw new Error(
+          archive
+            ? '채팅 백업은 512MiB까지 가져올 수 있어요.'
+            : 'JSON 채팅 백업은 256MiB까지 가져올 수 있어요.'
+        );
+      if (archive) {
+        const upload = await apiBinary<{ uploadId: string }>('/uploads', file);
+        const preview = await api<NativeArchivePrepare>('/chats/prepare-backup-archive', {
+          uploadId: upload.uploadId,
+        });
+        if (current === version.current)
+          setSelection({ archive: preview, requestKey: crypto.randomUUID() });
+        return;
+      }
       const backup = JSON.parse(await file.text()) as ChatBackup;
       if (current !== version.current) return;
       if (backup?.format !== CHAT_BACKUP_FORMAT)
@@ -97,10 +113,15 @@ export function ChatBackupImport({
     setError('');
     setMessage('');
     try {
-      const result = await api<ImportResult>('/chats/import-backup', {
-        backup: selection.backup,
-        idempotencyKey: selection.requestKey,
-      });
+      const result = await api<ImportResult>(
+        selection.archive ? '/chats/import-backup-archive' : '/chats/import-backup',
+        {
+          ...(selection.archive
+            ? { preparedId: selection.archive.preparedId, digest: selection.archive.digest }
+            : { backup: selection.backup }),
+          idempotencyKey: selection.requestKey,
+        }
+      );
       setSelection(null);
       setUncertain(false);
       if (input.current) input.current.value = '';
@@ -142,7 +163,7 @@ export function ChatBackupImport({
             <input
               ref={input}
               type="file"
-              accept=".json,application/json"
+              accept=".json,application/json,.uimori,.zip,application/zip"
               aria-label="채팅 백업 파일 선택"
               aria-describedby={`${id}-help`}
               disabled={disabled || busy || reading || uncertain}
@@ -156,11 +177,13 @@ export function ChatBackupImport({
         {selection && (
           <div className="archive-file-summary">
             <p>
-              {selection.backup.title} · 채팅 {selection.backup.chats.length}개 · 본문{' '}
-              {selection.backup.chats.reduce(
-                (sum, chat) => sum + chat.transcript.entries.length,
-                0
-              )}
+              {selection.archive?.backup?.title ?? selection.backup!.title} · 채팅{' '}
+              {selection.archive?.backup?.chats ?? selection.backup!.chats.length}개 · 본문{' '}
+              {selection.archive?.backup?.sources ??
+                selection.backup!.chats.reduce(
+                  (sum, chat) => sum + chat.transcript.entries.length,
+                  0
+                )}
               개
             </p>
             <div className="archive-import-actions">

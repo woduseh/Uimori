@@ -17,7 +17,13 @@ import { AccessSessions, AccessSessionRateLimitError } from './access-session.js
 import { forkChat } from './chat-fork.js';
 import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
 import { exportManuscript, manuscriptExportMetadata } from './manuscript-export.js';
-import { exportChatBackup, importChatBackup } from './chat-backup.js';
+import {
+  exportChatBackup,
+  importChatBackup,
+  exportChatBackupArchive,
+  importChatBackupArchiveRequest,
+} from './chat-backup.js';
+import { prepareNativeArchiveRequest } from './native-transfer-archive.js';
 import { CHAT_BACKUP_MAX_BYTES } from '../core/chat-backup.js';
 import { validateVertexEndpoint, type Connection } from '../core/product.js';
 import { parseCatalog, validateConnection } from '../core/transport.js';
@@ -82,6 +88,20 @@ export function productRoutes(
       .header('Content-Disposition', 'attachment; filename="chat-backup.json"')
       .send(exportChatBackup(store, request.params.id))
   );
+  app.get<{ Params: { id: string } }>('/api/chats/:id/backup-archive', (request, reply) =>
+    reply
+      .type('application/zip')
+      .header('Content-Disposition', 'attachment; filename="chat-backup.uimori"')
+      .send(exportChatBackupArchive(store, request.params.id))
+  );
+  app.post('/api/chats/prepare-backup-archive', (request, reply) =>
+    prepareNativeArchiveRequest(store, request, reply, 'chat')
+  );
+  app.post('/api/chats/import-backup-archive', (request) => {
+    const result = importChatBackupArchiveRequest(store, request.body);
+    if (result.created) options.publish(result.chat.id);
+    return result;
+  });
   app.post(
     '/api/chats/import-backup',
     { bodyLimit: CHAT_BACKUP_MAX_BYTES + 1024 },

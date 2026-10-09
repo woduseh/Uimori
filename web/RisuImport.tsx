@@ -37,6 +37,8 @@ export function RisuImport({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const active = useRef(false);
+  const preparation = useRef<AbortController | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const [source, setSource] = useState<RisuImportSource | RisuImportStagedSource | null>(null);
   const [kind, setKind] = useState<RisuImportKind | ''>('');
   const [preview, setPreview] = useState<RisuImportPreview | null>(null);
@@ -72,11 +74,14 @@ export function RisuImport({
     if (active.current || uncertain) return;
     active.current = true;
     setBusy(true);
+    const controller = new AbortController();
+    preparation.current = controller;
+    setPreparing(true);
     setError('');
     setNotice('');
     try {
-      if (!/\.(charx|risum|json|zip)$/i.test(file.name))
-        throw new Error('.charx, .risum, 카드·모듈 JSON, 모듈 프로젝트 ZIP을 선택해 주세요.');
+      if (!/\.(charx|jpe?g|png|risum|json|zip)$/i.test(file.name))
+        throw new Error('v3 CHARX·JPEG·PNG·JSON, .risum 또는 모듈 프로젝트 ZIP을 선택해 주세요.');
       if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
       if (file.size > RISU_IMPORT_MAX_UPLOAD_BYTES)
         throw new Error(
@@ -86,11 +91,16 @@ export function RisuImport({
         setNotice(
           `${Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024)} MiB가 넘는 파일이라 먼저 올린 뒤 확인해요. 원본 사본은 앱에 보관하지 않아요.`
         );
-      const nextSource = await readSource(file);
-      const nextPreview = await api<RisuImportPreview>('/risu-imports/prepare', {
-        source: nextSource,
-        ...(kind ? { kind } : {}),
-      });
+      const nextSource = await readSource(file, controller.signal);
+      const nextPreview = await api<RisuImportPreview>(
+        '/risu-imports/prepare',
+        {
+          source: nextSource,
+          ...(kind ? { kind } : {}),
+        },
+        'POST',
+        controller.signal
+      );
       setSource(nextSource);
       setPreview(nextPreview);
       setImageHandoffIds(
@@ -103,8 +113,12 @@ export function RisuImport({
       submission.current = null;
       requestKey.current = null;
     } catch (cause) {
-      setError(`${(cause as Error).message}${preview ? ' 앞서 확인한 파일은 유지했어요.' : ''}`);
+      if (controller.signal.aborted) setNotice('자료 확인을 취소했어요.');
+      else
+        setError(`${(cause as Error).message}${preview ? ' 앞서 확인한 파일은 유지했어요.' : ''}`);
     } finally {
+      preparation.current = null;
+      setPreparing(false);
       active.current = false;
       setBusy(false);
     }
@@ -124,6 +138,7 @@ export function RisuImport({
     try {
       const nextPreview = await api<RisuImportPreview>('/risu-imports/prepare', {
         source,
+        ...(preview?.preparedId ? { preparedId: preview.preparedId } : {}),
         ...(nextKind ? { kind: nextKind } : {}),
       });
       setKind(nextKind);
@@ -170,6 +185,7 @@ export function RisuImport({
     if (active.current || !source || !preview || !ready || result) return;
     const payload = submission.current ?? {
       source,
+      ...(preview.preparedId ? { preparedId: preview.preparedId } : {}),
       ...(kind ? { kind } : {}),
       digest: preview.digest,
       allowPartial,
@@ -250,12 +266,12 @@ export function RisuImport({
             <span>
               {preview
                 ? source?.name
-                : '.charx · .risum · 카드·모듈 JSON · 모듈 프로젝트 ZIP · 최대 256 MiB'}
+                : `v3 CHARX·JPEG·PNG·JSON · .risum · 모듈 ZIP · 최대 ${Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024)} MiB`}
             </span>
             <input
               type="file"
               aria-label="Risu 파일 선택"
-              accept=".charx,.risum,.json,.zip,application/json,application/zip"
+              accept=".charx,.jpg,.jpeg,.png,.risum,.json,.zip,application/json,application/zip,image/png,image/jpeg"
               disabled={busy || uncertain}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -441,6 +457,11 @@ export function RisuImport({
             </>
           )}
           {busy && <p role="status">파일을 처리하고 있어요…</p>}
+          {preparing && (
+            <button type="button" onClick={() => preparation.current?.abort()}>
+              자료 확인 취소
+            </button>
+          )}
           {notice && <p role="status">{notice}</p>}
           {error && (
             <p className="error" role="alert">

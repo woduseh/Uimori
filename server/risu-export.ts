@@ -66,8 +66,26 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
     consumed = new Set<string>();
   let total = 0;
   const blobs = new Map<string, Buffer>();
+  const imagesById = new Map(pkg.images?.map((image) => [image.id, image]));
+  const nativeByUri = new Map<string, (typeof native.assets)[number]>();
+  const nativeByUriName = new Map<string, Map<string, (typeof native.assets)[number]>>();
+  const moduleByName = new Map<string, typeof native.assets>();
+  for (const asset of native.assets) {
+    if (!nativeByUri.has(asset.uri)) nativeByUri.set(asset.uri, asset);
+    let names = nativeByUriName.get(asset.uri);
+    if (!names) nativeByUriName.set(asset.uri, (names = new Map()));
+    if (!names.has(asset.name)) names.set(asset.name, asset);
+    if (
+      asset.uri.startsWith('embeded://module-assets/') ||
+      asset.uri.startsWith('embeded://__risu_module__/module-assets/')
+    ) {
+      const entries = moduleByName.get(asset.name) ?? [];
+      entries.push(asset);
+      moduleByName.set(asset.name, entries);
+    }
+  }
   const imageBytes = (imageId: string) => {
-    const image = pkg.images?.find((item) => item.id === imageId);
+    const image = imagesById.get(imageId);
     if (!image) return failAsset();
     if (!blobs.has(image.blobHash)) {
       const blob = readImage(product.db, image.blobHash);
@@ -98,8 +116,9 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
     if (typeof asset.uri !== 'string') return failAsset();
     if (/^(?:embeded|embedded):\/\//iu.test(asset.uri)) {
       const match =
-        native.assets.find((item) => item.uri === asset.uri && item.name === asset.name) ??
-        native.assets.find((item) => item.uri === asset.uri);
+        (typeof asset.name === 'string'
+          ? nativeByUriName.get(asset.uri)?.get(asset.name)
+          : undefined) ?? nativeByUri.get(asset.uri);
       if (!match) return failAsset();
       add(asset.uri.replace(/^(?:embeded|embedded):\/\//iu, ''), imageBytes(match.imageId).bytes);
     } else if (!/^(?:https?:\/\/|data:)/iu.test(asset.uri)) {
@@ -117,11 +136,7 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
     const bytes = metadata.map((entry) => {
       if (!Array.isArray(entry) || typeof entry[0] !== 'string' || typeof entry[1] !== 'string')
         return failAsset();
-      const matches = native.assets.filter(
-        (item) =>
-          /^embeded:\/\/(?:__risu_module__\/)?module-assets\//u.test(item.uri) &&
-          item.name === entry[0]
-      );
+      const matches = moduleByName.get(entry[0]) ?? [];
       if (matches.length !== 1) return failAsset();
       const match = matches[0];
       moduleImageIds.add(match.imageId);
@@ -143,11 +158,12 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
       module.icon = `data:${portrait.image.mime};base64,${portrait.bytes.toString('base64')}`;
     }
     if (standalone) {
+      const metadataNames = new Set(metadata.filter(Array.isArray).map((entry) => entry[0]));
       for (const image of pkg.images ?? []) {
         if (consumed.has(image.id)) continue;
-        if (metadata.some((entry) => Array.isArray(entry) && entry[0] === image.title))
-          throw new HttpError(409, 'RISU_EXPORT_MODULE_CONFLICT');
+        if (metadataNames.has(image.title)) throw new HttpError(409, 'RISU_EXPORT_MODULE_CONFLICT');
         metadata.push([image.title, '', extension(image)]);
+        metadataNames.add(image.title);
         bytes.push(imageBytes(image.id).bytes);
       }
       module.assets = metadata;

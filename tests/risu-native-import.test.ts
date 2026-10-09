@@ -214,9 +214,13 @@ test('import preparation returns actionable greeting size errors through the app
       url: '/api/risu-imports/prepare',
       payload: {
         source: sourceOf({
-          name: 'Greeting size fixture',
-          description: '',
-          first_mes: 'a'.repeat(SOURCE_TEXT_MAX_CHARS + 1),
+          spec: 'chara_card_v3',
+          spec_version: '3.0',
+          data: {
+            name: 'Greeting size fixture',
+            description: '',
+            first_mes: 'a'.repeat(SOURCE_TEXT_MAX_CHARS + 1),
+          },
         }),
       },
     });

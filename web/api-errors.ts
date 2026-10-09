@@ -1,5 +1,9 @@
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import {
+  RISU_IMPORT_MAX_UPLOAD_BYTES,
+  RISU_IMPORT_MAX_PREPARED_BYTES,
+} from '../core/risu-import.js';
 
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
@@ -35,10 +39,16 @@ const messages: Record<string, string> = {
   RISU_PRESET_VERSION_UNSUPPORTED:
     '이 프리셋 바이너리 버전은 아직 지원하지 않아요. RisuToki에서 프로젝트로 추출한 ZIP도 가져올 수 있어요.',
   RISU_IMPORT_INVALID_FILE:
-    '지원하는 캐릭터 카드·Risu 모듈 JSON 또는 올바른 .charx 파일인지 확인해 주세요.',
-  RISU_IMPORT_TOO_LARGE: '캐릭터 카드 파일은 256 MiB 이하여야 해요.',
+    'v3 CHARX·JPEG·PNG·JSON 또는 Risu 모듈 파일인지, 파일 구조와 처리 한도가 맞는지 확인해 주세요.',
+  RISU_IMPORT_TOO_LARGE: `캐릭터 카드 파일은 ${RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024} MiB 이하여야 해요.`,
+  RISU_IMPORT_IMAGES_TOO_LARGE: `저장할 이미지 합계가 ${RISU_IMPORT_MAX_PREPARED_BYTES / 1024 / 1024} MiB를 넘어요. 첨부 이미지를 줄인 파일을 선택해 주세요.`,
   PACKAGE_START_TEXT_TOO_LONG: `시작문 하나가 ${SOURCE_TEXT_MAX_CHARS.toLocaleString('en-US')}자 저장 상한을 넘었어요. 기본 시작문과 대체 시작문의 길이를 확인해 주세요.`,
-  UPLOAD_TOO_LARGE: '올릴 수 있는 파일은 256 MiB 이하예요.',
+  UPLOAD_TOO_LARGE: `올릴 수 있는 파일은 ${RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024} MiB 이하예요.`,
+  RISU_IMPORT_V3_REQUIRED: 'Character Card v3 파일을 선택해 주세요. v2 카드는 지원하지 않아요.',
+  RISU_IMPORT_V2_UNSUPPORTED: 'Character Card v3 파일을 선택해 주세요. v2 카드는 지원하지 않아요.',
+  RISU_IMPORT_PREPARED_NOT_FOUND: '검토한 자료가 만료됐어요. 파일을 다시 선택해 주세요.',
+  RISU_IMPORT_CANCELLED: '자료 확인을 취소했어요.',
+  RISU_IMPORT_BUSY: '다른 자료를 준비하고 있어요. 완료 후 다시 시도해 주세요.',
   UPLOAD_EMPTY: '빈 파일은 올릴 수 없어요. 파일을 다시 선택해 주세요.',
   UPLOAD_NOT_FOUND:
     '올려 둔 파일을 찾을 수 없어요. 검토 시간이 길어져 정리됐을 수 있으니 파일을 다시 선택해 주세요.',

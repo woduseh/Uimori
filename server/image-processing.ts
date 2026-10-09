@@ -41,6 +41,8 @@ export async function processImage(bytes: Buffer): Promise<ProcessedImage> {
       throw new HttpError(400, '이미지 해상도나 전체 애니메이션 프레임 크기가 처리 범위를 넘어요.');
     if (!['png', 'jpeg', 'webp', 'gif', 'heif', 'avif', 'tiff'].includes(metadata.format ?? ''))
       throw new HttpError(400, '지원하지 않는 이미지 형식이에요.');
+    // Metadata alone accepts a damaged WebP bitstream. Decode without creating another encoding.
+    if (metadata.format === 'webp') await input.raw().toBuffer();
     const output =
       metadata.format === 'webp'
         ? bytes

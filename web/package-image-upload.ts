@@ -1,7 +1,8 @@
+import { RISU_ASSET_MAX } from '../core/risu-limits.js';
 import { PACKAGE_IMAGE_MIMES, type PackageImage } from '../core/package-images.js';
 import { sessionRequiredEvent } from './api.js';
 
-export const maxPackageImages = 2000;
+export const maxPackageImages = RISU_ASSET_MAX;
 
 /** Shared authoring upload: server validates immutable image bytes; callers own draft attachment. */
 export async function uploadPackageImage(

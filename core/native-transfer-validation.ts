@@ -1,3 +1,4 @@
+import { RISU_AGGREGATE_IMAGES_MAX } from './risu-limits.js';
 import { validateRisuContent, type RisuContent } from './risu-content.js';
 import { SOURCE_TEXT_MAX_CHARS } from './content-limits.js';
 import { IDENTITY_PATTERN } from './identity.js';
@@ -79,8 +80,24 @@ export type ValidatedNativeTransfer = {
   warnings: NativeTransferPrepare['warnings'];
 };
 
+export type PreparedNativeTransferFile = Omit<NativeTransferFile, 'images'> & {
+  images: Omit<NativeTransferFile['images'][number], 'base64'>[];
+};
+export type ValidatedPreparedNativeTransfer = Omit<ValidatedNativeTransfer, 'file'> & {
+  file: PreparedNativeTransferFile;
+};
 /** Structural, metadata and graph validation only. No destination lookup, evaluation or writes. */
 export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer {
+  return validateTransfer<NativeTransferFile>(value, false);
+}
+/** Internal prepared blobs are validated by the image owner before this metadata-only boundary. */
+export function validatePreparedNativeTransfer(value: unknown): ValidatedPreparedNativeTransfer {
+  return validateTransfer<PreparedNativeTransferFile>(value, true);
+}
+function validateTransfer<T extends NativeTransferFile | PreparedNativeTransferFile>(
+  value: unknown,
+  preparedImages: boolean
+): Omit<ValidatedNativeTransfer, 'file'> & { file: T } {
   const raw = object(value, ['format', 'version', 'roots', 'contents', 'prompts', 'images']);
   if (raw.format !== NATIVE_TRANSFER_FORMAT || raw.version !== NATIVE_TRANSFER_VERSION)
     fail('FORMAT');
@@ -89,7 +106,7 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
   if (contents.length + prompts.length > 1000) fail('ENTRY_LIMIT');
   const roots = list(raw.roots, 1000);
   if (!roots.length) fail('ROOTS');
-  const images = list(raw.images, 10_000);
+  const images = list(raw.images, RISU_AGGREGATE_IMAGES_MAX);
   for (const entry of contents) {
     object(entry, ['key', 'source', 'modules', 'origin']);
     identity(entry.key);
@@ -251,7 +268,12 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
       expectedImages.set(image.blobHash, image.mime);
     }
   for (const image of images) {
-    object(image, ['id', 'revision', 'hash', 'mime', 'base64']);
+    object(
+      image,
+      preparedImages
+        ? ['id', 'revision', 'hash', 'mime']
+        : ['id', 'revision', 'hash', 'mime', 'base64']
+    );
     if (
       typeof image.hash !== 'string' ||
       !/^[a-f0-9]{64}$/u.test(image.hash) ||
@@ -261,13 +283,13 @@ export function validateNativeTransfer(value: unknown): ValidatedNativeTransfer 
       (expectedImages.has(image.hash) && expectedImages.get(image.hash) !== image.mime)
     )
       fail('IMAGE_REFERENCES');
-    text(image.base64, 90 * 1024 * 1024);
+    if (!preparedImages) text(image.base64, 90 * 1024 * 1024);
   }
   unique(images.map((image) => image.hash));
   const includedImages = new Set(images.map((image) => image.hash));
   if ([...expectedImages.keys()].some((hash) => !includedImages.has(hash)))
     fail('IMAGE_REFERENCES');
-  const file = structuredClone(raw) as NativeTransferFile;
+  const file = structuredClone(raw) as T;
   const entries: NativeTransferPrepare['entries'] = [
     ...file.contents.map((entry) => ({
       key: entry.key,

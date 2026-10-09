@@ -33,7 +33,8 @@ const restoredAnchor = (
 /** Capture the displayed result, including the old successful image during a new render. */
 export function captureIllustrations(
   store: Store,
-  history: { revision: string }[]
+  history: { revision: string }[],
+  binary = false
 ): PortableIllustration[] {
   const result: PortableIllustration[] = [];
   for (const [entry, reference] of history.entries()) {
@@ -42,7 +43,7 @@ export function captureIllustrations(
     const presentation = illustrationPresentation(store, source.id, source.hash);
     const translation = successfulTranslation(store, source);
     const rows = store.db
-      .prepare(`SELECT j.id,j.source_hash,j.input,i.position,i.mime,i.body,b.bytes FROM illustration_jobs j
+      .prepare(`SELECT j.id,j.source_hash,j.input,i.position,i.mime,i.body,i.hash${binary ? '' : ',b.bytes'} FROM illustration_jobs j
       JOIN illustration_images i ON i.job_id=j.id JOIN image_blobs b ON b.hash=i.hash
       WHERE j.source_revision=? AND j.status='completed' ORDER BY j.created_at,j.id,i.position`)
       .all(source.id);
@@ -68,7 +69,9 @@ export function captureIllustrations(
         group: String(row.id),
         position: Number(row.position),
         mime: row.mime as 'image/webp',
-        base64: Buffer.from(row.bytes as Uint8Array).toString('base64'),
+        base64: binary
+          ? `archive:${String(row.hash)}`
+          : Buffer.from(row.bytes as Uint8Array).toString('base64'),
         title: String(body.caption ?? ''),
         ...(body.width && body.height ? { width: body.width, height: body.height } : {}),
         ...(stale ? { stale: true, sourceHash: String(row.source_hash) } : {}),
@@ -93,7 +96,8 @@ export function captureIllustrations(
 export function restoreIllustrations(
   store: Store,
   history: { revision: string }[],
-  images: PortableIllustration[]
+  images: PortableIllustration[],
+  readBinary?: (reference: string) => Buffer
 ): void {
   const groups = new Map<string, PortableIllustration[]>();
   for (const [index, image] of images.entries()) {
@@ -162,7 +166,7 @@ export function restoreIllustrations(
         time
       );
     for (const [position, image] of group.entries()) {
-      const bytes = Buffer.from(image.base64, 'base64');
+      const bytes = readBinary ? readBinary(image.base64) : Buffer.from(image.base64, 'base64');
       const imageHash = hash(bytes);
       storeImage(store.db, { hash: imageHash, mime: image.mime, bytes });
       store.db

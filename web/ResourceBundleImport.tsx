@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from './api.js';
+import { api, apiBinary } from './api.js';
+import { NATIVE_ARCHIVE_MAX_BYTES, type NativeArchivePrepare } from '../core/native-archive.js';
 import type {
   NativeTransferFile,
   NativeTransferPrepare,
@@ -14,7 +15,8 @@ export function ResourceBundleImport({
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [selection, setSelection] = useState<{
-    file: NativeTransferFile;
+    file?: NativeTransferFile;
+    preparedId?: string;
     preview: NativeTransferPrepare;
     key: string;
   }>();
@@ -45,7 +47,7 @@ export function ResourceBundleImport({
         <input
           type="file"
           aria-label="Uimori 자료 백업 파일"
-          accept="application/json,.json"
+          accept="application/json,.json,application/zip,.uimori,.zip"
           disabled={busy}
           onChange={async (event) => {
             const file = event.target.files?.[0];
@@ -56,8 +58,27 @@ export function ResourceBundleImport({
             if (!file) return;
             setBusy(true);
             try {
-              if (file.size > 256 * 1024 * 1024)
-                throw new Error('자료 백업은 256MiB 이하 파일을 사용해 주세요.');
+              const archive = /\.(?:uimori|zip)$/iu.test(file.name);
+              if (file.size > (archive ? NATIVE_ARCHIVE_MAX_BYTES : 256 * 1024 * 1024))
+                throw new Error(
+                  archive
+                    ? '자료 백업은 512MiB 이하 파일을 사용해 주세요.'
+                    : 'JSON 자료 백업은 256MiB 이하 파일을 사용해 주세요.'
+                );
+              if (archive) {
+                const upload = await apiBinary<{ uploadId: string }>('/uploads', file);
+                const preview = await api<NativeArchivePrepare>(
+                  '/native-transfers/prepare-archive',
+                  { uploadId: upload.uploadId }
+                );
+                if (current === serial.current)
+                  setSelection({
+                    preparedId: preview.preparedId,
+                    preview,
+                    key: crypto.randomUUID(),
+                  });
+                return;
+              }
               const value = JSON.parse(await file.text()) as NativeTransferFile;
               const preview = await api<NativeTransferPrepare>('/native-transfers/prepare', {
                 file: value,
@@ -88,12 +109,19 @@ export function ResourceBundleImport({
             setBusy(true);
             setError('');
             try {
-              const result = await api<NativeTransferReceipt>('/native-transfers/apply', {
-                file: selection.file,
-                digest: selection.preview.digest,
-                idempotencyKey: selection.key,
-                modelBindings: [],
-              });
+              const result = await api<NativeTransferReceipt>(
+                selection.preparedId
+                  ? '/native-transfers/apply-archive'
+                  : '/native-transfers/apply',
+                {
+                  ...(selection.preparedId
+                    ? { preparedId: selection.preparedId }
+                    : { file: selection.file }),
+                  digest: selection.preview.digest,
+                  idempotencyKey: selection.key,
+                  modelBindings: [],
+                }
+              );
               setSelection(undefined);
               setMessage(`${result.items.length}개 자료를 추가했어요.`);
               await onImported();

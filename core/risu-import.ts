@@ -1,9 +1,10 @@
 import type { NativeTransferReceipt } from './native-transfer.js';
 import type { Chat } from './types.js';
+import { RISU_ASSET_MAX, RISU_ZIP_MEMBERS_MAX } from './risu-limits.js';
 
 export const RISU_IMPORT_MAX_BYTES = 24 * 1024 * 1024;
 /** How many assets one container may declare, across its metadata and its stored files. */
-export const RISU_IMPORT_MAX_ASSETS = 2000;
+export const RISU_IMPORT_MAX_ASSETS = RISU_ASSET_MAX;
 /** How many lore entries one module or card lorebook may declare. */
 export const RISU_IMPORT_MAX_LORE_ENTRIES = 2000;
 /** Small containers may expand this far; larger ones also keep a bounded expansion ratio. */
@@ -11,16 +12,23 @@ export const RISU_IMPORT_MAX_CONTAINER_BYTES = 64 * 1024 * 1024;
 /** One entry inside a container never expands past this, so no single member can be huge. */
 export const RISU_IMPORT_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
 /** How many members a ZIP container may declare. */
-export const RISU_IMPORT_MAX_ZIP_MEMBERS = 4096;
+export const RISU_IMPORT_MAX_ZIP_MEMBERS = RISU_ZIP_MEMBERS_MAX;
 /** The card or module JSON document read out of a container stays a parseable size. */
 export const RISU_IMPORT_MAX_JSON_BYTES = 8 * 1024 * 1024;
 export type RisuImportSource = { name: string; base64: string; uploadId?: undefined };
 /** A staged upload keeps a large container out of the request body and the import receipt. */
 export type RisuImportStagedSource = { name: string; uploadId: string; base64?: undefined };
 /** Above this size the app reads a staged file and records the original's identity only. */
-export const RISU_IMPORT_MAX_UPLOAD_BYTES = 256 * 1024 * 1024;
+export const RISU_IMPORT_MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
+/** Disk-backed preparation still bounds actual decompressed and converted bytes. */
+export const RISU_IMPORT_MAX_EXPANDED_BYTES = 1024 * 1024 * 1024;
+/** Leave room for manifest and ZIP records when one card is backed up in a 512 MiB archive. */
+export const RISU_IMPORT_MAX_PREPARED_BYTES = 448 * 1024 * 1024;
 export const risuImportExpandedLimit = (containerBytes: number): number =>
-  Math.max(RISU_IMPORT_MAX_CONTAINER_BYTES, containerBytes * 4);
+  Math.min(
+    RISU_IMPORT_MAX_EXPANDED_BYTES,
+    Math.max(RISU_IMPORT_MAX_CONTAINER_BYTES, containerBytes * 4)
+  );
 export type RisuImportKind = 'bot' | 'persona' | 'module';
 export type RisuImportFinding = {
   code: string;
@@ -28,6 +36,8 @@ export type RisuImportFinding = {
   message: string;
 };
 export type RisuImportPreview = {
+  /** The server owns this short-lived, fully checked preparation. */
+  preparedId?: string;
   kind: RisuImportKind;
   digest: string;
   title: string;
@@ -35,6 +45,7 @@ export type RisuImportPreview = {
   format:
     | 'charx'
     | 'character-card-json'
+    | 'character-card-png'
     | 'risu-module-json'
     | 'risu-module-project-zip'
     | 'risu-module-binary';
@@ -52,6 +63,7 @@ export type RisuImportPreview = {
   findings: RisuImportFinding[];
 };
 export type RisuImportApply = {
+  preparedId?: string;
   source: RisuImportSource | RisuImportStagedSource;
   kind?: RisuImportKind;
   digest: string;

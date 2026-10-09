@@ -1,8 +1,10 @@
 import type { CharacterCardV3, CharacterCardV3Asset, LorebookEntry } from './compat/risu/types.js';
-import type { readCharacterCard } from './character-card-file.js';
+import type { readCharacterCard, readCharacterCardPath } from './character-card-file.js';
 
 /** The parsed card and the identity of the file it came from, as the reader hands it over. */
-export type RisuCardInput = ReturnType<typeof readCharacterCard>;
+export type RisuCardInput =
+  | ReturnType<typeof readCharacterCard>
+  | Awaited<ReturnType<typeof readCharacterCardPath>>;
 
 /**
  * A card as the importer reads it: every spec field optional and every other field still readable,
