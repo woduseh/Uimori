@@ -661,7 +661,7 @@ function SourceReaderContent({
                   css={displayedNative?.css}
                   onAction={nativeAction}
                   disabled={presentation?.pending}
-                  revisionKey={`${source.id}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
+                  revisionKey={`${source.id}:${source.hash}:${projected.nativeAction?.expectedHeadRevision ?? ''}:${projected.nativeAction?.expectedVariableRevision ?? ''}`}
                   onIllustrationAnchors={receiveNativeAnchors}
                   illustrations={(nativeAnchors.html === displayedNative?.html
                     ? nativeAnchors.anchors

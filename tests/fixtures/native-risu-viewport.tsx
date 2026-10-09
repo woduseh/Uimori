@@ -21,11 +21,13 @@ export function mount() {
     const [enabled, setEnabled] = useState(true);
     const [showPreview, setShowPreview] = useState(false);
     const [calls, setCalls] = useState(0);
-    const presentation = usePackagePresentation(source, undefined, enabled, '');
+    const [refresh, setRefresh] = useState(0);
+    const presentation = usePackagePresentation(source, undefined, enabled, String(refresh));
     return (
       <>
         <button onClick={() => setEnabled((value) => !value)}>Toggle presentation</button>
         <button onClick={() => setShowPreview((value) => !value)}>Toggle preview</button>
+        <button onClick={() => setRefresh((value) => value + 1)}>Refresh native revision</button>
         <output aria-label="Presentation status">
           {presentation?.pending ? 'pending' : 'ready'}
         </output>
@@ -35,7 +37,7 @@ export function mount() {
             <RisuMessageSurface
               html={presentation.data.original.html}
               css={presentation.data.original.css}
-              revisionKey={presentation.key}
+              revisionKey={`${source.id}:${presentation.data.nativeAction?.expectedHeadRevision ?? ''}:${presentation.data.nativeAction?.expectedVariableRevision ?? ''}`}
               disabled={presentation.pending}
               onAction={async () => {
                 setCalls((value) => value + 1);
