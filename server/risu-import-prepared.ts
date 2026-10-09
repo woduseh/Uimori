@@ -5,6 +5,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -45,7 +46,12 @@ function pathFor(dbPath: string, id: string) {
 }
 export function deletePreparedRisuImport(dbPath: string, id: string) {
   const path = pathFor(dbPath, id);
-  if (!active.has(path)) rmSync(path, { recursive: true, force: true });
+  if (active.has(path)) return;
+  try {
+    rmSync(path, { recursive: true, force: true });
+  } catch {
+    // A cleanup failure must not undo a successful response; expiry pruning retries it.
+  }
 }
 export function readPreparedRisuImport(dbPath: string, id: string): PreparedRisuImport {
   const path = pathFor(dbPath, id);
@@ -191,6 +197,34 @@ export async function prepareStoredRisuImport(
   if (body.preparedId) {
     const prior = readPreparedRisuImport(dbPath, body.preparedId);
     if (prior.requestedKind === body.kind) return prior.preview;
+    const workspace = pathFor(dbPath, prior.id);
+    const release = acquireImportPreparation(signal);
+    active.add(workspace);
+    try {
+      await worker(
+        {
+          path: '',
+          name: prior.sourceName,
+          kind: body.kind,
+          directory: workspace,
+          id: prior.id,
+          reproject: true,
+        },
+        signal
+      );
+      checkImportPreparation(signal);
+      // Publish only completed metadata. Failed/cancelled reviews keep the previous manifest.
+      renameSync(join(workspace, 'manifest.next.json'), join(workspace, 'manifest.json'));
+      return readPreparedRisuImport(dbPath, prior.id).preview;
+    } finally {
+      try {
+        rmSync(join(workspace, 'manifest.next.json'), { force: true });
+      } catch {
+        // Any abandoned candidate expires with its workspace.
+      }
+      active.delete(workspace);
+      release();
+    }
   }
   const id = randomBytes(16).toString('hex');
   const workspace = pathFor(dbPath, id);
@@ -199,27 +233,6 @@ export async function prepareStoredRisuImport(
     prunePreparedRisuImports(dbPath);
     mkdirSync(workspace, { recursive: true });
     active.add(workspace);
-    if (body.preparedId) {
-      const previous = readPreparedRisuImport(dbPath, body.preparedId);
-      const previousDirectory = pathFor(dbPath, body.preparedId);
-      active.add(previousDirectory);
-      try {
-        await worker(
-          {
-            path: '',
-            name: previous.sourceName,
-            kind: body.kind,
-            directory: workspace,
-            id,
-            previousDirectory,
-          },
-          signal
-        );
-      } finally {
-        active.delete(previousDirectory);
-      }
-      return readPreparedRisuImport(dbPath, id).preview;
-    }
     const source = record(body.source);
     let sourcePath: string;
     let name: string;

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { copyFileSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readCharacterCardPath } from './character-card-file.js';
 import { analyzeNativeRisuImport } from './risu-native-import.js';
@@ -22,12 +22,12 @@ export async function prepareRisuInWorker(input: {
   kind?: RisuImportKind;
   directory: string;
   id: string;
-  previousDirectory?: string;
+  reproject?: boolean;
 }): Promise<void> {
-  if (input.previousDirectory) {
-    const cached = JSON.parse(readFileSync(join(input.previousDirectory, 'input.json'), 'utf8'));
+  if (input.reproject) {
+    const cached = JSON.parse(readFileSync(join(input.directory, 'input.json'), 'utf8'));
     const previous = JSON.parse(
-      readFileSync(join(input.previousDirectory, 'manifest.json'), 'utf8')
+      readFileSync(join(input.directory, 'manifest.json'), 'utf8')
     ) as PreparedRisuImport;
     const card = {
       ...cached.card,
@@ -35,14 +35,8 @@ export async function prepareRisuInWorker(input: {
       members: new Map(cached.memberKeys.map((key: string) => [key, () => Buffer.alloc(0)])),
     };
     const analyzed = analyzeNativeRisuImport(card, new Map(cached.assets));
-    const images = previous.images.map((image) => {
-      const path = join(input.directory, `${image.hash}.image`);
-      copyFileSync(join(input.previousDirectory!, `${image.hash}.image`), path);
-      return { ...image, path };
-    });
-    writeFileSync(join(input.directory, 'input.json'), JSON.stringify(cached), { flag: 'wx' });
     writeFileSync(
-      join(input.directory, 'manifest.json'),
+      join(input.directory, 'manifest.next.json'),
       JSON.stringify({
         ...previous,
         id: input.id,
@@ -50,10 +44,10 @@ export async function prepareRisuInWorker(input: {
         createdAt: Date.now(),
         file: analyzed.file,
         preview: { ...analyzed.preview, preparedId: input.id },
-        images,
+        images: previous.images,
         transferDigest: bundleDigest(analyzed.file),
       }),
-      { flag: 'wx' }
+      { flag: 'w' }
     );
     return;
   }

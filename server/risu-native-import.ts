@@ -1,7 +1,6 @@
 import type { RisuContent } from '../core/risu-content.js';
 import type { RisuContentSource } from '../core/risu-native.js';
 import { nativeRisuTriggers } from '../core/risu-native.js';
-import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { importRisuAssets, type PreparedRisuAsset } from './risu-import-assets.js';
 import { object, string, type RisuCard, type RisuCardInput } from './risu-import-card.js';
 import { createRisuImportFindings } from './risu-import-findings.js';
@@ -89,8 +88,8 @@ export function analyzeNativeRisuImport(
   if (input.source.base64 === undefined)
     findings.add(
       'source-file-not-retained',
-      'warning',
-      `원본 컨테이너가 ${Math.ceil(RISU_IMPORT_MAX_BYTES / 1024 / 1024)} MiB를 넘어 파일 사본은 보관하지 않아요. 카드·모듈 원문과 지원되는 에셋은 자료에 보존해요. 원본 파일 지문: ${input.hash}`
+      'info',
+      '카드·모듈 원문과 지원 이미지는 자료에 보존해요. 원본 파일 자체가 필요하면 직접 보관해 주세요.'
     );
   findings.add(
     'native-risu',

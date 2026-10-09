@@ -739,8 +739,8 @@ test('a container beyond the inline limit is staged on disk, imported, and never
     const notRetained = preview.findings.find(
       (finding: { code: string }) => finding.code === 'source-file-not-retained'
     );
-    expect(notRetained.level).toBe('warning');
-    expect(notRetained.message).toContain(sha256);
+    expect(notRetained.level).toBe('info');
+    expect(notRetained.message).not.toMatch(/24\s*MiB|넘어/u);
 
     const applied = await app.inject({
       method: 'POST',
@@ -756,6 +756,7 @@ test('a container beyond the inline limit is staged on disk, imported, and never
     const receipt = applied.json().receipt;
     const content = store.product.get<Content>('content', receipt.items[0].id);
     expect(content.title).toBe('Synthetic Pilot');
+    expect(content.package!.nativeRisu!.sourceHash).toBe(sha256);
     // The registered material carries no copy of the original container.
 
     expect(existsSync(join(uploadDirectory(store.path), `${uploadId}.bin`))).toBe(false);

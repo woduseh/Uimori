@@ -184,8 +184,13 @@ export function risuImportRoutes(app: FastifyInstance, store: Store) {
     const result = await applyRisuImport(store, request.body, readStaged);
     const source = record(record(request.body).source);
     // The staged file has served its purpose once the material is registered.
-    if (result.receipt.created && typeof source.uploadId === 'string')
-      deleteUpload(store.path, source.uploadId);
+    if (result.receipt.created && typeof source.uploadId === 'string') {
+      try {
+        deleteUpload(store.path, source.uploadId);
+      } catch {
+        // The import is committed; upload expiry cleanup retries a locked file.
+      }
+    }
     return reply.code(result.receipt.created ? 201 : 200).send(result);
   });
 }
