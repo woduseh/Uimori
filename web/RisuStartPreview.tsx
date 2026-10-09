@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { Content } from '../core/product.js';
 import { api } from './api.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
+import { useWindowViewport } from './window-viewport.js';
 
 export function RisuStartPreview({
   content,
@@ -13,33 +14,43 @@ export function RisuStartPreview({
   startId: string;
   userName?: string;
 }) {
-  const [preview, setPreview] = useState<{ html: string; css: string; issues: string[] } | null>(
-    null
-  );
+  const viewport = useWindowViewport();
+  const identity = `${content.id}:${content.revision}:${startId}:${userName ?? ''}`;
+  const [preview, setPreview] = useState<{
+    identity: string;
+    html: string;
+    css: string;
+    issues: string[];
+  } | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
-    let active = true;
-    setPreview(null);
+    const controller = new AbortController();
     setError('');
     const query = new URLSearchParams({
       revision: String(content.revision),
       startId,
       ...(userName ? { userName } : {}),
+      ...(viewport
+        ? { viewportWidth: String(viewport.width), viewportHeight: String(viewport.height) }
+        : {}),
     });
     void api<{ html: string; css: string; issues: string[] }>(
-      `/content/${encodeURIComponent(content.id)}/risu-preview?${query}`
+      `/content/${encodeURIComponent(content.id)}/risu-preview?${query}`,
+      undefined,
+      'GET',
+      controller.signal
     )
       .then((value) => {
-        if (active) setPreview(value);
+        if (!controller.signal.aborted) setPreview({ identity, ...value });
       })
       .catch((caught: Error) => {
-        if (active) setError(caught.message);
+        if (!controller.signal.aborted) setError(caught.message);
       });
     return () => {
-      active = false;
+      controller.abort();
     };
-  }, [content.id, content.revision, startId, userName]);
-  if (!preview || error)
+  }, [content.id, content.revision, startId, userName, identity, viewport]);
+  if (!preview || preview.identity !== identity || error)
     return (
       <LoadingState
         compact

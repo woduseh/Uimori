@@ -6,12 +6,14 @@ import { buildPackagePresentation } from './package-presentation.js';
 import { nativeSourceSnapshot } from './risu-native-actions.js';
 import { nativeImageDisplayText } from './risu-native-images.js';
 import { readRunSnapshot } from './run-projections.js';
+import { readDisplayViewport } from './display-viewport.js';
 
 export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { id: string; sourceId: string }; Querystring: Record<string, unknown> }>(
     '/api/chats/:id/sources/:sourceId/presentation',
     async (request) => {
-      fields(record(request.query), []);
+      fields(record(request.query), ['viewportWidth', 'viewportHeight']);
+      const viewport = readDisplayViewport(request.query);
       store.chat(request.params.id);
       const source = store.source(request.params.sourceId);
       if (source.chatId !== request.params.id) throw new HttpError(404, 'Source not found');
@@ -56,16 +58,17 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
         const primary = messages.find((message) => message.primary);
         const imageView =
           primary?.text === source.text
-            ? await nativeImageDisplayText(store, live.snapshot, source.id)
+            ? await nativeImageDisplayText(store, live.snapshot, source.id, 'original', viewport)
             : { text: primary?.text ?? '', issues: [] };
         if (primary) primary.text = imageView.text;
         const imageTranslation = translation
-          ? await nativeImageDisplayText(store, live.snapshot, source.id, 'translation')
+          ? await nativeImageDisplayText(store, live.snapshot, source.id, 'translation', viewport)
           : undefined;
         const presentation = await buildPackagePresentation(
           live.snapshot,
           { ...source, ...(translation ? { translation } : {}) },
           {
+            viewport,
             nativeMessages: messages,
             ...(imageTranslation?.text ? { nativeTranslationText: imageTranslation.text } : {}),
           }

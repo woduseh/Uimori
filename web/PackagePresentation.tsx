@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Job, Source } from '../core/types.js';
+import { useWindowViewport } from './window-viewport.js';
 
 export type PackagePresentation = {
   sourceRevision: string;
@@ -35,9 +36,10 @@ export function usePackagePresentation(
   enabled: boolean,
   refreshKey: string
 ) {
+  const viewport = useWindowViewport(enabled);
   const sourceIdentity = `${source.chatId}:${source.id}`;
   const identity = `${sourceIdentity}:${source.hash}:${translation?.id ?? ''}:${translation?.revision ?? 0}:${translation?.status ?? ''}`;
-  const key = `${identity}:${refreshKey}`;
+  const key = `${identity}:${refreshKey}:${viewport?.width ?? ''}:${viewport?.height ?? ''}`;
   const sequence = useRef(0);
   const [result, setResult] = useState<{
     key: string;
@@ -52,8 +54,16 @@ export function usePackagePresentation(
     const controller = new AbortController();
     void (async () => {
       try {
+        const query = new URLSearchParams(
+          viewport
+            ? {
+                viewportWidth: String(viewport.width),
+                viewportHeight: String(viewport.height),
+              }
+            : {}
+        );
         const response = await fetch(
-          `/api/chats/${encodeURIComponent(source.chatId)}/sources/${encodeURIComponent(source.id)}/presentation`,
+          `/api/chats/${encodeURIComponent(source.chatId)}/sources/${encodeURIComponent(source.id)}/presentation?${query}`,
           { signal: controller.signal }
         );
         if (!response.ok) {
@@ -93,6 +103,7 @@ export function usePackagePresentation(
     identity,
     sourceIdentity,
     key,
+    viewport,
     source.chatId,
     source.id,
     source.hash,

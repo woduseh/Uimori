@@ -7,9 +7,12 @@ import type { Store } from './store.js';
 import { imageCatalog, imageTargetSource, latestImageJob } from './package-images.js';
 import { nativeRisuContext, nativeRisuPackages } from './risu-native-context.js';
 import { nativeImageTag } from './risu-native-image-tags.js';
-import { evaluateNativeRisuFields } from './risu-native-cbs.js';
+import { evaluateNativeRisuFields, type NativeRisuCbsContext } from './risu-native-cbs.js';
 
-async function imageGuidanceByPackage(snapshot: RunSnapshot): Promise<Map<string, string>> {
+async function imageGuidanceByPackage(
+  snapshot: RunSnapshot,
+  viewport?: NativeRisuCbsContext['viewport']
+): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   if (!snapshot.profile?.image) return result;
   const context = nativeRisuContext(snapshot);
@@ -53,6 +56,7 @@ async function imageGuidanceByPackage(snapshot: RunSnapshot): Promise<Map<string
     fields,
     context: {
       ...context,
+      viewport,
       variables: { ...context.variables, ...snapshot.nativeRisuExecution?.output?.variables },
     },
   });
@@ -83,7 +87,8 @@ export async function nativeImageDisplayText(
   store: Store,
   snapshot: RunSnapshot,
   sourceId: string,
-  mode: 'original' | 'translation' = 'original'
+  mode: 'original' | 'translation' = 'original',
+  viewport?: NativeRisuCbsContext['viewport']
 ): Promise<{ text: string; issues: string[] }> {
   const source = store.source(sourceId);
   if (source.chatId !== snapshot.chatId) throw new Error('NATIVE_IMAGE_SOURCE_SCOPE');
@@ -113,7 +118,7 @@ export async function nativeImageDisplayText(
     issues: string[] = [];
   let guidance: Map<string, string>;
   try {
-    guidance = await imageGuidanceByPackage(snapshot);
+    guidance = await imageGuidanceByPackage(snapshot, viewport);
   } catch {
     return { text: target.text, issues: ['native-image-guidance-evaluation'] };
   }
@@ -140,7 +145,12 @@ export async function nativeImageDisplayText(
       try {
         tag = await nativeImageTag({
           native: context.native,
-          context: { ...context, displaying: true, messageIndex: context.messages.length - 1 },
+          context: {
+            ...context,
+            viewport,
+            displaying: true,
+            messageIndex: context.messages.length - 1,
+          },
           name: original.name,
           url: asset.url,
           templates: pkg.imageHandoff.tagTemplates,

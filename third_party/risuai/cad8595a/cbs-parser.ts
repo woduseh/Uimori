@@ -136,6 +136,8 @@ export type RisuCbsDeps = {
     now: () => number
     /** The only entropy source. A value in [0, 1), like Math.random(). */
     random: () => number
+    /** Browser viewport supplied by the display caller; absent in server-only evaluations. */
+    getViewport?: () => { width: number; height: number } | undefined
     /**
      * Group-chat speaker lookup used when the parse argument carries a groupChat. Returning null is fine;
      * the parser then falls back exactly as upstream does for an unknown speaker.
@@ -352,6 +354,7 @@ export function createRisuCbs(deps: RisuCbsDeps): RisuCbs {
         appVer: deps.appVer,
         getTriggerId: deps.getTriggerId,
         now: deps.now,
+        getViewport: deps.getViewport,
         random: deps.random,
         unsupported: recordUnsupported,
     })

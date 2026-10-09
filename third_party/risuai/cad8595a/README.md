@@ -11,6 +11,7 @@
 - 이 디렉터리의 코드는 Uimori의 `core/`·`server/`·`web/`를 import하지 않아요. Risu가 전역 상태(`DBState`, `getDatabase()`)에 접근하던 자리는 인터페이스로 바꾸고, 그 구현은 Uimori 쪽 어댑터가 넘겨요.
 - 파일 해독·로어 어댑터는 `server/compat/risu/`, 원본 CBS 실행 연결은 `server/risu-native-cbs.ts`에서 이 코드를 사용해요. 검사(`tests/`)에서도 직접 사용하며 경계는 `tests/risu-snapshot-boundary.test.ts`가 확인해요.
 - Risu 원본 콘텐츠 실행에 이 스냅샷을 사용해요. 서버 저장·분기·이야기 기억·모델 연결은 Uimori가 소유해요.
+- 화면 폭·높이 CBS는 어댑터가 넘긴 선택적 `getViewport()`로 읽어요. 표시 요청에 브라우저 값이 없으면 미지원으로 보고하며 스냅샷이 직접 DOM에 접근하지 않아요.
 
 ## 갱신
 

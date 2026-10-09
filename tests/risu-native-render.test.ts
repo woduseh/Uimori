@@ -16,6 +16,39 @@ const native = (extra: Partial<RisuContentSource> = {}): RisuContentSource => ({
   sourceHash: 'a'.repeat(64),
   ...extra,
 });
+test('viewport CBS aliases drive authored responsive CSS and remain unsupported without a browser', async () => {
+  const input = native({
+    card: {
+      name: 'Guide',
+      extensions: {
+        risuai: {
+          backgroundHTML:
+            '<style>.panel { {{#if {{? {{screen_width}} > 768 }} }}width:33%;right:-33%;{{/if}}{{#if {{? {{screen_width}} <= 768 }} }}width:100%;right:-100%;{{/if}} }</style>',
+        },
+      },
+    },
+  });
+  const text = '{{screenwidth}}|{{screen_width}}|{{screenheight}}|{{screen_height}}';
+  for (const [viewport, expected, closed] of [
+    [{ width: 1845, height: 1194 }, '1845|1845|1194|1194', 'right:-33%'],
+    [{ width: 412, height: 915 }, '412|412|915|915', 'right:-100%'],
+  ] as const) {
+    const result = await renderNativeRisuMessage({
+      native: input,
+      text,
+      context: { variables: {}, viewport, displaying: true },
+    });
+    expect(result.html).toContain(expected);
+    expect(result.html).toContain(closed);
+    expect(result.issues).toEqual([]);
+  }
+  const withoutBrowser = await renderNativeRisuMessage({
+    native: input,
+    text,
+    context: { variables: {} },
+  });
+  expect(withoutBrowser.issues).toEqual(['screenwidth', 'screenheight']);
+});
 test('native CBS preserves shared variable writes across fields and native button/condition markup', async () => {
   const input = native();
   const result = await evaluateNativeRisuFields({

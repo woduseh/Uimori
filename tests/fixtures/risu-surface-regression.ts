@@ -353,33 +353,36 @@ export async function runSurfaceRegressions(mount: HTMLElement): Promise<string[
         'shadow paragraphs unavailable to scroll restoration'
       );
     });
-    await run('A fixed toolbar reserves height and its local label still works', async () => {
-      const s = surface(
-        prose(
-          '<style>.toolbar{position:fixed;top:35px;right:12px;display:flex;flex-direction:column;gap:8px}.toolbar label{display:block;width:48px;height:48px}.closed{position:fixed;right:-560px;top:80px;width:520px;height:100vh}</style><p>Choose</p><div class="toolbar"><label for="settings">1</label><label for="settings">2</label><label for="settings">3</label><label for="settings">4</label><label for="settings">5</label></div><input hidden id="settings" type="checkbox"><aside class="closed"><button>Hidden</button></aside>'
-        )
-      );
-      await tick();
-      await tick();
-      check(
-        Math.abs(s.host.getBoundingClientRect().height - 307) < 1,
-        `unexpected toolbar height ${s.host.getBoundingClientRect().height}`
-      );
-      const toolbar = s.root.querySelector('.toolbar')!.getBoundingClientRect();
-      check(
-        toolbar.bottom <= s.host.getBoundingClientRect().bottom + 1,
-        'fixed toolbar was clipped'
-      );
-      (s.root.querySelector('label') as HTMLElement).click();
-      check(
-        (s.root.getElementById('settings') as HTMLInputElement).checked,
-        'fixed toolbar label broken'
-      );
-      check(
-        document.documentElement.scrollWidth <= innerWidth + 1,
-        'closed offscreen panel widened the app'
-      );
-    });
+    await run(
+      'A viewport toolbar preserves natural flow and its local label still works',
+      async () => {
+        const s = surface(
+          prose(
+            '<style>.toolbar{position:fixed;top:35px;right:12px;display:flex;flex-direction:column;gap:8px}.toolbar label{display:block;width:48px;height:48px}.closed{position:fixed;right:-560px;top:80px;width:520px;height:100vh}</style><p>Choose</p><div class="toolbar"><label for="settings">1</label><label for="settings">2</label><label for="settings">3</label><label for="settings">4</label><label for="settings">5</label></div><input hidden id="settings" type="checkbox"><aside class="closed"><button>Hidden</button></aside>'
+          )
+        );
+        await tick();
+        await tick();
+        check(
+          s.host.style.minHeight === '' && s.host.getBoundingClientRect().height < 307,
+          `fixed toolbar enlarged the message to ${s.host.getBoundingClientRect().height}`
+        );
+        const toolbar = s.root.querySelector('.toolbar')!.getBoundingClientRect();
+        check(
+          Math.abs(toolbar.top - 35) < 1 && Math.abs(toolbar.right - (innerWidth - 12)) < 1,
+          'fixed toolbar was not positioned against the viewport'
+        );
+        (s.root.querySelector('label') as HTMLElement).click();
+        check(
+          (s.root.getElementById('settings') as HTMLInputElement).checked,
+          'fixed toolbar label broken'
+        );
+        check(
+          s.root.querySelector('.closed')!.getBoundingClientRect().left >= innerWidth,
+          'closed panel remained inside the viewport'
+        );
+      }
+    );
     await run('The real reading preference hook restores a visible shadow paragraph', () => {
       const reactHost = document.createElement('section');
       mount.append(reactHost);
