@@ -1,3 +1,4 @@
+import { RISU_ASSET_MAX } from './risu-limits.js';
 import { translationGuideValue, validateTranslationGuide } from './translation-guide.js';
 import {
   stripDeprecatedRisuCardFields,
@@ -69,6 +70,17 @@ export function nativeRisuBackground(native: RisuContentSource): string {
   return typeof value === 'string' ? value : '';
 }
 /** Risu card names may omit the separately serialized extension (e.g. Hinano_* + webp). */
+/** Index once per render, retaining the first matching authored entry. */
+export function nativeRisuAssetNameResolver(native: RisuContentSource) {
+  const byUri = new Map<unknown, Map<unknown, Record<string, unknown>>>();
+  for (const entry of records(native.card.assets)) {
+    let names = byUri.get(entry.uri);
+    if (!names) byUri.set(entry.uri, (names = new Map()));
+    if (!names.has(entry.name)) names.set(entry.name, entry);
+  }
+  return (asset: RisuContentSource['assets'][number]) =>
+    assetNames(asset, byUri.get(asset.uri)?.get(asset.name));
+}
 export function nativeRisuAssetNames(
   native: RisuContentSource,
   asset: RisuContentSource['assets'][number]
@@ -76,6 +88,12 @@ export function nativeRisuAssetNames(
   const original = records(native.card.assets).find(
     (entry) => entry.uri === asset.uri && entry.name === asset.name
   );
+  return assetNames(asset, original);
+}
+function assetNames(
+  asset: RisuContentSource['assets'][number],
+  original: Record<string, unknown> | undefined
+): string[] {
   const extension =
     typeof original?.ext === 'string' && /^[a-z0-9]{1,12}$/iu.test(original.ext)
       ? original.ext
@@ -106,7 +124,7 @@ export function assertRisuContentSource(value: unknown): asserts value is RisuCo
     typeof source.sourceHash !== 'string' ||
     !/^[a-f0-9]{64}$/u.test(source.sourceHash) ||
     !Array.isArray(source.assets) ||
-    source.assets.length > 2000
+    source.assets.length > RISU_ASSET_MAX
   )
     throw new Error('PACKAGE_NATIVE_RISU_INVALID');
   for (const document of [source.card, source.module]) {

@@ -3,7 +3,12 @@ import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { navigationAction, openChatSettings, selectChatSettingsSection } from './ui-navigation.js';
+import {
+  navigationAction,
+  openChatSettings,
+  selectChatSettingsSection,
+  selectSettingsSection,
+} from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 async function createBot(request: APIRequestContext, title: string): Promise<Content> {
@@ -412,4 +417,43 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
     path: info.outputPath('personal-metadata-error-retained.png'),
     fullPage: true,
   });
+});
+
+test('PERSONAL binary resource backup downloads and imports through the archive UI', async ({
+  page,
+  request,
+}) => {
+  const title = `Binary archive ${randomUUID()}`;
+  await createBot(request, title);
+  await openEditor(page, title);
+  await page.getByLabel('자료 메뉴', { exact: true }).click();
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('button', { name: '자료 백업', exact: true }).click();
+  const file = await downloaded;
+  expect(file.suggestedFilename()).toMatch(/\.uimori$/);
+  const path = await file.path();
+  expect(path).toBeTruthy();
+  await page.getByRole('button', { name: '서재 목록', exact: true }).click();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '데이터 관리');
+  await page.getByLabel('Uimori 자료 백업 파일', { exact: true }).setInputFiles({
+    name: 'resource.uimori',
+    mimeType: 'application/zip',
+    buffer: await (await import('node:fs/promises')).readFile(path!),
+  });
+  await expect(page.getByText('1개 자료 · 0개 프리셋 · 0개 이미지', { exact: true })).toBeVisible();
+  const applied = page.waitForResponse((response) =>
+    response.url().endsWith('/api/native-transfers/apply-archive')
+  );
+  await page.getByRole('button', { name: '새 자료로 가져오기', exact: true }).click();
+  const response = await applied;
+  expect(response.ok(), await response.text()).toBe(true);
+  const result = await response.json();
+  const content = await (
+    await request.get(
+      `/api/content/${result.items.find((item: { root: boolean }) => item.root).id}`
+    )
+  ).json();
+  expect(content.title).toBe(title);
+  expect(content.package.nativeRisu.card.description).toBe('Synthetic story source.');
 });

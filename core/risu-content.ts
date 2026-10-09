@@ -220,9 +220,9 @@ export function assertRisuContent(value: unknown): asserts value is RisuContent 
       assertRisuContentSource(p.nativeRisu);
       const native = p.nativeRisu;
       if (p.imageHandoff !== undefined) validateRisuImageHandoff(p.imageHandoff, native);
+      const imageIds = new Set((p.images as PackageImage[] | undefined)?.map((image) => image.id));
       for (const asset of native.assets)
-        if (!(p.images as PackageImage[] | undefined)?.some((image) => image.id === asset.imageId))
-          fail('PACKAGE_NATIVE_RISU_ASSET_REFERENCE');
+        if (!imageIds.has(asset.imageId)) fail('PACKAGE_NATIVE_RISU_ASSET_REFERENCE');
     }
     if (p.images !== undefined) validatePackageImages(p.images);
     if (p.portraitImageId !== undefined) {

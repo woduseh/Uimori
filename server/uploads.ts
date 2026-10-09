@@ -12,9 +12,10 @@ import { dirname, join, resolve } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { HttpError } from './request-validation.js';
+import { RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
 
 /** A staged import file lives next to the database, never inside a request body or the archive. */
-export const UPLOAD_MAX_BYTES = 256 * 1024 * 1024;
+export const UPLOAD_MAX_BYTES = RISU_IMPORT_MAX_UPLOAD_BYTES;
 export const UPLOAD_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const ID = /^[a-f0-9]{32}$/u;
 

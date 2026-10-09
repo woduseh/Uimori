@@ -301,9 +301,11 @@ test('large imported images export and reimport within the same ZIP and module b
 
 test('ZIP export keeps enough compression for image aliases above the upload limit', () => {
   const payload = Buffer.alloc(50 * 1024 * 1024, 1);
-  const files = new Map(Array.from({ length: 6 }, (_, index) => [`assets/${index}.webp`, payload]));
+  const files = new Map(
+    Array.from({ length: 11 }, (_, index) => [`assets/${index}.webp`, payload])
+  );
   const exported = writeRisuZip(files);
-  expect(exported.length).toBeLessThanOrEqual(256 * 1024 * 1024);
+  expect(exported.length).toBeLessThanOrEqual(512 * 1024 * 1024);
   const read = cardZip(exported);
   expect(read.size).toBe(files.size);
   for (const [name, bytes] of files) expect(read.get(name)?.().equals(bytes)).toBe(true);

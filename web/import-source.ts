@@ -3,17 +3,28 @@ import { apiBinary } from './api.js';
 
 /** Stages a file the request body cannot carry, and keeps the small path unchanged. */
 export async function readLargeImportSource(
-  file: File
+  file: File,
+  signal?: AbortSignal
 ): Promise<{ name: string; base64: string } | { name: string; uploadId: string }> {
-  if (file.size <= RISU_IMPORT_MAX_BYTES) return readImportSource(file);
-  const staged = await apiBinary<{ uploadId: string }>('/uploads', file);
+  if (file.size <= RISU_IMPORT_MAX_BYTES) return readImportSource(file, signal);
+  const staged = await apiBinary<{ uploadId: string }>('/uploads', file, signal);
   return { name: file.name, uploadId: staged.uploadId };
 }
 
 /** Read a chosen file once; the caller owns size limits, review, cancellation and adoption. */
-export function readImportSource(file: File): Promise<{ name: string; base64: string }> {
+export function readImportSource(
+  file: File,
+  signal?: AbortSignal
+): Promise<{ name: string; base64: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
+    if (signal?.aborted) {
+      reject(new DOMException('파일 읽기가 취소됐어요.', 'AbortError'));
+      return;
+    }
+    const abort = () => reader.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    reader.onloadend = () => signal?.removeEventListener('abort', abort);
     reader.onerror = () => reject(new Error('파일을 읽지 못했어요. 다시 선택해 주세요.'));
     reader.onabort = () => reject(new Error('파일 읽기가 취소됐어요.'));
     reader.onload = () => {

@@ -1,4 +1,5 @@
 import type { OutlineHelperRequest } from './outline-helper.js';
+import { downloadArchive } from './archive-download.js';
 import { ReaderEditingContext } from './Bookmarks.js';
 import type { NotificationIntent } from '../core/push.js';
 import { startPwa, subscribeNotificationNavigation } from './pwa.js';
@@ -73,7 +74,6 @@ import {
 } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import { reconcilePromptValues } from '../core/risu-prompt.js';
-import { api, saveDownload } from './api.js';
 import { refValue } from './content-ref.js';
 import { deferredPanel } from './deferredPanel.js';
 import { LoadingState } from './LoadingState.js';
@@ -954,14 +954,10 @@ function App() {
                       onClick={() => {
                         const chatId = s.selected;
                         const title = s.chats.find((chat) => chat.id === chatId)?.title ?? 'chat';
-                        void api<unknown>(`/chats/${chatId}/backup`).then(
-                          (backup) =>
-                            saveDownload(
-                              `${title.replace(/[\\/:*?"<>|]/g, '_')}.uimori-chat.json`,
-                              backup
-                            ),
-                          (error: Error) => s.setError(error.message)
-                        );
+                        void downloadArchive(
+                          `/chats/${chatId}/backup-archive`,
+                          `${title.replace(/[\\/:*?"<>|]/g, '_')}.chat.uimori`
+                        ).catch((error: Error) => s.setError(error.message));
                       }}
                     >
                       <Download size={18} aria-hidden="true" />

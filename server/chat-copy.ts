@@ -17,7 +17,12 @@ import { HttpError } from './request-validation.js';
 import { sceneTitles, restoreSceneTitles } from './scene-titles.js';
 
 /** Capture user-visible state through a selected source. No future notes/variables leak into an old copy. */
-export function captureChatCopy(store: Store, chatId: string, sourceId?: string | null): ChatCopy {
+export function captureChatCopy(
+  store: Store,
+  chatId: string,
+  sourceId?: string | null,
+  binary = false
+): ChatCopy {
   const chat = store.chat(chatId);
   const head = sourceId === undefined ? chat.headRevision : sourceId;
   if (head && store.source(head).chatId !== chatId) throw new HttpError(400, 'Source outside chat');
@@ -36,7 +41,7 @@ export function captureChatCopy(store: Store, chatId: string, sourceId?: string 
       : (checkpoints.at(-1) ?? { revision: 0, values: {} });
   const messages = captureCopiedMessages(store, history);
   mapCopiedMessageTexts(messages, (text) => independentTextMedia(store, text));
-  const illustrations = captureIllustrations(store, history);
+  const illustrations = captureIllustrations(store, history, binary);
   const titles = sceneTitles(store, chatId);
   return {
     transcript,
@@ -72,7 +77,8 @@ export function restoreChatCopy(
   store: Store,
   copy: ChatCopy,
   requestKey: string,
-  title = copy.transcript.title
+  title = copy.transcript.title,
+  readBinary?: (reference: string) => Buffer
 ): Chat {
   return store.transaction(() => {
     const imported = importChatTranscript(store, {
@@ -119,7 +125,7 @@ export function restoreChatCopy(
       history.map((source) => source.revision),
       copy.state.bookmarks
     );
-    restoreIllustrations(store, history, copy.illustrations);
+    restoreIllustrations(store, history, copy.illustrations, readBinary);
     return store.chat(chatId);
   });
 }

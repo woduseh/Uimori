@@ -9,7 +9,14 @@ import {
   type NativeTransferPrepare,
   type NativeTransferReceipt,
 } from '../core/native-transfer.js';
-import { validateNativeTransfer } from '../core/native-transfer-validation.js';
+import {
+  validateNativeTransfer,
+  validatePreparedNativeTransfer,
+  type PreparedNativeTransferFile,
+  type ValidatedPreparedNativeTransfer,
+} from '../core/native-transfer-validation.js';
+import { readFileSync } from 'node:fs';
+import { storeImage } from './image-storage.js';
 import { validateImageBlob, putValidatedImageBlob } from './package-images.js';
 import { encodedImage } from './image-storage.js';
 import { fields, HttpError, record, text } from './request-validation.js';
@@ -47,9 +54,20 @@ export function inspectBundle(value: unknown): NativeTransferPrepare {
 /** A saved-resource bundle, not a dump of database tables or old execution records. */
 export function exportResourceBundle(
   store: Store,
-  selection: { kind: 'content' | 'prompt-preset'; id: string }[]
-): NativeTransferFile {
-  const file: NativeTransferFile = {
+  selection: { kind: 'content' | 'prompt-preset'; id: string }[],
+  metadataOnly: true
+): PreparedNativeTransferFile;
+export function exportResourceBundle(
+  store: Store,
+  selection: { kind: 'content' | 'prompt-preset'; id: string }[],
+  metadataOnly?: false
+): NativeTransferFile;
+export function exportResourceBundle(
+  store: Store,
+  selection: { kind: 'content' | 'prompt-preset'; id: string }[],
+  metadataOnly = false
+): PreparedNativeTransferFile {
+  const file: PreparedNativeTransferFile = {
     format: NATIVE_TRANSFER_FORMAT,
     version: NATIVE_TRANSFER_VERSION,
     roots: [],
@@ -101,8 +119,19 @@ export function exportResourceBundle(
       (entry) => entry.source.package.images?.map((image) => image.blobHash) ?? []
     )
   );
-  file.images = [...hashes].map((hash) => encodedImage(store.db, hash));
-  inspectBundle(file);
+  file.images = [...hashes].map((hash) =>
+    metadataOnly
+      ? {
+          id: hash,
+          hash,
+          revision: 1,
+          mime: store.db.prepare('SELECT mime FROM image_blobs WHERE hash=?').get(hash)
+            ?.mime as PreparedNativeTransferFile['images'][number]['mime'],
+        }
+      : encodedImage(store.db, hash)
+  );
+  if (metadataOnly) validatePreparedNativeTransfer(file);
+  else inspectBundle(file);
   return file;
 }
 
@@ -134,7 +163,11 @@ export async function importNormalizedResourceBundle(
 function applyPreparedBundle(
   store: Store,
   body: Record<string, any>,
-  { checked, preview: prepared }: ReturnType<typeof prepareBundle>
+  {
+    checked,
+    preview: prepared,
+  }: { checked: ValidatedPreparedNativeTransfer; preview: NativeTransferPrepare },
+  putImages?: () => void
 ): NativeTransferReceipt {
   const supplied = body.modelBindings ?? [];
   if (!Array.isArray(supplied)) throw new HttpError(400, '모델 연결 목록을 확인해 주세요.');
@@ -174,7 +207,13 @@ function applyPreparedBundle(
     const contentIds = new Map(
       checked.file.contents.map((entry) => [entry.source.id, ids.get(entry.key)!])
     );
-    for (const image of checked.file.images) putValidatedImageBlob(store.product, image);
+    if (putImages) putImages();
+    else
+      for (const image of checked.file.images) {
+        if (!('base64' in image) || typeof image.base64 !== 'string')
+          throw new HttpError(400, 'Invalid image payload');
+        putValidatedImageBlob(store.product, { ...image, base64: image.base64 });
+      }
     for (const key of checked.persistOrder) {
       const entry = checked.file.contents.find((item) => item.key === key)!;
       const { id: _id, revision: _revision, ...source } = structuredClone(entry.source);
@@ -209,5 +248,56 @@ function applyPreparedBundle(
     };
     saveImportReceipt(store, key, commandDigest, receipt);
     return receipt;
+  });
+}
+
+export type PreparedBundleImage = {
+  hash: string;
+  mime: 'image/webp' | 'image/png' | 'image/jpeg' | 'image/avif' | 'image/gif';
+  path: string;
+  bytes: number;
+};
+
+/** Trusted staging paths only. Metadata crosses the same graph boundary as JSON bundles. */
+export function importPreparedResourceBundle(
+  store: Store,
+  file: PreparedNativeTransferFile,
+  images: PreparedBundleImage[],
+  value: { digest: string; modelBindings?: unknown[]; idempotencyKey: string }
+): NativeTransferReceipt {
+  const checked = validatePreparedNativeTransfer(file);
+  const digest = bundleDigest(checked.file);
+  if (value.digest !== digest) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+  const supplied = new Map(images.map((image) => [image.hash, image]));
+  if (
+    supplied.size !== images.length ||
+    supplied.size !== checked.file.images.length ||
+    checked.file.images.some((image) => supplied.get(image.hash)?.mime !== image.mime)
+  )
+    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  const preview: NativeTransferPrepare = {
+    digest,
+    entries: checked.entries,
+    modelRequirements: checked.modelRequirements,
+    warnings: checked.warnings,
+    summary: {
+      contents: file.contents.length,
+      prompts: file.prompts.length,
+      combinations: file.prompts.reduce((sum, item) => sum + item.combinations.length, 0),
+      images: images.length,
+      imageBytes: images.reduce((sum, item) => sum + item.bytes, 0),
+    },
+  };
+  return applyPreparedBundle(store, value, { checked, preview }, () => {
+    for (const image of images) {
+      if (store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(image.hash)) continue;
+      const bytes = readFileSync(image.path);
+      if (
+        bytes.length !== image.bytes ||
+        createHash('sha256').update(bytes).digest('hex') !== image.hash
+      )
+        throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
+      storeImage(store.db, { hash: image.hash, mime: image.mime, bytes });
+    }
   });
 }

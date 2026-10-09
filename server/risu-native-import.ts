@@ -2,15 +2,30 @@ import type { RisuContent } from '../core/risu-content.js';
 import type { RisuContentSource } from '../core/risu-native.js';
 import { nativeRisuTriggers } from '../core/risu-native.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
-import { importRisuAssets } from './risu-import-assets.js';
+import { importRisuAssets, type PreparedRisuAsset } from './risu-import-assets.js';
 import { object, string, type RisuCard, type RisuCardInput } from './risu-import-card.js';
 import { createRisuImportFindings } from './risu-import-findings.js';
 import { projectNativeRisuPackage } from './risu-native-projection.js';
 import { buildRisuTransfer } from './risu-import-transfer.js';
 import { text } from './request-validation.js';
+import type { NativeTransferFile } from '../core/native-transfer.js';
+import type { PreparedNativeTransferFile } from '../core/native-transfer-validation.js';
+import type { RisuImportPreview } from '../core/risu-import.js';
 
 /** Preserve Risu documents; build only the projections the existing library and chat store need. */
-export function analyzeNativeRisuImport(input: RisuCardInput) {
+export function analyzeNativeRisuImport(input: RisuCardInput): {
+  file: NativeTransferFile;
+  preview: RisuImportPreview;
+  hash: string;
+};
+export function analyzeNativeRisuImport(
+  input: RisuCardInput,
+  preparedAssets: Map<string, PreparedRisuAsset | null>
+): { file: PreparedNativeTransferFile; preview: RisuImportPreview; hash: string };
+export function analyzeNativeRisuImport(
+  input: RisuCardInput,
+  preparedAssets?: Map<string, PreparedRisuAsset | null>
+) {
   const card = input.card as RisuCard;
   const title = text(card.name, 'card name', 200);
   const findings = createRisuImportFindings();
@@ -24,13 +39,16 @@ export function analyzeNativeRisuImport(input: RisuCardInput) {
       'info',
       '자료 설명은 앞 4000자까지 표시해요. 제작자 코멘트 전체는 Risu 카드 원문에 보존해요.'
     );
-  const assets = importRisuAssets({
+  const assetInput = {
     card,
     kind: input.kind,
     members: input.members,
     findings,
     native: true,
-  });
+  };
+  const assets = preparedAssets
+    ? importRisuAssets({ ...assetInput, preparedAssets })
+    : importRisuAssets(assetInput);
   const native: RisuContentSource = {
     version: 1,
     card: structuredClone(input.nativeCard),
@@ -98,14 +116,20 @@ export function analyzeNativeRisuImport(input: RisuCardInput) {
       'info',
       '스크립트에 모델 호출로 보이는 코드가 있어요. 원래 호출은 유지해요. 상태창이나 이미지 선택을 위한 의미 판단은 JEV로 바꿀 후보가 될 수 있으며, 자유문·이미지 생성 호출 자체는 별도 기능이에요.'
     );
-  const { file, preview } = buildRisuTransfer({
+  const transferInput = {
     input,
     card,
     pkg,
     title,
-    images: assets.images,
     lore,
     findings,
-  });
+  };
+  const { file, preview } = preparedAssets
+    ? buildRisuTransfer({ ...transferInput, images: assets.images, prepared: true })
+    : buildRisuTransfer({
+        ...transferInput,
+        images: (assets as ReturnType<typeof importRisuAssets>).images,
+        prepared: false,
+      });
   return { file, preview, hash: input.hash };
 }

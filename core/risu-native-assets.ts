@@ -1,3 +1,4 @@
+import { RISU_ASSET_MAX } from './risu-limits.js';
 import type { PackageImage } from './package-images.js';
 import type { RisuContent } from './risu-content.js';
 
@@ -19,35 +20,30 @@ export function nativeImageNames(pkg: RisuContent, imageId: string): string[] {
 /** Unavailable/non-image authored assets remain visible as a count and are never rewritten by image edits. */
 export function unmappedNativeAssetCount(pkg: RisuContent): number {
   const native = pkg.nativeRisu;
+  const imageIds = new Set(pkg.images?.map((image) => image.id));
+  const namesByUri = new Map<string, Set<string>>();
+  const moduleNames = new Set<string>();
+  for (const asset of native.assets) {
+    if (!imageIds.has(asset.imageId)) continue;
+    let names = namesByUri.get(asset.uri);
+    if (!names) namesByUri.set(asset.uri, (names = new Set()));
+    names.add(asset.name);
+    if (moduleUri(asset.uri)) moduleNames.add(asset.name);
+  }
   const available = (uri: string, name: unknown) =>
-    native.assets.some(
-      (asset) =>
-        asset.uri === uri &&
-        asset.name === name &&
-        pkg.images?.some((image) => image.id === asset.imageId)
-    );
+    typeof name === 'string' && namesByUri.get(uri)?.has(name);
   const card = records(native.card.assets).filter(
     (asset) => typeof asset.uri !== 'string' || !available(asset.uri, asset.name)
   ).length;
   const module = Array.isArray(native.module?.assets) ? native.module.assets : [];
   return (
-    card +
-    module.filter(
-      (entry) =>
-        !Array.isArray(entry) ||
-        !native.assets.some(
-          (asset) =>
-            moduleUri(asset.uri) &&
-            asset.name === entry[0] &&
-            pkg.images?.some((image) => image.id === asset.imageId)
-        )
-    ).length
+    card + module.filter((entry) => !Array.isArray(entry) || !moduleNames.has(entry[0])).length
   );
 }
 /** Add portable metadata alongside the blob reference; a name collision never changes an existing identifier. */
 export function addNativeRisuImage(value: RisuContent, uploaded: PackageImage): RisuContent {
   if (
-    (value.images?.length ?? 0) >= 2000 ||
+    (value.images?.length ?? 0) >= RISU_ASSET_MAX ||
     value.images?.some((image) => image.id === uploaded.id)
   )
     throw new Error('이미지 개수 또는 식별자를 확인해 주세요.');

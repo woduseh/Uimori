@@ -93,6 +93,7 @@ export async function api<T>(
     body !== undefined &&
     (providerSettingsChanged ||
       path === '/native-transfers/apply' ||
+      path === '/native-transfers/apply-archive' ||
       path === '/risu-imports/apply' ||
       /^(?:\/library\/(?:folders|organization)|\/content(?:\/|$)|\/prompt-presets?(?:\/|$)|\/(?:prompt-workspace|model-workspace)(?:\/|$)|\/prompt-combinations?(?:\/|$))/.test(
         path
@@ -115,11 +116,12 @@ export async function api<T>(
 }
 
 /** Streams one chosen file as the request body, so a large container never becomes base64. */
-export async function apiBinary<T>(path: string, body: Blob): Promise<T> {
+export async function apiBinary<T>(path: string, body: Blob, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
     body,
+    signal,
   });
   return readApiResponse<T>(response, 'POST');
 }

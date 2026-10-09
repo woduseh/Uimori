@@ -1,3 +1,4 @@
+import { RISU_ASSET_MAX } from './risu-limits.js';
 import type { ProfileSnapshot, Asset } from './product.js';
 
 export const PACKAGE_IMAGE_MIMES = [
@@ -17,7 +18,8 @@ export type PackageImage = {
 };
 const identifier = /^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$/u;
 export function validatePackageImages(value: unknown): PackageImage[] {
-  if (!Array.isArray(value) || value.length > 2000) throw new Error('PACKAGE_IMAGE_LIST_LIMIT');
+  if (!Array.isArray(value) || value.length > RISU_ASSET_MAX)
+    throw new Error('PACKAGE_IMAGE_LIST_LIMIT');
   const ids = new Set<string>();
   for (const item of value) {
     if (

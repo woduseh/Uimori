@@ -5,7 +5,7 @@ import {
   nativeRisuTriggers,
   nativeRisuLore,
   nativeRisuBackground,
-  nativeRisuAssetNames,
+  nativeRisuAssetNameResolver,
 } from '../core/risu-native.js';
 import type { RisuContentSource } from '../core/risu-native.js';
 import { resolveTemplateVariableContext } from '../core/template-variables.js';
@@ -110,13 +110,16 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
   };
   const controls = effectiveRisuControls(snapshot.profile!, preset?.program);
   const assetUrls: Record<string, string> = Object.create(null);
-  for (const entry of entries)
+  for (const entry of entries) {
+    const images = new Map(entry.pkg.images?.map((image) => [image.id, image]));
+    const assetNames = nativeRisuAssetNameResolver(entry.native);
     for (const asset of entry.native.assets) {
-      const image = entry.pkg.images?.find((image) => image.id === asset.imageId);
+      const image = images.get(asset.imageId);
       if (!image) continue;
       const url = `/api/package-image-blobs/${image.blobHash}`;
-      for (const name of nativeRisuAssetNames(entry.native, asset)) assetUrls[name] = url;
+      for (const name of assetNames(asset)) assetUrls[name] = url;
     }
+  }
   return {
     native,
     effectiveTriggers,

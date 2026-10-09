@@ -79,9 +79,10 @@ export function moduleJsonDocument(
       /^data:image\/(?:png|jpeg|webp|avif|gif);base64,([A-Za-z0-9+/]+={0,2})$/u
     );
     const uri = data || projectAsset ? `embeded://module-assets/${assets.length}` : raw;
-    if (data || projectAsset) {
-      const bytes = projectAsset ? projectAsset() : Buffer.from(data![1], 'base64');
-      if (!projectAsset && bytes.toString('base64') !== data![1])
+    if (projectAsset) members.set(uri.slice('embeded://'.length), projectAsset);
+    else if (data) {
+      const bytes = Buffer.from(data[1], 'base64');
+      if (bytes.toString('base64') !== data[1])
         throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
       members.set(uri.slice('embeded://'.length), () => bytes);
     }

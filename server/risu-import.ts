@@ -1,5 +1,13 @@
 import { readImportReceipt, saveImportReceipt } from './import-operations.js';
-import { bundleDigest } from './resource-bundle.js';
+import { bundleDigest, importPreparedResourceBundle } from './resource-bundle.js';
+import {
+  prepareStoredRisuImport,
+  readPreparedRisuImport,
+  deletePreparedRisuImport,
+  findPreparedRisuImport,
+} from './risu-import-prepared.js';
+import type { PreparedNativeTransferFile } from '../core/native-transfer-validation.js';
+import type { NativeTransferFile } from '../core/native-transfer.js';
 import { normalizeTransferImages } from './transfer-images.js';
 import type { FastifyInstance } from 'fastify';
 import {
@@ -42,6 +50,7 @@ export async function applyRisuImport(
   const body = record(value);
   fields(body, [
     'source',
+    'preparedId',
     'kind',
     'digest',
     'imageHandoffIds',
@@ -50,6 +59,8 @@ export async function applyRisuImport(
     'idempotencyKey',
   ]);
   if (body.createChat !== undefined && typeof body.createChat !== 'boolean')
+    throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
+  if (body.preparedId !== undefined && typeof body.preparedId !== 'string')
     throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   const requestKey = text(body.idempotencyKey, 'request key', 100);
   // A response-loss retry must not touch the already-consumed staged upload.
@@ -73,11 +84,14 @@ export async function applyRisuImport(
   };
   const prior = previous();
   if (prior) return prior;
-  const { file: originalFile, preview } = analyze(
-    body.source,
-    body.kind as RisuImportKind | undefined,
-    readStaged
-  );
+  const staged =
+    typeof body.preparedId === 'string'
+      ? readPreparedRisuImport(store.path, body.preparedId)
+      : findPreparedRisuImport(store.path, body.digest, body.source);
+  const { file: originalFile, preview } =
+    staged ?? analyze(body.source, body.kind as RisuImportKind | undefined, readStaged);
+  if (staged && body.kind !== undefined && body.kind !== preview.kind)
+    throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
   if (body.digest !== preview.digest) throw new HttpError(409, 'RISU_IMPORT_DRAFT_CHANGED');
   if (typeof body.allowPartial !== 'boolean') throw new HttpError(400, 'RISU_IMPORT_INVALID_FILE');
   if (preview.findings.some((item) => item.level === 'unsupported') && !body.allowPartial)
@@ -98,21 +112,31 @@ export async function applyRisuImport(
         enabled: body.imageHandoffIds.includes(range.id),
       }));
   }
-  const file = await normalizeTransferImages(originalFile);
-  const prepared = prepareNativeTransfer({ file });
-  return store.transaction(() => {
+  const file = staged
+    ? staged.file
+    : await normalizeTransferImages(originalFile as NativeTransferFile);
+  const prepared = staged ? { digest: bundleDigest(file) } : prepareNativeTransfer({ file });
+  const result = store.transaction(() => {
     const concurrent = previous();
     if (concurrent) return concurrent;
     const finish = (result: RisuImportResult) => {
       saveImportReceipt(store, operationKey, commandDigest, result);
       return result;
     };
-    const receipt = applyNativeTransfer(store, {
+    const command = {
       file,
       digest: prepared.digest,
       modelBindings: [],
       idempotencyKey: `risu:${requestKey}`,
-    });
+    };
+    const receipt = staged
+      ? importPreparedResourceBundle(
+          store,
+          file as PreparedNativeTransferFile,
+          staged.images,
+          command
+        )
+      : applyNativeTransfer(store, command);
     if (preview.kind !== 'bot' || body.createChat === false) return finish({ receipt, chat: null });
     if (!receipt.created) {
       const exists = store.db.prepare('SELECT id FROM chats WHERE id=?').get(receipt.id);
@@ -137,14 +161,25 @@ export async function applyRisuImport(
       });
     return finish({ receipt, chat: store.chat(chat.id) });
   });
+  if (staged && result.receipt.created) deletePreparedRisuImport(store.path, staged.id);
+  return result;
 }
 
 export function risuImportRoutes(app: FastifyInstance, store: Store) {
   const bodyLimit = Math.ceil(RISU_IMPORT_MAX_BYTES / 3) * 4 + 1024 * 1024;
   const readStaged = (uploadId: string) => readUpload(store.path, uploadId);
-  app.post('/api/risu-imports/prepare', { bodyLimit }, async (request) =>
-    prepareRisuImport(request.body, readStaged)
-  );
+  app.post('/api/risu-imports/prepare', { bodyLimit }, async (request, reply) => {
+    const abort = new AbortController();
+    const closed = () => {
+      if (!reply.raw.writableFinished) abort.abort();
+    };
+    reply.raw.once('close', closed);
+    try {
+      return await prepareStoredRisuImport(store.path, request.body, abort.signal);
+    } finally {
+      reply.raw.removeListener('close', closed);
+    }
+  });
   app.post('/api/risu-imports/apply', { bodyLimit }, async (request, reply) => {
     const result = await applyRisuImport(store, request.body, readStaged);
     const source = record(record(request.body).source);
