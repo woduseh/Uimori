@@ -13,15 +13,16 @@
 //     `CurrentTriggerIdStore` import are gone.
 //   - Dropped `defaultCBSRegisterArg` (upstream cbs.ts:8-48). It is a documentation placeholder that the
 //     compat layer never uses, and its body is itself a `new Date()` / `Math.random()` site.
-//   - CBSRegisterArg gains four injected members, so that no app state or environment is touched
+//   - CBSRegisterArg gains injected members, so that no app state or environment is touched
 //     directly: `getTriggerId()` replaces `get(CurrentTriggerIdStore)` in {{trigger_id}}; `now()` is the
 //     only clock (every bare `new Date()` became `new Date(nowMs())`, destructured as `nowMs` so it does
 //     not shadow the `now` locals); `random()` is the only entropy source (every `Math.random()` became
 //     `randomValue()`, in {{randint}}, {{dice}}, {{random}} and {{roll}} - {{pick}}, {{rollp}} and
 //     {{hash}} already went through the injected, pure `pickHashRand`); `unsupported(name)` records a
 //     name the host cannot serve and returns ''.
-//   - Environment reads routed to `unsupported()`: {{screenwidth}} and {{screenheight}} (`window.inner*`)
-//     and {{metadata::browserlanguage}} (`navigator.language`). Nothing else in this file touched the DOM,
+//   - Viewport reads use optional getViewport() instead of window.inner*. Without a supplied viewport,
+//     {{screenwidth}} and {{screenheight}} report unsupported. {{metadata::browserlanguage}} still
+//     routes to unsupported() instead of navigator.language. Nothing else in this file touched the DOM,
 //     and no callback here calls processScriptFull; the asset and display functions ({{asset}}, {{img}},
 //     {{emotion}}, {{bgm}}, {{inlay}}, {{source}}, ...) are registered upstream as 'doc_only', so they are
 //     never registered at all and are reported through ./cbs-parser.ts's unknown-name path.
@@ -105,6 +106,7 @@ export type CBSRegisterArg = {
     now: () => number,
     random: () => number,
     unsupported: (name: string) => string,
+    getViewport?: () => { width: number; height: number } | undefined,
 }
 
 export function registerCBS(arg:CBSRegisterArg) {
@@ -136,7 +138,8 @@ export function registerCBS(arg:CBSRegisterArg) {
         getTriggerId,
         now: nowMs,
         random: randomValue,
-        unsupported
+        unsupported,
+        getViewport
     } = arg;
 
     // Basic character/user variables
@@ -1364,7 +1367,8 @@ export function registerCBS(arg:CBSRegisterArg) {
     registerFunction({
         name: 'screenwidth',
         callback: (str, matcherArg, args, vars) => {
-            return unsupported('screenwidth')
+            const viewport = getViewport?.()
+            return viewport ? viewport.width.toString() : unsupported('screenwidth')
         },
         alias: ['screen_width'],
         description: 'Returns the current screen/viewport width in pixels as a string. Updates dynamically with window resizing. Useful for responsive layouts.\n\nUsage:: {{screenwidth}}',
@@ -1373,7 +1377,8 @@ export function registerCBS(arg:CBSRegisterArg) {
     registerFunction({
         name: 'screenheight',
         callback: (str, matcherArg, args, vars) => {
-            return unsupported('screenheight')
+            const viewport = getViewport?.()
+            return viewport ? viewport.height.toString() : unsupported('screenheight')
         },
         alias: ['screen_height'],
         description: 'Returns the current screen/viewport height in pixels as a string. Updates dynamically with window resizing. Useful for responsive layouts.\n\nUsage:: {{screenheight}}',

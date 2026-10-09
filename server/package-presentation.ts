@@ -6,6 +6,7 @@ import { nativeRisuContext } from './risu-native-context.js';
 import { executeRisuNative } from './risu-native-runtime.js';
 import type { NativeRisuRenderInput, NativeRisuRenderResult } from './risu-native-render.js';
 import { createNativeRisuWorkerSession } from './risu-native-worker.js';
+import type { NativeRisuCbsContext } from './risu-native-cbs.js';
 
 export type PackagePresentationSource = {
   id: string;
@@ -19,6 +20,7 @@ export async function buildPackagePresentation(
   snapshot: RunSnapshot,
   source: PackagePresentationSource,
   options: {
+    viewport?: NativeRisuCbsContext['viewport'];
     nativeMessageIndex?: number;
     nativeDisplayText?: string;
     nativeTranslationText?: string;
@@ -57,6 +59,7 @@ export async function buildPackagePresentation(
       const display = async (value: string, index: number, canonical?: string) => {
         const edited = await executeRisuNative({
           ...native,
+          viewport: options.viewport,
           event: 'editDisplay',
           text: value,
           meta: { index },
@@ -74,6 +77,7 @@ export async function buildPackagePresentation(
               : undefined,
           context: {
             ...native,
+            viewport: options.viewport,
             variables: edited.variables,
             messageIndex: index,
             displaying: true,

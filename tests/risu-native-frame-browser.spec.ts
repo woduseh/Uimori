@@ -130,6 +130,175 @@ test('RSURFACE authored CSS cannot apply html/body layout to the app', async ({ 
     .toBe(true);
 });
 
+test('RSURFACE fixed panels open and close against the viewport without enlarging the reader', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    document.body.style.minHeight = '2400px';
+    document.getElementById('mount')!.style.cssText =
+      'width:70%;max-width:760px;margin:160px auto 0';
+    const path = '/tests/fixtures/native-risu-frame.tsx';
+    const { mount } = await import(path);
+    mount(`<style>
+      #settings {display:none}
+      .toolbar {position:fixed;top:35px;right:12px;z-index:2}
+      .panel {position:fixed;right:-440px;top:100px;width:420px;height:70vh}
+      #settings:checked ~ .panel {right:0}
+      @media(max-width:700px) {.panel {width:100vw;right:-100vw}}
+    </style><div class="risu-background"></div><p>Reader text</p><input type="checkbox" id="settings">
+    <label class="toolbar" for="settings">Toggle settings</label>
+    <aside class="panel"><input aria-label="Card draft" value="Keep me"></aside>`);
+  });
+  const native = page.locator('.risu-message-surface');
+  const panel = native.locator('.panel');
+  const toolbar = native.locator('.toolbar');
+  const draft = native.getByRole('textbox', { name: 'Card draft' });
+  const left = () => panel.evaluate((node) => node.getBoundingClientRect().left);
+  const dimensions = () =>
+    native.evaluate((host) => ({
+      height: host.getBoundingClientRect().height,
+      min: host.style.minHeight,
+    }));
+
+  for (const viewport of [
+    { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
+    { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
+  ]) {
+    await page.setViewportSize(viewport);
+    await expect.poll(left).toBeGreaterThanOrEqual(viewport.width);
+    await expect.poll(dimensions).toMatchObject({ min: '' });
+    expect((await dimensions()).height).toBeLessThan(200);
+    expect(
+      await native.evaluate((host) => {
+        const background = host
+          .shadowRoot!.querySelector('.risu-background')!
+          .getBoundingClientRect();
+        const message = host.getBoundingClientRect();
+        return (
+          Math.abs(background.top - message.top) + Math.abs(background.height - message.height)
+        );
+      })
+    ).toBeLessThan(1);
+    await toolbar.click();
+    await expect
+      .poll(() => panel.evaluate((node) => Math.round(node.getBoundingClientRect().right)))
+      .toBe(viewport.width);
+    await expect(panel).toHaveCSS('width', `${viewport.width < 700 ? viewport.width : 420}px`);
+    await draft.fill('Preserved card draft');
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await expect
+      .poll(() => toolbar.evaluate((node) => Math.round(node.getBoundingClientRect().top)))
+      .toBe(35);
+    await expect
+      .poll(() => panel.evaluate((node) => Math.round(node.getBoundingClientRect().top)))
+      .toBe(100);
+    await toolbar.click();
+    await expect.poll(left).toBeGreaterThanOrEqual(viewport.width);
+    await expect(draft).toHaveValue('Preserved card draft');
+    expect((await dimensions()).height).toBeLessThan(200);
+  }
+});
+
+test('RSURFACE viewport projections retain their content and disable actions while resizing', async ({
+  page,
+}) => {
+  const requests: { width: number; height: number }[] = [];
+  const previews: { width: number; height: number }[] = [];
+  let waitForResize = false;
+  let releaseResize!: () => void;
+  const resizeGate = new Promise<void>((resolve) => {
+    releaseResize = resolve;
+  });
+  const dimensions = (url: string) => {
+    const query = new URL(url).searchParams;
+    return {
+      width: Number(query.get('viewportWidth')),
+      height: Number(query.get('viewportHeight')),
+    };
+  };
+  await page.route('**/api/chats/chat/sources/source/presentation?*', async (route) => {
+    const viewport = dimensions(route.request().url());
+    requests.push(viewport);
+    if (waitForResize) await resizeGate;
+    await route.fulfill({
+      json: {
+        sourceRevision: 'source',
+        sourceHash: 'source-hash',
+        format: 'risu-html',
+        original: {
+          text: `Width ${viewport.width}`,
+          html: `<p>Width ${viewport.width}</p><button risu-trigger="one">One</button>`,
+          changed: true,
+          applied: [],
+        },
+        translationId: null,
+        translationRevision: null,
+        issues: [],
+      },
+    });
+  });
+  await page.route('**/api/content/bot/risu-preview?*', async (route) => {
+    const viewport = dimensions(route.request().url());
+    previews.push(viewport);
+    await route.fulfill({
+      json: { html: `<p>Preview ${viewport.width}</p>`, css: '', issues: [] },
+    });
+  });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.goto(origin);
+  await page.clock.install();
+  await page.evaluate(async () => {
+    const path = '/tests/fixtures/native-risu-viewport.tsx';
+    const { mount } = await import(path);
+    mount();
+  });
+  const presentation = page.getByRole('region', { name: 'Presentation', exact: true });
+  await expect(presentation).toContainText(`Width ${DESKTOP_WIDTH}`);
+  expect(requests).toEqual([{ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }]);
+
+  waitForResize = true;
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
+  await expect
+    .poll(() => requests.at(-1))
+    .toEqual({
+      width: MOBILE_WIDTH,
+      height: MOBILE_HEIGHT,
+    });
+  await expect(page.getByLabel('Presentation status')).toHaveText('pending');
+  await expect(presentation).toContainText(`Width ${DESKTOP_WIDTH}`);
+  await expect(presentation.locator('.risu-message-content')).toHaveAttribute(
+    'data-risu-disabled',
+    'true'
+  );
+  await presentation
+    .getByRole('button', { name: 'One', exact: true })
+    .evaluate((button: HTMLButtonElement) => button.click());
+  await expect(page.getByLabel('Action calls')).toHaveText('0');
+  releaseResize();
+  await expect(presentation).toContainText(`Width ${MOBILE_WIDTH}`);
+  await expect(page.getByLabel('Presentation status')).toHaveText('ready');
+  await expect(presentation.locator('.risu-message-content')).toHaveAttribute(
+    'data-risu-disabled',
+    'false'
+  );
+
+  await page.getByRole('button', { name: 'Toggle preview', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Preview', exact: true })).toContainText(
+    `Preview ${MOBILE_WIDTH}`
+  );
+  expect(previews).toEqual([{ width: MOBILE_WIDTH, height: MOBILE_HEIGHT }]);
+  await page.getByRole('button', { name: 'Toggle preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Toggle presentation', exact: true }).click();
+  await expect(presentation).toHaveText('Saved original');
+  const requestCount = requests.length;
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.clock.fastForward(1000);
+  expect(requests).toHaveLength(requestCount);
+  expect(previews).toHaveLength(1);
+});
+
 test('native preset editor keeps raw CBS, toggle values, and invalid regex drafts', async ({
   page,
 }) => {

@@ -23,6 +23,7 @@ export type NativeRisuCbsContext = {
   now?: number;
   random?: () => number;
   displaying?: boolean;
+  viewport?: { width: number; height: number };
   modelName?: string;
   maxContext?: number;
   mainPrompt?: string;
@@ -122,6 +123,7 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
     getTriggerId: () => context.triggerId ?? 'null',
     now: () => context.now ?? 0,
     random: context.random ?? Math.random,
+    getViewport: () => context.viewport,
     findCharacterbyId: (id) => (id === native.sourceHash ? chara : null),
     unsupportedNames: new Set(),
     maxOutputChars: EXECUTION_INPUT_MAX_CHARS,

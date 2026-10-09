@@ -10,7 +10,7 @@ export {
 import { nativeRisuTriggers, type RisuContentSource } from '../core/risu-native.js';
 
 import { RISU_NATIVE_LUA_DISPATCH, RISU_NATIVE_LUA_PRELUDE } from './risu-native-lua.js';
-import { createNativeRisuCbsSession } from './risu-native-cbs.js';
+import { createNativeRisuCbsSession, type NativeRisuCbsContext } from './risu-native-cbs.js';
 
 export interface NativeRisuMessage {
   id?: string;
@@ -49,6 +49,7 @@ export interface NativeRisuExecutionInput {
   globalVariables?: Record<string, string>;
   authorNote?: string;
   assetUrls?: Record<string, string>;
+  viewport?: NativeRisuCbsContext['viewport'];
 }
 export interface NativeRisuExecutionResult {
   variables: Record<string, string>;

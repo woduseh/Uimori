@@ -194,7 +194,13 @@ export function productRoutes(
   });
   app.get<{
     Params: { id: string };
-    Querystring: { revision?: string; startId?: string; userName?: string };
+    Querystring: {
+      revision?: string;
+      startId?: string;
+      userName?: string;
+      viewportWidth?: string;
+      viewportHeight?: string;
+    };
   }>('/api/content/:id/risu-preview', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
     assertLibraryVisible(store, 'content', request.params.id);

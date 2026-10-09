@@ -2,7 +2,6 @@ import { themeMessageSheet } from './theme-message-style.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { createReadingDecorator } from './reading-dom.js';
 import { risuActionKey, type PreparedRisuMessage } from './risu-message.js';
-import { reserveFixedControls } from './risu-message-layout.js';
 import surfaceCss from './risu-message-surface.css?inline';
 
 export type RisuAction = (kind: 'trigger' | 'button', name: string) => Promise<void>;
@@ -38,7 +37,6 @@ export function mountRisuMessageSurface(
     ])
   );
   const reading = createReadingDecorator(content);
-  const releaseLayout = reserveFixedControls(host, content);
   let action: RisuAction | undefined;
   let disabled = true;
   let locked = false;
@@ -121,7 +119,6 @@ export function mountRisuMessageSurface(
     destroy() {
       alive = false;
       generation++;
-      releaseLayout();
       root.removeEventListener('click', click, true);
       // The host owns the DOM lifetime; a content refresh replaces it atomically.
     },

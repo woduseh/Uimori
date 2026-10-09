@@ -12,6 +12,7 @@ import { forkChat } from '../server/chat-fork.js';
 import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
 import { readChatVariables } from '../server/chat-variables.js';
 import { packagePresentationRoutes } from '../server/package-presentation-routes.js';
+import { nativeRisuPreview } from '../server/risu-native-preview.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { prepareNativeRisuRun, prepareNativeRisuOutput } from '../server/risu-native-run.js';
 import { disposeAllNativeRisuSessions } from '../server/risu-native-runtime.js';
@@ -29,7 +30,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-async function setup(extraOutput = false, historyEdit = '') {
+async function setup(extraOutput = false, historyEdit = '', viewportDisplay = false) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-native-host-'));
   const store = new Store(join(path, 'test.sqlite'));
   owned.push({ path, store });
@@ -49,7 +50,9 @@ async function setup(extraOutput = false, historyEdit = '') {
                 {
                   type: 'editdisplay',
                   in: '<selector>',
-                  out: '<button risu-trigger="choose">Choose {{getvar::chosen}}</button>',
+                  out:
+                    '<button risu-trigger="choose">Choose {{getvar::chosen}}</button>' +
+                    (viewportDisplay ? '<span>Regex {{screenwidth}}/{{screen_height}}</span>' : ''),
                   flag: 'g',
                   ableFlag: true,
                 },
@@ -71,6 +74,14 @@ function onOutput(id)
   ${extraOutput ? "addChat(id, 'char', 'Script postscript'); addChat(id, 'user', 'Script user reply'); addChat(id, 'char', 'Script followup')" : ''}
   ${historyEdit}
 end
+${
+  viewportDisplay
+    ? `listenEdit('editDisplay', function(id, text)
+  local dimensions = cbs('{{screen_width}}/{{screenheight}}')
+  return text .. '<span>Lua ' .. dimensions .. '</span>'
+end)`
+    : ''
+}
 ${extraOutput ? "listenEdit('editDisplay', function(id, text, meta) return '[' .. tostring(meta.index) .. ']' .. text end)" : ''}
 function ask(id)
   local name = alertInput(id, 'Name?'):await()
@@ -218,6 +229,50 @@ test('user edits to an authored native char survive older output receipts', asyn
       (message) => message.id === `native:${authored.id}:0`
     )
   ).toMatchObject({ text: edited.text, sourceHash: edited.hash });
+});
+
+test('display requests supply viewport CBS to regex and Lua without changing stored sources or variables', async () => {
+  const { store, chatId } = await setup(false, '', true);
+  const app = Fastify();
+  packagePresentationRoutes(app, store);
+  try {
+    const first = store.chat(chatId).headRevision!;
+    const source = store.source(first),
+      variables = readChatVariables(store, chatId);
+    for (const [width, height] of [
+      [1845, 1194],
+      [412, 915],
+    ]) {
+      const response = await app.inject(
+        `/api/chats/${chatId}/sources/${first}/presentation?viewportWidth=${width}&viewportHeight=${height}`
+      );
+      expect(response.statusCode, response.body).toBe(200);
+      expect(response.json().original.html).toContain(`Regex ${width}/${height}`);
+      expect(response.json().original.html).toContain(`Lua ${width}/${height}`);
+      expect(response.json().issues).not.toContain('screenwidth');
+      expect(response.json().issues).not.toContain('screenheight');
+    }
+    const attachment = store.product.profile(chatId).packageAttachments![0];
+    const preview = await nativeRisuPreview(store, attachment.id, {
+      revision: String(attachment.revision),
+      startId: 'start-0',
+      viewportWidth: '412',
+      viewportHeight: '915',
+    });
+    expect(preview.html).toContain('Regex 412/915');
+    expect(preview.html).toContain('Lua 412/915');
+    expect(preview.issues).toEqual([]);
+    for (const query of ['viewportWidth=412', 'viewportWidth=0&viewportHeight=915']) {
+      expect(
+        (await app.inject(`/api/chats/${chatId}/sources/${first}/presentation?${query}`)).statusCode
+      ).toBe(400);
+    }
+    expect(store.source(first)).toEqual(source);
+    expect(readChatVariables(store, chatId)).toEqual(variables);
+    expect(store.chat(chatId).headRevision).toBe(first);
+  } finally {
+    await app.close();
+  }
 });
 
 test('native first-message button renders, checkpoints state, and survives source refresh', async () => {

@@ -3,8 +3,8 @@
 @layer uimori-message-base {
   :host {
     display: block;
+    position: relative;
     min-width: 0;
-    contain: layout;
     isolation: isolate;
   }
   .risu-message-content {

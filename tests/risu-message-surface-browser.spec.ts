@@ -56,7 +56,7 @@ for (const width of [390, 1440]) {
 }
 
 for (const width of [390, 1440]) {
-  test(`RSURFACE CLEANUP ${width}px modern selection and selective fixed layout`, async ({
+  test(`RSURFACE CLEANUP ${width}px modern selection stays in the owning reader`, async ({
     page,
   }, info) => {
     const errors: string[] = [];
@@ -68,7 +68,7 @@ for (const width of [390, 1440]) {
       const { runSurfaceCleanupRegressions } = await import(path);
       return runSurfaceCleanupRegressions(document.getElementById('mount')!);
     });
-    expect(passed).toHaveLength(10);
+    expect(passed).toHaveLength(1);
     expect(errors).toEqual([]);
     await info.attach('cleanup-scenarios', {
       body: JSON.stringify({ width, passed, errors }, null, 2),
@@ -76,23 +76,3 @@ for (const width of [390, 1440]) {
     });
   });
 }
-
-test('RSURFACE CLEANUP responsive fixed layout follows real viewport changes', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto(origin);
-  await page.evaluate(async () => {
-    const path = '/tests/fixtures/risu-surface-cleanup-regression.ts';
-    const { mountResponsiveLayoutRegression } = await import(path);
-    mountResponsiveLayoutRegression(document.getElementById('mount')!);
-  });
-  const floor = () =>
-    page.locator('.risu-message-surface').evaluate((host) => host.style.minHeight);
-  await expect.poll(floor).toBe('');
-  await page.setViewportSize({ width: 390, height: 900 });
-  await expect.poll(floor).toBe('115px');
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await expect.poll(floor).toBe('');
-  expect(errors).toEqual([]);
-});

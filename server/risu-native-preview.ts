@@ -4,12 +4,19 @@ import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
 import { executeRisuNative } from './risu-native-runtime.js';
 import { renderNativeRisuMessage } from './risu-native-render.js';
+import { readDisplayViewport } from './display-viewport.js';
 
 /** Read-only preview: a fresh Lua VM, copied variables, no chat, no model/interaction host. */
 export async function nativeRisuPreview(
   store: Store,
   id: string,
-  query: { revision?: string; startId?: string; userName?: string }
+  query: {
+    revision?: string;
+    startId?: string;
+    userName?: string;
+    viewportWidth?: string;
+    viewportHeight?: string;
+  }
 ) {
   const revision = number(Number(query.revision), 'content revision');
   const content = store.product.get<Content>('content', id, revision);
@@ -18,6 +25,7 @@ export async function nativeRisuPreview(
   const start = pkg.starts?.find((item) => item.id === text(query.startId, 'start ID', 64));
   if (!start || start.mode !== 'authored') throw new HttpError(404, 'Authored start not found');
   const context = {
+    viewport: readDisplayViewport(query),
     native: structuredClone(pkg.nativeRisu),
     variables: structuredClone(pkg.variableDefaults?.values ?? {}),
     messages: [],
