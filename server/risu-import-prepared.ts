@@ -53,6 +53,10 @@ export function deletePreparedRisuImport(dbPath: string, id: string) {
     // A cleanup failure must not undo a successful response; expiry pruning retries it.
   }
 }
+export function discardPreparedRisuImport(dbPath: string, id: string) {
+  if (active.has(pathFor(dbPath, id))) throw new HttpError(409, 'RISU_IMPORT_BUSY');
+  deletePreparedRisuImport(dbPath, id);
+}
 export function readPreparedRisuImport(dbPath: string, id: string): PreparedRisuImport {
   const path = pathFor(dbPath, id);
   if (!existsSync(join(path, 'manifest.json')))

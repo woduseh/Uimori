@@ -1,4 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
+import Fastify from 'fastify';
 import {
   existsSync,
   mkdtempSync,
@@ -10,6 +11,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import sharp from 'sharp';
 import { Store } from '../server/store.js';
 import {
@@ -18,10 +20,11 @@ import {
   deletePreparedRisuImport,
   prunePreparedRisuImports,
 } from '../server/risu-import-prepared.js';
-import { applyRisuImport } from '../server/risu-import.js';
+import { applyRisuImport, discardRisuImport, risuImportRoutes } from '../server/risu-import.js';
 import { readImage } from '../server/image-storage.js';
 import { writeRisuZip } from '../server/risu-export-codec.js';
 import { prepareNativeArchive } from '../server/native-transfer-archive.js';
+import { storeUpload, uploadDirectory } from '../server/uploads.js';
 
 const filesystemFailure = vi.hoisted(() => ({ cleanup: '', publish: '' }));
 vi.mock('node:fs', async (original) => {
@@ -159,6 +162,62 @@ test('committed import and retry succeed when staging cleanup is locked, then ex
   expect(existsSync(path)).toBe(false);
 });
 
+test('discarding a reviewed upload removes staging, is repeatable and preserves registered material', async () => {
+  const store = fixture(),
+    input = await source();
+  const savedPreview = await prepareStoredRisuImport(store.path, { source: input });
+  await applyRisuImport(store, {
+    source: input,
+    preparedId: savedPreview.preparedId,
+    digest: savedPreview.digest,
+    allowPartial: false,
+    createChat: false,
+    idempotencyKey: 'saved-before-discard',
+  });
+  const before = ['versions', 'image_blobs', 'import_operations'].map((table) =>
+    store.db.prepare(`SELECT * FROM ${table}`).all()
+  );
+  const uploaded = await storeUpload(
+    store.path,
+    Readable.from(Buffer.from(input.base64, 'base64'))
+  );
+  const preview = await prepareStoredRisuImport(store.path, {
+    source: { name: input.name, uploadId: uploaded.uploadId },
+  });
+  const preparedPath = join(resolve(store.path, '..'), 'risu-prepared', preview.preparedId!),
+    uploadedPath = join(uploadDirectory(store.path), `${uploaded.uploadId}.bin`);
+  const app = Fastify();
+  risuImportRoutes(app, store);
+  try {
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/api/risu-imports/discard',
+      payload: { preparedId: preview.preparedId, uploadId: '../invalid' },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(existsSync(preparedPath)).toBe(true);
+    expect(existsSync(uploadedPath)).toBe(true);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const discarded = await app.inject({
+        method: 'POST',
+        url: '/api/risu-imports/discard',
+        payload: { preparedId: preview.preparedId, uploadId: uploaded.uploadId },
+      });
+      expect(discarded.statusCode).toBe(200);
+      expect(discarded.json()).toEqual({ discarded: true });
+    }
+    expect(existsSync(preparedPath)).toBe(false);
+    expect(existsSync(uploadedPath)).toBe(false);
+    expect(
+      ['versions', 'image_blobs', 'import_operations'].map((table) =>
+        store.db.prepare(`SELECT * FROM ${table}`).all()
+      )
+    ).toEqual(before);
+  } finally {
+    await app.close();
+  }
+});
+
 test('invalid images are reported before consent and the prepared digest prevents stale apply', async () => {
   const store = fixture();
   const input = await source(true);
@@ -267,8 +326,21 @@ test('abort terminates an active worker before cleanup and concurrent preparatio
   const store = fixture();
   const other = fixture();
   const input = await source();
+  const uploaded = await storeUpload(
+    store.path,
+    Readable.from(Buffer.from(input.base64, 'base64'))
+  );
   const controller = new AbortController();
-  const running = prepareStoredRisuImport(store.path, { source: input }, controller.signal);
+  const running = prepareStoredRisuImport(
+    store.path,
+    { source: { name: input.name, uploadId: uploaded.uploadId } },
+    controller.signal
+  );
+  const preparedId = readdirSync(join(resolve(store.path, '..'), 'risu-prepared'))[0];
+  expect(() => discardRisuImport(store.path, { preparedId, uploadId: uploaded.uploadId })).toThrow(
+    'RISU_IMPORT_BUSY'
+  );
+  expect(existsSync(join(uploadDirectory(store.path), `${uploaded.uploadId}.bin`))).toBe(true);
   await expect(prepareStoredRisuImport(store.path, { source: input })).rejects.toThrow(
     'RISU_IMPORT_BUSY'
   );
