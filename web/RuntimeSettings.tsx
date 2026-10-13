@@ -8,6 +8,7 @@ import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
 import { useEffect, useState } from 'react';
 import type { Chat, Settings } from '../core/types.js';
+import type { AutoTranslationDefaults } from '../core/chat-settings.js';
 import { api } from './api.js';
 export function SettingsEditor({
   chat,
@@ -31,6 +32,20 @@ export function SettingsEditor({
   const [message, setMessage] = useState('');
   const [localError, setLocalError] = useState('');
   const [confirmReload, setConfirmReload] = useState(false);
+  const [globalAutoTranslate, setGlobalAutoTranslate] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    void api<AutoTranslationDefaults>('/auto-translation-defaults')
+      .then((value) => {
+        if (active) setGlobalAutoTranslate(value.autoTranslate);
+      })
+      .catch(() => {
+        // Failure to read a label must not block the chat's independent settings editor.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     onDirtyChange?.(dirty || saving);
   }, [dirty, saving, onDirtyChange]);
@@ -131,6 +146,9 @@ export function SettingsEditor({
                     실패 시 원문은 그대로 유지돼요. Codex에서 콘텐츠 확인이 필요한 경우 직접 번역을
                     시작해야 해요.
                   </small>
+                  {globalAutoTranslate !== null && (
+                    <small>현재 전체 기본값: {globalAutoTranslate ? '켜짐' : '꺼짐'}</small>
+                  )}
                 </span>
                 <select
                   aria-label="본문 생성 후 자동 번역"

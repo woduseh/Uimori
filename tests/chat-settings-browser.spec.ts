@@ -598,6 +598,12 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   const { chat, errors } = await prepare(page, request, 'CSUI08 ' + Date.now());
   let dialog = await openSettings(page);
   await selectChatSettingsSection(page, '실행 옵션');
+  const globalDefault = (await (await request.get('/api/auto-translation-defaults')).json()) as {
+    autoTranslate: boolean;
+  };
+  await expect(
+    dialog.getByText(`현재 전체 기본값: ${globalDefault.autoTranslate ? '켜짐' : '꺼짐'}`)
+  ).toBeVisible();
   let choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
   await expect(choice).toHaveValue('inherit');
   await choice.selectOption('on');

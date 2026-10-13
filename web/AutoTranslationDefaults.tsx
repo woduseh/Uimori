@@ -79,7 +79,7 @@ export function AutoTranslationDefaults() {
             <Switch
               aria-label="전체 자동 번역 기본값"
               checked={defaults.autoTranslate}
-              disabled={saving}
+              disabled={saving || loading || !!error}
               onChange={(event) => void change(event.target.checked)}
             />
           </span>
