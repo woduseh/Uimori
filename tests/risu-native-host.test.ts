@@ -78,7 +78,7 @@ ${
   viewportDisplay
     ? `listenEdit('editDisplay', function(id, text)
   local dimensions = cbs('{{screen_width}}/{{screenheight}}')
-  return text .. '<span>Lua ' .. dimensions .. '</span>'
+  return text .. '<span>Lua ' .. dimensions .. '</span><span>History ' .. tostring(getChatLength(id)) .. '</span>'
 end)`
     : ''
 }
@@ -270,6 +270,43 @@ test('display requests supply viewport CBS to regex and Lua without changing sto
     expect(store.source(first)).toEqual(source);
     expect(readChatVariables(store, chatId)).toEqual(variables);
     expect(store.chat(chatId).headRevision).toBe(first);
+
+    const next = await appendNativeSource(store, chatId, 'Later scene');
+    const translation = store.editTranslation(first, {
+      text: 'Translated opening {{getvar::chosen}}',
+      expectedRevision: 0,
+      expectedSourceHash: source.hash,
+    });
+    const savedSource = store.source(first),
+      savedTranslation = store.job(translation.id),
+      savedVariables = readChatVariables(store, chatId);
+    expect(projections.readStoredRunSnapshot(store, source.runId).settled).toBe(true);
+    // Display still needs today's message history, but never the model's story/resource input.
+    const preparation = vi.spyOn(store.story, 'prepare'),
+      resources = vi.spyOn(store.product, 'resources');
+    try {
+      const response = await app.inject(
+        `/api/chats/${chatId}/sources/${first}/presentation?viewportWidth=412&viewportHeight=915`
+      );
+      expect(response.statusCode, response.body).toBe(200);
+      const presentation = response.json();
+      expect(presentation.original.html).toContain('Choose none');
+      expect(presentation.original.html).toContain('History 2');
+      expect(presentation.translation.html).toContain('Translated opening none');
+      expect(presentation.translation.html).toContain('History 2');
+      expect(presentation.translationId).toBe(translation.id);
+      expect(presentation.translationRevision).toBe(translation.revision);
+      expect(presentation.nativeAction.expectedHeadRevision).toBe(next.id);
+      expect(preparation).not.toHaveBeenCalled();
+      expect(resources).not.toHaveBeenCalled();
+    } finally {
+      preparation.mockRestore();
+      resources.mockRestore();
+    }
+    expect(store.source(first)).toEqual(savedSource);
+    expect(store.job(translation.id)).toEqual(savedTranslation);
+    expect(readChatVariables(store, chatId)).toEqual(savedVariables);
+    expect(store.chat(chatId).headRevision).toBe(next.id);
   } finally {
     await app.close();
   }
@@ -281,7 +318,7 @@ test('native first-message button renders, checkpoints state, and survives sourc
   packagePresentationRoutes(app, store);
   try {
     const first = store.chat(chatId).headRevision!;
-    const snapshots = vi.spyOn(projections, 'readRunSnapshot');
+    const snapshots = vi.spyOn(projections, 'readStoredRunSnapshot');
     const before = await app.inject(`/api/chats/${chatId}/sources/${first}/presentation`);
     expect(
       snapshots.mock.calls.filter(([, runId]) => runId === store.source(first).runId)
