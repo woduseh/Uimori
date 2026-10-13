@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ReaderActivity } from '../core/types.js';
 import { Dialog } from './Dialog.js';
@@ -92,10 +93,10 @@ export function ActivityNotifications({
         </button>
       </div>
       {persistenceError && (
-        <p role="alert">
+        <NoticeBanner tone="error">
           확인 기록을 브라우저에 저장하지 못했어요. 이 화면에서는 숨겨지지만 앱을 다시 열면 알림이
           나타날 수 있어요.
-        </p>
+        </NoticeBanner>
       )}
       <ul className="activity-notification-items">
         {visible.map((item) => {
@@ -161,12 +162,20 @@ export function ActivityNotifications({
       {!visible.length && <p role="status">확인할 알림이 없어요.</p>}
       {loading && !error && <LoadingState compact label="이전 작업을 불러오는 중이에요…" />}
       {error && (
-        <p role="alert">
-          {error}{' '}
-          <button type="button" onClick={() => void load(cursor ?? undefined)}>
-            다시 불러오기
-          </button>
-        </p>
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => void load(cursor ?? undefined)}
+            >
+              다시 불러오기
+            </button>
+          }
+        >
+          {error}
+        </NoticeBanner>
       )}
       {cursor && !error && (
         <button

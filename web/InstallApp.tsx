@@ -1,4 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
+import { NoticeBanner } from './NoticeBanner.js';
 import { Check, Download } from 'lucide-react';
 import { installSnapshot, installServerSnapshot, promptInstall, subscribeInstall } from './pwa.js';
 
@@ -39,11 +40,7 @@ export function InstallApp() {
           </p>
         )}
       </details>
-      {state.error && (
-        <p role="alert" className="error">
-          {state.error}
-        </p>
-      )}
+      {state.error && <NoticeBanner tone="error">{state.error}</NoticeBanner>}
     </section>
   );
 }

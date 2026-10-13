@@ -1,4 +1,5 @@
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { ProviderConnectionForm } from './ProviderConnectionForm.js';
 import { ProviderModelForm } from './ProviderModelForm.js';
 import {
@@ -1034,9 +1035,9 @@ export function ConnectionEditor({
         </div>
       </div>
       {jevListError && (
-        <p className="error" role="alert">
+        <NoticeBanner tone="error">
           TypeSafe AI 등록 상태를 확인하지 못했어요. 목록을 새로고침해 주세요.
-        </p>
+        </NoticeBanner>
       )}
       {(screen === 'models' || screen === 'connections') && (
         <>
@@ -1305,9 +1306,9 @@ export function ConnectionEditor({
                   </ActionMenu>
                 </div>
                 {item.catalogError && (
-                  <p className="error provider-item-notice">
+                  <NoticeBanner tone="error" className="provider-item-notice">
                     모델 목록 조회 실패 · 마지막 저장 목록을 유지해요.
-                  </p>
+                  </NoticeBanner>
                 )}
               </article>
             );
@@ -1487,13 +1488,9 @@ export function ConnectionEditor({
         }}
         deleteAction={editingModel && deleteModel(editingModel, true)}
       />
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <TransientNotice message={message} />
-      {refreshWarning && <p role="status">{refreshWarning}</p>}
+      {refreshWarning && <NoticeBanner>{refreshWarning}</NoticeBanner>}
     </section>
   );
 }

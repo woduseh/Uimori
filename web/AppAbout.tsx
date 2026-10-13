@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { NoticeBanner } from './NoticeBanner.js';
 import './app-about.css';
 import { api } from './api.js';
 import { ExternalLinkIcon, LibraryIcon } from './ui-icons.js';
@@ -56,16 +57,20 @@ export function AppAbout() {
           </code>
         </div>
         {error && (
-          <p role="alert">
-            실행 버전을 확인하지 못했어요.{' '}
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => setRefresh((value) => value + 1)}
-            >
-              다시 확인
-            </button>
-          </p>
+          <NoticeBanner
+            tone="error"
+            actions={
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setRefresh((value) => value + 1)}
+              >
+                다시 확인
+              </button>
+            }
+          >
+            실행 버전을 확인하지 못했어요.
+          </NoticeBanner>
         )}
         <div className="settings-row">
           <div className="settings-row-copy">

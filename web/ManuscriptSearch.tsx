@@ -9,6 +9,8 @@ import type { Chat } from '../core/types.js';
 import type { Library, ChatFolder } from '../core/product.js';
 import { api } from './api.js';
 import { CheckIcon, SearchIcon } from './ui-icons.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './manuscript-search.css';
 
 const labels: Record<SearchKind, string> = {
@@ -224,14 +226,18 @@ export function ManuscriptSearchPanel({
       {needle && !result && !busy && !error && (
         <p className="muted">짧은 이름도 검색할 수 있어요. Enter 또는 검색을 눌러 주세요.</p>
       )}
-      {busy && <p role="status">원고를 찾고 있어요…</p>}
+      {busy && <LoadingState compact label="원고를 찾고 있어요…" />}
       {error && (
-        <p role="alert" className="error">
-          {error}{' '}
-          <button type="button" onClick={() => void run()}>
-            다시 검색
-          </button>
-        </p>
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button type="button" className="secondary" onClick={() => void run()}>
+              다시 검색
+            </button>
+          }
+        >
+          {error}
+        </NoticeBanner>
       )}
       {result && <h3 className="manuscript-search-result-heading">본문 검색 결과</h3>}
       <div className="manuscript-search-results">

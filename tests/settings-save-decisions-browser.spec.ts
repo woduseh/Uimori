@@ -55,6 +55,70 @@ test('DECISION settings role model conflict review keeps the editable draft and 
   ).toBe(remoteRetries);
 });
 
+test('DECISION settings role model reload requires explicit discard and keeps the draft when reading fails', async ({
+  page,
+  request,
+}, info) => {
+  const before = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '역할별 모델');
+  const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
+  await editor
+    .locator('summary')
+    .filter({ hasText: /^작업 동작/ })
+    .click();
+  const retries = editor.getByLabel('번역 자동 재요청 횟수', { exact: true });
+  const local = before.translationPolicy.maxRetries === 2 ? 1 : 2;
+  await retries.fill(String(local));
+  const reload = editor.getByRole('button', { name: '최신 설정 다시 불러오기', exact: true });
+  const confirmation = page.getByRole('alertdialog', {
+    name: '역할별 모델 설정 다시 불러오기',
+    exact: true,
+  });
+  await reload.click();
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(retries).toHaveValue(String(local));
+  const changed = await request.put('/api/model-workspace', {
+    data: {
+      expectedRevision: before.revision,
+      routes: before.routes,
+      mainJudgmentEnabled: before.mainJudgmentEnabled,
+      mainJudgmentThreshold: before.mainJudgmentThreshold,
+      titleModel: before.titleModel,
+      helperModel: before.helperModel,
+      contextModel: before.contextModel,
+      scriptModel: before.scriptModel,
+      translationPolicy: { ...before.translationPolicy, maxRetries: 3 },
+    },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  const saved = (await changed.json()) as ModelWorkspace;
+  let failing = true;
+  await page.route('**/api/model-workspace', async (route) => {
+    if (route.request().method() !== 'GET' || !failing) return route.continue();
+    await route.fulfill({ status: 503, json: { error: 'Synthetic model settings read failure' } });
+  });
+  await reload.click();
+  await confirmation.getByRole('button', { name: '초안 버리고 불러오기', exact: true }).click();
+  await expect(confirmation.getByRole('alert')).toContainText('초안은 유지했어요');
+  await page.screenshot({ path: info.outputPath('model-settings-reload-failed-412.png') });
+  await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await expect(retries).toHaveValue(String(local));
+  expect((await (await request.get('/api/model-workspace')).json()).revision).toBe(saved.revision);
+  failing = false;
+  await reload.click();
+  await confirmation.getByRole('button', { name: '초안 버리고 불러오기', exact: true }).click();
+  await expect(confirmation).toBeHidden();
+  await expect(retries).toHaveValue('3');
+  await expect(
+    editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true })
+  ).toBeDisabled();
+  expect((await (await request.get('/api/model-workspace')).json()).revision).toBe(saved.revision);
+});
+
 for (const scope of ['global', 'chat'] as const) {
   test(`DECISION settings ${scope} prompt option conflict review preserves local values until explicit reconciliation`, async ({
     page,

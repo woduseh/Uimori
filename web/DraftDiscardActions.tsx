@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CloseIcon, EditIcon, SaveIcon } from './ui-icons.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './draft-discard.css';
 
 export function DraftDiscardActions({
@@ -77,11 +78,7 @@ export function DraftDiscardActions({
           </button>
         )}
       </div>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './scheduled-backups.css';
 import { useEffect, useState } from 'react';
 import { DatabaseBackup, Download, RefreshCw } from 'lucide-react';
@@ -185,9 +186,7 @@ export function BackupSettings({
               </label>
             </div>
             {invalid && (
-              <p role="alert" className="error">
-                백업 시간과 보관 개수를 확인해 주세요.
-              </p>
+              <NoticeBanner tone="error">백업 시간과 보관 개수를 확인해 주세요.</NoticeBanner>
             )}
           </fieldset>
         )}
@@ -212,12 +211,8 @@ export function BackupSettings({
                 </dd>
               </div>
             </dl>
-            {status.error && (
-              <p role="alert" className="error">
-                {status.error}
-              </p>
-            )}
-            {status.warning && <p role="status">{status.warning}</p>}
+            {status.error && <NoticeBanner tone="error">{status.error}</NoticeBanner>}
+            {status.warning && <NoticeBanner>{status.warning}</NoticeBanner>}
             <div className="backup-actions">
               <button
                 type="button"
@@ -268,21 +263,23 @@ export function BackupSettings({
         )}
         {!status && !error && <LoadingState compact label="백업 설정을 불러오는 중이에요…" />}
         {error && (
-          <div className="settings-service-error">
-            <p role="alert" className="error">
-              {error}
-            </p>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                if (dirty) setConfirmReload(true);
-                else reloadSettings();
-              }}
-            >
-              <RefreshCw size={16} aria-hidden="true" /> 다시 확인
-            </button>
-          </div>
+          <NoticeBanner
+            tone="error"
+            actions={
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (dirty) setConfirmReload(true);
+                  else reloadSettings();
+                }}
+              >
+                <RefreshCw size={16} aria-hidden="true" /> 다시 확인
+              </button>
+            }
+          >
+            {error}
+          </NoticeBanner>
         )}
         <Dialog
           open={confirmReload}

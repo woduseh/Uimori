@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import {
   CHAT_BACKUP_FORMAT,
@@ -204,17 +205,14 @@ export function ChatBackupImport({
             </div>
           </div>
         )}
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+        {busy && <LoadingState compact label="채팅 백업을 복원하는 중이에요…" />}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         {uncertain && (
-          <p role="status">
+          <NoticeBanner>
             복원 결과가 아직 확인되지 않았어요. 같은 요청 확인으로 중복 없이 결과를 확인해 주세요.
-          </p>
+          </NoticeBanner>
         )}
-        {message && <p role="status">{message}</p>}
+        {message && <NoticeBanner>{message}</NoticeBanner>}
         <small className="muted archive-import-note">
           전역 프롬프트·역할 모델은 현재 작업실 설정을 사용하며 실행 기록과 도우미 내부 작업은
           가져오지 않아요.

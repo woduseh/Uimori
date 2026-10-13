@@ -1,4 +1,6 @@
 import { readImportSource as readSource } from './import-source.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
 import type { PromptPreset } from '../core/product.js';
 import { RISU_IMPORT_MAX_BYTES, type RisuImportSource } from '../core/risu-import.js';
@@ -219,10 +221,10 @@ export function RisuPresetImport({
                 </label>
               )}
               {uncertain && (
-                <p role="status">
+                <NoticeBanner>
                   서버의 완료 여부를 확인하지 못했어요. 파일과 선택을 유지한 같은 요청으로 다시
                   확인하면 프롬프트가 중복 생성되지 않아요. 이 창을 닫아도 요청은 유지돼요.
-                </p>
+                </NoticeBanner>
               )}
               {result ? (
                 <div className="risu-import-result">
@@ -248,12 +250,12 @@ export function RisuPresetImport({
               )}
             </>
           )}
-          {busy && <p role="status">파일을 처리하고 있어요…</p>}
-          {notice && <p role="status">{notice}</p>}
+          {busy && <LoadingState compact label="파일을 처리하고 있어요…" />}
+          {notice && <NoticeBanner>{notice}</NoticeBanner>}
           {error && (
-            <p className="error" role="alert">
+            <NoticeBanner className="error" tone="error">
               {error}
-            </p>
+            </NoticeBanner>
           )}
         </section>
       </Dialog>

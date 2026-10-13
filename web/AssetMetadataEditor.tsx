@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Asset } from '../core/product.js';
 import { api } from './api.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 
 /** Small local form: changing metadata never uploads or recompresses an image. */
 export function AssetMetadataEditor({
@@ -11,17 +13,24 @@ export function AssetMetadataEditor({
   onSaved: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState(asset);
+  const accepted = useRef(asset);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    // Refresh pristine fields, while an edited draft keeps its original CAS revision.
+    if (
+      busy ||
+      asset.revision <= accepted.current.revision ||
+      draft.title !== accepted.current.title ||
+      draft.description !== accepted.current.description
+    )
+      return;
+    accepted.current = asset;
+    setDraft(asset);
+    setError('');
+  }, [asset, busy, draft.title, draft.description]);
   return (
-    <details
-      onToggle={(event) => {
-        if (event.currentTarget.open) {
-          setDraft(asset);
-          setError('');
-        }
-      }}
-    >
+    <details aria-busy={busy}>
       <summary>이름·설명 편집</summary>
       <label>
         이미지 이름
@@ -61,6 +70,7 @@ export function AssetMetadataEditor({
               },
               'PATCH'
             );
+            accepted.current = saved;
             setDraft(saved);
             await onSaved();
           } catch (caught) {
@@ -72,7 +82,8 @@ export function AssetMetadataEditor({
       >
         이미지 정보 저장
       </button>
-      {error && <small role="alert">{error}</small>}
+      {busy && <LoadingState compact label="이미지 정보를 저장하는 중이에요…" />}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </details>
   );
 }

@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_THEME_TEMPLATE, THEME_SLOTS } from '../core/themes.js';
 import { ThemeContext } from './ThemeContext.js';
+import { NoticeBanner } from './NoticeBanner.js';
 
 /** Native slot projection leaves React's body/action nodes in place, even when layouts change. */
 export function themeTemplate(html: string): DocumentFragment {
@@ -107,9 +108,7 @@ export function ThemeFrame({
   return (
     <>
       {error && (
-        <p className="error" role="alert">
-          테마 레이아웃 대신 기본 화면을 표시해요. {error}
-        </p>
+        <NoticeBanner tone="error">테마 레이아웃 대신 기본 화면을 표시해요. {error}</NoticeBanner>
       )}
       <div
         ref={host}

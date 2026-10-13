@@ -267,20 +267,6 @@
   padding: 9px 7px;
   font-size: 12px;
 }
-.quick-controls .creative-options-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 36px;
-  background: transparent;
-  color: var(--muted);
-  padding: 5px 7px;
-  font-size: 11px;
-}
-.quick-controls .creative-options-button[aria-expanded="true"] {
-  background: var(--accent-soft);
-  color: var(--text);
-}
 @media (max-width: 760px) {
   .app-shell.options-open {
     grid-template-columns: minmax(0, 1fr);
@@ -288,10 +274,6 @@
   .chat-prompt-options {
     width: 100vw;
     border-left: 0;
-  }
-  .quick-controls .creative-options-button {
-    font-size: 10px;
-    min-height: 38px;
   }
   .chat-options-body {
     padding: 16px;

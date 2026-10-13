@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './deletion.css';
 
 type Props = {
@@ -98,6 +99,7 @@ export function DeleteButton({
       <Dialog
         open={!!target}
         title="삭제 확인"
+        variant="confirmation"
         role="alertdialog"
         className="delete-dialog"
         onClose={() => {
@@ -108,11 +110,7 @@ export function DeleteButton({
           <strong>{target?.title}</strong> 항목을 삭제할까요?
         </p>
         <p className="muted">{description}</p>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"

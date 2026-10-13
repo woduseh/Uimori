@@ -1,4 +1,5 @@
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { RefreshIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
@@ -70,7 +71,6 @@ export function SettingsEditor({
     } catch (error) {
       const text = (error as Error).message;
       setLocalError(text);
-      onError(text);
       return false;
     } finally {
       setSaving(false);
@@ -132,7 +132,11 @@ export function SettingsEditor({
           </div>
         </fieldset>
         <TransientNotice message={message} />
-        {localError && <p className="error full">{localError}</p>}
+        {localError && (
+          <NoticeBanner tone="error" className="full">
+            {localError}
+          </NoticeBanner>
+        )}
       </form>
     </section>
   );

@@ -315,7 +315,9 @@ test('PERSONAL saving one tab preserves another tab recovery through reload', as
     await expect.poll(storedTitle).toBe(recoveredTitle);
     await save(other);
     await expect(
-      page.getByText('저장된 자료가 변경됐어요. 현재 입력은 유지돼요.', { exact: true })
+      page.getByRole('alert').filter({
+        hasText: '저장된 자료가 변경됐어요. 현재 입력은 유지돼요.',
+      })
     ).toBeVisible();
     expect(await storedTitle()).toBe(recoveredTitle);
     await page.reload();
@@ -413,6 +415,12 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
   await expect(description).toBeEnabled();
   await expect(title).toHaveValue('Keep unsaved title');
   await expect(description).toHaveValue('Keep unsaved description');
+  await page.getByText('이름·설명 편집', { exact: true }).click();
+  await expect(title).not.toBeVisible();
+  await page.getByText('이름·설명 편집', { exact: true }).click();
+  await expect(title).toHaveValue('Keep unsaved title');
+  await expect(description).toHaveValue('Keep unsaved description');
+  await expect(page.getByRole('alert')).toBeVisible();
   await page.screenshot({
     path: info.outputPath('personal-metadata-error-retained.png'),
     fullPage: true,

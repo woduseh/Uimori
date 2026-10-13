@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useState } from 'react';
 import type { HelperActivity as Activity } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
@@ -126,10 +127,10 @@ export function HelperActivityDetails({
                   </details>
                   {stage.events.map((event) =>
                     event.error || event.denied ? (
-                      <p className="error" key={event.seq}>
+                      <NoticeBanner tone="error" key={event.seq}>
                         {event.name ? `${event.name} · ` : ''}
                         {event.error ?? '실행이 허용되지 않았어요.'}
-                      </p>
+                      </NoticeBanner>
                     ) : event.text ? (
                       <p key={event.seq}>
                         {event.text}

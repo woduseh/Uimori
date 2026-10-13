@@ -306,6 +306,13 @@ const settingsCategories: SettingsCategory[] = [
   { key: 'about', label: '앱 정보·라이선스', icon: Info, terms: '버전 빌드 저작권' },
 ];
 
+const librarySettingsSubjects: Record<string, string> = {
+  models: '역할별 모델 설정을',
+  prompts: '현재 프롬프트를',
+  connections: '프로바이더 목록을',
+  illustrations: '삽화 설정을',
+};
+
 function searchText(value: string) {
   return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '');
 }
@@ -582,6 +589,16 @@ export function AppSettingsPanel({
                     />
                   )}
                   {key === 'about' && <AppAbout />}
+                  {librarySettingsSubjects[key] && !state.library && (
+                    <LoadingState
+                      loading={!state.libraryError}
+                      error={state.libraryError}
+                      label={`${librarySettingsSubjects[key]} 불러오는 중이에요…`}
+                      errorLabel={`${librarySettingsSubjects[key]} 불러오지 못했어요.`}
+                      onRetry={() => void state.retryLibrary().catch(() => {})}
+                      compact
+                    />
+                  )}
                   {key === 'general' && (
                     <section
                       id={`${id}-general-display`}
@@ -711,7 +728,7 @@ export function AppSettingsPanel({
                   )}
                   {key === 'connections' && (
                     <div data-testid="connection-settings">
-                      {state.library ? (
+                      {state.library && (
                         <ConnectionEditor
                           library={state.library}
                           reload={state.loadLibrary}
@@ -720,15 +737,6 @@ export function AppSettingsPanel({
                           onSaveHandlerChange={saveGroup.registrations.connection}
                           modelToEdit={modelToEdit}
                           onModelEditHandled={() => setModelToEdit(null)}
-                        />
-                      ) : (
-                        <LoadingState
-                          loading={!state.libraryError}
-                          error={state.libraryError}
-                          label="프로바이더 목록을 불러오는 중이에요…"
-                          errorLabel="프로바이더 목록을 불러오지 못했어요."
-                          onRetry={() => void state.retryLibrary().catch(() => {})}
-                          compact
                         />
                       )}
                     </div>

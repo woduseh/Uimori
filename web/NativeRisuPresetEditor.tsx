@@ -1,4 +1,5 @@
 import type { ResourceModel } from '../core/resource-editing.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useId, useState, type DragEvent, type ReactNode } from 'react';
 import {
   createNativeRisuPresetProgram,
@@ -205,14 +206,14 @@ export function NativeRisuPresetEditor({
         idPrefix={id}
       />
       {error && (
-        <p className="error native-editor-notice" role="alert">
+        <NoticeBanner className="native-editor-notice" tone="error">
           {error} · 입력은 유지했어요.
-        </p>
+        </NoticeBanner>
       )}
       {pending && (
-        <p className="native-editor-notice" role="status">
+        <NoticeBanner className="native-editor-notice">
           직접 편집 중인 원문이 있어요. 저장할 때 함께 반영해요.
-        </p>
+        </NoticeBanner>
       )}
       <div {...panel('blocks')} className="native-editor-split">
         <aside className="native-item-list" aria-label="프롬프트 블록 목록">

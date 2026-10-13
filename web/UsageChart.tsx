@@ -13,51 +13,59 @@ export function UsageChart({ report }: { report: UsageReport }) {
         <h3>비용 추이</h3>
         <small>{step === 1 ? '일별' : `${step}일 단위`} · 한국 시간</small>
       </header>
-      <div className="usage-chart-scale">
-        <span>{usageUsd(maximum)}</span>
-        <span>US$0</span>
-      </div>
-      <div className="usage-chart" aria-label="기간별 비용">
-        {buckets.map((item, index) => (
-          <button
-            key={item.from}
-            type="button"
-            className={`usage-chart-column${item.unknown || item.partial ? ' incomplete' : ''}`}
-            aria-label={bucketLabel(item)}
-            aria-pressed={selected === index}
-            title={bucketLabel(item)}
-            onPointerEnter={() => setSelected(index)}
-            onFocus={() => setSelected(index)}
-            onClick={() => setSelected(index)}
-            onKeyDown={(event) => {
-              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-              event.preventDefault();
-              const next =
-                event.key === 'ArrowLeft'
-                  ? event.currentTarget.previousElementSibling
-                  : event.currentTarget.nextElementSibling;
-              if (next instanceof HTMLButtonElement) next.focus();
-            }}
-          >
-            <span
-              className="usage-chart-bar"
-              style={{
-                height: `${maximum && item.amount ? Math.max(2, (item.amount / maximum) * 100) : 0}%`,
-              }}
-            />
-            {(item.unknown > 0 || item.partial > 0) && (
-              <span className="usage-chart-missing" aria-hidden="true" />
-            )}
-          </button>
-        ))}
-      </div>
-      <div className="usage-chart-axis">
-        <span>{shortDay(report.from)}</span>
-        {report.from !== report.to && <span>{shortDay(report.to)}</span>}
-      </div>
-      <p className="usage-chart-caption" aria-live="polite">
-        {current ? bucketLabel(current) : '막대를 선택하면 상세 내역을 볼 수 있어요.'}
-      </p>
+      {report.totals.calls === 0 ? (
+        <p className="usage-chart-empty" role="status">
+          선택한 기간에 기록이 없어요.
+        </p>
+      ) : (
+        <>
+          <div className="usage-chart-scale">
+            <span>{usageUsd(maximum)}</span>
+            <span>US$0</span>
+          </div>
+          <div className="usage-chart" aria-label="기간별 비용">
+            {buckets.map((item, index) => (
+              <button
+                key={item.from}
+                type="button"
+                className={`usage-chart-column${item.unknown || item.partial ? ' incomplete' : ''}`}
+                aria-label={bucketLabel(item)}
+                aria-pressed={selected === index}
+                title={bucketLabel(item)}
+                onPointerEnter={() => setSelected(index)}
+                onFocus={() => setSelected(index)}
+                onClick={() => setSelected(index)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                  event.preventDefault();
+                  const next =
+                    event.key === 'ArrowLeft'
+                      ? event.currentTarget.previousElementSibling
+                      : event.currentTarget.nextElementSibling;
+                  if (next instanceof HTMLButtonElement) next.focus();
+                }}
+              >
+                <span
+                  className="usage-chart-bar"
+                  style={{
+                    height: `${maximum && item.amount ? Math.max(2, (item.amount / maximum) * 100) : 0}%`,
+                  }}
+                />
+                {(item.unknown > 0 || item.partial > 0) && (
+                  <span className="usage-chart-missing" aria-hidden="true" />
+                )}
+              </button>
+            ))}
+          </div>
+          <div className="usage-chart-axis">
+            <span>{shortDay(report.from)}</span>
+            {report.from !== report.to && <span>{shortDay(report.to)}</span>}
+          </div>
+          <p className="usage-chart-caption" aria-live="polite">
+            {current ? bucketLabel(current) : '막대를 선택하면 상세 내역을 볼 수 있어요.'}
+          </p>
+        </>
+      )}
     </section>
   );
 }

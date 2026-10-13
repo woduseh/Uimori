@@ -76,7 +76,7 @@ test('LAZY05 unavailable library data keeps prompt navigation usable', async ({ 
     expect((await failed).status()).toBe(503);
     await navigationAction(page, '프롬프트');
     await expect(page.getByRole('heading', { name: '프롬프트', exact: true })).toBeVisible();
-    await expect(page.getByRole('main').getByRole('status')).toContainText(
+    await expect(page.getByRole('main').getByRole('alert')).toContainText(
       '프롬프트 목록을 불러오지 못했어요.'
     );
     if (width === MOBILE_WIDTH)

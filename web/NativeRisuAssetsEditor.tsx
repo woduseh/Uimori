@@ -11,6 +11,8 @@ import {
 } from '../core/risu-native-assets.js';
 import { uploadPackageImage } from './package-image-upload.js';
 import { Dialog } from './Dialog.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { IconButton } from './IconButton.js';
 import { DeleteIcon, ImagesIcon } from './ui-icons.js';
 import './native-risu-assets.css';
@@ -69,7 +71,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
     upload.current = controller;
     setBusy(true);
     setError('');
-    setNotice('이미지를 업로드하고 있어요.');
+    setNotice('');
     latest.current.onBusyChange?.(true);
     const current = () =>
       generation.current === token && latest.current.scope === owner && !controller.signal.aborted;
@@ -163,14 +165,15 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           없으며, 내장 파일이 누락된 자료는 CHARX 내보내기가 제한될 수 있어요.
         </p>
       )}
-      <p role="status" aria-live="polite" className="muted">
-        {notice || `${images.length}개 이미지`}
-        {busy && ' · 업로드가 끝난 뒤 저장해 주세요.'}
-      </p>
+      <p className="muted">{images.length}개 이미지</p>
+      {busy && (
+        <LoadingState compact label="이미지를 업로드하고 있어요. 업로드가 끝난 뒤 저장해 주세요." />
+      )}
+      {notice && <NoticeBanner>{notice}</NoticeBanner>}
       {error && (
-        <p role="alert" className="error native-assets-error">
+        <NoticeBanner tone="error" className="native-assets-error">
           {error}
-        </p>
+        </NoticeBanner>
       )}
       <div className={`native-assets-layout${active ? ' has-selection' : ''}`}>
         <div>
@@ -277,6 +280,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
       <Dialog
         open={!!pending}
         title="이 에셋을 자료에서 제거할까요?"
+        variant="confirmation"
         className="delete-dialog"
         onClose={() => setRemoving('')}
         scopeKey={scope}

@@ -259,14 +259,27 @@
   padding-top: 12px;
   margin-top: 12px;
 }
-.run-outcome:has(.streaming-response) .turn-skeleton {
-  display: none;
-}
 .helper-thread-content {
   display: flex;
   flex-direction: column;
   gap: 22px;
   min-width: 0;
+}
+.helper-thread-empty {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+.helper-thread-empty > .helper-empty {
+  max-width: 32ch;
+  margin: 0;
+  text-align: center;
+}
+.helper-thread-empty > .loading-state {
+  width: 100%;
+}
+.helper-activity-stages .notice-banner-message {
+  white-space: pre-wrap;
 }
 .helper-work-selector {
   display: flex;

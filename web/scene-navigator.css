@@ -37,7 +37,7 @@
   width: 100%;
 }
 .scene-list-toggle span {
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -241,6 +241,8 @@
     position: absolute;
     left: 50%;
     bottom: 12px;
+    width: max-content;
+    max-width: calc(100% - 24px);
     transform: translateX(-50%);
     z-index: 5;
     display: flex;
@@ -254,8 +256,8 @@
     box-shadow: 0 4px 14px var(--shade);
   }
   .scene-mini-navigator button {
-    min-width: 38px;
-    min-height: 38px;
+    min-width: var(--control-h);
+    min-height: var(--control-h);
     padding: 6px 8px;
     color: var(--muted);
     border: 0;
@@ -266,6 +268,7 @@
     gap: 7px;
     align-items: center;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
   .reader-stage .scene-latest-floating {
     left: auto;

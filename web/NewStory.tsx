@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Chat } from '../core/types.js';
@@ -428,14 +429,22 @@ export function NewStory({
             </div>
           </dl>
           {!mainAvailable && (
-            <p role="status">
+            <NoticeBanner
+              actions={
+                <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
+                  전역 모델 설정
+                </button>
+              }
+            >
               본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도
               있어요.
-            </p>
+            </NoticeBanner>
           )}
-          <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
-            전역 모델 설정
-          </button>
+          {mainAvailable && (
+            <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
+              전역 모델 설정
+            </button>
+          )}
         </div>
         {packageLoading && <LoadingState compact label="시작 자료를 불러오는 중이에요…" />}
         {!!activeBot?.package?.starts?.length && (

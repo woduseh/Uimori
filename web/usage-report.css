@@ -87,6 +87,7 @@
 .usage-cards small {
   display: block;
   margin-top: 6px;
+  word-break: keep-all;
 }
 .usage-results > .usage-note {
   margin-top: -8px;
@@ -187,6 +188,14 @@
   font-size: 0.8125rem;
   min-height: 2.8em;
   padding-top: 10px;
+}
+.usage-chart-empty {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  text-align: center;
 }
 .usage-models {
   min-width: 0;
@@ -311,6 +320,9 @@
   }
 }
 @media (max-width: 600px) {
+  .usage-presets button {
+    min-height: var(--control-h);
+  }
   .usage-cards {
     grid-template-columns: 1fr 1fr;
   }

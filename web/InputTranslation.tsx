@@ -1,6 +1,8 @@
-import { Languages, LoaderCircle, Square, Undo2 } from 'lucide-react';
+import { Languages, Square, Undo2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { INPUT_TRANSLATION_LANGUAGES } from '../core/input-translation.js';
 import type { InputTranslationState } from './useInputTranslation.js';
+import { LoadingState } from './LoadingState.js';
 import './input-translation.css';
 import './activity-status.css';
 
@@ -10,6 +12,18 @@ export function InputTranslationControls({
   disabled,
   empty,
 }: Props & { empty: boolean }) {
+  const languageMenu = useRef<HTMLDetailsElement>(null);
+  const languageTrigger = useRef<HTMLElement>(null);
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!languageMenuOpen) return;
+    const outside = (event: PointerEvent) => {
+      const menu = languageMenu.current;
+      if (menu && !menu.contains(event.target as Node)) menu.open = false;
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, [languageMenuOpen]);
   const current =
     INPUT_TRANSLATION_LANGUAGES.find((language) => language.code === translation.language) ??
     INPUT_TRANSLATION_LANGUAGES[0];
@@ -48,8 +62,23 @@ export function InputTranslationControls({
           ))}
         </select>
       </label>
-      <details className="input-translation-language-mobile">
+      <details
+        ref={languageMenu}
+        className="input-translation-language-mobile"
+        onToggle={(event) => setLanguageMenuOpen(event.currentTarget.open)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape' || !event.currentTarget.open) return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.currentTarget.open = false;
+          languageTrigger.current?.focus();
+        }}
+      >
         <summary
+          ref={languageTrigger}
           aria-label={`입력 번역 언어 · ${current.label}`}
           title={`입력 번역 언어 · ${current.label}`}
         >
@@ -69,6 +98,7 @@ export function InputTranslationControls({
               onClick={(event) => {
                 translation.changeLanguage(language.code);
                 event.currentTarget.closest('details')?.removeAttribute('open');
+                languageTrigger.current?.focus();
               }}
             >
               {language.label}
@@ -91,10 +121,7 @@ export function InputTranslationFeedback({ translation, disabled }: Props) {
   return (
     <section className="input-translation-feedback" aria-label="입력 번역 상태">
       {translation.busy && (
-        <p role="status">
-          <LoaderCircle size={14} className="activity-spinner" aria-hidden="true" /> 입력을 번역하고
-          있어요. 계속 수정해도 괜찮아요.
-        </p>
+        <LoadingState compact label="입력을 번역하고 있어요. 계속 수정해도 괜찮아요." />
       )}
       {translation.original !== null && (
         <div className="input-translation-original">

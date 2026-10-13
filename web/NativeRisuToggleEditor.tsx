@@ -928,6 +928,8 @@ export function NativeRisuToggleEditor({
       <Dialog
         open={confirmation !== null}
         title={confirmation?.title ?? '변경 확인'}
+        variant="confirmation"
+        role="alertdialog"
         onClose={() => setConfirmation(null)}
       >
         <p>{confirmation?.description}</p>
@@ -943,7 +945,7 @@ export function NativeRisuToggleEditor({
               setConfirmation(null);
             }}
           >
-            {confirmation?.destructive ? '그룹 삭제' : '계속'}
+            {confirmation?.title ?? '변경 적용'}
           </button>
         </div>
       </Dialog>

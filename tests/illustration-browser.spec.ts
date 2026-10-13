@@ -280,7 +280,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
     route.fulfill({ status: 503, body: 'unavailable' })
   );
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
-  await expect(section.getByRole('status')).toContainText('설정을 불러오지 못했어요');
+  await expect(section.getByRole('alert')).toContainText('설정을 불러오지 못했어요');
   await page.unroute('**/api/illustration-settings');
   await section.getByLabel('장면당 최대 삽화 개수').fill('5');
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();

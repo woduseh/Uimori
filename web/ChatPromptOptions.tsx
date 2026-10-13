@@ -10,6 +10,7 @@ import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { ChatOptionSettings } from './ChatOptionSettings.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './chat-prompt-options.css';
 type Props = {
   open: boolean;
@@ -365,13 +366,13 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
           </button>
         </fieldset>
         {conflict && dirty && (
-          <p role="alert">
+          <NoticeBanner tone="error">
             다른 곳에서 현재 프롬프트가 바뀌었어요. 초안은 유지했어요. 최신 설정을 다시 불러온 뒤
             적용해 주세요.
-          </p>
+          </NoticeBanner>
         )}
         <TransientNotice message={message} />
-        {error && <p role="alert">{error}</p>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         {(error || conflict) && (
           <button
             type="button"

@@ -374,7 +374,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
               );
             })}
           </div>
-          {!visibleKeys.length && (
+          {!loading && view && !visibleKeys.length && (
             <p className="muted">{query ? '일치하는 변수가 없어요.' : '현재 변수가 없어요.'}</p>
           )}
           <details className="chat-variable-add">

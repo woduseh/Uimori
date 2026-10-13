@@ -6,6 +6,7 @@
 }
 .illustration-preset-settings {
   margin-bottom: 28px;
+  container-type: inline-size;
 }
 .illustration-preset-settings h3,
 .illustration-preset-settings h4,

@@ -100,7 +100,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     const a = await newChat(page, '합성 A · 등대');
     const b = await newChat(bPage, '합성 B · 정원');
     await storySettings(bPage);
-    await bPage.getByLabel('작업당 모델 호출 한도').fill('6');
+    await bPage.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true }).fill('6');
     await bPage.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect
       .poll(async () => (await detail(request, b.id)).chat.settingsRevision)
@@ -110,7 +110,9 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await aSecondTab.goto(`/?chat=${a.id}`);
     await expect(aSecondTab.getByRole('heading', { name: a.title, exact: true })).toBeVisible();
     await storySettings(aSecondTab);
-    await aSecondTab.getByLabel('작업당 모델 호출 한도').fill('6');
+    await aSecondTab
+      .getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true })
+      .fill('6');
     await control(request, 'hold', { barrier: 'run' });
     await control(request, 'hold', { barrier: 'translation' });
     const aRun = await send(page, '(OOC: Write a quiet lighthouse scene.) SYNTHETIC_A');
@@ -133,7 +135,9 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     } finally {
       await aWorkTab.close();
     }
-    await expect(aSecondTab.getByLabel('작업당 모델 호출 한도')).toHaveValue('6');
+    await expect(
+      aSecondTab.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true })
+    ).toHaveValue('6');
     // Duplicate identical HTTP command uses the exact browser-submitted body/key.
     const command = commands.get(aRun.id)!;
     expect(command).toMatchObject({
@@ -154,7 +158,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     expect(conflict.status()).toBe(409);
     // A changed setting while held must not alter the existing run snapshot.
     await storySettings(page);
-    await page.getByLabel('작업당 모델 호출 한도').fill('6');
+    await page.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true }).fill('6');
     await page.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect
       .poll(async () => (await detail(request, a.id)).chat.settingsRevision)
@@ -241,13 +245,14 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
         text: aSource.text,
         hash: createHash('sha256').update(aSource.text).digest('hex'),
       });
+      // Only the explicitly requested translation produces a result; status work is retired.
       expect(
         db
           .prepare(
             'SELECT count(*) AS n FROM job_results r JOIN jobs j ON j.id=r.job_id WHERE j.source_revision=?'
           )
           .get(aSource.id)?.n
-      ).toBe(2);
+      ).toBe(1);
     } finally {
       db.close();
     }
@@ -347,7 +352,9 @@ test('F05 failed auxiliary result retries independently while a later source is 
   } finally {
     db.close();
   }
-  expect(after.jobs.filter((j) => j.sourceRevision === source.id)).toHaveLength(2);
+  expect(after.jobs.filter((j) => j.sourceRevision === source.id).map((j) => j.id)).toEqual([
+    retriedJob.id,
+  ]);
   expect(after.runs.find((r) => r.sourceRevision === later.id)?.inputs).toEqual([]);
   expect(after.sources.map((item) => item.id)).toContain(source.id);
 });

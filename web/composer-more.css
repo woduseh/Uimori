@@ -38,6 +38,30 @@
   font-size: 13px;
   min-height: var(--control-h);
 }
+.quick-controls .composer-extra-settings > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.quick-controls .composer-extra-settings > button svg {
+  flex-shrink: 0;
+}
+.quick-controls .composer-extra-settings > button[aria-expanded="true"] {
+  background: var(--accent-soft);
+}
+@media (hover: hover) {
+  .quick-controls .composer-extra-settings > button:hover:not(:disabled) {
+    background: var(--hover);
+  }
+}
 .composer[hidden] {
   display: none;
 }
@@ -45,7 +69,7 @@
   display: flex;
   flex-direction: row;
   max-width: none;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   font-size: 13px;
   line-height: 1.5;

@@ -349,9 +349,9 @@ for (const viewport of viewports) {
       const duplicateKey = `${declarations}\nshort=Duplicate key=text`;
       await raw.fill(duplicateKey);
       await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
-      await expect(editor.locator('.native-editor-notice.error')).toContainText(
-        'RISU_NATIVE_PRESET_TOGGLE_KEY'
-      );
+      await expect(
+        editor.getByRole('alert').filter({ hasText: 'RISU_NATIVE_PRESET_TOGGLE_KEY' })
+      ).toBeVisible();
       await expect(raw).toHaveValue(duplicateKey);
       await raw.fill(declarations);
       await editView.click();

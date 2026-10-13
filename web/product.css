@@ -171,6 +171,24 @@
 .asset-grid small {
   display: block;
 }
+.asset-grid:has(> figure > figcaption > details[open]) {
+  max-height: none;
+}
+.asset-grid > figure:has(> figcaption > details[open]) {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.asset-grid figcaption > details[open] > label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin-block: 12px;
+}
+.asset-grid figcaption > details[open] > label > input,
+.asset-grid figcaption > details[open] > label > textarea {
+  width: 100%;
+  min-width: 0;
+}
 .settings {
   border-top: 1px solid var(--line);
   padding-top: 10px;

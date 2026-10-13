@@ -1,4 +1,5 @@
 import { TransientNotice } from './TransientNotice.js';
+import { LoadingState } from './LoadingState.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IllustrationReferenceRole, IllustrationReferences } from '../core/illustration.js';
@@ -35,8 +36,10 @@ export function IllustrationReferencesEditor({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
   const lock = useRef(false);
   const load = useCallback(async () => {
+    setLoadError('');
     try {
       const value = await api<Loaded>(
         `/chats/${encodeURIComponent(chatId)}/illustration-references`
@@ -44,10 +47,10 @@ export function IllustrationReferencesEditor({
       setLoaded(value);
       return value;
     } catch (error) {
-      onError((error as Error).message);
+      setLoadError((error as Error).message);
       return null;
     }
-  }, [chatId, onError]);
+  }, [chatId]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reader asset changes reload candidates; a dirty draft keeps its roles.
   useEffect(() => {
     void load().then((value) => {
@@ -60,7 +63,27 @@ export function IllustrationReferencesEditor({
   }, [dirty, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   useSettingsSaveHandler(onSaveHandlerChange, async () => (!loaded ? false : save()));
-  if (!loaded) return null;
+  if (!loaded)
+    return (
+      <section className="illustration-references" aria-label="삽화 참조 이미지">
+        <h4>삽화 참조 이미지</h4>
+        <LoadingState
+          compact
+          loading={!loadError}
+          error={loadError}
+          label="삽화 참조 이미지를 불러오는 중이에요…"
+          errorLabel="삽화 참조 이미지를 불러오지 못했어요."
+          onRetry={() =>
+            void load().then((value) => {
+              if (value)
+                setRoles(
+                  Object.fromEntries(value.candidates.map((item) => [item.ref, item.role ?? '']))
+                );
+            })
+          }
+        />
+      </section>
+    );
   const selected = loaded.candidates.filter((item) => roles[item.ref]);
   const save = async () => {
     if (lock.current) return false;
