@@ -6,6 +6,8 @@ type Target = {
   source_id: string | null;
   generation: number;
   eligible: number;
+  auto_run_id?: string | null;
+  auto_enabled?: number;
 };
 
 /** Called only while recording a real event, in the same database transaction.
@@ -29,27 +31,37 @@ export function enqueueTerminalNotification(
   let target: Target | undefined;
   let prefix: string;
   let kind: PushEnvelope['kind'];
-  const representation = family === 'job' ? 'translation' : 'original';
+  let representation: 'original' | 'translation' = family === 'job' ? 'translation' : 'original';
   if (family === 'run') {
     prefix = 'run';
     kind = status === 'completed' ? 'main-completed' : 'task-failed';
     target = db
       .prepare(`SELECT r.status,
       COALESCE(r.source_revision,r.parent_revision) AS source_id,0 AS generation,
+      EXISTS(SELECT 1 FROM jobs j WHERE j.source_revision=r.source_revision AND j.kind='translation'
+        AND json_extract(j.input,'$.autoTranslateRunId')=r.id) AS auto_enabled,
       EXISTS(SELECT 1 FROM attempts a WHERE a.run_id=r.id AND a.is_synthetic=0) AS eligible
       FROM runs r WHERE r.id=? AND r.chat_id=?`)
       .get(entityId, chatId) as Target | undefined;
+    // A generated source with an automatic translation has one user-visible outcome.
+    if (status === 'completed' && target?.auto_enabled) return;
   } else if (family === 'job') {
     prefix = 'translation';
     kind = status === 'completed' ? 'translation-completed' : 'task-failed';
     target = db
       .prepare(`SELECT j.status,j.source_revision AS source_id,j.generation,
+      CASE WHEN json_extract(j.input,'$.autoTranslateRunId')=r.id THEN r.id END AS auto_run_id,
       (EXISTS(SELECT 1 FROM attempts a WHERE a.job_id=j.id AND a.is_synthetic=0)
       AND EXISTS(SELECT 1 FROM job_results jr WHERE jr.job_id=j.id AND COALESCE(json_extract(jr.result,'$.manual'),0)=0)) AS eligible
       FROM jobs j JOIN sources s ON s.id=j.source_revision JOIN runs r ON r.id=s.run_id
       WHERE j.id=? AND j.chat_id=? AND j.kind='translation'
       AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)`)
       .get(entityId, chatId) as Target | undefined;
+    if (target?.auto_run_id) {
+      prefix = 'run';
+      kind = status === 'completed' ? 'request-translated' : 'auto-translation-failed';
+      if (status !== 'completed') representation = 'original';
+    }
   } else {
     prefix = 'illustration';
     kind = status === 'completed' ? 'illustration-completed' : 'task-failed';
@@ -63,9 +75,11 @@ export function enqueueTerminalNotification(
   }
   if (!target || target.status !== status || (status === 'completed' && !target.eligible)) return;
   const eventKey =
-    family === 'run'
-      ? `${prefix}:${entityId}:${status}`
-      : `${prefix}:${entityId}:${target.generation}:${status}`;
+    family === 'job' && target.auto_run_id
+      ? `run:${target.auto_run_id}:translation-${status}`
+      : family === 'run'
+        ? `${prefix}:${entityId}:${status}`
+        : `${prefix}:${entityId}:${target.generation}:${status}`;
   const expiresAt = new Date(Date.parse(at) + 2 * 3600_000).toISOString();
   const insert =
     db.prepare(`INSERT INTO push_outbox(subscription_id,event_key,chat_id,source_id,kind,representation,next_at,expires_at,created_at)

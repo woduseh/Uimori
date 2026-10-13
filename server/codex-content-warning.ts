@@ -89,6 +89,17 @@ async function judge(
   }
 }
 
+/** The automatic path has no user present to accept a Codex content warning. */
+export async function autoTranslationNeedsConfirmation(
+  model: ModelSnapshot | undefined,
+  source: string,
+  credential: JevCredentialStore['resolve'],
+  signal: AbortSignal
+): Promise<boolean> {
+  if (!isCodex(model)) return false;
+  return (await judge('translation', source, '', credential, signal)).warning;
+}
+
 function currentContext(store: Store, chatId: string): string {
   const chat = store.chat(chatId);
   if (!chat.headRevision) return '';

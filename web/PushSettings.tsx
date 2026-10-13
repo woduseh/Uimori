@@ -17,11 +17,11 @@ function applicationKey(value: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 const labels: [keyof PushPreferences, string][] = [
-  ['main', '본문 생성 완료'],
+  ['main', '요청 완료 (자동 번역은 번역까지 완료 후)'],
   ['failures', '확인이 필요한 작업 실패'],
-  ['translation', '번역 완료·실패'],
+  ['translation', '개별 번역 완료·실패'],
   ['illustration', '삽화 완료·실패'],
-  ['showTitle', '잠금 화면에 채팅 제목 표시'],
+  ['showTitle', '채팅 제목 표시 (잠금 화면에도 표시될 수 있어요)'],
 ];
 export function PushSettings() {
   const [clientId] = useState(browserClientId);

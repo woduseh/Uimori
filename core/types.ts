@@ -1,5 +1,7 @@
 export type Settings = {
   maxCalls: number;
+  /** Start a translation after a successful model-authored source commit. */
+  autoTranslate?: boolean;
 };
 export type Chat = {
   id: string;

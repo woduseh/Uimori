@@ -154,6 +154,14 @@ test('opt-in has no historical replay, body completion queues atomically once, a
   });
   expect(f.store.db.prepare('SELECT count(*) AS n FROM push_outbox').get()!.n).toBe(0);
   const enabled = enable(f);
+  f.service.update(
+    {
+      clientId: f.clientId,
+      expectedRevision: 1,
+      preferences: { ...DEFAULT_PUSH_PREFERENCES, showTitle: false },
+    },
+    f.cookie
+  );
   expect(enabled).toMatchObject({ device: { revision: 1, preferences: DEFAULT_PUSH_PREFERENCES } });
   await f.service.tick();
   expect(f.delivered).toEqual([]);
@@ -441,4 +449,133 @@ test('public HTTP routes reuse authenticated sessions and maintenance; private k
   ).toBe(200);
   await app.inject({ method: 'DELETE', url: '/api/session', headers: authenticated });
   expect(app.store.db.prepare('SELECT count(*) AS n FROM push_subscriptions').get()!.n).toBe(0);
+});
+
+test('automatic translation reserves with the source, delays notification and sends one translated result with chat title', async () => {
+  const f = fixture();
+  enable(f);
+  const chat = createFixtureChat(f.store, 'Synthetic story');
+  f.store.settings(chat.id, chat.settingsRevision, { ...chat.settings, autoTranslate: true });
+  const source = complete(f.store, chat.id);
+  const job = f.store.detail(chat.id).jobs.find((item) => item.kind === 'translation');
+  expect(job).toBeDefined();
+  expect(job?.input).toMatchObject({ autoTranslateRunId: source.runId });
+  expect(job?.status).toBe('queued');
+  await f.service.tick();
+  expect(f.delivered).toEqual([]);
+  const owned = f.store.claimJob(job!.id, 'auto-translation-test', {})!;
+  const attempt = f.store.product.startAttempt(chat.id, null, job!.id, {
+    connectionId: 'synthetic-provider',
+    modelId: 'synthetic-model',
+    role: 'translation',
+    protocol: 'openai-chat-v1',
+    method: 'POST',
+    url: 'https://provider.invalid',
+    headers: {},
+    body: {},
+    bodySha256: 'synthetic',
+    stablePrefixSha256: 'synthetic',
+  });
+  f.store.product.finishAttempt(attempt, {
+    status: 'completed',
+    text: '한국어 번역문',
+    toolCalls: [],
+    refusal: null,
+    error: null,
+    opaqueState: null,
+    usage: { inputTokens: 1, outputTokens: 1, costUsd: null, priceRevision: null, raw: null },
+  });
+  expect(
+    f.store.finishAuxiliary(job!.id, owned.generation, 'auto-translation-test', {
+      status: 'completed',
+      result: {
+        mock: false,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        text: '한국어 번역문',
+      },
+      error: null,
+    })
+  ).toBe(true);
+  await f.service.tick();
+  expect(f.delivered).toHaveLength(1);
+  expect(f.delivered[0]).toMatchObject({
+    kind: 'request-translated',
+    title: 'Synthetic story',
+    sourceId: source.id,
+    representation: 'translation',
+  });
+  f.store.event(chat.id, 'job.completed', job!.id);
+  await f.service.tick();
+  expect(f.delivered).toHaveLength(1);
+});
+
+test('automatic translation failure reports the saved original once, and disabled failure alerts remain off', async () => {
+  const f = fixture();
+  enable(f);
+  const chat = createFixtureChat(f.store, 'Failure story');
+  f.store.settings(chat.id, chat.settingsRevision, { ...chat.settings, autoTranslate: true });
+  const source = complete(f.store, chat.id);
+  const job = f.store.detail(chat.id).jobs.find((item) => item.kind === 'translation')!;
+  expect(job).toBeDefined();
+  f.store.failQueuedJob(job.id, job.generation, 'synthetic translation failure');
+  await f.service.tick();
+  expect(f.delivered).toHaveLength(1);
+  expect(f.delivered[0]).toMatchObject({
+    kind: 'auto-translation-failed',
+    sourceId: source.id,
+    representation: 'original',
+  });
+  expect(f.store.source(source.id).text).toBe('SECRET_PROSE_CANARY');
+  const second = createFixtureChat(f.store, 'Other story');
+  f.store.settings(second.id, second.settingsRevision, { ...second.settings, autoTranslate: true });
+  const change = f.service.update(
+    {
+      clientId: f.clientId,
+      expectedRevision: 1,
+      preferences: { ...DEFAULT_PUSH_PREFERENCES, failures: false },
+    },
+    f.cookie
+  );
+  expect(change.device?.preferences.failures).toBe(false);
+  const other = complete(f.store, second.id);
+  const otherJob = f.store.detail(second.id).jobs.find((item) => item.kind === 'translation')!;
+  f.store.failQueuedJob(otherJob.id, otherJob.generation, 'synthetic failure');
+  await f.service.tick();
+  expect(f.delivered).toHaveLength(1);
+  expect(f.store.source(other.id).text).toBe('SECRET_PROSE_CANARY');
+});
+
+test('run reservation freezes the auto-translation choice despite later chat-setting changes', () => {
+  const f = fixture();
+  const chat = createFixtureChat(f.store, 'Frozen choice');
+  f.store.settings(chat.id, chat.settingsRevision, { ...chat.settings, autoTranslate: true });
+  const selected = start(f.store, chat.id);
+  const latest = f.store.chat(chat.id);
+  f.store.settings(chat.id, latest.settingsRevision, { ...latest.settings, autoTranslate: false });
+  const source = f.store.completeRun(selected.id, 'Frozen ON source', {
+    modelCalls: 1,
+    inputTokens: 1,
+    outputTokens: 1,
+    costUsd: null,
+  });
+  expect(
+    f.store
+      .detail(chat.id)
+      .jobs.some((job) => job.kind === 'translation' && job.sourceRevision === source.id)
+  ).toBe(true);
+  const second = createFixtureChat(f.store, 'Frozen OFF');
+  const off = start(f.store, second.id);
+  f.store.settings(second.id, second.settingsRevision, { ...second.settings, autoTranslate: true });
+  const other = f.store.completeRun(off.id, 'Frozen OFF source', {
+    modelCalls: 1,
+    inputTokens: 1,
+    outputTokens: 1,
+    costUsd: null,
+  });
+  expect(
+    f.store
+      .detail(second.id)
+      .jobs.some((job) => job.kind === 'translation' && job.sourceRevision === other.id)
+  ).toBe(false);
 });

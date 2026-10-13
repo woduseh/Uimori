@@ -23,6 +23,11 @@ test('only active settings survive old DB and backup projections', () => {
       maxCalls: 7,
     })
   ).toEqual({ maxCalls: 7 });
+  expect(normalizeChatSettings({ maxCalls: 8, autoTranslate: true })).toEqual({
+    maxCalls: 8,
+    autoTranslate: true,
+  });
+  expect(() => normalizeChatSettings({ maxCalls: 8, autoTranslate: 'yes' })).toThrow();
   for (const maxCalls of [0, 33, 2.5, '8', null])
     expect(() => normalizeChatSettings({ status: false, maxCalls })).toThrow('Invalid settings');
 });

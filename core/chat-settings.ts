@@ -10,5 +10,10 @@ export function normalizeChatSettings(value: unknown): Settings {
     input.maxCalls! > 32
   )
     throw Object.assign(new Error('Invalid settings'), { statusCode: 400 });
-  return { maxCalls: input.maxCalls! };
+  if (input.autoTranslate !== undefined && typeof input.autoTranslate !== 'boolean')
+    throw Object.assign(new Error('Invalid automatic translation setting'), { statusCode: 400 });
+  return {
+    maxCalls: input.maxCalls!,
+    ...(input.autoTranslate !== undefined ? { autoTranslate: input.autoTranslate } : {}),
+  };
 }

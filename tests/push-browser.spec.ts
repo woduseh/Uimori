@@ -168,7 +168,7 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
     failures: true,
     translation: false,
     illustration: false,
-    showTitle: false,
+    showTitle: true,
   };
   let device: { revision: number; preferences: typeof defaults; lastError: null } | null = null;
   let rejectNextChange = true,
@@ -225,14 +225,18 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
   expect(prepareCalls).toBe(1);
   expect(subscribeCalls).toBe(1);
   await panel.locator('summary').filter({ hasText: '알림 옵션' }).click();
-  await expect(panel.getByLabel('본문 생성 완료', { exact: true })).toBeChecked();
-  await expect(panel.getByLabel('번역 완료·실패', { exact: true })).not.toBeChecked();
-  const title = panel.getByLabel('잠금 화면에 채팅 제목 표시', { exact: true });
+  await expect(
+    panel.getByLabel('요청 완료 (자동 번역은 번역까지 완료 후)', { exact: true })
+  ).toBeChecked();
+  await expect(panel.getByLabel('개별 번역 완료·실패', { exact: true })).not.toBeChecked();
+  const title = panel.getByLabel('채팅 제목 표시 (잠금 화면에도 표시될 수 있어요)', {
+    exact: true,
+  });
   await title.click();
   await expect(panel.getByRole('alert')).toContainText('바뀌었어요');
-  await expect(title).not.toBeChecked();
-  await title.click();
   await expect(title).toBeChecked();
+  await title.click();
+  await expect(title).not.toBeChecked();
   await panel.getByRole('button', { name: '테스트 알림 보내기', exact: true }).click();
   await expect(page.locator('.transient-notice[role="status"]')).toContainText('발송 대기열');
   expect(testCalls).toBe(1);
