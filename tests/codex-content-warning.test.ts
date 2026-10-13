@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { ProviderResult } from '../core/transport.js';
 import { createApp, type App } from '../server/app.js';
+import { autoTranslationNeedsConfirmation } from '../server/codex-content-warning.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
 import { injectWithFixtureBot, setFixtureModelRoutes } from './fixtures/chat.js';
 import { installJevFixture } from './fixtures/jev.js';
@@ -156,6 +157,23 @@ test('Codex preflight warns through JEV for main and translation while remaining
   });
   expect(withoutKey).toEqual({ warning: false });
   expect(judgments).toHaveLength(0);
+  const translationModel = app.store.product.snapshot(chat.id, 'translation').models.translation;
+  expect(
+    await autoTranslationNeedsConfirmation(
+      translationModel,
+      'Synthetic source text.',
+      () => undefined,
+      new AbortController().signal
+    )
+  ).toBe(true);
+  expect(
+    await autoTranslationNeedsConfirmation(
+      undefined,
+      'Text',
+      () => undefined,
+      new AbortController().signal
+    )
+  ).toBe(false);
 
   app.store.credentials.set('jev', 'synthetic-jev-test-key');
   const main = await api(app, `/api/chats/${chat.id}/codex-content-preflight`, {
@@ -165,6 +183,15 @@ test('Codex preflight warns through JEV for main and translation while remaining
   expect(main).toEqual({ warning: true });
   expect(judgments.at(-1)?.state).toEqual({ request: 'Continue the scene.' });
   expect(judgments.at(-1)?.questions.explicitSexualContent?.type).toBe('noul');
+
+  expect(
+    await autoTranslationNeedsConfirmation(
+      translationModel,
+      'Synthetic source text.',
+      () => 'synthetic-jev-test-key',
+      new AbortController().signal
+    )
+  ).toBe(true);
 
   const inputTranslation = await api(app, `/api/chats/${chat.id}/codex-content-preflight`, {
     role: 'translation',
