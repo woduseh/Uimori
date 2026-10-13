@@ -11,7 +11,6 @@ import {
 } from '../core/package-start.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import type { Store } from './store.js';
-import { type ContentAttachment } from '../core/risu-content.js';
 
 export type PackageStartCommand = PackageStartRef & {
   expectedSettingsRevision: number;
@@ -40,10 +39,6 @@ export function validatePackageStartCommand(value: unknown): PackageStartCommand
   };
 }
 
-function startText(snapshot: RunSnapshot): string {
-  return snapshot.packageStart!.text;
-}
-
 /** Confirm a Risu greeting atomically without making a model request. */
 export function createPackageStart(
   store: Store,
@@ -69,7 +64,6 @@ export function createPackageStart(
     let prepared:
       | {
           profile: ProfileSnapshot;
-          attachment: ContentAttachment;
           selected: PackageStartSnapshot;
         }
       | undefined;
@@ -90,7 +84,7 @@ export function createPackageStart(
       if (!profile || !attachment || chat.botId !== command.packageId)
         throw new HttpError(409, 'PACKAGE_START_OWNER_CHANGED');
       const selected = resolvePackageStart(content.package!, command.startId);
-      prepared = { profile, attachment, selected };
+      prepared = { profile, selected };
       request = `[작성된 도입문] ${selected.title}`;
     }
     // Store applies the shared run/authored reservation phases after this callback's
@@ -134,7 +128,7 @@ export function createPackageStart(
     store.db
       .prepare("UPDATE runs SET status='running' WHERE id=? AND status='queued'")
       .run(result.run.id);
-    store.completeRunInTransaction(result.run.id, startText(result.run.snapshot), {
+    store.completeRunInTransaction(result.run.id, result.run.snapshot.packageStart.text, {
       modelCalls: 0,
       inputTokens: null,
       outputTokens: null,

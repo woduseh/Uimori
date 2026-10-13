@@ -2,7 +2,7 @@ import { buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderToolCall } from '../core/transport.js';
 import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
-import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
+import { toolCorrectionOutcome } from '../core/tool-outcome.js';
 import type {
   AgentDefinition,
   AgentConsultationContext,
@@ -248,7 +248,6 @@ export function createAgentCollaboration(
     const target = snapshot.profile?.collaborationModels?.[agent.id];
     if (!target) return finish('unavailable', 'ADVISOR_MODEL_SNAPSHOT_MISSING');
     const results: ToolEvent[] = [];
-    const correction = createToolCorrectionPolicy();
     let opaqueState: Json | undefined;
     const deadline = Date.now() + (hooks.timeoutMs ?? target.timeoutMs ?? 120_000);
     const readTool = async (call: ProviderToolCall, readSignal: AbortSignal) => {
@@ -267,7 +266,7 @@ export function createAgentCollaboration(
         result: event.result,
         denied: event.denied,
       });
-      const outcome = correction(event, call.arguments);
+      const outcome = toolCorrectionOutcome(event);
       if (outcome === 'denied') throw new ProviderContractError('ADVISOR_READ_DENIED');
       results.push(event);
       if (event.denied) return event;

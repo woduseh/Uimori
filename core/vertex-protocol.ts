@@ -1,7 +1,7 @@
 import { canonicalJson as canonical } from './canonical-json.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
-import { CUSTOM_TRANSLATION_FORMAT_INSTRUCTION } from './provider-format.js';
+import { TRANSLATION_FORMAT_INSTRUCTION } from './provider-format.js';
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { createVertexPdf, PDF_INPUT_GUIDANCE } from './vertex-pdf.js';
 import type { ProviderProtocol } from './product.js';
@@ -262,7 +262,7 @@ export function prepareGeminiRequest(
         ...(request.role === 'translation'
           ? [
               {
-                text: CUSTOM_TRANSLATION_FORMAT_INSTRUCTION,
+                text: TRANSLATION_FORMAT_INSTRUCTION,
               },
             ]
           : []),

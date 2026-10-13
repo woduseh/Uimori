@@ -9,7 +9,6 @@ import {
   connectionPayload,
   type ConnectionDraft,
 } from './provider-editor-state.js';
-import type { ModelDraft } from './provider-model-draft.js';
 import { compareModelDisplayOrder } from '../core/model-order.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import {
@@ -58,7 +57,8 @@ import {
   modelDraftError,
   modelPayload,
   selectModelConnection,
-} from './ProviderModelFields.js';
+  type ModelDraft,
+} from './provider-model-draft.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
 import { JevProviderSettings } from './JevProviderSettings.js';

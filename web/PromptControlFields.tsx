@@ -106,7 +106,6 @@ export function PromptControlFields({
 }: {
   program: RisuPrompt;
   values: Record<string, PromptValue>;
-  visibilityValues?: Record<string, PromptValue>;
   controlIds?: string[];
   definitions?: PromptControl[];
   onChange: (id: string, value: PromptValue) => void;

@@ -28,17 +28,6 @@ import {
   modelDraftError,
   providerOptionsDraftError,
   selectModelFamily,
-  updateModelId,
-  type ModelDraft,
-} from './provider-model-draft.js';
-export {
-  initialModel,
-  modelDraft,
-  modelDraftError,
-  modelPayload,
-  selectModelConnection,
-  selectModelFamily,
-  updateModelId,
   type ModelDraft,
 } from './provider-model-draft.js';
 
@@ -408,7 +397,7 @@ export function ProviderModelFields({
             list="available-models"
             required
             value={value.modelId}
-            onChange={(event) => onChange(updateModelId(value, event.target.value))}
+            onChange={(event) => onChange({ ...value, modelId: event.target.value })}
           />
           <datalist id="available-models">
             {modelChoices.map((item) => (

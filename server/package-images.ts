@@ -264,9 +264,6 @@ export function imageTargetSource(
   const projected = { ...source, text: body, hash: target.textHash };
   return { ...projected, blocks: splitSource(projected) };
 }
-export function frozenImageSelection(store: Store, snapshot: RunSnapshot) {
-  return imageJobInput(store, snapshot);
-}
 export function automaticImageSelection(store: Store, snapshot: RunSnapshot) {
   const catalog = imageJobInput(store, snapshot);
   return catalog.imageCatalog.entries.length ? catalog : undefined;
@@ -294,7 +291,7 @@ export function reserveImageJob(
   store: Store,
   source: Source,
   imageTarget: ImageTarget,
-  frozen: ReturnType<typeof frozenImageSelection> & { imageSelectionError?: string }
+  frozen: ReturnType<typeof imageJobInput> & { imageSelectionError?: string }
 ): Job {
   const previous = latestImageJob(store, source.id, imageTarget.mode);
   const revision =
@@ -343,7 +340,7 @@ export function scheduleTranslationImages(store: Store, translation: Job) {
     translation.input && typeof translation.input === 'object' ? record(translation.input) : {};
   invalidateTranslationImages(store, translation.sourceRevision);
   if (!input.translationImageSelection) return;
-  const frozen = record(input.translationImageSelection) as ReturnType<typeof frozenImageSelection>;
+  const frozen = record(input.translationImageSelection) as ReturnType<typeof imageJobInput>;
   if (!imageCatalog(frozen).length) return;
   const source = store.source(translation.sourceRevision);
   const body = (translation.result as { text: string }).text;
@@ -410,7 +407,7 @@ export function requestImages(store: Store, sourceId: string, value: unknown) {
       store,
       source,
       target,
-      frozenImageSelection(store, { ...snapshot, ...(profile ? { profile } : {}) })
+      imageJobInput(store, { ...snapshot, ...(profile ? { profile } : {}) })
     );
   });
 }

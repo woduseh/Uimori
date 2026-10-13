@@ -2,7 +2,6 @@ import { canonicalJson as canonical } from './canonical-json.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
 import {
-  CUSTOM_TRANSLATION_FORMAT_INSTRUCTION,
   STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION,
   TRANSLATION_FORMAT_INSTRUCTION,
   translationJsonSchema,
@@ -353,14 +352,9 @@ export function encodeAnthropic(request: ProviderRequest): {
         ? [
             {
               type: 'text',
-              text:
-                input.controls.customPrompt === true
-                  ? structuredTranslation
-                    ? STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION
-                    : CUSTOM_TRANSLATION_FORMAT_INSTRUCTION
-                  : structuredTranslation
-                    ? STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION
-                    : TRANSLATION_FORMAT_INSTRUCTION,
+              text: structuredTranslation
+                ? STRUCTURED_TRANSLATION_FORMAT_INSTRUCTION
+                : TRANSLATION_FORMAT_INSTRUCTION,
             },
           ]
         : []),

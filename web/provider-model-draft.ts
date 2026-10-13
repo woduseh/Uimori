@@ -215,10 +215,6 @@ export function selectModelFamily(
 ): ModelDraft {
   return supportedDraft({ ...draft, modelFamily }, connection);
 }
-export function updateModelId(draft: ModelDraft, modelId: string): ModelDraft {
-  // Empty family means automatic; an explicit choice always wins, even when it matches the old ID.
-  return { ...draft, modelId };
-}
 export function modelPayload(draft: ModelDraft, connection: Connection) {
   const providerOptions =
     connection.protocol === 'vercel-chat-v1'

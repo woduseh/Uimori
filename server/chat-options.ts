@@ -48,11 +48,8 @@ function frozenOptionBinding(profile: ProfileSnapshot): OptionBinding | undefine
   if (!preset || profile.promptOptionOwner === undefined) return undefined;
   return {
     owner: profile.promptOptionOwner,
-    definitionHash: hash(frozenOptionControls(profile, preset.program)),
+    definitionHash: hash(effectiveRisuControls(profile, preset.program)),
   };
-}
-function frozenOptionControls(profile: ProfileSnapshot, program: RisuPrompt): PromptControl[] {
-  return effectiveRisuControls(profile, program);
 }
 const readBinding = (value: unknown): OptionBinding => {
   const b = record(value);

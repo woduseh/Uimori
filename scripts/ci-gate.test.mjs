@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { requireCi, selectRun, verifyJobs } from './ci-gate.mjs';
+import { requireCi } from './ci-gate.mjs';
 import { requiredJobs } from './ci-summary.mjs';
 
 const commit = 'a'.repeat(40);
@@ -55,9 +55,13 @@ function assertRunDetails(error, selected = run) {
   return true;
 }
 
-test('deployment requires the exact commit, branch, workflow and a non-PR completed run', () => {
-  assert.equal(selectRun([run], context).id, 17);
-  assert.equal(selectRun([{ ...run, event: 'workflow_dispatch' }], context).id, 17);
+test('deployment requires the exact commit, branch, workflow and a non-PR completed run', async () => {
+  assert.equal((await requireCi(context, lookup().execute)).runId, 17);
+  assert.equal(
+    (await requireCi(context, lookup({ runs: [{ ...run, event: 'workflow_dispatch' }] }).execute))
+      .runId,
+    17
+  );
   for (const change of [
     { head_sha: 'b'.repeat(40) },
     { head_branch: 'other' },
@@ -66,8 +70,11 @@ test('deployment requires the exact commit, branch, workflow and a non-PR comple
     { path: '.github/workflows/unrelated.yml' },
   ]) {
     const excluded = { ...run, id: 18, created_at: '2026-01-01T00:01:00Z', ...change };
-    assert.throws(() => selectRun([excluded], context), /No eligible exact-commit/);
-    assert.equal(selectRun([excluded, run], context).id, 17);
+    await assert.rejects(
+      requireCi(context, lookup({ runs: [excluded] }).execute),
+      /No eligible exact-commit/
+    );
+    assert.equal((await requireCi(context, lookup({ runs: [excluded, run] }).execute)).runId, 17);
   }
   for (const change of [
     { status: 'queued', conclusion: null },
@@ -75,14 +82,13 @@ test('deployment requires the exact commit, branch, workflow and a non-PR comple
     { conclusion: 'failure' },
   ]) {
     const selected = { ...run, ...change };
-    assert.throws(
-      () => selectRun([selected], context),
-      (error) => assertRunDetails(error, selected)
+    await assert.rejects(requireCi(context, lookup({ runs: [selected] }).execute), (error) =>
+      assertRunDetails(error, selected)
     );
   }
 });
 
-test('a newer failed or pending run does not fall back to an old green one', () => {
+test('a newer failed or pending run does not fall back to an old green one', async () => {
   for (const change of [
     { conclusion: 'failure' },
     { conclusion: 'cancelled' },
@@ -100,34 +106,39 @@ test('a newer failed or pending run does not fall back to an old green one', () 
       [run, selected],
       [selected, run],
     ])
-      assert.throws(
-        () => selectRun(runs, context),
-        (error) => assertRunDetails(error, selected)
+      await assert.rejects(requireCi(context, lookup({ runs: runs }).execute), (error) =>
+        assertRunDetails(error, selected)
       );
   }
-  assert.throws(
-    () => selectRun([run, { ...run, id: 18, conclusion: 'failure' }], context),
+  await assert.rejects(
+    requireCi(context, lookup({ runs: [run, { ...run, id: 18, conclusion: 'failure' }] }).execute),
     /id=18/
   );
 });
 
-test('docs-only success and missing, skipped, duplicated shards cannot authorize deployment', () => {
-  assert.deepEqual(verifyJobs(jobs()), requiredJobs);
+test('docs-only success and missing, skipped, duplicated shards cannot authorize deployment', async () => {
+  assert.deepEqual((await requireCi(context, lookup().execute)).jobs, requiredJobs);
   for (const outcome of ['skipped', 'failure', 'cancelled', 'neutral', null]) {
     const values = jobs();
     values[1].conclusion = outcome;
-    assert.throws(() => verifyJobs(values));
+    await assert.rejects(requireCi(context, lookup({ pages: [values] }).execute));
   }
   for (const status of ['queued', 'in_progress']) {
     const values = jobs();
     values[1].status = status;
-    assert.throws(() => verifyJobs(values));
+    await assert.rejects(requireCi(context, lookup({ pages: [values] }).execute));
   }
-  assert.throws(() => verifyJobs(jobs().slice(1)), /static: missing/);
-  assert.throws(() => verifyJobs([...jobs(), jobs()[0]]), /static: duplicate/);
+  await assert.rejects(
+    requireCi(context, lookup({ pages: [jobs().slice(1)] }).execute),
+    /static: missing/
+  );
+  await assert.rejects(
+    requireCi(context, lookup({ pages: [[...jobs(), jobs()[0]]] }).execute),
+    /static: duplicate/
+  );
 });
 
-test('job diagnostics report every failed, pending, missing and duplicated required job', () => {
+test('job diagnostics report every failed, pending, missing and duplicated required job', async () => {
   const values = jobs();
   values[0].conclusion = 'failure';
   values[1].conclusion = 'skipped';
@@ -135,22 +146,19 @@ test('job diagnostics report every failed, pending, missing and duplicated requi
   values[2].conclusion = null;
   values.pop();
   values.push({ ...values[3] });
-  assert.throws(
-    () => verifyJobs(values),
-    (error) => {
-      for (const detail of [
-        'static: status=completed, conclusion=failure',
-        'tooling: status=completed, conclusion=skipped',
-        'linux-core: status=in_progress, conclusion=none',
-        'selfhost: duplicate (2 matches',
-        'tests (4/4): missing',
-        'A docs-only or partial run cannot authorize deployment.',
-      ])
-        assert.ok(error.message.includes(detail), detail);
-      assert.ok(!error.message.includes('- quality:'));
-      return true;
-    }
-  );
+  await assert.rejects(requireCi(context, lookup({ pages: [values] }).execute), (error) => {
+    for (const detail of [
+      'static: status=completed, conclusion=failure',
+      'tooling: status=completed, conclusion=skipped',
+      'linux-core: status=in_progress, conclusion=none',
+      'selfhost: duplicate (2 matches',
+      'tests (4/4): missing',
+      'A docs-only or partial run cannot authorize deployment.',
+    ])
+      assert.ok(error.message.includes(detail), detail);
+    assert.ok(!error.message.includes('- quality:'));
+    return true;
+  });
 });
 
 test('GitHub lookup reads all pages and retained rerun jobs without changing the success receipt', async () => {

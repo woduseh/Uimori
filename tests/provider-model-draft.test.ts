@@ -8,7 +8,6 @@ import {
   modelPayload,
   selectModelConnection,
   selectModelFamily,
-  updateModelId,
 } from '../web/provider-model-draft.js';
 
 const connection: Connection = {
@@ -68,7 +67,7 @@ describe('model numeric drafts', () => {
   test('keeps manual tokenizers through model and connection changes and omits automatic selection', () => {
     const manual = { ...initialModel(), tokenizer: 'glm-5' as const };
     const changed = selectModelConnection(
-      updateModelId(manual, 'future-lab/new-model'),
+      { ...manual, modelId: 'future-lab/new-model' },
       anthropicConnection
     );
     expect(changed.tokenizer).toBe('glm-5');
@@ -136,11 +135,13 @@ describe('model numeric drafts', () => {
     const draft = selectModelConnection(initialModel(), direct);
     expect(draft.modelFamily).toBe('');
     expect(effectiveModelFamily(direct.protocol, draft.modelId, draft.modelFamily)).toBe('openai');
-    const automatic = updateModelId(initialModel(), 'anthropic/future-model');
+    const automatic = { ...initialModel(), modelId: 'anthropic/future-model' };
     expect(automatic.modelFamily).toBe('');
     expect(effectiveModelFamily(vercelConnection.protocol, automatic.modelId)).toBe('anthropic');
     const manual = selectModelFamily(automatic, 'anthropic', vercelConnection);
-    expect(updateModelId(manual, 'openai/future-model').modelFamily).toBe('anthropic');
+    expect(
+      modelPayload({ ...manual, modelId: 'openai/future-model' }, vercelConnection)
+    ).toMatchObject({ modelId: 'openai/future-model', modelFamily: 'anthropic' });
     expect(selectModelFamily(manual, '', vercelConnection).modelFamily).toBe('');
   });
 

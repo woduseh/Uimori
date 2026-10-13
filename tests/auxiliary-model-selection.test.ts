@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
 import { validateModelSnapshot } from '../server/provider-archive.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
-import { frozenImageSelection } from '../server/package-images.js';
+import { imageJobInput } from '../server/package-images.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { Controls } from '../server/controls.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -92,7 +92,7 @@ test('new auxiliary reservations use current generation models while JEV judgmen
     translationPolicy: { judgment: { threshold: 0.9 }, maxRetries: 1, maxCalls: 16 },
   });
   const translation = store.requestTranslation(source.id);
-  const imageInput = frozenImageSelection(store, priorSnapshot);
+  const imageInput = imageJobInput(store, priorSnapshot);
   const imageSnapshot = store.product.resolveJobPrompt(priorSnapshot, imageInput);
   const bridge = auxiliaryBridge(store, new Controls(), new AbortController().signal);
   const translationBundle = await bridge.load(translation.id);
