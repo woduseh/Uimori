@@ -20,6 +20,7 @@
 | Composer translation and request copying | `core/input-translation.ts`, `server/input-translation.ts`, `web/useInputTranslation.ts`, `web/InputTranslation.tsx`, `web/RequestMessage.tsx` | [Input translation](INPUT-TRANSLATION.md) |
 | Reader and application, delayed loading and retry | `web/useStory.ts`, `web/SourceReader.tsx`, `web/ReaderLoadingState.tsx`, `server/reader.ts`, `server/app.ts` | [Reading](READING.md), [UI principles](UI-PRINCIPLES.md) |
 | Shared save conflicts and recovery decisions | `web/SaveConflictDialog.tsx`, `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `web/main.tsx` | [Editing](EDITING.md), [Usage](USAGE.md) |
+| All-chat activity inbox and receipts | `server/activity-feed.ts`, `web/useActivityFeed.ts`, `web/ActivityNavigation.tsx`, `web/BotTreeNavigation.tsx`, `web/ActivityStatus.tsx` | [PWA and activity notifications](PWA.md) |
 | Notices and execution feedback | `web/NoticeBanner.tsx`, `web/TransientNotice.tsx`, `web/DismissibleError.tsx` | [UI principles](UI-PRINCIPLES.md) |
 | Workspace, bot, and manuscript search UI | `web/ManuscriptSearch.tsx`, `web/BotTreeNavigation.tsx`, `web/BotNavigation.tsx` | [Manuscript search](MANUSCRIPT-SEARCH.md), [UI principles](UI-PRINCIPLES.md) |
 | Retained manuscript comparison and scene names | `web/SourceVersions.tsx`, `web/SceneTitleEditor.tsx`, `server/source-editing.ts`, `server/scene-titles.ts` | [Editing](EDITING.md), [Reading state](READING-STATE.md) |

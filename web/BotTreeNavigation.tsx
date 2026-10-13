@@ -1,6 +1,6 @@
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
+import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import {
   libraryCategory,
@@ -25,23 +25,31 @@ import {
 } from './ui-icons.js';
 import { api } from './api.js';
 import { useChatActivities } from './useChatActivities.js';
+import { useActivityFeed } from './useActivityFeed.js';
+import { ActivityNavigation } from './ActivityNavigation.js';
 import './bot-tree-navigation.css';
 
 export type { ChatFolder } from '../core/product.js';
-type View = { open: Record<string, boolean>; sort: 'manual' | 'recent'; order: string[] };
+type View = {
+  open: Record<string, boolean>;
+  sort: 'manual' | 'recent';
+  order: string[];
+  mode: 'bots' | 'activity';
+};
 const storageKey = 'uimori.bot-tree.v1';
 function readView(): View {
   try {
     const value = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
     return {
       open: value?.open && typeof value.open === 'object' ? value.open : {},
+      mode: value?.mode === 'activity' ? 'activity' : 'bots',
       sort: value?.sort === 'manual' ? 'manual' : 'recent',
       order: Array.isArray(value?.order)
         ? value.order.filter((id: unknown) => typeof id === 'string')
         : [],
     };
   } catch {
-    return { open: {}, sort: 'recent', order: [] };
+    return { open: {}, sort: 'recent', order: [], mode: 'bots' };
   }
 }
 /** First row of the sidebar and the drawer: choose a bot in the library or find any chat. */
@@ -114,6 +122,9 @@ export function BotNavigation(
   } = props;
   const [view, setView] = useState(readView);
   const activities = useChatActivities();
+  const activityFeed = useActivityFeed();
+  const unreadChats = new Set(activityFeed.feed.items.map((item) => item.chatId)).size;
+  const setMode = (mode: View['mode']) => setView((current) => ({ ...current, mode }));
   const [runningPicker, setRunningPicker] = useState(false);
   const running = Object.entries(activities).filter(([, item]) => item.count > 0);
   const runningTotal = running.reduce((total, [, item]) => total + item.count, 0);
@@ -407,6 +418,22 @@ export function BotNavigation(
           />
         </div>
         <NavigationQuickActions compact onSearch={props.onSearch} onLibrary={onLibrary} />
+        <IconButton
+          label="봇 탐색"
+          icon={MessageCircle}
+          onClick={() => {
+            setMode('bots');
+            props.onToggleCollapse?.();
+          }}
+        />
+        <IconButton
+          label={`활동 · 미확인 채팅 ${unreadChats}개`}
+          icon={Inbox}
+          onClick={() => {
+            setMode('activity');
+            props.onToggleCollapse?.();
+          }}
+        />
         <nav className="sidebar-rail-destinations" aria-label="작업 공간">
           <IconButton
             label="서재"
@@ -461,6 +488,27 @@ export function BotNavigation(
           <NavigationQuickActions onSearch={props.onSearch} onLibrary={onLibrary} />
         </div>
       )}
+      <nav className="bot-navigation-modes" aria-label="사이드바 보기 방식">
+        <button
+          type="button"
+          aria-label="봇 탐색"
+          aria-pressed={view.mode === 'bots'}
+          title="봇 탐색"
+          onClick={() => setMode('bots')}
+        >
+          <MessageCircle size={19} />
+        </button>
+        <button
+          type="button"
+          aria-label={`활동 · 미확인 채팅 ${unreadChats}개`}
+          aria-pressed={view.mode === 'activity'}
+          title="활동"
+          onClick={() => setMode('activity')}
+        >
+          <Inbox size={19} />
+          {unreadChats > 0 && <span className="activity-mode-count">{unreadChats}</span>}
+        </button>
+      </nav>
       <nav className="sidebar-destinations" aria-label="작업 공간">
         <button
           type="button"
@@ -485,54 +533,69 @@ export function BotNavigation(
           프롬프트
         </button>
       </nav>
-      <div
-        className={`bot-tree-section-heading ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
-        onDragOver={(event) => overEntry(event, 'unfiled')}
-        onDrop={(event) => void dropEntry(event, null)}
-      >
-        <button
-          className="bot-folder-toggle"
-          aria-label="봇"
-          aria-expanded={!!view.open.section}
-          onClick={() => toggle('section')}
+      {view.mode === 'bots' && (
+        <div
+          className={`bot-tree-section-heading ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
+          onDragOver={(event) => overEntry(event, 'unfiled')}
+          onDrop={(event) => void dropEntry(event, null)}
         >
-          봇<ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
-        </button>
-        <div className="bot-row-actions">
-          <ActionMenu label="봇 목록 메뉴" viewport>
-            <label>
-              봇 정렬 기준
-              <select
-                aria-label="봇 정렬 기준"
-                value={view.sort}
-                onChange={(event) =>
-                  setView((current) => ({
-                    ...current,
-                    sort: event.target.value === 'manual' ? 'manual' : 'recent',
-                  }))
-                }
+          <button
+            className="bot-folder-toggle"
+            aria-label="봇"
+            aria-expanded={!!view.open.section}
+            onClick={() => toggle('section')}
+          >
+            봇<ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
+          </button>
+          <div className="bot-row-actions">
+            <ActionMenu label="봇 목록 메뉴" viewport>
+              <label>
+                봇 정렬 기준
+                <select
+                  aria-label="봇 정렬 기준"
+                  value={view.sort}
+                  onChange={(event) =>
+                    setView((current) => ({
+                      ...current,
+                      sort: event.target.value === 'manual' ? 'manual' : 'recent',
+                    }))
+                  }
+                >
+                  <option value="recent">최근 채팅 활동순</option>
+                  <option value="manual">수동 정렬</option>
+                </select>
+              </label>
+              <button
+                onClick={() => {
+                  setTitle('');
+                  setEditing('new');
+                }}
               >
-                <option value="recent">최근 채팅 활동순</option>
-                <option value="manual">수동 정렬</option>
-              </select>
-            </label>
-            <button
-              onClick={() => {
-                setTitle('');
-                setEditing('new');
-              }}
-            >
-              <FolderAddIcon size={16} />새 봇 폴더
-            </button>
-            <button onClick={() => onLibrary('bot')}>
-              <LibraryIcon size={16} />
-              서재에서 관리
-            </button>
-          </ActionMenu>
+                <FolderAddIcon size={16} />새 봇 폴더
+              </button>
+              <button onClick={() => onLibrary('bot')}>
+                <LibraryIcon size={16} />
+                서재에서 관리
+              </button>
+            </ActionMenu>
+          </div>
         </div>
-      </div>
+      )}
       <div className="bot-navigation-scroll">
-        {view.open.section && (
+        {view.mode === 'activity' && (
+          <ActivityNavigation
+            chats={chats}
+            library={library}
+            selected={selected}
+            feed={activityFeed.feed}
+            error={activityFeed.error}
+            onSelect={onSelect}
+            onAcknowledge={(items) => void activityFeed.acknowledge(items)}
+            onInspect={activityFeed.inspect}
+            onRetry={() => void activityFeed.refresh()}
+          />
+        )}
+        {view.mode === 'bots' && view.open.section && (
           <nav
             aria-label="봇별 채팅"
             onKeyDown={(event) => {
@@ -621,7 +684,7 @@ export function BotNavigation(
               ))}
           </nav>
         )}
-        {error && (
+        {view.mode === 'bots' && error && (
           <p className="error" role="alert">
             {error}
           </p>

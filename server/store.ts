@@ -1,4 +1,5 @@
 import { enqueueTerminalNotification } from './push-events.js';
+import { initializeActivityFeed } from './activity-feed.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { retainCompletedLore } from './lore-retention-state.js';
@@ -152,6 +153,7 @@ export class Store {
         initResponseStreams(this.db);
       });
       // The maintenance row belongs to every boot, not only to a fresh database.
+      initializeActivityFeed(this);
       initMaintenance(this);
     } catch (error) {
       this.db.close();

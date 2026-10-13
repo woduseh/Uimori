@@ -607,3 +607,71 @@ test('ACTUI09 confirmations survive a fresh browser session while new executions
     await context.close();
   }
 });
+
+test('ACTUI10 activity icon mode groups unread results and keeps recent chats across desktop and mobile', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request);
+  let confirmed = false;
+  const at = new Date().toISOString();
+  await page.route('**/api/activity-feed', (route) =>
+    route.fulfill({
+      json: {
+        items: confirmed
+          ? []
+          : [
+              {
+                chatId: seeded.chat.id,
+                acknowledgementKey: JSON.stringify(['main', 'synthetic-inbox', 0, at]),
+                kind: 'main',
+                status: 'completed',
+                label: '본문 완료',
+                at,
+                sourceId: null,
+                representation: 'original',
+                actionable: false,
+                canAcknowledge: true,
+              },
+            ],
+        running: [],
+      },
+    })
+  );
+  await page.route(`**/api/chats/${seeded.chat.id}/activity-acknowledgements`, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    confirmed = true;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  const activityMode = nav.locator('.bot-navigation-modes > button').nth(1);
+  await expect(activityMode).toBeVisible();
+  await activityMode.click();
+  await expect(activityMode).toHaveAttribute('aria-pressed', 'true');
+  const activityNav = nav.getByRole('navigation', { name: '채팅 활동' });
+  await expect(activityNav.getByText('확인할 활동', { exact: true })).toBeVisible();
+  await expect(activityNav.getByText(seeded.chat.title, { exact: true }).first()).toBeVisible();
+  await activityNav
+    .getByRole('button', { name: new RegExp(`${seeded.chat.title} 활동 .* 확인`) })
+    .click();
+  await expect(activityNav.getByText('확인할 활동이 없어요.')).toBeVisible();
+  await expect(activityNav.getByText(seeded.chat.title, { exact: true }).first()).toBeVisible();
+  await nav.locator('.bot-navigation-modes > button').first().click();
+  await expect(nav.locator('.bot-tree-section-heading')).toBeVisible();
+  await activityMode.click();
+  await expect(activityMode).toHaveAttribute('aria-pressed', 'true');
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+  const mobile = page.getByRole('dialog', { name: '탐색' }).getByTestId('bot-navigation');
+  await expect(mobile.locator('.bot-navigation-modes > button').nth(1)).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await expect(
+    mobile
+      .getByRole('navigation', { name: '채팅 활동' })
+      .getByText(seeded.chat.title, { exact: true })
+  ).toBeVisible();
+});
