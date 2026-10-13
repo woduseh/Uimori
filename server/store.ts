@@ -1,6 +1,7 @@
 import { enqueueTerminalNotification } from './push-events.js';
 import { initializeActivityFeed } from './activity-feed.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
+import { autoTranslationDefaults } from './auto-translation-defaults.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
 import { retainCompletedLore } from './lore-retention-state.js';
 import { verifiedRunLoreReads } from './lore-context.js';
@@ -404,6 +405,12 @@ export class Store {
     const captured = snapshot(chat);
     const base = {
       ...captured,
+      // Resolve inheritance once, inside the reservation transaction. Running jobs stay frozen.
+      settings: {
+        ...captured.settings,
+        autoTranslate:
+          captured.settings.autoTranslate ?? autoTranslationDefaults(this.db).autoTranslate,
+      },
       ...(isSourceOnlyTranscript(captured)
         ? {}
         : {

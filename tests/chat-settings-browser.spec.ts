@@ -5,7 +5,12 @@ import type { Chat, ChatDetail } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { postFixtureChat } from './fixtures/chat.js';
-import { openChatMenu, selectChatSettingsSection } from './ui-navigation.js';
+import {
+  navigationAction,
+  openChatMenu,
+  selectChatSettingsSection,
+  selectSettingsSection,
+} from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
 const sections = ['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '실행 옵션'];
@@ -593,9 +598,9 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   const { chat, errors } = await prepare(page, request, 'CSUI08 ' + Date.now());
   let dialog = await openSettings(page);
   await selectChatSettingsSection(page, '실행 옵션');
-  let toggle = dialog.getByRole('checkbox', { name: '본문 생성 후 자동 번역', exact: true });
-  await expect(toggle).not.toBeChecked();
-  await toggle.check();
+  let choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
+  await expect(choice).toHaveValue('inherit');
+  await choice.selectOption('on');
   await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
   const read = async () =>
     (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
@@ -603,11 +608,54 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   dialog = await openSettings(page);
   await selectChatSettingsSection(page, '실행 옵션');
-  toggle = dialog.getByRole('checkbox', { name: '본문 생성 후 자동 번역', exact: true });
-  await expect(toggle).toBeChecked();
-  await toggle.uncheck();
+  choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
+  await expect(choice).toHaveValue('on');
+  await choice.selectOption('off');
   await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
   await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(false);
+  await choice.selectOption('inherit');
+  await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBeUndefined();
   expect((await read()).jobs).toHaveLength(0);
   expect(errors).toEqual([]);
+});
+
+test('CSUI09 global automatic translation preference saves on server and reloads', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60000);
+  await prepare(page, request, 'CSUI09 ' + Date.now());
+  const endpoint = '/api/auto-translation-defaults';
+  const initial = (await (await request.get(endpoint)).json()) as {
+    revision: number;
+    autoTranslate: boolean;
+  };
+  try {
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '일반');
+    const settings = page.getByRole('dialog', { name: '설정', exact: true });
+    const toggle = settings.getByRole('switch', { name: '전체 자동 번역 기본값' });
+    await expect(toggle).toBeChecked({ checked: initial.autoTranslate });
+    if (initial.autoTranslate) await toggle.uncheck();
+    else await toggle.check();
+    await expect
+      .poll(async () => (await (await request.get(endpoint)).json()).autoTranslate)
+      .toBe(!initial.autoTranslate);
+    await page.reload();
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '일반');
+    const reopened = page.getByRole('dialog', { name: '설정', exact: true });
+    await expect(reopened.getByRole('switch', { name: '전체 자동 번역 기본값' })).toBeChecked({
+      checked: !initial.autoTranslate,
+    });
+  } finally {
+    const current = (await (await request.get(endpoint)).json()) as typeof initial;
+    if (current.autoTranslate !== initial.autoTranslate) {
+      const restored = await request.put(endpoint, {
+        data: { expectedRevision: current.revision, autoTranslate: initial.autoTranslate },
+      });
+      expect(restored.ok(), await restored.text()).toBe(true);
+    }
+  }
 });

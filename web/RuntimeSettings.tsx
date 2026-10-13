@@ -132,12 +132,26 @@ export function SettingsEditor({
                     시작해야 해요.
                   </small>
                 </span>
-                <input
-                  type="checkbox"
+                <select
                   aria-label="본문 생성 후 자동 번역"
-                  checked={value.autoTranslate === true}
-                  onChange={(event) => update('autoTranslate', event.target.checked)}
-                />
+                  value={
+                    value.autoTranslate === undefined
+                      ? 'inherit'
+                      : value.autoTranslate
+                        ? 'on'
+                        : 'off'
+                  }
+                  onChange={(event) =>
+                    update(
+                      'autoTranslate',
+                      event.target.value === 'inherit' ? undefined : event.target.value === 'on'
+                    )
+                  }
+                >
+                  <option value="inherit">전체 기본값 따르기</option>
+                  <option value="on">이 채팅에서 켜기</option>
+                  <option value="off">이 채팅에서 끄기</option>
+                </select>
               </label>
             </div>
           </div>
