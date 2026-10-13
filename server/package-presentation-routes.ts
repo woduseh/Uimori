@@ -5,7 +5,8 @@ import { successfulTranslation, validateTranslationArtifact } from './translatio
 import { buildPackagePresentation } from './package-presentation.js';
 import { nativeSourceSnapshot } from './risu-native-actions.js';
 import { nativeImageDisplayText } from './risu-native-images.js';
-import { readRunSnapshot } from './run-projections.js';
+import { readStoredRunSnapshot } from './run-projections.js';
+import { executionSnapshot } from './execution-snapshot.js';
 import { readDisplayViewport } from './display-viewport.js';
 
 export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
@@ -17,9 +18,17 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
       store.chat(request.params.id);
       const source = store.source(request.params.sourceId);
       if (source.chatId !== request.params.id) throw new HttpError(404, 'Source not found');
-      // Read the same execution projection the model input used, so the reader compares the
-      // stored request with the text actually sent instead of the reserved copy.
-      const snapshot = readRunSnapshot(store, source.runId);
+      const stored = readStoredRunSnapshot(store, source.runId);
+      // Settled runs need today's package/profile projection for display, but not a restored
+      // model context. Native display constructs the live history below; preparing the old
+      // history, resources and story here would immediately discard that work.
+      const { settled, ...saved } = stored;
+      const snapshot = settled
+        ? {
+            ...saved,
+            profile: store.product.snapshot(stored.chatId, 'inspect', stored.parentRevision),
+          }
+        : stored;
       if (snapshot.chatId !== source.chatId) throw new HttpError(409, 'Source run mismatch');
       const job = successfulTranslation(store, source);
       let translation: { text: string; sourceRevision: string; sourceHash: string } | undefined;
@@ -90,7 +99,8 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
           },
         };
       }
-      const presentation = await buildPackagePresentation(snapshot, {
+      // Preserve the fallback's full context, including preset-only native rendering.
+      const presentation = await buildPackagePresentation(executionSnapshot(store, stored), {
         ...source,
         ...(translation ? { translation } : {}),
       });

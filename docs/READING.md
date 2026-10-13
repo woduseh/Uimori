@@ -71,4 +71,6 @@ Each independent chat can have multiple helper sessions. A session owns its conv
 
 Opening the reader or helper takes a current view and event cursor, then follows newer changes; historical notifications are not replayed just to rebuild the screen. Message content updates preserve the reading position, and both native HTML and ordinary prose use the same outer block anchors.
 
+Completed Risu message presentation restores the current package/profile projection and builds the live message history once. It does not reconstruct the discarded generation history, story context or resource catalog. Original/translation rendering, CBS/Lua message order, current variables and action revision checks still use that live display context; model execution and its full-context reads are unchanged.
+
 Direct source edits retain the immutable authored original, the newest two edited versions and versions still captured by unfinished work. Translation history retains current/previous successful text and any active image target; billing summaries do not require an archive of every full translation.
