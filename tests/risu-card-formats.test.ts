@@ -124,13 +124,13 @@ test('v3 PNG chooses ccv3, resolves attachments and default cover without transp
   const { path, workspace } = fixture(bytes, 'card.png');
   const result = await readCharacterCardPath(path, 'card.png', undefined, workspace);
   expect(result.format).toBe('character-card-png');
-  expect(result.members.get('__png_asset__/7.bin')!()).toEqual(binary);
+  expect(result.members.get('__png_asset__/1.bin')!()).toEqual(binary);
   expect(result.members.get('__png_cover__.png')!()).toEqual(
     Buffer.concat([signature, ordinary, end])
   );
   expect((result.card.assets as Record<string, unknown>[]).map((asset) => asset.uri)).toEqual([
     'embeded://__png_cover__.png',
-    'embeded://__png_asset__/7.bin',
+    'embeded://__png_asset__/1.bin',
   ]);
 });
 

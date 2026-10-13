@@ -69,7 +69,12 @@ export function createNativeRisuHost(
     if (!Array.isArray(authored) || !authored.length) throw new Error('RISU_NATIVE_MODEL_PROMPT');
     const messages = authored.map((raw, index) => {
       const item = record(raw),
-        role = item.role === 'char' ? 'assistant' : item.role;
+        role =
+          item.role === 'sys'
+            ? 'system'
+            : item.role === 'char' || item.role === 'bot'
+              ? 'assistant'
+              : item.role;
       if (
         !['system', 'user', 'assistant'].includes(String(role)) ||
         typeof item.content !== 'string'

@@ -57,6 +57,7 @@ export function importRisuAssets({
   const packageImages: NonNullable<RisuContent['images']> = [];
   const assetUrls = new Map<string, string>();
   let portraitImageId: string | undefined;
+  let portraitPriority = -1;
   // A package image carries no role field, so a typed asset keeps only its bytes and its name.
   let typedAsset = false;
   const included = new Set<string>();
@@ -142,8 +143,16 @@ export function importRisuAssets({
       allowedUse: 'both',
     });
     if (asset.type === 'emotion' || asset.type === 'background') typedAsset = true;
-    if ((kind !== 'module' || asset.type === 'icon') && (!portraitImageId || name === 'main'))
+    // CCv3 icon/main owns the portrait even when later backgrounds or other assets are named main.
+    // Without an icon, retain the existing first-image / named-main fallback for cards.
+    const priority = asset.type === 'icon' ? (name === 'main' ? 2 : 1) : 0;
+    if (
+      (kind !== 'module' || asset.type === 'icon') &&
+      (priority > portraitPriority || (priority === 0 && portraitPriority === 0 && name === 'main'))
+    ) {
       portraitImageId = id;
+      portraitPriority = priority;
+    }
     const url = `/api/package-image-blobs/${image.hash}`;
     assetUrls.set(uri, url);
     assetUrls.set(`{{raw::${name}}}`, url);

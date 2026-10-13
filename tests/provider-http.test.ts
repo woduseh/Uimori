@@ -193,6 +193,70 @@ afterEach(() => {
 
 // fetch is always replaced. No live network, provider SDK, real credential environment or paid call.
 describe('native provider HTTP boundary with synthetic fetch', () => {
+  // DeepSeek documents both interruption reasons. Its usage normally accompanies the
+  // finish chunk; compatible Chat streams may instead send a following usage-only chunk.
+  test.each([
+    { reason: 'insufficient_system_resource', text: '보존할 초안 🌊', trailingUsage: true },
+    { reason: 'aborted', text: '보존할 초안 🌊', trailingUsage: true },
+    { reason: 'insufficient_system_resource', text: '', trailingUsage: false },
+    { reason: 'aborted', text: '', trailingUsage: false },
+  ])(
+    'DeepSeek records $reason with text=$text and consumes final usage without exposing unfinished tools',
+    async ({ reason, text, trailingUsage }) => {
+      const variant = variants.find((item) => item.protocol === 'deepseek-chat-v1')!;
+      const usage = { prompt_tokens: 9, completion_tokens: 3, total_tokens: 12 };
+      const response = stream(
+        [
+          {
+            id: 'deepseek-interrupted',
+            choices: [
+              {
+                index: 0,
+                delta: {
+                  role: 'assistant',
+                  content: text,
+                  ...(text
+                    ? {
+                        tool_calls: [
+                          {
+                            index: 0,
+                            id: 'unfinished-call',
+                            type: 'function',
+                            function: { name: 'tool_0_knowledge_read', arguments: '{"id":' },
+                          },
+                        ],
+                      }
+                    : {}),
+                },
+                finish_reason: null,
+              },
+            ],
+          },
+          {
+            id: 'deepseek-interrupted',
+            choices: [{ index: 0, delta: {}, finish_reason: reason }],
+            usage: trailingUsage ? null : usage,
+          },
+          ...(trailingUsage ? [{ id: 'deepseek-interrupted', choices: [], usage }] : []),
+          '[DONE]',
+        ],
+        true
+      );
+      const fetch = vi.fn(async () => response.response);
+      vi.stubGlobal('fetch', fetch);
+      const result = await executeProvider(connection(variant), request(variant), options(variant));
+      expect(result).toMatchObject({
+        status: text ? 'partial' : 'error',
+        text,
+        toolCalls: [],
+        error: { code: `PROVIDER_${reason.toUpperCase()}` },
+        usage: { inputTokens: 9, outputTokens: 3, raw: usage },
+      });
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(response.cancelled).toBe(1);
+    }
+  );
+
   test.each(variants)(
     '$protocol returns after its protocol terminal even when the HTTP body stays open',
     async (variant) => {

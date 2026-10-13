@@ -149,9 +149,9 @@ JEV 키 미설정·응답 오류·8초 시간 초과·입력 예산 초과는 `u
 - 프롬프트 모델 요청 전체는 선택 모델의 입력 토큰 예산으로 검사해요. 예산을 넘으면 모델·렌더 요청 없이 실패하며 같은 입력을 자동 재시도하지 않아요. 모델이 만든 `prompt`·`negativePrompt`는 임의의 글자 수로 자르지 않고 워크플로에 전달해요. 캡션·생략 이유는 짧은 설명을 요청하고, 생성 상세는 필요할 때만 펼쳐요.
 - 취소는 사용자의 명시 취소일 때만 원격에 닿아요. `POST /api/jobs/{prompt_id}/cancel`의 대상별 취소를 사용해요. 해당 API가 없는 서버(404/405)는 `POST /queue {delete:[id]}`로 대기 항목만 제거하고, 실행 중인 원격 렌더는 계속될 수 있어요. 전역 `/interrupt`는 호출하지 않아요. 서버 종료·timeout은 원격 취소를 보내지 않으며 로컬 generation 보호가 늦은 저장을 막아요.
 - **시간 초과(`COMFYUI_TIMEOUT`)는 원격 렌더를 건드리지 않아요.** 작업은 `prompt_id`를 보존한 채 실패로 남고, 삽화 카드의 **결과 확인**(`POST /api/illustrations/:id/reconcile`)이 `GET /history/{prompt_id}`를 한 번 읽어 끝난 결과를 저장해요. 결과 확인은 새로 그리지 않으며, 아직 결과가 없으면 이전 상태로 되돌려요. 서버 재시작으로 `interrupted`가 된 ComfyUI 작업도 같은 버튼으로 회수해요.
-- 워크플로는 API 형식(`노드 ID → {class_type, inputs}`)만 받아요. UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT`으로 거절해요. `inputs` 아래 문자열 값의 자리표시자만 바꾸고 노드 구조는 그대로예요. 필수 `{{prompt}}` 확인도 같은 입력 값을 검사하므로, 노드 제목·메타데이터·키에만 있는 표시는 유효하지 않아요. `{{seed}}`만 있는 문자열은 숫자로 바꿔요.
+- 워크플로는 API 형식(`노드 ID → {class_type, inputs}`)만 받아요. UI 형식(`nodes`/`links`)은 `COMFYUI_WORKFLOW_UI_FORMAT`으로 거절해요. `inputs` 아래 문자열 값의 자리표시자만 한 번 바꾸고 노드 구조는 그대로예요. 삽입한 프롬프트에 `{{negative}}`·`{{seed}}` 같은 문자가 있어도 다시 치환하지 않아요. 필수 `{{prompt}}` 확인도 같은 입력 값을 검사하므로, 노드 제목·메타데이터·키에만 있는 표시는 유효하지 않아요. `{{seed}}`만 있는 문자열은 숫자로 바꿔요.
 - 출력은 `outputs[*].images` 중 `type: 'output'`을 우선해 최대 4장까지 저장해요. 프롬프트 모델이 쓴 캡션을 삽화 캡션으로 써요.
-- 실패 코드와 진단: `COMFYUI_PROMPT_REJECTED`는 노드 오류를, `COMFYUI_EXECUTION_FAILED`는 실행 오류를 **생성 상세**에 표시해요. 접수 여부는 전송 전부터 기록하며 `COMFYUI_SUBMISSION_UNCERTAIN`은 새 렌더를 자동 제출하지 않아요. 접수 후 조회 실패는 `COMFYUI_RESULT_UNAVAILABLE`과 prompt ID를 보존해 **결과 확인**을 제공해요. 요청 전체 deadline은 응답 헤더뿐 아니라 JSON·이미지 body 읽기에도 적용해요. reader는 취소 신호를 직접 구독하며 본문·정리 응답이 멈춰도 종료가 지연되지 않아요.
+- 실패 코드와 진단: `COMFYUI_PROMPT_REJECTED`는 노드 오류를, `COMFYUI_EXECUTION_FAILED`는 실행 오류를 **생성 상세**에 표시해요. 접수 여부는 전송 전부터 기록하며 `COMFYUI_SUBMISSION_UNCERTAIN`은 새 렌더를 자동 제출하지 않아요. 접수 후 조회 실패는 `COMFYUI_RESULT_UNAVAILABLE`과 prompt ID를 보존해 **결과 확인**을 제공해요. 조회의 HTTP 오류(인증 거절·경로 오류·요청 제한 포함)는 아직 생성 중인 응답으로 간주하지 않고 즉시 조회 실패로 남기며 HTTP 상태도 보존해요. 요청 전체 deadline은 응답 헤더뿐 아니라 JSON·이미지 body 읽기에도 적용해요. reader는 취소 신호를 직접 구독하며 본문·정리 응답이 멈춰도 종료가 지연되지 않아요.
 - 참조 이미지 업로드(`POST /upload/image`)는 이번 구현에 없어요. 작업 입력에는 참조 목록이 그대로 고정되므로 나중에 ComfyUI 어댑터만 확장하면 돼요.
 
 ## API

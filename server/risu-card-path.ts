@@ -74,6 +74,7 @@ function readCardPng(
     ended = false,
     assetCount = 0,
     hasV2Card = false;
+  const attachmentPaths = new Map<string, string>();
   const coverPath = join(directory, 'cover.png'),
     cover = openSync(coverPath, 'wx');
   writeSync(cover, pngSignature);
@@ -98,15 +99,12 @@ function readCardPng(
       let checksum = crc32(header.subarray(4)),
         output: ReturnType<typeof base64File> | undefined,
         cardText = '';
-      const assetIndex = key.replace(/^chara-ext-asset_:?/u, '');
+      const assetKey = key.replace(/^chara-ext-asset_:?/u, '');
       if (key.startsWith('chara-ext-asset_')) {
-        if (
-          !/^\d{1,10}$/u.test(assetIndex) ||
-          ++assetCount > RISU_IMPORT_MAX_ASSETS ||
-          members.has(`__png_asset__/${assetIndex}.bin`)
-        )
+        if (!assetKey || ++assetCount > RISU_IMPORT_MAX_ASSETS || attachmentPaths.has(assetKey))
           return invalidCard();
-        output = base64File(join(directory, `png-${assetIndex}.bin`));
+        // The authored identifier is a lookup key; only our counter becomes a filesystem path.
+        output = base64File(join(directory, `png-${assetCount}.bin`));
       }
       try {
         if (!transport) writeSync(cover, header);
@@ -129,8 +127,10 @@ function readCardPng(
         if (!transport) writeSync(cover, footer);
         if (output) {
           output.finish();
-          const diskPath = join(directory, `png-${assetIndex}.bin`);
-          members.set(`__png_asset__/${assetIndex}.bin`, () => readFileSync(diskPath));
+          const diskPath = join(directory, `png-${assetCount}.bin`),
+            memberPath = `__png_asset__/${assetCount}.bin`;
+          attachmentPaths.set(assetKey, memberPath);
+          members.set(memberPath, () => readFileSync(diskPath));
         }
         if (key === 'ccv3') {
           if (document !== undefined) return invalidCard();
@@ -165,13 +165,18 @@ function readCardPng(
   const outer = record(document),
     card = record(outer.data);
   if (outer.spec !== 'chara_card_v3') throw new HttpError(400, 'RISU_IMPORT_V3_REQUIRED');
+  // CCv3 defines an implicit cover icon only when assets is omitted, not when it is empty.
+  if (card.assets === undefined)
+    card.assets = [{ type: 'icon', name: 'main', uri: 'ccdefault:', ext: 'png' }];
   if (Array.isArray(card.assets))
     for (const value of card.assets) {
       const asset = record(value);
       if (typeof asset.uri !== 'string') continue;
       if (asset.uri === 'ccdefault:') asset.uri = 'embeded://__png_cover__.png';
-      else if (/^__asset:\d+$/u.test(asset.uri))
-        asset.uri = `embeded://__png_asset__/${asset.uri.slice(8)}.bin`;
+      else if (asset.uri.startsWith('__asset:')) {
+        const memberPath = attachmentPaths.get(asset.uri.slice(8));
+        if (memberPath) asset.uri = `embeded://${memberPath}`;
+      }
     }
   return document;
 }

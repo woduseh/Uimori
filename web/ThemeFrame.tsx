@@ -6,7 +6,11 @@ import { ThemeContext } from './ThemeContext.js';
 /** Native slot projection leaves React's body/action nodes in place, even when layouts change. */
 export function themeTemplate(html: string): DocumentFragment {
   const template = document.createElement('template');
-  template.innerHTML = DOMPurify.sanitize(html || DEFAULT_THEME_TEMPLATE, {
+  // Parse as an inert fragment so leading style/script elements are not moved to a
+  // document head before sanitization can preserve them or report their removal.
+  template.innerHTML = html || DEFAULT_THEME_TEMPLATE;
+  const fragment = DOMPurify.sanitize(template.content, {
+    RETURN_DOM_FRAGMENT: true,
     // Names live inside this ShadowRoot, not in document named properties.
     SANITIZE_DOM: false,
     ADD_TAGS: ['slot', 'style'],
@@ -18,7 +22,7 @@ export function themeTemplate(html: string): DocumentFragment {
     throw new Error(
       '레이아웃에 지원하지 않는 HTML이 있어요. 스크립트·이벤트 속성·iframe·form 대신 슬롯과 CSS를 사용해 주세요.'
     );
-  const slots = [...template.content.querySelectorAll('slot')];
+  const slots = [...fragment.querySelectorAll('slot')];
   for (const name of THEME_SLOTS) {
     if (slots.filter((slot) => slot.name === name).length !== 1)
       throw new Error(`레이아웃에 <slot name="${name}"></slot>이 정확히 하나 필요해요.`);
@@ -41,8 +45,8 @@ export function themeTemplate(html: string): DocumentFragment {
     throw new Error('등장인물 슬롯은 하나만 사용할 수 있어요.');
   if (slots.filter((slot) => !slot.name).length > 1)
     throw new Error('기본 슬롯은 하나만 사용할 수 있어요.');
-  if (!slots.some((slot) => !slot.name)) template.content.append(document.createElement('slot'));
-  return template.content;
+  if (!slots.some((slot) => !slot.name)) fragment.append(document.createElement('slot'));
+  return fragment;
 }
 export function ThemeFrame({
   children,

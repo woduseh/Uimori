@@ -231,6 +231,45 @@ test('THEMES invalid import leaves selection untouched and closing dirty editor 
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeHidden();
 });
 
+test('THEMES imported leading style applies inside the layout without changing its content', async ({
+  page,
+}, info) => {
+  await openThemes(page);
+  const file = themeFile(emptyTheme('Leading style contract'));
+  file.theme.templateHtml =
+    '<style>.contract-marker { color: rgb(1, 2, 3); }</style>' +
+    '<p class="contract-marker">가져온 스타일</p>' +
+    DEFAULT_THEME_TEMPLATE;
+  await page.getByLabel('테마 파일', { exact: true }).setInputFiles({
+    name: 'leading-style.uimori-theme.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(file)),
+  });
+  await expect(page.getByLabel('테마 이름', { exact: true })).toHaveValue(file.theme.title);
+  await page.getByRole('button', { name: '미리 적용', exact: true }).click();
+  await page.getByText('현재 테마로 예문 보기', { exact: true }).click();
+  const marker = page.locator('.theme-sample .contract-marker');
+  await expect(marker).toHaveText('가져온 스타일');
+  await expect(marker).toHaveCSS('color', 'rgb(1, 2, 3)');
+  await page.locator('.theme-sample').screenshot({ path: info.outputPath('leading-style.png') });
+});
+
+test('THEMES rejects leading executable markup instead of silently dropping it on import', async ({
+  page,
+}) => {
+  await openThemes(page);
+  const file = themeFile(emptyTheme('Unsupported leading script'));
+  file.theme.templateHtml =
+    '<script>window.themeScriptExecuted = true;</script>' + DEFAULT_THEME_TEMPLATE;
+  await page.getByLabel('테마 파일', { exact: true }).setInputFiles({
+    name: 'leading-script.uimori-theme.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(file)),
+  });
+  await expect(page.getByRole('alert')).toContainText('지원하지 않는 HTML');
+  expect(await page.evaluate(() => 'themeScriptExecuted' in window)).toBe(false);
+});
+
 test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard navigation', async ({
   page,
   request,

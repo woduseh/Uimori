@@ -316,6 +316,7 @@ async function executeNativeRisuInvocation(
             state.messages[index].data = await readValue(effect.value, effect.valueType);
           break;
         }
+        case 'v2StopPromptSending':
         case 'v2StopPrompt':
         case 'stop':
           output.effects.stopChat = true;

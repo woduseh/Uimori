@@ -33,7 +33,8 @@ export async function comfyUIFixture(
     /** Inject after accepting a prompt, or while reading its history/image response. */
     fault?: {
       path: 'prompt' | 'history' | 'view';
-      kind: 'headers' | 'body' | 'disconnect' | 'http-5xx';
+      kind: 'headers' | 'body' | 'disconnect' | 'http-error';
+      httpStatus?: number;
     };
     targetedCancel?: boolean;
   } = {}
@@ -72,8 +73,8 @@ export async function comfyUIFixture(
           'content-type': path === 'view' ? 'image/png' : 'application/json',
         });
         response.write(path === 'view' ? FIXTURE_PNG.subarray(0, 8) : '{');
-      } else if (fault.kind === 'http-5xx')
-        json(503, { error: 'synthetic transient response failure' });
+      } else if (fault.kind === 'http-error')
+        json(fault.httpStatus ?? 503, { error: 'synthetic response failure' });
       return true;
     };
     if (options.authorization && request.headers.authorization !== options.authorization)
