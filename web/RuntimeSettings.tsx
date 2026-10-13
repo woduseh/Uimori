@@ -120,6 +120,27 @@ export function SettingsEditor({
               </label>
             </div>
           </div>
+          <div className="settings-group full">
+            <h4 className="settings-group-heading">본문 번역</h4>
+            <div className="settings-group-body">
+              <label className="settings-row">
+                <span className="settings-row-copy">
+                  <strong>본문 생성 후 자동 번역</strong>
+                  <small>
+                    본문을 저장하면 현재 번역 모델로 자동 번역해요. 원문은 먼저 읽을 수 있고, 번역
+                    실패 시 원문은 그대로 유지돼요. Codex에서 콘텐츠 확인이 필요한 경우 직접 번역을
+                    시작해야 해요.
+                  </small>
+                </span>
+                <input
+                  type="checkbox"
+                  aria-label="본문 생성 후 자동 번역"
+                  checked={value.autoTranslate === true}
+                  onChange={(event) => update('autoTranslate', event.target.checked)}
+                />
+              </label>
+            </div>
+          </div>
           <div className="form-actions full settings-save-actions">
             {dirty && (
               <button type="button" className="secondary" onClick={() => setConfirmReload(true)}>

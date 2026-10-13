@@ -124,7 +124,8 @@ export function requestTranslation(
   store: Store,
   id: string,
   force = false,
-  validate?: (id: string) => void
+  validate?: (id: string) => void,
+  autoTranslateRunId?: string
 ): Job {
   return store.transaction(() => {
     const source = store.source(id);
@@ -154,6 +155,7 @@ export function requestTranslation(
         })
       : undefined;
     const input = {
+      ...(autoTranslateRunId ? { autoTranslateRunId } : {}),
       ...(selection ? { translationImageSelection: selection } : {}),
       translationGuide: currentBotTranslationGuide(store, source.chatId),
       translationPrompt: structuredClone(workspace.translation),

@@ -161,7 +161,7 @@ test('actual service-worker code shows a generic visible notification and focuse
   await Promise.all(work);
   expect(notices).toHaveLength(1);
   expect(notices[0]).toMatchObject({
-    title: 'Uimori',
+    title: 'Uimori · 본문 완성',
     options: { body: '본문 생성이 완료됐어요.', tag: envelope.tag },
   });
   expect(JSON.stringify(notices)).not.toMatch(/PRIVATE_PROSE|attacker/);

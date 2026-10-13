@@ -715,6 +715,36 @@ export class Store {
       source,
       verifiedRunLoreReads(this, { ...run, status: 'completed', sourceRevision: source.id })
     );
+    if (
+      run.snapshot.settings.autoTranslate === true &&
+      !run.snapshot.packageStart &&
+      !run.snapshot.transcriptImport &&
+      !run.snapshot.nativeRisuAuthored &&
+      !run.snapshot.executionPurpose
+    ) {
+      try {
+        // The nested savepoint keeps a failed translation reservation from losing the source.
+        requestTranslation(this, source.id, false, undefined, id);
+      } catch {
+        const jobId = randomUUID();
+        const time = now();
+        this.db
+          .prepare(
+            "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,error,created_at,updated_at) VALUES(?,?,?,?,'translation','failed',?,?,?,?)"
+          )
+          .run(
+            jobId,
+            source.chatId,
+            source.id,
+            source.hash,
+            json({ autoTranslateRunId: id }),
+            '자동 번역을 준비하지 못했어요. 번역 모델 설정을 확인하고 직접 다시 요청해 주세요.',
+            time,
+            time
+          );
+        this.event(source.chatId, 'job.failed', jobId);
+      }
+    }
     this.event(source.chatId, 'source.ready', source.id);
     this.event(source.chatId, 'run.completed', id);
     this.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(

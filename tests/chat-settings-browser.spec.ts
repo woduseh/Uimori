@@ -584,3 +584,30 @@ test('CSUI05 save and close persists a valid user note and keeps an invalid note
   await expect(dialog).toBeHidden();
   expect(errors).toEqual([]);
 });
+
+test('CSUI08 automatic translation toggle persists per chat and reopens without starting a job', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60000);
+  const { chat, errors } = await prepare(page, request, 'CSUI08 ' + Date.now());
+  let dialog = await openSettings(page);
+  await selectChatSettingsSection(page, '실행 옵션');
+  let toggle = dialog.getByRole('checkbox', { name: '본문 생성 후 자동 번역', exact: true });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+  const read = async () =>
+    (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(true);
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  dialog = await openSettings(page);
+  await selectChatSettingsSection(page, '실행 옵션');
+  toggle = dialog.getByRole('checkbox', { name: '본문 생성 후 자동 번역', exact: true });
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(false);
+  expect((await read()).jobs).toHaveLength(0);
+  expect(errors).toEqual([]);
+});

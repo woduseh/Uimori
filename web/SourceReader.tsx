@@ -6,7 +6,15 @@ import { ThemeFrame } from './ThemeFrame.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
 import { displayTranslationJob } from './translation-display.js';
 import { resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placement.js';
-import { Fragment, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import type { Asset } from '../core/product.js';
 import type { Illustration } from '../core/illustration.js';
 import type { ChatDetail, ImageTarget, Job, ReaderRun, Source } from '../core/types.js';
@@ -252,6 +260,20 @@ function SourceReaderContent({
   );
   const appliedTarget = useRef<ReaderTarget | undefined>(undefined);
   const targetTranslationAvailable = !!displayTranslation?.result;
+  const translationPreviouslyAvailable = useRef(targetTranslationAvailable);
+  useEffect(() => {
+    const justCompleted = !translationPreviouslyAvailable.current && targetTranslationAvailable;
+    translationPreviouslyAvailable.current = targetTranslationAvailable;
+    if (!justCompleted || readerTarget?.sourceId === source.id) return;
+    try {
+      // Honor a manual choice made while translation was running.
+      if (sessionStorage.getItem(`reader-mode:${source.id}`)) return;
+      if (localStorage.getItem('uimori:reading-language') === 'original') return;
+      setMode('translation');
+    } catch {
+      /* Reading remains available without browser storage. */
+    }
+  }, [readerTarget?.sourceId, source.id, targetTranslationAvailable]);
   useLayoutEffect(() => {
     if (appliedTarget.current === readerTarget) return;
     appliedTarget.current = readerTarget;

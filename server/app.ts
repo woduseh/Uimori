@@ -81,7 +81,10 @@ import { createPackageStart } from './package-start.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
 import { JevCredentialStore } from './jev-credentials.js';
-import { codexContentWarningRoutes } from './codex-content-warning.js';
+import {
+  autoTranslationNeedsConfirmation,
+  codexContentWarningRoutes,
+} from './codex-content-warning.js';
 import { jevProviderRoutes } from './jev-provider.js';
 import {
   CodexRuntime,
@@ -511,6 +514,23 @@ export async function createApp(options: AppOptions): Promise<App> {
               !(queued.kind === 'translation' && record(queued.input).judgmentRecovery)
             )
               requireModel(snapshot.profile?.models[queued.kind], queued.kind);
+            if (
+              queued.kind === 'translation' &&
+              record(queued.input).autoTranslateRunId &&
+              (await autoTranslationNeedsConfirmation(
+                snapshot.profile?.models.translation,
+                source.text,
+                jevCredentials.resolve,
+                signal
+              ))
+            ) {
+              store.failQueuedJob(
+                id,
+                queued.generation,
+                'Codex 콘텐츠 경고를 확인해야 해요. 원문에서 번역 보기를 눌러 진행해 주세요.'
+              );
+              return;
+            }
             await runAuxiliaryJob(auxiliaryBridge(store, controls, signal), id, instanceId, {
               jev: { credential: jevCredentials.resolve },
               signal,
@@ -973,7 +993,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   );
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body: RecordBody = record(request.body);
-    fields(body, ['expectedSettingsRevision', 'maxCalls']);
+    fields(body, ['expectedSettingsRevision', 'maxCalls', 'autoTranslate']);
     const chat = store.settings(
       request.params.id,
       number(body.expectedSettingsRevision, 'settings revision', 1, 1e9),
