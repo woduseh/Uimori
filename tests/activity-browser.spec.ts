@@ -675,3 +675,60 @@ test('ACTUI10 activity icon mode groups unread results and keeps recent chats ac
       .getByText(seeded.chat.title, { exact: true })
   ).toBeVisible();
 });
+
+test('ACTUI11 an already visible source is confirmed only after its inbox entry is selected', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  const seeded = await seed(request);
+  const sourceId = seeded.sources[0].id;
+  const at = new Date().toISOString();
+  let confirmed = false;
+  let confirmations = 0;
+  const legacyReads: string[] = [];
+  page.on('request', (outbound) => {
+    if (new URL(outbound.url()).pathname === '/api/chat-activities')
+      legacyReads.push(outbound.url());
+  });
+  await page.route('**/api/activity-feed', (route) =>
+    route.fulfill({
+      json: {
+        items: confirmed
+          ? []
+          : [
+              {
+                chatId: seeded.chat.id,
+                acknowledgementKey: JSON.stringify(['main', 'synthetic-source-inbox', 0, at]),
+                kind: 'main',
+                status: 'completed',
+                label: '본문 완료',
+                at,
+                sourceId,
+                representation: 'original',
+                actionable: false,
+                canAcknowledge: true,
+              },
+            ],
+        running: [],
+      },
+    })
+  );
+  await page.route(`**/api/chats/${seeded.chat.id}/activity-acknowledgements`, async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    confirmed = true;
+    confirmations++;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  await expect(page.locator(`[data-source-id="${sourceId}"]`)).toBeInViewport();
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  await nav.locator('.bot-navigation-modes > button').nth(1).click();
+  const activity = nav.getByRole('navigation', { name: '채팅 활동' });
+  await expect(activity.locator('.activity-nav-entry')).toHaveCount(1);
+  expect(confirmations).toBe(0);
+  expect(legacyReads).toEqual([]);
+  await activity.locator('.activity-nav-entry .activity-nav-link').click();
+  await expect.poll(() => confirmations).toBe(1);
+  await expect(activity.getByText('확인할 활동이 없어요.')).toBeVisible();
+});

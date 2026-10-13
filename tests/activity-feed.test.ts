@@ -84,3 +84,83 @@ test('activity inbox ignores historic output, groups auto translation, and persi
     ).statusCode
   ).toBe(400);
 });
+
+test('automatic translation replaces a real completed-run notice instead of duplicating it', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-feed-'));
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'activity-auto-test',
+    testMode: true,
+  });
+  current = { app, directory };
+  const store = app.store;
+  const chat = createFixtureChat(store, 'Automatic writing');
+  const run = store.createRun(
+    chat.id,
+    {
+      request: 'A new story',
+      expectedRevision: chat.headRevision,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+    (selected) => ({
+      chatId: chat.id,
+      parentRevision: selected.headRevision,
+      settingsRevision: selected.settingsRevision,
+      settings: selected.settings,
+      request: 'A new story',
+      history: [],
+      resources: [],
+    })
+  ).run;
+  store.startRun(run.id);
+  const attempt = store.product.startAttempt(chat.id, run.id, null, {
+    connectionId: 'synthetic-provider',
+    modelId: 'synthetic-model',
+    role: 'main',
+    protocol: 'openai-chat-v1',
+    method: 'POST',
+    url: 'https://provider.invalid',
+    headers: {},
+    body: {},
+    bodySha256: 'synthetic',
+    stablePrefixSha256: 'synthetic',
+  });
+  store.product.finishAttempt(attempt, {
+    status: 'completed',
+    text: 'Private story body',
+    toolCalls: [],
+    refusal: null,
+    error: null,
+    opaqueState: null,
+    usage: { inputTokens: 1, outputTokens: 1, costUsd: null, priceRevision: null, raw: null },
+  });
+  const source = store.completeRun(run.id, 'Private story body', {
+    modelCalls: 1,
+    inputTokens: 1,
+    outputTokens: 1,
+    costUsd: null,
+  });
+  const single = (await app.inject('/api/activity-feed')).json();
+  expect(single.items).toMatchObject([{ kind: 'main', status: 'completed', sourceId: source.id }]);
+  const at = new Date(Date.now() + 1000).toISOString();
+  store.db
+    .prepare(`INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,error,created_at,updated_at)
+    VALUES(?,?,?,?,'translation','failed',?,'Synthetic translation failure',?,?)`)
+    .run(
+      randomUUID(),
+      chat.id,
+      source.id,
+      source.hash,
+      JSON.stringify({ autoTranslateRunId: run.id }),
+      at,
+      at
+    );
+  const combined = (await app.inject('/api/activity-feed')).json();
+  expect(combined.items).toHaveLength(1);
+  expect(combined.items[0]).toMatchObject({
+    kind: 'translation',
+    status: 'failed',
+    label: '자동 번역 실패 · 원문 확인 가능',
+  });
+});

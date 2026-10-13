@@ -5,7 +5,7 @@ import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { ActionMenu } from './ActionMenu.js';
-import type { useChatActivities } from './useChatActivities.js';
+import type { chatActivitySummaries } from './chat-activity-summaries.js';
 import type { DragEvent, MouseEvent, HTMLAttributes } from 'react';
 import { DeleteButton } from './DeleteButton.js';
 import { IconButton } from './IconButton.js';
@@ -67,7 +67,7 @@ export function BotBranch(
     expanded: boolean;
     onToggle: () => void;
     headingDrag?: HTMLAttributes<HTMLDivElement>;
-    activities: ReturnType<typeof useChatActivities>;
+    activities: ReturnType<typeof chatActivitySummaries>;
   }
 ) {
   const {

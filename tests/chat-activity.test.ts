@@ -1,3 +1,4 @@
+import { chatActivitySummaries } from '../web/chat-activity-summaries.js';
 import { afterEach, expect, test } from 'vitest';
 import { createApp, type App } from '../server/app.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -96,4 +97,17 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
   expect((await app.inject('/api/chat-activities')).json()).toEqual([
     { chatId: second.id, kind: 'main', count: 1 },
   ]);
+});
+
+test('shared inbox running snapshot aggregates kinds and totals for the existing bot tree', () => {
+  expect(
+    chatActivitySummaries([
+      { chatId: 'one', kind: 'main', count: 1 },
+      { chatId: 'one', kind: 'illustration', count: 2 },
+      { chatId: 'two', kind: 'translation', count: 1 },
+    ])
+  ).toEqual({
+    one: { count: 3, label: '원문 생성 1개 · 삽화 2개' },
+    two: { count: 1, label: '번역 1개' },
+  });
 });
