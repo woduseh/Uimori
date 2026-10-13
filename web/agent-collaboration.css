@@ -41,24 +41,6 @@
 .ac-agents {
   gap: 18px;
 }
-.ac-add {
-  order: 2;
-}
-.ac-agents {
-  order: 1;
-}
-.ac-shared-instructions {
-  order: 3;
-}
-.ac-shared-summary {
-  order: 4;
-}
-.ac-limits {
-  order: 5;
-}
-.ac-settings > .ac-validation {
-  order: 6;
-}
 .agent-collaboration .ac-field {
   font-size: 13px;
   gap: 7px;

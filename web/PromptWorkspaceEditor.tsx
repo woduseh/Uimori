@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { promptControls } from '../core/risu-prompt.js';
@@ -358,11 +359,11 @@ export function PromptWorkspaceEditor({
           )}
         </div>
         {(conflict || saveError) && (
-          <p role="alert">
+          <NoticeBanner tone="error">
             {conflict
               ? '다른 곳에서 현재 프롬프트가 바뀌었어요. 현재 선택을 보존했어요. 저장본을 확인하거나 편집 취소로 돌아갈 수 있어요.'
               : saveError}
-          </p>
+          </NoticeBanner>
         )}
         {(saveError || (dirty && !busy && !state.autosavePending)) && (
           <button
@@ -421,7 +422,7 @@ export function PromptWorkspaceEditor({
               onChange={(event) => setComboName(event.target.value)}
             />
           </label>
-          {comboError && <p role="alert">{comboError}</p>}
+          {comboError && <NoticeBanner tone="error">{comboError}</NoticeBanner>}
           <div className="form-actions">
             <button
               type="button"

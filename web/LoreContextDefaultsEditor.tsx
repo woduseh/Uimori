@@ -1,5 +1,6 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useCallback, useEffect, useState } from 'react';
 import {
   DEFAULT_LORE_CONTEXT,
@@ -108,11 +109,7 @@ export function LoreContextDefaultsEditor({
         />
       </fieldset>
       <TransientNotice message={message} />
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </section>
   );
 }

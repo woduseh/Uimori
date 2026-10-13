@@ -124,30 +124,32 @@ export function NativeCollectionEditor({
         </p>
       </aside>
       <div className="native-item-detail">
-        <div className="native-mobile-picker">
-          <button type="button" disabled={index === 0} onClick={() => setSelected(index - 1)}>
-            이전
-          </button>
-          <select
-            aria-label={'현재 ' + label}
-            value={index}
-            onChange={(e) => setSelected(Number(e.target.value))}
-          >
-            {items.map((item, i) => (
-              <option key={i} value={i}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={index >= items.length - 1}
-            onClick={() => setSelected(index + 1)}
-          >
-            다음
-          </button>
-          <IconButton label={label + ' 추가'} icon={AddIcon} onClick={add} />
-        </div>
+        {items.length > 0 && (
+          <div className="native-mobile-picker">
+            <button type="button" disabled={index === 0} onClick={() => setSelected(index - 1)}>
+              이전
+            </button>
+            <select
+              aria-label={'현재 ' + label}
+              value={index}
+              onChange={(e) => setSelected(Number(e.target.value))}
+            >
+              {items.map((item, i) => (
+                <option key={i} value={i}>
+                  {item.title}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              disabled={index >= items.length - 1}
+              onClick={() => setSelected(index + 1)}
+            >
+              다음
+            </button>
+            <IconButton label={label + ' 추가'} icon={AddIcon} onClick={add} />
+          </div>
+        )}
         {items[index] ? (
           <>
             <div className="native-detail-heading">

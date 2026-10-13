@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { api, apiBinary } from './api.js';
+import { api, apiBinary, definiteRejection } from './api.js';
 import { NATIVE_ARCHIVE_MAX_BYTES, type NativeArchivePrepare } from '../core/native-archive.js';
 import type {
   NativeTransferFile,
@@ -23,9 +23,12 @@ export function ResourceBundleImport({
     key: string;
   }>();
   const [busy, setBusy] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const serial = useRef(0);
+  const lock = useRef(false);
+  const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     onDirtyChange?.(busy || !!selection);
   }, [busy, selection, onDirtyChange]);
@@ -47,17 +50,20 @@ export function ResourceBundleImport({
       </header>
       <div className="settings-group-body archive-management-card">
         <input
+          ref={input}
           type="file"
           aria-label="Uimori 자료 백업 파일"
           accept="application/json,.json,application/zip,.uimori,.zip"
-          disabled={busy}
+          disabled={busy || uncertain}
           onChange={async (event) => {
+            if (lock.current || uncertain) return;
             const file = event.target.files?.[0];
             const current = ++serial.current;
             setSelection(undefined);
             setError('');
             setMessage('');
             if (!file) return;
+            lock.current = true;
             setBusy(true);
             try {
               const archive = /\.(?:uimori|zip)$/iu.test(file.name);
@@ -90,6 +96,7 @@ export function ResourceBundleImport({
             } catch (caught) {
               if (current === serial.current) setError((caught as Error).message);
             } finally {
+              lock.current = false;
               if (current === serial.current) setBusy(false);
             }
           }}
@@ -107,9 +114,11 @@ export function ResourceBundleImport({
           type="button"
           disabled={!selection || busy}
           onClick={async () => {
-            if (!selection || busy) return;
+            if (!selection || lock.current) return;
+            lock.current = true;
             setBusy(true);
             setError('');
+            setMessage('');
             try {
               const result = await api<NativeTransferReceipt>(
                 selection.preparedId
@@ -125,18 +134,34 @@ export function ResourceBundleImport({
                 }
               );
               setSelection(undefined);
+              setUncertain(false);
+              if (input.current) input.current.value = '';
               setMessage(`${result.items.length}개 자료를 추가했어요.`);
-              await onImported();
+              try {
+                await onImported();
+              } catch (caught) {
+                setError(
+                  `자료는 추가했어요. 목록을 다시 불러오지 못했어요. ${(caught as Error).message}`
+                );
+              }
             } catch (caught) {
+              setUncertain(uncertain || !definiteRejection(caught));
               setError((caught as Error).message);
             } finally {
+              lock.current = false;
               setBusy(false);
             }
           }}
         >
-          {busy ? '처리 중…' : '새 자료로 가져오기'}
+          {busy ? '처리 중…' : uncertain ? '같은 요청으로 다시 확인' : '새 자료로 가져오기'}
         </button>
         {busy && <LoadingState compact label="자료 백업을 처리하는 중이에요…" />}
+        {uncertain && (
+          <NoticeBanner>
+            서버의 완료 여부를 확인하지 못했어요. 선택한 파일과 요청을 유지했어요. 같은 요청으로
+            다시 확인해 주세요.
+          </NoticeBanner>
+        )}
         {message && <NoticeBanner>{message}</NoticeBanner>}
         {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       </div>

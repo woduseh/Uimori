@@ -1,5 +1,6 @@
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { LoadingState } from './LoadingState.js';
 import './push-settings.css';
 import { useEffect, useState } from 'react';
 import { Bell, BellOff, RefreshCw, Send } from 'lucide-react';
@@ -41,6 +42,7 @@ export function PushSettings() {
   // biome-ignore lint/correctness/useExhaustiveDependencies: refresh is an explicit read after an uncertain save; it never re-subscribes or requests permission.
   useEffect(() => {
     const controller = new AbortController();
+    setError('');
     void api<PushInfo>(
       `/push?${new URLSearchParams({ clientId })}`,
       undefined,
@@ -210,6 +212,9 @@ export function PushSettings() {
             </button>
           ))}
       </div>
+      {supported && !info && !error && (
+        <LoadingState compact label="알림 설정을 불러오는 중이에요…" />
+      )}
       {!supported && (
         <p className="muted">
           이 환경에서는 알림을 지원하지 않아요. HTTPS 또는 설치된 앱에서 확인해 주세요.

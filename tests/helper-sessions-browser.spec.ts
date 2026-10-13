@@ -6,10 +6,117 @@ import {
 } from './fixtures/browser-viewports.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import type { Chat } from '../core/types.js';
+import type { Chat, ChatDetail, Run } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { openHelper } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
+
+test('AUDIT2 helper deletion clears a recovered read error and keeps a rejected delete across successful polls', async ({
+  page,
+  request,
+}, info) => {
+  const created = await postFixtureChat(request, {
+    data: { title: `세션 삭제 오류 구분 ${randomUUID()}` },
+  });
+  expect(created.ok()).toBe(true);
+  const chat = (await created.json()) as Chat;
+  const generated = await request.post(`/api/chats/${chat.id}/runs`, {
+    data: {
+      request: 'Synthetic scene: preserve this manuscript while reviewing helper deletion.',
+      expectedRevision: chat.headRevision,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: `helper-deletion-${chat.id}`,
+    },
+  });
+  expect(generated.ok()).toBe(true);
+  const run = (await generated.json()) as Run;
+  await expect
+    .poll(async () => {
+      const current = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+      return current.runs.find((item) => item.id === run.id)?.status;
+    })
+    .toBe('completed');
+  const manuscript = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  expect(manuscript.sources).toHaveLength(1);
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const panel = page.locator('#helper-panel');
+  const input = panel.getByLabel('도우미에게 요청');
+  await expect(input).toBeEnabled();
+  await input.fill('삭제 검토 중에도 유지할 초안');
+  const session = await panel.getByLabel('도우미 세션 선택').inputValue();
+  let releaseInitial = () => {};
+  const initial = new Promise<void>((resolve) => {
+    releaseInitial = resolve;
+  });
+  let releaseRecovery = () => {};
+  const recovery = new Promise<void>((resolve) => {
+    releaseRecovery = resolve;
+  });
+  let reads = 0;
+  let successfulReads = 0;
+  let deleteRequests = 0;
+  const deleteFailure = '세션 삭제를 완료하지 못했어요. 먼저 작업 상태를 확인해 주세요.';
+  await page.route(`**/api/helper/conversations/${session}/deletion`, async (route) => {
+    reads++;
+    if (reads === 1) {
+      await initial;
+      await route.fulfill({ status: 503, json: { error: 'SYNTHETIC_DELETION_READ_FAILURE' } });
+      return;
+    }
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    await recovery;
+    await route.fulfill({ response });
+    successfulReads++;
+  });
+  await page.route(`**/api/helper/conversations/${session}`, async (route) => {
+    if (route.request().method() !== 'DELETE') {
+      await route.continue();
+      return;
+    }
+    deleteRequests++;
+    await route.fulfill({ status: 409, json: { error: deleteFailure } });
+  });
+  try {
+    await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
+    await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();
+    const dialog = page.getByRole('alertdialog', { name: '도우미 세션 삭제', exact: true });
+    const remove = dialog.getByRole('button', { name: '세션 영구 삭제', exact: true });
+    await expect(dialog.getByRole('status')).toContainText('삭제할 자료와 진행 중인 작업');
+    await expect(remove).toBeDisabled();
+    releaseInitial();
+    await expect(dialog.getByRole('alert')).toContainText('(503)');
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath('helper-deletion-read-failed-412.png') });
+    releaseRecovery();
+    await expect.poll(() => successfulReads).toBeGreaterThan(0);
+    await expect(dialog).toContainText('이미 저장한 본편');
+    await expect(dialog.getByRole('alert')).toHaveCount(0);
+    await expect(remove).toBeEnabled();
+    expect(deleteRequests).toBe(0);
+    await remove.click();
+    await expect(dialog.getByRole('alert')).toHaveText(deleteFailure);
+    const afterFailure = successfulReads;
+    await expect.poll(() => successfulReads).toBeGreaterThan(afterFailure);
+    await expect(dialog.getByRole('alert')).toHaveText(deleteFailure);
+    expect(deleteRequests).toBe(1);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath('helper-deletion-operation-failed-412.png') });
+    await dialog.getByRole('button', { name: '계속 사용', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(input).toHaveValue('삭제 검토 중에도 유지할 초안');
+    expect((await request.get(`/api/helper/conversations/${session}`)).ok()).toBe(true);
+    const preserved = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+    expect(preserved.sources).toEqual(manuscript.sources);
+    expect(preserved.runs).toEqual(manuscript.runs);
+  } finally {
+    releaseInitial();
+    releaseRecovery();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
 
 test('HSESSION01 sessions retain their own drafts after switching and reload, rename and delete only the selected session', async ({
   page,

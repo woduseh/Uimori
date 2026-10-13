@@ -160,113 +160,6 @@ export function AgentCollaborationEditor({
           )}
           {collaboration.enabled && (
             <div className="ac-settings">
-              <details className="ac-limits">
-                <summary>
-                  <span>호출 한도</span>
-                  <small>전체 추가 호출 {collaboration.maxCalls}회</small>
-                </summary>
-                <label className="ac-field ac-budget">
-                  전체 추가 호출 한도
-                  <input
-                    type="number"
-                    min={1}
-                    max={12}
-                    step={1}
-                    value={collaboration.maxCalls || ''}
-                    aria-describedby={`${id}-budget-note`}
-                    aria-label="전체 추가 호출 한도"
-                    onChange={(event) => update({ maxCalls: Number(event.target.value) })}
-                  />
-                  <small id={`${id}-budget-note`} className="muted">
-                    모든 에이전트가 나눠 쓰는 한도예요. 채팅의 전체 호출 한도에도 포함돼요. Codex
-                    조언은 여러 자료 읽기를 포함한 실행 1건으로 세며 내부 추론 횟수는 미확인이에요.
-                  </small>
-                </label>
-              </details>
-              <label className="ac-field ac-shared-instructions">
-                함께 따를 지침
-                <textarea
-                  aria-label="함께 따를 지침"
-                  rows={4}
-                  value={collaboration.sharedInstructions}
-                  placeholder="모든 에이전트가 함께 고려할 창작 방향을 적어 주세요."
-                  onChange={(event) => update({ sharedInstructions: event.target.value })}
-                />
-              </label>
-              <section className="ac-shared-summary" aria-label="전달할 창작 옵션">
-                <div>
-                  <strong>전달할 창작 옵션</strong>
-                  <p className="muted">선택한 옵션의 실행 시점 값을 읽기용으로 전달해요.</p>
-                </div>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={!controls.length && !missingControls.length}
-                  onClick={() => setControlDialog(true)}
-                >
-                  <EditIcon size={18} aria-hidden="true" />
-                  선택 변경
-                </button>
-                <div className="ac-shared-tags">
-                  {collaboration.sharedControls.length ? (
-                    collaboration.sharedControls.map((controlId, index) => (
-                      <span
-                        className={
-                          controls.some((control) => control.id === controlId) ? '' : 'missing'
-                        }
-                        key={controlId}
-                      >
-                        {controls.find((control) => control.id === controlId)?.label ??
-                          `삭제된 옵션 ${index + 1}`}
-                      </span>
-                    ))
-                  ) : (
-                    <small className="muted">선택한 옵션 없음</small>
-                  )}
-                </div>
-                <small className="muted">프롬프트 전체나 옵션 수정 권한은 전달하지 않아요.</small>
-              </section>
-              <div className="ac-add">
-                <div className="ac-heading">
-                  <h4>함께할 에이전트</h4>
-                  <span className="muted">{collaboration.agents.length} / 6명</span>
-                </div>
-                <button
-                  type="button"
-                  className="secondary ac-add-trigger"
-                  aria-expanded={showTemplates}
-                  disabled={collaboration.agents.length >= 6}
-                  onClick={() => setShowTemplates((current) => !current)}
-                >
-                  에이전트 추가
-                </button>
-                {showTemplates && (
-                  <div className="ac-template-picker">
-                    <p className="muted">
-                      템플릿으로 시작한 뒤 이름과 지침을 자유롭게 바꿀 수 있어요.
-                    </p>
-                    <div className="ac-templates">
-                      {templates.map((template) => (
-                        <button
-                          type="button"
-                          className="secondary"
-                          key={template.kind}
-                          aria-label={`${template.title} 에이전트 추가`}
-                          onClick={() => addAgent(template.kind)}
-                        >
-                          <strong>{template.title}</strong>
-                          <span>{template.description}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              {issue && (
-                <p className="ac-validation" role="status">
-                  {issue}
-                </p>
-              )}
               <div className="ac-agents">
                 {collaboration.agents.map((agent, index) => {
                   const agentLabel = `${index + 1}번째 에이전트`;
@@ -429,6 +322,113 @@ export function AgentCollaborationEditor({
                   );
                 })}
               </div>
+              <div className="ac-add">
+                <div className="ac-heading">
+                  <h4>함께할 에이전트</h4>
+                  <span className="muted">{collaboration.agents.length} / 6명</span>
+                </div>
+                <button
+                  type="button"
+                  className="secondary ac-add-trigger"
+                  aria-expanded={showTemplates}
+                  disabled={collaboration.agents.length >= 6}
+                  onClick={() => setShowTemplates((current) => !current)}
+                >
+                  에이전트 추가
+                </button>
+                {showTemplates && (
+                  <div className="ac-template-picker">
+                    <p className="muted">
+                      템플릿으로 시작한 뒤 이름과 지침을 자유롭게 바꿀 수 있어요.
+                    </p>
+                    <div className="ac-templates">
+                      {templates.map((template) => (
+                        <button
+                          type="button"
+                          className="secondary"
+                          key={template.kind}
+                          aria-label={`${template.title} 에이전트 추가`}
+                          onClick={() => addAgent(template.kind)}
+                        >
+                          <strong>{template.title}</strong>
+                          <span>{template.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <label className="ac-field ac-shared-instructions">
+                함께 따를 지침
+                <textarea
+                  aria-label="함께 따를 지침"
+                  rows={4}
+                  value={collaboration.sharedInstructions}
+                  placeholder="모든 에이전트가 함께 고려할 창작 방향을 적어 주세요."
+                  onChange={(event) => update({ sharedInstructions: event.target.value })}
+                />
+              </label>
+              <section className="ac-shared-summary" aria-label="전달할 창작 옵션">
+                <div>
+                  <strong>전달할 창작 옵션</strong>
+                  <p className="muted">선택한 옵션의 실행 시점 값을 읽기용으로 전달해요.</p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!controls.length && !missingControls.length}
+                  onClick={() => setControlDialog(true)}
+                >
+                  <EditIcon size={18} aria-hidden="true" />
+                  선택 변경
+                </button>
+                <div className="ac-shared-tags">
+                  {collaboration.sharedControls.length ? (
+                    collaboration.sharedControls.map((controlId, index) => (
+                      <span
+                        className={
+                          controls.some((control) => control.id === controlId) ? '' : 'missing'
+                        }
+                        key={controlId}
+                      >
+                        {controls.find((control) => control.id === controlId)?.label ??
+                          `삭제된 옵션 ${index + 1}`}
+                      </span>
+                    ))
+                  ) : (
+                    <small className="muted">선택한 옵션 없음</small>
+                  )}
+                </div>
+                <small className="muted">프롬프트 전체나 옵션 수정 권한은 전달하지 않아요.</small>
+              </section>
+              <details className="ac-limits">
+                <summary>
+                  <span>호출 한도</span>
+                  <small>전체 추가 호출 {collaboration.maxCalls}회</small>
+                </summary>
+                <label className="ac-field ac-budget">
+                  전체 추가 호출 한도
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    step={1}
+                    value={collaboration.maxCalls || ''}
+                    aria-describedby={`${id}-budget-note`}
+                    aria-label="전체 추가 호출 한도"
+                    onChange={(event) => update({ maxCalls: Number(event.target.value) })}
+                  />
+                  <small id={`${id}-budget-note`} className="muted">
+                    모든 에이전트가 나눠 쓰는 한도예요. 채팅의 전체 호출 한도에도 포함돼요. Codex
+                    조언은 여러 자료 읽기를 포함한 실행 1건으로 세며 내부 추론 횟수는 미확인이에요.
+                  </small>
+                </label>
+              </details>
+              {issue && (
+                <p className="ac-validation" role="status">
+                  {issue}
+                </p>
+              )}
             </div>
           )}
         </div>

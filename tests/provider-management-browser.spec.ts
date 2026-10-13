@@ -2005,12 +2005,46 @@ test('PMUI model presets group by provider, start collapsed and persist manual o
   await page.getByLabel('프로바이더·모델 검색').fill('');
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   const providers = page.getByRole('region', { name: '저장한 프로바이더', exact: true });
-  await providers
-    .getByRole('article', { name: `${secondConnection.title} 프로바이더`, exact: true })
-    .dragTo(
-      providers.getByRole('article', { name: `${firstConnection.title} 프로바이더`, exact: true }),
-      { targetPosition: { x: 10, y: 10 } }
-    );
+  const sourceProvider = providers.getByRole('article', {
+    name: `${secondConnection.title} 프로바이더`,
+    exact: true,
+  });
+  const targetProvider = providers.getByRole('article', {
+    name: `${firstConnection.title} 프로바이더`,
+    exact: true,
+  });
+  await expect(sourceProvider).toHaveAttribute('draggable', 'true');
+  await expect(targetProvider).toHaveAttribute('draggable', 'true');
+  const expectedOrder = (await library(request)).connections.map((item) => item.id);
+  await sourceProvider.scrollIntoViewIfNeeded();
+  const sourceBounds = await sourceProvider.boundingBox();
+  expect(sourceBounds).not.toBeNull();
+  const start = { x: sourceBounds!.x + 20, y: sourceBounds!.y + 20 };
+  const moved = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname === `/api/connections/${secondConnection.id}/move`
+  );
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  try {
+    // Begin the native drag before scrolling a long list to the other provider.
+    // dragTo scrolls its target while the mouse is down but before this first movement.
+    await page.mouse.move(start.x + 20, start.y + 4, { steps: 5 });
+    await targetProvider.scrollIntoViewIfNeeded();
+    const targetBounds = await targetProvider.boundingBox();
+    expect(targetBounds).not.toBeNull();
+    await page.mouse.move(targetBounds!.x + 20, targetBounds!.y + 10, { steps: 8 });
+  } finally {
+    await page.mouse.up();
+  }
+  const moveResponse = await moved;
+  expect(moveResponse.ok(), await moveResponse.text()).toBe(true);
+  expect(moveResponse.request().postDataJSON()).toEqual({
+    targetId: firstConnection.id,
+    position: 'before',
+    expectedOrder,
+  });
   await expect
     .poll(async () =>
       (await library(request)).connections

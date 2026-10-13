@@ -2,6 +2,8 @@ import { LoadingState } from './LoadingState.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { ActionMenu } from './ActionMenu.js';
 import type { useChatActivities } from './useChatActivities.js';
 import type { DragEvent, MouseEvent, HTMLAttributes } from 'react';
@@ -624,15 +626,17 @@ export function BotBranch(
             folder={settingsFolder}
             library={library}
             busy={busy}
-            onSave={(value) =>
-              perform(() =>
-                api(
+            onSave={async (value) => {
+              let saved: ChatFolder | null = null;
+              await perform(async () => {
+                saved = await api<ChatFolder>(
                   `/bots/${encodeURIComponent(botId)}/folders/${settingsFolder.id}`,
-                  { expectedRevision: settingsFolder.revision, ...value },
+                  value,
                   'PATCH'
-                )
-              )
-            }
+                );
+              });
+              return saved;
+            }}
             onRemove={() =>
               perform(() =>
                 api(
@@ -785,15 +789,21 @@ function FolderSettings({
   library: Library | null;
   busy: boolean;
   onSave: (value: {
+    expectedRevision: number;
     title: string;
     defaultPersona: { id: string; revision: number } | null;
-  }) => Promise<void>;
+  }) => Promise<ChatFolder | null>;
   onRemove: () => Promise<void>;
 }) {
   const [title, setTitle] = useState(folder.title);
   const [persona, setPersona] = useState(
     folder.defaultPersona ? reference(folder.defaultPersona) : ''
   );
+  const [base, setBase] = useState(folder);
+  const [edited, setEdited] = useState({ title: false, persona: false });
+  const [discarding, setDiscarding] = useState(false);
+  const dirty = edited.title || edited.persona;
+  const conflicted = folder.revision > base.revision;
   const [selectedContent, setSelectedContent] = useState<Content | null>(null);
   const personaId = folder.defaultPersona?.id,
     personaRevision = folder.defaultPersona?.revision;
@@ -820,28 +830,52 @@ function FolderSettings({
     };
   }, [personaId, personaRevision]);
   useEffect(() => {
+    if (folder.revision <= base.revision || busy) return;
+    if (!edited.title) setTitle(folder.title);
+    if (!edited.persona) setPersona(folder.defaultPersona ? reference(folder.defaultPersona) : '');
+    // A draft still belongs to the revision the user started editing. A conflict refresh
+    // may update untouched fields, but cannot quietly authorize overwriting newer settings.
+    if (!dirty) setBase(folder);
+  }, [folder, base.revision, busy, edited.title, edited.persona, dirty]);
+  function loadLatest() {
     setTitle(folder.title);
-    setPersona(personaId === undefined ? '' : `${personaId}@${personaRevision}`);
-  }, [folder.title, personaId, personaRevision]);
+    setPersona(folder.defaultPersona ? reference(folder.defaultPersona) : '');
+    setBase(folder);
+    setEdited({ title: false, persona: false });
+    setDiscarding(false);
+  }
+  const savedPersonaTitle = folder.defaultPersona
+    ? (library?.contents.find((content) => content.id === folder.defaultPersona?.id)?.title ??
+      (selectedContent?.id === folder.defaultPersona.id ? selectedContent.title : null) ??
+      '선택한 자료 확인 필요')
+    : '지정 안 함';
   return (
     <div className="bot-folder-settings">
       <form
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
+          if (busy || conflicted || !title.trim()) return;
           const selected = [
             ...(library?.contents ?? []),
             ...(selectedContent ? [selectedContent] : []),
           ]
             .filter((content) => content.id === persona.slice(0, persona.lastIndexOf('@')))
             .sort((a, b) => b.revision - a.revision)[0];
-          void onSave({
+          const saved = await onSave({
+            expectedRevision: base.revision,
             title,
             defaultPersona: selected
               ? { id: selected.id, revision: selected.revision }
               : persona
-                ? folder.defaultPersona
+                ? base.defaultPersona
                 : null,
           });
+          if (saved) {
+            setTitle(saved.title);
+            setPersona(saved.defaultPersona ? reference(saved.defaultPersona) : '');
+            setBase(saved);
+            setEdited({ title: false, persona: false });
+          }
         }}
       >
         <label>
@@ -851,7 +885,11 @@ function FolderSettings({
             value={title}
             maxLength={200}
             required
-            onChange={(event) => setTitle(event.target.value)}
+            disabled={busy}
+            onChange={(event) => {
+              setTitle(event.target.value);
+              setEdited((current) => ({ ...current, title: event.target.value !== base.title }));
+            }}
           />
         </label>
         {library && (
@@ -860,15 +898,45 @@ function FolderSettings({
             role="persona"
             label={`${folder.title} 기본 페르소나`}
             value={persona}
-            onChange={setPersona}
+            onChange={(value) => {
+              setPersona(value);
+              setEdited((current) => ({
+                ...current,
+                persona: value !== (base.defaultPersona ? reference(base.defaultPersona) : ''),
+              }));
+            }}
             allowNone
             noneLabel="지정 안 함"
             selectedContent={selectedContent}
             disabled={busy}
           />
         )}
+        {conflicted && (
+          <NoticeBanner tone="error">
+            <p>
+              폴더 설정이 다른 곳에서 바뀌었어요. 작성한 내용은 유지했어요. 최신 저장된 설정을
+              확인한 뒤 불러와 주세요.
+            </p>
+            <details>
+              <summary>현재 저장된 설정 보기</summary>
+              <p>폴더 이름 · {folder.title}</p>
+              <p>기본 페르소나 · {savedPersonaTitle}</p>
+            </details>
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => {
+                if (dirty) setDiscarding(true);
+                else loadLatest();
+              }}
+            >
+              최신 설정 불러오기
+            </button>
+          </NoticeBanner>
+        )}
         <small>앞으로 이 폴더에서 시작하는 채팅에 적용돼요.</small>
-        <button className="secondary" disabled={busy || !title.trim()}>
+        <button className="secondary" disabled={busy || conflicted || !title.trim()}>
           설정 저장
         </button>
       </form>
@@ -882,6 +950,21 @@ function FolderSettings({
       >
         폴더 해제 · 채팅 유지
       </button>
+      <Dialog
+        open={discarding}
+        title="최신 폴더 설정 불러오기"
+        variant="confirmation"
+        onClose={() => setDiscarding(false)}
+      >
+        <p>작성 중인 폴더 설정을 버리고 최신 설정을 불러올까요?</p>
+        <DraftDiscardActions
+          open={discarding}
+          disabled={busy}
+          onContinue={() => setDiscarding(false)}
+          onDiscard={loadLatest}
+          discardLabel="초안 버리고 최신 설정 불러오기"
+        />
+      </Dialog>
     </div>
   );
 }

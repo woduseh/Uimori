@@ -67,6 +67,50 @@ function nativeDialogs(page: Page) {
   return messages;
 }
 
+test('AUDIT2 bookmark retry replaces the old error with loading and preserves saved data at 360px', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, bookmark } = await seedBookmark(request, 360);
+  const before = await (await request.get(`/api/chats/${chat.id}/transcript`)).json();
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const path = `**/api/chats/${chat.id}/bookmarks`;
+  let reads = 0;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(path, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    reads++;
+    if (reads === 1)
+      return route.fulfill({ status: 503, json: { error: 'AUDIT2 bookmark list unavailable.' } });
+    await held;
+    await route.continue();
+  });
+  try {
+    const { list } = await openBookmarks(page, chat.id);
+    await expect(list.getByRole('alert')).toBeVisible();
+    await expect(list.getByRole('alert')).toContainText('(503)');
+    await list.getByRole('button', { name: '책갈피 새로 고침', exact: true }).click();
+    await expect.poll(() => reads).toBe(2);
+    await expect(list.getByRole('status')).toContainText('책갈피를 불러오는 중이에요…');
+    await expect(list.getByRole('alert')).toHaveCount(0);
+    await expect(list.getByText(/아직 책갈피가 없어요/)).toHaveCount(0);
+    await page.screenshot({ path: info.outputPath('bookmark-retry-loading-360.png') });
+    release();
+    await expect(list.getByRole('button', { name: bookmark.title, exact: true })).toBeVisible();
+    await expect(list.getByRole('status')).toHaveCount(0);
+    expect(await savedBookmarks(request, chat.id)).toEqual([bookmark]);
+    const after = await (await request.get(`/api/chats/${chat.id}/transcript`)).json();
+    expect(after.entries).toEqual(before.entries);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
 for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
   test(`BMCONF01 bookmark discard cancellation, Escape, backdrop and save preserve data and focus at ${width}`, async ({
     page,

@@ -1,10 +1,12 @@
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { DismissibleError } from './DismissibleError.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveIcon } from './ui-icons.js';
 import { RisuNativeFields } from './RisuNativeFields.js';
 import { RisuExportButton } from './RisuExportButton.js';
 import { IconButton } from './IconButton.js';
+import { useEditorHeadingHeight } from './useEditorHeadingHeight.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { RisuImport } from './RisuImport.js';
@@ -21,15 +23,7 @@ import {
 } from './resource-editor.js';
 import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type DragEvent,
-  type ReactNode,
-} from 'react';
+import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
@@ -1270,6 +1264,7 @@ function ContentEditor({
   const [saved, setSaved] = useState('');
   const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
   const nativeDraftDirty = state.local.unappliedFields.length > 0;
   const [portraitBusy, setPortraitBusy] = useState(false);
   const saveVersion = useRef(0);
@@ -1280,26 +1275,7 @@ function ContentEditor({
     []
   );
   const editorUnavailable = busy || !state.ready;
-  const editorHeading = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (!state.ready) return;
-    const heading = editorHeading.current;
-    const editor = heading?.parentElement;
-    if (!heading || !editor) return;
-    // Wrapped actions can change the sticky header's height without changing the viewport.
-    const measure = () =>
-      editor.style.setProperty(
-        '--content-editor-heading-h',
-        `${heading.getBoundingClientRect().height}px`
-      );
-    const observer = new ResizeObserver(measure);
-    observer.observe(heading);
-    measure();
-    return () => {
-      observer.disconnect();
-      editor.style.removeProperty('--content-editor-heading-h');
-    };
-  }, [state.ready]);
+  const editorHeading = useEditorHeadingHeight(state.ready);
   useEffect(() => {
     onDirtyChange(dirty || busy || portraitBusy);
   }, [dirty, busy, portraitBusy, onDirtyChange]);
@@ -1426,7 +1402,7 @@ function ContentEditor({
                     revision={selected.revision}
                     title={selected.title}
                     disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
-                    onError={setError}
+                    onError={setExportError}
                   />
                   <DeleteButton
                     path={`/content/${encodeURIComponent(selected.id)}`}
@@ -1446,6 +1422,7 @@ function ContentEditor({
             </LibraryItemMenu>
           </div>
           {headerTrailing}
+          <DismissibleError message={exportError} onDismiss={() => setExportError('')} />
         </div>
         <form
           id={formId}

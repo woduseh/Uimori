@@ -44,6 +44,7 @@ export function RisuExportButton({
         kind={kind === 'content' ? 'content' : 'prompt-preset'}
         id={id}
         disabled={disabled || busy}
+        onError={onError}
       />
       <button
         type="button"

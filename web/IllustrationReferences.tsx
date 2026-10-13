@@ -1,10 +1,12 @@
 import { TransientNotice } from './TransientNotice.js';
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { IllustrationReferenceRole, IllustrationReferences } from '../core/illustration.js';
 import { api } from './api.js';
 import { SaveButton } from './SaveButton.js';
+import { RefreshIcon } from './ui-icons.js';
 import './settings-actions.css';
 import './illustrations.css';
 
@@ -34,6 +36,7 @@ export function IllustrationReferencesEditor({
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [roles, setRoles] = useState<Record<string, IllustrationReferenceRole | ''>>({});
   const [dirty, setDirty] = useState(false);
+  const dirtyDraft = useRef(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [loadError, setLoadError] = useState('');
@@ -51,13 +54,16 @@ export function IllustrationReferencesEditor({
       return null;
     }
   }, [chatId]);
+  const refresh = useCallback(async () => {
+    const value = await load();
+    // Role edits made while the read was pending still own the draft.
+    if (value && !dirtyDraft.current)
+      setRoles(Object.fromEntries(value.candidates.map((item) => [item.ref, item.role ?? ''])));
+  }, [load]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reader asset changes reload candidates; a dirty draft keeps its roles.
   useEffect(() => {
-    void load().then((value) => {
-      if (value && !dirty)
-        setRoles(Object.fromEntries(value.candidates.map((item) => [item.ref, item.role ?? ''])));
-    });
-  }, [load, refreshKey]);
+    void refresh();
+  }, [refresh, refreshKey]);
   useEffect(() => {
     onDirtyChange?.(dirty || saving);
   }, [dirty, saving, onDirtyChange]);
@@ -73,14 +79,7 @@ export function IllustrationReferencesEditor({
           error={loadError}
           label="삽화 참조 이미지를 불러오는 중이에요…"
           errorLabel="삽화 참조 이미지를 불러오지 못했어요."
-          onRetry={() =>
-            void load().then((value) => {
-              if (value)
-                setRoles(
-                  Object.fromEntries(value.candidates.map((item) => [item.ref, item.role ?? '']))
-                );
-            })
-          }
+          onRetry={() => void refresh()}
         />
       </section>
     );
@@ -101,6 +100,7 @@ export function IllustrationReferencesEditor({
         'PUT'
       );
       setLoaded({ ...loaded, revision: value.revision, references: value.references });
+      dirtyDraft.current = false;
       setDirty(false);
       setMessage('삽화 참조 이미지를 저장했어요. 다음 삽화 요청부터 사용해요.');
       return true;
@@ -123,6 +123,23 @@ export function IllustrationReferencesEditor({
         Codex 삽화 생성 때 함께 보내는 이미지예요. 캐릭터 디자인은 인물의 외형을, 그림체는 화풍만
         참고하도록 구분해서 보내요. 8개까지 선택하고, ComfyUI 경로에서는 아직 사용하지 않아요.
       </small>
+      {loadError && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button
+              type="button"
+              className="secondary"
+              disabled={saving}
+              onClick={() => void refresh()}
+            >
+              <RefreshIcon size={18} aria-hidden="true" /> 다시 불러오기
+            </button>
+          }
+        >
+          삽화 참조 이미지를 새로 불러오지 못했어요. 기존 선택은 유지했어요. {loadError}
+        </NoticeBanner>
+      )}
       {!loaded.candidates.length && (
         <p className="muted">이 채팅에 등록한 이미지나 장착한 자료의 이미지가 없어요.</p>
       )}
@@ -136,6 +153,7 @@ export function IllustrationReferencesEditor({
               value={roles[item.ref] ?? ''}
               disabled={saving || (!roles[item.ref] && selected.length >= 8)}
               onChange={(event) => {
+                dirtyDraft.current = true;
                 setRoles({
                   ...roles,
                   [item.ref]: event.target.value as IllustrationReferenceRole | '',

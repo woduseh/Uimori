@@ -74,7 +74,17 @@ export function NewStory({
   onModelSettings: () => void;
   onCreated: (chat: Chat) => Promise<void>;
 }) {
-  const { workspace } = usePromptWorkspace();
+  const { workspace, error: workspaceError, refresh: refreshWorkspace } = usePromptWorkspace();
+  const [refreshingWorkspace, setRefreshingWorkspace] = useState(false);
+  async function reloadWorkspace() {
+    if (refreshingWorkspace) return;
+    setRefreshingWorkspace(true);
+    try {
+      await refreshWorkspace();
+    } finally {
+      setRefreshingWorkspace(false);
+    }
+  }
   const mainModel = library.models.find((item) => item.id === workspace?.modelRoutes.main?.id);
   const mainAvailable =
     !!mainModel && isModelSelectable(mainModel, library.models, library.connections);
@@ -414,36 +424,74 @@ export function NewStory({
           </p>
         )}
         <div className="new-story-main-model" aria-label="새 채팅에 사용할 전역 설정">
-          <dl className="new-story-settings-summary">
-            <div>
-              <dt>본문 모델</dt>
-              <dd>
-                {mainModel?.title ?? '미지정'} <span>· 전역 따름</span>
-              </dd>
-            </div>
-            <div>
-              <dt>작문 프롬프트</dt>
-              <dd>
-                {workspace?.main.title ?? '확인 중…'} <span>· 전역 따름</span>
-              </dd>
-            </div>
-          </dl>
-          {!mainAvailable && (
-            <NoticeBanner
-              actions={
+          {!workspace ? (
+            <LoadingState
+              compact
+              loading={refreshingWorkspace || !workspaceError}
+              error={refreshingWorkspace ? '' : workspaceError}
+              errorLabel="전역 모델과 프롬프트를 불러오지 못했어요."
+              label="전역 모델과 프롬프트를 불러오는 중이에요…"
+              onRetry={() => void reloadWorkspace()}
+            />
+          ) : (
+            <>
+              <dl className="new-story-settings-summary">
+                <div>
+                  <dt>본문 모델</dt>
+                  <dd>
+                    {mainModel?.title ?? '미지정'} <span>· 전역 따름</span>
+                  </dd>
+                </div>
+                <div>
+                  <dt>작문 프롬프트</dt>
+                  <dd>
+                    {workspace.main.title} <span>· 전역 따름</span>
+                  </dd>
+                </div>
+              </dl>
+              {!mainAvailable && (
+                <NoticeBanner
+                  actions={
+                    <button
+                      type="button"
+                      className="ghost"
+                      disabled={locked}
+                      onClick={onModelSettings}
+                    >
+                      전역 모델 설정
+                    </button>
+                  }
+                >
+                  본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도
+                  있어요.
+                </NoticeBanner>
+              )}
+              {mainAvailable && (
                 <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
                   전역 모델 설정
                 </button>
-              }
-            >
-              본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도
-              있어요.
-            </NoticeBanner>
-          )}
-          {mainAvailable && (
-            <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
-              전역 모델 설정
-            </button>
+              )}
+              {refreshingWorkspace && (
+                <LoadingState compact label="전역 설정을 다시 불러오는 중이에요…" />
+              )}
+              {workspaceError && !refreshingWorkspace && (
+                <NoticeBanner
+                  tone="error"
+                  actions={
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => void reloadWorkspace()}
+                    >
+                      다시 불러오기
+                    </button>
+                  }
+                >
+                  전역 설정을 새로 확인하지 못했어요. 앞서 불러온 설정을 유지했어요.{' '}
+                  {workspaceError}
+                </NoticeBanner>
+              )}
+            </>
           )}
         </div>
         {packageLoading && <LoadingState compact label="시작 자료를 불러오는 중이에요…" />}

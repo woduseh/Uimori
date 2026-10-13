@@ -5,6 +5,50 @@ import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 
 test.setTimeout(60000);
+test('AUDIT2 search explains an empty target selection and resumes after choosing one at 360px', async ({
+  page,
+  request,
+}, info) => {
+  const { chat } = await createReadingChat(request, `검색 대상 안내 ${Date.now()}`);
+  const searches: string[] = [];
+  page.on('request', (event) => {
+    if (event.method() === 'POST' && new URL(event.url()).pathname === '/api/search')
+      searches.push(event.url());
+  });
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`/?chat=${chat.id}`);
+  await visibleNavigation(page);
+  await page
+    .getByRole('button', { name: '전체 채팅 검색', exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
+  const dialog = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
+  const field = dialog.getByRole('searchbox', { name: '전체 채팅 검색', exact: true });
+  for (const name of ['원문', '번역', '요청']) {
+    const target = dialog.getByRole('button', { name, exact: true });
+    await target.click();
+    await expect(target).toHaveAttribute('aria-pressed', 'false');
+  }
+  await field.fill('미');
+  await expect(dialog.getByRole('button', { name: '검색', exact: true })).toBeDisabled();
+  await field.press('Enter');
+  await page.screenshot({ path: info.outputPath('search-no-targets-360.png') });
+  await expect(dialog.getByRole('status')).toContainText('검색 대상을 하나 이상 선택해 주세요.');
+  await expect(dialog.getByText(/Enter 또는 검색을 눌러/)).toHaveCount(0);
+  expect(searches).toEqual([]);
+  await expect(field).toHaveValue('미');
+  await dialog.getByRole('button', { name: '번역', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: '검색', exact: true })).toBeEnabled();
+  await dialog.getByRole('button', { name: '검색', exact: true }).click();
+  await expect(dialog.locator('.manuscript-search-results article').first()).toContainText(
+    '보라색 우산'
+  );
+  await expect(dialog.getByText('검색 대상을 하나 이상 선택해 주세요.')).toHaveCount(0);
+  expect(searches).toHaveLength(1);
+});
+
 test('PWUI01 search uses the saved translation and opens its exact scene on desktop and mobile without model work', async ({
   page,
   request,

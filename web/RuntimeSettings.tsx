@@ -1,5 +1,7 @@
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { RefreshIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
@@ -28,6 +30,7 @@ export function SettingsEditor({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [localError, setLocalError] = useState('');
+  const [confirmReload, setConfirmReload] = useState(false);
   useEffect(() => {
     onDirtyChange?.(dirty || saving);
   }, [dirty, saving, onDirtyChange]);
@@ -66,7 +69,13 @@ export function SettingsEditor({
       onError('');
       // Persisted; the refresh below is not an unsaved draft.
       setSaving(false);
-      await onSaved();
+      try {
+        await onSaved();
+      } catch (error) {
+        setLocalError(
+          `실행 설정은 저장했어요. 화면을 다시 불러오지 못했어요. ${(error as Error).message}`
+        );
+      }
       return true;
     } catch (error) {
       const text = (error as Error).message;
@@ -113,17 +122,7 @@ export function SettingsEditor({
           </div>
           <div className="form-actions full settings-save-actions">
             {dirty && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setValue(chat.settings);
-                  setRevision(chat.settingsRevision);
-                  setDirty(false);
-                  setLocalError('');
-                  onError('');
-                }}
-              >
+              <button type="button" className="secondary" onClick={() => setConfirmReload(true)}>
                 <RefreshIcon size={18} aria-hidden="true" />
                 저장된 설정 다시 불러오기
               </button>
@@ -138,6 +137,32 @@ export function SettingsEditor({
           </NoticeBanner>
         )}
       </form>
+      <Dialog
+        open={confirmReload}
+        title="실행 설정 다시 불러오기"
+        variant="confirmation"
+        role="alertdialog"
+        onClose={() => {
+          if (!saving) setConfirmReload(false);
+        }}
+      >
+        <p>저장된 실행 설정을 불러오면 현재 초안이 사라져요.</p>
+        <DraftDiscardActions
+          open={confirmReload}
+          disabled={saving}
+          onContinue={() => setConfirmReload(false)}
+          onDiscard={() => {
+            setValue(chat.settings);
+            setRevision(chat.settingsRevision);
+            setDirty(false);
+            setLocalError('');
+            setMessage('');
+            onError('');
+            setConfirmReload(false);
+          }}
+          discardLabel="초안 버리고 불러오기"
+        />
+      </Dialog>
     </section>
   );
 }

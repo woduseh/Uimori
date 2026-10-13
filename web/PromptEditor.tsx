@@ -3,6 +3,7 @@ import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
+import { useEditorHeadingHeight } from './useEditorHeadingHeight.js';
 import { CopyIcon, SaveIcon } from './ui-icons.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
@@ -99,6 +100,7 @@ export function PromptEditor({
   const session = selectedSessions[role];
   const shared = useResourceEditor<PromptEditModel>(session);
   const { model, state, setModel } = shared;
+  const editorHeading = useEditorHeadingHeight(state.ready);
   const base: PromptPreset | null = state.document.targetId
     ? {
         ...(state.document.baseModel as PromptEditModel),
@@ -117,6 +119,7 @@ export function PromptEditor({
   const pendingTemplate = state.local.unappliedFields.length > 0;
   const [collaborationExpanded, setCollaborationExpanded] = useState(true);
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
   const [status, setStatus] = useState('');
   const presets = [
     ...new Map(
@@ -245,7 +248,7 @@ export function PromptEditor({
               revision={draft.base.revision}
               title={draft.base.title}
               disabled={busy || draft.dirty || pendingTemplate}
-              onError={setError}
+              onError={setExportError}
             />
             {draft.base && (
               <button
@@ -357,11 +360,12 @@ export function PromptEditor({
         data-testid="prompt-editor"
         aria-label="전체 프롬프트 편집"
       >
-        <div className="prompt-editor-heading">
+        <div ref={editorHeading} className="prompt-editor-heading">
           {heading ?? <h2>{draft.title || '프롬프트 편집'}</h2>}
           <ResourceEditorActions value={shared} hideSyncError />
           {saveActions}
           {headingTrailing}
+          <DismissibleError message={exportError} onDismiss={() => setExportError('')} />
         </div>
         {initialPreset === undefined && (
           <p className="muted">

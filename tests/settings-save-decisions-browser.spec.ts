@@ -1,12 +1,202 @@
 import { test, expect } from '@playwright/test';
 import type { ModelWorkspace, PromptWorkspace } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
+import type { BackupSettings, BackupStatus } from '../core/backups.js';
+import type { Chat } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
-import { navigationAction, selectSettingsSection } from './ui-navigation.js';
+import {
+  navigationAction,
+  openChatSettings,
+  selectChatSettingsSection,
+  selectSettingsSection,
+} from './ui-navigation.js';
 
 preservePromptWorkspace();
+
+test('AUDIT2 acknowledged runtime save remains successful when the reader refresh fails', async ({
+  page,
+  request,
+}, info) => {
+  const created = await postFixtureChat(request, {
+    data: { title: '실행 설정 저장 후 읽기 실패' },
+  });
+  expect(created.ok()).toBe(true);
+  const chat = (await created.json()) as Chat;
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto(`/?chat=${chat.id}`);
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '실행 옵션');
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
+  await calls.fill('16');
+  let failedReads = 0;
+  const writes: unknown[] = [];
+  page.on('request', (entry) => {
+    if (entry.method() === 'PATCH' && entry.url().endsWith(`/chats/${chat.id}/settings`))
+      writes.push(entry.postDataJSON());
+  });
+  await page.route(`**/api/chats/${chat.id}/reader?*`, (route) => {
+    failedReads++;
+    return route.fulfill({ status: 503, json: { error: 'Synthetic refresh failure.' } });
+  });
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PATCH' &&
+      response.url().endsWith(`/chats/${chat.id}/settings`)
+  );
+  await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+  expect((await saved).ok()).toBe(true);
+  await expect(dialog.getByRole('alert')).toContainText('실행 설정은 저장했어요.');
+  await expect(dialog.getByRole('alert')).toContainText('화면을 다시 불러오지 못했어요.');
+  await expect(dialog.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
+  await expect(calls).toHaveValue('16');
+  expect(failedReads).toBeGreaterThan(0);
+  expect(writes).toHaveLength(1);
+  const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
+  expect(detail.chat.settings.maxCalls).toBe(16);
+  expect(detail.chat.settingsRevision).toBe(chat.settingsRevision + 1);
+  await page.screenshot({ path: info.outputPath('runtime-accepted-refresh-failed-412.png') });
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(
+    page.getByRole('alertdialog', { name: '저장하지 않은 설정', exact: true })
+  ).toHaveCount(0);
+  expect(writes).toHaveLength(1);
+});
+
+for (const width of [360, 412]) {
+  test(`AUDIT2 runtime reload keeps the draft until explicit discard at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const created = await postFixtureChat(request, { data: { title: `실행 옵션 초안 ${width}` } });
+    expect(created.ok(), await created.text()).toBe(true);
+    const chat = (await created.json()) as Chat;
+    const original = String(chat.settings.maxCalls);
+    const edited = original === '16' ? '15' : '16';
+    const settingsWrites: unknown[] = [];
+    page.on('request', (entry) => {
+      if (
+        entry.method() === 'PATCH' &&
+        new URL(entry.url()).pathname === `/api/chats/${chat.id}/settings`
+      )
+        settingsWrites.push(entry.postDataJSON());
+    });
+    await page.setViewportSize({ width, height: 915 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`/?chat=${chat.id}`);
+    await openChatSettings(page);
+    await selectChatSettingsSection(page, '실행 옵션');
+    const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+    const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
+    const reload = dialog.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true });
+    const confirmation = page.getByRole('alertdialog', {
+      name: '실행 설정 다시 불러오기',
+      exact: true,
+    });
+    await calls.fill(edited);
+    await reload.click();
+    await page.screenshot({ path: info.outputPath(`audit2-runtime-reload-${width}.png`) });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(calls).toHaveValue(edited);
+    await reload.click();
+    await confirmation.getByRole('button', { name: '초안 버리고 불러오기', exact: true }).click();
+    await expect(confirmation).toBeHidden();
+    await expect(calls).toHaveValue(original);
+    await expect(dialog.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
+    expect(settingsWrites).toEqual([]);
+    const after = await (await request.get(`/api/chats/${chat.id}`)).json();
+    expect(after.chat.settings).toEqual(chat.settings);
+    expect(after.chat.settingsRevision).toBe(chat.settingsRevision);
+  });
+
+  test(`AUDIT2 backup save announces an acknowledged save and retains a rejected draft at ${width}px`, async ({
+    page,
+  }, info) => {
+    let saved: BackupSettings = {
+      revision: 7,
+      enabled: false,
+      hour: 3,
+      minute: 0,
+      retain: 5,
+      nextRunAt: null,
+    };
+    const writes: unknown[] = [];
+    let rejectSave = false;
+    await page.route('**/api/backups', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      const status: BackupStatus = {
+        settings: saved,
+        status: 'idle',
+        lastSuccess: null,
+        error: null,
+        warning: null,
+        backups: [],
+      };
+      await route.fulfill({ json: status });
+    });
+    await page.route('**/api/backups/settings', async (route) => {
+      if (route.request().method() !== 'PUT') return route.continue();
+      const body = route.request().postDataJSON();
+      writes.push(body);
+      if (rejectSave)
+        return route.fulfill({ status: 503, json: { error: '합성 백업 설정 저장 실패' } });
+      expect(body.expectedRevision).toBe(saved.revision);
+      saved = {
+        ...saved,
+        enabled: body.enabled,
+        hour: body.hour,
+        minute: body.minute,
+        retain: body.retain,
+        revision: saved.revision + 1,
+      };
+      await route.fulfill({ json: saved });
+    });
+    await page.setViewportSize({ width, height: 915 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '데이터 관리');
+    const panel = page.getByRole('region', { name: '자동 백업', exact: true });
+    const retain = panel.getByLabel('성공본 보관 개수', { exact: true });
+    const save = panel.getByRole('button', { name: '백업 설정 저장', exact: true });
+    await retain.fill('6');
+    const [acknowledged] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/backups/settings' &&
+          response.request().method() === 'PUT'
+      ),
+      save.click(),
+    ]);
+    expect(acknowledged.ok()).toBe(true);
+    await acknowledged.json();
+    await expect(save).toBeDisabled();
+    await page.screenshot({ path: info.outputPath(`audit2-backup-saved-${width}.png`) });
+    const notice = page.getByRole('status').filter({ hasText: '백업 설정을 저장했어요.' });
+    await expect(notice).toBeVisible();
+    expect(saved.retain).toBe(6);
+    expect(saved.revision).toBe(8);
+    expect(writes).toHaveLength(1);
+    await expect(notice).toBeHidden();
+    rejectSave = true;
+    await retain.fill('9');
+    await save.click();
+    await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요.');
+    await expect(panel.getByRole('alert')).toContainText('(503)');
+    await expect(panel.getByRole('alert')).toBeInViewport({ ratio: 1 });
+    await expect(retain).toHaveValue('9');
+    await expect(save).toBeEnabled();
+    await expect(notice).toBeHidden();
+    expect(saved.retain).toBe(6);
+    expect(saved.revision).toBe(8);
+    expect(writes).toHaveLength(2);
+    await page.screenshot({ path: info.outputPath(`audit2-backup-save-failed-${width}.png`) });
+  });
+}
 
 test('DECISION settings role model conflict review keeps the editable draft and saved version separate', async ({
   page,

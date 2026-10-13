@@ -2,9 +2,19 @@ import sharp from 'sharp';
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
-import type { Illustration, IllustrationSettings } from '../core/illustration.js';
-import { fixtureBotInput } from './fixtures/chat.js';
-import { navigationAction, openSourceActions, selectSettingsSection } from './ui-navigation.js';
+import type {
+  Illustration,
+  IllustrationReferences,
+  IllustrationSettings,
+} from '../core/illustration.js';
+import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
+import {
+  navigationAction,
+  openChatSettings,
+  openSourceActions,
+  selectChatSettingsSection,
+  selectSettingsSection,
+} from './ui-navigation.js';
 
 test.setTimeout(60000);
 
@@ -65,6 +75,141 @@ async function illustrations(request: APIRequestContext, chatId: string) {
   return (await response.json()) as Illustration[];
 }
 const byStatus = (status: string) => `[data-testid="illustration"][data-status="${status}"]`;
+
+for (const width of [360, 412]) {
+  test(`AUDIT2 illustration reference refresh failure keeps candidates, draft roles and revision before retry at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const created = await postFixtureChat(request, {
+      data: { title: `참조 이미지 갱신 ${width}` },
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    const chat = (await created.json()) as Chat;
+    const image = await sharp({
+      create: { width: 80, height: 80, channels: 3, background: '#6688aa' },
+    })
+      .png()
+      .toBuffer();
+    for (const title of ['인물 기준 이미지', '배경 기준 이미지']) {
+      const uploaded = await request.post(`/api/chats/${chat.id}/assets`, {
+        data: {
+          title,
+          description: '합성 참조 이미지',
+          actor: '',
+          outfit: '',
+          location: '',
+          allowedUse: 'both',
+          mime: 'image/png',
+          base64: image.toString('base64'),
+        },
+      });
+      expect(uploaded.ok(), await uploaded.text()).toBe(true);
+    }
+    const path = `/api/chats/${chat.id}/illustration-references`;
+    const initial = (await (await request.get(path)).json()) as IllustrationReferences & {
+      candidates: Array<{ ref: string; title: string }>;
+    };
+    const person = initial.candidates.find((item) => item.title === '인물 기준 이미지')!;
+    const seeded = await request.put(path, {
+      data: {
+        expectedRevision: initial.revision,
+        references: [{ ref: person.ref, role: 'character' }],
+      },
+    });
+    expect(seeded.ok(), await seeded.text()).toBe(true);
+    const saved = (await seeded.json()) as IllustrationReferences;
+    let failRefresh = false;
+    let failedReads = 0;
+    const referenceWrites: unknown[] = [];
+    const generationRequests: string[] = [];
+    await page.route(`**${path}`, async (route) => {
+      const entry = route.request();
+      if (entry.method() === 'PUT') referenceWrites.push(entry.postDataJSON());
+      if (entry.method() === 'GET' && failRefresh) {
+        failedReads++;
+        return route.fulfill({ status: 503, json: { error: '합성 삽화 참조 갱신 실패' } });
+      }
+      return route.continue();
+    });
+    page.on('request', (entry) => {
+      if (
+        entry.method() === 'POST' &&
+        /\/(runs|retranslate|illustrations)$/.test(new URL(entry.url()).pathname)
+      )
+        generationRequests.push(entry.url());
+    });
+    await page.setViewportSize({ width, height: 915 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`/?chat=${chat.id}`);
+    await openChatSettings(page);
+    await selectChatSettingsSection(page, '이미지');
+    const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+    const references = dialog.getByRole('region', { name: '삽화 참조 이미지', exact: true });
+    const personRole = references.getByLabel('인물 기준 이미지 참조 역할', { exact: true });
+    await expect(personRole).toHaveValue('character');
+    await personRole.selectOption('style');
+    failRefresh = true;
+    await dialog.locator('.chat-settings-image-management > summary').click();
+    const assets = dialog.getByRole('region', { name: '이 이야기의 이미지', exact: true });
+    await assets.getByLabel('PNG 또는 JPEG 이미지', { exact: true }).setInputFiles({
+      name: 'additional.png',
+      mimeType: 'image/png',
+      buffer: image,
+    });
+    await assets.getByLabel('이미지 이름', { exact: true }).fill('갱신 후 새 이미지');
+    await assets
+      .getByLabel('이미지 설명', { exact: true })
+      .fill('새 후보가 들어올 때도 참조 초안은 유지돼요.');
+    await assets.getByRole('button', { name: '이미지 등록', exact: true }).click();
+    await expect.poll(() => failedReads).toBeGreaterThan(0);
+    await expect(references.locator('figure')).toHaveCount(initial.candidates.length);
+    await expect(personRole).toHaveValue('style');
+    const unchanged = (await (await request.get(path)).json()) as IllustrationReferences;
+    expect(unchanged.revision).toBe(saved.revision);
+    expect(unchanged.references).toEqual(saved.references);
+    expect(referenceWrites).toEqual([]);
+    await references.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: info.outputPath(`audit2-reference-refresh-failed-${width}.png`),
+    });
+    await expect(references.getByRole('alert')).toContainText(
+      '삽화 참조 이미지를 새로 불러오지 못했어요. 기존 선택은 유지했어요.'
+    );
+    await expect(references.getByRole('alert')).toContainText('(503)');
+    const retry = references.getByRole('button', { name: '다시 불러오기', exact: true });
+    await expect(retry).toBeVisible();
+    failRefresh = false;
+    await retry.click();
+    await expect(references.getByRole('alert')).toBeHidden();
+    await expect(references.locator('figure')).toHaveCount(initial.candidates.length + 1);
+    await expect(personRole).toHaveValue('style');
+    await expect(references.getByLabel('갱신 후 새 이미지 참조 역할', { exact: true })).toHaveValue(
+      ''
+    );
+    const [acknowledged] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === path && response.request().method() === 'PUT'
+      ),
+      references.getByRole('button', { name: '삽화 참조 저장', exact: true }).click(),
+    ]);
+    expect(acknowledged.ok()).toBe(true);
+    await acknowledged.json();
+    await expect(
+      references.getByRole('button', { name: '삽화 참조 저장', exact: true })
+    ).toBeDisabled();
+    expect(referenceWrites).toEqual([
+      { expectedRevision: saved.revision, references: [{ ref: person.ref, role: 'style' }] },
+    ]);
+    const accepted = (await (await request.get(path)).json()) as IllustrationReferences;
+    expect(accepted.revision).toBe(saved.revision + 1);
+    expect(accepted.references).toEqual([{ ref: person.ref, role: 'style' }]);
+    expect(generationRequests).toEqual([]);
+    expect((await detail(request, chat.id)).runs).toHaveLength(0);
+    await page.screenshot({ path: info.outputPath(`audit2-reference-recovered-${width}.png`) });
+  });
+}
 
 test('ILUI01 scene menu requests an illustration, shows the stored image, retries a failure and deletes', async ({
   page,

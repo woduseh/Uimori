@@ -328,7 +328,7 @@ input[type="checkbox"] {
   display: grid;
   grid-template-columns: var(--nav-w) minmax(0, 1fr);
   height: min(var(--app-height, 100dvh), 100dvh);
-  overflow: hidden;
+  overflow: clip;
 }
 .sidebar {
   background: var(--nav);
