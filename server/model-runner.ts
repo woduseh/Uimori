@@ -2,7 +2,7 @@ import { buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderExecutionOptions } from '../core/transport.js';
 import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
-import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
+import { toolCorrectionOutcome } from '../core/tool-outcome.js';
 import { estimateContextTokens } from '../core/context-budget.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
 import { executeTool } from '../core/provider.js';
@@ -99,7 +99,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   let completedToolHistory: ToolEvent[] = [];
   let lastUnhelpfulRead: string | undefined;
   const results: ToolEvent[] = [];
-  const correction = createToolCorrectionPolicy();
   const evaluation = createEvaluationToolSession(
     target,
     hooks.timeoutMs,
@@ -327,7 +326,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         advisorContext.set(event.callId, structuredClone(event));
       // Persist each real result immediately. Recovery reuses the durable receipt instead.
       if (!saved) await hooks.onToolEvent(structuredClone(event));
-      const outcome = correction(event, call.arguments);
+      const outcome = toolCorrectionOutcome(event);
       if (outcome === 'denied') return fail('READ_TOOL_DENIED');
     }
     return undefined;

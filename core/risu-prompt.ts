@@ -371,12 +371,6 @@ export function reconcilePromptValues(
   );
   return { values: resolved, resetKeys };
 }
-export function visiblePromptControls(
-  controls: PromptControl[],
-  _values?: Record<string, PromptValue>
-): PromptControl[] {
-  return controls;
-}
 /** Compose native RISUP blocks after server CBS evaluation. Slot insertion is host data plumbing. */
 export function compileRisuPrompt(
   program: RisuPrompt,

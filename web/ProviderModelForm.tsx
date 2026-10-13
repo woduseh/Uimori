@@ -3,7 +3,7 @@ import type { Connection, ModelPreset, VertexRequestTier } from '../core/product
 import { modelHints } from '../core/model-hints.js';
 import { ProviderCatalogPicker } from './ProviderCatalogPicker.js';
 import { ProviderModelFields } from './ProviderModelFields.js';
-import { selectModelConnection, updateModelId, type ModelDraft } from './provider-model-draft.js';
+import { selectModelConnection, type ModelDraft } from './provider-model-draft.js';
 import type { ProviderEditorState } from './provider-editor-state.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
@@ -158,18 +158,14 @@ export function ProviderModelForm({
             connection={chosen}
             selectedId={model.modelId}
             busy={busy}
-            onRefresh={(item) => {
-              onCatalog(item);
-            }}
+            onRefresh={onCatalog}
             onChoose={(item) =>
               onChange((current) => {
                 // Picking from the list is an explicit choice: published limits prefill and stay editable.
-                const selected = updateModelId(current, item.id);
-                const hints = chosen
-                  ? modelHints(chosen, item.id, selected.modelFamily)
-                  : undefined;
+                const hints = chosen ? modelHints(chosen, item.id, current.modelFamily) : undefined;
                 return {
-                  ...selected,
+                  ...current,
+                  modelId: item.id,
                   title:
                     !current.title ||
                     current.title === current.modelId ||

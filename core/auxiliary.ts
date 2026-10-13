@@ -11,7 +11,7 @@ import {
   type ToolAction,
 } from './provider.js';
 import type { TranslationContextMode } from './translation-settings.js';
-import { createToolCorrectionPolicy } from './tool-outcome.js';
+import { toolCorrectionOutcome } from './tool-outcome.js';
 import type { Resource, RunSnapshot, ToolEvent } from './types.js';
 import { STORY_READ_NAMES } from './story-context.js';
 import { TRANSLATION_READ_NAMES, translationSnapshot } from './translation-context.js';
@@ -350,7 +350,6 @@ export async function executeAuxiliary(
   const inputs: AuxiliaryInput[] = [];
   const toolEvents: ToolEvent[] = [];
   const limit = hooks.maxCalls ?? snapshot.settings.maxCalls;
-  const correction = createToolCorrectionPolicy();
   const check = () => {
     if (hooks.signal?.aborted)
       throw Object.assign(new Error('Auxiliary cancelled'), { name: 'AbortError' });
@@ -423,7 +422,7 @@ export async function executeAuxiliary(
       toolEvents.push(structuredClone(event));
       await hooks.onToolEvent?.(structuredClone(event));
       check();
-      const decision = correction(event, action.args);
+      const decision = toolCorrectionOutcome(event);
       if (decision === 'denied') throw new Error('Auxiliary read tool denied');
     }
   }

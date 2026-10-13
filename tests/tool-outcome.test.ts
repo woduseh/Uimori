@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { createToolCorrectionPolicy } from '../core/tool-outcome.js';
+import { toolCorrectionOutcome } from '../core/tool-outcome.js';
 import { executeTool } from '../core/provider.js';
 import { syntheticResources } from './fixtures/resources.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
@@ -41,14 +41,11 @@ test('recoverable feedback stays available to the owning loop budget; unclassifi
     denied: true,
     errorKind: 'recoverable',
   };
-  const policy = createToolCorrectionPolicy();
-  for (const limit of [101, 102, 103, 104]) expect(policy(event, { limit })).toBe('continue');
-  const repeated = createToolCorrectionPolicy();
-  expect(repeated(event, { limit: 101, query: 'a' })).toBe('continue');
-  expect(repeated(event, { query: 'a', limit: 101 })).toBe('continue');
-  expect(createToolCorrectionPolicy()({ ...event, errorKind: undefined }, {})).toBe('denied');
+  expect(toolCorrectionOutcome(event)).toBe('continue');
+  expect(toolCorrectionOutcome({ ...event, denied: false, errorKind: undefined })).toBe('continue');
+  expect(toolCorrectionOutcome({ ...event, errorKind: undefined })).toBe('denied');
   const denied = executeTool(snapshot, { callId: 'a', name: 'shell', args: {} });
-  expect(createToolCorrectionPolicy()(denied, {})).toBe('denied');
+  expect(toolCorrectionOutcome(denied)).toBe('denied');
 });
 
 test('knowledge search splits whitespace and matches every term independently', () => {

@@ -1,14 +1,14 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
-import { promptControls, type PromptControl } from '../core/risu-prompt.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { ChatOptionState } from '../core/chat-options.js';
 import {
+  promptControls,
   reconcilePromptValues,
-  visiblePromptControls,
+  type PromptControl,
   type RisuPrompt,
   type PromptValue,
 } from '../core/risu-prompt.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ChatOptionState } from '../core/chat-options.js';
 import { api, ApiError } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
@@ -426,11 +426,9 @@ function SelectiveValues({
   mode: 'fixed' | 'oneoff';
 }) {
   const effective = { ...inherited, ...values };
-  let controls: PromptControl[];
-  let visibilityValues: Values;
+  let reconciledValues: Values;
   try {
-    visibilityValues = reconcilePromptValues(definitions, effective).values;
-    controls = visiblePromptControls(definitions, visibilityValues);
+    reconciledValues = reconcilePromptValues(definitions, effective).values;
   } catch {
     return <p role="alert">옵션 표시 조건을 확인하지 못했어요. 프롬프트 정의를 확인해 주세요.</p>;
   }
@@ -440,13 +438,13 @@ function SelectiveValues({
   /* Same grouping rule as the prompt editor, so one option means the same thing in
      both places. Long option sets stay navigable instead of becoming one long list. */
   const groups = new Map<string, PromptControl[]>();
-  for (const control of controls) {
+  for (const control of definitions) {
     const group = control.group?.trim() || '기본 설정';
     groups.set(group, [...(groups.get(group) ?? []), control]);
   }
   const row = (control: PromptControl) => {
     const selected = Object.hasOwn(values, control.id);
-    const current = visibilityValues[control.id]!;
+    const current = reconciledValues[control.id]!;
     /* A switch already says what it will do, so flipping it is the act of setting a
        value for this chat. Every other control keeps its value readable as text until
        the row is explicitly switched into editing. */
@@ -460,7 +458,6 @@ function SelectiveValues({
               definitions={definitions}
               controlIds={[control.id]}
               values={{ [control.id]: current }}
-              visibilityValues={{ [control.id]: visibilityValues[control.id]! }}
               onChange={(id, value) => onChange({ ...values, [id]: value })}
             />
           </div>

@@ -53,19 +53,6 @@ function jobFailure(jobs) {
     : null;
 }
 
-export function selectRun(runs, context) {
-  const run = latestRun(runs, context);
-  const failure = runFailure(run, context);
-  if (failure) throw new Error(`${failure}\n${runDetails(run)}`);
-  return run;
-}
-
-export function verifyJobs(jobs) {
-  const failure = jobFailure(jobs);
-  if (failure) throw new Error(failure);
-  return requiredJobs;
-}
-
 /** Read GitHub's workflow and jobs for the pinned SHA; no locally fabricated receipt. */
 export async function requireCi({ commit, branch, signal }, execute = runExternal) {
   const gh = async (args) =>
