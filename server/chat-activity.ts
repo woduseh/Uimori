@@ -11,6 +11,10 @@ export function chatActivities(store: Store): ChatActivityCount[] {
       SELECT j.chat_id,j.kind FROM jobs j JOIN sources s ON s.id=j.source_revision
         WHERE j.kind!='status' AND j.status IN ('queued','running')
         AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
+      UNION ALL
+      SELECT j.chat_id,'illustration' FROM illustration_jobs j JOIN sources s ON s.id=j.source_revision
+        WHERE j.status IN ('queued','running')
+        AND j.source_hash=COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash)
     ) SELECT chatId,kind,COUNT(*) AS count FROM active GROUP BY chatId,kind ORDER BY chatId,kind`)
     .all() as ChatActivityCount[];
 }

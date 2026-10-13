@@ -133,6 +133,9 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
     for (const table of chatTables)
       store.db.prepare(`DELETE FROM ${table} WHERE chat_id=?`).run(chatId);
     removeIllustrationPresetScope(store, 'chat', chatId);
+    store.db
+      .prepare('DELETE FROM app_metadata WHERE key LIKE ?')
+      .run(`activity-feed:ack:v1:${chatId}:%`);
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
     pruneUnusedData(store.db, imageCandidates);
     return { deleted: true };

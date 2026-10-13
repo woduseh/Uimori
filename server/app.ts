@@ -42,6 +42,7 @@ import { chatVariableRoutes } from './chat-variable-routes.js';
 import { ResponseStreamStore, responseStreamRoutes } from './response-stream.js';
 import { readerActivities, readerDetail, readerRuns } from './reader.js';
 import { chatActivities } from './chat-activity.js';
+import { activityFeed, acknowledgedActivities, acknowledgeActivities } from './activity-feed.js';
 import { readerRoutes } from './reader-routes.js';
 import { Controls, type Barrier, type FailurePoint } from './controls.js';
 import { type MainHooks } from './model-runner.js';
@@ -939,6 +940,20 @@ export async function createApp(options: AppOptions): Promise<App> {
   }));
   app.get('/api/chats', async () => store.chats());
   app.get('/api/chat-activities', async () => chatActivities(store));
+  app.get('/api/activity-feed', async () => activityFeed(store));
+  app.get<{ Params: { id: string } }>(
+    '/api/chats/:id/activity-acknowledgements',
+    async (request) => ({ keys: acknowledgedActivities(store, request.params.id) })
+  );
+  app.post<{ Params: { id: string } }>(
+    '/api/chats/:id/activity-acknowledgements',
+    async (request) => {
+      const body = record(request.body);
+      fields(body, ['keys']);
+      acknowledgeActivities(store, request.params.id, body.keys);
+      return { ok: true };
+    }
+  );
   app.post('/api/chats', async (request) => {
     const body: RecordBody = record(request.body);
     fields(body, ['title', 'botId', 'folderId', 'autoTitle', 'persona']);

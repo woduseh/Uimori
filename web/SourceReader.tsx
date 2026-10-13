@@ -48,6 +48,7 @@ import { Dialog } from './Dialog.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
+import { activityViewedEvent } from './useActivityFeed.js';
 
 import { PackagePresentationIssues, usePackagePresentation } from './PackagePresentation.js';
 import './source-edit.css';
@@ -258,6 +259,23 @@ function SourceReaderContent({
   const [mode, setMode] = useState<ReaderMode>(() =>
     initialMode(source.id, !!displayTranslation?.result)
   );
+  useEffect(() => {
+    const node = container.current;
+    if (!node || !('IntersectionObserver' in window)) return;
+    let sent = false;
+    const observer = new IntersectionObserver((entries) => {
+      if (sent || !entries.some((entry) => entry.isIntersecting)) return;
+      sent = true;
+      window.dispatchEvent(
+        new CustomEvent(activityViewedEvent, {
+          detail: { chatId: source.chatId, sourceId: source.id, representation: mode },
+        })
+      );
+      observer.disconnect();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [source.chatId, source.id, mode]);
   const appliedTarget = useRef<ReaderTarget | undefined>(undefined);
   const targetTranslationAvailable = !!displayTranslation?.result;
   const translationPreviouslyAvailable = useRef(targetTranslationAvailable);

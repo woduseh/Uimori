@@ -17,6 +17,8 @@ import {
   migrateAcknowledgements,
   isAcknowledgementStorageKey,
 } from './activity-acknowledgements.js';
+import { api } from './api.js';
+import { activityReceiptEvent } from './useActivityFeed.js';
 import './activity-status.css';
 
 type Notice = { item: Item; expiresAt: number | null };
@@ -119,8 +121,34 @@ export function ActivityStatus({
       const saved = readAcknowledgements(chatId);
       setAcknowledged((old) => [...new Set([...old, ...saved])]);
     };
+    let alive = true;
+    const local = readAcknowledgements(chatId);
+    void api<{ keys: string[] }>(`/chats/${encodeURIComponent(chatId)}/activity-acknowledgements`)
+      .then(async ({ keys }) => {
+        if (!alive) return;
+        setAcknowledged((old) => [...new Set([...old, ...keys])]);
+        const missing = local.filter((key) => !keys.includes(key));
+        for (let i = 0; i < missing.length; i += 100) {
+          await api(`/chats/${encodeURIComponent(chatId)}/activity-acknowledgements`, {
+            keys: missing.slice(i, i + 100),
+          });
+        }
+      })
+      .catch(() => {
+        /* Browser-local confirmations still work offline. */
+      });
+    const receipt = (event: Event) => {
+      const detail = (event as CustomEvent<{ chatId: string; keys: string[] }>).detail;
+      if (detail?.chatId === chatId)
+        setAcknowledged((old) => [...new Set([...old, ...detail.keys])]);
+    };
+    window.addEventListener(activityReceiptEvent, receipt);
     window.addEventListener('storage', sync);
-    return () => window.removeEventListener('storage', sync);
+    return () => {
+      alive = false;
+      window.removeEventListener('storage', sync);
+      window.removeEventListener(activityReceiptEvent, receipt);
+    };
   }, [chatId]);
   const observed = useRef<Map<string, string> | null>(null);
   useEffect(() => {
@@ -306,6 +334,12 @@ export function ActivityStatus({
       .map((item) => item.acknowledgementKey);
     // Persist this exact displayed execution before hiding it; never save a stale whole-tab snapshot.
     const saved = saveAcknowledgements(chatId, [...acknowledged, ...keys]);
+    if (keys.length)
+      void api(`/chats/${encodeURIComponent(chatId)}/activity-acknowledgements`, { keys })
+        .then(() =>
+          window.dispatchEvent(new CustomEvent(activityReceiptEvent, { detail: { chatId, keys } }))
+        )
+        .catch(() => setPersistenceError(true));
     setPersistenceError(!saved);
     setAcknowledged((old) => [...new Set([...old, ...keys])]);
   }

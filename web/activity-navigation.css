@@ -1,0 +1,147 @@
+.activity-navigation {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  padding: 12px 6px 24px;
+  min-width: 0;
+}
+.activity-nav-section {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.activity-nav-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 9px 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.activity-nav-heading strong {
+  font-weight: 650;
+}
+.activity-nav-entry {
+  min-width: 0;
+  border-radius: 9px;
+}
+.activity-nav-link {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 9px;
+  padding: 9px;
+  text-align: left;
+  border-radius: 9px;
+}
+.activity-nav-link:hover,
+.activity-nav-link.selected {
+  background: var(--nav-item-selected);
+}
+.activity-nav-link > svg {
+  flex: none;
+  color: var(--muted);
+}
+.activity-nav-link > .activity-nav-warning {
+  color: var(--danger, #c87863);
+}
+.activity-nav-link > .activity-nav-success {
+  color: var(--accent);
+}
+.activity-nav-copy {
+  flex: 1;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.activity-nav-copy strong,
+.activity-nav-copy small {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-nav-copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.activity-nav-copy small,
+.activity-nav-link time {
+  color: var(--muted);
+  font-size: 11px;
+}
+.activity-nav-link time {
+  flex: none;
+}
+.activity-nav-confirm {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin: -2px 9px 5px 34px;
+  padding: 3px 7px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  font-size: 11px;
+}
+.activity-nav-confirm:hover {
+  color: var(--text);
+  background: var(--nav-item-selected);
+}
+.activity-nav-empty {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 5px 9px 8px;
+}
+.activity-nav-error {
+  padding: 8px;
+  font-size: 12px;
+  color: var(--danger, #c87863);
+}
+.activity-nav-error button {
+  font-size: 12px;
+}
+.bot-navigation-modes {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0 8px 8px;
+}
+.bot-navigation-modes > button {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 35px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.bot-navigation-modes > button[aria-pressed="true"] {
+  background: var(--nav-item-selected);
+  color: var(--text);
+}
+.bot-navigation-modes > button:hover {
+  background: var(--nav-item-selected);
+}
+.bot-navigation-modes > button {
+  position: relative;
+}
+.activity-mode-count {
+  position: absolute;
+  top: 2px;
+  right: 12%;
+  min-width: 15px;
+  height: 15px;
+  line-height: 15px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  font-size: 10px;
+  text-align: center;
+}
