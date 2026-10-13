@@ -4,7 +4,12 @@ import { describe, expect, test } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RisuContentSource } from '../core/risu-native.js';
-import { createNativeRisuCbsSession, evaluateNativeRisuFields } from '../server/risu-native-cbs.js';
+import {
+  createNativeRisuCbs,
+  createNativeRisuCbsSession,
+  evaluateNativeRisuFields,
+} from '../server/risu-native-cbs.js';
+import { EXECUTION_INPUT_MAX_CHARS } from '../core/content-limits.js';
 import { processNativeRisuText, renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { cardZip } from '../server/character-card-file.js';
 import { readEmbeddedRisuModule } from '../server/risu-module-file.js';
@@ -15,6 +20,32 @@ const native = (extra: Partial<RisuContentSource> = {}): RisuContentSource => ({
   assets: [],
   sourceHash: 'a'.repeat(64),
   ...extra,
+});
+
+test('literal fields before and after CBS preserve limits, aliases, roles and shared writes', () => {
+  const input = native();
+  const before = structuredClone(input);
+  const variables: Record<string, string> = {};
+  const cbs = createNativeRisuCbs({
+    native: input,
+    variables,
+    userName: 'Reader',
+    messages: [{ role: 'user', data: 'Earlier request' }],
+  });
+  const issues = cbs.issues;
+  expect(() => cbs.parse('가'.repeat(EXECUTION_INPUT_MAX_CHARS + 1))).toThrow(
+    'RISU_NATIVE_TEXT_LIMIT'
+  );
+  expect(cbs.parse('긴 일반 원고.\n\n그대로 남겨요.')).toBe('긴 일반 원고.\n\n그대로 남겨요.');
+  expect(cbs.parse('<char>|<user>|{{role}}{{setvar::step::first}}', 'assistant')).toBe(
+    'Guide|Reader|char'
+  );
+  expect(cbs.parse('Next plain field')).toBe('Next plain field');
+  expect(cbs.parse('{{getvar::step}}|{{role}}{{setvar::step::last}}')).toBe('first|user');
+  expect(cbs.parse('{{screenwidth}}')).toBe('');
+  expect(issues).toEqual(['screenwidth']);
+  expect(variables).toEqual({ step: 'last' });
+  expect(input).toEqual(before);
 });
 test('viewport CBS aliases drive authored responsive CSS and remain unsupported without a browser', async () => {
   const input = native({

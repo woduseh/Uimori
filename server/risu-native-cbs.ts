@@ -37,6 +37,22 @@ const string = (value: unknown) => (typeof value === 'string' ? value : '');
 
 /** Native CBS runs against an explicit chat view; callers decide whether its writes are committed. */
 export function createNativeRisuCbs(context: NativeRisuCbsContext) {
+  const issues: string[] = [];
+  let evaluator: ReturnType<typeof initializeNativeRisuCbs> | undefined;
+  return {
+    issues,
+    parse(text: string, role?: 'system' | 'user' | 'assistant'): string {
+      if (text.length > EXECUTION_INPUT_MAX_CHARS) throw new Error('RISU_NATIVE_TEXT_LIMIT');
+      // Most history is literal prose. Defer the detached card/database view as well as
+      // parsing; otherwise every plain message still clones the entire card and lore.
+      if (!/[{}#]|<(?:user|char|bot)>/iu.test(text)) return text;
+      evaluator ??= initializeNativeRisuCbs(context, issues);
+      return evaluator.parse(text, role);
+    },
+  };
+}
+
+function initializeNativeRisuCbs(context: NativeRisuCbsContext, issues: string[]) {
   const { variables } = context;
   const native = normalizeRisuContentSource(context.native);
   const card = native.card;
@@ -92,7 +108,6 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
     globalChatVariables: context.globalVariables ?? {},
     templateDefaultVariables: context.templateDefaultVariables ?? '',
   };
-  const issues: string[] = [];
   let deadline = 0;
   const cbs = createRisuCbs({
     getDatabase: () => database,
@@ -136,12 +151,7 @@ export function createNativeRisuCbs(context: NativeRisuCbsContext) {
     appVer: 'uimori',
   });
   return {
-    issues,
     parse(text: string, role?: 'system' | 'user' | 'assistant'): string {
-      if (text.length > EXECUTION_INPUT_MAX_CHARS) throw new Error('RISU_NATIVE_TEXT_LIMIT');
-      // Literal prose has no CBS effects. Avoid the character-by-character parser and its
-      // code-execution watchdog for large plain blocks; native aliases still go through it.
-      if (!/[{}#]|<(?:user|char|bot)>/iu.test(text)) return text;
       deadline = Date.now() + 500;
       const result = cbs.parse(stripRisuComments(text), {
         chatID: context.messageIndex ?? messages.length - 1,
