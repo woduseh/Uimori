@@ -205,6 +205,12 @@ export function rejudgeTranslation(store: Store, id: string): Job {
     )
       throw new HttpError(409, 'Translation judgment recovery unavailable');
     const time = new Date().toISOString();
+    // Judgment recovery was explicitly requested; it is not another automatic run outcome.
+    const recoveryInput: Record<string, unknown> = {
+      ...input,
+      judgmentRecovery: { text: original.result!.text, sourceHash: source.hash },
+    };
+    delete recoveryInput.autoTranslateRunId;
     store.db
       .prepare(
         "INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,revision,input,created_at,updated_at) VALUES(?,?,?,?,'translation','queued',?,?,?,?)"
@@ -215,10 +221,7 @@ export function rejudgeTranslation(store: Store, id: string): Job {
         source.id,
         source.hash,
         (original.revision ?? 0) + 1,
-        JSON.stringify({
-          ...input,
-          judgmentRecovery: { text: original.result!.text, sourceHash: source.hash },
-        }),
+        JSON.stringify(recoveryInput),
         time,
         time
       );

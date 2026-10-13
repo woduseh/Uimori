@@ -1104,6 +1104,17 @@ export class Store {
             now(),
             row.id
           );
+        // An interrupted automatic translation is the terminal outcome the reader was awaiting.
+        // Ordinary queued jobs still resume without an extra notification.
+        const input = this.job(row.id).input;
+        if (
+          live &&
+          row.kind === 'translation' &&
+          input &&
+          typeof input === 'object' &&
+          'autoTranslateRunId' in input
+        )
+          this.event(this.job(row.id).chatId, 'job.interrupted', row.id);
       }
       this.db
         .prepare(`

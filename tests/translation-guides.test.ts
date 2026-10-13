@@ -252,7 +252,14 @@ test('empty guide is captured explicitly and judgment-only recovery never adopts
     expectedRevision: workspace.revision,
     translationPolicy: { ...workspace.translationPolicy, contextMode: 'source-only' },
   });
-  const first = requestTranslation(store, chat.headRevision!, true);
+  const first = requestTranslation(
+    store,
+    chat.headRevision!,
+    true,
+    undefined,
+    'synthetic-auto-run'
+  );
+  expect(first.input).toMatchObject({ autoTranslateRunId: 'synthetic-auto-run' });
   expect((first.input as any).translationGuide).toBeNull();
   expect((first.input as any).translationPolicy.contextMode).toBe('source-only');
   current = save(store, current, guide);
@@ -286,6 +293,7 @@ test('empty guide is captured explicitly and judgment-only recovery never adopts
     translationPolicy: { contextMode: 'source-only' },
     judgmentRecovery: { text: '판정 대기 번역' },
   });
+  expect(recovered.input).not.toHaveProperty('autoTranslateRunId');
   expect(resolved(store, chat.headRevision!, recovered.id).translationGuide).toBeNull();
   expect(currentBotTranslationGuide(store, chat.id)).toMatchObject(guide);
 });

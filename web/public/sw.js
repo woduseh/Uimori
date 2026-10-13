@@ -9,6 +9,8 @@ const messages = {
   'translation-completed': '번역이 완료됐어요.',
   'request-translated': '새로운 장면을 한국어로 읽을 준비가 됐어요.',
   'auto-translation-failed': '원문은 저장됐지만 번역에 실패했어요. 앱에서 다시 시도할 수 있어요.',
+  'auto-translation-interrupted':
+    '원문은 저장됐지만 번역이 중단됐어요. 앱에서 상태를 확인하고 다시 시도해 주세요.',
   'illustration-completed': '삽화 생성이 완료됐어요.',
   'task-failed': '확인이 필요한 작업이 있어요. 앱에서 상태를 확인해 주세요.',
   test: '이 기기의 테스트 알림이에요.',
@@ -37,6 +39,7 @@ self.addEventListener('push', (event) => {
     'request-translated': '번역까지 완성',
     'translation-completed': '번역 완성',
     'auto-translation-failed': '번역 확인 필요',
+    'auto-translation-interrupted': '번역 확인 필요',
     'illustration-completed': '삽화 완성',
     'task-failed': '작업 확인 필요',
     test: '테스트 알림',

@@ -11,6 +11,7 @@ import { DEFAULT_PUSH_PREFERENCES, type PushEnvelope } from '../core/push.js';
 import type { PushSender } from '../server/push-transport.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 
 const origin = 'https://story.example.test';
 const accessToken = 'synthetic-push-access-key-32-characters';
@@ -578,4 +579,47 @@ test('run reservation freezes the auto-translation choice despite later chat-set
       .detail(second.id)
       .jobs.some((job) => job.kind === 'translation' && job.sourceRevision === other.id)
   ).toBe(false);
+});
+
+test('recovery of an interrupted automatic provider translation reports one final actionable alert', async () => {
+  const f = fixture();
+  enable(f);
+  const connection = f.store.product.connection({
+    title: 'Test provider',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = f.store.product.model({
+    title: 'Test translation model',
+    connectionId: connection.id,
+    modelId: 'fixture',
+    maxOutputTokens: 1024,
+    temperature: null,
+  });
+  const workspace = modelWorkspace(f.store);
+  updateModelWorkspace(f.store, {
+    expectedRevision: workspace.revision,
+    routes: { ...workspace.routes, translation: { id: model.id } },
+    translationPolicy: workspace.translationPolicy,
+  });
+  const chat = createFixtureChat(f.store, 'Interrupted translation');
+  f.store.settings(chat.id, chat.settingsRevision, { ...chat.settings, autoTranslate: true });
+  const source = complete(f.store, chat.id);
+  const job = f.store.detail(chat.id).jobs.find((item) => item.kind === 'translation')!;
+  expect(f.store.claimJob(job.id, 'previous-server', {})?.status).toBe('running');
+  f.store.recover();
+  expect(f.store.job(job.id).status).toBe('interrupted');
+  await f.service.tick();
+  expect(f.delivered).toHaveLength(1);
+  expect(f.delivered[0]).toMatchObject({
+    kind: 'auto-translation-interrupted',
+    sourceId: source.id,
+    representation: 'original',
+    title: 'Interrupted translation',
+  });
+  f.store.recover();
+  await f.service.tick();
+  expect(f.delivered).toHaveLength(1);
+  expect(f.store.source(source.id).text).toBe('SECRET_PROSE_CANARY');
 });

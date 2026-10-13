@@ -59,7 +59,12 @@ export function enqueueTerminalNotification(
       .get(entityId, chatId) as Target | undefined;
     if (target?.auto_run_id) {
       prefix = 'run';
-      kind = status === 'completed' ? 'request-translated' : 'auto-translation-failed';
+      kind =
+        status === 'completed'
+          ? 'request-translated'
+          : status === 'interrupted'
+            ? 'auto-translation-interrupted'
+            : 'auto-translation-failed';
       if (status !== 'completed') representation = 'original';
     }
   } else {

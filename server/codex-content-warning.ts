@@ -70,10 +70,11 @@ async function judge(
   content: string,
   recentContext: string,
   credential: JevCredentialStore['resolve'],
-  signal: AbortSignal
+  signal: AbortSignal,
+  conservative = false
 ): Promise<CodexContentPreflightResult> {
   try {
-    if (!credential()) return { warning: false };
+    if (!credential()) return { warning: conservative };
     const request = codexContentWarningRequest(role, content, recentContext);
     const timeout = AbortSignal.timeout(PREFLIGHT_TIMEOUT_MS);
     const result = await executeJevJudgment(request, digest({ role, request }), null, {
@@ -84,8 +85,8 @@ async function judge(
     });
     return { warning: result.scores.explicitSexualContent! >= CODEX_CONTENT_WARNING_THRESHOLD };
   } catch {
-    // Advisory only: an unavailable or uncertain preflight must not block the user's request.
-    return { warning: false };
+    // Interactive requests stay advisory; automatic Codex translation must await confirmation.
+    return { warning: conservative };
   }
 }
 
@@ -97,7 +98,7 @@ export async function autoTranslationNeedsConfirmation(
   signal: AbortSignal
 ): Promise<boolean> {
   if (!isCodex(model)) return false;
-  return (await judge('translation', source, '', credential, signal)).warning;
+  return (await judge('translation', source, '', credential, signal, true)).warning;
 }
 
 function currentContext(store: Store, chatId: string): string {
