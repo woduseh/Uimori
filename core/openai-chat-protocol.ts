@@ -321,6 +321,18 @@ export class ChatDecoder {
       this.result.error = { code: 'MAX_OUTPUT_TOKENS' };
       return;
     }
+    if (['insufficient_system_resource', 'aborted'].includes(this.finishReason ?? '')) {
+      // DeepSeek interruptions still finish the stream with usage and [DONE].
+      // Unfinished tool deltas remain diagnostic history, never executable calls.
+      this.result.status = this.result.text || this.calls.size ? 'partial' : 'error';
+      this.result.error = {
+        code:
+          this.finishReason === 'aborted'
+            ? 'PROVIDER_ABORTED'
+            : 'PROVIDER_INSUFFICIENT_SYSTEM_RESOURCE',
+      };
+      return;
+    }
     if (this.finishReason === 'tool_calls') {
       if (!this.calls.size) reject('EMPTY_TOOL_CALLS');
       const ids = new Set<string>();

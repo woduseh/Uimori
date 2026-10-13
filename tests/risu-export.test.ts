@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { crc32 } from 'node:zlib';
 import { Store } from '../server/store.js';
 import type { Content, PromptPreset } from '../core/product.js';
 import { exportRisuContent, exportRisuPrompt } from '../server/risu-export.js';
@@ -13,6 +14,8 @@ import { readRisuPresetFile } from '../server/risu-preset-file.js';
 import { putImageBlob, putValidatedImageBlob } from '../server/package-images.js';
 import { decodeRPack, encodeRPack } from '../server/compat/risu/rpack.js';
 import { prepareRisuImport, applyRisuImport } from '../server/risu-import.js';
+import { prepareStoredRisuImport } from '../server/risu-import-prepared.js';
+import { readImage } from '../server/image-storage.js';
 import {
   addNativeRisuImage,
   removeNativeRisuImage,
@@ -48,6 +51,15 @@ const source = (bytes: Buffer, name = 'source.charx') => ({
   name,
   base64: bytes.toString('base64'),
 });
+function pngTextChunk(key: string, value: string) {
+  const data = Buffer.from(`${key}\0${value}`),
+    header = Buffer.alloc(8),
+    footer = Buffer.alloc(4);
+  header.writeUInt32BE(data.length);
+  header.write('tEXt', 4);
+  footer.writeUInt32BE(crc32(Buffer.concat([header.subarray(4), data])));
+  return Buffer.concat([header, data, footer]);
+}
 const card = () => ({
   name: '원본 카드',
   description: '{{char}} ORIGINAL',
@@ -99,6 +111,186 @@ function imported(store: Store, data = card(), module?: Record<string, unknown>)
   const { id: _id, revision: _revision, ...body } = result.file.contents[0].source;
   return store.product.content(body) as Content;
 }
+
+// CCv3 assets: omitted assets imply icon/main/ccdefault; an explicit empty list does not.
+// https://github.com/kwaroran/character-card-spec-v3/blob/f3a86af019fbd99f788f7a1155f399655b34ab35/SPEC_V3.md#assets
+test.each([false, true])(
+  'PNG cover survives preparation, storage and CHARX export with explicit empty assets=%s',
+  async (emptyAssets) => {
+    const { store } = fixture();
+    const cover = await sharp({
+      create: { width: 2, height: 2, channels: 4, background: '#aa7799' },
+    })
+      .png()
+      .toBuffer();
+    const data = {
+      name: 'PNG cover',
+      description: 'Authored description',
+      ...(emptyAssets ? { assets: [] } : {}),
+    };
+    const metadata = pngTextChunk(
+      'ccv3',
+      Buffer.from(JSON.stringify({ spec: 'chara_card_v3', spec_version: '3.0', data })).toString(
+        'base64'
+      )
+    );
+    const input = source(
+      Buffer.concat([cover.subarray(0, -12), metadata, cover.subarray(-12)]),
+      'cover.png'
+    );
+    const preview = await prepareStoredRisuImport(store.path, { source: input });
+    expect(preview.summary.images).toBe(emptyAssets ? 0 : 1);
+    const result = await applyRisuImport(store, {
+      source: input,
+      preparedId: preview.preparedId,
+      digest: preview.digest,
+      allowPartial: false,
+      createChat: false,
+      idempotencyKey: 'png-default-cover',
+    });
+    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+    const files = cardZip(exportRisuContent(store.product, saved).bytes);
+    const exported = JSON.parse(files.get('card.json')!().toString()).data;
+    expect(exported.description).toBe(data.description);
+    if (emptyAssets) {
+      expect(saved.package.portraitImageId).toBeUndefined();
+      expect(exported.assets).toEqual([]);
+    } else {
+      const portrait = saved.package.images!.find(
+        (image) => image.id === saved.package.portraitImageId
+      )!;
+      expect(portrait).toBeDefined();
+      expect(exported.assets).toEqual([
+        { type: 'icon', name: 'main', ext: 'png', uri: 'embeded://__png_cover__.png' },
+      ]);
+      expect(files.get('__png_cover__.png')!()).toEqual(
+        readImage(store.db, portrait.blobHash).bytes
+      );
+    }
+  }
+);
+
+// CCv3 PNG attachment identifiers are paths, not just RisuAI's generated numeric keys.
+test.each([false, true])(
+  'named PNG attachment paths preserve bytes through CHARX export or reject duplicate keys=%s',
+  async (duplicate) => {
+    const { store } = fixture();
+    const cover = await sharp({
+      create: { width: 2, height: 2, channels: 4, background: '#bb7788' },
+    })
+      .png()
+      .toBuffer();
+    const attachment = await sharp({
+      create: { width: 2, height: 2, channels: 4, background: '#7788bb' },
+    })
+      .webp()
+      .toBuffer();
+    const data = {
+      name: 'Named PNG attachment',
+      description: '{{raw::scene}}',
+      assets: [
+        { type: 'icon', name: 'main', ext: 'png', uri: 'ccdefault:' },
+        { type: 'x-risu-asset', name: 'scene', ext: 'webp', uri: '__asset:images/scene.webp' },
+      ],
+    };
+    const metadata = pngTextChunk(
+      'ccv3',
+      Buffer.from(JSON.stringify({ spec: 'chara_card_v3', spec_version: '3.0', data })).toString(
+        'base64'
+      )
+    );
+    const assetChunk = pngTextChunk(
+      'chara-ext-asset_:images/scene.webp',
+      attachment.toString('base64')
+    );
+    const input = source(
+      Buffer.concat([
+        cover.subarray(0, -12),
+        metadata,
+        assetChunk,
+        ...(duplicate ? [assetChunk] : []),
+        cover.subarray(-12),
+      ]),
+      'named-attachment.png'
+    );
+    if (duplicate) {
+      await expect(prepareStoredRisuImport(store.path, { source: input })).rejects.toThrow(
+        'RISU_IMPORT_INVALID_FILE'
+      );
+      return;
+    }
+    const preview = await prepareStoredRisuImport(store.path, { source: input });
+    expect(preview.summary.images).toBe(2);
+    const result = await applyRisuImport(store, {
+      source: input,
+      preparedId: preview.preparedId,
+      digest: preview.digest,
+      allowPartial: false,
+      createChat: false,
+      idempotencyKey: 'png-named-attachment',
+    });
+    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+    const files = cardZip(exportRisuContent(store.product, saved).bytes);
+    const exported = JSON.parse(files.get('card.json')!().toString()).data;
+    expect(exported.description).toBe(data.description);
+    const asset = exported.assets.find((entry: { name: string }) => entry.name === 'scene');
+    expect(asset).toEqual({ ...data.assets[1], uri: 'embeded://__png_asset__/1.bin' });
+    expect(files.get(asset.uri.slice('embeded://'.length))!()).toEqual(attachment);
+  }
+);
+
+test.each([false, true])(
+  'CHARX icon/main remains the representative image when other main assets precede it=%s',
+  async (othersFirst) => {
+    const { store } = fixture();
+    const image = await sharp({
+      create: { width: 2, height: 2, channels: 4, background: '#7788aa' },
+    })
+      .png()
+      .toBuffer();
+    const assets = ['icon', 'background', 'x-risu-asset'].map((type) => ({
+      type,
+      name: 'main',
+      ext: 'png',
+      uri: `embeded://assets/${type}.png`,
+    }));
+    if (othersFirst) assets.reverse();
+    const input = source(
+      writeRisuZip(
+        new Map([
+          [
+            'card.json',
+            exportJson({
+              spec: 'chara_card_v3',
+              spec_version: '3.0',
+              data: { name: 'Asset roles', description: 'Preserve roles', assets },
+            }),
+          ],
+          ...assets.map((asset) => [asset.uri.slice('embeded://'.length), image] as const),
+        ])
+      )
+    );
+    const preview = await prepareStoredRisuImport(store.path, { source: input });
+    const result = await applyRisuImport(store, {
+      source: input,
+      preparedId: preview.preparedId,
+      digest: preview.digest,
+      allowPartial: false,
+      createChat: false,
+      idempotencyKey: 'charx-icon-role',
+    });
+    const saved = store.product.get<Content>('content', result.receipt.items[0].id);
+    expect(
+      saved.package.nativeRisu.assets.find(
+        (asset) => asset.imageId === saved.package.portraitImageId
+      )?.uri
+    ).toBe('embeded://assets/icon.png');
+    const exported = JSON.parse(
+      cardZip(exportRisuContent(store.product, saved).bytes).get('card.json')!().toString()
+    ).data;
+    expect(exported.assets).toEqual(assets);
+  }
+);
 
 test('new saved image and changed representative image export with portable asset names', () => {
   const { store } = fixture(),

@@ -39,6 +39,27 @@ async function failure(promise: Promise<unknown>): Promise<IllustrationError> {
 }
 
 describe('remote ComfyUI client against a synthetic HTTP server', () => {
+  test('submitted workflow preserves marker-like text inside generated prompts', async () => {
+    const server = await fixture();
+    const template = parseComfyWorkflow(FIXTURE_WORKFLOW);
+    const original = JSON.stringify(template);
+    const prompt = 'engraved {{negative}}, {{seed}}, {{prompt}} and $&\n은빛 등불';
+    const negativePrompt = 'written {{seed}} and {{prompt}}';
+    await generateWithComfyUI(
+      { baseUrl: server.origin, authorizationEnv: '' },
+      fillComfyWorkflow(template, { prompt, negativePrompt, seed: 7 }),
+      { signal: signal(), timeoutMs: 1000, pollIntervalMs: 10 }
+    );
+    const submitted = JSON.parse(
+      server.requests.find((request) => request.url === '/prompt')!.body
+    );
+    expect(submitted.prompt['6'].inputs.text).toBe(prompt);
+    expect(submitted.prompt['7'].inputs.text).toBe(`blurry, ${negativePrompt}`);
+    expect(submitted.prompt['3'].inputs.seed).toBe(7);
+    expect(JSON.stringify(template)).toBe(original);
+    expect(server.prompts).toHaveLength(1);
+  });
+
   test('a valid PNG above 16 MB is retrieved intact and converted by the shared image intake', async () => {
     const png = await sharp({
       create: { width: 2400, height: 2400, channels: 3, background: '#aaccdd' },
@@ -150,7 +171,7 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     }
   );
 
-  test.each(['headers', 'disconnect', 'http-5xx'] as const)(
+  test.each(['headers', 'disconnect', 'http-error'] as const)(
     'a %s failure after submission never authorizes automatic resubmission',
     async (kind) => {
       const server = await fixture({ fault: { path: 'prompt', kind } });
@@ -167,29 +188,40 @@ describe('remote ComfyUI client against a synthetic HTTP server', () => {
     }
   );
 
-  test('accepted prompt history errors preserve the prompt ID and use result retrieval instead of a new render', async () => {
-    const server = await fixture({ fault: { path: 'history', kind: 'http-5xx' } });
-    const error = await failure(
-      generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
-        signal: signal(),
-        timeoutMs: 1000,
-        pollIntervalMs: 10,
-      })
-    );
-    expect(error).toMatchObject({ code: 'COMFYUI_RESULT_UNAVAILABLE', retryable: false });
-    expect(error.diagnostic.comfyui?.promptId).toBe(server.prompts[0].id);
-    server.clearFault();
-    expect(
-      (
-        await fetchComfyUIResult(
-          { baseUrl: server.origin, authorizationEnv: '' },
-          server.prompts[0].id,
-          { signal: signal() }
-        )
-      ).state
-    ).toBe('completed');
-    expect(server.prompts).toHaveLength(1);
-  });
+  test.each([401, 403, 404, 429, 503])(
+    'accepted prompt history HTTP %s preserves diagnostics and retrieves the result without a new render',
+    async (httpStatus) => {
+      const server = await fixture({ fault: { path: 'history', kind: 'http-error', httpStatus } });
+      const error = await failure(
+        generateWithComfyUI({ baseUrl: server.origin, authorizationEnv: '' }, workflow(), {
+          signal: signal(),
+          timeoutMs: 1000,
+          pollIntervalMs: 10,
+        })
+      );
+      expect(error).toMatchObject({ code: 'COMFYUI_RESULT_UNAVAILABLE', retryable: false });
+      expect(error.diagnostic.comfyui).toMatchObject({
+        promptId: server.prompts[0].id,
+        httpStatus,
+        submission: 'accepted',
+      });
+      expect(server.requests.map((request) => request.url)).toEqual([
+        '/prompt',
+        `/history/${server.prompts[0].id}`,
+      ]);
+      server.clearFault();
+      expect(
+        (
+          await fetchComfyUIResult(
+            { baseUrl: server.origin, authorizationEnv: '' },
+            server.prompts[0].id,
+            { signal: signal() }
+          )
+        ).state
+      ).toBe('completed');
+      expect(server.prompts).toHaveLength(1);
+    }
+  );
 
   test('authenticated user cancellation uses only the targeted endpoint and retains the credential resolver', async () => {
     const server = await fixture({

@@ -715,52 +715,59 @@ function cancel(store: Store, id: string) {
 }
 
 describe('skip decisions and reconcile of accepted remote prompts', () => {
-  test('accepted history failures never requeue and reconcile uses the same authenticated remote job', async () => {
-    const store = databases.create();
-    const { source } = chatWithSource(store);
-    const { provider, model } = await promptModel(store, () =>
-      JSON.stringify({ prompt: 'one render', caption: '한 번' })
-    );
-    const comfy = await comfyUIFixture({
-      fault: { path: 'history', kind: 'http-5xx' },
-      authorization: 'Bearer callback-only',
-    });
-    cleanups.push(comfy.close);
-    fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
-    const job = reserveIllustration(store, source, 'manual', {
-      settings: fixtureSettings({
-        generator: 'comfyui',
-        maxAutoRetries: 3,
-        comfyui: {
-          baseUrl: comfy.origin,
-          authorizationEnv: 'CALLBACK_ONLY',
+  test.each([401, 503])(
+    'accepted history HTTP %s never requeues and reconciles the same authenticated remote job',
+    async (httpStatus) => {
+      const store = databases.create();
+      const { source } = chatWithSource(store);
+      const { provider, model } = await promptModel(store, () =>
+        JSON.stringify({ prompt: 'one render', caption: '한 번' })
+      );
+      const comfy = await comfyUIFixture({
+        fault: { path: 'history', kind: 'http-error', httpStatus },
+        authorization: 'Bearer callback-only',
+      });
+      cleanups.push(comfy.close);
+      fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
+      const job = reserveIllustration(store, source, 'manual', {
+        settings: fixtureSettings({
+          generator: 'comfyui',
+          maxAutoRetries: 3,
+          comfyui: {
+            baseUrl: comfy.origin,
+            authorizationEnv: 'CALLBACK_ONLY',
 
-          promptModel: { id: model.id },
-          timeoutMs: 1000,
-          pollIntervalMs: 10,
-        },
-      }),
-    });
-    const observed = hooks(store, {
-      resolveCredential: () => 'Bearer callback-only',
-      resolveComfyCredential: () => 'Bearer callback-only',
-    });
-    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
-      status: 'failed',
-      code: 'COMFYUI_RESULT_UNAVAILABLE',
-      images: 0,
-    });
-    expect(illustrationJob(store, job.id).diagnostic?.comfyui?.promptId).toBe(comfy.prompts[0].id);
-    expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();
-    comfy.clearFault();
-    const recovered = await reconcileIllustrationJob(store, job.id, 'worker', {
-      signal: new AbortController().signal,
-      resolveCredential: () => 'Bearer callback-only',
-    });
-    expect(recovered.status).toBe('completed');
-    expect(provider.requests).toHaveLength(1);
-    expect(comfy.prompts).toHaveLength(1);
-  });
+            promptModel: { id: model.id },
+            timeoutMs: 1000,
+            pollIntervalMs: 10,
+          },
+        }),
+      });
+      const observed = hooks(store, {
+        resolveCredential: () => 'Bearer callback-only',
+        resolveComfyCredential: () => 'Bearer callback-only',
+      });
+      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
+        status: 'failed',
+        code: 'COMFYUI_RESULT_UNAVAILABLE',
+        images: 0,
+      });
+      expect(illustrationJob(store, job.id).diagnostic?.comfyui).toMatchObject({
+        promptId: comfy.prompts[0].id,
+        httpStatus,
+        submission: 'accepted',
+      });
+      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();
+      comfy.clearFault();
+      const recovered = await reconcileIllustrationJob(store, job.id, 'worker', {
+        signal: new AbortController().signal,
+        resolveCredential: () => 'Bearer callback-only',
+      });
+      expect(recovered.status).toBe('completed');
+      expect(provider.requests).toHaveLength(1);
+      expect(comfy.prompts).toHaveLength(1);
+    }
+  );
 
   test('automatic runs may skip through the prompt model without touching ComfyUI; manual runs must draw', async () => {
     const store = databases.create();

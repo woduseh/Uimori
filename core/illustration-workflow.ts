@@ -60,15 +60,15 @@ export function fillComfyWorkflow(
 ): ComfyWorkflow {
   if (!Number.isSafeInteger(values.seed) || values.seed < 0)
     throw new IllustrationError('COMFYUI_WORKFLOW_INVALID');
+  const replacements: Record<string, string> = {
+    [COMFY_PLACEHOLDERS.prompt]: values.prompt,
+    [COMFY_PLACEHOLDERS.negative]: values.negativePrompt,
+    [COMFY_PLACEHOLDERS.seed]: String(values.seed),
+  };
   const replaceString = (input: string): Json => {
     if (input === COMFY_PLACEHOLDERS.seed) return values.seed;
-    return input
-      .split(COMFY_PLACEHOLDERS.prompt)
-      .join(values.prompt)
-      .split(COMFY_PLACEHOLDERS.negative)
-      .join(values.negativePrompt)
-      .split(COMFY_PLACEHOLDERS.seed)
-      .join(String(values.seed));
+    // Only template markers are substituted; inserted prompt text stays literal.
+    return input.replace(/\{\{(?:prompt|negative|seed)\}\}/gu, (marker) => replacements[marker]);
   };
   return Object.fromEntries(
     Object.entries(structuredClone(workflow)).map(([id, node]) => [

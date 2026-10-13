@@ -319,11 +319,11 @@ export async function fetchComfyUIResult(
   const response = await send(connection, options, `history/${encodeURIComponent(promptId)}`);
   if (!response.ok) {
     void response.body?.cancel().catch(() => undefined);
-    if (response.status >= 500)
-      throw new IllustrationError('COMFYUI_HTTP_5XX', true, {
-        comfyui: { promptId, httpStatus: response.status },
-      });
-    return { state: 'pending' };
+    throw new IllustrationError(
+      response.status >= 500 ? 'COMFYUI_HTTP_5XX' : 'COMFYUI_HTTP_ERROR',
+      response.status >= 500,
+      { comfyui: { promptId, httpStatus: response.status } }
+    );
   }
   const body = await readJson(response, options.signal);
   if (!object(body) || !object(body[promptId])) return { state: 'pending' };

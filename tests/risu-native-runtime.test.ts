@@ -72,6 +72,25 @@ const input = (
 });
 
 describe('native Risu execution', () => {
+  it.each(['v2StopPromptSending', 'v2StopPrompt', 'stop'])(
+    'preserves preceding variable edits when the native %s effect stops generation',
+    async (type) => {
+      const content = native([
+        {
+          type: 'input',
+          effect: [
+            { type: 'setvar', var: 'choice', operator: '=', value: 'selected' },
+            { type, indent: 0 },
+          ],
+        },
+      ]);
+      const result = await executeRisuNative(input(content, 'input'));
+      expect(result.effects.stopChat).toBe(true);
+      expect(result.variables.choice).toBe('selected');
+      expect(result.messages).toEqual(input(content).messages);
+    }
+  );
+
   it('continues with a fresh CBS evaluation after Lua handles an evaluation error', async () => {
     const content = native([
       lua(`function choose(id)
