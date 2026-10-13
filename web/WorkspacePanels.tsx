@@ -1,4 +1,5 @@
 import { PushSettings } from './PushSettings.js';
+import { AutoTranslationDefaults } from './AutoTranslationDefaults.js';
 import { LoadingState } from './LoadingState.js';
 import { InstallApp } from './InstallApp.js';
 import { UsagePanel } from './UsagePanel.js';
@@ -263,6 +264,11 @@ const settingsCategories: SettingsCategory[] = [
         label: '화면과 입력',
         terms: '화면 테마 Enter 보내기 도우미 패널 폭 사이드바 좌측 탐색 크기',
         anchor: 'display',
+      },
+      {
+        label: '생성 기본값',
+        terms: '전체 자동 번역 본문 생성 번역 기본값',
+        anchor: 'generation',
       },
       {
         label: '원고 읽기',
@@ -674,6 +680,19 @@ export function AppSettingsPanel({
                           </select>
                         </label>
                       </div>
+                    </section>
+                  )}
+                  {key === 'general' && (
+                    <section
+                      id={`${id}-general-generation`}
+                      tabIndex={-1}
+                      className="settings-section settings-group"
+                    >
+                      <h3>
+                        생성 기본값
+                        <span className="scope-badge">전체</span>
+                      </h3>
+                      <AutoTranslationDefaults />
                     </section>
                   )}
                   {key === 'general' && (

@@ -7,6 +7,7 @@ import { ManuscriptSearch, manuscriptSearchRoutes } from './manuscript-search.js
 import { BackupService, backupRoutes } from './backup-service.js';
 import { illustrationPresetRoutes } from './illustration-presets.js';
 import { normalizeChatSettings } from '../core/chat-settings.js';
+import { autoTranslationDefaultRoutes } from './auto-translation-defaults.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createRunExecutor } from './run-executor.js';
 import { APP_VERSION } from './app-version.js';
@@ -1006,6 +1007,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     '/api/chats/:id/activities',
     async (request) => readerActivities(store, request.params.id, request.query)
   );
+  autoTranslationDefaultRoutes(app, store);
   app.patch<{ Params: { id: string } }>('/api/chats/:id/settings', async (request) => {
     const body: RecordBody = record(request.body);
     fields(body, ['expectedSettingsRevision', 'maxCalls', 'autoTranslate']);

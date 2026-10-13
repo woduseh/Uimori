@@ -25,7 +25,7 @@
 | Workspace, bot, and manuscript search UI | `web/ManuscriptSearch.tsx`, `web/BotTreeNavigation.tsx`, `web/BotNavigation.tsx` | [Manuscript search](MANUSCRIPT-SEARCH.md), [UI principles](UI-PRINCIPLES.md) |
 | Retained manuscript comparison and scene names | `web/SourceVersions.tsx`, `web/SceneTitleEditor.tsx`, `server/source-editing.ts`, `server/scene-titles.ts` | [Editing](EDITING.md), [Reading state](READING-STATE.md) |
 | Tests and local verification | `tests/`, `scripts/verify-*.mjs` | [Development](DEVELOPMENT.md) |
-| Automatic translation and final request notifications | `server/store.ts`, `server/source-editing.ts`, `server/push-events.ts`, `server/push-service.ts`, `web/RuntimeSettings.tsx`, `web/PushSettings.tsx`, `web/public/sw.js` | [PWA and push](PWA.md) |
+| Automatic translation and final request notifications | `server/auto-translation-defaults.ts`, `web/AutoTranslationDefaults.tsx`, `server/store.ts`, `server/source-editing.ts`, `server/push-events.ts`, `server/push-service.ts`, `web/RuntimeSettings.tsx`, `web/PushSettings.tsx`, `web/public/sw.js` | [PWA and push](PWA.md) |
 | Bot translation guides | `core/translation-guide.ts`, `server/translation-guide.ts`, `web/TranslationGuideEditor.tsx` | [Translation guides](TRANSLATION-GUIDES.md) |
 
 Theme resources and selection: `core/themes.ts`, `server/themes.ts`, `web/ThemeContext.tsx`, `web/ThemeSettings.tsx`, `web/ThemeFrame.tsx`. [Authoring and usage](THEME-AUTHORING.md).
