@@ -18,7 +18,6 @@ export function useActivityFeed() {
   const latest = useRef(feed);
   latest.current = feed;
   const seq = useRef(0);
-  const seenResults = useRef(new Set<string>());
   const pendingViews = useRef(new Set<string>());
   const inFlight = useRef(new Set<string>());
   const refresh = useCallback(async () => {
@@ -113,9 +112,6 @@ export function useActivityFeed() {
     const visible = (event: Event) => {
       const target = (event as CustomEvent<Viewed>).detail;
       if (!target) return;
-      seenResults.current.add(
-        JSON.stringify([target.chatId, target.sourceId, target.representation])
-      );
       const matches = latest.current.items.filter(
         (item) =>
           pendingViews.current.has(item.acknowledgementKey) &&
@@ -143,21 +139,9 @@ export function useActivityFeed() {
       window.removeEventListener(activityReceiptEvent, receipt);
     };
   }, [acknowledge]);
-  useEffect(() => {
-    const matches = feed.items.filter(
-      (item) =>
-        item.status === 'completed' &&
-        pendingViews.current.has(item.acknowledgementKey) &&
-        item.sourceId &&
-        seenResults.current.has(JSON.stringify([item.chatId, item.sourceId, item.representation]))
-    );
-    if (matches.length) void acknowledge(matches);
-  }, [feed.items, acknowledge]);
   const inspect = (item: ActivityFeedItem) => {
     if (item.status !== 'completed' || !item.sourceId) return;
     pendingViews.current.add(item.acknowledgementKey);
-    if (seenResults.current.has(JSON.stringify([item.chatId, item.sourceId, item.representation])))
-      void acknowledge([item]);
   };
   return { feed, error, acknowledge, refresh, inspect };
 }

@@ -24,7 +24,7 @@ import {
   EditIcon,
 } from './ui-icons.js';
 import { api } from './api.js';
-import { useChatActivities } from './useChatActivities.js';
+import { chatActivitySummaries } from './chat-activity-summaries.js';
 import { useActivityFeed } from './useActivityFeed.js';
 import { ActivityNavigation } from './ActivityNavigation.js';
 import './bot-tree-navigation.css';
@@ -121,8 +121,8 @@ export function BotNavigation(
     quickActions = true,
   } = props;
   const [view, setView] = useState(readView);
-  const activities = useChatActivities();
   const activityFeed = useActivityFeed();
+  const activities = chatActivitySummaries(activityFeed.feed.running);
   const unreadChats = new Set(activityFeed.feed.items.map((item) => item.chatId)).size;
   const setMode = (mode: View['mode']) => setView((current) => ({ ...current, mode }));
   const [runningPicker, setRunningPicker] = useState(false);

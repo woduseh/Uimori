@@ -260,6 +260,9 @@ function SourceReaderContent({
     initialMode(source.id, !!displayTranslation?.result)
   );
   useEffect(() => {
+    // Re-entering a visible scene with a new deep link must emit a fresh inspection;
+    // defer until the requested original/translation representation is rendered.
+    if (readerTarget?.sourceId === source.id && readerTarget.representation !== mode) return;
     const node = container.current;
     if (!node || !('IntersectionObserver' in window)) return;
     let sent = false;
@@ -275,7 +278,7 @@ function SourceReaderContent({
     });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [source.chatId, source.id, mode]);
+  }, [source.chatId, source.id, mode, readerTarget]);
   const appliedTarget = useRef<ReaderTarget | undefined>(undefined);
   const targetTranslationAvailable = !!displayTranslation?.result;
   const translationPreviouslyAvailable = useRef(targetTranslationAvailable);
