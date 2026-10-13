@@ -1,5 +1,6 @@
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { TransientNotice } from './TransientNotice.js';
 import './scheduled-backups.css';
 import { useEffect, useState } from 'react';
 import { DatabaseBackup, Download, RefreshCw } from 'lucide-react';
@@ -31,11 +32,13 @@ export function BackupSettings({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [reload, setReload] = useState(0);
   const [confirmReload, setConfirmReload] = useState(false);
   function reloadSettings() {
     setConfirmReload(false);
     setError('');
+    setMessage('');
     setDraft(null);
     setDirty(false);
     setReload((value) => value + 1);
@@ -78,12 +81,14 @@ export function BackupSettings({
   const change = (value: Partial<Settings>) => {
     setDraft((old) => old && { ...old, ...value });
     setDirty(true);
+    setMessage('');
   };
   async function save(): Promise<boolean> {
     if (!draft || invalid || busy) return false;
     if (!dirty) return true;
     setBusy(true);
     setError('');
+    setMessage('');
     try {
       const saved = await api<Settings>(
         '/backups/settings',
@@ -98,6 +103,7 @@ export function BackupSettings({
       );
       setDraft(saved);
       setDirty(false);
+      setMessage('백업 설정을 저장했어요.');
       setReload((value) => value + 1);
       return true;
     } catch (caught) {
@@ -190,6 +196,25 @@ export function BackupSettings({
             )}
           </fieldset>
         )}
+        {error && (
+          <NoticeBanner
+            tone="error"
+            actions={
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  if (dirty) setConfirmReload(true);
+                  else reloadSettings();
+                }}
+              >
+                <RefreshCw size={16} aria-hidden="true" /> 다시 확인
+              </button>
+            }
+          >
+            {error}
+          </NoticeBanner>
+        )}
         {status && (
           <>
             <dl className="backup-status" aria-live="polite">
@@ -262,25 +287,7 @@ export function BackupSettings({
           </>
         )}
         {!status && !error && <LoadingState compact label="백업 설정을 불러오는 중이에요…" />}
-        {error && (
-          <NoticeBanner
-            tone="error"
-            actions={
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  if (dirty) setConfirmReload(true);
-                  else reloadSettings();
-                }}
-              >
-                <RefreshCw size={16} aria-hidden="true" /> 다시 확인
-              </button>
-            }
-          >
-            {error}
-          </NoticeBanner>
-        )}
+        <TransientNotice message={message} />
         <Dialog
           open={confirmReload}
           title="백업 설정 변경 버리기"

@@ -336,7 +336,7 @@
 }
 @media (min-width: 801px) {
   .library-page-editing .native-advanced-workspace {
-    height: calc(100dvh - var(--editor-heading-h) - 56px);
+    height: calc(100dvh - var(--editor-heading-offset, var(--editor-heading-h)) - 56px);
     min-height: 0;
     overflow: hidden;
   }
@@ -450,6 +450,18 @@
   border-bottom: 1px solid var(--line);
   background: var(--bg);
 }
+.library-page-editing .prompt-editor-heading:has(> .dismissible-error),
+.library-page-editing .library-content-editor > .library-detail-heading:has(> .dismissible-error) {
+  flex-wrap: wrap;
+}
+.library-page-editing .prompt-editor-heading > .dismissible-error,
+.library-page-editing .library-content-editor > .library-detail-heading > .dismissible-error {
+  flex: 0 0 100%;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
 .prompt-editor-heading > h2,
 .library-page-editing .library-content-editor > .library-detail-heading > h2 {
   flex: 1;
@@ -479,7 +491,7 @@
   bottom: auto;
 }
 .library-page-editing .native-editor > .section-navigation {
-  top: var(--content-editor-heading-h, var(--editor-heading-h));
+  top: var(--editor-heading-offset, var(--editor-heading-h));
 }
 .library-page-editing .library-content-editor .editor-grid {
   margin-top: 0;
@@ -595,7 +607,7 @@
 }
 @media (min-width: 601px) {
   .library-page-editing .native-editor-split {
-    height: calc(100dvh - var(--editor-heading-h) - 56px);
+    height: calc(100dvh - var(--editor-heading-offset, var(--editor-heading-h)) - 56px);
     min-height: 0;
     overflow: hidden;
   }

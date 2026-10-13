@@ -27,6 +27,12 @@ On phones, resource editors keep the title and helper action in the first header
 
 Explicitly reloading role-model settings asks before discarding a draft; failed reads preserve the draft and its revision. Settings tabs that depend on the library use the same loading, failure and retry surface. A mobile input-language menu closes on outside interaction or Escape and restores its opener's focus after Escape or selection.
 
+Reloading edited execution settings also asks before discarding their draft. A failed refresh keeps already loaded choices and shows a retry banner; pending reads do not claim that a collection is empty. New-chat workspace reads and bot-default reads expose failure and retry separately from missing configuration. Export failures remain visible after their action menu closes. Collaboration controls follow the same order visually and by keyboard.
+
+An acknowledged execution-settings save remains successful when the subsequent reader refresh fails; show that refresh failure separately. Successful deletion-scope reads clear only their own read error, preserving a failed stop or delete operation for review.
+
+The application frame stays fixed when opening menus and panels from a long manuscript. Reading and dialog content scroll within their own surfaces; focusing a menu item must not move the header or sidebar outside the viewport.
+
 Manuscript search uses independent pressed-state filter buttons for original text, translation and requests; multiple kinds can be selected. Filter buttons retain the shared control height. Empty-query title browsing remains available. With a query, matching chat titles are shown compactly in batches of five above a separate manuscript-results section. Global search stays open with its query, filters and results when the navigation changes between desktop, collapsed rail and mobile layouts.
 
 Use the current components and styles as the starting point. [Library](LIBRARY.md) and [usage](USAGE.md) describe feature behavior; [DEVELOPMENT](DEVELOPMENT.md#verification) covers verification selection.

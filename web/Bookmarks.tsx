@@ -228,6 +228,7 @@ export function BookmarkList({
   useEffect(() => {
     const controller = new AbortController();
     setLoaded(false);
+    setError('');
     void api<Bookmark[]>(`/chats/${chatId}/bookmarks`, undefined, 'GET', controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) {

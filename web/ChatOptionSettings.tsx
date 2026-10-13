@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import {
   promptControls,
@@ -332,18 +333,18 @@ export function ChatOptionSettings(props: Props) {
           </section>
         )}
         {displayState.conflicts.map((item) => (
-          <p role="alert" key={item}>
+          <NoticeBanner tone="error" key={item}>
             {item}
-          </p>
+          </NoticeBanner>
         ))}
         {conflict && (
-          <p role="alert">
+          <NoticeBanner tone="error">
             채팅이나 전체 옵션이 바뀌었어요. 초안을 유지했어요. 최신 내용을 확인한 뒤 다시 적용해
             주세요.
-          </p>
+          </NoticeBanner>
         )}
-        {error && <p role="alert">{error}</p>}
-        {message && <p role="status">{message}</p>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        {message && <NoticeBanner>{message}</NoticeBanner>}
         <TransientNotice message={completion} />
         {uncertain && (
           <button
@@ -430,7 +431,11 @@ function SelectiveValues({
   try {
     reconciledValues = reconcilePromptValues(definitions, effective).values;
   } catch {
-    return <p role="alert">옵션 표시 조건을 확인하지 못했어요. 프롬프트 정의를 확인해 주세요.</p>;
+    return (
+      <NoticeBanner tone="error">
+        옵션 표시 조건을 확인하지 못했어요. 프롬프트 정의를 확인해 주세요.
+      </NoticeBanner>
+    );
   }
   if (definitions.length === 0)
     return <p className="muted">현재 프롬프트에 조정할 옵션이 없어요.</p>;

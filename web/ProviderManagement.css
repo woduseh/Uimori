@@ -109,6 +109,10 @@
 .provider-actions small {
   flex: 1 1 200px;
 }
+.jev-provider-test .provider-actions > button {
+  flex: none;
+  word-break: keep-all;
+}
 .provider-status {
   font-size: 12px;
   color: var(--muted);

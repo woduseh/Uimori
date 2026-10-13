@@ -159,7 +159,7 @@ export function ActivityNotifications({
           );
         })}
       </ul>
-      {!visible.length && <p role="status">확인할 알림이 없어요.</p>}
+      {!visible.length && !loading && !error && <p role="status">확인할 알림이 없어요.</p>}
       {loading && !error && <LoadingState compact label="이전 작업을 불러오는 중이에요…" />}
       {error && (
         <NoticeBanner

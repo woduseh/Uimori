@@ -335,6 +335,12 @@
   font-size: 12px;
   line-height: 1.5;
 }
+.bot-folder-settings .notice-banner {
+  align-items: flex-start;
+}
+.bot-folder-settings .notice-banner-icon {
+  margin-top: 1px;
+}
 .bot-folder-release {
   margin-top: 18px;
   width: 100%;

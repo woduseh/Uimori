@@ -150,6 +150,42 @@ async function harness(
   };
 }
 
+test('AUDIT2 pending notification history does not claim empty after acknowledging the visible notice', async ({
+  page,
+  request,
+}, info) => {
+  const seeded = await seed(request);
+  await page.setViewportSize({ width: 360, height: 900 });
+  const state = await harness(page, seeded.chat.id, [
+    activity('pending-history', 'translation', 'failed'),
+  ]);
+  let requested = false;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/chats/${seeded.chat.id}/activities?*`, async (route) => {
+    requested = true;
+    await held;
+    await route.fulfill({ json: { items: [], nextCursor: null } });
+  });
+  try {
+    await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '작업 알림', exact: true });
+    await expect.poll(() => requested).toBe(true);
+    await dialog.getByRole('button', { name: '모두 확인', exact: true }).click();
+    await page.clock.runFor(250);
+    await expect(dialog.getByText('이전 작업을 불러오는 중이에요…', { exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath('notification-history-pending-360.png') });
+    await expect(dialog.getByText('확인할 알림이 없어요.', { exact: true })).toHaveCount(0);
+    release();
+    await expect(dialog.getByText('확인할 알림이 없어요.', { exact: true })).toBeVisible();
+    expect(state.writes).toEqual([]);
+  } finally {
+    release();
+  }
+});
+
 test('ACTUI01 elapsed time, collapse, next task and completion expiry', async ({
   page,
   request,

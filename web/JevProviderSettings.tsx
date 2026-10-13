@@ -1,5 +1,6 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -413,11 +414,7 @@ export function JevProviderSettings({
               <small>짧은 예제의 관련성을 판단해요.</small>
             </div>
             {apiKey && <small>입력한 키를 저장하거나 지운 뒤 테스트해 주세요.</small>}
-            {testError && (
-              <p role="alert" className="error">
-                {testError}
-              </p>
-            )}
+            {testError && <NoticeBanner tone="error">{testError}</NoticeBanner>}
             {test && (
               <div role="status" className="jev-test-result provider-test-result">
                 {test.modelRevision !== status.revision && (
@@ -483,11 +480,7 @@ export function JevProviderSettings({
           </details>
         </>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <TransientNotice message={message} />
     </section>
   );

@@ -6,3 +6,13 @@
 .dismissible-error .notice-banner-actions button {
   color: inherit;
 }
+@media (max-width: 600px) {
+  .dismissible-error {
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+  }
+  .dismissible-error .notice-banner-actions {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}

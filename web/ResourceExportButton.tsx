@@ -7,13 +7,14 @@ export function ResourceExportButton({
   kind,
   id,
   disabled = false,
+  onError,
 }: {
   kind: 'content' | 'prompt-preset';
   id: string;
   disabled?: boolean;
+  onError: (message: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   return (
     <span className="resource-export-action">
       <button
@@ -22,7 +23,6 @@ export function ResourceExportButton({
         disabled={disabled || busy}
         onClick={async () => {
           setBusy(true);
-          setError('');
           try {
             await downloadArchive(
               '/native-transfers/export-archive',
@@ -32,7 +32,7 @@ export function ResourceExportButton({
               }
             );
           } catch (caught) {
-            setError((caught as Error).message);
+            onError((caught as Error).message);
           } finally {
             setBusy(false);
           }
@@ -41,11 +41,6 @@ export function ResourceExportButton({
         <DownloadIcon size={16} aria-hidden="true" />
         {busy ? '내보내는 중…' : '자료 백업'}
       </button>
-      {error && (
-        <small role="alert" className="error">
-          {error}
-        </small>
-      )}
     </span>
   );
 }

@@ -5,6 +5,7 @@ import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { LoadingState } from './LoadingState.js';
 import { IconButton } from './IconButton.js';
 import { CheckIcon, CloseIcon, DeleteIcon, EditIcon, StopIcon } from './ui-icons.js';
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
@@ -31,6 +32,7 @@ export function HelperSessionBar(props: Props) {
   const [impact, setImpact] = useState<HelperConversationDeletion | null>(null);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
   const [cleanupFailure, setCleanupFailure] = useState('');
   useEffect(() => {
     if (!deleting) return;
@@ -41,10 +43,13 @@ export function HelperSessionBar(props: Props) {
         const value = await api<HelperConversationDeletion>(
           `/helper/conversations/${encodeURIComponent(deleting.id)}/deletion`
         );
-        if (!disposed) setImpact(value);
+        if (!disposed) {
+          setImpact(value);
+          setReadError('');
+        }
       } catch (cause) {
         if (!disposed)
-          setError(cause instanceof Error ? cause.message : '삭제 범위를 확인하지 못했어요.');
+          setReadError(cause instanceof Error ? cause.message : '삭제 범위를 확인하지 못했어요.');
       } finally {
         if (!disposed) timer = setTimeout(() => void load(), 1200);
       }
@@ -70,11 +75,16 @@ export function HelperSessionBar(props: Props) {
         if (tasks.length < 50) break;
         before = tasks.at(-1)!.id;
       }
-      setImpact(
-        await api<HelperConversationDeletion>(
-          `/helper/conversations/${encodeURIComponent(deleting.id)}/deletion`
-        )
-      );
+      const value = await api<HelperConversationDeletion>(
+        `/helper/conversations/${encodeURIComponent(deleting.id)}/deletion`
+      ).catch((cause) => {
+        setReadError(cause instanceof Error ? cause.message : '삭제 범위를 확인하지 못했어요.');
+        return null;
+      });
+      if (value) {
+        setImpact(value);
+        setReadError('');
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '작업을 중지하지 못했어요.');
     } finally {
@@ -140,6 +150,7 @@ export function HelperSessionBar(props: Props) {
                 setDeleting(props.conversation);
                 setImpact(null);
                 setError('');
+                setReadError('');
               }}
             >
               <DeleteIcon size={18} aria-hidden="true" />
@@ -232,13 +243,20 @@ export function HelperSessionBar(props: Props) {
         <p>
           <strong>{deleting?.title || '새 대화'}</strong> 세션을 삭제해요.
         </p>
-        <p>{impact?.description ?? '삭제할 자료와 진행 중인 작업을 확인하고 있어요…'}</p>
+        {impact ? (
+          <p>{impact.description}</p>
+        ) : (
+          !readError && (
+            <LoadingState compact label="삭제할 자료와 진행 중인 작업을 확인하고 있어요…" />
+          )
+        )}
         {impact && !impact.canDelete && (
           <p role="status">
             진행·대기 요청 {impact.activeTasks}개 · 종료를 기다리는 외부 요청{' '}
             {impact.unsettledAttempts}개{impact.workerActive ? ' · 작업 정리 중' : ''}
           </p>
         )}
+        {readError && <NoticeBanner tone="error">{readError}</NoticeBanner>}
         {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button

@@ -116,6 +116,150 @@ async function navigationFixture(request: APIRequestContext) {
 const rows = (nav: Locator) => nav.locator('.bot-chat-item');
 
 for (const width of DEFAULT_WIDTHS) {
+  test(`AUDIT2 folder settings retain the manual draft after a real revision conflict ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { owner, chats, folder } = await navigationFixture(request);
+    const [original] = await (await request.get(`/api/bots/${owner.id}/folders`)).json();
+    const personas: Content[] = [];
+    for (const name of ['작성 중인 페르소나', '다른 창의 페르소나']) {
+      const created = await request.post('/api/content', {
+        data: {
+          kind: 'persona',
+          title: `${name} ${crypto.randomUUID()}`,
+          description: '',
+          text: 'Synthetic folder conflict persona',
+          loading: 'pinned',
+          relatedIds: [],
+        },
+      });
+      expect(created.ok()).toBe(true);
+      personas.push((await created.json()) as Content);
+    }
+    const [draftPersona, concurrentPersona] = personas;
+    const patches: { expectedRevision: number }[] = [];
+    page.on('request', (item) => {
+      if (item.method() === 'PATCH' && item.url().endsWith(`/folders/${folder.id}`))
+        patches.push(item.postDataJSON());
+    });
+    await page.goto(`/?chat=${chats[0].id}`);
+    const nav = await visibleNavigation(page);
+    await nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true }).hover();
+    await nav.getByRole('button', { name: `${folder.title} 폴더 설정`, exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '폴더 설정', exact: true });
+    const title = dialog.getByRole('textbox');
+    const draft = `작성 중인 폴더 이름 ${width}`;
+    const concurrent = `다른 창에서 저장한 폴더 이름 ${width}`;
+    await title.fill(draft);
+    await dialog
+      .getByRole('button', { name: `${folder.title} 기본 페르소나`, exact: true })
+      .click();
+    await page
+      .getByRole('dialog', { name: `${folder.title} 기본 페르소나`, exact: true })
+      .locator('[data-content-choice]')
+      .filter({ hasText: draftPersona.title })
+      .click();
+    const changed = await request.patch(`/api/bots/${owner.id}/folders/${folder.id}`, {
+      data: {
+        expectedRevision: original.revision,
+        title: concurrent,
+        defaultPersona: { id: concurrentPersona.id, revision: concurrentPersona.revision },
+      },
+    });
+    expect(changed.ok()).toBe(true);
+    const rejected = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/folders/${folder.id}`) && response.request().method() === 'PATCH'
+    );
+    const refreshed = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/bots/${owner.id}/folders`) &&
+        response.request().method() === 'GET'
+    );
+    await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+    expect((await rejected).status()).toBe(409);
+    expect((await refreshed).ok()).toBe(true);
+    await expect(
+      nav.getByRole('button', { name: `${concurrent} 폴더`, exact: true })
+    ).toBeVisible();
+    await expect(dialog).toBeVisible();
+    const [stored] = await (await request.get(`/api/bots/${owner.id}/folders`)).json();
+    expect(stored.title).toBe(concurrent);
+    expect(stored.revision).toBe(original.revision + 1);
+    expect(stored.defaultPersona.id).toBe(concurrentPersona.id);
+    await expect(title).toHaveValue(draft);
+    const persona = dialog.getByRole('button', {
+      name: `${concurrent} 기본 페르소나`,
+      exact: true,
+    });
+    await expect(persona).toContainText(draftPersona.title);
+    const save = dialog.getByRole('button', { name: '설정 저장', exact: true });
+    await expect(save).toBeDisabled();
+    await expect(dialog.getByRole('alert')).toContainText('작성한 내용은 유지했어요.');
+    await dialog.getByText('현재 저장된 설정 보기', { exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText(concurrentPersona.title);
+    const noticeIconOffset = await dialog.getByRole('alert').evaluate((notice) => {
+      const icon = notice.querySelector('.notice-banner-icon');
+      const paragraph = notice.querySelector('.notice-banner-message > p');
+      if (!icon || !paragraph) throw new Error('Folder conflict notice is missing its content');
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      const firstLine = range.getClientRects()[0];
+      if (!firstLine) throw new Error('Folder conflict notice has no visible first line');
+      const iconBox = icon.getBoundingClientRect();
+      return Math.abs(iconBox.y + iconBox.height / 2 - (firstLine.y + firstLine.height / 2));
+    });
+    expect(noticeIconOffset).toBeLessThanOrEqual(2);
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`folder-conflict-draft-${width}.png`) });
+    const reload = dialog.getByRole('button', { name: '최신 설정 불러오기', exact: true });
+    await reload.click();
+    const confirmation = page.getByRole('dialog', {
+      name: '최신 폴더 설정 불러오기',
+      exact: true,
+    });
+    const keep = confirmation.getByRole('button', { name: '계속 편집', exact: true });
+    await expect(keep).toBeFocused();
+    await keep.click();
+    await expect(confirmation).toBeHidden();
+    await expect(title).toHaveValue(draft);
+    await expect(persona).toContainText(draftPersona.title);
+    await expect(save).toBeDisabled();
+    expect(patches).toHaveLength(1);
+    expect(patches[0].expectedRevision).toBe(original.revision);
+    await reload.click();
+    if (visualReview) {
+      await confirmation.evaluate(async (node) => {
+        await Promise.all(node.getAnimations().map((animation) => animation.finished));
+      });
+      await page.screenshot({ path: info.outputPath(`folder-conflict-discard-${width}.png`) });
+    }
+    await confirmation
+      .getByRole('button', { name: '초안 버리고 최신 설정 불러오기', exact: true })
+      .click();
+    await expect(confirmation).toBeHidden();
+    await expect(title).toHaveValue(concurrent);
+    await expect(persona).toContainText(concurrentPersona.title);
+    await expect(save).toBeEnabled();
+    expect(patches).toHaveLength(1);
+    const reconciled = `검토 후 다시 작성한 폴더 이름 ${width}`;
+    await title.fill(reconciled);
+    await save.click();
+    await expect(
+      nav.getByRole('button', { name: `${reconciled} 폴더`, exact: true })
+    ).toBeVisible();
+    expect(patches).toHaveLength(2);
+    expect(patches[1].expectedRevision).toBe(stored.revision);
+    const [final] = await (await request.get(`/api/bots/${owner.id}/folders`)).json();
+    expect(final.title).toBe(reconciled);
+    expect(final.defaultPersona.id).toBe(concurrentPersona.id);
+    expect(final.revision).toBe(stored.revision + 1);
+  });
+}
+
+for (const width of DEFAULT_WIDTHS) {
   test(`ORG05 ${width}px chat menu icons and manual titles preserve drafts and persist`, async ({
     page,
     request,

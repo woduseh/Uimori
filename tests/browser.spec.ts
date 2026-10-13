@@ -168,6 +168,10 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
       aSecondTab.getByRole('dialog', { name: '채팅 설정', exact: true }).getByRole('alert')
     ).toContainText('다른 요청이 먼저 반영됐어요');
     await aSecondTab.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
+    await aSecondTab
+      .getByRole('alertdialog', { name: '실행 설정 다시 불러오기', exact: true })
+      .getByRole('button', { name: '초안 버리고 불러오기', exact: true })
+      .click();
     await expect(aSecondTab.getByRole('alert')).toHaveCount(0);
     expect((await detail(request, a.id)).runs[0].snapshot.settings.maxCalls).toBe(8);
     await page.close();

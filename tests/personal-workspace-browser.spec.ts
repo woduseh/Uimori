@@ -3,6 +3,7 @@ import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 import {
   navigationAction,
   openChatSettings,
@@ -10,6 +11,7 @@ import {
   selectSettingsSection,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { visualReview } from './fixtures/visual-review.js';
 
 async function createBot(request: APIRequestContext, title: string): Promise<Content> {
   const pkg = nativeContent({ name: title, description: 'Synthetic story source.' });
@@ -465,3 +467,247 @@ test('PERSONAL binary resource backup downloads and imports through the archive 
   expect(content.title).toBe(title);
   expect(content.package.nativeRisu.card.description).toBe('Synthetic story source.');
 });
+
+for (const width of [412, 1440]) {
+  test(`AUDIT2 dirty prompt tabs clear the actual sticky header after scrolling ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const title = `AUDIT2 prompt heading ${width} ${randomUUID()}`;
+    const response = await request.post('/api/prompt-presets', {
+      data: {
+        title,
+        role: 'translation',
+        program: nativePrompt('Synthetic header fixture.'),
+        values: {},
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    await page.goto('/');
+    await navigationAction(page, '프롬프트');
+    await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+    await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+    const editor = page.getByTestId('prompt-editor');
+    await editor.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} edited`);
+    await editor.getByRole('tab', { name: '정규식', exact: true }).click();
+    const regex = editor.getByRole('region', { name: '정규식 편집기', exact: true });
+    await expect(regex.locator('.native-mobile-picker')).toHaveCount(0);
+    await expect(
+      regex.locator('.native-empty').getByRole('button', { name: '정규식 추가', exact: true })
+    ).toBeVisible();
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`audit2-prompt-empty-regex-${width}.png`) });
+    await editor.getByText('고급 JSON 편집', { exact: true }).click();
+    const raw = editor.getByLabel('Risu 정규식 JSON', { exact: true });
+    await raw.fill('{unfinished');
+    await raw.evaluate((node) => node.scrollIntoView({ block: 'start' }));
+    await expect
+      .poll(() =>
+        raw.evaluate((node) => {
+          let scrolled = 0;
+          for (let parent = node.parentElement; parent; parent = parent.parentElement)
+            scrolled = Math.max(scrolled, parent.scrollTop);
+          return scrolled;
+        })
+      )
+      .toBeGreaterThan(0);
+    const heading = editor.locator(':scope > .prompt-editor-heading');
+    const tabs = editor.getByRole('tablist', { name: '프리셋 편집 영역', exact: true });
+    await expect
+      .poll(async () => {
+        const header = (await heading.boundingBox())!;
+        const navigation = (await tabs.boundingBox())!;
+        return navigation.y - (header.y + header.height);
+      })
+      .toBeGreaterThanOrEqual(-1);
+    // The measured offset must not become the header's minimum and grow on each resize.
+    const minimum = await heading.evaluate((node) => getComputedStyle(node).minHeight);
+    expect(minimum).toBe(width === 412 ? '64px' : '72px');
+    await expect(raw).toHaveValue('{unfinished');
+    if (visualReview)
+      await page.screenshot({ path: info.outputPath(`audit2-prompt-sticky-header-${width}.png`) });
+    await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+    await expect(editor.getByRole('tabpanel', { name: '기본 옵션', exact: true })).toBeVisible();
+  });
+
+  test(`AUDIT2 archive import confirms a completed request after a lost response without duplicates ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const title = `AUDIT2 archive ${width} ${randomUUID()}`;
+    const original = await createBot(request, title);
+    const archive = await request.post('/api/native-transfers/export-archive', {
+      data: { items: [{ kind: 'content', id: original.id }] },
+    });
+    expect(archive.ok(), await archive.text().catch(() => '')).toBe(true);
+    const bytes = await archive.body();
+    const importedTitleCount = async () => {
+      const library = await (await request.get('/api/library?view=summary')).json();
+      return library.contents.filter((item: { title: string }) => item.title === title).length;
+    };
+    const before = await importedTitleCount();
+    const bodies: unknown[] = [];
+    let receipt: { created: boolean; items: { id: string }[] } | undefined;
+    await page.route('**/api/native-transfers/apply-archive', async (route) => {
+      bodies.push(route.request().postDataJSON());
+      if (bodies.length !== 1) return route.continue();
+      // The server commits and stores its receipt; only the browser-facing response is lost.
+      const accepted = await route.fetch();
+      expect(accepted.ok(), await accepted.text()).toBe(true);
+      receipt = await accepted.json();
+      await route.fulfill({ status: 503, json: { error: 'AUDIT2_IMPORT_RESPONSE_LOST' } });
+    });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '데이터 관리');
+    const importer = page.getByRole('region', { name: '자료 가져오기', exact: true });
+    const file = importer.getByLabel('Uimori 자료 백업 파일', { exact: true });
+    await file.setInputFiles({
+      name: 'audit2-resource.uimori',
+      mimeType: 'application/zip',
+      buffer: bytes,
+    });
+    await expect(importer).toContainText('1개 자료 · 0개 프리셋 · 0개 이미지');
+    await importer.getByRole('button', { name: '새 자료로 가져오기', exact: true }).click();
+    await expect(importer.getByRole('alert')).toContainText('503');
+    expect(receipt?.created).toBe(true);
+    expect(await importedTitleCount()).toBe(before + 1);
+    await importer.getByRole('alert').scrollIntoViewIfNeeded();
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`audit2-resource-import-uncertain-${width}.png`),
+      });
+    await expect(file).toBeDisabled();
+    await expect(importer.getByRole('status')).toContainText('완료 여부');
+    const retry = page.waitForResponse(
+      (response) => response.url().endsWith('/api/native-transfers/apply-archive') && response.ok()
+    );
+    await importer.getByRole('button', { name: '같은 요청으로 다시 확인', exact: true }).click();
+    const replay = await (await retry).json();
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toEqual(bodies[0]);
+    expect(replay.created).toBe(false);
+    expect(replay.items).toEqual(receipt!.items);
+    expect(await importedTitleCount()).toBe(before + 1);
+    await expect(file).toBeEnabled();
+    await expect(importer.getByRole('status')).toContainText('1개 자료를 추가했어요.');
+    await expect(importer.getByRole('alert')).toHaveCount(0);
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`audit2-resource-import-confirmed-${width}.png`),
+      });
+  });
+
+  for (const kind of ['content', 'prompt'] as const) {
+    test(`AUDIT2 ${kind} backup failure stays in the sticky header after its menu closes ${width}`, async ({
+      page,
+      request,
+    }, info) => {
+      await page.setViewportSize({ width, height: 900 });
+      const title = `AUDIT2 ${kind} export ${width} ${randomUUID()}`;
+      const endpoint = kind === 'content' ? '/api/content' : '/api/prompt-presets';
+      let original: { id: string; title: string };
+      if (kind === 'content') original = await createBot(request, title);
+      else {
+        const response = await request.post(endpoint, {
+          data: {
+            title,
+            role: 'translation',
+            program: nativePrompt('Synthetic export fixture.', {}, 'translation'),
+            values: {},
+          },
+        });
+        expect(response.ok(), await response.text()).toBe(true);
+        original = await response.json();
+      }
+      const stored = await (await request.get(`${endpoint}/${original.id}`)).json();
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let started!: () => void;
+      const requested = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const message = '합성 백업 다운로드 응답 실패';
+      await page.route('**/api/native-transfers/export-archive', async (route) => {
+        started();
+        await held;
+        await route.fulfill({ status: 503, json: { error: message } });
+      });
+      try {
+        if (kind === 'content') await openEditor(page, original.title);
+        else {
+          await page.goto('/');
+          await navigationAction(page, '프롬프트');
+          await page.getByLabel('프롬프트 검색', { exact: true }).fill(original.title);
+          await page
+            .getByRole('button', { name: `${original.title} 프롬프트 편집`, exact: true })
+            .click();
+        }
+        const editor =
+          kind === 'content'
+            ? page.locator('.library-content-editor')
+            : page.getByTestId('prompt-editor');
+        const heading = editor.locator(
+          kind === 'content'
+            ? ':scope > .library-detail-heading'
+            : ':scope > .prompt-editor-heading'
+        );
+        const menu = heading.locator('details.action-menu');
+        await menu
+          .getByLabel(kind === 'content' ? '자료 메뉴' : '프롬프트 관리', { exact: true })
+          .click();
+        await menu.getByRole('button', { name: '자료 백업', exact: true }).click();
+        await requested;
+        await expect(menu).not.toHaveAttribute('open');
+        const failed = page.waitForResponse(
+          (response) =>
+            response.url().endsWith('/api/native-transfers/export-archive') &&
+            response.status() === 503
+        );
+        release();
+        await failed;
+        const alert = heading.getByRole('alert').filter({ hasText: message });
+        await expect(alert).toBeInViewport({ ratio: 1 });
+        const close = alert.getByRole('button', { name: '오류 메시지 닫기', exact: true });
+        const closeBox = (await close.boundingBox())!;
+        const messageBox = (await alert.locator('.notice-banner-message').boundingBox())!;
+        expect(closeBox.x).toBeGreaterThanOrEqual(messageBox.x + messageBox.width - 1);
+        expect(
+          Math.abs(closeBox.y + closeBox.height / 2 - messageBox.y - messageBox.height / 2)
+        ).toBeLessThanOrEqual(2);
+        const tabs = editor.getByRole('tablist', {
+          name: kind === 'content' ? '자료 편집 영역' : '프리셋 편집 영역',
+          exact: true,
+        });
+        const clearHeader = async () => {
+          const header = (await heading.boundingBox())!;
+          const navigation = (await tabs.boundingBox())!;
+          return navigation.y - (header.y + header.height);
+        };
+        await expect.poll(clearHeader).toBeGreaterThanOrEqual(-1);
+        await expect(menu).not.toHaveAttribute('open');
+        await expect(
+          editor.getByLabel(kind === 'content' ? 'Risu 자료 이름' : '프롬프트 이름', {
+            exact: true,
+          })
+        ).toHaveValue(original.title);
+        expect(await (await request.get(`${endpoint}/${original.id}`)).json()).toEqual(stored);
+        if (visualReview)
+          await page.screenshot({
+            path: info.outputPath(`audit2-${kind}-export-late-failed-${width}.png`),
+          });
+        const expanded = (await heading.boundingBox())!.height;
+        await alert.getByRole('button', { name: '오류 메시지 닫기', exact: true }).click();
+        await expect(alert).toBeHidden();
+        await expect.poll(async () => (await heading.boundingBox())!.height).toBeLessThan(expanded);
+        await expect.poll(clearHeader).toBeGreaterThanOrEqual(-1);
+      } finally {
+        release();
+      }
+    });
+  }
+}

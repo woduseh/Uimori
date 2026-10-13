@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
 import type { BotDefaults, BotPersonaDefault } from '../core/bot-defaults.js';
 import type { Content, Library } from '../core/product.js';
@@ -21,10 +22,13 @@ export function BotDefaultPersona({
   const [personaId, setPersonaId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const lock = useRef(false);
   const path = `/bots/${encodeURIComponent(bot.id)}/defaults`;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: An explicit retry repeats the initial read while the dialog stays open.
   useEffect(() => {
     let alive = true;
+    setError('');
     void api<BotDefaults>(path)
       .then((value) => {
         if (!alive) return;
@@ -38,7 +42,7 @@ export function BotDefaultPersona({
     return () => {
       alive = false;
     };
-  }, [path]);
+  }, [path, loadAttempt]);
   const selected = library.contents.find((item) => item.id === personaId);
   async function save() {
     if (!saved || lock.current || (mode === 'persona' && !selected)) return;
@@ -82,7 +86,16 @@ export function BotDefaultPersona({
         }}
       >
         <p>{bot.title}의 새 채팅을 시작할 때 사용할 페르소나예요. 기존 채팅은 바뀌지 않아요.</p>
-        {!saved && !error && <LoadingState compact label="기본 설정을 불러오는 중이에요…" />}
+        {!saved && (
+          <LoadingState
+            compact
+            loading={!error}
+            error={error}
+            errorLabel="기본 페르소나를 불러오지 못했어요."
+            label="기본 설정을 불러오는 중이에요…"
+            onRetry={() => setLoadAttempt((attempt) => attempt + 1)}
+          />
+        )}
         <label>
           기본 페르소나
           <select
@@ -113,11 +126,7 @@ export function BotDefaultPersona({
           </>
         )}
         <p className="muted">새 채팅 화면에서 직접 고른 값이 가장 우선해요.</p>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+        {saved && error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <button disabled={!saved || busy || (mode === 'persona' && !selected)}>
           {busy ? '저장하는 중…' : '기본 페르소나 저장'}
         </button>

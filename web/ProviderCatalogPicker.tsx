@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { NoticeBanner } from './NoticeBanner.js';
 import { CheckIcon, SearchIcon } from './ui-icons.js';
 import type { Connection } from '../core/product.js';
 import { supportedModels } from '../core/model-capabilities.js';
@@ -59,7 +60,9 @@ export function ProviderCatalogPicker({
         </button>
       </div>
       {connection.catalogError && (
-        <p className="error">모델 목록 조회에 실패했어요. 마지막 저장 목록은 유지돼요.</p>
+        <NoticeBanner tone="error">
+          모델 목록 조회에 실패했어요. 마지막 저장 목록은 유지돼요.
+        </NoticeBanner>
       )}
       {catalog.length > 0 ? (
         <>

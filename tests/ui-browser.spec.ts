@@ -1658,6 +1658,51 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
   }
 });
 
+for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
+  test(`AUDIT2 long manuscript menus keep the app header and sidebar in place ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    const chat = await seed(request, `고정 작업실 ${width} ${Date.now()}`, longPrompt, 3);
+    const before = await data(request, chat.id);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    await expect(page.getByTestId('source')).toHaveCount(3);
+    await page.getByLabel('다음 장면 요청').fill('패널을 열어도 유지할 입력');
+    const stableFrame = async () => {
+      await expect
+        .poll(() => page.locator('.app-shell').evaluate((node) => node.scrollTop))
+        .toBe(0);
+      await expect
+        .poll(async () => (await page.locator('.workspace-header').boundingBox())!.y)
+        .toBeGreaterThanOrEqual(0);
+      if (width === DESKTOP_WIDTH)
+        expect((await page.locator('.sidebar').boundingBox())!.y).toBe(0);
+    };
+    await stableFrame();
+    for (const title of ['작업 현황', '읽기 설정', '계층형 구성']) {
+      await openChatMenu(page);
+      await page.getByRole('button', { name: title, exact: true }).click();
+      const panel =
+        title === '계층형 구성'
+          ? page.getByRole('region', { name: title, exact: true })
+          : page.getByRole('dialog', { name: title, exact: true });
+      await expect(panel).toBeVisible();
+      await panel.getByRole('button', { name: `${title} 닫기`, exact: true }).focus();
+      await stableFrame();
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`fixed-frame-${title}-${width}.png`) });
+      await panel.getByRole('button', { name: `${title} 닫기`, exact: true }).click();
+      await expect(panel).not.toBeVisible();
+      await stableFrame();
+      await expect(page.getByLabel('다음 장면 요청')).toHaveValue('패널을 열어도 유지할 입력');
+    }
+    const after = await data(request, chat.id);
+    expect(after.sources).toEqual(before.sources);
+    expect(after.runs).toEqual(before.runs);
+  });
+}
+
 test('UI common dialogs stay centered with mobile margins, internal scrolling and native dismissal', async ({
   page,
   request,

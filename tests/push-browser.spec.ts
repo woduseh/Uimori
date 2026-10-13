@@ -4,6 +4,105 @@ import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 
 test.setTimeout(60000);
+
+test('AUDIT2 push settings initial read shows centered loading and recovers from 503 without permission or subscription writes', async ({
+  page,
+}, info) => {
+  await page.addInitScript(() => {
+    Reflect.set(window, 'pushPermissionCalls', 0);
+    Reflect.set(window, 'pushSubscribeCalls', 0);
+    Object.defineProperty(Notification, 'permission', {
+      configurable: true,
+      get: () => 'default',
+    });
+    Notification.requestPermission = async () => {
+      Reflect.set(
+        window,
+        'pushPermissionCalls',
+        Number(Reflect.get(window, 'pushPermissionCalls')) + 1
+      );
+      return 'denied';
+    };
+    PushManager.prototype.subscribe = async () => {
+      Reflect.set(
+        window,
+        'pushSubscribeCalls',
+        Number(Reflect.get(window, 'pushSubscribeCalls')) + 1
+      );
+      throw new Error('This read-only fixture must not subscribe');
+    };
+  });
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let phase: 'pending' | 'failed' | 'recovered' = 'pending';
+  let reads = 0;
+  const writes: string[] = [];
+  await page.route('**/api/push**', async (route) => {
+    const entry = route.request();
+    const path = new URL(entry.url()).pathname;
+    if (entry.method() !== 'GET' || path !== '/api/push') {
+      writes.push(`${entry.method()} ${path}`);
+      return route.fulfill({ status: 500, json: { error: 'Unexpected push mutation' } });
+    }
+    reads++;
+    if (phase === 'pending') await pending;
+    if (phase !== 'recovered')
+      return route.fulfill({ status: 503, json: { error: 'Synthetic push info read failure' } });
+    return route.fulfill({
+      json: { available: true, reason: null, publicKey: null, device: null },
+    });
+  });
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  try {
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '일반');
+    const panel = page.getByRole('region', { name: '작업 완료 알림', exact: true });
+    const loading = panel.locator('.loading-state-compact');
+    await expect(loading.getByRole('status')).toContainText('알림 설정을 불러오는 중이에요…');
+    await expect(panel.getByRole('button', { name: '알림 켜기', exact: true })).toBeHidden();
+    for (const width of [360, 412]) {
+      await page.setViewportSize({ width, height: 915 });
+      await loading.scrollIntoViewIfNeeded();
+      const bounds = (await loading.boundingBox())!;
+      const status = (await loading.getByRole('status').boundingBox())!;
+      expect(
+        Math.abs(bounds.x + bounds.width / 2 - status.x - status.width / 2)
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(bounds.y + bounds.height / 2 - status.y - status.height / 2)
+      ).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: info.outputPath(`audit2-push-initial-loading-${width}.png`) });
+    }
+    phase = 'failed';
+    release();
+    const failure = panel.getByRole('alert');
+    await expect(failure).toContainText('서버 작업을 완료하지 못했어요.');
+    await expect(failure).toContainText('(503)');
+    await expect(loading).toBeHidden();
+    const retry = panel.getByRole('button', { name: '알림 연결 다시 확인', exact: true });
+    await expect(retry).toBeVisible();
+    await page.screenshot({ path: info.outputPath('audit2-push-initial-read-failed-412.png') });
+    const beforeRetry = reads;
+    phase = 'recovered';
+    await retry.click();
+    await expect(panel.getByRole('status')).toContainText('이 기기의 알림 꺼짐');
+    await expect(panel.getByRole('button', { name: '알림 켜기', exact: true })).toBeVisible();
+    await expect(failure).toBeHidden();
+    await expect(loading).toBeHidden();
+    expect(reads).toBeGreaterThan(beforeRetry);
+    expect(writes).toEqual([]);
+    expect(await page.evaluate(() => Reflect.get(window, 'pushPermissionCalls'))).toBe(0);
+    expect(await page.evaluate(() => Reflect.get(window, 'pushSubscribeCalls'))).toBe(0);
+    await page.screenshot({ path: info.outputPath('audit2-push-initial-read-recovered-412.png') });
+  } finally {
+    release();
+  }
+});
+
 test('PWUI06 push consent is explicit, preferences are acknowledged before changing, and server opt-out survives browser unsubscribe failure', async ({
   page,
 }, info) => {

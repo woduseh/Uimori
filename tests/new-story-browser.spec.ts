@@ -7,6 +7,7 @@ import {
 import { setCurrentModels } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { test, expect } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
@@ -394,6 +395,150 @@ for (const [viewportName, viewport] of [
 }
 
 preservePromptWorkspace();
+
+for (const width of [412, 1440]) {
+  test(`AUDIT2 bot default persona recovers an initial read and retains a rejected save ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const created = await request.post('/api/content', {
+      data: {
+        kind: 'bot',
+        title: `AUDIT2 defaults ${width} ${crypto.randomUUID()}`,
+        description: '',
+        text: 'Synthetic default-persona recovery fixture.',
+        loading: 'pinned',
+        relatedIds: [],
+      },
+    });
+    expect(created.ok()).toBe(true);
+    const bot = (await created.json()) as Content;
+    let failRead = true;
+    let failSave = true;
+    await page.route(`**/api/bots/${bot.id}/defaults`, async (route) => {
+      if (route.request().method() === 'GET' && failRead) {
+        failRead = false;
+        await route.fulfill({ status: 503, json: { error: 'AUDIT2_DEFAULT_READ_FAILED' } });
+      } else if (route.request().method() === 'PATCH' && failSave) {
+        failSave = false;
+        await route.fulfill({ status: 409, json: { error: 'AUDIT2_DEFAULT_SAVE_REJECTED' } });
+      } else await route.continue();
+    });
+    await page.goto('/');
+    const nav = await visibleNavigation(page);
+    const section = nav.getByRole('button', { name: '봇', exact: true });
+    if ((await section.getAttribute('aria-expanded')) === 'false') await section.click();
+    const branch = nav.locator(`[data-bot-id="${bot.id}"]`);
+    await branch.hover();
+    await branch.getByLabel(`${bot.title} 관리`, { exact: true }).click();
+    await branch.getByRole('button', { name: '기본 페르소나', exact: true }).click();
+    const settings = page.getByRole('dialog', { name: '봇 기본 페르소나', exact: true });
+    await expect(settings.getByRole('alert')).toContainText('503');
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`audit2-default-persona-read-failed-${width}.png`),
+      });
+    await settings.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+    const mode = settings.getByLabel('봇 기본 페르소나 방식', { exact: true });
+    await expect(mode).toBeEnabled();
+    await mode.selectOption('none');
+    await settings.getByRole('button', { name: '기본 페르소나 저장', exact: true }).click();
+    await expect(settings.getByRole('alert')).toContainText('409');
+    await expect(mode).toHaveValue('none');
+    if (visualReview)
+      await page.screenshot({
+        path: info.outputPath(`audit2-default-persona-save-rejected-${width}.png`),
+      });
+    await settings.getByRole('button', { name: '기본 페르소나 저장', exact: true }).click();
+    await expect(settings).toBeHidden();
+    expect(await (await request.get(`/api/bots/${bot.id}/defaults`)).json()).toMatchObject({
+      persona: { mode: 'none' },
+    });
+  });
+
+  test(`AUDIT2 new chat distinguishes workspace read failure and preserves choices on retry ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const botTitle = `AUDIT2 workspace ${width} ${crypto.randomUUID()}`;
+    const created = await request.post('/api/content', {
+      data: {
+        kind: 'bot',
+        title: botTitle,
+        description: '',
+        text: 'Synthetic workspace recovery fixture.',
+        loading: 'pinned',
+        relatedIds: [],
+        package: nativeContent({ name: botTitle, first_mes: 'Synthetic first message.' }),
+      },
+    });
+    expect(created.ok()).toBe(true);
+    const bot = (await created.json()) as Content;
+    let failRead = true;
+    let releaseRead!: () => void;
+    const heldRead = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    let readStarted!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      readStarted = resolve;
+    });
+    await page.goto('/');
+    await page.route('**/api/prompt-workspace', async (route) => {
+      if (route.request().method() !== 'GET' || !failRead) return route.continue();
+      failRead = false;
+      readStarted();
+      await heldRead;
+      await route.fulfill({ status: 503, json: { error: 'AUDIT2_WORKSPACE_READ_FAILED' } });
+    });
+    try {
+      await navigationAction(page, '새 채팅', bot.title);
+      const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+      await reading;
+      await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
+      await page
+        .getByRole('dialog', { name: '시작 페르소나', exact: true })
+        .getByRole('button', { name: '페르소나 없음', exact: true })
+        .click();
+      const options = dialog.locator('.new-story-options');
+      await options.locator('summary').click();
+      const title = dialog.getByLabel('새 채팅 제목', { exact: true });
+      const draft = `입력 유지 ${width}`;
+      await title.fill(draft);
+      await dialog.getByLabel('첫 메시지 선택', { exact: true }).selectOption('');
+      const failed = page.waitForResponse(
+        (response) => response.url().endsWith('/api/prompt-workspace') && response.status() === 503
+      );
+      releaseRead();
+      await failed;
+      const settings = dialog.getByLabel('새 채팅에 사용할 전역 설정', { exact: true });
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`audit2-new-chat-workspace-failed-${width}.png`),
+        });
+      await expect(settings.getByRole('alert')).toContainText('503');
+      await expect(settings).not.toContainText('확인 중…');
+      await expect(settings).not.toContainText('본문 생성 전에 사용 가능한');
+      await settings.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+      await expect(settings.locator('.new-story-settings-summary')).toBeVisible();
+      await expect(settings.getByRole('alert')).toHaveCount(0);
+      await expect(title).toHaveValue(draft);
+      await expect(
+        dialog.getByRole('button', { name: '시작 페르소나', exact: true })
+      ).toContainText('페르소나 없음');
+      await expect(dialog.getByLabel('첫 메시지 선택', { exact: true })).toHaveValue('');
+      await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeEnabled();
+      if (visualReview)
+        await page.screenshot({
+          path: info.outputPath(`audit2-new-chat-workspace-recovered-${width}.png`),
+        });
+    } finally {
+      releaseRead();
+    }
+  });
+}
 
 test('NSUI02 native authoring preserves raw drafts and starts with the rendered default greeting', async ({
   page,

@@ -191,6 +191,7 @@ test('IPUI02 stale edits are not overwritten and can be saved as a new copy', as
   expect(
     (await catalog(request)).presets.find((item) => item.id === preset.id)?.styleGuidance
   ).toBe('saved in another window');
+  await editor.getByRole('alert').scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('illustration-preset-conflict-mobile.png') });
   await editor.getByRole('button', { name: '사본으로 저장', exact: true }).click();
   await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();

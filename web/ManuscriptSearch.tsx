@@ -220,10 +220,15 @@ export function ManuscriptSearchPanel({
           )}
         </details>
       )}
-      {!needle && (
+      {!kinds.length && (
+        <p className="muted" role="status">
+          검색 대상을 하나 이상 선택해 주세요.
+        </p>
+      )}
+      {!needle && kinds.length > 0 && (
         <p className="muted">저장된 현재 원고를 찾아요. 따옴표로 감싸면 연속 문구를 찾아요.</p>
       )}
-      {needle && !result && !busy && !error && (
+      {needle && kinds.length > 0 && !result && !busy && !error && (
         <p className="muted">짧은 이름도 검색할 수 있어요. Enter 또는 검색을 눌러 주세요.</p>
       )}
       {busy && <LoadingState compact label="원고를 찾고 있어요…" />}

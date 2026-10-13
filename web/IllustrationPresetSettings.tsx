@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
@@ -345,18 +346,14 @@ export function IllustrationPresetSettings({
           </div>
         </div>
       </div>
-      {(error || loadError) && (
-        <p role="alert" className="error">
-          {error || loadError}
-        </p>
-      )}
+      {(error || loadError) && <NoticeBanner tone="error">{error || loadError}</NoticeBanner>}
       {loadError && (
         <button onClick={() => void refresh()}>
           <RefreshCw size={16} aria-hidden="true" /> 다시 불러오기
         </button>
       )}
       <TransientNotice message={notice} />
-      {importNotice && <p role="status">{importNotice}</p>}
+      {importNotice && <NoticeBanner>{importNotice}</NoticeBanner>}
       <div className="illustration-preset-grid" aria-label="저장된 삽화 프리셋">
         {catalog.presets.map((preset) => (
           <article
@@ -474,12 +471,12 @@ export function IllustrationPresetSettings({
             <small>{dirty ? '미저장 변경' : '저장됨'}</small>
           </div>
           {(conflict || deleted) && (
-            <p role="alert">
+            <NoticeBanner tone="error">
               {deleted
                 ? '이 프리셋이 다른 곳에서 삭제됐어요.'
                 : '다른 곳에서 저장된 프리셋이 바뀌었어요.'}{' '}
               편집 내용은 유지했어요. 사본으로 저장하거나 편집을 닫고 최신 항목을 다시 열어 주세요.
-            </p>
+            </NoticeBanner>
           )}
           <fieldset
             className="control-grid settings-group-body illustration-preset-editor-body"
@@ -725,11 +722,7 @@ export function IllustrationPresetSettings({
           작업실 기본이었다면 기본 프리셋으로 돌아가요. 진행 중인 작업과 기존 삽화는 유지돼요.
         </p>
         <p>다음 생성은 대체 프리셋의 생성기를 사용해요. 해당 생성기의 연결·모델을 확인해 주세요.</p>
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button autoFocus disabled={busy} onClick={() => setDeleting(null)}>
             취소
