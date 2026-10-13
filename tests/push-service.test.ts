@@ -452,6 +452,36 @@ test('public HTTP routes reuse authenticated sessions and maintenance; private k
   expect(app.store.db.prepare('SELECT count(*) AS n FROM push_subscriptions').get()!.n).toBe(0);
 });
 
+test('inherited global translation default queues only opted-in completions and freezes for in-flight runs', () => {
+  const f = fixture();
+  const inherited = createFixtureChat(f.store, 'Inherits translation');
+  const optedOut = createFixtureChat(f.store, 'Explicitly disabled');
+  f.store.settings(optedOut.id, optedOut.settingsRevision, {
+    ...optedOut.settings,
+    autoTranslate: false,
+  });
+  f.store.db
+    .prepare('INSERT INTO app_metadata(key,value) VALUES(?,?)')
+    .run('auto-translation-defaults', JSON.stringify({ revision: 1, autoTranslate: true }));
+  const translatedSource = complete(f.store, inherited.id);
+  const job = f.store.detail(inherited.id).jobs.find((item) => item.kind === 'translation');
+  expect(job?.input).toMatchObject({ autoTranslateRunId: translatedSource.runId });
+  expect(job?.status).toBe('queued');
+  const originalOnly = complete(f.store, optedOut.id);
+  expect(f.store.detail(optedOut.id).jobs.filter((item) => item.kind === 'translation')).toEqual(
+    []
+  );
+  expect(f.store.run(originalOnly.runId).snapshot.settings.autoTranslate).toBe(false);
+  f.store.db
+    .prepare('UPDATE app_metadata SET value=? WHERE key=?')
+    .run(JSON.stringify({ revision: 2, autoTranslate: false }), 'auto-translation-defaults');
+  expect(f.store.run(translatedSource.runId).snapshot.settings.autoTranslate).toBe(true);
+  const later = createFixtureChat(f.store, 'Global option switched off');
+  const newSource = complete(f.store, later.id);
+  expect(f.store.run(newSource.runId).snapshot.settings.autoTranslate).toBe(false);
+  expect(f.store.detail(later.id).jobs.filter((item) => item.kind === 'translation')).toEqual([]);
+});
+
 test('automatic translation reserves with the source, delays notification and sends one translated result with chat title', async () => {
   const f = fixture();
   enable(f);
