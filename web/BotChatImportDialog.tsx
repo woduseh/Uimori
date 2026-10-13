@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
 import { ChevronRight, Database, FileText } from 'lucide-react';
 import { validateChatTranscript, type ChatTranscript } from '../core/chat-transcript.js';
@@ -192,15 +193,14 @@ export function BotChatImportDialog({
                   </button>
                 </div>
               )}
-              {busy && !selection && !message && (
-                <LoadingState compact label="파일을 읽고 있어요…" />
+              {busy && (
+                <LoadingState
+                  compact
+                  label={selection ? '채팅 본문을 가져오는 중이에요…' : '파일을 읽고 있어요…'}
+                />
               )}
-              {message && <p role="status">{message}</p>}
-              {error && (
-                <p role="alert" className="error">
-                  {error}
-                </p>
-              )}
+              {message && <NoticeBanner>{message}</NoticeBanner>}
+              {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
             </section>
           )}
         </>

@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
+import type { ChatDetail, Job, ReaderDetail } from '../core/types.js';
+import type { ResponseStreamPage } from '../core/response-stream.js';
 import { postFixtureChat } from './fixtures/chat.js';
+import { nativeProse } from './fixtures/native-message.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import { navigationAction, visibleNavigation } from './ui-navigation.js';
 
@@ -432,6 +435,311 @@ test('READERREC rejudgment survives an uncertain response and reload without sen
     await expect(page.getByTestId('source')).toHaveCount(1);
     expect(writerRequests).toBe(0);
   } finally {
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
+test('NOTICELOAD response waits are centered and keep streamed text until the saved source arrives', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, detail } = await createReadingChat(request, 'Response waiting feedback', 1);
+  const run = detail.runs[0];
+  const clockStart = Date.now();
+  await page.clock.install({ time: clockStart });
+  await page.clock.pauseAt(clockStart + 1000);
+  await page.addInitScript(() => {
+    localStorage.setItem('uimori:reading-language', 'original');
+    if (!localStorage.getItem('uimori:response-display'))
+      localStorage.setItem('uimori:response-display', 'complete');
+    class ControlledEvents {
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      listener = (event: Event) =>
+        this.onmessage?.(
+          new MessageEvent('message', { data: JSON.stringify((event as CustomEvent).detail) })
+        );
+      constructor() {
+        addEventListener('test-reader-event', this.listener);
+        queueMicrotask(() => this.onopen?.(new Event('open')));
+      }
+      close() {
+        removeEventListener('test-reader-event', this.listener);
+      }
+    }
+    Object.defineProperty(window, 'EventSource', { value: ControlledEvents });
+  });
+  let canonical = false,
+    publicText = false,
+    completed = false,
+    streamReads = 0,
+    cursor = 1000000;
+  const text = '먼저 도착한 응답은 저장본을 기다리는 동안에도 남아요.';
+  // The source is really saved. Only its delayed reader projection and public stream are controlled.
+  await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.delete('since');
+    const response = await route.fetch({ url: url.toString() });
+    const body: ReaderDetail = await response.json();
+    if (!canonical) {
+      body.sources = [];
+      body.jobs = [];
+      body.runs = [
+        { ...body.runs[0], status: completed ? 'completed' : 'running', sourceRevision: null },
+      ];
+      Object.assign(body.reader, {
+        pendingRunIds: [run.id],
+        order: [],
+        navigation: [],
+        activity: [],
+        responseActivity: [],
+        total: 0,
+        latest: null,
+        activeJobs: completed ? 0 : 1,
+      });
+    }
+    body.reader.cursor = cursor;
+    await route.fulfill({ response, json: body });
+  });
+  await page.route(`**/api/response-streams/main/${run.id}?*`, async (route) => {
+    streamReads++;
+    const after = Number(new URL(route.request().url()).searchParams.get('after') ?? 0);
+    await route.fulfill({
+      json: {
+        taskKind: 'main',
+        taskId: run.id,
+        status: completed ? 'completed' : 'running',
+        cursor: publicText ? 1 : 0,
+        hasMore: false,
+        chunks:
+          publicText && after === 0
+            ? [{ seq: 1, segment: 0, attemptId: 'public', text, offset: text.length }]
+            : [],
+      } satisfies ResponseStreamPage,
+    });
+  });
+  const refresh = async () => {
+    cursor++;
+    const response = page.waitForResponse(
+      (item) => item.url().includes(`/chats/${chat.id}/reader?`) && item.ok()
+    );
+    await page.evaluate(
+      (seq) =>
+        dispatchEvent(
+          new CustomEvent('test-reader-event', { detail: { kind: 'run.completed', seq } })
+        ),
+      cursor
+    );
+    await page.clock.runFor(150);
+    await response;
+  };
+  try {
+    for (const mode of ['complete', 'stream']) {
+      canonical = publicText = completed = false;
+      const readsBefore = streamReads;
+      if (mode === 'stream')
+        await page.evaluate((mode) => localStorage.setItem('uimori:response-display', mode), mode);
+      await page.goto(`/?chat=${chat.id}`);
+      const pending = page.getByTestId('pending-run');
+      await expect(pending).toBeVisible();
+      const waiting = pending.locator('.loading-state').getByRole('status');
+      await page.clock.runFor(50);
+      await expect(waiting).toHaveCount(0);
+      await page.clock.runFor(200);
+      await expect(waiting).toBeVisible();
+      const spinner = waiting.locator('svg');
+      await expect(spinner).toHaveCSS('animation-name', 'activity-spin');
+      const hostBounds = await pending.locator('.loading-state').boundingBox();
+      const spinnerBounds = await spinner.boundingBox();
+      expect(
+        Math.abs(
+          spinnerBounds!.x + spinnerBounds!.width / 2 - (hostBounds!.x + hostBounds!.width / 2)
+        )
+      ).toBeLessThan(2);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await expect(spinner).toHaveCSS('animation-name', 'none');
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      if (mode === 'stream') {
+        await page.screenshot({ path: info.outputPath('reader-response-waiting.png') });
+        publicText = true;
+        await page.clock.runFor(350);
+        await expect(pending.locator('.streaming-text')).toHaveText(text);
+        await expect(waiting).toHaveCount(0);
+        completed = true;
+        await page.clock.runFor(350);
+        await expect(pending.locator('.streaming-response')).toHaveAttribute(
+          'data-status',
+          'completed'
+        );
+        await expect(pending.locator('.streaming-text')).toHaveText(text);
+        await expect(waiting).toHaveCount(0);
+      } else {
+        expect(streamReads).toBe(readsBefore);
+        completed = true;
+        await refresh();
+        await expect(waiting).toBeVisible();
+      }
+      canonical = true;
+      await refresh();
+      await expect(pending).toHaveCount(0);
+      await expect(nativeProse(page.getByTestId('source'))).toContainText(
+        'Scene 1. Mira carried a purple umbrella.'
+      );
+      await expect(page.getByTestId('source').locator('.loading-state')).toHaveCount(0);
+    }
+    const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
+    expect(after.sources).toEqual(detail.sources);
+    expect(after.runs).toEqual(detail.runs);
+  } finally {
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
+test('NOTICELOAD translation admission and active jobs wait centrally while failure preserves source and retry', async ({
+  page,
+  request,
+}, info) => {
+  const owner = await (
+    await postFixtureChat(request, { data: { title: 'Translation waiting source' } })
+  ).json();
+  const transcript = await (await request.get(`/api/chats/${owner.id}/transcript`)).json();
+  const text = 'Saved original text remains available during translation recovery.';
+  transcript.entries = [{ request: 'Translation waiting fixture', text, translation: null }];
+  const imported = await request.post('/api/chats/import-transcript', {
+    data: { transcript, idempotencyKey: `translation-wait-${owner.id}` },
+  });
+  expect(imported.ok()).toBe(true);
+  const chat = (await imported.json()).chat;
+  const original: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
+  const source = original.sources[0];
+  let job: Job | null = null,
+    submissions = 0,
+    cursor = 1000000;
+  let release = () => {};
+  const admission = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.addInitScript(() => {
+    class ControlledEvents {
+      onopen: ((event: Event) => void) | null = null;
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      listener = (event: Event) =>
+        this.onmessage?.(
+          new MessageEvent('message', { data: JSON.stringify((event as CustomEvent).detail) })
+        );
+      constructor() {
+        addEventListener('test-reader-event', this.listener);
+        queueMicrotask(() => this.onopen?.(new Event('open')));
+      }
+      close() {
+        removeEventListener('test-reader-event', this.listener);
+      }
+    }
+    Object.defineProperty(window, 'EventSource', { value: ControlledEvents });
+  });
+  await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+    const url = new URL(route.request().url());
+    url.searchParams.delete('since');
+    const response = await route.fetch({ url: url.toString() });
+    const body: ReaderDetail = await response.json();
+    body.jobs = job ? [job] : [];
+    body.reader.activeJobs = job && ['queued', 'running'].includes(job.status) ? 1 : 0;
+    body.reader.cursor = cursor;
+    await route.fulfill({ response, json: body });
+  });
+  await page.route(`**/api/sources/${source.id}/translation`, async (route) => {
+    expect(route.request().postDataJSON()).toEqual({});
+    submissions++;
+    if (submissions === 1) await admission;
+    job = {
+      id: `synthetic-waiting-translation-${submissions}`,
+      chatId: chat.id,
+      sourceRevision: source.id,
+      sourceHash: source.hash,
+      kind: 'translation',
+      status: 'queued',
+      attempt: 1,
+      revision: submissions,
+      result: null,
+      error: null,
+    };
+    await route.fulfill({ json: job });
+  });
+  try {
+    await page.goto(`/?chat=${chat.id}`);
+    const scene = page.getByTestId('source');
+    const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+    await draft.fill('번역 대기와 재시도 뒤에도 남을 초안');
+    await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+    const waiting = scene.locator('.translation-placeholder .loading-state').getByRole('status');
+    await expect(waiting).toBeVisible();
+    await expect(waiting.locator('svg')).toBeVisible();
+    await expect(waiting).toHaveCSS('justify-items', 'center');
+    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toBeDisabled();
+    expect(submissions).toBe(1);
+    release();
+    await expect.poll(() => job?.status).toBe('queued');
+    await expect(waiting).toBeVisible();
+    await scene.getByRole('button', { name: '원문부터 읽기', exact: true }).click();
+    await expect(nativeProse(scene)).toContainText(text);
+    await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await expect(waiting).toBeVisible();
+    expect(submissions).toBe(1);
+    job = { ...job!, status: 'running' };
+    await page.reload();
+    // Without a completed translation, reopening starts with the saved original.
+    await expect(nativeProse(scene)).toContainText(text);
+    await expect(waiting).toHaveCount(0);
+    await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await expect(waiting).toBeVisible();
+    expect(submissions).toBe(1);
+    await page.screenshot({ path: info.outputPath('reader-translation-waiting.png') });
+    job = { ...job, status: 'failed', error: 'AUXILIARY_PROVIDER_TIMEOUT' };
+    // Deliver failure while the translation view is open; reopening a failed view
+    // instead starts with the original, and its translation button admits a new retry.
+    const failedRead = page.waitForResponse(
+      (item) => item.url().includes(`/chats/${chat.id}/reader?`) && item.ok()
+    );
+    await page.evaluate(
+      (seq) =>
+        dispatchEvent(
+          new CustomEvent('test-reader-event', { detail: { kind: 'job.failed', seq } })
+        ),
+      ++cursor
+    );
+    await failedRead;
+    await expect(waiting).toHaveCount(0);
+    const retry = scene.getByRole('button', { name: '번역 다시 시도', exact: true });
+    await expect(retry).toBeVisible();
+    await expect(scene.locator('.translation-placeholder')).toContainText('원문은 보존돼요.');
+    await page.screenshot({ path: info.outputPath('reader-translation-failed.png') });
+    await retry.click();
+    await expect.poll(() => submissions).toBe(2);
+    await expect(waiting).toBeVisible();
+    job = {
+      ...job!,
+      status: 'completed',
+      error: null,
+      result: {
+        mock: false,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        text: '복구된 번역이에요.',
+      },
+    };
+    await page.reload();
+    await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await expect(scene.getByTestId('translation-text')).toContainText('복구된 번역이에요.');
+    await expect(waiting).toHaveCount(0);
+    await expect(retry).toHaveCount(0);
+    expect(submissions).toBe(2);
+    await expect(draft).toHaveValue('번역 대기와 재시도 뒤에도 남을 초안');
+    const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
+    expect(after.sources).toEqual(original.sources);
+    expect(after.runs).toEqual(original.runs);
+    expect(after.jobs).toEqual(original.jobs);
+  } finally {
+    release();
     await page.unrouteAll({ behavior: 'wait' });
   }
 });

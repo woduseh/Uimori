@@ -752,6 +752,7 @@ for (const kind of ['bot', 'persona'] as const) {
       });
     });
     try {
+      await page.clock.install();
       const savedResponse = page.waitForResponse(
         (response) =>
           response.request().method() === 'POST' &&
@@ -767,10 +768,17 @@ for (const kind of ['bot', 'persona'] as const) {
       const saved = await (await request.get(`/api/content/${content.id}`)).json();
       expect(saved.title).toBe(updated);
       expect(saved.revision).toBe(content.revision + 1);
+      const completion = page.locator('.transient-notice').filter({
+        hasText: `${updated} 자료를 저장했어요.`,
+      });
+      await expect(completion).toBeVisible();
+      // Completion expires independently; a failed follow-up read still needs review.
       release();
-      await expect(
-        editor.getByText(`${updated} 저장됨 · 서재 목록을 갱신하지 못했어요.`, { exact: true })
-      ).toBeVisible();
+      const warning = editor.getByRole('status', { name: '저장 후 확인할 사항', exact: true });
+      await expect(warning).toContainText(`${updated} 저장됨 · 서재 목록을 갱신하지 못했어요.`);
+      await page.clock.fastForward(4500);
+      await expect(completion).toHaveCount(0);
+      await expect(warning).toBeVisible();
       await expect(
         editor.getByRole('button', { name: '변경사항 저장', exact: true })
       ).toBeEnabled();

@@ -130,6 +130,8 @@ for (const width of [360, 412, 1440]) {
         await mobileSummary.click();
         await mobileLanguage.getByRole('button', { name: label, exact: true }).click();
         await expect(mobileSummary).toHaveText(code.toUpperCase());
+        await expect(mobileLanguage).not.toHaveAttribute('open');
+        await expect(mobileSummary).toBeFocused();
       } else {
         await language.selectOption(code);
         await expect(language).toHaveValue(code);
@@ -138,6 +140,14 @@ for (const width of [360, 412, 1440]) {
     if (width <= 600) {
       await expect(language).toBeHidden();
       await expect(mobileSummary).toHaveText('EN');
+      await mobileSummary.click();
+      await expect(mobileLanguage).toHaveAttribute('open', '');
+      await composer(page).click();
+      await expect(mobileLanguage).not.toHaveAttribute('open');
+      await mobileSummary.click();
+      await mobileSummary.press('Escape');
+      await expect(mobileLanguage).not.toHaveAttribute('open');
+      await expect(mobileSummary).toBeFocused();
     } else {
       await expect(language).toHaveValue('en');
       await expect(mobileLanguage).toBeHidden();

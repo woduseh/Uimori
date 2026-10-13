@@ -463,6 +463,68 @@ async function open(page: Page) {
 }
 
 for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
+  test(`HELPUI15 initial loading and the empty conversation center within the reading area ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const chat = await create(request),
+      state = await harness(page);
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let waiting = true;
+    await page.route('**/api/helper/conversations/*/view', async (route) => {
+      if (waiting) await held;
+      await route.fallback();
+    });
+    try {
+      await page.goto(`/?chat=${chat.id}`);
+      await openHelper(page);
+      const panel = page.locator('#helper-panel'),
+        list = panel.locator('.helper-messages'),
+        loading = panel.getByRole('status').filter({ hasText: '대화를 불러오는 중이에요…' });
+      await expect(loading).toBeVisible();
+      const loadingBox = (await loading.boundingBox())!,
+        listBox = (await list.boundingBox())!;
+      expect(
+        Math.abs(loadingBox.x + loadingBox.width / 2 - listBox.x - listBox.width / 2)
+      ).toBeLessThan(12);
+      expect(
+        Math.abs(loadingBox.y + loadingBox.height / 2 - listBox.y - listBox.height / 2)
+      ).toBeLessThan(12);
+      await page.screenshot({ path: info.outputPath(`helper-initial-loading-${width}.png`) });
+      waiting = false;
+      release();
+      await expect(loading).toHaveCount(0);
+      const empty = panel.getByText(
+        '작품에 대해 묻거나, 설정을 다듬거나, 가정 장면을 부탁해 보세요.',
+        { exact: true }
+      );
+      await expect(empty).toBeVisible();
+      const emptyBox = (await empty.boundingBox())!;
+      expect(
+        Math.abs(emptyBox.x + emptyBox.width / 2 - listBox.x - listBox.width / 2)
+      ).toBeLessThan(12);
+      expect(
+        Math.abs(emptyBox.y + emptyBox.height / 2 - listBox.y - listBox.height / 2)
+      ).toBeLessThan(12);
+      await page.screenshot({ path: info.outputPath(`helper-empty-centered-${width}.png`) });
+      await panel.getByLabel('도우미에게 요청').fill('첫 대화 요청');
+      await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
+      await expect.poll(() => state.posts.length).toBe(1);
+      await expect(empty).toHaveCount(0);
+      const message = panel.locator('.helper-message').first();
+      await expect(message).toBeVisible();
+      const messageBox = (await message.boundingBox())!;
+      expect(messageBox.y - listBox.y).toBeLessThan(32);
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+  });
+}
+
+for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
   test(`HELPSTEER adds instructions to the active task and keeps ordinary requests queued ${width}`, async ({
     page,
     request,

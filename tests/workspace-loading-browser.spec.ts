@@ -83,3 +83,51 @@ for (const width of [412, 1440]) {
     });
   }
 }
+
+test('WORKLOAD every library-dependent settings page shows the same read failure and explicit retry recovers', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 412, height: 900 });
+  let failing = true;
+  await page.route('**/api/library?view=summary', async (route) => {
+    if (!failing) return route.continue();
+    await route.fulfill({
+      status: 503,
+      json: { error: 'Synthetic settings library read failure' },
+    });
+  });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  const settings = page.getByRole('dialog', { name: '설정', exact: true });
+  for (const [section, errorLabel] of [
+    ['역할별 모델', '역할별 모델 설정을 불러오지 못했어요.'],
+    ['현재 프롬프트', '현재 프롬프트를 불러오지 못했어요.'],
+    ['삽화', '삽화 설정을 불러오지 못했어요.'],
+    ['프로바이더·모델', '프로바이더 목록을 불러오지 못했어요.'],
+  ]) {
+    await selectSettingsSection(page, section);
+    await expect(settings.getByRole('alert').filter({ hasText: errorLabel })).toBeVisible();
+    await expect(
+      settings.getByRole('button', { name: '다시 불러오기', exact: true })
+    ).toBeEnabled();
+  }
+  failing = false;
+  await settings.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect(settings.getByTestId('connection-editor')).toBeVisible();
+  for (const section of ['역할별 모델', '현재 프롬프트', '삽화']) {
+    await selectSettingsSection(page, section);
+    await expect(settings.locator('.loading-state [role="alert"]')).toHaveCount(0);
+    if (section === '역할별 모델')
+      await expect(
+        settings.getByRole('region', { name: '역할별 모델 설정', exact: true })
+      ).toBeVisible();
+    if (section === '현재 프롬프트')
+      await expect(
+        settings.getByRole('region', { name: '현재 프롬프트 설정', exact: true })
+      ).toBeVisible();
+    if (section === '삽화')
+      await expect(
+        settings.getByRole('region', { name: '삽화 프리셋', exact: true })
+      ).toBeVisible();
+  }
+});

@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/content-limits.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
@@ -207,7 +208,11 @@ export function ContextPanel({
     return saveSummary();
   });
   return (
-    <section className="context-panel" aria-label="컨텍스트 관리" data-testid="context-panel">
+    <section
+      className={`context-panel${mode === 'compact' ? ' context-panel-compact' : ''}`}
+      aria-label="컨텍스트 관리"
+      data-testid="context-panel"
+    >
       <div className="context-heading">
         <h4>컨텍스트 요약</h4>
         <button
@@ -223,11 +228,7 @@ export function ContextPanel({
         </button>
       </div>
       <div className="context-content">
-        {detail && error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+        {detail && error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <TransientNotice message={message} />
         {!detail ? (
           <LoadingState
@@ -245,10 +246,10 @@ export function ContextPanel({
             {summary ? (
               <div className="context-summary">
                 {!detail.usable && (
-                  <p role="status">
+                  <NoticeBanner>
                     이전 요약을 보존하고 있어요.{' '}
                     {detail.invalidReason ?? '현재 요청에는 원문을 사용해요.'}
-                  </p>
+                  </NoticeBanner>
                 )}
                 <small>
                   {origins[detail.checkpoint!.origin]} · 요약한 장면{' '}
@@ -262,9 +263,10 @@ export function ContextPanel({
               <p className="muted">아직 저장된 요약이 없어요. 원문을 그대로 사용해요.</p>
             )}
             {!current && (
-              <p role="status">
-                대상 장면의 최신 컨텍스트를 확인하고 있어요. 작성 중인 초안은 유지해요.
-              </p>
+              <LoadingState
+                compact
+                label="대상 장면의 최신 컨텍스트를 확인하고 있어요. 작성 중인 초안은 유지해요."
+              />
             )}
             <details className="context-priorities">
               <summary>이번 압축에서 우선할 내용 · 선택</summary>
@@ -334,12 +336,11 @@ export function ContextPanel({
               )}
             </div>
             {working ? (
-              <p role="status">
-                {working.status === 'queued'
-                  ? '컨텍스트 압축을 기다리고 있어요.'
-                  : '컨텍스트를 정리하고 있어요.'}{' '}
-                이 화면을 닫아도 작업은 계속돼요.
-              </p>
+              <LoadingState
+                key={working.id}
+                compact
+                label={`${working.status === 'queued' ? '컨텍스트 압축을 기다리고 있어요.' : '컨텍스트를 정리하고 있어요.'} 이 화면을 닫아도 작업은 계속돼요.`}
+              />
             ) : (
               latest && (
                 <div className="context-job-result" role="status">
@@ -370,23 +371,25 @@ export function ContextPanel({
                 }}
               >
                 {conflict && (
-                  <div className="context-conflict" role="alert">
-                    <p>
-                      저장된 요약이나 대상 장면이 바뀌었어요. 위의 최신 요약과 입력한 내용을 비교해
-                      주세요.
-                    </p>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy || !current}
-                      onClick={() => {
-                        setDraft({ ...draft, revision: detail.activeRevision, headRevision });
-                        setError('');
-                      }}
-                    >
-                      최신 요약을 확인했어요 · 내 초안 유지
-                    </button>
-                  </div>
+                  <NoticeBanner
+                    tone="error"
+                    actions={
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy || !current}
+                        onClick={() => {
+                          setDraft({ ...draft, revision: detail.activeRevision, headRevision });
+                          setError('');
+                        }}
+                      >
+                        최신 요약을 확인했어요 · 내 초안 유지
+                      </button>
+                    }
+                  >
+                    저장된 요약이나 대상 장면이 바뀌었어요. 위의 최신 요약과 입력한 내용을 비교해
+                    주세요.
+                  </NoticeBanner>
                 )}
                 <label>
                   편집할 컨텍스트 요약

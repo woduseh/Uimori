@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import {
   api,
   ApiError,
@@ -65,12 +67,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
       <a className="wordmark" href="/">
         Uimori
       </a>
-      <h1>{session?.required ? '개인 작업실에 연결' : '작업실 연결 확인 중'}</h1>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
+      {session?.required && <h1>개인 작업실에 연결</h1>}
+      {!session && !error && <LoadingState compact label="작업실 연결을 확인하고 있어요…" />}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       {session?.required && (
         <form
           className="editor-grid"
@@ -115,7 +114,7 @@ export function SessionGate({ children }: { children: ReactNode }) {
           <small>토큰은 이 입력창에서만 사용하고 브라우저 저장소에 보관하지 않아요.</small>
         </form>
       )}
-      {!session && (
+      {!session && !!error && (
         <button type="button" className="secondary" onClick={() => location.reload()}>
           다시 연결
         </button>

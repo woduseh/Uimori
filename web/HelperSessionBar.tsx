@@ -4,6 +4,7 @@ import type { HelperConversation, HelperConversationDeletion } from '../core/hel
 import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { IconButton } from './IconButton.js';
 import { CheckIcon, CloseIcon, DeleteIcon, EditIcon, StopIcon } from './ui-icons.js';
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
@@ -151,7 +152,7 @@ export function HelperSessionBar(props: Props) {
           {props.unread.length > 0 && <strong>새 소식 {props.unread.length}</strong>}
         </div>
       </div>
-      {cleanupFailure && <p role="alert">{cleanupFailure}</p>}
+      {cleanupFailure && <NoticeBanner tone="error">{cleanupFailure}</NoticeBanner>}
       <Dialog
         open={!!rename}
         title="도우미 세션 이름 변경"
@@ -200,7 +201,7 @@ export function HelperSessionBar(props: Props) {
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          {error && <p role="alert">{error}</p>}
+          {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
           <div className="form-actions">
             <button
               type="button"
@@ -221,6 +222,7 @@ export function HelperSessionBar(props: Props) {
       <Dialog
         open={!!deleting}
         title="도우미 세션 삭제"
+        variant="confirmation"
         role="alertdialog"
         className="delete-dialog"
         onClose={() => {
@@ -237,7 +239,7 @@ export function HelperSessionBar(props: Props) {
             {impact.unsettledAttempts}개{impact.workerActive ? ' · 작업 정리 중' : ''}
           </p>
         )}
-        {error && <p role="alert">{error}</p>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"

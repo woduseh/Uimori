@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { NoticeBanner } from './NoticeBanner.js';
 import { CredentialFileIcon, UploadIcon } from './ui-icons.js';
 import { api, ApiError } from './api.js';
 
@@ -114,11 +115,7 @@ export function VertexCredentialUpload({
           <small>{registered.clientEmail}</small>
         </p>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <small>
         키 파일은 서버에 보관돼요. 등록만으로 Google에 요청하지 않으며, 저장된 키 원문은 다시
         표시하거나 일반 백업에 포함하지 않아요.

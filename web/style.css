@@ -783,8 +783,15 @@ input[type="checkbox"] {
   color: var(--muted);
   font-size: 14px;
 }
-.translation-placeholder p {
+.translation-placeholder > p {
   margin-bottom: 12px;
+}
+.translation-placeholder.is-loading {
+  padding: 0;
+  border: 0;
+}
+.translation-placeholder.is-loading .form-actions {
+  justify-content: center;
 }
 .derived-summary {
   font-size: 11px;
@@ -1065,41 +1072,10 @@ input[type="checkbox"] {
 .run-outcome button {
   justify-self: start;
 }
-/* Running turn: three quiet placeholder lines where the prose will appear. */
-.turn-skeleton {
-  display: grid;
-  gap: 14px;
-  margin: 4px 0 8px;
-}
-.turn-skeleton > span {
-  display: block;
-  height: 14px;
-  border-radius: 7px;
-  background: linear-gradient(90deg, var(--surface) 25%, var(--hover) 50%, var(--surface) 75%);
-  background-size: 200% 100%;
-  animation: turn-shimmer 1.4s linear infinite;
-}
-.turn-skeleton > span:nth-child(1) {
-  width: 92%;
-}
-.turn-skeleton > span:nth-child(2) {
-  width: 80%;
-}
-.turn-skeleton > span:nth-child(3) {
-  width: 58%;
-}
-@keyframes turn-shimmer {
-  to {
-    background-position: -200% 0;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-fast: 0ms;
     --motion-panel: 0ms;
-  }
-  .turn-skeleton > span {
-    animation: none;
   }
 }
 /* Failed turn: one card in the prose position with the next actions. */
@@ -1371,7 +1347,7 @@ input[type="checkbox"] {
     font-size: 14px;
   }
   .header-title small {
-    font-size: 10px;
+    font-size: 12px;
   }
   .model-chip {
     min-height: var(--control-h);
@@ -1413,7 +1389,10 @@ input[type="checkbox"] {
     margin-bottom: var(--reading-paragraph-gap, 1.45em);
   }
   .composer-dock {
-    padding: 8px 11px max(7px, env(safe-area-inset-bottom));
+    padding: 8px 9px max(7px, env(safe-area-inset-bottom));
+  }
+  .composer-dock:has(.composer[hidden]) {
+    padding: 0;
   }
   .composer {
     padding: 3px 4px 3px 2px;
@@ -1427,12 +1406,16 @@ input[type="checkbox"] {
     padding: 11px 12px 6px;
   }
   .composer-status {
-    font-size: 10px;
+    font-size: 12px;
     margin-top: 4px;
   }
   .source + .source {
     margin-top: 22px;
     padding-top: 16px;
+  }
+  .segmented.compact button,
+  .turn-failure .form-actions button {
+    min-height: var(--control-h);
   }
   .app-dialog {
     --dialog-gap: 16px;

@@ -172,7 +172,8 @@
   border-left: 3px solid var(--accent);
   background: var(--accent-soft);
 }
-.risu-import-body.complete > :not(.risu-import-result):not([role="status"]):not(.error) {
+.risu-import-body.complete
+  > :not(.risu-import-result):not([role="status"]):not(.error):not(.loading-state) {
   display: none;
 }
 .risu-import-result > svg {

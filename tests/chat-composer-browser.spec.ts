@@ -4,6 +4,45 @@ import { postFixtureChat } from './fixtures/chat.js';
 import { openHelper } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 
+for (const width of DEFAULT_WIDTHS) {
+  test(`NOTICE composer menu actions share color and alignment at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const created = await postFixtureChat(request, { data: { title: '메뉴 안내 정렬 검사' } });
+    expect(created.ok()).toBe(true);
+    const chat = await created.json();
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    const input = page.getByRole('textbox', { name: '다음 장면 요청' });
+    await input.fill('메뉴를 열어도 보존할 초안');
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    const options = page.getByRole('button', { name: '창작 옵션', exact: true });
+    await expect(options).toBeVisible();
+    const reference = await options.evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        color: style.color,
+        fontSize: style.fontSize,
+        left: node.getBoundingClientRect().left,
+      };
+    });
+    for (const name of ['창작 옵션', '다음 요청 미리보기', '수동 컨텍스트 압축']) {
+      const button = page.getByRole('button', { name, exact: true });
+      await expect(button).toHaveCSS('color', reference.color);
+      await expect(button).toHaveCSS('font-size', reference.fontSize);
+      await expect(button).toHaveCSS('text-align', 'left');
+      await expect(button).toHaveCSS('justify-content', 'flex-start');
+      expect(Math.abs((await button.boundingBox())!.x - reference.left)).toBeLessThanOrEqual(1);
+    }
+    await page.screenshot({ path: info.outputPath(`composer-menu-${width}.png`) });
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();
+    await expect(input).toHaveValue('메뉴를 열어도 보존할 초안');
+    expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(0);
+  });
+}
+
 test('shared composer preserves Korean composition and Shift+Enter without sending', async ({
   page,
   request,

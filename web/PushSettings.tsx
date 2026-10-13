@@ -1,4 +1,5 @@
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './push-settings.css';
 import { useEffect, useState } from 'react';
 import { Bell, BellOff, RefreshCw, Send } from 'lucide-react';
@@ -256,18 +257,20 @@ export function PushSettings() {
           </div>
         </details>
       )}
-      {info?.device?.lastError && <p role="status">{info.device.lastError}</p>}
+      {info?.device?.lastError && <NoticeBanner tone="error">{info.device.lastError}</NoticeBanner>}
       <TransientNotice message={notice} />
-      {warning && <p role="status">{warning}</p>}
+      {warning && <NoticeBanner>{warning}</NoticeBanner>}
       {error && (
-        <div className="settings-service-error">
-          <p role="alert" className="error">
-            {error}
-          </p>
-          <button type="button" disabled={busy} onClick={recheck}>
-            <RefreshCw size={16} aria-hidden="true" /> 알림 연결 다시 확인
-          </button>
-        </div>
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button type="button" disabled={busy} onClick={recheck}>
+              <RefreshCw size={16} aria-hidden="true" /> 알림 연결 다시 확인
+            </button>
+          }
+        >
+          {error}
+        </NoticeBanner>
       )}
     </section>
   );

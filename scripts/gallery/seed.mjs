@@ -80,7 +80,6 @@ export async function seedGallery(baseUrl, { log = () => {} } = {}) {
   const quietChat = async (botId, title) => {
     const chat = await call('POST', '/api/chats', { botId, title });
     await call('PATCH', `/api/chats/${chat.id}/settings`, {
-      status: false,
       maxCalls: chat.settings.maxCalls,
       expectedSettingsRevision: chat.settingsRevision,
     });

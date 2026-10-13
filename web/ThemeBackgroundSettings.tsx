@@ -1,4 +1,5 @@
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import {
@@ -225,11 +226,7 @@ export function ThemeBackgroundSettings({
           />
         )}
       </div>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <TransientNotice message={notice} />
     </section>
   );

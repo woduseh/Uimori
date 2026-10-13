@@ -789,15 +789,8 @@ export function HelperPanel(props: Props) {
           )}
         </div>
       ))}
-      {task.status !== 'queued' && !answered.has(task.id) && (
+      {!answered.has(task.id) && (
         <div className="run-outcome">
-          {task.status === 'running' && (
-            <div className="turn-skeleton" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-            </div>
-          )}
           <ResponseDisplay
             mode={props.responseDisplay}
             taskKind="helper"
@@ -1098,7 +1091,10 @@ export function HelperPanel(props: Props) {
           }
         }}
       >
-        <div ref={content} className="helper-thread-content">
+        <div
+          ref={content}
+          className={`helper-thread-content${messages.length === 0 ? ' helper-thread-empty' : ''}`}
+        >
           {data.current?.hasOlderMessages && (
             <button
               type="button"

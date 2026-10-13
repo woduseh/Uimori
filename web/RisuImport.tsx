@@ -1,4 +1,6 @@
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { readLargeImportSource as readSource } from './import-source.js';
 import { useRef, useState } from 'react';
 import { RISU_IMPORT_MAX_BYTES, RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
@@ -432,7 +434,7 @@ export function RisuImport({
                 </label>
               )}
               {uncertain && (
-                <p role="status">
+                <NoticeBanner>
                   서버의 완료 여부를 확인하지 못했어요. 파일과 선택을 유지한 같은 요청으로 다시
                   확인하면{' '}
                   {preview.kind === 'module'
@@ -443,7 +445,7 @@ export function RisuImport({
                         ? '봇과 채팅이'
                         : '봇이'}{' '}
                   중복 생성되지 않아요. 이 창을 닫아도 요청은 유지돼요.
-                </p>
+                </NoticeBanner>
               )}
               {result ? (
                 <div className="risu-import-result">
@@ -491,17 +493,17 @@ export function RisuImport({
               )}
             </>
           )}
-          {busy && <p role="status">파일을 처리하고 있어요…</p>}
+          {busy && <LoadingState compact label="파일을 처리하고 있어요…" />}
           {preparing && (
             <button type="button" onClick={() => preparation.current?.abort()}>
               자료 확인 취소
             </button>
           )}
-          {notice && <p role="status">{notice}</p>}
+          {notice && <NoticeBanner>{notice}</NoticeBanner>}
           {error && (
-            <p className="error" role="alert">
+            <NoticeBanner className="error" tone="error">
               {error}
-            </p>
+            </NoticeBanner>
           )}
         </section>
       </Dialog>

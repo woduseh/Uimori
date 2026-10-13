@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './save-conflict-dialog.css';
 import './settings-layout.css';
 
@@ -67,11 +69,8 @@ export function SaveConflictDialog({
             : fields.content}
         </section>
       )}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {loading && <LoadingState compact label="저장본을 확인하고 있어요…" />}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <div className="form-actions">
         <button
           type="button"

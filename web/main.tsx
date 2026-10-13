@@ -60,6 +60,7 @@ import {
   BookOpen,
   ChevronDown,
   Download,
+  Eye,
   GitFork,
   ListTree,
   Maximize,
@@ -169,7 +170,6 @@ const SIDEBAR_WIDTHS = [SIDEBAR_WIDTH, 320, 400];
 const RAIL_WIDTH = 56;
 /* Below this the centre column stops being comfortable to read or edit in. */
 const MIN_CENTER_WIDTH = 768;
-const runActive = (status: string) => ['queued', 'running'].includes(status);
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
 function App() {
@@ -1417,13 +1417,6 @@ function App() {
                                 refresh={() => s.refresh(s.selected)}
                                 onError={s.setError}
                               />
-                              {runActive(run.status) && (
-                                <div className="turn-skeleton" aria-hidden="true">
-                                  <span />
-                                  <span />
-                                  <span />
-                                </div>
-                              )}
                               <ResponseDisplay
                                 mode={responseDisplay}
                                 taskKind="main"
@@ -1661,7 +1654,7 @@ function App() {
                         <button
                           ref={optionsButton}
                           type="button"
-                          className="creative-options-button"
+                          className="secondary creative-options-button"
                           aria-label="창작 옵션"
                           aria-expanded={optionsOpen}
                           aria-controls="chat-prompt-options"
@@ -1670,7 +1663,7 @@ function App() {
                             setWorkspacePanel((value) => (value === 'options' ? null : 'options'));
                           }}
                         >
-                          <SlidersHorizontal size={14} />
+                          <SlidersHorizontal size={18} aria-hidden="true" />
                           창작 옵션{optionsDirty && ' · 미적용'}
                         </button>
                       )}
@@ -1680,6 +1673,7 @@ function App() {
                         disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
                         onClick={() => setChatTool({ scope: s.viewKey, kind: 'preview' })}
                       >
+                        <Eye size={18} aria-hidden="true" />
                         다음 요청 미리보기
                       </button>
                       <button
@@ -1688,6 +1682,7 @@ function App() {
                         disabled={!s.detail?.chat.headRevision}
                         onClick={() => setChatTool({ scope: s.viewKey, kind: 'lore' })}
                       >
+                        <BookOpen size={18} aria-hidden="true" />
                         마지막 장면의 로어
                       </button>
                       <button
@@ -1696,6 +1691,7 @@ function App() {
                         disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
                         onClick={() => setChatTool({ scope: s.viewKey, kind: 'compact' })}
                       >
+                        <Minimize size={18} aria-hidden="true" />
                         수동 컨텍스트 압축
                       </button>
                       {s.library && (

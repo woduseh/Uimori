@@ -1,4 +1,5 @@
 import type { ReactNode, RefObject, Dispatch, SetStateAction } from 'react';
+import { NoticeBanner } from './NoticeBanner.js';
 import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
 import { modelHints } from '../core/model-hints.js';
 import { ProviderCatalogPicker } from './ProviderCatalogPicker.js';
@@ -91,9 +92,9 @@ export function ProviderModelForm({
         <p className="provider-draft-note full">설정을 검토한 뒤 새 프리셋으로 저장해요.</p>
       )}
       {conflict && (
-        <p className="error full" role="alert">
+        <NoticeBanner tone="error" className="full">
           다른 곳에서 모델이 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
-        </p>
+        </NoticeBanner>
       )}
       <div className="provider-model-tabs full" aria-label="모델 편집 항목">
         {(['basic', 'advanced'] as const).map((section, index) => (

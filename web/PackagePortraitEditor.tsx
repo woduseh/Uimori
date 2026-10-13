@@ -3,6 +3,8 @@ import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { Dialog } from './Dialog.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { maxPackageImages, uploadPackageImage } from './package-image-upload.js';
 
 /** Edits the current authoring draft; representative image changes are saved by the parent. */
@@ -182,7 +184,7 @@ export function PackagePortraitEditor({
         <small>PNG · JPEG · WebP · AVIF · GIF, 최대 64MiB · 자동 WebP 변환</small>
         {busy && (
           <div className="package-portrait-actions">
-            <span role="status">대표 이미지를 업로드하고 있어요…</span>
+            <LoadingState compact label="대표 이미지를 업로드하고 있어요…" />
             <button
               type="button"
               className="ghost"
@@ -199,12 +201,8 @@ export function PackagePortraitEditor({
             </button>
           </div>
         )}
-        {notice && <small role="status">{notice}</small>}
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
+        {notice && <NoticeBanner>{notice}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       </div>
       <Dialog open={open} title="대표 이미지 선택" onClose={() => setOpen(false)} scopeKey={scope}>
         <label>

@@ -37,6 +37,7 @@ import { themeTemplate, ThemeFrame } from './ThemeFrame.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { Dialog } from './Dialog.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import './themes.css';
 import './deletion.css';
@@ -343,9 +344,16 @@ export function ThemeSettings({
         </p>
       )}
       {state.error && (
-        <p className="error" role="alert">
-          {state.error} <button onClick={() => void state.refresh()}>다시 불러오기</button>
-        </p>
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button type="button" className="secondary" onClick={() => void state.refresh()}>
+              다시 불러오기
+            </button>
+          }
+        >
+          {state.error}
+        </NoticeBanner>
       )}
       <section className="theme-dimension" aria-labelledby="theme-layout-heading">
         <div className="theme-dimension-heading">
@@ -702,11 +710,7 @@ export function ThemeSettings({
           </div>
         </ThemeFrame>
       </details>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <TransientNotice message={notice} />
       {importNotice && <p role="status">{importNotice}</p>}
       <p className="theme-help">
@@ -716,6 +720,7 @@ export function ThemeSettings({
       <Dialog
         open={!!deleting}
         title="테마 삭제"
+        variant="confirmation"
         role="alertdialog"
         className="delete-dialog"
         onClose={() => {
@@ -726,11 +731,7 @@ export function ThemeSettings({
           {deleting?.title} 테마를 삭제할까요? 이 테마를 선택한 봇과 채팅은 상위 또는 기본 테마로
           돌아가요.
         </p>
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"

@@ -1,4 +1,6 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
+import { TransientNotice } from './TransientNotice.js';
 import { SaveIcon } from './ui-icons.js';
 import { RisuNativeFields } from './RisuNativeFields.js';
 import { RisuExportButton } from './RisuExportButton.js';
@@ -19,7 +21,15 @@ import {
 } from './resource-editor.js';
 import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
-import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
@@ -1258,6 +1268,7 @@ function ContentEditor({
   const [placing, setPlacing] = useState(false);
   const busy = state.saving || placing;
   const [saved, setSaved] = useState('');
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
   const [error, setError] = useState('');
   const nativeDraftDirty = state.local.unappliedFields.length > 0;
   const [portraitBusy, setPortraitBusy] = useState(false);
@@ -1269,6 +1280,26 @@ function ContentEditor({
     []
   );
   const editorUnavailable = busy || !state.ready;
+  const editorHeading = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!state.ready) return;
+    const heading = editorHeading.current;
+    const editor = heading?.parentElement;
+    if (!heading || !editor) return;
+    // Wrapped actions can change the sticky header's height without changing the viewport.
+    const measure = () =>
+      editor.style.setProperty(
+        '--content-editor-heading-h',
+        `${heading.getBoundingClientRect().height}px`
+      );
+    const observer = new ResizeObserver(measure);
+    observer.observe(heading);
+    measure();
+    return () => {
+      observer.disconnect();
+      editor.style.removeProperty('--content-editor-heading-h');
+    };
+  }, [state.ready]);
   useEffect(() => {
     onDirtyChange(dirty || busy || portraitBusy);
   }, [dirty, busy, portraitBusy, onDirtyChange]);
@@ -1284,6 +1315,7 @@ function ContentEditor({
     const version = ++saveVersion.current;
     onError('');
     setSaved('');
+    setSaveWarnings([]);
     setError('');
     try {
       const copying = !!copyKind;
@@ -1300,13 +1332,16 @@ function ContentEditor({
         package: pkg,
       };
       const item = (await session.save(model, { copy: copying })).saved as Content;
-      setSaved(item.title + ' 저장됨 · 다음 실행부터 사용해요.');
+      setSaved(item.title + ' 자료를 저장했어요. 다음 실행부터 사용해요.');
       if (!selected || copying) {
         setPlacing(true);
         try {
           await onCreated?.(item);
         } catch {
-          setSaved(item.title + ' 저장됨 · 서재의 분류 반영을 확인해 주세요.');
+          setSaveWarnings((warnings) => [
+            ...warnings,
+            item.title + ' 저장됨 · 서재의 분류 반영을 확인해 주세요.',
+          ]);
         }
       }
       // The durable save is complete. A list refresh must not keep the editor locked
@@ -1315,7 +1350,10 @@ function ContentEditor({
         .then(reload)
         .catch(() => {
           if (saveVersion.current === version)
-            setSaved(item.title + ' 저장됨 · 서재 목록을 갱신하지 못했어요.');
+            setSaveWarnings((warnings) => [
+              ...warnings,
+              item.title + ' 저장됨 · 서재 목록을 갱신하지 못했어요.',
+            ]);
         });
       return !session.snapshot().dirty;
     } catch (caught) {
@@ -1337,7 +1375,7 @@ function ContentEditor({
         aria-label="자료 상세"
         aria-busy={editorUnavailable}
       >
-        <div className="library-detail-heading">
+        <div ref={editorHeading} className="library-detail-heading">
           {headerLeading}
           <IconButton
             className="secondary"
@@ -1445,9 +1483,15 @@ function ContentEditor({
                 {selected.kind === 'bot' ? '채팅 시작' : '이 자료를 봇으로 시작'}
               </button>
             )}
-
-            <span role="status">{saved}</span>
           </div>
+          <TransientNotice message={saved} />
+          {!!saveWarnings.length && (
+            <NoticeBanner className="full" label="저장 후 확인할 사항">
+              {saveWarnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </NoticeBanner>
+          )}
         </form>
       </section>
     </ResourceEditorProvider>

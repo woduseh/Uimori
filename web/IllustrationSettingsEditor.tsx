@@ -1,5 +1,6 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { IllustrationPresetSettings } from './IllustrationPresetSettings.js';
 import type {
   IllustrationPresetScope,
@@ -550,11 +551,7 @@ function IllustrationEnvironmentEditor({
         }}
       >
         <p>저장된 설정을 불러오면 현재 초안이 사라져요.</p>
-        {loadError && (
-          <p role="alert" className="error">
-            {loadError}
-          </p>
-        )}
+        {loadError && <NoticeBanner tone="error">{loadError}</NoticeBanner>}
         <DraftDiscardActions
           open={confirmReload}
           disabled={busy}
@@ -564,14 +561,14 @@ function IllustrationEnvironmentEditor({
         />
       </Dialog>
       {conflict && dirty && (
-        <p role="alert">
+        <NoticeBanner tone="error">
           다른 곳에서 삽화 설정이 바뀌었어요. 초안은 유지했어요. 최신 설정을 불러온 뒤 다시 적용해
           주세요.
-        </p>
+        </NoticeBanner>
       )}
-      {saveError && <p role="alert">{saveError} 초안은 유지했어요.</p>}
+      {saveError && <NoticeBanner tone="error">{saveError} 초안은 유지했어요.</NoticeBanner>}
       <TransientNotice message={message} />
-      {loadError && <p role="status">{loadError}</p>}
+      {loadError && !confirmReload && <NoticeBanner tone="error">{loadError}</NoticeBanner>}
     </section>
   );
 }

@@ -135,7 +135,7 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
   await title.click();
   await expect(title).toBeChecked();
   await panel.getByRole('button', { name: '테스트 알림 보내기', exact: true }).click();
-  await expect(panel).toContainText('발송 대기열');
+  await expect(page.locator('.transient-notice[role="status"]')).toContainText('발송 대기열');
   expect(testCalls).toBe(1);
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -191,7 +191,7 @@ test('PWUI07 a worker notification focuses a semantic scene without reloading; a
       representation: 'translation',
     }
   );
-  const banner = page.getByRole('complementary', { name: '알림의 장면 이동', exact: true });
+  const banner = page.getByRole('status', { name: '알림의 장면 이동', exact: true });
   await expect(banner).toBeVisible();
   await expect(banner.getByRole('button', { name: '알림으로 이동', exact: true })).toBeDisabled();
   expect(page.url()).toBe(before);

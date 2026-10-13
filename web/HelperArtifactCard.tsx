@@ -1,5 +1,6 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef, useState } from 'react';
 import { Copy } from 'lucide-react';
@@ -184,7 +185,7 @@ export function HelperArtifactCard({
           {artifact?.origin === 'edit' ? '직접 편집' : '생성한 장면'} · 본편과 별도
         </small>
       </header>
-      {artifact && error && <p role="alert">{error}</p>}
+      {artifact && error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       <TransientNotice message={message} />
       {artifact ? (
         <>

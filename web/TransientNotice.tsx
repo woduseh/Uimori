@@ -21,7 +21,11 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const show = useCallback((notice: Notice) => {
     clearTimeout(timers.current.get(notice.id));
-    setNotices((old) => [...old.filter((item) => item.id !== notice.id), notice]);
+    // Repeated saves may remount an editor; show one copy of the same completion.
+    setNotices((old) => [
+      ...old.filter((item) => item.id !== notice.id && item.message !== notice.message),
+      notice,
+    ]);
     timers.current.set(
       notice.id,
       setTimeout(() => {

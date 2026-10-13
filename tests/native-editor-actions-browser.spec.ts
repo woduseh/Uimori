@@ -135,7 +135,7 @@ for (const viewport of [
     ).toBeVisible();
 
     // Deletion keeps an explicit destructive action while retaining draft-only changes.
-    const confirmation = page.getByRole('dialog', { name: '그룹 삭제', exact: true });
+    const confirmation = page.getByRole('alertdialog', { name: '그룹 삭제', exact: true });
     await groupMenu.click();
     await definitions.getByRole('button', { name: '그룹 삭제', exact: true }).click();
     await actionPair(confirmation, '그룹 삭제', 'delete');

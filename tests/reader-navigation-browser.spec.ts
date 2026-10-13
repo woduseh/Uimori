@@ -220,27 +220,34 @@ for (const action of ['same-chat', 'A-B-A'] as const) {
     ).json();
     const staleTitle = 'READERNAV superseded initial response';
     let reads = 0;
+    let recovering = false;
     let captured = false;
-    let released = false;
+    let released = 0;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
     await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
-      if (++reads > 1) return route.continue();
+      reads++;
+      // The SSE snapshot may start another initial read before navigation. Keep every
+      // pre-navigation response pending so the real loading surface remains observable.
+      if (recovering) return route.continue();
       const response = await route.fetch();
       const body = await response.json();
       body.chat.title = staleTitle;
       captured = true;
       await gate;
       await route.fulfill({ response, json: body });
-      released = true;
+      released++;
     });
     try {
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto(`/?chat=${chat.id}`);
       await expect.poll(() => captured).toBe(true);
-      await expect(page.getByText('채팅을 불러오는 중이에요…', { exact: true })).toBeVisible();
+      const loading = page.getByRole('status').filter({ hasText: '본문을 불러오는 중이에요…' });
+      await expect(loading).toBeVisible();
+      const initialReads = reads;
+      recovering = true;
       if (action === 'same-chat') {
         await page.getByRole('button', { name: chat.title, exact: true }).click();
       } else {
@@ -257,10 +264,10 @@ for (const action of ['same-chat', 'A-B-A'] as const) {
       // Recover before the superseded HTTP request settles, without an SSE event or reload.
       const title = page.locator('.workspace-header').getByText(chat.title, { exact: true });
       await expect(title).toBeVisible();
-      await expect.poll(() => reads).toBeGreaterThan(1);
-      await expect(page.getByText('채팅을 불러오는 중이에요…', { exact: true })).toHaveCount(0);
+      await expect.poll(() => reads).toBeGreaterThan(initialReads);
+      await expect(loading).toHaveCount(0);
       release();
-      await expect.poll(() => released).toBe(true);
+      await expect.poll(() => released).toBe(initialReads);
       await expect(title).toBeVisible();
       await expect(page.getByText(staleTitle, { exact: true })).toHaveCount(0);
     } finally {

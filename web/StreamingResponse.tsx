@@ -7,6 +7,7 @@ import type {
 } from '../core/response-stream.js';
 import { api, ApiError } from './api.js';
 import { PlainProse } from './Prose.js';
+import { LoadingState } from './LoadingState.js';
 
 const active = (status?: string) => status === undefined || ['queued', 'running'].includes(status);
 
@@ -31,8 +32,8 @@ type ResponseProps = {
 /** Final answers belong to Source/helper messages, never to a completed transport stream. */
 export function ResponseDisplay({ mode, ...props }: ResponseProps & { mode: ResponseDisplayMode }) {
   if (mode === 'stream') return <StreamingResponse {...props} />;
-  if (active(props.taskStatus)) return null;
-  if (props.taskStatus === 'completed') return <small role="status">결과 불러오는 중…</small>;
+  if (active(props.taskStatus)) return <LoadingState compact label="응답을 기다리고 있어요…" />;
+  if (props.taskStatus === 'completed') return <LoadingState compact label="결과 불러오는 중…" />;
   return (
     <PartialResponse key={props.taskId}>
       <StreamingResponse {...props} settled />
@@ -197,16 +198,32 @@ export function StreamingResponse({
     shown.current = visible;
     wake.current();
   }, [visible]);
-  if (!chunks.length)
-    return settled ? (
-      <small role="status">
-        {disconnected
-          ? '일부 응답을 불러오지 못했어요. 연결을 확인해 주세요.'
-          : loaded
-            ? '표시할 일부 응답이 없어요.'
-            : '일부 응답을 불러오는 중…'}
-      </small>
-    ) : null;
+  if (!chunks.length) {
+    if (disconnected)
+      return (
+        <small role="status">
+          {settled
+            ? '일부 응답을 불러오지 못했어요. 연결을 확인해 주세요.'
+            : '응답을 불러오지 못했어요. 연결을 확인해 주세요.'}
+        </small>
+      );
+    if (!loaded)
+      return (
+        <LoadingState
+          compact
+          label={
+            settled || (!active(taskStatus) && taskStatus !== 'completed')
+              ? '일부 응답을 불러오는 중…'
+              : taskStatus === 'completed'
+                ? '결과 불러오는 중…'
+                : '응답을 기다리고 있어요…'
+          }
+        />
+      );
+    if (!settled && status === 'completed')
+      return <LoadingState compact label="결과 불러오는 중…" />;
+    return settled ? <small role="status">표시할 일부 응답이 없어요.</small> : null;
+  }
   const parts = new Map<string, string>();
   for (const chunk of chunks) {
     const key = `${chunk.segment}:${chunk.attemptId}`;

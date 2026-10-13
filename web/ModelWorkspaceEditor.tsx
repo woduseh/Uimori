@@ -1,5 +1,6 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
@@ -11,6 +12,8 @@ import { EditIcon, RefreshIcon, SettingsIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { Switch } from './BooleanControls.js';
+import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import './settings-actions.css';
 
 export function ModelWorkspaceEditor({
@@ -35,20 +38,27 @@ export function ModelWorkspaceEditor({
   const [message, setMessage] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saveConflict, setSaveConflict] = useState(false);
+  const [confirmReload, setConfirmReload] = useState(false);
+  const [reloadError, setReloadError] = useState('');
   const { canSelect } = useModelSelection(library.models, library.connections);
   useEffect(() => {
     if (workspace && !dirty && !busy)
-      setDraft({
-        revision: workspace.revision,
-        titleModel: workspace.titleModel ?? null,
-        helperModel: workspace.helperModel ?? null,
-        contextModel: workspace.contextModel ?? null,
-        scriptModel: workspace.scriptModel ?? null,
-        routes: workspace.modelRoutes,
-        mainJudgmentEnabled: workspace.mainJudgmentEnabled === true,
-        mainJudgmentThreshold: workspace.mainJudgmentThreshold ?? 0.9,
-        translationPolicy: workspace.translationPolicy,
-      });
+      // A successful explicit read must not be replaced by an older shared snapshot.
+      setDraft((current) =>
+        current && current.revision > workspace.revision
+          ? current
+          : {
+              revision: workspace.revision,
+              titleModel: workspace.titleModel ?? null,
+              helperModel: workspace.helperModel ?? null,
+              contextModel: workspace.contextModel ?? null,
+              scriptModel: workspace.scriptModel ?? null,
+              routes: workspace.modelRoutes,
+              mainJudgmentEnabled: workspace.mainJudgmentEnabled === true,
+              mainJudgmentThreshold: workspace.mainJudgmentThreshold ?? 0.9,
+              translationPolicy: workspace.translationPolicy,
+            }
+      );
   }, [workspace, dirty, busy]);
   useEffect(() => {
     onDirtyChange(dirty || busy);
@@ -126,6 +136,26 @@ export function ModelWorkspaceEditor({
     setDraft(next);
     setDirty(true);
     setMessage('');
+  }
+  async function reload() {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setReloadError('');
+    try {
+      const accepted = await api<ModelWorkspace>('/model-workspace');
+      setDraft(accepted);
+      setDirty(false);
+      setSaveError('');
+      setMessage('');
+      setConfirmReload(false);
+      void refresh();
+    } catch {
+      setReloadError('설정을 불러오지 못했어요. 초안은 유지했어요.');
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
   }
   const selector = (
     label: string,
@@ -450,9 +480,9 @@ export function ModelWorkspaceEditor({
               type="button"
               className="secondary"
               onClick={() => {
-                setDirty(false);
-                setSaveError('');
-                void refresh();
+                setReloadError('');
+                if (dirty) setConfirmReload(true);
+                else void reload();
               }}
             >
               <RefreshIcon size={18} aria-hidden="true" />
@@ -468,6 +498,25 @@ export function ModelWorkspaceEditor({
           />
         </div>
       </fieldset>
+      <Dialog
+        open={confirmReload}
+        title="역할별 모델 설정 다시 불러오기"
+        variant="confirmation"
+        role="alertdialog"
+        onClose={() => {
+          if (!busy) setConfirmReload(false);
+        }}
+      >
+        <p>저장된 설정을 불러오면 현재 초안이 사라져요.</p>
+        {reloadError && <NoticeBanner tone="error">{reloadError}</NoticeBanner>}
+        <DraftDiscardActions
+          open={confirmReload}
+          disabled={busy}
+          onContinue={() => setConfirmReload(false)}
+          onDiscard={reload}
+          discardLabel="초안 버리고 불러오기"
+        />
+      </Dialog>
       <SaveConflictDialog
         open={saveConflict}
         title="역할별 모델 저장 내용 확인"
@@ -488,14 +537,15 @@ export function ModelWorkspaceEditor({
         }}
       />
       {conflict && dirty && (
-        <p role="alert">
+        <NoticeBanner tone="error">
           다른 곳에서 전역 설정이 바뀌었어요. 초안은 유지했어요. 최신 설정을 불러온 뒤 다시 적용해
           주세요.
-        </p>
+        </NoticeBanner>
       )}
-      {saveError && <p role="alert">{saveError} 초안은 유지했어요.</p>}
+      {saveError && <NoticeBanner tone="error">{saveError} 초안은 유지했어요.</NoticeBanner>}
       <TransientNotice message={message} />
-      {error && <p role="status">{error}</p>}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {!confirmReload && reloadError && <NoticeBanner tone="error">{reloadError}</NoticeBanner>}
       <button type="button" className="secondary" onClick={onManage}>
         <SettingsIcon size={18} aria-hidden="true" />
         모델 프리셋·프로바이더 관리{' '}

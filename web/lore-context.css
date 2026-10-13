@@ -190,6 +190,15 @@
   background: var(--accent);
   color: var(--accent-ink);
 }
+@media (max-width: 640px) {
+  .lore-context-actions.settings-form-footer {
+    align-items: stretch;
+  }
+  .lore-context-actions.settings-form-footer > button {
+    height: auto;
+    min-height: var(--control-h);
+  }
+}
 .lore-context-units {
   font-size: 0.875rem;
 }

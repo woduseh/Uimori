@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { api, apiBinary } from './api.js';
 import { NATIVE_ARCHIVE_MAX_BYTES, type NativeArchivePrepare } from '../core/native-archive.js';
 import type {
@@ -134,12 +136,9 @@ export function ResourceBundleImport({
         >
           {busy ? '처리 중…' : '새 자료로 가져오기'}
         </button>
-        {message && <p role="status">{message}</p>}
-        {error && (
-          <p role="alert" className="error">
-            {error}
-          </p>
-        )}
+        {busy && <LoadingState compact label="자료 백업을 처리하는 중이에요…" />}
+        {message && <NoticeBanner>{message}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       </div>
     </section>
   );

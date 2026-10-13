@@ -3,6 +3,8 @@ import type { RequestPreview } from '../core/request-preview.js';
 import { TOKENIZER_PROFILES } from '../core/tokenizer-profiles.js';
 import { api, libraryChangedKey } from './api.js';
 import { Dialog } from './Dialog.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './request-preview.css';
 
 const amount = (value: number | null) =>
@@ -116,7 +118,7 @@ export function RequestPreviewDialog({
       {!request.trim() ? (
         <p>장면 요청을 입력하면 다음 생성의 설정과 컨텍스트를 확인할 수 있어요.</p>
       ) : unavailable ? (
-        <p role="status">현재 작업을 마치고 미리보기를 다시 확인해 주세요.</p>
+        <NoticeBanner>현재 작업을 마치고 미리보기를 다시 확인해 주세요.</NoticeBanner>
       ) : (
         <>
           <div className="request-preview-heading">
@@ -131,21 +133,19 @@ export function RequestPreviewDialog({
             </button>
           </div>
           {error ? (
-            <p className="error" role="alert">
-              {error}
-            </p>
+            <NoticeBanner tone="error">{error}</NoticeBanner>
           ) : !preview ? (
-            <p role="status">다음 요청을 확인하고 있어요.</p>
+            <LoadingState compact label="다음 요청을 확인하고 있어요…" />
           ) : preview.snapshot.stale ? (
-            <p role="status">확인 중에 컨텍스트나 설정이 바뀌었어요. 다시 확인해 주세요.</p>
+            <NoticeBanner>확인 중에 컨텍스트나 설정이 바뀌었어요. 다시 확인해 주세요.</NoticeBanner>
           ) : (
             <div data-testid="request-preview">
               {preview.error && (
-                <p role="status">
+                <NoticeBanner>
                   {preview.error === 'MAIN_MODEL_REQUIRED'
                     ? '본문 모델을 선택하면 입력량을 계산할 수 있어요.'
                     : '현재 조건의 입력량을 계산하지 못했어요. 자료와 프롬프트 설정을 확인해 주세요.'}
-                </p>
+                </NoticeBanner>
               )}
               <dl className="request-preview-facts">
                 <div>

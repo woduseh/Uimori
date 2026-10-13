@@ -230,6 +230,10 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
     .getByRole('button', { name: '에셋 제거', exact: true })
     .click();
   const removed = await save(page, library, reused);
+  const completion = page.locator('.transient-notice').filter({ hasText: original.title });
+  await expect(completion.first()).toBeVisible();
+  // Reopening the editor must not stack identical messages from consecutive saves.
+  expect(await completion.count()).toBe(1);
   expect(removed.package!.images).toHaveLength(1);
   expect(removed.package!.portraitImageId).toBe('inline');
   // Only the current resource and its one-level undo are retained.
@@ -243,6 +247,21 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   );
   if (visualReview)
     await page.screenshot({ path: info.outputPath('portrait-authoring-mobile.png') });
+  await library.locator('.library-savebar').scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      library.evaluate((element) => {
+        const heading = element.querySelector('.library-content-editor > .library-detail-heading')!;
+        const navigation = element.querySelector('.native-editor > .section-navigation')!;
+        return navigation.getBoundingClientRect().top >= heading.getBoundingClientRect().bottom - 1;
+      })
+    )
+    .toBe(true);
+  // Scrolled navigation must stay reachable below the two-row save header.
+  await library.getByRole('tab', { name: '에셋', exact: true }).click();
+  await expect(library.getByLabel('Risu 이미지 목록', { exact: true })).toBeVisible();
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('portrait-authoring-mobile-scrolled.png') });
 });
 
 test('LIMG02 persona folder picker supports keyboard selection and nested Escape without creating a chat', async ({

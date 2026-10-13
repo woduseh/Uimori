@@ -102,7 +102,7 @@ for (const width of [412, 1440]) {
     for (const dismissal of ['cancel', 'Escape', 'backdrop'] as const) {
       await menu.click();
       await trigger.click();
-      await expectShell(page, dialog, 480);
+      await expectShell(page, dialog, 620);
       await expect(cancel).toBeFocused();
       await expect(cancel).toHaveClass(/\bsecondary\b/);
       await expect(remove).toHaveClass(/\bdelete-button\b/);
@@ -189,7 +189,7 @@ for (const width of [412, 1440]) {
     });
     await trigger.click();
     const remove = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-    await expectShell(page, remove, 480);
+    await expectShell(page, remove, 620);
     await page.screenshot({ path: info.outputPath(`nested-prompt-delete-${width}.png`) });
     await page.keyboard.press('Escape');
     await expect(remove).toBeHidden();
@@ -271,7 +271,7 @@ for (const width of [412, 1440]) {
     });
     await imageTrigger.click();
     const remove = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
-    await expectShell(page, remove, 480);
+    await expectShell(page, remove, 620);
     await page.screenshot({ path: info.outputPath(`nested-image-delete-${width}.png`) });
     await remove.getByRole('button', { name: '취소', exact: true }).click();
     await expect(remove).toBeHidden();

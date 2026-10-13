@@ -5,6 +5,8 @@ import { api } from './api.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { IconButton } from './IconButton.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { CheckIcon, CloseIcon, EditIcon, RefreshIcon, StopIcon } from './ui-icons.js';
 
 type Selection = { start: number; end: number; version: number };
@@ -179,16 +181,13 @@ export function SelectionRevision(props: Props) {
             초안에만 반영되며, 원문 저장으로 확정해요.
           </p>
           {stale && (
-            <p role="status" className="muted">
+            <NoticeBanner>
               초안이나 선택 구간이 바뀌었어요. 현재 입력은 유지했어요. 닫고 구절을 다시 선택해
               주세요.
-            </p>
+            </NoticeBanner>
           )}
-          {error && (
-            <p className="error" role="alert">
-              {error} 작성한 내용은 유지돼요.
-            </p>
-          )}
+          {error && <NoticeBanner tone="error">{error} 작성한 내용은 유지돼요.</NoticeBanner>}
+          {busy && <LoadingState compact label="선택한 구절을 다듬고 있어요…" />}
           <div className="form-actions">
             {busy ? (
               <button type="button" className="secondary" onClick={cancel}>

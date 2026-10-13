@@ -1,5 +1,7 @@
 import { RefreshIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
+import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import './codex-agent-settings.css';
 import { useEffect, useRef, useState } from 'react';
 import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
@@ -154,7 +156,7 @@ export function CodexAgentSettings({
         />
       </div>
       {!status ? (
-        <p role="status">{error ? '상태 확인 실패' : '상태 확인 중…'}</p>
+        <LoadingState compact loading={!error} label="연결 상태를 확인하고 있어요…" />
       ) : (
         <>
           {!(status.authenticated && status.authMode === 'chatgpt') && (
@@ -346,11 +348,7 @@ export function CodexAgentSettings({
           방식으로 자동 전환하지 않아요.
         </p>
       </details>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </section>
   );
 }

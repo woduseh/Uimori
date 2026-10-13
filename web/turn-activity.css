@@ -37,7 +37,8 @@
   display: inline-flex;
   color: var(--faint);
 }
-.turn-activity-issue .turn-activity-text {
+.turn-activity-issue .turn-activity-text,
+.turn-activity-issue .turn-status {
   color: var(--error);
 }
 .turn-activity-text {

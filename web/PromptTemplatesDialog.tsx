@@ -1,4 +1,5 @@
 import { LoadingState } from './LoadingState.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
 import type { PromptPreset, PromptRole } from '../core/product.js';
 import { api } from './api.js';
@@ -114,19 +115,25 @@ export function PromptTemplatesDialog({
           ))}
         </ul>
       )}
-      {adding && <p role="status">{adding.title} 프리셋을 추가하는 중이에요…</p>}
+      {adding && <LoadingState compact label={`${adding.title} 프리셋을 추가하는 중이에요…`} />}
       {failure && (
         <div className="prompt-templates-error">
-          <p role="alert">프롬프트를 추가하지 못했어요. {failure.message}</p>
-          <button
-            type="button"
-            className="secondary"
-            disabled={pending}
-            aria-label={`${failure.template.title} 다시 추가`}
-            onClick={() => void add(failure.template)}
+          <NoticeBanner
+            tone="error"
+            actions={
+              <button
+                type="button"
+                className="secondary"
+                disabled={pending}
+                aria-label={`${failure.template.title} 다시 추가`}
+                onClick={() => void add(failure.template)}
+              >
+                다시 시도
+              </button>
+            }
           >
-            다시 시도
-          </button>
+            프롬프트를 추가하지 못했어요. {failure.message}
+          </NoticeBanner>
         </div>
       )}
     </Dialog>

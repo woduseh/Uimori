@@ -1,4 +1,5 @@
 import type { ReactNode, RefObject, Dispatch, SetStateAction } from 'react';
+import { NoticeBanner } from './NoticeBanner.js';
 import type { Connection, ProviderProtocol } from '../core/product.js';
 import { PROVIDER_DEFINITIONS, providerDefinition } from '../core/provider-definitions.js';
 import { Switch } from './BooleanControls.js';
@@ -96,9 +97,9 @@ export function ProviderConnectionForm({
         </p>
       )}
       {conflict && (
-        <p className="error full" role="alert">
+        <NoticeBanner tone="error" className="full">
           다른 곳에서 프로바이더가 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
-        </p>
+        </NoticeBanner>
       )}
       <fieldset className="editor-fields full provider-connection-fields" disabled={busy}>
         <label>
