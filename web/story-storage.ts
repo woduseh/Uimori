@@ -35,12 +35,7 @@ export function writeViewCache(key: `reading:${string}` | `cursor:${string}`, va
       }
       return;
     } catch {
-      // Persistent storage may be blocked or full; fall back to this tab.
-      try {
-        localStorage.removeItem(key);
-      } catch {
-        // A stale position is only optional cache data.
-      }
+      // Keep the previous durable location when persistent writes fail.
     }
   }
   try {
@@ -75,19 +70,20 @@ function validReadingPosition(value: Record<string, unknown> | null): ReadingPos
 }
 
 export function readReadingPosition(key: string): ReadingPosition | null {
-  const saved = validReadingPosition(optionalCache(key, true));
-  if (saved) return saved;
-  // Older clients used sessionStorage. Migrate an existing tab's position once.
-  const legacy = validReadingPosition(optionalCache(key));
-  if (legacy) {
+  const inSession = validReadingPosition(optionalCache(key));
+  const persistent = validReadingPosition(optionalCache(key, true));
+  if (!inSession) return persistent;
+  // The tab-local fallback may be newer than the last durable position.
+  // Migrate older tab-only positions if no durable position exists.
+  if (!persistent) {
     try {
-      localStorage.setItem(key, JSON.stringify(legacy));
+      localStorage.setItem(key, JSON.stringify(inSession));
       sessionStorage.removeItem(key);
     } catch {
       // The tab-local position still works if migration is unavailable.
     }
   }
-  return legacy;
+  return inSession;
 }
 
 export function readDraftCursor(key: string): { start: number; end: number } | null {
