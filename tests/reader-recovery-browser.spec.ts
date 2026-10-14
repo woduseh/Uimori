@@ -94,6 +94,40 @@ test('READERREC failed optional reading sync stays silent until the reader regai
   await expect(page.getByRole('alert', { name: '읽기 위치 연결 오류' })).toHaveCount(0);
 });
 
+test('READERREC a failed refocus lookup does not suspend an already healthy reader', async ({
+  page,
+  request,
+}) => {
+  const { chat, detail } = await createReadingChat(request, 'Refocus lookup failure', 3);
+  let lookups = 0;
+  await page.route(`**/api/chats/${chat.id}/reading-position?*`, (route) => {
+    lookups++;
+    if (lookups === 1) return route.continue();
+    return route.fulfill({ status: 503, json: { error: 'Temporary reading sync failure' } });
+  });
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByTestId('source').first()).toBeVisible();
+  await expect.poll(() => lookups).toBe(1);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect.poll(() => lookups).toBe(2);
+  await page
+    .getByRole('button', { name: '장면 목록 열기', exact: true })
+    .filter({ visible: true })
+    .first()
+    .click();
+  await page
+    .getByRole('dialog', { name: '장면 목록', exact: true })
+    .getByRole('button', { name: /^2번째 장면 ·/ })
+    .click();
+  const clientId = await page.evaluate(() => localStorage.getItem('uimori:reading-client'));
+  const path = `/api/chats/${chat.id}/reading-position?${new URLSearchParams({ clientId: clientId! })}`;
+  await expect
+    .poll(async () => (await (await request.get(path)).json()).own?.target.sourceId, {
+      timeout: 4500,
+    })
+    .toBe(detail.sources[1].id);
+});
+
 test('READERREC confirming an uncertain request never turns into cancelling its admitted run', async ({
   page,
   request,

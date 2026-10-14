@@ -100,8 +100,8 @@ export function useReadingSync(options: {
           loaded = true;
           setState({ key, ...value });
         } catch {
-          // An optional lookup failure never interrupts reading or triggers retries.
-          loaded = false;
+          // A failed refresh does not invalidate an earlier successful read.
+          // Save failures still suspend further writes until the next reader check.
         }
       })().finally(() => {
         loading = null;
