@@ -10,6 +10,7 @@ import {
 } from './reader-navigation.js';
 import {
   commandStorageKey,
+  clearReadingPosition,
   readReadingPosition,
   readDraftCursor,
   writeViewCache,
@@ -321,7 +322,7 @@ export function useStory() {
           let cacheKey = query.key;
           if (replacementSource !== undefined) {
             restoredView.current = '';
-            sessionStorage.removeItem(`reading:${id}`);
+            clearReadingPosition(`reading:${id}`);
             cacheKey = `${id}:${replacementSource}`;
             readerQuery.current = { ...query, source: replacementSource, key: cacheKey };
             navigate({ kind: 'rebase-source', source: replacementSource });

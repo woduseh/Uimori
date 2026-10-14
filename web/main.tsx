@@ -1146,19 +1146,6 @@ function App() {
                   : '저장된 읽기 위치가 있어요.'}
               </NoticeBanner>
             )}
-            {s.readingSync.error && (
-              <NoticeBanner
-                label="읽기 위치 연결 오류"
-                tone="error"
-                actions={
-                  <button type="button" onClick={s.readingSync.refresh}>
-                    연결 다시 확인
-                  </button>
-                }
-              >
-                {s.readingSync.error}
-              </NoticeBanner>
-            )}
             <div
               className={`reader-stage ${showSceneNavigator && s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
             >
