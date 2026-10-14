@@ -1542,6 +1542,7 @@ function App() {
                       : undefined
                   }
                   recoveryBusy={s.submitting.includes(s.viewKey)}
+                  recoveryError={s.error}
                   onRecoverRequest={(requestId) => {
                     if (
                       s.pendingRequest &&

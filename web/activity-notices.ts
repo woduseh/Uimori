@@ -27,7 +27,13 @@ export function activityAcknowledgementKey(item: ReaderActivity) {
 
 /** Match a successful replacement to the exact source version; never infer across sources. */
 export function translationResolved(item: ActivityNoticeItem, items: ActivityNoticeItem[]) {
-  if (item.kind !== 'translation' || !canAcknowledge(item) || activitySuccess(item.status))
+  // Terminal uncertainty can be acknowledged explicitly, but must never be silently resolved.
+  if (
+    item.kind !== 'translation' ||
+    item.executionUncertain ||
+    !canAcknowledge(item) ||
+    activitySuccess(item.status)
+  )
     return false;
   if (item.superseded) return true;
   return (

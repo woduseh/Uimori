@@ -17,6 +17,7 @@ export function ActivityNotifications({
   persistenceError,
   recoveryRequestId,
   recoveryBusy,
+  recoveryError,
   onRecoverRequest,
   onLater,
   message,
@@ -32,6 +33,7 @@ export function ActivityNotifications({
   persistenceError: boolean;
   recoveryRequestId?: string;
   recoveryBusy: boolean;
+  recoveryError: string;
   onRecoverRequest: (requestId: string) => void;
   onLater: (item: ActivityNoticeItem) => void;
   message: (item: ActivityNoticeItem) => string;
@@ -188,6 +190,9 @@ export function ActivityNotifications({
               ) : !canAcknowledge(item) ? (
                 <small>진행 중인 작업은 아직 확인할 수 없어요.</small>
               ) : null}
+              {recoverable && recoveryError && (
+                <NoticeBanner tone="error">{recoveryError}</NoticeBanner>
+              )}
               {inspected === item.acknowledgementKey && (
                 <NotificationDetail
                   key={item.acknowledgementKey}
