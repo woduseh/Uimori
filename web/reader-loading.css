@@ -42,8 +42,21 @@
   margin: 0;
   font-size: 12px;
 }
+.reader.reader-awaiting:has(> .reader-loading-error) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .reader-loading-error {
   display: grid;
-  place-items: center;
-  min-height: min(55dvh, 420px);
+  justify-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.reader-loading-retry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
 }

@@ -18,6 +18,10 @@ test('READERREC initial reader loading becomes a recoverable error without losin
   const heldRead = new Promise<void>((resolve) => {
     releaseRead = resolve;
   });
+  let releaseRetry!: () => void;
+  const heldRetry = new Promise<void>((resolve) => {
+    releaseRetry = resolve;
+  });
   let failed = true;
   await page.addInitScript((id) => {
     sessionStorage.setItem(`draft:${id}`, '본문 재조회 중에도 남을 초안');
@@ -29,7 +33,10 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     });
   }, chat.id);
   await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
-    if (!failed) return route.continue();
+    if (!failed) {
+      await heldRetry;
+      return route.continue();
+    }
     await heldRead;
     await route.fulfill({ status: 503, json: { error: 'Reader temporarily unavailable' } });
   });
@@ -63,12 +70,28 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     const error = page.getByRole('alert').filter({ hasText: '본문을 불러오지 못했어요.' });
     await expect(error).toBeVisible();
     await expect(error).toContainText('서버 작업을 완료하지 못했어요. (503)');
+    // Errors remain centered in the reader; only active loading aligns to the top.
+    await expect(page.locator('.reader-awaiting')).toHaveCSS('justify-content', 'center');
+    const centerDelta = await page.locator('.reader-awaiting').evaluate((reader) => {
+      const alert = reader.querySelector('[role="alert"]')!;
+      const readerBox = reader.getBoundingClientRect();
+      const errorBox = alert.getBoundingClientRect();
+      return Math.abs(readerBox.top + readerBox.height / 2 - (errorBox.top + errorBox.height / 2));
+    });
+    expect(centerDelta).toBeLessThan(36);
     await expect(loading).toHaveCount(0);
     await expect(skeleton).toHaveCount(0);
     if (process.env.UIMORI_VISUAL_REVIEW === '1')
       await page.screenshot({ path: info.outputPath('reader-loading-error.png') });
     failed = false;
     await page.getByRole('button', { name: '본문 다시 불러오기', exact: true }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: '본문을 다시 불러오는 중이에요…' })
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '본문 다시 불러오기', exact: true })
+    ).toBeDisabled();
+    releaseRetry();
     await expect(page.getByTestId('source')).toHaveCount(1);
     await expect(page.getByTestId('source-request')).toContainText('검증 장면 1');
     await expect(page.getByRole('textbox', { name: '다음 장면 요청' })).toHaveValue(
@@ -78,6 +101,7 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     await expect(loading).toHaveCount(0);
   } finally {
     releaseRead();
+    releaseRetry();
     await page.unrouteAll({ behavior: 'wait' });
   }
 });
