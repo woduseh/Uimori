@@ -1,4 +1,4 @@
-import type { Job, Source } from '../core/types.js';
+import type { Job, Source } from './types.js';
 
 /** Failed classifier candidates must never replace a completed translation. */
 export function displayTranslationJob(

@@ -4,7 +4,7 @@ import { captureReaderLocation } from './useReadingSync.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeFrame } from './ThemeFrame.js';
 import { canRejudgeTranslation } from '../core/translation-recovery.js';
-import { displayTranslationJob } from './translation-display.js';
+import { displayTranslationJob } from '../core/translation-display.js';
 import { resolveInlineImage, IMAGE_POSITION_UNAVAILABLE } from './image-placement.js';
 import {
   Fragment,

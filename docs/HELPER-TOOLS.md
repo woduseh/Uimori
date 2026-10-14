@@ -56,6 +56,20 @@ Search results page by matching windows. Later matches in the same long field re
 
 Search defaults to five results, at most fifty, with at most eight patterns. Search responses fit 8,000 serialized UTF-16 units including metadata; `complete:false` and `nextOffset` expose the remaining page. Excerpts are at most 2,000 UTF-16 units. Each text read defaults to 4,000 and accepts at most 10,000 units; directories default to twenty fields, at most fifty. Directory/SQL result assembly retains its approximately 16,000-character output budget. References, metadata, and JSON transport overhead are separate from text length.
 
+## Editing saved scenes
+
+Discover `scene.read`, `scene.patch`, `scene.versions` and `scene.restore` through `app.tools`, then execute through `app.call`. The five provider-facing tools stay unchanged. These operations use live saved scenes in the selected chat, unlike the frozen ancestry returned by `story.read`. Locate a source ID with chat/story/data reads; a scene number is local to its chat, not a write identifier. The host checks current chat ancestry before reading or saving. Optional `chatId` selects another chat without changing the helper conversation's default scope.
+
+`scene.read` requires a `sourceId` and explicit `target` (`original` or `translation`). It returns editable stored text, not rendered HTML or a CBS display transformation. Read long text using its returned continuation rather than treating one page as the whole scene. Its `editTarget` supplies the expected revision and source hash for saving. Translation reads use the same usable completed-result projection as the Reader, including a previous completed translation while a new attempt is pending; the displayed result identity is distinct from the latest revision used for save conflicts. Continuations also bind the exact text hash, so completion during paging cannot mix two translations.
+
+`scene.patch` accepts either a complete `text` replacement or literal `changes` (`oldText`, `newText`). Every old excerpt must occur exactly once in the saved base text, and replacement ranges must not overlap. All changes validate before one save; an invalid or stale edit leaves the whole scene unchanged. No regular-expression or multi-scene write mode is provided. Explicit requests to edit include saving; review and proposal requests do not. Full rewrites require the complete source and a complete response, never a silently truncated page or output.
+
+The existing source and translation save paths own revision checks, preservation, job invalidation and illustration placement. HTTP and helper edits share post-commit cancellation of superseded jobs and reader notification. A source edit makes old translation jobs stale; saved execution inputs remain unchanged. Existing summary source-hash checks determine whether a previous summary is usable; scene editing does not author a replacement summary. The helper returns a compact saved receipt rather than echoing the whole manuscript. Mutation receipts use host-owned task/call identity, and changed source revisions reject stale new calls.
+
+`scene.versions` exposes metadata for the original and the two retained original edits, with bounded text reads for a selected version. `scene.restore` saves a retained original version as a new edit after checking the current source revision/hash. This does not delete intervening history or restore translations. Task-pinned older text is not exposed as an editing archive. Translation restoration, automatic retranslation, scene titles and persistent writing options are outside these operations.
+
+Reader drafts remain in their existing device-local editor state. If a helper changes their saved base, the existing conflict UI preserves the draft and requires reconciliation. Scene tools do not read unsaved Reader drafts or track drafts across tabs. Separate resource-editor draft protection still applies to resource mutations.
+
 ## Read-only SQL
 
 Call `db.query` without `sql` to discover actual view columns and examples. The server supplies connection details; neither database paths nor credentials are tool arguments.
