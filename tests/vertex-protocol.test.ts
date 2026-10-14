@@ -164,8 +164,8 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     const nextWire = bodyObject(next.body);
     expect(nextWire.contents[2]).toEqual(wire.contents[2]);
     expect(nextWire.contents[3].parts).toEqual(providerParts);
-    expect(nextWire.contents[4].parts[0].functionResponse.id).toBe('read-pdf');
-    expect(nextWire.contents[4].parts.at(-1)).toEqual({ text: 'Fresh native input.' });
+    expect(nextWire.contents[4].parts[0]).toEqual({ text: 'Fresh native input.' });
+    expect(nextWire.contents[4].parts.at(-1).functionResponse.id).toBe('read-pdf');
     expect(nextWire.tools).toEqual(wire.tools);
     expect(bodyObject(next.contextBody!).contents[2].parts[0].text).toBe(
       input.prompt!.messages[1].content[0].text
@@ -401,7 +401,9 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     const second = start(secondInput);
     const secondBody = bodyObject(second.body);
     expect(secondBody.contents[1]).toEqual({ role: 'model', parts });
+    // Gemini tool replies must end the user turn, not be followed by another text part.
     expect(secondBody.contents[2].parts).toEqual([
+      { text: secondInput.continuationInput },
       {
         functionResponse: {
           id: 'Call-A.Original',
@@ -416,7 +418,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
           response: { text: 'Read lore-2' },
         },
       },
-      { text: secondInput.continuationInput },
     ]);
     second.decoder.accept(
       event([call('Call-C', 'lore-3'), { thoughtSignature: 'AFTER_CALL_SIGNATURE' }], 'STOP')

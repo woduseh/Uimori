@@ -56,6 +56,8 @@ Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 
 
 사고 수준·출력 한도·생성 옵션과 PDF 입력을 설정할 수 있어요. Service Tier는 Standard·Flex·Priority를 제안하며 실제 지원은 모델과 계정 설정을 따라요. Standard와 모델 기본값은 필드를 생략하고, Flex·Priority는 Gemini API의 `service_tier`로 보내요. 서버의 Vertex 서비스 등급 제한은 이 연결에 적용하지 않아요. 단가는 자동으로 추정하지 않으며 모델 프리셋에서 직접 설정해요. [Gemini API 키](https://ai.google.dev/gemini-api/docs/api-key), [Flex](https://ai.google.dev/gemini-api/docs/generate-content/flex-inference), [Priority](https://ai.google.dev/gemini-api/docs/generate-content/priority-inference)를 참고해요.
 
+Gemini에서 도구 호출 후 이어지는 요청은 모델의 원본 응답과 사고 서명을 보존하고, 동일한 사용자 턴 안의 추가 제어 텍스트를 도구 결과(`functionResponse`) 앞에 배치해요. Vertex가 도구 결과 뒤에 텍스트를 붙인 요청을 거부하는 문제를 피하기 위한 프로토콜 전용 처리이며, Claude·OpenAI·Codex 요청 형식은 변경하지 않아요.
+
 ## Gemini PDF 입력
 
 모델 프리셋의 **고급 → 텍스트 대화를 PDF로 전송**을 켜면 Google Agent Platform 또는 Google AI Studio 연결의 초기 텍스트 대화를 순서와 역할이 표시된 PDF 하나로 묶어 사용자 입력으로 보내요. 기본값은 꺼짐이고 다른 프로토콜에는 적용하지 않아요. 시스템 지침, 도구 정의·호출·결과, 프로바이더가 반환한 사고 서명과 후속 대화는 기존 Gemini 형식으로 유지해요. 파일 업로드 서비스를 따로 사용하지 않고 PDF를 요청 안에 넣어요.
