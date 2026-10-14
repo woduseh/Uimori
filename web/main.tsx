@@ -450,11 +450,15 @@ function App() {
     !!mainModel &&
     !!s.library &&
     isModelSelectable(mainModel, s.library.models, s.library.connections);
-  const mainDescription = mainModel
-    ? `${modelLabel(mainModel, s.library)}${mainAvailable ? '' : ' · 사용 불가'}`
-    : mainModelRef
-      ? '선택한 본문 모델 · 확인 필요'
-      : '본문 모델을 선택해 주세요';
+  // Both the reader and model routes must settle before an absent model is actionable.
+  const modelCheckReady = !!s.detail && !!s.library && !!s.promptWorkspace;
+  const mainDescription = !modelCheckReady
+    ? '본문 모델을 확인하고 있어요'
+    : mainModel
+      ? `${modelLabel(mainModel, s.library)}${mainAvailable ? '' : ' · 사용 불가'}`
+      : mainModelRef
+        ? '선택한 본문 모델 · 확인 필요'
+        : '본문 모델을 선택해 주세요';
   const helperModel = s.library?.models.find(
     (item) => item.id === s.promptWorkspace?.helperModel?.id
   );
@@ -469,11 +473,13 @@ function App() {
       : '도우미 모델을 선택해 주세요';
   // The model is a header chip at every width; narrow widths shorten the empty states so the
   // chip leaves room for the title. The accessible name keeps the full description.
-  const mainShortDescription = mainModel
-    ? `${mainModel.title}${mainAvailable ? '' : ' · 사용 불가'}`
-    : mainModelRef
-      ? '모델 확인 필요'
-      : '모델 선택';
+  const mainShortDescription = !modelCheckReady
+    ? '모델 확인 중'
+    : mainModel
+      ? `${mainModel.title}${mainAvailable ? '' : ' · 사용 불가'}`
+      : mainModelRef
+        ? '모델 확인 필요'
+        : '모델 선택';
   const mainModelChip = (
     <button
       type="button"
@@ -1534,6 +1540,24 @@ function App() {
                 />
                 {!sourceEditing &&
                   !s.pendingRequest &&
+                  !!s.detail &&
+                  !!s.library &&
+                  !s.promptWorkspace &&
+                  s.promptWorkspaceError && (
+                    <p className="muted" role="alert">
+                      모델 설정을 확인하지 못했어요.{' '}
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={() => void s.refreshPromptWorkspace()}
+                      >
+                        다시 불러오기
+                      </button>
+                    </p>
+                  )}
+                {!sourceEditing &&
+                  !s.pendingRequest &&
+                  modelCheckReady &&
                   ((!testMode && !mainAvailable) || !promptAvailable) && (
                     <p className="muted" role="status">
                       {!promptAvailable
