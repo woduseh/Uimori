@@ -301,6 +301,20 @@ export async function createApp(options: AppOptions): Promise<App> {
     });
   };
   const streams = new ResponseStreamStore(store);
+  // Both HTTP and helper edits commit first, then stop superseded work and notify readers.
+  const sceneUpdated = (sourceId: string) => {
+    const source = store.source(sourceId);
+    for (const [jobId, controller] of jobControllers) {
+      const job = store.job(jobId);
+      if (
+        job.sourceRevision === sourceId &&
+        (job.sourceHash !== source.hash || ['stale', 'cancelled'].includes(job.status))
+      )
+        controller.abort(new Error('Scene edited'));
+    }
+    publish(source.chatId);
+    pumpIllustrations();
+  };
   const helper: HelperRuntime = new HelperRuntime(store, {
     owner: instanceId,
 
@@ -312,6 +326,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     track,
     streams,
     services: {
+      sceneUpdated,
       task: (task, name, args, operationId) => {
         const afterCommit: (() => void)[] = [];
         const invoke = () =>
@@ -1208,12 +1223,7 @@ export async function createApp(options: AppOptions): Promise<App> {
           Number.MAX_SAFE_INTEGER
         ),
       });
-      for (const [jobId, controller] of jobControllers) {
-        const job = store.job(jobId);
-        if (job.sourceRevision === source.id && job.sourceHash !== source.hash)
-          controller.abort(new Error('Source edited'));
-      }
-      publish(source.chatId);
+      sceneUpdated(source.id);
       return source;
     }
   );
@@ -1233,9 +1243,7 @@ export async function createApp(options: AppOptions): Promise<App> {
         ),
         expectedSourceHash: text(body.expectedSourceHash, 'source hash', 64),
       });
-      jobControllers.get(job.id)?.abort(new Error('Translation edited'));
-      publish(job.chatId);
-      pumpIllustrations();
+      sceneUpdated(job.sourceRevision);
       return job;
     }
   );

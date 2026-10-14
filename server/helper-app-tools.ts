@@ -4,6 +4,7 @@ import { RESOURCE_TOOLS, helperResourceOperation } from './helper-resource-tools
 import { HELPER_SETTINGS_TOOLS } from './helper-settings-tools.js';
 import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { HELPER_DATA_TOOLS } from './helper-data-tools.js';
+import { HELPER_SCENE_TOOLS } from './helper-scene-tools.js';
 import { helperOptionTools } from './chat-options.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { HttpError } from './request-validation.js';
@@ -41,6 +42,7 @@ const TOOLS: ProviderTool[] = [
   ...RESOURCE_TOOLS,
   ...HELPER_SETTINGS_TOOLS,
   ...HELPER_TASK_TOOLS,
+  ...HELPER_SCENE_TOOLS,
   {
     name: 'chat.list',
     description: 'List available chats and their current heads.',
@@ -273,6 +275,7 @@ const chatToolNames = new Set([
   'chat.lore',
   'chat.rename',
   'chat.fork',
+  ...HELPER_SCENE_TOOLS.map((tool) => tool.name),
   'outline.read',
   'outline.write',
   'context.read',
@@ -301,6 +304,8 @@ const readNames = new Set([
   'outline.read',
   'options.read',
   'artifact.read',
+  'scene.read',
+  'scene.versions',
 ]);
 const writingNames = new Set([
   ...writingReadNames,
@@ -351,7 +356,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.tools',
     description:
-      'Discover app operations for editing resources/themes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or generating an independent what-if scene. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
+      'Discover app operations for editing resources/themes, saved original or translated scenes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or generating an independent what-if scene. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
     inputSchema: schema(
       {
         names: { type: 'array', maxItems: 4, items: str },

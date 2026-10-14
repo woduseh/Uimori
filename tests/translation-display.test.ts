@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import type { Job } from '../core/types.js';
-import { displayTranslationJob } from '../web/translation-display.js';
+import { displayTranslationJob } from '../core/translation-display.js';
 const source = { id: 'source', hash: 'hash' };
 const result = { mock: false, sourceRevision: 'source', sourceHash: 'hash', text: '완료 번역' };
 const job = (status: Job['status']) =>
