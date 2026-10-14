@@ -62,12 +62,10 @@ export function useReadingSync(options: {
     key: string;
     own: ReadingPosition | null;
     other: ReadingPosition | null;
-    error: string;
-  }>({ key: '', own: null, other: null, error: '' });
+  }>({ key: '', own: null, other: null });
   const actions = useRef<{
     key: string;
     remember: (target: ReaderTarget) => void;
-    load: () => Promise<void>;
   } | null>(null);
   const pending = useRef<ReaderTarget | null>(null);
   const remember = useCallback((target: ReaderTarget) => {
@@ -100,15 +98,10 @@ export function useReadingSync(options: {
           if (!alive) return;
           revision = Math.max(revision, value.own?.revision ?? 0);
           loaded = true;
-          setState({ key, ...value, error: '' });
+          setState({ key, ...value });
         } catch {
-          if (alive)
-            setState((old) => ({
-              key,
-              own: old.key === key ? old.own : null,
-              other: null,
-              error: '읽기 위치 연결을 확인하지 못했어요. 이 기기의 위치는 계속 보존해요.',
-            }));
+          // An optional lookup failure never interrupts reading or triggers retries.
+          loaded = false;
         }
       })().finally(() => {
         loading = null;
@@ -129,22 +122,18 @@ export function useReadingSync(options: {
           AbortSignal.timeout(5000)
         );
         revision = Math.max(revision, saved.revision);
-        if (alive) setState((old) => (old.key === key ? { ...old, own: saved, error: '' } : old));
+        if (alive) setState((old) => (old.key === key ? { ...old, own: saved } : old));
       } catch {
-        // Unknown/CAS outcomes are reread, not blindly replayed. Keep only a newer user location.
+        // Do not blindly replay an uncertain or conflicting write.
+        // Refresh the revision when the reader next opens or regains focus.
         loaded = false;
-        if (alive) await load();
       } finally {
         saving = false;
       }
     };
     const rememberTarget = (target: ReaderTarget) => {
       dirty = target;
-      void (loaded
-        ? save()
-        : load().then(() => {
-            if (alive) return save();
-          }));
+      if (loaded) void save();
     };
     const input = (event: Event) => {
       const node = current.current.reader.current;
@@ -179,15 +168,15 @@ export function useReadingSync(options: {
     };
     const visibility = () => {
       if (document.visibilityState === 'hidden') void save();
-      else void load();
-    };
-    const online = () => {
-      void load();
+      else
+        void load().then(() => {
+          if (alive) return save();
+        });
     };
     const pagehide = () => {
       void save();
     };
-    actions.current = { key, remember: rememberTarget, load };
+    actions.current = { key, remember: rememberTarget };
     if (pending.current?.chatId === chatId) {
       dirty = pending.current;
       pending.current = null;
@@ -196,19 +185,13 @@ export function useReadingSync(options: {
       if (alive) return save();
     });
     const timer = setInterval(() => {
-      if (document.visibilityState !== 'visible' || !dirty) return;
-      if (loaded) void save();
-      else
-        void load().then(() => {
-          if (alive) return save();
-        });
+      if (document.visibilityState === 'visible' && loaded && dirty) void save();
     }, 10_000);
     document.addEventListener('scroll', scroll, true);
     for (const type of ['wheel', 'touchmove', 'pointerdown'])
       document.addEventListener(type, input, { capture: true, passive: true });
     document.addEventListener('keydown', keyboard, true);
     document.addEventListener('visibilitychange', visibility);
-    addEventListener('online', online);
     addEventListener('pagehide', pagehide);
     return () => {
       alive = false;
@@ -221,7 +204,6 @@ export function useReadingSync(options: {
         document.removeEventListener(type, input, true);
       document.removeEventListener('keydown', keyboard, true);
       document.removeEventListener('visibilitychange', visibility);
-      removeEventListener('online', online);
       removeEventListener('pagehide', pagehide);
     };
   }, [key, clientId]);
@@ -258,7 +240,6 @@ export function useReadingSync(options: {
     remember,
     other: resume,
     resumeLabel: other ? '다른 기기에서 이어 읽기' : '저장된 위치에서 이어 읽기',
-    error: state.key === key ? state.error : '',
     resumeOther: () => {
       if (resume) {
         acknowledge();
@@ -266,8 +247,5 @@ export function useReadingSync(options: {
       }
     },
     dismiss: acknowledge,
-    refresh: () => {
-      void actions.current?.load();
-    },
   };
 }

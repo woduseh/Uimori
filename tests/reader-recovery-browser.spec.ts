@@ -73,43 +73,25 @@ test('READERREC initial reader loading becomes a recoverable error without losin
   }
 });
 
-test('NOTICECOLOR reader error banners stay legible in light and dark themes', async ({
+test('READERREC failed optional reading sync stays silent until the reader regains focus', async ({
   page,
   request,
-}, info) => {
-  const { chat } = await createReadingChat(request, '오류 안내 대비 검증', 1);
-  await page.route(`**/api/chats/${chat.id}/reading-position?*`, (route) =>
-    route.fulfill({ status: 503, json: { error: 'Reading position unavailable' } })
-  );
+}) => {
+  const { chat } = await createReadingChat(request, 'Optional reading sync failure', 1);
+  let lookups = 0;
+  await page.route(`**/api/chats/${chat.id}/reading-position?*`, (route) => {
+    lookups++;
+    return route.fulfill({ status: 503, json: { error: 'Reading position unavailable' } });
+  });
   await page.goto(`/?chat=${chat.id}`);
-  for (const mode of ['light', 'dark']) {
-    await page.evaluate((mode) => localStorage.setItem('uimori:theme', mode), mode);
-    await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', mode);
-    const banner = page.getByRole('alert', { name: '읽기 위치 연결 오류', exact: true });
-    await expect(banner).toBeVisible();
-    const contrast = await banner.evaluate((node) => {
-      const style = getComputedStyle(node);
-      const luminance = (color: string) => {
-        const channels = color
-          .match(/[\d.]+/g)!
-          .slice(0, 3)
-          .map((value) => Number(value) / 255)
-          .map((value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
-        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
-      };
-      const fg = luminance(style.color),
-        bg = luminance(style.backgroundColor);
-      return (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
-    });
-    expect(contrast).toBeGreaterThanOrEqual(4.5);
-    await expect(banner.getByRole('button', { name: '연결 다시 확인', exact: true })).toBeEnabled();
-    if (process.env.UIMORI_VISUAL_REVIEW === '1')
-      await page.screenshot({
-        path: info.outputPath(`error-banner-${mode}.png`),
-        animations: 'disabled',
-      });
-  }
+  await expect(page.getByTestId('source').first()).toBeVisible();
+  await expect.poll(() => lookups).toBe(1);
+  await expect(page.getByRole('alert', { name: '읽기 위치 연결 오류' })).toHaveCount(0);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  expect(lookups).toBe(1);
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await expect.poll(() => lookups).toBe(2);
+  await expect(page.getByRole('alert', { name: '읽기 위치 연결 오류' })).toHaveCount(0);
 });
 
 test('READERREC confirming an uncertain request never turns into cancelling its admitted run', async ({
@@ -223,7 +205,10 @@ test('READERREC failed view cache writes preserve library and chat navigation an
     Object.assign(window, { failedViewCacheWrites: failed });
     const setItem = Storage.prototype.setItem;
     Storage.prototype.setItem = function (key, value) {
-      if (this === sessionStorage && (key.startsWith('reading:') || key.startsWith('cursor:'))) {
+      if (
+        (key.startsWith('reading:') && (this === localStorage || this === sessionStorage)) ||
+        (key.startsWith('cursor:') && this === sessionStorage)
+      ) {
         failed.add(key.split(':')[0]);
         throw new DOMException('Full', 'QuotaExceededError');
       }

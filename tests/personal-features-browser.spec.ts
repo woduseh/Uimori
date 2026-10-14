@@ -295,7 +295,7 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
         (response) =>
           response.url().includes('/reading-position?') && response.request().method() === 'GET'
       );
-      await phone.evaluate(() => window.dispatchEvent(new Event('online')));
+      await phone.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
       await refreshed;
     };
     await refreshPosition();
