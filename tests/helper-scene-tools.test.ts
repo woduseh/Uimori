@@ -119,7 +119,7 @@ test('bounded reads require stable snapshots and reject sources outside the live
   expect(() => call('scene.read', { sourceId: source.id, target: 'original', offset: 4 })).toThrow(
     /revision/
   );
-  call('scene.patch', { ...first.editTarget, text: 'ABCDEFGHIJ' });
+  call('scene.patch', { ...first.editTarget, text: 'X' });
   expect(() => call('scene.read', first.nextRead)).toThrow(/changed/);
   const other = createFixtureChat(store, 'Other chat').id;
   expect(() =>
@@ -127,6 +127,41 @@ test('bounded reads require stable snapshots and reject sources outside the live
   ).toThrow(/ancestry/);
   store.db.prepare('UPDATE chats SET head_revision=NULL WHERE id=?').run(chatId);
   expect(() => call('scene.read', { sourceId: source.id, target: 'original' })).toThrow(/ancestry/);
+});
+
+test('literal replacements can normalize whitespace without accepting an empty match', () => {
+  const { store, source, call, read } = fixture('First paragraph.\n\n\nLast paragraph.');
+  const editTarget = read().editTarget;
+  expect(() =>
+    call('scene.patch', { ...editTarget, changes: [{ oldText: '', newText: 'unexpected' }] })
+  ).toThrow(/old text/);
+  expect(
+    call('scene.patch', {
+      ...editTarget,
+      changes: [{ oldText: '\n\n\n', newText: '\n\n' }],
+    })
+  ).toMatchObject({ changed: true, revision: 1 });
+  expect(store.source(source.id).text).toBe('First paragraph.\n\nLast paragraph.');
+});
+
+test('scene and retained-version reads reject offsets past the text instead of reporting completion', () => {
+  const { source, call, read } = fixture('Short text');
+  const editTarget = read().editTarget;
+  for (const [name, args] of [
+    ['scene.read', editTarget],
+    ['scene.versions', { sourceId: source.id, versionRevision: 0 }],
+  ] as const) {
+    const current = call(name, args);
+    const guards = { ...current.editTarget };
+    if (name === 'scene.versions') delete guards.target;
+    expect(call(name, { ...args, ...guards, offset: 10 })).toMatchObject({
+      text: '',
+      offset: 10,
+      totalLength: 10,
+      nextOffset: null,
+    });
+    expect(() => call(name, { ...args, ...guards, offset: 11 })).toThrow(/offset/);
+  }
 });
 
 test('retained original versions expose metadata and bounded text, restore as a new edit', () => {

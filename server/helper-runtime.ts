@@ -174,6 +174,19 @@ function smallerHelperRead(
           },
         },
       };
+    case 'scene.read':
+    case 'scene.versions':
+      return {
+        name: 'app.call',
+        arguments: {
+          name,
+          arguments: {
+            ...args,
+            ...(chatId ? { chatId } : {}),
+            limit: Math.max(1, Math.min(2000, Math.floor(Number(args.limit ?? 6000) / 2))),
+          },
+        },
+      };
     case 'chat.lore':
       return {
         name: 'app.call',
@@ -1022,7 +1035,9 @@ export class HelperRuntime {
                 guidance:
                   call.name === 'artifact.read'
                     ? 'This artifact page was not supplied to the model or summarizer. Retry the same artifact revision, field and offset with nextRead; it uses a smaller page. If this round already returned several reads, request this page next round.'
-                    : 'This result was not supplied to the model or summarizer. Use the small resource overview and a narrower path, or paged data.search/read. If this round already returned several reads, request the remaining reads next round.',
+                    : call.name === 'scene.read' || call.name === 'scene.versions'
+                      ? 'This scene page was not supplied to the model or summarizer. Retry the same chat, scene target or retained version, guards and offset with nextRead; it uses a smaller page. If this round already returned several reads, request this page next round.'
+                      : 'This result was not supplied to the model or summarizer. Use the small resource overview and a narrower path, or paged data.search/read. If this round already returned several reads, request the remaining reads next round.',
                 nextRead,
               };
               event.denied = denied = true;
