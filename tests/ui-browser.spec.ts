@@ -507,17 +507,12 @@ test('UI12 lost response reconfirms the original command and preserves a newer d
   await expect.poll(async () => (await data(request, chat.id)).runs[0]?.status).toBe('completed');
   await expect(page.getByTestId('source')).toHaveCount(1);
   await page.getByLabel('다음 장면 요청').fill('합성 새 초안은 원래 요청과 달라요');
-  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-  const admission = page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true });
-  await expect(admission).toBeVisible();
+  await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
+  const notification = page.getByRole('dialog', { name: '작업 알림', exact: true });
+  await expect(notification.getByRole('button', { name: '접수 확인', exact: true })).toBeVisible();
+  await expect(notification).toContainText('아직 접수되지 않았다면 생성을 시작할 수 있어요');
   expect(commands).toHaveLength(1);
-  await admission.getByRole('button', { name: '닫기', exact: true }).click();
-  await expect(page.getByLabel('다음 장면 요청')).toHaveValue('합성 새 초안은 원래 요청과 달라요');
-  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
-  await page
-    .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
-    .getByRole('button', { name: '접수 확인', exact: true })
-    .click();
+  await notification.getByRole('button', { name: '접수 확인', exact: true }).click();
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeVisible();
   expect(commands).toHaveLength(2);
   expect(commands[1]).toEqual(commands[0]);
@@ -525,6 +520,49 @@ test('UI12 lost response reconfirms the original command and preserves a newer d
   expect((await data(request, chat.id)).sources).toHaveLength(1);
   await expect(page.getByLabel('다음 장면 요청')).toHaveValue('합성 새 초안은 원래 요청과 달라요');
   expect(await page.evaluate((id) => sessionStorage.getItem(`command:${id}`), chat.id)).toBeNull();
+});
+
+test('UI12 postponing uncertain admission hides only the tab notice and retains recovery', async ({
+  page,
+  request,
+}) => {
+  const response = await postFixtureChat(request, {
+    data: { title: `합성 UI later notice ${Date.now()}` },
+  });
+  expect(response.ok()).toBeTruthy();
+  const chat = (await response.json()) as Chat;
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByRole('heading', { name: chat.title, exact: true })).toBeVisible();
+  let submissions = 0;
+  await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
+    submissions++;
+    await route.abort('failed');
+  });
+  await page.getByLabel('다음 장면 요청').fill('나중에 접수를 확인할 요청');
+  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
+  const notice = page.getByRole('dialog', { name: '작업 알림', exact: true });
+  await expect(notice.getByRole('button', { name: '접수 확인', exact: true })).toBeVisible();
+  await expect(notice).not.toContainText('상세');
+  expect(await notice.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await notice.getByRole('button', { name: '나중에', exact: true }).click();
+  await expect(page.getByTestId('activity-status')).toHaveCount(0);
+  const pending = await page.evaluate((id) => sessionStorage.getItem(`command:${id}`), chat.id);
+  expect(pending).toBeTruthy();
+  expect(submissions).toBe(1);
+  await page.reload();
+  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await expect(page.getByTestId('activity-status')).toHaveCount(0);
+  expect(await page.evaluate((id) => sessionStorage.getItem(`command:${id}`), chat.id)).toBe(
+    pending
+  );
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  const admission = page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true });
+  await expect(admission).toBeVisible();
+  await admission.getByRole('button', { name: '닫기', exact: true }).click();
+  expect(submissions).toBe(1);
 });
 
 test('UI07 UI12 lost fork response reuses one new story and Back Forward preserves independent drafts without model calls', async ({

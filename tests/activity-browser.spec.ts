@@ -180,7 +180,8 @@ test('AUDIT2 pending notification history does not claim empty after acknowledgi
     await expect(dialog.getByText('확인할 알림이 없어요.', { exact: true })).toHaveCount(0);
     release();
     await expect(dialog.getByText('확인할 알림이 없어요.', { exact: true })).toBeVisible();
-    expect(state.writes).toEqual([]);
+    expect(state.writes).toHaveLength(1);
+    expect(state.writes.every((write) => write.includes('/activity-acknowledgements'))).toBe(true);
   } finally {
     release();
   }
@@ -412,22 +413,26 @@ test('ACTUI06 old notification pages, bulk confirmation and execution identity s
     dialog
       .locator('[data-activity-id="uncertain-job"]')
       .getByRole('button', { name: '확인', exact: true })
-  ).toBeDisabled();
+  ).toBeEnabled();
+  await expect(dialog.locator('[data-activity-id="uncertain-job"]')).toContainText(
+    '실행 결과가 불확실해요'
+  );
   await dialog.getByRole('button', { name: '모두 확인', exact: true }).click();
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(1);
   await page.reload();
   await expect(page.getByTestId('source')).toHaveCount(1);
   await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(1);
   await dialog.getByRole('button', { name: '이전 작업 더 보기', exact: true }).click();
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(1);
   // A retry may retain its job id and timestamp: generation alone must make its
   // new failure visible rather than inheriting the previous acknowledgment.
   const retried = { ...recent[0], generation: 2 };
   await state.set([retried, ...recent.slice(1), running, uncertain]);
   await expect(dialog.locator('[data-activity-id="recent-failure-0"]')).toBeVisible();
-  await expect(rows).toHaveCount(3);
-  expect(state.writes).toEqual([]);
+  await expect(rows).toHaveCount(2);
+  expect(state.writes).toHaveLength(2);
+  expect(state.writes.every((write) => write.includes('/activity-acknowledgements'))).toBe(true);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
 
@@ -510,7 +515,8 @@ test('ACTUI07 translation success clears only its source hash and failed detail 
   await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
   await expect(rows).toHaveCount(1);
   await expect(dialog.locator('[data-activity-id="image-failure"]')).toBeVisible();
-  expect(state.writes).toEqual([]);
+  expect(state.writes).toHaveLength(3);
+  expect(state.writes.every((write) => write.includes('/activity-acknowledgements'))).toBe(true);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
 

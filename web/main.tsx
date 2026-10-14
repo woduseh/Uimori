@@ -1536,6 +1536,21 @@ function App() {
                   request={s.requestActivity}
                   connected={s.connected}
                   onDetails={() => inspect('')}
+                  recoveryRequestId={
+                    s.pendingRequest && s.requestActivity?.status === 'uncertain'
+                      ? s.requestActivity.id
+                      : undefined
+                  }
+                  recoveryBusy={s.submitting.includes(s.viewKey)}
+                  onRecoverRequest={(requestId) => {
+                    if (
+                      s.pendingRequest &&
+                      s.requestActivity?.status === 'uncertain' &&
+                      s.requestActivity.id === requestId &&
+                      !s.submitting.includes(s.viewKey)
+                    )
+                      void s.generate();
+                  }}
                   seenRunIds={seenRuns}
                 />
                 {!sourceEditing &&

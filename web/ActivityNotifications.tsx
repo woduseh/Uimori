@@ -15,6 +15,10 @@ export function ActivityNotifications({
   items,
   acknowledged,
   persistenceError,
+  recoveryRequestId,
+  recoveryBusy,
+  onRecoverRequest,
+  onLater,
   message,
   onAcknowledge,
   onHistory,
@@ -26,6 +30,10 @@ export function ActivityNotifications({
   items: ActivityNoticeItem[];
   acknowledged: string[];
   persistenceError: boolean;
+  recoveryRequestId?: string;
+  recoveryBusy: boolean;
+  onRecoverRequest: (requestId: string) => void;
+  onLater: (item: ActivityNoticeItem) => void;
   message: (item: ActivityNoticeItem) => string;
   onAcknowledge: (items: ActivityNoticeItem[]) => void;
   onHistory: (items: ReaderActivity[]) => void;
@@ -101,6 +109,10 @@ export function ActivityNotifications({
       <ul className="activity-notification-items">
         {visible.map((item) => {
           const confirmed = acknowledged.includes(item.acknowledgementKey);
+          const recoverable =
+            item.kind === 'request' &&
+            item.status === 'uncertain' &&
+            item.runId === recoveryRequestId;
           return (
             <li
               key={item.acknowledgementKey}
@@ -114,39 +126,68 @@ export function ActivityNotifications({
                     <time dateTime={item.startedAt}>
                       {new Date(item.startedAt).toLocaleString()}
                     </time>{' '}
-                    · {item.runId}
+                    · {item.kind === 'request' ? '장면 생성' : `작업 ${item.runId.slice(0, 8)}`}
                   </small>
                 </div>
                 <div className="activity-notification-actions">
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={item.kind === 'request'}
-                    aria-expanded={inspected === item.acknowledgementKey}
-                    onClick={() =>
-                      setInspected(
-                        inspected === item.acknowledgementKey ? null : item.acknowledgementKey
-                      )
-                    }
-                  >
-                    상세
-                  </button>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={confirmed || !canAcknowledge(item)}
-                    onClick={() => {
-                      onAcknowledge([item]);
-                      if (inspected === item.acknowledgementKey) setInspected(null);
-                    }}
-                  >
-                    {confirmed ? '확인됨' : '확인'}
-                  </button>
+                  {item.kind !== 'request' && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-expanded={inspected === item.acknowledgementKey}
+                      onClick={() =>
+                        setInspected(
+                          inspected === item.acknowledgementKey ? null : item.acknowledgementKey
+                        )
+                      }
+                    >
+                      상세
+                    </button>
+                  )}
+                  {item.kind === 'request' && item.status === 'uncertain' ? (
+                    <>
+                      <button type="button" className="secondary" onClick={() => onLater(item)}>
+                        나중에
+                      </button>
+                      {recoverable && (
+                        <button
+                          type="button"
+                          disabled={recoveryBusy}
+                          aria-busy={recoveryBusy}
+                          onClick={() => onRecoverRequest(item.runId)}
+                        >
+                          {recoveryBusy ? '확인 중…' : '접수 확인'}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={confirmed || !canAcknowledge(item)}
+                      onClick={() => {
+                        onAcknowledge([item]);
+                        if (inspected === item.acknowledgementKey) setInspected(null);
+                      }}
+                    >
+                      {confirmed ? '확인됨' : '확인'}
+                    </button>
+                  )}
                 </div>
               </div>
-              {!canAcknowledge(item) && (
-                <small>진행 중이거나 실행 여부 확인이 필요한 작업은 알림을 유지해요.</small>
-              )}
+              {item.kind === 'request' && item.status === 'uncertain' ? (
+                <small>
+                  {recoverable
+                    ? '서버 응답을 받지 못했어요. 같은 요청으로 다시 확인하며, 아직 접수되지 않았다면 생성을 시작할 수 있어요. 이미 접수된 요청은 중복 생성하지 않아요.'
+                    : '이 탭에 복구 가능한 요청 정보가 없어요. 알림을 잠시 숨기거나 작업 기록을 확인할 수 있어요.'}
+                </small>
+              ) : item.executionUncertain && canAcknowledge(item) ? (
+                <small>
+                  실행 결과가 불확실해요. 확인은 알림만 정리하며 작업 기록과 상태는 유지돼요.
+                </small>
+              ) : !canAcknowledge(item) ? (
+                <small>진행 중인 작업은 아직 확인할 수 없어요.</small>
+              ) : null}
               {inspected === item.acknowledgementKey && (
                 <NotificationDetail
                   key={item.acknowledgementKey}

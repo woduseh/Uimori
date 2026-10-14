@@ -85,6 +85,39 @@ test('activity inbox ignores historic output, groups auto translation, and persi
   ).toBe(400);
 });
 
+test('uncertain completed-attempt outcomes can be read without changing their saved status', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-feed-'));
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'activity-uncertain-test',
+    testMode: true,
+  });
+  current = { app, directory };
+  const chat = createFixtureChat(app.store, 'Uncertain activity');
+  const source = completedSource(app.store, chat.id, 'Saved original');
+  await app.inject('/api/activity-feed');
+  const jobId = randomUUID();
+  const at = new Date(Date.now() + 1000).toISOString();
+  app.store.db
+    .prepare(`INSERT INTO jobs(id,chat_id,source_revision,source_hash,kind,status,input,error,created_at,updated_at)
+    VALUES(?,?,?,?,'translation','interrupted',?,'PROVIDER_UNCERTAIN: response lost',?,?)`)
+    .run(jobId, chat.id, source.id, source.hash, '{}', at, at);
+  const { items } = (await app.inject('/api/activity-feed')).json();
+  expect(items).toMatchObject([
+    { kind: 'translation', status: 'interrupted', actionable: true, canAcknowledge: true },
+  ]);
+  const acknowledged = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${chat.id}/activity-acknowledgements`,
+    payload: { keys: [items[0].acknowledgementKey] },
+  });
+  expect(acknowledged.statusCode).toBe(200);
+  expect((await app.inject('/api/activity-feed')).json().items).toEqual([]);
+  expect(app.store.db.prepare('SELECT status FROM jobs WHERE id=?').get(jobId)).toMatchObject({
+    status: 'interrupted',
+  });
+});
+
 test('automatic translation replaces a real completed-run notice instead of duplicating it', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-feed-'));
   const app = await createApp({

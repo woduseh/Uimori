@@ -89,6 +89,9 @@ export function ActivityStatus({
   request,
   connected,
   onDetails,
+  recoveryRequestId,
+  recoveryBusy = false,
+  onRecoverRequest,
   scope,
   seenRunIds = [],
 }: {
@@ -97,6 +100,9 @@ export function ActivityStatus({
   request?: RequestActivity;
   connected: boolean;
   onDetails: () => void;
+  recoveryRequestId?: string;
+  recoveryBusy?: boolean;
+  onRecoverRequest: (requestId: string) => void;
   scope: string;
   /** Pending turns whose failure card the reader has scrolled into view. */
   seenRunIds?: string[];
@@ -263,6 +269,12 @@ export function ActivityStatus({
         (Date.parse(notice.item.startedAt) || 0) >= latestMainStart) &&
       (notice.expiresAt === null || notice.expiresAt > now) &&
       !acknowledged.includes(notice.item.acknowledgementKey) &&
+      // Postponing this warning does not change the recoverable request.
+      !(
+        notice.item.kind === 'request' &&
+        notice.item.status === 'uncertain' &&
+        hidden.includes(notice.item.key)
+      ) &&
       !(success(notice.item.status) && hidden.includes(notice.item.key)) &&
       // The failed turn's own card is on screen; the composer row must not repeat it.
       !(
@@ -376,6 +388,14 @@ export function ActivityStatus({
         items={[...running, ...unresolvedNotices.map((notice) => notice.item)]}
         acknowledged={acknowledged}
         persistenceError={persistenceError}
+        recoveryRequestId={recoveryRequestId}
+        recoveryBusy={recoveryBusy}
+        onRecoverRequest={onRecoverRequest}
+        onLater={(notice) => {
+          if (notice.kind !== 'request' || notice.status !== 'uncertain') return;
+          setHidden((old) => [...new Set([...old, notice.key])]);
+          setNotificationsOpen(false);
+        }}
         message={message}
         onAcknowledge={acknowledge}
         onHistory={(page) =>

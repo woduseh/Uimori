@@ -122,7 +122,7 @@ export function activityFeed(store: Store): ActivityFeed {
       representation:
         row.kind === 'translation' && success(row.status) ? 'translation' : 'original',
       actionable: !success(row.status),
-      canAcknowledge: !row.uncertain,
+      canAcknowledge: true,
     });
   }
   return { items, running: chatActivities(store) };
