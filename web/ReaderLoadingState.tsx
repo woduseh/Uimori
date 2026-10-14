@@ -29,6 +29,12 @@ export function ReaderLoadingState({
   if (error)
     return (
       <div className="reader-loading-error">
+        {loading && (
+          <div className="reader-loading-retry" role="status">
+            <RunningIcon size={18} className="activity-spinner" aria-hidden="true" />
+            <span>본문을 다시 불러오는 중이에요…</span>
+          </div>
+        )}
         <LoadingState
           loading={loading}
           error={error}
