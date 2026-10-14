@@ -91,6 +91,7 @@ export function ActivityStatus({
   onDetails,
   recoveryRequestId,
   recoveryBusy = false,
+  recoveryError = '',
   onRecoverRequest,
   scope,
   seenRunIds = [],
@@ -102,6 +103,7 @@ export function ActivityStatus({
   onDetails: () => void;
   recoveryRequestId?: string;
   recoveryBusy?: boolean;
+  recoveryError?: string;
   onRecoverRequest: (requestId: string) => void;
   scope: string;
   /** Pending turns whose failure card the reader has scrolled into view. */
@@ -390,6 +392,7 @@ export function ActivityStatus({
         persistenceError={persistenceError}
         recoveryRequestId={recoveryRequestId}
         recoveryBusy={recoveryBusy}
+        recoveryError={recoveryError}
         onRecoverRequest={onRecoverRequest}
         onLater={(notice) => {
           if (notice.kind !== 'request' || notice.status !== 'uncertain') return;

@@ -537,7 +537,15 @@ test('UI12 postponing uncertain admission hides only the tab notice and retains 
   let submissions = 0;
   await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
     submissions++;
-    await route.abort('failed');
+    if (submissions === 1) {
+      await route.abort('failed');
+    } else {
+      await route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'RECOVERY_UNAVAILABLE' }),
+      });
+    }
   });
   await page.getByLabel('다음 장면 요청').fill('나중에 접수를 확인할 요청');
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
@@ -545,13 +553,18 @@ test('UI12 postponing uncertain admission hides only the tab notice and retains 
   await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
   const notice = page.getByRole('dialog', { name: '작업 알림', exact: true });
   await expect(notice.getByRole('button', { name: '접수 확인', exact: true })).toBeVisible();
+  const firstError = await notice.getByRole('alert').innerText();
+  await notice.getByRole('button', { name: '접수 확인', exact: true }).click();
+  await expect.poll(() => submissions).toBe(2);
+  await expect(notice.getByRole('alert')).not.toHaveText(firstError);
+  await expect(notice.getByRole('button', { name: '접수 확인', exact: true })).toBeEnabled();
   await expect(notice).not.toContainText('상세');
   expect(await notice.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   await notice.getByRole('button', { name: '나중에', exact: true }).click();
   await expect(page.getByTestId('activity-status')).toHaveCount(0);
   const pending = await page.evaluate((id) => sessionStorage.getItem(`command:${id}`), chat.id);
   expect(pending).toBeTruthy();
-  expect(submissions).toBe(1);
+  expect(submissions).toBe(2);
   await page.reload();
   await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
   await expect(page.getByTestId('activity-status')).toHaveCount(0);
@@ -562,7 +575,7 @@ test('UI12 postponing uncertain admission hides only the tab notice and retains 
   const admission = page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true });
   await expect(admission).toBeVisible();
   await admission.getByRole('button', { name: '닫기', exact: true }).click();
-  expect(submissions).toBe(1);
+  expect(submissions).toBe(2);
 });
 
 test('UI07 UI12 lost fork response reuses one new story and Back Forward preserves independent drafts without model calls', async ({
