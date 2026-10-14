@@ -19,7 +19,7 @@ export const activityActive = (status: string) =>
   ['sending', 'accepted', 'queued', 'running'].includes(status);
 export const activitySuccess = (status: string) => ['completed', 'cancelled'].includes(status);
 export const canAcknowledge = (item: ActivityNoticeItem) =>
-  !activityActive(item.status) && item.status !== 'uncertain' && !item.executionUncertain;
+  !activityActive(item.status) && item.status !== 'uncertain';
 
 export function activityAcknowledgementKey(item: ReaderActivity) {
   return JSON.stringify([item.kind, item.id, item.generation, item.startedAt]);
