@@ -120,6 +120,68 @@ test.each(['standard', 'flex', 'priority'])(
   }
 );
 
+test('Studio keeps fresh helper controls ahead of multiple signed tool responses', async () => {
+  const input = request();
+  input.role = 'helper';
+  const callParts: Json[] = [
+    {
+      functionCall: { id: 'studio-first', name: 'knowledge.read', args: { id: 'one' } },
+      thoughtSignature: 'first-private-signature',
+    },
+    {
+      functionCall: { id: 'studio-second', name: 'knowledge.read', args: { id: 'two' } },
+    },
+  ];
+  const bodies: any[] = [];
+  await localProvider(async (captured, response) => {
+    bodies.push(JSON.parse(captured.body));
+    await writeSse(response, [
+      resultEvent(bodies.length === 1 ? callParts : [{ text: 'Both references checked.' }]),
+    ]);
+  });
+  const first = await executeProvider(connection, input, options());
+  expect(first.status).toBe('tool_calls');
+  const freshControls = JSON.stringify({ controls: { helperCallsRemaining: 2 } });
+  const second = await executeProvider(
+    connection,
+    {
+      ...input,
+      opaqueState: first.opaqueState,
+      continuationInput: freshControls,
+      input: {
+        ...input.input,
+        results: [...first.toolCalls].reverse().map((call) => ({
+          callId: call.id,
+          name: call.name,
+          result: { text: call.id },
+        })),
+      },
+    },
+    options()
+  );
+  expect(second.status).toBe('completed');
+  expect(second.text).toBe('Both references checked.');
+  expect(bodies).toHaveLength(2);
+  expect(bodies[1].contents[1].parts).toEqual(callParts);
+  expect(bodies[1].contents[2].parts).toEqual([
+    { text: freshControls },
+    {
+      functionResponse: {
+        id: 'studio-first',
+        name: 'knowledge.read',
+        response: { text: 'studio-first' },
+      },
+    },
+    {
+      functionResponse: {
+        id: 'studio-second',
+        name: 'knowledge.read',
+        response: { text: 'studio-second' },
+      },
+    },
+  ]);
+});
+
 test('Studio PDF keeps signed native tool continuation and transient budget evidence through pricing', async () => {
   const input = request();
   input.generation!.pdfInput = true;

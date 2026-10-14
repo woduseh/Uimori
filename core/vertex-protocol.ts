@@ -198,9 +198,12 @@ export function prepareGeminiRequest(
       ...previous.contents,
       {
         role: 'user',
+        // Vertex rejects a tool-response turn when appended text follows functionResponse.
+        // Keep the original model turn and tool result ordering intact; place fresh
+        // host controls before the function responses inside the same user turn.
         parts: [
-          ...responses,
           ...(continuationInput !== undefined ? [{ text: continuationInput }] : []),
+          ...responses,
         ],
       },
     ];
