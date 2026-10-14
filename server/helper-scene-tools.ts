@@ -153,6 +153,7 @@ function page(
   const textHash = digest(content);
   if ((offset > 0 || args.expectedTextHash !== undefined) && args.expectedTextHash !== textHash)
     throw new HttpError(409, 'Scene text changed; restart paging');
+  if (offset > content.length) throw new HttpError(400, 'Text offset exceeds scene length');
   const splitsPair = (index: number) =>
     index > 0 &&
     index < content.length &&
@@ -202,7 +203,8 @@ function replacement(content: string, args: Record<string, unknown>) {
     .map((value) => {
       const change = record(value);
       fields(change, ['oldText', 'newText']);
-      const oldText = text(change.oldText, 'old text', SOURCE_TEXT_MAX_CHARS);
+      const oldText = text(change.oldText, 'old text', SOURCE_TEXT_MAX_CHARS, true);
+      if (oldText.length === 0) throw new HttpError(400, 'Invalid old text');
       const newText = text(change.newText, 'new text', SOURCE_TEXT_MAX_CHARS, true);
       const start = content.indexOf(oldText);
       if (start < 0 || content.indexOf(oldText, start + 1) !== -1)

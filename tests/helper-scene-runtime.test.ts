@@ -328,3 +328,66 @@ test('helper translation save aborts the active provider and preserves the manua
     result: { text: '직접 다듬어 저장한 번역' },
   });
 });
+
+test.each(['scene.read', 'scene.versions'] as const)(
+  '%s round-budget recovery preserves the selected chat, version and unread range',
+  async (name) => {
+    const f = await fixture('library');
+    const prose = 'Exact saved scene. '.repeat(6000);
+    const source = completedSource(f.store, f.chat.id, prose);
+    let args: Record<string, unknown>;
+    mockSend((request, round) => {
+      if (round === 0)
+        return calls(
+          call('guards', 'scene.read', {
+            chatId: f.chat.id,
+            sourceId: source.id,
+            target: 'original',
+            limit: 1,
+          })
+        );
+      if (round === 1) {
+        const guards = result(request, 'guards').editTarget as Record<string, unknown>;
+        const { target: _target, ...versionGuards } = guards;
+        args = {
+          ...(name === 'scene.read' ? guards : versionGuards),
+          chatId: f.chat.id,
+          ...(name === 'scene.versions' ? { versionRevision: 0 } : {}),
+          offset: 37,
+          limit: 10000,
+        };
+        return calls(...Array.from({ length: 7 }, (_, index) => call(`page-${index}`, name, args)));
+      }
+      if (round === 2) {
+        const denied = (request.input.results as unknown as ToolEvent[]).find(
+          (item) =>
+            item.denied && (item.result as { error?: string }).error === 'HELPER_READ_TOO_LARGE'
+        );
+        expect(denied).toBeDefined();
+        const retry = (
+          denied!.result as {
+            nextRead: { name: string; arguments: Record<string, unknown> };
+          }
+        ).nextRead;
+        expect(request.stable.tools.map((tool) => tool.name)).toContain(retry.name);
+        expect(retry).toEqual({
+          name: 'app.call',
+          arguments: { name, arguments: { ...args, limit: 2000 } },
+        });
+        return calls({
+          id: 'retry-page',
+          name: retry.name,
+          arguments: asJson(retry.arguments) as Record<string, transport.Json>,
+        });
+      }
+      expect(result(request, 'retry-page')).toMatchObject({
+        chatId: f.chat.id,
+        text: prose.slice(37, 2037),
+        offset: 37,
+        nextOffset: 2037,
+      });
+      return structuredClone(success);
+    });
+    await submit(f, '지정한 채팅의 장면 본문을 이어서 읽어줘.');
+  }
+);
