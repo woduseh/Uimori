@@ -1,5 +1,49 @@
 .reader.reader-awaiting {
+  display: block;
+}
+.reader-loading {
+  width: 100%;
+  max-width: 720px;
+  padding: 16px 0 24px;
+  color: var(--muted);
+}
+.reader-loading-status {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.reader-loading-status svg {
+  flex: none;
+}
+.reader-loading-skeleton {
+  padding-top: 32px;
+}
+.reader-loading-skeleton-title,
+.reader-loading-skeleton-paragraph span {
+  display: block;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+}
+.reader-loading-skeleton-title {
+  width: 34%;
+  height: 16px;
+  margin-bottom: 32px;
+}
+.reader-loading-skeleton-paragraph {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 32px;
+}
+.reader-loading-skeleton-paragraph span {
+  height: 11px;
+}
+.reader-loading-slow {
+  margin: 0;
+  font-size: 12px;
+}
+.reader-loading-error {
+  display: grid;
+  place-items: center;
+  min-height: min(55dvh, 420px);
 }

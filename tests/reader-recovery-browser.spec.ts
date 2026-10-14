@@ -39,8 +39,14 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     await expect(page.locator('.reader-awaiting')).toHaveAttribute('aria-busy', 'true');
     await page.clock.runFor(50);
     await expect(loading).toHaveCount(0);
+    await expect(page.locator('.reader-loading-skeleton')).toHaveCount(0);
     await page.clock.fastForward(250);
     await expect(loading).toBeVisible();
+    const skeleton = page.locator('.reader-loading-skeleton');
+    await expect(skeleton).toBeVisible();
+    await expect(skeleton).toHaveAttribute('aria-hidden', 'true');
+    await expect(skeleton.locator('.reader-loading-skeleton-paragraph span')).toHaveCount(7);
+    await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toHaveCount(0);
     const spinner = loading.locator('svg');
     await expect(spinner).toHaveCSS('animation-name', 'activity-spin');
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -49,6 +55,8 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     await expect(page.getByRole('button', { name: '본문 다시 불러오기', exact: true })).toHaveCount(
       0
     );
+    await page.clock.fastForward(3100);
+    await expect(page.getByText('평소보다 조금 오래 걸리고 있어요.')).toBeVisible();
     if (process.env.UIMORI_VISUAL_REVIEW === '1')
       await page.screenshot({ path: info.outputPath('reader-loading.png') });
     releaseRead();
@@ -56,6 +64,7 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     await expect(error).toBeVisible();
     await expect(error).toContainText('서버 작업을 완료하지 못했어요. (503)');
     await expect(loading).toHaveCount(0);
+    await expect(skeleton).toHaveCount(0);
     if (process.env.UIMORI_VISUAL_REVIEW === '1')
       await page.screenshot({ path: info.outputPath('reader-loading-error.png') });
     failed = false;
@@ -69,6 +78,69 @@ test('READERREC initial reader loading becomes a recoverable error without losin
     await expect(loading).toHaveCount(0);
   } finally {
     releaseRead();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
+test('READERREC missing model warning waits for reader and model lookup to finish', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await createReadingChat(request, 'Delayed model lookup', 1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  let releaseLibrary!: () => void;
+  const libraryGate = new Promise<void>((resolve) => {
+    releaseLibrary = resolve;
+  });
+  await page.route(/\/api\/health(?:\?|$)/, async (route) => {
+    const response = await route.fetch();
+    const health = await response.json();
+    await route.fulfill({ response, json: { ...health, testMode: false } });
+  });
+  await page.route('**/api/library?view=summary', async (route) => {
+    await libraryGate;
+    const response = await route.fetch();
+    const library = await response.json();
+    await route.fulfill({ response, json: { ...library, models: [] } });
+  });
+  try {
+    await page.goto(`/?chat=${chat.id}`);
+    await expect(page.getByTestId('source')).toHaveCount(1);
+    await expect(
+      page.getByRole('button', { name: /현재 본문 모델 · 본문 모델을 확인하고 있어요/ })
+    ).toBeVisible();
+    await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
+    releaseLibrary();
+    await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '현재 본문 모델 · 본문 모델을 선택해 주세요' })
+    ).toBeVisible();
+  } finally {
+    releaseLibrary();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
+test('READERREC a failed model-settings read offers retry instead of a missing-model claim', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await createReadingChat(request, 'Model lookup recovery', 1);
+  let failures = 1;
+  await page.route('**/api/prompt-workspace', (route) => {
+    if (failures-- > 0) return route.fulfill({ status: 503, json: { error: 'Unavailable' } });
+    return route.continue();
+  });
+  try {
+    await page.goto(`/?chat=${chat.id}`);
+    await expect(page.getByTestId('source')).toHaveCount(1);
+    const error = page.getByRole('alert').filter({ hasText: '모델 설정을 확인하지 못했어요.' });
+    await expect(error).toBeVisible();
+    await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toHaveCount(0);
+    await error.getByRole('button', { name: '다시 불러오기' }).click();
+    await expect(error).toHaveCount(0);
+  } finally {
     await page.unrouteAll({ behavior: 'wait' });
   }
 });
