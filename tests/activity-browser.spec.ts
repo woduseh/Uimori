@@ -520,6 +520,44 @@ test('ACTUI07 translation success clears only its source hash and failed detail 
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
 
+test('ACTUI12 illustration notification detail reads its illustration and preserves execution identity', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request);
+  const illustration = activity('illustration-notice', 'illustration', 'failed');
+  const state = await harness(page, seeded.chat.id, [illustration]);
+  const reads: string[] = [];
+  page.on('request', (outbound) => {
+    const path = new URL(outbound.url()).pathname;
+    if (path.endsWith('/illustration-notice')) reads.push(path);
+  });
+  await page.route('**/api/illustrations/illustration-notice', (route) =>
+    route.fulfill({ json: { status: 'failed', attempt: 1, generation: 2 } })
+  );
+  await page.getByRole('button', { name: '작업 상세 보기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '작업 알림', exact: true });
+  const row = dialog.locator('[data-activity-id="illustration-notice"]');
+  await row.getByRole('button', { name: '상세', exact: true }).click();
+  await expect(row).toContainText('새 실행으로 바뀌어');
+  await expect(row.getByRole('button', { name: '확인', exact: true })).toBeEnabled();
+  expect(state.writes).toEqual([]);
+  await row.getByRole('button', { name: '상세', exact: true }).click();
+  await page.route('**/api/illustrations/illustration-notice', (route) =>
+    route.fulfill({ json: { status: 'failed', attempt: 0, generation: 1 } })
+  );
+  await row.getByRole('button', { name: '상세', exact: true }).click();
+  await expect(row).toContainText('상태: 실패');
+  await expect(row.getByRole('button', { name: '확인됨', exact: true })).toBeDisabled();
+  expect(reads).toEqual([
+    '/api/illustrations/illustration-notice',
+    '/api/illustrations/illustration-notice',
+  ]);
+  expect(state.writes).toHaveLength(1);
+  expect(state.writes[0]).toContain('/activity-acknowledgements');
+  expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
+});
+
 test('ACTUI08 history cannot retain vanished active jobs or revive a previous generation', async ({
   page,
   request,

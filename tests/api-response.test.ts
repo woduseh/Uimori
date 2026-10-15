@@ -138,6 +138,35 @@ test('accepted task mutations wake activity views while reads and rejected reque
   expect(changed).not.toHaveBeenCalled();
 });
 
+test.each([
+  '/scene-commands/synthetic/cancel',
+  '/chats/synthetic/scene-commands',
+  '/sources/synthetic/translation',
+  '/sources/synthetic/images',
+  '/illustrations/synthetic/cancel',
+  '/helper/tasks/synthetic/cancel',
+])('accepted active mutation %s wakes activity views', async (path) => {
+  browser();
+  const changed = vi.fn();
+  window.addEventListener(activityChangedEvent, changed);
+  respond(200, { ok: true });
+  await api(path, {});
+  expect(changed).toHaveBeenCalledTimes(1);
+});
+
+test.each([
+  '/story-jobs/synthetic/cancel',
+  '/chats/synthetic/extension',
+  '/sources/synthetic/status',
+])('retired mutation %s does not wake activity views', async (path) => {
+  browser();
+  const changed = vi.fn();
+  window.addEventListener(activityChangedEvent, changed);
+  respond(200, { ok: true });
+  await api(path, {});
+  expect(changed).not.toHaveBeenCalled();
+});
+
 test.each(['json', 'binary'] as const)(
   '%s propagates transport failure without an HTTP error',
   async (mode) => {
