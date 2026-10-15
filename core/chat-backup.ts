@@ -28,6 +28,8 @@ export type ChatCopyAuthoring = {
   > & { atIndex: number | null })[];
 };
 export type ChatCopyState = {
+  /** Authored preferences only; derived guide results belong to the original execution. */
+  storyGuide?: import('./story-guide.js').StoryGuideConfig;
   sceneTitles?: { atIndex: number; title: string }[];
   bookmarks?: import('./reading-state.js').PortableBookmark[];
   authoring?: ChatCopyAuthoring;

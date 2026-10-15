@@ -6,6 +6,7 @@ import { initDatabaseReadIndexes } from './database-performance.js';
 import { initIllustrations } from './illustrations.js';
 import { initOutline, initOutlineWorkspace } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
+import { initStoryGuide } from './story-guide-store.js';
 
 export const DATABASE_SCHEMA_VERSION = 15;
 const FORMAT = 'uimori-personal-v1';
@@ -45,12 +46,14 @@ export function databaseSchemaVersion(db: DatabaseSync): number {
 export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () => void): void {
   const previous = databaseSchemaVersion(db);
   if (previous === DATABASE_SCHEMA_VERSION) {
+    initStoryGuide(db);
     initDatabaseReadIndexes(db);
     return;
   }
   try {
     db.exec('BEGIN IMMEDIATE');
     initializeFresh();
+    initStoryGuide(db);
     initIllustrations(db);
     initOutline(db);
     initLoreContextDefaults(db);

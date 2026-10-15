@@ -946,6 +946,17 @@ function App() {
                     <button
                       type="button"
                       className="secondary"
+                      onClick={(event) => {
+                        fromChatMenu(event);
+                        openChatSettings('guide');
+                      }}
+                    >
+                      <BookOpen size={18} aria-hidden="true" />
+                      이야기 가이드
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
                       disabled={!sceneCount}
                       onClick={() => setChatTool({ scope: s.viewKey, kind: 'export' })}
                     >

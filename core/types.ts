@@ -65,6 +65,8 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  storyGuide?: import('./story-guide.js').StoryGuideSnapshot;
+  storyGuideReceipt?: Pick<import('./story-guide.js').StoryGuideSnapshot, 'brief' | 'error'>;
   /** Replace this head only on successful completion; generation starts at its parent. */
   replacement?: { sourceRevision: string; sourceHash: string };
   /** Compact Lua-authored message edits retained after execution inputs are released. */

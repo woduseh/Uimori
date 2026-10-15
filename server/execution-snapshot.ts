@@ -9,6 +9,16 @@ export function settleSnapshot(snapshot: RunSnapshot): RunSnapshot {
     mainJudgmentEnabled: snapshot.mainJudgmentEnabled,
     mainJudgmentThreshold: snapshot.mainJudgmentThreshold,
     displayModelTitle: snapshot.profile?.models.main?.title ?? snapshot.displayModelTitle,
+    ...(snapshot.storyGuide?.config.enabled
+      ? {
+          storyGuideReceipt: {
+            ...(snapshot.storyGuide.brief ? { brief: snapshot.storyGuide.brief } : {}),
+            ...(snapshot.storyGuide.error ? { error: snapshot.storyGuide.error } : {}),
+          },
+        }
+      : snapshot.storyGuideReceipt
+        ? { storyGuideReceipt: snapshot.storyGuideReceipt }
+        : {}),
     chatId: snapshot.chatId,
     parentRevision: snapshot.parentRevision,
     ...(snapshot.replacement ? { replacement: snapshot.replacement } : {}),

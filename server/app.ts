@@ -14,6 +14,7 @@ import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
 import { inputTranslationRoutes } from './input-translation.js';
+import { storyGuideRoutes } from './story-guide-routes.js';
 import { selectionRevisionRoutes } from './selection-revision.js';
 import { ChatTranscriptError } from '../core/chat-transcript.js';
 import { PackageStartError } from '../core/package-start.js';
@@ -836,6 +837,13 @@ export async function createApp(options: AppOptions): Promise<App> {
   themeRoutes(app, store);
   illustrationPresetRoutes(app, store);
   inputTranslationRoutes(app, store, {
+    signal: stopping.signal,
+    resolveCredential,
+    executeCodex,
+    vertexRequestTier: options.vertexRequestTier,
+    track,
+  });
+  storyGuideRoutes(app, store, {
     signal: stopping.signal,
     resolveCredential,
     executeCodex,

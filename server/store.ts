@@ -34,6 +34,7 @@ import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import { isSourceOnlyTranscript } from '../core/authored-history.js';
 import { HttpError, text } from './request-validation.js';
 import { StoryStore } from './story-store.js';
+import { StoryGuideStore } from './story-guide-store.js';
 import { OutlineStore } from './outline-store.js';
 import { ChatOrganizationStore } from './chat-organization.js';
 import { LibraryOrganizationStore } from './library-organization.js';
@@ -91,6 +92,7 @@ export class Store {
   readonly product: ProductStore;
   readonly credentials: CredentialStore;
   readonly story: StoryStore;
+  readonly storyGuide: StoryGuideStore;
   readonly outline: OutlineStore;
   readonly context: ContextStore;
   readonly organization: ChatOrganizationStore;
@@ -122,6 +124,7 @@ export class Store {
       this.credentials = new CredentialStore(this.db);
       this.product = new ProductStore(this);
       this.story = new StoryStore(this);
+      this.storyGuide = new StoryGuideStore(this);
       this.outline = new OutlineStore(this);
       this.context = new ContextStore(this);
       this.organization = new ChatOrganizationStore(this);

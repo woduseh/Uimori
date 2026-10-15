@@ -1,0 +1,70 @@
+.story-guide,
+.story-guide-config {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.story-guide > p,
+.story-guide-section > h4,
+.story-guide-heading h4 {
+  margin: 0;
+}
+.story-guide-config {
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.story-guide-config > label:not(.settings-row, .story-guide-check),
+.story-guide-reference label,
+.story-guide-section form > label {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.story-guide-config input:not([type="checkbox"]),
+.story-guide textarea {
+  width: 100%;
+  min-width: 0;
+}
+.story-guide-config > .story-guide-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.story-guide-section {
+  min-width: 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.story-guide-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.story-guide-reference > summary,
+.story-guide-last-brief > summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+}
+.story-guide-last-brief {
+  margin-top: 16px;
+}
+.story-guide-result {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.story-guide-question {
+  margin-top: 0;
+  font-weight: 600;
+  white-space: pre-wrap;
+}

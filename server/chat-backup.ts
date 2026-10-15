@@ -22,6 +22,7 @@ import { convertTransferImages } from './transfer-images.js';
 import { processImage } from './image-processing.js';
 import { validateChatTranscript } from '../core/chat-transcript.js';
 import { validateChatVariableState } from '../core/chat-variables.js';
+import { normalizeStoryGuideConfig } from '../core/story-guide.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -101,6 +102,8 @@ function checkedBackup(value: unknown, binary = false): ChatBackup {
     const copy = record(raw);
     validateChatTranscript(copy.transcript);
     const state = record(copy.state);
+    if (state.storyGuide !== undefined)
+      state.storyGuide = normalizeStoryGuideConfig(state.storyGuide);
     validateChatVariableState(state.variables);
     if (!Array.isArray(state.checkpoints) || !Array.isArray(copy.illustrations))
       throw new HttpError(400, '채팅 상태가 올바르지 않아요.');
