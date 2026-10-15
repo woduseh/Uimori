@@ -21,6 +21,33 @@ async function seed(request: APIRequestContext, kind: Content['kind'], title: st
   return response.json() as Promise<Content>;
 }
 
+test('PLR04 an explicit prompt-card question pins the intended helper resource', async ({
+  page,
+  request,
+}) => {
+  const title = `PLR helper target ${crypto.randomUUID()}`;
+  const response = await request.post('/api/prompt-presets', {
+    data: {
+      title,
+      role: 'translation',
+      program: createDefaultRisuPrompt('Translate precisely.', 'translation'),
+      values: {},
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+  const menu = page.getByLabel(`${title} 메뉴`, { exact: true });
+  await menu.click();
+  await menu.locator('..').getByRole('button', { name: '도우미에게 묻기' }).click();
+  const helper = page.locator('#helper-panel');
+  await expect(helper).toBeVisible();
+  await expect(helper.getByText(`참고 자료 · ${title}`, { exact: true })).toBeVisible();
+  await helper.getByRole('button', { name: '대상 해제' }).click();
+  await expect(helper.getByText(`참고 자료 · ${title}`, { exact: true })).toHaveCount(0);
+});
+
 test('PLR02 every package category is editable from card and list controls', async ({
   page,
   request,

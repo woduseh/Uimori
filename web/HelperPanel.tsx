@@ -7,6 +7,7 @@ import { SaveIcon, SettingsIcon, CloseIcon } from './ui-icons.js';
 import type {
   HelperConversation,
   HelperEditor,
+  HelperResourceRef,
   HelperScope,
   HelperSelection,
 } from '../core/helper.js';
@@ -58,6 +59,8 @@ type Props = {
   ready?: boolean;
   scope: HelperScope;
   selection?: HelperSelection & { key: string; scope?: HelperScope; conversationId?: string };
+  resource?: HelperResourceRef | null;
+  onClearResource?: () => void;
   outlineRequest?: OutlineHelperRequest;
   outlineWorkspace?: boolean;
   onClose: () => void;
@@ -563,9 +566,10 @@ export function HelperPanel(props: Props) {
       owner = scopeKey;
     if (saved && (saved.scope !== owner || saved.targetConversationId !== conversation?.id))
       return false;
-    // Capture before the first await, including pending raw editor fields.
+    // An explicit library-card target takes precedence over another mounted editor.
+    const targeted = props.scope.kind === 'library' && props.resource ? props.resource : null;
     let captured: ReturnType<typeof captureActiveEditorContext> = null;
-    if (!saved && !steerTaskId) {
+    if (!saved && !steerTaskId && !targeted) {
       try {
         captured = captureActiveEditorContext();
       } catch (cause) {
@@ -595,11 +599,19 @@ export function HelperPanel(props: Props) {
           scope: owner,
           targetConversationId: conversation!.id,
           ...(steerTaskId ? { steerTaskId } : {}),
-          ...(captured
+          ...(!steerTaskId && targeted
             ? {
-                editor: captured,
+                editor: {
+                  kind: targeted.kind,
+                  targetId: targeted.id,
+                  revision: targeted.revision,
+                  title: targeted.title,
+                  source: 'saved' as const,
+                },
               }
-            : {}),
+            : captured
+              ? { editor: captured }
+              : {}),
           ...(!steerTaskId && selection ? { selection } : {}),
           ...(!steerTaskId && selectedOutline ? { outline: selectedOutline.target } : {}),
         };
@@ -1316,7 +1328,15 @@ export function HelperPanel(props: Props) {
             refresh={() => data.refresh(conversation)}
           />
         )}
-        {editor && (
+        {props.resource && props.scope.kind === 'library' && (
+          <div className="helper-editor">
+            <span>참고 자료 · {props.resource.title}</span>
+            <button type="button" onClick={props.onClearResource}>
+              대상 해제
+            </button>
+          </div>
+        )}
+        {editor && !props.resource && (
           <div className="helper-editor">
             <span>편집 중 · {editor.title || '이름 없는 자료'}</span>
             <button
