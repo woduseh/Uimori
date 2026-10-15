@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
+import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 import type { Content } from '../core/product.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readHelperEditor } from '../server/helper-resource-editing.js';
@@ -803,6 +804,163 @@ test('preset block edits compose sequentially with one save and undo while prese
   call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
   const restored = store.product.get<any>('prompt-preset', preset.id);
   expect(restored).toEqual({ ...preset, revision: preset.revision + 2 });
+});
+
+const presetTogglePath = '/program/nativeRisuPreset/preset/customPromptTemplateToggle';
+
+test('changing prompt control IDs reconciles saved values atomically and undo restores both', () => {
+  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep this block' }]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [{ op: 'set', path: presetTogglePath, value: 'style=Style=text' }],
+  });
+  expect(result).toEqual({
+    id: preset.id,
+    revision: preset.revision + 1,
+    changedPaths: [presetTogglePath, '/values'],
+    resetKeys: ['tone'],
+  });
+  const saved = store.product.get<any>('prompt-preset', preset.id);
+  expect(saved.values).toEqual({ style: '' });
+  expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual([
+    { type: 'plain', text: 'Keep this block' },
+  ]);
+  call(store, 'resource.undo', { ...target, expectedRevision: result.revision });
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
+    ...preset,
+    revision: preset.revision + 2,
+  });
+});
+
+test('new controls take defaults while compatible saved values survive', () => {
+  const { store, preset, target } = presetFixture([]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      {
+        op: 'set',
+        path: presetTogglePath,
+        value: 'tone=Tone=text\nstyle=Style=text',
+      },
+    ],
+  });
+  expect(result.changedPaths).toEqual([presetTogglePath, '/values']);
+  expect(result).not.toHaveProperty('resetKeys');
+  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
+    tone: 'warm',
+    style: '',
+  });
+});
+
+test('changing control options resets only values that are no longer valid', () => {
+  const { store, preset, target } = presetFixture([]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      {
+        op: 'set',
+        path: presetTogglePath,
+        value: 'tone=Tone=select=soft,firm\nstyle=Style=text',
+      },
+    ],
+  });
+  expect(result.resetKeys).toEqual(['tone']);
+  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
+    tone: '0',
+    style: '',
+  });
+});
+
+test('a valid explicitly supplied value wins over the default in the same control edit', () => {
+  const { store, preset, target } = presetFixture([]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      { op: 'set', path: presetTogglePath, value: 'tone=Tone=text\nstyle=Style=text' },
+      { op: 'set', path: '/values/style', value: 'vivid' },
+    ],
+  });
+  expect(result.changedPaths).toEqual([presetTogglePath, '/values/style']);
+  expect(result).not.toHaveProperty('resetKeys');
+  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
+    tone: 'warm',
+    style: 'vivid',
+  });
+});
+
+test('invalid explicit value writes are rejected rather than silently reconciled', () => {
+  const { store, preset, target } = presetFixture([]);
+  const originalUndo = store.db
+    .prepare('SELECT * FROM resource_undo WHERE kind=? AND id=?')
+    .get(target.kind, target.id);
+  const cases = [
+    {
+      changes: [
+        { op: 'set', path: presetTogglePath, value: 'style=Style=text' },
+        { op: 'set', path: '/values/tone', value: 'warm' },
+      ],
+      error: 'PROMPT_UNKNOWN_CONTROL',
+    },
+    {
+      changes: [
+        { op: 'set', path: presetTogglePath, value: 'tone=Tone=select=soft,firm' },
+        { op: 'set', path: '/values/tone', value: 'invalid' },
+      ],
+      error: 'PROMPT_INVALID_CONTROL_VALUE',
+    },
+    {
+      changes: [{ op: 'set', path: '/values/unknown', value: 'new' }],
+      error: 'PROMPT_UNKNOWN_CONTROL',
+    },
+  ];
+  for (const { changes, error } of cases) {
+    expect(() =>
+      call(store, 'resource.patch', {
+        ...target,
+        expectedRevision: preset.revision,
+        changes,
+      })
+    ).toThrow(error);
+    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+    expect(
+      store.db
+        .prepare('SELECT * FROM resource_undo WHERE kind=? AND id=?')
+        .get(target.kind, target.id)
+    ).toEqual(originalUndo);
+  }
+});
+
+test('removing a control still referenced by enabled collaboration is rejected', () => {
+  const { store, preset: base } = presetFixture([]);
+  const collaboration = {
+    ...createAgentCollaboration(),
+    enabled: true,
+    sharedControls: ['tone'],
+    agents: [createAgentDefinition('custom', 'reviewer')],
+  };
+  const preset = store.product.promptPreset(
+    {
+      title: base.title,
+      role: base.role,
+      program: { ...base.program, collaboration },
+      values: base.values,
+      expectedRevision: base.revision,
+    },
+    base.id
+  );
+  expect(() =>
+    call(store, 'resource.patch', {
+      kind: 'prompt-preset',
+      id: preset.id,
+      expectedRevision: preset.revision,
+      changes: [{ op: 'set', path: presetTogglePath, value: 'style=Style=text' }],
+    })
+  ).toThrow('AGENT_COLLABORATION_UNKNOWN_CONTROL');
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
 });
 
 test('preset display title can change independently from the native name and undo normally', () => {
