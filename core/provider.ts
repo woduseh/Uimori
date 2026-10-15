@@ -14,7 +14,7 @@ import { DEFAULT_LORE_CONTEXT, measureLoreText, type LorePlacement } from './lor
 import { countTextTokens } from './text-tokens.js';
 import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
-import { PROMPT_COMPILER_VERSIONS, type PromptCompilerVersion } from './risu-prompt.js';
+import { PROMPT_COMPILER_VERSIONS } from './risu-prompt.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
@@ -152,12 +152,11 @@ export function pinnedSlotSources(
 /** Fixed contract, provenance-bearing pinned content, catalog and observed reads stay separate. */
 export function buildMainInput(
   snapshot: RunSnapshot,
-  results: readonly ToolEvent[] = [],
-  options: { compilerVersion?: PromptCompilerVersion } = {}
+  results: readonly ToolEvent[] = []
 ): MainInput {
   if (
-    options.compilerVersion !== undefined &&
-    !PROMPT_COMPILER_VERSIONS.has(options.compilerVersion)
+    snapshot.promptCompilation &&
+    !PROMPT_COMPILER_VERSIONS.has(snapshot.promptCompilation.compilerVersion)
   )
     throw new Error('PROMPT_INVALID_COMPILED');
   const packages = compiledPackages(snapshot, 'main'),

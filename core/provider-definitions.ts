@@ -102,7 +102,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
       'stopSequences',
       'serviceTier',
     ],
-    reference: 'core/vertex.ts#executeVertexProvider',
+    reference: 'core/vertex.ts#executeGeminiProvider',
     limitations: [
       'Gemini 모델 연결 · Gemini Enterprise Agent Platform의 global 프로젝트 endpoint를 사용해요.',
       '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요. 목록과 실제 모델 사용 권한은 Google Cloud 설정을 따라요.',

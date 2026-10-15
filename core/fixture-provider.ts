@@ -80,9 +80,7 @@ export async function executeFixtureMain(
     ) {
       throw Object.assign(new Error('Model call budget exhausted'), { name: 'BudgetError' });
     }
-    const input = buildMainInput(fixed, results, {
-      compilerVersion: fixed.promptCompilation?.compilerVersion,
-    });
+    const input = buildMainInput(fixed, results);
     modelCalls++;
     // This is the exact mock-provider input, copied only to prevent log-hook writes.
     await hooks.onInput(structuredClone(input));

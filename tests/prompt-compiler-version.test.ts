@@ -66,6 +66,7 @@ test('the current native compiler keeps host context and version across request 
   const compact = buildMainInput(input);
   expect(hostText(current)).toBe(nativeHostContextText({ input: requestInput(current, compact) }));
   expect(attachMainHostContext(current)).toEqual(current);
+  expect(buildMainInput(current)).toEqual(compact);
   expect(buildMainProviderRequest(current).request.prompt!.compilerVersion).toBe(
     PROMPT_COMPILER_VERSION
   );
@@ -75,3 +76,14 @@ test('the current native compiler keeps host context and version across request 
   )!.content[0].text += ' ';
   expect(() => attachMainHostContext(tampered)).toThrow('NATIVE_HOST_CONTEXT_COLLISION');
 });
+
+test.each(['risu-prompt-1', 'future-prompt', undefined])(
+  'stored compiler version %s is rejected even when host context already exists',
+  (compilerVersion) => {
+    const compiled = compileSnapshotPrompt(snapshot([lore]));
+    Object.assign(compiled.promptCompilation!, { compilerVersion });
+    expect(() => buildMainInput(compiled)).toThrow('PROMPT_INVALID_COMPILED');
+    expect(() => attachMainHostContext(compiled)).toThrow('PROMPT_INVALID_COMPILED');
+    expect(() => buildMainProviderRequest(compiled)).toThrow('PROMPT_INVALID_COMPILED');
+  }
+);
