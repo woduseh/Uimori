@@ -46,6 +46,7 @@ export function captureChatCopy(
   return {
     transcript,
     state: {
+      storyGuide: store.storyGuide.get(chatId).config,
       sceneTitles: history.flatMap((source, atIndex) => {
         const title = titles.get(source.revision);
         return title ? [{ atIndex, title }] : [];
@@ -99,6 +100,8 @@ export function restoreChatCopy(
       ...copy.state.profile,
     });
     store.settings(chatId, imported.chat.settingsRevision, copy.state.settings);
+    if (copy.state.storyGuide)
+      store.storyGuide.update(chatId, { expectedRevision: 0, config: copy.state.storyGuide });
     for (const [index, source] of history.entries()) {
       const checkpoint = copy.state.checkpoints[index];
       if (checkpoint)

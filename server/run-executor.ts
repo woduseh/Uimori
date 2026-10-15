@@ -27,6 +27,12 @@ import { judgeMainRefusal, mainJudgmentInput, validateMainJudgmentWire } from '.
 import { JevCredentialStore } from './jev-credentials.js';
 import { AnthropicBatchRun } from './anthropic-batch.js';
 import type { Usage } from '../core/types.js';
+import {
+  applyStoryGuide,
+  prepareStoryGuide,
+  storyGuideReservedTokens,
+  StoryGuideCancelledError,
+} from './story-guide-runtime.js';
 
 function mergeUsage(left: Usage, right: Usage): Usage {
   const total: Usage = { ...left, modelCalls: left.modelCalls + right.modelCalls };
@@ -251,6 +257,16 @@ export function createRunExecutor({
           hooks.initialUsage = structuredClone(priorUsage);
           // Keep the reserved input fixed; preparation advances one execution snapshot.
           let executionSnapshot = run.snapshot;
+          if (executionSnapshot.storyGuide?.config.enabled) {
+            executionSnapshot = {
+              ...executionSnapshot,
+              storyGuide: {
+                revision: executionSnapshot.storyGuide.revision,
+                config: structuredClone(executionSnapshot.storyGuide.config),
+              },
+            };
+            delete executionSnapshot.promptCompilation;
+          }
           let result: Awaited<ReturnType<typeof runMain>>;
           if (run.snapshot.judgmentRecovery) {
             const preserved = run.snapshot.mainJudgment!;
@@ -332,6 +348,7 @@ export function createRunExecutor({
                 {
                   ...hooks,
                   reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
+                  reserveInputTokens: storyGuideReservedTokens(executionSnapshot),
                   authorize: (connection) => {
                     assertCurrent();
                     return store.product.authorize(connection);
@@ -381,6 +398,46 @@ export function createRunExecutor({
                 store.event(run.chatId, 'run.context.updated', id);
               });
               executionSnapshot = prepared.snapshot;
+            }
+            if (executionSnapshot.storyGuide?.config.enabled) {
+              const guide = await prepareStoryGuide(
+                executionSnapshot,
+                {
+                  ...hooks,
+                  initialUsage: priorUsage,
+                  onAttemptStart: (wire) => {
+                    assertCurrent();
+                    store.product.authorize(executionSnapshot.profile!.models.main!.connection);
+                    return store.product.startAttempt(run.chatId, id, null, wire, {
+                      kind: 'story-guide',
+                    });
+                  },
+                },
+                {
+                  runId: id,
+                  reserveCalls: 1 + Number(judgeResponse),
+                  cachedBrief:
+                    run.snapshot.storyGuide?.brief ?? store.storyGuide.get(run.chatId).brief,
+                }
+              );
+              priorUsage = mergeUsage(priorUsage, guide.usage);
+              hooks.initialUsage = structuredClone(priorUsage);
+              executionSnapshot = applyStoryGuide(executionSnapshot, guide);
+              store.transaction(() => {
+                assertCurrent();
+                store.db
+                  .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+                  .run(
+                    JSON.stringify(
+                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                    ),
+                    id
+                  );
+                const brief = executionSnapshot.storyGuide?.brief;
+                if (brief) store.storyGuide.saveBrief(run.chatId, brief);
+                store.event(run.chatId, 'run.context.updated', id);
+              });
+              publish(run.chatId);
             }
             // Native preparation invalidates the old compilation even when a fixture has no
             // model/context plan. Persist the exact prepared prompt before any writer input.
@@ -502,6 +559,8 @@ export function createRunExecutor({
           publish(run.chatId);
           afterSource(id);
         } catch (error) {
+          if (error instanceof StoryGuideCancelledError)
+            priorUsage = mergeUsage(priorUsage, error.usage);
           if (!signal.aborted) {
             if (error instanceof ContextCompactionError) {
               const usage = mergeUsage(priorUsage, error.usage);

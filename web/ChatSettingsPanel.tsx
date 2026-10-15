@@ -6,6 +6,7 @@ import { IconButton } from './IconButton.js';
 import { SectionNavigation } from './SectionNavigation.js';
 import { ProfileEditor, type ProfileSection } from './ProfileEditor.js';
 import { StoryPanel } from './StoryPanel.js';
+import { StoryGuidePanel } from './StoryGuidePanel.js';
 import { AssetEditor } from './AssetEditor.js';
 import { IllustrationReferencesEditor } from './IllustrationReferences.js';
 import { SettingsEditor } from './RuntimeSettings.js';
@@ -18,9 +19,9 @@ import { BackIcon, BotIcon, PromptIcon, LoreIcon, ImagesIcon, BehaviorIcon } fro
 import './chat-settings.css';
 import './settings-layout.css';
 
-const saveSections = ['story', 'profile', 'image', 'reference', 'runtime'] as const;
+const saveSections = ['story', 'guide', 'profile', 'image', 'reference', 'runtime'] as const;
 
-export type Section = ProfileSection | 'story' | 'images' | 'runtime' | 'packages';
+export type Section = ProfileSection | 'story' | 'guide' | 'images' | 'runtime' | 'packages';
 // Two groups: the basics every chat needs, then the advanced automation sections.
 // Reading settings live in their own dialog (chat ⋯ menu), not here.
 const categories = [
@@ -36,6 +37,13 @@ const categories = [
     title: '프롬프트·모델',
     icon: PromptIcon,
     description: '작문 지침과 창작 옵션',
+    group: '기본',
+  },
+  {
+    id: 'guide',
+    title: '이야기 가이드',
+    icon: LoreIcon,
+    description: '원작과 현재 이야기 살펴보기',
     group: '기본',
   },
   {
@@ -91,6 +99,7 @@ export function ChatSettingsPanel({
   const [detailOpen, setDetailOpen] = useState(!!initialSection);
   const [profileDirty, setProfileDirty] = useState(false);
   const [storyDirty, setStoryDirty] = useState(false);
+  const [guideDirty, setGuideDirty] = useState(false);
   const [imageDirty, setImageDirty] = useState(false);
   const [referenceDirty, setReferenceDirty] = useState(false);
   const [runtimeDirty, setRuntimeDirty] = useState(false);
@@ -98,7 +107,8 @@ export function ChatSettingsPanel({
   const [discard, setDiscard] = useState(false);
   const [savingClose, setSavingClose] = useState(false);
   const saveGroup = useSettingsSaveGroup(saveSections);
-  const dirty = profileDirty || storyDirty || imageDirty || referenceDirty || runtimeDirty;
+  const dirty =
+    profileDirty || storyDirty || guideDirty || imageDirty || referenceDirty || runtimeDirty;
   const compact = useCompactLayout();
   const showingDetail = !compact || detailOpen;
   const root = useRef<HTMLElement>(null);
@@ -384,6 +394,22 @@ export function ChatSettingsPanel({
                 {visited.includes(section) && detail && library && (
                   <>
                     {!compact && <h3 className="settings-page-title">{label}</h3>}
+                    {section === 'guide' && (
+                      <StoryGuidePanel
+                        chatId={state.selected}
+                        headRevision={detail.chat.headRevision}
+                        profileRevision={detail.profile?.revision}
+                        refreshKey={detail.reader.cursor}
+                        active={active === 'guide' && showingDetail}
+                        nextRequest={state.pendingRequest ?? state.draft}
+                        onChanged={() => {
+                          void state.refresh(state.selected);
+                        }}
+                        onError={state.setError}
+                        onDirtyChange={setGuideDirty}
+                        onSaveHandlerChange={saveGroup.registrations.guide}
+                      />
+                    )}
                     {section === 'runtime' && (
                       <SettingsEditor
                         chat={detail.chat}
@@ -436,6 +462,7 @@ export function ChatSettingsPanel({
               !(await saveGroup.save({
                 profile: profileDirty,
                 story: storyDirty,
+                guide: guideDirty,
                 image: imageDirty,
                 reference: referenceDirty,
                 runtime: runtimeDirty,

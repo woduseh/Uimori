@@ -18,6 +18,7 @@ import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspa
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
+import { defaultStoryGuideConfig } from '../core/story-guide.js';
 
 const owned: { store: Store; directory: string }[] = [];
 afterEach(() => {
@@ -68,6 +69,9 @@ function phases() {
   const store = {
     source: () => ({ runId: 'previous-run' }),
     run: () => ({ snapshot: {} }),
+    storyGuide: {
+      get: () => ({ revision: 0, config: defaultStoryGuideConfig(), brief: null }),
+    },
     product: {
       profile: () => base.profile,
       resources: () => {
@@ -169,6 +173,10 @@ test.each<{
     expected: ['variables', 'story', 'logical-history', 'lore', 'context', 'previous-summary'],
   },
   {
+    options: { purpose: 'story-guide' },
+    expected: ['variables', 'story', 'logical-history', 'lore'],
+  },
+  {
     options: { purpose: 'preview-main', executionClock: () => clock },
     expected: ['variables', 'story', 'logical-history', 'clock', 'lore'],
   },
@@ -215,6 +223,9 @@ test.each<{
         summary: f.previous.summary,
         recentSourceRevisions: ['source-2'],
       });
+    if (options.purpose === 'run')
+      expect(result.storyGuide).toEqual({ revision: 0, config: defaultStoryGuideConfig() });
+    else expect(result.storyGuide).toBeUndefined();
     if (options.purpose === 'resume-state') expect(result).toEqual(fixed);
   }
 );
@@ -229,6 +240,16 @@ test('authored preparation requires the corresponding frozen authored marker bef
     reservation.freezeReservationSnapshot(f.store, f.base, { purpose: 'run', runId: 'run' })
   ).toThrow('RESERVATION_AUTHORSHIP_MISMATCH');
   expect(f.calls).toEqual([]);
+});
+
+test('a helper artifact reserved as a run does not enable the chat story guide', () => {
+  const f = phases();
+  f.base.executionPurpose = 'artifact';
+  const result = reservation.freezeReservationSnapshot(f.store, f.base, {
+    purpose: 'run',
+    runId: 'run',
+  });
+  expect(result.storyGuide).toBeUndefined();
 });
 
 test('helper callers apply fixed options before resources and preserve pending options without database writes', () => {

@@ -1,8 +1,16 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
-import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Locator,
+  type Page,
+  type Route,
+} from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
+import type { StoryGuideDetail } from '../core/story-guide.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import {
@@ -13,7 +21,14 @@ import {
 } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
-const sections = ['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '실행 옵션'];
+const sections = [
+  '대화 구성',
+  '프롬프트·모델',
+  '이야기 가이드',
+  '기억·로어',
+  '이미지',
+  '실행 옵션',
+];
 
 async function prepare(page: Page, request: APIRequestContext, title: string) {
   const response = await postFixtureChat(request, { data: { title } });
@@ -664,4 +679,134 @@ test('CSUI09 global automatic translation preference saves on server and reloads
       expect(restored.ok(), await restored.text()).toBe(true);
     }
   }
+});
+
+test('CSUI10 story guide preserves settings and notes, separates previews from saved briefs, and cancels late answers', async ({
+  page,
+  request,
+}, info) => {
+  test.setTimeout(60000);
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  const { chat, errors } = await prepare(page, request, `CSUI10 ${Date.now()}`);
+  const base = `/api/chats/${chat.id}/story-guide`;
+  const lastBrief = '지난 집필에서는 두 인물의 불신을 참고했어요.';
+  await page.route(`**${base}`, async (route) => {
+    const response = await route.fetch();
+    const data = (await response.json()) as StoryGuideDetail;
+    await route.fulfill({
+      response,
+      json: {
+        ...data,
+        brief: {
+          fingerprint: 'ui-fixture',
+          text: lastBrief,
+          createdAt: '2026-01-01T12:00:00.000Z',
+          parentRevision: null,
+          configRevision: 0,
+          modelTitle: '이전 집필 모델',
+        },
+      },
+    });
+  });
+  const requests: { action: string; body: unknown }[] = [];
+  let pendingAnswer: Route | null = null;
+  await page.route(`**${base}/refresh`, async (route) => {
+    requests.push({ action: 'refresh', body: route.request().postDataJSON() });
+    await route.fulfill({ json: { text: '이번 이야기에서는 이미 동료를 신뢰하고 있어요.' } });
+  });
+  await page.route(`**${base}/ask`, async (route) => {
+    const body = route.request().postDataJSON() as { question: string };
+    requests.push({ action: 'ask', body });
+    if (body.question === '늦게 도착할 질문') pendingAnswer = route;
+    else await route.fulfill({ json: { text: '원작에서는 배신을 겪은 일이 이유예요.' } });
+  });
+  await page.getByLabel('다음 장면 요청', { exact: true }).fill('두 사람이 다시 만나는 장면');
+  const menu = await openChatMenu(page);
+  await menu.getByRole('button', { name: '이야기 가이드', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  await expect(dialog.getByRole('heading', { name: '이야기 가이드', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('switch', { name: '집필에 이야기 가이드 사용' })).not.toBeChecked();
+  expect(requests).toEqual([]);
+  await dialog.getByRole('switch', { name: '집필에 이야기 가이드 사용' }).check();
+  await dialog.getByLabel('작품·세계관', { exact: true }).fill('가상의 항구 이야기');
+  await dialog.getByLabel('기준 시점·스포일러 범위', { exact: true }).fill('2권 끝까지');
+  await selectChatSettingsSection(page, '이미지');
+  await selectChatSettingsSection(page, '이야기 가이드');
+  await expect(dialog.getByLabel('작품·세계관', { exact: true })).toHaveValue('가상의 항구 이야기');
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  const discard = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
+  await expect(discard).toBeVisible();
+  await discard.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const saved = (await (await request.get(base)).json()) as StoryGuideDetail;
+  expect(saved.config).toMatchObject({
+    enabled: true,
+    work: '가상의 항구 이야기',
+    position: '2권 끝까지',
+    followCanon: false,
+  });
+
+  await (await openChatMenu(page))
+    .getByRole('button', { name: '이야기 가이드', exact: true })
+    .click();
+  await dialog.locator('.story-guide-last-brief > summary').click();
+  await expect(dialog.getByLabel('마지막 집필 참고문 내용', { exact: true })).toContainText(
+    lastBrief
+  );
+  await expect(dialog.getByText(/이전 설정으로 만든 참고문/)).toBeVisible();
+  await dialog.getByRole('button', { name: '미리보기 만들기', exact: true }).click();
+  await expect(dialog.getByLabel('가이드 미리보기', { exact: true })).toContainText(
+    '이미 동료를 신뢰하고 있어요.'
+  );
+  await dialog
+    .getByRole('textbox', { name: '원작·인물 질문', exact: true })
+    .fill('이 인물이 동료를 불신한 이유는?');
+  await dialog.getByRole('button', { name: '질문하기', exact: true }).click();
+  await expect(dialog.getByLabel('원작 질문 답변', { exact: true })).toContainText(
+    '배신을 겪은 일이 이유예요.'
+  );
+  expect(requests).toEqual([
+    { action: 'refresh', body: { request: '두 사람이 다시 만나는 장면' } },
+    {
+      action: 'ask',
+      body: { question: '이 인물이 동료를 불신한 이유는?', request: '두 사람이 다시 만나는 장면' },
+    },
+  ]);
+  await expect(dialog.getByLabel('마지막 집필 참고문 내용', { exact: true })).toContainText(
+    lastBrief
+  );
+  await dialog
+    .getByRole('textbox', { name: '원작·인물 질문', exact: true })
+    .fill('늦게 도착할 질문');
+  await dialog.getByRole('button', { name: '질문하기', exact: true }).click();
+  await expect.poll(() => pendingAnswer !== null).toBe(true);
+  await dialog.getByRole('button', { name: '질문 중지', exact: true }).click();
+  await pendingAnswer!.fulfill({ json: { text: '중지한 질문의 늦은 답변' } });
+  await expect(dialog.getByRole('button', { name: '질문하기', exact: true })).toBeEnabled();
+  await expect(dialog.getByText('중지한 질문의 늦은 답변', { exact: true })).toHaveCount(0);
+  expect(requests.filter((entry) => entry.action === 'ask')).toHaveLength(2);
+
+  const notes = dialog.getByTestId('context-notes');
+  await notes.locator(':scope > summary').click();
+  await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
+  await notes
+    .getByLabel('메모·정정 내용', { exact: true })
+    .fill('이 이야기에서는 두 사람이 화해했다.');
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  await discard.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const story = (await (await request.get(`/api/chats/${chat.id}/story`)).json()) as StoryDetail;
+  expect(story.notes).toHaveLength(1);
+  expect(story.notes[0]).toMatchObject({
+    kind: 'author-note',
+    text: '이 이야기에서는 두 사람이 화해했다.',
+  });
+  await (await openChatMenu(page))
+    .getByRole('button', { name: '이야기 가이드', exact: true })
+    .click();
+  await expect(dialog.getByLabel('가이드 미리보기', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('원작 질문 답변', { exact: true })).toHaveCount(0);
+  await expectNoOverflow(page, dialog);
+  if (visualReview) await page.screenshot({ path: info.outputPath('story-guide-mobile.png') });
+  expect(errors).toEqual([]);
 });

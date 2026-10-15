@@ -51,6 +51,16 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
         : {}),
       ...(input.notes && !used.has('notes') ? { notes: modelAuthorNotes(input.notes) } : {}),
       ...(input.outline && !used.has('outline') ? { outline: input.outline } : {}),
+      ...(snapshot.storyGuide?.config.enabled && snapshot.storyGuide.brief
+        ? {
+            storyGuide: {
+              kind: 'derived-story-guide',
+              text: snapshot.storyGuide.brief.text,
+              guidance:
+                'Optional analysis for this request. Original-work references, current-branch evidence and proposed developments remain distinct. This guide is not canon, a user correction, or knowledge automatically possessed by characters. Explicit author notes and actual source evidence take precedence.',
+            },
+          }
+        : {}),
       ...(input.catalogPage ? { catalogPage: input.catalogPage } : {}),
     }),
     catalog: json(input.catalog),

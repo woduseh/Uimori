@@ -34,6 +34,8 @@ export type ContextCompactionHooks = MainHooks & {
   reason?: 'automatic' | 'manual';
   priorities?: string;
   reserveCalls?: number;
+  /** Space for optional data prepared after compaction; never makes fixed input infeasible. */
+  reserveInputTokens?: number;
 };
 export class ContextCompactionError extends Error {
   constructor(
@@ -160,6 +162,7 @@ export async function prepareInputContext(
   const fixed = structuredClone(snapshot),
     usage = emptyUsage();
   const measureInput = hooks.measureInput ?? measureMainContext;
+  let reservedInputTokens = 0;
   const plan: ContextPlan = {
     ...structuredClone(snapshot.contextPlan),
     status: 'pending',
@@ -191,7 +194,7 @@ export async function prepareInputContext(
   });
   const measure = () => {
     const measured = measureInput(projected());
-    estimate = measured.estimatedInputTokens;
+    estimate = measured.estimatedInputTokens + reservedInputTokens;
     return measured.snapshot;
   };
   try {
@@ -215,6 +218,35 @@ export async function prepareInputContext(
       fixed.loreContext = fitFixedLoreContext(
         withContextProjection(fixed, allRefs, plan.summary)
       ).loreContext;
+    if (hooks.reserveInputTokens) {
+      const fixedTokens = measureInput(
+        withContextProjection(fixed, allRefs, null)
+      ).estimatedInputTokens;
+      const fixedWithSummary = plan.summary
+        ? measureInput(withContextProjection(fixed, allRefs, plan.summary)).estimatedInputTokens
+        : fixedTokens;
+      reservedInputTokens = Math.min(
+        hooks.reserveInputTokens,
+        Math.max(0, Math.floor(limit * TARGET_RATIO - fixedTokens)),
+        Math.max(0, Math.floor(limit * CONTEXT_COMPACTION_TRIGGER_RATIO - fixedWithSummary))
+      );
+      const summaryModel = hooks.summaryModel ?? fixed.profile?.contextModel;
+      if (
+        !summaryModel ||
+        summaryModel.enabled === false ||
+        fixed.settings.maxCalls <= (hooks.reserveCalls ?? 1)
+      )
+        reservedInputTokens = Math.min(
+          reservedInputTokens,
+          Math.max(
+            0,
+            Math.floor(
+              limit * CONTEXT_COMPACTION_TRIGGER_RATIO -
+                measureInput(projected()).estimatedInputTokens
+            )
+          )
+        );
+    }
     let prepared = measure();
     const manualTarget = hooks.reason === 'manual' ? Math.max(0, allRefs.length - 2) : 0;
     if (
@@ -229,9 +261,9 @@ export async function prepareInputContext(
       };
     }
     // Measuring the fixed input is only a feasibility check; this empty-history projection is never returned or sent.
-    const fixedEstimate = measureInput(
-      withContextProjection(fixed, allRefs, plan.summary)
-    ).estimatedInputTokens;
+    const fixedEstimate =
+      measureInput(withContextProjection(fixed, allRefs, plan.summary)).estimatedInputTokens +
+      reservedInputTokens;
     if (fixedEstimate > limit) fail('CONTEXT_FIXED_INPUT_TOO_LARGE');
     const target = structuredClone(hooks.summaryModel ?? fixed.profile?.contextModel);
     if (!target) fail('MODEL_REQUIRED:context');
@@ -239,7 +271,8 @@ export async function prepareInputContext(
     // This empty-summary projection is measured only; originals and the complete previous
     // summary still go to the provider. A soft target leaves room below its hard output cap.
     const fixedWithoutSummary = plan.summary
-      ? measureInput(withContextProjection(fixed, allRefs, null)).estimatedInputTokens
+      ? measureInput(withContextProjection(fixed, allRefs, null)).estimatedInputTokens +
+        reservedInputTokens
       : fixedEstimate;
     if (
       !Number.isFinite(fixedWithoutSummary) ||

@@ -40,6 +40,7 @@ npm run dev
 | --- | --- |
 | [사용 안내](docs/USAGE.md) | 봇별 채팅·폴더, 설정 검색, 프롬프트·창작 프리셋, 번역·독립 채팅 복사, 백업 |
 | [구성·집필 작업실](docs/OUTLINE.md) | 계층형 구성, 관련 계획 연결, 선택한 단위 집필과 원문 점검 |
+| [이야기 가이드](docs/STORY-GUIDE.md) | 원작·현재 이야기 분석, 집필 참고문, 원작 질문과 직접 정정 |
 | [도우미 도구](docs/HELPER-TOOLS.md) · [Codex 연결](docs/CODEX.md) | 부분 조회·편집, 설정·작업 제어와 네이티브 실행 |
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
 | [Risu 원본 가져오기](docs/RISU-IMPORT.md) | `.charx` 카드·모듈·`.risup` 프롬프트 원본, CBS·Lua·정규식·CSS 실행과 지원 범위 |

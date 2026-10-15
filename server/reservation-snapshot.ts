@@ -20,7 +20,7 @@ export type ReservationPurpose =
       sceneCommandId?: string;
       supersedesRunId?: string;
     }
-  | { purpose: 'helper-artifact' | 'helper-context' }
+  | { purpose: 'helper-artifact' | 'helper-context' | 'story-guide' }
   | {
       purpose: 'preview-main' | 'preview-translation';
       executionClock: () => NonNullable<RunSnapshot['executionClock']>;
@@ -102,6 +102,10 @@ export function freezeReservationSnapshot(
   }
 
   let frozen = base;
+  if (options.purpose === 'run' && !frozen.executionPurpose) {
+    const { revision, config } = store.storyGuide.get(base.chatId);
+    frozen = { ...frozen, storyGuide: { revision, config } };
+  }
   if (!authored) frozen = store.story.prepareRunInTransaction(frozen);
   if (reserved && options.sceneCommandId)
     frozen = freezeOutline(store, options.sceneCommandId, frozen);
