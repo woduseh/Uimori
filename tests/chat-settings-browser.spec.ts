@@ -726,6 +726,7 @@ test('CSUI10 story guide preserves settings and notes, separates previews from s
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(dialog.getByRole('heading', { name: '이야기 가이드', exact: true })).toBeVisible();
   await expect(dialog.getByRole('switch', { name: '집필에 이야기 가이드 사용' })).not.toBeChecked();
+  await expect(dialog.locator('.story-guide-settings')).toHaveAttribute('open', '');
   expect(requests).toEqual([]);
   await dialog.getByRole('switch', { name: '집필에 이야기 가이드 사용' }).check();
   await dialog.getByLabel('작품·세계관', { exact: true }).fill('가상의 항구 이야기');
@@ -749,6 +750,11 @@ test('CSUI10 story guide preserves settings and notes, separates previews from s
   await (await openChatMenu(page))
     .getByRole('button', { name: '이야기 가이드', exact: true })
     .click();
+  await expect(dialog.locator('.story-guide-settings')).not.toHaveAttribute('open');
+  await expect(dialog.getByLabel('작품·세계관', { exact: true })).toBeHidden();
+  await expect(
+    dialog.getByRole('button', { name: '미리보기 만들기', exact: true })
+  ).toBeInViewport();
   await dialog.locator('.story-guide-last-brief > summary').click();
   await expect(dialog.getByLabel('마지막 집필 참고문 내용', { exact: true })).toContainText(
     lastBrief
@@ -786,6 +792,24 @@ test('CSUI10 story guide preserves settings and notes, separates previews from s
   await expect(dialog.getByText('중지한 질문의 늦은 답변', { exact: true })).toHaveCount(0);
   expect(requests.filter((entry) => entry.action === 'ask')).toHaveLength(2);
 
+  // Another tab changes the analysis inputs without changing the story head.
+  // Already displayed analysis must disappear, while the question draft survives.
+  const changed = await request.put(base, {
+    data: {
+      expectedRevision: saved.revision,
+      config: { ...saved.config, position: '3권 끝까지' },
+    },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  await expect(dialog.getByLabel('가이드 미리보기', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel('원작 질문 답변', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('textbox', { name: '원작·인물 질문', exact: true })).toHaveValue(
+    '늦게 도착할 질문'
+  );
+  await expect(dialog.getByLabel('마지막 집필 참고문 내용', { exact: true })).toContainText(
+    lastBrief
+  );
+
   const notes = dialog.getByTestId('context-notes');
   await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
@@ -807,6 +831,11 @@ test('CSUI10 story guide preserves settings and notes, separates previews from s
   await expect(dialog.getByLabel('가이드 미리보기', { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('원작 질문 답변', { exact: true })).toHaveCount(0);
   await expectNoOverflow(page, dialog);
-  if (visualReview) await page.screenshot({ path: info.outputPath('story-guide-mobile.png') });
+  if (visualReview) {
+    await page.screenshot({ path: info.outputPath('story-guide-mobile.png') });
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+    await expectNoOverflow(page, dialog);
+    await page.screenshot({ path: info.outputPath('story-guide-desktop.png') });
+  }
   expect(errors).toEqual([]);
 });

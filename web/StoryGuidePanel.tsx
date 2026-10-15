@@ -56,6 +56,7 @@ function StoryGuideEditor({
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [draft, setDraft] = useState(defaultStoryGuideConfig);
   const [draftRevision, setDraftRevision] = useState(0);
+  const [settingsOpen, setSettingsOpen] = useState<boolean | null>(null);
   const baseline = useRef(draft);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
@@ -115,6 +116,7 @@ function StoryGuideEditor({
       if (!alive.current || controller.signal.aborted || sequence !== loadSequence.current) return;
       setLoaded(value);
       setStory(notes);
+      setSettingsOpen((open) => open ?? value.revision === 0);
       if (!dirtyRef.current && !savingRef.current) acceptSaved(value);
     } catch (caught) {
       if (alive.current && !controller.signal.aborted && sequence === loadSequence.current)
@@ -125,14 +127,14 @@ function StoryGuideEditor({
   useEffect(() => {
     if (active) void load();
   }, [active, headRevision, profileRevision, refreshKey]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: A different story or model invalidates an in-flight manual analysis.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Invalidate only when analysis inputs change, not on usage/progress events or re-entry.
   useEffect(() => {
     modelRequest.current?.abort();
     modelRequest.current = null;
     setWorking(null);
     setPreview(null);
     setAnswer(null);
-  }, [headRevision, profileRevision]);
+  }, [headRevision, profileRevision, loaded?.analysisRevision, nextRequest]);
 
   function update<K extends keyof StoryGuideConfig>(key: K, value: StoryGuideConfig[K]) {
     const next = { ...draft, [key]: value };
@@ -208,6 +210,7 @@ function StoryGuideEditor({
         return;
       if (kind === 'ask') setAnswer({ question: asked, text: result.text });
       else setPreview(result.text);
+      onError('');
     } catch (caught) {
       if (alive.current && !controller.signal.aborted && modelRequest.current === controller)
         report(caught);
@@ -251,58 +254,76 @@ function StoryGuideEditor({
           <label className="settings-row settings-row-toggle">
             <span className="settings-row-copy">
               <strong>집필에 이야기 가이드 사용</strong>
-              <small>본문 모델이 집필 전에 참고문을 만들어요.</small>
+              <small>본문 모델로 참고문을 만든 뒤 집필해요.</small>
             </span>
-            <Switch
-              aria-label="집필에 이야기 가이드 사용"
-              checked={draft.enabled}
-              onChange={(event) => update('enabled', event.target.checked)}
-            />
-          </label>
-          <label>
-            작품·세계관
-            <input
-              value={draft.work}
-              maxLength={STORY_GUIDE_LIMITS.work}
-              placeholder="작품 이름이나 참고할 세계관"
-              onChange={(event) => update('work', event.target.value)}
-            />
-          </label>
-          <label>
-            기준 시점·스포일러 범위
-            <textarea
-              value={draft.position}
-              maxLength={STORY_GUIDE_LIMITS.position}
-              rows={2}
-              placeholder="예: 2권 마지막까지. 이후 사건과 인물의 정체는 밝히지 않기"
-              onChange={(event) => update('position', event.target.value)}
-            />
-          </label>
-          <label className="story-guide-check">
-            <SelectionCheckbox
-              checked={draft.followCanon}
-              onChange={(event) => update('followCanon', event.target.checked)}
-            />
-            <span>원작의 사건 전개도 참고</span>
-          </label>
-          <details className="story-guide-reference">
-            <summary>추가 참고 자료</summary>
-            <p className="muted">기존 카드와 로어도 함께 참고해요. 더 필요한 자료만 덧붙여요.</p>
-            <label>
-              추가 참고 텍스트
-              <textarea
-                value={draft.reference}
-                maxLength={STORY_GUIDE_LIMITS.reference}
-                rows={6}
-                onChange={(event) => update('reference', event.target.value)}
+            <span className="settings-row-control">
+              <Switch
+                aria-label="집필에 이야기 가이드 사용"
+                checked={draft.enabled}
+                onChange={(event) => update('enabled', event.target.checked)}
               />
-            </label>
+            </span>
+          </label>
+          <details
+            className="story-guide-settings"
+            open={settingsOpen ?? false}
+            onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
+          >
+            <summary>
+              가이드 설정
+              {!settingsOpen && <small>{draft.work || '작품·참고 범위'}</small>}
+            </summary>
+            <div className="story-guide-fields">
+              <label>
+                작품·세계관
+                <input
+                  value={draft.work}
+                  maxLength={STORY_GUIDE_LIMITS.work}
+                  placeholder="작품 이름이나 참고할 세계관"
+                  onChange={(event) => update('work', event.target.value)}
+                />
+              </label>
+              <label>
+                기준 시점·스포일러 범위
+                <textarea
+                  value={draft.position}
+                  maxLength={STORY_GUIDE_LIMITS.position}
+                  rows={2}
+                  placeholder="예: 2권 마지막까지. 이후 사건과 인물의 정체는 밝히지 않기"
+                  onChange={(event) => update('position', event.target.value)}
+                />
+              </label>
+              <label className="story-guide-check">
+                <SelectionCheckbox
+                  checked={draft.followCanon}
+                  onChange={(event) => update('followCanon', event.target.checked)}
+                />
+                <span>원작의 사건 전개도 참고</span>
+              </label>
+              <details className="story-guide-reference">
+                <summary>추가 참고 자료</summary>
+                <p className="muted">
+                  기존 카드와 로어도 함께 참고해요. 더 필요한 자료만 덧붙여요.
+                </p>
+                <label>
+                  추가 참고 텍스트
+                  <textarea
+                    value={draft.reference}
+                    maxLength={STORY_GUIDE_LIMITS.reference}
+                    rows={6}
+                    onChange={(event) => update('reference', event.target.value)}
+                  />
+                </label>
+              </details>
+            </div>
           </details>
         </fieldset>
-        <div className="form-actions">
-          <SaveButton label="이야기 가이드 저장" text="저장" disabled={busy || !dirty} />
-          {dirty && <small className="muted">저장하면 다음 요청부터 반영해요.</small>}
-        </div>
+        {dirty && (
+          <div className="form-actions">
+            <SaveButton label="이야기 가이드 저장" text="저장" disabled={busy} />
+            <small className="muted">저장하면 다음 요청부터 반영해요.</small>
+          </div>
+        )}
       </form>
       {error && (
         <p className="error" role="alert">
@@ -325,13 +346,18 @@ function StoryGuideEditor({
             {working === 'refresh' ? '미리보기 중지' : '미리보기 만들기'}
           </button>
         </div>
-        <p className="muted">저장한 설정과 현재 작성 중인 요청을 바탕으로 살펴봐요.</p>
+        <p className="muted">
+          저장한 설정과 작성 중인 요청으로 살펴봐요. 자동 사용을 꺼도 만들 수 있어요.
+        </p>
         {hasDraft && <p className="muted">수정한 설정과 메모를 저장한 뒤 사용할 수 있어요.</p>}
         {working === 'refresh' && <p role="status">이야기를 살펴보고 있어요…</p>}
         {preview && (
-          <div className="story-guide-result" aria-label="가이드 미리보기">
-            <Prose text={preview} />
-          </div>
+          <details key={preview} className="story-guide-preview" open>
+            <summary>가이드 미리보기</summary>
+            <div className="story-guide-result" aria-label="가이드 미리보기">
+              <Prose text={preview} />
+            </div>
+          </details>
         )}
         {loaded.brief ? (
           <details className="story-guide-last-brief">

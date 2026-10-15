@@ -272,7 +272,7 @@ test('failed or oversized guide removes stale advice; admitted guide reaches the
   expect(oversized.storyGuide!.brief).toBeUndefined();
 });
 
-test('guide space participates in the first compaction instead of triggering another summary after analysis', async () => {
+test('a fitting writer input does not call the summary provider merely to reserve guide space', async () => {
   const source = await snapshot();
   const measureInput = (projected: RunSnapshot) => ({
     snapshot: projected,
@@ -288,15 +288,16 @@ test('guide space participates in the first compaction instead of triggering ano
   };
   const without = await prepareInputContext(source, hooks);
   expect(without.usage.modelCalls).toBe(0);
+  vi.mocked(fetch).mockRejectedValue(
+    new Error('Unavailable summary provider must not block the fitting writer')
+  );
   const withGuide = await prepareInputContext(source, {
     ...hooks,
     reserveInputTokens: storyGuideReservedTokens(source),
   });
-  expect(withGuide.usage.modelCalls).toBe(1);
-  expect(withGuide.snapshot.contextPlan!.compacted).toHaveLength(1);
-  expect(withGuide.snapshot.contextPlan!.estimatedInputTokens).toBe(
-    3_500 + storyGuideReservedTokens(source)
-  );
+  expect(withGuide.usage.modelCalls).toBe(0);
+  expect(withGuide.snapshot.contextPlan!.compacted).toHaveLength(0);
+  expect(withGuide.snapshot.contextPlan!.estimatedInputTokens).toBeLessThanOrEqual(8192 * 0.85);
   expect(withGuide.snapshot.logicalHistory).toEqual(source.logicalHistory);
   delete source.profile!.contextModel;
   const withoutSummaryModel = await prepareInputContext(source, {
@@ -305,5 +306,6 @@ test('guide space participates in the first compaction instead of triggering ano
   });
   expect(withoutSummaryModel.usage.modelCalls).toBe(0);
   expect(withoutSummaryModel.snapshot.contextPlan!.compacted).toHaveLength(0);
-  expect(log.wires).toHaveLength(1);
+  expect(log.wires).toHaveLength(0);
+  expect(fetch).not.toHaveBeenCalled();
 });

@@ -14,6 +14,7 @@ const TIMEOUT_MS = 120_000;
 type Options = Pick<StoryGuideHooks, 'resolveCredential' | 'executeCodex' | 'vertexRequestTier'> & {
   signal: AbortSignal;
   track: (work: Promise<void>) => void;
+  publish: (chatId: string) => void;
 };
 
 /** Inspect current sources without reserving a writer or executing card callbacks. */
@@ -43,6 +44,19 @@ function guideSnapshot(store: Store, chatId: string, request: string): RunSnapsh
 }
 
 export function storyGuideRoutes(app: FastifyInstance, store: Store, options: Options) {
+  const analysisRevision = (chatId: string): number =>
+    Number(
+      store.db
+        .prepare(
+          `SELECT COALESCE(MAX(seq),0) AS revision FROM events WHERE chat_id=? AND (
+            kind GLOB 'source.*' OR kind IN (
+              'context.updated','context.notes.updated','story-guide.updated','profile.updated',
+              'prompt-workspace.updated','options.updated','chat.lore.override','chat.variables.changed'
+            )
+          )`
+        )
+        .get(chatId)!.revision
+    );
   const detail = (chatId: string): StoryGuideDetail => {
     const state = store.storyGuide.get(chatId);
     const last = store.db
@@ -53,11 +67,23 @@ export function storyGuideRoutes(app: FastifyInstance, store: Store, options: Op
     const guide = last?.guide
       ? (JSON.parse(String(last.guide)) as RunSnapshot['storyGuideReceipt'])
       : undefined;
+    const lastWithBrief = store.db
+      .prepare(
+        `SELECT COALESCE(json_extract(snapshot,'$.storyGuideReceipt.brief'),json_extract(snapshot,'$.storyGuide.brief')) AS brief
+          FROM runs WHERE chat_id=? AND (
+            json_type(snapshot,'$.storyGuideReceipt.brief')='object' OR
+            json_type(snapshot,'$.storyGuide.brief')='object'
+          ) ORDER BY rowid DESC LIMIT 1`
+      )
+      .get(chatId);
     return {
       ...state,
+      analysisRevision: analysisRevision(chatId),
       // A settings edit during generation may reject cache publication, while the
-      // completed run still owns the exact advice it used with its frozen settings.
-      ...(guide?.brief ? { brief: guide.brief } : {}),
+      // run still owns its advice. A newer run without a guide must not hide it.
+      ...(lastWithBrief
+        ? { brief: JSON.parse(String(lastWithBrief.brief)) as StoryGuideDetail['brief'] }
+        : {}),
       ...(guide
         ? {
             latestRun: {
@@ -77,6 +103,7 @@ export function storyGuideRoutes(app: FastifyInstance, store: Store, options: Op
     { bodyLimit: 256 * 1024 },
     async (request) => {
       store.storyGuide.update(request.params.id, request.body);
+      options.publish(request.params.id);
       return detail(request.params.id);
     }
   );
@@ -98,7 +125,7 @@ export function storyGuideRoutes(app: FastifyInstance, store: Store, options: Op
         const chatId = request.params.id;
         const frozen = guideSnapshot(store, chatId, draft);
         const sourceRefs = contextSourceRefs(frozen);
-        const notesRevision = store.story.notes.revision(chatId);
+        const inputRevision = analysisRevision(chatId);
         const disconnected = new AbortController();
         const onClose = () => {
           if (!reply.raw.writableEnded) disconnected.abort();
@@ -111,8 +138,7 @@ export function storyGuideRoutes(app: FastifyInstance, store: Store, options: Op
           if (signal.aborted) throw new HttpError(408, 'STORY_GUIDE_CANCELLED');
           if (
             store.chat(chatId).headRevision !== frozen.parentRevision ||
-            store.storyGuide.get(chatId).revision !== frozen.storyGuide!.revision ||
-            store.story.notes.revision(chatId) !== notesRevision
+            analysisRevision(chatId) !== inputRevision
           )
             throw new HttpError(409, 'STORY_GUIDE_STALE');
         };

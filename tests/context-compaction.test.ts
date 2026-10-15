@@ -1000,6 +1000,44 @@ describe('input context projection and durable summary calls', () => {
   });
 });
 
+test('automatic compaction fits the reserved guide space in one summary call while preserving the writer call', async () => {
+  const source = await snapshot([
+    'Older scene one.',
+    'Older scene two.',
+    'Older scene three.',
+    'Recent scene one.',
+    'Recent scene two.',
+  ]);
+  source.settings.maxCalls = 2;
+  const log = observed({
+    reserveCalls: 1,
+    reserveInputTokens: 2048,
+    measureInput: (projected) => ({
+      snapshot: projected,
+      estimatedInputTokens:
+        1000 +
+        projected.contextPlan!.recentSourceRevisions.reduce(
+          (tokens, revision) => tokens + (Number(revision.split('-').at(-1)) < 3 ? 2000 : 1000),
+          0
+        ) +
+        (projected.contextPlan!.summary ? 200 : 0),
+    }),
+  });
+  const payloads = respondWithMergedSummary(log);
+  const result = await prepareInputContext(source, log.hooks);
+  expect(result.usage.modelCalls).toBe(1);
+  expect(payloads).toHaveLength(1);
+  expect(
+    payloads[0].fragments.filter((part) => part.role === 'assistant').map((part) => part.text)
+  ).toEqual(source.history.slice(0, 3).map((entry) => entry.text));
+  expect(result.snapshot.contextPlan).toMatchObject({
+    status: 'ready',
+    estimatedInputTokens: 5248,
+    recentSourceRevisions: ['source-3', 'source-4'],
+  });
+  expect(result.snapshot.history).toEqual(source.history);
+});
+
 test('manual compaction fits one source prefix without rebuilding the writer input for every scene', async () => {
   const source = await snapshot(
     Array.from(
