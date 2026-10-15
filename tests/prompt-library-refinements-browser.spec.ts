@@ -46,6 +46,30 @@ test('PLR04 an explicit prompt-card question pins the intended helper resource',
   await expect(helper.getByText(`참고 자료 · ${title}`, { exact: true })).toBeVisible();
   await helper.getByRole('button', { name: '대상 해제' }).click();
   await expect(helper.getByText(`참고 자료 · ${title}`, { exact: true })).toHaveCount(0);
+
+  // Pin the card again, then switch to an unsaved editor. The card's old saved
+  // reference must not replace the active editor model when the request is sent.
+  await helper.getByRole('button', { name: '도우미 닫기' }).click();
+  await menu.click();
+  await menu.locator('..').getByRole('button', { name: '도우미에게 묻기' }).click();
+  await expect(helper.getByText(`참고 자료 · ${title}`, { exact: true })).toBeVisible();
+  await helper.getByRole('button', { name: '도우미 닫기' }).click();
+  await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+  const draftTitle = `${title} unsaved`;
+  await page.getByLabel('프롬프트 이름', { exact: true }).fill(draftTitle);
+  await page.getByRole('button', { name: '도우미 열기', exact: true }).click();
+  await expect(helper.getByText(`편집 중 · ${draftTitle}`, { exact: true })).toBeVisible();
+  await expect(helper.getByText(`참고 자료 · ${title}`, { exact: true })).toHaveCount(0);
+
+  let submitted: { editor?: { source?: string; model?: { title?: string } } } | undefined;
+  await page.route('**/api/helper/conversations/*/messages', async (route) => {
+    submitted = route.request().postDataJSON();
+    await route.fulfill({ status: 400, json: { error: 'synthetic test interception' } });
+  });
+  await helper.getByLabel('도우미에게 요청').fill('미저장 프리셋 확인');
+  await helper.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await expect.poll(() => submitted?.editor?.source).toBe('unsaved');
+  expect(submitted?.editor?.model?.title).toBe(draftTitle);
 });
 
 test('PLR02 every package category is editable from card and list controls', async ({

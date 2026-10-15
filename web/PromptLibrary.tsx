@@ -76,6 +76,7 @@ export function PromptLibrary({
   headerTrailing,
   onOpenCurrentPrompts,
   onAskHelper,
+  onEditorOpened,
   initialPresetId,
   onInitialPresetHandled,
   listRequest = 0,
@@ -88,6 +89,7 @@ export function PromptLibrary({
   headerTrailing?: ReactNode;
   onOpenCurrentPrompts: () => void;
   onAskHelper: (preset: PromptPresetSummary) => void;
+  onEditorOpened: () => void;
   initialPresetId?: string | null;
   onInitialPresetHandled?: () => void;
   /** Bumped when the navigation entry is chosen, so an open editor returns to the list. */
@@ -107,6 +109,10 @@ export function PromptLibrary({
     null
   );
   const pendingEditing = useRef<typeof editing>(null);
+  useEffect(() => {
+    // A card-pinned saved reference must never mask a newly opened editor draft.
+    if (editing) onEditorOpened();
+  }, [editing, onEditorOpened]);
   const handledPreset = useRef<string | null>(null);
   useEffect(() => {
     if (!initialPresetId) {
