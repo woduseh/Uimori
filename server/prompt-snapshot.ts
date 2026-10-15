@@ -1,10 +1,7 @@
 import { applyMessageChanges } from '../core/message-changes.js';
-import { nativePromptSlots } from './native-prompt-slots.js';
-import { nativeExampleMessages } from '../core/risu-native-messages.js';
-import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
+import { nativeCharacterExamples, nativePromptSlots } from './native-prompt-slots.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { effectiveRisuControls } from '../core/risu-effective-controls.js';
-import { risuImageHandoffText } from '../core/risu-image-handoff.js';
 import { loreHistory } from '../core/lore-context.js';
 import { placeNativeRisuLore } from '../core/risu-native-lore.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
@@ -189,26 +186,8 @@ function contextFromPackages(
   ];
   const preset = snapshot.profile?.promptPresets?.main;
   const identity = snapshot.profile ? packageIdentityFromProfile(snapshot.profile) : undefined;
-  const bot = packages.find((entry) => entry.attachment.role === 'bot');
-  const exampleText = bot
-    ? snapshot.profile?.image
-      ? risuImageHandoffText(bot.package, 'card:mes_example')
-      : String(bot.package.nativeRisu?.card.mes_example ?? '')
-    : '';
-  const examples = nativeExampleMessages(
-    exampleText,
-    identity?.bot.name ?? '',
-    identity?.user.name ?? ''
-  ).map((message, index) => ({
-    ...message,
-    text: bot
-      ? (snapshot.nativeRisuExecution?.fields[nativeRisuFieldKey(bot.attachment)]?.[
-          `example:${index}`
-        ] ?? message.text)
-      : message.text,
-  }));
   return {
-    examples,
+    examples: nativeCharacterExamples(snapshot, packages)?.messages ?? [],
     names: { char: identity?.bot.name ?? 'Character', user: identity?.user.name ?? 'User' },
     slots,
     history,

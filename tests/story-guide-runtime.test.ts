@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { defaultProfile } from '../core/product.js';
 import { defaultStoryGuideConfig } from '../core/story-guide.js';
+import { OUTLINE_CONTRACT } from '../core/outline.js';
+import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
 import type { RunSnapshot } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { prepareInputContext } from '../server/context-compaction.js';
@@ -16,6 +18,8 @@ import {
   type StoryGuideHooks,
 } from '../server/story-guide-runtime.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
+import { nativeContent } from './fixtures/native-content.js';
+import { refreshNativeSnapshot } from './fixtures/native-snapshot.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const sse = (...events: unknown[]) =>
@@ -198,6 +202,96 @@ test('guide consumes prepared logical history and one summary, ignores prior adv
   expect(changed.cached).toBe(false);
   expect(changed.brief!.fingerprint).not.toBe(first.brief!.fingerprint);
   expect(log.wires).toHaveLength(2);
+});
+
+test('guide serializes prepared character examples with their identities and source, plus current author direction and outline', async () => {
+  const source = await snapshot();
+  const bot = nativeContent(
+    {
+      name: 'Keeper',
+      description: 'CARD_CANON_NOTES',
+      mes_example: '{{user}}: May I enter?\n{{char}}: RENDERED_VOICE_{{? 1+1}} to {{user}}',
+    },
+    { id: 'guide-bot', revision: 2 }
+  );
+  const persona = nativeContent(
+    { name: 'Visitor', description: 'USER_OC_NOTES' },
+    { id: 'guide-persona' },
+    'persona'
+  );
+  const botRef = { id: bot.id, revision: bot.revision, role: 'bot' as const };
+  source.profile!.packages = [bot, persona];
+  source.profile!.packageAttachments = [
+    botRef,
+    { id: persona.id, revision: persona.revision, role: 'persona' },
+  ];
+  source.profile!.authorNote = 'CHAT_AUTHOR_NOTE_ONLY: Wait for the visitor to ask.';
+  source.outline = {
+    version: 1,
+    path: [
+      {
+        id: 'episode',
+        level: 'episode',
+        title: 'Reunion',
+        intent: 'Do not reveal the sibling yet.',
+        fixed: true,
+        revision: 1,
+      },
+    ],
+    children: [],
+    written: [],
+    hash: 'selected-plan',
+  };
+  await refreshNativeSnapshot(source);
+  const log = observed();
+  const first = await prepareStoryGuide(source, log.hooks);
+  expect(first.error).toBeNull();
+  const bodyText = String(vi.mocked(fetch).mock.calls.at(-1)![1]!.body);
+  const body = JSON.parse(bodyText);
+  const examples = body.input.source.characterExamples;
+  expect(examples).toEqual({
+    source: {
+      sourceRole: 'bot',
+      sourceName: 'Keeper',
+      contentId: bot.id,
+      revision: 2,
+      field: 'mes_example',
+    },
+    names: { char: 'Keeper', user: 'Visitor' },
+    messages: [
+      { role: 'user', text: 'May I enter?' },
+      { role: 'assistant', text: 'RENDERED_VOICE_2 to Visitor' },
+    ],
+  });
+  expect(bodyText.match(/RENDERED_VOICE_2/gu)).toHaveLength(1);
+  expect(bodyText).not.toContain('RENDERED_VOICE_{{');
+  expect(bodyText).not.toContain('WRITER_STYLE_DO_NOT_COPY_TO_GUIDE');
+  expect(JSON.stringify(body.input.source.history)).not.toContain('RENDERED_VOICE');
+  expect(body.input.source.risuAuthorNote).toEqual({
+    kind: 'risu-author-note',
+    source: { chatId: source.chatId },
+    text: source.profile!.authorNote,
+  });
+  expect(body.input.source.notes).toEqual([]);
+  expect(body.input.source.outline).toEqual(source.outline);
+  expect(body.stable.contract).toContain(OUTLINE_CONTRACT);
+
+  const writer = buildMainProviderRequest(source);
+  const writerBody = JSON.stringify(
+    encodeMainPreview(writer.request, writer.snapshot.profile!.models.main!).body
+  );
+  expect(writerBody).toContain('RENDERED_VOICE_2 to Visitor');
+  expect(writerBody).not.toContain('RENDERED_VOICE_{{');
+
+  const same = await prepareStoryGuide(source, log.hooks, { cachedBrief: first.brief });
+  expect(same.cached).toBe(true);
+  expect(log.wires).toHaveLength(1);
+  source.nativeRisuExecution!.fields[nativeRisuFieldKey(botRef)]['example:1'] =
+    'CHANGED_PREPARED_VOICE';
+  const changed = await prepareStoryGuide(source, log.hooks, { cachedBrief: first.brief });
+  expect(changed.cached).toBe(false);
+  expect(changed.brief!.fingerprint).not.toBe(first.brief!.fingerprint);
+  expect(String(vi.mocked(fetch).mock.calls.at(-1)![1]!.body)).toContain('CHANGED_PREPARED_VOICE');
 });
 
 test('disabled automatic guide is a no-op, explicit requests work, and writer calls remain reserved', async () => {

@@ -764,6 +764,12 @@ test('CSUI10 story guide preserves settings and notes, separates previews from s
   await expect(dialog.getByLabel('가이드 미리보기', { exact: true })).toContainText(
     '이미 동료를 신뢰하고 있어요.'
   );
+  await dialog.getByRole('button', { name: '말투·관계', exact: true }).click();
+  const questionInput = dialog.getByRole('textbox', { name: '원작·인물 질문', exact: true });
+  await expect(questionInput).toBeFocused();
+  await expect(questionInput).toHaveValue(/말투·호칭·행동/);
+  await expect(dialog.getByRole('group', { name: '질문 예시' })).toHaveCount(0);
+  expect(requests.filter((entry) => entry.action === 'ask')).toHaveLength(0);
   await dialog
     .getByRole('textbox', { name: '원작·인물 질문', exact: true })
     .fill('이 인물이 동료를 불신한 이유는?');

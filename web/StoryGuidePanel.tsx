@@ -23,6 +23,23 @@ import {
 import './story-guide.css';
 
 const saveSections = ['notes'] as const;
+const questionExamples = [
+  {
+    label: '말투·관계',
+    question:
+      '이번 장면에 등장할 인물들의 말투·호칭·행동은 어떤 점을 참고하면 좋을까요? 이 이야기에서 달라진 관계도 반영해 주세요.',
+  },
+  {
+    label: '세계관·설정',
+    question:
+      '현재 장소와 상황에 도움이 될 원작의 세계관·설정을 알려 주세요. 설정한 스포일러 범위 안에서, 제공된 자료와 모델 지식을 구분해 주세요.',
+  },
+  {
+    label: '다음 전개',
+    question:
+      '현재 관계와 남은 약속을 고려하면 어떤 전개가 가능할까요? 원작과 달라진 점, 인물들이 아는 정보와 사건의 성립 조건을 짚고 선택지로 제안해 주세요.',
+  },
+];
 type Props = {
   chatId: string;
   headRevision: string | null;
@@ -66,6 +83,7 @@ function StoryGuideEditor({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [question, setQuestion] = useState('');
+  const questionInput = useRef<HTMLTextAreaElement>(null);
   const [working, setWorking] = useState<'ask' | 'refresh' | null>(null);
   const [answer, setAnswer] = useState<{ question: string; text: string } | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -279,7 +297,7 @@ function StoryGuideEditor({
                 <input
                   value={draft.work}
                   maxLength={STORY_GUIDE_LIMITS.work}
-                  placeholder="작품 이름이나 참고할 세계관"
+                  placeholder="작품 이름·판본, 또는 참고할 세계관"
                   onChange={(event) => update('work', event.target.value)}
                 />
               </label>
@@ -389,9 +407,28 @@ function StoryGuideEditor({
             void generate('ask');
           }}
         >
+          {!question.trim() && (
+            <div className="story-guide-question-examples" role="group" aria-label="질문 예시">
+              {questionExamples.map((example) => (
+                <button
+                  key={example.label}
+                  type="button"
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => {
+                    setQuestion(example.question);
+                    questionInput.current?.focus();
+                  }}
+                >
+                  {example.label}
+                </button>
+              ))}
+            </div>
+          )}
           <label>
             원작·인물 질문
             <textarea
+              ref={questionInput}
               value={question}
               maxLength={REQUEST_TEXT_MAX_CHARS}
               rows={3}
