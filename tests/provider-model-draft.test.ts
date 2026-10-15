@@ -36,27 +36,6 @@ const vercelConnection: Connection = {
 };
 
 describe('model numeric drafts', () => {
-  test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
-    'keeps PDF input opt-in for %s and preserves the draft across connections',
-    (protocol) => {
-      const vertexConnection: Connection = { ...connection, protocol };
-      expect(initialModel().pdfInput).toBe(false);
-      expect(modelPayload(initialModel(), vertexConnection)).not.toHaveProperty('pdfInput');
-      const enabled = { ...initialModel(), pdfInput: true };
-      const saved = modelPayload(enabled, vertexConnection);
-      expect(saved.pdfInput).toBe(true);
-      expect(modelDraft({ ...saved, id: 'model', revision: 1 } as ModelPreset).pdfInput).toBe(true);
-      const switched = selectModelConnection(enabled, anthropicConnection);
-      expect(switched.pdfInput).toBe(true);
-      expect(modelPayload(switched, anthropicConnection)).not.toHaveProperty('pdfInput');
-      const returned = selectModelConnection(switched, vertexConnection);
-      expect(modelPayload(returned, vertexConnection).pdfInput).toBe(true);
-      expect(modelPayload({ ...returned, pdfInput: false }, vertexConnection)).not.toHaveProperty(
-        'pdfInput'
-      );
-    }
-  );
-
   test('AI Studio presets ignore the server Vertex tier restriction', () => {
     const studio: Connection = { ...connection, protocol: 'google-gemini-v1' };
     expect(

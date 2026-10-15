@@ -4,13 +4,11 @@ import { createHash } from 'node:crypto';
 import { isVertexAdcReference } from './credential-reference.js';
 import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
 import { isGeminiProtocol, validateProviderEndpoint, validateVertexEndpoint } from './product.js';
-import { assertContextBudget, estimateContextTokens } from './context-budget.js';
-import { tokenizerInfo } from './text-tokens.js';
+import { assertContextBudget } from './context-budget.js';
 import { createPublicTextProgress, publicProgressAllowed } from './provider-progress.js';
 import { vertexAccessToken } from './vertex-auth.js';
 import {
-  prepareGeminiRequest,
-  encodePreparedGeminiRequest,
+  encodeVertex,
   diagnosticVertexBody,
   VertexDecoder,
   VertexProtocolError,
@@ -166,7 +164,7 @@ export async function executeGeminiProvider(
       throw new ProviderContractError('UNSUPPORTED_PROTOCOL');
     const vertex = connection.protocol === 'vertex-gemini-v1';
     const request = validateRequest(requestValue);
-    const native = prepareGeminiRequest(request, connection.protocol);
+    const prepared = encodeVertex(request, connection.protocol);
     const requestedTier = request.generation?.serviceTier;
     const tier = (vertex ? options.vertexRequestTier : undefined) ?? requestedTier ?? 'standard';
     if (
@@ -179,19 +177,10 @@ export async function executeGeminiProvider(
       throw new ProviderContractError(
         vertex ? 'INVALID_VERTEX_REQUEST_TIER' : 'INVALID_GEMINI_REQUEST_TIER'
       );
-    decoder = new VertexDecoder(native.context);
+    decoder = new VertexDecoder(prepared.context);
     if (signal.aborted) return failure('CANCELLED');
-    assertContextBudget(native.body, request.contextBudget);
-    const prepared = encodePreparedGeminiRequest(native);
+    assertContextBudget(prepared.body, request.contextBudget);
     const body = JSON.stringify(prepared.body);
-    // Flex limits the complete inline payload, including base64 and native tool turns.
-    if (
-      request.generation?.pdfInput &&
-      vertex &&
-      tier === 'flex' &&
-      Buffer.byteLength(body, 'utf8') > 20_000_000
-    )
-      throw new ProviderContractError('PDF_INPUT_PAYLOAD_TOO_LARGE');
     if (!vertex && !connection.credentialRef)
       throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     // Google's well-known variable contains an ADC file path, never a bearer token.
@@ -228,45 +217,23 @@ export async function executeGeminiProvider(
       : { 'x-goog-api-key': '[REDACTED]' };
     // The diagnostic view does not become the actual request. Signatures remain byte-for-byte in body.
     const diagnostic = redactDiagnosticJson(diagnosticVertexBody(prepared.body), token);
-    await options.onWire?.(
-      {
-        connectionId: connection.id,
-        protocol: connection.protocol,
-        role: request.role,
-        modelId: request.modelId,
-        method: 'POST',
-        url: endpoint,
-        headers: {
-          'content-type': 'application/json',
-          accept: 'text/event-stream',
-          ...tierHeaders,
-          ...diagnosticAuth,
-        },
-        body: diagnostic,
-        ...(prepared.contextBody && request.contextBudget
-          ? {
-              requestContext: {
-                estimatedInputTokens: estimateContextTokens(
-                  prepared.contextBody,
-                  request.contextBudget
-                ),
-                inputTokenLimit: request.contextBudget.inputTokenLimit,
-                estimator: request.contextBudget.estimator,
-                ...(request.contextBudget.estimator === 'model-local-v1'
-                  ? {
-                      tokenizer: request.contextBudget.tokenizer,
-                      tokenizerFallback: tokenizerInfo(request.contextBudget.tokenizer).fallback,
-                    }
-                  : {}),
-              },
-            }
-          : {}),
-        bodySha256: sha(body),
-        stablePrefixSha256: sha(JSON.stringify(request.stable)),
+    await options.onWire?.({
+      connectionId: connection.id,
+      protocol: connection.protocol,
+      role: request.role,
+      modelId: request.modelId,
+      method: 'POST',
+      url: endpoint,
+      headers: {
+        'content-type': 'application/json',
+        accept: 'text/event-stream',
+        ...tierHeaders,
+        ...diagnosticAuth,
       },
-      undefined,
-      prepared.contextBody ? { contextBody: prepared.contextBody } : undefined
-    );
+      body: diagnostic,
+      bodySha256: sha(body),
+      stablePrefixSha256: sha(JSON.stringify(request.stable)),
+    });
     // The persisted attempt completes before generation starts.
     if (signal.aborted) return failure('CANCELLED');
     const response = await fetch(

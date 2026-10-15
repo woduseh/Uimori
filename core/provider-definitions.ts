@@ -98,7 +98,6 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
       'temperature',
       'timeoutMs',
       'thinkingLevel',
-      'pdfInput',
       'topP',
       'stopSequences',
       'serviceTier',
@@ -123,7 +122,6 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
       'temperature',
       'timeoutMs',
       'thinkingLevel',
-      'pdfInput',
       'topP',
       'stopSequences',
       'serviceTier',
@@ -132,7 +130,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     limitations: [
       'Google AI Studio에서 발급한 Gemini API 키를 등록해요. Google Cloud 서비스 계정은 필요하지 않아요.',
       '공식 Gemini API에서 생성과 모델 목록 조회에 같은 API 키를 사용해요. 모델 사용 권한과 요청 한도는 Google 계정 설정을 따라요.',
-      '텍스트 대화를 PDF로 전송하는 옵션을 지원해요. 가격은 모델 프리셋에서 직접 설정하며 실제 청구액은 미확인이에요.',
+      '가격은 모델 프리셋에서 직접 설정하며 실제 청구액은 미확인이에요.',
     ],
   }),
   definition({

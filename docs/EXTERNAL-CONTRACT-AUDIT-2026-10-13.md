@@ -30,7 +30,7 @@
 | `sharp` | 0.35.4 | 0.35.4 | 0.35.4 |
 | `react` / `react-dom` | 19.2.8 / 19.2.8 | 19.2.8 / 19.2.8 | 19.2.8 / 19.2.8 |
 | 토크나이저 `tiktoken` / `@huggingface/tokenizers` | 1.0.22 / 0.2.0 | 1.0.22 / 0.2.0 | 1.0.22 / 0.2.0; 로컬 추정은 원격 과금 증거가 아님 |
-| 검사 `@playwright/test` / `pdfjs-dist` | 1.63.0 / 6.4.299 | 1.63.0 / 6.4.299 | 1.63.0 / 6.4.299 |
+| 검사 `@playwright/test` | 1.63.0 | 1.63.0 | 1.63.0 |
 | `@types/node` | 26.4.1 | 26.4.1 | 26.4.1. 타입 버전은 실행 Node 버전의 증거가 아님 |
 | SQLite / 브라우저 | Node 내장 / Chrome 또는 Edge | npm 패키지 잠금 대상 아님 | SQLite **3.51.2**, Chrome **154.0.8037.99** |
 | 외부 Codex CLI | 프로젝트 npm 의존성 없음; 위 문서의 지원 기준 | 프로젝트 lockfile에 없음 | Uimori PATH 탐색 대상 **0.162.0-alpha.17.2**, 별도 npm 설치 **0.162.0**. 운영 설치 버전은 미확인 |
@@ -65,7 +65,6 @@ F8 수정 전에도 script가 실행된 증거는 없어요. 스타일 보존과
 | 비공개·미보장 구현 의존 | Risu 포맷/Wasmoon 갱신 시 파일 해독·Lua 시작 실패 가능 | `server/compat/risu/`, `server/risu-lua-worker.ts`; S2/S3/S5. **높음**. RISUM/RISUP 내부 codec·고정 키 및 WASM 메모리 패치는 공개 안정 계약이 아님. 고정 버전에서 검사 통과, 자동 최신화 없음 |
 | 소스 관찰에 의존 | 커스텀 Comfy 서버가 실행 도중 history를 게시하면 완료 판정이 달라질 수 있음 | `server/comfyui-client.ts`; S6. **중간**. 조사한 공식 소스는 종료 후 history 저장. 모든 파생 서버의 게시 순서를 공개 보장으로 취급하지 않음 |
 | 공개 보장 없는 파일 위치 | Codex가 inline 결과 없이 전용 home 밖 savedPath만 반환하면 삽화 수집 실패 가능 | `server/codex-runtime.ts`; S4. **중간**. 저장 위치는 DTO의 보장 아님. 현재 재현이 없어 파일 접근 범위를 넓히지 않음 |
-| 품질 미보장 | 조밀한 1pt PDF의 실제 Gemini 추출·역할 해석이 원문 대화와 다를 수 있음 | `core/vertex-pdf.ts`, `docs/PROVIDERS.md`; S11. **높음**. PDF.js 왕복은 모델 해석 보장이 아니며 기존 문서에 한계 명시 |
 | 실제 대상 확인 필요 | Vercel reasoning_details의 동일 index 분할 서명이 후속 도구 요청에서 거절될 가능성 | `core/openai-chat-protocol.ts`의 배열 metadata 누적; S10. **낮음**. 증분/index는 문서화됐지만 replay 재조립 실패는 미재현. 예방 변환을 추가하지 않음 |
 | 실제 대상 확인 필요 | DeepSeek 추천 `deepseek-v4-flash`와 현 문서 `deepseek-flash` 차이 | `core/provider-catalog.ts`; S8. **낮음**. 이전 ID 거부 근거 없음. 원격 목록·직접 ID 입력 유지, 최신 이름으로 임의 교체하지 않음 |
 | 지원 범위 확인 필요 | Lua `useMultimodal`과 inlay를 텍스트 모델 호출에 전달했을 때 실제 첨부로 해석되지 않을 수 있음 | `server/risu-native-host.ts`; S3. **중간**. Lua inlay 모델 입력 전체 지원이 명시되지 않아 범위를 임의 확장/축소하지 않음 |
@@ -85,7 +84,7 @@ F8 수정 전에도 script가 실행된 증거는 없어요. 스타일 보존과
 | 검사 | 결과·범위 |
 | --- | --- |
 | Responses/Chat/JEV 사전 focused | 4파일 194 PASS. DeepSeek 변경 후 Chat/HTTP 2파일 116 PASS |
-| Google/Vertex/Anthropic | 8파일 190 PASS, 합성 인증·HTTP·Batch 복구·PDF 추출 |
+| Google/Vertex/Anthropic | 8파일 190 PASS, 합성 인증·HTTP·Batch 복구 등 당시 실행 범위 |
 | Codex | 합성 4파일 78 PASS; 설치 preflight는 위 별도 범위 |
 | ComfyUI | 5파일 95 PASS, 실제 POST body·401/403/404/429/503·재접수 금지·결과 확인 |
 | Risu 파일 | 표지·대표 수정 후 7파일 88 PASS. PNG 문자열 키 수정 후 영향받는 3파일 34 PASS, PNG/CHARX 왕복과 중복 키 거절 |
@@ -115,7 +114,7 @@ F8 수정 전에도 script가 실행된 증거는 없어요. 스타일 보존과
 | S8 | [DeepSeek Chat API](https://api-docs.deepseek.com/api/create-chat-completion/), [thinking](https://api-docs.deepseek.com/guides/thinking_mode/). 현행 `/v1` 호환 API 문서, 원격 구현 릴리스·문서 revision 미제공 | 2026-10-13 |
 | S9 | [DOMPurify 3.4.15 README](https://github.com/cure53/DOMPurify/tree/3.4.15), [purify.ts](https://github.com/cure53/DOMPurify/blob/3.4.15/src/purify.ts); [WHATWG template·slot](https://html.spec.whatwg.org/multipage/scripting.html#the-template-element)은 Living Standard, 고정 revision 미확인 | 2026-10-13 |
 | S10 | [Vercel reasoning](https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions/reasoning), 표시 갱신일 2026-09-08, 서비스 릴리스 비고정 | 2026-10-13 |
-| S11 | [Gemini v1beta REST](https://ai.google.dev/api/generate-content), [Flex](https://ai.google.dev/gemini-api/docs/generate-content/flex-inference), [thought signatures](https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures), [PDF](https://ai.google.dev/gemini-api/docs/generate-content/document-processing). [Vertex Flex](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/flex-paygo)는 표시 갱신일 2026-10-12. 모두 원격 릴리스·고정 문서 revision 미제공. google-auth-library 해당 태그 소스는 웹 조회 실패로 직접 대조 범위에서 제외 | 2026-10-13 |
+| S11 | [Gemini v1beta REST](https://ai.google.dev/api/generate-content), [Flex](https://ai.google.dev/gemini-api/docs/generate-content/flex-inference), [thought signatures](https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures). [Vertex Flex](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/flex-paygo)는 표시 갱신일 2026-10-12. 모두 원격 릴리스·고정 문서 revision 미제공. google-auth-library 해당 태그 소스는 웹 조회 실패로 직접 대조 범위에서 제외 | 2026-10-13 |
 | S12 | Anthropic `2023-06-01`: [streaming](https://platform.claude.com/docs/en/build-with-claude/streaming), [thinking](https://platform.claude.com/docs/en/build-with-claude/thinking), [Batch 생성](https://platform.claude.com/docs/en/api/messages/batches/create), [Batch 처리](https://platform.claude.com/docs/en/build-with-claude/batch-processing). 현행 문서, 모델 배포 버전 미확인 | 2026-10-13 |
 | S13 | [OpenAI Responses stream](https://developers.openai.com/api/reference/resources/responses/streaming-events), [reasoning](https://developers.openai.com/api/docs/guides/reasoning), [Chat stream](https://developers.openai.com/api/reference/resources/chat/subresources/completions/streaming-events). 현행 API 문서, 원격 릴리스·문서 revision 미제공 | 2026-10-13 |
 | S14 | [TypeSafe API](https://docs.typesafe.ai/api), [모델 목록](https://docs.typesafe.ai/models). `/v1/systemone` 현행 문서, `jev-latest` 실제 해석 모델 미확인 | 2026-10-13 |

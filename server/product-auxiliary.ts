@@ -444,24 +444,16 @@ export async function runAuxiliaryJob(
         hooks.timeoutMs ??
         target.timeoutMs ??
         (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
-      onWire: async (wire, _resumeAttemptId, evidence) => {
+      onWire: async (wire) => {
         attemptId = await hooks.onAttemptStart(
           job.kind === 'translation'
             ? {
                 ...wire,
-                requestLore: requestLore(
-                  executionSnapshot,
-                  body,
-                  {
-                    ...wire,
-                    body: evidence?.contextBody ?? wire.body,
-                  },
-                  {
-                    pinned: input.context.packages?.pinned ?? [],
-                    catalog: input.catalog,
-                    sourceOnly: mode === 'source-only',
-                  }
-                ),
+                requestLore: requestLore(executionSnapshot, body, wire, {
+                  pinned: input.context.packages?.pinned ?? [],
+                  catalog: input.catalog,
+                  sourceOnly: mode === 'source-only',
+                }),
               }
             : wire
         );

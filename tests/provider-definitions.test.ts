@@ -45,7 +45,6 @@ describe('local provider definitions (no network or provider capability inferenc
       'temperature',
       'timeoutMs',
       'thinkingLevel',
-      'pdfInput',
       'topP',
       'stopSequences',
       'serviceTier',
@@ -77,7 +76,6 @@ describe('local provider definitions (no network or provider capability inferenc
     expect(providerDefinition('vertex-gemini-v1').auth).toBe('adc-or-bearer');
     expect(providerDefinition('google-gemini-v1').auth).toBe('api-key');
     expect(providerDefinition('google-gemini-v1').credentialRefDefault).toBe('GEMINI_API_KEY');
-    expect(providerDefinition('google-gemini-v1').optionKeys).toContain('pdfInput');
     expect(providerDefinition('google-gemini-v1').optionKeys).toContain('serviceTier');
   });
   test('AI Studio keys are restricted to the official Gemini API root', () => {
