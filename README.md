@@ -2,7 +2,7 @@
 
 긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별 채팅·폴더, Risu 원본 봇·페르소나·모듈, 프롬프트와 모델의 독립 설정, 원문·번역 편집, 독립 채팅 복사, 이야기 기억과 백업을 제공해요.
 
-이 소스의 앱 버전은 **`v0.9.1`**이에요. 도우미가 저장된 리소스와 프롬프트 프리셋을 새 사본으로 복제하고 프롬프트 블록을 순서대로 추가·삭제·이동할 수 있어요. 기존 이야기 가이드와 Gemini 텍스트 입력 경로는 유지해요. 개인용 초기 개발 릴리스이며 기능과 데이터 형식은 앞으로 바뀔 수 있어요. **DB 스키마는 15**로 유지해요. 자세한 변경과 제한은 [릴리스 노트](docs/releases/v0.9.1.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
+이 소스의 앱 버전은 **`v0.9.2`**이에요. 삽화 작업 알림에서 실행 세대를 정확히 확인하도록 수정하고, 사용하지 않는 내부 경로와 스타일을 정리했어요. 기존 도우미 리소스 복제·프롬프트 블록 편집 기능은 유지해요. 개인용 초기 개발 릴리스이며 기능과 데이터 형식은 앞으로 바뀔 수 있어요. **DB 스키마는 15**로 유지해요. 자세한 변경과 제한은 [릴리스 노트](docs/releases/v0.9.2.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
 
 개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → Codex 연결**에서 로그인해요.
 
@@ -10,10 +10,10 @@
 
 Node **24.14 이상 24.x**, npm, Chrome 또는 Edge가 필요해요. SQLite는 Node에 포함된 기능을 사용해요.
 
-태그 기반 설치는 공개된 `v0.9.1` 태그를 사용해요. 릴리스 공개 여부는 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 확인해요.
+태그 기반 설치는 공개된 `v0.9.2` 태그를 사용해요. 릴리스 공개 여부는 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 확인해요.
 
 ```powershell
-git clone --branch v0.9.1 --single-branch https://github.com/woduseh/Uimori.git
+git clone --branch v0.9.2 --single-branch https://github.com/woduseh/Uimori.git
 cd Uimori
 npm ci
 npm run dev
