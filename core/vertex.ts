@@ -305,6 +305,3 @@ export async function executeGeminiProvider(
     }
   }
 }
-
-// Preserve the existing transport entry point for callers of the Cloud adapter.
-export const executeVertexProvider = executeGeminiProvider;

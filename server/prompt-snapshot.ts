@@ -145,13 +145,9 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
     return applyMessageChanges(accumulated, owner.messageChanges);
   }, []);
 }
-function contextFromPackages(
-  snapshot: RunSnapshot,
-  packages: readonly ResolvedPackage[],
-  compilerVersion?: PromptCompilerVersion
-) {
-  const input = buildMainInput(snapshot, [], { compilerVersion });
-  const slots = nativePromptSlots(snapshot, compilerVersion);
+function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedPackage[]) {
+  const input = buildMainInput(snapshot);
+  const slots = nativePromptSlots(snapshot);
   const inputHistoryIds = new Set(input.history.map((entry) => entry.revision));
   const logical = (
     snapshot.nativeRisuExecution?.history ??
@@ -211,7 +207,7 @@ export function compileSnapshotPrompt(
     createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT);
   const selected = projectNativeRisuPresetProgram(snapshot, authored);
   const packages = compiledPackages(snapshot, 'main');
-  const context = contextFromPackages(snapshot, packages, options.compilerVersion);
+  const context = contextFromPackages(snapshot, packages);
   const promptCompilation = compileRisuPrompt(selected, {
     ...context,
     ...(snapshot.profile ? { controls: effectiveRisuControls(snapshot.profile, selected) } : {}),
@@ -227,7 +223,7 @@ export function compileSnapshotPrompt(
     ...hosted,
     promptCompilation: placeNativeRisuLore(
       hosted.promptCompilation!,
-      buildMainInput(snapshot, [], options).pinnedSources ?? []
+      buildMainInput(snapshot).pinnedSources ?? []
     ),
   };
 }

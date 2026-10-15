@@ -83,9 +83,7 @@ export function storyGuideReservedTokens(snapshot: RunSnapshot): number {
 /** No prior guide, authored prompt, or original/rendered duplicate enters this projection. */
 function guideRequest(snapshot: RunSnapshot, question?: string): ProviderRequest {
   const target = snapshot.profile!.models.main!;
-  const input = buildMainInput(snapshot, [], {
-    compilerVersion: snapshot.promptCompilation?.compilerVersion,
-  });
+  const input = buildMainInput(snapshot);
   const characterExamples = nativeCharacterExamples(snapshot);
   const kept = new Set(input.history.map((entry) => entry.revision));
   const history = (

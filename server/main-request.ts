@@ -90,9 +90,7 @@ export function buildMainProviderRequest(
     (target.evaluationTools?.contextMode === 'source-bound'
       ? { definitions: evaluationToolDefinitions(target.evaluationTools), bootstrap: [] }
       : undefined);
-  const input = buildMainInput(fixed, options.results ?? [], {
-      compilerVersion: fixed.promptCompilation?.compilerVersion,
-    }),
+  const input = buildMainInput(fixed, options.results ?? []),
     terminal = storySubmissionEnabled(fixed);
 
   const collaboration = fixed.profile?.promptPresets?.main?.program.collaboration;

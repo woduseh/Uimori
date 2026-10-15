@@ -5,7 +5,6 @@ import {
 import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
 import { compiledPackages, type ResolvedPackage } from '../core/package-context.js';
 import type { RunSnapshot } from '../core/types.js';
-import type { PromptCompilerVersion } from '../core/risu-prompt.js';
 import { modelAuthorNotes } from '../core/notes.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { nativeExampleMessages } from '../core/risu-native-messages.js';
@@ -46,11 +45,8 @@ export function nativeCharacterExamples(
 }
 
 /** The same fixed host slots determine both CBS evaluation and message composition. */
-export function nativePromptSlots(
-  snapshot: RunSnapshot,
-  compilerVersion?: PromptCompilerVersion
-): Record<string, string> {
-  const input = buildMainInput(snapshot, [], { compilerVersion });
+export function nativePromptSlots(snapshot: RunSnapshot): Record<string, string> {
+  const input = buildMainInput(snapshot);
   const packages = compiledPackages(snapshot, 'main');
   const body = (slot: string) =>
     pinnedSlotSources(input, slot).map(serializeRisuContextSource).filter(Boolean).join('\n\n');
