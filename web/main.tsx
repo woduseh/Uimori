@@ -222,6 +222,7 @@ function App() {
   const [settingsTab, setSettingsTab] = useState('general');
   const [promptToEdit, setPromptToEdit] = useState<string | null>(null);
   const [helperResource, setHelperResource] = useState<HelperResourceRef | null>(null);
+  const clearHelperResource = useCallback(() => setHelperResource(null), []);
   const [workspacePanel, setWorkspacePanel] = useState<'options' | 'helper' | null>(null);
   const optionsOpen = workspacePanel === 'options';
   const helperOpen = workspacePanel === 'helper';
@@ -1092,6 +1093,7 @@ function App() {
                   listRequest={libraryListRequest}
                   initialPresetId={promptToEdit}
                   onInitialPresetHandled={() => setPromptToEdit(null)}
+                  onEditorOpened={clearHelperResource}
                   onAskHelper={(preset) => {
                     setHelperResource({
                       kind: 'prompt-preset',
@@ -1928,7 +1930,7 @@ function App() {
         open={helperOpen}
         selection={helperSelection}
         resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
-        onClearResource={() => setHelperResource(null)}
+        onClearResource={clearHelperResource}
         outlineRequest={outlineHelperRequest}
         outlineWorkspace={panel === 'outline'}
         scope={
