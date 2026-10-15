@@ -7,6 +7,11 @@ import {
 } from '../core/resource-editing.js';
 import type { Content } from '../core/product.js';
 import type { HelperEditor } from '../core/helper.js';
+import {
+  promptControls,
+  reconcilePromptValues,
+  resolveControlValues,
+} from '../core/risu-prompt.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
 import { readResource, saveResource } from './resource-service.js';
@@ -492,6 +497,7 @@ export function patchHelperResource(
     throw new HttpError(400, 'native 원문이 없는 자료예요.');
   const changes = rawChanges as Change[];
   const changedPaths: string[] = [];
+  const explicitlyEditedValues = new Set<string>();
   for (const change of changes) {
     if (
       !object(change) ||
@@ -500,6 +506,8 @@ export function patchHelperResource(
     )
       throw new HttpError(400, '변경 형식을 확인해 주세요.');
     const segments = parts(change.path);
+    if (kind === 'prompt-preset' && segments[0] === 'values' && segments.length === 2)
+      explicitlyEditedValues.add(segments[1]!);
     const nativePath =
       segments.length >= 4 &&
       segments[0] === 'package' &&
@@ -630,8 +638,39 @@ export function patchHelperResource(
       }
     }
   }
+  const resetKeys: string[] = [];
+  if (kind === 'prompt-preset') {
+    const before = original as PromptEditModel;
+    const after = model as PromptEditModel;
+    if (
+      before.program.nativeRisuPreset.preset.customPromptTemplateToggle !==
+      after.program.nativeRisuPreset.preset.customPromptTemplateToggle
+    ) {
+      // Never silently discard a value explicitly written by this request.
+      // Unchanged saved values may instead become stale after a toggle edit.
+      if (explicitlyEditedValues.size) {
+        const values = after.values;
+        if (!values) throw new HttpError(400, '설정값을 확인해 주세요.');
+        const explicitValues = Object.fromEntries(
+          [...explicitlyEditedValues].map((key) => [key, values[key]])
+        );
+        resolveControlValues(promptControls(after.program), explicitValues);
+      }
+      const reconciled = reconcilePromptValues(after.program, after.values ?? {});
+      resetKeys.push(...reconciled.resetKeys);
+      if (!isDeepStrictEqual(after.values, reconciled.values)) {
+        after.values = reconciled.values;
+        changedPaths.push('/values');
+      }
+    }
+  }
   if (!changedPaths.length || isDeepStrictEqual(original, model))
     return { id, revision, changedPaths: [] };
   const saved = saveResource(store, { kind, id, expectedRevision: revision, model }).saved;
-  return { id, revision: saved.revision, changedPaths: [...new Set(changedPaths)] };
+  return {
+    id,
+    revision: saved.revision,
+    changedPaths: [...new Set(changedPaths)],
+    ...(resetKeys.length ? { resetKeys } : {}),
+  };
 }
