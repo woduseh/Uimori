@@ -45,6 +45,13 @@ export type HelperEditor = EditorContext & {
   source?: 'saved' | 'unsaved';
 };
 export type HelperSelection = { sourceId: string; sourceHash: string; text: string };
+/** One explicitly targeted saved library item, not a persistent conversation scope. */
+export type HelperResourceRef = {
+  kind: 'content' | 'prompt-preset';
+  id: string;
+  revision: number;
+  title: string;
+};
 export type HelperTaskSnapshot = {
   retryOf?: string;
   /** Kept after input cleanup so an admission retry cannot silently change its input. */

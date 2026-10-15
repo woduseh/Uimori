@@ -68,7 +68,7 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'resource.read',
     effect: 'read',
     description:
-      'Read a compact resource overview, then follow readyPaths into authored fields. Native promptTemplate array pages include a block overview: optional id/name, type, role/role2 and textLengths for text/innerFormat/defaultText in UTF-16 units, without bodies or CBS evaluation. Metadata over 200 units appears instead under block.previews[field] with text, full length and a path for exact reads. Use limit:50 to inspect up to 50 blocks, following nextOffset. Use path for one read or paths for 1-16 reads of the same revision, never both. Batch items keep individual results/errors; resubmit paths.slice(nextIndex) for unreturned paths. Shared fields/offset/limit and textOffset/textLimit apply to every path. Object and array pages preserve exact small scalar values. A missing optional field returns exists:false with its path. The complete response stays within 24000 serialized characters. Revision is required for resource.patch and resource.clone.',
+      'Read a compact resource overview, then follow readyPaths into authored fields. Native promptTemplate array pages return block metadata and textLengths without bodies by default. Set includeBodies:true for a path read of the promptTemplate array to include all authored text/innerFormat/defaultText per block when each fits the 24000-character result budget; nextOffset continues unread blocks, and oversized single blocks expose omittedBodyPaths for exact follow-up reads. This does not evaluate CBS. Metadata over 200 units appears instead under block.previews[field] with text, full length and a path for exact reads. Use limit:50 to inspect up to 50 blocks, following nextOffset. Use path for one read or paths for 1-16 reads of the same revision, never both. Batch items keep individual results/errors; resubmit paths.slice(nextIndex) for unreturned paths. Shared fields/offset/limit and textOffset/textLimit apply to every path. Object and array pages preserve exact small scalar values. A missing optional field returns exists:false with its path. The complete response stays within 24000 serialized characters. Revision is required for resource.patch and resource.clone.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -86,6 +86,7 @@ const resourceTools: ResourceToolDefinition[] = [
         limit: { type: 'integer', minimum: 1, maximum: 50 },
         textOffset: { type: 'integer', minimum: 0 },
         textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+        includeBodies: { type: 'boolean' },
       },
       required: ['kind', 'id'],
       additionalProperties: false,
@@ -133,7 +134,7 @@ const resourceTools: ResourceToolDefinition[] = [
         ? { kind: args.kind, id: null }
         : null,
     description:
-      'Create an independent copy of a saved bot/persona/module or prompt preset without reading or resending its full model. Requires sourceId, expectedSourceRevision and the new display title. Returns a new id/revision and the copied source id/revision; patch the returned id to edit the copy. Preserves prompt blocks, controls, defaults and current values, including the independent native preset name. Content copies follow native naming and start with no relatedIds. Does not copy unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and never edits the source. Singleton prompt-workspace is not supported.',
+      'Create an independent copy of a saved bot/persona/module or prompt preset without reading or resending its full model. Requires sourceId, expectedSourceRevision and the new display title. Returns a new id/revision and the copied source id/revision; patch the returned id to edit the copy. Preserves prompt blocks, controls, defaults and current values. Native preset name is independent and preserved by default; syncNativeName:true updates it to the new title. Content copies follow native naming and start with no relatedIds. Does not copy unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and never edits the source. Singleton prompt-workspace is not supported.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -141,6 +142,7 @@ const resourceTools: ResourceToolDefinition[] = [
         sourceId: string,
         expectedSourceRevision: revision,
         title: string,
+        syncNativeName: { type: 'boolean' },
       },
       required: ['kind', 'sourceId', 'expectedSourceRevision', 'title'],
       additionalProperties: false,
@@ -307,7 +309,9 @@ export function invokeResourceTool(
     throw new HttpError(400, '자료 종류를 확인해 주세요.');
   const kind = args.kind as ResourceKind;
   if (name === 'resource.clone') {
-    fields(args, ['kind', 'sourceId', 'expectedSourceRevision', 'title']);
+    fields(args, ['kind', 'sourceId', 'expectedSourceRevision', 'title', 'syncNativeName']);
+    if (args.syncNativeName !== undefined && typeof args.syncNativeName !== 'boolean')
+      throw new HttpError(400, '내부 이름 동기화 옵션을 확인해 주세요.');
     if (kind !== 'content' && kind !== 'prompt-preset')
       throw new HttpError(400, '봇·페르소나·모듈과 프롬프트 프리셋만 복제할 수 있어요.');
     const result = cloneResource(store, {
@@ -315,6 +319,7 @@ export function invokeResourceTool(
       sourceId: text(args.sourceId, 'source resource ID', 100),
       expectedSourceRevision: number(args.expectedSourceRevision, 'source revision'),
       title: text(args.title, 'title', 200),
+      ...(args.syncNativeName === undefined ? {} : { syncNativeName: args.syncNativeName }),
     });
     return { ...summary(result), source: result.source };
   }

@@ -1,4 +1,5 @@
 import { IconButton } from './IconButton.js';
+import { MessageCircle } from 'lucide-react';
 import { LoadingState } from './LoadingState.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
@@ -74,6 +75,7 @@ export function PromptLibrary({
   headerLeading,
   headerTrailing,
   onOpenCurrentPrompts,
+  onAskHelper,
   initialPresetId,
   onInitialPresetHandled,
   listRequest = 0,
@@ -85,6 +87,7 @@ export function PromptLibrary({
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
   onOpenCurrentPrompts: () => void;
+  onAskHelper: (preset: PromptPresetSummary) => void;
   initialPresetId?: string | null;
   onInitialPresetHandled?: () => void;
   /** Bumped when the navigation entry is chosen, so an open editor returns to the list. */
@@ -749,6 +752,9 @@ export function PromptLibrary({
                       onClick={() => void editPreset(item)}
                     >
                       <EditIcon size={18} aria-hidden="true" /> 편집
+                    </button>
+                    <button type="button" className="secondary" onClick={() => onAskHelper(item)}>
+                      <MessageCircle size={18} aria-hidden="true" /> 도우미에게 묻기
                     </button>
                     <button
                       type="button"
