@@ -21,6 +21,8 @@ export type StoryGuideState = {
   brief: StoryGuideBrief | null;
 };
 export type StoryGuideDetail = StoryGuideState & {
+  /** Authored analysis inputs only; model progress and generated advice do not advance it. */
+  analysisRevision: number;
   latestRun?: { status: string; used: boolean; error?: string };
 };
 export type StoryGuideSnapshot = Pick<StoryGuideState, 'revision' | 'config'> & {

@@ -1,5 +1,6 @@
 .story-guide,
-.story-guide-config {
+.story-guide-config,
+.story-guide-fields {
   display: grid;
   gap: 16px;
   min-width: 0;
@@ -14,7 +15,7 @@
   margin: 0;
   border: 0;
 }
-.story-guide-config > label:not(.settings-row, .story-guide-check),
+.story-guide-fields > label:not(.story-guide-check),
 .story-guide-reference label,
 .story-guide-section form > label {
   display: grid;
@@ -26,7 +27,7 @@
   width: 100%;
   min-width: 0;
 }
-.story-guide-config > .story-guide-check {
+.story-guide-fields > .story-guide-check {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -46,10 +47,26 @@
   gap: 12px;
 }
 .story-guide-reference > summary,
+.story-guide-settings > summary,
+.story-guide-preview > summary,
 .story-guide-last-brief > summary {
   cursor: pointer;
   min-height: 44px;
   align-content: center;
+}
+.story-guide-settings > summary small {
+  margin-left: auto;
+  max-width: 65%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-weight: normal;
+}
+.story-guide-settings > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .story-guide-last-brief {
   margin-top: 16px;

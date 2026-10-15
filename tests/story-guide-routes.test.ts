@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as transport from '../core/transport.js';
-import { defaultStoryGuideConfig } from '../core/story-guide.js';
+import { defaultStoryGuideConfig, type StoryGuideBrief } from '../core/story-guide.js';
 import { createApp, type App } from '../server/app.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
@@ -137,6 +137,8 @@ test('explicit questions and previews work while automatic guidance is off, usin
   });
   expect(summary.statusCode, summary.body).toBe(200);
   const before = authoredState(f.app);
+  const revision = (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json()
+    .analysisRevision;
   const send = mockSend();
   const answer = await f.post('ask', {
     question: 'QUESTION_ABOUT_ORIGINAL',
@@ -159,6 +161,11 @@ test('explicit questions and previews work while automatic guidance is off, usin
   expect(send).toHaveBeenCalledTimes(2);
   expect(f.store.storyGuide.get(f.chat.id).brief).toBeNull();
   expect(authoredState(f.app)).toEqual(before);
+  f.store.event(f.chat.id, 'story-guide.generated', 'synthetic-result');
+  f.store.event(f.chat.id, 'run.usage', 'synthetic-run');
+  expect((await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json().analysisRevision).toBe(
+    revision
+  );
   const receipts = f.store.db
     .prepare('SELECT usage_kind,usage_detached,request,response FROM attempts')
     .all();
@@ -173,6 +180,8 @@ test.each(['settings', 'source'] as const)(
   'a late answer is rejected after %s changes, without replacing writing advice',
   async (change) => {
     const f = await setup();
+    const inputRevision = (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json()
+      .analysisRevision;
     expect((await f.put(0)).statusCode).toBe(409);
     let started!: () => void;
     let finish!: () => void;
@@ -195,6 +204,9 @@ test.each(['settings', 'source'] as const)(
         expectedRevision: 0,
         text: 'MIRA_DOES_NOT_KNOW_SECRET',
       });
+    expect(
+      (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json().analysisRevision
+    ).toBeGreaterThan(inputRevision);
     finish();
     const answer = await response;
     expect(answer.statusCode, answer.body).toBe(409);
@@ -204,6 +216,103 @@ test.each(['settings', 'source'] as const)(
       config: { position: change === 'settings' ? 'Chapter 9' : '' },
       brief: null,
     });
+  }
+);
+
+test.each(['off', 'failed'] as const)(
+  'the last writing brief survives a newer %s guide run when only its receipt was published',
+  async (nextGuide) => {
+    const f = await setup();
+    const enabled = { ...f.config, enabled: true };
+    expect((await f.put(1, enabled)).statusCode).toBe(200);
+    const reserve = () => {
+      const chat = f.store.chat(f.chat.id);
+      const run = f.store.createRun(
+        chat.id,
+        {
+          request: 'Continue the story',
+          expectedRevision: chat.headRevision,
+          expectedSettingsRevision: chat.settingsRevision,
+          idempotencyKey: randomUUID(),
+        },
+        (current) => ({
+          chatId: current.id,
+          parentRevision: current.headRevision,
+          settingsRevision: current.settingsRevision,
+          settings: current.settings,
+          request: 'Continue the story',
+          history: f.store.history(current.headRevision),
+          resources: [],
+        })
+      ).run;
+      f.store.startRun(run.id);
+      return run;
+    };
+    const complete = (
+      run: ReturnType<typeof reserve>,
+      result: { brief?: StoryGuideBrief; error?: string }
+    ) => {
+      // Seed the provider outcome at the existing execution seam, then use the real
+      // completion path to keep the receipt while releasing the full input snapshot.
+      f.store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
+        JSON.stringify({
+          ...run.snapshot,
+          storyGuide: { ...run.snapshot.storyGuide, ...result },
+        }),
+        run.id
+      );
+      f.store.completeRun(run.id, 'A completed synthetic scene.', {
+        modelCalls: 0,
+        inputTokens: null,
+        outputTokens: null,
+        costUsd: null,
+      });
+    };
+    const makeBrief = (run: ReturnType<typeof reserve>, value: string): StoryGuideBrief => ({
+      fingerprint: 'a'.repeat(64),
+      text: value,
+      createdAt: new Date().toISOString(),
+      parentRevision: run.parentRevision,
+      configRevision: run.snapshot.storyGuide!.revision,
+      runId: run.id,
+      modelTitle: 'Synthetic writer',
+    });
+
+    const first = reserve();
+    const oldBrief = makeBrief(first, 'Older cached writing advice.');
+    expect(f.store.storyGuide.saveBrief(f.chat.id, oldBrief)).toBe(true);
+    complete(first, { brief: oldBrief });
+
+    const second = reserve();
+    const lastBrief = makeBrief(second, 'Most recent advice actually supplied to the writer.');
+    expect(
+      (
+        await f.put(2, {
+          ...enabled,
+          enabled: nextGuide !== 'off',
+          position: 'Changed while the guide was running',
+        })
+      ).statusCode
+    ).toBe(200);
+    expect(f.store.storyGuide.saveBrief(f.chat.id, lastBrief)).toBe(false);
+    complete(second, { brief: lastBrief });
+    expect(f.store.storyGuide.get(f.chat.id).brief).toEqual(oldBrief);
+    expect(f.store.run(second.id).snapshot.storyGuideReceipt?.brief).toEqual(lastBrief);
+    expect((await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json().brief).toEqual(
+      lastBrief
+    );
+
+    const third = reserve();
+    complete(third, nextGuide === 'failed' ? { error: 'STORY_GUIDE_PROVIDER_FAILED' } : {});
+    const detail = (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json();
+    expect(detail.brief).toEqual(lastBrief);
+    if (nextGuide === 'failed')
+      expect(detail.latestRun).toEqual({
+        status: 'completed',
+        used: false,
+        error: 'STORY_GUIDE_PROVIDER_FAILED',
+      });
+    else expect(detail.latestRun).toBeUndefined();
   }
 );
 

@@ -849,6 +849,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     executeCodex,
     vertexRequestTier: options.vertexRequestTier,
     track,
+    publish,
   });
   selectionRevisionRoutes(app, store, {
     signal: stopping.signal,

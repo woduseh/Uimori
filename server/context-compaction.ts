@@ -231,20 +231,18 @@ export async function prepareInputContext(
         Math.max(0, Math.floor(limit * CONTEXT_COMPACTION_TRIGGER_RATIO - fixedWithSummary))
       );
       const summaryModel = hooks.summaryModel ?? fixed.profile?.contextModel;
+      const ordinaryInputTokens = measureInput(projected()).estimatedInputTokens;
+      // An optional addition must not introduce a new paid summary dependency for
+      // a writer input that already fits. Required compaction still reserves its space.
       if (
+        ordinaryInputTokens <= limit * CONTEXT_COMPACTION_TRIGGER_RATIO ||
         !summaryModel ||
         summaryModel.enabled === false ||
         fixed.settings.maxCalls <= (hooks.reserveCalls ?? 1)
       )
         reservedInputTokens = Math.min(
           reservedInputTokens,
-          Math.max(
-            0,
-            Math.floor(
-              limit * CONTEXT_COMPACTION_TRIGGER_RATIO -
-                measureInput(projected()).estimatedInputTokens
-            )
-          )
+          Math.max(0, Math.floor(limit * CONTEXT_COMPACTION_TRIGGER_RATIO - ordinaryInputTokens))
         );
     }
     let prepared = measure();
@@ -495,7 +493,7 @@ export async function prepareInputContext(
             )
           ).estimatedInputTokens;
           if (
-            projectedEstimate <= limit * TARGET_RATIO &&
+            projectedEstimate + reservedInputTokens <= limit * TARGET_RATIO &&
             plan.compacted.length + batch.length >= manualTarget
           )
             break;
