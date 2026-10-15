@@ -1,7 +1,7 @@
 import { DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
-import type { Content, Library } from '../core/product.js';
+import type { Content, Library, PromptPreset } from '../core/product.js';
 import type { LibraryOrganization, LibraryFolder } from '../core/library-organization.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { editLibraryContent, navigationAction, selectContent } from './ui-navigation.js';
@@ -392,6 +392,161 @@ test('SAVEACK prompt navigation preserves an accepted save when placement and su
     (await organization(request)).items.find((item) => item.id === saved[0].id)?.folderId
   ).not.toBe(folder.id);
   expect(saves).toBe(2);
+  expect(placements).toBe(1);
+});
+
+test('LIBCLONE01 a reclassified content copy safely shortens its maximum-length title and opens in the current folder', async ({
+  page,
+  request,
+}) => {
+  const prefix = `LIBCLONE01 ${Date.now()}`;
+  const keptTitle = prefix.padEnd(196, '가');
+  const title = `${keptTitle}🌸끝끝`;
+  const copyTitle = `${keptTitle} 사본`;
+  expect(title.length).toBe(200);
+  const source = await createContent(request, title, 'bot');
+  await page.goto('/');
+  await navigationAction(page, '모듈');
+  const panel = page.getByTestId('library-panel');
+  const folder = await createFolder(page, panel, `${prefix} folder`);
+  const placed = await request.post('/api/library/organization/move', {
+    data: {
+      expectedRevision: (await organization(request)).revision,
+      items: [{ kind: 'content', id: source.id }],
+      category: 'module',
+      folderId: folder.id,
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  await page.reload();
+  await navigationAction(page, '모듈');
+  await chooseFolder(panel, folder.title);
+  await panel.getByLabel(`${title} 메뉴`, { exact: true }).click();
+  const cloned = page.waitForResponse('**/api/resources/clone');
+  await panel.getByRole('button', { name: '복제', exact: true }).click();
+  const response = await cloned;
+  expect(response.ok(), await response.text()).toBe(true);
+  const result = (await response.json()) as { saved: Content };
+  const copy = result.saved;
+  const editor = page.getByRole('region', { name: '자료 상세', exact: true });
+  await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(copyTitle);
+  expect(copy.title).toBe(copyTitle);
+  expect(copy.id).not.toBe(source.id);
+  expect(copy.kind).toBe('bot');
+  expect(copy.revision).toBe(1);
+  expect(copy.text).toBe(source.text);
+  expect((await organization(request)).items.find((item) => item.id === copy.id)).toMatchObject({
+    kind: 'content',
+    category: 'module',
+    folderId: folder.id,
+  });
+  expect(await (await request.get(`/api/content/${source.id}`)).json()).toEqual(source);
+  expect(await (await request.get(`/api/content/${copy.id}`)).json()).toEqual(copy);
+});
+
+test('LIBCLONE02 prompt list keeps a complete emoji in its shortened title and preserves saved authorship and options', async ({
+  page,
+  request,
+}) => {
+  const prefix = `LIBCLONE02 ${Date.now()}`;
+  const keptTitle = `${prefix.padEnd(195, '나')}🌸`;
+  const title = `${keptTitle}끝끝끝`;
+  const copyTitle = `${keptTitle} 사본`;
+  expect(title.length).toBe(200);
+  expect(copyTitle.length).toBe(200);
+  const program = createDefaultRisuPrompt('Synthetic core {{getglobalvar::toggle_tone}}', 'main');
+  Object.assign(program.nativeRisuPreset.preset, {
+    name: 'Separate authored native name',
+    customPromptTemplateToggle: 'tone=Tone=text\nmode=Mode=select=Story,Notes',
+    templateDefaultVariables: 'tone=quiet\nmode=0',
+    promptSettings: { assistantPrefill: 'Preserved prefill', sendName: true },
+  });
+  const created = await request.post('/api/prompt-presets', {
+    data: { title, role: 'main', program, values: { tone: 'warm', mode: '1' } },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const source = (await created.json()) as PromptPreset;
+  await page.goto('/');
+  await navigationAction(page, '프롬프트');
+  const panel = page.getByTestId('prompt-library');
+  await panel.getByLabel('프롬프트 검색', { exact: true }).fill(prefix);
+  let clones = 0;
+  await page.route('**/api/resources/clone', async (route) => {
+    clones++;
+    await route.continue();
+  });
+  await panel.getByLabel(`${title} 메뉴`, { exact: true }).click();
+  const cloned = page.waitForResponse('**/api/resources/clone');
+  await panel.getByRole('button', { name: '복제', exact: true }).click();
+  const response = await cloned;
+  expect(response.ok(), await response.text()).toBe(true);
+  const copy = (await response.json()).saved as PromptPreset;
+  await expect(
+    panel.getByRole('button', { name: `${copyTitle} 프롬프트 편집`, exact: true })
+  ).toBeVisible();
+  expect(copy.id).not.toBe(source.id);
+  expect(copy.title).toBe(copyTitle);
+  expect(copy.revision).toBe(1);
+  expect(copy.program).toEqual(source.program);
+  expect(copy.program.nativeRisuPreset.preset.name).toBe('Separate authored native name');
+  expect(copy.values).toEqual({ tone: 'warm', mode: '1' });
+  expect(await (await request.get(`/api/prompt-presets/${source.id}`)).json()).toEqual(source);
+  expect(await (await request.get(`/api/prompt-presets/${copy.id}`)).json()).toEqual(copy);
+  expect(clones).toBe(1);
+});
+
+test('LIBCLONE03 accepted content clone opens its saved copy when placement and refresh fail without repeating the write', async ({
+  page,
+  request,
+}) => {
+  const title = `LIBCLONE03 ${Date.now()}`;
+  const source = await createContent(request, title);
+  await page.goto('/');
+  const panel = page.getByTestId('library-panel');
+  const folder = await createFolder(page, panel, `${title} folder`);
+  const placed = await request.post('/api/library/organization/move', {
+    data: {
+      expectedRevision: (await organization(request)).revision,
+      items: [{ kind: 'content', id: source.id }],
+      category: 'bot',
+      folderId: folder.id,
+    },
+  });
+  expect(placed.ok(), await placed.text()).toBe(true);
+  await page.reload();
+  await chooseFolder(panel, folder.title);
+  let clones = 0;
+  let placements = 0;
+  await page.route('**/api/resources/clone', async (route) => {
+    clones++;
+    await route.continue();
+  });
+  await page.route('**/api/library/organization/move', async (route) => {
+    placements++;
+    await route.fulfill({ status: 503, json: { error: 'Synthetic clone placement failure' } });
+  });
+  await page.route('**/api/library?view=summary', (route) =>
+    route.fulfill({ status: 503, json: { error: 'Synthetic clone refresh failure' } })
+  );
+  await panel.getByLabel(`${title} 메뉴`, { exact: true }).click();
+  const cloned = page.waitForResponse('**/api/resources/clone');
+  await panel.getByRole('button', { name: '복제', exact: true }).click();
+  const response = await cloned;
+  expect(response.ok(), await response.text()).toBe(true);
+  const copy = (await response.json()).saved as Content;
+  const editor = page.getByRole('region', { name: '자료 상세', exact: true });
+  await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(`${title} 사본`);
+  const warning = page.getByRole('alert').filter({ hasText: '자료는 복제됐어요.' });
+  await expect(warning).toContainText('폴더에 배치하지 못했어요.');
+  await expect(warning).toContainText('목록을 다시 불러오지 못했어요.');
+  const library = (await (await request.get('/api/library')).json()) as Library;
+  expect(library.contents.filter((item) => item.title === `${title} 사본`)).toHaveLength(1);
+  expect(
+    (await organization(request)).items.find((item) => item.id === copy.id)?.folderId
+  ).toBeNull();
+  expect(await (await request.get(`/api/content/${source.id}`)).json()).toEqual(source);
+  expect(await (await request.get(`/api/content/${copy.id}`)).json()).toEqual(copy);
+  expect(clones).toBe(1);
   expect(placements).toBe(1);
 });
 

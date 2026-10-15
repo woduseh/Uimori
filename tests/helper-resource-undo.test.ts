@@ -4,6 +4,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import Fastify from 'fastify';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { HelperTask } from '../core/helper.js';
+import type { PromptPreset } from '../core/product.js';
 import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import { editableResource } from '../core/resource-editing.js';
 import { emptyTheme } from '../core/themes.js';
@@ -22,6 +23,7 @@ import { readResource, saveResource } from '../server/resource-service.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 
 const owned: {
   store: Store;
@@ -171,6 +173,122 @@ function providerMutation(name: string, args: Record<string, unknown>, failAfter
     }
   );
 }
+
+test('a repeated clone receipt creates one copy and a structural patch undoes only that copy', () => {
+  const f = fixture();
+  const source = f.store.product.promptPreset({
+    title: 'Version 1',
+    role: 'main',
+    program: nativePrompt('Saved body', {
+      name: 'Authored native name',
+      promptTemplate: [
+        { id: 'core', type: 'plain', role: 'system', text: 'Saved body' },
+        { type: 'plain', role: 'user', text: 'Redundant seal', custom: { preserve: true } },
+      ],
+    }),
+    values: {},
+  }) as PromptPreset;
+  const task = runningTask(f);
+  const args = {
+    kind: 'prompt-preset',
+    sourceId: source.id,
+    expectedSourceRevision: source.revision,
+    title: 'Version 2',
+  };
+  const copy = mutate(f, task, 'resource.clone', args, 'copy') as {
+    id: string;
+    revision: number;
+  };
+  expect(copy).toMatchObject({
+    created: true,
+    revision: 1,
+    source: { id: source.id, revision: source.revision },
+  });
+  expect(copy.id).not.toBe(source.id);
+  expect(mutate(f, task, 'resource.clone', args, 'copy')).toEqual(copy);
+  expect(
+    f.store.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='prompt-preset'").get()!.n
+  ).toBe(2);
+  expect(lastEdit(f)).toBeNull();
+  expect(
+    f.workspace.events(f.conversation.id).filter((event) => event.kind === 'resource.updated')
+  ).toHaveLength(1);
+  const before = readResource(f.store, 'prompt-preset', copy.id);
+  mutate(
+    f,
+    task,
+    'resource.patch',
+    {
+      kind: 'prompt-preset',
+      id: copy.id,
+      expectedRevision: copy.revision,
+      changes: [
+        { op: 'set', path: '/title', value: 'Version 2 polished' },
+        { op: 'remove', path: '/program/nativeRisuPreset/preset/promptTemplate/1' },
+      ],
+    },
+    'patch-copy'
+  );
+  finish(f, task);
+  const edit = lastEdit(f)!;
+  expect(edit).toMatchObject({ kind: 'prompt-preset', id: copy.id, revision: 2, canUndo: true });
+  undoHelperResourceEdit(f.store, f.workspace, f.conversation.id, edit.editSeq);
+  const restored = readResource(f.store, 'prompt-preset', copy.id);
+  expect(restored.revision).toBe(3);
+  expect(editableResource('prompt-preset', restored)).toEqual(
+    editableResource('prompt-preset', before)
+  );
+  expect(readResource(f.store, 'prompt-preset', source.id)).toEqual(source);
+});
+
+test('runtime cloning uses saved source while an unsaved editor remains analysis input', async () => {
+  const f = fixture();
+  const source = f.store.product.promptPreset({
+    title: 'Stored preset',
+    role: 'main',
+    program: nativePrompt('Saved source body'),
+    values: {},
+  }) as PromptPreset;
+  const draft = {
+    ...editableResource('prompt-preset', source),
+    program: nativePrompt('Unsaved draft body'),
+  };
+  providerMutation('resource.clone', {
+    kind: 'prompt-preset',
+    sourceId: source.id,
+    expectedSourceRevision: source.revision,
+    title: 'Stored copy',
+  });
+  const task = f.runtime.enqueue(
+    f.conversation.id,
+    'clone-saved',
+    '저장된 프리셋의 사본을 만들어줘',
+    {
+      kind: 'prompt-preset',
+      targetId: source.id,
+      revision: source.revision,
+      title: source.title,
+      source: 'unsaved',
+      model: draft,
+    }
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  const row = f.store.db
+    .prepare("SELECT id FROM versions WHERE kind='prompt-preset' AND id<>?")
+    .get(source.id)!;
+  expect(readResource(f.store, 'prompt-preset', String(row.id))).toMatchObject({
+    title: 'Stored copy',
+    revision: 1,
+    program: source.program,
+  });
+  expect(draft.program).toEqual(nativePrompt('Unsaved draft body'));
+  expect(readResource(f.store, 'prompt-preset', source.id)).toEqual(source);
+  expect(lastEdit(f)).toBeNull();
+  expect(
+    f.workspace.events(f.conversation.id).filter((event) => event.kind === 'resource.updated')
+  ).toHaveLength(1);
+});
 
 test('runtime edits stay undoable after input cleanup and duplicate POST confirms without another write', async () => {
   const f = fixture();

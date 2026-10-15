@@ -14,7 +14,7 @@ import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import type { DataOperation, DataRef } from '../server/helper-data-worker.js';
 import { fixtureBotInput, createFixtureChat } from './fixtures/chat.js';
 import type { HelperTaskSnapshot } from '../core/helper.js';
-import type { Content } from '../core/product.js';
+import type { Content, PromptPreset } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 
 const owned: { store: Store; path: string }[] = [];
@@ -70,6 +70,45 @@ function bot(
   kind: 'bot' | 'persona' | 'module' = 'bot'
 ) {
   return f.store.product.content({ ...fixtureBotInput('하린 ' + kind, text), kind }) as Content;
+}
+function prompt(
+  f: ReturnType<typeof fixture>,
+  vendor: Record<string, unknown> = {
+    sourceHash: 'blocked-marker-hash',
+    note: 'Keep this metadata.',
+  }
+): PromptPreset {
+  return f.store.product.promptPreset({
+    title: 'Phēmē V5.1.0',
+    role: 'main',
+    program: {
+      version: 1,
+      nativeRisuPreset: {
+        version: 1,
+        preset: {
+          name: 'Phēmē native name',
+          promptTemplate: [
+            {
+              id: 'blocked-marker-id',
+              name: 'Resolution',
+              type: 'plain',
+              role: 'system',
+              text: 'A resolution follows established actions.',
+              enabled: true,
+              priority: 17,
+              extensions: { vendor },
+            },
+            { id: 'history', type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+          ],
+          promptSettings: { sendChatAsSystem: true },
+          customPromptTemplateToggle: 'tone=Tone=text\nscope/name~key=Scope=text',
+          templateDefaultVariables: 'tone=Calm',
+        },
+      },
+      execution: { storySubmission: true },
+    },
+    values: { tone: 'Quiet', 'scope/name~key': 'Harbor' },
+  }) as PromptPreset;
 }
 
 async function readOne(
@@ -374,6 +413,210 @@ test('module string excerpts can be patched while protected native paths remain 
   expect(after.package.nativeRisu.module?.extensions).toMatchObject({ vendor: protectedFields });
 });
 
+test('prompt search patches the exact native block without a reread and rejects a stale target', async () => {
+  const f = fixture();
+  const saved = prompt(f);
+  const found = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['established actions'],
+  });
+  expect(found.items).toHaveLength(1);
+  const hit = found.items[0];
+  const path = '/program/nativeRisuPreset/preset/promptTemplate/0/text';
+  expect(hit.ref).toMatchObject({
+    kind: 'prompt',
+    revision: saved.revision,
+    field: path,
+  });
+  expect(hit.editTarget).toEqual({
+    kind: 'prompt-preset',
+    id: saved.id,
+    expectedRevision: saved.revision,
+    path,
+  });
+  const { path: editPath, ...target } = hit.editTarget;
+  const patch = {
+    ...target,
+    changes: [
+      {
+        path: editPath,
+        op: 'replaceText',
+        oldText: 'established actions',
+        newText: 'established circumstances, actions, and consequences',
+      },
+    ],
+  };
+  expect(invokeResourceTool(f.store, 'resource.patch', patch)).toEqual({
+    id: saved.id,
+    revision: saved.revision + 1,
+    changedPaths: [path],
+  });
+  const expected = structuredClone(saved);
+  (expected.program.nativeRisuPreset.preset.promptTemplate as { text?: string }[])[0].text =
+    'A resolution follows established circumstances, actions, and consequences.';
+  expected.revision++;
+  expect(f.store.product.get<PromptPreset>('prompt-preset', saved.id)).toEqual(expected);
+  expect(() => invokeResourceTool(f.store, 'resource.patch', patch)).toThrow(
+    '저장된 자료가 변경됐어요'
+  );
+  expect(f.store.product.get<PromptPreset>('prompt-preset', saved.id)).toEqual(expected);
+  await expect(readOne(f, hit.ref)).rejects.toThrow('DATA_SOURCE_CHANGED');
+});
+
+test('prompt reads expose editable titles, options and native strings but exclude protected and typed fields', async () => {
+  const f = fixture();
+  const saved = prompt(f);
+  const editablePaths = [
+    '/title',
+    '/values/tone',
+    '/values/scope~1name~0key',
+    '/program/nativeRisuPreset/preset/promptTemplate/0/text',
+    '/program/nativeRisuPreset/preset/promptTemplate/0/extensions/vendor/note',
+  ];
+  const found = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['^'],
+    regex: true,
+    paths: editablePaths,
+    limit: 10,
+  });
+  expect(found.complete).toBe(true);
+  for (const path of editablePaths) {
+    const hit = found.items.find((item: any) => item.ref.field === path);
+    expect(hit?.editTarget).toEqual({
+      kind: 'prompt-preset',
+      id: saved.id,
+      expectedRevision: saved.revision,
+      path,
+    });
+  }
+  const readPaths = [
+    '/title',
+    '/values/scope~1name~0key',
+    '/program/nativeRisuPreset/preset/promptTemplate/0/text',
+  ];
+  for (const path of readPaths) {
+    const hit = found.items.find((item: any) => item.ref.field === path);
+    expect((await readOne(f, hit.ref)).editTarget).toEqual(hit.editTarget);
+  }
+  const readonlyPaths = [
+    '/program/version',
+    '/program/execution/storySubmission',
+    '/program/nativeRisuPreset/preset/promptTemplate/0/enabled',
+    '/program/nativeRisuPreset/preset/promptTemplate/0/priority',
+    '/program/nativeRisuPreset/preset/promptTemplate/0/id',
+    '/program/nativeRisuPreset/preset/promptTemplate/0/extensions/vendor/sourceHash',
+  ];
+  const readonlyFound = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['^'],
+    regex: true,
+    paths: readonlyPaths,
+    limit: 10,
+  });
+  expect(readonlyFound.complete).toBe(true);
+  for (const path of readonlyPaths) {
+    const hit = readonlyFound.items.find((item: any) => item.ref.field === path);
+    expect(hit).toBeDefined();
+    expect(hit.editTarget).toBeUndefined();
+  }
+  const protectedHit = readonlyFound.items.find((item: any) =>
+    item.ref.field.endsWith('/sourceHash')
+  );
+  expect((await readOne(f, protectedHit.ref)).editTarget).toBeUndefined();
+  const escaped = found.items.find((item: any) => item.ref.field === '/values/scope~1name~0key');
+  const { path: escapedPath, ...escapedTarget } = escaped.editTarget;
+  invokeResourceTool(f.store, 'resource.patch', {
+    ...escapedTarget,
+    changes: [{ path: escapedPath, op: 'replaceText', oldText: 'Harbor', newText: 'Port' }],
+  });
+  expect(f.store.product.get<PromptPreset>('prompt-preset', saved.id)?.values).toEqual({
+    ...saved.values,
+    'scope/name~key': 'Port',
+  });
+});
+
+test.each([
+  ['empty property name', { '': 'unaddressable-marker' }],
+  ['oversized property name', { ['x'.repeat(301)]: 'unaddressable-marker' }],
+  [
+    'too many nested properties',
+    Array.from({ length: 74 }, (_, index) => `level${index}`).reduce<unknown>(
+      (value, key) => ({ [key]: value }),
+      'unaddressable-marker'
+    ),
+  ],
+] as const)(
+  'prompt metadata with %s stays readable without an unusable edit target',
+  async (_case, vendor) => {
+    const f = fixture();
+    const saved = prompt(f, vendor as Record<string, unknown>);
+    const found = await f.invoke('data.search', {
+      scope: 'library',
+      ids: [saved.id],
+      patterns: ['unaddressable-marker'],
+    });
+    expect(found.items).toHaveLength(1);
+    const hit = found.items[0];
+    expect(hit.text).toBe('unaddressable-marker');
+    expect(hit.editTarget).toBeUndefined();
+    const read = await readOne(f, hit.ref);
+    expect(read.text).toBe('unaddressable-marker');
+    expect(read.editTarget).toBeUndefined();
+  }
+);
+
+test('content search accounts for the native edit prefix when a field path exceeds the patch limit', async () => {
+  const f = fixture();
+  const input = fixtureBotInput('Long native path');
+  const native = input.package.nativeRisu.card;
+  native.extensions = {
+    vendor: Array.from({ length: 4 }, (_, index) => String(index).repeat(245)).reduce<unknown>(
+      (value, key) => ({ [key]: value }),
+      { note: 'prefix-boundary-marker' }
+    ),
+  };
+  const saved = f.store.product.content(input) as Content;
+  const found = await f.invoke('data.search', {
+    scope: 'library',
+    ids: [saved.id],
+    patterns: ['prefix-boundary-marker'],
+  });
+  expect(found.items).toHaveLength(1);
+  const hit = found.items[0];
+  expect(hit.ref.field.length).toBeLessThanOrEqual(1024);
+  expect(`/package/nativeRisu${hit.ref.field}`.length).toBeGreaterThan(1024);
+  expect(hit.text).toBe('prefix-boundary-marker');
+  expect(hit.editTarget).toBeUndefined();
+  expect((await readOne(f, hit.ref)).editTarget).toBeUndefined();
+});
+
+test.each(['saved', 'unsaved'] as const)(
+  '%s captured prompt editors never advertise live resource edit targets',
+  async (source) => {
+    const f = fixture();
+    const saved = prompt(f);
+    f.setSnapshot({
+      editor: {
+        kind: 'prompt-preset',
+        targetId: saved.id,
+        revision: saved.revision,
+        title: saved.title,
+        source,
+        model: saved,
+      },
+    });
+    const found = await f.invoke('data.search', { patterns: ['established actions'] });
+    expect(found.scope).toBe('editor');
+    expect(found.items).toHaveLength(1);
+    expect(found.items[0].editTarget).toBeUndefined();
+    expect((await readOne(f, found.items[0].ref)).editTarget).toBeUndefined();
+  }
+);
+
 test('matches later occurrences in one long field, with deterministic search pagination and exact original offsets', async () => {
   const f = fixture();
   bot(
@@ -666,6 +909,7 @@ test('current scope retains reservation facts, complete old prose, source roles,
   const result = await f.invoke('data.search', { patterns: ['나이'], limit: 30 });
   expect(result.scope).toBe('current');
   expect(result.chatId).toBe('chat-A');
+  expect(result.items.every((item: any) => item.editTarget === undefined)).toBe(true);
   expect(result.items.some((i: any) => i.ref.kind === 'bot' && i.text.includes('27세'))).toBe(true);
   expect(result.items.some((i: any) => i.ref.kind === 'chat' && i.ref.field === '/request')).toBe(
     true

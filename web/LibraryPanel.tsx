@@ -21,7 +21,11 @@ import {
   useEditorSaveCommand,
   useResourceEditor,
 } from './resource-editor.js';
-import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
+import {
+  editableResource,
+  type ContentEditModel,
+  type ResourceSaveResult,
+} from '../core/resource-editing.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
 import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
@@ -238,6 +242,7 @@ export function LibraryPanel({
   const selectionExit = useRef<HTMLButtonElement>(null);
   const wasSelecting = useRef(false);
   const opening = useRef(0);
+  const cloning = useRef(false);
   const latestLibrary = useRef(library);
   latestLibrary.current = library;
   const externalTab = useRef(initialTab);
@@ -343,27 +348,33 @@ export function LibraryPanel({
     externalTab.current = tab;
     onTabChange?.(tab);
   }
-  async function placeCreated(item: Content) {
-    if (folder === 'all' || folder === 'unclassified' || item.kind !== tab) return;
+  async function placeCreated(item: Content, cloned = false) {
+    const folderId = folder === 'all' || folder === 'unclassified' ? null : folder;
+    if ((!cloned && item.kind !== tab) || (folderId === null && item.kind === tab)) return;
     const current = await api<LibraryOrganization>('/library/organization');
-    await organizer.mutate(
+    const placed = await organizer.mutate(
       '/library/organization/move',
-      { items: [{ kind: 'content', id: item.id }], category: tab, folderId: folder },
+      { items: [{ kind: 'content', id: item.id }], category: tab, folderId },
       'POST',
       current.revision
     );
+    if (!placed) throw new Error('폴더 배치를 완료하지 못했어요.');
   }
   async function openContent(
     item: Content,
     action: 'detail' | 'edit' | 'clone' | PrimaryLibraryTab = 'detail'
   ) {
+    if (action === 'clone') {
+      if (cloning.current) return;
+      cloning.current = true;
+    }
     const request = ++opening.current;
     setLoading(true);
     try {
       const cached = detail && refValue(detail) === refValue(item) ? detail : null;
       const full =
         cached ??
-        (library?.contentBodiesOmitted || (item.hasPackage && !item.package)
+        (action !== 'clone' && (library?.contentBodiesOmitted || (item.hasPackage && !item.package))
           ? await api<Content>(`/content/${item.id}`)
           : item);
       if (
@@ -375,22 +386,30 @@ export function LibraryPanel({
         setDetail(null);
         setEditing({ kind: full.kind, item: full });
       } else if (action === 'clone') {
-        const copy = await api<Content>('/content', {
-          kind: tab,
-          title: `${full.title} 사본`,
-          description: full.description,
-          text: full.text,
-          loading: full.loading,
-          relatedIds: [],
-          ...(full.package
-            ? { package: withNativeContentTitle(full.package, `${full.title} 사본`) }
-            : {}),
+        const result = await api<ResourceSaveResult>('/resources/clone', {
+          kind: 'content',
+          sourceId: full.id,
+          expectedSourceRevision: full.revision,
+          title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
         });
-        await placeCreated(copy);
-        await reload();
+        const copy = result.saved as Content;
+        const warnings: string[] = [];
+        try {
+          await placeCreated(copy, true);
+        } catch (error) {
+          warnings.push(`자료는 복제됐어요. 폴더에 배치하지 못했어요. ${(error as Error).message}`);
+        }
+        try {
+          await reload();
+        } catch (error) {
+          warnings.push(
+            `자료는 복제됐어요. 목록을 다시 불러오지 못했어요. ${(error as Error).message}`
+          );
+        }
         if (request === opening.current) {
           setDetail(null);
           setEditing({ kind: copy.kind, item: copy });
+          if (warnings.length) onError(warnings.join('\n'));
         }
       } else if (action === 'detail') setDetail(full);
       else if (onUseContent) onUseContent(full, action);
@@ -398,6 +417,7 @@ export function LibraryPanel({
     } catch (error) {
       if (request === opening.current) onError((error as Error).message);
     } finally {
+      if (action === 'clone') cloning.current = false;
       if (request === opening.current) setLoading(false);
     }
   }

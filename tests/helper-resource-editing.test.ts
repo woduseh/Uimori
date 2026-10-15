@@ -51,6 +51,28 @@ function fixture(large = false) {
 }
 const call = (store: Store, name: string, args: Record<string, unknown>) =>
   invokeResourceTool(store, name, args) as Record<string, any>;
+const presetBlocksPath = '/program/nativeRisuPreset/preset/promptTemplate';
+function presetFixture(blocks: Record<string, unknown>[]) {
+  const { store } = fixture();
+  const preset = store.product.promptPreset({
+    title: 'Library V1',
+    role: 'main',
+    program: {
+      version: 1,
+      nativeRisuPreset: {
+        version: 1,
+        preset: {
+          name: 'Native V1',
+          promptTemplate: blocks,
+          customPromptTemplateToggle: 'tone=Tone=text',
+          templateDefaultVariables: 'tone=quiet',
+        },
+      },
+    },
+    values: { tone: 'warm' },
+  });
+  return { store, preset, target: { kind: 'prompt-preset', id: preset.id } };
+}
 
 test('captured unsaved editor uses bounded typed paths while preserving its original revision', () => {
   const { store, content } = fixture(true);
@@ -616,6 +638,240 @@ test('preset native text and option declarations patch through normal preset val
   );
   expect(saved.program.nativeRisuPreset.preset.customPromptTemplateToggle).toBe('tone=Tone=text');
   expect(saved.values).toHaveProperty('tone');
+});
+
+test('preset overview points to a complete 40-block outline without loading authored text', () => {
+  const blocks = Array.from({ length: 40 }, (_, index) => ({
+    name: `Block ${index}`,
+    type: 'plain',
+    role: 'system',
+    text: `PRIVATE_BODY_${index} `.repeat(100),
+    ...(index % 3 ? { id: 'legacy-duplicate' } : {}),
+  }));
+  const { store, preset, target } = presetFixture([
+    {
+      type: 'authornote',
+      role2: 'user',
+      name: 'Author note',
+      innerFormat: '<note>{{slot}}</note>',
+      defaultText: '초안 😀',
+    },
+    ...blocks.slice(1),
+  ]);
+  const overview = call(store, 'resource.read', target);
+  expect(overview.readyPaths).toEqual([
+    presetBlocksPath,
+    '/program/nativeRisuPreset/preset/customPromptTemplateToggle',
+    '/program/nativeRisuPreset/preset/templateDefaultVariables',
+    '/values',
+  ]);
+  const outline = call(store, 'resource.read', { ...target, path: presetBlocksPath, limit: 50 });
+  expect(outline.revision).toBe(preset.revision);
+  expect(outline.items).toHaveLength(40);
+  expect(outline.nextOffset).toBeNull();
+  expect(outline.items[0]).toMatchObject({
+    name: '0',
+    path: `${presetBlocksPath}/0`,
+    type: 'object',
+    block: {
+      name: 'Author note',
+      type: 'authornote',
+      role2: 'user',
+      textLengths: { innerFormat: 21, defaultText: 5 },
+    },
+  });
+  expect(outline.items[0].block).not.toHaveProperty('id');
+  expect(outline.items[1].block).toEqual({
+    id: 'legacy-duplicate',
+    name: 'Block 1',
+    type: 'plain',
+    role: 'system',
+    textLengths: { text: 1500 },
+  });
+  expect(JSON.stringify(outline)).not.toContain('PRIVATE_BODY_');
+  expect(JSON.stringify(outline).length).toBeLessThanOrEqual(24_000);
+  const next = call(store, 'resource.read', {
+    ...target,
+    path: presetBlocksPath,
+    offset: 39,
+    limit: 1,
+  });
+  expect(next.items[0].path).toBe(`${presetBlocksPath}/39`);
+  expect(next.nextOffset).toBeNull();
+});
+
+test('oversized block metadata stays paged and offers exact field reads without changing stored text', () => {
+  const longName = '긴 이름 "\\\n😀'.repeat(4000);
+  const longId = 'legacy-'.repeat(4000);
+  const { store, preset, target } = presetFixture([
+    { id: longId, name: longName, type: 'plain', role: 'system', text: 'PRIVATE_BODY' },
+    { name: 'Short name', type: 'chat' },
+    { name: longName, type: 'authornote', defaultText: 'PRIVATE_NOTE' },
+  ]);
+  const first = call(store, 'resource.read', { ...target, path: presetBlocksPath, limit: 1 });
+  expect(first.items).toHaveLength(1);
+  expect(first.nextOffset).toBe(1);
+  const block = first.items[0].block;
+  expect(block).toMatchObject({ type: 'plain', role: 'system', textLengths: { text: 12 } });
+  expect(block).not.toHaveProperty('name');
+  expect(block).not.toHaveProperty('id');
+  expect(block.previews.name).toMatchObject({
+    length: longName.length,
+    path: `${presetBlocksPath}/0/name`,
+  });
+  expect(block.previews.name.text.length).toBeLessThanOrEqual(200);
+  expect(longName.startsWith(block.previews.name.text)).toBe(true);
+  expect(block.previews.id).toMatchObject({
+    length: longId.length,
+    path: `${presetBlocksPath}/0/id`,
+  });
+  expect(JSON.stringify(first).length).toBeLessThanOrEqual(24_000);
+  expect(JSON.stringify(first)).not.toContain('PRIVATE_BODY');
+  const next = call(store, 'resource.read', {
+    ...target,
+    path: presetBlocksPath,
+    offset: first.nextOffset,
+  });
+  expect(next.items.map((item: any) => item.path)).toEqual([
+    `${presetBlocksPath}/1`,
+    `${presetBlocksPath}/2`,
+  ]);
+  expect(next.nextOffset).toBeNull();
+  expect(next.items[0].block.name).toBe('Short name');
+  expect(next.items[1].block.previews.name.length).toBe(longName.length);
+  const exact = call(store, 'resource.read', {
+    ...target,
+    path: block.previews.name.path,
+    textLimit: 37,
+  });
+  expect(exact.text).toBe(longName.slice(0, exact.nextOffset));
+  expect(exact.length).toBe(longName.length);
+  expect(store.product.get('prompt-preset', preset.id)).toEqual(preset);
+});
+
+test('preset block edits compose sequentially with one save and undo while preserving slot metadata', () => {
+  const blocks = [
+    { type: 'plain', role: 'system', text: 'Core', extensions: { vendor: [1, 2] } },
+    { id: 'duplicate', type: 'chat', rangeStart: 0, rangeEnd: 'end', cachePoint: true },
+    {
+      id: 'duplicate',
+      type: 'persona',
+      role2: 'system',
+      innerFormat: '<persona>{{slot}}</persona>',
+      vendor: { unknown: 'keep' },
+    },
+    { type: 'plain', role: 'user', name: 'Seal', text: 'Deliver directly.' },
+  ];
+  const { store, preset, target } = presetFixture(blocks);
+  const inserted = { type: 'plain', role: 'user', text: 'Original instruction.' };
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      { op: 'insert', path: `${presetBlocksPath}/1`, value: inserted },
+      {
+        op: 'replaceText',
+        path: `${presetBlocksPath}/1/text`,
+        oldText: 'Original',
+        newText: 'Revised',
+      },
+      { op: 'move', from: `${presetBlocksPath}/3`, path: `${presetBlocksPath}/0` },
+      { op: 'remove', path: `${presetBlocksPath}/4` },
+      { op: 'move', from: `${presetBlocksPath}/1`, path: `${presetBlocksPath}/3` },
+    ],
+  });
+  const saved = store.product.get<any>('prompt-preset', preset.id);
+  expect(result.revision).toBe(preset.revision + 1);
+  expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual([
+    blocks[2],
+    { ...inserted, text: 'Revised instruction.' },
+    blocks[1],
+    blocks[0],
+  ]);
+  expect(saved.values).toEqual(preset.values);
+  expect(saved.program.nativeRisuPreset.preset.customPromptTemplateToggle).toBe('tone=Tone=text');
+  const noChange = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: saved.revision,
+    changes: [
+      { op: 'move', from: `${presetBlocksPath}/0`, path: `${presetBlocksPath}/2` },
+      { op: 'move', from: `${presetBlocksPath}/2`, path: `${presetBlocksPath}/0` },
+      { op: 'move', from: `${presetBlocksPath}/1`, path: `${presetBlocksPath}/1` },
+    ],
+  });
+  expect(noChange).toEqual({ id: preset.id, revision: saved.revision, changedPaths: [] });
+  call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
+  const restored = store.product.get<any>('prompt-preset', preset.id);
+  expect(restored).toEqual({ ...preset, revision: preset.revision + 2 });
+});
+
+test('preset display title can change independently from the native name and undo normally', () => {
+  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Instruction' }]);
+  const saved = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [{ op: 'set', path: '/title', value: 'Library V2' }],
+  });
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
+    ...preset,
+    title: 'Library V2',
+    revision: saved.revision,
+  });
+  call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
+    ...preset,
+    revision: preset.revision + 2,
+  });
+});
+
+test('stale and invalid preset structural proposals leave every block and the undo record intact', () => {
+  const {
+    store,
+    preset: initial,
+    target,
+  } = presetFixture([
+    { type: 'plain', role: 'system', text: 'Original' },
+    { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+  ]);
+  call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: initial.revision,
+    changes: [{ op: 'set', path: '/title', value: 'Saved draft' }],
+  });
+  const preset = store.product.get<any>('prompt-preset', initial.id);
+  const previousUndo = store.db
+    .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
+    .get(target.kind, target.id);
+  const insert = { op: 'insert', path: `${presetBlocksPath}/1`, value: { type: 'persona' } };
+  expect(() =>
+    call(store, 'resource.patch', {
+      ...target,
+      expectedRevision: preset.revision + 1,
+      changes: [insert],
+    })
+  ).toThrow('저장된 자료가 변경됐어요');
+  for (const invalid of [
+    { op: 'move', from: `${presetBlocksPath}/0`, path: `${presetBlocksPath}/3` },
+    { op: 'move', from: '/values/tone/0', path: `${presetBlocksPath}/1` },
+    { op: 'insert', path: '/program/nativeRisuPreset/preset/regex/0', value: {} },
+    { op: 'insert', path: `${presetBlocksPath}/0`, value: [] },
+    { op: 'set', path: '/title/extra', value: 'Wrong' },
+    { op: 'set', path: '/program/nativeRisuPreset/preset/unsupported', value: true },
+  ]) {
+    expect(() =>
+      call(store, 'resource.patch', {
+        ...target,
+        expectedRevision: preset.revision,
+        changes: [insert, invalid],
+      })
+    ).toThrow();
+    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+    expect(
+      store.db
+        .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
+        .get(target.kind, target.id)
+    ).toEqual(previousUndo);
+  }
 });
 
 test('first lore insertion creates the missing card book without replacing native source', () => {

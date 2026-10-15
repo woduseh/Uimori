@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
-import { readResource, saveResource, undoResource } from './resource-service.js';
+import { choice, fields, HttpError, number, record, text } from './request-validation.js';
+import { cloneResource, readResource, saveResource, undoResource } from './resource-service.js';
 
 const kinds = ['content', 'prompt-preset', 'prompt-workspace', 'theme', 'illustration-preset'];
 export function resourceKind(value: unknown): ResourceKind {
@@ -14,6 +14,16 @@ export function resourceRoutes(app: FastifyInstance, store: Store) {
   app.get<{ Params: { kind: string; id: string } }>('/api/resources/:kind/:id', (request) =>
     readResource(store, resourceKind(request.params.kind), request.params.id)
   );
+  app.post('/api/resources/clone', (request) => {
+    const body = record(request.body);
+    fields(body, ['kind', 'sourceId', 'expectedSourceRevision', 'title']);
+    return cloneResource(store, {
+      kind: choice(body.kind, ['content', 'prompt-preset'], 'clone resource kind'),
+      sourceId: text(body.sourceId, 'source ID', 100),
+      expectedSourceRevision: number(body.expectedSourceRevision, 'source revision'),
+      title: text(body.title, 'title', 200),
+    });
+  });
   app.post('/api/resources/save', { bodyLimit: 48 * 1024 * 1024 }, (request) => {
     const body = record(request.body);
     fields(body, ['kind', 'id', 'expectedRevision', 'model']);

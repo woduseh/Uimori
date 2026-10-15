@@ -9,16 +9,18 @@ import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
 import { readResource, saveResource } from './resource-service.js';
+import pathPolicy from './helper-resource-path-policy.json' with { type: 'json' };
 import protectedFields from './helper-native-protected-fields.json' with { type: 'json' };
 
 const MAX_RESULT = 24_000;
-const MAX_PATH = 1_024;
+const MAX_PATH = pathPolicy.maxLength;
 const MAX_TEXT = 10_000;
 const FORBIDDEN = new Set(protectedFields);
 type JsonObject = Record<string, unknown>;
 type Change = {
   path: string;
-  op: 'set' | 'replaceText' | 'insert' | 'remove';
+  op: 'set' | 'replaceText' | 'insert' | 'remove' | 'move';
+  from?: string;
   value?: unknown;
   oldText?: string;
   newText?: string;
@@ -47,7 +49,10 @@ function parts(path: unknown): string[] {
       if (/~(?![01])/u.test(part)) throw new HttpError(400, '올바른 자료 경로가 필요해요.');
       return part.replaceAll('~1', '/').replaceAll('~0', '~');
     });
-  if (segments.length > 80 || segments.some((part) => !part || part.length > 300))
+  if (
+    segments.length > pathPolicy.maxSegments ||
+    segments.some((part) => !part || part.length > pathPolicy.maxSegmentLength)
+  )
     throw new HttpError(400, '자료 경로가 너무 길어요.');
   return segments;
 }
@@ -131,6 +136,32 @@ function sourceFor(content: Content) {
         : '/package/nativeRisu/card/character_book/entries',
   };
 }
+const PRESET_TEMPLATE_PATH = '/program/nativeRisuPreset/preset/promptTemplate';
+function promptBlock(value: unknown, path: string): JsonObject | undefined {
+  if (!object(value)) return undefined;
+  const block: JsonObject = {};
+  const previews: JsonObject = {};
+  for (const field of ['id', 'name', 'type', 'role', 'role2']) {
+    const text = value[field];
+    if (typeof text !== 'string') continue;
+    if (text.length <= 200) block[field] = text;
+    else
+      previews[field] = {
+        text: text.slice(0, 200).replace(/[\uD800-\uDBFF]$/u, ''),
+        length: text.length,
+        path: joined(path, field),
+      };
+  }
+  return {
+    ...block,
+    ...(Object.keys(previews).length ? { previews } : {}),
+    textLengths: Object.fromEntries(
+      ['text', 'innerFormat', 'defaultText'].flatMap((field) =>
+        typeof value[field] === 'string' ? [[field, value[field].length]] : []
+      )
+    ),
+  };
+}
 export function readHelperResource(store: Store, kind: ResourceKind, id: string, args: JsonObject) {
   const paths = args.paths;
   if (paths !== undefined) {
@@ -209,7 +240,12 @@ function readHelperModel(
     const readyPaths = source
       ? [source.path, source.lorePath, source.translationGuidePath]
       : kind === 'prompt-preset'
-        ? ['/program', '/values']
+        ? [
+            PRESET_TEMPLATE_PATH,
+            '/program/nativeRisuPreset/preset/customPromptTemplateToggle',
+            '/program/nativeRisuPreset/preset/templateDefaultVariables',
+            '/values',
+          ]
         : Object.keys(model).map((key) => joined('', key));
     const regions = Object.keys(model).map((key) =>
       descriptor(joined('', key), (model as JsonObject)[key])
@@ -300,7 +336,13 @@ function readHelperModel(
   for (; index < Math.min(keys.length, offset + limit); index++) {
     const key = keys[index]!;
     const item = member(value, key);
-    const next = { name: key, ...descriptor(joined(path, key), item.value, item.exists) };
+    const next = {
+      name: key,
+      ...descriptor(joined(path, key), item.value, item.exists),
+      ...(kind === 'prompt-preset' && path === PRESET_TEMPLATE_PATH && Array.isArray(value)
+        ? { block: promptBlock(item.value, joined(path, key)) }
+        : {}),
+    };
     const candidate = {
       ...head,
       count: keys.length,
@@ -347,7 +389,15 @@ function guidePath(segments: string[]): boolean {
     segments[5] === 'translationGuide'
   );
 }
-function listPath(segments: string[]): 'lore' | 'terms' | null {
+function listPath(segments: string[]): 'lore' | 'terms' | 'prompt' | null {
+  if (
+    segments.length === 4 &&
+    segments[0] === 'program' &&
+    segments[1] === 'nativeRisuPreset' &&
+    segments[2] === 'preset' &&
+    segments[3] === 'promptTemplate'
+  )
+    return 'prompt';
   if (segments.length === 7 && guidePath(segments.slice(0, -1)) && segments[6] === 'terms')
     return 'terms';
   if (
@@ -383,7 +433,8 @@ export function patchHelperResource(
   const current = readResource(store, kind, id);
   if (current.revision !== revision)
     throw new HttpError(409, '저장된 자료가 변경됐어요. 최신 자료를 확인해 주세요.');
-  const model = structuredClone(editableResource(kind, current)) as ResourceModel;
+  const original = editableResource(kind, current);
+  const model = structuredClone(original) as ResourceModel;
   if (kind === 'content' && !sourceFor(current as Content))
     throw new HttpError(400, 'native 원문이 없는 자료예요.');
   const changes = rawChanges as Change[];
@@ -392,7 +443,7 @@ export function patchHelperResource(
     if (
       !object(change) ||
       typeof change.path !== 'string' ||
-      !['set', 'replaceText', 'insert', 'remove'].includes(change.op)
+      !['set', 'replaceText', 'insert', 'remove', 'move'].includes(change.op)
     )
       throw new HttpError(400, '변경 형식을 확인해 주세요.');
     const segments = parts(change.path);
@@ -401,12 +452,9 @@ export function patchHelperResource(
       segments[0] === 'package' &&
       segments[1] === 'nativeRisu' &&
       ['card', 'module'].includes(segments[2]!);
-    const presetPath =
-      (segments.length >= 4 &&
-        segments[0] === 'program' &&
-        segments[1] === 'nativeRisuPreset' &&
-        segments[2] === 'preset') ||
-      (segments.length >= 2 && segments[0] === 'values');
+    const presetPath = pathPolicy.presetPaths.some((rule) =>
+      rule.endsWith('/') ? change.path.startsWith(rule) : change.path === rule
+    );
     if (
       (kind === 'content' ? !nativePath : !presetPath) ||
       segments.some((part) => FORBIDDEN.has(part))
@@ -418,12 +466,15 @@ export function patchHelperResource(
       !(current as Content).package.nativeRisu.module
     )
       throw new HttpError(400, '존재하는 모듈만 수정할 수 있어요.');
-    if (change.op === 'insert' || change.op === 'remove') {
-      if (kind !== 'content' || !/^(0|[1-9]\d*)$/u.test(segments.at(-1)!))
-        throw new HttpError(400, '로어 또는 번역 표기 인덱스가 필요해요.');
+    if (change.op === 'insert' || change.op === 'remove' || change.op === 'move') {
+      if (!/^(0|[1-9]\d*)$/u.test(segments.at(-1)!))
+        throw new HttpError(400, '목록 항목의 인덱스가 필요해요.');
       const parentSegments = segments.slice(0, -1);
       const list = listPath(parentSegments);
-      if (!list) throw new HttpError(400, '로어와 번역 표기 목록만 수정할 수 있어요.');
+      if (!list || (kind === 'prompt-preset' ? list !== 'prompt' : list === 'prompt'))
+        throw new HttpError(400, '로어, 번역 표기 또는 프롬프트 블록 목록만 수정할 수 있어요.');
+      if (change.op === 'move' && list !== 'prompt')
+        throw new HttpError(400, '프롬프트 블록만 이동할 수 있어요.');
       if (change.op === 'insert' && list === 'lore' && parentSegments[2] === 'card') {
         const card = (model as Content).package.nativeRisu.card;
         if (card.character_book == null) card.character_book = { entries: [] };
@@ -441,6 +492,24 @@ export function patchHelperResource(
       if (!parent.exists || !Array.isArray(parent.value))
         throw new HttpError(400, '수정할 목록이 없어요.');
       const index = Number(segments.at(-1));
+      if (change.op === 'move') {
+        const from = parts(change.from);
+        if (
+          from.length !== segments.length ||
+          from.slice(0, -1).some((part, offset) => part !== parentSegments[offset]) ||
+          !/^(0|[1-9]\d*)$/u.test(from.at(-1)!)
+        )
+          throw new HttpError(400, '같은 프롬프트 목록의 출발 인덱스가 필요해요.');
+        const sourceIndex = Number(from.at(-1));
+        // JSON Patch semantics: the destination index is evaluated after removal.
+        if (sourceIndex >= parent.value.length || index >= parent.value.length)
+          throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
+        if (sourceIndex === index) continue;
+        const [moved] = parent.value.splice(sourceIndex, 1);
+        parent.value.splice(index, 0, moved);
+        changedPaths.push(change.from!, change.path);
+        continue;
+      }
       if (index > parent.value.length || (change.op === 'remove' && index === parent.value.length))
         throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
       if (change.op === 'insert') {
@@ -508,7 +577,8 @@ export function patchHelperResource(
       }
     }
   }
-  if (!changedPaths.length) return { id, revision, changedPaths };
+  if (!changedPaths.length || isDeepStrictEqual(original, model))
+    return { id, revision, changedPaths: [] };
   const saved = saveResource(store, { kind, id, expectedRevision: revision, model }).saved;
   return { id, revision: saved.revision, changedPaths: [...new Set(changedPaths)] };
 }
