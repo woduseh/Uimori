@@ -1388,6 +1388,7 @@ export function illustrationRoutes(
     const job = illustrationJob(store, request.params.id);
     return {
       ...projectIllustration(store, job),
+      generation: job.generation,
       input: job.input,
       usage: illustrationUsage(store, [job.id]),
       modelTitle: job.input.codex?.model.title ?? job.input.comfyui?.promptModel.title,

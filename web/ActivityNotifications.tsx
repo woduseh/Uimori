@@ -196,7 +196,6 @@ export function ActivityNotifications({
               {inspected === item.acknowledgementKey && (
                 <NotificationDetail
                   key={item.acknowledgementKey}
-                  chatId={chatId}
                   item={item}
                   onRead={() => onAcknowledge([item])}
                 />
@@ -240,15 +239,7 @@ export function ActivityNotifications({
   );
 }
 
-function NotificationDetail({
-  chatId,
-  item,
-  onRead,
-}: {
-  chatId: string;
-  item: ActivityNoticeItem;
-  onRead: () => void;
-}) {
+function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead: () => void }) {
   const [result, setResult] = useState<{ status: string; error?: string | null } | null>(null);
   const [error, setError] = useState('');
   const read = useRef(onRead);
@@ -256,11 +247,9 @@ function NotificationDetail({
   const { kind, runId, generation } = item;
   useEffect(() => {
     let current = true;
-    const collection = kind === 'main' ? 'runs' : kind === 'state' ? 'story-jobs' : 'jobs';
-    const path =
-      kind === 'extension'
-        ? `/chats/${encodeURIComponent(chatId)}/extension-operations/${encodeURIComponent(runId)}`
-        : `/${collection}/${encodeURIComponent(runId)}`;
+    const collection =
+      kind === 'main' ? 'runs' : kind === 'illustration' ? 'illustrations' : 'jobs';
+    const path = `/${collection}/${encodeURIComponent(runId)}`;
     void api<{ status: string; error?: string | null; attempt?: number; generation?: number }>(path)
       .then((value) => {
         if (!current) return;
@@ -287,7 +276,7 @@ function NotificationDetail({
     return () => {
       current = false;
     };
-  }, [chatId, kind, runId, generation]);
+  }, [kind, runId, generation]);
   if (error || !result)
     return (
       <LoadingState compact loading={!error} error={error} label="상세를 불러오는 중이에요…" />

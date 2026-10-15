@@ -274,7 +274,7 @@ describe('illustration API in test mode with the synthetic generator', () => {
     );
   });
   test('cancellation and injected failures leave distinct terminal states without stored images', async () => {
-    const { api, respond, settle, settings, illustrations } = await setup();
+    const { api, chat, respond, settle, settings, illustrations } = await setup();
     const source = await respond();
     await settings({ generator: 'fixture', maxPerSource: 4, maxAutoRetries: 2 });
     await api('/api/test/control', { action: 'hold', barrier: 'illustration' });
@@ -288,6 +288,18 @@ describe('illustration API in test mode with the synthetic generator', () => {
       status: 'cancelled',
       error: 'ILLUSTRATION_CANCELLED',
       images: [],
+    });
+    const detail = await api<Illustration & { generation: number }>(
+      `/api/illustrations/${held.id}`
+    );
+    const reader = await api<ReaderDetail>(`/api/chats/${chat.id}/reader`);
+    const notice = reader.reader.activity?.find((item) => item.id === held.id);
+    expect(detail.generation).toBe(2);
+    expect(detail.attempt).toBe(1);
+    expect(notice).toMatchObject({
+      kind: 'illustration',
+      status: 'cancelled',
+      generation: detail.generation,
     });
     await api('/api/test/control', { action: 'release', barrier: 'illustration' });
     await new Promise((resolve) => setTimeout(resolve, 100));

@@ -6,7 +6,7 @@ export type ActivityNoticeItem = {
   status: string;
   startedAt: string;
   finishedAt: string | null;
-  kind: string;
+  kind: ReaderActivity['kind'] | 'request';
   runId: string;
   sourceRevision?: string | null;
   sourceHash?: string | null;

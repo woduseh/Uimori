@@ -23,10 +23,8 @@ const ALWAYS_ADMITTED = new Set([
   '/api/runs/:id/skip-state-wait',
   '/api/runs/:id/skip-package-preparation',
   '/api/runs/:id/skip-package-after-response',
-  '/api/chats/:id/extension-operations/:operationId/cancel',
   '/api/jobs/:id/cancel',
   '/api/illustrations/:id/cancel',
-  '/api/story-jobs/:id/cancel',
   '/api/scene-commands/:id/cancel',
   '/api/helper/tasks/:id/cancel',
 ]);

@@ -79,6 +79,14 @@ test('existing database settings are normalized on read/save and public settings
     payload: {},
   });
   expect(retired.statusCode).toBe(404);
+  for (const url of [
+    '/api/story-jobs/legacy/cancel',
+    `/api/chats/${chat.id}/extension`,
+    `/api/chats/${chat.id}/extension-operations/legacy/cancel`,
+  ]) {
+    const response = await app.inject({ method: 'POST', url, payload: {} });
+    expect(response.statusCode).toBe(404);
+  }
   const control = await app.inject({
     method: 'POST',
     url: '/api/test/control',
