@@ -844,11 +844,7 @@ input[type="checkbox"] {
   right: auto;
   left: 0;
 }
-.source-actions > .story-source-state {
-  display: contents;
-}
-.source-actions > details:not(.action-menu),
-.source-actions .story-source-state details {
+.source-actions > details:not(.action-menu) {
   font-size: 11px;
   color: var(--faint);
   border: 0;
@@ -856,8 +852,7 @@ input[type="checkbox"] {
   padding: 0;
   min-width: 0;
 }
-.source-actions > details:not(.action-menu) > summary,
-.source-actions .story-source-state details > summary {
+.source-actions > details:not(.action-menu) > summary {
   display: inline-flex;
   align-items: center;
   min-height: var(--control-h);
@@ -865,14 +860,10 @@ input[type="checkbox"] {
   width: fit-content;
   cursor: pointer;
 }
-.source-actions > details[open]:not(.action-menu),
-.source-actions .story-source-state details[open] {
+.source-actions > details[open]:not(.action-menu) {
   flex-basis: 100%;
   color: var(--muted);
   font-size: 12px;
-}
-.source-actions .story-source-state > p.error {
-  flex-basis: 100%;
 }
 .focus-reading .source-actions,
 .focus-reading .scene-header {
