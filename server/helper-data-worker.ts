@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import type { HelperTaskSnapshot } from '../core/helper.js';
 import protectedFields from './helper-native-protected-fields.json' with { type: 'json' };
+import resourcePathPolicy from './helper-resource-path-policy.json' with { type: 'json' };
 
 // Node builtins and JSON keep this entry runnable under Node's TS stripping in tests.
 export type DataScope = 'current' | 'library' | 'chats' | 'editor' | 'conversation';
@@ -461,22 +462,42 @@ function reference(doc: Document, field: string, text: string): DataRef {
   return { ...ref, field, hash: sha(text) };
 }
 function editTarget(doc: Document, field: string, stringValue: boolean) {
+  if (doc.scope !== 'library' || !stringValue) return undefined;
+  const kind =
+    doc.kind === 'prompt' &&
+    resourcePathPolicy.presetPaths.some((rule) =>
+      rule.endsWith('/') ? field.startsWith(rule) : field === rule
+    )
+      ? 'prompt-preset'
+      : ['bot', 'persona', 'module'].includes(doc.kind) && /^\/(?:card|module)\//u.test(field)
+        ? 'content'
+        : undefined;
+  if (!kind) return undefined;
+  // Search fields omit the native content prefix; limits apply to the complete patch path.
+  const path = kind === 'content' ? `/package/nativeRisu${field}` : field;
   if (
-    doc.scope !== 'library' ||
-    !['bot', 'persona', 'module'].includes(doc.kind) ||
-    !stringValue ||
-    !/^\/(?:card|module)\//u.test(field) ||
-    field
-      .slice(1)
-      .split('/')
-      .some((part) => PROTECTED_FIELDS.has(part.replaceAll('~1', '/').replaceAll('~0', '~')))
+    !path.startsWith('/') ||
+    path.length > resourcePathPolicy.maxLength ||
+    /~(?![01])/u.test(path)
+  )
+    return undefined;
+  const segments = path
+    .slice(1)
+    .split('/')
+    .map((part) => part.replaceAll('~1', '/').replaceAll('~0', '~'));
+  if (
+    segments.length > resourcePathPolicy.maxSegments ||
+    segments.some(
+      (part) =>
+        !part || part.length > resourcePathPolicy.maxSegmentLength || PROTECTED_FIELDS.has(part)
+    )
   )
     return undefined;
   return {
-    kind: 'content',
+    kind,
     id: doc.id,
     expectedRevision: doc.revision,
-    path: `/package/nativeRisu${field}`,
+    path,
   };
 }
 // Adjust only surrogate boundaries, never normalize source text or invent offsets.

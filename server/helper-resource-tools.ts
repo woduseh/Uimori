@@ -7,9 +7,9 @@ import type { ResourceKind, ResourceModel } from '../core/resource-editing.js';
 import { editableResource } from '../core/resource-editing.js';
 import type { Content } from '../core/product.js';
 import type { Store } from './store.js';
-import { readResource, saveResource, undoResource } from './resource-service.js';
+import { cloneResource, readResource, saveResource, undoResource } from './resource-service.js';
 import { deleteLibraryItem } from './library-deletion.js';
-import { record, number, text, HttpError } from './request-validation.js';
+import { fields, record, number, text, HttpError } from './request-validation.js';
 import { patchHelperResource, readHelperResource } from './helper-resource-editing.js';
 
 const kind = {
@@ -68,7 +68,7 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'resource.read',
     effect: 'read',
     description:
-      'Read a compact resource overview, then follow JSON Pointer paths into its authored fields. Use path for one read or paths for 1-16 reads of the same resource revision, never both. Batch items keep individual results/errors; resubmit paths.slice(nextIndex) for unreturned paths. Shared fields/offset/limit and textOffset/textLimit apply to every path; each item nextOffset continues its own page. Object and array pages list paths and exact small scalar values. A missing optional field returns exists:false with its patchable path. The complete response stays within 24000 serialized characters. Revision is required for resource.patch.',
+      'Read a compact resource overview, then follow readyPaths into authored fields. Native promptTemplate array pages include a block overview: optional id/name, type, role/role2 and textLengths for text/innerFormat/defaultText in UTF-16 units, without bodies or CBS evaluation. Metadata over 200 units appears instead under block.previews[field] with text, full length and a path for exact reads. Use limit:50 to inspect up to 50 blocks, following nextOffset. Use path for one read or paths for 1-16 reads of the same revision, never both. Batch items keep individual results/errors; resubmit paths.slice(nextIndex) for unreturned paths. Shared fields/offset/limit and textOffset/textLimit apply to every path. Object and array pages preserve exact small scalar values. A missing optional field returns exists:false with its path. The complete response stays within 24000 serialized characters. Revision is required for resource.patch and resource.clone.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -96,7 +96,7 @@ const resourceTools: ResourceToolDefinition[] = [
     effect: 'mutation',
     target: resourceTarget,
     description:
-      'Edit existing native card/module or prompt-preset authored fields with the latest revision. Use resource.read paths or a library editTarget. set changes a simple typed field, including native prompt text/options and preset values; replaceText changes one unique literal excerpt. Set source.translationGuidePath from resource.read to {instructions:string,terms:[{source:string,target:string,note?:string}]} to create or replace a card/module translation guide. insert/remove use an indexed path only in card character_book/entries, module lorebook, or translationGuide/terms. Insert one entry object or remove the indexed entry. A missing card book or module lorebook is created on first insert. All changes save together with one undo. Projection fields such as package.lore/body/starts are read only.',
+      'Edit existing native card/module or prompt-preset fields with the latest revision. Use resource.read paths or a library editTarget. set changes simple typed fields; replaceText changes one unique literal excerpt. A prompt-preset display name is /title, independent of /program/nativeRisuPreset/preset/name; change both explicitly when needed. Native prompt text/options and /values are editable. Set source.translationGuidePath to {instructions:string,terms:[{source:string,target:string,note?:string}]} for a complete translation guide. insert/remove use indexed paths in card character_book/entries, module lorebook, translationGuide/terms, or native preset promptTemplate. Insert one object or remove one item; absent card books/module lore are created on first insert. move is only for promptTemplate: from and path are full indexed paths in the same array, with destination indexed AFTER removal. Changes run sequentially, so later paths refer to the already changed array. All changes validate and save together with one undo; a failure saves nothing. Projection fields such as package.lore/body/starts are read only.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -110,7 +110,8 @@ const resourceTools: ResourceToolDefinition[] = [
             type: 'object',
             properties: {
               path: string,
-              op: { type: 'string', enum: ['set', 'replaceText', 'insert', 'remove'] },
+              op: { type: 'string', enum: ['set', 'replaceText', 'insert', 'remove', 'move'] },
+              from: string,
               value: {},
               oldText: string,
               newText: string,
@@ -125,11 +126,32 @@ const resourceTools: ResourceToolDefinition[] = [
     },
   },
   {
+    name: 'resource.clone',
+    effect: 'mutation',
+    target: (args) =>
+      args.kind === 'content' || args.kind === 'prompt-preset'
+        ? { kind: args.kind, id: null }
+        : null,
+    description:
+      'Create an independent copy of a saved bot/persona/module or prompt preset without reading or resending its full model. Requires sourceId, expectedSourceRevision and the new display title. Returns a new id/revision and the copied source id/revision; patch the returned id to edit the copy. Preserves prompt blocks, controls, defaults and current values, including the independent native preset name. Content copies follow native naming and start with no relatedIds. Does not copy unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and never edits the source. Singleton prompt-workspace is not supported.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        kind: { type: 'string', enum: ['content', 'prompt-preset'] },
+        sourceId: string,
+        expectedSourceRevision: revision,
+        title: string,
+      },
+      required: ['kind', 'sourceId', 'expectedSourceRevision', 'title'],
+      additionalProperties: false,
+    },
+  },
+  {
     name: 'resource.save',
     effect: 'mutation',
     target: resourceTarget,
     description:
-      'Create an application resource, or save a complete editable model for kinds without partial editing. For existing native card/module content use resource.read then resource.patch, so unrelated authored fields stay intact. Use latest revision for existing IDs; omit id/revision to create. There is no server draft or separate apply step. A draft/proposal request does not authorize saving.',
+      'Create an application resource, or save a complete editable model for kinds without partial editing. Use resource.clone to copy saved content or a prompt preset. For existing native card/module or prompt-preset edits use resource.patch so unrelated fields stay intact. Use latest revision for existing IDs; omit id/revision to create. There is no server draft or separate apply step. A draft/proposal request does not authorize saving.',
     inputSchema: {
       type: 'object',
       properties: { kind, id: string, expectedRevision: revision, model: { type: 'object' } },
@@ -284,6 +306,18 @@ export function invokeResourceTool(
   )
     throw new HttpError(400, '자료 종류를 확인해 주세요.');
   const kind = args.kind as ResourceKind;
+  if (name === 'resource.clone') {
+    fields(args, ['kind', 'sourceId', 'expectedSourceRevision', 'title']);
+    if (kind !== 'content' && kind !== 'prompt-preset')
+      throw new HttpError(400, '봇·페르소나·모듈과 프롬프트 프리셋만 복제할 수 있어요.');
+    const result = cloneResource(store, {
+      kind,
+      sourceId: text(args.sourceId, 'source resource ID', 100),
+      expectedSourceRevision: number(args.expectedSourceRevision, 'source revision'),
+      title: text(args.title, 'title', 200),
+    });
+    return { ...summary(result), source: result.source };
+  }
   const id = args.id == null ? null : text(args.id, 'resource ID', 100);
   if (name === 'resource.read') return readHelperResource(store, kind, id ?? 'current', args);
   if (name === 'resource.patch') {

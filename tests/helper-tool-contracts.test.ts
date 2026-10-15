@@ -868,6 +868,7 @@ test('resource schemas expose scoped reads and typed native patches without a mo
   mockSend((request) => {
     const read = definition(request, 'resource.read') as Record<string, any>;
     const patch = definition(request, 'resource.patch') as Record<string, any>;
+    const clone = definition(request, 'resource.clone') as Record<string, any>;
     expect(read).toMatchObject({
       required: ['kind', 'id'],
       properties: {
@@ -881,11 +882,25 @@ test('resource schemas expose scoped reads and typed native patches without a mo
       properties: {
         changes: {
           minItems: 1,
-          items: { properties: { op: { enum: ['set', 'replaceText', 'insert', 'remove'] } } },
+          items: {
+            properties: {
+              op: { enum: ['set', 'replaceText', 'insert', 'remove', 'move'] },
+              from: { type: 'string' },
+            },
+          },
         },
       },
     });
     expect(patch.properties).not.toHaveProperty('operationId');
+    expect(clone).toMatchObject({
+      required: ['kind', 'sourceId', 'expectedSourceRevision', 'title'],
+      additionalProperties: false,
+      properties: {
+        kind: { enum: ['content', 'prompt-preset'] },
+        expectedSourceRevision: { type: 'integer', minimum: 1 },
+      },
+    });
+    expect(clone.properties).not.toHaveProperty('operationId');
     return structuredClone(success);
   });
   await submit(f, '현재 자료를 고치는 도구 형식을 확인해줘');

@@ -1,0 +1,6 @@
+{
+  "presetPaths": ["/title", "/program/nativeRisuPreset/preset/", "/values/"],
+  "maxLength": 1024,
+  "maxSegments": 80,
+  "maxSegmentLength": 300
+}

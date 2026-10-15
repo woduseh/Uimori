@@ -2,7 +2,12 @@ import { readIllustrationPreset, saveIllustrationPreset } from './illustration-p
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { readTheme, saveTheme } from './themes.js';
 import type { Store } from './store.js';
-import type { ResourceKind, ResourceModel, SavedResource } from '../core/resource-editing.js';
+import type {
+  ContentEditModel,
+  ResourceKind,
+  ResourceModel,
+  SavedResource,
+} from '../core/resource-editing.js';
 import { promptWorkspace, updatePromptWorkspace } from './prompt-workspace.js';
 import { editableResource } from '../core/resource-editing.js';
 import { HttpError } from './request-validation.js';
@@ -57,6 +62,41 @@ export function saveResource(
       if (removedImage) pruneUnusedData(store.db, imageDataHashes(oldUndo));
     }
     return { saved, created: previous === null };
+  });
+}
+
+/** Clone saved authorship, without the source's selection, history or undo state. */
+export function cloneResource(
+  store: Store,
+  request: {
+    kind: 'content' | 'prompt-preset';
+    sourceId: string;
+    expectedSourceRevision: number;
+    title: string;
+  }
+) {
+  return store.transaction(() => {
+    store.product.assertAvailable(request.kind, request.sourceId);
+    const source = readResource(store, request.kind, request.sourceId);
+    if (source.revision !== request.expectedSourceRevision)
+      throw new HttpError(409, '원본 자료가 변경됐어요. 최신 자료를 확인한 뒤 복제해 주세요.');
+    const model = structuredClone(editableResource(request.kind, source));
+    if (request.kind === 'content') {
+      const content = model as ContentEditModel;
+      content.title = request.title;
+      content.relatedIds = [];
+      content.package.title = request.title;
+      const native = content.package.nativeRisu;
+      if (!Object.keys(native.card).length && native.module) native.module.name = request.title;
+      else native.card.name = request.title;
+    } else {
+      // The library title and authored native preset name are independent fields.
+      (model as { title: string }).title = request.title;
+    }
+    return {
+      ...saveResource(store, { kind: request.kind, id: null, model }),
+      source: { id: request.sourceId, revision: source.revision },
+    };
   });
 }
 

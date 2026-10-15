@@ -18,6 +18,7 @@ import {
   SettingsIcon,
 } from './ui-icons.js';
 import type { Library, PromptPreset, PromptPresetSummary, PromptRole } from '../core/product.js';
+import type { ResourceSaveResult } from '../core/resource-editing.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryFolderOf } from '../core/library-organization.js';
 import { api } from './api.js';
@@ -339,13 +340,13 @@ export function PromptLibrary({
     mutation.current = true;
     setBusy(true);
     try {
-      const full = await api<PromptPreset>(`/prompt-presets/${item.id}`);
-      const copy = await api<PromptPreset>('/prompt-presets', {
-        title: `${full.title} 사본`,
-        role: full.role,
-        program: full.program,
-        values: full.values,
+      const result = await api<ResourceSaveResult>('/resources/clone', {
+        kind: 'prompt-preset',
+        sourceId: item.id,
+        expectedSourceRevision: item.revision,
+        title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
       });
+      const copy = result.saved as PromptPreset;
       const warnings: string[] = [];
       try {
         await placeCreated(copy, true);
