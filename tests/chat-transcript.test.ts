@@ -442,7 +442,7 @@ describe('chat transcript export and import', () => {
 
   test('a transcript carries authored history only and imports as a new chat with the same reading', async () => {
     const store = await database();
-    const { chat, first } = authoredChat(store);
+    const { chat, first, second } = authoredChat(store);
     const transcript = exportChatTranscript(store, chat.id);
     expect(transcript.format).toBe(CHAT_TRANSCRIPT_FORMAT);
     expect(transcript.title).toBe('Original story');
@@ -473,7 +473,13 @@ describe('chat transcript export and import', () => {
       expect(readStoredRunSnapshot(store, run.id).history).toEqual([]);
       expect(run.snapshot.promptCompilation).toBeUndefined();
     }
-    expect(store.validateHistory(history, store.chat(id).headRevision)).toBe(true);
+    expect(store.chat(id).headRevision).toBe(history[1].revision);
+    expect(store.source(history[0].revision).parentRevision).toBeNull();
+    expect(store.source(history[1].revision).parentRevision).toBe(history[0].revision);
+    expect(history.map((item) => store.sourceOriginal(item.revision).hash)).toEqual([
+      first.hash,
+      second.hash,
+    ]);
     const copiedFirst = store.source(history[0].revision);
     expect(copiedFirst.hash).toBe(first.hash);
     expect(successfulTranslation(store, copiedFirst)?.result?.text).toBe('첫 장면.');

@@ -20,13 +20,3 @@ export const object = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
-export const present = (value: unknown): boolean =>
-  value !== undefined &&
-  value !== null &&
-  value !== false &&
-  value !== '' &&
-  (Array.isArray(value)
-    ? value.length > 0
-    : typeof value === 'object'
-      ? Object.keys(value).length > 0
-      : true);

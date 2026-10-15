@@ -363,7 +363,11 @@ test('source editing invalidates jobs and preserves both old and new snapshot hi
   expect(edited.editRevision).toBe(1);
   expect(store.sourceOriginal(s.id).text).toBe(s.text);
   expect(store.sourceAtHash(s.id, s.hash).text).toBe(s.text);
-  expect(store.validateHistory(before.history, s.id)).toBe(true);
+  expect(before.history).toEqual([{ revision: s.id, text: s.text }]);
+  expect(readRunSnapshot(store, child.runId).history).toEqual([
+    { revision: s.id, text: edited.text, contentHash: edited.hash },
+  ]);
+  expect(store.source(child.id).parentRevision).toBe(s.id);
   expect(store.history(s.id)[0].contentHash).toBe(edited.hash);
   expect(
     store.finishAuxiliary(job.id, active.generation, 'owner', {

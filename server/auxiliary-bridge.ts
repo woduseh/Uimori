@@ -3,7 +3,6 @@ import { translationPolicy, type TranslationPolicy } from '../core/translation-s
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 import { readRunSnapshot } from './run-projections.js';
-import { type AssetEntry } from '../core/auxiliary.js';
 import type { AuxiliaryStoreBridge } from './product-auxiliary.js';
 import type { Controls } from './controls.js';
 import { translationReferences } from './translation-context.js';
@@ -30,18 +29,6 @@ export function auxiliaryBridge(
         readRunSnapshot(store, source.runId),
         job.input
       );
-      const assets: AssetEntry[] = store.product.assets(job.chatId).map((a) => ({
-        ref: a.id,
-        revision: a.revision,
-        hash: a.hash,
-        url: a.url,
-        alt: a.title,
-        caption: a.description,
-        actorId: a.actor,
-        clothing: a.outfit,
-        location: a.location,
-        uses: a.allowedUse === 'both' ? ['profile', 'inline'] : [a.allowedUse],
-      }));
       return {
         job: { ...job, kind: job.kind },
         source,
@@ -54,7 +41,7 @@ export function auxiliaryBridge(
               judgmentRecovery: translationRecovery(job.input, source.hash),
             }
           : {}),
-        assets: job.kind === 'image' ? imageCatalog(job.input) : assets,
+        assets: job.kind === 'image' ? imageCatalog(job.input) : [],
         ...(policy ? { translationPolicy: policy } : {}),
       };
     },

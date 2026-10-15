@@ -206,16 +206,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       onWire: (wire: WireRecord) => void | Promise<void>;
     }
   ) => {
-    const authorize = () => {
-      const current = store.product.get<Connection>('connection', connection.id);
-      if (
-        !current.enabled ||
-        current.protocol !== connection.protocol ||
-        current.endpoint !== connection.endpoint ||
-        current.credentialRef !== connection.credentialRef
-      )
-        throw new ProviderContractError('CONNECTION_NOT_AUTHORIZED');
-    };
+    const authorize = () => authorizeCodex(connection);
     authorize();
     return codex.generateImage(
       {

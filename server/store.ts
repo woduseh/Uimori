@@ -821,24 +821,6 @@ export class Store {
     const source = { ...original, text: edit.text, hash: edit.hash, editRevision: edit.revision };
     return { ...source, blocks: splitSource(source) };
   }
-  validateHistory(history: RunSnapshot['history'], head: string | null): boolean {
-    if (!Array.isArray(history)) return false;
-    const ids = this.history(head).map((item) => item.revision);
-    if (ids.length !== history.length) return false;
-    return history.every((item, index) => {
-      if (
-        !item ||
-        item.revision !== ids[index] ||
-        Object.keys(item).some((k) => !['revision', 'text', 'contentHash'].includes(k))
-      )
-        return false;
-      const source =
-        item.contentHash === undefined
-          ? this.sourceOriginal(item.revision)
-          : this.sourceAtHash(item.revision, item.contentHash);
-      return item.text === source.text;
-    });
-  }
   editSource(id: string, value: { text: string; expectedRevision: number }): Source {
     return editSource(this, id, value);
   }
