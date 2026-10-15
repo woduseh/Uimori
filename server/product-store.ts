@@ -95,7 +95,7 @@ type Row = Record<string, any>;
 const json = JSON.stringify;
 function currentModelFields<T>(kind: string, value: T): T {
   if (kind !== 'model') return value;
-  const { contextTools: _retired, ...model } = value as Row;
+  const { contextTools: _retired, pdfInput: _retiredPdf, ...model } = value as Row;
   return model as T;
 }
 export const modelRef = (v: unknown): ModelRef => {

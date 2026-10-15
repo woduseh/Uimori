@@ -151,10 +151,9 @@ describe('provider settings, catalogs and archive contracts', () => {
     const model = await request<ModelPreset>(
       app,
       '/model-presets',
-      modelBody(connection, { pdfInput: true, thinkingLevel: 'HIGH' })
+      modelBody(connection, { thinkingLevel: 'HIGH' })
     );
     expect(app.store.product.modelSnapshot(model.id)).toMatchObject({
-      pdfInput: true,
       thinkingLevel: 'HIGH',
       connection: { protocol: 'google-gemini-v1', credentialRef: connection.credentialRef },
     });

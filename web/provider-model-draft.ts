@@ -5,7 +5,6 @@ import type {
   ModelPreset,
   VertexRequestTier,
 } from '../core/product.js';
-import { isGeminiProtocol } from '../core/product.js';
 import { effectiveModelFamily, modelFamilyOptionKeys } from '../core/model-family.js';
 import { TOKENIZER_PROFILES, type TokenizerProfileId } from '../core/tokenizer-profiles.js';
 import type { ModelPricing, TokenRates } from '../core/pricing-types.js';
@@ -89,7 +88,6 @@ export type ModelDraft = {
   thinkingLevel: string;
   timeoutSeconds: string;
   structuredOutput: 'default' | 'on' | 'off';
-  pdfInput: boolean;
   reasoningEffort: string;
   outputEffort: string;
   verbosity: string;
@@ -120,7 +118,6 @@ export const initialModel = (): ModelDraft => ({
   thinkingLevel: '',
   timeoutSeconds: '600',
   structuredOutput: 'default',
-  pdfInput: false,
   reasoningEffort: '',
   outputEffort: '',
   verbosity: '',
@@ -156,7 +153,6 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     timeoutSeconds: value.timeoutMs === undefined ? '' : String(value.timeoutMs / 1000),
     structuredOutput:
       value.structuredOutput === undefined ? 'default' : value.structuredOutput ? 'on' : 'off',
-    pdfInput: value.pdfInput === true,
     reasoningEffort: value.reasoningEffort ?? '',
     outputEffort: value.outputEffort ?? '',
     verbosity: value.verbosity ?? '',
@@ -188,13 +184,7 @@ function supportedDraft(draft: ModelDraft, connection: Connection): ModelDraft {
   const defaults = initialModel();
   const next = { ...draft };
   for (const key of GENERATION_KEYS) {
-    if (
-      key === 'modelFamily' ||
-      key === 'maxOutputTokens' ||
-      key === 'pdfInput' ||
-      !(key in next) ||
-      keys.includes(key)
-    )
+    if (key === 'modelFamily' || key === 'maxOutputTokens' || !(key in next) || keys.includes(key))
       continue;
     Object.assign(next, { [key]: defaults[key as keyof ModelDraft] });
   }
@@ -239,7 +229,6 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
     ...(draft.structuredOutput !== 'default'
       ? { structuredOutput: draft.structuredOutput === 'on' }
       : {}),
-    ...(isGeminiProtocol(connection.protocol) && draft.pdfInput ? { pdfInput: true } : {}),
     ...(draft.reasoningEffort ? { reasoningEffort: draft.reasoningEffort } : {}),
     ...(draft.outputEffort ? { outputEffort: draft.outputEffort } : {}),
     ...(draft.verbosity ? { verbosity: draft.verbosity } : {}),

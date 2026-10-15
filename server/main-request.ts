@@ -33,7 +33,7 @@ import {
 import { encodeResponses } from '../core/openai-protocol.js';
 import { encodeChat } from '../core/openai-chat-protocol.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
-import { encodeVertex, prepareGeminiRequest } from '../core/vertex-protocol.js';
+import { encodeVertex } from '../core/vertex-protocol.js';
 import {
   buildCodexDescriptor,
   buildCodexNativeRequest,
@@ -253,7 +253,7 @@ export function encodeMainPreview(
 ) {
   const checked = validateRequest(request),
     protocol = target.connection.protocol;
-  let encoded: { body: Json; contextBody?: Json; messageMetadata?: NativeMessageMetadata };
+  let encoded: { body: Json; messageMetadata?: NativeMessageMetadata };
   if (protocol === 'openai-responses-v1') encoded = encodeResponses(checked);
   else if (protocol === 'anthropic-messages-v1') encoded = encodeAnthropic(checked);
   else if (isGeminiProtocol(protocol)) encoded = encodeVertex(checked, protocol);
@@ -280,21 +280,18 @@ export function encodeMainPreview(
     modelId: target.modelId,
     kind: 'exact-request-body' as const,
     body: encoded.body,
-    ...(encoded.contextBody ? { contextBody: encoded.contextBody } : {}),
     diagnostics: encoded.messageMetadata?.diagnostics ?? [],
     capabilityVersion: encoded.messageMetadata?.capabilityVersion ?? 'fixture-only',
   };
 }
 
-/** Measure the provider's text projection without producing an attachment for transport. */
+/** Measure the provider request using its protocol-specific encoding. */
 export function measureProviderRequest(
   request: ProviderRequest,
   target: ModelPreset & { connection: Connection },
   options: { codexNative?: boolean } = {}
 ): { body: Json; modelId: string; estimatedInputTokens: number } {
-  const body = isGeminiProtocol(target.connection.protocol)
-    ? prepareGeminiRequest(validateRequest(request), target.connection.protocol).body
-    : encodeMainPreview(request, target, options).body;
+  const body = encodeMainPreview(request, target, options).body;
   return {
     body,
     modelId: target.modelId,

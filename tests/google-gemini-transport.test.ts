@@ -1,7 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { estimateContextTokens } from '../core/context-budget.js';
 import { encodeVertex } from '../core/vertex-protocol.js';
-import * as vertexPdf from '../core/vertex-pdf.js';
 import {
   executeProvider,
   validateConnection,
@@ -182,9 +180,8 @@ test('Studio keeps fresh helper controls ahead of multiple signed tool responses
   ]);
 });
 
-test('Studio PDF keeps signed native tool continuation and transient budget evidence through pricing', async () => {
+test('Studio preserves signed native continuation, tool choice and pricing', async () => {
   const input = request();
-  input.generation!.pdfInput = true;
   input.toolChoice = 'knowledge.read';
   input.pricingSnapshot = {
     version: 1,
@@ -196,7 +193,6 @@ test('Studio PDF keeps signed native tool continuation and transient budget evid
     rates: { input: 1, cacheRead: 0.1, cacheWrite: null, output: 2 },
     notes: [],
   };
-  const prepared = encodeVertex(input, 'google-gemini-v1');
   const signed: Json[] = [
     { thought: true, text: 'PRIVATE_THOUGHT' },
     {
@@ -205,35 +201,24 @@ test('Studio PDF keeps signed native tool continuation and transient budget evid
     },
   ];
   const bodies: any[] = [],
-    wires: WireRecord[] = [],
-    evidenceBodies: (Json | undefined)[] = [];
+    wires: WireRecord[] = [];
   const local = await localProvider(async (captured, response) => {
     bodies.push(JSON.parse(captured.body));
     await writeSse(response, [
-      resultEvent(bodies.length === 1 ? signed : [{ text: 'After PDF and tool.' }]),
+      resultEvent(bodies.length === 1 ? signed : [{ text: 'After the tool.' }]),
     ]);
   });
-  const onWire = (wire: WireRecord, _resume?: string, evidence?: { contextBody?: Json }) => {
+  const onWire = (wire: WireRecord) => {
     wires.push(wire);
-    evidenceBodies.push(evidence?.contextBody);
   };
   const first = await executeProvider(connection, input, { ...options(), onWire });
   expect(first.status).toBe('tool_calls');
   expect(first.toolCalls).toHaveLength(1);
-  const pdf = bodies[0].contents[0].parts[0].inlineData;
-  expect(pdf.mimeType).toBe('application/pdf');
-  expect(Buffer.from(pdf.data, 'base64').subarray(0, 8).toString()).toBe('%PDF-1.7');
   expect(bodies[0].toolConfig.functionCallingConfig).toEqual({
     mode: 'ANY',
     allowedFunctionNames: ['knowledge.read'],
   });
-  expect(bodies[0].generationConfig).not.toHaveProperty('pdfInput');
-  expect(evidenceBodies[0]).toEqual(prepared.contextBody);
-  expect(wires[0].requestContext?.estimatedInputTokens).toBe(
-    estimateContextTokens(prepared.contextBody, input.contextBudget)
-  );
   expect(wires[0].pricingSnapshot).toEqual(input.pricingSnapshot);
-  expect(wires[0]).not.toHaveProperty('contextBody');
   const continued: ProviderRequest = {
     ...input,
     opaqueState: first.opaqueState,
@@ -251,7 +236,7 @@ test('Studio PDF keeps signed native tool continuation and transient budget evid
   };
   const second = await executeProvider(connection, continued, { ...options(), onWire });
   expect(second.status).toBe('completed');
-  expect(second.text).toBe('After PDF and tool.');
+  expect(second.text).toBe('After the tool.');
   expect(local.requests).toHaveLength(2);
   expect(bodies[1].contents[0]).toEqual(bodies[0].contents[0]);
   expect(bodies[1].contents[1].parts).toEqual(signed);
@@ -283,16 +268,13 @@ test('Studio rejects Cloud credential references, missing keys and oversized ori
   });
   expect(missing.error?.code).toBe('CREDENTIAL_UNAVAILABLE');
   const input = request();
-  input.generation!.pdfInput = true;
   input.input.source = { text: '원문 한도 보호. '.repeat(10000) };
-  const createPdf = vi.spyOn(vertexPdf, 'createVertexPdf');
   const large = await executeProvider(connection, input, {
     ...options(),
     resolveCredential,
     onWire,
   });
   expect(large.error?.code).toBe('INPUT_CONTEXT_LIMIT_EXCEEDED');
-  expect(createPdf).not.toHaveBeenCalled();
   expect(resolveCredential).not.toHaveBeenCalled();
   expect(onWire).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();

@@ -253,8 +253,9 @@ export function validateProviderSettingVersion(row: Row): void {
       'maxOutputTokens',
       'temperature',
       ...modelOptionKeys,
-      // Accept archived presets from releases that offered this switch.
+      // Read archived settings without restoring retired execution options.
       'contextTools',
+      'pdfInput',
       'enabled',
       'displayOrder',
       'pricing',
@@ -303,6 +304,6 @@ export function validateModelSnapshot(value: unknown): ModelSnapshot {
     )
       throw new HttpError(400, 'Pricing snapshot model mismatch');
   }
-  const { contextTools: _retired, ...current } = snapshot;
+  const { contextTools: _retired, pdfInput: _retiredPdf, ...current } = snapshot;
   return structuredClone(current) as ModelSnapshot;
 }

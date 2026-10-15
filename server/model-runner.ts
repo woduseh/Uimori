@@ -490,12 +490,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         hooks.timeoutMs ??
         target.timeoutMs ??
         (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
-      onWire: async (wire, resumeAttemptId, evidence) => {
-        const contextWire = evidence?.contextBody ? { ...wire, body: evidence.contextBody } : wire;
+      onWire: async (wire, resumeAttemptId) => {
         attemptId = await hooks.onAttemptStart(
           {
             ...wire,
-            requestReceipt: requestReceipt(fixed, contextWire),
+            requestReceipt: requestReceipt(fixed, wire),
             ...(request.contextBudget
               ? {
                   requestContext: wire.requestContext ?? {
@@ -512,7 +511,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
                   },
                 }
               : {}),
-            requestLore: requestLore(fixed, request, contextWire, {
+            requestLore: requestLore(fixed, request, wire, {
               pinned: input.pinnedSources ?? [],
               catalog: input.catalog,
             }),
