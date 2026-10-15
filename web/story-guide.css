@@ -85,3 +85,9 @@
   font-weight: 600;
   white-space: pre-wrap;
 }
+.story-guide-question-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
