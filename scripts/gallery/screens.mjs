@@ -196,9 +196,9 @@ export const screens = [
   },
   chatSettings('characters', '봇·페르소나·모듈'),
   chatSettings('prompts', '프롬프트·모델'),
-  chatSettings('story', '상태와 기억'),
+  chatSettings('story', '기억·로어'),
   chatSettings('images', '이미지'),
-  chatSettings('runtime', '자동 후속 작업'),
+  chatSettings('runtime', '실행 옵션'),
   {
     id: 'new-chat',
     title: '새 채팅',

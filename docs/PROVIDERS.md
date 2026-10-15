@@ -18,7 +18,7 @@ OpenAI Responses·Chat 호환, Anthropic Messages 등 프로토콜과 주소를 
 
 ## Anthropic Batch 실행
 
-직접 `Anthropic · Messages` 연결의 모델 프리셋은 **실행 방식**에서 `실시간` 또는 `Batch · 비동기 · 50% 할인`을 선택할 수 있어요. 기본값은 기존과 같은 실시간이에요. Batch는 현재 본문을 생성하는 main Run에 적용하며 번역·상태·도우미·제목 같은 별도 보조 작업은 기존 실시간 실행을 유지해요. Batch 응답은 스트리밍처럼 꾸미지 않고 완료되면 한 번에 표시해요.
+직접 `Anthropic · Messages` 연결의 모델 프리셋은 **실행 방식**에서 `실시간` 또는 `Batch · 비동기 · 50% 할인`을 선택할 수 있어요. 기본값은 기존과 같은 실시간이에요. Batch는 현재 본문을 생성하는 main Run에 적용하며 번역·도우미·제목 같은 별도 보조 작업은 기존 실시간 실행을 유지해요. Batch 응답은 스트리밍처럼 꾸미지 않고 완료되면 한 번에 표시해요.
 
 Uimori는 여러 사용자 요청을 모으는 자체 batching scheduler를 두지 않아요. 한 번의 모델 호출마다 Anthropic Batch에 요청 하나를 넣고 기존 `runMain` 도구 루프를 그대로 사용해요. Claude가 도구를 요청하면 그 결과를 처리한 다음 다음 모델 라운드를 새 Batch로 보내며, `story.submit`은 기존처럼 추가 모델 호출 없이 Run을 끝내요.
 
