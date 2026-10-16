@@ -882,6 +882,12 @@ test('forced compaction retains large batch identities and continuation without 
         target: '/program/nativeRisuPreset/preset/promptTemplate/0',
         exists: true,
         type: 'object',
+        block: {
+          omittedBodyPaths: {
+            text: '/program/nativeRisuPreset/preset/promptTemplate/0/text',
+            innerFormat: '/program/nativeRisuPreset/preset/promptTemplate/0/innerFormat',
+          },
+        },
       },
     ],
   };
@@ -906,7 +912,7 @@ test('forced compaction retains large batch identities and continuation without 
           items: [
             { kind: current.kind, id: current.id, path: current.path, textOffset: 120 },
             { kind: previous.kind, id: previous.id, path: previous.path, version: 'previous' },
-            { kind: array.kind, id: array.id, path: array.path, limit: 1 },
+            { kind: array.kind, id: array.id, path: array.path, limit: 1, includeBodies: true },
             { kind: 'content', id: 'missing-resource' },
           ],
         })

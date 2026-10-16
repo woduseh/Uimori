@@ -4,6 +4,7 @@ import { readTheme, saveTheme } from './themes.js';
 import type { Store } from './store.js';
 import type {
   ContentEditModel,
+  PromptEditModel,
   ResourceKind,
   ResourceModel,
   SavedResource,
@@ -73,8 +74,11 @@ export function cloneResource(
     sourceId: string;
     expectedSourceRevision: number;
     title: string;
+    syncNativeName?: boolean;
   }
 ) {
+  if (request.syncNativeName && request.kind !== 'prompt-preset')
+    throw new HttpError(400, '프롬프트 프리셋만 내부 이름을 함께 변경할 수 있어요.');
   return store.transaction(() => {
     store.product.assertAvailable(request.kind, request.sourceId);
     const source = readResource(store, request.kind, request.sourceId);
@@ -90,8 +94,10 @@ export function cloneResource(
       if (!Object.keys(native.card).length && native.module) native.module.name = request.title;
       else native.card.name = request.title;
     } else {
-      // The library title and authored native preset name are independent fields.
-      (model as { title: string }).title = request.title;
+      // Preserve the authored native name unless explicitly requested.
+      const preset = model as PromptEditModel;
+      preset.title = request.title;
+      if (request.syncNativeName) preset.program.nativeRisuPreset.preset.name = request.title;
     }
     return {
       ...saveResource(store, { kind: request.kind, id: null, model }),

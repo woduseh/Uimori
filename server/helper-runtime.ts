@@ -417,6 +417,7 @@ const READ_METADATA_GROUPS = new Set([
   'folders',
   'results',
   'result',
+  'block',
   'checkpoint',
   'compacted',
   'retained',
@@ -461,6 +462,14 @@ function helperReadMetadata(value: unknown): Json | undefined {
       )
     ) {
       metadata[key] = String(item);
+    } else if (key === 'omittedBodyPaths' && item && typeof item === 'object') {
+      const paths = Object.fromEntries(
+        ['text', 'innerFormat', 'defaultText'].flatMap((field) => {
+          const path = (item as Record<string, unknown>)[field];
+          return typeof path === 'string' && path.length <= 1024 ? [[field, path]] : [];
+        })
+      );
+      if (Object.keys(paths).length) metadata[key] = paths;
     } else if (READ_METADATA_VALUES.has(key) && (item === null || typeof item !== 'object')) {
       if (item !== undefined) metadata[key] = item as Json;
     } else if (READ_METADATA_GROUPS.has(key)) {

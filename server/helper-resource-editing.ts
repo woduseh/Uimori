@@ -1,9 +1,9 @@
 import { isDeepStrictEqual } from 'node:util';
 import {
   editableResource,
+  type PromptEditModel,
   type ResourceKind,
   type ResourceModel,
-  type PromptEditModel,
 } from '../core/resource-editing.js';
 import {
   reconcilePromptValues,
@@ -149,7 +149,9 @@ function sourceFor(content: Content) {
   };
 }
 const PRESET_TEMPLATE_PATH = '/program/nativeRisuPreset/preset/promptTemplate';
-function promptBlock(value: unknown, path: string): JsonObject | undefined {
+const PRESET_NAME_PATH = '/program/nativeRisuPreset/preset/name';
+const BODY_FIELDS = ['text', 'innerFormat', 'defaultText'];
+function promptBlock(value: unknown, path: string, includeBodies = false): JsonObject | undefined {
   if (!object(value)) return undefined;
   const block: JsonObject = {};
   const previews: JsonObject = {};
@@ -168,10 +170,19 @@ function promptBlock(value: unknown, path: string): JsonObject | undefined {
     ...block,
     ...(Object.keys(previews).length ? { previews } : {}),
     textLengths: Object.fromEntries(
-      ['text', 'innerFormat', 'defaultText'].flatMap((field) =>
+      BODY_FIELDS.flatMap((field) =>
         typeof value[field] === 'string' ? [[field, value[field].length]] : []
       )
     ),
+    ...(includeBodies
+      ? {
+          bodies: Object.fromEntries(
+            BODY_FIELDS.flatMap((field) =>
+              typeof value[field] === 'string' ? [[field, value[field]]] : []
+            )
+          ),
+        }
+      : {}),
   };
 }
 export function readHelperResource(
@@ -182,6 +193,13 @@ export function readHelperResource(
   maximum = MAX_RESULT
 ) {
   const paths = args.paths;
+  if (args.includeBodies !== undefined && typeof args.includeBodies !== 'boolean')
+    throw new HttpError(400, '본문 포함 옵션을 확인해 주세요.');
+  if (
+    args.includeBodies &&
+    (kind !== 'prompt-preset' || args.path !== PRESET_TEMPLATE_PATH || paths !== undefined)
+  )
+    throw new HttpError(400, '프롬프트 블록 목록에서만 본문을 함께 읽을 수 있어요.');
   if (paths !== undefined) {
     if (args.path !== undefined) throw new HttpError(400, 'path와 paths 중 하나만 지정해 주세요.');
     if (
@@ -288,6 +306,7 @@ function readHelperModel(
       : kind === 'prompt-preset'
         ? [
             PRESET_TEMPLATE_PATH,
+            PRESET_NAME_PATH,
             '/program/nativeRisuPreset/preset/customPromptTemplateToggle',
             '/program/nativeRisuPreset/preset/templateDefaultVariables',
             '/values',
@@ -308,10 +327,25 @@ function readHelperModel(
         if (!(error instanceof HttpError && [400, 404].includes(error.statusCode))) throw error;
       }
     }
+    const nativeName =
+      kind === 'prompt-preset'
+        ? (model as PromptEditModel).program.nativeRisuPreset.preset.name
+        : undefined;
     return bounded(
       {
         ...base,
         title,
+        ...(typeof nativeName !== 'string'
+          ? {}
+          : nativeName.length <= 200
+            ? { nativeName }
+            : {
+                nativeNamePreview: {
+                  text: nativeName.slice(0, 200).replace(/[\uD800-\uDBFF]$/u, ''),
+                  length: nativeName.length,
+                  path: PRESET_NAME_PATH,
+                },
+              }),
         ...(source ? { source } : {}),
         regions,
         readyPaths,
@@ -378,11 +412,13 @@ function readHelperModel(
   const limit = optionalInt(args.limit, 'limit', 50, 20);
   if (limit === 0) throw new HttpError(400, '읽기 개수는 1 이상이어야 해요.');
   const entries: unknown[] = [];
+  const withBodies =
+    args.includeBodies === true && kind === 'prompt-preset' && path === PRESET_TEMPLATE_PATH;
   let index = offset;
   for (; index < Math.min(keys.length, offset + limit); index++) {
     const key = keys[index]!;
     const item = member(value, key);
-    const next = {
+    let next = {
       name: key,
       ...descriptor(joined(path, key), item.value, item.exists),
       ...(previousCurrentRevision === undefined &&
@@ -393,7 +429,7 @@ function readHelperModel(
         ? { target: joined(path, key) }
         : {}),
       ...(kind === 'prompt-preset' && path === PRESET_TEMPLATE_PATH && Array.isArray(value)
-        ? { block: promptBlock(item.value, joined(path, key)) }
+        ? { block: promptBlock(item.value, joined(path, key), withBodies) }
         : {}),
     };
     const candidate = {
@@ -403,9 +439,25 @@ function readHelperModel(
       nextOffset: index + 1 < keys.length ? index + 1 : null,
     };
     if (JSON.stringify(candidate).length > maximum) {
-      if (!entries.length)
+      if (!withBodies || entries.length) {
+        if (entries.length) break;
         throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
-      break;
+      }
+      // A single enormous block cannot fit. Return its full metadata and explicit
+      // field paths rather than dropping it or claiming its text was read.
+      const omittedBodyPaths = Object.fromEntries(
+        BODY_FIELDS.flatMap((field) =>
+          object(item.value) && typeof item.value[field] === 'string'
+            ? [[field, joined(joined(path, key), field)]]
+            : []
+        )
+      );
+      next = {
+        ...next,
+        block: { ...promptBlock(item.value, joined(path, key)), omittedBodyPaths },
+      };
+      if (JSON.stringify({ ...candidate, items: [next] }).length > maximum)
+        throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
     }
     entries.push(next);
   }
@@ -769,6 +821,7 @@ export function patchHelperResource(
       patchFailure(changeIndex, input, error);
     }
   }
+  const resetKeys: string[] = [];
   let reconciledValues: { removedKeys: string[]; resetKeys: string[] } | undefined;
   if (kind === 'prompt-preset') {
     const preset = model as PromptEditModel;
@@ -802,14 +855,19 @@ export function patchHelperResource(
         Object.entries(values).filter(([key]) => !explicitValues.has(key))
       );
       const reconciled = reconcilePromptValues(preset.program, inherited);
+      // Keep the existing combined report while also distinguishing removed values.
+      resetKeys.push(...reconciled.resetKeys);
       const removedKeys = reconciled.resetKeys.filter(
         (key) => !Object.hasOwn(reconciled.values, key)
       );
-      const resetKeys = reconciled.resetKeys.filter((key) => Object.hasOwn(reconciled.values, key));
+      const resetValueKeys = reconciled.resetKeys.filter((key) =>
+        Object.hasOwn(reconciled.values, key)
+      );
       for (const key of explicitValues.keys()) reconciled.values[key] = values[key]!;
       if (!isDeepStrictEqual(preset.values, reconciled.values)) changedPaths.push('/values');
       preset.values = reconciled.values;
-      if (removedKeys.length || resetKeys.length) reconciledValues = { removedKeys, resetKeys };
+      if (removedKeys.length || resetValueKeys.length)
+        reconciledValues = { removedKeys, resetKeys: resetValueKeys };
     }
   }
   if (!changedPaths.length || isDeepStrictEqual(original, model))
@@ -830,6 +888,7 @@ export function patchHelperResource(
     revision: saved.revision,
     changedPaths: [...new Set(changedPaths)],
     ...(matches.length ? { matches } : {}),
+    ...(resetKeys.length ? { resetKeys } : {}),
     ...(reconciledValues ? { reconciledValues } : {}),
   };
 }

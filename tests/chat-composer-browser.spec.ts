@@ -43,6 +43,46 @@ for (const width of DEFAULT_WIDTHS) {
   });
 }
 
+test('shared composer follows resized content viewport while preserving the draft', async ({
+  page,
+  request,
+}) => {
+  const created = await postFixtureChat(request, { data: { title: '모바일 키보드 영역 검사' } });
+  expect(created.ok()).toBe(true);
+  const chat = await created.json();
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  await page.goto(`/?chat=${chat.id}`);
+  const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
+  expect(viewport).toContain('interactive-widget=resizes-content');
+
+  const input = page.getByRole('textbox', { name: '다음 장면 요청' });
+  const draft = '키보드가 열린 상태에서도 보존할 요청\n'.repeat(5);
+  await input.fill(draft);
+  await expect(page.locator('.composer-dock .composer')).toHaveClass(/grown/u);
+  // Desktop emulation cannot raise an Android IME. Simulate the layout viewport
+  // shrinking/restoring, as requested by interactive-widget=resizes-content.
+  for (const height of [590, 490, 844]) {
+    await page.setViewportSize({ width: MOBILE_WIDTH, height });
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const shell = document.querySelector('.app-shell')!.getBoundingClientRect();
+          const dock = document.querySelector('.composer-dock')!.getBoundingClientRect();
+          const input = document.querySelector<HTMLTextAreaElement>('#request')!;
+          // Matching the dock to a wrongly shortened shell would miss the blank gap.
+          return Math.max(
+            Math.abs(shell.bottom - window.innerHeight),
+            Math.abs(dock.bottom - window.innerHeight),
+            Math.max(0, -input.getBoundingClientRect().top)
+          );
+        })
+      )
+      .toBeLessThanOrEqual(2);
+    await expect(input).toBeFocused();
+    await expect(input).toHaveValue(draft);
+  }
+});
+
 test('shared composer preserves Korean composition and Shift+Enter without sending', async ({
   page,
   request,

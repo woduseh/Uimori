@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
+import { createAgentCollaboration, createAgentDefinition } from '../core/agent-collaboration.js';
 import type { Content, PromptPreset } from '../core/product.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { editableResource } from '../core/resource-editing.js';
@@ -661,8 +662,10 @@ test('preset overview points to a complete 40-block outline without loading auth
     ...blocks.slice(1),
   ]);
   const overview = call(store, 'resource.read', target);
+  expect(overview.nativeName).toBe('Native V1');
   expect(overview.readyPaths).toEqual([
     presetBlocksPath,
+    '/program/nativeRisuPreset/preset/name',
     '/program/nativeRisuPreset/preset/customPromptTemplateToggle',
     '/program/nativeRisuPreset/preset/templateDefaultVariables',
     '/values',
@@ -700,6 +703,100 @@ test('preset overview points to a complete 40-block outline without loading auth
   });
   expect(next.items[0].path).toBe(`${presetBlocksPath}/39`);
   expect(next.nextOffset).toBeNull();
+});
+
+test('opt-in preset body pages include full authored fields and mark oversized blocks for follow-up', () => {
+  const huge = 'Long prose 😀'.repeat(3_000);
+  const { store, target } = presetFixture([
+    {
+      name: 'Short',
+      type: 'plain',
+      text: 'Ready',
+      innerFormat: '<b>{{slot}}</b>',
+      defaultText: '기본',
+    },
+    { name: 'Large', type: 'plain', role: 'system', text: 'detail '.repeat(2_000) },
+    { name: 'Huge', type: 'plain', role: 'user', text: huge },
+    { name: 'After', type: 'plain', text: 'Final instruction' },
+  ]);
+  const collected: Record<string, any>[] = [];
+  let offset = 0;
+  for (let pageCount = 0; pageCount < 6; pageCount++) {
+    const page = call(store, 'resource.read', {
+      ...target,
+      path: presetBlocksPath,
+      includeBodies: true,
+      offset,
+      limit: 50,
+    });
+    expect(JSON.stringify(page).length).toBeLessThanOrEqual(24_000);
+    collected.push(...page.items);
+    if (page.nextOffset === null) break;
+    expect(page.nextOffset).toBeGreaterThan(offset);
+    offset = page.nextOffset;
+  }
+  expect(collected.map(({ name }) => name)).toEqual(['0', '1', '2', '3']);
+  expect(collected[0].block.bodies).toEqual({
+    text: 'Ready',
+    innerFormat: '<b>{{slot}}</b>',
+    defaultText: '기본',
+  });
+  expect(collected[1].block.bodies.text).toBe('detail '.repeat(2_000));
+  expect(collected[2].block).not.toHaveProperty('bodies');
+  expect(collected[2].block.omittedBodyPaths.text).toBe(`${presetBlocksPath}/2/text`);
+  expect(collected[3].block.bodies.text).toBe('Final instruction');
+  const next = call(store, 'resource.read', {
+    ...target,
+    path: collected[2].block.omittedBodyPaths.text,
+    textLimit: 10000,
+  });
+  expect(next.text).toBe(huge.slice(0, next.nextOffset));
+  expect(next.nextOffset).not.toBeNull();
+  expect(() => call(store, 'resource.read', { ...target, includeBodies: true })).toThrow(
+    '프롬프트 블록 목록'
+  );
+  expect(() =>
+    call(store, 'resource.read', {
+      ...target,
+      path: presetBlocksPath,
+      includeBodies: 'true',
+    })
+  ).toThrow('본문 포함 옵션');
+});
+
+test('preset clones keep native names by default and can synchronize them atomically', () => {
+  const { store, preset, target } = presetFixture([
+    { type: 'plain', text: 'Preserved authored prompt' },
+  ]);
+  const clone = (title: string, syncNativeName?: boolean) =>
+    call(store, 'resource.clone', {
+      kind: 'prompt-preset',
+      sourceId: preset.id,
+      expectedSourceRevision: preset.revision,
+      title,
+      ...(syncNativeName === undefined ? {} : { syncNativeName }),
+    });
+  const independent = clone('New Display');
+  const synchronized = clone('Synchronized', true);
+  const nativeName = (id: string) =>
+    call(store, 'resource.read', {
+      kind: 'prompt-preset',
+      id,
+      path: '/program/nativeRisuPreset/preset/name',
+    }).text;
+  expect(nativeName(independent.id)).toBe('Native V1');
+  expect(nativeName(synchronized.id)).toBe('Synchronized');
+  expect(nativeName(preset.id)).toBe('Native V1');
+  expect(
+    call(store, 'resource.read', { kind: 'prompt-preset', id: synchronized.id }).nativeName
+  ).toBe('Synchronized');
+  expect(
+    call(store, 'resource.read', {
+      ...target,
+      path: `${presetBlocksPath}/0/text`,
+    }).text
+  ).toBe('Preserved authored prompt');
+  expect(() => clone('Bad', 'true' as unknown as boolean)).toThrow('동기화');
 });
 
 test('oversized block metadata stays paged and offers exact field reads without changing stored text', () => {
@@ -805,6 +902,164 @@ test('preset block edits compose sequentially with one save and undo while prese
   call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
   const restored = store.product.get<any>('prompt-preset', preset.id);
   expect(restored).toEqual({ ...preset, revision: preset.revision + 2 });
+});
+
+const presetTogglePath = '/program/nativeRisuPreset/preset/customPromptTemplateToggle';
+
+test('changing prompt control IDs reconciles saved values atomically and undo restores both', () => {
+  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep this block' }]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [{ op: 'set', path: presetTogglePath, value: 'style=Style=text' }],
+  });
+  expect(result).toEqual({
+    id: preset.id,
+    revision: preset.revision + 1,
+    changedPaths: [presetTogglePath, '/values'],
+    resetKeys: ['tone'],
+    reconciledValues: { removedKeys: ['tone'], resetKeys: [] },
+  });
+  const saved = store.product.get<any>('prompt-preset', preset.id);
+  expect(saved.values).toEqual({ style: '' });
+  expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual([
+    { type: 'plain', text: 'Keep this block' },
+  ]);
+  call(store, 'resource.undo', { ...target, expectedRevision: result.revision });
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
+    ...preset,
+    revision: preset.revision + 2,
+  });
+});
+
+test('new controls take defaults while compatible saved values survive', () => {
+  const { store, preset, target } = presetFixture([]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      {
+        op: 'set',
+        path: presetTogglePath,
+        value: 'tone=Tone=text\nstyle=Style=text',
+      },
+    ],
+  });
+  expect(result.changedPaths).toEqual([presetTogglePath, '/values']);
+  expect(result).not.toHaveProperty('resetKeys');
+  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
+    tone: 'warm',
+    style: '',
+  });
+});
+
+test('changing control options resets only values that are no longer valid', () => {
+  const { store, preset, target } = presetFixture([]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      {
+        op: 'set',
+        path: presetTogglePath,
+        value: 'tone=Tone=select=soft,firm\nstyle=Style=text',
+      },
+    ],
+  });
+  expect(result.resetKeys).toEqual(['tone']);
+  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
+    tone: '0',
+    style: '',
+  });
+});
+
+test('a valid explicitly supplied value wins over the default in the same control edit', () => {
+  const { store, preset, target } = presetFixture([]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      { op: 'set', path: presetTogglePath, value: 'tone=Tone=text\nstyle=Style=text' },
+      { op: 'set', path: '/values/style', value: 'vivid' },
+    ],
+  });
+  expect(result.changedPaths).toEqual([presetTogglePath, '/values/style']);
+  expect(result).not.toHaveProperty('resetKeys');
+  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({
+    tone: 'warm',
+    style: 'vivid',
+  });
+});
+
+test('invalid explicit value writes are rejected rather than silently reconciled', () => {
+  const { store, preset, target } = presetFixture([]);
+  const originalUndo = store.db
+    .prepare('SELECT * FROM resource_undo WHERE kind=? AND id=?')
+    .get(target.kind, target.id);
+  const cases = [
+    {
+      changes: [
+        { op: 'set', path: presetTogglePath, value: 'style=Style=text' },
+        { op: 'set', path: '/values/tone', value: 'warm' },
+      ],
+      error: 'PROMPT_UNKNOWN_CONTROL',
+    },
+    {
+      changes: [
+        { op: 'set', path: presetTogglePath, value: 'tone=Tone=select=soft,firm' },
+        { op: 'set', path: '/values/tone', value: 'invalid' },
+      ],
+      error: 'PROMPT_INVALID_CONTROL_VALUE',
+    },
+    {
+      changes: [{ op: 'set', path: '/values/unknown', value: 'new' }],
+      error: 'PROMPT_UNKNOWN_CONTROL',
+    },
+  ];
+  for (const { changes, error } of cases) {
+    expect(() =>
+      call(store, 'resource.patch', {
+        ...target,
+        expectedRevision: preset.revision,
+        changes,
+      })
+    ).toThrow(error);
+    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+    expect(
+      store.db
+        .prepare('SELECT * FROM resource_undo WHERE kind=? AND id=?')
+        .get(target.kind, target.id)
+    ).toEqual(originalUndo);
+  }
+});
+
+test('removing a control still referenced by enabled collaboration is rejected', () => {
+  const { store, preset: base } = presetFixture([]);
+  const collaboration = {
+    ...createAgentCollaboration(),
+    enabled: true,
+    sharedControls: ['tone'],
+    agents: [createAgentDefinition('custom', 'reviewer')],
+  };
+  const preset = store.product.promptPreset(
+    {
+      title: base.title,
+      role: base.role,
+      program: { ...base.program, collaboration },
+      values: base.values,
+      expectedRevision: base.revision,
+    },
+    base.id
+  );
+  expect(() =>
+    call(store, 'resource.patch', {
+      kind: 'prompt-preset',
+      id: preset.id,
+      expectedRevision: preset.revision,
+      changes: [{ op: 'set', path: presetTogglePath, value: 'style=Style=text' }],
+    })
+  ).toThrow('AGENT_COLLABORATION_UNKNOWN_CONTROL');
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
 });
 
 test('preset display title can change independently from the native name and undo normally', () => {

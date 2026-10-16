@@ -36,7 +36,7 @@ import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { HelperPanel } from './HelperPanel.js';
 import { selectedHelperSession } from './useHelperSessions.js';
-import type { HelperScope } from '../core/helper.js';
+import type { HelperScope, HelperResourceRef } from '../core/helper.js';
 import { ResponseDisplay } from './StreamingResponse.js';
 import {
   readPresentationChoice,
@@ -221,6 +221,8 @@ function App() {
   };
   const [settingsTab, setSettingsTab] = useState('general');
   const [promptToEdit, setPromptToEdit] = useState<string | null>(null);
+  const [helperResource, setHelperResource] = useState<HelperResourceRef | null>(null);
+  const clearHelperResource = useCallback(() => setHelperResource(null), []);
   const [workspacePanel, setWorkspacePanel] = useState<'options' | 'helper' | null>(null);
   const optionsOpen = workspacePanel === 'options';
   const helperOpen = workspacePanel === 'helper';
@@ -302,6 +304,9 @@ function App() {
   const [initialModules, setInitialModules] = useState<Content[]>([]);
   const [moduleToUse, setModuleToUse] = useState<Content | null>(null);
   const [libraryTab, setLibraryTab] = useState<'bot' | 'persona' | 'module' | 'prompts'>('bot');
+  useEffect(() => {
+    if (s.destination !== 'library' || libraryTab !== 'prompts') setHelperResource(null);
+  }, [s.destination, libraryTab]);
   const [libraryListRequest, setLibraryListRequest] = useState(0);
   const errorScope = `${s.destination}:${libraryTab}:${s.viewKey}`;
   const previousErrorScope = useRef(errorScope);
@@ -1088,6 +1093,16 @@ function App() {
                   listRequest={libraryListRequest}
                   initialPresetId={promptToEdit}
                   onInitialPresetHandled={() => setPromptToEdit(null)}
+                  onEditorOpened={clearHelperResource}
+                  onAskHelper={(preset) => {
+                    setHelperResource({
+                      kind: 'prompt-preset',
+                      id: preset.id,
+                      revision: preset.revision,
+                      title: preset.title,
+                    });
+                    setWorkspacePanel('helper');
+                  }}
                   onOpenCurrentPrompts={() => {
                     setSettingsTab('prompts');
                     setPanel('settings');
@@ -1914,6 +1929,8 @@ function App() {
         modelDescription={helperDescription}
         open={helperOpen}
         selection={helperSelection}
+        resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
+        onClearResource={clearHelperResource}
         outlineRequest={outlineHelperRequest}
         outlineWorkspace={panel === 'outline'}
         scope={
