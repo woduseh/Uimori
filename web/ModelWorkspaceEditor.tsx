@@ -231,9 +231,7 @@ export function ModelWorkspaceEditor({
     Number(draft.translationPolicy.judgment.enabled !== false);
   return (
     <section aria-label="역할별 모델 설정" className="settings-section model-workspace-settings">
-      <p>
-        모든 채팅의 이후 요청에 적용해요. 진행 중인 작업과 과거 실행·결과의 설정은 바뀌지 않아요.
-      </p>
+      <p className="model-workspace-intro">변경한 설정은 이후 작업부터 적용돼요.</p>
       <fieldset disabled={busy} className="control-grid model-workspace-controls">
         <fieldset className="settings-group full model-primary-settings">
           <legend className="settings-group-heading">핵심 작업</legend>
@@ -256,13 +254,13 @@ export function ModelWorkspaceEditor({
               '도우미 모델',
               draft.helperModel ?? null,
               (ref) => change({ ...draft, helperModel: ref }),
-              '작품 질문과 자료 작업에 사용해요. 미지정하면 도우미의 모델 실행을 시작하지 않아요.'
+              '작품 질문·자료 작업에 사용해요. 미지정 시 도우미 모델 호출을 하지 않아요.'
             )}
             {selector(
               '컨텍스트 요약 모델',
               draft.contextModel ?? null,
               (ref) => change({ ...draft, contextModel: ref }),
-              '자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지 않아요.'
+              '자동·수동 요약에 사용해요. 미지정 시 압축 작업은 진행되지 않아요.'
             )}
             {(['conversation', 'helper'] as const).map((role) => {
               const label = role === 'conversation' ? '세션 요약 길이' : '도우미 요약 길이';
@@ -271,11 +269,6 @@ export function ModelWorkspaceEditor({
                 <div key={role} className="settings-row">
                   <div className="settings-row-copy">
                     <label htmlFor={`${id}-summary-${role}`}>{label}</label>
-                    <small>
-                      {role === 'conversation'
-                        ? '자동은 최대 8,192토큰을 목표 상한으로 사용해요.'
-                        : '자동은 최대 4,096토큰을 목표 상한으로 사용해요.'}
-                    </small>
                   </div>
                   <div className="settings-row-control">
                     <select
@@ -308,10 +301,9 @@ export function ModelWorkspaceEditor({
                 </div>
               );
             })}
-            <p className="muted">
-              길이는 채워야 할 분량이 아닌 상한이에요. 실제 요약은 내용, 소비자 컨텍스트와 요약
-              모델의 최대 출력 설정에 따라 짧아질 수 있어요. 변경 사항은 이후 작업에만 적용하며 기존
-              요약은 다시 작성하지 않아요.
+            <p className="model-summary-note">
+              자동 상한: 세션 8,192 · 도우미 4,096토큰. 실제 요약은 더 짧을 수 있으며 기존 요약은
+              유지돼요.
             </p>
           </div>
         </details>
@@ -335,7 +327,7 @@ export function ModelWorkspaceEditor({
               '확장 호출 모델',
               draft.scriptModel ?? null,
               (ref) => change({ ...draft, scriptModel: ref }),
-              '사용자가 허용한 패키지 코드의 추가 생성 요청에 사용해요. 미지정하면 추가 호출을 시작하지 않아요.'
+              '허용된 패키지의 추가 모델 호출에 사용해요. 미지정 시 호출하지 않아요.'
             )}
           </div>
         </details>
