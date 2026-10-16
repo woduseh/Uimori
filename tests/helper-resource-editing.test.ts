@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { Content, PromptPreset } from '../core/product.js';
+import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readHelperEditor } from '../server/helper-resource-editing.js';
 import { HelperResourcePatchError } from '../server/helper-resource-patch-error.js';
@@ -1070,6 +1071,59 @@ test('whole-model validation does not blame an unrelated last change', () => {
   });
   expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
   expect(store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)).toBeUndefined();
+});
+
+test('invalid projected content is reported as model validation without saving', () => {
+  const { store, content } = fixture();
+  expect(() =>
+    call(store, 'resource.patch', {
+      kind: 'content',
+      id: content.id,
+      expectedRevision: content.revision,
+      changes: [
+        {
+          op: 'set',
+          path: '/package/nativeRisu/card/first_mes',
+          value: 'x'.repeat(SOURCE_TEXT_MAX_CHARS + 1),
+        },
+      ],
+    })
+  ).toThrow(
+    expect.objectContaining({
+      statusCode: 400,
+      details: {
+        stage: 'validation',
+        changeIndex: null,
+        path: null,
+        op: null,
+        reason: 'invalid_change',
+      },
+    })
+  );
+  expect(store.product.get('content', content.id)).toEqual(content);
+  expect(store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
+});
+
+test('unexpected persistence failures are not relabeled as invalid patch input', () => {
+  const { store, content } = fixture();
+  const failure = new Error('Storage unavailable');
+  vi.spyOn(store.product, 'saveInTransaction').mockImplementationOnce(() => {
+    throw failure;
+  });
+  let caught: unknown;
+  try {
+    call(store, 'resource.patch', {
+      kind: 'content',
+      id: content.id,
+      expectedRevision: content.revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/name', value: 'New name' }],
+    });
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBe(failure);
+  expect(store.product.get('content', content.id)).toEqual(content);
+  expect(store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
 });
 
 test.each([
