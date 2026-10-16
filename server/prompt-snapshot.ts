@@ -123,6 +123,15 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
           id: `native:${entry.revision}:${index}`,
           role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
           text: message.role === 'char' ? entry.text : message.data,
+          ...(message.role === 'user' && message.requestImageIndexes?.length
+            ? {
+                requestImages: message.requestImageIndexes.map((index) => {
+                  const image = owner.requestImages?.[index];
+                  if (!image) throw new Error('PROMPT_HISTORY_REQUEST_IMAGE_MISSING');
+                  return image;
+                }),
+              }
+            : {}),
           ...provenance,
           ...(native.greeting ? { sourceKind: 'authored-start' as const } : {}),
         }))

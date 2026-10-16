@@ -227,6 +227,152 @@ test('RIMAGE failed IndexedDB writes retain latest text and offer the previous a
   await expect(composer(page)).toHaveValue('선택하는 동안 다시 고친 최신 텍스트');
 });
 
+test('RIMAGE late acceptance in another chat preserves an edited-then-reverted draft after IndexedDB writes fail', async ({
+  page,
+  request,
+}) => {
+  const first = await createChat(request),
+    second = await createChat(request);
+  const text = '같은 문장이어도 다시 작성한 초안';
+  let release!: () => void;
+  let started!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/chats/${first.id}/runs`, async (route) => {
+    const response = await route.fetch();
+    expect(response.ok(), await response.text()).toBe(true);
+    started();
+    await held;
+    await route.fulfill({ response });
+  });
+  try {
+    await open(page, first);
+    await composer(page).fill(text);
+    await page.getByLabel('참고 이미지 파일', { exact: true }).setInputFiles(await image());
+    await expect(thumbnails(page)).toHaveCount(1);
+    await send(page).click();
+    await ready;
+    // Newer text still reaches sessionStorage, while the durable tuple stays at the sent token.
+    // Cleanup uses delete(), which remains available after these failed put() calls.
+    await page.evaluate(() => {
+      const put = IDBObjectStore.prototype.put;
+      IDBObjectStore.prototype.put = function (...args: Parameters<typeof put>) {
+        if (this.name === 'buffers')
+          throw new DOMException('Synthetic storage full', 'QuotaExceededError');
+        return put.apply(this, args);
+      };
+    });
+    await composer(page).fill('새로 고치는 중');
+    await composer(page).fill(text);
+    await expect(
+      page.getByRole('alert').filter({ hasText: '초안을 기기에 저장하지 못했어요' })
+    ).toBeVisible();
+    await page.evaluate((id) => {
+      history.pushState(null, '', '/?chat=' + id);
+      dispatchEvent(new PopStateEvent('popstate'));
+    }, second.id);
+    await expect(composer(page)).toHaveValue('');
+    release();
+    // Observe completed cleanup before returning, rather than racing the late response.
+    await expect
+      .poll(() =>
+        page.evaluate(async (id) => {
+          const db = await new Promise<IDBDatabase>((resolve) => {
+            const request = indexedDB.open('uimori-editor-recovery', 1);
+            request.onsuccess = () => resolve(request.result);
+          });
+          return new Promise<boolean>((resolve) => {
+            const request = db
+              .transaction('buffers')
+              .objectStore('buffers')
+              .get(`request:${sessionStorage.getItem('uimori:request-draft-tab')}:draft:${id}`);
+            request.onsuccess = () => resolve(request.result === undefined);
+          });
+        }, first.id)
+      )
+      .toBe(true);
+    await page.evaluate((id) => {
+      history.pushState(null, '', '/?chat=' + id);
+      dispatchEvent(new PopStateEvent('popstate'));
+    }, first.id);
+    await expect(composer(page)).toHaveValue(text);
+    await expect(send(page)).toBeEnabled();
+    expect((await detail(request, first.id)).runs).toHaveLength(1);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
+test('RIMAGE legacy pending text drafts clear after acceptance while another chat is open', async ({
+  page,
+  request,
+}) => {
+  const first = await createChat(request),
+    second = await createChat(request);
+  const payload = {
+    request: '이미지 첨부 이전 버전에서 남은 요청',
+    expectedRevision: null,
+    expectedSettingsRevision: first.settingsRevision,
+  };
+  await page.addInitScript(
+    ({ id, payload, key }) => {
+      sessionStorage.setItem(`draft:${id}`, payload.request);
+      sessionStorage.setItem(
+        `command:${id}`,
+        JSON.stringify({ id: key, payload: JSON.stringify(payload) })
+      );
+    },
+    { id: first.id, payload, key: randomUUID() }
+  );
+  let release!: () => void;
+  let started!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/chats/${first.id}/runs`, async (route) => {
+    const response = await route.fetch();
+    expect(response.ok(), await response.text()).toBe(true);
+    started();
+    await held;
+    await route.fulfill({ response });
+  });
+  try {
+    await open(page, first);
+    await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+      .getByRole('button', { name: '접수 확인', exact: true })
+      .click();
+    await ready;
+    await page.evaluate((id) => {
+      history.pushState(null, '', '/?chat=' + id);
+      dispatchEvent(new PopStateEvent('popstate'));
+    }, second.id);
+    await expect(composer(page)).toHaveValue('');
+    release();
+    await expect
+      .poll(() => page.evaluate((id) => sessionStorage.getItem(`draft:${id}`), first.id))
+      .toBeNull();
+    await page.evaluate((id) => {
+      history.pushState(null, '', '/?chat=' + id);
+      dispatchEvent(new PopStateEvent('popstate'));
+    }, first.id);
+    await expect(composer(page)).toHaveValue('');
+    expect((await detail(request, first.id)).runs).toHaveLength(1);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
 test('RIMAGE accepted request never reappears after IndexedDB cleanup fails', async ({
   page,
   request,

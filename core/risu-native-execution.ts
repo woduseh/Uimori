@@ -32,7 +32,10 @@ export type NativeRisuExecution = {
 export type NativeRisuAuthored = {
   version: 1;
   action: string;
-  messages: NativeRisuMessage[];
+  messages: (NativeRisuMessage & {
+    /** Attachments owned by this user message, indexed in the run's requestImages. */
+    requestImageIndexes?: number[];
+  })[];
   commandHash?: string;
   greeting?: boolean;
 };
