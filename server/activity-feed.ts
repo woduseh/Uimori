@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 import { chatActivities } from './chat-activity.js';
-import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
+import type { ActivityFeed, ActivityFeedItem, HelperRecentTask } from '../core/activity-feed.js';
 
 const baselineKey = 'activity-feed:baseline:v1';
 const ackPrefix = (chatId: string) => `activity-feed:ack:v1:${chatId}:`;
@@ -125,5 +125,20 @@ export function activityFeed(store: Store): ActivityFeed {
       canAcknowledge: true,
     });
   }
-  return { items, running: chatActivities(store) };
+  // One task = one recent entry. Do not join tool events or original task input:
+  // a completed edit can still be committed when the final assistant answer fails.
+  const helperRows = store.db
+    .prepare(`
+    SELECT t.id,t.conversation_id AS conversationId,c.chat_id AS chatId,
+      json_extract(c.scope,'$.workId') AS workId,c.title,
+      json_extract(t.snapshot,'$.model.title') AS modelTitle,
+      t.status,t.updated_at AS updatedAt,
+      (SELECT COUNT(*) FROM helper_operations op WHERE op.task_id=t.id) AS committedEffects
+    FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id
+    WHERE NOT EXISTS (SELECT 1 FROM helper_tasks retry WHERE
+      retry.conversation_id=t.conversation_id AND json_extract(retry.snapshot,'$.retryOf')=t.id)
+    ORDER BY (t.status IN ('queued','running')) DESC,t.updated_at DESC,t.rowid DESC LIMIT 30
+  `)
+    .all() as HelperRecentTask[];
+  return { items, running: chatActivities(store), helpers: helperRows };
 }

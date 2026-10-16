@@ -95,6 +95,11 @@ export function encodeVertex(
   const continuationInput = continuationInputText(request);
   const generation = request.generation;
   if (generation) validateModelOptions(generation, protocol);
+  const argon = request.modelId === 'gemini-4-argon';
+  if (argon && generation?.thinkingLevel === 'MINIMAL') reject('ARGON_THINKING_LEVEL_UNSUPPORTED');
+  // Long decoding needs continuation_token handling, which the direct REST adapter does not yet do.
+  if (argon && (generation?.maxOutputTokens ?? 65_536) > 65_536)
+    reject('ARGON_LONG_DECODE_UNSUPPORTED');
   const maxOutputTokens =
     generation?.maxOutputTokens ??
     modelCapability(protocol, request.modelId)?.maxOutputTokens ??
@@ -287,10 +292,10 @@ export function encodeVertex(
       ...(generation?.thinkingLevel !== undefined
         ? { thinkingConfig: { thinkingLevel: generation.thinkingLevel } }
         : {}),
-      ...(generation?.temperature !== undefined && generation.temperature !== null
+      ...(!argon && generation?.temperature !== undefined && generation.temperature !== null
         ? { temperature: generation.temperature }
         : {}),
-      ...(generation?.topP !== undefined ? { topP: generation.topP } : {}),
+      ...(!argon && generation?.topP !== undefined ? { topP: generation.topP } : {}),
       ...(generation?.stopSequences !== undefined
         ? { stopSequences: structuredClone(generation.stopSequences) }
         : {}),

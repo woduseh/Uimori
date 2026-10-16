@@ -1,5 +1,5 @@
 import { AlertCircle, Check, Clock3, LoaderCircle, MessageCircle } from 'lucide-react';
-import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
+import type { ActivityFeed, ActivityFeedItem, HelperRecentTask } from '../core/activity-feed.js';
 import type { Chat } from '../core/types.js';
 import type { Library } from '../core/product.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -14,6 +14,7 @@ type Props = {
   onSelect: (id: string, target?: ReaderTarget) => void;
   onAcknowledge: (items: ActivityFeedItem[]) => void;
   onInspect: (item: ActivityFeedItem) => void;
+  onOpenHelper?: (task: HelperRecentTask) => void;
   onRetry: () => void;
 };
 function timeLabel(date: string) {
@@ -34,6 +35,7 @@ export function ActivityNavigation({
   onSelect,
   onAcknowledge,
   onInspect,
+  onOpenHelper,
   onRetry,
 }: Props) {
   const names = new Map(library?.contents.map((bot) => [bot.id, bot.title]) ?? []);
@@ -156,6 +158,50 @@ export function ActivityNavigation({
         })}
         {!running.size && <p className="activity-nav-empty">진행 중인 작업이 없어요.</p>}
       </div>
+      {!!feed.helpers?.length && (
+        <div className="activity-nav-section">
+          <div className="activity-nav-heading">
+            <strong>최근 도우미 작업</strong>
+            <span>{Math.min(feed.helpers.length, 20)}</span>
+          </div>
+          {feed.helpers.slice(0, 20).map((task) => (
+            <button
+              key={task.id}
+              type="button"
+              className="activity-nav-link"
+              onClick={() => onOpenHelper?.(task)}
+              disabled={!onOpenHelper}
+            >
+              {task.status === 'running' || task.status === 'queued' ? (
+                <LoaderCircle size={16} aria-hidden="true" />
+              ) : task.status === 'completed' ? (
+                <Check size={16} aria-hidden="true" />
+              ) : (
+                <AlertCircle size={16} className="activity-nav-warning" aria-hidden="true" />
+              )}
+              <span className="activity-nav-copy">
+                <strong>{task.title || '도우미 대화'}</strong>
+                <small>
+                  {task.chatId ? '작품' : '서재'} ·{' '}
+                  {task.status === 'running'
+                    ? '진행 중'
+                    : task.status === 'queued'
+                      ? '대기 중'
+                      : task.status === 'completed'
+                        ? '완료'
+                        : task.status === 'failed'
+                          ? '실패'
+                          : task.status === 'cancelled'
+                            ? '취소'
+                            : '중단'}
+                  {task.committedEffects > 0 ? ` · 확정된 앱 작업 ${task.committedEffects}건` : ''}
+                </small>
+              </span>
+              <time dateTime={task.updatedAt}>{timeLabel(task.updatedAt)}</time>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="activity-nav-section">
         <div className="activity-nav-heading">
           <strong>최근 대화</strong>

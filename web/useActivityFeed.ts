@@ -13,7 +13,7 @@ export const activityViewedEvent = 'uimori-activity-result-visible';
 
 type Viewed = { chatId: string; sourceId: string; representation: 'original' | 'translation' };
 export function useActivityFeed() {
-  const [feed, setFeed] = useState<ActivityFeed>({ items: [], running: [] });
+  const [feed, setFeed] = useState<ActivityFeed>({ items: [], running: [], helpers: [] });
   const [error, setError] = useState('');
   const latest = useRef(feed);
   latest.current = feed;
@@ -91,7 +91,13 @@ export function useActivityFeed() {
       if (stopped) return;
       if (!document.hidden) await refresh();
       if (!stopped)
-        timer = setTimeout(() => void poll(), latest.current.running.length ? 2500 : 10000);
+        timer = setTimeout(
+          () => void poll(),
+          latest.current.running.length ||
+            latest.current.helpers?.some((task) => ['queued', 'running'].includes(task.status))
+            ? 2500
+            : 10000
+        );
     };
     const active = () => {
       if (!document.hidden) void refresh();

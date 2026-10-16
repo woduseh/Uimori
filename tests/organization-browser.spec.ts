@@ -460,9 +460,13 @@ test('ORG04 unselected chat and collapsed folder display compact pending activit
   });
   expect(moved.ok()).toBe(true);
   let active = true;
-  await page.route('**/api/chat-activities', (route) =>
+  await page.route('**/api/activity-feed', (route) =>
     route.fulfill({
-      json: active ? [{ chatId: background.id, kind: 'translation', count: 1 }] : [],
+      json: {
+        items: [],
+        running: active ? [{ chatId: background.id, kind: 'translation', count: 1 }] : [],
+        helpers: [],
+      },
     })
   );
   await page.goto(`/?chat=${chats[0].id}`);

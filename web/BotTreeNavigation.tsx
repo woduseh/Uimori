@@ -115,6 +115,7 @@ export function BotNavigation(
     onLibrary,
     onSettings,
     onTasks,
+    onOpenHelperTask,
     onError,
     onLibraryChanged,
     onSelect,
@@ -592,6 +593,7 @@ export function BotNavigation(
             onSelect={onSelect}
             onAcknowledge={(items) => void activityFeed.acknowledge(items)}
             onInspect={activityFeed.inspect}
+            onOpenHelper={onOpenHelperTask}
             onRetry={() => void activityFeed.refresh()}
           />
         )}

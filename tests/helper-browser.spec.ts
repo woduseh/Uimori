@@ -1283,6 +1283,64 @@ test('HELPUI06 saved effects survive response failure and cannot be replayed fro
   await expect(details.getByText('UNEXPECTED_EOF', { exact: true })).toBeVisible();
 });
 
+test('HELPBRANCH a late session branch never overrides a newer user session selection', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request);
+  const state = await harness(page, 1);
+  let release!: () => void;
+  let received = false;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/helper/conversations/*/branch', async (route) => {
+    received = true;
+    await held;
+    const id = route.request().url().split('/').at(-2)!;
+    const source = state.views.get(id)!;
+    const conversation = {
+      ...source.conversation,
+      id: randomUUID(),
+      title: `${source.conversation.title} · 분기`,
+    };
+    state.views.set(conversation.id, {
+      conversation,
+      messages: source.messages.map((message) => ({
+        ...message,
+        id: randomUUID(),
+        conversationId: conversation.id,
+        taskId: `seed:${message.id}`,
+        taskStatus: 'completed',
+        artifacts: [],
+      })),
+      tasks: [],
+      events: [],
+    });
+    await route.fulfill({ json: conversation });
+  });
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const picker = panel.getByLabel('도우미 세션 선택');
+  const first = await picker.inputValue();
+  await panel.getByLabel('도우미 세션 관리').click();
+  await panel.getByRole('button', { name: /세션 분기 \(완료 대화 복사\)/ }).click();
+  await expect.poll(() => received).toBe(true);
+  try {
+    await panel.getByRole('button', { name: '새 도우미 세션' }).click();
+    await expect(picker).not.toHaveValue(first);
+    const selected = await picker.inputValue();
+    const resolved = page.waitForResponse((response) => response.url().endsWith('/branch'));
+    release();
+    await resolved;
+    await expect.poll(() => state.views.size).toBe(3);
+    await page.waitForTimeout(750);
+    await expect(picker).toHaveValue(selected);
+  } finally {
+    release();
+  }
+});
+
 test('HELPUI07 switching sessions isolates late responses and retains the background task', async ({
   page,
   request,

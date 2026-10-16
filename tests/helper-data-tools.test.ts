@@ -172,6 +172,38 @@ test('conversation search recovers exact earlier dialogue with message roles and
   expect(read.nextOffset).toBe(text.indexOf('마지막 합의') + 6);
 });
 
+test('branched conversation keeps exact searchable dialogue independent of original task', async () => {
+  const f = fixture();
+  const workspace = new HelperWorkspace(f.store);
+  workspace.start(f.task.id, 'owner');
+  workspace.finish(f.task.id, 'owner', 1, 'completed', '분기한 고유 답변 원본', null);
+  const branch = workspace.branch(f.task.conversationId, 'seed-data-branch');
+  const seeded = helperHistory(f.store, branch.id);
+  expect(seeded.map((message) => message.text)).toContain('분기한 고유 답변 원본');
+  const next = workspace.enqueue(branch.id, 'seek-seed', '이전 문장을 검색해 주세요', {
+    ...f.task.snapshot,
+    scope: branch.scope,
+    history: seeded,
+  });
+  const invoke = (name: DataOperation['name'], args: Record<string, unknown>) =>
+    runDataProcess({ path: f.store.path, taskId: next.id, name, args }) as Promise<any>;
+  const result = await invoke('data.search', {
+    scope: 'conversation',
+    patterns: ['고유 답변'],
+  });
+  expect(result.items).toHaveLength(1);
+  const reference = result.items[0].ref;
+  expect(reference.id).toBe(seeded[1].id);
+  expect(result.items[0].text).toContain('분기한 고유 답변 원본');
+  const read = await invoke('data.read', { refs: [reference] });
+  expect(read.items[0].read.text).toBe('분기한 고유 답변 원본');
+  expect(read.items[0].read.metadata.role).toBe('assistant');
+  const impact = workspace.deletionImpact(f.task.conversationId);
+  workspace.delete(f.task.conversationId, impact.request);
+  const again = await invoke('data.search', { scope: 'conversation', patterns: ['고유 답변'] });
+  expect(again.items[0].ref.id).toBe(reference.id);
+});
+
 test('conversation retrieval follows effective request history without superseded or later requests', async () => {
   const f = fixture();
   const workspace = new HelperWorkspace(f.store);
