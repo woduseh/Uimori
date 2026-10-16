@@ -113,14 +113,24 @@ export type HelperEvent = {
   kind: string;
   data: unknown;
 };
-export type HelperResourceEdit = {
-  editSeq: number;
-  taskId: string;
+export type HelperResourceEditResource = {
   kind: import('./resource-editing.js').ResourceKind;
   id: string;
   revision: number;
   title: string;
+};
+export type HelperResourceEdit = HelperResourceEditResource & {
+  editSeq: number;
+  taskId: string;
+  /** A grouped receipt contains only changed resources; old single-resource events omit this. */
+  resources?: HelperResourceEditResource[];
   canUndo: boolean;
   reason?: string;
   undone?: boolean;
 };
+
+export function helperResourceEditResources(
+  edit: HelperResourceEdit
+): readonly HelperResourceEditResource[] {
+  return edit.resources?.length ? edit.resources : [edit];
+}

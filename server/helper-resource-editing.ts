@@ -3,12 +3,22 @@ import {
   editableResource,
   type ResourceKind,
   type ResourceModel,
+  type PromptEditModel,
 } from '../core/resource-editing.js';
+import {
+  reconcilePromptValues,
+  resolvePromptValues,
+  validateEditableRisuPrompt,
+} from '../core/risu-prompt.js';
 import type { Content } from '../core/product.js';
 import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
 import { readResource, saveResource } from './resource-service.js';
+import {
+  HelperResourcePatchError,
+  type HelperResourcePatchReason,
+} from './helper-resource-patch-error.js';
 import pathPolicy from './helper-resource-path-policy.json' with { type: 'json' };
 import protectedFields from './helper-native-protected-fields.json' with { type: 'json' };
 
@@ -19,6 +29,7 @@ const FORBIDDEN = new Set(protectedFields);
 type JsonObject = Record<string, unknown>;
 type Change = {
   path: string;
+  target?: string;
   op: 'set' | 'replaceText' | 'insert' | 'remove' | 'move';
   from?: string;
   value?: unknown;
@@ -162,7 +173,13 @@ function promptBlock(value: unknown, path: string): JsonObject | undefined {
     ),
   };
 }
-export function readHelperResource(store: Store, kind: ResourceKind, id: string, args: JsonObject) {
+export function readHelperResource(
+  store: Store,
+  kind: ResourceKind,
+  id: string,
+  args: JsonObject,
+  maximum = MAX_RESULT
+) {
   const paths = args.paths;
   if (paths !== undefined) {
     if (args.path !== undefined) throw new HttpError(400, 'path와 paths 중 하나만 지정해 주세요.');
@@ -175,26 +192,45 @@ export function readHelperResource(store: Store, kind: ResourceKind, id: string,
       throw new HttpError(400, '읽을 경로를 1개에서 16개까지 지정해 주세요.');
   }
   const saved = readResource(store, kind, id);
-  const model = editableResource(kind, saved);
-  const read = (selection: JsonObject, maximum = MAX_RESULT) =>
+  let model = editableResource(kind, saved);
+  if (args.version !== undefined && args.version !== 'current' && args.version !== 'previous')
+    throw new HttpError(400, '읽을 저장본을 확인해 주세요.');
+  const previous = args.version === 'previous';
+  if (previous) {
+    const row = store.db
+      .prepare('SELECT saved_revision,model FROM resource_undo WHERE kind=? AND id=?')
+      .get(kind, id);
+    if (!row) throw new HttpError(404, '직전 저장본이 없어요.');
+    if (row.saved_revision !== saved.revision)
+      throw new HttpError(409, '최근 저장 이후 자료가 변경됐어요.');
+    try {
+      const parsed: unknown = JSON.parse(String(row.model));
+      if (!object(parsed)) throw new Error('Invalid previous model');
+      model = parsed as ResourceModel;
+    } catch {
+      throw new HttpError(409, '직전 저장본을 읽을 수 없어요.');
+    }
+  }
+  const read = (selection: JsonObject, limit = maximum) =>
     readHelperModel(
       kind,
       id,
-      saved.revision,
-      'title' in saved ? saved.title : 'current',
+      previous ? null : saved.revision,
+      'title' in model ? String(model.title) : 'current',
       model,
       selection,
       undefined,
-      maximum
+      limit,
+      previous ? saved.revision : undefined
     );
   if (paths === undefined) return read(args);
   const items: unknown[] = [];
   // An individual page must also fit when enclosed by the batch response.
-  const maximum = MAX_RESULT - JSON.stringify({ items: [], nextIndex: null }).length;
+  const pageMaximum = maximum - JSON.stringify({ items: [], nextIndex: null }).length;
   for (const path of paths) {
     let item: unknown;
     try {
-      item = read({ ...args, path }, maximum);
+      item = read({ ...args, path }, pageMaximum);
     } catch (error) {
       if (!(error instanceof HttpError)) throw error;
       item = { path, error: error.message };
@@ -203,10 +239,10 @@ export function readHelperResource(store: Store, kind: ResourceKind, id: string,
       items: [...items, item],
       nextIndex: items.length + 1 < paths.length ? items.length + 1 : null,
     };
-    if (JSON.stringify(candidate).length > MAX_RESULT) break;
+    if (JSON.stringify(candidate).length > maximum) break;
     items.push(item);
   }
-  return bounded({ items, nextIndex: items.length < paths.length ? items.length : null });
+  return bounded({ items, nextIndex: items.length < paths.length ? items.length : null }, maximum);
 }
 
 /** Read the admitted editor model without replacing it with a later saved revision. */
@@ -231,9 +267,18 @@ function readHelperModel(
   model: ResourceModel,
   args: JsonObject,
   inputOrigin?: string,
-  maximum = MAX_RESULT
+  maximum = MAX_RESULT,
+  previousCurrentRevision?: number
 ) {
-  const base = { kind, id, revision, ...(inputOrigin ? { inputOrigin } : {}) };
+  const base = {
+    kind,
+    id,
+    revision,
+    ...(inputOrigin ? { inputOrigin } : {}),
+    ...(previousCurrentRevision === undefined
+      ? {}
+      : { version: 'previous', currentRevision: previousCurrentRevision }),
+  };
   const path = args.path === undefined ? undefined : text(args.path, 'path', MAX_PATH, true);
   if (path === undefined) {
     const source = kind === 'content' ? sourceFor(model as Content) : null;
@@ -339,6 +384,13 @@ function readHelperModel(
     const next = {
       name: key,
       ...descriptor(joined(path, key), item.value, item.exists),
+      ...(previousCurrentRevision === undefined &&
+      inputOrigin === undefined &&
+      Array.isArray(value) &&
+      listPath(segments) &&
+      object(item.value)
+        ? { target: joined(path, key) }
+        : {}),
       ...(kind === 'prompt-preset' && path === PRESET_TEMPLATE_PATH && Array.isArray(value)
         ? { block: promptBlock(item.value, joined(path, key)) }
         : {}),
@@ -419,6 +471,91 @@ function listPath(segments: string[]): 'lore' | 'terms' | 'prompt' | null {
     return 'lore';
   return null;
 }
+function patchFailure(
+  changeIndex: number,
+  change: unknown,
+  error: unknown,
+  reason: HelperResourcePatchReason = 'invalid_change',
+  matchCount?: number
+): never {
+  if (error instanceof HelperResourcePatchError) throw error;
+  const input = object(change) ? change : {};
+  throw new HelperResourcePatchError(
+    error instanceof HttpError ? error.statusCode : 400,
+    error instanceof Error ? error.message : '변경 내용을 확인해 주세요.',
+    {
+      changeIndex,
+      path: typeof input.path === 'string' ? input.path.slice(0, MAX_PATH) : null,
+      op: typeof input.op === 'string' ? input.op.slice(0, 32) : null,
+      reason,
+      ...(typeof input.target === 'string' ? { target: input.target.slice(0, MAX_PATH) } : {}),
+      ...(matchCount === undefined ? {} : { matchCount }),
+    }
+  );
+}
+function validationFailure(error: unknown): never {
+  throw new HelperResourcePatchError(
+    error instanceof HttpError ? error.statusCode : 400,
+    error instanceof Error ? error.message : '변경 내용을 확인해 주세요.',
+    { stage: 'validation', changeIndex: null, path: null, op: null, reason: 'invalid_change' }
+  );
+}
+type BoundTarget = { list: string[]; item: JsonObject };
+function bindTarget(model: ResourceModel, kind: ResourceKind, change: Change): BoundTarget | null {
+  if (change.target === undefined) return null;
+  if (
+    !['set', 'replaceText', 'remove'].includes(change.op) ||
+    (change.op === 'remove' && change.path !== '')
+  )
+    throw new HttpError(400, '대상 참조는 필드 수정 또는 항목 삭제에만 사용할 수 있어요.');
+  const segments = parts(change.target);
+  const list = segments.slice(0, -1);
+  const listKind = listPath(list);
+  if (
+    !listKind ||
+    (kind === 'prompt-preset' ? listKind !== 'prompt' : listKind === 'prompt') ||
+    !/^(0|[1-9]\d*)$/u.test(segments.at(-1)!)
+  )
+    throw new HttpError(400, '원본 목록 항목의 대상 경로가 필요해요.');
+  let target: ReturnType<typeof locate>;
+  try {
+    target = locate(model, segments);
+  } catch {
+    throw new HttpError(404, '원본 대상 항목이 존재하지 않아요.');
+  }
+  if (!target.exists || !object(target.value) || !Array.isArray(target.parent))
+    throw new HttpError(404, '원본 대상 항목이 존재하지 않아요.');
+  return { list, item: target.value };
+}
+function targetPath(model: ResourceModel, target: BoundTarget, relative: string): string {
+  let list: unknown;
+  try {
+    list = locate(model, target.list).value;
+  } catch {
+    throw new HttpError(409, '앞선 변경에서 대상 항목이 삭제되거나 교체됐어요.');
+  }
+  const index = Array.isArray(list) ? list.indexOf(target.item) : -1;
+  if (index < 0) throw new HttpError(409, '앞선 변경에서 대상 항목이 삭제되거나 교체됐어요.');
+  return [...target.list, String(index), ...parts(relative)].reduce(joined, '');
+}
+function textMatches(value: string, needle: string): { first: number; count: number } {
+  const first = value.indexOf(needle);
+  let count = 0;
+  for (let index = first; index >= 0; index = value.indexOf(needle, index + 1)) count++;
+  return { first, count };
+}
+function normalizedText(value: string): { text: string; offsets: number[] } {
+  let text = '';
+  const offsets = [0];
+  for (let index = 0; index < value.length; ) {
+    if (value[index] === '\r' && value[index + 1] === '\n') {
+      text += '\n';
+      index += 2;
+    } else text += value[index++]!;
+    offsets.push(index);
+  }
+  return { text, offsets };
+}
 export function patchHelperResource(
   store: Store,
   kind: ResourceKind,
@@ -438,147 +575,256 @@ export function patchHelperResource(
   if (kind === 'content' && !sourceFor(current as Content))
     throw new HttpError(400, 'native 원문이 없는 자료예요.');
   const changes = rawChanges as Change[];
-  const changedPaths: string[] = [];
-  for (const change of changes) {
+  // Bind before any mutation: duplicate or missing native IDs do not affect identity.
+  const targets = changes.map((change, changeIndex) => {
     if (
       !object(change) ||
       typeof change.path !== 'string' ||
       !['set', 'replaceText', 'insert', 'remove', 'move'].includes(change.op)
     )
-      throw new HttpError(400, '변경 형식을 확인해 주세요.');
-    const segments = parts(change.path);
-    const nativePath =
-      segments.length >= 4 &&
-      segments[0] === 'package' &&
-      segments[1] === 'nativeRisu' &&
-      ['card', 'module'].includes(segments[2]!);
-    const presetPath = pathPolicy.presetPaths.some((rule) =>
-      rule.endsWith('/') ? change.path.startsWith(rule) : change.path === rule
-    );
-    if (
-      (kind === 'content' ? !nativePath : !presetPath) ||
-      segments.some((part) => FORBIDDEN.has(part))
-    )
-      throw new HttpError(400, 'native 원문 필드만 수정할 수 있어요.');
-    if (
-      kind === 'content' &&
-      segments[2] === 'module' &&
-      !(current as Content).package.nativeRisu.module
-    )
-      throw new HttpError(400, '존재하는 모듈만 수정할 수 있어요.');
-    if (change.op === 'insert' || change.op === 'remove' || change.op === 'move') {
-      if (!/^(0|[1-9]\d*)$/u.test(segments.at(-1)!))
-        throw new HttpError(400, '목록 항목의 인덱스가 필요해요.');
-      const parentSegments = segments.slice(0, -1);
-      const list = listPath(parentSegments);
-      if (!list || (kind === 'prompt-preset' ? list !== 'prompt' : list === 'prompt'))
-        throw new HttpError(400, '로어, 번역 표기 또는 프롬프트 블록 목록만 수정할 수 있어요.');
-      if (change.op === 'move' && list !== 'prompt')
-        throw new HttpError(400, '프롬프트 블록만 이동할 수 있어요.');
-      if (change.op === 'insert' && list === 'lore' && parentSegments[2] === 'card') {
-        const card = (model as Content).package.nativeRisu.card;
-        if (card.character_book == null) card.character_book = { entries: [] };
+      patchFailure(changeIndex, change, new HttpError(400, '변경 형식을 확인해 주세요.'));
+    try {
+      parts(change.path);
+    } catch (error) {
+      patchFailure(changeIndex, change, error);
+    }
+    try {
+      return bindTarget(model, kind, change);
+    } catch (error) {
+      return patchFailure(
+        changeIndex,
+        change,
+        error,
+        error instanceof HttpError && error.statusCode === 404 ? 'target_missing' : 'invalid_target'
+      );
+    }
+  });
+  const changedPaths: string[] = [];
+  const matches: { changeIndex: number; path: string; normalization: 'crlf-lf' }[] = [];
+  const explicitValues = new Map<string, number>();
+  for (const [changeIndex, input] of changes.entries()) {
+    let path = input.path;
+    const bound = targets[changeIndex];
+    if (bound) {
+      try {
+        path = targetPath(model, bound, input.path);
+      } catch (error) {
+        patchFailure(changeIndex, input, error, 'target_removed');
       }
-      let parent = locate(model, parentSegments);
-      if (!parent.exists && change.op === 'insert' && list === 'lore') {
-        if (parentSegments[2] === 'module') {
-          (parent.parent as JsonObject).lorebook = [];
-        } else {
+    }
+    const change = { ...input, path };
+    try {
+      const segments = parts(change.path);
+      if (kind === 'prompt-preset' && segments[0] === 'values' && segments[1])
+        explicitValues.set(segments[1], changeIndex);
+      const nativePath =
+        segments.length >= 4 &&
+        segments[0] === 'package' &&
+        segments[1] === 'nativeRisu' &&
+        ['card', 'module'].includes(segments[2]!);
+      const presetPath = pathPolicy.presetPaths.some((rule) =>
+        rule.endsWith('/') ? change.path.startsWith(rule) : change.path === rule
+      );
+      if (
+        (kind === 'content' ? !nativePath : !presetPath) ||
+        segments.some((part) => FORBIDDEN.has(part))
+      )
+        throw new HttpError(400, 'native 원문 필드만 수정할 수 있어요.');
+      if (
+        kind === 'content' &&
+        segments[2] === 'module' &&
+        !(current as Content).package.nativeRisu.module
+      )
+        throw new HttpError(400, '존재하는 모듈만 수정할 수 있어요.');
+      if (change.op === 'insert' || change.op === 'remove' || change.op === 'move') {
+        if (!/^(0|[1-9]\d*)$/u.test(segments.at(-1)!))
+          throw new HttpError(400, '목록 항목의 인덱스가 필요해요.');
+        const parentSegments = segments.slice(0, -1);
+        const list = listPath(parentSegments);
+        if (!list || (kind === 'prompt-preset' ? list !== 'prompt' : list === 'prompt'))
+          throw new HttpError(400, '로어, 번역 표기 또는 프롬프트 블록 목록만 수정할 수 있어요.');
+        if (change.op === 'move' && list !== 'prompt')
+          throw new HttpError(400, '프롬프트 블록만 이동할 수 있어요.');
+        if (change.op === 'insert' && list === 'lore' && parentSegments[2] === 'card') {
           const card = (model as Content).package.nativeRisu.card;
-          (card.character_book as JsonObject).entries = [];
+          if (card.character_book == null) card.character_book = { entries: [] };
         }
-        parent = locate(model, parentSegments);
-      }
-      if (!parent.exists || !Array.isArray(parent.value))
-        throw new HttpError(400, '수정할 목록이 없어요.');
-      const index = Number(segments.at(-1));
-      if (change.op === 'move') {
-        const from = parts(change.from);
+        let parent = locate(model, parentSegments);
+        if (!parent.exists && change.op === 'insert' && list === 'lore') {
+          if (parentSegments[2] === 'module') {
+            (parent.parent as JsonObject).lorebook = [];
+          } else {
+            const card = (model as Content).package.nativeRisu.card;
+            (card.character_book as JsonObject).entries = [];
+          }
+          parent = locate(model, parentSegments);
+        }
+        if (!parent.exists || !Array.isArray(parent.value))
+          throw new HttpError(400, '수정할 목록이 없어요.');
+        const index = Number(segments.at(-1));
+        if (change.op === 'move') {
+          const from = parts(change.from);
+          if (
+            from.length !== segments.length ||
+            from.slice(0, -1).some((part, offset) => part !== parentSegments[offset]) ||
+            !/^(0|[1-9]\d*)$/u.test(from.at(-1)!)
+          )
+            throw new HttpError(400, '같은 프롬프트 목록의 출발 인덱스가 필요해요.');
+          const sourceIndex = Number(from.at(-1));
+          // JSON Patch semantics: the destination index is evaluated after removal.
+          if (sourceIndex >= parent.value.length || index >= parent.value.length)
+            throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
+          if (sourceIndex === index) continue;
+          const [moved] = parent.value.splice(sourceIndex, 1);
+          parent.value.splice(index, 0, moved);
+          changedPaths.push(change.from!, change.path);
+          continue;
+        }
         if (
-          from.length !== segments.length ||
-          from.slice(0, -1).some((part, offset) => part !== parentSegments[offset]) ||
-          !/^(0|[1-9]\d*)$/u.test(from.at(-1)!)
+          index > parent.value.length ||
+          (change.op === 'remove' && index === parent.value.length)
         )
-          throw new HttpError(400, '같은 프롬프트 목록의 출발 인덱스가 필요해요.');
-        const sourceIndex = Number(from.at(-1));
-        // JSON Patch semantics: the destination index is evaluated after removal.
-        if (sourceIndex >= parent.value.length || index >= parent.value.length)
           throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
-        if (sourceIndex === index) continue;
-        const [moved] = parent.value.splice(sourceIndex, 1);
-        parent.value.splice(index, 0, moved);
-        changedPaths.push(change.from!, change.path);
+        if (change.op === 'insert') {
+          if (!object(change.value)) throw new HttpError(400, '새 항목 객체가 필요해요.');
+          if (list === 'lore' && typeof change.value.content !== 'string')
+            throw new HttpError(400, '로어 항목의 내용을 확인해 주세요.');
+          parent.value.splice(index, 0, structuredClone(change.value));
+        } else parent.value.splice(index, 1);
+        changedPaths.push(change.path);
         continue;
       }
-      if (index > parent.value.length || (change.op === 'remove' && index === parent.value.length))
-        throw new HttpError(400, '목록 인덱스를 확인해 주세요.');
-      if (change.op === 'insert') {
-        if (!object(change.value)) throw new HttpError(400, '새 항목 객체가 필요해요.');
-        if (list === 'lore' && typeof change.value.content !== 'string')
-          throw new HttpError(400, '로어 항목의 내용을 확인해 주세요.');
-        parent.value.splice(index, 0, structuredClone(change.value));
-      } else parent.value.splice(index, 1);
-      changedPaths.push(change.path);
-      continue;
-    }
-    if (kind === 'content' && change.op === 'set' && guidePath(segments)) {
-      if (!object(change.value)) throw new HttpError(400, '번역 지침 객체가 필요해요.');
-      const document =
-        segments[2] === 'card'
-          ? (model as Content).package.nativeRisu.card
-          : (model as Content).package.nativeRisu.module!;
-      if (document.extensions != null && !object(document.extensions))
-        throw new HttpError(400, '기존 확장 필드를 확인해 주세요.');
-      const extensions = object(document.extensions) ? document.extensions : {};
-      if (extensions.uimori != null && !object(extensions.uimori))
-        throw new HttpError(400, '기존 Uimori 확장 필드를 확인해 주세요.');
-      const uimori = object(extensions.uimori) ? extensions.uimori : {};
-      if (isDeepStrictEqual(uimori.translationGuide, change.value)) continue;
-      document.extensions = {
-        ...extensions,
-        uimori: { ...uimori, translationGuide: structuredClone(change.value) },
-      };
-      changedPaths.push(change.path);
-      continue;
-    }
-    const target = locate(model, segments);
-    if (!target.exists && Array.isArray(target.parent))
-      throw new HttpError(400, '새 배열 항목은 만들 수 없어요.');
-    if (change.op === 'set') {
-      if (
-        !Object.hasOwn(change, 'value') ||
-        !allowedValue(change.value) ||
-        (target.exists && !allowedValue(target.value))
-      )
-        throw new HttpError(400, '기존의 단순 값만 수정할 수 있어요.');
-      if (!isDeepStrictEqual(target.value, change.value)) {
-        (target.parent as JsonObject)[segments.at(-1)!] = structuredClone(change.value);
+      if (kind === 'content' && change.op === 'set' && guidePath(segments)) {
+        if (!object(change.value)) throw new HttpError(400, '번역 지침 객체가 필요해요.');
+        const document =
+          segments[2] === 'card'
+            ? (model as Content).package.nativeRisu.card
+            : (model as Content).package.nativeRisu.module!;
+        if (document.extensions != null && !object(document.extensions))
+          throw new HttpError(400, '기존 확장 필드를 확인해 주세요.');
+        const extensions = object(document.extensions) ? document.extensions : {};
+        if (extensions.uimori != null && !object(extensions.uimori))
+          throw new HttpError(400, '기존 Uimori 확장 필드를 확인해 주세요.');
+        const uimori = object(extensions.uimori) ? extensions.uimori : {};
+        if (isDeepStrictEqual(uimori.translationGuide, change.value)) continue;
+        document.extensions = {
+          ...extensions,
+          uimori: { ...uimori, translationGuide: structuredClone(change.value) },
+        };
         changedPaths.push(change.path);
+        continue;
       }
-    } else {
-      if (
-        !target.exists ||
-        typeof target.value !== 'string' ||
-        typeof change.oldText !== 'string' ||
-        !change.oldText ||
-        typeof change.newText !== 'string'
+      const target = locate(model, segments);
+      if (!target.exists && Array.isArray(target.parent))
+        throw new HttpError(400, '새 배열 항목은 만들 수 없어요.');
+      if (change.op === 'set') {
+        if (
+          !Object.hasOwn(change, 'value') ||
+          !allowedValue(change.value) ||
+          (target.exists && !allowedValue(target.value))
+        )
+          throw new HttpError(400, '기존의 단순 값만 수정할 수 있어요.');
+        if (!isDeepStrictEqual(target.value, change.value)) {
+          (target.parent as JsonObject)[segments.at(-1)!] = structuredClone(change.value);
+          changedPaths.push(change.path);
+        }
+      } else {
+        if (
+          !target.exists ||
+          typeof target.value !== 'string' ||
+          typeof change.oldText !== 'string' ||
+          !change.oldText ||
+          typeof change.newText !== 'string'
+        )
+          throw new HttpError(400, '문자열과 찾을 문구가 필요해요.');
+        let { first, count } = textMatches(target.value, change.oldText);
+        let end = first + change.oldText.length;
+        if (count === 0 && change.oldText.includes('\n')) {
+          const normalized = normalizedText(target.value);
+          const needle = change.oldText.replaceAll('\r\n', '\n');
+          const equivalent = textMatches(normalized.text, needle);
+          count = equivalent.count;
+          if (count === 1) {
+            first = normalized.offsets[equivalent.first]!;
+            end = normalized.offsets[equivalent.first + needle.length]!;
+            matches.push({ changeIndex, path: change.path, normalization: 'crlf-lf' });
+          }
+        }
+        if (count !== 1)
+          patchFailure(
+            changeIndex,
+            input,
+            new HttpError(409, '문구가 정확히 한 번 나타나야 해요.'),
+            count === 0 ? 'text_not_found' : 'text_ambiguous',
+            count
+          );
+        const next = target.value.slice(0, first) + change.newText + target.value.slice(end);
+        if (next !== target.value) {
+          (target.parent as JsonObject)[segments.at(-1)!] = next;
+          changedPaths.push(change.path);
+        }
+      }
+    } catch (error) {
+      patchFailure(changeIndex, input, error);
+    }
+  }
+  let reconciledValues: { removedKeys: string[]; resetKeys: string[] } | undefined;
+  if (kind === 'prompt-preset') {
+    const preset = model as PromptEditModel;
+    const oldPreset = original as PromptEditModel;
+    const values = preset.values ?? {};
+    const programChanged = changes.some((change) =>
+      (change.target ?? change.path).startsWith('/program/')
+    );
+    if (programChanged) {
+      try {
+        validateEditableRisuPrompt(preset.program);
+        resolvePromptValues(preset.program);
+      } catch (error) {
+        validationFailure(error);
+      }
+    }
+    for (const [key, changeIndex] of explicitValues) {
+      try {
+        resolvePromptValues(preset.program, { [key]: values[key]! });
+      } catch (error) {
+        patchFailure(changeIndex, changes[changeIndex], error, 'invalid_value');
+      }
+    }
+    if (
+      !isDeepStrictEqual(
+        preset.program.nativeRisuPreset.preset.customPromptTemplateToggle,
+        oldPreset.program.nativeRisuPreset.preset.customPromptTemplateToggle
       )
-        throw new HttpError(400, '문자열과 찾을 문구가 필요해요.');
-      const first = target.value.indexOf(change.oldText);
-      if (first < 0 || target.value.indexOf(change.oldText, first + 1) >= 0)
-        throw new HttpError(409, '문구가 정확히 한 번 나타나야 해요.');
-      const next =
-        target.value.slice(0, first) +
-        change.newText +
-        target.value.slice(first + change.oldText.length);
-      if (next !== target.value) {
-        (target.parent as JsonObject)[segments.at(-1)!] = next;
-        changedPaths.push(change.path);
-      }
+    ) {
+      const inherited = Object.fromEntries(
+        Object.entries(values).filter(([key]) => !explicitValues.has(key))
+      );
+      const reconciled = reconcilePromptValues(preset.program, inherited);
+      const removedKeys = reconciled.resetKeys.filter(
+        (key) => !Object.hasOwn(reconciled.values, key)
+      );
+      const resetKeys = reconciled.resetKeys.filter((key) => Object.hasOwn(reconciled.values, key));
+      for (const key of explicitValues.keys()) reconciled.values[key] = values[key]!;
+      if (!isDeepStrictEqual(preset.values, reconciled.values)) changedPaths.push('/values');
+      preset.values = reconciled.values;
+      if (removedKeys.length || resetKeys.length) reconciledValues = { removedKeys, resetKeys };
     }
   }
   if (!changedPaths.length || isDeepStrictEqual(original, model))
-    return { id, revision, changedPaths: [] };
-  const saved = saveResource(store, { kind, id, expectedRevision: revision, model }).saved;
-  return { id, revision: saved.revision, changedPaths: [...new Set(changedPaths)] };
+    return { id, revision, changedPaths: [], ...(matches.length ? { matches } : {}) };
+  let saved: ReturnType<typeof saveResource>['saved'];
+  try {
+    saved = saveResource(store, { kind, id, expectedRevision: revision, model }).saved;
+  } catch (error) {
+    if (error instanceof HttpError && error.statusCode === 400) validationFailure(error);
+    throw error;
+  }
+  return {
+    id,
+    revision: saved.revision,
+    changedPaths: [...new Set(changedPaths)],
+    ...(matches.length ? { matches } : {}),
+    ...(reconciledValues ? { reconciledValues } : {}),
+  };
 }

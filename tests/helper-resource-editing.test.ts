@@ -2,9 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { Content } from '../core/product.js';
+import type { Content, PromptPreset } from '../core/product.js';
 import { editableResource } from '../core/resource-editing.js';
 import { readHelperEditor } from '../server/helper-resource-editing.js';
+import { HelperResourcePatchError } from '../server/helper-resource-patch-error.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { Store } from '../server/store.js';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -70,7 +71,7 @@ function presetFixture(blocks: Record<string, unknown>[]) {
       },
     },
     values: { tone: 'warm' },
-  });
+  }) as PromptPreset;
   return { store, preset, target: { kind: 'prompt-preset', id: preset.id } };
 }
 
@@ -897,4 +898,362 @@ test('first lore insertion creates the missing card book without replacing nativ
   expect((saved.package.nativeRisu.card.character_book as any).entries).toHaveLength(1);
   expect(saved.package.nativeRisu.card.extensions).toEqual({ vendor: { keep: true } });
   expect(saved.package.lore[0]?.text).toBe('First fact.');
+});
+
+test('original item targets survive insertion, deletion and movement without relying on native IDs', () => {
+  const blocks = [
+    { type: 'plain', text: 'Core' },
+    { id: 'duplicate', type: 'plain', text: 'First duplicate' },
+    { id: 'duplicate', type: 'plain', text: 'Second duplicate' },
+    { type: 'plain', text: 'Seal' },
+  ];
+  const { store, preset, target } = presetFixture(blocks);
+  const outline = call(store, 'resource.read', { ...target, path: presetBlocksPath });
+  expect(outline.items.map((item: any) => item.target)).toEqual(
+    blocks.map((_, index) => `${presetBlocksPath}/${index}`)
+  );
+  const editor = readHelperEditor(
+    {
+      kind: 'prompt-preset',
+      targetId: preset.id,
+      revision: preset.revision,
+      title: preset.title,
+      source: 'saved',
+      model: editableResource('prompt-preset', preset),
+    },
+    { path: presetBlocksPath }
+  ) as any;
+  expect(editor.items[0]).not.toHaveProperty('target');
+  const inserted = { type: 'plain', text: 'Inserted' };
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      { op: 'insert', path: `${presetBlocksPath}/0`, value: inserted },
+      { op: 'remove', target: outline.items[1].target, path: '' },
+      { op: 'move', from: `${presetBlocksPath}/2`, path: `${presetBlocksPath}/0` },
+      { op: 'set', target: outline.items[0].target, path: '/text', value: 'Edited core' },
+      {
+        op: 'replaceText',
+        target: outline.items[2].target,
+        path: '/text',
+        oldText: 'Second',
+        newText: 'Edited',
+      },
+      { op: 'remove', target: outline.items[3].target, path: '' },
+    ],
+  });
+  const saved = store.product.get<any>('prompt-preset', preset.id);
+  expect(saved.revision).toBe(preset.revision + 1);
+  expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual([
+    { ...blocks[2], text: 'Edited duplicate' },
+    inserted,
+    { ...blocks[0], text: 'Edited core' },
+  ]);
+  call(store, 'resource.undo', { ...target, expectedRevision: result.revision });
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
+    ...preset,
+    revision: preset.revision + 2,
+  });
+});
+
+test('missing original targets and previously removed targets reject the entire proposal', () => {
+  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Original' }]);
+  call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [{ op: 'set', path: '/title', value: 'Saved title' }],
+  });
+  const saved = store.product.get<any>('prompt-preset', preset.id);
+  const undo = store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id);
+  for (const [changes, expected] of [
+    [
+      [
+        { op: 'remove', path: `${presetBlocksPath}/0` },
+        { op: 'set', target: `${presetBlocksPath}/0`, path: '/text', value: 'Wrong' },
+      ],
+      { changeIndex: 1, reason: 'target_removed', target: `${presetBlocksPath}/0` },
+    ],
+    [
+      [
+        { op: 'insert', path: `${presetBlocksPath}/1`, value: { type: 'plain', text: 'New' } },
+        { op: 'set', target: `${presetBlocksPath}/1`, path: '/text', value: 'Wrong' },
+      ],
+      { changeIndex: 1, reason: 'target_missing', target: `${presetBlocksPath}/1` },
+    ],
+    [
+      [{ op: 'set', target: '/values/tone', path: '', value: 'Wrong' }],
+      { changeIndex: 0, reason: 'invalid_target', target: '/values/tone' },
+    ],
+  ] as const) {
+    let caught: unknown;
+    try {
+      call(store, 'resource.patch', { ...target, expectedRevision: saved.revision, changes });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(HelperResourcePatchError);
+    expect(caught).toMatchObject({ details: { ...expected, op: 'set' } });
+    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(saved);
+    expect(store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)).toEqual(undo);
+  }
+});
+
+test('replaceText prefers exact matches and maps unique CRLF equivalents to original byte slices', () => {
+  const { store, preset, target } = presetFixture([
+    { type: 'plain', text: 'same\nline / same\r\nline' },
+    { type: 'plain', text: '앞\r\n😀 A\r\nB\r\nC 뒤\n끝' },
+    { type: 'plain', text: 'Start\none\ntwo\nend' },
+  ]);
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      {
+        op: 'replaceText',
+        path: `${presetBlocksPath}/0/text`,
+        oldText: 'same\nline',
+        newText: 'exact',
+      },
+      {
+        op: 'replaceText',
+        path: `${presetBlocksPath}/1/text`,
+        oldText: 'A\nB\nC',
+        newText: 'X\nY\r\nZ',
+      },
+      {
+        op: 'replaceText',
+        path: `${presetBlocksPath}/2/text`,
+        oldText: 'one\r\ntwo',
+        newText: 'Replacement\r\nbytes',
+      },
+    ],
+  });
+  expect(
+    store.product.get<any>('prompt-preset', preset.id).program.nativeRisuPreset.preset
+      .promptTemplate
+  ).toEqual([
+    { type: 'plain', text: 'exact / same\r\nline' },
+    { type: 'plain', text: '앞\r\n😀 X\nY\r\nZ 뒤\n끝' },
+    { type: 'plain', text: 'Start\nReplacement\r\nbytes\nend' },
+  ]);
+  expect(result.matches).toEqual([
+    { changeIndex: 1, path: `${presetBlocksPath}/1/text`, normalization: 'crlf-lf' },
+    { changeIndex: 2, path: `${presetBlocksPath}/2/text`, normalization: 'crlf-lf' },
+  ]);
+});
+
+test('whole-model validation does not blame an unrelated last change', () => {
+  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep' }]);
+  let caught: unknown;
+  try {
+    call(store, 'resource.patch', {
+      ...target,
+      expectedRevision: preset.revision,
+      changes: [
+        { op: 'set', path: '/program/nativeRisuPreset/preset/unsupported', value: true },
+        { op: 'set', path: `${presetBlocksPath}/0/text`, value: 'Valid text' },
+      ],
+    });
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(HelperResourcePatchError);
+  expect(caught).toMatchObject({
+    details: {
+      stage: 'validation',
+      changeIndex: null,
+      path: null,
+      op: null,
+      reason: 'invalid_change',
+    },
+  });
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+  expect(store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)).toBeUndefined();
+});
+
+test.each([
+  ['A\r\nB\nC / A\nB\r\nC', 'A\r\nB\r\nC', 'text_ambiguous', 2],
+  ['aaaa', 'aa', 'text_ambiguous', 3],
+  ['A\r\nB', 'A\nC', 'text_not_found', 0],
+] as const)(
+  'failed text match reports its change and count without saving: %s',
+  (body, oldText, reason, matchCount) => {
+    const { store, preset, target } = presetFixture([{ type: 'plain', text: body }]);
+    let caught: unknown;
+    try {
+      call(store, 'resource.patch', {
+        ...target,
+        expectedRevision: preset.revision,
+        changes: [
+          { op: 'set', path: '/title', value: 'Must roll back' },
+          { op: 'replaceText', path: `${presetBlocksPath}/0/text`, oldText, newText: 'Wrong' },
+        ],
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(HelperResourcePatchError);
+    expect(caught).toMatchObject({
+      statusCode: 409,
+      details: {
+        changeIndex: 1,
+        path: `${presetBlocksPath}/0/text`,
+        op: 'replaceText',
+        reason,
+        matchCount,
+      },
+    });
+    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+    expect(
+      store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)
+    ).toBeUndefined();
+  }
+);
+
+test.each([
+  ['', {}, { removedKeys: ['tone'], resetKeys: [] }],
+  ['mood=Mood=text', { mood: '' }, { removedKeys: ['tone'], resetKeys: [] }],
+  ['tone=Tone=select=Quiet,Loud', { tone: '0' }, { removedKeys: [], resetKeys: ['tone'] }],
+  ['tone=Renamed label=text\nmode=Mode', { tone: 'warm', mode: '0' }, undefined],
+] as const)(
+  'toggle changes reconcile only inherited values: %s',
+  (declaration, values, metadata) => {
+    const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep' }]);
+    const result = call(store, 'resource.patch', {
+      ...target,
+      expectedRevision: preset.revision,
+      changes: [
+        {
+          op: 'set',
+          path: '/program/nativeRisuPreset/preset/customPromptTemplateToggle',
+          value: declaration,
+        },
+      ],
+    });
+    const saved = store.product.get<any>('prompt-preset', preset.id);
+    expect(saved.values).toEqual(values);
+    expect(saved.program.nativeRisuPreset.preset.promptTemplate).toEqual(
+      preset.program.nativeRisuPreset.preset.promptTemplate
+    );
+    expect(result.reconciledValues).toEqual(metadata);
+    expect(saved.revision).toBe(preset.revision + 1);
+    call(store, 'resource.undo', { ...target, expectedRevision: saved.revision });
+    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual({
+      ...preset,
+      revision: preset.revision + 2,
+    });
+  }
+);
+
+test.each(['', 'tone=Tone=select=Quiet,Loud'])(
+  'explicit invalid values cannot be silently removed or reset: %s',
+  (declaration) => {
+    const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep' }]);
+    let caught: unknown;
+    try {
+      call(store, 'resource.patch', {
+        ...target,
+        expectedRevision: preset.revision,
+        changes: [
+          { op: 'set', path: '/values/tone', value: 'warm' },
+          {
+            op: 'set',
+            path: '/program/nativeRisuPreset/preset/customPromptTemplateToggle',
+            value: declaration,
+          },
+        ],
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toMatchObject({
+      details: { changeIndex: 0, path: '/values/tone', op: 'set', reason: 'invalid_value' },
+    });
+    expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(preset);
+    expect(
+      store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)
+    ).toBeUndefined();
+  }
+);
+
+test('new explicit values use final declarations and reverting a declaration remains a no-op', () => {
+  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'Keep' }]);
+  const path = '/program/nativeRisuPreset/preset/customPromptTemplateToggle';
+  expect(
+    call(store, 'resource.patch', {
+      ...target,
+      expectedRevision: preset.revision,
+      changes: [
+        { op: 'set', path, value: '' },
+        { op: 'set', path, value: 'tone=Tone=text' },
+      ],
+    })
+  ).toEqual({ id: preset.id, revision: preset.revision, changedPaths: [] });
+  const result = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      { op: 'set', path: '/values/mood', value: '1' },
+      { op: 'set', path, value: 'mood=Mood=select=Quiet,Loud' },
+    ],
+  });
+  expect(store.product.get<any>('prompt-preset', preset.id).values).toEqual({ mood: '1' });
+  expect(result.reconciledValues).toEqual({ removedKeys: ['tone'], resetKeys: [] });
+});
+
+test('previous reads expose the current undo slot without changing saved state or advertising patch targets', () => {
+  const { store, preset, target } = presetFixture([{ type: 'plain', text: 'First' }]);
+  expect(() => call(store, 'resource.read', { ...target, version: 'previous' })).toThrow(
+    '직전 저장본이 없어요'
+  );
+  const path = `${presetBlocksPath}/0/text`;
+  const second = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [{ op: 'set', path, value: 'Second' }],
+  });
+  const saved = store.product.get<any>('prompt-preset', preset.id);
+  const undo = store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id);
+  const previous = call(store, 'resource.read', { ...target, version: 'previous', path });
+  expect(previous).toMatchObject({
+    version: 'previous',
+    revision: null,
+    currentRevision: second.revision,
+    text: 'First',
+  });
+  const outline = call(store, 'resource.read', {
+    ...target,
+    version: 'previous',
+    path: presetBlocksPath,
+  });
+  expect(outline.items[0]).not.toHaveProperty('target');
+  expect(store.product.get<any>('prompt-preset', preset.id)).toEqual(saved);
+  expect(store.db.prepare('SELECT * FROM resource_undo WHERE id=?').get(preset.id)).toEqual(undo);
+  const third = call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: second.revision,
+    changes: [{ op: 'set', path, value: 'Third' }],
+  });
+  expect(
+    call(store, 'resource.read', { ...target, version: 'previous', paths: [path] }).items[0]
+  ).toMatchObject({
+    version: 'previous',
+    currentRevision: third.revision,
+    revision: null,
+    text: 'Second',
+  });
+  store.db
+    .prepare('UPDATE resource_undo SET saved_revision=? WHERE id=?')
+    .run(second.revision, preset.id);
+  expect(() => call(store, 'resource.read', { ...target, version: 'previous', path })).toThrow(
+    '최근 저장 이후'
+  );
+  store.db
+    .prepare('UPDATE resource_undo SET saved_revision=?,model=? WHERE id=?')
+    .run(third.revision, '{broken', preset.id);
+  expect(() => call(store, 'resource.read', { ...target, version: 'previous', path })).toThrow(
+    '직전 저장본을 읽을 수 없어요'
+  );
+  expect(call(store, 'resource.read', { ...target, path }).text).toBe('Third');
 });

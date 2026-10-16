@@ -185,7 +185,8 @@ async function fixture(options: { vertex?: boolean; fixed?: boolean; reviewOnly?
     },
   };
   vi.spyOn(resourceTools, 'invokeResourceTool').mockImplementation((_store, name, args) => {
-    if (name === 'resource.read') return structuredClone(f.readValue);
+    if (name === 'resource.read' || name === 'resource.readMany')
+      return structuredClone(f.readValue);
     // Match resource.save's revision check; do not invent a model-owned idempotency API.
     const current = store.product.content(
       { ...fixtureBotInput('Saved exactly once'), expectedRevision: args.expectedRevision },
@@ -759,70 +760,178 @@ test('completed read references retain returned ranges and revisions while allow
   expect(task.snapshot.context).toEqual({ activeRevision: 0, checkpoint: null });
 });
 
-test('forced compaction retains exact small scoped evidence and requested app schemas', async () => {
+test.each(['resource.read', 'resource.readMany'] as const)(
+  'forced compaction retains exact small %s evidence and requested app schemas',
+  async (readName) => {
+    const f = await fixture();
+    const compactionSource = Array.from({ length: 1_400 }, (_, index) =>
+      index.toString(36).padStart(4, '0')
+    ).join(' ');
+    const library = f.store.product.content(
+      fixtureBotInput('Read material', compactionSource)
+    ) as Content;
+    const exactSource = 'Exact small source name 🌱';
+    const selection = {
+      kind: 'content',
+      id: f.saved.id,
+      path: '/package/nativeRisu/card/name',
+    };
+    const exactField = {
+      kind: 'content',
+      id: f.saved.id,
+      revision: 1,
+      path: '/package/nativeRisu/card/name',
+      exists: true,
+      type: 'string',
+      length: exactSource.length,
+      text: exactSource,
+      textOffset: 0,
+      nextOffset: null,
+    };
+    f.readValue =
+      readName === 'resource.readMany'
+        ? { items: [{ requestIndex: 0, result: exactField }], nextIndex: null }
+        : exactField;
+    let helperCalls = 0;
+    const log = script(f, (request) => {
+      if (request.role === 'context') {
+        const summaryInput = String((request.input.source as { part: string }).part);
+        expect(summaryInput).toContain('schemasRetained');
+        expect(summaryInput).not.toContain('inputSchema');
+        expect(summaryInput).toContain(exactSource);
+        return summarized();
+      }
+      if (++helperCalls === 1)
+        return tools(
+          tool('material', 'data.search', {
+            scope: 'library',
+            ids: [library.id],
+            patterns: ['0'],
+            context: 1200,
+            limit: 50,
+          }),
+          tool('schema', 'app.tools', { names: [readName, 'resource.patch'] }),
+          tool(
+            'field',
+            readName,
+            readName === 'resource.readMany' ? { items: [selection] } : selection
+          )
+        );
+      const refs = continuation(request)?.completedReads ?? [];
+      expect(JSON.stringify(request.input)).not.toContain(compactionSource);
+      expect(refs).toContainEqual(
+        expect.objectContaining({
+          name: readName,
+          returned: f.readValue,
+        })
+      );
+      const schema = refs.find((item) => item.name === 'app.tools')?.returned as {
+        tools: { name: string }[];
+      };
+      expect(schema.tools.map((item) => item.name)).toEqual([readName, 'resource.patch']);
+      expect(JSON.stringify(schema).length).toBeLessThan(8_000);
+      return structuredClone(success);
+    });
+    const task = await f.run();
+    if (task.status !== 'completed') throw new Error(task.error ?? 'helper failed');
+    expect(task.status, task.error ?? '').toBe('completed');
+    expect(log.requests.map((request) => request.role)).toEqual(['helper', 'context', 'helper']);
+    expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true]);
+  }
+);
+
+test('forced compaction retains large batch identities and continuation without body text', async () => {
   const f = await fixture();
-  const compactionSource = Array.from({ length: 1_400 }, (_, index) =>
-    index.toString(36).padStart(4, '0')
-  ).join(' ');
-  const library = f.store.product.content(
-    fixtureBotInput('Read material', compactionSource)
-  ) as Content;
-  const exactSource = 'Exact small source name 🌱';
-  f.readValue = {
+  const current = {
     kind: 'content',
     id: f.saved.id,
     revision: 1,
-    path: '/package/nativeRisu/card/name',
+    path: '/package/nativeRisu/card/description',
     exists: true,
     type: 'string',
-    length: exactSource.length,
-    text: exactSource,
-    textOffset: 0,
-    nextOffset: null,
+    length: 20_000,
+    textOffset: 120,
+    nextOffset: 9_120,
   };
+  const previous = {
+    kind: 'prompt-preset',
+    id: 'previous-preset',
+    revision: null,
+    version: 'previous',
+    currentRevision: 7,
+    path: '/program/nativeRisuPreset/preset/promptTemplate/0/text',
+    exists: true,
+    type: 'string',
+    length: 200,
+    textOffset: 10,
+    nextOffset: 30,
+  };
+  const array = {
+    kind: 'prompt-preset',
+    id: 'current-preset',
+    revision: 3,
+    path: '/program/nativeRisuPreset/preset/promptTemplate',
+    exists: true,
+    type: 'array',
+    total: 2,
+    offset: 0,
+    nextOffset: 1,
+    items: [
+      {
+        path: '/program/nativeRisuPreset/preset/promptTemplate/0',
+        target: '/program/nativeRisuPreset/preset/promptTemplate/0',
+        exists: true,
+        type: 'object',
+      },
+    ],
+  };
+  const missing = { requestIndex: 3, error: '자료를 찾을 수 없어요.', status: 404 };
+  const body = 'LARGE_BATCH_BODY_CANARY '.repeat(400).slice(0, 9_000);
+  f.readValue = {
+    items: [
+      { requestIndex: 0, result: { ...current, text: body } },
+      { requestIndex: 1, result: { ...previous, text: 'PREVIOUS_BODY_CANARY' } },
+      { requestIndex: 2, result: array },
+      missing,
+    ],
+    nextIndex: null,
+  };
+  expect(JSON.stringify(f.readValue).length).toBeGreaterThan(8_000);
   let helperCalls = 0;
   const log = script(f, (request) => {
-    if (request.role === 'context') {
-      const summaryInput = String((request.input.source as { part: string }).part);
-      expect(summaryInput).toContain('schemasRetained');
-      expect(summaryInput).not.toContain('inputSchema');
-      expect(summaryInput).toContain(exactSource);
-      return summarized();
-    }
+    if (request.role === 'context') return summarized();
     if (++helperCalls === 1)
       return tools(
-        tool('material', 'data.search', {
-          scope: 'library',
-          ids: [library.id],
-          patterns: ['0'],
-          context: 1200,
-          limit: 50,
-        }),
-        tool('schema', 'app.tools', { names: ['resource.read', 'resource.patch'] }),
-        tool('field', 'resource.read', {
-          kind: 'content',
-          id: f.saved.id,
-          path: '/package/nativeRisu/card/name',
+        tool('batch', 'resource.readMany', {
+          items: [
+            { kind: current.kind, id: current.id, path: current.path, textOffset: 120 },
+            { kind: previous.kind, id: previous.id, path: previous.path, version: 'previous' },
+            { kind: array.kind, id: array.id, path: array.path, limit: 1 },
+            { kind: 'content', id: 'missing-resource' },
+          ],
         })
       );
-    const refs = continuation(request)?.completedReads ?? [];
-    expect(JSON.stringify(request.input)).not.toContain(compactionSource);
-    expect(refs).toContainEqual(
+    const retained = continuation(request)?.completedReads;
+    expect(retained).toEqual([
       expect.objectContaining({
-        name: 'resource.read',
-        returned: f.readValue,
-      })
-    );
-    const schema = refs.find((item) => item.name === 'app.tools')?.returned as {
-      tools: { name: string }[];
-    };
-    expect(schema.tools.map((item) => item.name)).toEqual(['resource.read', 'resource.patch']);
-    expect(JSON.stringify(schema).length).toBeLessThan(8_000);
+        name: 'resource.readMany',
+        returned: {
+          items: [
+            { requestIndex: 0, result: current },
+            { requestIndex: 1, result: previous },
+            { requestIndex: 2, result: array },
+            missing,
+          ],
+          nextIndex: null,
+        },
+      }),
+    ]);
+    expect(JSON.stringify(retained)).not.toContain('LARGE_BATCH_BODY_CANARY');
+    expect(JSON.stringify(retained)).not.toContain('PREVIOUS_BODY_CANARY');
     return structuredClone(success);
   });
   const task = await f.run();
-  if (task.status !== 'completed') throw new Error(task.error ?? 'helper failed');
-  expect(task.status, task.error ?? '').toBe('completed');
+  expect(task).toMatchObject({ status: 'completed', error: null });
   expect(log.requests.map((request) => request.role)).toEqual(['helper', 'context', 'helper']);
   expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true]);
 });

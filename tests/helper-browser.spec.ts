@@ -1554,73 +1554,96 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
   });
 }
 
-test('HELPUNDO blocks a dirty editor and a changed saved revision without losing its draft', async ({
-  page,
-  request,
-}) => {
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-  const response = await request.post('/api/content', {
-    data: fixtureBotInput(`Undo draft ${randomUUID()}`, 'Original source.'),
-  });
-  expect(response.ok()).toBe(true);
-  const bot = await response.json();
-  const state = await harness(page, 1);
-  const openEditor = async () => {
-    await page.goto('/');
-    await navigationAction(page, '서재');
-    await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(bot.title);
-    await page.getByRole('button', { name: `${bot.title} 상세 보기`, exact: true }).click();
-    await page.getByRole('button', { name: '편집', exact: true }).click();
-    await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
-  };
-  const openEditorHelper = async () => {
-    await page
-      .getByRole('region', { name: '자료 상세', exact: true })
-      .getByRole('button', { name: '도우미 열기', exact: true })
-      .click();
-    const panel = page.locator('#helper-panel');
-    await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-    await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
-    return panel;
-  };
-  await openEditor();
-  await openEditorHelper();
-  const view = state.current();
-  view.lastResourceEdit = {
-    editSeq: 41,
-    taskId: view.tasks[0].id,
-    kind: 'content',
-    id: bot.id,
-    revision: bot.revision,
-    title: bot.title,
-    canUndo: true,
-  };
-  await openEditor();
-  const draft = page.getByLabel('Risu 자료 이름', { exact: true });
-  await draft.fill('지키려는 미저장 입력');
-  const panel = await openEditorHelper();
-  const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
-  await expect(undo).toBeDisabled();
-  await expect(
-    panel.getByText('이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.')
-  ).toBeVisible();
-  expect(state.undoPosts).toHaveLength(0);
-  await expect(draft).toHaveValue('지키려는 미저장 입력');
-  // Restoring the local value only removes the local guard; the server still owns the revision check.
-  await draft.fill(bot.title);
-  await expect(undo).toBeEnabled();
-  await undo.click();
-  view.lastResourceEdit.canUndo = false;
-  view.lastResourceEdit.reason = '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.';
-  await page
-    .getByRole('dialog', { name: '자료 수정 되돌리기', exact: true })
-    .getByRole('button', { name: '되돌리기', exact: true })
-    .click();
-  await expect(undo).toBeDisabled();
-  await expect(draft).toHaveValue(bot.title);
-  expect(state.undoPosts).toEqual([{ editSeq: 41 }]);
-  expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(bot.title);
-});
+for (const grouped of [false, true]) {
+  test(
+    grouped
+      ? 'HELPUNDO grouped edit shows all titles and blocks its second dirty target'
+      : 'HELPUNDO blocks a dirty editor and a changed saved revision without losing its draft',
+    async ({ page, request }) => {
+      await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+      const response = await request.post('/api/content', {
+        data: fixtureBotInput(`Undo draft ${randomUUID()}`, 'Original source.'),
+      });
+      expect(response.ok()).toBe(true);
+      const bot = await response.json();
+      const state = await harness(page, 1);
+      const openEditor = async () => {
+        await page.goto('/');
+        await navigationAction(page, '서재');
+        await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(bot.title);
+        await page.getByRole('button', { name: `${bot.title} 상세 보기`, exact: true }).click();
+        await page.getByRole('button', { name: '편집', exact: true }).click();
+        await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
+      };
+      const openEditorHelper = async () => {
+        await page
+          .getByRole('region', { name: '자료 상세', exact: true })
+          .getByRole('button', { name: '도우미 열기', exact: true })
+          .click();
+        const panel = page.locator('#helper-panel');
+        await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+        await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
+        return panel;
+      };
+      await openEditor();
+      await openEditorHelper();
+      const view = state.current();
+      const edited = {
+        kind: 'content' as const,
+        id: bot.id,
+        revision: bot.revision,
+        title: bot.title,
+      };
+      const first = {
+        kind: 'content' as const,
+        id: 'first-batch-resource',
+        revision: 2,
+        title: '함께 수정한 첫 자료',
+      };
+      view.lastResourceEdit = {
+        ...(grouped ? first : edited),
+        editSeq: 41,
+        taskId: view.tasks[0].id,
+        canUndo: true,
+        ...(grouped ? { resources: [first, edited] } : {}),
+      };
+      await openEditor();
+      const draft = page.getByLabel('Risu 자료 이름', { exact: true });
+      await draft.fill('지키려는 미저장 입력');
+      const panel = await openEditorHelper();
+      const undo = panel.getByRole('button', { name: '마지막 자료 수정 되돌리기' });
+      if (grouped)
+        await expect(panel.getByRole('region', { name: '도우미 최근 자료 수정' })).toContainText(
+          '함께 수정한 첫 자료 외 1개'
+        );
+      await expect(undo).toBeDisabled();
+      await expect(
+        panel.getByText('이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.')
+      ).toBeVisible();
+      expect(state.undoPosts).toHaveLength(0);
+      await expect(draft).toHaveValue('지키려는 미저장 입력');
+      // Restoring the local value only removes the local guard; the server still owns the revision check.
+      await draft.fill(bot.title);
+      await expect(undo).toBeEnabled();
+      await undo.click();
+      if (grouped) {
+        const dialog = page.getByRole('dialog', { name: '자료 수정 되돌리기', exact: true });
+        await expect(dialog).toContainText('자료 2개');
+        await expect(dialog.getByRole('listitem')).toHaveText([first.title, bot.title]);
+      }
+      view.lastResourceEdit.canUndo = false;
+      view.lastResourceEdit.reason = '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.';
+      await page
+        .getByRole('dialog', { name: '자료 수정 되돌리기', exact: true })
+        .getByRole('button', { name: '되돌리기', exact: true })
+        .click();
+      await expect(undo).toBeDisabled();
+      await expect(draft).toHaveValue(bot.title);
+      expect(state.undoPosts).toEqual([{ editSeq: 41 }]);
+      expect((await (await request.get(`/api/content/${bot.id}`)).json()).title).toBe(bot.title);
+    }
+  );
+}
 
 test('HELPACTIVITY observed stages retain tool errors and cancellation on desktop and mobile', async ({
   page,

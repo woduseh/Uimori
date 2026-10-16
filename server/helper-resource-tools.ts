@@ -11,6 +11,8 @@ import { cloneResource, readResource, saveResource, undoResource } from './resou
 import { deleteLibraryItem } from './library-deletion.js';
 import { fields, record, number, text, HttpError } from './request-validation.js';
 import { patchHelperResource, readHelperResource } from './helper-resource-editing.js';
+import { patchHelperResources } from './helper-resource-batch.js';
+import { readHelperResources, validateHelperPreset } from './helper-resource-inspection.js';
 
 const kind = {
   type: 'string',
@@ -18,6 +20,40 @@ const kind = {
 };
 const string = { type: 'string' };
 const revision = { type: 'integer', minimum: 1 };
+const readSelection = {
+  kind,
+  id: string,
+  version: { type: 'string', enum: ['current', 'previous'] },
+  path: string,
+  fields: { type: 'array', items: string, maxItems: 50 },
+  offset: { type: 'integer', minimum: 0 },
+  limit: { type: 'integer', minimum: 1, maximum: 50 },
+  textOffset: { type: 'integer', minimum: 0 },
+  textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+};
+const patchProperties = {
+  kind: { type: 'string', enum: ['content', 'prompt-preset'] },
+  id: string,
+  expectedRevision: revision,
+  changes: {
+    type: 'array',
+    minItems: 1,
+    items: {
+      type: 'object',
+      properties: {
+        path: string,
+        target: string,
+        op: { type: 'string', enum: ['set', 'replaceText', 'insert', 'remove', 'move'] },
+        from: string,
+        value: {},
+        oldText: string,
+        newText: string,
+      },
+      required: ['path', 'op'],
+      additionalProperties: false,
+    },
+  },
+};
 type ResourceMutationTarget = { kind: ResourceKind; id: string | null };
 type ResourceToolDefinition = ProviderTool &
   (
@@ -25,6 +61,7 @@ type ResourceToolDefinition = ProviderTool &
     | {
         effect: 'mutation';
         target: (args: Record<string, unknown>) => ResourceMutationTarget | null;
+        targets?: (args: Record<string, unknown>) => ResourceMutationTarget[];
       }
   );
 function resourceTarget(args: Record<string, unknown>): ResourceMutationTarget | null {
@@ -68,26 +105,59 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'resource.read',
     effect: 'read',
     description:
-      'Read a compact resource overview, then follow readyPaths into authored fields. Native promptTemplate array pages include a block overview: optional id/name, type, role/role2 and textLengths for text/innerFormat/defaultText in UTF-16 units, without bodies or CBS evaluation. Metadata over 200 units appears instead under block.previews[field] with text, full length and a path for exact reads. Use limit:50 to inspect up to 50 blocks, following nextOffset. Use path for one read or paths for 1-16 reads of the same revision, never both. Batch items keep individual results/errors; resubmit paths.slice(nextIndex) for unreturned paths. Shared fields/offset/limit and textOffset/textLimit apply to every path. Object and array pages preserve exact small scalar values. A missing optional field returns exists:false with its path. The complete response stays within 24000 serialized characters. Revision is required for resource.patch and resource.clone.',
+      'Read a compact resource overview, then follow readyPaths into authored fields. Native promptTemplate pages include id/name, type, role/role2 and textLengths without bodies or CBS evaluation. Long metadata has previews with exact-read paths. Editable array entries provide target anchors for resource.patch at this revision. Use limit:50 and follow nextOffset. Use path for one read or paths for 1-16 reads of the same resource/revision, never both. Follow nextIndex with paths.slice(nextIndex); shared fields/offset/limit and textOffset/textLimit apply to every path. Small values preserve JSON types; missing fields have exists:false. The complete response stays within 24000 serialized characters. version=previous reads only the retained undo model with revision:null and currentRevision; it has no editable targets. Compare before undo, and read current again before patching. Use resource.readMany for typed reads across resources, or data.read refs for already located strings.',
     inputSchema: {
       type: 'object',
       properties: {
-        kind,
-        id: string,
-        path: string,
+        ...readSelection,
         paths: {
           type: 'array',
           minItems: 1,
           maxItems: 16,
           items: { type: 'string', maxLength: 1024 },
         },
-        fields: { type: 'array', items: string, maxItems: 50 },
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1, maximum: 50 },
-        textOffset: { type: 'integer', minimum: 0 },
-        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
       },
       required: ['kind', 'id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'resource.readMany',
+    effect: 'read',
+    description:
+      'Read 1-16 explicit resource/field selections with typed values and a shared 24000-character response budget. Use data.read refs for already located text across resources. Each selection takes the resource.read arguments except paths. Individual errors stay local. Follow nextIndex by resubmitting items.slice(nextIndex), and follow each result nextOffset for text or array pages. version=previous reads only the retained undo model with revision:null and currentRevision, never a complete history.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 16,
+          items: {
+            type: 'object',
+            properties: readSelection,
+            required: ['kind', 'id'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['items'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'preset.validate',
+    effect: 'read',
+    description:
+      'Inspect a saved prompt preset without executing CBS or changing values. Reports toggle declaration/value diagnostics and option value/label changes against the retained previous save when available. Advisory only: coverage explicitly excludes full CBS syntax, conditional branch analysis and externally supplied variables. Page diagnostics with offset/limit. A clean report is not proof that every CBS branch is valid.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: string,
+        offset: { type: 'integer', minimum: 0 },
+        limit: { type: 'integer', minimum: 1, maximum: 50 },
+      },
+      required: ['id'],
       additionalProperties: false,
     },
   },
@@ -96,32 +166,44 @@ const resourceTools: ResourceToolDefinition[] = [
     effect: 'mutation',
     target: resourceTarget,
     description:
-      'Edit existing native card/module or prompt-preset fields with the latest revision. Use resource.read paths or a library editTarget. set changes simple typed fields; replaceText changes one unique literal excerpt. A prompt-preset display name is /title, independent of /program/nativeRisuPreset/preset/name; change both explicitly when needed. Native prompt text/options and /values are editable. Set source.translationGuidePath to {instructions:string,terms:[{source:string,target:string,note?:string}]} for a complete translation guide. insert/remove use indexed paths in card character_book/entries, module lorebook, translationGuide/terms, or native preset promptTemplate. Insert one object or remove one item; absent card books/module lore are created on first insert. move is only for promptTemplate: from and path are full indexed paths in the same array, with destination indexed AFTER removal. Changes run sequentially, so later paths refer to the already changed array. All changes validate and save together with one undo; a failure saves nothing. Projection fields such as package.lore/body/starts are read only.',
+      'Edit native card/module or prompt-preset fields at expectedRevision. set changes simple typed fields; replaceText changes one unique exact excerpt, falling back only to CRLF/LF-equivalent matching when no exact match exists. It preserves text outside the matched span and reports normalization. /title and the native preset name are independent. insert/remove use indexed lore, translationGuide/terms or promptTemplate paths; move is only within promptTemplate, destination indexed AFTER removal. Ordinary paths run sequentially. For an existing item use its read target (original full item path) plus relative path, e.g. target=.../promptTemplate/2, path=/text. target remains attached across earlier moves/inserts/deletes; remove with target uses path="". Only set/replaceText/remove accept target; a removed target fails. Set source.translationGuidePath to a complete {instructions,terms} guide. Toggle definition edits reconcile inherited invalid/retired values and report resetKeys/removedKeys; explicitly supplied invalid values still fail. All changes validate and save together with one undo; failure saves nothing and identifies the change. Projection/identity/asset fields remain read only.',
+    inputSchema: {
+      type: 'object',
+      properties: patchProperties,
+      required: ['kind', 'id', 'expectedRevision', 'changes'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'resource.patchMany',
+    effect: 'mutation',
+    target: () => null,
+    targets: (args) =>
+      Array.isArray(args.items)
+        ? args.items.flatMap((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+            const target = resourceTarget(item as Record<string, unknown>);
+            return target ? [target] : [];
+          })
+        : [],
+    description:
+      'Apply resource.patch to 1-16 distinct explicit resources atomically, with each current expectedRevision. Every item must succeed or nothing is saved. The same target cannot appear twice. All affected unsaved editor input is protected. Each item supports the same target anchors, newline matching and toggle-value reconciliation as resource.patch. Returns per-resource saved results; changed resources form one undo group in the helper UI. Does not establish ongoing synchronization between presets.',
     inputSchema: {
       type: 'object',
       properties: {
-        kind,
-        id: string,
-        expectedRevision: revision,
-        changes: {
+        items: {
           type: 'array',
           minItems: 1,
+          maxItems: 16,
           items: {
             type: 'object',
-            properties: {
-              path: string,
-              op: { type: 'string', enum: ['set', 'replaceText', 'insert', 'remove', 'move'] },
-              from: string,
-              value: {},
-              oldText: string,
-              newText: string,
-            },
-            required: ['path', 'op'],
+            properties: patchProperties,
+            required: ['kind', 'id', 'expectedRevision', 'changes'],
             additionalProperties: false,
           },
         },
       },
-      required: ['kind', 'id', 'expectedRevision', 'changes'],
+      required: ['items'],
       additionalProperties: false,
     },
   },
@@ -215,7 +297,7 @@ const resourceTools: ResourceToolDefinition[] = [
 export const RESOURCE_TOOLS: ProviderTool[] = resourceTools.map((definition) => {
   const { effect: _effect, ...tool } = definition;
   if ('target' in tool) {
-    const { target: _target, ...schema } = tool;
+    const { target: _target, targets: _targets, ...schema } = tool;
     return schema;
   }
   return tool;
@@ -225,12 +307,19 @@ export const RESOURCE_TOOLS: ProviderTool[] = resourceTools.map((definition) => 
 export function helperResourceOperation(
   name: string,
   args: Record<string, unknown> = {}
-): { readOnly: true } | { readOnly: false; target: ResourceMutationTarget | null } | undefined {
+):
+  | { readOnly: true }
+  | { readOnly: false; target: ResourceMutationTarget | null; targets?: ResourceMutationTarget[] }
+  | undefined {
   const definition = resourceTools.find((tool) => tool.name === name);
   if (!definition) return undefined;
   return definition.effect === 'read'
     ? { readOnly: true }
-    : { readOnly: false, target: definition.target(args) };
+    : {
+        readOnly: false,
+        target: definition.target(args),
+        ...(definition.targets ? { targets: definition.targets(args) } : {}),
+      };
 }
 const summary = (result: ReturnType<typeof saveResource>) => ({
   created: result.created,
@@ -245,6 +334,9 @@ export function invokeResourceTool(
   name: string,
   args: Record<string, unknown>
 ): unknown {
+  if (name === 'resource.readMany') return readHelperResources(store, args.items);
+  if (name === 'resource.patchMany') return patchHelperResources(store, args.items);
+  if (name === 'preset.validate') return validateHelperPreset(store, args);
   if (name === 'illustration-preset.list') {
     const catalog = illustrationPresetCatalog(store);
     return {
