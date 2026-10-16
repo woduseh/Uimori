@@ -108,6 +108,33 @@ test('Argon omits ignored sampling, rejects minimal thinking and unsupported lon
   expect(() => encodeVertex(input)).toThrow('ARGON_LONG_DECODE_UNSUPPORTED');
 });
 
+test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
+  '%s serializes only selected safety filters and preserves them across tool turns',
+  (protocol) => {
+    const input = request();
+    expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('safetySettings');
+    input.generation!.safetySettings = {};
+    expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('safetySettings');
+    input.generation!.safetySettings = {
+      HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+      HARM_CATEGORY_HARASSMENT: 'OFF',
+    };
+    const first = encodeVertex(input, protocol);
+    expect(bodyObject(first.body).safetySettings).toEqual([
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'OFF' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    ]);
+    const decoder = new VertexDecoder(first.context);
+    decoder.accept(event([call('Call-1')], 'STOP'));
+    const nextInput = continued(input, decoder.finish());
+    expect(bodyObject(encodeVertex(nextInput, protocol).body).safetySettings).toEqual(
+      bodyObject(first.body).safetySettings
+    );
+    nextInput.generation!.safetySettings!.HARM_CATEGORY_HARASSMENT = 'BLOCK_NONE';
+    expect(() => encodeVertex(nextInput, protocol)).toThrow('VERTEX_CONTINUATION_MISMATCH');
+  }
+);
+
 // Pure recorded-object fixtures: these checks do not call a live model or assess prose quality.
 describe('Vertex 3.8 request and continuation protocol', () => {
   test('encodes contract, complete input JSON and function schemas without unsupported sampling fields', () => {

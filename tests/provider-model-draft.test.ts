@@ -61,6 +61,32 @@ describe('model numeric drafts', () => {
     );
   });
 
+  test('Gemini filter drafts round-trip, omit defaults and clear on unsupported connections', () => {
+    const vertex: Connection = { ...connection, protocol: 'vertex-gemini-v1' };
+    const studio: Connection = { ...connection, protocol: 'google-gemini-v1' };
+    const defaults = initialModel();
+    expect(modelPayload(defaults, studio)).not.toHaveProperty('safetySettings');
+    const selected = {
+      ...defaults,
+      modelId: 'gemini-3.8-flash',
+      safetySettings: {
+        HARM_CATEGORY_HARASSMENT: 'OFF' as const,
+        HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE' as const,
+      },
+    };
+    for (const gemini of [vertex, studio]) {
+      expect(modelDraftError(selected, gemini)).toBe('');
+      const saved = modelPayload(selected, gemini);
+      const restored = modelDraft({ ...saved, id: 'model', revision: 1 } as ModelPreset);
+      expect(restored.safetySettings).toEqual(selected.safetySettings);
+      expect(restored.safetySettings).not.toBe(selected.safetySettings);
+    }
+    expect(modelDraftError(selected, anthropicConnection)).not.toBe('');
+    const changed = selectModelConnection(selected, anthropicConnection);
+    expect(changed.safetySettings).toEqual({});
+    expect(modelPayload(changed, anthropicConnection)).not.toHaveProperty('safetySettings');
+  });
+
   test('uses a 600-second response timeout for new models', () => {
     expect(initialModel().timeoutSeconds).toBe('600');
     expect(modelPayload(initialModel(), connection).timeoutMs).toBe(600_000);

@@ -1,4 +1,5 @@
 import type { EvaluationToolOptions } from './evaluation-tool-config.js';
+import type { GeminiSafetySettings } from './gemini-safety.js';
 import type { ProviderOptions } from './provider-options.js';
 import { DEFAULT_LORE_CONTEXT } from './lore-context.js';
 export const PROVIDER_PROTOCOLS = [
@@ -37,6 +38,7 @@ export type ModelGeneration = {
   reasoningContext?: 'auto' | 'all_turns' | 'current_turn';
   topP?: number;
   stopSequences?: string[];
+  safetySettings?: GeminiSafetySettings;
   serviceTier?: string;
   cacheMode?: 'disabled' | 'explicit' | 'automatic';
   cacheTtl?: '5m' | '30m' | '1h';

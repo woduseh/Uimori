@@ -1,3 +1,4 @@
+import type { GeminiSafetySettings } from '../core/gemini-safety.js';
 import type {
   Connection,
   ModelExecutionMode,
@@ -85,6 +86,7 @@ export type ModelDraft = {
   temperature: string;
   topP: string;
   stopSequences: string[];
+  safetySettings: GeminiSafetySettings;
   thinkingLevel: string;
   timeoutSeconds: string;
   structuredOutput: 'default' | 'on' | 'off';
@@ -115,6 +117,7 @@ export const initialModel = (): ModelDraft => ({
   temperature: '',
   topP: '',
   stopSequences: [],
+  safetySettings: {},
   thinkingLevel: '',
   timeoutSeconds: '600',
   structuredOutput: 'default',
@@ -149,6 +152,7 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     temperature: value.temperature === null ? '' : String(value.temperature),
     topP: value.topP === undefined ? '' : String(value.topP),
     stopSequences: [...(value.stopSequences ?? [])],
+    safetySettings: { ...(value.safetySettings ?? {}) },
     thinkingLevel: value.thinkingLevel ?? '',
     timeoutSeconds: value.timeoutMs === undefined ? '' : String(value.timeoutMs / 1000),
     structuredOutput:
@@ -222,6 +226,9 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
     enabled: draft.enabled,
     ...(draft.topP !== '' ? { topP: Number(draft.topP) } : {}),
     ...(draft.stopSequences.length ? { stopSequences: [...draft.stopSequences] } : {}),
+    ...(Object.keys(draft.safetySettings).length
+      ? { safetySettings: { ...draft.safetySettings } }
+      : {}),
     ...(draft.thinkingLevel ? { thinkingLevel: draft.thinkingLevel } : {}),
     ...(draft.timeoutSeconds !== ''
       ? { timeoutMs: Math.round(Number(draft.timeoutSeconds) * 1000) }

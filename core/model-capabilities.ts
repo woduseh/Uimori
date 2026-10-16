@@ -1,4 +1,5 @@
 import type { ModelGeneration, ProviderProtocol } from './product.js';
+import { GEMINI_SAFETY_CATEGORIES, GEMINI_SAFETY_THRESHOLDS } from './gemini-safety.js';
 import { providerDefinition } from './provider-definitions.js';
 import { ProviderContractError } from './provider-errors.js';
 import { MODEL_FAMILIES } from './product.js';
@@ -17,6 +18,7 @@ export const GENERATION_KEYS = [
   'reasoningContext',
   'topP',
   'stopSequences',
+  'safetySettings',
   'serviceTier',
   'cacheMode',
   'cacheTtl',
@@ -374,6 +376,23 @@ export function validateGenerationShape(value: unknown): asserts value is ModelG
       ))
   )
     reject();
+  if (g.safetySettings !== undefined) {
+    const settings = g.safetySettings;
+    if (
+      settings === null ||
+      typeof settings !== 'object' ||
+      Array.isArray(settings) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(settings)) ||
+      Object.entries(settings).some(
+        ([category, threshold]) =>
+          !GEMINI_SAFETY_CATEGORIES.includes(
+            category as (typeof GEMINI_SAFETY_CATEGORIES)[number]
+          ) ||
+          !GEMINI_SAFETY_THRESHOLDS.includes(threshold as (typeof GEMINI_SAFETY_THRESHOLDS)[number])
+      )
+    )
+      reject();
+  }
   if (
     g.serviceTier !== undefined &&
     (typeof g.serviceTier !== 'string' || !g.serviceTier.length || g.serviceTier.length > 40)

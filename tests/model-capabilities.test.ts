@@ -114,6 +114,56 @@ test('options the encoder cannot send and values outside the protocol vocabulary
     expect(protocolOptionKeys(protocol)).not.toContain('timeoutMs');
 });
 
+test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct connections', () => {
+  const configured: ModelGeneration = {
+    ...base,
+    safetySettings: {
+      HARM_CATEGORY_HARASSMENT: 'OFF',
+      HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+    },
+  };
+  for (const protocol of ['vertex-gemini-v1', 'google-gemini-v1'] as const) {
+    expect(() => validateModelOptions(configured, protocol)).not.toThrow();
+    expect(() => validateModelOptions({ ...base, safetySettings: {} }, protocol)).not.toThrow();
+  }
+  expect(generationFromModel(configured).safetySettings).toEqual(configured.safetySettings);
+  expect(generationFromModel(configured).safetySettings).not.toBe(configured.safetySettings);
+  for (const protocol of ['vercel-chat-v1', 'anthropic-messages-v1'] as const)
+    expect(() => validateModelOptions(configured, protocol)).toThrow();
+  for (const value of [
+    null,
+    [],
+    { HARM_CATEGORY_HARASSMENT: 'DEFAULT' },
+    { HARM_CATEGORY_HARASSMENT: null },
+    { HARM_CATEGORY_UNKNOWN: 'OFF' },
+  ])
+    expect(() =>
+      validateModelOptions(
+        { ...base, safetySettings: value } as ModelGeneration,
+        'vertex-gemini-v1'
+      )
+    ).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
+
+  const request = {
+    role: 'main',
+    modelId: 'gemini-3.8-flash',
+    stable: { contract: 'Synthetic', tools: [] },
+    input: { task: 'Synthetic', controls: {} },
+    generation: configured,
+    generationBinding: configured,
+  };
+  expect(() => validateRequest(request)).not.toThrow();
+  expect(() =>
+    validateRequest({
+      ...request,
+      generation: {
+        ...configured,
+        safetySettings: { HARM_CATEGORY_HARASSMENT: 'BLOCK_NONE' as const },
+      },
+    })
+  ).toThrow('INVALID_GENERATION_BINDING');
+});
+
 test('the hint table still describes reviewed models but never gates unlisted IDs', () => {
   expect(modelCapability('vertex-gemini-v1', 'gemini-3.1-pro-preview')?.defaultThinkingLevel).toBe(
     'HIGH'

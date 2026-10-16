@@ -170,6 +170,58 @@ describe('provider settings, catalogs and archive contracts', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  test('saves Gemini filter overrides for Vertex and Studio without changing defaults', async () => {
+    const app = await application();
+    for (const protocol of ['vertex-gemini-v1', 'google-gemini-v1'] as const) {
+      const connection = await request<Connection>(app, '/connections', connectionBody(protocol));
+      const original = await request<ModelPreset>(app, '/model-presets', modelBody(connection));
+      expect(original).not.toHaveProperty('safetySettings');
+      const safetySettings = {
+        HARM_CATEGORY_HARASSMENT: 'OFF',
+        HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+      };
+      const saved = await request<ModelPreset>(
+        app,
+        `/model-presets/${original.id}`,
+        modelBody(connection, { expectedRevision: original.revision, safetySettings }),
+        200,
+        'PUT'
+      );
+      expect(saved.safetySettings).toEqual(safetySettings);
+      expect(app.store.product.modelSnapshot(saved.id).safetySettings).toEqual(safetySettings);
+      await request(
+        app,
+        '/model-presets',
+        modelBody(connection, {
+          safetySettings: { HARM_CATEGORY_HARASSMENT: 'DEFAULT' },
+        }),
+        400
+      );
+      const reset = await request<ModelPreset>(
+        app,
+        `/model-presets/${saved.id}`,
+        modelBody(connection, { expectedRevision: saved.revision }),
+        200,
+        'PUT'
+      );
+      expect(reset).not.toHaveProperty('safetySettings');
+    }
+    const unrelated = await request<Connection>(
+      app,
+      '/connections',
+      connectionBody('openai-chat-v1')
+    );
+    await request(
+      app,
+      '/model-presets',
+      modelBody(unrelated, {
+        safetySettings: { HARM_CATEGORY_HARASSMENT: 'OFF' },
+      }),
+      400
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test('accepts old contextTools values without exposing or resaving the retired setting', async () => {
     const app = await application();
     const connection = await request<Connection>(
