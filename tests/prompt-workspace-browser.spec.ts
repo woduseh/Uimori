@@ -310,6 +310,40 @@ test('PWS03 failed autosaves preserve consecutive local changes and protect exte
   );
 });
 
+test('PWS05 summary length controls save independently and survive reload on mobile', {
+  tag: '@smoke',
+}, async ({ page, request }) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '역할별 모델');
+  let models = page.getByRole('region', { name: '역할별 모델 설정' });
+  await models.locator('summary').filter({ hasText: '대화와 자료 지원' }).click();
+  const conversation = models.getByLabel('세션 요약 길이', { exact: true });
+  const helper = models.getByLabel('도우미 요약 길이', { exact: true });
+  await expect(conversation).toHaveValue('auto');
+  await expect(helper).toHaveValue('auto');
+  await conversation.selectOption('16384');
+  await helper.selectOption('2048');
+  await models.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/model-workspace')).json()).summaryLength)
+    .toEqual({
+      conversation: 16384,
+      helper: 2048,
+    });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+    true
+  );
+  await page.reload();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '역할별 모델');
+  models = page.getByRole('region', { name: '역할별 모델 설정' });
+  await models.locator('summary').filter({ hasText: '대화와 자료 지원' }).click();
+  await expect(models.getByLabel('세션 요약 길이', { exact: true })).toHaveValue('16384');
+  await expect(models.getByLabel('도우미 요약 길이', { exact: true })).toHaveValue('2048');
+});
+
 test('PWS04 shared workspace load failures recover in model and prompt settings', async ({
   page,
 }) => {
