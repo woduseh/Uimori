@@ -308,8 +308,10 @@ export function BotBranch(
     // Keep the selected chat accessible even if it lies beyond the displayed page.
     const selectedItem =
       destination === 'story' ? items.find((chat) => chat.id === selected) : undefined;
+    // A selected chat beyond the first page is a shortcut, not part of the visible
+    // sortable page. Keep it separate at the top so its actual position is not implied.
     const shown =
-      selectedItem && !initial.includes(selectedItem) ? [...initial, selectedItem] : initial;
+      selectedItem && !initial.includes(selectedItem) ? [selectedItem, ...initial] : initial;
     return (
       <div className="bot-chat-list">
         {shown.map((chat) => {
@@ -324,11 +326,15 @@ export function BotBranch(
           }
           return (
             <div
-              className={`bot-chat-item ${selectedChat ? 'selected' : ''} ${dragId === chat.id ? 'dragging' : ''} ${dropTarget?.folderId === folderId && dropTarget.beforeId === chat.id ? 'drop-before' : ''}`}
+              className={`bot-chat-item ${pinned ? 'pinned' : ''} ${selectedChat ? 'selected' : ''} ${dragId === chat.id ? 'dragging' : ''} ${dropTarget?.folderId === folderId && dropTarget.beforeId === chat.id ? 'drop-before' : ''}`}
               key={chat.id}
               data-chat-id={chat.id}
-              draggable={!busy && !loading}
+              draggable={!pinned && !busy && !loading}
               onDragStart={(event) => {
+                if (pinned) {
+                  event.preventDefault();
+                  return;
+                }
                 event.stopPropagation();
                 if ((event.target as HTMLElement).closest('.bot-row-actions')) {
                   event.preventDefault();
@@ -340,8 +346,17 @@ export function BotBranch(
                 event.dataTransfer.setData('text/plain', chat.id);
               }}
               onDragEnd={clearDrag}
-              onDragOver={(event) => over(event, folderId, target(event))}
-              onDrop={(event) => drop(event, folderId, target(event))}
+              onDragOver={(event) => {
+                if (pinned) return event.stopPropagation();
+                over(event, folderId, target(event));
+              }}
+              onDrop={(event) => {
+                if (pinned) {
+                  event.preventDefault();
+                  return event.stopPropagation();
+                }
+                drop(event, folderId, target(event));
+              }}
             >
               <button
                 className="chat-link"

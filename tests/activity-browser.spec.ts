@@ -827,8 +827,11 @@ test('ACTUI14 activity sections show 5 then more, retain folding and never exclu
   await restored.locator('.bot-navigation-modes > button').first().click();
   const branch = restored.locator(`[data-bot-id="${seeded.chat.botId}"]`);
   await expect(branch.locator('.bot-chat-item')).toHaveCount(6);
-  await expect(branch.getByText('현재 채팅')).toBeVisible();
-  const firstVisible = branch.locator('.bot-chat-item').first();
+  const pinned = branch.locator('.bot-chat-item').first();
+  await expect(pinned).toHaveClass(/pinned/);
+  await expect(pinned).toHaveAttribute('draggable', 'false');
+  await expect(pinned.getByText('현재 채팅')).toBeVisible();
+  const firstVisible = branch.locator('.bot-chat-item:not(.pinned)').first();
   const movedId = await firstVisible.getAttribute('data-chat-id');
   const chatOrder = async () => {
     const response = await request.get('/api/chats');
@@ -842,6 +845,16 @@ test('ACTUI14 activity sections show 5 then more, retain folding and never exclu
   await expect.poll(async () => (await chatOrder()).indexOf(movedId!)).toBe(4);
   await branch.locator('.bot-chat-more').click();
   await expect(branch.locator('.bot-chat-item')).toHaveCount(9);
+  // Compact navigation must retain the pinned shortcut without horizontal overflow.
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+  const mobileBranch = page
+    .getByRole('dialog', { name: '탐색' })
+    .locator(`[data-bot-id="${seeded.chat.botId}"]`);
+  await expect(mobileBranch.locator('.bot-chat-item.pinned')).toHaveCount(1);
+  expect(
+    await mobileBranch.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+  ).toBe(true);
 });
 
 test('ACTUI11 an already visible source is confirmed only after its inbox entry is selected', async ({
