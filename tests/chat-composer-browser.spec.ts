@@ -68,7 +68,13 @@ test('shared composer follows resized content viewport while preserving the draf
         page.evaluate(() => {
           const shell = document.querySelector('.app-shell')!.getBoundingClientRect();
           const dock = document.querySelector('.composer-dock')!.getBoundingClientRect();
-          return Math.abs(shell.bottom - dock.bottom);
+          const input = document.querySelector<HTMLTextAreaElement>('#request')!;
+          // Matching the dock to a wrongly shortened shell would miss the blank gap.
+          return Math.max(
+            Math.abs(shell.bottom - window.innerHeight),
+            Math.abs(dock.bottom - window.innerHeight),
+            Math.max(0, -input.getBoundingClientRect().top)
+          );
         })
       )
       .toBeLessThanOrEqual(2);
