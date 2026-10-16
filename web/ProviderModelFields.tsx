@@ -5,6 +5,12 @@ import { AddIcon, CloseIcon } from './ui-icons.js';
 import { useEffect, useRef } from 'react';
 import { isGeminiProtocol, type Connection, type VertexRequestTier } from '../core/product.js';
 import {
+  GEMINI_SAFETY_CATEGORIES,
+  GEMINI_SAFETY_THRESHOLDS,
+  type GeminiSafetyCategory,
+  type GeminiSafetyThreshold,
+} from '../core/gemini-safety.js';
+import {
   MODEL_FAMILY_CHOICES,
   effectiveModelFamily,
   modelFamilyOptionKeys,
@@ -31,6 +37,19 @@ import {
   type ModelDraft,
 } from './provider-model-draft.js';
 
+const geminiSafetyLabels: Record<GeminiSafetyCategory, string> = {
+  HARM_CATEGORY_HARASSMENT: '괴롭힘',
+  HARM_CATEGORY_HATE_SPEECH: '증오 표현',
+  HARM_CATEGORY_SEXUALLY_EXPLICIT: '성적 콘텐츠',
+  HARM_CATEGORY_DANGEROUS_CONTENT: '위험 콘텐츠',
+};
+const geminiThresholdLabels: Record<GeminiSafetyThreshold, string> = {
+  OFF: 'OFF · 필터 비활성화',
+  BLOCK_NONE: 'BLOCK_NONE · 차단 없이 평가',
+  BLOCK_ONLY_HIGH: '높음만 차단',
+  BLOCK_MEDIUM_AND_ABOVE: '중간 이상 차단',
+  BLOCK_LOW_AND_ABOVE: '낮음 이상 차단',
+};
 const tierLabels: Record<string, string> = {
   flex: 'Flex',
   standard: 'Standard',
@@ -363,6 +382,12 @@ export function ProviderModelFields({
       label: '번역 구조화 출력',
       text: value.structuredOutput === 'on' ? 'JSON Schema 사용' : '지침과 결과 검증만 사용',
       reset: () => update({ structuredOutput: 'default' }),
+    });
+  if (Object.keys(value.safetySettings).length > 0)
+    specified.push({
+      label: 'Gemini 안전 필터',
+      text: `${Object.keys(value.safetySettings).length}개 범주`,
+      reset: () => update({ safetySettings: {} }),
     });
   if (value.stopSequences.length > 0)
     specified.push({
@@ -740,6 +765,60 @@ export function ProviderModelFields({
                 최대 4개예요. 각 항목의 문자열이 생성되면 응답을 멈춰요. 줄바꿈도 문자열에 포함돼요.
                 {capability?.stopSequences === false && ` ${UNDOCUMENTED}`}
               </small>
+            </div>
+          </details>
+        )}
+        {(sends('safetySettings') || Object.keys(value.safetySettings).length > 0) && (
+          <details
+            className="provider-stop-sequences full"
+            open={Object.keys(value.safetySettings).length > 0}
+          >
+            <summary>
+              Gemini 안전 필터
+              {Object.keys(value.safetySettings).length > 0 &&
+                ` · ${Object.keys(value.safetySettings).length}개 지정`}
+            </summary>
+            <div className="provider-stop-sequences-body editor-fields">
+              {sends('safetySettings') ? (
+                <>
+                  <p className="muted full">
+                    각 범주를 별도로 지정해요. 모델 기본값은 해당 범주를 요청에서 생략하며, OFF는
+                    필터를 끄고 BLOCK_NONE은 차단 없이 안전성 평가를 요청해요.
+                  </p>
+                  {GEMINI_SAFETY_CATEGORIES.map((category) => (
+                    <label key={category}>
+                      {geminiSafetyLabels[category]}
+                      <select
+                        aria-label={`${geminiSafetyLabels[category]} 안전 필터`}
+                        value={value.safetySettings[category] ?? ''}
+                        onChange={(event) => {
+                          const next = { ...value.safetySettings };
+                          if (event.target.value)
+                            next[category] = event.target.value as GeminiSafetyThreshold;
+                          else delete next[category];
+                          update({ safetySettings: next });
+                        }}
+                      >
+                        <option value="">모델 기본값 · 전송하지 않음</option>
+                        {GEMINI_SAFETY_THRESHOLDS.map((threshold) => (
+                          <option key={threshold} value={threshold}>
+                            {geminiThresholdLabels[threshold]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                  <small className="full">
+                    적용 가능 여부는 모델과 프로바이더에 따라 달라요. 특히 Vertex의 BLOCK_NONE은
+                    사용 권한이 제한될 수 있어요. 실패 시 다른 값으로 자동 변경하지 않아요.
+                  </small>
+                </>
+              ) : (
+                <p className="error full">
+                  이 연결에서는 안전 필터 설정을 전달할 수 없어요. 위 직접 지정한 설정에서 해제해
+                  주세요.
+                </p>
+              )}
             </div>
           </details>
         )}

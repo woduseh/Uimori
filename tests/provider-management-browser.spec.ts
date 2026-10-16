@@ -297,16 +297,32 @@ test('PMUI Google AI Studio registers an API key and preserves model settings on
   await expect(modelForm.getByLabel('프로바이더', { exact: true })).toHaveValue(connection.id);
   await modelForm.getByLabel('모델 프리셋 이름', { exact: true }).fill(title + ' model');
   await modelForm.getByLabel('모델 ID', { exact: true }).fill('gemini-3.8-flash');
+  await modelForm.getByRole('button', { name: '고급', exact: true }).click();
+  await modelForm.getByText('Gemini 안전 필터', { exact: true }).click();
+  await modelForm.getByLabel('괴롭힘 안전 필터').selectOption('OFF');
+  await modelForm.getByLabel('성적 콘텐츠 안전 필터').selectOption('BLOCK_NONE');
+  await modelForm.getByRole('button', { name: '기본', exact: true }).click();
   await modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
   await expect
     .poll(async () =>
       (await library(request)).models.find((item) => item.title === title + ' model')
     )
-    .toMatchObject({ connectionId: connection.id, modelId: 'gemini-3.8-flash' });
+    .toMatchObject({
+      connectionId: connection.id,
+      modelId: 'gemini-3.8-flash',
+      safetySettings: {
+        HARM_CATEGORY_HARASSMENT: 'OFF',
+        HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+      },
+    });
   await settings(page);
   await openProviderModel(page, title + ' model');
   await expect(modelForm.getByLabel('프로바이더', { exact: true })).toHaveValue(connection.id);
   await expect(modelForm.getByLabel('모델 ID', { exact: true })).toHaveValue('gemini-3.8-flash');
+  await modelForm.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(modelForm.getByLabel('괴롭힘 안전 필터')).toHaveValue('OFF');
+  await expect(modelForm.getByLabel('성적 콘텐츠 안전 필터')).toHaveValue('BLOCK_NONE');
+  await expect(modelForm.getByLabel('증오 표현 안전 필터')).toHaveValue('');
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await page.getByRole('button', { name: title + ' 프로바이더 수정', exact: true }).click();
   await expect(connectionForm.getByLabel('API 키', { exact: true })).toHaveValue('');

@@ -79,6 +79,10 @@ test.each(['standard', 'flex', 'priority'])(
   async (serviceTier) => {
     const input = request();
     input.generation!.serviceTier = serviceTier;
+    input.generation!.safetySettings = {
+      HARM_CATEGORY_HARASSMENT: 'OFF',
+      HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+    };
     const original = structuredClone(input),
       wires: WireRecord[] = [];
     const local = await localProvider(async (_request, response) =>
@@ -104,6 +108,10 @@ test.each(['standard', 'flex', 'priority'])(
     expect(captured.headers['x-goog-api-key']).toBe(key);
     expect(captured.headers.authorization).toBeUndefined();
     expect(captured.headers['x-vertex-ai-llm-shared-request-type']).toBeUndefined();
+    expect(body.safetySettings).toEqual([
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'OFF' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+    ]);
     expect(body.systemInstruction.parts[0].text).toBe(input.stable.contract);
     expect(JSON.stringify(body.contents)).toContain('한글');
     expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'MEDIUM' });

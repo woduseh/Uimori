@@ -1,4 +1,5 @@
 import { canonicalJson as canonical } from './canonical-json.js';
+import { GEMINI_SAFETY_CATEGORIES } from './gemini-safety.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
 import { TRANSLATION_FORMAT_INSTRUCTION } from './provider-format.js';
@@ -242,8 +243,13 @@ export function encodeVertex(
       parametersJsonSchema: copy(tool.inputSchema, 'INVALID_TOOLS'),
     };
   });
+  const safetySettings = GEMINI_SAFETY_CATEGORIES.flatMap((category) => {
+    const threshold = generation?.safetySettings?.[category];
+    return threshold ? [{ category, threshold }] : [];
+  });
   const body: Json = {
     ...plan?.options,
+    ...(safetySettings.length ? { safetySettings } : {}),
     ...(protocol === 'google-gemini-v1' &&
     generation?.serviceTier &&
     generation.serviceTier !== 'standard'

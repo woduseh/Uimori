@@ -47,6 +47,7 @@ describe('local provider definitions (no network or provider capability inferenc
       'thinkingLevel',
       'topP',
       'stopSequences',
+      'safetySettings',
       'serviceTier',
     ]);
     for (const item of PROVIDER_DEFINITIONS) {
