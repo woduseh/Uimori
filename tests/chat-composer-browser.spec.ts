@@ -17,6 +17,14 @@ for (const width of DEFAULT_WIDTHS) {
     const input = page.getByRole('textbox', { name: '다음 장면 요청' });
     await input.fill('메뉴를 열어도 보존할 초안');
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    const menu = page.getByRole('group', { name: '이번 요청 옵션' });
+    await expect(menu.locator('.composer-menu-heading')).toHaveText([
+      '창작 설정',
+      '요청 및 컨텍스트',
+    ]);
+    await expect(menu.locator('.composer-menu-persona > span')).toHaveText('페르소나');
+    await expect(menu.getByRole('button', { name: '빠른 페르소나' })).toBeVisible();
+    await expect(menu.getByRole('switch', { name: '다음 생성에서 조회 로어 제외' })).toHaveCount(1);
     const options = page.getByRole('button', { name: '창작 옵션', exact: true });
     await expect(options).toBeVisible();
     const reference = await options.evaluate((node) => {
@@ -36,12 +44,36 @@ for (const width of DEFAULT_WIDTHS) {
       expect(Math.abs((await button.boundingBox())!.x - reference.left)).toBeLessThanOrEqual(1);
     }
     await page.screenshot({ path: info.outputPath(`composer-menu-${width}.png`) });
+    await menu.getByRole('button', { name: '빠른 페르소나' }).click();
+    const picker = page.getByRole('dialog', { name: '빠른 페르소나', exact: true });
+    await expect(picker).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(picker).toBeHidden();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();
     await expect(input).toHaveValue('메뉴를 열어도 보존할 초안');
     expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(0);
   });
 }
+
+test('short mobile composer menu keeps context controls reachable', async ({ page, request }) => {
+  const created = await postFixtureChat(request, { data: { title: '짧은 화면 메뉴 검사' } });
+  expect(created.ok()).toBe(true);
+  const chat = await created.json();
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 540 });
+  await page.goto(`/?chat=${chat.id}`);
+  await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+  const menu = page.getByRole('group', { name: '이번 요청 옵션' });
+  const frame = await menu.boundingBox();
+  expect(frame).not.toBeNull();
+  expect(frame!.y).toBeGreaterThanOrEqual(0);
+  expect(frame!.y + frame!.height).toBeLessThanOrEqual(540);
+  const loreReset = menu.getByRole('switch', { name: '다음 생성에서 조회 로어 제외' });
+  await loreReset.scrollIntoViewIfNeeded();
+  await expect(loreReset).toBeInViewport();
+  await loreReset.click();
+  await expect(page.getByRole('button', { name: '조회 로어 제외 해제' })).toBeVisible();
+});
 
 test('shared composer follows resized content viewport while preserving the draft', async ({
   page,
