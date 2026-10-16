@@ -98,7 +98,7 @@ export function compileTranslationPrompt(
     compilation.messages.some(
       (message) =>
         message.provenance.origin === 'current' &&
-        message.content.some((part) => part.text === currentText)
+        message.content.some((part) => part.type === 'text' && part.text === currentText)
     )
   )
     compilation.usedSlots = [

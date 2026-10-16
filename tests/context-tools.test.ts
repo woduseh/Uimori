@@ -1051,7 +1051,9 @@ describe('host read compaction and provider continuation inside one main run', (
         if (events.length === 2) expect(JSON.stringify(data), codec).toContain('checkpoint-exact');
       }
       expect(request.input.source).toMatchObject({ completedToolHistory: { events } });
-      expect(request.prompt!.messages.at(-1)!.content[0].text).toContain('Host continuation');
+      expect(
+        (request.prompt!.messages.at(-1)!.content[0] as { type: 'text'; text: string }).text
+      ).toContain('Host continuation');
       expect(request).not.toHaveProperty('opaqueState');
       expect(request.stable.tools).toEqual(buildMainProviderRequest(fixed).request.stable.tools);
     }

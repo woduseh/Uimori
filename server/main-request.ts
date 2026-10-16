@@ -3,7 +3,7 @@ import { generationFromModel } from '../core/model-capabilities.js';
 import { AGENT_CONTEXT_REFS_MAX } from '../core/agent-collaboration.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { evaluationToolDefinitions } from '../core/evaluation-tools.js';
-import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
+import { contextBudgetForModel, estimateContextInput } from '../core/context-budget.js';
 import {
   CONTEXT_CONTINUATION_GUIDANCE,
   CONTEXT_DERIVED_GUIDANCE,
@@ -276,7 +276,11 @@ export function encodeMainPreview(
   return {
     protocol,
     modelId: target.modelId,
-    kind: 'exact-request-body' as const,
+    kind: checked.prompt?.messages.some((message) =>
+      message.content.some((part) => part.type === 'image')
+    )
+      ? ('request-descriptor' as const)
+      : ('exact-request-body' as const),
     body: encoded.body,
     diagnostics: encoded.messageMetadata?.diagnostics ?? [],
     capabilityVersion: encoded.messageMetadata?.capabilityVersion ?? 'fixture-only',
@@ -288,11 +292,15 @@ export function measureProviderRequest(
   request: ProviderRequest,
   target: ModelPreset & { connection: Connection },
   options: { codexNative?: boolean } = {}
-): { body: Json; modelId: string; estimatedInputTokens: number } {
+) {
   const body = encodeMainPreview(request, target, options).body;
+  const estimate = estimateContextInput(body, request.contextBudget);
   return {
     body,
     modelId: target.modelId,
-    estimatedInputTokens: estimateContextTokens(body, request.contextBudget),
+    estimatedInputTokens: estimate.totalTokens,
+    imageCount: estimate.imageCount,
+    estimatedImageTokens: estimate.imageTokens,
+    imageEstimate: estimate.imageEstimate,
   };
 }

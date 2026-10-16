@@ -3,6 +3,11 @@ import { validateAgentCollaboration } from './agent-collaboration.js';
 import { EXECUTION_INPUT_MAX_CHARS } from './content-limits.js';
 import { stripDeprecatedRisuPresetFields } from './risu-deprecated-fields.js';
 import {
+  validateRequestImage,
+  type RequestImage,
+  type RequestImagePart,
+} from './request-images.js';
+import {
   validateNativeRisuPreset,
   nativeRisuPresetControls,
   nativeRisuBlockEnabled,
@@ -47,7 +52,7 @@ export type ChatPromptControls = {
 export type LogicalMessage = {
   id: string;
   role: PromptRoleName;
-  content: { type: 'text'; text: string }[];
+  content: ({ type: 'text'; text: string } | RequestImagePart)[];
   completion: 'complete' | 'prefill';
   provenance: {
     blockId: string;
@@ -55,6 +60,8 @@ export type LogicalMessage = {
     sourceRevision?: string;
     sourceHash?: string;
     runId?: string;
+    /** Original user/history identity, distinct from the compiled block message id. */
+    sourceMessageId?: string;
   };
 };
 export type PromptCacheAnchor = {
@@ -86,6 +93,7 @@ export type PromptHistoryMessage = {
   runId?: string;
   sourceKind?: 'authored-start';
   current?: boolean;
+  requestImages?: RequestImage[];
 };
 export type ProviderPrompt = Pick<
   PromptCompilation,
@@ -217,9 +225,19 @@ export function validateProviderPrompt(value: unknown): asserts value is Provide
     )
       fail('PROMPT_INVALID_MESSAGE');
     for (const part of m.content) {
-      const c = object(part, ['type', 'text']);
-      if (c.type !== 'text') fail('PROMPT_TEXT_ONLY');
-      str(c.text, EXECUTION_INPUT_MAX_CHARS);
+      if (isObject(part) && part.type === 'image') {
+        const c = object(part, ['type', 'image']);
+        if (m.role !== 'user' || m.completion !== 'complete') fail('PROMPT_INVALID_IMAGE');
+        try {
+          validateRequestImage(c.image);
+        } catch {
+          fail('PROMPT_INVALID_IMAGE');
+        }
+      } else {
+        const c = object(part, ['type', 'text']);
+        if (c.type !== 'text') fail('PROMPT_INVALID_MESSAGE');
+        str(c.text, EXECUTION_INPUT_MAX_CHARS);
+      }
     }
     const provenance = object(m.provenance, [
       'blockId',
@@ -227,11 +245,12 @@ export function validateProviderPrompt(value: unknown): asserts value is Provide
       'sourceRevision',
       'sourceHash',
       'runId',
+      'sourceMessageId',
     ]);
     id(provenance.blockId);
     if (!['prompt', 'history', 'current'].includes(String(provenance.origin)))
       fail('PROMPT_INVALID_PROVENANCE');
-    for (const key of ['sourceRevision', 'sourceHash', 'runId'])
+    for (const key of ['sourceRevision', 'sourceHash', 'runId', 'sourceMessageId'])
       if (provenance[key] !== undefined) str(provenance[key]);
   }
   for (const raw of p.cachePlan) {
@@ -474,11 +493,20 @@ export function compileRisuPrompt(
         messages.push({
           id: `${id}:${item.id}`,
           role: item.role,
-          content: [{ type: 'text', text: item.text }],
+          content: [
+            { type: 'text', text: item.text },
+            ...(item.requestImages ?? []).map(
+              (image): RequestImagePart => ({
+                type: 'image',
+                image: structuredClone(image),
+              })
+            ),
+          ],
           completion: 'complete',
           provenance: {
             blockId: id,
             origin: item.current ? 'current' : 'history',
+            sourceMessageId: item.id,
             ...(item.sourceRevision ? { sourceRevision: item.sourceRevision } : {}),
             ...(item.sourceHash ? { sourceHash: item.sourceHash } : {}),
             ...(item.runId ? { runId: item.runId } : {}),

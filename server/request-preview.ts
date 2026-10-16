@@ -4,6 +4,12 @@ import { EXECUTION_INPUT_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/conte
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import type { RequestPreview } from '../core/request-preview.js';
+import {
+  REQUEST_IMAGE_MAX_COUNT,
+  validateRequestImage,
+  type RequestImage,
+  type RequestImagePreview,
+} from '../core/request-images.js';
 import type { Connection, ModelPreset, PromptPreset } from '../core/product.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -23,7 +29,8 @@ export async function previewNextRequest(
   store: Store,
   chatId: string,
   request: string,
-  loreContextReset = false
+  loreContextReset = false,
+  requestImages: readonly RequestImagePreview[] = []
 ): Promise<RequestPreview> {
   const chat = store.chat(chatId);
   const profile = store.product.snapshot(chat.id, 'main', chat.headRevision);
@@ -50,7 +57,9 @@ export async function previewNextRequest(
       promptWorkspaceRevision: workspace.revision,
       modelWorkspaceRevision: workspace.revision,
       contextRevision: null,
-      requestHash: createHash('sha256').update(request).digest('hex'),
+      requestHash: createHash('sha256')
+        .update(requestImages.length ? JSON.stringify([request, requestImages]) : request)
+        .digest('hex'),
       loreContextReset,
       stale: false,
     },
@@ -87,6 +96,7 @@ export async function previewNextRequest(
     settingsRevision: chat.settingsRevision,
     settings: chat.settings,
     request,
+    ...(requestImages.length ? { requestImages: previewImages(requestImages) } : {}),
     history: store.history(chat.headRevision),
     resources: store.product.resources(chat.id, profile),
     profile,
@@ -151,6 +161,9 @@ export async function previewNextRequest(
       if (previous?.summary && result.summary.inUse !== true)
         result.caveats.push('SUMMARY_INCLUSION_UNVERIFIED');
       result.tokens.estimatedInputTokens = estimated;
+      result.tokens.imageCount = measured.imageCount;
+      result.tokens.estimatedImageTokens = measured.estimatedImageTokens;
+      result.tokens.imageEstimate = measured.imageEstimate;
       result.tokens.utilization = estimated / budget.inputTokenLimit;
       const pending = estimated > budget.inputTokenLimit * CONTEXT_COMPACTION_TRIGGER_RATIO;
       result.tokens.status = pending ? 'compaction-pending' : 'within-budget';
@@ -218,15 +231,45 @@ export function requestPreviewRoutes(app: FastifyInstance, store: Store) {
     { bodyLimit: EXECUTION_INPUT_MAX_CHARS },
     async (request) => {
       const body = record(request.body);
-      fields(body, ['request', 'loreContextReset']);
+      fields(body, ['request', 'loreContextReset', 'requestImages']);
       if (body.loreContextReset !== undefined && typeof body.loreContextReset !== 'boolean')
         throw new HttpError(400, 'Invalid lore context reset');
+      const images = body.requestImages === undefined ? [] : previewImages(body.requestImages);
       return previewNextRequest(
         store,
         request.params.id,
-        text(body.request, 'preview request', REQUEST_TEXT_MAX_CHARS),
-        body.loreContextReset === true
+        text(body.request, 'preview request', REQUEST_TEXT_MAX_CHARS, images.length > 0),
+        body.loreContextReset === true,
+        images.map(({ name, width, height }) => ({ name, width, height }))
       );
     }
   );
+}
+
+/** Dimension-only projection. It never resolves bytes, stages uploads or stores these identities. */
+function previewImages(value: unknown): RequestImage[] {
+  if (!Array.isArray(value) || value.length > REQUEST_IMAGE_MAX_COUNT)
+    throw new HttpError(400, '참고 이미지 목록을 확인해 주세요.');
+  try {
+    return value.map((raw, index) => {
+      const image = record(raw);
+      fields(image, ['name', 'width', 'height']);
+      const hash = createHash('sha256')
+        .update(JSON.stringify([index, image]))
+        .digest('hex');
+      const ratio = Math.min(1, 2048 / Math.max(image.width, image.height));
+      return validateRequestImage({
+        ...image,
+        hash,
+        mime: 'image/webp',
+        input: {
+          hash,
+          width: Math.max(1, Math.round(image.width * ratio)),
+          height: Math.max(1, Math.round(image.height * ratio)),
+        },
+      });
+    });
+  } catch {
+    throw new HttpError(400, '참고 이미지의 이름과 크기를 확인해 주세요.');
+  }
 }

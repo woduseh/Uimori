@@ -1,4 +1,5 @@
 import { illustrationErrorMessage } from './illustration-labels.js';
+import { requestImageErrors } from './request-image-errors.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import {
   RISU_IMPORT_MAX_UPLOAD_BYTES,
@@ -8,6 +9,7 @@ import {
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
+  ...requestImageErrors,
   STORY_GUIDE_STALE: '가이드 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 요청해 주세요.',
   STORY_GUIDE_CANCELLED: '이야기 가이드 요청이 중단됐어요.',
   STORY_GUIDE_TIMEOUT: '이야기 가이드가 제한 시간 안에 끝나지 않았어요. 다시 요청해 주세요.',

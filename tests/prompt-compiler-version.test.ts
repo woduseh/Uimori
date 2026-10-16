@@ -56,8 +56,10 @@ function snapshot(resources: Resource[]): RunSnapshot {
   };
 }
 const hostText = (compiled: RunSnapshot) =>
-  compiled.promptCompilation!.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID)!
-    .content[0].text;
+  (
+    compiled.promptCompilation!.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID)!
+      .content[0] as { type: 'text'; text: string }
+  ).text;
 
 test('the current native compiler keeps host context and version across request building', () => {
   const input = snapshot([lore]);
@@ -71,9 +73,10 @@ test('the current native compiler keeps host context and version across request 
     PROMPT_COMPILER_VERSION
   );
   const tampered = structuredClone(current);
-  tampered.promptCompilation!.messages.find(
-    (message) => message.id === NATIVE_HOST_CONTEXT_ID
-  )!.content[0].text += ' ';
+  (
+    tampered.promptCompilation!.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID)!
+      .content[0] as { type: 'text'; text: string }
+  ).text += ' ';
   expect(() => attachMainHostContext(tampered)).toThrow('NATIVE_HOST_CONTEXT_COLLISION');
 });
 

@@ -192,12 +192,18 @@ test('CHARX-shaped bot, persona, and native module retain provenance through res
   expect(slots.lore).not.toContain('MODULE_POSITIONED');
   const compiled = compileSnapshotPrompt(snapshot).promptCompilation!;
   const positioned = compiled.messages.filter((message) =>
-    message.content.some((part) => part.text.includes('MODULE_POSITIONED'))
+    message.content.some((part) =>
+      (part as { type: 'text'; text: string }).text.includes('MODULE_POSITIONED')
+    )
   );
   expect(positioned).toHaveLength(1);
   expect(positioned[0].role).toBe('user');
-  expect(positioned[0].content[0].text).toContain('source_role="module"');
-  expect(positioned[0].content[0].text).toContain('title="Positioned module lore"');
+  expect((positioned[0].content[0] as { type: 'text'; text: string }).text).toContain(
+    'source_role="module"'
+  );
+  expect((positioned[0].content[0] as { type: 'text'; text: string }).text).toContain(
+    'title="Positioned module lore"'
+  );
   expect(compiled.messages.at(-1)).toEqual(positioned[0]);
   const synthetic = createNativeRisuPresetProgram({
     version: 1,
@@ -244,7 +250,9 @@ test('CHARX-shaped bot, persona, and native module retain provenance through res
       program === synthetic ? undefined : defaults
     ).promptCompilation!;
     const text = rendered.messages
-      .flatMap((message) => message.content.map((part) => part.text))
+      .flatMap((message) =>
+        message.content.map((part) => (part as { type: 'text'; text: string }).text)
+      )
       .join('\n');
     for (const slot of [slots.description, slots.persona, slots.lorebook]) {
       expect(text).toContain(slot);
@@ -270,14 +278,21 @@ test('CHARX-shaped bot, persona, and native module retain provenance through res
   const fallbackMessage = fallback.messages.find(
     (message) => message.id === '__host_background_lore__'
   )!;
-  const fallbackItems = JSON.parse(fallbackMessage.content[0].text.split('\n').slice(1).join('\n'));
+  const fallbackItems = JSON.parse(
+    (fallbackMessage.content[0] as { type: 'text'; text: string }).text
+      .split('\n')
+      .slice(1)
+      .join('\n')
+  );
   for (const item of input.pinnedSources!.filter((item) => !item.nativeRisuPosition)) {
     expect(fallbackItems.filter((candidate: { id: string }) => candidate.id === item.id)).toEqual([
       item,
     ]);
   }
   const fallbackText = fallback.messages
-    .flatMap((message) => message.content.map((part) => part.text))
+    .flatMap((message) =>
+      message.content.map((part) => (part as { type: 'text'; text: string }).text)
+    )
     .join('\n');
   expect(fallbackText.split(RISU_SOURCE_GUIDANCE)).toHaveLength(2);
   expect(fallbackText.split('MODULE_POSITIONED')).toHaveLength(2);

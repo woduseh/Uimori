@@ -5,6 +5,7 @@ import {
   CODEX_SEXUAL_CONTENT_BOUNDARY,
 } from '../core/codex-content-warning.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { REQUEST_IMAGE_MAX_COUNT } from '../core/request-images.js';
 import type {
   CodexContentPreflightResult,
   CodexContentWarningRole,
@@ -142,11 +143,24 @@ export function codexContentWarningRoutes(
     async (request, reply): Promise<CodexContentPreflightResult> => {
       reply.header('Cache-Control', 'no-store');
       const body = record(request.body);
-      fields(body, ['role', 'text', 'retryRunId', 'selection']);
+      fields(body, ['role', 'text', 'retryRunId', 'selection', 'imageCount']);
       const role = body.role;
       if (role !== 'main' && role !== 'translation' && role !== 'selection-revision')
         throw new HttpError(400, 'CODEX_CONTENT_PREFLIGHT_ROLE_INVALID');
-      const content = text(body.text, 'preflight text', REQUEST_TEXT_MAX_CHARS);
+      if (
+        body.imageCount !== undefined &&
+        (!Number.isSafeInteger(body.imageCount) ||
+          body.imageCount < 1 ||
+          body.imageCount > REQUEST_IMAGE_MAX_COUNT ||
+          role !== 'main')
+      )
+        throw new HttpError(400, 'Invalid preflight image count');
+      const content = text(
+        body.text,
+        'preflight text',
+        REQUEST_TEXT_MAX_CHARS,
+        role === 'main' && body.imageCount !== undefined
+      );
       store.chat(request.params.id);
       if (role === 'selection-revision') {
         const selection = text(body.selection, 'selected passage', REQUEST_TEXT_MAX_CHARS);

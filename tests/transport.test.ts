@@ -489,7 +489,9 @@ describe('server main runner through the actual loopback adapter', () => {
     snapshot.resources = [];
     expect(JSON.stringify(buildMainInput(snapshot))).not.toContain('AUXILIARY_ONLY');
     expect(
-      compileSnapshotPrompt(snapshot).promptCompilation!.messages[0].content[0].text
+      compileSnapshotPrompt(snapshot).promptCompilation!.messages[0].content.find(
+        (part) => part.type === 'text'
+      )?.text
     ).toContain(DEFAULT_MAIN_PROMPT);
     snapshot.profile!.packages = [];
     snapshot.profile!.packageAttachments = [];

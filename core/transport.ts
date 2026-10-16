@@ -186,6 +186,13 @@ export type CatalogModel = {
 
 /** Fetch + fatal UTF-8 decoder + SSE assembler. Never retries or follows redirects. */
 export type ProviderExecutionOptions = {
+  /** Host-owned immutable image bytes; resolved only into a detached transmission copy. */
+  resolveImage?: (
+    image: import('./request-images.js').RequestImage,
+    signal?: AbortSignal
+  ) =>
+    | import('./request-images.js').ResolvedRequestImage
+    | Promise<import('./request-images.js').ResolvedRequestImage>;
   executeAnthropicBatch?: (
     connection: ProviderConnection,
     request: ProviderRequest,

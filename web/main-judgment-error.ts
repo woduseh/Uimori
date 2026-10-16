@@ -1,6 +1,9 @@
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
+import { requestImageError } from './request-image-errors.js';
 
 export function mainJudgmentError(error: string | null | undefined): string | undefined {
+  const image = requestImageError(error);
+  if (image) return image;
   if (error === 'EVALUATION_SUBMISSION_REQUIRED') {
     const diagnostic = auxiliaryErrorDiagnostic(error);
     return `${diagnostic.message} ${diagnostic.action}`;

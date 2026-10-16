@@ -151,6 +151,7 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     scan(JSON.parse(String(row.default_persona)));
   for (const row of db.prepare('SELECT snapshot,status FROM runs').iterate()) {
     const snapshot = JSON.parse(String(row.snapshot));
+    scan(snapshot.requestImages);
     if (row.status === 'queued' || row.status === 'running') scan(snapshot);
     else {
       scan(snapshot.messageChanges);

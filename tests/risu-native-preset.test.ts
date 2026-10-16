@@ -134,7 +134,7 @@ async function render(source: unknown, values: Record<string, string | null> = {
     compiled,
     text: compiled.messages
       .filter((message) => message.provenance.origin === 'prompt')
-      .map((message) => message.content[0]!.text)
+      .map((message) => (message.content[0]! as { type: 'text'; text: string }).text)
       .join('\n'),
   };
 }
@@ -247,7 +247,10 @@ test('slot wrappers and fallback notes keep ordering without retired role overri
     })
   );
   expect(
-    result.compiled.messages.map((message) => [message.role, message.content[0]!.text])
+    result.compiled.messages.map((message) => [
+      message.role,
+      (message.content[0]! as { type: 'text'; text: string }).text,
+    ])
   ).toEqual([
     ['system', '<box>BOT</box>'],
     ['system', 'CBS=default note'],
@@ -282,7 +285,12 @@ test('chat author note overrides the Risu slot and CBS while translation keeps i
     slots: nativePromptSlots(prepared),
     history: [{ id: 'current', role: 'user', text: 'CURRENT', current: true }],
   });
-  expect(compiled.messages.map((message) => [message.role, message.content[0]!.text])).toEqual([
+  expect(
+    compiled.messages.map((message) => [
+      message.role,
+      (message.content[0]! as { type: 'text'; text: string }).text,
+    ])
+  ).toEqual([
     ['system', 'CBS=chat note'],
     ['system', '<note>chat note</note>'],
     ['user', 'CURRENT'],

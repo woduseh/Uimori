@@ -157,6 +157,19 @@ test('Codex preflight warns through JEV for main and translation while remaining
   });
   expect(withoutKey).toEqual({ warning: false });
   expect(judgments).toHaveLength(0);
+  expect(
+    await api(app, `/api/chats/${chat.id}/codex-content-preflight`, {
+      role: 'main',
+      text: '',
+      imageCount: 1,
+    })
+  ).toEqual({ warning: false });
+  const emptyWithoutImage = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${chat.id}/codex-content-preflight`,
+    payload: { role: 'main', text: '' },
+  });
+  expect(emptyWithoutImage.statusCode).toBe(400);
   const translationModel = app.store.product.snapshot(chat.id, 'translation').models.translation;
   expect(
     await autoTranslationNeedsConfirmation(

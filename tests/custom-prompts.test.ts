@@ -56,12 +56,19 @@ describe('full editable prompt boundaries', () => {
       text: 'The harbor waited.',
       hash: createHash('sha256').update('The harbor waited.').digest('hex'),
     };
-    expect(compileSnapshotPrompt(original).promptCompilation!.messages[0].content[0].text).toBe(
-      DEFAULT_MAIN_PROMPT
-    );
     expect(
-      compileTranslationPrompt(translationInput(source, context, original), original, 'task')!
-        .messages[0].content[0].text
+      (
+        compileSnapshotPrompt(original).promptCompilation!.messages[0].content[0] as {
+          type: 'text';
+          text: string;
+        }
+      ).text
+    ).toBe(DEFAULT_MAIN_PROMPT);
+    expect(
+      (
+        compileTranslationPrompt(translationInput(source, context, original), original, 'task')!
+          .messages[0].content[0] as { type: 'text'; text: string }
+      ).text
     ).toBe(DEFAULT_TRANSLATION_PROMPT);
     expect(context.instructionRevision).toBe('default-translation-1');
     for (const text of ['', '  \r\n  ', literal]) {
@@ -83,7 +90,12 @@ describe('full editable prompt boundaries', () => {
     const legacySnapshot = snapshot();
     delete legacySnapshot.profile;
     expect(
-      compileSnapshotPrompt(legacySnapshot).promptCompilation!.messages[0].content[0].text
+      (
+        compileSnapshotPrompt(legacySnapshot).promptCompilation!.messages[0].content[0] as {
+          type: 'text';
+          text: string;
+        }
+      ).text
     ).toBe(DEFAULT_MAIN_PROMPT);
   });
 

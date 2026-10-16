@@ -121,7 +121,12 @@ export function retryRun(
       const request =
         options.request === undefined
           ? original.request
-          : text(options.request, 'request', REQUEST_TEXT_MAX_CHARS);
+          : text(
+              options.request,
+              'request',
+              REQUEST_TEXT_MAX_CHARS,
+              !!original.snapshot.requestImages?.length
+            );
       const result = store.createRunInTransaction(
         chat.id,
         {
@@ -137,6 +142,9 @@ export function retryRun(
           const snapshot: RunSnapshot = {
             chatId: chat.id,
             request,
+            ...(original.snapshot.requestImages?.length
+              ? { requestImages: structuredClone(original.snapshot.requestImages) }
+              : {}),
             parentRevision,
             ...(replacement
               ? { replacement: { sourceRevision: replacement.id, sourceHash: replacement.hash } }

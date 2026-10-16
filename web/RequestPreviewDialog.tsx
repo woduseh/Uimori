@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RequestPreview } from '../core/request-preview.js';
+import type { RequestImagePreview } from '../core/request-images.js';
 import { TOKENIZER_PROFILES } from '../core/tokenizer-profiles.js';
 import { api, libraryChangedKey } from './api.js';
 import { Dialog } from './Dialog.js';
@@ -10,11 +11,13 @@ import './request-preview.css';
 const amount = (value: number | null) =>
   value === null ? '미확인' : value.toLocaleString('ko-KR');
 const entries = (value: number | null) => (value === null ? '미확인' : `${amount(value)}개`);
+const noImages: readonly RequestImagePreview[] = [];
 
 export function RequestPreviewDialog({
   open,
   chatId,
   request,
+  requestImages = noImages,
   loreContextReset,
   refreshKey,
   unavailable,
@@ -23,6 +26,7 @@ export function RequestPreviewDialog({
   open: boolean;
   chatId: string;
   request: string;
+  requestImages?: readonly RequestImagePreview[];
   loreContextReset: boolean;
   refreshKey: string;
   unavailable: boolean;
@@ -32,9 +36,11 @@ export function RequestPreviewDialog({
   const [result, setResult] = useState<{ key: string; value: RequestPreview } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const sequence = useRef(0);
+  const imageKey = JSON.stringify(requestImages);
   const key = JSON.stringify([
     chatId,
     request,
+    imageKey,
     loreContextReset,
     refreshKey,
     refresh,
@@ -43,7 +49,8 @@ export function RequestPreviewDialog({
   ]);
   const preview = result?.key === key ? result.value : null;
   const error = failure?.key === key ? failure.message : '';
-  const ready = open && !!request.trim() && !unavailable;
+  const hasInput = !!request.trim() || requestImages.length > 0;
+  const ready = open && hasInput && !unavailable;
 
   useEffect(() => {
     if (!open) return;
@@ -75,7 +82,11 @@ export function RequestPreviewDialog({
     const controller = new AbortController();
     void api<RequestPreview>(
       `/chats/${encodeURIComponent(chatId)}/request-preview`,
-      { request, ...(loreContextReset ? { loreContextReset: true } : {}) },
+      {
+        request,
+        ...(imageKey !== '[]' ? { requestImages: JSON.parse(imageKey) } : {}),
+        ...(loreContextReset ? { loreContextReset: true } : {}),
+      },
       'POST',
       controller.signal
     )
@@ -93,7 +104,7 @@ export function RequestPreviewDialog({
       controller.abort();
       sequence.current++;
     };
-  }, [ready, key, chatId, request, loreContextReset]);
+  }, [ready, key, chatId, request, imageKey, loreContextReset]);
 
   const tokens = preview?.tokens;
   const percent =
@@ -115,7 +126,7 @@ export function RequestPreviewDialog({
       scopeKey={chatId}
       onClose={onClose}
     >
-      {!request.trim() ? (
+      {!hasInput ? (
         <p>장면 요청을 입력하면 다음 생성의 설정과 컨텍스트를 확인할 수 있어요.</p>
       ) : unavailable ? (
         <NoticeBanner>현재 작업을 마치고 미리보기를 다시 확인해 주세요.</NoticeBanner>
@@ -203,6 +214,12 @@ export function RequestPreviewDialog({
                   />
                 )}
                 {tokenizer && <small className="muted">{tokenizer.label} · 로컬 추정</small>}
+                {!!tokens?.imageCount && (
+                  <small className="muted">
+                    참고 이미지 {tokens.imageCount}장 · 이미지 입력 약{' '}
+                    {amount(tokens.estimatedImageTokens ?? null)}토큰 포함
+                  </small>
+                )}
                 {preview.summary.compactionPending && (
                   <p role="status">컨텍스트 정리가 필요해 실제 전송량은 달라질 수 있어요.</p>
                 )}
@@ -224,6 +241,12 @@ export function RequestPreviewDialog({
                   길이는 미리 알 수 없어요.
                 </p>
                 <p>로어 수는 현재 준비된 자료 기준이에요. 실제 포함 기록은 생성 후 확인해요.</p>
+                {!!tokens?.imageCount && (
+                  <p>
+                    이미지는 전송용 해상도로 별도 추정해요. 모델별 실제 이미지 토큰과 과금량을
+                    보장하지 않으며, 이미지 변환과 스크립트 처리 후 입력량이 달라질 수 있어요.
+                  </p>
+                )}
                 {preview.caveats.includes('NATIVE_CALLBACKS_DEFERRED') && (
                   <p>Risu의 입력·시작·요청 수정 스크립트는 생성할 때 실행해요.</p>
                 )}

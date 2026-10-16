@@ -1,3 +1,4 @@
+import type { RequestImage } from '../core/request-images.js';
 import { themeBodyScroll, readerLocation } from './theme-body-scroll.js';
 import { BookmarkButton } from './Bookmarks.js';
 import { captureReaderLocation } from './useReadingSync.js';
@@ -81,6 +82,7 @@ type ReaderProps = {
   retryDisabled?: boolean;
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
+  requestImages?: RequestImage[];
   /** The newest scene keeps its request actions standing on narrow widths. */
   latest?: boolean;
   onEditRequest?: (text: string) => Promise<boolean>;
@@ -196,6 +198,7 @@ function SourceReaderContent({
   retryDisabled,
   onEditingChange,
   request,
+  requestImages,
   latest,
   onEditRequest,
   onCheckRequest,
@@ -641,10 +644,11 @@ function SourceReaderContent({
         requestPersona={request && packageStart?.mode !== 'authored' ? requestPersona : undefined}
       >
         <div slot="request" data-uimori-part="request">
-          {packageStart?.mode !== 'authored' && request && (
+          {packageStart?.mode !== 'authored' && (request || requestImages?.length) && (
             <RequestMessage
               runId={source.runId}
-              request={request}
+              request={request ?? ''}
+              images={requestImages}
               displayText={presentation?.data?.request?.text}
               compactActions={latest ? 'always' : 'tap'}
               onSubmit={onEditRequest}

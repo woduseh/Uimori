@@ -19,6 +19,7 @@ export interface NativeRisuMessage {
   time?: number;
 }
 export interface NativeRisuRequestMessage {
+  id?: string;
   role: string;
   content: string;
 }
@@ -127,7 +128,11 @@ function requestMessages(value: unknown): NativeRisuRequestMessage[] {
     const message = record(item);
     if (typeof message.role !== 'string' || typeof message.content !== 'string')
       fail('RISU_NATIVE_REQUEST');
-    return { role: message.role as string, content: message.content as string };
+    return {
+      role: message.role as string,
+      content: message.content as string,
+      ...(typeof message.id === 'string' ? { id: message.id } : {}),
+    };
   });
 }
 

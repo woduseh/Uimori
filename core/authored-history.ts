@@ -20,6 +20,7 @@ export function validateSourceOnlyTranscript(snapshot: RunSnapshot): void {
           'settingsRevision',
           'settings',
           'request',
+          'requestImages',
           'history',
           'resources',
           'profile',

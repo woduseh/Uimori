@@ -39,7 +39,9 @@ export function translationFixtureSlot(request: ProviderRequest, slot: 'source' 
   if (slot === 'source' && typeof fallback.text === 'string') return fallback.text;
   if (slot === 'context' && fallback.context) return JSON.stringify(fallback.context);
   return translationFixtureRenderedSlot(
-    request.prompt?.messages.map((item) => item.content.map((part) => part.text).join('')) ?? [],
+    request.prompt?.messages.map((item) =>
+      item.content.map((part) => (part as { type: 'text'; text: string }).text).join('')
+    ) ?? [],
     slot
   );
 }

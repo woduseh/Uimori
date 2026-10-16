@@ -436,7 +436,9 @@ test('switching an attached reference to pinned supplies it once and removes the
   expect(b.snapshot.loreContext!.entries).toEqual([]);
   expect(b.snapshot.loreContext!.stats.reasons).toContain('provided-as-pinned');
   const wireText = b.snapshot
-    .promptCompilation!.messages.map((m) => m.content.map((c) => c.text).join(''))
+    .promptCompilation!.messages.map((m) =>
+      m.content.map((c) => (c as { type: 'text'; text: string }).text).join('')
+    )
     .join('\n');
   expect(wireText.split(f.loreText).length - 1).toBe(1);
 });

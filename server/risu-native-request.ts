@@ -4,7 +4,7 @@ import { validateProviderPrompt } from '../core/risu-prompt.js';
 import type { RunSnapshot } from '../core/types.js';
 import { nativeRisuContext, nativeRisuSessionKey } from './risu-native-context.js';
 import { executeRisuNative, type NativeRisuExecutionOptions } from './risu-native-runtime.js';
-import { nativeHistoryRevision } from './risu-native-run.js';
+import { nativeHistoryRevision, validateNativeImageMessageIdentity } from './risu-native-run.js';
 
 export async function prepareNativeRisuRequest(
   snapshot: RunSnapshot,
@@ -36,22 +36,55 @@ export async function prepareNativeRisuRequest(
       messages: receipt.messages,
       event: 'editRequest',
       request: request.prompt.messages.map((message) => ({
+        id: message.id,
         role: message.role,
-        content: message.content.map((part) => part.text).join('\n'),
+        content: message.content
+          .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+          .join('\n'),
       })),
     },
     { ...options, sessionKey: options.sessionKey ?? nativeRisuSessionKey(snapshot) }
   );
+  validateNativeImageMessageIdentity(snapshot, result.messages);
   const prompt = structuredClone(request.prompt);
   if (result.request) {
+    const originals = new Map(prompt.messages.map((message) => [message.id, message]));
+    const imageMessages = prompt.messages.filter((message) =>
+      message.content.some((part) => part.type === 'image')
+    );
+    const returnedIds = new Set<string>();
+    if (imageMessages.length) {
+      for (const message of result.request) {
+        if (message.id && returnedIds.has(message.id))
+          throw new Error('RISU_NATIVE_REQUEST_IMAGE_IDENTITY');
+        if (message.id) returnedIds.add(message.id);
+        const previous = message.id ? originals.get(message.id) : undefined;
+        if (previous?.content.some((part) => part.type === 'image') && message.role !== 'user')
+          throw new Error('RISU_NATIVE_REQUEST_IMAGE_IDENTITY');
+      }
+      // Removing an identified message is an intentional exclusion. An unidentified
+      // replacement could instead be the same message with a lost id: never guess.
+      if (
+        imageMessages.some((message) => !returnedIds.has(message.id)) &&
+        result.request.some((message) => !message.id || !originals.has(message.id))
+      )
+        throw new Error('RISU_NATIVE_REQUEST_IMAGE_IDENTITY');
+    }
     prompt.messages = result.request.map((message, index) => {
       if (!['system', 'user', 'assistant'].includes(message.role))
         throw new Error('RISU_NATIVE_REQUEST_ROLE');
-      const previous = prompt.messages[index];
+      const previous = message.id
+        ? originals.get(message.id)
+        : imageMessages.length
+          ? undefined
+          : prompt.messages[index];
       return {
-        id: previous?.id ?? `native-request:${index}`,
+        id: message.id ?? previous?.id ?? `native-request:${index}`,
         role: message.role as 'system' | 'user' | 'assistant',
-        content: [{ type: 'text' as const, text: message.content }],
+        content: [
+          { type: 'text' as const, text: message.content },
+          ...(previous?.content.filter((part) => part.type === 'image') ?? []),
+        ],
         completion:
           previous?.role === message.role && index === result.request!.length - 1
             ? previous.completion

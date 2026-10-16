@@ -9,9 +9,14 @@ import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { prepareNativeRisuRequest } from '../server/risu-native-request.js';
 import { disposeAllNativeRisuSessions } from '../server/risu-native-runtime.js';
+import type { RequestImage } from '../core/request-images.js';
 
 afterEach(disposeAllNativeRisuSessions);
-async function prepared(code?: string, providerPrefill = false) {
+async function prepared(
+  code?: string,
+  providerPrefill = false,
+  authored: Partial<RunSnapshot> = {}
+) {
   const program = importRisuPresetProgram({
     name: 'Prefill',
     promptTemplate: [
@@ -54,6 +59,7 @@ async function prepared(code?: string, providerPrefill = false) {
     history: [],
     logicalHistory: [],
     resources: [],
+    ...authored,
     profile: {
       ...defaultProfile('test'),
       contents: [],
@@ -91,6 +97,94 @@ async function prepared(code?: string, providerPrefill = false) {
   return { snapshot: compiled, request };
 }
 
+const image: RequestImage = {
+  hash: 'a'.repeat(64),
+  mime: 'image/webp',
+  name: 'reference.webp',
+  width: 1200,
+  height: 800,
+  input: { hash: 'b'.repeat(64), width: 1200, height: 800 },
+};
+
+test('image-only current input survives text callbacks and receipt replay binds image identity', async () => {
+  const input = await prepared(undefined, false, { request: '', requestImages: [image] });
+  const last = input.request.prompt!.messages.at(-1)!;
+  expect(last.content).toEqual([
+    { type: 'text', text: '' },
+    { type: 'image', image },
+  ]);
+  expect(last.provenance.sourceMessageId).toBe('current-input');
+  const first = await prepareNativeRisuRequest(input.snapshot, input.request);
+  expect(first.request.prompt!.messages.at(-1)!.content).toEqual(last.content);
+  const changed = structuredClone(input.request);
+  changed.prompt!.messages.at(-1)!.content = [
+    { type: 'text', text: '' },
+    { type: 'image', image: { ...image, input: { ...image.input, hash: 'c'.repeat(64) } } },
+  ];
+  await expect(
+    prepareNativeRisuRequest(first.snapshot, changed, { requestOrdinal: 0 })
+  ).rejects.toThrow('RISU_NATIVE_REQUEST_REPLAY_MISMATCH');
+});
+
+test('Lua request reordering keeps images on their identified user message', async () => {
+  const input = await prepared(
+    `listenEdit('editRequest', function(id, messages)
+    local user = table.remove(messages, #messages)
+    user.content = 'Look here'
+    table.insert(messages, 1, user)
+    return messages
+  end)`,
+    false,
+    { requestImages: [image] }
+  );
+  const result = await prepareNativeRisuRequest(input.snapshot, input.request);
+  expect(result.request.prompt!.messages[0]).toMatchObject({
+    id: input.request.prompt!.messages.at(-1)!.id,
+    role: 'user',
+    provenance: { sourceMessageId: 'current-input' },
+    content: [
+      { type: 'text', text: 'Look here' },
+      { type: 'image', image },
+    ],
+  });
+  expect(result.request.prompt!.messages[1].content).toEqual([{ type: 'text', text: 'Story' }]);
+});
+
+test.each([
+  'messages[#messages].id = nil',
+  "messages[#messages].role = 'assistant'",
+  'table.insert(messages, messages[#messages])',
+  "setChatRole(id, -1, 'char')",
+])('image request refuses ambiguous or changed attachment ownership: %s', async (change) => {
+  const input = await prepared(
+    `listenEdit('editRequest', function(id, messages)
+    ${change}
+    return messages
+  end)`,
+    false,
+    { requestImages: [image] }
+  );
+  await expect(prepareNativeRisuRequest(input.snapshot, input.request)).rejects.toThrow(
+    'RISU_NATIVE_REQUEST_IMAGE_IDENTITY'
+  );
+});
+
+test('start script exclusion does not resurrect an image-only current input', async () => {
+  const input = await prepared('function onStart(id) removeChat(id, -1) end', false, {
+    request: '',
+    requestImages: [image],
+  });
+  expect(input.snapshot.nativeRisuExecution!.requestPresent).toBe(false);
+  expect(
+    input.request
+      .prompt!.messages.flatMap((message) => message.content)
+      .some((part) => part.type === 'image')
+  ).toBe(false);
+  expect(
+    input.request.prompt!.messages.some((message) => message.provenance.origin === 'current')
+  ).toBe(false);
+});
+
 test('native request without callbacks never adds the retired RISUP assistant prefill', async () => {
   const input = await prepared();
   expect(input.request.prompt!.messages.at(-1)).toMatchObject({
@@ -119,7 +213,9 @@ test('native request body edits preserve completion when the final role and posi
     completion: 'prefill',
     content: [{ type: 'text', text: 'Edited prefix: ' }],
   });
-  expect(input.request.prompt!.messages.at(-1)!.content[0]!.text).toBe('Continue: ');
+  expect(
+    input.request.prompt!.messages.at(-1)!.content.filter((part) => part.type === 'text')[0]!.text
+  ).toBe('Continue: ');
 });
 
 test.each([
@@ -138,6 +234,14 @@ test.each([
     ).toBe(true);
   }
 );
+
+test('start scripts cannot change an attached input to an assistant message', async () => {
+  await expect(
+    prepared("function onStart(id) setChatRole(id, -1, 'char') end", false, {
+      requestImages: [image],
+    })
+  ).rejects.toThrow('RISU_NATIVE_REQUEST_IMAGE_IDENTITY');
+});
 
 test('request receipts replay by round without repeating Lua callbacks or folding a later identical request', async () => {
   const input = await prepared(`listenEdit('editRequest', function(id, messages)
@@ -161,8 +265,12 @@ test('request receipts replay by round without repeating Lua callbacks or foldin
     requestOrdinal: 1,
   });
   expect(calls).toEqual(['LLM', 'LLM']);
-  expect(first.request.prompt!.messages.at(-1)!.content[0]!.text).toBe('A scene edit 1');
-  expect(second.request.prompt!.messages.at(-1)!.content[0]!.text).toBe('A scene edit 2');
+  expect(
+    first.request.prompt!.messages.at(-1)!.content.filter((part) => part.type === 'text')[0]!.text
+  ).toBe('A scene edit 1');
+  expect(
+    second.request.prompt!.messages.at(-1)!.content.filter((part) => part.type === 'text')[0]!.text
+  ).toBe('A scene edit 2');
   const persisted = JSON.parse(JSON.stringify(second.snapshot)) as RunSnapshot;
   disposeAllNativeRisuSessions();
   const replayFirst = await prepareNativeRisuRequest(persisted, input.request, {
@@ -196,7 +304,8 @@ test('a replayed request rejects changed input before executing authored callbac
     requestOrdinal: 0,
   });
   const changed = structuredClone(input.request);
-  changed.prompt!.messages.at(-1)!.content[0]!.text = 'Different scene';
+  changed.prompt!.messages.at(-1)!.content.filter((part) => part.type === 'text')[0]!.text =
+    'Different scene';
   await expect(
     prepareNativeRisuRequest(first.snapshot, changed, { host, requestOrdinal: 0 })
   ).rejects.toThrow('RISU_NATIVE_REQUEST_REPLAY_MISMATCH');

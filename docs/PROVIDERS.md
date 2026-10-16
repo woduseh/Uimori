@@ -64,6 +64,8 @@ Codex는 API 키를 입력하는 연결이 아니라 전용 실행기의 로그�
 
 ## 구현 경계
 
+본문 참고 이미지는 Responses의 `input_image`, Chat/Vercel의 `image_url`, Anthropic의 `image`, Gemini/Vertex의 `inlineData`, Codex의 이미지 입력으로 전달해요. Codex의 이미지 생성 도구를 켜지 않아요. DeepSeek 직접 연결과 명시적으로 확인된 텍스트 전용 모델은 이미지 입력을 거절하며, 알 수 없는 사용자 지정 모델은 지원 미확인으로 전송을 허용해요. 제공사·게이트웨이·계정별 실제 지원 여부는 API 응답이 기준이에요. 현재 이미지 입력은 본문 사용자 요청 범위이며 입력 번역·JEV 선별·도우미에 첨부 UI를 추가하지 않아요.
+
 `core/model-request-fields.ts`는 실행 스냅샷의 모델 ID·프로바이더 옵션·확정된 가격 스냅샷만 요청으로 옮겨요. 생성 옵션·컨텍스트 예산·도구·저장과 실행 정책은 각 요청 생성부가 결정하며, 제목과 연결 테스트는 별도 정책을 유지해요.
 
 `server/provider-connections.ts`는 연결 입력·키 저장을, `server/credentials.ts`는 DB 키 읽기/쓰기를 맡아요. 프로토콜별 encoder와 transport는 모델 요청 형식과 응답 파싱을 맡아요. 자료 편집과 과거 백업 검증이 프로바이더 전송 경로에 개입하지 않아요. 실제 지원 옵션과 응답 품질은 해당 서비스에서 확인해야 해요.

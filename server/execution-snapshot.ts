@@ -23,6 +23,7 @@ export function settleSnapshot(snapshot: RunSnapshot): RunSnapshot {
     parentRevision: snapshot.parentRevision,
     ...(snapshot.replacement ? { replacement: snapshot.replacement } : {}),
     request: snapshot.request,
+    ...(snapshot.requestImages?.length ? { requestImages: snapshot.requestImages } : {}),
     settingsRevision: snapshot.settingsRevision,
     settings: snapshot.settings,
     history: [],

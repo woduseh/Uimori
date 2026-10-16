@@ -2,6 +2,19 @@ import type { ChatTranscript } from '../core/chat-transcript.js';
 import type { Store } from './store.js';
 import { encodedImage } from './image-storage.js';
 
+export function remapTranscriptRequestImages(
+  transcript: ChatTranscript,
+  resolve: (hash: string) => string
+): void {
+  for (const entry of transcript.entries)
+    if (entry.requestImages)
+      entry.requestImages = entry.requestImages.map((image) => ({
+        ...image,
+        hash: resolve(image.hash),
+        input: { ...image.input, hash: resolve(image.input.hash) },
+      }));
+}
+
 const mediaUrl = /\/api\/(assets|illustration-images|package-image-blobs)\/([A-Za-z0-9_.-]+)/gu;
 
 export function rewriteTranscriptMedia(
@@ -54,9 +67,14 @@ export function independentTextMedia(store: Store, text: string): string {
 export function transcriptImages(store: Store, transcripts: readonly ChatTranscript[]) {
   const hashes = new Set<string>();
   for (const transcript of transcripts)
-    for (const entry of transcript.entries)
+    for (const entry of transcript.entries) {
+      for (const image of entry.requestImages ?? []) {
+        hashes.add(image.hash);
+        hashes.add(image.input.hash);
+      }
       for (const text of [entry.text, entry.translation ?? ''])
         for (const match of text.matchAll(/\/api\/package-image-blobs\/([a-f0-9]{64})/gu))
           hashes.add(match[1]);
+    }
   return [...hashes].map((hash) => encodedImage(store.db, hash));
 }

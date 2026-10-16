@@ -198,7 +198,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE COALESCE(json_extract(snapshot,'$.displayModelTitle'),json_extract(snapshot,'$.profile.models.main.title')) END AS modelTitle,json_extract(snapshot,'$.profile.models.main.executionMode') AS executionMode,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
-    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset')) AS snapshot
+    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'requestImages',json_extract(snapshot,'$.requestImages')) AS snapshot
     FROM runs
     WHERE runs.chat_id=? ${scope ? 'AND runs.id IN (SELECT value FROM json_each(?))' : ''} ORDER BY runs.created_at,runs.id`)
       .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<string, any> & {

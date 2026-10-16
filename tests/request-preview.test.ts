@@ -187,6 +187,51 @@ test('current preview is metadata only, with no writes, provider calls or native
   expect(callbacks).not.toHaveBeenCalled();
 });
 
+test('image-only preview includes image allowance without uploading or storing image data', async () => {
+  const f = await fixture();
+  f.store.product.connection(
+    {
+      title: 'Image preview',
+      protocol: 'openai-responses-v1',
+      endpoint: 'https://api.openai.com/v1',
+      enabled: true,
+      expectedRevision: f.connection.revision,
+    },
+    f.connection.id
+  );
+  f.store.product.model({ ...f.modelInput, expectedRevision: f.model.revision }, f.model.id);
+  const network = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Network forbidden'));
+  const baseline = await f.preview();
+  const before = f.changes();
+  const response = await f.post({
+    request: '',
+    requestImages: [{ name: 'PRIVATE_REFERENCE.png', width: 4096, height: 2048 }],
+  });
+  expect(response.statusCode, response.body).toBe(200);
+  const result = response.json<RequestPreview>();
+  expect(result.error).toBeNull();
+  expect(result.tokens).toMatchObject({
+    imageCount: 1,
+    imageEstimate: 'conservative-dimensions-v1',
+  });
+  expect(result.tokens.estimatedImageTokens).toBeGreaterThan(0);
+  expect(result.tokens.estimatedInputTokens!).toBeGreaterThan(
+    baseline.tokens.estimatedInputTokens!
+  );
+  expect(response.body).not.toContain('PRIVATE_REFERENCE');
+  expect(f.changes()).toBe(before);
+  expect(network).not.toHaveBeenCalled();
+  const changed = await f.post({
+    request: '',
+    requestImages: [{ name: 'PRIVATE_REFERENCE.png', width: 2048, height: 2048 }],
+  });
+  expect(changed.json<RequestPreview>().snapshot.requestHash).not.toBe(result.snapshot.requestHash);
+  expect(
+    (await f.post({ request: '', requestImages: [{ name: 'bad', width: 0, height: 5 }] }))
+      .statusCode
+  ).toBe(400);
+});
+
 test('draft and refreshed current settings/models affect provenance and estimate without creating summaries', async () => {
   const f = await fixture();
   const first = await f.preview();

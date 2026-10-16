@@ -81,7 +81,7 @@ test('native depth/end/reverse-depth preserve role and position once while norma
   const messages = compiled.messages.map((message) => ({
     id: message.id,
     role: message.role,
-    text: message.content.map((part) => part.text).join(''),
+    text: message.content.map((part) => (part as { type: 'text'; text: string }).text).join(''),
   }));
   const matches = (text: string, value: string) =>
     text === value || text.includes(`>\n${value}\n</entry>`);
@@ -114,7 +114,11 @@ test('conditional native positions use frozen lore selection and pinned budgets 
   const attachment = snapshot.profile!.packageAttachments![0];
   const before = compileSnapshotPrompt(snapshot).promptCompilation!;
   expect(
-    before.messages.some((message) => message.content[0].text.includes('>\nCONDITIONAL\n</entry>'))
+    before.messages.some((message) =>
+      (message.content[0] as { type: 'text'; text: string }).text.includes(
+        '>\nCONDITIONAL\n</entry>'
+      )
+    )
   ).toBe(false);
   snapshot.loreSelection = {
     version: 1,
@@ -132,13 +136,21 @@ test('conditional native positions use frozen lore selection and pinned budgets 
   program.nativeRisuPreset.preset.promptSettings = { assistantPrefill: 'PREFIX' };
   const after = compileSnapshotPrompt(snapshot, program).promptCompilation!;
   expect(
-    after.messages.some((message) => message.content[0].text.includes('>\nCONDITIONAL\n</entry>'))
+    after.messages.some((message) =>
+      (message.content[0] as { type: 'text'; text: string }).text.includes(
+        '>\nCONDITIONAL\n</entry>'
+      )
+    )
   ).toBe(true);
   expect(after.messages.at(-1)).toMatchObject({
     completion: 'complete',
     content: [{ text: expect.stringContaining('>\nPINNED\n</entry>') }],
   });
-  expect(after.messages.some((message) => message.content[0].text === 'PREFIX')).toBe(false);
+  expect(
+    after.messages.some(
+      (message) => (message.content[0] as { type: 'text'; text: string }).text === 'PREFIX'
+    )
+  ).toBe(false);
   snapshot.profile!.loreContext = { ...DEFAULT_LORE_CONTEXT, maxPinnedTokens: 2 };
   expect(() => compileSnapshotPrompt(snapshot)).toThrow('LORE_PINNED_BUDGET_EXCEEDED');
 });

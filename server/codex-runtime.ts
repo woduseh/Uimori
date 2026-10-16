@@ -36,6 +36,11 @@ import {
 } from '../core/codex-protocol.js';
 import { assertContextBudget, type ContextBudget } from '../core/context-budget.js';
 import {
+  materializeProviderImages,
+  PROVIDER_REQUEST_MAX_BYTES,
+  requestImages,
+} from '../core/provider-images.js';
+import {
   ProviderContractError,
   type Json,
   type ProviderConnection,
@@ -189,6 +194,7 @@ type TurnPlan = {
   baseInstructions?: string;
   developerInstructions: string;
   input: Json[];
+  imagePrompt?: ProviderRequest['prompt'];
   outputSchema?: Json;
   /** Attempt record body; never carries attachment bytes or image results. */
   descriptor: Json;
@@ -739,7 +745,12 @@ export class CodexRuntime implements CodexRuntimeService {
         effort: request.generation?.reasoningEffort,
         baseInstructions: built.baseInstructions,
         developerInstructions: built.developerInstructions,
-        input: [{ type: 'text', text: built.inputText, text_elements: [] }],
+        input: built.input.map((part) =>
+          object(part) && part.type === 'text' ? { ...part, text_elements: [] } : part
+        ),
+        ...(requestImages(request).length
+          ? { imagePrompt: request.prompt, maxWriteBytes: PROVIDER_REQUEST_MAX_BYTES + 1024 * 1024 }
+          : {}),
         outputSchema: built.outputSchema,
         descriptor,
         stablePrefix: built.baseInstructions
@@ -777,7 +788,10 @@ export class CodexRuntime implements CodexRuntimeService {
         effort: request.reasoningEffort,
         baseInstructions: request.baseInstructions,
         developerInstructions: request.developerInstructions,
-        input: [{ type: 'text', text: request.text, text_elements: [] }],
+        input: request.input ?? [{ type: 'text', text: request.text, text_elements: [] }],
+        ...(requestImages(request).length
+          ? { imagePrompt: request.prompt, maxWriteBytes: PROVIDER_REQUEST_MAX_BYTES + 1024 * 1024 }
+          : {}),
         descriptor,
         stablePrefix: JSON.stringify([
           request.baseInstructions ?? '',
@@ -1083,6 +1097,9 @@ export class CodexRuntime implements CodexRuntimeService {
       if ((await this.account(process, signal)).type !== 'chatgpt') error('CODEX_LOGIN_REQUIRED');
       if (revision !== this.revision) error('CODEX_AUTH_CHANGED');
       if (signal.aborted) return fail(options.signal.aborted ? 'CANCELLED' : 'TIMEOUT', usage);
+      const input = plan.imagePrompt
+        ? await materializeProviderImages(plan.input, { prompt: plan.imagePrompt }, options, signal)
+        : plan.input;
       const serialized = JSON.stringify(plan.descriptor);
       await options.onWire?.({
         connectionId: connection.id,
@@ -1378,7 +1395,7 @@ export class CodexRuntime implements CodexRuntimeService {
         {
           threadId,
           model: plan.modelId,
-          input: plan.input,
+          input,
           ...(plan.outputSchema ? { outputSchema: plan.outputSchema } : {}),
           approvalPolicy: 'never',
           sandboxPolicy: { type: 'readOnly', networkAccess: false },

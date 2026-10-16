@@ -375,7 +375,11 @@ export function LoreContextPolicyEditor({
                           {index + 1}. {message.role} · {message.provenance.origin} ·{' '}
                           {message.provenance.blockId}
                         </summary>
-                        <pre>{message.content.map((part) => part.text).join('\n')}</pre>
+                        <pre>
+                          {message.content
+                            .flatMap((part) => (part.type === 'text' ? [part.text] : []))
+                            .join('\n')}
+                        </pre>
                       </details>
                     </li>
                   ))}

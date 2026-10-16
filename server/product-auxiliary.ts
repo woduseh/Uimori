@@ -246,7 +246,7 @@ function providerInput(
     !!value &&
     !!compilation?.usedSlots?.includes(slot) &&
     compilation.messages.some((message) =>
-      message.content.some((part) => part.text.includes(value))
+      message.content.some((part) => part.type === 'text' && part.text.includes(value))
     );
   const sourceOnly = input.contextMode === 'source-only';
   const context = translationPromptContext(input);

@@ -10,6 +10,7 @@ import { normalizeChatSettings } from '../core/chat-settings.js';
 import { autoTranslationDefaultRoutes } from './auto-translation-defaults.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { createRunExecutor } from './run-executor.js';
+import { imageInputSupported } from '../core/provider-images.js';
 import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
@@ -66,6 +67,12 @@ import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
 import { applyNativeRisuAction } from './risu-native-actions.js';
 import { pruneUploads, uploadRoutes } from './uploads.js';
+import {
+  prepareRequestImages,
+  releaseRequestImageUploads,
+  requestImageUploads,
+  storeRequestImages,
+} from './request-images.js';
 import { admissionOpen, maintenanceRoutes, maintenanceStatus } from './maintenance.js';
 import { risuPresetImportRoutes } from './risu-preset-import.js';
 import { risuExportRoutes } from './risu-export.js';
@@ -133,6 +140,16 @@ export async function createApp(options: AppOptions): Promise<App> {
   const store = new Store(options.dbPath);
   const requireModel = (target: unknown, role: string) => {
     if (!options.testMode && !target) throw new HttpError(409, `MODEL_REQUIRED:${role}`);
+  };
+  const requireRequestModel = (snapshot: RunSnapshot) => {
+    const target = snapshot.profile?.models.main;
+    requireModel(target, 'main');
+    if (
+      snapshot.requestImages?.length &&
+      target &&
+      imageInputSupported(target.connection.protocol, target.modelId) === false
+    )
+      throw new HttpError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
   };
   const requireJobModel = (id: string) => {
     const job = store.job(id);
@@ -1046,14 +1063,19 @@ export async function createApp(options: AppOptions): Promise<App> {
         'idempotencyKey',
         'expectedProfileRevision',
         'loreContextReset',
+        'requestImages',
       ]);
+      const uploads = requestImageUploads(body.requestImages);
       if (body.loreContextReset !== undefined && typeof body.loreContextReset !== 'boolean')
         throw new HttpError(400, 'Invalid lore context reset');
       const command = {
         ...(body.loreContextReset !== undefined
           ? { loreContextReset: body.loreContextReset as boolean }
           : {}),
-        request: text(body.request, 'request', REQUEST_TEXT_MAX_CHARS),
+        request: text(body.request, 'request', REQUEST_TEXT_MAX_CHARS, uploads.length > 0),
+        ...(uploads.length
+          ? { requestImages: uploads.map(({ sha256, name }) => ({ sha256, name })) }
+          : {}),
         expectedRevision:
           body.expectedRevision === null
             ? null
@@ -1076,20 +1098,35 @@ export async function createApp(options: AppOptions): Promise<App> {
             }
           : {}),
       };
-      const result = store.createRun(request.params.id, command, (chat) => {
-        const profile = store.product.snapshot(chat.id);
-        requireModel(profile.models.main, 'main');
-        return {
-          chatId: chat.id,
-          parentRevision: chat.headRevision,
-          settingsRevision: chat.settingsRevision,
-          settings: chat.settings,
-          request: command.request,
-          history: store.history(chat.headRevision),
-          resources: store.product.resources(chat.id, profile),
-          ...(profile ? { profile } : {}),
-        } satisfies RunSnapshot;
+      const previous = store.findRunByCommand(request.params.id, command);
+      if (previous) {
+        releaseRequestImageUploads(store, uploads);
+        return previous;
+      }
+      store.assertRunAdmission(request.params.id, command);
+      const prepared = await prepareRequestImages(store, uploads);
+      const result = store.transaction(() => {
+        const prior = store.findRunByCommand(request.params.id, command);
+        if (prior) return { run: prior, created: false };
+        storeRequestImages(store, prepared);
+        return store.createRunInTransaction(request.params.id, command, (chat) => {
+          const profile = store.product.snapshot(chat.id);
+          const snapshot = {
+            chatId: chat.id,
+            parentRevision: chat.headRevision,
+            settingsRevision: chat.settingsRevision,
+            settings: chat.settings,
+            request: command.request,
+            ...(prepared.images.length ? { requestImages: prepared.images } : {}),
+            history: store.history(chat.headRevision),
+            resources: store.product.resources(chat.id, profile),
+            ...(profile ? { profile } : {}),
+          } satisfies RunSnapshot;
+          requireRequestModel(snapshot);
+          return snapshot;
+        });
       });
+      releaseRequestImageUploads(store, uploads);
       if (result.created) {
         publish(request.params.id);
         if (result.run.status === 'queued') execute(result.run.id);
@@ -1113,10 +1150,15 @@ export async function createApp(options: AppOptions): Promise<App> {
       const result = store.retryRun(
         request.params.id,
         text(body.idempotencyKey, 'idempotency key', 120),
-        (snapshot) => requireModel(snapshot.profile?.models.main, 'main'),
+        requireRequestModel,
         body.request === undefined
           ? undefined
-          : text(body.request, 'request', REQUEST_TEXT_MAX_CHARS),
+          : text(
+              body.request,
+              'request',
+              REQUEST_TEXT_MAX_CHARS,
+              !!store.run(request.params.id).snapshot.requestImages?.length
+            ),
         body.mode as 'replace' | 'copy' | undefined
       );
       if (result.created) {

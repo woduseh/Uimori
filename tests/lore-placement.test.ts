@@ -58,7 +58,11 @@ function fixture(): RunSnapshot {
   };
 }
 const texts = (s: RunSnapshot) =>
-  s.promptCompilation!.messages.map((m) => m.content.map((c) => c.text).join('')).join('\n');
+  s
+    .promptCompilation!.messages.map((m) =>
+      m.content.map((c) => (c as { type: 'text'; text: string }).text).join('')
+    )
+    .join('\n');
 test('places authored pinned references once before the current input', () => {
   const s = compileSnapshotPrompt(fixture()),
     text = texts(s);

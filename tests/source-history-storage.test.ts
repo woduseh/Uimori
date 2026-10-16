@@ -7,6 +7,7 @@ import { Store } from '../server/store.js';
 import { exportChatTranscript } from '../server/chat-transcript.js';
 import { captureLogicalHistory } from '../server/prompt-snapshot.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import type { RunSnapshot } from '../core/types.js';
 
 const owned: { store: Store; directory: string }[] = [];
 afterEach(() => {
@@ -57,6 +58,50 @@ function append(store: Store, chatId: string, text: string) {
     costUsd: null,
   });
 }
+
+test('logical history recovers authored images from a persisted native output receipt', () => {
+  const { store, chat } = fixture();
+  const source = append(store, chat.id, 'A written scene');
+  const image = {
+    hash: 'a'.repeat(64),
+    mime: 'image/webp' as const,
+    name: 'reference.webp',
+    width: 900,
+    height: 600,
+    input: { hash: 'b'.repeat(64), width: 900, height: 600 },
+  };
+  const owner = store.run(source.runId).snapshot;
+  // Synthetic persisted execution receipt: this boundary reads attachment ownership,
+  // not image blobs or the native runtime that created the receipt.
+  store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
+    JSON.stringify({
+      ...owner,
+      requestImages: [image],
+      nativeRisuExecution: {
+        messages: [],
+        output: {
+          messages: [
+            { id: 'current-input', role: 'user', data: 'Describe the reference' },
+            { id: 'current-output', role: 'char', data: source.text },
+          ],
+        },
+      },
+    }),
+    source.runId
+  );
+  const history = captureLogicalHistory(store, {
+    ...owner,
+    history: [{ revision: source.id, text: source.text }],
+  } as RunSnapshot);
+  expect(history[0]).toMatchObject({
+    id: `request:${source.id}`,
+    role: 'user',
+    text: 'Describe the reference',
+    requestImages: [image],
+  });
+  expect(history[1].requestImages).toBeUndefined();
+  expect(history[1].id).toBe(`source:${source.id}`);
+});
 
 test('history still rejects missing ancestors and ancestry cycles', () => {
   const { store, chat } = fixture();

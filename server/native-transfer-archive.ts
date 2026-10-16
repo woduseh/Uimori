@@ -34,6 +34,7 @@ import { readImage } from './image-storage.js';
 import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import type { NativeTransferReceipt } from '../core/native-transfer.js';
 import { processImage } from './image-processing.js';
+import { remapTranscriptRequestImages } from './chat-media.js';
 import { acquireImportPreparation, checkImportPreparation } from './import-preparation.js';
 import { deleteUpload, uploadDirectory, UPLOAD_MAX_AGE_MS } from './uploads.js';
 import {
@@ -102,6 +103,11 @@ export function exportNativeArchive(
   validatePreparedNativeTransfer(resources);
   const hashes = new Set(resources.images.map((image) => image.hash));
   for (const copy of backup?.chats ?? []) {
+    for (const entry of copy.transcript.entries)
+      for (const image of entry.requestImages ?? []) {
+        hashes.add(image.hash);
+        hashes.add(image.input.hash);
+      }
     for (const image of copy.illustrations) {
       if (!/^archive:[a-f0-9]{64}$/u.test(image.base64)) invalid();
       hashes.add(image.base64.slice(8));
@@ -304,6 +310,11 @@ export async function prepareNativeArchive(
     ];
     if (manifest.backup)
       for (const copy of manifest.backup.chats) {
+        remapTranscriptRequestImages(copy.transcript, (hash) => {
+          const image = converted.get(hash);
+          if (!image) invalid();
+          return image!.hash;
+        });
         const rewrite = (value: string) =>
           value.replace(/\/api\/package-image-blobs\/([a-f0-9]{64})/gu, (url, hash: string) => {
             const image = converted.get(hash);

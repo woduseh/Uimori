@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { AnthropicBatchRun, recoverableAnthropicBatchRun } from '../server/anthropic-batch.js';
 import type { Store } from '../server/store.js';
@@ -127,6 +128,43 @@ test('Batch diagnostic copies redact accidental credential text before any netwo
 
 describe('Anthropic Batch execution', () => {
   test('restarts from the durable batch id without creating a second paid request', async () => {
+    const imageBytes = Buffer.from('synthetic immutable Batch image');
+    const imageHash = createHash('sha256').update(imageBytes).digest('hex');
+    const imageBase64 = imageBytes.toString('base64');
+    const input = request();
+    input.prompt = {
+      compilerVersion: 'risu-native-prompt-2',
+      values: {},
+      cachePlan: [],
+      messages: [
+        {
+          id: 'batch-image-input',
+          role: 'user',
+          completion: 'complete',
+          provenance: { blockId: 'batch-image-input', origin: 'current' },
+          content: [
+            {
+              type: 'image',
+              image: {
+                hash: imageHash,
+                mime: 'image/webp',
+                name: 'batch.webp',
+                width: 32,
+                height: 32,
+                input: { hash: imageHash, width: 32, height: 32 },
+              },
+            },
+            { type: 'text', text: 'Continue the scene from this reference.' },
+          ],
+        },
+      ],
+    };
+    const resolveImage = () => ({
+      mime: 'image/webp' as const,
+      base64: imageBase64,
+      width: 32,
+      height: 32,
+    });
     let ended = false;
     const server = await loopbackProvider(async (captured, response) => {
       if (captured.url === '/v1/messages/batches') {
@@ -134,6 +172,10 @@ describe('Anthropic Batch execution', () => {
         expect(body.requests).toHaveLength(1);
         expect(body.requests[0].custom_id).toBe('attempt-1');
         expect(body.requests[0].params).not.toHaveProperty('stream');
+        expect(body.requests[0].params.messages[0].content[0]).toEqual({
+          type: 'image',
+          source: { type: 'base64', media_type: 'image/webp', data: imageBase64 },
+        });
         json(response, { id: 'batch-1', processing_status: 'in_progress' });
         return;
       }
@@ -175,8 +217,8 @@ describe('Anthropic Batch execution', () => {
     const controller = new AbortController();
     const first = new AnthropicBatchRun(store, 'run-1', 5).execute(
       connection(`${server.origin}/v1`),
-      request(),
-      options(db, controller.signal)
+      input,
+      { ...options(db, controller.signal), resolveImage }
     );
     await until(
       () =>
@@ -186,15 +228,21 @@ describe('Anthropic Batch execution', () => {
     controller.abort(new Error('Server stopping'));
     expect(await first).toMatchObject({ status: 'cancelled', error: { code: 'CANCELLED' } });
     expect(recoverableAnthropicBatchRun(store, 'run-1')).toBe(true);
+    expect(
+      String(db.prepare('SELECT request FROM attempts WHERE id=?').get('attempt-1')?.request)
+    ).not.toContain(imageBase64);
 
     ended = true;
     let resumed = '';
     const second = await new AnthropicBatchRun(store, 'run-1', 1).execute(
       connection(`${server.origin}/v1`),
-      request(),
-      options(db, new AbortController().signal, (id) => {
-        resumed = id;
-      })
+      input,
+      {
+        ...options(db, new AbortController().signal, (id) => {
+          resumed = id;
+        }),
+        resolveImage,
+      }
     );
     expect(resumed).toBe('attempt-1');
     expect(second).toMatchObject({
