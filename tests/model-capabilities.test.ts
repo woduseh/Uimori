@@ -158,6 +158,18 @@ test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct c
       ...request,
       generation: {
         ...configured,
+        safetySettings: {
+          HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE' as const,
+          HARM_CATEGORY_HARASSMENT: 'OFF' as const,
+        },
+      },
+    })
+  ).not.toThrow();
+  expect(() =>
+    validateRequest({
+      ...request,
+      generation: {
+        ...configured,
         safetySettings: { HARM_CATEGORY_HARASSMENT: 'BLOCK_NONE' as const },
       },
     })

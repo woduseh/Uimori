@@ -3,6 +3,7 @@
  * Lives apart from `transport.ts` so executors can validate without importing the dispatcher.
  */
 import { GENERATION_KEYS, validateGenerationShape } from './model-capabilities.js';
+import { GEMINI_SAFETY_CATEGORIES } from './gemini-safety.js';
 import { EXECUTION_INPUT_MAX_CHARS } from './content-limits.js';
 import { createHash } from 'node:crypto';
 import {
@@ -155,10 +156,20 @@ export function validateRequest(value: unknown): ProviderRequest {
     validateGeneration(value.generationBinding);
     if (value.generation === undefined) reject('INVALID_GENERATION_BINDING');
     for (const key of GENERATION_KEYS.filter(
-      (key) => !['maxOutputTokens', 'reasoningEffort', 'outputEffort'].includes(key)
+      (key) =>
+        !['maxOutputTokens', 'reasoningEffort', 'outputEffort', 'safetySettings'].includes(key)
     ))
       if (JSON.stringify(value.generation[key]) !== JSON.stringify(value.generationBinding[key]))
         reject('INVALID_GENERATION_BINDING');
+    // Safety categories are a map: insertion order must not change binding semantics.
+    if (
+      GEMINI_SAFETY_CATEGORIES.some(
+        (category) =>
+          value.generation?.safetySettings?.[category] !==
+          value.generationBinding?.safetySettings?.[category]
+      )
+    )
+      reject('INVALID_GENERATION_BINDING');
     if (value.generation.maxOutputTokens > value.generationBinding.maxOutputTokens)
       reject('INVALID_GENERATION_BINDING');
     for (const key of ['reasoningEffort', 'outputEffort'] as const) {
