@@ -31,10 +31,16 @@
   height: 20px;
   stroke-width: 1.7;
 }
+.model-workspace-settings .model-workspace-intro {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
 .model-workspace-settings .model-workspace-controls {
   border: 0;
   padding: 0;
-  gap: 24px;
+  gap: 14px;
 }
 .model-primary-settings {
   border: 0;
@@ -44,25 +50,69 @@
 }
 .model-primary-settings > legend {
   padding: 0;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
 }
-.model-secondary-settings > summary small {
-  color: var(--muted);
-  font-weight: 400;
-  float: right;
-  margin-left: 12px;
+.model-secondary-settings {
+  min-width: 0;
 }
 .model-secondary-settings > summary {
-  display: list-item;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-weight: 500;
   cursor: pointer;
-  min-height: var(--control-h);
-  align-content: center;
+}
+.model-secondary-settings > summary small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.model-secondary-settings[open] {
+  gap: 0;
+}
+.model-secondary-settings[open] > summary {
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+}
+.model-secondary-settings > .settings-group-body {
+  border-radius: 0 0 10px 10px;
+}
+@media (hover: hover) {
+  .model-secondary-settings > summary:hover {
+    background: var(--hover);
+  }
+}
+.model-workspace-settings .settings-row {
+  gap: 16px;
+  padding-block: 12px;
+}
+.model-workspace-settings .settings-row-copy label {
+  font-weight: 500;
+}
+.model-workspace-settings .settings-row-copy small {
+  font-size: 12px;
+  line-height: 1.5;
 }
 .model-role-setting .settings-row-control > select {
   flex: 1;
   min-width: 0;
   width: 100%;
+}
+.model-workspace-settings .model-summary-note {
+  padding: 10px 0 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .model-workspace-settings .task-behavior-settings-body {
   display: grid;
