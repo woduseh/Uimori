@@ -165,8 +165,8 @@ export function validateRequest(value: unknown): ProviderRequest {
     if (
       GEMINI_SAFETY_CATEGORIES.some(
         (category) =>
-          value.generation?.safetySettings?.[category] !==
-          value.generationBinding?.safetySettings?.[category]
+          (value.generation as ModelGeneration).safetySettings?.[category] !==
+          (value.generationBinding as ModelGeneration).safetySettings?.[category]
       )
     )
       reject('INVALID_GENERATION_BINDING');
