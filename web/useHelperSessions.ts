@@ -239,6 +239,8 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
     setBranching(true);
     setErrors((old) => ({ ...old, [group]: '' }));
     const key = `uimori:helper-branch:${currentId}`;
+    const selectionVersion = selectionVersions.current.get(group) ?? 0;
+    const originalScope = viewedScope.current;
     try {
       const request = JSON.parse(read(key) ?? 'null') ?? { requestKey: crypto.randomUUID() };
       remember(key, JSON.stringify(request));
@@ -247,7 +249,13 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
         request
       );
       remember(key, null);
-      select(value);
+      // A delayed branch must not steal selection after the user opens another session/tab.
+      if (
+        alive.current &&
+        viewedScope.current === originalScope &&
+        (selectionVersions.current.get(group) ?? 0) === selectionVersion
+      )
+        select(value);
       void reload().catch(() => {});
     } catch (cause) {
       if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status))
