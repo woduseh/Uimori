@@ -1,4 +1,5 @@
 import { detachAttemptUsage, helperUsageKind } from './usage-accounting.js';
+import { helperHistory } from './helper-context.js';
 import { releaseCompletedHelperInputs } from './execution-retention.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type {
@@ -128,6 +129,77 @@ export class HelperWorkspace {
       return this.conversation(id);
     });
   }
+  branch(id: string, requestKey: string, untilMessageId?: string): HelperConversation {
+    return this.store.transaction(() => {
+      const source = this.conversation(id);
+      const scopeKey = json(source.scope);
+      const creationKey = `branch:${requestKey}`;
+      const creationHash = createHash('sha256')
+        .update(json({ sourceId: id, untilMessageId: untilMessageId ?? null }))
+        .digest('hex');
+      const existing = this.store.db
+        .prepare(
+          'SELECT id,creation_hash FROM helper_conversations WHERE scope_key=? AND creation_key=?'
+        )
+        .get(scopeKey, creationKey) as Row | undefined;
+      if (existing) {
+        if (existing.creation_hash !== creationHash)
+          throw new HttpError(409, '같은 분기 요청 키가 다른 대상에 사용됐어요.');
+        return this.conversation(existing.id);
+      }
+      if (
+        this.store.db
+          .prepare(
+            "SELECT 1 FROM helper_tasks WHERE conversation_id=? AND status IN ('queued','running') LIMIT 1"
+          )
+          .get(id)
+      )
+        throw new HttpError(409, '진행 중인 작업을 마친 뒤 세션을 분기해 주세요.');
+      const history = helperHistory(this.store, id);
+      const accepted = (message: (typeof history)[number]) =>
+        message.role === 'assistant' &&
+        (!this.store.db.prepare('SELECT 1 FROM helper_messages WHERE id=?').get(message.id) ||
+          this.store.db
+            .prepare(`SELECT 1 FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id
+            WHERE m.id=? AND t.status='completed'`)
+            .get(message.id));
+      const selected = untilMessageId
+        ? history.find((message) => message.id === untilMessageId && accepted(message))
+        : history.findLast(accepted);
+      if (!selected) throw new HttpError(409, '완료된 도우미 응답이 있어야 분기할 수 있어요.');
+      const prefix = history.slice(
+        0,
+        history.findIndex((message) => message.id === selected.id) + 1
+      );
+      const time = now(),
+        newId = randomUUID();
+      this.store.db
+        .prepare(`INSERT INTO helper_conversations
+        (id,scope_key,creation_key,creation_hash,chat_id,scope,title,auto_title,revision,persona,created_at,updated_at,limits)
+        VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?)`)
+        .run(
+          newId,
+          scopeKey,
+          creationKey,
+          creationHash,
+          source.scope.kind === 'chat' ? source.scope.chatId : null,
+          scopeKey,
+          `${source.title} · 분기`.slice(0, 200),
+          0,
+          source.persona,
+          time,
+          time,
+          json(source.limits)
+        );
+      const add = this.store.db.prepare(`INSERT INTO helper_seed_messages
+        (id,conversation_id,ordinal,role,text,created_at) VALUES(?,?,?,?,?,?)`);
+      prefix.forEach((message, ordinal) => {
+        add.run(randomUUID(), newId, ordinal, message.role, message.text, time);
+      });
+      this.event(newId, null, 'conversation.branched', { sourceId: id, messages: prefix.length });
+      return this.conversation(newId);
+    });
+  }
   list(scope: { kind: 'chat'; chatId: string } | { kind: 'library' }): HelperConversationSummary[] {
     if (scope.kind === 'chat') {
       this.store.chat(scope.chatId);
@@ -234,18 +306,43 @@ export class HelperWorkspace {
   }
   messages(id: string, before?: string): HelperMessage[] {
     this.conversation(id);
-    return (
-      this.store.db
-        .prepare(
-          `SELECT m.*, t.status AS task_status, t.request AS request_text, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
-          (SELECT latest.id FROM helper_tasks latest WHERE latest.conversation_id=m.conversation_id AND COALESCE(json_extract(latest.snapshot,'$.requestGroupId'),latest.id)=root.id ORDER BY latest.rowid DESC LIMIT 1) AS latest_task_id
-          FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id JOIN helper_tasks root ON root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id)
-          WHERE m.conversation_id=? ${before ? 'AND m.rowid < (SELECT rowid FROM helper_messages WHERE id=?)' : ''} ORDER BY m.rowid DESC LIMIT 100`
-        )
-        .all(...(before ? [id, before] : [id])) as Row[]
-    )
-      .reverse()
-      .map((row) => ({
+    const seedCursor = before
+      ? (this.store.db
+          .prepare('SELECT ordinal FROM helper_seed_messages WHERE conversation_id=? AND id=?')
+          .get(id, before) as { ordinal: number } | undefined)
+      : undefined;
+    const rows = seedCursor
+      ? []
+      : (this.store.db
+          .prepare(
+            `SELECT m.*, t.status AS task_status, t.request AS request_text, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
+        (SELECT latest.id FROM helper_tasks latest WHERE latest.conversation_id=m.conversation_id AND COALESCE(json_extract(latest.snapshot,'$.requestGroupId'),latest.id)=root.id ORDER BY latest.rowid DESC LIMIT 1) AS latest_task_id
+        FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id JOIN helper_tasks root ON root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id)
+        WHERE m.conversation_id=? ${before ? 'AND m.rowid < (SELECT rowid FROM helper_messages WHERE id=?)' : ''} ORDER BY m.rowid DESC LIMIT 100`
+          )
+          .all(...(before ? [id, before] : [id])) as Row[]);
+    const remaining = 100 - rows.length;
+    const seeds = remaining
+      ? (this.store.db
+          .prepare(`SELECT * FROM helper_seed_messages
+      WHERE conversation_id=? AND ordinal<? ORDER BY ordinal DESC LIMIT ?`)
+          .all(id, seedCursor?.ordinal ?? Number.MAX_SAFE_INTEGER, remaining) as Row[])
+      : [];
+    return [
+      ...seeds.reverse().map((row) => ({
+        requestGroupId: `seed:${row.id}`,
+        latestTaskId: `seed:${row.id}`,
+        requestOrder: -1000000000 + row.ordinal,
+        id: row.id,
+        conversationId: id,
+        taskId: `seed:${row.id}`,
+        taskStatus: 'completed' as const,
+        role: row.role as 'user' | 'assistant',
+        text: row.text,
+        artifacts: [],
+        createdAt: row.created_at,
+      })),
+      ...rows.reverse().map((row) => ({
         requestGroupId: row.request_group_id,
         latestTaskId: row.latest_task_id,
         requestOrder: row.request_order,
@@ -257,7 +354,8 @@ export class HelperWorkspace {
         text: row.role === 'user' ? row.request_text : row.text,
         artifacts: JSON.parse(row.artifacts),
         createdAt: row.created_at,
-      }));
+      })),
+    ];
   }
   event(conversationId: string, taskId: string | null, kind: string, data: unknown = null) {
     this.store.db

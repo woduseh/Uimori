@@ -13,6 +13,17 @@ import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js'
 
 const base: ModelGeneration = { maxOutputTokens: 8192, temperature: null };
 
+test('Gemini 4 Argon is reviewed with explicit thinking levels and implicit-only caching', () => {
+  for (const protocol of ['vertex-gemini-v1', 'google-gemini-v1'] as const) {
+    expect(modelCapability(protocol, 'gemini-4-argon')).toMatchObject({
+      maxOutputTokens: 65_536,
+      thinkingLevels: ['LOW', 'MEDIUM', 'HIGH'],
+      defaultThinkingLevel: 'MEDIUM',
+    });
+    expect(modelCapability(protocol, 'gemini-4-argon')?.cacheModes).toBeUndefined();
+  }
+});
+
 test('AI Studio reuses Gemini model hints with its own service tiers', () => {
   const capability = modelCapability('google-gemini-v1', 'gemini-3.1-pro-preview');
   expect(capability?.thinkingLevels).toEqual(['LOW', 'MEDIUM', 'HIGH']);

@@ -48,9 +48,16 @@ export function readHelperChatContext(store: Store, chatId: string) {
 export function helperHistory(store: Store, conversationId: string): HelperTaskSnapshot['history'] {
   return store.db
     .prepare(
-      "SELECT m.id,m.role,m.text FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id WHERE m.conversation_id=? AND NOT EXISTS (SELECT 1 FROM helper_tasks next WHERE next.conversation_id=t.conversation_id AND json_extract(next.snapshot,'$.retryOf')=t.id) ORDER BY (SELECT root.rowid FROM helper_tasks root WHERE root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id)),CASE m.role WHEN 'user' THEN 0 ELSE 1 END"
+      `WITH visible AS (
+        SELECT s.id,s.role,s.text,0 AS phase,s.ordinal AS position FROM helper_seed_messages s WHERE s.conversation_id=?
+        UNION ALL
+        SELECT m.id,m.role,m.text,1 AS phase,
+          (SELECT root.rowid FROM helper_tasks root WHERE root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id)) AS position
+        FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id
+        WHERE m.conversation_id=? AND NOT EXISTS (SELECT 1 FROM helper_tasks next WHERE next.conversation_id=t.conversation_id AND json_extract(next.snapshot,'$.retryOf')=t.id)
+      ) SELECT id,role,text FROM visible ORDER BY phase,position,CASE role WHEN 'user' THEN 0 ELSE 1 END`
     )
-    .all(conversationId)
+    .all(conversationId, conversationId)
     .map((row) => ({
       id: String(row.id),
       role: row.role as 'user' | 'assistant',

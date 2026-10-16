@@ -38,6 +38,7 @@ import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { HelperPanel } from './HelperPanel.js';
 import { selectedHelperSession } from './useHelperSessions.js';
+import type { HelperRecentTask } from '../core/activity-feed.js';
 import type { HelperScope, HelperResourceRef } from '../core/helper.js';
 import { ResponseDisplay } from './StreamingResponse.js';
 import {
@@ -227,6 +228,11 @@ function App() {
   const [helperResource, setHelperResource] = useState<HelperResourceRef | null>(null);
   const clearHelperResource = useCallback(() => setHelperResource(null), []);
   const [workspacePanel, setWorkspacePanel] = useState<'options' | 'helper' | null>(null);
+  const [helperNavigation, setHelperNavigation] = useState<{
+    conversationId: string;
+    taskId: string;
+    sequence: number;
+  } | null>(null);
   const optionsOpen = workspacePanel === 'options';
   const helperOpen = workspacePanel === 'helper';
   const [optionsDirty, setOptionsDirty] = useState(false),
@@ -630,6 +636,29 @@ function App() {
       setPendingNavigation(() => go);
     } else go();
   }
+  function openRecentHelper(task: HelperRecentTask) {
+    const go = () => {
+      if (task.chatId) s.select(task.chatId);
+      else {
+        const tab = task.workId?.replace(/^library:/u, '');
+        setLibraryTab(
+          tab === 'bot' || tab === 'persona' || tab === 'module' || tab === 'prompts' ? tab : 'bot'
+        );
+        s.showLibrary();
+      }
+      setPanel('');
+      setWorkspacePanel('helper');
+      setHelperNavigation((previous) => ({
+        conversationId: task.conversationId,
+        taskId: task.id,
+        sequence: (previous?.sequence ?? 0) + 1,
+      }));
+    };
+    if (libraryDirty && s.destination === 'library') {
+      setPanel('');
+      setPendingNavigation(() => go);
+    } else go();
+  }
   function showLibrary(tab: 'bot' | 'persona' | 'module' | 'prompts' = 'bot') {
     const go = () => {
       setLibraryTab(tab);
@@ -692,6 +721,7 @@ function App() {
         setPanel('settings');
       }}
       onTasks={() => inspect('')}
+      onOpenHelperTask={openRecentHelper}
       tasks={s.tasks}
     />
   );
@@ -2035,6 +2065,7 @@ function App() {
         responseDisplay={responseDisplay}
         modelDescription={helperDescription}
         open={helperOpen}
+        navigation={helperNavigation}
         selection={helperSelection}
         resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
         onClearResource={clearHelperResource}

@@ -47,6 +47,7 @@ export type Props = {
   onError: (message: string) => void;
   onSettings: () => void;
   onTasks: () => void;
+  onOpenHelperTask?: (target: import('../core/activity-feed.js').HelperRecentTask) => void;
   tasks: number;
 };
 const reference = (value: { id: string; revision: number }) => `${value.id}@${value.revision}`;

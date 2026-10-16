@@ -720,6 +720,70 @@ test('ACTUI10 activity icon mode groups unread results and keeps recent chats ac
   ).toBeVisible();
 });
 
+test('ACTUI13 recent helper jobs navigate to their original chat or library sessions', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request);
+  const create = async (
+    scope: { kind: 'chat'; chatId: string } | { kind: 'library'; workId: string }
+  ) => {
+    const response = await request.post('/api/helper/conversations/new', {
+      data: { scope, requestKey: `activity-helper-${Math.random().toString(36).slice(2)}` },
+    });
+    expect(response.ok()).toBeTruthy();
+    return (await response.json()) as { id: string };
+  };
+  const chat = await create({ kind: 'chat', chatId: seeded.chat.id });
+  const library = await create({ kind: 'library', workId: 'library:bot' });
+  const now = new Date().toISOString();
+  await page.route('**/api/activity-feed', (route) =>
+    route.fulfill({
+      json: {
+        items: [],
+        running: [],
+        helpers: [
+          {
+            id: 'synthetic-chat-job',
+            conversationId: chat.id,
+            chatId: seeded.chat.id,
+            workId: null,
+            title: '합성 작품 도우미',
+            modelTitle: 'Synthetic',
+            status: 'completed',
+            updatedAt: now,
+            committedEffects: 0,
+          },
+          {
+            id: 'synthetic-library-job',
+            conversationId: library.id,
+            chatId: null,
+            workId: 'library:bot',
+            title: '합성 서재 도우미',
+            modelTitle: 'Synthetic',
+            status: 'failed',
+            updatedAt: now,
+            committedEffects: 1,
+          },
+        ],
+      },
+    })
+  );
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  await nav.locator('.bot-navigation-modes > button').nth(1).click();
+  const activityNav = nav.getByRole('navigation', { name: '채팅 활동' });
+  await activityNav.getByRole('button', { name: /합성 작품 도우미/ }).click();
+  const panel = page.locator('.helper-panel').filter({ visible: true });
+  await expect(panel.getByRole('combobox', { name: '도우미 세션 선택' })).toHaveValue(chat.id);
+  await expect(page.getByRole('dialog', { name: '도우미 작업 기록' })).toBeVisible();
+  await page.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
+  await activityNav.getByRole('button', { name: /합성 서재 도우미/ }).click();
+  await expect(panel.getByRole('combobox', { name: '도우미 세션 선택' })).toHaveValue(library.id);
+  await expect(activityNav.getByText('확정된 앱 작업 1건')).toBeVisible();
+});
+
 test('ACTUI11 an already visible source is confirmed only after its inbox entry is selected', async ({
   page,
   request,

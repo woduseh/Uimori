@@ -55,6 +55,7 @@ type Props = {
   enterSend: boolean;
   responseDisplay: ResponseDisplayMode;
   open: boolean;
+  navigation?: { conversationId: string; taskId: string; sequence: number } | null;
   modal?: boolean;
   ready?: boolean;
   scope: HelperScope;
@@ -238,6 +239,16 @@ const selectionRequest = '선택한 원문을 검토해 주세요.';
 
 export function HelperPanel(props: Props) {
   const sessions = useHelperSessions(props.open && props.ready !== false, props.scope);
+  const navigatedTask = useRef<number | null>(null);
+  useEffect(() => {
+    const target = props.navigation;
+    if (!props.open || !target || navigatedTask.current === target.sequence) return;
+    const match = sessions.sessions.find((session) => session.id === target.conversationId);
+    if (!match) return;
+    navigatedTask.current = target.sequence;
+    sessions.select(match);
+    setTaskHistory({ taskId: target.taskId });
+  }, [props.navigation, props.open, sessions.sessions, sessions.select]);
   const scopeKey = sessions.currentId ?? '';
   const currentScope = useRef(scopeKey);
   currentScope.current = scopeKey;
@@ -908,6 +919,8 @@ export function HelperPanel(props: Props) {
         busy={props.ready === false || busy || Boolean(outbox)}
         onSelect={sessions.select}
         onCreate={() => void sessions.create()}
+        onBranch={() => void sessions.branch()}
+        branching={sessions.branching}
         onUpdate={(value) => {
           data.updateConversation(value);
           void sessions.reload().catch((cause) => setError(cause.message));

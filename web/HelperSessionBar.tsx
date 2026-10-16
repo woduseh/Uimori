@@ -22,6 +22,8 @@ type Props = {
   busy: boolean;
   onSelect: (session: HelperConversation) => void;
   onCreate: () => void;
+  onBranch: () => void;
+  branching: boolean;
   onUpdate: (session: HelperConversation) => void;
   onDelete: () => void;
 };
@@ -132,6 +134,14 @@ export function HelperSessionBar(props: Props) {
           <ActionMenu label="도우미 세션 관리" viewport>
             <button
               type="button"
+              disabled={!props.conversation || props.busy || props.branching}
+              onClick={props.onBranch}
+            >
+              <Plus size={18} aria-hidden="true" />
+              {props.branching ? '분기 중…' : '세션 분기 (완료 대화 복사)'}
+            </button>
+            <button
+              type="button"
               disabled={!props.conversation || props.busy}
               onClick={() => {
                 setRename(props.conversation);
@@ -159,7 +169,10 @@ export function HelperSessionBar(props: Props) {
           </ActionMenu>
         </div>
         <div className="helper-session-meta">
-          <span>{props.conversation?.scope.kind === 'chat' ? '이 채팅' : '서재 작업'}</span>
+          <span>
+            {props.conversation?.scope.kind === 'chat' ? '이 채팅' : '서재 작업'} · 세션{' '}
+            {props.sessions.length}개
+          </span>
           {props.unread.length > 0 && <strong>새 소식 {props.unread.length}</strong>}
         </div>
       </div>

@@ -1638,3 +1638,81 @@ test('outline selection scope and revisions are checked before a provider call; 
   expect(f.store.outline.node(foreign.id).intent).toBe('');
   expect(f.store.chat(chat.id).headRevision).toBeNull();
 });
+
+test('helper session branching stores only independent text history and can branch again after source deletion', () => {
+  const f = fixture();
+  const source = f.conversation;
+  const time = new Date().toISOString(),
+    tid = crypto.randomUUID();
+  f.store.db
+    .prepare(`INSERT INTO helper_tasks
+    (id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?)`)
+    .run(
+      tid,
+      source.id,
+      tid,
+      '초기 질문',
+      'completed',
+      JSON.stringify({ model: { title: 'Synthetic model' }, history: [] }),
+      JSON.stringify({ modelCalls: 1 }),
+      time,
+      time
+    );
+  const makeMessage = f.store.db.prepare(`INSERT INTO helper_messages
+    (id,conversation_id,task_id,role,text,artifacts,created_at) VALUES(?,?,?,?,?,'[]',?)`);
+  makeMessage.run(crypto.randomUUID(), source.id, tid, 'user', '초기 질문', time);
+  const answer = crypto.randomUUID();
+  makeMessage.run(answer, source.id, tid, 'assistant', '초기 답변', time);
+  const branched = f.workspace.branch(source.id, 'branch-id');
+  expect(f.workspace.branch(source.id, 'branch-id').id).toBe(branched.id);
+  expect(branched.id).not.toBe(source.id);
+  expect(f.workspace.taskSummaries(branched.id)).toEqual([]);
+  expect(f.workspace.messages(branched.id).map((m) => m.text)).toEqual(['초기 질문', '초기 답변']);
+  expect(helperHistory(f.store, branched.id).map((m) => m.text)).toEqual([
+    '초기 질문',
+    '초기 답변',
+  ]);
+  expect(
+    Number(
+      f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(tid)?.n
+    )
+  ).toBe(0);
+  expect(() => f.workspace.branch(source.id, 'branch-id', 'different-message')).toThrow();
+  const next = f.workspace.branch(branched.id, 'next');
+  expect(helperHistory(f.store, next.id).map((m) => m.text)).toEqual(['초기 질문', '초기 답변']);
+  const deletion = f.workspace.deletionImpact(source.id);
+  f.workspace.delete(source.id, deletion.request);
+  expect(f.workspace.messages(branched.id).map((m) => m.text)).toEqual(['초기 질문', '초기 답변']);
+  expect(
+    Number(
+      f.store.db
+        .prepare('SELECT COUNT(*) AS n FROM helper_tasks WHERE conversation_id=?')
+        .get(branched.id)?.n
+    )
+  ).toBe(0);
+});
+
+test('helper branch refuses active work and invalid cut positions', () => {
+  const f = fixture();
+  const source = f.conversation;
+  expect(() => f.workspace.branch(source.id, 'blank')).toThrow('완료된 도우미 응답');
+  const time = new Date().toISOString(),
+    tid = crypto.randomUUID();
+  f.store.db
+    .prepare(`INSERT INTO helper_tasks
+    (id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,?)`)
+    .run(
+      tid,
+      source.id,
+      tid,
+      'pending',
+      'running',
+      JSON.stringify({ model: { title: 'Synthetic model' }, history: [] }),
+      JSON.stringify({ modelCalls: 0 }),
+      time,
+      time
+    );
+  expect(() => f.workspace.branch(source.id, 'running')).toThrow('진행 중인 작업');
+});

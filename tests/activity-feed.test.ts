@@ -197,3 +197,79 @@ test('automatic translation replaces a real completed-run notice instead of dupl
     label: '자동 번역 실패 · 원문 확인 가능',
   });
 });
+
+test('recent helper tasks include both chat and library scopes, without exposing request bodies', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-feed-'));
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    buildId: 'helper-recent-feed',
+    testMode: true,
+  });
+  current = { app, directory };
+  const chat = createFixtureChat(app.store, 'Chat with assistant');
+  await app.inject('/api/activity-feed');
+  const time = new Date().toISOString();
+  const make = (scope: object, chatId: string | null, status: string) => {
+    const cid = randomUUID(),
+      tid = randomUUID();
+    app.store.db
+      .prepare(`INSERT INTO helper_conversations
+      (id,scope_key,creation_key,creation_hash,chat_id,scope,title,auto_title,revision,persona,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,1,?,?,?)`)
+      .run(
+        cid,
+        JSON.stringify(scope),
+        cid,
+        'hash',
+        chatId,
+        JSON.stringify(scope),
+        'Helper title',
+        0,
+        '',
+        time,
+        time
+      );
+    app.store.db
+      .prepare(`INSERT INTO helper_tasks
+      (id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?)`)
+      .run(
+        tid,
+        cid,
+        tid,
+        'Sensitive assistant request',
+        status,
+        JSON.stringify({ model: { title: 'Synthetic model' } }),
+        JSON.stringify({ modelCalls: 1 }),
+        time,
+        time
+      );
+    return { cid, tid };
+  };
+  const library = make({ kind: 'library', workId: 'library:bot' }, null, 'failed');
+  const writing = make({ kind: 'chat', chatId: chat.id }, chat.id, 'running');
+  app.store.db
+    .prepare(
+      'INSERT INTO helper_operations(id,task_id,request_hash,result,created_at) VALUES(?,?,?,?,?)'
+    )
+    .run(randomUUID(), library.tid, 'hash', '{}', time);
+  const result = (await app.inject('/api/activity-feed')).json();
+  expect(result.helpers).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: library.tid,
+        conversationId: library.cid,
+        chatId: null,
+        committedEffects: 1,
+        status: 'failed',
+      }),
+      expect.objectContaining({
+        id: writing.tid,
+        conversationId: writing.cid,
+        chatId: chat.id,
+        status: 'running',
+      }),
+    ])
+  );
+  expect(JSON.stringify(result.helpers)).not.toContain('Sensitive assistant request');
+});

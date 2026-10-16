@@ -87,6 +87,27 @@ function translationRequest() {
   return { input };
 }
 
+test('Argon omits ignored sampling, rejects minimal thinking and unsupported long REST decodes', () => {
+  const input = request();
+  input.modelId = 'gemini-4-argon';
+  input.generation = {
+    maxOutputTokens: 32_768,
+    temperature: 1,
+    topP: 0.9,
+    thinkingLevel: 'MEDIUM',
+  };
+  const wire = bodyObject(encodeVertex(input).body);
+  expect(wire.generationConfig).toEqual({
+    maxOutputTokens: 32_768,
+    thinkingConfig: { thinkingLevel: 'MEDIUM' },
+  });
+  input.generation.thinkingLevel = 'MINIMAL';
+  expect(() => encodeVertex(input)).toThrow('ARGON_THINKING_LEVEL_UNSUPPORTED');
+  input.generation.thinkingLevel = 'HIGH';
+  input.generation.maxOutputTokens = 65_537;
+  expect(() => encodeVertex(input)).toThrow('ARGON_LONG_DECODE_UNSUPPORTED');
+});
+
 // Pure recorded-object fixtures: these checks do not call a live model or assess prose quality.
 describe('Vertex 3.8 request and continuation protocol', () => {
   test('encodes contract, complete input JSON and function schemas without unsupported sampling fields', () => {
