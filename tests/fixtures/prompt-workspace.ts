@@ -86,6 +86,7 @@ export function preservePromptWorkspace() {
           titleModel: originalModels.titleModel ?? null,
           helperModel: originalModels.helperModel ?? null,
           contextModel: originalModels.contextModel ?? null,
+          summaryLength: originalModels.summaryLength,
           translationPolicy: originalModels.translationPolicy,
         },
       });
