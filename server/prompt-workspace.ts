@@ -1,4 +1,9 @@
 import { promptOptionOwner } from '../core/chat-options.js';
+import {
+  DEFAULT_SUMMARY_LENGTH,
+  SUMMARY_LENGTH_VALUES,
+  type SummaryLengthSettings,
+} from '../core/summary-length.js';
 import { EXECUTION_INPUT_MAX_CHARS } from '../core/content-limits.js';
 import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import type { FastifyInstance } from 'fastify';
@@ -66,6 +71,21 @@ export function validateCombinationOwner(value: unknown): PromptCombinationOwner
   return { kind: 'workspace', role: roleValue(b.role) };
 }
 
+function validateSummaryLength(value: unknown): SummaryLengthSettings {
+  if (value === undefined) return { ...DEFAULT_SUMMARY_LENGTH };
+  const input = record(value);
+  fields(input, ['conversation', 'helper']);
+  if (
+    !SUMMARY_LENGTH_VALUES.includes(input.conversation as never) ||
+    !SUMMARY_LENGTH_VALUES.includes(input.helper as never)
+  )
+    throw new HttpError(400, 'SUMMARY_LENGTH_INVALID');
+  return {
+    conversation: input.conversation as SummaryLengthSettings['conversation'],
+    helper: input.helper as SummaryLengthSettings['helper'],
+  };
+}
+
 export function validatePromptWorkspace(value: unknown): PromptWorkspace {
   const b = record(value);
   fields(b, [
@@ -80,6 +100,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
     'helperModel',
     'contextModel',
     'scriptModel',
+    'summaryLength',
   ]);
   const policy = record(b.translationPolicy);
   fields(policy, ['maxRetries', 'maxCalls', 'judgment', 'contextMode']);
@@ -100,6 +121,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
       ? { mainJudgmentEnabled: b.mainJudgmentEnabled as boolean }
       : {}),
     revision: number(b.revision, 'prompt workspace revision'),
+    summaryLength: validateSummaryLength(b.summaryLength),
     titleModel: validateTitleModel(b.titleModel ?? null),
     helperModel: validateTitleModel(b.helperModel ?? null),
     contextModel: validateTitleModel(b.contextModel ?? null),
@@ -121,6 +143,7 @@ export function validatePromptWorkspace(value: unknown): PromptWorkspace {
 export function defaultPromptWorkspace(): PromptWorkspace {
   return {
     revision: 1,
+    summaryLength: { ...DEFAULT_SUMMARY_LENGTH },
     titleModel: null,
     helperModel: null,
     contextModel: null,
@@ -143,6 +166,7 @@ export function promptWorkspace(store: Store): PromptWorkspace {
   const saved = JSON.parse(row.body) as PromptWorkspace;
   return {
     ...saved,
+    summaryLength: validateSummaryLength(saved.summaryLength),
     main: validateCurrentPrompt(saved.main, 'main'),
     translation: validateCurrentPrompt(saved.translation, 'translation'),
     titleModel: validateTitleModel(saved.titleModel ?? null),
@@ -231,6 +255,7 @@ export function modelWorkspace(store: Store): ModelWorkspace {
     mainJudgmentEnabled: current.mainJudgmentEnabled === true,
     mainJudgmentThreshold: mainJudgmentThreshold(current.mainJudgmentThreshold),
     revision: current.revision,
+    summaryLength: validateSummaryLength(current.summaryLength),
     titleModel: workspaceModelRef(current, 'title'),
     helperModel: workspaceModelRef(current, 'helper'),
     contextModel: workspaceModelRef(current, 'context'),
@@ -251,6 +276,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     'helperModel',
     'contextModel',
     'scriptModel',
+    'summaryLength',
   ]);
   return store.transaction(() => {
     const prior = promptWorkspace(store);
@@ -271,6 +297,9 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
         ? validateTitleModel(input.scriptModel)
         : (prior.scriptModel ?? null),
       modelRoutes: validateModelRoutes(input.routes),
+      summaryLength: Object.hasOwn(input, 'summaryLength')
+        ? validateSummaryLength(input.summaryLength)
+        : validateSummaryLength(prior.summaryLength),
       translationPolicy: input.translationPolicy,
       ...(Object.hasOwn(input, 'mainJudgmentThreshold')
         ? { mainJudgmentThreshold: input.mainJudgmentThreshold }

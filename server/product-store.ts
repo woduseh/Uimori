@@ -743,6 +743,7 @@ export class ProductStore {
       }
     const profile: ProfileSnapshot = {
       ...p,
+      summaryLength: structuredClone(workspace.summaryLength),
       routes,
       models,
       ...resolvePackageProfile(this, p),

@@ -949,7 +949,9 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
     if (request.role === 'context') {
       expect(request.stable.contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
       expect(Number(request.input.controls?.targetSummaryTokens)).toBeGreaterThan(1);
-      expect(request.generation?.maxOutputTokens).toBe(4096);
+      expect(request.generation?.maxOutputTokens).toBe(8192);
+      expect(Number(request.input.controls?.targetSummaryTokens)).toBeLessThanOrEqual(4096);
+      expect(Number(request.input.controls?.targetSummaryTokens)).toBeGreaterThan(2048);
       expect(f.workspace.task(f.currentTaskId).snapshot.contextModel?.maxOutputTokens).toBe(8192);
       return summarized();
     }
