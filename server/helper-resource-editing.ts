@@ -11,6 +11,7 @@ import {
   validateEditableRisuPrompt,
 } from '../core/risu-prompt.js';
 import type { Content } from '../core/product.js';
+import { RisuContentError } from '../core/risu-content.js';
 import type { HelperEditor } from '../core/helper.js';
 import type { Store } from './store.js';
 import { HttpError, number, text } from './request-validation.js';
@@ -817,7 +818,11 @@ export function patchHelperResource(
   try {
     saved = saveResource(store, { kind, id, expectedRevision: revision, model }).saved;
   } catch (error) {
-    if (error instanceof HttpError && error.statusCode === 400) validationFailure(error);
+    if (
+      (error instanceof HttpError && error.statusCode === 400) ||
+      error instanceof RisuContentError
+    )
+      validationFailure(error);
     throw error;
   }
   return {

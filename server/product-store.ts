@@ -307,7 +307,15 @@ export class ProductStore {
     }
     if (packageInput && record(packageInput).nativeRisu) {
       const raw = record(packageInput);
-      assertRisuContentSource(raw.nativeRisu);
+      try {
+        assertRisuContentSource(raw.nativeRisu);
+      } catch (error) {
+        // Native source validation is pure; report rejected input before any persistence begins.
+        throw new HttpError(
+          400,
+          error instanceof Error ? error.message : 'PACKAGE_NATIVE_RISU_INVALID'
+        );
+      }
       const native = raw.nativeRisu;
       const { imageHandoff: _old, ...rest } = raw;
       const handoff = detectRisuImageHandoff(

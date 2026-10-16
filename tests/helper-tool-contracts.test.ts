@@ -1002,6 +1002,88 @@ test('patch failures identify exact change and batch item without treating text 
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
 });
 
+test('invalid native batch input rolls back and can be corrected in the same helper task', async () => {
+  const f = await fixture('library');
+  const other = f.store.product.content(fixtureBotInput('Other')) as Content;
+  const items = (target: string) => [
+    {
+      kind: 'content',
+      id: f.bot.id,
+      expectedRevision: f.bot.revision,
+      changes: [{ op: 'set', path: '/package/nativeRisu/card/name', value: 'Renamed' }],
+    },
+    {
+      kind: 'content',
+      id: other.id,
+      expectedRevision: other.revision,
+      changes: [
+        {
+          op: 'set',
+          path: '/package/nativeRisu/card/extensions/uimori/translationGuide',
+          value: { instructions: '', terms: [{ source: 'Rose', target }] },
+        },
+      ],
+    },
+  ];
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('invalid-guide', 'app.call', {
+          name: 'resource.patchMany',
+          arguments: { items: items('') },
+        })
+      );
+    if (round === 1) {
+      expect(event(request, 'invalid-guide')).toMatchObject({
+        denied: true,
+        errorKind: 'recoverable',
+        result: {
+          code: 'PATCH_INVALID_CHANGE',
+          retryMode: 'correct_arguments',
+          outcome: 'unchanged',
+          details: {
+            itemIndex: 1,
+            kind: 'content',
+            id: other.id,
+            stage: 'validation',
+            changeIndex: null,
+            path: null,
+          },
+        },
+      });
+      expect(f.store.product.get('content', f.bot.id)).toEqual(f.bot);
+      expect(f.store.product.get('content', other.id)).toEqual(other);
+      expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
+      expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations').get()).toEqual({
+        n: 0,
+      });
+      return calls(
+        call('corrected-guide', 'app.call', {
+          name: 'resource.patchMany',
+          arguments: { items: items('로즈') },
+        })
+      );
+    }
+    expect(result(request, 'corrected-guide')).toMatchObject({
+      items: [
+        { id: f.bot.id, revision: f.bot.revision + 1 },
+        { id: other.id, revision: other.revision + 1 },
+      ],
+    });
+    return structuredClone(success);
+  });
+  const task = await submit(f, '두 자료의 이름과 번역 표기를 고쳐줘');
+  expect(f.store.product.get<Content>('content', f.bot.id).title).toBe('Renamed');
+  expect(
+    f.store.product.get<Content>('content', other.id).package.nativeRisu.card.extensions
+  ).toMatchObject({
+    uimori: { translationGuide: { terms: [{ source: 'Rose', target: '로즈' }] } },
+  });
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 1 });
+});
+
 test('library schema exposes folder CAS and item identity for a discovered read-create-move flow', async () => {
   const f = await fixture('library');
   mockSend((request, round) => {
