@@ -53,6 +53,8 @@ export type HelperResourceRef = {
   title: string;
 };
 export type HelperTaskSnapshot = {
+  /** Frozen when this task is queued. */
+  summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   retryOf?: string;
   /** Kept after input cleanup so an admission retry cannot silently change its input. */
   requestFingerprint?: string;

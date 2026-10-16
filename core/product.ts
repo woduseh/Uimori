@@ -90,6 +90,7 @@ export type CurrentPrompt = {
   defaultValues?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
 export type ModelWorkspace = {
+  summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   mainJudgmentThreshold?: number;
   mainJudgmentEnabled?: boolean;
   titleModel?: ModelRef | null;
@@ -101,6 +102,7 @@ export type ModelWorkspace = {
   translationPolicy: PromptWorkspace['translationPolicy'];
 };
 export type PromptWorkspace = {
+  summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   mainJudgmentThreshold?: number;
   mainJudgmentEnabled?: boolean;
   titleModel?: ModelRef | null;
@@ -234,6 +236,8 @@ export type ChatProfile = {
   packageAttachments?: import('./risu-content.js').ContentAttachment[];
 };
 export type ProfileSnapshot = ChatProfile & {
+  /** Frozen summary policy for this run, independent of later global settings. */
+  summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   /** Chat overrides frozen at reservation; absent in historical snapshots. */
   variableState?: import('./chat-variables.js').ChatVariableState;
   chatOptions?: import('./chat-options.js').ChatOptionResolution;

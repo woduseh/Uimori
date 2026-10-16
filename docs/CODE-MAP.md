@@ -15,6 +15,7 @@
 | Independent copies and retries | `server/chat-copy.ts`, `server/chat-fork.ts`, `server/run-retry.ts`, `server/chat-media.ts` | [Chat backup](CHAT-BACKUP.md) |
 | Portable user resources | `server/resource-bundle.ts`, `server/transfer-images.ts`, `core/native-transfer-validation.ts` | [Transfer](NATIVE-TRANSFER.md) |
 | DB schema and snapshot | `server/database-schema.ts`, `server/database-backup.ts` | [Data](DATA-MIGRATIONS.md) |
+| Summary length defaults, frozen settings, and title generation | `core/summary-length.ts`, `core/context-summary-policy.ts`, `server/prompt-workspace.ts`, `web/ModelWorkspaceEditor.tsx`, `server/chat-title.ts` | [Execution inputs](EXECUTION.md) |
 | Execution, context and notes | `server/run-executor.ts`, `server/store.ts`, `server/execution-snapshot.ts`, `server/execution-retention.ts`, `server/context-planning.ts`, `server/story-notes.ts` | [Execution inputs](EXECUTION.md) |
 | Native Risu execution | `server/risu-native-runtime.ts`, `server/risu-native-lua-session.ts`, `server/risu-native-render.ts`, `server/risu-native-projection.ts` | [Risu import](RISU-IMPORT.md) |
 | Model request fields and provider protocols | `core/model-request-fields.ts`, `core/provider-request.ts`, `core/provider-http.ts`, `core/*-protocol.ts` | [Providers](PROVIDERS.md) |

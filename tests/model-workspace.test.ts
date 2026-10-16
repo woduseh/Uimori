@@ -128,6 +128,36 @@ test('optional title model is independent of task routes, strict, CAS protected 
   expect(save(null).titleModel).toBeNull();
 });
 
+test('summary length configuration is validated, persisted and frozen per run', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Summary limits');
+  const before = modelWorkspace(store);
+  expect(before.summaryLength).toEqual({ conversation: 'auto', helper: 'auto' });
+  const save = (summaryLength: unknown, revision = modelWorkspace(store).revision) =>
+    updateModelWorkspace(store, {
+      expectedRevision: revision,
+      routes: before.routes,
+      translationPolicy: before.translationPolicy,
+      summaryLength,
+    });
+  expect(() => save({ conversation: 123, helper: 'auto' })).toThrow('SUMMARY_LENGTH_INVALID');
+  expect(() => save({ conversation: 'auto' })).toThrow('SUMMARY_LENGTH_INVALID');
+  expect(() => save({ conversation: 'auto', helper: 'auto', extra: 1 })).toThrow();
+  const accepted = save({ conversation: 16384, helper: 2048 });
+  expect(accepted.summaryLength).toEqual({ conversation: 16384, helper: 2048 });
+  const frozen = store.product.snapshot(chat.id);
+  expect(frozen.summaryLength).toEqual(accepted.summaryLength);
+  expect(() => save({ conversation: 'auto', helper: 'auto' }, before.revision)).toThrow();
+  updatePromptWorkspace(store, { expectedRevision: modelWorkspace(store).revision });
+  expect(modelWorkspace(store).summaryLength).toEqual(accepted.summaryLength);
+  save({ conversation: 'auto', helper: 8192 });
+  expect(frozen.summaryLength).toEqual({ conversation: 16384, helper: 2048 });
+  expect(store.product.snapshot(chat.id).summaryLength).toEqual({
+    conversation: 'auto',
+    helper: 8192,
+  });
+});
+
 test('the optional extension model stays outside task routes and freezes its current model revision', () => {
   const store = database(),
     chat = createFixtureChat(store, 'Extension model'),

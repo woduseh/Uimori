@@ -63,6 +63,7 @@ import { prepareNativeRisuReadOnly } from './risu-native-readonly.js';
 import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { previousContextPlan, seedContextPlan } from './context-planning.js';
 import { prepareInputContext } from './context-compaction.js';
+import { DEFAULT_SUMMARY_LENGTH } from '../core/summary-length.js';
 import { runMain, type MainHooks } from './model-runner.js';
 import { readRequestImage } from './request-images.js';
 import { measureProviderRequest } from './main-request.js';
@@ -683,6 +684,7 @@ export class HelperRuntime {
         ...(retryOf ? { retryOf } : {}),
         scope,
         model,
+        summaryLength: structuredClone(workspace.summaryLength ?? DEFAULT_SUMMARY_LENGTH),
         history,
         context: helperContext(this.store, conversationId, history),
         persona: conversation.persona,
@@ -1662,6 +1664,7 @@ export class HelperRuntime {
     const budget = contextBudgetForModel(target);
     const policy = contextSummaryPolicy({
       purpose: 'helper',
+      summaryLength: task.snapshot.summaryLength?.helper,
       consumerInputTokenLimit: contextBudgetForModel(task.snapshot.model).inputTokenLimit,
       generation: generationFromModel(target),
       fixedInputTokens,

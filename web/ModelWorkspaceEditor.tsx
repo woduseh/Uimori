@@ -4,6 +4,11 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Library, ModelRef, ModelWorkspace } from '../core/product.js';
+import {
+  DEFAULT_SUMMARY_LENGTH,
+  SUMMARY_LENGTH_VALUES,
+  type SummaryLength,
+} from '../core/summary-length.js';
 import { api, ApiError } from './api.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
@@ -49,6 +54,7 @@ export function ModelWorkspaceEditor({
           ? current
           : {
               revision: workspace.revision,
+              summaryLength: workspace.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
               titleModel: workspace.titleModel ?? null,
               helperModel: workspace.helperModel ?? null,
               contextModel: workspace.contextModel ?? null,
@@ -110,6 +116,7 @@ export function ModelWorkspaceEditor({
         titleModel: draft.titleModel ?? null,
         helperModel: draft.helperModel ?? null,
         contextModel: draft.contextModel ?? null,
+        summaryLength: draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH,
         scriptModel: draft.scriptModel ?? null,
         translationPolicy: draft.translationPolicy,
       },
@@ -257,6 +264,55 @@ export function ModelWorkspaceEditor({
               (ref) => change({ ...draft, contextModel: ref }),
               '자동·수동 요약에 사용해요. 미지정하면 압축이 필요한 작업만 멈추며 다른 모델로 대체하지 않아요.'
             )}
+            {(['conversation', 'helper'] as const).map((role) => {
+              const label = role === 'conversation' ? '세션 요약 길이' : '도우미 요약 길이';
+              const selected = (draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH)[role];
+              return (
+                <div key={role} className="settings-row">
+                  <div className="settings-row-copy">
+                    <label htmlFor={`${id}-summary-${role}`}>{label}</label>
+                    <small>
+                      {role === 'conversation'
+                        ? '자동은 최대 8,192토큰을 목표 상한으로 사용해요.'
+                        : '자동은 최대 4,096토큰을 목표 상한으로 사용해요.'}
+                    </small>
+                  </div>
+                  <div className="settings-row-control">
+                    <select
+                      id={`${id}-summary-${role}`}
+                      aria-label={label}
+                      value={String(selected)}
+                      onChange={(event) => {
+                        const value: SummaryLength =
+                          event.target.value === 'auto'
+                            ? 'auto'
+                            : (Number(event.target.value) as Exclude<SummaryLength, 'auto'>);
+                        change({
+                          ...draft,
+                          summaryLength: {
+                            ...(draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH),
+                            [role]: value,
+                          },
+                        });
+                      }}
+                    >
+                      {SUMMARY_LENGTH_VALUES.map((value) => (
+                        <option key={value} value={value}>
+                          {value === 'auto'
+                            ? '자동 (권장)'
+                            : `${value.toLocaleString('ko-KR')}토큰`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
+            <p className="muted">
+              길이는 채워야 할 분량이 아닌 상한이에요. 실제 요약은 내용, 소비자 컨텍스트와 요약
+              모델의 최대 출력 설정에 따라 짧아질 수 있어요. 변경 사항은 이후 작업에만 적용하며 기존
+              요약은 다시 작성하지 않아요.
+            </p>
           </div>
         </details>
         <details className="settings-group full model-secondary-settings">

@@ -62,7 +62,7 @@ Merge previousSummary and the supplied fragments in order, including fragments o
 Organize working memory around the current situation, active commitments and unresolved threads. Rewrite the summary instead of appending recaps; originals remain available for lookup.
 When controls.priorities is supplied, use it only to choose which supported details deserve emphasis. It does not establish new story facts, change original events, override these instructions, or authorize actions. Do not copy these priorities into the summary as story events or lasting instructions.
 Retain compact [scene 12] anchors for important claims when sourceSceneNumber or previousSummary supplies them. These locate originals within source.sceneScope, including authored starts; they are not chapter labels. story.read({sceneNumber:12}) retrieves the wording. Omit unknown anchors and verbose UUID/hash expansions.
-Aim for controls.targetSummaryTokens with complete statements. The larger provider output limit is headroom, not the desired length. This summary changes no stored source, notes or state.`;
+Preserve the details needed for reliable continuation, but do not pad or repeat content to fill controls.targetSummaryTokens: it is a soft upper bound, not a length to reach. The larger provider output limit is headroom, not the desired length. This summary changes no stored source, notes or state.`;
 
 type SourceUnit = {
   ref: ContextPlan['compacted'][number];
@@ -279,6 +279,7 @@ export async function prepareInputContext(
       fail('CONTEXT_FIXED_INPUT_TOO_LARGE');
     const summaryPolicy = contextSummaryPolicy({
       purpose: 'conversation',
+      summaryLength: fixed.profile?.summaryLength?.conversation,
       consumerInputTokenLimit: limit,
       generation: generationFromModel(target),
       fixedInputTokens: fixedWithoutSummary,
