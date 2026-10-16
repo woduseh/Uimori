@@ -1200,6 +1200,9 @@ export function useStory() {
         );
         return false;
       }
+      // Legacy text-only drafts have no stored generation until their first edit.
+      // Publish it before admission so all cleanup can use the same token owner.
+      if (!preserveDraft) rememberRequestDraft(sentKey, requestDraft.current);
       sessionStorage.setItem(
         commandKey,
         JSON.stringify({
@@ -1251,18 +1254,12 @@ export function useStory() {
         if (currentDraftKey.current === sentKey) setLoreResetDraft(false);
       }
       if (!preserveDraft) {
-        const remaining = await clearRequestDraft(sentKey, sentDraftToken).catch(() => {
+        await clearRequestDraft(sentKey, sentDraftToken).catch(() => {
           if (currentView.current === sentView)
             setError(
               '요청은 수락됐지만 기기의 초안을 정리하지 못했어요. 다시 보내기 전에 확인해 주세요.'
             );
         });
-        if (
-          !remaining &&
-          currentDraftKey.current !== sentKey &&
-          sessionStorage.getItem(sentKey) === payload.request
-        )
-          sessionStorage.removeItem(sentKey);
         if (currentDraftKey.current === sentKey && requestDraft.current.token === sentDraftToken) {
           sessionStorage.removeItem(sentKey);
           requestDraft.current = { token: crypto.randomUUID(), text: '', images: [] };

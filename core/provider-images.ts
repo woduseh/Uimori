@@ -22,16 +22,16 @@ export function assertProviderRequestBytes(body: Json): void {
     throw new ProviderContractError('IMAGE_REQUEST_TOO_LARGE');
 }
 
-/** Materialize a detached wire copy. The frozen request and opaque replay never contain bytes. */
+/** Detach image-bearing wire bodies so frozen requests and opaque replay never contain bytes. */
 export async function materializeProviderImages(
   body: Json,
   request: Pick<ProviderRequest, 'prompt'>,
   options: Pick<ProviderExecutionOptions, 'resolveImage'>,
   signal?: AbortSignal
 ): Promise<Json> {
-  const allowed = new Map(
-    requestImages(request).map((image) => [providerImageReference(image), image])
-  );
+  const images = requestImages(request);
+  if (!images.length) return body;
+  const allowed = new Map(images.map((image) => [providerImageReference(image), image]));
   const resolved = new Map<string, ResolvedRequestImage>();
   let wireBytes = Buffer.byteLength(JSON.stringify(body), 'utf8');
   if (wireBytes > PROVIDER_REQUEST_MAX_BYTES)

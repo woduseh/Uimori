@@ -3,6 +3,8 @@ import * as projections from '../server/run-projections.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
+import sharp from 'sharp';
 import Fastify from 'fastify';
 import { Store } from '../server/store.js';
 import { prepareRisuImport, applyRisuImport } from '../server/risu-import.js';
@@ -16,6 +18,8 @@ import { nativeRisuPreview } from '../server/risu-native-preview.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { prepareNativeRisuRun, prepareNativeRisuOutput } from '../server/risu-native-run.js';
 import { disposeAllNativeRisuSessions } from '../server/risu-native-runtime.js';
+import { storeImage } from '../server/image-storage.js';
+import type { RequestImage } from '../core/request-images.js';
 
 import {
   nativeInteractionRoutes,
@@ -30,7 +34,12 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-async function setup(extraOutput = false, historyEdit = '', viewportDisplay = false) {
+async function setup(
+  extraOutput = false,
+  historyEdit = '',
+  viewportDisplay = false,
+  actionCode = ''
+) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-native-host-'));
   const store = new Store(join(path, 'test.sqlite'));
   owned.push({ path, store });
@@ -89,6 +98,7 @@ function ask(id)
   local selected = alertSelect(id, {'A', 'B'}):await()
   setChatVar(id, 'selected', selected)
 end
+${actionCode}
 `,
                     },
                   ],
@@ -132,7 +142,12 @@ function actionBody(store: Store, chatId: string, name: string, key: string) {
   };
 }
 
-async function appendNativeSource(store: Store, chatId: string, text: string) {
+async function appendNativeSource(
+  store: Store,
+  chatId: string,
+  text: string,
+  requestImages: RequestImage[] = []
+) {
   const chat = store.chat(chatId);
   const { run } = store.createRun(
     chatId,
@@ -146,6 +161,7 @@ async function appendNativeSource(store: Store, chatId: string, text: string) {
       chatId,
       parentRevision: chat.headRevision,
       request: `Continue ${text}`,
+      ...(requestImages.length ? { requestImages } : {}),
       settingsRevision: chat.settingsRevision,
       settings: chat.settings,
       history: store.history(chat.headRevision),
@@ -166,6 +182,165 @@ async function appendNativeSource(store: Store, chatId: string, text: string) {
     costUsd: 0,
   });
 }
+
+async function referenceImage(store: Store): Promise<RequestImage> {
+  const bytes = await sharp({
+    create: { width: 3, height: 2, channels: 3, background: '#6045ad' },
+  })
+    .webp({ lossless: true })
+    .toBuffer();
+  const hash = createHash('sha256').update(bytes).digest('hex');
+  storeImage(store.db, { hash, mime: 'image/webp', bytes });
+  return {
+    hash,
+    mime: 'image/webp',
+    name: 'reference.webp',
+    width: 3,
+    height: 2,
+    input: { hash, width: 3, height: 2 },
+  };
+}
+
+test('native variables-only buttons retain each user attachment through repeated actions, copies and backups', async () => {
+  const { store, chatId } = await setup();
+  const image = await referenceImage(store);
+  const references = Array.from({ length: 8 }, (_, index) => ({ ...image, name: `ref-${index}` }));
+  await appendNativeSource(store, chatId, 'First reference scene', references);
+  const second = await appendNativeSource(store, chatId, 'Second reference scene', references);
+  for (const key of ['choose-images', 'choose-images-again']) {
+    const head = store.chat(chatId).headRevision!;
+    await applyNativeRisuAction(store, chatId, head, actionBody(store, chatId, 'choose', key));
+  }
+  const head = store.chat(chatId).headRevision!;
+  expect(head).not.toBe(second.id);
+  const attachments = (owner: Store, id: string) =>
+    nativeSourceSnapshot(owner, id, owner.chat(id).headRevision!)
+      .snapshot.logicalHistory!.filter((message) => message.requestImages?.length)
+      .map((message) => ({ role: message.role, images: message.requestImages }));
+  const expected = [
+    { role: 'user', images: references },
+    { role: 'user', images: references },
+  ];
+  expect(attachments(store, chatId)).toEqual(expected);
+  const copied = forkChat(store, chatId, {
+    fromRevision: head,
+    idempotencyKey: 'image-button-copy',
+  });
+  expect(attachments(store, copied.id)).toEqual(expected);
+  const backup = exportChatBackup(store, chatId);
+  expect(backup.chats[0].transcript.entries.slice(1).map((entry) => entry.requestImages)).toEqual([
+    references,
+    references,
+  ]);
+  const { store: target } = await setup();
+  const restored = await importChatBackup(target, {
+    backup,
+    idempotencyKey: 'image-button-backup',
+  });
+  expect(attachments(target, restored.chat.id)).toEqual(expected);
+  const invalid = structuredClone(backup);
+  invalid.chats[0].state
+    .messages!.at(-1)!
+    .authored!.messages.find(
+      (message) => message.requestImageIndexes?.length
+    )!.requestImageIndexes = [8];
+  await expect(
+    importChatBackup(target, { backup: invalid, idempotencyKey: 'invalid-image-index' })
+  ).rejects.toThrow('메시지에 연결된 참고 이미지가 올바르지 않아요.');
+});
+
+test('native button message merging keeps each user attachment on its identified message', async () => {
+  const { store, chatId } = await setup(
+    false,
+    '',
+    false,
+    'function choose(id) removeChat(id, 1) end'
+  );
+  const firstImage = await referenceImage(store),
+    secondImage = { ...firstImage, name: 'second.webp' };
+  await appendNativeSource(store, chatId, 'First reference scene', [firstImage]);
+  const source = await appendNativeSource(store, chatId, 'Second reference scene', [secondImage]);
+  await applyNativeRisuAction(
+    store,
+    chatId,
+    source.id,
+    actionBody(store, chatId, 'choose', 'merge-images')
+  );
+  const head = store.chat(chatId).headRevision!;
+  expect(
+    nativeSourceSnapshot(store, chatId, head)
+      .snapshot.logicalHistory!.filter((message) => message.requestImages?.length)
+      .map((message) => ({ text: message.text, images: message.requestImages }))
+  ).toEqual([
+    { text: 'Continue First reference scene INPUT', images: [firstImage] },
+    { text: 'Continue Second reference scene INPUT', images: [secondImage] },
+  ]);
+});
+
+test('native button deletion removes only the identified user attachment', async () => {
+  const { store, chatId } = await setup(
+    false,
+    '',
+    false,
+    'function choose(id) removeChat(id, 0) end'
+  );
+  const image = await referenceImage(store);
+  const source = await appendNativeSource(store, chatId, 'Reference scene', [image]);
+  await applyNativeRisuAction(
+    store,
+    chatId,
+    source.id,
+    actionBody(store, chatId, 'choose', 'delete-image')
+  );
+  const head = store.chat(chatId).headRevision!;
+  expect(
+    nativeSourceSnapshot(store, chatId, head).snapshot.logicalHistory!.flatMap(
+      (message) => message.requestImages ?? []
+    )
+  ).toEqual([]);
+  expect(store.run(source.runId).snapshot.requestImages).toEqual([image]);
+});
+
+test.each([
+  ['role change', "setChatRole(id, 0, 'char')", 'RISU_NATIVE_REQUEST_IMAGE_IDENTITY'],
+  [
+    'duplicate identity',
+    'local messages = getFullChat(id); table.insert(messages, messages[1]); setFullChat(id, messages)',
+    'RISU_NATIVE_REQUEST_IMAGE_IDENTITY',
+  ],
+  [
+    'lost identity',
+    'local messages = getFullChat(id); messages[1].id = nil; setFullChat(id, messages)',
+    'RISU_NATIVE_REQUEST_IMAGE_IDENTITY',
+  ],
+  ['overfull merged scene', 'removeChat(id, 1)', '참고 이미지는 한 장면에 8장까지 묶을 수 있어요.'],
+])('native button rejects %s without changing head or variables', async (_, code, error) => {
+  const { store, chatId } = await setup(
+    false,
+    '',
+    false,
+    `function choose(id) setChatVar(id, 'chosen', 'changed'); ${code} end`
+  );
+  const image = await referenceImage(store);
+  const images = Array.from({ length: 8 }, () => image);
+  await appendNativeSource(store, chatId, 'First reference scene', images);
+  const source = await appendNativeSource(store, chatId, 'Second reference scene', images);
+  const before = readChatVariables(store, chatId);
+  await expect(
+    applyNativeRisuAction(
+      store,
+      chatId,
+      source.id,
+      actionBody(store, chatId, 'choose', 'reject-image')
+    )
+  ).rejects.toThrow(error);
+  expect(store.chat(chatId).headRevision).toBe(source.id);
+  expect(readChatVariables(store, chatId)).toEqual(before);
+  const failed = store.db
+    .prepare("SELECT status FROM runs WHERE request_key='native-action:reject-image'")
+    .get();
+  expect(failed?.status).toBe('failed');
+});
 
 test('later native output preserves Lua history edits until a newer user source edit replaces them', async () => {
   const { store, chatId } = await setup(

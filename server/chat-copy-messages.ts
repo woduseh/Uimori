@@ -101,7 +101,29 @@ export function restoreCopiedMessages(
       };
       snapshot.messageChanges = changes;
     }
-    if (state.authored)
+    if (state.authored) {
+      const imageIndexes = new Set<number>();
+      for (const message of state.authored.messages) {
+        if (message.requestImageIndexes === undefined) continue;
+        if (
+          message.role !== 'user' ||
+          !Array.isArray(message.requestImageIndexes) ||
+          message.requestImageIndexes.some((index) => {
+            if (
+              !Number.isSafeInteger(index) ||
+              index < 0 ||
+              !snapshot.requestImages?.[index] ||
+              imageIndexes.has(index)
+            )
+              return true;
+            imageIndexes.add(index);
+            return false;
+          })
+        )
+          throw new HttpError(400, '메시지에 연결된 참고 이미지가 올바르지 않아요.');
+      }
+      if (imageIndexes.size !== (snapshot.requestImages?.length ?? 0))
+        throw new HttpError(400, '메시지에 연결된 참고 이미지가 올바르지 않아요.');
       snapshot.nativeRisuAuthored = {
         version: 1,
         action: 'copied-messages',
@@ -111,7 +133,7 @@ export function restoreCopiedMessages(
         })),
         ...(state.authored.greeting ? { greeting: true } : {}),
       } satisfies NativeRisuAuthored;
-    else if (state.opening)
+    } else if (state.opening)
       snapshot.nativeRisuAuthored = {
         version: 1,
         action: 'copied-opening',

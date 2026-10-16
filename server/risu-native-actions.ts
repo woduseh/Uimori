@@ -10,6 +10,9 @@ import {
   type NativeRisuExecutionOptions,
 } from './risu-native-runtime.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
+import { validateNativeImageMessageIdentity } from './risu-native-run.js';
+import { REQUEST_IMAGE_MAX_COUNT, type RequestImage } from '../core/request-images.js';
+import type { NativeRisuAuthored } from '../core/risu-native-execution.js';
 import { chatVariableProfile } from './chat-variable-context.js';
 import { readChatVariables, writeChatVariablesInTransaction } from './chat-variables.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
@@ -29,7 +32,11 @@ function groupMessages(messages: NativeRisuMessage[]): NativeRisuMessage[][] {
       message.data.length > 2_000_000
     )
       throw new HttpError(400, 'RISU_NATIVE_MESSAGE_INVALID');
-    pending.push({ role: message.role, data: message.data });
+    pending.push({
+      ...(message.id ? { id: message.id } : {}),
+      role: message.role,
+      data: message.data,
+    });
     if (message.role === 'char') {
       groups.push(pending);
       pending = [];
@@ -168,6 +175,11 @@ export async function applyNativeRisuAction(
       }
     );
     validateChatVariableValues(result.variables);
+    // Actions have no newly submitted current-input; their attachments belong to history.
+    validateNativeImageMessageIdentity(
+      { ...captured.snapshot, requestImages: undefined },
+      result.messages
+    );
     const previous = groupMessages(context.messages);
     const next = groupMessages(result.messages);
     const greeting = captured.snapshot.history.find((entry) => {
@@ -210,6 +222,29 @@ export async function applyNativeRisuAction(
       : first
         ? (messageSources[first - 1]?.revision ?? null)
         : (greeting?.revision ?? null);
+    const originals = new Map(
+      (captured.snapshot.logicalHistory ?? []).map((message) => [message.id, message])
+    );
+    const authoredGroups = next.map((messages) => {
+      const requestImages: RequestImage[] = [];
+      const authored: NativeRisuAuthored['messages'] = messages.map((message) => {
+        const images =
+          message.role === 'user' && message.id
+            ? (originals.get(message.id)?.requestImages ?? [])
+            : [];
+        const requestImageIndexes = images.map((image) => {
+          requestImages.push(image);
+          return requestImages.length - 1;
+        });
+        return {
+          ...message,
+          ...(requestImageIndexes.length ? { requestImageIndexes } : {}),
+        };
+      });
+      if (requestImages.length > REQUEST_IMAGE_MAX_COUNT)
+        throw new HttpError(400, '참고 이미지는 한 장면에 8장까지 묶을 수 있어요.');
+      return { messages: authored, requestImages };
+    });
     return store.transaction(() => {
       check();
       if (store.run(reserved.id).status !== 'running')
@@ -219,7 +254,7 @@ export async function applyNativeRisuAction(
       let head = retained;
       let lastRunId = reserved.id;
       for (let index = first; index < next.length; index++) {
-        const messages = next[index];
+        const { messages, requestImages } = authoredGroups[index];
         const request = messages
           .filter((entry) => entry.role === 'user')
           .map((entry) => entry.data)
@@ -232,6 +267,7 @@ export async function applyNativeRisuAction(
           settingsRevision: chat.settingsRevision,
           settings: chat.settings,
           request,
+          ...(requestImages.length ? { requestImages } : {}),
           history: store.history(head),
           resources: captured.snapshot.profile
             ? store.product.resources(chatId, captured.snapshot.profile)
