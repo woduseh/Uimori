@@ -11,6 +11,14 @@ import { initStoryGuide } from './story-guide-store.js';
 export const DATABASE_SCHEMA_VERSION = 15;
 const FORMAT = 'uimori-personal-v1';
 
+function initHelperSeeds(db: DatabaseSync) {
+  db.exec(`CREATE TABLE IF NOT EXISTS helper_seed_messages (
+    id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,
+    ordinal INTEGER NOT NULL,role TEXT NOT NULL CHECK(role IN ('user','assistant')),
+    text TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(conversation_id,ordinal)
+  );`);
+}
+
 export class DatabaseSchemaError extends Error {
   constructor(
     readonly code: string,
@@ -47,12 +55,14 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
   const previous = databaseSchemaVersion(db);
   if (previous === DATABASE_SCHEMA_VERSION) {
     initStoryGuide(db);
+    initHelperSeeds(db);
     initDatabaseReadIndexes(db);
     return;
   }
   try {
     db.exec('BEGIN IMMEDIATE');
     initializeFresh();
+    initHelperSeeds(db);
     initStoryGuide(db);
     initIllustrations(db);
     initOutline(db);

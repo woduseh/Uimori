@@ -62,6 +62,15 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       body.title === undefined ? undefined : text(body.title, 'conversation title', 200)
     );
   });
+  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/branch', (request) => {
+    const body = record(request.body);
+    fields(body, ['requestKey', 'untilMessageId']);
+    return store.branch(
+      request.params.id,
+      text(body.requestKey, 'request key', 100),
+      body.untilMessageId === undefined ? undefined : text(body.untilMessageId, 'message ID', 100)
+    );
+  });
   app.get<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) =>
     store.conversation(request.params.id)
   );

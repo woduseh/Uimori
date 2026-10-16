@@ -139,6 +139,21 @@ const capabilities: readonly ModelCapability[] = [
     })
   ),
   {
+    id: 'gemini-4-argon',
+    name: 'Gemini 4 Argon',
+    protocol: 'vertex-gemini-v1',
+    maxOutputTokens: 65_536,
+    temperature: false,
+    topP: false,
+    stopSequences: true,
+    thinkingLevels: ['LOW', 'MEDIUM', 'HIGH'],
+    defaultThinkingLevel: 'MEDIUM',
+    serviceTiers: ['standard', 'flex'],
+    sources: [
+      'https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/guides/gemini-4-argon',
+    ],
+  },
+  {
     id: 'gemini-3.8-flash',
     name: 'Gemini 3.8 Flash',
     protocol: 'vertex-gemini-v1',

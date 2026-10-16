@@ -178,6 +178,10 @@ Compaction classifies the inner operation: read bodies can be summarized, while 
 
 Browser helper input, selection, outline selection, unacknowledged requests and artifact drafts use the existing IndexedDB recovery store. Requests are held in memory before persistence. A failed outbox write offers an explicit send-without-storage action; it cannot promise recovery after reload. An outbox read failure is distinct from an empty outbox. Accepted requests are cleared conditionally, and cleanup or view-refresh failure does not turn server acceptance into transmission failure. Reload never automatically sends recovered requests. Admission compares a small request fingerprint before resolving current resource references, including after completed input cleanup.
 
+## 도우미 세션 분기
+
+세션 메뉴의 **세션 분기**는 마지막 정상 완료 응답까지의 대화문만 새 독립 세션에 복사해요. 요청 키로 중복 생성을 방지하며 진행 중인 작업이 있으면 분기하지 않아요. 이전 모델 시도·usage·도구 실행·변경 영수증·가정 장면·checkpoint는 다시 생성하거나 재실행하지 않아요. 새 세션은 원본을 삭제해도 과거 대화문을 참고할 수 있어요. 읽기 전용 seed 메시지는 별도 `helper_seed_messages`에 보존하고, 다음 모델의 이력·자동 압축에는 포함돼요. 외부 자료는 최신 저장 상태를 새로 읽어요.
+
 ## Activity and restoring the last resource edit
 
 While a task is running, the composer offers **현재 작업에 추가** beside the normal send action. Normal send still queues a separate request. Additional text keeps the current task's model, captured materials and read-only review mode. HTTP helpers include it at the next model request, skipping not-yet-started tool calls from the superseded response; a tool already running may finish. Native Codex uses `turn/steer` on that exact active turn.
