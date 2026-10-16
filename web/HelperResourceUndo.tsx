@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Undo2 } from 'lucide-react';
-import type { HelperResourceEdit } from '../core/helper.js';
+import { helperResourceEditResources, type HelperResourceEdit } from '../core/helper.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
 import { editorContextChanged, hasUnsavedResourceEditor } from './resource-editor.js';
 import './helper-resource-undo.css';
+
+const hasUnsavedEditResource = (edit: HelperResourceEdit) =>
+  helperResourceEditResources(edit).some((resource) =>
+    hasUnsavedResourceEditor(resource.kind, resource.id)
+  );
 
 /** The server owns the saved edit and its revision; this control only selects its receipt. */
 export function HelperResourceUndo({
@@ -23,7 +28,7 @@ export function HelperResourceUndo({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [restored, setRestored] = useState(false);
-  const [dirty, setDirty] = useState(() => hasUnsavedResourceEditor(edit.kind, edit.id));
+  const [dirty, setDirty] = useState(() => hasUnsavedEditResource(edit));
   const alive = useRef(true);
   const locked = useRef(false);
   useEffect(() => {
@@ -34,20 +39,22 @@ export function HelperResourceUndo({
   }, [edit.undone]);
   useEffect(() => {
     alive.current = true;
-    const changed = () => setDirty(hasUnsavedResourceEditor(edit.kind, edit.id));
+    const changed = () => setDirty(hasUnsavedEditResource(edit));
     changed();
     window.addEventListener(editorContextChanged, changed);
     return () => {
       alive.current = false;
       window.removeEventListener(editorContextChanged, changed);
     };
-  }, [edit.kind, edit.id]);
+  }, [edit]);
+  const resources = helperResourceEditResources(edit);
+  const title = resources.length > 1 ? `${edit.title} 외 ${resources.length - 1}개` : edit.title;
   const undone = restored || edit.undone;
   const reason = dirty ? '이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.' : edit.reason;
   const unavailable = disabled || busy || dirty || !edit.canUndo || !!undone;
   async function undo() {
     if (unavailable || locked.current) return;
-    if (hasUnsavedResourceEditor(edit.kind, edit.id)) {
+    if (hasUnsavedEditResource(edit)) {
       setDirty(true);
       return;
     }
@@ -64,8 +71,9 @@ export function HelperResourceUndo({
       if (!accepted) throw new Error('되돌린 결과를 확인하지 못했어요.');
       // Notify other saved-resource owners even if this conversation was switched meanwhile.
       window.dispatchEvent(new Event('uimori-helper-updated'));
-      if (edit.kind === 'theme') window.dispatchEvent(new Event('uimori-themes-changed'));
-      if (edit.kind === 'illustration-preset')
+      if (resources.some((resource) => resource.kind === 'theme'))
+        window.dispatchEvent(new Event('uimori-themes-changed'));
+      if (resources.some((resource) => resource.kind === 'illustration-preset'))
         window.dispatchEvent(new Event('uimori-illustration-presets-changed'));
       if (alive.current) {
         setRestored(true);
@@ -94,7 +102,7 @@ export function HelperResourceUndo({
     <section className="helper-resource-undo" aria-label="도우미 최근 자료 수정">
       <div>
         <span role={undone ? 'status' : undefined}>
-          {undone ? '수정 되돌림' : '최근 수정'} · {edit.title}
+          {undone ? '수정 되돌림' : '최근 수정'} · {title}
         </span>
         {!undone && (
           <IconButton
@@ -121,7 +129,18 @@ export function HelperResourceUndo({
           if (!busy) setConfirming(false);
         }}
       >
-        <p>‘{edit.title}’을 도우미 수정 직전 저장본으로 되돌릴까요?</p>
+        {resources.length > 1 ? (
+          <>
+            <p>다음 자료 {resources.length}개를 도우미 수정 직전 저장본으로 함께 되돌릴까요?</p>
+            <ul>
+              {resources.map((resource) => (
+                <li key={`${resource.kind}:${resource.id}`}>{resource.title}</li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p>‘{edit.title}’을 도우미 수정 직전 저장본으로 되돌릴까요?</p>
+        )}
         {reason && <p role="status">{reason}</p>}
         {error && (
           <p className="error" role="alert">

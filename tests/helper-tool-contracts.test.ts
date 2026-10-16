@@ -223,7 +223,7 @@ test.each(['resource.read', 'chat.lore'] as const)(
             name,
             arguments:
               name === 'resource.read'
-                ? { kind: 'content', id: f.bot.id }
+                ? { ...args, limit: 5, textLimit: 1000 }
                 : { ...args, limit: 5, textLimit: 2000 },
           },
         });
@@ -232,7 +232,14 @@ test.each(['resource.read', 'chat.lore'] as const)(
       const recovered = result(request, 'retry-page');
       expect(recovered).toMatchObject(
         name === 'resource.read'
-          ? { id: f.bot.id, revision: f.bot.revision, source: { path: '/package/nativeRisu/card' } }
+          ? {
+              id: f.bot.id,
+              revision: f.bot.revision,
+              path: args.path,
+              text: prose.slice(37, 1037),
+              textOffset: 37,
+              nextOffset: 1037,
+            }
           : {
               chatId: f.chat.id,
               selector,
@@ -869,6 +876,16 @@ test('resource schemas expose scoped reads and typed native patches without a mo
     const read = definition(request, 'resource.read') as Record<string, any>;
     const patch = definition(request, 'resource.patch') as Record<string, any>;
     const clone = definition(request, 'resource.clone') as Record<string, any>;
+    const many = definition(request, 'resource.patchMany') as Record<string, any>;
+    expect(many.properties.items.maxItems).toBe(16);
+    expect(many.properties.items.items.properties.changes.items.properties.target).toEqual({
+      type: 'string',
+    });
+    expect(describeHelperTools({ names: ['resource.patchMany'] }).tools[0]).not.toHaveProperty(
+      'targets'
+    );
+    expect(helperToolTraits('resource.readMany', { items: [] }).readOnly).toBe(true);
+    expect(helperToolTraits('preset.validate', { id: 'example' }).readOnly).toBe(true);
     expect(read).toMatchObject({
       required: ['kind', 'id'],
       properties: {
@@ -904,6 +921,85 @@ test('resource schemas expose scoped reads and typed native patches without a mo
     return structuredClone(success);
   });
   await submit(f, '현재 자료를 고치는 도구 형식을 확인해줘');
+});
+
+test('patch failures identify exact change and batch item without treating text mismatch as a stale revision', async () => {
+  const f = await fixture('library');
+  const other = f.store.product.content(fixtureBotInput('Other', 'same same')) as Content;
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('missing-literal', 'app.call', {
+          name: 'resource.patch',
+          arguments: {
+            kind: 'content',
+            id: f.bot.id,
+            expectedRevision: f.bot.revision,
+            changes: [
+              { op: 'set', path: '/package/nativeRisu/card/name', value: 'Must roll back' },
+              {
+                op: 'replaceText',
+                path: '/package/nativeRisu/card/description',
+                oldText: 'Missing literal',
+                newText: 'replacement',
+              },
+            ],
+          },
+        }),
+        call('ambiguous-batch', 'app.call', {
+          name: 'resource.patchMany',
+          arguments: {
+            items: [
+              {
+                kind: 'content',
+                id: f.bot.id,
+                expectedRevision: f.bot.revision,
+                changes: [
+                  { op: 'set', path: '/package/nativeRisu/card/name', value: 'Also roll back' },
+                ],
+              },
+              {
+                kind: 'content',
+                id: other.id,
+                expectedRevision: other.revision,
+                changes: [
+                  {
+                    op: 'replaceText',
+                    path: '/package/nativeRisu/card/description',
+                    oldText: 'same',
+                    newText: 'one',
+                  },
+                ],
+              },
+            ],
+          },
+        })
+      );
+    expect(event(request, 'missing-literal')).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: {
+        code: 'PATCH_TEXT_NOT_FOUND',
+        retryMode: 'correct_arguments',
+        outcome: 'unchanged',
+        details: { changeIndex: 1, path: '/package/nativeRisu/card/description', matchCount: 0 },
+      },
+    });
+    expect(event(request, 'ambiguous-batch')).toMatchObject({
+      denied: true,
+      result: {
+        code: 'PATCH_TEXT_AMBIGUOUS',
+        retryMode: 'correct_arguments',
+        outcome: 'unchanged',
+        details: { itemIndex: 1, id: other.id, changeIndex: 0, matchCount: 2 },
+      },
+    });
+    return structuredClone(success);
+  });
+  await submit(f, '자료의 문구를 수정해줘');
+  expect(f.store.product.get('content', f.bot.id)).toEqual(f.bot);
+  expect(f.store.product.get('content', other.id)).toEqual(other);
+  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
 });
 
 test('library schema exposes folder CAS and item identity for a discovered read-create-move flow', async () => {

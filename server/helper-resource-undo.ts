@@ -1,25 +1,34 @@
 import { isDeepStrictEqual } from 'node:util';
-import type { HelperResourceEdit, HelperTask } from '../core/helper.js';
+import {
+  helperResourceEditResources,
+  type HelperResourceEdit,
+  type HelperResourceEditResource,
+  type HelperTask,
+} from '../core/helper.js';
 import { editableResource, type ResourceKind } from '../core/resource-editing.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+import { HelperResourceBatchError, helperResourceBatchItems } from './helper-resource-batch.js';
 import { invokeResourceTool } from './helper-resource-tools.js';
 import { HttpError } from './request-validation.js';
 import { readResource, undoResource } from './resource-service.js';
 import type { Store } from './store.js';
 
-type EditRecord = Pick<HelperResourceEdit, 'kind' | 'id' | 'revision' | 'title'> & {
+type EditRecord = HelperResourceEditResource & {
   receiptId: string;
+  resources?: HelperResourceEditResource[];
 };
+type MutationTarget = { kind: ResourceKind; id: string | null };
 
 function resourceUpdated(
   workspace: HelperWorkspace,
   conversationId: string,
   taskId: string,
-  kind?: ResourceKind
+  kinds: readonly ResourceKind[] = []
 ) {
   workspace.event(conversationId, taskId, 'resource.updated');
-  if (kind === 'theme' || kind === 'illustration-preset')
-    workspace.event(conversationId, taskId, `${kind}.updated`);
+  for (const kind of new Set(kinds))
+    if (kind === 'theme' || kind === 'illustration-preset')
+      workspace.event(conversationId, taskId, `${kind}.updated`);
 }
 
 /** Runs inside the operation receipt transaction; only compact provenance survives cleanup. */
@@ -30,33 +39,73 @@ export function applyHelperResourceMutation(
   receiptId: string,
   name: string,
   args: Record<string, unknown>,
-  target: { kind: ResourceKind; id: string | null } | null
+  target: MutationTarget | MutationTarget[] | null
 ): unknown {
-  const existing =
-    target?.id && ['resource.save', 'resource.patch', 'image.update-metadata'].includes(name)
-      ? { kind: target.kind, id: target.id }
-      : null;
-  const before = existing ? readResource(store, existing.kind, existing.id) : null;
+  const targets: readonly MutationTarget[] =
+    name === 'resource.patchMany'
+      ? helperResourceBatchItems(args.items)
+      : target === null
+        ? []
+        : Array.isArray(target)
+          ? target
+          : [target];
+  const tracked = [
+    'resource.save',
+    'resource.patch',
+    'resource.patchMany',
+    'image.update-metadata',
+  ].includes(name);
+  const before = tracked
+    ? targets.flatMap((item, itemIndex) => {
+        if (!item.id) return [];
+        try {
+          return [{ kind: item.kind, id: item.id, saved: readResource(store, item.kind, item.id) }];
+        } catch (error) {
+          if (name === 'resource.patchMany' && error instanceof HttpError)
+            throw new HelperResourceBatchError(
+              itemIndex,
+              item.kind === 'content' || item.kind === 'prompt-preset' ? item.kind : undefined,
+              item.id,
+              error
+            );
+          throw error;
+        }
+      })
+    : [];
   const result = invokeResourceTool(store, name, args);
-  if (existing && before) {
+  const resources: HelperResourceEditResource[] = [];
+  for (const existing of before) {
     const saved = readResource(store, existing.kind, existing.id);
     if (
-      saved.revision !== before.revision &&
+      saved.revision !== existing.saved.revision &&
       !isDeepStrictEqual(
-        editableResource(existing.kind, before),
+        editableResource(existing.kind, existing.saved),
         editableResource(existing.kind, saved)
       )
     ) {
-      const edit: EditRecord = {
-        ...existing,
+      resources.push({
+        kind: existing.kind,
+        id: existing.id,
         revision: saved.revision,
         title: 'title' in saved ? saved.title : '공통 프롬프트',
-        receiptId,
-      };
-      workspace.event(task.conversationId, task.id, 'resource.edited', edit);
+      });
     }
   }
-  resourceUpdated(workspace, task.conversationId, task.id, target?.kind);
+  if (resources.length) {
+    const edit: EditRecord = {
+      ...resources[0]!,
+      receiptId,
+      ...(resources.length > 1 ? { resources } : {}),
+    };
+    workspace.event(task.conversationId, task.id, 'resource.edited', edit);
+  }
+  if (name !== 'resource.patchMany' || resources.length)
+    resourceUpdated(
+      workspace,
+      task.conversationId,
+      task.id,
+      targets.map((item) => item.kind)
+    );
   return result;
 }
 
@@ -108,13 +157,15 @@ export function lastHelperResourceEdit(
   )
     return { ...edit, reason: '도우미 작업이 끝나면 되돌릴 수 있어요.' };
   try {
-    store.product.assertAvailable(edit.kind, edit.id);
-    const saved = readResource(store, edit.kind, edit.id);
-    const undo = store.db
-      .prepare('SELECT saved_revision FROM resource_undo WHERE kind=? AND id=?')
-      .get(edit.kind, edit.id);
-    if (saved.revision !== edit.revision || undo?.saved_revision !== edit.revision)
-      return { ...edit, reason: '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.' };
+    for (const resource of helperResourceEditResources(edit)) {
+      store.product.assertAvailable(resource.kind, resource.id);
+      const saved = readResource(store, resource.kind, resource.id);
+      const undo = store.db
+        .prepare('SELECT saved_revision FROM resource_undo WHERE kind=? AND id=?')
+        .get(resource.kind, resource.id);
+      if (saved.revision !== resource.revision || undo?.saved_revision !== resource.revision)
+        return { ...edit, reason: '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.' };
+    }
   } catch (error) {
     if (!(error instanceof HttpError) || error.statusCode !== 404) throw error;
     return { ...edit, reason: '자료를 찾을 수 없어 되돌릴 수 없어요.' };
@@ -137,7 +188,9 @@ export function undoHelperResourceEdit(
     if (!edit || edit.editSeq !== editSeq)
       throw new HttpError(409, '최근 수정이 바뀌었어요. 다시 확인해 주세요.');
     if (!edit.canUndo) throw new HttpError(409, edit.reason!);
-    undoResource(store, edit.kind, edit.id, edit.revision);
+    const resources = helperResourceEditResources(edit);
+    for (const resource of resources)
+      undoResource(store, resource.kind, resource.id, resource.revision);
     const result = {
       ...edit,
       canUndo: false,
@@ -145,7 +198,12 @@ export function undoHelperResourceEdit(
       reason: '이미 되돌린 수정이에요.',
     };
     workspace.event(conversationId, edit.taskId, 'resource.edit.undone', result);
-    resourceUpdated(workspace, conversationId, edit.taskId, edit.kind);
+    resourceUpdated(
+      workspace,
+      conversationId,
+      edit.taskId,
+      resources.map((resource) => resource.kind)
+    );
     return result;
   });
 }
