@@ -99,7 +99,9 @@ test('bundled native presets are editable independent copies and compile in all 
       expect(
         compiled.messages
           .flatMap((message) => message.content)
-          .filter((part) => part.text.includes(snapshot.request))
+          .filter((part) =>
+            (part as { type: 'text'; text: string }).text.includes(snapshot.request)
+          )
       ).toHaveLength(1);
       const source = {
         id: 'synthetic-source',
@@ -114,9 +116,19 @@ test('bundled native presets are editable independent copies and compile in all 
         'Translate.'
       )!;
       const messages = translated.messages.flatMap((message) => message.content);
-      expect(messages.filter((part) => part.text.includes(source.text))).toHaveLength(1);
-      expect(messages.some((part) => part.text.includes('Hermēneía'))).toBe(true);
-      expect(messages.some((part) => part.text.includes(snapshot.request))).toBe(false);
+      expect(
+        messages.filter((part) =>
+          (part as { type: 'text'; text: string }).text.includes(source.text)
+        )
+      ).toHaveLength(1);
+      expect(
+        messages.some((part) => (part as { type: 'text'; text: string }).text.includes('Hermēneía'))
+      ).toBe(true);
+      expect(
+        messages.some((part) =>
+          (part as { type: 'text'; text: string }).text.includes(snapshot.request)
+        )
+      ).toBe(false);
     }
     template.program.nativeRisuPreset.preset.promptTemplate = [];
     expect(

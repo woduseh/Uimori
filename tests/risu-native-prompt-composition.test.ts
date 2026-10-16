@@ -6,6 +6,7 @@ import {
   resolvePromptValues,
   reconcilePromptValues,
   validateRisuPrompt,
+  validateProviderPrompt,
 } from '../core/risu-prompt.js';
 import {
   createNativeRisuPresetProgram,
@@ -30,6 +31,52 @@ const history = [
 ];
 
 describe('native Risu prompt composition', () => {
+  test('only selected chat messages carry their images; ChatML text copies remain text', () => {
+    const image = {
+      hash: 'a'.repeat(64),
+      mime: 'image/webp' as const,
+      name: 'scene.webp',
+      width: 500,
+      height: 700,
+      input: { hash: 'b'.repeat(64), width: 500, height: 700 },
+    };
+    const program = createNativeRisuPresetProgram({
+      version: 1,
+      preset: {
+        promptTemplate: [
+          { type: 'chatML', text: '<|im_start|>user\nA copied request<|im_end|>' },
+          { type: 'chat', rangeStart: -1, rangeEnd: 'end' },
+        ],
+      },
+    });
+    const result = compileRisuPrompt(program, {
+      slots: {},
+      history: [
+        { id: 'old', role: 'user', text: 'Excluded', requestImages: [image] },
+        { id: 'current', role: 'user', text: '', current: true, requestImages: [image] },
+      ],
+    });
+    expect(result.messages[0].content).toEqual([{ type: 'text', text: 'A copied request' }]);
+    expect(result.messages[1]).toMatchObject({
+      id: 'risu-block-2:current',
+      provenance: { sourceMessageId: 'current', origin: 'current' },
+      content: [
+        { type: 'text', text: '' },
+        { type: 'image', image },
+      ],
+    });
+    expect(() =>
+      validateProviderPrompt({
+        compilerVersion: result.compilerVersion,
+        messages: result.messages,
+        cachePlan: result.cachePlan,
+        values: result.values,
+      })
+    ).not.toThrow();
+    expect(result.messages.some((message) => message.provenance.sourceMessageId === 'old')).toBe(
+      false
+    );
+  });
   test('uses original block roles, slot wrappers, history ranges and cache anchors without AST projection', () => {
     const program = createNativeRisuPresetProgram({
       version: 1,
@@ -45,7 +92,9 @@ describe('native Risu prompt composition', () => {
       },
     });
     const result = compileRisuPrompt(program, { slots, history });
-    expect(result.messages.map((m) => [m.role, m.content[0].text])).toEqual([
+    expect(
+      result.messages.map((m) => [m.role, m.content.filter((part) => part.type === 'text')[0].text])
+    ).toEqual([
       ['system', 'Instruction'],
       ['user', '<character>Character description</character>'],
       ['assistant', 'Previous story'],
@@ -118,7 +167,9 @@ describe('native Risu prompt composition', () => {
         { ...program, nativeRisuPreset: evaluatedNativeRisuPreset(source, fields.fields) },
         { slots, history, values: selectedValues }
       );
-      const text = result.messages.flatMap((m) => m.content.map((p) => p.text)).join('\n');
+      const text = result.messages
+        .flatMap((m) => m.content.filter((part) => part.type === 'text').map((p) => p.text))
+        .join('\n');
       expect(text).toContain('Phēmē');
       expect(text).toContain('Character description');
       expect(text).not.toMatch(/\{\{/u);

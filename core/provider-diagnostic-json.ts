@@ -2,7 +2,10 @@ import type { Json } from './transport.js';
 
 /** Redact diagnostic copies only; wire bytes and resumable inputs stay unchanged. */
 export function redactDiagnosticJson(value: Json, secret?: string): Json {
-  if (typeof value === 'string') return secret ? value.split(secret).join('[REDACTED]') : value;
+  if (typeof value === 'string') {
+    if (/^data:image\/[^;]+;base64,/u.test(value)) return '[image payload withheld]';
+    return secret ? value.split(secret).join('[REDACTED]') : value;
+  }
   if (Array.isArray(value)) return value.map((item) => redactDiagnosticJson(item, secret));
   if (value && typeof value === 'object')
     return Object.fromEntries(
@@ -12,7 +15,11 @@ export function redactDiagnosticJson(value: Json, secret?: string): Json {
           key
         )
           ? '[REDACTED]'
-          : redactDiagnosticJson(item, secret),
+          : key === 'data' && (value.type === 'base64' || typeof value.mimeType === 'string')
+            ? typeof item === 'string' && item.startsWith('uimori-image://')
+              ? item
+              : '[image payload withheld]'
+            : redactDiagnosticJson(item, secret),
       ])
     );
   return value;

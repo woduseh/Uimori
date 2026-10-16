@@ -64,6 +64,7 @@ import { freezeReservationSnapshot } from './reservation-snapshot.js';
 import { previousContextPlan, seedContextPlan } from './context-planning.js';
 import { prepareInputContext } from './context-compaction.js';
 import { runMain, type MainHooks } from './model-runner.js';
+import { readRequestImage } from './request-images.js';
 import { measureProviderRequest } from './main-request.js';
 import { HelperWorkspace, helperCallOperationId } from './helper-workspace.js';
 import { forkChat } from './chat-fork.js';
@@ -861,6 +862,7 @@ export class HelperRuntime {
     const artifacts: { id: string; revision: number }[] = [];
     const hooks = (purpose: string, executionSignal = signal): MainHooks => ({
       ...this.options,
+      resolveImage: (image) => readRequestImage(this.store, image),
       // Independent helper artifacts retain their existing writer/advisor execution path.
       executeCodexAgent: undefined,
       signal: executionSignal,

@@ -269,7 +269,9 @@ describe('input context projection and durable summary calls', () => {
     const built = buildMainProviderRequest(result.snapshot);
     expect(JSON.stringify(built.request).length).toBeGreaterThan(2_000_000);
     expect(
-      built.request.prompt!.messages.slice(0, 2).map((message) => message.content[0].text)
+      built.request
+        .prompt!.messages.slice(0, 2)
+        .map((message) => (message.content[0] as { type: 'text'; text: string }).text)
     ).toEqual(paragraphs);
     expect(result.snapshot.contextPlan).toMatchObject({
       status: 'ready',
@@ -487,7 +489,9 @@ describe('input context projection and durable summary calls', () => {
     }
     const request = buildMainProviderRequest(result.snapshot).request,
       rendered = request
-        .prompt!.messages.flatMap((message) => message.content.map((part) => part.text))
+        .prompt!.messages.flatMap((message) =>
+          message.content.map((part) => (part as { type: 'text'; text: string }).text)
+        )
         .join('\n');
     expect(rendered).toContain(fixedPrompt);
     expect(rendered).toContain(currentRequest);
@@ -686,6 +690,7 @@ describe('input context projection and durable summary calls', () => {
       sourceRevision: 'source-0',
       sourceHash: hash(text),
       runId: 'authored-start-run',
+      sourceMessageId: authored.id,
     });
     expect(() => validateProviderPrompt(request.prompt)).not.toThrow();
     expect(JSON.stringify(request)).not.toContain('sourceKind');

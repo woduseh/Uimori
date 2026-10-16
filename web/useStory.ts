@@ -1,3 +1,13 @@
+import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
+import { REQUEST_IMAGE_MAX_COUNT, type RequestImageUpload } from '../core/request-images.js';
+import {
+  clearRequestDraft,
+  readRequestDraft,
+  rememberRequestDraft,
+  writeRequestDraft,
+  type DraftImage,
+  type RequestDraft,
+} from './request-image-draft.js';
 import { readerLocation, THEME_BODY_SCROLL_SELECTOR } from './theme-body-scroll.js';
 import { captureReaderLocation, useReadingSync } from './useReadingSync.js';
 import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
@@ -21,7 +31,7 @@ import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, Run } from '../core/types.js';
 import type { Content, CurrentPrompt, Library, PromptPreset } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
-import { api, ApiError, definiteRejection, libraryChangedKey } from './api.js';
+import { api, apiBinary, ApiError, definiteRejection, libraryChangedKey } from './api.js';
 import { requestChatFork } from './fork-request.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
 import { useInputTranslation } from './useInputTranslation.js';
@@ -69,11 +79,18 @@ type RunPayload = {
   editedRequest?: boolean;
   loreContextReset?: boolean;
   request: string;
+  requestImages?: RequestImageUpload[];
   expectedRevision: string | null;
   expectedSettingsRevision: number;
   expectedProfileRevision?: number;
 };
-type PendingCommand = { payload: string; id: string; preserveDraft?: boolean; startedAt?: string };
+type PendingCommand = {
+  payload: string;
+  id: string;
+  preserveDraft?: boolean;
+  startedAt?: string;
+  draftToken?: string;
+};
 export type RequestActivity = {
   id: string;
   startedAt: string;
@@ -94,7 +111,7 @@ function readCommand(key: string): { record: PendingCommand; payload: RunPayload
     if (
       !payload ||
       typeof payload.request !== 'string' ||
-      !payload.request.trim() ||
+      (!payload.request.trim() && !payload.requestImages?.length && !payload.retryOf) ||
       !(payload.expectedRevision === null || typeof payload.expectedRevision === 'string') ||
       !Number.isInteger(payload.expectedSettingsRevision)
     )
@@ -151,6 +168,13 @@ export function useStory() {
   const [archivedContents, setArchivedContents] = useState<Content[]>([]);
   const [draft, setDraft] = useState('');
   const draftIdentity = useRef({ text: '', revision: 0 });
+  const requestDraft = useRef<RequestDraft>({ token: '', text: '', images: [] });
+  const [draftImages, setDraftImages] = useState<DraftImage[]>([]);
+  const [draftRecovery, setDraftRecovery] = useState<RequestDraft | null>(null);
+  const draftRecoveryRef = useRef<RequestDraft | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+  const [imagesDecoding, setImagesDecoding] = useState(false);
+  const decoding = useRef<symbol | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [readerTarget, setReaderTarget] = useState<ReaderTarget | null>(() =>
@@ -662,13 +686,49 @@ export function useStory() {
     const text = sessionStorage.getItem(draftKey) || '';
     draftIdentity.current = { text, revision: draftIdentity.current.revision + 1 };
     setDraft(text);
+    setDraftImages([]);
+    setDraftRecovery(null);
+    draftRecoveryRef.current = null;
+    setDraftReady(false);
+    decoding.current = null;
+    setImagesDecoding(false);
+    const initialToken = crypto.randomUUID();
+    requestDraft.current = { token: initialToken, text, images: [] };
+    let alive = true;
+    void readRequestDraft(draftKey)
+      .then(({ saved, conflict }) => {
+        if (!alive || requestDraft.current.token !== initialToken) return;
+        if (conflict) {
+          draftRecoveryRef.current = conflict;
+          setDraftRecovery(conflict);
+        }
+        if (saved) {
+          requestDraft.current = saved;
+          draftIdentity.current = {
+            text: saved.text,
+            revision: draftIdentity.current.revision + 1,
+          };
+          sessionStorage.setItem(draftKey, saved.text);
+          setDraft(saved.text);
+          setDraftImages(saved.images);
+        }
+      })
+      .catch(() => {
+        if (alive) setError('입력 초안을 복구하지 못했어요. 브라우저 저장 공간을 확인해 주세요.');
+      })
+      .finally(() => {
+        if (alive) setDraftReady(true);
+      });
     setLoreResetDraft(sessionStorage.getItem(`lore-reset:${draftKey}`) === 'true');
     const cursor = readDraftCursor(`cursor:${draftKey}`);
     const frame = requestAnimationFrame(() => {
       if (cursor && currentDraftKey.current === draftKey)
         input.current?.setSelectionRange(cursor.start, cursor.end);
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      alive = false;
+      cancelAnimationFrame(frame);
+    };
   }, [draftKey]);
   useEffect(() => {
     const before = () => savePosition();
@@ -693,7 +753,99 @@ export function useStory() {
     if (node)
       writeViewCache(`cursor:${draftKey}`, { start: node.selectionStart, end: node.selectionEnd });
   }, [draftKey]);
+  function persistDraft(value: RequestDraft) {
+    const key = draftKey;
+    requestDraft.current = value;
+    if (draftRecoveryRef.current) {
+      rememberRequestDraft(key, value);
+      return;
+    }
+    void writeRequestDraft(key, value).catch(() => {
+      if (currentDraftKey.current === key)
+        setError(
+          '입력 초안을 기기에 저장하지 못했어요. 화면을 닫기 전에 전송하거나 파일을 보관해 주세요.'
+        );
+    });
+  }
+  function resolveDraftRecovery(restore: boolean) {
+    const found = draftRecoveryRef.current;
+    if (!found) return;
+    draftRecoveryRef.current = null;
+    setDraftRecovery(null);
+    const images = restore ? found.images : [];
+    persistDraft({ ...requestDraft.current, token: crypto.randomUUID(), images });
+    setDraftImages(images);
+  }
+  async function addDraftImages(files: File[]) {
+    if (
+      !draftReady ||
+      draftRecoveryRef.current ||
+      decoding.current ||
+      submitLocks.current.has(viewKey) ||
+      !files.length
+    )
+      return;
+    if (files.some((file) => file.size > IMAGE_INPUT_MAX_BYTES)) {
+      setError('참고 이미지는 파일당 64MB 이내로 첨부해 주세요.');
+      return;
+    }
+    if (files.some((file) => !['image/png', 'image/jpeg', 'image/webp'].includes(file.type))) {
+      setError('참고 이미지는 PNG, JPEG, 정지 WebP 파일로 첨부해 주세요.');
+      return;
+    }
+    if (requestDraft.current.images.length + files.length > REQUEST_IMAGE_MAX_COUNT) {
+      setError('참고 이미지는 최대 8장까지 첨부할 수 있어요.');
+      return;
+    }
+    const scope = { key: draftKey, epoch: navigation.current.epoch };
+    const operation = Symbol();
+    decoding.current = operation;
+    setImagesDecoding(true);
+    try {
+      const additions = await Promise.all(
+        files.map(async (file) => {
+          const bitmap = await createImageBitmap(file);
+          const dimensions = { width: bitmap.width, height: bitmap.height };
+          bitmap.close();
+          return {
+            id: crypto.randomUUID(),
+            name: file.name || '참고 이미지',
+            blob: file,
+            ...dimensions,
+          };
+        })
+      );
+      if (
+        decoding.current !== operation ||
+        currentDraftKey.current !== scope.key ||
+        navigation.current.epoch !== scope.epoch
+      )
+        return;
+      const images = [...requestDraft.current.images, ...additions];
+      persistDraft({ ...requestDraft.current, token: crypto.randomUUID(), images });
+      setDraftImages(images);
+    } catch {
+      if (
+        decoding.current === operation &&
+        currentDraftKey.current === scope.key &&
+        navigation.current.epoch === scope.epoch
+      )
+        setError('이미지를 열지 못했어요. 파일이 손상되지 않았는지 확인해 주세요.');
+    } finally {
+      if (decoding.current === operation) {
+        decoding.current = null;
+        setImagesDecoding(false);
+      }
+    }
+  }
+  function removeDraftImage(id: string) {
+    if (!draftReady || submitLocks.current.has(viewKey)) return;
+    const images = requestDraft.current.images.filter((image) => image.id !== id);
+    persistDraft({ ...requestDraft.current, token: crypto.randomUUID(), images });
+    setDraftImages(images);
+  }
   function editDraft(value: string) {
+    persistDraft({ ...requestDraft.current, token: crypto.randomUUID(), text: value });
     draftIdentity.current = { text: value, revision: draftIdentity.current.revision + 1 };
     setDraft(value);
     sessionStorage.setItem(draftKey, value);
@@ -715,6 +867,7 @@ export function useStory() {
     }),
     writeDraft: editDraft,
     available: () =>
+      draftReady &&
       !!detail &&
       navigation.current.destination === 'story' &&
       navigation.current.chat === selected &&
@@ -894,7 +1047,7 @@ export function useStory() {
     const run = visibleRuns.find((run) => run.id === id);
     return (
       !!run &&
-      !!run.request.trim() &&
+      (!!run.request.trim() || !!run.snapshot.requestImages?.length) &&
       run.packageStart?.mode !== 'authored' &&
       ['completed', 'failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(run.status)
     );
@@ -923,7 +1076,7 @@ export function useStory() {
       sessionStorage.getItem(`pending-profile:${selected}`)
     )
       return false;
-    if (editedRequest !== undefined && (!retryRunId || !editedRequest.trim())) return false;
+    if (editedRequest !== undefined && !retryRunId) return false;
     const retryRun = retryRunId ? visibleRuns.find((run) => run.id === retryRunId)! : undefined;
     const chat = detail.chat;
     const sentKey = draftKey;
@@ -934,7 +1087,23 @@ export function useStory() {
     // Recovering an uncertain admission reuses its key even if SSE already shows a running run.
     if ((!previous && activeRun()) || (retryRunId && (reuseBlocked || !canReuseRun(retryRunId))))
       return false;
-    if (!previous && !retryRun && !draft.trim()) return false;
+    if (
+      !draftReady ||
+      decoding.current ||
+      (!previous && !retryRun && !draft.trim() && !draftImages.length)
+    )
+      return false;
+    if (
+      editedRequest !== undefined &&
+      !editedRequest.trim() &&
+      !retryRun?.snapshot.requestImages?.length
+    )
+      return false;
+    const sentDraftToken = previous
+      ? (previous.record.draftToken ??
+        (requestDraft.current.text === previous.payload.request ? requestDraft.current.token : ''))
+      : requestDraft.current.token;
+    const sentImages = requestDraft.current.images;
     // An uncertain request keeps its original snapshot as well as its key.
     // A newer draft is never silently sent after recovering that earlier request.
     const payload: RunPayload = previous?.payload ?? {
@@ -960,6 +1129,16 @@ export function useStory() {
         {
           role: 'main',
           text: payload.request,
+          ...((payload.requestImages?.length ??
+          retryRun?.snapshot.requestImages?.length ??
+          sentImages.length)
+            ? {
+                imageCount:
+                  payload.requestImages?.length ??
+                  retryRun?.snapshot.requestImages?.length ??
+                  sentImages.length,
+              }
+            : {}),
           ...(payload.retryOf ? { retryRunId: payload.retryOf } : {}),
         },
         'main'
@@ -968,13 +1147,15 @@ export function useStory() {
       if (
         currentView.current !== sentView ||
         navigation.current.epoch !== sentEpoch ||
+        (!retryRun && requestDraft.current.token !== sentDraftToken) ||
         (!retryRun && draftIdentity.current.text !== payload.request) ||
         (!retryRun && loreResetDraftRef.current !== (payload.loreContextReset === true))
       )
         return false;
     }
+    if (submitLocks.current.has(sentView)) return false;
+    const sentTranslationId = inputTranslation.beginSend();
     const preserveDraft = !!retryRun || previous?.record.preserveDraft === true;
-    const sentDraft = payload.request;
     const idempotencyKey = previous?.record.id ?? crypto.randomUUID();
     const startedAt = previous?.record.startedAt ?? new Date().toISOString();
     const track = (status: RequestActivity['status'], runId?: string) =>
@@ -982,8 +1163,38 @@ export function useStory() {
         ...old,
         [sentView]: { id: idempotencyKey, startedAt, status, runId },
       }));
+    submitLocks.current.add(sentView);
+    setSubmitting([...submitLocks.current]);
+    let uploadingImages = false;
     try {
+      if (!previous && !retryRun && sentImages.length) {
+        uploadingImages = true;
+        payload.requestImages = [];
+        for (const image of sentImages) {
+          const uploaded = await apiBinary<{ uploadId: string; sha256: string }>(
+            '/uploads',
+            image.blob
+          );
+          payload.requestImages.push({
+            uploadId: uploaded.uploadId,
+            sha256: uploaded.sha256,
+            name: image.name,
+          });
+        }
+        if (
+          currentView.current !== sentView ||
+          navigation.current.epoch !== sentEpoch ||
+          requestDraft.current.token !== sentDraftToken
+        ) {
+          submitLocks.current.delete(sentView);
+          setSubmitting([...submitLocks.current]);
+          return false;
+        }
+      }
+      uploadingImages = false;
       if (!previous && sessionStorage.getItem(commandKey)) {
+        submitLocks.current.delete(sentView);
+        setSubmitting([...submitLocks.current]);
         setError(
           '이전 요청 기록을 읽을 수 없어 새 요청을 보내지 않았어요. 기록을 보존한 상태로 복구가 필요해요.'
         );
@@ -995,16 +1206,23 @@ export function useStory() {
           payload: JSON.stringify(payload),
           id: idempotencyKey,
           startedAt,
+          draftToken: sentDraftToken,
           ...(preserveDraft ? { preserveDraft: true } : {}),
         })
       );
-    } catch {
-      setError(
-        '요청 복구 기록을 저장하지 못해 요청을 보내지 않았어요. 브라우저 저장 공간을 확인해 주세요.'
-      );
+    } catch (cause) {
+      submitLocks.current.delete(sentView);
+      setSubmitting([...submitLocks.current]);
+      if (currentView.current === sentView && navigation.current.epoch === sentEpoch)
+        setError(
+          uploadingImages
+            ? cause instanceof Error
+              ? cause.message
+              : '이미지 업로드에 실패했어요. 초안은 보존했어요.'
+            : '요청 복구 기록을 저장하지 못해 요청을 보내지 않았어요. 브라우저 저장 공간을 확인해 주세요.'
+        );
       return false;
     }
-    const sentTranslationId = inputTranslation.beginSend();
     track('sending');
     submitLocks.current.add(sentView);
     setSubmitting([...submitLocks.current]);
@@ -1032,11 +1250,25 @@ export function useStory() {
         sessionStorage.removeItem(`lore-reset:${sentKey}`);
         if (currentDraftKey.current === sentKey) setLoreResetDraft(false);
       }
-      if (!preserveDraft && sessionStorage.getItem(sentKey) === sentDraft) {
-        sessionStorage.removeItem(sentKey);
-        if (currentDraftKey.current === sentKey) {
+      if (!preserveDraft) {
+        const remaining = await clearRequestDraft(sentKey, sentDraftToken).catch(() => {
+          if (currentView.current === sentView)
+            setError(
+              '요청은 수락됐지만 기기의 초안을 정리하지 못했어요. 다시 보내기 전에 확인해 주세요.'
+            );
+        });
+        if (
+          !remaining &&
+          currentDraftKey.current !== sentKey &&
+          sessionStorage.getItem(sentKey) === payload.request
+        )
+          sessionStorage.removeItem(sentKey);
+        if (currentDraftKey.current === sentKey && requestDraft.current.token === sentDraftToken) {
+          sessionStorage.removeItem(sentKey);
+          requestDraft.current = { token: crypto.randomUUID(), text: '', images: [] };
           draftIdentity.current = { text: '', revision: draftIdentity.current.revision + 1 };
           setDraft('');
+          setDraftImages([]);
         }
       }
       if (currentView.current === sentView)
@@ -1060,7 +1292,7 @@ export function useStory() {
       track(definiteRejection(error) ? 'failed' : 'uncertain');
       if (
         definiteRejection(error) &&
-        (!previous || (error instanceof ApiError && error.status === 409))
+        (!previous || (error instanceof ApiError && [404, 409].includes(error.status)))
       )
         clearCommand(commandKey, idempotencyKey);
       if (currentView.current === sentView)
@@ -1313,7 +1545,9 @@ export function useStory() {
       allContents.some((item) => refValue(item) === refValue(ref))
     );
   const pendingCommand = selected ? readCommand(commandStorageKey(selected)) : null;
-  const pendingRequest = pendingCommand?.payload.request ?? null;
+  const pendingRequest = pendingCommand
+    ? pendingCommand.payload.request || '참고 이미지 요청'
+    : null;
   const pendingEditedRunId = pendingCommand?.payload.editedRequest
     ? pendingCommand.payload.retryOf
     : undefined;
@@ -1375,6 +1609,14 @@ export function useStory() {
     library,
     libraryError,
     draft,
+    draftImages,
+    draftReady,
+    draftRecovery,
+    resolveDraftRecovery,
+    imagesDecoding,
+    requestImagePreviews: draftImages.map(({ name, width, height }) => ({ name, width, height })),
+    addDraftImages,
+    removeDraftImage,
     inputTranslation,
     codexWarning,
     error,

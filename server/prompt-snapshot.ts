@@ -107,6 +107,12 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
                   : `native:${entry.revision}:${index}`),
             role: message.role === 'user' ? ('user' as const) : ('assistant' as const),
             text: current ? entry.text : preserveSource ? existing!.text : message.data,
+            requestImages:
+              message.role === 'user'
+                ? message.id === 'current-input'
+                  ? owner.requestImages
+                  : existing?.requestImages
+                : undefined,
           };
         }),
       ];
@@ -131,6 +137,7 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
               id: `request:${entry.revision}`,
               role: 'user' as const,
               text: row.request,
+              ...(owner.requestImages?.length ? { requestImages: owner.requestImages } : {}),
               ...provenance,
             },
           ]),
@@ -163,22 +170,17 @@ function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedP
     (message) =>
       snapshot.contextPlan || !message.sourceRevision || inputHistoryIds.has(message.sourceRevision)
   );
-  const historyInput = [
-    ...structuredClone(logical),
-    {
-      id: 'current-input',
-      role: 'user' as const,
-      text: snapshot.nativeRisuExecution?.request ?? snapshot.request,
-      current: true,
-    },
-  ];
-  const current = historyInput.at(-1)!;
+  const current = {
+    id: 'current-input',
+    role: 'user' as const,
+    text: snapshot.nativeRisuExecution?.request ?? snapshot.request,
+    current: true,
+    ...(snapshot.requestImages?.length ? { requestImages: snapshot.requestImages } : {}),
+  };
+  const historyInput = [...structuredClone(logical)];
   const history = [
-    ...loreHistory(
-      projectedLogicalHistory(snapshot, historyInput.slice(0, -1)),
-      snapshot.loreContext
-    ),
-    current,
+    ...loreHistory(projectedLogicalHistory(snapshot, historyInput), snapshot.loreContext),
+    ...(snapshot.nativeRisuExecution?.requestPresent === false ? [] : [current]),
   ];
   const preset = snapshot.profile?.promptPresets?.main;
   const identity = snapshot.profile ? packageIdentityFromProfile(snapshot.profile) : undefined;

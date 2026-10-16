@@ -65,6 +65,8 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** Authored user attachments retained after execution inputs are settled. */
+  requestImages?: import('./request-images.js').RequestImage[];
   storyGuide?: import('./story-guide.js').StoryGuideSnapshot;
   storyGuideReceipt?: Pick<import('./story-guide.js').StoryGuideSnapshot, 'brief' | 'error'>;
   /** Replace this head only on successful completion; generation starts at its parent. */
@@ -245,7 +247,7 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
     unknownCount: number;
     attemptCount: number;
   };
-  snapshot: Pick<RunSnapshot, 'loreContextReset'>;
+  snapshot: Pick<RunSnapshot, 'loreContextReset' | 'requestImages'>;
   contextSummary?: {
     status: 'pending' | 'ready' | 'failed';
     inputTokenLimit: number;

@@ -67,6 +67,7 @@ export function applyMessageChanges(
       ...(current ?? change.message),
       role: change.message.role,
       text: change.message.text,
+      ...(change.message.role !== 'user' ? { requestImages: undefined } : {}),
     });
   }
   if (!changes.order) return [...entries.values()];

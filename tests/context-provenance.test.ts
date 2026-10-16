@@ -155,7 +155,9 @@ describe('derived context provenance (host mechanics, not model semantic accurac
       NATIVE_HOST_CONTEXT_ID,
       'current',
     ]);
-    expect(changed.prompt!.messages[1].content[0].text).toBe(nativeHostContextText(changed));
+    expect((changed.prompt!.messages[1].content[0] as { type: 'text'; text: string }).text).toBe(
+      nativeHostContextText(changed)
+    );
     expect(changed.prompt!.messages[0]).toEqual(original.prompt!.messages[0]);
     expect(changed.prompt!.messages[2]).toEqual(original.prompt!.messages[1]);
     expect(changed.stable).toEqual(original.stable);

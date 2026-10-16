@@ -7,6 +7,8 @@ import {
   encodeAnthropic,
 } from '../core/anthropic-protocol.js';
 import { assertContextBudget } from '../core/context-budget.js';
+import { materializeProviderImages } from '../core/provider-images.js';
+import { requestImages } from '../core/provider-image-reference.js';
 import {
   readProviderHttpDiagnostic,
   type ProviderHttpDiagnostic,
@@ -225,6 +227,9 @@ export class AnthropicBatchRun {
       const rawBody = prepared.body as Record<string, Json>;
       const { stream: _stream, ...params } = rawBody;
       assertContextBudget(params as Json, request.contextBudget);
+      const transmitted = requestImages(request).length
+        ? await materializeProviderImages(params, request, options, options.signal)
+        : params;
       const endpoint = validateProviderEndpoint(connection.protocol, connection.endpoint);
       const secret = connection.credentialRef
         ? await (options.resolveCredential ?? ((name) => process.env[name]))(
@@ -241,9 +246,9 @@ export class AnthropicBatchRun {
         'anthropic-version': '2023-06-01',
         'x-api-key': secret,
       };
-      const requestBody = JSON.stringify(params);
+      const requestBody = JSON.stringify(transmitted);
       const requestSha256 = sha(requestBody);
-      const cacheBoundaries = providerCacheBoundaries(connection.protocol, params);
+      const cacheBoundaries = providerCacheBoundaries(connection.protocol, transmitted);
       const existing = this.row(ordinal);
       if (existing && existing.requestSha256 !== requestSha256)
         return failure('ANTHROPIC_BATCH_RECOVERY_MISMATCH');
@@ -290,7 +295,7 @@ export class AnthropicBatchRun {
             method: 'POST',
             headers,
             body: JSON.stringify({
-              requests: [{ custom_id: state.customId, params }],
+              requests: [{ custom_id: state.customId, params: transmitted }],
             }),
             signal: options.signal,
             redirect: 'error',

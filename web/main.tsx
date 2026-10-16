@@ -1,3 +1,5 @@
+import { imageInputSupported } from '../core/provider-image-reference.js';
+import { DraftRequestImages } from './RequestImages.js';
 import type { OutlineHelperRequest } from './outline-helper.js';
 import { downloadArchive } from './archive-download.js';
 import { ReaderEditingContext } from './Bookmarks.js';
@@ -62,6 +64,7 @@ import {
   Download,
   Eye,
   GitFork,
+  ImagePlus,
   ListTree,
   Maximize,
   Menu,
@@ -229,6 +232,7 @@ function App() {
   const [optionsDirty, setOptionsDirty] = useState(false),
     [optionsBusy, setOptionsBusy] = useState(false);
   const inputTranslationDisabled =
+    !s.draftReady ||
     optionsBusy ||
     !s.detail ||
     s.pendingProfile ||
@@ -279,6 +283,7 @@ function App() {
     return s.generate();
   };
   const optionsButton = useRef<HTMLButtonElement>(null);
+  const requestImageInput = useRef<HTMLInputElement>(null);
   const [panel, setPanel] = useState<Panel>('');
   const [searchingChats, setSearchingChats] = useState(false);
   const searchOpener = useRef<HTMLElement | null>(null);
@@ -455,6 +460,13 @@ function App() {
     !!mainModel &&
     !!s.library &&
     isModelSelectable(mainModel, s.library.models, s.library.connections);
+  const mainConnection = s.library?.connections.find(
+    (connection) => connection.id === mainModel?.connectionId
+  );
+  const imageSupport =
+    mainModel && mainConnection
+      ? imageInputSupported(mainConnection.protocol, mainModel.modelId)
+      : null;
   // Both the reader and model routes must settle before an absent model is actionable.
   const modelCheckReady = !!s.detail && !!s.library && !!s.promptWorkspace;
   const mainDescription = !modelCheckReady
@@ -520,6 +532,13 @@ function App() {
       ? '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.'
       : '',
     s.cancelling ? '원문 생성 취소 중…' : '',
+    s.imagesDecoding ? '참고 이미지를 준비하고 있어요…' : '',
+    s.draftImages.length && !testMode && imageSupport === false
+      ? '선택한 본문 모델은 이미지 입력을 지원하지 않아요. 모델을 바꾸거나 첨부를 제거해 주세요.'
+      : '',
+    s.draftImages.length && !testMode && imageSupport === null
+      ? '선택한 모델의 이미지 지원 여부는 미확인이에요. 첨부한 상태로 전송할 수 있어요.'
+      : '',
     s.profileDirty ? '채팅 설정에 미저장 변경' : '',
   ]
     .filter(Boolean)
@@ -1317,6 +1336,10 @@ function App() {
                               request={
                                 s.detail!.runs.find((run) => run.id === source.runId)?.request
                               }
+                              requestImages={
+                                s.detail!.runs.find((run) => run.id === source.runId)?.snapshot
+                                  .requestImages
+                              }
                               jobs={s.detail!.jobs.filter(
                                 (job) => job.sourceRevision === source.id
                               )}
@@ -1411,6 +1434,7 @@ function App() {
                             <RequestMessage
                               runId={run.id}
                               request={run.request}
+                              images={run.snapshot.requestImages}
                               disabled={s.reuseBlocked || optionsBusy}
                               editHint="수정한 요청을 현재 설정으로 다시 실행해요."
                               onSubmit={
@@ -1624,13 +1648,69 @@ function App() {
                       </button>
                     </p>
                   )}
+                {s.draftRecovery && !sourceEditing && (
+                  <div className="notice" role="alert">
+                    <p>
+                      최신 텍스트를 보존했어요. 이전에 저장된 참고 이미지를 복구할지 선택해 주세요.
+                    </p>
+                    <details>
+                      <summary>이전 초안 텍스트 보기</summary>
+                      <p>{s.draftRecovery.text}</p>
+                    </details>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => s.resolveDraftRecovery(true)}
+                    >
+                      이전 첨부 복구
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => s.resolveDraftRecovery(false)}
+                    >
+                      이전 첨부 버리기
+                    </button>
+                  </div>
+                )}
                 <ChatComposer
                   hidden={sourceEditing}
                   onSubmit={(event) => {
                     event.preventDefault();
                     void submitRequest();
                   }}
+                  onDragOver={(event) => {
+                    if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+                  }}
+                  onDrop={(event) => {
+                    if (!event.dataTransfer.files.length) return;
+                    event.preventDefault();
+                    void s.addDraftImages(Array.from(event.dataTransfer.files));
+                  }}
                 >
+                  <input
+                    ref={requestImageInput}
+                    type="file"
+                    className="sr-only"
+                    aria-label="참고 이미지 파일"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    disabled={
+                      !s.draftReady ||
+                      !!s.draftRecovery ||
+                      s.imagesDecoding ||
+                      s.submitting.includes(s.viewKey)
+                    }
+                    onChange={(event) => {
+                      void s.addDraftImages(Array.from(event.target.files ?? []));
+                      event.target.value = '';
+                    }}
+                  />
+                  <DraftRequestImages
+                    images={s.draftImages}
+                    remove={s.removeDraftImage}
+                    disabled={!s.draftReady || s.submitting.includes(s.viewKey)}
+                  />
                   <LoreResetChip
                     selected={s.loreContextReset}
                     disabled={
@@ -1647,6 +1727,14 @@ function App() {
                   </label>
                   <ComposerInput
                     inputRef={s.input}
+                    disabled={!s.draftReady}
+                    onPaste={(event) => {
+                      const files = Array.from(event.clipboardData.files);
+                      if (files.length) {
+                        event.preventDefault();
+                        void s.addDraftImages(files);
+                      }
+                    }}
                     id="request"
                     data-uimori-part="composer-input"
                     maxLength={REQUEST_TEXT_MAX_CHARS}
@@ -1677,6 +1765,18 @@ function App() {
                       }
                       onChange={s.editLoreContextReset}
                     >
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={
+                          !s.draftReady || s.imagesDecoding || s.submitting.includes(s.viewKey)
+                        }
+                        onClick={() => requestImageInput.current?.click()}
+                      >
+                        <ImagePlus size={18} aria-hidden="true" />
+                        참고 이미지 첨부
+                      </button>
+
                       {creativePresets.length > 0 && (
                         <label>
                           <span className="sr-only">빠른 옵션 조합</span>
@@ -1802,7 +1902,13 @@ function App() {
                       disabled={
                         optionsBusy ||
                         s.submitting.includes(s.viewKey) ||
-                        (!s.draft.trim() && !s.pendingRequest) ||
+                        !s.draftReady ||
+                        s.imagesDecoding ||
+                        (!!s.draftImages.length &&
+                          !testMode &&
+                          imageSupport === false &&
+                          !s.pendingRequest) ||
+                        (!s.draft.trim() && !s.draftImages.length && !s.pendingRequest) ||
                         !s.detail ||
                         (((!testMode && !mainAvailable) || !promptAvailable) &&
                           !s.pendingRequest &&
@@ -1845,6 +1951,7 @@ function App() {
             open={currentChatTool === 'preview'}
             chatId={s.detail.chat.id}
             request={s.draft}
+            requestImages={s.requestImagePreviews}
             loreContextReset={s.loreContextReset}
             refreshKey={`${s.detail.chat.headRevision}:${s.detail.chat.settingsRevision}:${s.detail.profile?.revision}:${s.detail.reader.cursor}:${s.promptWorkspace?.revision}:${s.pinnedPromptRevision}:${s.nativeInteractionRevision}`}
             unavailable={

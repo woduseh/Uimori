@@ -51,6 +51,7 @@ export type MainHooks = {
   /** Explicitly wired for real writing Runs, not helper-generated hypothetical scenes. */
   executeCodexAgent?: import('./codex-runtime.js').CodexRuntimeService['executeAgent'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
+  resolveImage?: import('../core/transport.js').ProviderExecutionOptions['resolveImage'];
   signal: AbortSignal;
   onInput: (input: ModelInput) => void | Promise<void>;
   onToolEvent: (event: ToolEvent) => void | Promise<void>;
@@ -480,6 +481,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     const execution: ProviderExecutionOptions = {
       signal: hooks.signal,
       resolveCredential: hooks.resolveCredential,
+      resolveImage: hooks.resolveImage,
       executeAnthropicBatch: hooks.executeAnthropicBatch,
       executeCodex: hooks.executeCodex,
       vertexRequestTier: hooks.vertexRequestTier,

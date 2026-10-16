@@ -405,7 +405,9 @@ describe('native provider wire (synthetic, no live calls)', () => {
         encoded.map((message: any) =>
           typeof message.content === 'string' ? message.content : message.content[0].text
         )
-      ).toEqual(before.prompt!.messages.map((m) => m.content[0].text));
+      ).toEqual(
+        before.prompt!.messages.map((m) => m.content.find((part) => part.type === 'text')?.text)
+      );
     }
     for (const other of ['gpt-5.6', 'claude-opus-5', 'custom-gemini-proxy']) {
       expect(
@@ -498,7 +500,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
     expect(result.messages.slice(0, 5)).toEqual(wire(encoded.body).messages);
     expect(result.messages.at(-2).reasoning_content).toBe('signed-chat');
     expect(result.messages.at(-1).tool_call_id).toBe('Chat.Call');
-    continued.prompt!.messages[0].content[0].text = 'changed';
+    continued.prompt!.messages[0].content[0] = { type: 'text', text: 'changed' };
     expect(() => encodeChat(continued)).toThrow('OPENAI_CONTINUATION_MISMATCH');
   });
   test('Anthropic signed content and Vertex thought signatures survive native continuation', () => {
@@ -551,7 +553,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
     const vb = wire(encodeVertex(vr).body);
     expect(vb.contents.at(-2).parts).toEqual([signed]);
     expect(vb.contents.at(-1).parts[0].functionResponse.id).toBe('Vertex.Call');
-    vr.prompt!.messages[0].content[0].text = 'changed';
+    vr.prompt!.messages[0].content[0] = { type: 'text', text: 'changed' };
     expect(() => encodeVertex(vr)).toThrow('VERTEX_CONTINUATION_MISMATCH');
   });
   test('Anthropic accepts script, context and helper roles without enabling a model call', () => {

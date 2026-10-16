@@ -355,38 +355,14 @@ export class Store {
       packageStart?: import('../core/package-start.js').PackageStartRef;
       retryOf?: string;
       requestEdited?: boolean;
+      requestImages?: { sha256: string; name: string }[];
     },
     snapshot: (chat: Chat) => RunSnapshot
   ): { run: Run; created: boolean } {
     return this.transaction(() => this.createRunInTransaction(chatId, command, snapshot));
   }
-  /** Joins the host's transaction when an authored opening and its source commit together. */
-  createRunInTransaction(
-    chatId: string,
-    command: Parameters<Store['createRun']>[1],
-    snapshot: (chat: Chat) => RunSnapshot
-  ): { run: Run; created: boolean } {
-    if (command.loreContextReset !== undefined && typeof command.loreContextReset !== 'boolean')
-      throw new HttpError(400, 'Invalid lore context reset');
-    const prior = this.db
-      .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
-      .get(chatId, command.idempotencyKey) as Row | undefined;
-    const canonical = json({
-      request: command.request,
-      expectedRevision: command.expectedRevision,
-      expectedSettingsRevision: command.expectedSettingsRevision,
-      expectedProfileRevision: command.expectedProfileRevision,
-      ...(command.sceneCommandId ? { sceneCommandId: command.sceneCommandId } : {}),
-      ...(command.packageStart ? { packageStart: command.packageStart } : {}),
-      ...(command.loreContextReset ? { loreContextReset: true } : {}),
-      ...(command.retryOf ? { retryOf: command.retryOf } : {}),
-      ...(command.requestEdited ? { requestEdited: true } : {}),
-    });
-    if (prior) {
-      if (prior.command !== canonical)
-        throw new HttpError(409, 'Idempotency key reused with different command');
-      return { run: this.run(prior.id), created: false };
-    }
+  /** Early intake check; reservation repeats it inside the transaction after async conversion. */
+  assertRunAdmission(chatId: string, command: Parameters<Store['createRun']>[1]): Chat {
     const chat = this.chat(chatId);
     if (chat.headRevision !== command.expectedRevision)
       throw new HttpError(409, 'Source revision conflict');
@@ -403,6 +379,46 @@ export class Store {
         .get(chatId)
     )
       throw new HttpError(409, 'A run already owns this head');
+    return chat;
+  }
+  /** Admission recovery must precede access to consumed or expired staged files. */
+  findRunByCommand(chatId: string, command: Parameters<Store['createRun']>[1]): Run | undefined {
+    const prior = this.db
+      .prepare('SELECT id,command FROM runs WHERE chat_id=? AND request_key=?')
+      .get(chatId, command.idempotencyKey) as Row | undefined;
+    if (!prior) return undefined;
+    if (prior.command !== this.runCommandIdentity(command))
+      throw new HttpError(409, 'Idempotency key reused with different command');
+    return this.run(prior.id);
+  }
+  private runCommandIdentity(command: Parameters<Store['createRun']>[1]): string {
+    return json({
+      request: command.request,
+      expectedRevision: command.expectedRevision,
+      expectedSettingsRevision: command.expectedSettingsRevision,
+      expectedProfileRevision: command.expectedProfileRevision,
+      ...(command.sceneCommandId ? { sceneCommandId: command.sceneCommandId } : {}),
+      ...(command.packageStart ? { packageStart: command.packageStart } : {}),
+      ...(command.loreContextReset ? { loreContextReset: true } : {}),
+      ...(command.retryOf ? { retryOf: command.retryOf } : {}),
+      ...(command.requestEdited ? { requestEdited: true } : {}),
+      ...(command.requestImages?.length
+        ? { requestImages: command.requestImages.map(({ sha256, name }) => ({ sha256, name })) }
+        : {}),
+    });
+  }
+  /** Joins the host's transaction when an authored opening and its source commit together. */
+  createRunInTransaction(
+    chatId: string,
+    command: Parameters<Store['createRun']>[1],
+    snapshot: (chat: Chat) => RunSnapshot
+  ): { run: Run; created: boolean } {
+    if (command.loreContextReset !== undefined && typeof command.loreContextReset !== 'boolean')
+      throw new HttpError(400, 'Invalid lore context reset');
+    const prior = this.findRunByCommand(chatId, command);
+    if (prior) return { run: prior, created: false };
+    const canonical = this.runCommandIdentity(command);
+    const chat = this.assertRunAdmission(chatId, command);
     const id = randomUUID();
     const time = now();
     const captured = snapshot(chat);

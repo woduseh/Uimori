@@ -1,3 +1,5 @@
+import type { RequestImage } from '../core/request-images.js';
+import { StoredRequestImages } from './RequestImages.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { ArrowUp, Check, Copy, Pencil, RefreshCw, X } from 'lucide-react';
@@ -8,6 +10,7 @@ import './request-message.css';
 export function RequestMessage({
   runId,
   request,
+  images,
   displayText,
   disabled,
   onSubmit,
@@ -23,6 +26,7 @@ export function RequestMessage({
   compactActions?: 'always' | 'tap';
   runId: string;
   request: string;
+  images?: RequestImage[];
   displayText?: string;
   disabled?: boolean;
   onSubmit?: (text: string) => Promise<boolean>;
@@ -98,7 +102,11 @@ export function RequestMessage({
           className="request-message request-message-editor"
           onSubmit={async (event) => {
             event.preventDefault();
-            if (lock.current || (!onConfirm && (disabled || !draft.trim() || !onSubmit))) return;
+            if (
+              lock.current ||
+              (!onConfirm && (disabled || (!draft.trim() && !images?.length) || !onSubmit))
+            )
+              return;
             lock.current = true;
             setBusy(true);
             try {
@@ -119,6 +127,7 @@ export function RequestMessage({
             }
           }}
         >
+          <StoredRequestImages images={images} />
           <textarea
             ref={input}
             aria-label="요청 수정 내용"
@@ -149,7 +158,7 @@ export function RequestMessage({
                 icon={onConfirm ? RefreshCw : ArrowUp}
                 label={busy ? '요청 전송 중' : onConfirm ? '이전 요청 확인' : '수정한 요청 보내기'}
                 type="submit"
-                disabled={busy || (!onConfirm && (disabled || !draft.trim()))}
+                disabled={busy || (!onConfirm && (disabled || (!draft.trim() && !images?.length)))}
               />
             </div>
           </div>
@@ -165,6 +174,7 @@ export function RequestMessage({
                 setRevealed((value) => !value);
             }}
           >
+            <StoredRequestImages images={images} />
             {shownRequest.length > 280 ? (
               <details>
                 <summary>

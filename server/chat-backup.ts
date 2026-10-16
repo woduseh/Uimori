@@ -1,7 +1,11 @@
 import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { remapChatAuthoring } from './chat-copy-authoring.js';
 import { copiedMessageTexts, mapCopiedMessageTexts } from './chat-copy-messages.js';
-import { transcriptImages, rewriteTranscriptMedia } from './chat-media.js';
+import {
+  transcriptImages,
+  rewriteTranscriptMedia,
+  remapTranscriptRequestImages,
+} from './chat-media.js';
 import type { Store } from './store.js';
 import {
   CHAT_BACKUP_FORMAT,
@@ -273,6 +277,11 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
   const copies: ChatCopy[] = [];
   for (const originalCopy of original.chats) {
     const copy = structuredClone(originalCopy);
+    remapTranscriptRequestImages(copy.transcript, (hash) => {
+      const image = convertedResources.imagesBySourceHash.get(hash);
+      if (!image) throw new HttpError(400, '요청에 첨부한 이미지가 백업에 없어요.');
+      return image.hash;
+    });
     copy.transcript = rewriteTranscriptMedia(copy.transcript, (kind, hash) => {
       const image =
         kind === 'package-image-blobs' && convertedResources.imagesBySourceHash.get(hash);

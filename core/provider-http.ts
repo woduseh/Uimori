@@ -32,6 +32,7 @@ import {
 import { ProviderContractError } from './provider-errors.js';
 import { providerCacheBoundaries } from './provider-cache-diagnostics.js';
 import { validateConnection, validateRequest } from './provider-request.js';
+import { materializeProviderImages } from './provider-images.js';
 import type {
   Json,
   ProviderConnection,
@@ -151,8 +152,9 @@ export async function executeNativeProvider(
       headers['x-api-key'] = secret!;
     } else if (secret) headers.authorization = `Bearer ${secret}`;
     const url = validateProviderEndpoint(connection.protocol, connection.endpoint) + path;
-    const body = JSON.stringify(bodyValue);
-    const cacheBoundaries = providerCacheBoundaries(connection.protocol, bodyValue);
+    const wireBody = await materializeProviderImages(bodyValue, request, options, signal);
+    const body = JSON.stringify(wireBody);
+    const cacheBoundaries = providerCacheBoundaries(connection.protocol, wireBody);
     await options.onWire?.({
       connectionId: connection.id,
       protocol: connection.protocol,

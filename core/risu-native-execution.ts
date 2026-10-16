@@ -12,6 +12,8 @@ export type NativeRisuExecution = {
   variables: Record<string, string>;
   fields: Record<string, Record<string, string>>;
   request: string;
+  /** False when a start script deleted current-input; empty text alone does not imply deletion. */
+  requestPresent?: boolean;
   messages: NativeRisuMessage[];
   history: PromptHistoryMessage[];
   issues: string[];

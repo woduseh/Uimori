@@ -47,6 +47,26 @@ export async function writeRecovery<T>(key: string, value?: RecoveryBuffer<T>): 
   });
 }
 
+/** Copy a cloned tab's buffers once, before that tab starts editing independently. */
+export async function copyRecoveryPrefix(fromPrefix: string, toPrefix: string): Promise<void> {
+  const db = await open();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction('buffers', 'readwrite');
+    const buffers = transaction.objectStore('buffers');
+    const request = buffers.openCursor(IDBKeyRange.bound(fromPrefix, `${fromPrefix}\uffff`));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) return;
+      buffers.put(cursor.value, `${toPrefix}${String(cursor.key).slice(fromPrefix.length)}`);
+      cursor.continue();
+    };
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error('복제한 탭의 초안 복사가 중단됐어요.'));
+  });
+}
+
 async function deleteRecoveryIf<T>(
   key: string,
   matches: (value: RecoveryBuffer<T>) => boolean

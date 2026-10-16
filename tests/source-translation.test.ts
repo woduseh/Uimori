@@ -136,7 +136,9 @@ describe('whole-source authored translation prompts', () => {
       'assistant',
       'user',
     ]);
-    expect(compiled.messages[0].content[0].text).toBe('Translate faithfully. Style=1');
+    expect((compiled.messages[0].content[0] as { type: 'text'; text: string }).text).toBe(
+      'Translate faithfully. Style=1'
+    );
     expect(input.sourceText).toBe(seed.source.text);
     expect(
       compiled.messages.filter((message) => message.provenance.origin === 'current')

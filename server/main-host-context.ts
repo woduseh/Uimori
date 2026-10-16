@@ -80,15 +80,18 @@ export function attachMainHostContext(snapshot: RunSnapshot): RunSnapshot {
       existing.provenance.blockId !== NATIVE_HOST_CONTEXT_ID ||
       existing.role !== 'user' ||
       existing.content.length !== 1 ||
+      existing.content[0].type !== 'text' ||
       existing.content[0].text !== text
     )
       throw new ProviderContractError('NATIVE_HOST_CONTEXT_COLLISION');
     return snapshot;
   }
-  const index = compilation.messages.findIndex(
-    (message) => message.provenance.origin === 'current'
-  );
-  if (index < 0) throw new ProviderContractError('NATIVE_HOST_CONTEXT_BOUNDARY_MISSING');
+  let index = compilation.messages.findIndex((message) => message.provenance.origin === 'current');
+  if (index < 0) {
+    if (snapshot.nativeRisuExecution?.requestPresent !== false)
+      throw new ProviderContractError('NATIVE_HOST_CONTEXT_BOUNDARY_MISSING');
+    index = compilation.messages.length;
+  }
   compilation.messages.splice(index, 0, {
     id: NATIVE_HOST_CONTEXT_ID,
     role: 'user',
@@ -115,7 +118,7 @@ export function attachMainHostContext(snapshot: RunSnapshot): RunSnapshot {
         ? message.provenance.origin === 'current'
         : message.provenance.origin === 'history' || message.provenance.origin === 'current'
     );
-    compilation.messages.splice(boundary, 0, {
+    compilation.messages.splice(boundary < 0 ? compilation.messages.length : boundary, 0, {
       id,
       role: 'user',
       content: [

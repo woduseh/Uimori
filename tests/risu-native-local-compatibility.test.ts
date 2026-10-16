@@ -162,7 +162,9 @@ test.runIf(paths.length > 0 && !!presetPath)(
       expect(prepared.promptCompilation!.messages.length > 0).toBe(true);
       expect(
         prepared.promptCompilation!.messages.some((message) =>
-          message.content.some((part) => part.text.includes('LOCAL_COMPATIBILITY_CONTINUE'))
+          message.content.some((part) =>
+            (part as { type: 'text'; text: string }).text.includes('LOCAL_COMPATIBILITY_CONTINUE')
+          )
         )
       ).toBe(true);
       const output = await prepareNativeRisuOutput(prepared, 'LOCAL_COMPATIBILITY_RESPONSE', {

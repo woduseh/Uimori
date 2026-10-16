@@ -170,9 +170,9 @@ test('compact logical messages keep retrievable provenance and omit only an exac
   r.prompt.messages[1].role = 'system';
   expect(JSON.parse(buildCodexTurn(r).inputText).input.task).toBe('Write');
   r.prompt.messages[1].role = 'user';
-  r.prompt.messages[1].content[0].text = 'Rewritten current request';
+  r.prompt.messages[1].content[0] = { type: 'text', text: 'Rewritten current request' };
   expect(JSON.parse(buildCodexTurn(r).inputText).input.task).toBe('Write');
-  r.prompt.messages[1].content[0].text = 'Write';
+  r.prompt.messages[1].content[0] = { type: 'text', text: 'Write' };
   r.prompt.messages[1].provenance.origin = 'history';
   expect(JSON.parse(buildCodexTurn(r).inputText).input.task).toBe('Write');
 });

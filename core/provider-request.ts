@@ -26,6 +26,7 @@ import { validatePricingSnapshot } from './model-pricing.js';
 import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
 import type { CatalogModel, ProviderConnection, ProviderRequest } from './transport.js';
 import { continuationInputText } from './provider-messages.js';
+import { requestImages } from './provider-image-reference.js';
 
 export function reject(code: string): never {
   throw new ProviderContractError(code);
@@ -205,7 +206,10 @@ export function validateRequest(value: unknown): ProviderRequest {
     if (value.toolChoice !== 'auto' && !names.has(value.toolChoice)) reject('INVALID_TOOL_CHOICE');
   }
   keys(value.input, ['task', 'controls', 'source', 'catalog', 'results', 'history']);
-  string(value.input.task, EXECUTION_INPUT_MAX_CHARS);
+  if (typeof value.input.task !== 'string' || value.input.task.length > EXECUTION_INPUT_MAX_CHARS)
+    reject('INVALID_STRING');
+  if (!value.input.task.trim() && !requestImages(value as ProviderRequest).length)
+    reject('INVALID_STRING');
   if (
     !object(value.input.controls) ||
     Object.entries(value.input.controls).some(

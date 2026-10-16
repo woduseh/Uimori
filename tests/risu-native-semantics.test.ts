@@ -139,7 +139,12 @@ test('only native formatted slots evaluate wrappers and hidden ChatML thoughts d
     slots: { lorebook: 'Lore', postEverything: 'Post' },
     history: [],
   });
-  expect(result.messages.map((message) => [message.role, message.content[0].text])).toEqual([
+  expect(
+    result.messages.map((message) => [
+      message.role,
+      message.content.filter((part) => part.type === 'text')[0].text,
+    ])
+  ).toEqual([
     ['system', 'Content 2'],
     ['system', 'Lore'],
     ['system', 'Post'],
@@ -172,7 +177,9 @@ test('retired post-end and prefill fields never evaluate CBS or append messages'
     'block:0:text',
     'block:2:text',
   ]);
-  expect(result.messages.map((message) => message.content[0].text)).toEqual(['first', 'Current']);
+  expect(
+    result.messages.map((message) => message.content.filter((part) => part.type === 'text')[0].text)
+  ).toEqual(['first', 'Current']);
   expect(result.messages.every((message) => message.completion === 'complete')).toBe(true);
 });
 
@@ -210,7 +217,12 @@ test('example dialogue uses separate message roles at the beginning of native ch
   const messages = result.promptCompilation!.messages.filter(
     (message) => message.id !== NATIVE_HOST_CONTEXT_ID
   );
-  expect(messages.map((message) => [message.role, message.content[0].text])).toEqual([
+  expect(
+    messages.map((message) => [
+      message.role,
+      message.content.filter((part) => part.type === 'text')[0].text,
+    ])
+  ).toEqual([
     [
       'system',
       '<uimori_source source_role="bot" source_name="Bot" content_id="bot">\nDescription\n</uimori_source>',
@@ -246,7 +258,12 @@ test('native ChatML and history preserve roles and text despite retired settings
       { id: 'request', role: 'user', text: 'Go', current: true },
     ],
   });
-  expect(result.messages.map((message) => [message.role, message.content[0].text])).toEqual([
+  expect(
+    result.messages.map((message) => [
+      message.role,
+      message.content.filter((part) => part.type === 'text')[0].text,
+    ])
+  ).toEqual([
     ['system', 'Policy'],
     ['user', 'Example'],
     ['assistant', 'Example reply'],
@@ -285,11 +302,11 @@ test.each(['risu-native-prompt-2'] as const)(
       history: [{ id: 'request', role: 'user', text: 'Go', current: true }],
     });
     expect(result.compilerVersion).toBe(compilerVersion);
-    expect(result.messages.map((message) => message.content[0].text)).toEqual([
-      '{{slot}}',
-      'Saved post',
-      'Go',
-    ]);
+    expect(
+      result.messages.map(
+        (message) => message.content.filter((part) => part.type === 'text')[0].text
+      )
+    ).toEqual(['{{slot}}', 'Saved post', 'Go']);
     expect(result.messages.at(-1)?.role).toBe('user');
     expect(result.messages.every((message) => message.completion === 'complete')).toBe(true);
     expect(result.warnings).toEqual([]);

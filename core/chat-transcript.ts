@@ -1,4 +1,5 @@
 import { CONTENT_ROLES, type ContentAttachment } from './risu-content.js';
+import { validateRequestImages, type RequestImage } from './request-images.js';
 import type { ImportedMemoryOrigin } from './notes.js';
 import {
   CHAT_TITLE_MAX_CHARS,
@@ -28,6 +29,7 @@ export const CHAT_TRANSCRIPT_LIMITS = {
 export type ChatTranscriptEntry = {
   /** The user request recorded on the run that produced this source; may be empty. */
   request: string;
+  requestImages?: RequestImage[];
   /** The source text as currently read, including the latest user edit. */
   text: string;
   /** The latest translation whose source hash still matched, or null. */
@@ -119,8 +121,17 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
   const entries = list(body.entries, 'CHAT_TRANSCRIPT_INVALID_ENTRIES').map(
     (raw): ChatTranscriptEntry => {
       const item = object(raw);
-      keys(item, ['request', 'text', 'translation']);
+      keys(item, ['request', 'requestImages', 'text', 'translation']);
+      let requestImages: RequestImage[] | undefined;
+      if (item.requestImages !== undefined) {
+        try {
+          requestImages = validateRequestImages(item.requestImages);
+        } catch {
+          fail('CHAT_TRANSCRIPT_INVALID_REQUEST_IMAGES');
+        }
+      }
       return {
+        ...(requestImages?.length ? { requestImages } : {}),
         request: string(
           item.request,
           CHAT_TRANSCRIPT_LIMITS.request,

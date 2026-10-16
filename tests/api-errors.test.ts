@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
+import { mainJudgmentError } from '../web/main-judgment-error.js';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -11,6 +12,15 @@ async function rejected(status: number, error: unknown, method = 'POST') {
   expect(result).toBeInstanceOf(ApiError);
   return result as ApiError;
 }
+
+test('image admission and execution failures give actionable safe messages', async () => {
+  const result = await rejected(400, 'REQUEST_IMAGE_ANIMATED');
+  expect(result).toMatchObject({ code: 'REQUEST_IMAGE_ANIMATED', status: 400 });
+  expect(result.message).toContain('정지 이미지');
+  expect(mainJudgmentError('RISU_NATIVE_REQUEST_IMAGE_IDENTITY')).toContain('id와 역할');
+  expect(mainJudgmentError('IMAGE_INPUT_UNSUPPORTED_MODEL')).toContain('본문 모델');
+  expect(mainJudgmentError('REQUEST_IMAGE_ANIMATED: unsafe provider text')).toBeUndefined();
+});
 
 test('pinned prompt failures preserve the safe code and point to chat settings, not revision conflict', async () => {
   const result = await rejected(

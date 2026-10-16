@@ -15,6 +15,7 @@ import {
 } from './vertex-protocol.js';
 import { ProviderContractError } from './provider-errors.js';
 import { validateConnection, validateRequest } from './provider-request.js';
+import { materializeProviderImages } from './provider-images.js';
 import type { ProviderConnection, ProviderExecutionOptions, ProviderResult } from './transport.js';
 
 const sha = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -180,7 +181,8 @@ export async function executeGeminiProvider(
     decoder = new VertexDecoder(prepared.context);
     if (signal.aborted) return failure('CANCELLED');
     assertContextBudget(prepared.body, request.contextBudget);
-    const body = JSON.stringify(prepared.body);
+    const wireBody = await materializeProviderImages(prepared.body, request, options, signal);
+    const body = JSON.stringify(wireBody);
     if (!vertex && !connection.credentialRef)
       throw new ProviderContractError('CREDENTIAL_UNAVAILABLE');
     // Google's well-known variable contains an ADC file path, never a bearer token.

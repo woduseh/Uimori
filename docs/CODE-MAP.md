@@ -19,6 +19,7 @@
 | Native Risu execution | `server/risu-native-runtime.ts`, `server/risu-native-lua-session.ts`, `server/risu-native-render.ts`, `server/risu-native-projection.ts` | [Risu import](RISU-IMPORT.md) |
 | Model request fields and provider protocols | `core/model-request-fields.ts`, `core/provider-request.ts`, `core/provider-http.ts`, `core/*-protocol.ts` | [Providers](PROVIDERS.md) |
 | Composer translation and request copying | `core/input-translation.ts`, `server/input-translation.ts`, `web/useInputTranslation.ts`, `web/InputTranslation.tsx`, `web/RequestMessage.tsx` | [Input translation](INPUT-TRANSLATION.md) |
+| Composer reference images and their lifetime | `core/request-images.ts`, `core/provider-image-reference.ts`, `core/provider-images.ts`, `server/request-images.ts`, `web/request-image-draft.ts`, `web/RequestImages.tsx` | [Usage](USAGE.md), [Execution](EXECUTION.md), [Chat backup](CHAT-BACKUP.md) |
 | Reader and application, delayed loading and retry | `web/useStory.ts`, `web/SourceReader.tsx`, `web/ReaderLoadingState.tsx`, `server/reader.ts`, `server/app.ts` | [Reading](READING.md), [UI principles](UI-PRINCIPLES.md) |
 | Shared save conflicts and recovery decisions | `web/SaveConflictDialog.tsx`, `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `web/main.tsx` | [Editing](EDITING.md), [Usage](USAGE.md) |
 | All-chat activity inbox and receipts | `server/activity-feed.ts`, `web/useActivityFeed.ts`, `web/ActivityNavigation.tsx`, `web/BotTreeNavigation.tsx`, `web/ActivityStatus.tsx` | [PWA and activity notifications](PWA.md) |

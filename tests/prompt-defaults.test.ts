@@ -100,9 +100,9 @@ describe('single prompt program defaults at real native encoder boundaries', () 
       expect(built.request.stable.contract).toBe(
         '\n' + CONTEXT_DERIVED_GUIDANCE + '\n' + CONTEXT_RETRIEVAL_GUIDANCE
       );
-      expect(built.request.prompt!.messages[0].content[0].text).toBe(
-        custom ? 'Literal Character' : DEFAULT_MAIN_PROMPT
-      );
+      expect(
+        (built.request.prompt!.messages[0].content[0] as { type: 'text'; text: string }).text
+      ).toBe(custom ? 'Literal Character' : DEFAULT_MAIN_PROMPT);
     }
     // Encoding is protocol-specific, but it does not reassemble the prompt.
     const beforeEncoding = structuredClone(request!);
@@ -152,7 +152,9 @@ describe('single prompt program defaults at real native encoder boundaries', () 
         results: [],
       },
     });
-    expect(compilation.messages[0].content[0].text).toBe(DEFAULT_TRANSLATION_PROMPT);
+    expect((compilation.messages[0].content[0] as { type: 'text'; text: string }).text).toBe(
+      DEFAULT_TRANSLATION_PROMPT
+    );
     expect(compilation.messages.filter((m) => m.provenance.origin === 'history')).toHaveLength(0);
     expect(compilation.messages.filter((m) => m.provenance.origin === 'current')).toHaveLength(1);
     const hostMessages = request.prompt!.messages.filter(
@@ -160,7 +162,9 @@ describe('single prompt program defaults at real native encoder boundaries', () 
     );
     expect(hostMessages).toHaveLength(1);
     expect(hostMessages[0].role).toBe('user');
-    expect(hostMessages[0].content[0].text).toContain(source.hash);
+    expect((hostMessages[0].content[0] as { type: 'text'; text: string }).text).toContain(
+      source.hash
+    );
     expect(compilation.messages.some((message) => message.id === 'outputSchema')).toBe(false);
     for (const protocol of protocols) {
       const target = snapshot(protocol).profile!.models.translation!;

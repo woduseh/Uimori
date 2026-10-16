@@ -26,6 +26,7 @@ import { JEV_ENDPOINT, JEV_MODEL, JevError } from './jev-judgment.js';
 import { judgeMainRefusal, mainJudgmentInput, validateMainJudgmentWire } from './main-judgment.js';
 import { JevCredentialStore } from './jev-credentials.js';
 import { AnthropicBatchRun } from './anthropic-batch.js';
+import { readRequestImage } from './request-images.js';
 import type { Usage } from '../core/types.js';
 import {
   applyStoryGuide,
@@ -157,6 +158,7 @@ export function createRunExecutor({
             replayToolEvents: run.toolEvents,
             evaluationRunId: id,
             resolveCredential,
+            resolveImage: (image) => readRequestImage(store, image),
             executeAnthropicBatch: (connection, request, execution) =>
               anthropicBatch.execute(connection, request, execution),
             executeCodex,

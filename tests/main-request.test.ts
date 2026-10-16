@@ -413,7 +413,7 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
       >;
     const compiled = built.request.prompt!;
     const host = compiled.messages.find((m) => m.id === 'native.host-context')!;
-    expect(host.content[0].text).toContain(entry.text);
+    expect((host.content[0] as { type: 'text'; text: string }).text).toContain(entry.text);
     expect(JSON.stringify(body).split(entry.text)).toHaveLength(2);
     expect((built.request.input.source as any).notes[0]).toEqual({
       ...entry,

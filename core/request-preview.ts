@@ -39,6 +39,9 @@ export type RequestPreview = {
     persona: Selection | null;
   };
   tokens: {
+    imageCount?: number;
+    estimatedImageTokens?: number;
+    imageEstimate?: 'conservative-dimensions-v1' | null;
     estimatedInputTokens: number | null;
     inputTokenLimit: number | null;
     estimator: ContextBudget['estimator'] | null;

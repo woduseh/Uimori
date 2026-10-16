@@ -12,6 +12,7 @@ import type { RunSnapshot } from '../core/types.js';
 import type { Chat, Store } from './store.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import { successfulTranslation } from './translation-artifacts.js';
+import { assertRequestImages } from './request-images.js';
 
 /** User-authored data through a selected source; no execution or database-table archive. */
 export function exportChatTranscript(
@@ -28,10 +29,15 @@ export function exportChatTranscript(
     throw new HttpError(400, 'Source outside chat');
   const entries = history.map((item, index) => {
     const source = sources[index];
+    const run = store.db
+      .prepare(
+        "SELECT request,json_extract(snapshot,'$.requestImages') AS images FROM runs WHERE id=?"
+      )
+      .get(source.runId)!;
+    const images = typeof run.images === 'string' ? JSON.parse(run.images) : undefined;
     return {
-      request: String(
-        store.db.prepare('SELECT request FROM runs WHERE id=?').get(source.runId)!.request
-      ),
+      ...(images?.length ? { requestImages: structuredClone(images) } : {}),
+      request: String(run.request),
       text: item.text,
       translation: successfulTranslation(store, source)?.result?.text ?? null,
     };
@@ -123,6 +129,7 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
     notesAt(null, null);
     let head: string | null = null;
     for (const [index, entry] of transcript.entries.entries()) {
+      assertRequestImages(store, entry.requestImages ?? []);
       const { run } = store.createRunInTransaction(
         chat.id,
         {
@@ -138,6 +145,7 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
             settingsRevision: state.settingsRevision,
             settings: state.settings,
             request: entry.request,
+            ...(entry.requestImages?.length ? { requestImages: entry.requestImages } : {}),
             history: [],
             resources: [],
             profile: frozen,

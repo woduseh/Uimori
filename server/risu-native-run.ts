@@ -16,6 +16,39 @@ import { projectRisuImageHandoff, risuImageHandoffText } from '../core/risu-imag
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { nativeExampleMessages } from '../core/risu-native-messages.js';
 
+/** Text scripts may reorder/exclude turns, but cannot reassign their authored images. */
+export function validateNativeImageMessageIdentity(
+  snapshot: RunSnapshot,
+  messages: NativeRisuMessage[]
+) {
+  const history = snapshot.nativeRisuExecution?.history ?? snapshot.logicalHistory ?? [];
+  const owners = new Set(
+    history.filter((message) => message.requestImages?.length).map((message) => message.id)
+  );
+  if (snapshot.requestImages?.length && snapshot.nativeRisuExecution?.requestPresent !== false)
+    owners.add('current-input');
+  if (!owners.size) return;
+  const known = new Set([
+    ...history.map((message) => message.id),
+    'current-input',
+    'current-output',
+  ]);
+  const ids = new Set<string>();
+  for (const message of messages) {
+    if (message.id) {
+      if (ids.has(message.id)) throw new Error('RISU_NATIVE_REQUEST_IMAGE_IDENTITY');
+      ids.add(message.id);
+      if (owners.has(message.id) && message.role !== 'user')
+        throw new Error('RISU_NATIVE_REQUEST_IMAGE_IDENTITY');
+    }
+  }
+  if (
+    [...owners].some((id) => !ids.has(id)) &&
+    messages.some((message) => !message.id || !known.has(message.id))
+  )
+    throw new Error('RISU_NATIVE_REQUEST_IMAGE_IDENTITY');
+}
+
 function exampleFields(snapshot: RunSnapshot, pkg: Parameters<typeof risuImageHandoffText>[0]) {
   const identity = packageIdentityFromProfile(snapshot.profile!);
   const text = snapshot.profile?.image
@@ -37,7 +70,7 @@ export function nativeHistoryRevision(
   const semantic = (messages: NativeRisuMessage[]) =>
     messages
       .filter((entry) => !['current-input', 'current-output'].includes(entry.id ?? ''))
-      .map(({ role, data }) => ({ role, data }));
+      .map(({ id, role, data }) => ({ id, role, data }));
   const left = JSON.stringify(semantic(before)),
     right = JSON.stringify(semantic(after));
   return left === right
@@ -65,6 +98,7 @@ export function nativeRisuInputHash(snapshot: RunSnapshot): string {
         promptControls: snapshot.profile?.promptControls,
         historyRevision: snapshot.nativeRisuHistoryRevision,
         request: snapshot.request,
+        requestImages: snapshot.requestImages,
         history: snapshot.logicalHistory ?? snapshot.history,
         clock: snapshot.executionClock,
       })
@@ -114,6 +148,7 @@ export async function prepareNativeRisuRun(
   issues.push(...edited.issues);
   messages.push({ id: 'current-input', role: 'user', data: edited.text });
   await invoke('start');
+  validateNativeImageMessageIdentity(snapshot, messages);
   const fieldPlan: { key: string; fields: Record<string, string> }[] = [];
   for (const { attachment, pkg } of nativeRisuPackages(snapshot)) {
     const projected = projectRisuImageHandoff(pkg, snapshot.profile?.image === true);
@@ -154,6 +189,7 @@ export async function prepareNativeRisuRun(
       id: message.id ?? `native-input:${index}`,
       role: message.role === 'char' ? 'assistant' : 'user',
       text: processed.texts[index],
+      ...(message.role !== 'user' ? { requestImages: undefined } : {}),
     });
   }
   validateChatVariableValues(variables);
@@ -166,6 +202,7 @@ export async function prepareNativeRisuRun(
       variables,
       fields,
       request,
+      requestPresent: messages.some((message) => message.id === 'current-input'),
       history,
       messages,
       issues: [...new Set(issues)],
@@ -241,6 +278,7 @@ export async function prepareNativeRisuOutput(
     { ...context, variables: processed.variables, messages: outputMessages, event: 'output' },
     execution
   );
+  validateNativeImageMessageIdentity(snapshot, output.messages);
   validateChatVariableValues(output.variables);
   const value = output.messages.find((message) => message.id === 'current-output')?.data ?? '';
   return {

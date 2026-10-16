@@ -3,6 +3,7 @@ import { ProviderContractError } from './provider-errors.js';
 import { modelCapability } from './model-capabilities.js';
 import { isGeminiProtocol, type ProviderProtocol } from './product.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
+import { plannedImageMetadata } from './provider-image-reference.js';
 
 export const DEFAULT_INPUT_TOKEN_LIMIT = 272_000;
 export const MIN_INPUT_TOKEN_LIMIT = 8_192;
@@ -109,15 +110,28 @@ export function contextBudgetForModel(model: {
  * charged per lore entry. The final request still passes this admission check.
  */
 export function estimateContextTokens(value: unknown, budget?: ContextBudget): number {
+  return estimateContextInput(value, budget).totalTokens;
+}
+
+/** Dimension-based admission allowance, not a documented model formula or billed token count. */
+export function estimateContextInput(value: unknown, budget?: ContextBudget) {
   let serialized: string | undefined;
+  let imageTokens = 0;
+  let imageCount = 0;
   try {
-    serialized = JSON.stringify(value);
+    serialized = JSON.stringify(value, (_key, item: unknown) => {
+      const image = plannedImageMetadata(item);
+      if (!image) return item;
+      imageCount++;
+      imageTokens += Math.max(4096, Math.ceil((image.width * image.height * 2) / 750) + 1024);
+      return { type: 'image', width: image.width, height: image.height };
+    });
   } catch {
     throw new ProviderContractError('INVALID_CONTEXT_INPUT');
   }
   if (serialized === undefined) throw new ProviderContractError('INVALID_CONTEXT_INPUT');
   const checked = budget === undefined ? undefined : validateContextBudget(budget);
-  return Math.ceil(
+  const textTokens = Math.ceil(
     (countTextTokens(
       serialized,
       checked?.estimator === MODEL_CONTEXT_ESTIMATOR ? checked.tokenizer : undefined
@@ -125,6 +139,13 @@ export function estimateContextTokens(value: unknown, budget?: ContextBudget): n
       11) /
       10
   );
+  return {
+    textTokens,
+    imageTokens,
+    imageCount,
+    imageEstimate: imageCount ? ('conservative-dimensions-v1' as const) : null,
+    totalTokens: textTokens + imageTokens,
+  };
 }
 
 /** Fail before credentials, journaling or transmission; never edit a continuation to fit. */
