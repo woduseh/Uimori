@@ -94,6 +94,53 @@ test('multi-resource text pages share a bounded envelope and continue unread sel
   expect(JSON.stringify(second).length).toBeLessThanOrEqual(24000);
 });
 
+test('multi-resource body pages preserve previous-save identity and oversized-body follow-ups', () => {
+  const store = fixture();
+  const original = 'Long original 😀'.repeat(3000);
+  const a = preset(store, 'RP', original);
+  const b = preset(store, 'Novel', 'Complete authored text');
+  const path = '/program/nativeRisuPreset/preset/promptTemplate';
+  call(store, 'resource.patch', {
+    kind: 'prompt-preset',
+    id: a.id,
+    expectedRevision: 1,
+    changes: [{ op: 'set', path: `${path}/0/text`, value: 'Current text' }],
+  });
+  const result = call(store, 'resource.readMany', {
+    items: [
+      { kind: 'prompt-preset', id: a.id, version: 'previous', path, includeBodies: true },
+      { kind: 'prompt-preset', id: b.id, path, includeBodies: true },
+    ],
+  });
+  expect(JSON.stringify(result).length).toBeLessThanOrEqual(24000);
+  expect(result.nextIndex).toBeNull();
+  const previous = result.items[0].result;
+  expect(previous).toMatchObject({
+    id: a.id,
+    version: 'previous',
+    revision: null,
+    currentRevision: 2,
+  });
+  expect(previous.items[0]).not.toHaveProperty('target');
+  expect(previous.items[0].block).not.toHaveProperty('bodies');
+  expect(previous.items[0].block.omittedBodyPaths.text).toBe(`${path}/0/text`);
+  expect(result.items[1].result.items[0]).toMatchObject({
+    target: `${path}/0`,
+    block: { bodies: { text: 'Complete authored text' } },
+  });
+  const followUp = call(store, 'resource.read', {
+    kind: 'prompt-preset',
+    id: a.id,
+    version: 'previous',
+    path: previous.items[0].block.omittedBodyPaths.text,
+    textLimit: 1000,
+  });
+  expect(followUp.text).toBe(original.slice(0, followUp.nextOffset));
+  expect(
+    call(store, 'resource.read', { kind: 'prompt-preset', id: a.id, path: `${path}/0/text` }).text
+  ).toBe('Current text');
+});
+
 test('preset inspection compares retained option meaning without evaluating CBS or creating another revision', () => {
   const store = fixture();
   const saved = preset(store, 'Options', '{{setvar::do_not_execute::1}}{{#when broken');

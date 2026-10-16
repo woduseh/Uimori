@@ -30,6 +30,7 @@ const readSelection = {
   limit: { type: 'integer', minimum: 1, maximum: 50 },
   textOffset: { type: 'integer', minimum: 0 },
   textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
+  includeBodies: { type: 'boolean' },
 };
 const patchProperties = {
   kind: { type: 'string', enum: ['content', 'prompt-preset'] },
@@ -105,7 +106,7 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'resource.read',
     effect: 'read',
     description:
-      'Read a compact resource overview, then follow readyPaths into authored fields. Native promptTemplate pages include id/name, type, role/role2 and textLengths without bodies or CBS evaluation. Long metadata has previews with exact-read paths. Editable array entries provide target anchors for resource.patch at this revision. Use limit:50 and follow nextOffset. Use path for one read or paths for 1-16 reads of the same resource/revision, never both. Follow nextIndex with paths.slice(nextIndex); shared fields/offset/limit and textOffset/textLimit apply to every path. Small values preserve JSON types; missing fields have exists:false. The complete response stays within 24000 serialized characters. version=previous reads only the retained undo model with revision:null and currentRevision; it has no editable targets. Compare before undo, and read current again before patching. Use resource.readMany for typed reads across resources, or data.read refs for already located strings.',
+      'Read a compact resource overview, then follow readyPaths into authored fields. Native promptTemplate pages include id/name, type, role/role2 and textLengths without bodies by default. Set includeBodies:true only with the promptTemplate array path to include text/innerFormat/defaultText per block. Follow nextOffset for unread blocks and omittedBodyPaths for oversized bodies. This does not evaluate CBS. Long metadata has previews with exact-read paths. Editable array entries provide target anchors for resource.patch at this revision. Use limit:50 and follow nextOffset. Use path for one read or paths for 1-16 reads of the same resource/revision, never both. Follow nextIndex with paths.slice(nextIndex); shared fields/offset/limit and textOffset/textLimit apply to every path. Small values preserve JSON types; missing fields have exists:false. The complete response stays within 24000 serialized characters. version=previous reads only the retained undo model with revision:null and currentRevision; it has no editable targets. Compare before undo, and read current again before patching. Use resource.readMany for typed reads across resources, or data.read refs for already located strings.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -215,7 +216,7 @@ const resourceTools: ResourceToolDefinition[] = [
         ? { kind: args.kind, id: null }
         : null,
     description:
-      'Create an independent copy of a saved bot/persona/module or prompt preset without reading or resending its full model. Requires sourceId, expectedSourceRevision and the new display title. Returns a new id/revision and the copied source id/revision; patch the returned id to edit the copy. Preserves prompt blocks, controls, defaults and current values, including the independent native preset name. Content copies follow native naming and start with no relatedIds. Does not copy unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and never edits the source. Singleton prompt-workspace is not supported.',
+      'Create an independent copy of a saved bot/persona/module or prompt preset without reading or resending its full model. Requires sourceId, expectedSourceRevision and the new display title. Returns a new id/revision and the copied source id/revision; patch the returned id to edit the copy. Preserves prompt blocks, controls, defaults and current values. Native preset name is independent and preserved by default; syncNativeName:true updates it to the new title. Content copies follow native naming and start with no relatedIds. Does not copy unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and never edits the source. Singleton prompt-workspace is not supported.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -223,6 +224,7 @@ const resourceTools: ResourceToolDefinition[] = [
         sourceId: string,
         expectedSourceRevision: revision,
         title: string,
+        syncNativeName: { type: 'boolean' },
       },
       required: ['kind', 'sourceId', 'expectedSourceRevision', 'title'],
       additionalProperties: false,
@@ -399,7 +401,9 @@ export function invokeResourceTool(
     throw new HttpError(400, '자료 종류를 확인해 주세요.');
   const kind = args.kind as ResourceKind;
   if (name === 'resource.clone') {
-    fields(args, ['kind', 'sourceId', 'expectedSourceRevision', 'title']);
+    fields(args, ['kind', 'sourceId', 'expectedSourceRevision', 'title', 'syncNativeName']);
+    if (args.syncNativeName !== undefined && typeof args.syncNativeName !== 'boolean')
+      throw new HttpError(400, '내부 이름 동기화 옵션을 확인해 주세요.');
     if (kind !== 'content' && kind !== 'prompt-preset')
       throw new HttpError(400, '봇·페르소나·모듈과 프롬프트 프리셋만 복제할 수 있어요.');
     const result = cloneResource(store, {
@@ -407,6 +411,7 @@ export function invokeResourceTool(
       sourceId: text(args.sourceId, 'source resource ID', 100),
       expectedSourceRevision: number(args.expectedSourceRevision, 'source revision'),
       title: text(args.title, 'title', 200),
+      ...(args.syncNativeName === undefined ? {} : { syncNativeName: args.syncNativeName }),
     });
     return { ...summary(result), source: result.source };
   }

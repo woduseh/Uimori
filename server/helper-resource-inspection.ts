@@ -17,6 +17,7 @@ const selectionFields = [
   'limit',
   'textOffset',
   'textLimit',
+  'includeBodies',
 ];
 
 /** Flat selections share one response budget; text pagination stays local to each result. */
