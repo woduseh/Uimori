@@ -419,22 +419,6 @@ export function BotNavigation(
           />
         </div>
         <NavigationQuickActions compact onSearch={props.onSearch} onLibrary={onLibrary} />
-        <IconButton
-          label="봇 탐색"
-          icon={MessageCircle}
-          onClick={() => {
-            setMode('bots');
-            props.onToggleCollapse?.();
-          }}
-        />
-        <IconButton
-          label={`활동 · 미확인 채팅 ${unreadChats}개`}
-          icon={Inbox}
-          onClick={() => {
-            setMode('activity');
-            props.onToggleCollapse?.();
-          }}
-        />
         <nav className="sidebar-rail-destinations" aria-label="작업 공간">
           <IconButton
             label="서재"
@@ -451,6 +435,22 @@ export function BotNavigation(
             onClick={() => onLibrary('prompts')}
           />
         </nav>
+        <IconButton
+          label="봇 탐색"
+          icon={MessageCircle}
+          onClick={() => {
+            setMode('bots');
+            props.onToggleCollapse?.();
+          }}
+        />
+        <IconButton
+          label={`활동 · 미확인 채팅 ${unreadChats}개`}
+          icon={Inbox}
+          onClick={() => {
+            setMode('activity');
+            props.onToggleCollapse?.();
+          }}
+        />
         <div className="sidebar-rail-spacer" />
         <nav className="sidebar-app-actions" aria-label="앱 탐색">
           {runningTotal > 0 && (
@@ -489,27 +489,6 @@ export function BotNavigation(
           <NavigationQuickActions onSearch={props.onSearch} onLibrary={onLibrary} />
         </div>
       )}
-      <nav className="bot-navigation-modes" aria-label="사이드바 보기 방식">
-        <button
-          type="button"
-          aria-label="봇 탐색"
-          aria-pressed={view.mode === 'bots'}
-          title="봇 탐색"
-          onClick={() => setMode('bots')}
-        >
-          <MessageCircle size={19} />
-        </button>
-        <button
-          type="button"
-          aria-label={`활동 · 미확인 채팅 ${unreadChats}개`}
-          aria-pressed={view.mode === 'activity'}
-          title="활동"
-          onClick={() => setMode('activity')}
-        >
-          <Inbox size={19} />
-          {unreadChats > 0 && <span className="activity-mode-count">{unreadChats}</span>}
-        </button>
-      </nav>
       <nav className="sidebar-destinations" aria-label="작업 공간">
         <button
           type="button"
@@ -532,6 +511,27 @@ export function BotNavigation(
         >
           <PromptIcon size={20} aria-hidden="true" />
           프롬프트
+        </button>
+      </nav>
+      <nav className="bot-navigation-modes" aria-label="사이드바 보기 방식">
+        <button
+          type="button"
+          aria-label="봇 탐색"
+          aria-pressed={view.mode === 'bots'}
+          title="봇 탐색"
+          onClick={() => setMode('bots')}
+        >
+          <MessageCircle size={19} />
+        </button>
+        <button
+          type="button"
+          aria-label={`활동 · 미확인 채팅 ${unreadChats}개`}
+          aria-pressed={view.mode === 'activity'}
+          title="활동"
+          onClick={() => setMode('activity')}
+        >
+          <Inbox size={19} />
+          {unreadChats > 0 && <span className="activity-mode-count">{unreadChats}</span>}
         </button>
       </nav>
       {view.mode === 'bots' && (

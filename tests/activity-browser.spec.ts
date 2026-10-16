@@ -774,6 +774,7 @@ test('ACTUI13 recent helper jobs navigate to their original chat or library sess
   const nav = page.getByTestId('bot-navigation').filter({ visible: true });
   await nav.locator('.bot-navigation-modes > button').nth(1).click();
   const activityNav = nav.getByRole('navigation', { name: '채팅 활동' });
+  await activityNav.locator('[data-activity-section="helpers"] .activity-nav-heading').click();
   await activityNav.getByRole('button', { name: /합성 작품 도우미/ }).click();
   const panel = page.locator('.helper-panel').filter({ visible: true });
   await expect(panel.getByRole('combobox', { name: '도우미 세션 선택' })).toHaveValue(chat.id);
@@ -782,6 +783,65 @@ test('ACTUI13 recent helper jobs navigate to their original chat or library sess
   await activityNav.getByRole('button', { name: /합성 서재 도우미/ }).click();
   await expect(panel.getByRole('combobox', { name: '도우미 세션 선택' })).toHaveValue(library.id);
   await expect(activityNav.getByText('확정된 앱 작업 1건')).toBeVisible();
+});
+
+test('ACTUI14 activity sections show 5 then more, retain folding and never exclude recent chats', async ({
+  page,
+  request,
+}) => {
+  const seeded = await seed(request);
+  for (let i = 0; i < 8; i++) {
+    const response = await request.post('/api/chats', {
+      data: { title: `추가 탐색 ${i}`, botId: seeded.chat.botId },
+    });
+    expect(response.ok()).toBe(true);
+  }
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  await nav.locator('.bot-navigation-modes > button').nth(1).click();
+  const activity = nav.getByRole('navigation', { name: '채팅 활동' });
+  const recent = activity.locator('[data-activity-section="recent"]');
+  const total = Number(
+    await recent.locator('.activity-nav-heading > span:last-child').textContent()
+  );
+  expect(total).toBeGreaterThanOrEqual(9);
+  await expect(recent.locator('.activity-nav-link')).toHaveCount(5);
+  await expect(recent.locator('.activity-nav-more')).toContainText(
+    `${Math.min(20, total - 5)}개 더 보기`
+  );
+  await recent.locator('.activity-nav-more').click();
+  await expect(recent.locator('.activity-nav-link')).toHaveCount(Math.min(total, 25));
+  await recent.locator('.activity-nav-heading').click();
+  await expect(recent.locator('.activity-nav-link')).toHaveCount(0);
+  await recent.locator('.activity-nav-heading').click();
+  await expect(recent.locator('.activity-nav-link')).toHaveCount(Math.min(total, 25));
+  await page.reload();
+  const restored = page.getByTestId('bot-navigation').filter({ visible: true });
+  const restoredRecent = restored.locator('[data-activity-section="recent"]');
+  await expect(restoredRecent.locator('.activity-nav-link')).toHaveCount(5);
+  await expect(restoredRecent.locator('.activity-nav-heading')).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
+  await restored.locator('.bot-navigation-modes > button').first().click();
+  const branch = restored.locator(`[data-bot-id="${seeded.chat.botId}"]`);
+  await expect(branch.locator('.bot-chat-item')).toHaveCount(6);
+  await expect(branch.getByText('현재 채팅')).toBeVisible();
+  const firstVisible = branch.locator('.bot-chat-item').first();
+  const movedId = await firstVisible.getAttribute('data-chat-id');
+  const chatOrder = async () => {
+    const response = await request.get('/api/chats');
+    const all = (await response.json()) as Chat[];
+    return all
+      .filter((chat) => chat.botId === seeded.chat.botId && !chat.folderId)
+      .sort((a, b) => (a.sortPosition ?? 0) - (b.sortPosition ?? 0))
+      .map((chat) => chat.id);
+  };
+  await firstVisible.dragTo(branch.locator('.bot-chat-more'));
+  await expect.poll(async () => (await chatOrder()).indexOf(movedId!)).toBe(4);
+  await branch.locator('.bot-chat-more').click();
+  await expect(branch.locator('.bot-chat-item')).toHaveCount(9);
 });
 
 test('ACTUI11 an already visible source is confirmed only after its inbox entry is selected', async ({

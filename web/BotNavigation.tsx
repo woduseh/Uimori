@@ -98,6 +98,7 @@ export function BotBranch(
   const [creating, setCreating] = useState(false);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState<Record<string, number>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     try {
       const value: unknown = JSON.parse(
@@ -301,9 +302,19 @@ export function BotBranch(
   }
   function chatList(folderId: string | null) {
     const items = visible.filter((chat) => (chat.folderId ?? null) === folderId);
+    const key = `${botId}:${folderId ?? ''}`;
+    const limit = visibleCount[key] ?? 5;
+    const initial = items.slice(0, limit);
+    // Keep the selected chat accessible even if it lies beyond the displayed page.
+    const selectedItem =
+      destination === 'story' ? items.find((chat) => chat.id === selected) : undefined;
+    const shown =
+      selectedItem && !initial.includes(selectedItem) ? [...initial, selectedItem] : initial;
     return (
       <div className="bot-chat-list">
-        {items.map((chat, index) => {
+        {shown.map((chat) => {
+          const index = items.indexOf(chat);
+          const pinned = index >= limit;
           const selectedChat = selected === chat.id && destination === 'story';
           function target(event: DragEvent) {
             const box = event.currentTarget.getBoundingClientRect();
@@ -339,6 +350,7 @@ export function BotBranch(
                 onClick={() => onSelect(chat.id)}
               >
                 <strong>{chat.title}</strong>
+                {pinned && <small className="bot-chat-current-label">현재 채팅</small>}
               </button>
               {status(activity(chat)?.label)}
               <div className="bot-row-actions">
@@ -365,6 +377,21 @@ export function BotBranch(
             </div>
           );
         })}
+        {items.length > limit && (
+          <button
+            type="button"
+            className="bot-chat-more"
+            onClick={() =>
+              setVisibleCount((current) => ({
+                ...current,
+                [key]: (current[key] ?? 5) + 20,
+              }))
+            }
+          >
+            <ExpandIcon size={13} aria-hidden="true" />
+            {Math.min(20, items.length - limit)}개 더 보기
+          </button>
+        )}
         {dropTarget?.folderId === folderId && dropTarget.beforeId === null && (
           <div className="bot-drop-end" aria-hidden="true" />
         )}
@@ -372,6 +399,18 @@ export function BotBranch(
           <p className="bot-empty-folder">{dragId ? '여기로 이동' : '채팅이 없어요.'}</p>
         )}
       </div>
+    );
+  }
+  // The blank space after a truncated list means "after the visible rows", not
+  // "append after every hidden chat". Individual row drops already use full indices.
+  function firstHiddenId(folderId: string | null) {
+    const key = `${botId}:${folderId ?? ''}`;
+    const limit = visibleCount[key] ?? 5;
+    return (
+      visible
+        .filter((chat) => (chat.folderId ?? null) === folderId)
+        .slice(limit)
+        .find((chat) => chat.id !== dragChat.current?.id)?.id ?? null
     );
   }
   function folderSection(folder: ChatFolder | null) {
@@ -388,8 +427,8 @@ export function BotBranch(
           className={`bot-folder bot-folder-unfiled ${dropTarget?.folderId === null && dropTarget.beforeId === null ? 'drop-folder' : ''}`}
           key=""
           data-folder-id=""
-          onDragOver={(event) => over(event, null, null)}
-          onDrop={(event) => drop(event, null, null)}
+          onDragOver={(event) => over(event, null, firstHiddenId(null))}
+          onDrop={(event) => drop(event, null, firstHiddenId(null))}
         >
           {chatList(null)}
         </section>
@@ -399,8 +438,20 @@ export function BotBranch(
         className={`bot-folder ${dropTarget?.folderId === id && dropTarget.beforeId === null ? 'drop-folder' : ''}`}
         key={id ?? ''}
         data-folder-id={id ?? ''}
-        onDragOver={(event) => over(event, id, null)}
-        onDrop={(event) => drop(event, id, null)}
+        onDragOver={(event) =>
+          over(
+            event,
+            id,
+            (event.target as HTMLElement).closest('.bot-folder-heading') ? null : firstHiddenId(id)
+          )
+        }
+        onDrop={(event) =>
+          drop(
+            event,
+            id,
+            (event.target as HTMLElement).closest('.bot-folder-heading') ? null : firstHiddenId(id)
+          )
+        }
       >
         <div className="bot-folder-heading">
           <button
