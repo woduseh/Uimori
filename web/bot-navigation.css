@@ -231,6 +231,11 @@
 .bot-chat-item.selected {
   background: var(--nav-item-selected);
 }
+/* A current-chat shortcut outside the first page is not a sortable list row. */
+.bot-chat-item.pinned {
+  margin-bottom: 6px;
+  box-shadow: 0 1px 0 var(--line);
+}
 .bot-chat-item .chat-link {
   display: flex;
   flex-direction: row;
@@ -595,8 +600,14 @@
   color: var(--text);
   background: var(--nav-item-selected);
 }
+.bot-chat-item.pinned .chat-link strong {
+  flex: 1;
+  min-width: 0;
+}
 .bot-chat-current-label {
-  display: block;
+  flex: none;
+  white-space: nowrap;
+  margin-left: 6px;
   color: var(--muted);
   font-size: 10px;
   font-weight: normal;
