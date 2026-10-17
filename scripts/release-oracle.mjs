@@ -219,7 +219,7 @@ export async function releaseOracle(options, dependencies = {}) {
         timeoutMs: 30_000,
         signal: options.signal,
       }),
-      'Oracle status'
+      options['cleanup-plan'] ? 'Oracle cleanup preview' : 'Oracle status'
     );
     return JSON.parse(result.output);
   }

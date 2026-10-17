@@ -173,6 +173,19 @@ class GarbageCollection(unittest.TestCase):
         self.assertEqual(outcome["status"], "WARN")
         self.assertTrue(alien.exists())
 
+    def test_inventory_failure_is_an_incomplete_preview_not_an_empty_success(self):
+        calls = []
+        def unavailable(*args):
+            calls.append(args)
+            raise RuntimeError("Docker inventory failed")
+        result = gc.collect_garbage("/unused", self.root, unavailable)
+        self.assertEqual(result["status"], "WARN")
+        self.assertEqual(result["warnings"], ["Docker inventory failed"])
+        self.assertEqual(result["images"], [])
+        self.assertEqual(result["directories"], [])
+        self.assertEqual(calls, [("ps", "-aq")])
+        self.assertTrue(self.current.exists())
+
     def test_no_managed_successful_receipt_means_no_gc(self):
         record = json.loads((self.current / "oracle-summary.json").read_text())
         record["managedBy"] = "old"
