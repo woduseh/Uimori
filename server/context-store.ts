@@ -159,8 +159,10 @@ export class ContextStore {
       const chat = this.store.chat(snapshot.chatId);
       const currentSources = this.store.history(chat.headRevision);
       const unchanged = isDeepStrictEqual(
-        currentSources.slice(0, snapshot.history.length).map((s) => [s.revision, s.contentHash]),
-        snapshot.history.map((s) => [s.revision, s.contentHash])
+        currentSources
+          .slice(0, snapshot.history.length)
+          .map((s) => [s.revision, s.contentHash, s.sceneContext?.revision ?? 0]),
+        snapshot.history.map((s) => [s.revision, s.contentHash, s.sceneContext?.revision ?? 0])
       );
       checkpoint.activated =
         options.activate !== false &&

@@ -219,7 +219,9 @@ export function buildMainInput(
     input.notes = structuredClone(snapshot.story.notes);
     input.contract += '\n' + AUTHOR_NOTE_GUIDANCE;
   }
-  input.history = validateSourceHistory(snapshot);
+  input.history = validateSourceHistory(snapshot)
+    .filter((entry) => entry.sceneContext?.sceneEnabled !== false)
+    .map(({ revision, text, contentHash }) => ({ revision, text, contentHash }));
   input.tools.push(...STORY_READ_NAMES);
   if (snapshot.contextPlan) {
     const kept = new Set(snapshot.contextPlan.recentSourceRevisions);

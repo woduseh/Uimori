@@ -44,7 +44,8 @@ for (const width of [360, 1440]) {
     const choosingFile = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: '참고 이미지 첨부', exact: true }).click();
     await (await choosingFile).setFiles(await image());
-    await composer(page).click();
+    // Close the narrow-screen options popover at its owner; it can overlap the composer.
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await expect(thumbnails(page)).toHaveCount(1);
     await page.reload();
     await expect(composer(page)).toHaveValue('이미지의 옷차림을 참고해 줘.');
@@ -89,7 +90,7 @@ for (const width of [360, 1440]) {
     await page
       .getByRole('textbox', { name: '요청 수정 내용', exact: true })
       .fill('같은 옷차림으로 다시 이어 줘.');
-    await page.getByRole('button', { name: '수정한 요청 보내기', exact: true }).click();
+    await page.getByRole('button', { name: '수정 후 재생성', exact: true }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(chat.id);
     const copied = new URL(page.url()).searchParams.get('chat')!;
     await expect

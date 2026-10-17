@@ -83,11 +83,15 @@ export function ComposerMore({
       {open && (
         <div id={id} className="composer-more-panel" role="group" aria-label="이번 요청 옵션">
           {children && (
-            <div className="composer-extra-settings" aria-label="대화 설정">
+            <div className="composer-extra-settings" aria-label="입력 도구와 설정">
               {children}
             </div>
           )}
-          <label>
+          <label className="composer-lore-toggle">
+            <span className="composer-lore-copy">
+              <span>다음 생성에서 조회 로어 제외</span>
+              <small aria-hidden="true">이번 요청에만 적용</small>
+            </span>
             <Switch
               ref={choice}
               checked={selected}
@@ -97,7 +101,6 @@ export function ComposerMore({
                 trigger.current?.focus();
               }}
             />
-            <span>다음 생성에서 조회 로어 제외</span>
           </label>
         </div>
       )}

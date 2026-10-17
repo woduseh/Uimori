@@ -40,7 +40,7 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
   const readOwner = store.db.prepare(
     "SELECT request,snapshot,json_extract(snapshot,'$.packageStart.mode') AS startMode FROM runs WHERE id=?"
   );
-  return entries.reduce<PromptHistoryMessage[]>((accumulated, entry) => {
+  const folded = entries.reduce<PromptHistoryMessage[]>((accumulated, entry) => {
     const source = readSource.get(entry.revision) as
       | Pick<Source, 'id' | 'chatId' | 'runId' | 'text' | 'hash'>
       | undefined;
@@ -160,6 +160,39 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
     );
     return applyMessageChanges(accumulated, owner.messageChanges);
   }, []);
+  // User controls always win over retained native/Risu script transformations.
+  const controls = new Map(entries.map((entry) => [entry.revision, entry.sceneContext]));
+  // A native Risu action may retain multiple user messages in one scene. The user edits
+  // that scene's combined request, so project it once while retaining every attachment.
+  const requestImages = new Map<string, NonNullable<PromptHistoryMessage['requestImages']>>();
+  for (const message of folded) {
+    if (message.role !== 'user' || !message.sourceRevision) continue;
+    const existing = requestImages.get(message.sourceRevision) ?? [];
+    requestImages.set(message.sourceRevision, [...existing, ...(message.requestImages ?? [])]);
+  }
+  const replaced = new Set<string>();
+  return folded.flatMap((message) => {
+    const revision = message.sourceRevision;
+    const control = revision ? controls.get(revision) : undefined;
+    if (
+      control?.sceneEnabled === false ||
+      (message.role === 'user' && control?.requestEnabled === false)
+    )
+      return [];
+    if (
+      revision &&
+      message.role === 'user' &&
+      control?.requestText !== null &&
+      control?.requestText !== undefined
+    ) {
+      if (replaced.has(revision)) return [];
+      replaced.add(revision);
+      return [
+        { ...message, text: control.requestText, requestImages: requestImages.get(revision) },
+      ];
+    }
+    return [message];
+  });
 }
 function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedPackage[]) {
   const input = buildMainInput(snapshot);

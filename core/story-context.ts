@@ -59,17 +59,20 @@ function boundedSearch(
 /** Ordered ancestry index: position, revision/hash, size, preview and window membership. */
 function listStorySources(snapshot: RunSnapshot, offset: number, limit: number) {
   const compacted = new Set(snapshot.contextPlan?.compacted.map((ref) => ref.revision) ?? []);
-  const results = snapshot.history.slice(offset, offset + limit).map((item, pageIndex) => {
+  const results = snapshot.history.slice(offset, offset + limit).flatMap((item, pageIndex) => {
+    if (item.sceneContext?.sceneEnabled === false) return [];
     const index = offset + pageIndex;
     const text = item.text;
-    return {
-      sceneNumber: index + 1,
-      revision: item.revision,
-      hash: item.contentHash ?? sourceHash(item.text),
-      chars: text.length,
-      preview: text.replace(/\s+/gu, ' ').trim().slice(0, LIST_PREVIEW_CHARS),
-      compacted: compacted.has(item.revision),
-    };
+    return [
+      {
+        sceneNumber: index + 1,
+        revision: item.revision,
+        hash: item.contentHash ?? sourceHash(item.text),
+        chars: text.length,
+        preview: text.replace(/\s+/gu, ' ').trim().slice(0, LIST_PREVIEW_CHARS),
+        compacted: compacted.has(item.revision),
+      },
+    ];
   });
   return { total: snapshot.history.length, results };
 }
@@ -86,6 +89,10 @@ export function executeStoryRead(snapshot: RunSnapshot, action: ToolAction): Too
   if (!STORY_READ_NAMES.includes(action.name)) return denied('TOOL_NOT_ALLOWED');
 
   const scope = { chatId: snapshot.chatId, history: snapshot.history };
+  const visibleScope = {
+    ...scope,
+    history: scope.history.filter((item) => item.sceneContext?.sceneEnabled !== false),
+  };
   const args = action.args;
   const search = action.name === 'story.search';
   const allowed = search ? ['query', 'offset', 'limit'] : ['sceneNumber', 'offset', 'limit'];
@@ -120,7 +127,7 @@ export function executeStoryRead(snapshot: RunSnapshot, action: ToolAction): Too
       }
 
       const numbers = new Map(scope.history.map((source, index) => [source.revision, index + 1]));
-      const found = searchStorySources(scope, { query, offset, limit });
+      const found = searchStorySources(visibleScope, { query, offset, limit });
       return {
         ...action,
         args: { query, offset, limit },
@@ -141,10 +148,11 @@ export function executeStoryRead(snapshot: RunSnapshot, action: ToolAction): Too
     if (!Number.isSafeInteger(args.sceneNumber) || (args.sceneNumber as number) < 1)
       return denied('INVALID_ARGUMENTS');
     const numbered = scope.history[(args.sceneNumber as number) - 1];
-    if (!numbered) return denied('RESOURCE_UNAVAILABLE', true);
+    if (!numbered || numbered.sceneContext?.sceneEnabled === false)
+      return denied('RESOURCE_UNAVAILABLE', true);
     if (offset > numbered.text.length) return denied('INVALID_ARGUMENTS');
 
-    const page = readStorySource(scope, { revision: numbered.revision, offset, limit });
+    const page = readStorySource(visibleScope, { revision: numbered.revision, offset, limit });
     const { quote: _quote, ...source } = page.source;
     const sceneScope = sourceSceneScope(scope);
     const result = boundedRead(offset, page.source.end, (end) => ({

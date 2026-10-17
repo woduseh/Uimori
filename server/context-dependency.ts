@@ -15,6 +15,9 @@ export function contextDependencyKey(snapshot: RunSnapshot): string {
         prompt: main ? { program: main.program, values: values ?? main.values ?? {} } : null,
         canon: snapshot.story?.canonHash ?? null,
         resources: snapshot.resources,
+        sceneContext: snapshot.history.flatMap((entry) =>
+          entry.sceneContext?.revision ? [[entry.revision, entry.sceneContext]] : []
+        ),
         ...((snapshot.nativeRisuExecution?.inputHistoryRevision ??
         snapshot.nativeRisuHistoryRevision)
           ? {

@@ -30,6 +30,8 @@ export type ChatTranscriptEntry = {
   /** The user request recorded on the run that produced this source; may be empty. */
   request: string;
   requestImages?: RequestImage[];
+  /** Optional authored future-context controls; absent in older v2 transcripts. */
+  sceneContext?: Omit<import('./scene-context.js').SceneContext, 'revision'>;
   /** The source text as currently read, including the latest user edit. */
   text: string;
   /** The latest translation whose source hash still matched, or null. */
@@ -121,7 +123,29 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
   const entries = list(body.entries, 'CHAT_TRANSCRIPT_INVALID_ENTRIES').map(
     (raw): ChatTranscriptEntry => {
       const item = object(raw);
-      keys(item, ['request', 'requestImages', 'text', 'translation']);
+      keys(item, ['request', 'requestImages', 'text', 'translation', 'sceneContext']);
+      let sceneContext: ChatTranscriptEntry['sceneContext'];
+      if (item.sceneContext !== undefined) {
+        const control = object(item.sceneContext);
+        keys(control, ['requestText', 'requestEnabled', 'sceneEnabled']);
+        if (
+          typeof control.requestEnabled !== 'boolean' ||
+          typeof control.sceneEnabled !== 'boolean'
+        )
+          fail('CHAT_TRANSCRIPT_INVALID_SCENE_CONTEXT');
+        if (control.requestText !== null)
+          string(
+            control.requestText,
+            CHAT_TRANSCRIPT_LIMITS.request,
+            'CHAT_TRANSCRIPT_INVALID_SCENE_CONTEXT',
+            true
+          );
+        sceneContext = {
+          requestText: control.requestText as string | null,
+          requestEnabled: control.requestEnabled as boolean,
+          sceneEnabled: control.sceneEnabled as boolean,
+        };
+      }
       let requestImages: RequestImage[] | undefined;
       if (item.requestImages !== undefined) {
         try {
@@ -132,6 +156,7 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
       }
       return {
         ...(requestImages?.length ? { requestImages } : {}),
+        ...(sceneContext ? { sceneContext } : {}),
         request: string(
           item.request,
           CHAT_TRANSCRIPT_LIMITS.request,
