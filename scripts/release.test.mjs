@@ -521,6 +521,26 @@ test('cleanup preview performs one read-only SSH query without CI or a deploymen
   assert.equal(fixture.calls.length, 0);
 });
 
+test('inspection warnings preserve partial evidence without becoming a successful empty result', async (t) => {
+  const fixture = await releaseFixture(t);
+  for (const mode of ['status', 'cleanup-plan']) {
+    const partial = {
+      status: 'WARN',
+      warnings: ['container: inspection unavailable'],
+      ...(mode === 'status'
+        ? { container: null, checkout: commit }
+        : { images: [], directories: [] }),
+    };
+    fixture.dependencies.execute = async () => ({ code: 0, output: JSON.stringify(partial) });
+    const result = await releaseOracle(
+      { config: fixture.configFile, [mode]: true },
+      fixture.dependencies
+    );
+    assert.deepEqual(result, partial);
+  }
+  assert.equal(fixture.calls.length, 0);
+});
+
 test('Oracle controller starts without installed Playwright or any node_modules', async (t) => {
   // Outside the repository so Node cannot accidentally resolve its test dependencies.
   const isolated = await mkdtemp(path.join(tmpdir(), 'uimori-deploy-only-'));

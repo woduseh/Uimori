@@ -150,7 +150,7 @@ def collect_garbage(app, root, docker, *, apply=False, remove=shutil.rmtree):
         plan = plan_gc(root, live, containers, images)
         return apply_plan(plan, root, docker, remove=remove) if apply else plan
     except Exception as error:
-        return {"status": "WARN" if apply else "PLAN", "images": [], "directories": [],
+        return {"status": "WARN", "images": [], "directories": [],
                 "warnings": [str(error)], "removed": {"images": [], "directories": []}}
 
 

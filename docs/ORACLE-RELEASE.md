@@ -24,6 +24,10 @@ Oracle에는 기존 Uimori 앱, Docker/Compose, Python 3, Git, Tailscale 경로�
 
 `expectedOrigin`은 운영 `.env.self-host`의 `UIMORI_PUBLIC_ORIGIN`과 같은 HTTPS origin이며 경로나 후행 `/`를 넣지 않아요. `releaseRoot`는 `/opt/uimori/releases`로 고정돼요. 키와 `known_hosts` 파일은 기존 개인 파일 경로를 사용해요. **이전 설정의 `accessEnvFile`과 `area`는 제거하고 `expectedOrigin`으로 바꿔요.** 컨트롤러는 운영 접속 토큰 파일을 더 이상 읽지 않아요. 서버의 기존 origin·토큰·인증 파일은 유지해요.
 
+배포 도구는 실행한 checkout의 파일을 해당 release 디렉터리에 올려 사용해요. `--status`와 `--cleanup-plan`도 실행한 checkout의 조회 코드를 SSH로 전달해요. 이전 release 디렉터리는 당시 기록과 복구 자료이며, 최신 도구 설치를 위해 덮어쓰는 위치가 아니에요.
+
+시아·티아가 공유하는 `/workspace/Uimori` checkout에서 최신 도구를 사용하려면 먼저 `git status --short`로 작업 중인 변경이 없는지 확인하고 `git pull --ff-only`로 갱신해요. 배포 도구가 자동으로 pull하거나 작업 중인 변경을 정리하지는 않아요.
+
 ## 검증과 배포
 
 ```bash
@@ -77,6 +81,8 @@ control과 smoke는 작업 성공·실패에 관계없이 자신이 만든 임�
 
 전환 전 실패는 기존 앱을 유지해요. 전환 후 **쓰기 재개 요청 전** 실패는 maintenance 소유권·닫힘·idle을 확인한 뒤 직전 이미지/DB/환경으로 롤백해요. 쓰기 재개 요청을 보내기 전에 `REOPENING`을 저장하므로 응답을 잃어도 DB를 과거 백업으로 자동 복원하지 않아요. 사용자가 새 앱에서 저장했을 가능성이 있는 상태를 덮어쓰지 않기 위해서예요. 이 경우 `REFUSED_AFTER_REOPEN` 또는 상태 불확실성을 보고하고 `--status`로 조사해요.
 
+`--status`는 container, checkout, lock, 실행 기록을 각각 조회해요. 일부 조회가 실패하면 확인된 정보는 유지하고 해당 필드는 `null`, 전체 `status`는 `WARN`, 원인은 `warnings`로 출력하며 종료 코드는 1이에요. 손상된 최신 실행 기록을 예전 성공 기록으로 대체하지 않아요. 지정한 run ID가 없는 정상 조회는 기존처럼 `release: null`이에요.
+
 SSH가 끊기면 같은 명령을 바로 재실행하지 말고 알려진 run ID로 상태를 조회해요. 실제 image·volume·health와 lock이 확인되기 전에는 성공이나 실패를 추정하지 않아요. 실행 중인 작업을 자동 재개하거나 새로운 배포로 덮어쓰는 기능은 없어요.
 
 컨트롤러 보고서는 `output/release/oracle/<run>/summary.json`, 서버 보고서는 `/opt/uimori/releases/<run>/oracle-summary.json`이에요. 단계 시작·종료와 경과시간을 바로 출력하고 CI 실행 번호, image identity, 백업, smoke, 쓰기 재개 및 롤백 결과를 분리해서 남겨요. 비밀 설정 전체는 출력하지 않으며 하위 명령 오류의 비공개 진단 로그 위치를 기록해요.
@@ -92,6 +98,8 @@ SSH가 끊기면 같은 명령을 바로 재실행하지 말고 알려진 run ID
 ```bash
 npm run release:oracle -- --config .local/oracle-release.json --cleanup-plan
 ```
+
+삭제 후보가 없는 정상 preview는 `status: PLAN`과 빈 후보 목록을 반환해요. Docker 조회나 복구 세트 검증에 실패해 후보를 결정하지 못하면 `status: WARN`과 원인을 출력하고 종료 코드 1을 반환해요. 이를 정리할 것이 없는 정상 결과로 해석하지 않아요.
 
 컨트롤러 preview는 읽기 전용이며 별도 수동 apply 모드를 제공하지 않아요. 실제 정리는 정상 배포 뒤 자동 수행해요. 동작 중인 배포가 lock을 잡고 있다면 preview도 재시도하기 전 해당 배포 종료를 확인해요.
 
