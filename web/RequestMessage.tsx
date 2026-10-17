@@ -10,6 +10,7 @@ import './request-message.css';
 export function RequestMessage({
   runId,
   request,
+  originalRequest,
   images,
   displayText,
   disabled,
@@ -29,6 +30,8 @@ export function RequestMessage({
   compactActions?: 'always' | 'tap';
   runId: string;
   request: string;
+  /** Frozen input originally used to generate this response. */
+  originalRequest?: string;
   images?: RequestImage[];
   displayText?: string;
   disabled?: boolean;
@@ -229,6 +232,17 @@ export function RequestMessage({
               <p>{shownRequest}</p>
             )}
           </div>
+          {originalRequest !== undefined && originalRequest !== request && (
+            <details className="request-transform-details">
+              <summary>수정 전 입력 보기</summary>
+              <dl>
+                <div>
+                  <dt>장면 생성 당시 입력</dt>
+                  <dd>{originalRequest}</dd>
+                </div>
+              </dl>
+            </details>
+          )}
           {shownRequest !== request && (
             <details className="request-transform-details">
               <summary>표시 변환됨 · 원래 요청 보기</summary>
