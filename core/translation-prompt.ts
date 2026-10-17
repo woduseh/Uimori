@@ -3,7 +3,6 @@ import type { RunSnapshot } from './types.js';
 import { createDefaultRisuPrompt } from './prompt-defaults.js';
 import { DEFAULT_TRANSLATION_PROMPT } from './prompts.js';
 import { compileRisuPrompt, type PromptCompilation } from './risu-prompt.js';
-import { executionContext } from './execution-context.js';
 import { packageSlots } from './package-context.js';
 import { modelAuthorNotes } from './notes.js';
 import { translationSnapshot } from './translation-context.js';
@@ -68,15 +67,6 @@ export function compileTranslationPrompt(
   const compilation = compileRisuPrompt(
     preset?.program ?? createDefaultRisuPrompt(DEFAULT_TRANSLATION_PROMPT, 'translation'),
     {
-      runtime: {
-        ...executionContext(snapshot, 'translation'),
-        source: {
-          id: input.sourceRevision,
-          hash: input.sourceHash,
-          text: input.sourceText ?? '',
-          blocks: input.blocks as unknown as import('./risu-prompt.js').RuntimeValue,
-        },
-      },
       values: preset
         ? snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values
         : undefined,

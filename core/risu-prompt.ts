@@ -14,13 +14,7 @@ import {
   type NativeRisuPreset,
 } from './risu-native-preset.js';
 import { nativeChatMlMessages, type NativePromptMessage } from './risu-native-messages.js';
-import {
-  PromptBudget,
-  jsonStringSize,
-  type RuntimeValue,
-  type PromptEvaluationLimits,
-} from './prompt-values.js';
-export type { RuntimeValue, PromptEvaluationLimits } from './prompt-values.js';
+import { PromptBudget, jsonStringSize } from './prompt-values.js';
 export type PromptValue = string | number | boolean | null;
 export type PromptRoleName = 'system' | 'user' | 'assistant';
 /** A UI projection of the preset's native toggle declarations, never an authored AST. */
@@ -398,11 +392,7 @@ export function compileRisuPrompt(
     slots: Record<string, string>;
     history: PromptHistoryMessage[];
     examples?: NativePromptMessage[];
-    names?: { char: string; user: string };
     controls?: PromptControl[];
-    runtime?: Record<string, RuntimeValue>;
-    limits?: PromptEvaluationLimits;
-    budget?: PromptBudget;
     compilerVersion?: PromptCompilerVersion;
   }
 ): PromptCompilation {

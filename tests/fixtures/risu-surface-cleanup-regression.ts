@@ -6,6 +6,7 @@ import { mountRisuMessageSurface } from '../../web/risu-message-surface.js';
 export function runSurfaceCleanupRegressions(mount: HTMLElement): string[] {
   const article = document.createElement('section');
   const host = document.createElement('div');
+  host.className = 'risu-message-surface';
   article.append(host);
   mount.append(article);
   const surface = mountRisuMessageSurface(host, prepareRisuMessage('<p>선택할 본문</p>'), () => {});

@@ -25,13 +25,6 @@ export function captureCopiedMessages(
   });
 }
 
-export function copiedMessageTexts(messages: readonly CopiedMessageState[]): string[] {
-  return messages.flatMap((state) => [
-    ...(state.changes?.updated.map((item) => item.message.text) ?? []),
-    ...(state.authored?.messages.map((message) => message.data) ?? []),
-  ]);
-}
-
 export function mapCopiedMessageTexts(
   messages: CopiedMessageState[],
   transform: (text: string) => string

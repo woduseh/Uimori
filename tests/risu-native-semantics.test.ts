@@ -251,7 +251,6 @@ test('native ChatML and history preserve roles and text despite retired settings
   );
   const result = compileRisuPrompt(input.profile!.promptPresets!.main!.program, {
     slots: { postEverything: '' },
-    names: { char: 'Bot', user: 'Reader' },
     examples: [{ role: 'assistant', text: 'Example reply' }],
     history: [
       { id: 'first', role: 'assistant', sourceKind: 'authored-start', text: 'Hi' },
@@ -298,7 +297,6 @@ test.each(['risu-native-prompt-2'] as const)(
     const result = compileRisuPrompt(input.profile!.promptPresets!.main!.program, {
       compilerVersion,
       slots: { globalNote: 'Saved note', postEverything: 'Saved post' },
-      names: { char: 'Bot', user: 'Reader' },
       history: [{ id: 'request', role: 'user', text: 'Go', current: true }],
     });
     expect(result.compilerVersion).toBe(compilerVersion);
