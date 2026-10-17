@@ -1,4 +1,5 @@
 import { initPushSchema } from './push-schema.js';
+import { initSceneContext } from './scene-context.js';
 import { initReadingState } from './reading-state.js';
 import { initManuscriptSearch } from './search-schema.js';
 import type { DatabaseSync } from 'node:sqlite';
@@ -56,6 +57,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
   if (previous === DATABASE_SCHEMA_VERSION) {
     initStoryGuide(db);
     initHelperSeeds(db);
+    initSceneContext(db);
     initDatabaseReadIndexes(db);
     return;
   }
@@ -64,6 +66,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initializeFresh();
     initHelperSeeds(db);
     initStoryGuide(db);
+    initSceneContext(db);
     initIllustrations(db);
     initOutline(db);
     initLoreContextDefaults(db);

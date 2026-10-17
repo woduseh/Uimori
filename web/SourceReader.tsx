@@ -37,6 +37,8 @@ import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { CopyIcon, EditIcon, IllustrationIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
 import {
+  Eye,
+  EyeOff,
   GitFork,
   Info,
   Languages,
@@ -372,6 +374,28 @@ function SourceReaderContent({
     restoreEditor.current = true;
     setEditor(null);
   };
+  const context = source.sceneContext;
+  const sceneEnabled = context?.sceneEnabled !== false;
+  const requestEnabled = context?.requestEnabled !== false;
+  const effectiveRequest = context?.requestText ?? request ?? '';
+  const saveSceneContext = async (change: {
+    requestText?: string;
+    requestEnabled?: boolean;
+    sceneEnabled?: boolean;
+  }): Promise<boolean> => {
+    try {
+      await api(
+        `/sources/${source.id}/scene-context`,
+        { expectedRevision: context?.revision ?? 0, ...change },
+        'PATCH'
+      );
+      await refresh();
+      return true;
+    } catch (error) {
+      onError(error instanceof Error ? error.message : '기록 변경에 실패했어요.');
+      return false;
+    }
+  };
   const requestPending = useRef(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [costOpen, setCostOpen] = useState(false);
@@ -566,10 +590,14 @@ function SourceReaderContent({
         : '장면 ' + (sceneNumber ?? index + 1)}
     </span>
   );
-  const badges =
-    validTranslation?.manual && mode === 'translation' ? (
-      <span className="scene-badge">직접 수정한 번역</span>
-    ) : null;
+  const badges = (
+    <>
+      {!sceneEnabled && <span className="scene-badge">문맥에서 제외됨</span>}
+      {validTranslation?.manual && mode === 'translation' && (
+        <span className="scene-badge">직접 수정한 번역</span>
+      )}
+    </>
+  );
   const trailing = (
     <div className="segmented compact" role="group" aria-label="원문과 번역 보기">
       <button
@@ -621,7 +649,7 @@ function SourceReaderContent({
   return (
     <article
       ref={container}
-      className="source"
+      className={`source${!sceneEnabled ? ' scene-context-muted' : ''}`}
       id={`source-${source.id}`}
       data-testid="source"
       data-source-id={source.id}
@@ -647,9 +675,16 @@ function SourceReaderContent({
           {packageStart?.mode !== 'authored' && (request || requestImages?.length) && (
             <RequestMessage
               runId={source.runId}
-              request={request ?? ''}
+              request={effectiveRequest}
               images={requestImages}
-              displayText={presentation?.data?.request?.text}
+              displayText={
+                context?.requestText == null ? presentation?.data?.request?.text : undefined
+              }
+              requestEnabled={requestEnabled}
+              onSave={(value) => saveSceneContext({ requestText: value })}
+              onToggleRequest={async () => {
+                await saveSceneContext({ requestEnabled: !requestEnabled });
+              }}
               compactActions={latest ? 'always' : 'tap'}
               onSubmit={onEditRequest}
               onConfirm={onCheckRequest}
@@ -668,6 +703,11 @@ function SourceReaderContent({
             )}
             <div className="scene-header-tools">{trailing}</div>
           </div>
+          {!sceneEnabled && (
+            <p className="scene-context-notice" role="status">
+              이 장면의 입력과 본문은 이후 생성 문맥에서 제외돼요. 이미 생성된 다른 장면은 유지돼요.
+            </p>
+          )}
           {!activityNode && <ContextSummaryStatus summary={contextSummary} />}
         </div>
         <div slot="body" data-uimori-part="body">
@@ -902,7 +942,24 @@ function SourceReaderContent({
                 : null;
             }}
           />
-          <ActionMenu label="장면 작업 메뉴" placement="top">
+          <ActionMenu label="장면 작업 메뉴" placement="top" viewport>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!!editor || !!pending || retryDisabled}
+              onClick={() =>
+                void action('scene-context', async () => {
+                  await saveSceneContext({ sceneEnabled: !sceneEnabled });
+                })
+              }
+            >
+              {sceneEnabled ? (
+                <EyeOff size={18} aria-hidden="true" />
+              ) : (
+                <Eye size={18} aria-hidden="true" />
+              )}
+              {sceneEnabled ? '장면을 문맥에서 제외' : '장면을 문맥에 포함'}
+            </button>
             {onAskHelper && (
               <button
                 type="button"

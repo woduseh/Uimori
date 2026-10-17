@@ -23,6 +23,7 @@ import { RisuContentError } from '../core/risu-content.js';
 import { resourceRoutes } from './resource-routes.js';
 import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
+import { updateSceneContext } from './scene-context.js';
 import { HttpError, fields, number, record, text } from './request-validation.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
@@ -1241,6 +1242,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     publish(job.chatId);
     pumpJobs();
     return job;
+  });
+  app.patch<{ Params: { id: string } }>('/api/sources/:id/scene-context', async (request) => {
+    const result = updateSceneContext(store, request.params.id, request.body);
+    sceneUpdated(request.params.id);
+    return result;
   });
   app.get<{ Params: { id: string } }>('/api/sources/:id/versions', async (request) =>
     sourceVersions(store, request.params.id)

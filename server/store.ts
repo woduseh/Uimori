@@ -1,5 +1,6 @@
 import { enqueueTerminalNotification } from './push-events.js';
 import { initializeActivityFeed } from './activity-feed.js';
+
 import { normalizeChatSettings } from '../core/chat-settings.js';
 import { autoTranslationDefaults } from './auto-translation-defaults.js';
 import { pruneSourceEdits, pruneTranslationHistory } from './text-retention.js';
@@ -293,8 +294,11 @@ export class Store {
     // Keep source integrity checks while projecting the latest edit in one read per ancestor.
     const read =
       this.db.prepare(`SELECT s.id,s.chat_id AS chatId,s.parent_revision AS parentRevision,
-      s.text,s.hash,e.text AS editedText,e.hash AS editedHash
+      s.text,s.hash,e.text AS editedText,e.hash AS editedHash,
+      sc.revision AS sceneControlRevision,sc.request_text AS sceneControlRequest,
+      sc.request_enabled AS sceneControlRequestEnabled,sc.scene_enabled AS sceneControlSceneEnabled
       FROM sources s JOIN runs r ON r.id=s.run_id
+      LEFT JOIN scene_context sc ON sc.source_id=s.id
       LEFT JOIN source_edits e ON e.source_id=s.id
         AND e.revision=(SELECT MAX(revision) FROM source_edits WHERE source_id=s.id)
       WHERE s.id=?`);
@@ -311,6 +315,10 @@ export class Store {
             editedText: string | null;
             editedHash: string | null;
             policy: string | null;
+            sceneControlRevision: number | null;
+            sceneControlRequest: string | null;
+            sceneControlRequestEnabled: number | null;
+            sceneControlSceneEnabled: number | null;
           }
         | undefined;
       if (!source) throw new HttpError(404, 'Source not found');
@@ -318,6 +326,12 @@ export class Store {
       if (source.editedText !== null)
         validateSourceIdentity({ ...source, text: source.editedText, hash: source.editedHash! });
       history.push({
+        sceneContext: {
+          revision: source.sceneControlRevision ?? 0,
+          requestText: source.sceneControlRequest,
+          requestEnabled: source.sceneControlRequestEnabled !== 0,
+          sceneEnabled: source.sceneControlSceneEnabled !== 0,
+        },
         revision: source.id,
         text: source.editedText ?? source.text,
         ...(source.editedHash !== null && source.editedHash !== source.hash

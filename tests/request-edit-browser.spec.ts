@@ -1,10 +1,16 @@
 import { DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
-import type { Chat, ChatDetail, Run } from '../core/types.js';
+import type { Chat, ChatDetail, Run, Source } from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 async function detail(request: APIRequestContext, id: string): Promise<ChatDetail> {
   return (await request.get(`/api/chats/${id}`)).json();
+}
+async function readerSource(request: APIRequestContext, id: string): Promise<Source> {
+  const result = (await request.get(`/api/chats/${id}/reader`)).json() as Promise<{
+    sources: Source[];
+  }>;
+  return (await result).sources[0];
 }
 async function seed(request: APIRequestContext, width: number, text = '원래 합성 요청') {
   const response = await postFixtureChat(request, { data: { title: `요청 편집 합성 ${width}` } });
@@ -68,6 +74,50 @@ for (const width of DEFAULT_WIDTHS) {
     expect(await error.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: info.outputPath(`source-error-${width}.png`) });
   });
+  test(`SCCTX01 ${width} editing and excluding past input and scene keeps the original run intact`, async ({
+    page,
+    request,
+  }) => {
+    const { chat, run } = await seed(request, width);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    const source = page.getByTestId('source').first();
+    const message = source.getByTestId('source-request');
+    await message.hover();
+    if (width !== DESKTOP_WIDTH) await message.click();
+    await source.getByRole('button', { name: '요청 편집', exact: true }).click();
+    await page.getByRole('textbox', { name: '요청 수정 내용' }).fill('저장된 수정 입력');
+    await page.getByRole('button', { name: '입력 저장' }).click();
+    await expect(message).toContainText('저장된 수정 입력');
+    await expect
+      .poll(async () => (await readerSource(request, chat.id)).sceneContext?.requestText)
+      .toBe('저장된 수정 입력');
+    await message.hover();
+    if (width !== DESKTOP_WIDTH) await message.click();
+    await source.getByRole('button', { name: '입력을 문맥에서 제외' }).click();
+    await expect(message).toHaveClass(/request-context-disabled/);
+    await expect
+      .poll(async () => (await readerSource(request, chat.id)).sceneContext?.requestEnabled)
+      .toBe(false);
+
+    await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+    await source.getByRole('button', { name: '장면을 문맥에서 제외' }).click();
+    await expect(source).toHaveClass(/scene-context-muted/);
+    await expect(source.locator('.scene-context-notice')).toContainText('이후 생성 문맥에서 제외');
+    await page.reload();
+    const restored = page.getByTestId('source').first();
+    await expect(restored).toHaveClass(/scene-context-muted/);
+    await restored.getByLabel('장면 작업 메뉴', { exact: true }).click();
+    await restored.getByRole('button', { name: '장면을 문맥에 포함' }).click();
+    await expect(restored).not.toHaveClass(/scene-context-muted/);
+    const after = await detail(request, chat.id);
+    expect(after.runs.find((item) => item.id === run.id)?.request).toBe('원래 합성 요청');
+    expect((await readerSource(request, chat.id)).sceneContext).toMatchObject({
+      requestText: '저장된 수정 입력',
+      requestEnabled: false,
+      sceneEnabled: true,
+    });
+  });
   test(`REDIT01 ${width} inline request editing preserves drafts and original answers while copying a chat`, async ({
     page,
     request,
@@ -117,7 +167,7 @@ for (const width of DEFAULT_WIDTHS) {
       if (calls.length === 1) await route.abort('failed');
       else await route.fulfill({ response });
     });
-    await page.getByRole('button', { name: '수정한 요청 보내기' }).click();
+    await page.getByRole('button', { name: '수정 후 재생성' }).click();
     await expect(field).toHaveValue('수정한 합성 요청');
     await expect(field).toBeDisabled();
     await page.getByRole('button', { name: '이전 요청 확인' }).click();
