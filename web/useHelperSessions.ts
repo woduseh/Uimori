@@ -25,6 +25,53 @@ function remember(key: string, value: string | null) {
     // Selection remains available in the current window.
   }
 }
+type PendingHelperCreation = {
+  request: { scope: HelperScope; requestKey: string };
+  storage: Storage;
+};
+function pendingHelperCreation(key: string, scope: HelperScope): PendingHelperCreation {
+  const stores = [() => localStorage, () => sessionStorage];
+  // Restore before choosing where to write: a fallback request must survive a reload,
+  // even if localStorage has become writable in the meantime.
+  for (const getStorage of stores) {
+    try {
+      const storage = getStorage();
+      const saved = JSON.parse(storage.getItem(key) ?? 'null') as {
+        scope?: HelperScope;
+        requestKey?: unknown;
+      } | null;
+      if (
+        typeof saved?.requestKey === 'string' &&
+        saved.requestKey.length > 0 &&
+        JSON.stringify(saved.scope) === JSON.stringify(scope)
+      )
+        return { request: { scope, requestKey: saved.requestKey }, storage };
+    } catch {
+      // The other store may still hold the pending request.
+    }
+  }
+  const request = { scope, requestKey: crypto.randomUUID() };
+  const value = JSON.stringify(request);
+  for (const getStorage of stores) {
+    try {
+      const storage = getStorage();
+      storage.setItem(key, value);
+      return { request, storage };
+    } catch {
+      // Never send a new request before its retry key has been stored.
+    }
+  }
+  throw new Error(
+    '브라우저에 대화 생성 요청을 보관하지 못했어요. 저장 공간이나 사이트 저장소 설정을 확인한 뒤 다시 시도해 주세요.'
+  );
+}
+function forgetHelperCreation(key: string, pending: PendingHelperCreation | undefined) {
+  try {
+    pending?.storage.removeItem(key);
+  } catch {
+    // A storage cleanup failure must not turn an acknowledged creation into a failure.
+  }
+}
 export function forgetHelperSession(conversation: HelperConversation) {
   for (const key of [
     `uimori:helper-session:${helperGroupKey(conversation.scope)}`,
@@ -200,17 +247,11 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
     setErrors((old) => ({ ...old, [group]: '' }));
     const key = `uimori:helper-create:${scopeKey}`;
     const selectionVersion = selectionVersions.current.get(group) ?? 0;
+    let pending: PendingHelperCreation | undefined;
     try {
-      let request: { scope: HelperScope; requestKey: string };
-      try {
-        request = JSON.parse(read(key) ?? 'null') ?? { scope, requestKey: crypto.randomUUID() };
-      } catch {
-        request = { scope, requestKey: crypto.randomUUID() };
-      }
-      // An uncertain create must reuse the same key after a reload.
-      localStorage.setItem(key, JSON.stringify(request));
-      const value = await api<HelperConversation>('/helper/conversations/new', request);
-      remember(key, null);
+      pending = pendingHelperCreation(key, scope);
+      const value = await api<HelperConversation>('/helper/conversations/new', pending.request);
+      forgetHelperCreation(key, pending);
       versions.current.set(group, (versions.current.get(group) ?? 0) + 1);
       if (alive.current) {
         if ((selectionVersions.current.get(group) ?? 0) === selectionVersion) select(value);
@@ -222,7 +263,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
       }
     } catch (cause) {
       if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status))
-        remember(key, null);
+        forgetHelperCreation(key, pending);
       if (alive.current)
         setErrors((old) => ({
           ...old,
