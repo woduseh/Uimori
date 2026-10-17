@@ -30,10 +30,11 @@ type PendingHelperCreation = {
   storage: Storage;
 };
 function pendingHelperCreation(key: string, scope: HelperScope): PendingHelperCreation {
-  const stores = [() => localStorage, () => sessionStorage];
-  // Restore before choosing where to write: a fallback request must survive a reload,
-  // even if localStorage has become writable in the meantime.
-  for (const getStorage of stores) {
+  const local = () => localStorage;
+  const session = () => sessionStorage;
+  // This tab's fallback request takes precedence over another tab's shared request,
+  // even after a reload has made localStorage writable again.
+  for (const getStorage of [session, local]) {
     try {
       const storage = getStorage();
       const saved = JSON.parse(storage.getItem(key) ?? 'null') as {
@@ -52,7 +53,7 @@ function pendingHelperCreation(key: string, scope: HelperScope): PendingHelperCr
   }
   const request = { scope, requestKey: crypto.randomUUID() };
   const value = JSON.stringify(request);
-  for (const getStorage of stores) {
+  for (const getStorage of [local, session]) {
     try {
       const storage = getStorage();
       storage.setItem(key, value);

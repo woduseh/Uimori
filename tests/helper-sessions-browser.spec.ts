@@ -441,3 +441,89 @@ test('HSESSION07 unavailable creation storage explains the failure without sendi
   await expect(picker.locator('option:not([disabled])')).toHaveCount(count);
   await page.screenshot({ path: info.outputPath('helper-create-storage-unavailable.png') });
 });
+
+test('HSESSION08 a fallback retry keeps its own request when another tab has a pending localStorage creation', async ({
+  page,
+  request,
+  context,
+}) => {
+  const chat = (await (
+    await postFixtureChat(request, { data: { title: `여러 탭 생성 복구 ${randomUUID()}` } })
+  ).json()) as Chat;
+  const key = `uimori:helper-create:${JSON.stringify({ kind: 'chat', chatId: chat.id })}`;
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const panel = page.locator('#helper-panel');
+  await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (this === localStorage && key.startsWith('uimori:helper-create:'))
+        throw new DOMException('Full', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  const payloads: unknown[] = [];
+  const ids: string[] = [];
+  await page.route('**/api/helper/conversations/new', async (route) => {
+    payloads.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    ids.push(((await response.json()) as { id: string }).id);
+    if (payloads.length === 1) await route.abort('failed');
+    else await route.fulfill({ response });
+  });
+  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  const pending = await page.evaluate((key) => sessionStorage.getItem(key), key);
+  expect(pending).not.toBeNull();
+
+  // Resolve the storage failure, then let another tab retain its own uncertain request.
+  await page.reload();
+  await openHelper(page);
+  await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+  const other = await context.newPage();
+  try {
+    await other.goto(`/?chat=${chat.id}`);
+    await openHelper(other);
+    const otherPanel = other.locator('#helper-panel');
+    await expect(otherPanel.getByLabel('도우미에게 요청')).toBeEnabled();
+    const otherIds: string[] = [];
+    await other.route('**/api/helper/conversations/new', async (route) => {
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      otherIds.push(((await response.json()) as { id: string }).id);
+      if (otherIds.length === 1) await route.abort('failed');
+      else await route.fulfill({ response });
+    });
+    await otherPanel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await expect(otherPanel.getByRole('alert')).toBeVisible();
+    const otherPending = await other.evaluate((key) => localStorage.getItem(key), key);
+    expect(otherPending).not.toBeNull();
+    expect(otherPending).not.toBe(pending);
+
+    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await expect(panel.getByRole('button', { name: '새 도우미 세션', exact: true })).toBeEnabled();
+    expect(payloads).toHaveLength(2);
+    expect(payloads[1]).toEqual(payloads[0]);
+    expect(ids[1]).toBe(ids[0]);
+    await expect(panel.getByLabel('도우미 세션 선택')).toHaveValue(ids[0]);
+    expect(
+      await page.evaluate((key) => [sessionStorage.getItem(key), localStorage.getItem(key)], key)
+    ).toEqual([null, otherPending]);
+
+    await otherPanel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await expect(
+      otherPanel.getByRole('button', { name: '새 도우미 세션', exact: true })
+    ).toBeEnabled();
+    expect(otherIds).toHaveLength(2);
+    expect(otherIds[1]).toBe(otherIds[0]);
+    await expect(otherPanel.getByLabel('도우미 세션 선택')).toHaveValue(otherIds[0]);
+    expect(await other.evaluate((key) => localStorage.getItem(key), key)).toBeNull();
+    const persisted = await request.get(`/api/helper/conversations?kind=chat&chatId=${chat.id}`);
+    expect(persisted.ok()).toBe(true);
+    expect(await persisted.json()).toHaveLength(3);
+  } finally {
+    await other.close();
+  }
+});
