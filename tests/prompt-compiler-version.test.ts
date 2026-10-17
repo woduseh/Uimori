@@ -7,6 +7,7 @@ import { buildMainProviderRequest } from '../server/main-request.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { defaultProfile, type Connection } from '../core/product.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 
 const bound: Connection = {
   id: 'fixture-connection',
@@ -78,6 +79,39 @@ test('the current native compiler keeps host context and version across request 
       .content[0] as { type: 'text'; text: string }
   ).text += ' ';
   expect(() => attachMainHostContext(tampered)).toThrow('NATIVE_HOST_CONTEXT_COLLISION');
+});
+
+test('prompt compilation preserves the aggregate variable-default warning without changing its inputs', () => {
+  const input = snapshot([]);
+  const value = 'x'.repeat(180_000);
+  input.profile!.variableState = {
+    revision: 1,
+    values: { savedA: value, savedB: value, savedC: value },
+  };
+  input.profile!.promptPresets = {
+    main: {
+      id: 'variable-defaults',
+      revision: 1,
+      title: 'Synthetic variable defaults',
+      role: 'main',
+      program: nativePrompt('Active instructions.', {
+        templateDefaultVariables: ['defaultA', 'defaultB', 'defaultC']
+          .map((key) => `${key}=${value}`)
+          .join('\n'),
+      }),
+    },
+  };
+  const before = structuredClone(input);
+
+  const compiled = compileSnapshotPrompt(input);
+
+  expect(compiled.promptCompilation!.warnings).toContain('TEMPLATE_VARIABLE_DEFAULTS_LIMIT');
+  expect(compiled.promptCompilation!.messages).toContainEqual(
+    expect.objectContaining({
+      content: [{ type: 'text', text: 'Active instructions.' }],
+    })
+  );
+  expect(input).toEqual(before);
 });
 
 test.each(['risu-prompt-1', 'future-prompt', undefined])(

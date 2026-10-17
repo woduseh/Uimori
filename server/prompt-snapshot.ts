@@ -1,6 +1,5 @@
 import { applyMessageChanges } from '../core/message-changes.js';
 import { nativeCharacterExamples, nativePromptSlots } from './native-prompt-slots.js';
-import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { effectiveRisuControls } from '../core/risu-effective-controls.js';
 import { loreHistory } from '../core/lore-context.js';
 import { placeNativeRisuLore } from '../core/risu-native-lore.js';
@@ -20,7 +19,7 @@ import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { compiledPackages, type ResolvedPackage } from '../core/package-context.js';
-import { executionContext } from '../core/execution-context.js';
+import { resolveTemplateVariableContext } from '../core/template-variables.js';
 import { projectedLogicalHistory } from '../core/context-projection.js';
 import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-native-preset.js';
 
@@ -225,13 +224,10 @@ function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedP
     ...(snapshot.nativeRisuExecution?.requestPresent === false ? [] : [current]),
   ];
   const preset = snapshot.profile?.promptPresets?.main;
-  const identity = snapshot.profile ? packageIdentityFromProfile(snapshot.profile) : undefined;
   return {
     examples: nativeCharacterExamples(snapshot, packages)?.messages ?? [],
-    names: { char: identity?.bot.name ?? 'Character', user: identity?.user.name ?? 'User' },
     slots,
     history,
-    runtime: executionContext(snapshot),
     values: preset
       ? snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values
       : undefined,
@@ -260,7 +256,10 @@ export function compileSnapshotPrompt(
   });
   if (nativeRisuPresetPending(snapshot))
     promptCompilation.warnings.push('RISU_NATIVE_PRESET_PENDING');
-  if (context.runtime.variableDefaultsError === 'TEMPLATE_VARIABLE_DEFAULTS_LIMIT')
+  if (
+    resolveTemplateVariableContext(snapshot.profile).variableDefaultsError ===
+    'TEMPLATE_VARIABLE_DEFAULTS_LIMIT'
+  )
     promptCompilation.warnings.push('TEMPLATE_VARIABLE_DEFAULTS_LIMIT');
   const hosted = attachMainHostContext({ ...snapshot, promptCompilation });
   return {

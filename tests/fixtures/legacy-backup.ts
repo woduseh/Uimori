@@ -1,13 +1,35 @@
 import type { Content } from '../../core/product.js';
 import type { Settings } from '../../core/types.js';
-import type { ChatBackup } from '../../core/chat-backup.js';
+import type { ChatBackup, CopiedMessageState } from '../../core/chat-backup.js';
+import type { ChatTranscript } from '../../core/chat-transcript.js';
 import type { NativeTransferFile } from '../../core/native-transfer.js';
 import type { Store } from '../../server/store.js';
 import { captureChatCopy } from '../../server/chat-copy.js';
-import { copiedMessageTexts } from '../../server/chat-copy-messages.js';
-import { transcriptImages } from '../../server/chat-media.js';
 import { captureResourceBundle } from '../../server/resource-bundle.js';
 import { encodedImage } from '../../server/image-storage.js';
+
+function copiedMessageTexts(messages: readonly CopiedMessageState[]): string[] {
+  return messages.flatMap((state) => [
+    ...(state.changes?.updated.map((item) => item.message.text) ?? []),
+    ...(state.authored?.messages.map((message) => message.data) ?? []),
+  ]);
+}
+
+/** Include bytes referenced by authored Markdown/HTML even when they are not part of the bot. */
+function transcriptImages(store: Store, transcripts: readonly ChatTranscript[]) {
+  const hashes = new Set<string>();
+  for (const transcript of transcripts)
+    for (const entry of transcript.entries) {
+      for (const image of entry.requestImages ?? []) {
+        hashes.add(image.hash);
+        hashes.add(image.input.hash);
+      }
+      for (const text of [entry.text, entry.translation ?? ''])
+        for (const match of text.matchAll(/\/api\/package-image-blobs\/([a-f0-9]{64})/gu))
+          hashes.add(match[1]);
+    }
+  return [...hashes].map((hash) => encodedImage(store.db, hash));
+}
 
 /** Test-only v1 JSON input, never a product output path or deprecated HTTP API. */
 export function legacyResourceBundleFixture(
