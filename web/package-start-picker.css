@@ -1,0 +1,14 @@
+.package-start-preview > summary {
+  padding-block: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.package-start-preview-body {
+  max-height: 320px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}

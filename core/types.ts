@@ -262,7 +262,10 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   executionMode?: import('./product.js').ModelExecutionMode;
   /** Read-time projection of the failing attempt's provider verdict; never stored on the run. */
   rejection?: import('./provider-rejection.js').ProviderRejection;
-  packageStart?: Pick<import('./package-start.js').PackageStartSnapshot, 'mode' | 'title'>;
+  packageStart?: Pick<
+    import('./package-start.js').PackageStartSnapshot,
+    'mode' | 'title' | 'startId' | 'packageId' | 'packageRevision'
+  >;
   hasPackages?: boolean;
 };
 export type ReaderActivity = {
@@ -301,6 +304,7 @@ export type ReaderDetail = Omit<ChatDetail, 'runs' | 'attempts'> & {
     responseActivity?: ReaderActivity[];
     presentationRevisions: Record<string, string>;
     headSourceHash?: string | null;
+    canChangePackageStart?: boolean;
     activeJobs: number;
     cursor: number;
     order: string[];

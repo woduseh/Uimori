@@ -42,12 +42,14 @@ import {
   GitFork,
   Info,
   Languages,
+  ListRestart,
   MessageCircleQuestion,
   ReceiptText,
   Save,
   X,
 } from 'lucide-react';
 import { Dialog } from './Dialog.js';
+import { PackageStartPicker, type PackageStartSelection } from './PackageStartPicker.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
@@ -93,6 +95,8 @@ type ReaderProps = {
   contextSummary?: ReaderRun['contextSummary'];
   estimatedCost?: ReaderRun['estimatedCost'];
   packageStart?: { mode: 'authored'; title: string };
+  startSelection?: PackageStartSelection;
+  onStartChanged?: () => void;
   /** Wraps the scene header in the per-response activity panel; falsy keeps a plain header. */
   activity?: (slots: SceneHeaderSlots) => ReactNode;
   hasPackages?: boolean;
@@ -208,6 +212,8 @@ function SourceReaderContent({
   contextSummary,
   estimatedCost,
   packageStart,
+  startSelection,
+  onStartChanged,
   activity,
   hasPackages,
   presentationRefreshKey,
@@ -500,6 +506,7 @@ function SourceReaderContent({
   });
   const [illustrationDialog, setIllustrationDialog] = useState(false);
   const [retryDialog, setRetryDialog] = useState(false);
+  const [startPickerOpen, setStartPickerOpen] = useState(false);
   const [illustrationCount, setIllustrationCount] = useState(1);
   const illustrationRequestKey = useRef('');
   const previousHash = useRef(source.hash);
@@ -947,6 +954,24 @@ function SourceReaderContent({
             }}
           />
           <ActionMenu label="장면 작업 메뉴" placement="top" viewport>
+            {startSelection && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={!!editor || !!pending || retryDisabled}
+                onClick={(event) => {
+                  const menu = event.currentTarget.closest('details');
+                  if (menu) {
+                    menu.open = false;
+                    menu.querySelector('summary')?.focus({ preventScroll: true });
+                  }
+                  setStartPickerOpen(true);
+                }}
+              >
+                <ListRestart size={18} aria-hidden="true" />
+                시작문 바꾸기
+              </button>
+            )}
             <button
               type="button"
               className="secondary"
@@ -1100,6 +1125,18 @@ function SourceReaderContent({
               </button>
             )}
           </ActionMenu>
+          {startSelection && (
+            <PackageStartPicker
+              open={startPickerOpen}
+              onClose={() => setStartPickerOpen(false)}
+              source={source}
+              selection={startSelection}
+              disabled={!!editor || !!pending || retryDisabled}
+              refresh={refresh}
+              onError={onError}
+              onChanged={onStartChanged}
+            />
+          )}
           <Dialog
             open={retryDialog}
             onClose={() => setRetryDialog(false)}

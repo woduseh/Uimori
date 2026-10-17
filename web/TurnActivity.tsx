@@ -121,6 +121,7 @@ function TurnActivityContent({
     const timer = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(timer);
   }, [running]);
+  const authored = run.packageStart?.mode === 'authored';
   const mainLabel =
     run.packageStart?.mode === 'authored'
       ? '작성된 도입문'
@@ -131,7 +132,7 @@ function TurnActivityContent({
         : `본문 ${labels[run.status] ?? run.status}`;
   const important = entries.filter((item) => item.status !== 'completed');
   const summary = [
-    mainLabel,
+    ...(authored ? [] : [mainLabel]),
     ...important.map(
       (item) =>
         item.summary ?? `${item.label ?? names[item.kind]} ${labels[item.status] ?? item.status}`
@@ -151,7 +152,14 @@ function TurnActivityContent({
   const tone = uncertain ? 'uncertain' : hasIssue ? 'issue' : running ? 'running' : 'done';
   // A finished response shows only the check; its text stays for assistive technology.
   const quiet = tone === 'done' && !!source;
-  const text = uncertain ? '연결 확인 중 · 진행 상태 미확인' : summary;
+  const text = uncertain ? '연결 확인 중 · 진행 상태 미확인' : summary || '후속 작업 완료';
+  if (authored && !entries.length)
+    return (
+      <div className="scene-header-lead">
+        {leading}
+        {badges}
+      </div>
+    );
   return (
     <TurnStatus
       tone={tone}
@@ -171,7 +179,7 @@ function TurnActivityContent({
             연결을 다시 확인하는 중이에요. 아래는 마지막으로 확인한 상태예요.
           </p>
         )}
-        {source && source.editRevision && source.editRevision > 0 ? (
+        {!authored && source && source.editRevision && source.editRevision > 0 ? (
           <p className="muted">
             본문 생성 기록은 생성 당시 원문 기준이에요. 후속 작업은 현재 수정본에 연결된 항목을
             보여줘요.

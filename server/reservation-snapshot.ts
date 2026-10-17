@@ -77,7 +77,9 @@ export function freezeReservationSnapshot(
   }
   if (base.profile && !translationPreview) {
     base = { ...base, profile: chatVariableProfile(store, base.chatId, base.profile) };
-    if (base.replacement) {
+    // Changing an authored opening does not rewind explicit user variable settings.
+    // Its admission excludes native actions and generated conversation.
+    if (base.replacement && base.packageStart?.mode !== 'authored') {
       const live = readChatVariables(store, base.chatId);
       const checkpoint = base.parentRevision
         ? store.db

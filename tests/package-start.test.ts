@@ -1,9 +1,12 @@
+import { readerDetail } from '../server/reader.js';
+import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
+import { sourceVersions } from '../server/source-editing.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
-import { createPackageStart } from '../server/package-start.js';
+import { canChangePackageStart, createPackageStart } from '../server/package-start.js';
 import { resolvePackageStart, validatePackageStarts } from '../core/package-start.js';
 import type { Content } from '../core/product.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -134,3 +137,138 @@ test('greeting selection rejects stale ownership and subsequent attempts without
     createPackageStart(f.store, f.chat.id, { ...f.command, idempotencyKey: 'another' })
   ).toThrow();
 });
+
+function selectedStart(f: ReturnType<typeof fixture>) {
+  const opening = createPackageStart(f.store, f.chat.id, f.command).run;
+  const source = f.store.source(opening.sourceRevision!);
+  return {
+    source,
+    command: {
+      ...f.command,
+      startId: 'start-1',
+      expectedRevision: source.id,
+      expectedSourceHash: source.hash,
+      idempotencyKey: 'change-opening',
+    },
+  };
+}
+
+test('changing the opening keeps one active source and preserves edited originals, translations and explicit variables', () => {
+  const f = fixture();
+  const initial = selectedStart(f);
+  const edited = f.store.editSource(initial.source.id, {
+    text: 'My edited opening.',
+    expectedRevision: 0,
+  });
+  const translation = f.store.editTranslation(edited.id, {
+    text: 'Saved translation.',
+    expectedRevision: 0,
+    expectedSourceHash: edited.hash,
+  });
+  writeChatVariables(f.store, f.chat.id, {
+    expectedRevision: 0,
+    expectedSourceHash: edited.hash,
+    idempotencyKey: 'personal-setting',
+    values: { $name: 'Reader' },
+  });
+  const pending = f.store.retranslate(edited.id);
+  expect(canChangePackageStart(f.store, f.chat.id)).toBe(true);
+  const changed = createPackageStart(f.store, f.chat.id, {
+    ...initial.command,
+    expectedSourceHash: edited.hash,
+  });
+  const next = f.store.source(changed.run.sourceRevision!);
+  expect(changed.created).toBe(true);
+  expect(next.text).toBe('A second opening.');
+  expect(next.parentRevision).toBeNull();
+  expect(f.store.history(next.id).map((entry) => entry.text)).toEqual(['A second opening.']);
+  expect(sourceVersions(f.store, edited.id).versions.map((entry) => entry.text)).toEqual([
+    'My edited opening.',
+    initial.source.text,
+  ]);
+  expect(f.store.job(translation.id).result?.text).toBe('Saved translation.');
+  expect(f.store.job(translation.id).status).toBe('completed');
+  expect(f.store.job(pending.id).status).toBe('cancelled');
+  expect(readChatVariables(f.store, f.chat.id).values).toEqual({ $name: 'Reader' });
+  expect(changed.run.usage?.modelCalls).toBe(0);
+  const detail = readerDetail(f.store, f.chat.id, {});
+  expect(detail.reader.order).toEqual([next.id]);
+  expect(detail.reader.canChangePackageStart).toBe(true);
+  expect(detail.runs[0].packageStart).toMatchObject({
+    startId: 'start-1',
+    packageId: f.content.id,
+    packageRevision: f.content.revision,
+  });
+});
+
+test('opening changes reject stale hashes and heads and replay the exact result after another selection', () => {
+  const f = fixture();
+  const initial = selectedStart(f);
+  expect(() =>
+    createPackageStart(f.store, f.chat.id, {
+      ...initial.command,
+      expectedSourceHash: '0'.repeat(64),
+    })
+  ).toThrow('Source hash conflict');
+  const first = createPackageStart(f.store, f.chat.id, initial.command);
+  expect(() =>
+    createPackageStart(f.store, f.chat.id, { ...initial.command, idempotencyKey: 'stale' })
+  ).toThrow('Source revision conflict');
+  const source = f.store.source(first.run.sourceRevision!);
+  createPackageStart(f.store, f.chat.id, {
+    ...initial.command,
+    startId: 'start-0',
+    expectedRevision: source.id,
+    expectedSourceHash: source.hash,
+    idempotencyKey: 'change-back',
+  });
+  const replay = createPackageStart(f.store, f.chat.id, initial.command);
+  expect(replay.created).toBe(false);
+  expect(replay.run.id).toBe(first.run.id);
+  expect(() =>
+    createPackageStart(f.store, f.chat.id, { ...initial.command, startId: 'start-0' })
+  ).toThrow('Idempotency key reused');
+});
+
+test.each(['ordinary', 'native-action'] as const)(
+  'opening cannot change after a %s reservation, including cancelled attempts',
+  (kind) => {
+    const f = fixture();
+    const initial = selectedStart(f);
+    const chat = f.store.chat(f.chat.id);
+    const run = f.store.createRun(
+      chat.id,
+      {
+        request: 'Continue',
+        expectedRevision: chat.headRevision,
+        expectedSettingsRevision: chat.settingsRevision,
+        idempotencyKey: 'follow-up',
+      },
+      () => ({
+        chatId: chat.id,
+        request: 'Continue',
+        parentRevision: chat.headRevision,
+        settingsRevision: chat.settingsRevision,
+        settings: chat.settings,
+        history: f.store.history(chat.headRevision),
+        resources: [],
+        ...(kind === 'native-action'
+          ? {
+              nativeRisuAuthored: {
+                version: 1 as const,
+                action: 'button',
+                messages: [],
+                commandHash: '0'.repeat(64),
+              },
+            }
+          : {}),
+      })
+    ).run;
+    f.store.finishRun(run.id, 'cancelled', 'Cancelled by user');
+    expect(canChangePackageStart(f.store, chat.id)).toBe(false);
+    expect(() => createPackageStart(f.store, chat.id, initial.command)).toThrow(
+      'PACKAGE_START_CONVERSATION_STARTED'
+    );
+    expect(f.store.chat(chat.id).headRevision).toBe(initial.source.id);
+  }
+);
