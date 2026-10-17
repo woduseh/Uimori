@@ -326,12 +326,16 @@ export class Store {
       if (source.editedText !== null)
         validateSourceIdentity({ ...source, text: source.editedText, hash: source.editedHash! });
       history.push({
-        sceneContext: {
-          revision: source.sceneControlRevision ?? 0,
-          requestText: source.sceneControlRequest,
-          requestEnabled: source.sceneControlRequestEnabled !== 0,
-          sceneEnabled: source.sceneControlSceneEnabled !== 0,
-        },
+        ...(source.sceneControlRevision === null
+          ? {}
+          : {
+              sceneContext: {
+                revision: source.sceneControlRevision,
+                requestText: source.sceneControlRequest,
+                requestEnabled: source.sceneControlRequestEnabled !== 0,
+                sceneEnabled: source.sceneControlSceneEnabled !== 0,
+              },
+            }),
         revision: source.id,
         text: source.editedText ?? source.text,
         ...(source.editedHash !== null && source.editedHash !== source.hash
