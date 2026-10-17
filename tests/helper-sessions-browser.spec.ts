@@ -296,3 +296,148 @@ test('HSESSION04 current helper input survives reload and navigation without rea
   await openHelper(page);
   await expect(input).toHaveValue('새로 입력한 원고');
 });
+
+test('HSESSION05 a full localStorage uses sessionStorage to create a session and clears the request after success', async ({
+  page,
+  request,
+}) => {
+  const chat = (await (
+    await postFixtureChat(request, { data: { title: `생성 저장소 대체 ${randomUUID()}` } })
+  ).json()) as Chat;
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const panel = page.locator('#helper-panel');
+  await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+  const picker = panel.getByLabel('도우미 세션 선택');
+  const first = await picker.inputValue();
+  const count = await picker.locator('option:not([disabled])').count();
+  const key = `uimori:helper-create:${JSON.stringify({ kind: 'chat', chatId: chat.id })}`;
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (this === localStorage && key.startsWith('uimori:helper-create:'))
+        throw new DOMException('Full', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  let storedRequest: string | null = null;
+  let sentRequest: unknown;
+  await page.route('**/api/helper/conversations/new', async (route) => {
+    storedRequest = await page.evaluate((key) => sessionStorage.getItem(key), key);
+    sentRequest = route.request().postDataJSON();
+    await route.continue();
+  });
+  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await expect(picker).not.toHaveValue(first);
+  await expect(picker.locator('option:not([disabled])')).toHaveCount(count + 1);
+  expect(storedRequest).not.toBeNull();
+  expect(JSON.parse(storedRequest ?? 'null')).toEqual(sentRequest);
+  expect(
+    await page.evaluate((key) => [localStorage.getItem(key), sessionStorage.getItem(key)], key)
+  ).toEqual([null, null]);
+});
+
+for (const failure of ['transport', 'invalid-json'] as const) {
+  test(`HSESSION06 ${failure} after server creation preserves the fallback key across reload and storage recovery`, async ({
+    page,
+    request,
+  }) => {
+    const chat = (await (
+      await postFixtureChat(request, { data: { title: `생성 응답 복구 ${randomUUID()}` } })
+    ).json()) as Chat;
+    await page.goto(`/?chat=${chat.id}`);
+    await openHelper(page);
+    const panel = page.locator('#helper-panel');
+    await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+    const picker = panel.getByLabel('도우미 세션 선택');
+    const count = await picker.locator('option:not([disabled])').count();
+    const key = `uimori:helper-create:${JSON.stringify({ kind: 'chat', chatId: chat.id })}`;
+    await page.evaluate(() => {
+      const original = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (this === localStorage && key.startsWith('uimori:helper-create:'))
+          throw new DOMException('Full', 'QuotaExceededError');
+        return original.call(this, key, value);
+      };
+    });
+    const payloads: unknown[] = [];
+    const ids: string[] = [];
+    await page.route('**/api/helper/conversations/new', async (route) => {
+      payloads.push(route.request().postDataJSON());
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      ids.push(((await response.json()) as { id: string }).id);
+      if (payloads.length === 1) {
+        if (failure === 'transport') await route.abort('failed');
+        else await route.fulfill({ status: 200, contentType: 'application/json', body: '{' });
+      } else await route.fulfill({ response });
+    });
+    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await expect(panel.getByRole('alert')).toBeVisible();
+    expect(payloads).toHaveLength(1);
+    const pending = await page.evaluate((key) => sessionStorage.getItem(key), key);
+    expect(pending).not.toBeNull();
+    expect(JSON.parse(pending ?? 'null')).toEqual(payloads[0]);
+
+    // Reload restores localStorage writes while preserving the pending sessionStorage request.
+    await page.reload();
+    await openHelper(page);
+    await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+    await page.evaluate(() => {
+      const key = 'uimori:helper-create:storage-recovery-probe';
+      localStorage.setItem(key, 'available');
+      localStorage.removeItem(key);
+    });
+    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await expect.poll(() => ids.length).toBe(2);
+    await expect(picker).toHaveValue(ids[0]);
+    await expect(panel.getByRole('button', { name: '새 도우미 세션', exact: true })).toBeEnabled();
+    expect(payloads[1]).toEqual(payloads[0]);
+    expect(ids[1]).toBe(ids[0]);
+    await expect(picker.locator('option:not([disabled])')).toHaveCount(count + 1);
+    const persisted = await request.get(`/api/helper/conversations?kind=chat&chatId=${chat.id}`);
+    expect(persisted.ok()).toBe(true);
+    expect(await persisted.json()).toHaveLength(count + 1);
+    expect(
+      await page.evaluate((key) => [localStorage.getItem(key), sessionStorage.getItem(key)], key)
+    ).toEqual([null, null]);
+  });
+}
+
+test('HSESSION07 unavailable creation storage explains the failure without sending a request', async ({
+  page,
+  request,
+}, info) => {
+  const chat = (await (
+    await postFixtureChat(request, { data: { title: `생성 저장 실패 ${randomUUID()}` } })
+  ).json()) as Chat;
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  const panel = page.locator('#helper-panel');
+  await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+  const picker = panel.getByLabel('도우미 세션 선택');
+  const first = await picker.inputValue();
+  const count = await picker.locator('option:not([disabled])').count();
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith('uimori:helper-create:'))
+        throw new DOMException('Full', 'QuotaExceededError');
+      return original.call(this, key, value);
+    };
+  });
+  let posts = 0;
+  await page.route('**/api/helper/conversations/new', async (route) => {
+    posts++;
+    await route.continue();
+  });
+  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await expect(panel.getByRole('alert').locator('.notice-banner-message')).toHaveText(
+    '브라우저에 대화 생성 요청을 보관하지 못했어요. 저장 공간이나 사이트 저장소 설정을 확인한 뒤 다시 시도해 주세요.'
+  );
+  await expect(panel.getByRole('button', { name: '새 도우미 세션', exact: true })).toBeEnabled();
+  expect(posts).toBe(0);
+  await expect(picker).toHaveValue(first);
+  await expect(picker.locator('option:not([disabled])')).toHaveCount(count);
+  await page.screenshot({ path: info.outputPath('helper-create-storage-unavailable.png') });
+});

@@ -178,6 +178,10 @@ Compaction classifies the inner operation: read bodies can be summarized, while 
 
 Browser helper input, selection, outline selection, unacknowledged requests and artifact drafts use the existing IndexedDB recovery store. Requests are held in memory before persistence. A failed outbox write offers an explicit send-without-storage action; it cannot promise recovery after reload. An outbox read failure is distinct from an empty outbox. Accepted requests are cleared conditionally, and cleanup or view-refresh failure does not turn server acceptance into transmission failure. Reload never automatically sends recovered requests. Admission compares a small request fingerprint before resolving current resource references, including after completed input cleanup.
 
+## 새 도우미 세션 생성
+
+새 세션의 생성 요청은 서버에 보내기 전에 재시도 키와 작업 범위를 `localStorage`에 보관하며, 저장할 수 없으면 `sessionStorage`를 사용해요. 재시도는 두 저장소의 미완료 요청을 먼저 찾아 같은 키를 사용해요. 네트워크 오류나 서버 오류처럼 생성 여부가 불확실하면 요청을 유지하고, 성공하거나 확정 거절되면 해당 저장소에서 정리해요. 새로고침만으로 재전송하지는 않아요. 대체 저장소를 사용한 요청은 탭을 닫은 뒤의 복구를 보장하지 않아요. 두 저장소 모두 보관할 수 없으면 안내를 표시하고 새 생성 요청을 보내지 않으며, 다른 초안이나 설정을 삭제하지 않아요.
+
 ## 도우미 세션 분기
 
 세션 메뉴의 **세션 분기**는 마지막 정상 완료 응답까지의 대화문만 새 독립 세션에 복사해요. 요청 키로 중복 생성을 방지하며 진행 중인 작업이 있으면 분기하지 않아요. 이전 모델 시도·usage·도구 실행·변경 영수증·가정 장면·checkpoint는 다시 생성하거나 재실행하지 않아요. 새 세션은 원본을 삭제해도 과거 대화문을 참고할 수 있어요. 읽기 전용 seed 메시지는 별도 `helper_seed_messages`에 보존하고, 다음 모델의 이력·자동 압축에는 포함돼요. 외부 자료는 최신 저장 상태를 새로 읽어요.
