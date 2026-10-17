@@ -55,6 +55,9 @@ const messages: Record<string, string> = {
     'v3 CHARX·JPEG·PNG·JSON 또는 Risu 모듈 파일인지, 파일 구조와 처리 한도가 맞는지 확인해 주세요.',
   RISU_IMPORT_TOO_LARGE: `캐릭터 카드 파일은 ${RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024} MiB 이하여야 해요.`,
   RISU_IMPORT_IMAGES_TOO_LARGE: `저장할 이미지 합계가 ${RISU_IMPORT_MAX_PREPARED_BYTES / 1024 / 1024} MiB를 넘어요. 첨부 이미지를 줄인 파일을 선택해 주세요.`,
+  PACKAGE_START_CONVERSATION_STARTED:
+    '대화가 진행됐거나 원래 봇의 시작문을 사용할 수 없어 바꾸지 못했어요. 선택 창을 닫고 현재 대화를 확인해 주세요.',
+  PACKAGE_START_OWNER_CHANGED: '채팅의 봇 설정이 바뀌었어요. 선택 창을 닫고 다시 열어 주세요.',
   PACKAGE_START_TEXT_TOO_LONG: `시작문 하나가 ${SOURCE_TEXT_MAX_CHARS.toLocaleString('en-US')}자 저장 상한을 넘었어요. 기본 시작문과 대체 시작문의 길이를 확인해 주세요.`,
   UPLOAD_TOO_LARGE: `올릴 수 있는 파일은 ${RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024} MiB 이하예요.`,
   RISU_IMPORT_V3_REQUIRED: 'Character Card v3 파일을 선택해 주세요. v2 카드는 지원하지 않아요.',
@@ -143,6 +146,7 @@ const revisionErrors = new Set([
   'Settings revision conflict',
   'Story settings revision conflict',
   'Source revision conflict',
+  'Source hash conflict',
   'Source revision changed',
   'Translation revision conflict',
   'Current prompts changed; refresh before saving',

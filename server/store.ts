@@ -365,6 +365,7 @@ export class Store {
     command: {
       request: string;
       expectedRevision: string | null;
+      expectedSourceHash?: string;
       expectedSettingsRevision: number;
       idempotencyKey: string;
       expectedProfileRevision?: number;
@@ -384,6 +385,11 @@ export class Store {
     const chat = this.chat(chatId);
     if (chat.headRevision !== command.expectedRevision)
       throw new HttpError(409, 'Source revision conflict');
+    if (
+      command.expectedSourceHash !== undefined &&
+      (!chat.headRevision || this.source(chat.headRevision).hash !== command.expectedSourceHash)
+    )
+      throw new HttpError(409, 'Source hash conflict');
     if (chat.settingsRevision !== command.expectedSettingsRevision)
       throw new HttpError(409, 'Settings revision conflict');
     if (
@@ -413,6 +419,9 @@ export class Store {
     return json({
       request: command.request,
       expectedRevision: command.expectedRevision,
+      ...(command.expectedSourceHash !== undefined
+        ? { expectedSourceHash: command.expectedSourceHash }
+        : {}),
       expectedSettingsRevision: command.expectedSettingsRevision,
       expectedProfileRevision: command.expectedProfileRevision,
       ...(command.sceneCommandId ? { sceneCommandId: command.sceneCommandId } : {}),

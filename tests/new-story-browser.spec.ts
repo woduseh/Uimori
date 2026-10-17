@@ -9,7 +9,7 @@ import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { test, expect } from '@playwright/test';
-import type { Chat, ChatDetail } from '../core/types.js';
+import type { Chat, ChatDetail, ReaderDetail } from '../core/types.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
 import { visibleNavigation } from './ui-navigation.js';
@@ -645,4 +645,143 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   );
   await dialog.getByLabel('첫 메시지 선택').selectOption('');
   await expect(dialog.getByLabel('첫 메시지 선택')).toHaveValue('');
+});
+
+test('NSUI10 authored opening switches in the same chat, retains the draft, and hides empty generation details', async ({
+  page,
+  request,
+}, info) => {
+  const title = `시작문 선택 검증 ${crypto.randomUUID()}`;
+  const saved = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title,
+      description: '',
+      text: '',
+      loading: 'pinned',
+      relatedIds: [],
+      package: nativeContent({
+        name: title,
+        first_mes:
+          '<section><h2>비 오는 도서관</h2><p>서가 사이로 젖은 바람이 들어왔다.</p></section>',
+        alternate_greetings: [
+          '<section><h2>새벽의 정원</h2><p>이슬 맺힌 잎사귀 너머로 누군가 손을 흔들었다.</p></section>',
+          '<section><h2>노을 지는 역</h2><p>마지막 열차를 알리는 종이 울렸다.</p></section>',
+        ],
+      }),
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  const bot = (await saved.json()) as Content;
+  // The browser harness supplies its deterministic writer when no provider is selected.
+  await setCurrentModels(request, { main: null, translation: null });
+  const mainRequests: string[] = [];
+  page.on('request', (item) => {
+    if (item.method() === 'POST' && /\/(?:runs|candidate)$/.test(item.url()))
+      mainRequests.push(item.url());
+  });
+  await page.goto('/');
+  await navigationAction(page, '새 채팅', bot.title);
+  const create = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  const started = page.waitForResponse(
+    (response) => /\/package-start$/.test(response.url()) && response.request().method() === 'POST'
+  );
+  await create.getByRole('button', { name: '채팅 만들기', exact: true }).click();
+  const openingResponse = await started;
+  expect(openingResponse.ok()).toBe(true);
+  const opening = await openingResponse.json();
+  const chatId = opening.run.chatId as string;
+  const read = async () => (await (await request.get(`/api/chats/${chatId}`)).json()) as ChatDetail;
+  await expect(create).toBeHidden();
+  const source = page.getByTestId('source').first();
+  await expect(source.getByRole('heading', { name: '비 오는 도서관' })).toBeVisible();
+  await source.locator('.folio').click();
+  await expect(source.getByTestId('turn-activity')).toHaveCount(0);
+  await expect(source).not.toContainText('이번 생성');
+  await expect(source).not.toContainText('실행과 실제 입력 확인');
+  const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+  await draft.fill('시작문을 바꿔도 남겨 둘 다음 장면 초안');
+  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+  await source.getByRole('button', { name: '시작문 바꾸기', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: '시작문 바꾸기', exact: true });
+  await expect(picker.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
+  await picker.getByLabel('첫 메시지 선택').selectOption('start-1');
+  await picker.getByText('미리보기', { exact: true }).click();
+  await expect(picker.getByRole('heading', { name: '새벽의 정원' })).toBeVisible();
+  for (const viewport of [
+    { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
+    { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
+      await expect(
+        picker.getByRole('button', { name: '시작문 바꾸기', exact: true })
+      ).toBeInViewport({
+        ratio: 1,
+      });
+      expect(
+        await picker.evaluate((node) => node.scrollWidth - node.clientWidth)
+      ).toBeLessThanOrEqual(1);
+      await page.screenshot({
+        path: info.outputPath(`opening-picker-${viewport.width}-${colorScheme}.png`),
+      });
+    }
+  }
+  const changed = page.waitForResponse(
+    (response) => /\/package-start$/.test(response.url()) && response.request().method() === 'POST'
+  );
+  await picker.getByRole('button', { name: '시작문 바꾸기', exact: true }).click();
+  const switched = await changed;
+  expect(switched.ok()).toBe(true);
+  await expect(picker).toBeHidden();
+  await expect(source.getByRole('heading', { name: '새벽의 정원' })).toBeVisible();
+  await expect(draft).toHaveValue('시작문을 바꿔도 남겨 둘 다음 장면 초안');
+  expect(new URL(page.url()).searchParams.get('chat')).toBe(chatId);
+  const after = await read();
+  expect(after.chat.id).toBe(chatId);
+  const readActive = async () =>
+    (await (await request.get(`/api/chats/${chatId}/reader`)).json()) as ReaderDetail;
+  const active = await readActive();
+  expect(active.reader.order).toHaveLength(1);
+  expect(active.sources.find((item) => item.id === active.reader.order[0])?.text).toContain(
+    '새벽의 정원'
+  );
+  expect(after.sources).toHaveLength(2);
+  expect(after.sources.some((item) => item.text.includes('비 오는 도서관'))).toBe(true);
+  expect(after.runs.every((run) => run.usage.modelCalls === 0)).toBe(true);
+  expect(after.attempts).toHaveLength(0);
+  expect(mainRequests).toEqual([]);
+  await page.screenshot({ path: info.outputPath('opening-switched-mobile-dark.png') });
+  await page.reload();
+  await expect(source.getByRole('heading', { name: '새벽의 정원' })).toBeVisible();
+  await expect(draft).toHaveValue('시작문을 바꿔도 남겨 둘 다음 장면 초안');
+  await expect(source.getByTestId('turn-activity')).toHaveCount(0);
+  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+  await source.getByRole('button', { name: '시작문 바꾸기', exact: true }).click();
+  await expect(picker.getByLabel('첫 메시지 선택')).toHaveValue('start-1');
+  await page.keyboard.press('Escape');
+  await expect(picker).toBeHidden();
+  await expect(source.getByLabel('장면 작업 메뉴', { exact: true })).toBeFocused();
+  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+  await source.getByRole('button', { name: '번역 수정', exact: true }).click();
+  await page.getByLabel('번역 수정 내용').fill('The garden stirred in the dawn light.');
+  await page.getByRole('button', { name: '번역 저장', exact: true }).click();
+  await expect(source.getByTestId('translation-text')).toContainText(
+    'The garden stirred in the dawn light.'
+  );
+  const activity = source.getByTestId('turn-activity');
+  await expect(activity).toBeVisible();
+  await activity.locator(':scope > summary').click();
+  await expect(activity).toContainText('번역');
+  await expect(activity).not.toContainText('이번 생성');
+  await expect(activity).not.toContainText('실행과 실제 입력 확인');
+  expect((await read()).attempts).toHaveLength(0);
+  expect(mainRequests).toEqual([]);
+  await page.screenshot({ path: info.outputPath('opening-manual-translation-mobile-dark.png') });
+  await page.getByRole('button', { name: '원문 생성', exact: true }).click();
+  await expect.poll(async () => (await readActive()).reader.total).toBe(2);
+  await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+  await expect(source.getByRole('button', { name: '시작문 바꾸기', exact: true })).toHaveCount(0);
 });

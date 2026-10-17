@@ -1365,6 +1365,21 @@ function App() {
                               packageStart={
                                 s.detail!.runs.find((run) => run.id === source.runId)?.packageStart
                               }
+                              startSelection={
+                                s.detail!.reader.canChangePackageStart &&
+                                source.id === s.detail!.chat.headRevision &&
+                                s.detail!.profile &&
+                                s.detail!.runs.find((run) => run.id === source.runId)?.packageStart
+                                  ? {
+                                      ...s.detail!.runs.find((run) => run.id === source.runId)!
+                                        .packageStart!,
+                                      expectedSettingsRevision: s.detail!.chat.settingsRevision,
+                                      expectedProfileRevision: s.detail!.profile.revision,
+                                      userName: s.persona?.title,
+                                    }
+                                  : undefined
+                              }
+                              onStartChanged={() => s.setNotice('시작문을 바꿨어요.')}
                               hasPackages={
                                 !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
                               }

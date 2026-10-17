@@ -1,4 +1,4 @@
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import { HttpError, fields, isSha256Hex, number, record, text } from './request-validation.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Content, ProfileSnapshot } from '../core/product.js';
 import type { Run, RunSnapshot } from '../core/types.js';
@@ -16,6 +16,8 @@ export type PackageStartCommand = PackageStartRef & {
   expectedSettingsRevision: number;
   expectedProfileRevision: number;
   idempotencyKey: string;
+  expectedRevision?: string;
+  expectedSourceHash?: string;
 };
 export function validatePackageStartCommand(value: unknown): PackageStartCommand {
   const body = record(value);
@@ -26,8 +28,19 @@ export function validatePackageStartCommand(value: unknown): PackageStartCommand
     'expectedSettingsRevision',
     'expectedProfileRevision',
     'idempotencyKey',
+    'expectedRevision',
+    'expectedSourceHash',
   ]);
+  const replacing = body.expectedRevision !== undefined || body.expectedSourceHash !== undefined;
+  if (replacing && !isSha256Hex(body.expectedSourceHash))
+    throw new HttpError(400, 'Invalid source hash');
   return {
+    ...(replacing
+      ? {
+          expectedRevision: text(body.expectedRevision, 'source revision', 200),
+          expectedSourceHash: body.expectedSourceHash as string,
+        }
+      : {}),
     ...validatePackageStartRef({
       packageId: body.packageId,
       packageRevision: body.packageRevision,
@@ -39,6 +52,24 @@ export function validatePackageStartCommand(value: unknown): PackageStartCommand
   };
 }
 
+/** Only an untouched opening can change without reinterpreting later conversation or card actions. */
+export function canChangePackageStart(store: Store, chatId: string): boolean {
+  return !!store.db
+    .prepare(
+      `SELECT 1 FROM chats c JOIN sources s ON s.id=c.head_revision JOIN runs r ON r.id=s.run_id
+      JOIN chat_organization o ON o.chat_id=c.id
+      JOIN versions v ON v.kind='content' AND v.id=o.bot_id
+        AND v.id=json_extract(r.snapshot,'$.packageStart.packageId')
+        AND v.revision=json_extract(r.snapshot,'$.packageStart.packageRevision')
+      WHERE c.id=? AND s.chat_id=c.id AND s.parent_revision IS NULL
+      AND json_array_length(v.body,'$.package.starts')>1
+      AND json_extract(r.snapshot,'$.packageStart.mode')='authored'
+      AND NOT EXISTS (SELECT 1 FROM runs other WHERE other.chat_id=c.id
+        AND (COALESCE(json_extract(other.snapshot,'$.packageStart.mode'),'')!='authored' OR other.status!='completed'))`
+    )
+    .get(chatId);
+}
+
 /** Confirm a Risu greeting atomically without making a model request. */
 export function createPackageStart(
   store: Store,
@@ -46,12 +77,6 @@ export function createPackageStart(
   value: unknown
 ): { run: Run; created: boolean } {
   const command = validatePackageStartCommand(value);
-  const content = store.product.get<Content>('content', command.packageId, command.packageRevision);
-  if (!content.package) throw new HttpError(400, 'PACKAGE_START_REQUIRES_PACKAGE');
-  const start = validatePackageStarts(content.package.starts ?? []).find(
-    (item) => item.id === command.startId
-  );
-  if (!start) throw new HttpError(400, 'PACKAGE_START_NOT_FOUND');
   const ref: PackageStartRef = {
     packageId: command.packageId,
     packageRevision: command.packageRevision,
@@ -73,6 +98,16 @@ export function createPackageStart(
       // other canonical command field before returning the prior Run.
       request = text(record(JSON.parse(prior.command)).request, 'request', REQUEST_TEXT_MAX_CHARS);
     } else {
+      const content = store.product.get<Content>(
+        'content',
+        command.packageId,
+        command.packageRevision
+      );
+      if (!content.package) throw new HttpError(400, 'PACKAGE_START_REQUIRES_PACKAGE');
+      const start = validatePackageStarts(content.package.starts ?? []).find(
+        (item) => item.id === command.startId
+      );
+      if (!start) throw new HttpError(400, 'PACKAGE_START_NOT_FOUND');
       const chat = store.chat(chatId);
       const profile = chatVariableProfile(store, chatId);
       const attachment = profile?.packageAttachments?.find(
@@ -93,7 +128,8 @@ export function createPackageStart(
       chatId,
       {
         request,
-        expectedRevision: null,
+        expectedRevision: command.expectedRevision ?? null,
+        ...(command.expectedSourceHash ? { expectedSourceHash: command.expectedSourceHash } : {}),
         expectedSettingsRevision: command.expectedSettingsRevision,
         expectedProfileRevision: command.expectedProfileRevision,
         idempotencyKey: command.idempotencyKey,
@@ -101,7 +137,10 @@ export function createPackageStart(
       },
       (chat) => {
         // Check after idempotency lookup. A lost successful response may replay even after the head advanced.
-        if (store.db.prepare('SELECT 1 FROM runs WHERE chat_id=? LIMIT 1').get(chatId))
+        if (command.expectedRevision) {
+          if (!canChangePackageStart(store, chatId))
+            throw new HttpError(409, 'PACKAGE_START_CONVERSATION_STARTED');
+        } else if (store.db.prepare('SELECT 1 FROM runs WHERE chat_id=? LIMIT 1').get(chatId))
           throw new HttpError(409, 'PACKAGE_START_ALREADY_CONFIRMED');
         if (!prepared) throw new HttpError(409, 'PACKAGE_START_REPLAY_MISSING');
         const { profile, selected } = prepared;
@@ -111,6 +150,14 @@ export function createPackageStart(
         const snapshot: RunSnapshot = {
           chatId,
           parentRevision: null,
+          ...(command.expectedRevision
+            ? {
+                replacement: {
+                  sourceRevision: command.expectedRevision,
+                  sourceHash: command.expectedSourceHash!,
+                },
+              }
+            : {}),
           settingsRevision: chat.settingsRevision,
           settings: chat.settings,
           request,

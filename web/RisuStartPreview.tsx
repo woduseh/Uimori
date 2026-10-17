@@ -75,7 +75,7 @@ export function RisuStartPreview({
           <p>{preview.issues.join(', ')}</p>
         </details>
       )}
-      <p className="muted">미리보기예요. 화면의 선택 버튼은 채팅을 만든 뒤 사용할 수 있어요.</p>
+      <p className="muted">미리보기에서는 화면 안의 선택 버튼이 동작하지 않아요.</p>
     </>
   );
 }
