@@ -116,6 +116,7 @@ export type RunSnapshot = {
     revision: string;
     text: string;
     contentHash?: string;
+    sceneContext?: import('./scene-context.js').SceneContext;
   }[];
   resources: Resource[];
   profile?: import('./product.js').ProfileSnapshot;
@@ -151,6 +152,7 @@ export type Run = {
   partialText?: string;
 };
 export type Source = {
+  sceneContext?: import('./scene-context.js').SceneContext;
   editRevision?: number;
   translationRevision?: number;
   id: string;

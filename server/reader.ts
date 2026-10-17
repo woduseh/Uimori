@@ -9,6 +9,7 @@ import { providerRejection } from '../core/provider-rejection.js';
 import { readerRequestOrder } from '../core/reader-conversation.js';
 import type { SceneUsageReceipt } from '../core/scene-usage.js';
 import { outlineSceneTitles, sceneTitles } from './scene-titles.js';
+import { readSceneContext } from './scene-context.js';
 
 /** The failing attempt's stored provider diagnostic, read only for 4xx failures being displayed. */
 export function attemptRejection(store: Store, column: 'run_id' | 'job_id', id: string) {
@@ -278,7 +279,10 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   const known = new Set((query.known ?? '').split(','));
   const sources = order
     .filter((sourceId) => !events || !known.has(sourceId) || changed.has(sourceId))
-    .map((sourceId) => store.source(sourceId));
+    .map((sourceId) => ({
+      ...store.source(sourceId),
+      sceneContext: readSceneContext(store.db, sourceId),
+    }));
   const jobs = sources.flatMap((source) => {
     const ids = readerJobIds(store, source.id, source.hash);
     return ids
@@ -362,7 +366,8 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   const outlineTitles = outlineSceneTitles(store, id);
   const navigation = chain.map((sourceId) => {
     const run = runsById.get(byId.get(sourceId)!.runId);
-    const request = String(run?.request ?? '')
+    const control = readSceneContext(store.db, sourceId);
+    const request = String(control.requestText ?? run?.request ?? '')
       .replace(/\s+/gu, ' ')
       .trim();
     // 202 UTF-16 units suffice to decide whether there are more than 100 codepoints.
