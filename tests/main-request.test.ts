@@ -24,6 +24,7 @@ import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 import type { Store } from '../server/store.js';
 import * as chatVariables from '../server/chat-variables.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
+import { encodeAnthropic } from '../core/anthropic-protocol.js';
 
 const closes: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -172,6 +173,39 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     );
     expect(built.request).toEqual(before);
     expect(JSON.stringify(preview.body)).not.toContain('capabilityVersion');
+  });
+
+  test('Anthropic preview includes the same late-system boundary as the wire encoder without editing the snapshot', async () => {
+    const work = await snapshot();
+    const target = work.profile!.models.main!;
+    target.connection.protocol = 'anthropic-messages-v1';
+    target.modelId = 'claude-opus-5';
+    work.profile!.promptPresets!.main!.program.nativeRisuPreset.preset.promptTemplate = [
+      { type: 'plain', role: 'system', text: 'STABLE_PREFIX' },
+      { type: 'cache', role: 'all', depth: 1 },
+      { type: 'plain', role: 'user', text: 'CURRENT_NOTE' },
+      { type: 'plain', role: 'system', text: 'ACTIVE_CONTROLS' },
+      { type: 'plain', role: 'system', text: 'LANGUAGE_SEAL' },
+      { type: 'chat', rangeStart: 0, rangeEnd: 'end' },
+    ];
+    await refreshNativeSnapshot(work);
+    const before = structuredClone(work);
+    const built = buildMainProviderRequest(work);
+    const requestBefore = structuredClone(built.request);
+    const preview = encodeMainPreview(built.request, target);
+    expect(preview.body).toEqual(encodeAnthropic(built.request).body);
+    expect(preview.capabilityVersion).toBe('native-wire-2026-10-17');
+    expect(preview.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'ANTHROPIC_SYSTEM_BOUNDARY_ASSISTANT_INSERTED',
+        blockId: 'risu-block-5',
+      })
+    );
+    expect(
+      JSON.stringify(preview.body).split('I will continue within the active controls.')
+    ).toHaveLength(2);
+    expect(work).toEqual(before);
+    expect(built.request).toEqual(requestBefore);
   });
 
   test('retired fields in an old execution snapshot never enter a custom prompt request or its host context', async () => {

@@ -2,12 +2,22 @@ import { VERTEX_GEMINI_MODEL_ID } from './fixtures/vertex-model.js';
 import { describe, expect, test } from 'vitest';
 import { encodeResponses, ResponsesDecoder } from '../core/openai-protocol.js';
 import { encodeChat, ChatDecoder } from '../core/openai-chat-protocol.js';
-import { encodeAnthropic, AnthropicDecoder } from '../core/anthropic-protocol.js';
+import {
+  encodeAnthropic,
+  AnthropicDecoder,
+  decodeAnthropicMessage,
+  type AnthropicTurn,
+} from '../core/anthropic-protocol.js';
 import { encodeVertex, VertexDecoder } from '../core/vertex-protocol.js';
 
 import type { LogicalMessage, ProviderPrompt } from '../core/risu-prompt.js';
 import type { Json, ProviderRequest, ProviderResult } from '../core/transport.js';
 import { planNativeMessages } from '../core/provider-messages.js';
+import { providerCacheBoundaries } from '../core/provider-cache-diagnostics.js';
+// Captured from adfaad60 before the conditional Anthropic boundary mapping.
+import legacyAnthropicTurn from './fixtures/anthropic-native-legacy-turn.json' with {
+  type: 'json',
+};
 const wire = (value: Json) => value as Record<string, any>;
 const message = (id: string, role: LogicalMessage['role'], text: string): LogicalMessage => ({
   id,
@@ -331,6 +341,135 @@ describe('native provider wire (synthetic, no live calls)', () => {
     r.prompt!.messages.splice(3, 0, message('bad-placement', 'system', 'MIDDLE_RULE'));
     expect(() => encodeAnthropic(r)).toThrow('PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED');
   });
+  test('Anthropic completes a late system section once without changing authored input or cache prefixes', () => {
+    const r = request('claude-opus-5');
+    r.prompt!.messages = [
+      message('system', 'system', 'NATIVE_SYSTEM'),
+      message('old-user', 'user', 'EARLIER_REQUEST'),
+      message('controls', 'system', 'ACTIVE_CONTROLS'),
+      message('seal', 'system', 'LANGUAGE_SEAL'),
+      message('current', 'user', 'CURRENT_REQUEST'),
+    ];
+    r.prompt!.cachePlan = ['system', 'seal'].map((id) => ({
+      blockId: `cache-${id}`,
+      afterMessageId: id,
+      policy: 'require',
+    }));
+    const before = structuredClone(r);
+    const terminal = structuredClone(r);
+    terminal.prompt!.messages.pop();
+    const existing = encodeAnthropic(terminal);
+    const encoded = encodeAnthropic(r);
+    const body = wire(encoded.body);
+    expect(body.messages).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'EARLIER_REQUEST' }] },
+      { role: 'system', content: [{ type: 'text', text: 'ACTIVE_CONTROLS' }] },
+      {
+        role: 'system',
+        content: [{ type: 'text', text: 'LANGUAGE_SEAL', cache_control: { type: 'ephemeral' } }],
+      },
+      {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'I will continue within the active controls.' }],
+      },
+      { role: 'user', content: [{ type: 'text', text: 'CURRENT_REQUEST' }] },
+    ]);
+    expect(encoded.messageMetadata?.capabilityVersion).toBe('native-wire-2026-10-17');
+    expect(existing.messageMetadata?.capabilityVersion).toBe('native-wire-2026-09-07');
+    expect(
+      encoded.messageMetadata?.diagnostics.filter(
+        (item) => item.code === 'ANTHROPIC_SYSTEM_BOUNDARY_ASSISTANT_INSERTED'
+      )
+    ).toEqual([
+      {
+        code: 'ANTHROPIC_SYSTEM_BOUNDARY_ASSISTANT_INSERTED',
+        blockId: 'seal',
+        logicalIndex: 3,
+        protocol: 'anthropic-messages-v1',
+        modelId: 'claude-opus-5',
+        status: 'mapped',
+      },
+    ]);
+    expect(providerCacheBoundaries('anthropic-messages-v1', encoded.body)).toEqual(
+      providerCacheBoundaries('anthropic-messages-v1', existing.body)
+    );
+    const authored = structuredClone(r);
+    authored.prompt!.messages.splice(
+      4,
+      0,
+      message('authored-boundary', 'assistant', 'I will continue within the active controls.')
+    );
+    const authoredEncoding = encodeAnthropic(authored);
+    expect(authoredEncoding.body).toEqual(encoded.body);
+    expect(authoredEncoding.messageMetadata?.capabilityVersion).toBe('native-wire-2026-09-07');
+    const other = structuredClone(r);
+    other.prompt!.cachePlan = [];
+    expect(wire(encodeResponses(other).body).input.map((item: any) => item.role)).toEqual([
+      'system',
+      'user',
+      'system',
+      'system',
+      'user',
+    ]);
+    expect(wire(encodeChat(other).body).messages).toHaveLength(6);
+    expect(r).toEqual(before);
+  });
+  test.each([false, true])(
+    'Anthropic replays frozen native turns without duplicating a boundary (inserted=%s)',
+    (inserted) => {
+      const r = request('claude-opus-5');
+      if (inserted)
+        r.prompt!.messages.splice(
+          3,
+          0,
+          message('note', 'user', 'USER_NOTE'),
+          message('controls', 'system', 'ACTIVE_CONTROLS'),
+          message('seal', 'system', 'LANGUAGE_SEAL')
+        );
+      const before = structuredClone(r);
+      const encoded = encodeAnthropic(r);
+      if (!inserted) expect(encoded.context).toEqual(legacyAnthropicTurn);
+      const parts = [
+        { type: 'thinking', thinking: 'private reasoning', signature: 'signed-thinking' },
+        {
+          type: 'tool_use',
+          id: 'Boundary.Call',
+          name: 'tool_0_knowledge_read',
+          input: { id: 'synthetic' },
+        },
+      ];
+      const result = decodeAnthropicMessage(
+        {
+          type: 'message',
+          id: 'boundary-tool',
+          role: 'assistant',
+          model: r.modelId,
+          content: parts,
+          stop_reason: 'tool_use',
+          stop_sequence: null,
+        },
+        inserted ? encoded.context : (legacyAnthropicTurn as AnthropicTurn)
+      );
+      const continuation = encodeAnthropic(next(r, result));
+      const body = wire(continuation.body);
+      expect(body.messages.slice(0, encoded.context.messages.length)).toEqual(
+        encoded.context.messages
+      );
+      expect(body.messages.at(-2).content).toEqual(parts);
+      expect(body.messages.at(-1).content[0].tool_use_id).toBe('Boundary.Call');
+      expect(
+        body.messages.filter((item: any) =>
+          item.content.some(
+            (part: any) => part.text === 'I will continue within the active controls.'
+          )
+        )
+      ).toHaveLength(inserted ? 1 : 0);
+      expect(continuation.messageMetadata?.capabilityVersion).toBe(
+        inserted ? 'native-wire-2026-10-17' : 'native-wire-2026-09-07'
+      );
+      expect(r).toEqual(before);
+    }
+  );
   test.each([
     'gemini-3.8-flash',
     'gemini-3.1-pro-preview',

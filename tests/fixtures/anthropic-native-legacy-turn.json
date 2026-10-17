@@ -1,0 +1,46 @@
+{
+  "version": "anthropic-messages-turn-v1",
+  "modelId": "claude-opus-5",
+  "bindingHash": "e092a27a87d22269c0da9f9a64b01ec3558bc46ecbbcbb93909c0a9df7c9b5d2",
+  "phase": "request",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "EARLIER_REQUEST"
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "text",
+          "text": "COMPLETED_PROSE"
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "CURRENT_REQUEST"
+        }
+      ]
+    }
+  ],
+  "completedResults": [],
+  "pending": [],
+  "usedIds": [],
+  "toolNames": [
+    {
+      "name": "knowledge.read",
+      "wireName": "tool_0_knowledge_read"
+    }
+  ],
+  "stopSequences": [],
+  "stateHash": "a1cb7e7de20c276a64088bda3178f3b846f1c59aca9215b0e617ede967ceaf8e"
+}
