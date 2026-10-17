@@ -18,7 +18,7 @@ export type NativeMessagePlan = {
   system: Json[];
   options: Record<string, Json>;
   diagnostics: MessageDiagnostic[];
-  capabilityVersion: 'native-wire-2026-09-07';
+  capabilityVersion: 'native-wire-2026-09-07' | 'native-wire-2026-10-17';
 };
 export type NativeMessageMetadata = Pick<NativeMessagePlan, 'diagnostics' | 'capabilityVersion'>;
 
@@ -100,6 +100,7 @@ export function planNativeMessages(
   const gemini = /(?:^|\/)gemini-[^/]+$/iu.test(request.modelId);
   let leading = true;
   let cacheCount = 0;
+  let capabilityVersion: NativeMessagePlan['capabilityVersion'] = 'native-wire-2026-09-07';
   const cacheIds = new Set<string>();
   for (const [index, message] of prompt.messages.entries()) {
     if (message.completion === 'prefill') reject('PROMPT_PREFILL_UNSUPPORTED', message, index);
@@ -115,11 +116,14 @@ export function planNativeMessages(
     if (role !== message.role) note('GEMINI_MID_SYSTEM_TO_USER', message, index);
     if (vertex && role === 'system' && !wasLeading)
       reject('PROMPT_MID_SYSTEM_UNSUPPORTED', message, index);
+    let assistantBoundary = false;
     if (anthropic && role === 'system' && !wasLeading) {
       const before = prompt.messages.slice(0, index).findLast((m) => m.role !== 'system');
-      const after = prompt.messages.slice(index + 1).find((m) => m.role !== 'system');
-      if (before?.role !== 'user' || (after && after.role !== 'assistant'))
+      if (before?.role !== 'user')
         reject('PROMPT_MID_SYSTEM_PLACEMENT_UNSUPPORTED', message, index);
+      // Complete only a system section followed by another user turn. Existing
+      // assistant boundaries and terminal system sections remain byte-for-byte intact.
+      assistantBoundary = prompt.messages[index + 1]?.role === 'user';
     }
     if (
       anthropic &&
@@ -177,10 +181,19 @@ export function planNativeMessages(
         note('CONSECUTIVE_ROLE_PARTS_COMBINED', message, index);
       } else messages.push({ role, parts });
     } else messages.push({ role, content: parts });
+    if (assistantBoundary) {
+      messages.push({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'I will continue within the active controls.' }],
+      });
+      note('ANTHROPIC_SYSTEM_BOUNDARY_ASSISTANT_INSERTED', message, index);
+      // Previously valid requests keep their binding version and opaque continuations.
+      capabilityVersion = 'native-wire-2026-10-17';
+    }
   }
   if ((anthropic || vertex) && messages.length === 0)
     throw new ProviderContractError('PROMPT_CONVERSATION_REQUIRED');
-  return { messages, system, options, diagnostics, capabilityVersion: 'native-wire-2026-09-07' };
+  return { messages, system, options, diagnostics, capabilityVersion };
 }
 /** The current request/history are already messages; this envelope contains reference metadata only. */
 export const NATIVE_HOST_CONTEXT_ID = 'native.host-context';
