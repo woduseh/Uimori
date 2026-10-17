@@ -1807,98 +1807,117 @@ function App() {
                         참고 이미지 첨부
                       </button>
 
-                      {creativePresets.length > 0 && (
-                        <label>
-                          <span className="sr-only">빠른 옵션 조합</span>
-                          <select
-                            aria-label="빠른 옵션 조합"
-                            value={currentCombination ? refValue(currentCombination) : ''}
-                            disabled={
-                              s.quickBusy ||
-                              optionsBusy ||
-                              optionsDirty ||
-                              s.profileDirty ||
-                              !s.detail
-                            }
-                            onChange={(event) => {
-                              void s.quickChange('combination', event.target.value);
-                            }}
-                          >
-                            <option value="">옵션 조합 · 현재 선택값</option>
-                            {creativePresets.map((item) => (
-                              <option value={refValue(item)} key={refValue(item)}>
-                                {item.title}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                      {(creativePresets.length > 0 || !!s.library || hasCreativeOptions) && (
+                        <div className="composer-menu-group" role="group" aria-label="창작 설정">
+                          <div className="composer-menu-heading">창작 설정</div>
+                          {creativePresets.length > 0 && (
+                            <label className="composer-menu-choice">
+                              <span>옵션 조합</span>
+                              <select
+                                aria-label="빠른 옵션 조합"
+                                value={currentCombination ? refValue(currentCombination) : ''}
+                                disabled={
+                                  s.quickBusy ||
+                                  optionsBusy ||
+                                  optionsDirty ||
+                                  s.profileDirty ||
+                                  !s.detail
+                                }
+                                onChange={(event) => {
+                                  void s.quickChange('combination', event.target.value);
+                                }}
+                              >
+                                <option value="">현재 선택값</option>
+                                {creativePresets.map((item) => (
+                                  <option value={refValue(item)} key={refValue(item)}>
+                                    {item.title}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
+                          {s.library && (
+                            <div className="composer-menu-persona">
+                              <span aria-hidden="true">페르소나</span>
+                              <ContentPicker
+                                library={s.library}
+                                role="persona"
+                                label="빠른 페르소나"
+                                value={s.persona ? refValue(s.persona) : ''}
+                                selectedContent={s.persona}
+                                allowNone
+                                noneLabel={
+                                  s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'
+                                }
+                                disabled={
+                                  s.quickBusy ||
+                                  optionsBusy ||
+                                  optionsDirty ||
+                                  s.profileDirty ||
+                                  !s.detail ||
+                                  !s.attachmentsReady
+                                }
+                                onChange={(value) => {
+                                  void s.quickChange('persona', value);
+                                }}
+                              />
+                            </div>
+                          )}
+                          {hasCreativeOptions && (
+                            <button
+                              ref={optionsButton}
+                              type="button"
+                              className="secondary creative-options-button"
+                              aria-label="창작 옵션"
+                              aria-expanded={optionsOpen}
+                              aria-controls="chat-prompt-options"
+                              disabled={!s.detail}
+                              onClick={() => {
+                                setWorkspacePanel((value) =>
+                                  value === 'options' ? null : 'options'
+                                );
+                              }}
+                            >
+                              <SlidersHorizontal size={18} aria-hidden="true" />
+                              창작 옵션{optionsDirty && ' · 미적용'}
+                            </button>
+                          )}
+                        </div>
                       )}
-                      {hasCreativeOptions && (
+                      <div
+                        className="composer-menu-group"
+                        role="group"
+                        aria-label="요청 및 컨텍스트"
+                      >
+                        <div className="composer-menu-heading">요청 및 컨텍스트</div>
                         <button
-                          ref={optionsButton}
                           type="button"
-                          className="secondary creative-options-button"
-                          aria-label="창작 옵션"
-                          aria-expanded={optionsOpen}
-                          aria-controls="chat-prompt-options"
-                          disabled={!s.detail}
-                          onClick={() => {
-                            setWorkspacePanel((value) => (value === 'options' ? null : 'options'));
-                          }}
+                          className="secondary"
+                          disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
+                          onClick={() => setChatTool({ scope: s.viewKey, kind: 'preview' })}
                         >
-                          <SlidersHorizontal size={18} aria-hidden="true" />
-                          창작 옵션{optionsDirty && ' · 미적용'}
+                          <Eye size={18} aria-hidden="true" />
+                          다음 요청 미리보기
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
-                        onClick={() => setChatTool({ scope: s.viewKey, kind: 'preview' })}
-                      >
-                        <Eye size={18} aria-hidden="true" />
-                        다음 요청 미리보기
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={!s.detail?.chat.headRevision}
-                        onClick={() => setChatTool({ scope: s.viewKey, kind: 'lore' })}
-                      >
-                        <BookOpen size={18} aria-hidden="true" />
-                        마지막 장면의 로어
-                      </button>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
-                        onClick={() => setChatTool({ scope: s.viewKey, kind: 'compact' })}
-                      >
-                        <Minimize size={18} aria-hidden="true" />
-                        수동 컨텍스트 압축
-                      </button>
-                      {s.library && (
-                        <ContentPicker
-                          library={s.library}
-                          role="persona"
-                          label="빠른 페르소나"
-                          value={s.persona ? refValue(s.persona) : ''}
-                          selectedContent={s.persona}
-                          allowNone
-                          noneLabel={s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'}
-                          disabled={
-                            s.quickBusy ||
-                            optionsBusy ||
-                            optionsDirty ||
-                            s.profileDirty ||
-                            !s.detail ||
-                            !s.attachmentsReady
-                          }
-                          onChange={(value) => {
-                            void s.quickChange('persona', value);
-                          }}
-                        />
-                      )}
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={!s.detail?.chat.headRevision}
+                          onClick={() => setChatTool({ scope: s.viewKey, kind: 'lore' })}
+                        >
+                          <BookOpen size={18} aria-hidden="true" />
+                          마지막 장면의 로어
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
+                          onClick={() => setChatTool({ scope: s.viewKey, kind: 'compact' })}
+                        >
+                          <Minimize size={18} aria-hidden="true" />
+                          수동 컨텍스트 압축
+                        </button>
+                      </div>
                     </ComposerMore>
                     <InputTranslationControls
                       translation={s.inputTranslation}

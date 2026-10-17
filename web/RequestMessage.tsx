@@ -2,7 +2,7 @@ import type { RequestImage } from '../core/request-images.js';
 import { StoredRequestImages } from './RequestImages.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { ArrowUp, Check, Copy, Pencil, RefreshCw, X } from 'lucide-react';
+import { ArrowUp, Check, Copy, Eye, EyeOff, Pencil, RefreshCw, Save, X } from 'lucide-react';
 import { IconButton } from './IconButton.js';
 import { SHEET_MEDIA } from './ActionMenu.js';
 import './request-message.css';
@@ -10,10 +10,14 @@ import './request-message.css';
 export function RequestMessage({
   runId,
   request,
+  originalRequest,
   images,
   displayText,
   disabled,
   onSubmit,
+  onSave,
+  requestEnabled = true,
+  onToggleRequest,
   onConfirm,
   onEditingChange,
   editHint = '수정한 요청으로 새 채팅에서 생성해요.',
@@ -26,10 +30,15 @@ export function RequestMessage({
   compactActions?: 'always' | 'tap';
   runId: string;
   request: string;
+  /** Frozen input originally used to generate this response. */
+  originalRequest?: string;
   images?: RequestImage[];
   displayText?: string;
   disabled?: boolean;
   onSubmit?: (text: string) => Promise<boolean>;
+  onSave?: (text: string) => Promise<boolean>;
+  requestEnabled?: boolean;
+  onToggleRequest?: () => Promise<void>;
   onConfirm?: () => Promise<boolean>;
   onEditingChange?: (editing: boolean) => void;
 }) {
@@ -104,13 +113,14 @@ export function RequestMessage({
             event.preventDefault();
             if (
               lock.current ||
-              (!onConfirm && (disabled || (!draft.trim() && !images?.length) || !onSubmit))
+              (!onConfirm &&
+                (disabled || (!draft.trim() && !images?.length) || (!onSave && !onSubmit)))
             )
               return;
             lock.current = true;
             setBusy(true);
             try {
-              if (await (onConfirm ? onConfirm() : onSubmit!(draft))) {
+              if (await (onConfirm ? onConfirm() : onSave ? onSave(draft) : onSubmit!(draft))) {
                 saveDraft();
                 setEditing(false);
               }
@@ -144,7 +154,9 @@ export function RequestMessage({
             <small>
               {onConfirm
                 ? '이전 전송의 수락 여부를 확인해 주세요. 같은 요청으로 확인해요.'
-                : editHint}
+                : onSave
+                  ? '이후 생성 문맥에 반영해요. 이미 생성된 장면은 유지돼요.'
+                  : editHint}
             </small>
             <div className="request-edit-buttons">
               <IconButton
@@ -154,9 +166,40 @@ export function RequestMessage({
                 disabled={busy}
                 onClick={close}
               />
+              {onSave && onSubmit && !onConfirm && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy || disabled || (!draft.trim() && !images?.length)}
+                  onClick={async () => {
+                    if (lock.current) return;
+                    lock.current = true;
+                    setBusy(true);
+                    try {
+                      if (await onSubmit(draft)) {
+                        saveDraft();
+                        setEditing(false);
+                      }
+                    } finally {
+                      lock.current = false;
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  수정 후 재생성
+                </button>
+              )}
               <IconButton
-                icon={onConfirm ? RefreshCw : ArrowUp}
-                label={busy ? '요청 전송 중' : onConfirm ? '이전 요청 확인' : '수정한 요청 보내기'}
+                icon={onConfirm ? RefreshCw : onSave ? Save : ArrowUp}
+                label={
+                  busy
+                    ? '처리 중'
+                    : onConfirm
+                      ? '이전 요청 확인'
+                      : onSave
+                        ? '입력 저장'
+                        : '수정한 요청 보내기'
+                }
                 type="submit"
                 disabled={busy || (!onConfirm && (disabled || (!draft.trim() && !images?.length)))}
               />
@@ -166,7 +209,7 @@ export function RequestMessage({
       ) : (
         <>
           <div
-            className="request-message"
+            className={`request-message${!requestEnabled ? ' request-context-disabled' : ''}`}
             data-testid="source-request"
             onClick={() => {
               // Narrow widths keep earlier requests quiet; tapping the bubble shows its actions.
@@ -189,6 +232,17 @@ export function RequestMessage({
               <p>{shownRequest}</p>
             )}
           </div>
+          {originalRequest !== undefined && originalRequest !== request && (
+            <details className="request-transform-details">
+              <summary>수정 전 입력 보기</summary>
+              <dl>
+                <div>
+                  <dt>장면 생성 당시 입력</dt>
+                  <dd>{originalRequest}</dd>
+                </div>
+              </dl>
+            </details>
+          )}
           {shownRequest !== request && (
             <details className="request-transform-details">
               <summary>표시 변환됨 · 원래 요청 보기</summary>
@@ -201,6 +255,15 @@ export function RequestMessage({
             </details>
           )}
           <div className="request-message-actions">
+            {onToggleRequest && (
+              <IconButton
+                icon={requestEnabled ? EyeOff : Eye}
+                label={requestEnabled ? '입력을 문맥에서 제외' : '입력을 문맥에 포함'}
+                className="secondary"
+                disabled={disabled}
+                onClick={() => void onToggleRequest()}
+              />
+            )}
             <IconButton
               icon={copyState === 'copied' ? Check : Copy}
               label={copyState === 'copied' ? '요청 복사됨' : '요청 복사'}
@@ -211,7 +274,7 @@ export function RequestMessage({
             <span className="sr-only" role="status">
               {copyState === 'copied' ? '요청을 복사했어요.' : ''}
             </span>
-            {onSubmit && (
+            {(onSubmit || onSave) && (
               <IconButton
                 ref={trigger}
                 icon={Pencil}

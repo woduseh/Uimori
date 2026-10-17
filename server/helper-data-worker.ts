@@ -91,7 +91,10 @@ function chatMessagesSql(scoped: boolean) {
   SELECT s.id,a.chat_id,a.head_revision,
     COALESCE((SELECT hash FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.hash) AS hash,s.created_at,
     row_number() OVER (PARTITION BY a.chat_id ORDER BY a.depth DESC) scene_number,
-    r.request,COALESCE((SELECT text FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.text) AS text FROM ancestry a JOIN sources s ON s.id=a.id JOIN runs r ON r.id=s.run_id`;
+    CASE WHEN COALESCE(sc.request_enabled,1)=0 THEN NULL ELSE COALESCE(sc.request_text,r.request) END AS request,
+    COALESCE((SELECT text FROM source_edits WHERE source_id=s.id ORDER BY revision DESC LIMIT 1),s.text) AS text
+    FROM ancestry a JOIN sources s ON s.id=a.id JOIN runs r ON r.id=s.run_id
+    LEFT JOIN scene_context sc ON sc.source_id=s.id WHERE COALESCE(sc.scene_enabled,1)=1`;
 }
 function installViews(db: DatabaseSync) {
   db.exec(`
@@ -180,6 +183,7 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
     profiles: ['chat_id', 'body'],
     sources: ['id', 'parent_revision', 'chat_id', 'hash', 'created_at', 'text', 'run_id'],
     source_edits: ['source_id', 'revision', 'text', 'hash'],
+    scene_context: ['source_id', 'request_text', 'request_enabled', 'scene_enabled'],
     runs: ['id', 'request'],
     attempts: [
       'id',
@@ -339,10 +343,13 @@ function* documents(
       requests.set(message.sourceRevision, group);
     }
     for (const [index, source] of writing.history.entries()) {
-      if (!accepts(source.revision)) continue;
+      if (!accepts(source.revision) || source.sceneContext?.sceneEnabled === false) continue;
       if (source.contentHash && source.contentHash !== sha(source.text))
         throw new Error('DATA_SOURCE_CHANGED');
-      const request = requests.get(source.revision)?.join('\n');
+      const request =
+        source.sceneContext?.requestEnabled === false
+          ? undefined
+          : requests.get(source.revision)?.join('\n');
       yield {
         ...common,
         kind: 'chat',

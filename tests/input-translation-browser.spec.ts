@@ -95,7 +95,7 @@ test('ITRAN long requests survive composer translation, send, edit and reload', 
   const edited = translated + '\n수정한 전개';
   await editor.fill(edited);
   await expect(editor).toHaveValue(edited);
-  await page.getByRole('button', { name: '수정한 요청 보내기', exact: true }).click();
+  await page.getByRole('button', { name: '수정 후 재생성', exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(chat.id);
   const copyId = new URL(page.url()).searchParams.get('chat')!;
   await expect.poll(async () => (await detail(request, copyId)).runs[0]?.status).toBe('completed');

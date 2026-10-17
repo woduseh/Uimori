@@ -344,6 +344,38 @@ test('PWS05 summary length controls save independently and survive reload on mob
   await expect(models.getByLabel('도우미 요약 길이', { exact: true })).toHaveValue('2048');
 });
 
+test('PWS06 role model settings show concise help and compact sections at both widths', async ({
+  page,
+}, info) => {
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '역할별 모델');
+  const models = page.getByRole('region', { name: '역할별 모델 설정' });
+  for (const width of [MOBILE_WIDTH, 1200]) {
+    await page.setViewportSize({ width, height: 900 });
+    const group = models.locator('details.model-secondary-settings').filter({
+      has: page.locator('summary').filter({ hasText: '대화와 자료 지원' }),
+    });
+    const heading = group.locator('summary');
+    await expect(heading).toBeVisible();
+    await heading.click();
+    await expect(models.getByLabel('세션 요약 길이', { exact: true })).toBeVisible();
+    await expect(models.getByLabel('도우미 요약 길이', { exact: true })).toBeVisible();
+    await expect(group.locator('.model-summary-note')).toContainText('8,192');
+    await expect(group.locator('.model-summary-note')).toContainText('4,096');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    await page.screenshot({ path: info.outputPath(`role-model-settings-${width}.png`) });
+    if (width === 1200) {
+      await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+      await page.screenshot({ path: info.outputPath('role-model-settings-dark.png') });
+    }
+    await heading.click();
+    await expect(group).not.toHaveAttribute('open');
+  }
+});
+
 test('PWS04 shared workspace load failures recover in model and prompt settings', async ({
   page,
 }) => {

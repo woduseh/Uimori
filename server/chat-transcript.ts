@@ -13,6 +13,7 @@ import type { Chat, Store } from './store.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import { successfulTranslation } from './translation-artifacts.js';
 import { assertRequestImages } from './request-images.js';
+import { updateSceneContext } from './scene-context.js';
 
 /** User-authored data through a selected source; no execution or database-table archive. */
 export function exportChatTranscript(
@@ -37,6 +38,15 @@ export function exportChatTranscript(
     const images = typeof run.images === 'string' ? JSON.parse(run.images) : undefined;
     return {
       ...(images?.length ? { requestImages: structuredClone(images) } : {}),
+      ...(item.sceneContext?.revision
+        ? {
+            sceneContext: {
+              requestText: item.sceneContext.requestText,
+              requestEnabled: item.sceneContext.requestEnabled,
+              sceneEnabled: item.sceneContext.sceneEnabled,
+            },
+          }
+        : {}),
       request: String(run.request),
       text: item.text,
       translation: successfulTranslation(store, source)?.result?.text ?? null,
@@ -160,6 +170,8 @@ export function importChatTranscript(store: Store, value: unknown): ChatTranscri
         costUsd: null,
       });
       head = source.id;
+      if (entry.sceneContext)
+        updateSceneContext(store, source.id, { expectedRevision: 0, ...entry.sceneContext });
       if (entry.translation !== null) {
         const id = randomUUID(),
           time = new Date().toISOString();

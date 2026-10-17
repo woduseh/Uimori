@@ -9,36 +9,41 @@
   position: absolute;
   bottom: calc(100% + 8px);
   left: 0;
-  width: 290px;
-  max-width: calc(100vw - 64px);
-  padding: 14px;
+  width: 312px;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
   color: var(--text);
   box-shadow: 0 8px 24px #0003;
   z-index: 20;
-  max-height: min(440px, calc(var(--app-height, 100dvh) - 200px));
+  max-height: min(540px, calc(var(--app-height, 100dvh) - 112px));
   overflow-y: auto;
 }
 .quick-controls .composer-extra-settings {
   display: grid;
-  gap: 10px;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--line);
+  gap: 0;
 }
-.quick-controls .composer-extra-settings > label,
-.quick-controls .composer-extra-settings .content-picker {
-  width: 100%;
-  max-width: none;
+.composer-menu-group {
+  min-width: 0;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+.composer-menu-heading {
+  padding: 3px 10px 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 .quick-controls .composer-extra-settings select,
 .quick-controls .composer-extra-settings button {
   font-size: 13px;
   min-height: var(--control-h);
 }
-.quick-controls .composer-extra-settings > button {
+.quick-controls .composer-extra-settings > button,
+.quick-controls .composer-menu-group > button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -51,35 +56,81 @@
   color: var(--text);
   text-align: left;
 }
-.quick-controls .composer-extra-settings > button svg {
+.quick-controls .composer-extra-settings > button svg,
+.quick-controls .composer-menu-group > button svg {
   flex-shrink: 0;
 }
-.quick-controls .composer-extra-settings > button[aria-expanded="true"] {
+.quick-controls .composer-menu-group > button[aria-expanded="true"] {
   background: var(--accent-soft);
 }
 @media (hover: hover) {
-  .quick-controls .composer-extra-settings > button:hover:not(:disabled) {
+  .quick-controls .composer-extra-settings > button:hover:not(:disabled),
+  .quick-controls .composer-menu-group > button:hover:not(:disabled) {
     background: var(--hover);
   }
 }
-.composer[hidden] {
-  display: none;
-}
-.quick-controls .composer-more-panel label {
-  display: flex;
-  flex-direction: row;
-  max-width: none;
+.quick-controls .composer-menu-choice,
+.quick-controls .composer-menu-persona {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+  width: 100%;
+  max-width: none;
+  min-height: var(--control-h);
+  padding: 2px 8px;
+}
+.quick-controls .composer-menu-choice > span,
+.quick-controls .composer-menu-persona > span {
+  color: var(--muted);
   font-size: 13px;
-  line-height: 1.5;
+}
+.quick-controls .composer-menu-choice select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--control-h);
+  padding: 5px 28px 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background-color: var(--surface);
+  color: var(--text);
+}
+.quick-controls .composer-menu-persona .content-picker {
+  width: 100%;
+  max-width: none;
+}
+.quick-controls .composer-menu-persona .content-picker-trigger {
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.quick-controls .composer-lore-toggle {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: none;
+  min-height: var(--control-h);
+  padding: 8px 10px;
   cursor: pointer;
 }
-.composer-more-panel p {
-  margin: 8px 0 0 24px;
-  font-size: 12px;
-  line-height: 1.6;
+.composer-lore-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.composer-lore-copy small {
+  font-size: 11px;
   color: var(--muted);
+}
+.composer[hidden] {
+  display: none;
 }
 .composer-request-chips {
   grid-area: chips;
