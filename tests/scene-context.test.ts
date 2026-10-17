@@ -140,6 +140,65 @@ describe('authored scene context without replaying prior runs', () => {
     );
   });
 
+  test('a native Risu scene edits a combined user request, not only request:source IDs', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Native Risu context');
+    const data = [
+      { role: 'user' as const, data: 'Pick a destination' },
+      { role: 'user' as const, data: 'Follow the river' },
+      { role: 'char' as const, data: 'At the river bank' },
+    ];
+    const before = store.chat(chat.id);
+    const request = 'Pick a destination\n\nFollow the river';
+    const { run } = store.createRun(
+      chat.id,
+      {
+        request,
+        expectedRevision: before.headRevision,
+        expectedSettingsRevision: before.settingsRevision,
+        idempotencyKey: randomUUID(),
+      },
+      (state): RunSnapshot => ({
+        chatId: chat.id,
+        parentRevision: state.headRevision,
+        settingsRevision: state.settingsRevision,
+        settings: state.settings,
+        request,
+        history: [],
+        resources: [],
+        nativeRisuAuthored: { version: 1, action: 'choose', messages: data },
+      })
+    );
+    store.startRun(run.id);
+    const source = store.completeRun(run.id, 'At the river bank', {
+      modelCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+    });
+    expect(captureLogicalHistory(store, current(store, chat.id)).map((m) => m.text)).toEqual([
+      'Pick a destination',
+      'Follow the river',
+      'At the river bank',
+    ]);
+    updateSceneContext(store, source.id, {
+      expectedRevision: 0,
+      requestText: 'Go to the mountain instead',
+    });
+    expect(captureLogicalHistory(store, current(store, chat.id)).map((m) => m.text)).toEqual([
+      'Go to the mountain instead',
+      'At the river bank',
+    ]);
+    updateSceneContext(store, source.id, {
+      expectedRevision: 1,
+      requestEnabled: false,
+    });
+    expect(captureLogicalHistory(store, current(store, chat.id)).map((m) => m.text)).toEqual([
+      'At the river bank',
+    ]);
+    expect(store.run(run.id).request).toBe(request);
+  });
+
   test('rejects stale revisions and changes during an active main run', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Concurrent edits');

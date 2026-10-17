@@ -89,6 +89,9 @@ for (const width of DEFAULT_WIDTHS) {
     await page.getByRole('textbox', { name: '요청 수정 내용' }).fill('저장된 수정 입력');
     await page.getByRole('button', { name: '입력 저장' }).click();
     await expect(message).toContainText('저장된 수정 입력');
+    await source.getByText('수정 전 입력 보기').click();
+    await expect(source.getByText('장면 생성 당시 입력')).toBeVisible();
+    await expect(source.locator('.request-transform-details')).toContainText('원래 합성 요청');
     await expect
       .poll(async () => (await readerSource(request, chat.id)).sceneContext?.requestText)
       .toBe('저장된 수정 입력');

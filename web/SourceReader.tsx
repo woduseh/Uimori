@@ -676,6 +676,7 @@ function SourceReaderContent({
             <RequestMessage
               runId={source.runId}
               request={effectiveRequest}
+              originalRequest={request}
               images={requestImages}
               displayText={
                 context?.requestText == null ? presentation?.data?.request?.text : undefined
