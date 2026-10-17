@@ -131,3 +131,142 @@ test('WORKLOAD every library-dependent settings page shows the same read failure
       ).toBeVisible();
   }
 });
+
+for (const width of [412, 1440]) {
+  test(`WORKLOAD settings ${width} centers module, prerequisite and editor reads in their available body`, async ({
+    page,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const now = Date.now();
+    await page.clock.install({ time: now });
+    await page.clock.pauseAt(now + 1000);
+    let releaseModule!: () => void;
+    let releaseLibrary!: () => void;
+    let releaseWorkspace!: () => void;
+    let releaseLore!: () => void;
+    const moduleRead = new Promise<void>((resolve) => {
+      releaseModule = resolve;
+    });
+    const libraryRead = new Promise<void>((resolve) => {
+      releaseLibrary = resolve;
+    });
+    const workspaceRead = new Promise<void>((resolve) => {
+      releaseWorkspace = resolve;
+    });
+    const loreRead = new Promise<void>((resolve) => {
+      releaseLore = resolve;
+    });
+    let failWorkspace = true;
+    await page.route('**/assets/WorkspacePanels-*.js', async (route) => {
+      await moduleRead;
+      await route.continue();
+    });
+    await page.route('**/api/library?view=summary', async (route) => {
+      await libraryRead;
+      await route.continue();
+    });
+    await page.route('**/api/prompt-workspace', async (route) => {
+      if (route.request().method() !== 'GET') return route.continue();
+      await workspaceRead;
+      if (failWorkspace)
+        return route.fulfill({
+          status: 503,
+          json: { error: 'Synthetic model settings read failure' },
+        });
+      await route.continue();
+    });
+    await page.route('**/api/lore-context-defaults', async (route) => {
+      await loreRead;
+      await route.continue();
+    });
+    // The available body excludes its padding and the optional desktop page title.
+    // Comparing against the page, rather than the spinner's own box, catches a short box near the top.
+    const expectCentered = async (body: import('@playwright/test').Locator) => {
+      const status = body.locator('.loading-state [role="status"], .loading-state [role="alert"]');
+      await expect(status).toHaveCount(1);
+      await expect(status).toBeVisible();
+      const available = await body.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        const title = element.querySelector(':scope > .settings-page-title');
+        const top = title
+          ? title.getBoundingClientRect().bottom +
+            Number.parseFloat(getComputedStyle(title).marginBottom)
+          : bounds.top + Number.parseFloat(style.paddingTop);
+        return {
+          x: bounds.x + bounds.width / 2,
+          y: (top + bounds.bottom - Number.parseFloat(style.paddingBottom)) / 2,
+          height: bounds.bottom - Number.parseFloat(style.paddingBottom) - top,
+        };
+      });
+      const bounds = (await status.boundingBox())!;
+      const retry = body.locator('.loading-state > button');
+      const retryBounds = (await retry.count()) ? await retry.boundingBox() : null;
+      const contentBottom = retryBounds
+        ? retryBounds.y + retryBounds.height
+        : bounds.y + bounds.height;
+      expect(available.height).toBeGreaterThan(400);
+      expect(Math.abs(bounds.x + bounds.width / 2 - available.x)).toBeLessThan(2);
+      expect(Math.abs((bounds.y + contentBottom) / 2 - available.y)).toBeLessThan(2);
+    };
+    try {
+      await page.goto('/');
+      await navigationAction(page, '설정');
+      const settings = page.getByRole('dialog', { name: '설정', exact: true });
+      const moduleStatus = settings
+        .getByRole('status')
+        .filter({ hasText: '설정 화면을 불러오는 중이에요…' });
+      await page.clock.runFor(150);
+      await expect(moduleStatus).toHaveCount(0);
+      await page.clock.runFor(100);
+      await expectCentered(settings.locator(':scope > .dialog-body'));
+      await page.clock.resume();
+      const shell = (await settings.boundingBox())!;
+      await page.screenshot({ path: info.outputPath(`settings-module-loading-${width}.png`) });
+      releaseModule();
+      await expect(settings.locator('.app-settings-panel')).toBeVisible();
+      await selectSettingsSection(page, '역할별 모델');
+      const models = settings.locator('[data-settings-section="models"]');
+      await expect(models.getByRole('status')).toContainText(
+        '역할별 모델 설정을 불러오는 중이에요…'
+      );
+      await expectCentered(models);
+      expect((await settings.boundingBox())!.height).toBeCloseTo(shell.height, 0);
+      await page.screenshot({
+        path: info.outputPath(`settings-prerequisite-loading-${width}.png`),
+      });
+      const prerequisite = (await models.locator('.loading-state-region').elementHandle())!;
+      releaseLibrary();
+      await expect.poll(() => prerequisite.evaluate((element) => element.isConnected)).toBe(false);
+      const editorLoading = models
+        .getByRole('status')
+        .filter({ hasText: '역할별 모델 설정을 불러오는 중이에요…' });
+      await expect(editorLoading).toBeVisible();
+      await expectCentered(models);
+      await page.screenshot({ path: info.outputPath(`settings-editor-loading-${width}.png`) });
+      releaseWorkspace();
+      await expect(models.getByRole('alert')).toContainText('불러오지 못했어요.');
+      await expectCentered(models);
+      failWorkspace = false;
+      await models.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+      await expect(
+        models.getByRole('region', { name: '역할별 모델 설정', exact: true })
+      ).toBeVisible();
+      await expect(models.locator('.loading-state')).toHaveCount(0);
+      await selectSettingsSection(page, '로어 컨텍스트');
+      const lore = settings.locator('[data-settings-section="lore"]');
+      await expect(lore.getByRole('status')).toBeVisible();
+      await expectCentered(lore);
+      await page.screenshot({ path: info.outputPath(`settings-lore-loading-${width}.png`) });
+      releaseLore();
+      await expect(lore.locator('.loading-state')).toHaveCount(0);
+    } finally {
+      releaseModule();
+      releaseLibrary();
+      releaseWorkspace();
+      releaseLore();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+  });
+}

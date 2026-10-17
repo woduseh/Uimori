@@ -60,7 +60,7 @@ function DiagnosticReportContent({ scope, label }: { scope: DiagnosticScope; lab
           원문·프롬프트·키·자료 이름은 포함하지 않아요. 파일을 확인한 뒤 원하는 곳에 직접 공유해
           주세요.
         </p>
-        {busy && <LoadingState compact label="진단 보고서를 만드는 중이에요…" />}
+        {busy && <LoadingState presentation="inline" label="진단 보고서를 만드는 중이에요…" />}
         {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         {report && (
           <>

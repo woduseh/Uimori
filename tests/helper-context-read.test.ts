@@ -87,7 +87,7 @@ async function fixture() {
     });
   }
   const snapshot = await prepareNativeRisuReadOnly(
-    helperWritingSnapshot(store, chat.id, 'context'),
+    helperWritingSnapshot(store, chat.id),
     'context'
   );
   const saved = store.context.edit(
@@ -107,7 +107,7 @@ async function fixture() {
   // They never activate, so the current model-visible state remains identical as history grows.
   async function addHistory(count: number, jobs: number) {
     const current = await prepareNativeRisuReadOnly(
-      helperWritingSnapshot(store, chat.id, 'context'),
+      helperWritingSnapshot(store, chat.id),
       'context'
     );
     store.transaction(() => {

@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createApp, type App } from '../server/app.js';
-import { HelperWorkspace, helperCallOperationId } from '../server/helper-workspace.js';
+import { HelperWorkspace } from '../server/helper-workspace.js';
 import { ChatOverridesStore } from '../server/chat-overrides.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
@@ -252,131 +252,161 @@ test.each(['resource.read', 'chat.lore'] as const)(
   }
 );
 
-test.each(['generate', 'receipt'] as const)(
-  'artifact %s returns a small saved reference and preserves the full stored scene',
-  async (mode) => {
-    const f = await fixture();
-    const prose = 'A'.repeat(3999) + '😀' + '합성 독립 장면.\n'.repeat(9000);
-    const prompt = '독립 장면의 조건. '.repeat(1000);
-    const usage = { modelCalls: 1, inputTokens: 10, outputTokens: 4, costUsd: null };
-    const generate = vi.spyOn(modelRunner, 'runMain').mockResolvedValue({
-      status: 'completed',
-      text: prose,
-      error: null,
-      usage,
-    });
-    let artifact!: { id: string; revision: number };
-    let retry!: { name: string; arguments: Record<string, unknown> };
-    mockSend((request, round) => {
-      if (round === 0) {
-        if (mode === 'receipt') {
-          const taskId = String(
-            f.store.db.prepare("SELECT id FROM helper_tasks WHERE status='running'").get()!.id
-          );
-          f.workspace.saveArtifact(
-            taskId,
-            `${taskId}:${helperCallOperationId(taskId, 'generate')}`,
-            prompt,
-            prose,
-            usage
-          );
-        }
-        return calls(
-          call('generate', 'app.call', {
-            name: 'artifact.generate',
-            arguments: { request: prompt },
-          })
-        );
-      }
-      if (round === 1) {
-        const saved = result<{ id: string; revision: number }>(request, 'generate');
-        artifact = { id: saved.id, revision: saved.revision };
-        expect(saved).toMatchObject({
-          revision: 1,
-          origin: 'model',
-          textChars: prose.length,
-          usage,
-        });
-        expect(saved).not.toHaveProperty('text');
-        expect(saved).not.toHaveProperty('request');
-        expect(JSON.stringify(saved).length).toBeLessThan(1000);
-        if (mode === 'receipt') return structuredClone(success);
-        return calls(call('first', 'app.call', { name: 'artifact.read', arguments: artifact }));
-      }
-      if (round === 2) {
-        expect(result(request, 'first')).toMatchObject({
-          field: 'text',
-          text: 'A'.repeat(3999),
-          range: { start: 0, end: 3999, unit: 'utf16-code-unit' },
-          totalChars: prose.length,
-          nextOffset: 3999,
-        });
-        return calls(
-          call('emoji', 'app.call', {
-            name: 'artifact.read',
-            arguments: { ...artifact, offset: 3999, limit: 1 },
-          }),
-          call('prompt', 'app.call', {
-            name: 'artifact.read',
-            arguments: { ...artifact, field: 'request', limit: 20 },
-          }),
-          ...Array.from({ length: 7 }, (_, index) =>
-            call(`page-${index}`, 'app.call', {
-              name: 'artifact.read',
-              arguments: { ...artifact, offset: index * 10000, limit: 10000 },
-            })
-          )
-        );
-      }
-      if (round === 3) {
-        expect(result(request, 'emoji')).toMatchObject({
-          text: '😀',
-          range: { start: 3999, end: 4001 },
-          nextOffset: 4001,
-        });
-        expect(result(request, 'prompt')).toMatchObject({
-          field: 'request',
-          text: prompt.slice(0, 20),
-          totalChars: prompt.length,
-          nextOffset: 20,
-        });
-        const denied = event(request, 'page-6');
-        expect(denied).toMatchObject({ denied: true, result: { error: 'HELPER_READ_TOO_LARGE' } });
-        retry = (denied.result as { nextRead: typeof retry }).nextRead;
-        expect(retry).toMatchObject({
-          name: 'app.call',
-          arguments: {
-            name: 'artifact.read',
-            arguments: { id: artifact.id, revision: 1, offset: 60000, limit: 1000 },
-          },
-        });
-        return calls(call('retry-page', retry.name, retry.arguments));
-      }
-      expect(result(request, 'retry-page')).toMatchObject({
-        text: prose.slice(60000, 61000),
-        range: { start: 60000, end: 61000 },
-        nextOffset: 61000,
+test('retired artifact writes are unavailable while historical revisions remain readable', async () => {
+  const f = await fixture();
+  const prose = 'A'.repeat(3999) + '😀' + '합성 독립 장면.\n'.repeat(9000);
+  const prompt = '독립 장면의 조건. '.repeat(1000);
+  const usage = { modelCalls: 1, inputTokens: 10, outputTokens: 4, costUsd: null };
+  const generate = vi.spyOn(modelRunner, 'runMain');
+  const historical = f.workspace.enqueue(
+    f.conversation.id,
+    'historical-artifact',
+    'Original draft',
+    {
+      scope: f.conversation.scope,
+      model: f.store.product.modelSnapshot(modelWorkspace(f.store).helperModel!.id),
+      history: [],
+      persona: '',
+      limits: { totalCalls: 24, helperCalls: 12 },
+    }
+  );
+  f.workspace.start(historical.id, 'history');
+  f.workspace.finish(historical.id, 'history', 1, 'completed', 'A saved scene', null);
+  const artifact = { id: randomUUID(), revision: 1 };
+  const insert = f.store.db.prepare('INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,?,?,?)');
+  insert.run(
+    artifact.id,
+    1,
+    f.conversation.id,
+    historical.id,
+    prompt,
+    prose,
+    JSON.stringify(usage),
+    historical.createdAt,
+    'model'
+  );
+  insert.run(
+    artifact.id,
+    2,
+    f.conversation.id,
+    historical.id,
+    prompt,
+    'A historical edit.',
+    JSON.stringify(usage),
+    historical.createdAt,
+    'edit'
+  );
+  f.store.db
+    .prepare("UPDATE helper_messages SET artifacts=? WHERE task_id=? AND role='assistant'")
+    .run(JSON.stringify([artifact]), historical.id);
+  const legacyJob = randomUUID(),
+    legacySnapshot = '{"legacy":"unmodified"}';
+  f.store.db
+    .prepare("INSERT INTO helper_artifact_jobs VALUES(?,?,?,?,'running',NULL,NULL,NULL,?)")
+    .run(legacyJob, historical.id, 'legacy-job', legacySnapshot, historical.createdAt);
+  f.workspace.interrupt();
+  expect(
+    f.store.db.prepare('SELECT status,snapshot FROM helper_artifact_jobs WHERE id=?').get(legacyJob)
+  ).toEqual({ status: 'interrupted', snapshot: legacySnapshot });
+  expect(() => describeHelperTools({ names: ['artifact.generate'] })).toThrow('UNKNOWN_APP_TOOL');
+  expect(describeHelperTools({ names: ['artifact.read'] }).tools[0].name).toBe('artifact.read');
+  const patch = await f.app.inject({
+    method: 'PATCH',
+    url: '/api/helper/artifacts/' + artifact.id,
+    payload: { expectedRevision: 2, text: 'Must not save', requestKey: 'retired-edit' },
+  });
+  expect(patch.statusCode).toBe(404);
+  let retry!: { name: string; arguments: Record<string, unknown> };
+  mockSend((request, round) => {
+    if (round === 0) {
+      return calls(
+        call('generate', 'app.call', {
+          name: 'artifact.generate',
+          arguments: { request: prompt },
+        })
+      );
+    }
+    if (round === 1) {
+      expect(event(request, 'generate')).toMatchObject({
+        denied: true,
+        result: { error: 'UNKNOWN_APP_TOOL' },
       });
-      return structuredClone(success);
+      return calls(call('first', 'app.call', { name: 'artifact.read', arguments: artifact }));
+    }
+    if (round === 2) {
+      expect(result(request, 'first')).toMatchObject({
+        field: 'text',
+        text: 'A'.repeat(3999),
+        range: { start: 0, end: 3999, unit: 'utf16-code-unit' },
+        totalChars: prose.length,
+        nextOffset: 3999,
+      });
+      return calls(
+        call('emoji', 'app.call', {
+          name: 'artifact.read',
+          arguments: { ...artifact, offset: 3999, limit: 1 },
+        }),
+        call('prompt', 'app.call', {
+          name: 'artifact.read',
+          arguments: { ...artifact, field: 'request', limit: 20 },
+        }),
+        ...Array.from({ length: 7 }, (_, index) =>
+          call(`page-${index}`, 'app.call', {
+            name: 'artifact.read',
+            arguments: { ...artifact, offset: index * 10000, limit: 10000 },
+          })
+        )
+      );
+    }
+    if (round === 3) {
+      expect(result(request, 'emoji')).toMatchObject({
+        text: '😀',
+        range: { start: 3999, end: 4001 },
+        nextOffset: 4001,
+      });
+      expect(result(request, 'prompt')).toMatchObject({
+        field: 'request',
+        text: prompt.slice(0, 20),
+        totalChars: prompt.length,
+        nextOffset: 20,
+      });
+      const denied = event(request, 'page-6');
+      expect(denied).toMatchObject({ denied: true, result: { error: 'HELPER_READ_TOO_LARGE' } });
+      retry = (denied.result as { nextRead: typeof retry }).nextRead;
+      expect(retry).toMatchObject({
+        name: 'app.call',
+        arguments: {
+          name: 'artifact.read',
+          arguments: { id: artifact.id, revision: 1, offset: 60000, limit: 1000 },
+        },
+      });
+      return calls(call('retry-page', retry.name, retry.arguments));
+    }
+    expect(result(request, 'retry-page')).toMatchObject({
+      text: prose.slice(60000, 61000),
+      range: { start: 60000, end: 61000 },
+      nextOffset: 61000,
     });
-    const task = await submit(f, '독립 장면을 만들어 저장하고 필요한 부분만 확인해줘');
-    expect(generate).toHaveBeenCalledTimes(mode === 'generate' ? 1 : 0);
-    const saved = await f.app.inject({ url: `/api/helper/artifacts/${artifact.id}?revision=1` });
-    expect(saved.statusCode).toBe(200);
-    expect(saved.json()).toMatchObject({ text: prose, request: prompt });
-    expect(
-      f.workspace
-        .messages(f.conversation.id)
-        .find((message) => message.taskId === task.id && message.role === 'assistant')?.artifacts
-    ).toEqual([{ id: artifact.id, revision: 1 }]);
-    expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_artifacts').get()).toEqual({
-      n: 1,
-    });
-    expect(
-      f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
-    ).toEqual({ n: 1 });
-  }
-);
+    return structuredClone(success);
+  });
+  const task = await submit(f, '이전 가정 장면을 읽고 생성을 재시도하지 마세요.');
+  expect(generate).not.toHaveBeenCalled();
+  const saved = await f.app.inject({ url: `/api/helper/artifacts/${artifact.id}?revision=1` });
+  expect(saved.statusCode).toBe(200);
+  expect(saved.json()).toMatchObject({ text: prose, request: prompt });
+  expect(
+    f.workspace
+      .messages(f.conversation.id)
+      .find((message) => message.taskId === historical.id && message.role === 'assistant')
+      ?.artifacts
+  ).toEqual([{ id: artifact.id, revision: 1 }]);
+  expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_artifacts').get()).toEqual({
+    n: 2,
+  });
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 0 });
+});
 
 test('targeted chat metadata and rename avoid writing projections while preserving CAS and receipts', async () => {
   const f = await fixture('library');

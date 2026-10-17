@@ -137,7 +137,7 @@ test('cancellation routes to the existing run transition and rejects inactive or
     model: {} as never,
     history: [],
     persona: '',
-    limits: { totalCalls: 3, helperCalls: 2, artifacts: 0 },
+    limits: { totalCalls: 3, helperCalls: 2 },
   });
   f.current.id = helperTask.id;
   const rejectedCancel = vi.fn();
@@ -221,7 +221,7 @@ test('a helper retry replaces only one failed task and makes the old task inelig
     model: {} as never,
     history: [],
     persona: '',
-    limits: { totalCalls: 3, helperCalls: 2, artifacts: 0 },
+    limits: { totalCalls: 3, helperCalls: 2 },
   });
   f.store.db
     .prepare("UPDATE helper_tasks SET status='failed',error='PROVIDER_FAILED' WHERE id=?")
@@ -439,7 +439,7 @@ function receiptTask(f: ReturnType<typeof fixture>) {
     model: {} as never,
     history: [],
     persona: '',
-    limits: { totalCalls: 3, helperCalls: 2, artifacts: 0 },
+    limits: { totalCalls: 3, helperCalls: 2 },
   });
   f.workspace.start(task.id, 'owner');
   return task;

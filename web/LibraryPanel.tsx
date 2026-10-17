@@ -38,6 +38,7 @@ import { validateRisuContent } from '../core/risu-content.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { ContentAvatar } from './ContentAvatar.js';
+import { contentPortraitUrl } from './content-portrait.js';
 import {
   AddIcon,
   BackIcon,
@@ -724,9 +725,10 @@ export function LibraryPanel({
           setSelecting(false);
         }}
       />
-      {loading && <LoadingState label="자료 본문을 불러오는 중이에요…" compact />}
+      {loading && <LoadingState presentation="inline" label="자료 본문을 불러오는 중이에요…" />}
       {!library ? (
         <LoadingState
+          presentation="region"
           loading={!libraryError}
           error={libraryError}
           label="서재를 불러오는 중이에요…"
@@ -1110,6 +1112,9 @@ export function LibraryPanel({
                     }
                     key={item.id}
                     data-library-item-id={item.id}
+                    data-has-portrait={
+                      item.kind === 'module' ? undefined : !!contentPortraitUrl(item)
+                    }
                     data-selected={selecting && selectedIds.includes(item.id) ? 'true' : undefined}
                     data-selecting={selecting ? 'true' : undefined}
                     data-dragging={draggedItemId === item.id ? 'true' : undefined}

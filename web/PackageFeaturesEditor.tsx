@@ -162,7 +162,7 @@ export function PackageFeaturesEditor({
               <ContentAvatar content={status?.content} title={status?.content?.title ?? ref.id} />
               {status?.error && (
                 <p className="error" role="alert">
-                  {status.error} 자료를 다시 확인하거나 참조를 해제해 주세요.
+                  {status.error} 자료를 다시 확인하거나 연결을 해제해 주세요.
                 </p>
               )}
               <div className="package-role-actions">
@@ -174,7 +174,7 @@ export function PackageFeaturesEditor({
                     update({ modules: value.modules?.filter((item) => item.id !== ref.id) });
                   }}
                 >
-                  모듈 참조 해제
+                  모듈 연결 해제
                 </button>
               </div>
             </fieldset>
@@ -217,8 +217,10 @@ export function PackageFeaturesEditor({
         </footer>
       </section>
       <div className="package-module-status" aria-live="polite">
-        {loading && <LoadingState compact label="자료와 기능 목록을 불러오는 중이에요…" />}
-        {busy && <LoadingState compact label="선택한 자료를 불러오는 중이에요…" />}
+        {loading && (
+          <LoadingState presentation="inline" label="자료와 기능 목록을 불러오는 중이에요…" />
+        )}
+        {busy && <LoadingState presentation="inline" label="선택한 자료를 불러오는 중이에요…" />}
       </div>
       {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       {notice && <NoticeBanner>{notice}</NoticeBanner>}

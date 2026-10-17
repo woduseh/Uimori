@@ -41,7 +41,7 @@ export function TranslationGuideEditor({
         <div>
           <h3>이름·용어 표기</h3>
           <p className="muted">
-            조건과 컨텍스트를 함께 전달해요. 번역문을 기계적으로 치환하는 규칙은 아니에요.
+            번역 모델이 표기와 조건을 문맥에 맞춰 참고해요. 번역문의 단어를 일괄 치환하지는 않아요.
           </p>
         </div>
         <button

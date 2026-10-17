@@ -51,7 +51,6 @@ const chatLabels = {
   prompts: '프롬프트·모델',
   story: '기억·로어',
   images: '이미지',
-  runtime: '실행 옵션',
 };
 
 const chatSettings = (section, title) => ({
@@ -198,7 +197,11 @@ export const screens = [
   chatSettings('prompts', '프롬프트·모델'),
   chatSettings('story', '기억·로어'),
   chatSettings('images', '이미지'),
-  chatSettings('runtime', '실행 옵션'),
+  {
+    ...chatSettings('prompts', '고급 실행 설정'),
+    id: 'chat-settings-generation-advanced',
+    steps: [{ click: { text: '고급 실행 설정', exact: true, within: chatDialog } }],
+  },
   {
     id: 'new-chat',
     title: '새 채팅',

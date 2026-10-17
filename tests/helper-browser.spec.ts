@@ -35,6 +35,7 @@ async function harness(page: Page, seedCount = 0) {
   const receipts = new Map<string, HelperTaskView>();
   const streams = new Map<string, ResponseStreamPage>();
   const artifacts = new Map<string, HelperArtifactView[]>();
+  const artifactWrites: string[] = [];
   const activities = new Map<string, HelperActivityEvent[]>();
   const undoPosts: { editSeq: number }[] = [];
   let loseUndo = false;
@@ -175,7 +176,7 @@ async function harness(page: Page, seedCount = 0) {
           scope,
           revision: 1,
           persona: '',
-          limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
+          limits: { totalCalls: 24, helperCalls: 12 },
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           title: `합성 작업 ${views.size + 1}`,
@@ -345,18 +346,9 @@ async function harness(page: Page, seedCount = 0) {
     const artifactMatch = /^\/api\/helper\/artifacts\/([^/]+)$/u.exec(path);
     if (artifactMatch) {
       const revisions = artifacts.get(artifactMatch[1])!;
-      if (request.method() === 'PATCH') {
-        const latest = revisions.at(-1)!;
-        if (body.expectedRevision !== latest.revision)
-          return route.fulfill({ status: 409, json: { error: '다른 장면 변경이 저장됐어요.' } });
-        const next = {
-          ...latest,
-          revision: latest.revision + 1,
-          origin: 'edit' as const,
-          text: body.text,
-        };
-        revisions.push(next);
-        return route.fulfill({ json: next });
+      if (request.method() !== 'GET') {
+        artifactWrites.push(request.method());
+        return route.fulfill({ status: 410, json: { error: 'HELPER_ARTIFACT_READ_ONLY' } });
       }
       const revision = url.searchParams.get('revision');
       return route.fulfill({
@@ -372,6 +364,7 @@ async function harness(page: Page, seedCount = 0) {
     posts,
     steerPosts,
     artifacts,
+    artifactWrites,
     undoPosts,
     loseUndo: () => {
       loseUndo = true;
@@ -496,10 +489,7 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
       waiting = false;
       release();
       await expect(loading).toHaveCount(0);
-      const empty = panel.getByText(
-        '작품에 대해 묻거나, 설정을 다듬거나, 가정 장면을 부탁해 보세요.',
-        { exact: true }
-      );
+      const empty = panel.getByText('작품이나 설정에 대해 물어보세요.', { exact: true });
       await expect(empty).toBeVisible();
       const emptyBox = (await empty.boundingBox())!;
       expect(
@@ -635,7 +625,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   for (const width of [1440, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     const settings = panel.locator('.helper-settings');
-    await expect(settings.locator('input[type="number"]')).toHaveCount(3);
+    await expect(settings.locator('input[type="number"]')).toHaveCount(2);
     expect(
       await settings.evaluate((node) => node.scrollWidth - node.clientWidth)
     ).toBeLessThanOrEqual(1);
@@ -1017,10 +1007,12 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   ).toBe(1);
 });
 
-test('HELPUI03 library work selection, older pages and direct artifact edit preserve exact message references', async ({
+test('HELPUI03 archived artifact revisions and device drafts remain readable without writes', async ({
   page,
   request,
-}) => {
+  context,
+}, info) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const chat = await create(request),
     state = await harness(page, 55);
   await page.goto(`/?chat=${chat.id}`);
@@ -1039,7 +1031,52 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
     usage: { ...usage },
     createdAt: new Date().toISOString(),
   };
-  state.artifacts.set(artifact.id, [artifact]);
+  state.artifacts.set(artifact.id, [
+    artifact,
+    {
+      ...artifact,
+      revision: 2,
+      origin: 'edit',
+      request: '과거 수정 요청',
+      text: '과거 편집 저장본',
+    },
+  ]);
+  const draftKeys = [
+    `helper-artifact-draft:${artifact.id}:1`,
+    `helper-artifact-draft:${artifact.id}:2`,
+  ];
+  const draftTexts = ['내 장면 편집 초안', '다른 수정본의 편집 초안'];
+  const recovery = [
+    {
+      key: `helper:helper-artifacts:${view.conversation.id}`,
+      model: JSON.stringify(draftKeys),
+    },
+    ...draftKeys.map((key, index) => ({
+      key: `helper:${key}`,
+      model: JSON.stringify({ revision: index + 1, text: draftTexts[index] }),
+    })),
+  ];
+  await page.evaluate(async (entries) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('uimori-editor-recovery', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('buffers');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = database.transaction('buffers', 'readwrite');
+        for (const entry of entries)
+          transaction
+            .objectStore('buffers')
+            .put({ revision: null, model: entry.model, rawFields: {} }, entry.key);
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+      });
+    } finally {
+      database.close();
+    }
+  }, recovery);
   view.messages.at(-1)!.artifacts = [{ id: artifact.id, revision: 1 }];
   view.events.push({
     seq: 1,
@@ -1049,7 +1086,7 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
     data: null,
   });
   // This external change arrives while idle: allow the 10-second list poll and its follow-up reads.
-  await expect(panel.getByRole('region', { name: '독립 가정 장면' })).toBeVisible({
+  await expect(panel.getByRole('region', { name: '보관된 가정 장면' })).toBeVisible({
     timeout: 15000,
   });
   await panel.getByRole('button', { name: '이전 메시지 불러오기' }).click();
@@ -1060,42 +1097,99 @@ test('HELPUI03 library work selection, older pages and direct artifact edit pres
   await expect(panel.locator('.helper-task-history h2')).toHaveText('도우미 작업 기록');
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(55);
   await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
-  const card = panel.getByRole('region', { name: '독립 가정 장면' });
-  await card.getByRole('button', { name: '직접 편집', exact: true }).click();
-  await card.getByLabel('가정 장면 직접 편집').fill('내 장면 편집 초안');
+  const card = panel.getByRole('region', { name: '보관된 가정 장면' });
+  await expect(card.locator('.helper-prose').first()).toHaveText(artifact.text);
+  await expect(card.getByRole('button', { name: '직접 편집', exact: true })).toHaveCount(0);
+  await expect(card.getByRole('button', { name: '이 장면 수정 요청', exact: true })).toHaveCount(0);
+  await expect(card.getByRole('textbox')).toHaveCount(0);
   await panel.getByLabel('도우미에게 요청').fill('별도로 유지할 요청 초안');
-  state.artifacts
-    .get(artifact.id)!
-    .push({ ...artifact, revision: 2, origin: 'edit', text: '다른 창의 편집' });
-  await card.getByRole('button', { name: '장면 편집 저장' }).click();
-  const conflict = page.getByRole('alertdialog', { name: '가정 장면 저장 충돌' });
-  await expect(conflict).toBeVisible();
-  await conflict.getByRole('button', { name: '현재 입력 유지' }).click();
-  await expect(card.getByLabel('가정 장면 직접 편집')).toHaveValue('내 장면 편집 초안');
-  await card.getByRole('button', { name: '장면 편집 저장' }).click();
-  await conflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
-  await expect(conflict.getByLabel('현재 저장본')).toContainText('다른 창의 편집');
-  expect(state.artifacts.get(artifact.id)!.at(-1)!.revision).toBe(2);
-  await conflict.getByRole('button', { name: '현재 입력 유지' }).click();
-  await card.getByRole('button', { name: '장면 편집 저장' }).click();
-  await expect(conflict).toBeVisible();
-  await conflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
-  await conflict.getByRole('button', { name: '저장본 확인 완료', exact: true }).click();
-  await card.getByRole('button', { name: '장면 편집 저장' }).click();
-  await expect(card.locator('.helper-prose')).toHaveText('내 장면 편집 초안');
-  expect(state.artifacts.get(artifact.id)!.at(-1)!.revision).toBe(3);
+  await card.getByLabel('가정 장면 수정 번호').selectOption('2');
+  await expect(card.locator('.helper-prose').first()).toHaveText('과거 편집 저장본');
+  await card.getByText('장면 요청', { exact: true }).click();
+  await expect(card.locator('.helper-artifact-request')).toContainText('과거 수정 요청');
+  await card.getByRole('button', { name: '가정 장면 요청 복사', exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe('과거 수정 요청');
+  await card.getByRole('button', { name: '가정 장면 복사', exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    .toBe('과거 편집 저장본');
+  await card.getByLabel('가정 장면 수정 번호').selectOption('1');
+  await expect(card.locator('.helper-prose').first()).toHaveText(artifact.text);
+  await card.getByText('이 기기에 남은 편집 초안 2개', { exact: true }).click();
+  for (const [index, text] of draftTexts.entries()) {
+    const draft = card.getByRole('region', { name: `보관된 편집 초안 ${index + 1}`, exact: true });
+    await expect(draft).toContainText(text);
+    await draft.getByRole('button', { name: '가정 장면 초안 복사', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(text);
+  }
+  expect(state.artifactWrites).toEqual([]);
+  expect(state.artifacts.get(artifact.id)).toHaveLength(2);
   expect(view.messages.at(-1)!.artifacts).toEqual([{ id: artifact.id, revision: 1 }]);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
   await panel.getByRole('button', { name: '새 도우미 세션' }).click();
-  await expect(
-    panel.getByText('작품에 대해 묻거나, 설정을 다듬거나, 가정 장면을 부탁해 보세요.')
-  ).toBeVisible();
+  await expect(panel.getByText('작품이나 설정에 대해 물어보세요.')).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 작업의 초안');
   await panel.getByLabel('도우미 세션 선택').selectOption(view.conversation.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
   await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(55);
+  await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
+  for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
+    await page.setViewportSize({ width, height: 900 });
+    await card.locator('header').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`helper-archive-${width}.png`) });
+  }
+
+  // A fresh page must recover device drafts even when every saved-artifact read fails.
+  await page.route(`**/api/helper/artifacts/${artifact.id}**`, async (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return route.fulfill({ status: 503, json: { error: 'SYNTHETIC_ARCHIVE_READ_FAILURE' } });
+  });
+  await page.reload();
+  await navigationAction(page, '서재');
+  const recoveredPanel = await open(page);
+  await recoveredPanel.getByLabel('도우미 세션 선택').selectOption(view.conversation.id);
+  const recoveredCard = recoveredPanel.getByRole('region', { name: '보관된 가정 장면' });
+  await expect(recoveredCard).toContainText('서버 작업을 완료하지 못했어요. (503)');
+  await recoveredCard.getByText('이 기기에 남은 편집 초안 2개', { exact: true }).click();
+  for (const [index, text] of draftTexts.entries()) {
+    const draft = recoveredCard.getByRole('region', {
+      name: `보관된 편집 초안 ${index + 1}`,
+      exact: true,
+    });
+    await expect(draft).toContainText(text);
+    await draft.getByRole('button', { name: '가정 장면 초안 복사', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(text);
+  }
+  const persisted = await page.evaluate(
+    async (keys) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('uimori-editor-recovery', 1);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        return await Promise.all(
+          keys.map(
+            (key) =>
+              new Promise<string>((resolve, reject) => {
+                const request = database.transaction('buffers').objectStore('buffers').get(key);
+                request.onsuccess = () => resolve(request.result?.model);
+                request.onerror = () => reject(request.error);
+              })
+          )
+        );
+      } finally {
+        database.close();
+      }
+    },
+    recovery.map((entry) => entry.key)
+  );
+  expect(persisted).toEqual(recovery.map((entry) => entry.model));
+  expect(state.artifactWrites).toEqual([]);
 });
 
 test('HELPUI04 selected source is frozen in the request and a terminal missing stream does not reconnect', async ({

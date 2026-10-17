@@ -38,14 +38,15 @@ export function ModelWorkspaceEditor({
   const id = useId();
   const [draft, setDraft] = useState<ModelWorkspace | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'reload' | null>(null);
+  const busy = operation !== null;
   const lock = useRef(false);
   const [message, setMessage] = useState('');
   const [saveError, setSaveError] = useState('');
   const [saveConflict, setSaveConflict] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
   const [reloadError, setReloadError] = useState('');
-  const { canSelect } = useModelSelection(library.models, library.connections);
+  const { canSelect, choices } = useModelSelection(library.models, library.connections);
   useEffect(() => {
     if (workspace && !dirty && !busy)
       // A successful explicit read must not be replaced by an older shared snapshot.
@@ -74,7 +75,7 @@ export function ModelWorkspaceEditor({
   if (!draft)
     return (
       <LoadingState
-        compact
+        presentation="region"
         loading={!error}
         error={error}
         label="역할별 모델 설정을 불러오는 중이에요…"
@@ -103,7 +104,7 @@ export function ModelWorkspaceEditor({
     }
     if (!dirty) return true;
     lock.current = true;
-    setBusy(true);
+    setOperation('save');
     setSaveError('');
     setMessage('');
     return api<ModelWorkspace>(
@@ -136,7 +137,7 @@ export function ModelWorkspaceEditor({
       })
       .finally(() => {
         lock.current = false;
-        setBusy(false);
+        setOperation(null);
       });
   }
   function change(next: ModelWorkspace) {
@@ -147,7 +148,7 @@ export function ModelWorkspaceEditor({
   async function reload() {
     if (lock.current) return;
     lock.current = true;
-    setBusy(true);
+    setOperation('reload');
     setReloadError('');
     try {
       const accepted = await api<ModelWorkspace>('/model-workspace');
@@ -161,7 +162,7 @@ export function ModelWorkspaceEditor({
       setReloadError('설정을 불러오지 못했어요. 초안은 유지했어요.');
     } finally {
       lock.current = false;
-      setBusy(false);
+      setOperation(null);
     }
   }
   const selector = (
@@ -241,6 +242,19 @@ export function ModelWorkspaceEditor({
             )}
             {selector('번역 모델', draft.routes.translation, (ref) =>
               change({ ...draft, routes: { ...draft.routes, translation: ref } })
+            )}
+            {choices.length === 0 && (
+              <div className="settings-row model-setup-prompt">
+                <div className="settings-row-copy">
+                  <small>사용할 수 있는 모델이 없어요. 프로바이더와 모델을 설정해 주세요.</small>
+                </div>
+                <div className="settings-row-control">
+                  <button type="button" className="secondary" onClick={onManage}>
+                    <SettingsIcon size={18} aria-hidden="true" />
+                    프로바이더·모델 설정
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </fieldset>
@@ -540,7 +554,7 @@ export function ModelWorkspaceEditor({
           <SaveButton
             type="button"
             label="역할별 모델 설정 저장"
-            aria-busy={busy}
+            aria-busy={operation === 'save'}
             disabled={!dirty || invalid}
             onClick={() => void save()}
           />
@@ -594,10 +608,12 @@ export function ModelWorkspaceEditor({
       <TransientNotice message={message} />
       {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       {!confirmReload && reloadError && <NoticeBanner tone="error">{reloadError}</NoticeBanner>}
-      <button type="button" className="secondary" onClick={onManage}>
-        <SettingsIcon size={18} aria-hidden="true" />
-        모델 프리셋·프로바이더 관리{' '}
-      </button>
+      {choices.length > 0 && (
+        <button type="button" className="secondary" onClick={onManage}>
+          <SettingsIcon size={18} aria-hidden="true" />
+          모델 프리셋·프로바이더 관리{' '}
+        </button>
+      )}
     </section>
   );
 }

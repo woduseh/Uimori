@@ -1,5 +1,4 @@
 .loading-state {
-  min-height: min(50dvh, 360px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -11,8 +10,14 @@
   text-align: center;
   overflow-wrap: anywhere;
 }
-.loading-state-compact {
-  min-height: 0;
+/* The destination or panel supplies available height; stand-alone dialogs retain a quiet body. */
+.loading-state-region {
+  flex: 1;
+  min-height: min(50dvh, 360px);
+  width: 100%;
+}
+.loading-state-placeholder {
+  min-height: 128px;
   padding: 16px;
 }
 .loading-state [role="status"],
@@ -28,4 +33,25 @@
 }
 .loading-state p {
   margin: 0;
+}
+.loading-state-inline {
+  flex-direction: row;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 0;
+  text-align: left;
+}
+.loading-state-inline [role="status"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: none;
+}
+.loading-state-inline [role="alert"] {
+  justify-items: start;
+  max-width: none;
+}
+.loading-state-inline .activity-spinner {
+  flex-shrink: 0;
 }

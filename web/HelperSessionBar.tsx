@@ -260,7 +260,10 @@ export function HelperSessionBar(props: Props) {
           <p>{impact.description}</p>
         ) : (
           !readError && (
-            <LoadingState compact label="삭제할 자료와 진행 중인 작업을 확인하고 있어요…" />
+            <LoadingState
+              presentation="inline"
+              label="삭제할 자료와 진행 중인 작업을 확인하고 있어요…"
+            />
           )
         )}
         {impact && !impact.canDelete && (

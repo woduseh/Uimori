@@ -278,7 +278,7 @@ test.describe('actual local native Risu cards', () => {
         body: JSON.stringify({ diagnostic, unsupported }),
         contentType: 'application/json',
       });
-      const partial = dialog.getByLabel('위 미지원 항목이 반영되지 않는 부분 가져오기에 동의해요.');
+      const partial = dialog.getByLabel('위의 미지원 항목을 적용하지 않고 가져오는 데 동의해요.');
       if (diagnostic && unsupported.length) await partial.check();
       else
         expect(unsupported, 'Final acceptance requires no unsupported imported features').toEqual(

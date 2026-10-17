@@ -45,7 +45,7 @@ export function MaintenanceBanner() {
         <p>
           읽기와 진행 중인 작업의 취소는 사용할 수 있어요. 작성 중인 내용은 유지해요. 가져오기도
           잠시 중단해요.
-          {!!state.activeWork && ` 진행 중인 작업 ${state.activeWork}개가 끝나는 중이에요.`}
+          {!!state.activeWork && ` 진행 중인 작업이 ${state.activeWork}개 있어요.`}
         </p>
       </details>
     </NoticeBanner>

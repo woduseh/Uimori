@@ -155,7 +155,7 @@ export function ResourceBundleImport({
         >
           {busy ? '처리 중…' : uncertain ? '같은 요청으로 다시 확인' : '새 자료로 가져오기'}
         </button>
-        {busy && <LoadingState compact label="자료 백업을 처리하는 중이에요…" />}
+        {busy && <LoadingState presentation="inline" label="자료 백업을 처리하는 중이에요…" />}
         {uncertain && (
           <NoticeBanner>
             서버의 완료 여부를 확인하지 못했어요. 선택한 파일과 요청을 유지했어요. 같은 요청으로

@@ -213,7 +213,7 @@ export function PushSettings() {
           ))}
       </div>
       {supported && !info && !error && (
-        <LoadingState compact label="알림 설정을 불러오는 중이에요…" />
+        <LoadingState presentation="placeholder" label="알림 설정을 불러오는 중이에요…" />
       )}
       {!supported && (
         <p className="muted">

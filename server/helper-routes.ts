@@ -104,12 +104,11 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     let limits: HelperLimits | undefined;
     if (body.limits !== undefined) {
       const value = record(body.limits);
-      fields(value, ['totalCalls', 'helperCalls', 'artifacts']);
+      fields(value, ['totalCalls', 'helperCalls']);
       const totalCalls = number(value.totalCalls, 'total call limit', 2, 100);
       limits = {
         totalCalls,
         helperCalls: number(value.helperCalls, 'helper call limit', 1, totalCalls),
-        artifacts: number(value.artifacts, 'artifact jobs', 1, 10),
       };
     }
     return store.update(
@@ -260,16 +259,4 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         )
       )
   );
-  app.patch<{ Params: { id: string } }>('/api/helper/artifacts/:id', (request) => {
-    const body = record(request.body);
-    fields(body, ['expectedRevision', 'text', 'requestKey']);
-    return publicArtifact(
-      store.editArtifact(
-        request.params.id,
-        number(body.expectedRevision, 'artifact revision'),
-        text(body.text, 'artifact text', 500_000),
-        text(body.requestKey, 'request key', 100)
-      )
-    );
-  });
 }

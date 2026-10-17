@@ -138,7 +138,7 @@ export function PromptWorkspaceEditor({
   if (!state.ready)
     return (
       <LoadingState
-        compact
+        presentation="region"
         loading={!state.error}
         error={state.error}
         label="현재 프롬프트를 불러오는 중이에요…"

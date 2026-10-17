@@ -258,7 +258,8 @@ export function AssetEditor({
     <section className="workspace-tools" aria-label="이 이야기의 이미지">
       <p className="muted">채팅에 등록한 이미지 {assets.length}개</p>
       <p className="muted">
-        봇·페르소나·모듈의 본문용 에셋은 여기서 편집하지 않지만 자동 배치 후보에는 포함돼요.
+        봇·페르소나·모듈에 등록한 본문용 이미지는 각 자료에서 편집해요. 자동 이미지 배치에 이
+        이미지들도 사용할 수 있어요.
       </p>
       {content}
     </section>

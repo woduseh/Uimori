@@ -1,3 +1,4 @@
+import { legacyChatBackupFixture } from './fixtures/legacy-backup.js';
 import { saveImportReceipt } from '../server/import-operations.js';
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { afterEach, describe, expect, test } from 'vitest';
@@ -9,7 +10,7 @@ import { Store } from '../server/store.js';
 import { HttpError } from '../server/request-validation.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
-import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { importChatBackup } from '../server/chat-backup.js';
 import { CHAT_TRANSCRIPT_FORMAT, validateChatTranscript } from '../core/chat-transcript.js';
 import { editTranslation } from '../server/source-editing.js';
 import { successfulTranslation } from '../server/translation-artifacts.js';
@@ -306,7 +307,7 @@ describe('chat transcript export and import', () => {
     });
     const destination = await database();
     const restored = await importChatBackup(destination, {
-      backup: exportChatBackup(store, chat.id),
+      backup: legacyChatBackupFixture(store, chat.id),
       idempotencyKey: 'shared-roles-backup',
     });
     for (const [owner, copied] of [
@@ -337,7 +338,7 @@ describe('chat transcript export and import', () => {
         expectedHeadRevision: null,
         idempotencyKey: `note-${index}`,
       });
-    const backup = exportChatBackup(store, chat.id);
+    const backup = legacyChatBackupFixture(store, chat.id);
     expect(backup.chats[0].transcript.notes).toHaveLength(501);
     const destination = await database();
     const restored = await importChatBackup(destination, {
@@ -428,7 +429,7 @@ describe('chat transcript export and import', () => {
       ).toMatchObject({ kind: 'imported-memory', origin, atRevision: null });
       expect(exportChatTranscript(store, copied.id).notes).toEqual(transcript.notes);
     }
-    const backup = exportChatBackup(store, imported.chat.id);
+    const backup = legacyChatBackupFixture(store, imported.chat.id);
     const fresh = await database();
     const restored = await importChatBackup(fresh, { backup, idempotencyKey: 'memory-backup' });
     expect(exportChatTranscript(fresh, restored.chat.id).notes).toEqual(transcript.notes);
@@ -565,7 +566,7 @@ describe('chat transcript export and import', () => {
     const first = importChatTranscript(store, { transcript, idempotencyKey: 'portable-key' });
     const fresh = await database();
     const restored = await importChatBackup(fresh, {
-      backup: exportChatBackup(store, first.chat.id),
+      backup: legacyChatBackupFixture(store, first.chat.id),
       idempotencyKey: 'restore',
     });
     const historical = fresh.db

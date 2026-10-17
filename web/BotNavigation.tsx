@@ -589,8 +589,7 @@ export function BotBranch(
                 type="button"
                 onClick={(event) => openFromMenu(event, () => props.onImportChat?.(bot))}
               >
-                <LibraryIcon size={18} aria-hidden="true" />
-                채팅 가져오기
+                <LibraryIcon size={18} aria-hidden="true" />이 봇으로 본문 가져오기
               </button>
             )}
           </ActionMenu>
@@ -605,7 +604,7 @@ export function BotBranch(
       {expanded && (
         <div className="bot-branch-chats">
           {loading ? (
-            <LoadingState compact label="폴더를 불러오는 중이에요…" />
+            <LoadingState presentation="inline" label="폴더를 불러오는 중이에요…" />
           ) : (
             <nav aria-label={`${bot?.title ?? '봇'}의 채팅 목록`}>
               {folderSection(null)}

@@ -1,3 +1,4 @@
+import { legacyChatBackupFixture } from './fixtures/legacy-backup.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,7 +10,7 @@ import { ChatOverridesStore } from '../server/chat-overrides.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { OutlineStore } from '../server/outline-store.js';
 import { forkChat } from '../server/chat-fork.js';
-import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { importChatBackup } from '../server/chat-backup.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import type { Content } from '../core/product.js';
 import { setSceneTitle, sceneTitles } from '../server/scene-titles.js';
@@ -124,7 +125,7 @@ test('independent chat copies and portable restores keep authored plans and scop
   verify(store, copy.id);
   const target = database();
   const restored = await importChatBackup(target, {
-    backup: exportChatBackup(store, chat.id),
+    backup: legacyChatBackupFixture(store, chat.id),
     idempotencyKey: randomUUID(),
   });
   verify(target, restored.chat.id);
@@ -132,7 +133,7 @@ test('independent chat copies and portable restores keep authored plans and scop
   expect(new OutlineStore(target).detail(restored.chat.id).nodes[0].id).not.toBe(
     outline.detail(chat.id).nodes[0].id
   );
-  const legacy = exportChatBackup(store, chat.id);
+  const legacy = legacyChatBackupFixture(store, chat.id);
   delete legacy.chats[0].state.sceneTitles;
   const withoutTitles = await importChatBackup(target, {
     backup: legacy,

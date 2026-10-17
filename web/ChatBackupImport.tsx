@@ -174,7 +174,7 @@ export function ChatBackupImport({
             />
           </label>
         </div>
-        {reading && <LoadingState compact label="백업 파일을 읽고 있어요…" />}
+        {reading && <LoadingState presentation="inline" label="백업 파일을 읽고 있어요…" />}
         {selection && (
           <div className="archive-file-summary">
             <p>
@@ -205,7 +205,7 @@ export function ChatBackupImport({
             </div>
           </div>
         )}
-        {busy && <LoadingState compact label="채팅 백업을 복원하는 중이에요…" />}
+        {busy && <LoadingState presentation="inline" label="채팅 백업을 복원하는 중이에요…" />}
         {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         {uncertain && (
           <NoticeBanner>

@@ -72,9 +72,12 @@ export function LoreContextDefaultsEditor({
   useSettingsSaveHandler(onSaveHandlerChange, save);
   if (!draft)
     return (
-      <section className="settings-section" aria-label="로어 컨텍스트 기본값">
+      <section
+        className="settings-section settings-loading-region"
+        aria-label="로어 컨텍스트 기본값"
+      >
         <LoadingState
-          compact
+          presentation="region"
           loading={!error}
           error={error}
           label="로어 컨텍스트 기본값을 불러오는 중이에요…"

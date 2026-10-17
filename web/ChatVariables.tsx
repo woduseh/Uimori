@@ -272,7 +272,9 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
         카드와 스크립트가 이 채팅에서 함께 읽는 문자열 값이에요. 서재 원본은 바꾸지 않아요. 빈
         문자열도 값으로 저장하며, 키를 지우면 자료의 기본값을 다시 사용해요.
       </p>
-      {loading && <LoadingState compact label="공유 변수를 불러오는 중이에요…" />}
+      {loading && (
+        <LoadingState presentation="placeholder" label="공유 변수를 불러오는 중이에요…" />
+      )}
       {view?.pending && (
         <p role="status">
           원문 생성이나 자료 코드 작업이 현재 값을 사용하고 있어요. 새 편집과 저장은 완료 뒤 할 수
@@ -286,7 +288,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
       )}
       {conflict && !hasUncertainSave && (
         <div className="behavior-action-result" role="alert">
-          <p>서버의 변수 수정 번호나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.</p>
+          <p>변수 저장본이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 유지했어요.</p>
           <button
             type="button"
             className="secondary"
@@ -303,7 +305,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
               }
             }}
           >
-            최신 상태 기준으로 초안 유지
+            입력값 유지하고 계속 편집
           </button>
         </div>
       )}

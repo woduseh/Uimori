@@ -441,7 +441,7 @@ export async function createApp(options: AppOptions): Promise<App> {
             author: '사용자 도우미 요청',
           });
         const snapshot = await prepareNativeRisuReadOnly(
-          helperWritingSnapshot(store, scope.chatId, 'context'),
+          helperWritingSnapshot(store, scope.chatId),
           'context'
         );
         hooks.signal.throwIfAborted();
@@ -798,7 +798,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     signal: stopping.signal,
     track,
     snapshot: (chatId) =>
-      prepareNativeRisuReadOnly(helperWritingSnapshot(store, chatId, 'context'), 'context'),
+      prepareNativeRisuReadOnly(helperWritingSnapshot(store, chatId), 'context'),
     execute: async (job, signal) => {
       const snapshot = job.snapshot;
       if (!snapshot) throw new HttpError(409, 'CONTEXT_INPUT_MISSING');

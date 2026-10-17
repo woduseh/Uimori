@@ -333,10 +333,10 @@ export function RisuNativeFields({
             />
           </label>
           <label>
-            {standalone ? '모듈 설명' : '디스크립션'}
+            {standalone ? '모듈 설명' : '카드 설명'}
             <textarea
               className="native-main-text native-description"
-              aria-label={standalone ? '모듈 설명' : '캐릭터 설정'}
+              aria-label={standalone ? '모듈 설명' : '카드 설명'}
               rows={12}
               value={string(standalone ? native.module?.description : native.card.description)}
               onChange={(e) => field('description', e.target.value)}
@@ -540,7 +540,7 @@ export function RisuNativeFields({
             </label>
           </div>
           <div hidden={advanced !== 'display'} className="native-form-stack">
-            <h3>백그라운드 임베딩</h3>
+            <h3>배경 HTML·CSS와 이미지 설정</h3>
             {!standalone && (
               <label>
                 배경 HTML / CSS

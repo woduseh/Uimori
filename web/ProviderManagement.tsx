@@ -63,6 +63,7 @@ import {
 import { DeleteButton } from './DeleteButton.js';
 import { ProviderModelTest, useProviderModelTests } from './ProviderModelTest.js';
 import { JevProviderSettings } from './JevProviderSettings.js';
+import { useTestMode } from './useTestMode.js';
 import './ProviderManagement.css';
 import './settings-actions.css';
 
@@ -87,6 +88,7 @@ export function ConnectionEditor({
   modelToEdit?: string | null;
   onModelEditHandled?: () => void;
 }) {
+  const testMode = useTestMode();
   const modelTests = useProviderModelTests();
   const [forcedVertexTier, setForcedVertexTier] = useState<VertexRequestTier>();
   useEffect(() => {
@@ -210,10 +212,11 @@ export function ConnectionEditor({
   }
   const [jevDirty, setJevDirty] = useState(false);
   const [jevBusy, setJevBusy] = useState(false);
-  const [operationBusy, setOperationBusy] = useState(false),
+  const [operation, setOperation] = useState<'model-save' | 'other' | null>(null),
     [message, setMessage] = useState(''),
     [refreshWarning, setRefreshWarning] = useState(''),
     [error, setError] = useState('');
+  const operationBusy = operation !== null;
   const busy = operationBusy || uploadingCredential || jevBusy;
   const dirty =
     busy ||
@@ -223,7 +226,6 @@ export function ConnectionEditor({
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
-  const setBusy = setOperationBusy;
   const operationLock = useRef(false);
   const jevSave = useRef<(() => Promise<boolean>) | null>(null);
   const connectionForm = useRef<HTMLFormElement>(null);
@@ -334,7 +336,7 @@ export function ConnectionEditor({
   ) {
     if (operationLock.current) return false;
     operationLock.current = true;
-    setBusy(true);
+    setOperation(saveAttempt && scope === 'model' ? 'model-save' : 'other');
     setError('');
     onError('');
     setMessage('');
@@ -364,7 +366,7 @@ export function ConnectionEditor({
       return false;
     } finally {
       operationLock.current = false;
-      setBusy(false);
+      setOperation(null);
     }
   }
   function showConnection(item: Connection, copy = false, approved = false) {
@@ -1160,9 +1162,7 @@ export function ConnectionEditor({
       {screen === 'providers' && (
         <section className="provider-selection" aria-label="프로바이더 선택">
           <h4>프로바이더를 선택하세요.</h4>
-          <p className="muted">
-            현재 지원하는 프로바이더 방식이에요. 선택하면 주소와 인증 참조의 기본값을 채워요.
-          </p>
+          <p className="muted">프로바이더를 고르면 기본 접속 정보를 채워요.</p>
           <div className="provider-template-grid">
             {PROVIDER_CHOICES.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
               <button
@@ -1193,16 +1193,18 @@ export function ConnectionEditor({
               </button>
             ))}
           </div>
-          <details className="provider-test-template">
-            <summary>개발·검사용 프로바이더</summary>
-            <button
-              type="button"
-              className="secondary"
-              onClick={() => startProvider('fixture-sse-v1')}
-            >
-              로컬 fixture로 설정
-            </button>
-          </details>
+          {testMode && (
+            <details className="provider-test-template">
+              <summary>개발·검사용 프로바이더</summary>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => startProvider('fixture-sse-v1')}
+              >
+                로컬 fixture로 설정
+              </button>
+            </details>
+          )}
         </section>
       )}
       <JevProviderSettings
@@ -1450,6 +1452,7 @@ export function ConnectionEditor({
         </div>
       </section>
       <ProviderConnectionForm
+        testMode={testMode}
         hidden={screen !== 'connection'}
         draft={drafts.connection}
         connections={library.connections}
@@ -1473,6 +1476,7 @@ export function ConnectionEditor({
         modelConnections={library.connections}
         conflict={conflict === 'model'}
         busy={busy}
+        saving={operation === 'model-save'}
         forcedVertexTier={forcedVertexTier}
         modelSection={modelSection}
         onSectionChange={setModelSection}

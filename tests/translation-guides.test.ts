@@ -1,3 +1,4 @@
+import { legacyChatBackupFixture, legacyResourceBundleFixture } from './fixtures/legacy-backup.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -23,12 +24,8 @@ import { importChatTranscript } from '../server/chat-transcript.js';
 import { requestTranslation, rejudgeTranslation } from '../server/source-editing.js';
 import { translationInput } from '../core/auxiliary.js';
 import { sourceTimeContext } from '../server/product-auxiliary.js';
-import {
-  exportResourceBundle,
-  importResourceBundle,
-  inspectBundle,
-} from '../server/resource-bundle.js';
-import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { importResourceBundle, inspectBundle } from '../server/resource-bundle.js';
+import { importChatBackup } from '../server/chat-backup.js';
 import { exportRisuContent } from '../server/risu-export.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
@@ -161,7 +158,7 @@ test('guide survives restart, native projection, independent resource and chat b
   const source = database();
   const original = bot(source);
   const chat = story(source, original);
-  const bundle = exportResourceBundle(source, [{ kind: 'content', id: original.id }]);
+  const bundle = legacyResourceBundleFixture(source, [{ kind: 'content', id: original.id }]);
   const target = database();
   const bundleInput = {
     file: bundle,
@@ -175,7 +172,7 @@ test('guide survives restart, native projection, independent resource and chat b
   expect(readTranslationGuide(copy.package.nativeRisu.card)).toEqual(guide);
   expect(importResourceBundle(target, bundleInput)).toEqual({ ...imported, created: false });
   const portable = await importChatBackup(target, {
-    backup: exportChatBackup(source, chat.id),
+    backup: legacyChatBackupFixture(source, chat.id),
     idempotencyKey: randomUUID(),
   });
   expect(currentBotTranslationGuide(target, portable.chat.id)).toMatchObject({

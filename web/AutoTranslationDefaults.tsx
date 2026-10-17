@@ -56,6 +56,7 @@ export function AutoTranslationDefaults() {
   return (
     <div className="settings-group-body">
       <LoadingState
+        presentation="placeholder"
         loading={loading}
         error={!defaults ? error : ''}
         label="자동 번역 기본값을 불러오는 중이에요…"
@@ -64,7 +65,6 @@ export function AutoTranslationDefaults() {
           setLoading(true);
           setReload((value) => value + 1);
         }}
-        compact
       />
       {defaults && (
         <label className="settings-row settings-row-toggle">

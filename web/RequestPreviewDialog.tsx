@@ -134,19 +134,20 @@ export function RequestPreviewDialog({
         <>
           <div className="request-preview-heading">
             <p className="muted">작성 중인 요청 기준 · 추가 모델 호출 없음</p>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!preview && !error}
-              onClick={() => setRefresh((value) => value + 1)}
-            >
-              다시 확인
-            </button>
+            {(error || preview?.error || preview?.snapshot.stale) && (
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setRefresh((value) => value + 1)}
+              >
+                다시 확인
+              </button>
+            )}
           </div>
           {error ? (
             <NoticeBanner tone="error">{error}</NoticeBanner>
           ) : !preview ? (
-            <LoadingState compact label="다음 요청을 확인하고 있어요…" />
+            <LoadingState presentation="placeholder" label="다음 요청을 확인하고 있어요…" />
           ) : preview.snapshot.stale ? (
             <NoticeBanner>확인 중에 컨텍스트나 설정이 바뀌었어요. 다시 확인해 주세요.</NoticeBanner>
           ) : (

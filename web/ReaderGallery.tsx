@@ -96,7 +96,7 @@ export const ReaderGallery = memo(function ReaderGallery({
         </div>
         {(
           [
-            ['bot', bot, '이야기의 얼굴'],
+            ['bot', bot, '봇'],
             ['persona', persona, '나의 페르소나'],
           ] as const
         ).map(([role, content, label]) => {

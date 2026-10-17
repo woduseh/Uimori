@@ -82,7 +82,7 @@ export function AssetMetadataEditor({
       >
         이미지 정보 저장
       </button>
-      {busy && <LoadingState compact label="이미지 정보를 저장하는 중이에요…" />}
+      {busy && <LoadingState presentation="inline" label="이미지 정보를 저장하는 중이에요…" />}
       {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
     </details>
   );

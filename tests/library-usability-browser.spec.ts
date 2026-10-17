@@ -63,8 +63,8 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     const saveState = panel.locator('.resource-editor-status').getByRole('status');
     await expect(saveState).toHaveText('등록 전');
     await expect(panel.getByLabel('Risu 자료 이름', { exact: true })).toBeInViewport();
-    await panel.getByLabel('캐릭터 설정', { exact: true }).scrollIntoViewIfNeeded();
-    await expect(panel.getByLabel('캐릭터 설정', { exact: true })).toBeInViewport();
+    await panel.getByLabel('카드 설명', { exact: true }).scrollIntoViewIfNeeded();
+    await expect(panel.getByLabel('카드 설명', { exact: true })).toBeInViewport();
     await expect(
       panel.getByRole('region', { name: '대표 이미지 설정', exact: true })
     ).toBeVisible();
@@ -75,7 +75,7 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     const createdTitle = `${title} 새 친구`,
       body = '친절한 안내자예요. 내가 고른 길을 존중하며 짧게 대답해요.';
     await panel.getByLabel('Risu 자료 이름', { exact: true }).fill(createdTitle);
-    await panel.getByLabel('캐릭터 설정', { exact: true }).fill(body);
+    await panel.getByLabel('카드 설명', { exact: true }).fill(body);
     await expect(saveState).toHaveText('미저장 변경');
     const savedResponse = waitForContentSave(page);
     await panel.getByRole('button', { name: '자료 등록', exact: true }).click();

@@ -31,6 +31,11 @@
 .native-trigger-editor > .native-advanced > summary {
   padding-block: 16px;
 }
+.native-trigger-empty {
+  margin: 0;
+  padding-block: 12px;
+  color: var(--muted);
+}
 .native-trigger-actions {
   display: flex;
   justify-content: flex-end;

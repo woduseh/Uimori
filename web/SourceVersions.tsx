@@ -50,7 +50,9 @@ export function SourceVersions({
               {error}
             </p>
           )}
-          {!versions && !error && <LoadingState compact label="저장본을 불러오는 중이에요…" />}
+          {!versions && !error && (
+            <LoadingState presentation="inline" label="저장본을 불러오는 중이에요…" />
+          )}
           {versions && version && (
             <>
               <label>

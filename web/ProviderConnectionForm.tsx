@@ -8,6 +8,7 @@ import type { ProviderEditorState, ConnectionDraft } from './provider-editor-sta
 
 type Props = {
   hidden: boolean;
+  testMode: boolean;
   draft: ProviderEditorState['connection'];
   connections: Connection[];
   conflict: boolean;
@@ -23,6 +24,7 @@ type Props = {
 };
 export function ProviderConnectionForm({
   hidden,
+  testMode,
   draft,
   connections,
   conflict,
@@ -119,7 +121,9 @@ export function ProviderConnectionForm({
               });
             }}
           >
-            {PROVIDER_DEFINITIONS.map((item) => (
+            {PROVIDER_DEFINITIONS.filter(
+              (item) => testMode || item.id !== 'fixture-sse-v1' || connection.protocol === item.id
+            ).map((item) => (
               <option key={item.id} value={item.id}>
                 {item.label}
               </option>
@@ -232,31 +236,23 @@ export function ProviderConnectionForm({
               : 'API 키는 서버 DB에 저장돼요. 키를 저장하면 재시작 없이 사용할 수 있어요.'}
         </small>
         <details className="provider-definition full">
-          <summary>프로바이더 템플릿 정보</summary>
+          <summary>연결 안내</summary>
           <dl>
-            <dt>정의</dt>
-            <dd>{definition.id}</dd>
-            <dt>확인일</dt>
-            <dd>{definition.source.checkedAt}</dd>
-            <dt>근거</dt>
-            <dd>로컬 어댑터 · {definition.source.reference}</dd>
             <dt>인증 방식</dt>
             <dd>{definition.auth}</dd>
             <dt>목록 방식</dt>
             <dd>
               {definition.catalog === 'remote'
-                ? '명시 요청 시 원격 조회'
+                ? '모델 목록 새로고침을 누르면 프로바이더에서 조회'
                 : '로그인한 에이전트 모델 목록'}
             </dd>
-            <dt>설정할 수 있는 옵션</dt>
-            <dd>{definition.optionKeys.join(', ')}</dd>
           </dl>
           <ul>
             {definition.limitations.map((item) => (
               <li key={item}>{item}</li>
             ))}
           </ul>
-          <p>프로바이더 템플릿은 로컬 구현의 설명이에요. 모델별 기능과 가격은 미확인이에요.</p>
+          <p>이 정보는 Uimori의 연결 설정을 설명해요. 모델별 기능과 요금은 확인되지 않았어요.</p>
         </details>
       </fieldset>
       <div className="provider-actions full provider-save-actions">

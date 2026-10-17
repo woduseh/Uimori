@@ -1,3 +1,4 @@
+import { legacyChatBackupFixture } from './fixtures/legacy-backup.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,7 +15,7 @@ import {
   readingStateRoutes,
 } from '../server/reading-state.js';
 import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
-import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { importChatBackup } from '../server/chat-backup.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
@@ -197,7 +198,7 @@ test('portable backup round-trip keeps bookmarks, rejects malformed locations at
     expectedRevision: 0,
     target: target(source),
   });
-  const backup = exportChatBackup(store, chat.id);
+  const backup = legacyChatBackupFixture(store, chat.id);
   const destination = fixture();
   const restored = await importChatBackup(destination, { backup, idempotencyKey: 'portable' });
   expect(listBookmarks(destination, restored.chat.id)[0]).toMatchObject({

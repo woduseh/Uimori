@@ -13,6 +13,7 @@ import type { ChatOptionState } from '../core/chat-options.js';
 import { api, ApiError } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
+import { reviewChatOptionDraft } from './chat-option-review.js';
 
 type Values = Record<string, PromptValue>;
 type Props = {
@@ -36,21 +37,6 @@ const sameValues = (left: Values, right: Values) => {
     keys.every((key) => Object.hasOwn(right, key) && left[key] === right[key])
   );
 };
-function reviewedValues(
-  program: RisuPrompt,
-  values: Values,
-  definitions = promptControls(program)
-): Values {
-  const reconciled = reconcilePromptValues(definitions, values);
-  return Object.fromEntries(
-    definitions
-      .filter(
-        (control) => Object.hasOwn(values, control.id) && !reconciled.resetKeys.includes(control.id)
-      )
-      .map((control) => [control.id, reconciled.values[control.id]!])
-  );
-}
-
 export function ChatOptionSettings(props: Props) {
   const [base, setBase] = useState<ChatOptionState | null>(null);
   const [latest, setLatest] = useState<ChatOptionState | null>(null);
@@ -59,6 +45,7 @@ export function ChatOptionSettings(props: Props) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [readError, setReadError] = useState('');
   const [message, setMessage] = useState('');
   const [completion, setCompletion] = useState('');
   const [conflict, setConflict] = useState(false);
@@ -69,50 +56,37 @@ export function ChatOptionSettings(props: Props) {
     loadedPromptRevision = useRef(props.promptRevision);
   const fixedDirty = !!base && !sameValues(fixed, base.fixedValues);
   const dirty = fixedDirty || Object.keys(oneoff).length > 0 || !!uncertain;
-  const current = useRef({ base, fixed, oneoff, dirty, fixedDirty });
-  current.current = { base, fixed, oneoff, dirty, fixedDirty };
+  const current = useRef({ base, fixed, oneoff, dirty });
+  current.current = { base, fixed, oneoff, dirty };
   const path = `/chats/${encodeURIComponent(props.chatId)}/options`;
-  const refresh = useCallback(
-    async (review = false) => {
-      if (lock.current) return;
-      const version = ++requestVersion.current;
-      setLoading(true);
-      try {
-        const state = await api<ChatOptionState>(path);
-        if (version !== requestVersion.current) return;
-        const draft = current.current;
-        setLatest(state);
-        if (review || !draft.base || !draft.dirty) {
-          setBase(state);
-          if (review && draft.dirty) {
-            const nextFixed = draft.fixedDirty
-              ? reviewedValues(state.program, draft.fixed, state.controls)
-              : state.fixedValues;
-            const nextOneoff = reviewedValues(state.program, draft.oneoff, state.controls);
-            setFixed(nextFixed);
-            setOneoff(nextOneoff);
-            setMessage(
-              '최신 옵션 정의에서 사용할 수 있는 초안을 유지했어요. 값을 확인한 뒤 적용해 주세요.'
-            );
-          } else setFixed(state.fixedValues);
-          setConflict(false);
-          setError('');
-        } else if (
-          state.revision !== draft.base.revision ||
-          state.workspaceRevision !== draft.base.workspaceRevision ||
-          state.binding.owner !== draft.base.binding.owner ||
-          state.binding.definitionHash !== draft.base.binding.definitionHash
-        ) {
-          setConflict(true);
-        }
-      } catch (caught) {
-        if (version === requestVersion.current) setError((caught as Error).message);
-      } finally {
-        if (version === requestVersion.current) setLoading(false);
+  const refresh = useCallback(async () => {
+    if (lock.current) return;
+    const version = ++requestVersion.current;
+    setLoading(true);
+    try {
+      const state = await api<ChatOptionState>(path);
+      if (version !== requestVersion.current) return;
+      const draft = current.current;
+      setLatest(state);
+      setReadError('');
+      if (!draft.base || !draft.dirty) {
+        setBase(state);
+        setFixed(state.fixedValues);
+        setConflict(false);
+      } else if (
+        state.revision !== draft.base.revision ||
+        state.workspaceRevision !== draft.base.workspaceRevision ||
+        state.binding.owner !== draft.base.binding.owner ||
+        state.binding.definitionHash !== draft.base.binding.definitionHash
+      ) {
+        setConflict(true);
       }
-    },
-    [path]
-  );
+    } catch (caught) {
+      if (version === requestVersion.current) setReadError((caught as Error).message);
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
+    }
+  }, [path]);
   useEffect(() => {
     if (!props.active || props.disabled) return;
     void refresh();
@@ -220,9 +194,9 @@ export function ChatOptionSettings(props: Props) {
     return (
       <div className="chat-options-body">
         <LoadingState
-          compact
+          presentation="placeholder"
           loading={loading}
-          error={error}
+          error={readError}
           label="채팅 옵션을 불러오는 중이에요…"
           onRetry={() => void refresh()}
           retryLabel="채팅 옵션 다시 불러오기"
@@ -230,7 +204,7 @@ export function ChatOptionSettings(props: Props) {
       </div>
     );
   const disabled = busy || props.disabled || !!uncertain;
-  const blocked = disabled || conflict || loading;
+  const blocked = disabled || loading;
   const displayState = latest ?? base;
   const fieldLabel = (id: string) =>
     (base.controls ?? promptControls(base.program)).find((control) => control.id === id)?.label ??
@@ -243,15 +217,81 @@ export function ChatOptionSettings(props: Props) {
         title="채팅 옵션 저장 내용 확인"
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
+          const draft = current.current;
           const value = await api<ChatOptionState>(path);
           const controls = value.controls ?? promptControls(value.program);
-          return controls.map((control) => ({
-            label: control.label,
-            value: optionText(
-              control,
-              value.fixedValues[control.id] ?? value.globalValues[control.id]
+          const review = reviewChatOptionDraft(draft.base!, draft.fixed, draft.oneoff, value);
+          const adopt = (keepInput: boolean) => {
+            requestVersion.current++;
+            setLoading(false);
+            setBase(value);
+            setLatest(value);
+            setFixed(keepInput ? review.fixed : value.fixedValues);
+            setOneoff(keepInput ? review.oneoff : {});
+            setConflict(false);
+            setError('');
+            setReadError('');
+            setSaveConflict(false);
+            setMessage(keepInput ? '입력을 확인한 뒤 저장하거나 예약해 주세요.' : '');
+            setCompletion(keepInput ? '' : '저장본을 불러왔어요.');
+          };
+          return {
+            content: (
+              <>
+                {controls.map((control) => (
+                  <div className="settings-row" key={control.id}>
+                    <span className="settings-row-copy">{control.label}</span>
+                    <span className="settings-row-control">
+                      {optionText(
+                        control,
+                        value.fixedValues[control.id] ?? value.globalValues[control.id]
+                      )}
+                    </span>
+                  </div>
+                ))}
+                {review.discarded.length > 0 && (
+                  <section aria-label="유지할 수 없는 입력">
+                    <h3>유지할 수 없는 입력</h3>
+                    <p>계속 편집하면 아래 입력은 제외해요. 필요한 내용은 먼저 복사해 두세요.</p>
+                    {review.discarded.map((item) => {
+                      const control = (
+                        draft.base!.controls ?? promptControls(draft.base!.program)
+                      ).find((entry) => entry.id === item.id);
+                      return (
+                        <div className="settings-row" key={item.scope + ':' + item.id}>
+                          <span className="settings-row-copy">
+                            {item.scope === 'fixed' ? '고정 옵션' : '1회 옵션'} · {item.label}
+                            <small>{item.reason}</small>
+                          </span>
+                          <span className="settings-row-control">
+                            {item.unset
+                              ? '개별 지정 해제'
+                              : control
+                                ? optionText(control, item.value)
+                                : String(item.value ?? '') || '비어 있음'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </section>
+                )}
+                <p className="muted">
+                  저장본을 불러오면 작성 중인 고정 옵션과 1회 옵션 입력을 버려요. 이미 예약한 옵션은
+                  취소하지 않아요.
+                </p>
+              </>
             ),
-          }));
+            actions: (
+              <>
+                <button type="button" className="secondary" onClick={() => adopt(false)}>
+                  입력 버리고 저장본 불러오기
+                </button>
+                <button type="button" className="primary" onClick={() => adopt(true)}>
+                  입력 유지하고 계속 편집
+                </button>
+              </>
+            ),
+          };
         }}
       />
       <div className="chat-options-body chat-specific-options">
@@ -339,8 +379,20 @@ export function ChatOptionSettings(props: Props) {
         ))}
         {conflict && (
           <NoticeBanner tone="error">
-            채팅이나 전체 옵션이 바뀌었어요. 초안을 유지했어요. 최신 내용을 확인한 뒤 다시 적용해
-            주세요.
+            다른 곳에서 옵션이 바뀌었어요. 입력은 유지했어요. 저장하거나 예약할 때 변경 내용을
+            확인해 주세요.
+          </NoticeBanner>
+        )}
+        {readError && (
+          <NoticeBanner tone="error">
+            {readError}
+            <button
+              type="button"
+              disabled={busy || loading || !!uncertain}
+              onClick={() => void refresh()}
+            >
+              {loading ? '불러오는 중…' : '다시 불러오기'}
+            </button>
           </NoticeBanner>
         )}
         {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
@@ -355,24 +407,12 @@ export function ChatOptionSettings(props: Props) {
             같은 요청 다시 확인
           </button>
         )}
-        {!uncertain && (error || conflict) && (
-          <button type="button" disabled={busy || loading} onClick={() => void refresh(true)}>
-            최신 정의에 초안 유지
-          </button>
-        )}
       </div>
       <footer className="chat-options-footer">
         <small>
           {dirty ? '저장하지 않은 옵션 초안이 있어요.' : '고정 옵션은 이 채팅에 적용해요.'}
         </small>
         <div>
-          <button
-            type="button"
-            disabled={busy || loading || !!uncertain}
-            onClick={() => void refresh()}
-          >
-            최신 상태 확인
-          </button>
           <button
             type="button"
             disabled={!fixedDirty || disabled || loading}

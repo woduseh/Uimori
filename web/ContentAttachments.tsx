@@ -107,7 +107,7 @@ export function ContentAttachments({
       setSelected('');
     } catch (caught) {
       if (version.current === request && latest.current.viewKey === initialKey) {
-        const message = `패키지 연결을 변경하지 않았어요. 필수 모듈의 누락·순환 연결을 확인해 주세요. (${(caught as Error).message})`;
+        const message = `자료 연결을 바꾸지 못했어요. (${(caught as Error).message}) 모듈 연결 문제라면 필요한 모듈이 빠졌거나 모듈끼리 서로를 다시 연결하는지 확인해 주세요.`;
         setLoadError(message);
         latest.current.onError(message);
       }
@@ -144,7 +144,7 @@ export function ContentAttachments({
         </p>
       )}
       {busy && !loadError && (
-        <LoadingState compact label="패키지와 필수 모듈을 불러오는 중이에요…" />
+        <LoadingState presentation="inline" label="패키지와 필수 모듈을 불러오는 중이에요…" />
       )}
       {loadError && (
         <div>

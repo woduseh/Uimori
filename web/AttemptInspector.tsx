@@ -172,8 +172,8 @@ function CacheUsage({ attempt }: { attempt: Attempt }) {
         </>
       )}
       <small>
-        읽기 토큰이 보고돼야 캐시 재사용을 확인할 수 있어요. 설정만으로 hit나 절감액을 추정하지
-        않아요.
+        캐시를 재사용했는지는 프로바이더가 보고한 캐시 읽기 토큰으로 확인해요. 캐시 설정만으로
+        재사용 여부나 절감액을 추정하지 않아요.
       </small>
     </p>
   );
@@ -304,8 +304,8 @@ function AttemptTable({
         있어요.
       </p>
       <p className="muted">
-        비용이나 토큰이 없는 호출은 0으로 계산하지 않아요. 외부 전송이 없는 scripted mock은 아래
-        원문 실행 기록에서 확인할 수 있어요.
+        비용이나 토큰 기록이 없는 호출은 0으로 계산하지 않아요. 외부로 요청을 보내지 않은 모의
+        생성은 아래 본문 생성 기록에서 확인할 수 있어요.
       </p>
       <div className="table-scroll">
         <table>
@@ -343,9 +343,9 @@ function AttemptTable({
         </table>
       </div>
       <p className="muted">
-        보관된 원문 Run {runs.length}개 · 완료{' '}
+        보관된 본문 생성 기록 {runs.length}개 · 완료{' '}
         {runs.filter((run) => run.status === 'completed').length}개 · 거절{' '}
-        {runs.filter((run) => run.status === 'refused').length}개 · 부분{' '}
+        {runs.filter((run) => run.status === 'refused').length}개 · 부분 생성{' '}
         {runs.filter((run) => run.status === 'partial').length}개
       </p>
       {attempts.map((summary) => (

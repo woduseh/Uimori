@@ -161,7 +161,7 @@ test('direct reading scroll wins over a queued geometry update before its scroll
   expect(await page.locator('#reader').evaluate((node) => node.scrollTop)).toBe(80);
 });
 
-test('CHATREC03 mobile mini navigator follows source IDs and keeps the opening outside scene counts', async ({
+test('CHATREC03 compact scene list follows source IDs and keeps the opening outside scene counts', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 412, height: 915 });
@@ -171,38 +171,36 @@ test('CHATREC03 mobile mini navigator follows source IDs and keeps the opening o
     const { mountMiniNavigator } = await import(path);
     mountMiniNavigator();
   });
-  const nav = page.getByRole('navigation', { name: '장면 탐색', exact: true });
   const selected = page.getByLabel('Selected source', { exact: true });
-  const previous = nav.getByRole('button', { name: '이전 장면', exact: true });
-  const next = nav.getByRole('button', { name: '다음 장면', exact: true });
-  const list = nav.getByRole('button', { name: '장면 목록 열기', exact: true });
-  await expect(previous).toBeDisabled();
+  const list = page.getByRole('button', { name: '장면 목록 열기', exact: true });
+  const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
+  const latest = page.getByRole('button', { name: '본문 맨 아래로', exact: true });
+  await expect(page.getByRole('button', { name: '이전 장면', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '다음 장면', exact: true })).toHaveCount(0);
   await expect(list).toHaveText('첫 메시지');
-  await next.click();
+  await list.click();
+  await dialog.getByRole('button', { name: '1번째 장면 · Scene one', exact: true }).click();
   await expect(selected).toHaveText('source:nonsequential:a');
   await expect(list).toHaveText('1 / 2');
-  await next.click();
-  await expect(selected).toHaveText('source:nonsequential:z');
-  await expect(list).toHaveText('2 / 2');
-  await expect(next).toBeDisabled();
-  await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toBeHidden();
-  await previous.click();
-  await expect(list).toHaveText('1 / 2');
-  await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toBeVisible();
+  await expect(latest).toBeVisible();
+  const reader = (await page.locator('.reader-scrollport').boundingBox())!;
+  const jump = (await latest.boundingBox())!;
+  expect(jump.y).toBeGreaterThanOrEqual(reader.y + reader.height);
   const before = await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop);
+  await list.click();
+  await page.keyboard.press('Escape');
+  await expect(list).toBeFocused();
+  expect(await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop)).toBe(before);
   await page.getByRole('button', { name: 'Append scene', exact: true }).click();
   await expect(list).toHaveText('1 / 3');
   expect(await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop)).toBe(before);
+  await latest.click();
+  await expect(list).toHaveText('3 / 3');
+  await expect(latest).toBeHidden();
   await list.click();
-  const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
   await dialog.getByRole('button', { name: 'Opening', exact: true }).click();
   await expect(selected).toHaveText('opening:id');
-  await expect(previous).toBeDisabled();
-  const reader = await page.locator('.reader-scrollport').boundingBox();
-  const bar = await nav.boundingBox();
-  // Mobile navigation floats over the lower edge instead of reserving a permanent row.
-  expect(bar!.y).toBeGreaterThan(reader!.y + reader!.height - 80);
-  expect(bar!.y + bar!.height).toBeLessThanOrEqual(reader!.y + reader!.height + 1);
+  await expect(list).toHaveText('첫 메시지');
 });
 
 // One JS task reproduces A -> B -> A before React can commit a different query.

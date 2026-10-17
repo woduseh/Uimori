@@ -481,7 +481,7 @@ export function PromptLibrary({
         }}
       />
       {!library ? (
-        <LoadingState label="프롬프트를 불러오는 중이에요…" />
+        <LoadingState presentation="region" label="프롬프트를 불러오는 중이에요…" />
       ) : editing ? (
         <div className="library-prompt-editor">
           <PromptEditor

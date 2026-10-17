@@ -32,8 +32,10 @@ type ResponseProps = {
 /** Final answers belong to Source/helper messages, never to a completed transport stream. */
 export function ResponseDisplay({ mode, ...props }: ResponseProps & { mode: ResponseDisplayMode }) {
   if (mode === 'stream') return <StreamingResponse {...props} />;
-  if (active(props.taskStatus)) return <LoadingState compact label="응답을 기다리고 있어요…" />;
-  if (props.taskStatus === 'completed') return <LoadingState compact label="결과 불러오는 중…" />;
+  if (active(props.taskStatus))
+    return <LoadingState presentation="placeholder" label="응답을 기다리고 있어요…" />;
+  if (props.taskStatus === 'completed')
+    return <LoadingState presentation="placeholder" label="결과 불러오는 중…" />;
   return (
     <PartialResponse key={props.taskId}>
       <StreamingResponse {...props} settled />
@@ -210,7 +212,7 @@ export function StreamingResponse({
     if (!loaded)
       return (
         <LoadingState
-          compact
+          presentation="placeholder"
           label={
             settled || (!active(taskStatus) && taskStatus !== 'completed')
               ? '일부 응답을 불러오는 중…'
@@ -221,7 +223,7 @@ export function StreamingResponse({
         />
       );
     if (!settled && status === 'completed')
-      return <LoadingState compact label="결과 불러오는 중…" />;
+      return <LoadingState presentation="placeholder" label="결과 불러오는 중…" />;
     return settled ? <small role="status">표시할 일부 응답이 없어요.</small> : null;
   }
   const parts = new Map<string, string>();

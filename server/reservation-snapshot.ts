@@ -20,7 +20,7 @@ export type ReservationPurpose =
       sceneCommandId?: string;
       supersedesRunId?: string;
     }
-  | { purpose: 'helper-artifact' | 'helper-context' | 'story-guide' }
+  | { purpose: 'helper-context' | 'story-guide' }
   | {
       purpose: 'preview-main' | 'preview-translation';
       executionClock: () => NonNullable<RunSnapshot['executionClock']>;
@@ -45,7 +45,7 @@ export function freezeReservationSnapshot(
 
   const reserved = options.purpose === 'run' || options.purpose === 'authored';
   const authored = options.purpose === 'authored';
-  const helper = options.purpose === 'helper-artifact' || options.purpose === 'helper-context';
+  const helper = options.purpose === 'helper-context';
   const translationPreview = options.purpose === 'preview-translation';
   if (
     reserved &&

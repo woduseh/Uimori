@@ -72,6 +72,7 @@ test('REQUESTPREVIEW current composer settings are estimated without generation 
       const dialog = page.getByRole('dialog', { name: '다음 요청 미리보기', exact: true });
       const preview = dialog.getByTestId('request-preview');
       await expect(preview).toContainText(model.title);
+      await expect(dialog.getByRole('button', { name: '다시 확인', exact: true })).toHaveCount(0);
       await expect(preview).toContainText('65,536');
       await expect(preview).toContainText('OpenAI · o200k_base');
       await expect(preview.getByRole('meter')).toHaveCount(1);
@@ -93,6 +94,35 @@ test('REQUESTPREVIEW current composer settings are estimated without generation 
     await page.getByRole('button', { name: '다음 요청 미리보기', exact: true }).click();
     await expect(page.getByTestId('request-preview')).toContainText('이번 요청에서 조회 로어 제외');
     expect(requests.at(-1)?.loreContextReset).toBe(true);
+    // Only failed or stale reads need a manual retry; retry never generates text.
+    let state: 'failed' | 'unavailable' | 'stale' | 'ready' = 'failed';
+    await page.route('**/api/chats/' + chat.id + '/request-preview', async (route) => {
+      if (state === 'failed')
+        return route.fulfill({ status: 503, json: { error: 'Synthetic preview unavailable' } });
+      const response = await route.fetch();
+      const value = await response.json();
+      await route.fulfill({
+        response,
+        json: {
+          ...value,
+          ...(state === 'unavailable' ? { error: 'PREVIEW_UNAVAILABLE' } : {}),
+          snapshot: { ...value.snapshot, stale: state === 'stale' },
+        },
+      });
+    });
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    const dialog = page.getByRole('dialog', { name: '다음 요청 미리보기', exact: true });
+    await expect(dialog.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
+    state = 'unavailable';
+    await dialog.getByRole('button', { name: '다시 확인', exact: true }).click();
+    await expect(dialog).toContainText('현재 조건의 입력량을 계산하지 못했어요.');
+    state = 'stale';
+    await dialog.getByRole('button', { name: '다시 확인', exact: true }).click();
+    await expect(dialog).toContainText('확인 중에 컨텍스트나 설정이 바뀌었어요.');
+    state = 'ready';
+    await dialog.getByRole('button', { name: '다시 확인', exact: true }).click();
+    await expect(dialog.getByTestId('request-preview')).toContainText(model.title);
+    await expect(dialog.getByRole('button', { name: '다시 확인', exact: true })).toHaveCount(0);
     expect(peer.requests).toHaveLength(0);
     const after = await body<ChatDetail>(await request.get(`/api/chats/${chat.id}`));
     expect(after.runs).toHaveLength(0);

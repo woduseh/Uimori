@@ -33,7 +33,7 @@ export type HelperStatus =
   | 'failed'
   | 'cancelled'
   | 'interrupted';
-export type HelperLimits = { totalCalls: number; helperCalls: number; artifacts: number };
+export type HelperLimits = { totalCalls: number; helperCalls: number };
 export type HelperInstruction = {
   id: number;
   requestKey: string;

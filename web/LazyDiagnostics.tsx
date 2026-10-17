@@ -57,7 +57,7 @@ export function LazyDiagnostics<T>({
       {open &&
         (error || value === null ? (
           <LoadingState
-            compact
+            presentation="inline"
             loading={!error}
             error={error}
             label="상세를 불러오는 중이에요…"

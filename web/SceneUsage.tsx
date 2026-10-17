@@ -7,7 +7,13 @@ import './scene-usage.css';
 const amount = (value: number | null) =>
   value === null ? '미확인' : value.toLocaleString('ko-KR');
 
-export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
+export function SceneUsage({
+  usage,
+  compact = false,
+}: {
+  usage?: SceneUsageReceipt;
+  compact?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<{ id: string; value: SceneUsageDetail } | null>(null);
   const [failedId, setFailedId] = useState<string | null>(null);
@@ -38,19 +44,22 @@ export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
   const contextTokens = actualInput ?? context?.estimatedInputTokens ?? null;
   const percent =
     context && contextTokens !== null ? (contextTokens / context.inputTokenLimit) * 100 : null;
+  const totals = (
+    <>
+      요청 {amount(usage?.inputTokens ?? null)} · 응답 {amount(usage?.outputTokens ?? null)} 토큰
+      {percent !== null &&
+        ` · 컨텍스트 사용량 ${actualInput === null ? '약 ' : ''}${percent.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}%`}
+    </>
+  );
   return (
     <details
       className="scene-usage"
       data-testid="scene-usage"
       onToggle={(event) => setOpen(event.currentTarget.open)}
     >
-      <summary>
-        이번 생성 · 요청 {amount(usage?.inputTokens ?? null)} · 응답{' '}
-        {amount(usage?.outputTokens ?? null)} 토큰
-        {percent !== null &&
-          ` · 컨텍스트 사용량 ${actualInput === null ? '약 ' : ''}${percent.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}%`}
-      </summary>
+      <summary>{compact ? '이번 생성' : <>이번 생성 · {totals}</>}</summary>
       <div className="scene-usage-body">
+        {compact && <p>{totals}</p>}
         {receipt ? (
           <dl className="scene-receipt">
             <dt>모델</dt>
@@ -155,7 +164,7 @@ export function SceneUsage({ usage }: { usage?: SceneUsageReceipt }) {
             </>
           ) : open ? (
             <LoadingState
-              compact
+              presentation="inline"
               loading={failedId !== attemptId}
               error={failedId === attemptId ? '다시 펼치면 재시도해요.' : ''}
               errorLabel="캐시·로어 기록을 불러오지 못했어요."

@@ -231,7 +231,7 @@ export function ManuscriptSearchPanel({
       {needle && kinds.length > 0 && !result && !busy && !error && (
         <p className="muted">짧은 이름도 검색할 수 있어요. Enter 또는 검색을 눌러 주세요.</p>
       )}
-      {busy && <LoadingState compact label="원고를 찾고 있어요…" />}
+      {busy && <LoadingState presentation="inline" label="원고를 찾고 있어요…" />}
       {error && (
         <NoticeBanner
           tone="error"

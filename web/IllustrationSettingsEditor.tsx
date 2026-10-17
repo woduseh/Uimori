@@ -55,7 +55,8 @@ function IllustrationEnvironmentEditor({
   const [dirty, setDirty] = useState(false);
   const [confirmReload, setConfirmReload] = useState(false);
   const [saveConflict, setSaveConflict] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'reload' | null>(null);
+  const busy = operation !== null;
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
   const [message, setMessage] = useState('');
@@ -87,7 +88,7 @@ function IllustrationEnvironmentEditor({
   if (!draft)
     return (
       <LoadingState
-        compact
+        presentation="region"
         loading={!loadError}
         error={loadError}
         label="삽화 설정을 불러오는 중이에요…"
@@ -198,7 +199,7 @@ function IllustrationEnvironmentEditor({
     }
     if (!dirty) return true;
     lock.current = true;
-    setBusy(true);
+    setOperation('save');
     setSaveError('');
     setMessage('');
     const { revision, ...body } = draft;
@@ -221,13 +222,13 @@ function IllustrationEnvironmentEditor({
       })
       .finally(() => {
         lock.current = false;
-        setBusy(false);
+        setOperation(null);
       });
   };
   const reload = async () => {
     if (lock.current) return;
     lock.current = true;
-    setBusy(true);
+    setOperation('reload');
     setLoadError('');
     setMessage('');
     try {
@@ -242,7 +243,7 @@ function IllustrationEnvironmentEditor({
       setLoadError('설정을 불러오지 못했어요. 초안은 유지했어요.');
     } finally {
       lock.current = false;
-      setBusy(false);
+      setOperation(null);
     }
   };
   const runTest = async () => {
@@ -280,8 +281,8 @@ function IllustrationEnvironmentEditor({
         <div>
           <h3>생성 환경·자동 생성</h3>
           <p>
-            생성기는 선택한 프리셋을 따라가요. 아래 연결·모델은 같은 생성기의 프리셋들이 함께
-            사용하며, 변경은 다음 예약부터 적용돼요.
+            선택한 프리셋이 사용할 생성기를 정해요. 같은 생성기를 쓰는 프리셋은 아래 연결과 모델을
+            함께 사용해요. 변경한 설정은 이후 새로 요청하는 삽화부터 사용해요.
           </p>
         </div>
       </div>
@@ -493,21 +494,6 @@ function IllustrationEnvironmentEditor({
                 }),
               1
             )}
-            {numberField(
-              '확인 간격 (초)',
-              draft.comfyui.pollIntervalMs / 1000,
-              0.25,
-              10,
-              (value) =>
-                change({
-                  ...draft,
-                  comfyui: {
-                    ...draft.comfyui,
-                    pollIntervalMs: Math.round(value * 1000),
-                  },
-                }),
-              0.25
-            )}
           </fieldset>
         </details>
         <div className="form-actions settings-save-actions full">
@@ -521,7 +507,7 @@ function IllustrationEnvironmentEditor({
           <SaveButton
             type="button"
             label="삽화 설정 저장"
-            aria-busy={busy}
+            aria-busy={operation === 'save'}
             disabled={!dirty || !valid}
             onClick={save}
           />

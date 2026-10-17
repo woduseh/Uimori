@@ -5,7 +5,6 @@ import type { Content, PromptPreset, SavedPromptCombination } from '../core/prod
 import {
   NATIVE_TRANSFER_FORMAT,
   NATIVE_TRANSFER_VERSION,
-  type NativeTransferFile,
   type NativeTransferPrepare,
   type NativeTransferReceipt,
 } from '../core/native-transfer.js';
@@ -18,7 +17,6 @@ import {
 import { readFileSync } from 'node:fs';
 import { storeImage } from './image-storage.js';
 import { validateImageBlob, putValidatedImageBlob } from './package-images.js';
-import { encodedImage } from './image-storage.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import { normalizeTransferImages } from './transfer-images.js';
 
@@ -51,21 +49,10 @@ export function inspectBundle(value: unknown): NativeTransferPrepare {
   return prepareBundle(value).preview;
 }
 
-/** A saved-resource bundle, not a dump of database tables or old execution records. */
-export function exportResourceBundle(
+/** Capture archive metadata; image bytes are streamed separately from its read snapshot. */
+export function captureResourceBundle(
   store: Store,
-  selection: { kind: 'content' | 'prompt-preset'; id: string }[],
-  metadataOnly: true
-): PreparedNativeTransferFile;
-export function exportResourceBundle(
-  store: Store,
-  selection: { kind: 'content' | 'prompt-preset'; id: string }[],
-  metadataOnly?: false
-): NativeTransferFile;
-export function exportResourceBundle(
-  store: Store,
-  selection: { kind: 'content' | 'prompt-preset'; id: string }[],
-  metadataOnly = false
+  selection: { kind: 'content' | 'prompt-preset'; id: string }[]
 ): PreparedNativeTransferFile {
   const file: PreparedNativeTransferFile = {
     format: NATIVE_TRANSFER_FORMAT,
@@ -119,19 +106,14 @@ export function exportResourceBundle(
       (entry) => entry.source.package.images?.map((image) => image.blobHash) ?? []
     )
   );
-  file.images = [...hashes].map((hash) =>
-    metadataOnly
-      ? {
-          id: hash,
-          hash,
-          revision: 1,
-          mime: store.db.prepare('SELECT mime FROM image_blobs WHERE hash=?').get(hash)
-            ?.mime as PreparedNativeTransferFile['images'][number]['mime'],
-        }
-      : encodedImage(store.db, hash)
-  );
-  if (metadataOnly) validatePreparedNativeTransfer(file);
-  else inspectBundle(file);
+  file.images = [...hashes].map((hash) => ({
+    id: hash,
+    hash,
+    revision: 1,
+    mime: store.db.prepare('SELECT mime FROM image_blobs WHERE hash=?').get(hash)
+      ?.mime as PreparedNativeTransferFile['images'][number]['mime'],
+  }));
+  validatePreparedNativeTransfer(file);
   return file;
 }
 

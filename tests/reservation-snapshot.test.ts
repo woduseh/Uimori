@@ -165,10 +165,6 @@ test.each<{
     ],
   },
   {
-    options: { purpose: 'helper-artifact' },
-    expected: ['variables', 'story', 'logical-history', 'lore', 'context', 'previous-summary'],
-  },
-  {
     options: { purpose: 'helper-context' },
     expected: ['variables', 'story', 'logical-history', 'lore', 'context', 'previous-summary'],
   },
@@ -217,7 +213,7 @@ test.each<{
     if (options.purpose === 'run' || options.purpose === 'authored')
       expect(result.resources.map((item) => item.id)).toEqual(['manual', 'package:refreshed']);
     else expect(result.resources).toEqual(fixed.resources);
-    if (options.purpose === 'helper-artifact' || options.purpose === 'helper-context')
+    if (options.purpose === 'helper-context')
       expect(result.contextPlan).toMatchObject({
         compacted: f.previous.compacted,
         summary: f.previous.summary,
@@ -298,13 +294,11 @@ test('helper callers apply fixed options before resources and preserve pending o
     observed.push(profile?.chatOptions?.values);
     return resources(chatId, profile);
   });
-  for (const purpose of ['artifact', 'context'] as const) {
-    const result = helperWritingSnapshot(store, chat.id, purpose);
-    expect(result.profile?.chatOptions).toMatchObject({ values: { tone: 'bold' }, pendingIds: [] });
-    expect(result.executionPurpose).toBe(purpose === 'artifact' ? 'artifact' : undefined);
-    expect(result.promptCompilation).toBeUndefined();
-  }
-  expect(observed).toEqual([{ tone: 'bold' }, { tone: 'bold' }]);
+  const result = helperWritingSnapshot(store, chat.id);
+  expect(result.profile?.chatOptions).toMatchObject({ values: { tone: 'bold' }, pendingIds: [] });
+  expect(result.executionPurpose).toBeUndefined();
+  expect(result.promptCompilation).toBeUndefined();
+  expect(observed).toEqual([{ tone: 'bold' }]);
   expect(service.get(chat.id).pending).toEqual(pending);
   expect(store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
 });

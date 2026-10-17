@@ -87,19 +87,28 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const title = 'PMUI01 ' + Date.now(),
     observed = observe(page);
+  await page.route('**/api/health', async (route) => {
+    const response = await route.fetch();
+    const health = await response.json();
+    await route.fulfill({ response, json: { ...health, testMode: false } });
+  });
   await settings(page);
   const form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
     modelForm = page.getByRole('form', { name: '모델 편집 양식' });
   await startProviderConnection(page);
+  await expect(page.getByText('개발·검사용 프로바이더', { exact: true })).toHaveCount(0);
   await page
     .getByRole('region', { name: '프로바이더 선택', exact: true })
     .getByRole('button', { name: /OpenAI · Responses/ })
     .click();
+  await expect(
+    form.getByLabel('프로바이더 프로토콜').locator('option[value="fixture-sse-v1"]')
+  ).toHaveCount(0);
   await form.getByLabel('프로바이더 프로토콜').selectOption('openai-responses-v1');
   await expect(form.getByLabel('API 기본 주소')).toHaveValue('https://api.openai.com/v1');
-  await form.getByText('프로바이더 템플릿 정보', { exact: true }).click();
-  await expect(form.getByText('openai-responses-v1', { exact: true })).toBeVisible();
-  await expect(form).toContainText(/\d{4}-\d{2}-\d{2}/);
+  await form.getByText('연결 안내', { exact: true }).click();
+  await expect(form.locator('.provider-definition')).toContainText('인증 방식');
+  await expect(form.locator('.provider-definition')).not.toContainText('로컬 어댑터');
   await form.getByLabel('API 기본 주소').fill('http://127.0.0.1:9/v1');
   await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
   await form.getByLabel('API 키').fill('PM_SYNTHETIC_KEY');

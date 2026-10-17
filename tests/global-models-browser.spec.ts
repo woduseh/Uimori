@@ -1,6 +1,7 @@
 import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import type {
+  Library,
   ModelPreset,
   ModelWorkspace,
   PromptPreset,
@@ -620,6 +621,9 @@ for (const width of DEFAULT_WIDTHS) {
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
     const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
+    await expect(
+      roles.getByRole('button', { name: '프로바이더·모델 설정', exact: true })
+    ).toHaveCount(0);
     const main = roles.getByLabel('원문 모델', { exact: true });
     const translation = roles.getByLabel('번역 모델', { exact: true });
     await main.selectOption(second.id);
@@ -686,6 +690,87 @@ for (const width of DEFAULT_WIDTHS) {
       .poll(async () => (await models(request)).routes)
       .toEqual({ ...savedRoutes, main: { id: second.id }, translation: { id: first.id } });
   });
+}
+
+for (const width of DEFAULT_WIDTHS) {
+  for (const state of ['empty', 'disabled-provider'] as const) {
+    test(`GMUI04 ${width} ${state} missing usable models expose nearby setup and preserve the role draft`, async ({
+      page,
+      request,
+    }, info) => {
+      const library = (await (await request.get('/api/library')).json()) as Library;
+      let unavailable: Library = { ...library, models: [], connections: [] };
+      if (state === 'disabled-provider') {
+        const connectionResponse = await request.post('/api/connections', {
+          data: {
+            title: `설정 안내 연결 ${width}`,
+            protocol: 'fixture-sse-v1',
+            endpoint: 'http://127.0.0.1:9/not-called',
+            enabled: false,
+          },
+        });
+        expect(connectionResponse.ok()).toBe(true);
+        const connection = await connectionResponse.json();
+        const modelResponse = await request.post('/api/model-presets', {
+          data: {
+            title: `설정 안내 모델 ${width}`,
+            connectionId: connection.id,
+            modelId: 'synthetic-unavailable-model',
+            maxOutputTokens: 1000,
+            temperature: null,
+          },
+        });
+        expect(modelResponse.ok()).toBe(true);
+        unavailable = {
+          ...library,
+          models: [(await modelResponse.json()) as ModelPreset],
+          connections: [connection],
+        };
+      }
+      // Isolate the visible choices without deleting the shared server's other fixtures.
+      await page.route('**/api/library?view=summary', (route) =>
+        route.fulfill({ json: unavailable })
+      );
+      const before = await models(request);
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      await navigationAction(page, '설정');
+      await selectSettingsSection(page, '역할별 모델');
+      const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
+      const setup = roles.getByRole('button', { name: '프로바이더·모델 설정', exact: true });
+      await expect(roles.getByLabel('원문 모델', { exact: true })).toBeInViewport();
+      await expect(setup).toBeInViewport();
+      await expect(
+        roles.getByText('사용할 수 있는 모델이 없어요.', { exact: false })
+      ).toBeVisible();
+      await expect(
+        roles.getByRole('button', { name: '모델 프리셋·프로바이더 관리', exact: true })
+      ).toHaveCount(0);
+      if (visualReview) {
+        for (const colorScheme of ['light', 'dark'] as const) {
+          await page.emulateMedia({ colorScheme });
+          await page.screenshot({
+            path: info.outputPath(`model-setup-${state}-${colorScheme}-${width}.png`),
+          });
+        }
+      }
+      const behavior = roles.locator('summary').filter({ hasText: /^작업 동작/ });
+      await behavior.click();
+      const limit = roles.getByLabel('번역 작업 호출 한도', { exact: true });
+      const draftLimit = before.translationPolicy.maxCalls === 12 ? '16' : '12';
+      await limit.fill(draftLimit);
+      await behavior.click();
+      await setup.click();
+      await expect(page.getByTestId('connection-editor')).toBeVisible();
+      await selectSettingsSection(page, '역할별 모델');
+      await behavior.click();
+      await expect(limit).toHaveValue(draftLimit);
+      expect((await models(request)).translationPolicy).toEqual(before.translationPolicy);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
+      ).toBe(true);
+    });
+  }
 }
 
 preservePromptWorkspace();

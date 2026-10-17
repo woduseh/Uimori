@@ -1,10 +1,18 @@
 import { nativeProse, waitForNativeLayout } from './fixtures/native-message.js';
-import { openChatMenu } from './ui-navigation.js';
+import { navigationAction, openChatMenu } from './ui-navigation.js';
+import type { SceneUsageDetail } from '../core/scene-usage.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import type { Chat, ChatDetail, ReaderActivity, ReaderDetail, Run } from '../core/types.js';
+import type {
+  Chat,
+  ChatDetail,
+  ReaderActivity,
+  ReaderDetail,
+  ReaderRun,
+  Run,
+} from '../core/types.js';
 import { postFixtureChat } from './fixtures/chat.js';
 
 test.setTimeout(60000);
@@ -172,6 +180,164 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   expect(state.writes).toEqual([]);
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
+
+for (const width of [MOBILE_WIDTH, 1440]) {
+  test(`TURNUI05 completed task history keeps adjacent lazy diagnostics and visible recovery states at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const seeded = await seed(request);
+    const run = seeded.runs[0]!;
+    const attemptId = `task-history-display-${run.id}`;
+    const sceneReads: string[] = [];
+    // Rendering proof only: the durable run/source use the real app; known usage
+    // and additional history states are controlled reader projections, not executions.
+    await page.route(`**/api/chats/${seeded.chat.id}/reader-runs`, async (route) => {
+      const response = await route.fetch();
+      expect(response.ok()).toBeTruthy();
+      const runs = (await response.json()) as ReaderRun[];
+      const base: ReaderRun = {
+        ...runs.find((item) => item.id === run.id)!,
+        modelTitle: '호출 당시 작가 모델',
+        contextSummary: {
+          status: 'ready',
+          inputTokenLimit: 65536,
+          estimatedInputTokens: 1200,
+          compactedSources: 3,
+          summaryCalls: 1,
+          error: null,
+        },
+        sceneUsage: {
+          attemptId,
+          inputTokens: 1234,
+          outputTokens: 87,
+          context: { estimatedInputTokens: 1200, inputTokenLimit: 65536 },
+        },
+      };
+      const states: ReaderRun[] = (
+        ['failed', 'partial', 'cancelled', 'refused', 'running'] as const
+      ).map((status) => ({
+        ...base,
+        id: `${run.id}-${status}`,
+        request: `표시 상태 확인: ${status}`,
+        status,
+        contextSummary: undefined,
+        error: status === 'failed' ? 'SYNTHETIC_TASK_HISTORY_FAILURE' : null,
+        partialText: status === 'partial' ? '보존한 미완성 원문' : undefined,
+      }));
+      for (const status of ['pending', 'failed'] as const)
+        states.push({
+          ...base,
+          id: `${run.id}-context-${status}`,
+          request: `완료된 작업의 컨텍스트 상태: ${status}`,
+          contextSummary: {
+            ...base.contextSummary!,
+            status,
+            error: status === 'failed' ? 'SYNTHETIC_CONTEXT_HISTORY_FAILURE' : null,
+          },
+        });
+      await route.fulfill({ response, json: [base, ...states] });
+    });
+    await page.route(`**/api/attempts/${attemptId}/scene-detail`, async (route) => {
+      sceneReads.push(route.request().url());
+      await route.fulfill({
+        json: {
+          cache: { readTokens: 123, writeTokens: 45 },
+          lore: null,
+        } satisfies SceneUsageDetail,
+      });
+    });
+    await page.setViewportSize({ width, height: 900 });
+    const state = await harness(page, seeded.chat.id);
+    await navigationAction(page, '작업 현황');
+    const panel = page.getByRole('dialog', { name: '작업 현황', exact: true });
+    const task = panel.locator(`[data-testid="run"][data-run-id="${run.id}"]`);
+    const diagnostics = task.locator('.run-input-details');
+    const usage = task.getByTestId('scene-usage');
+    const execution = diagnostics.locator(':scope > .inspector');
+    const usageSummary = usage.locator(':scope > summary');
+    const executionSummary = execution.locator(':scope > summary');
+    await expect(task.locator('.task-request')).toHaveText(run.request);
+    await expect(task.locator('.task-heading')).toContainText('원문 완료');
+    await expect(task.locator('.task-heading')).toContainText('호출 당시 작가 모델');
+    await expect(task.getByRole('button', { name: '원고 읽기', exact: true })).toBeVisible();
+    await expect(task.getByRole('button', { name: '새 채팅으로 복사', exact: true })).toBeVisible();
+    await expect(diagnostics.locator(':scope > details')).toHaveCount(2);
+    await expect(usageSummary).toHaveText('이번 생성');
+    await expect(executionSummary).toHaveText('실행과 실제 입력 확인');
+    await expect(usage).not.toHaveAttribute('open');
+    await expect(execution).not.toHaveAttribute('open');
+    await expect(task.getByText(/요청 1,234 · 응답 87 토큰/)).not.toBeVisible();
+    await expect(task.getByTestId('context-summary')).not.toBeVisible();
+    expect(sceneReads).toEqual([]);
+    expect(state.runReads).toEqual([]);
+    const left = await usageSummary.boundingBox();
+    const right = await executionSummary.boundingBox();
+    expect(left).not.toBeNull();
+    expect(right).not.toBeNull();
+    expect(Math.abs(left!.y - right!.y)).toBeLessThanOrEqual(2);
+    expect(left!.x + left!.width).toBeLessThanOrEqual(right!.x + 1);
+    await page.screenshot({ path: info.outputPath(`task-history-compact-${width}.png`) });
+
+    await usageSummary.click();
+    await expect(usage.getByText(/요청 1,234 · 응답 87 토큰/)).toBeVisible();
+    await expect(usage.getByText(/컨텍스트 사용량 1.9%/)).toBeVisible();
+    await expect(
+      usage.getByText('입력 1,234 / 컨텍스트 한도 65,536', { exact: true })
+    ).toBeVisible();
+    await expect(usage.getByText('캐시 읽기 123 / 쓰기 45 토큰', { exact: true })).toBeVisible();
+    expect(sceneReads).toHaveLength(1);
+    expect(state.runReads).toEqual([]);
+    const groupBounds = await diagnostics.boundingBox();
+    const usageBounds = await usage.boundingBox();
+    expect(usageBounds!.width).toBeCloseTo(groupBounds!.width, 0);
+    await usageSummary.click();
+    await executionSummary.click();
+    await expect(execution.locator('pre').last()).toContainText('snapshot');
+    await expect(execution.getByTestId('context-summary')).toHaveText(
+      '앞선 3개 원문 요약 · 입력 약 1,200 / 65,536 토큰 · 요약 1회'
+    );
+    expect(state.runReads).toHaveLength(1);
+    const executionBounds = await execution.boundingBox();
+    expect(executionBounds!.width).toBeCloseTo(groupBounds!.width, 0);
+    await expect(task.locator('.task-request')).toHaveText(run.request);
+    await expect(task.getByRole('button', { name: '원고 읽기', exact: true })).toBeVisible();
+    await expect(task.getByRole('button', { name: '새 채팅으로 복사', exact: true })).toBeVisible();
+    await executionSummary.click();
+
+    for (const status of ['failed', 'partial', 'cancelled', 'refused', 'running']) {
+      const other = panel.locator(`[data-testid="run"][data-run-id="${run.id}-${status}"]`);
+      await expect(other.getByTestId('scene-usage').locator(':scope > summary')).toContainText(
+        '이번 생성 · 요청 1,234 · 응답 87 토큰'
+      );
+      await expect(other.locator('.run-diagnostics-compact')).toHaveCount(0);
+    }
+    await expect(panel.getByText('SYNTHETIC_TASK_HISTORY_FAILURE', { exact: true })).toBeVisible();
+    const partial = panel.locator(`[data-run-id="${run.id}-partial"] .partial-result`);
+    await partial.locator(':scope > summary').click();
+    await expect(partial.getByText('보존한 미완성 원문', { exact: true })).toBeVisible();
+    await expect(partial.getByRole('button', { name: '출력 복사', exact: true })).toBeVisible();
+    await expect(panel.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
+    const pending = panel.locator(`[data-run-id="${run.id}-context-pending"]`);
+    await expect(pending.getByTestId('context-summary')).toHaveText('컨텍스트 확인 중');
+    await expect(pending.getByTestId('context-summary')).toBeVisible();
+    const failed = panel.locator(`[data-run-id="${run.id}-context-failed"]`);
+    await expect(failed.getByTestId('context-summary')).toContainText(
+      'SYNTHETIC_CONTEXT_HISTORY_FAILURE'
+    );
+    await expect(failed.getByTestId('context-summary')).toBeVisible();
+    expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+      true
+    );
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    expect(sceneReads).toHaveLength(1);
+    expect(state.runReads).toHaveLength(1);
+    expect(state.writes).toEqual([]);
+    expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
+  });
+}
 
 test('TURNUI02 folded auxiliary progress updates preserve explicit expansion and ownership', async ({
   page,

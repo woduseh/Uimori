@@ -3,7 +3,6 @@ import { deleteRecoveryIfModel, readRecovery, writeRecovery } from './editor-rec
 // Keep the latest text across panel unmounts. The existing editor database owns disk storage.
 const values = new Map<string, string | null>();
 const writes = new Map<string, Promise<void>>();
-const registrations = new Map<string, Promise<void>>();
 const diskKey = (key: string) => `helper:${key}`;
 
 export function cachedHelperRecovery(key: string): string | null | undefined {
@@ -59,7 +58,6 @@ export async function clearHelperRecoveryIf(key: string, expected: string): Prom
 
 export async function deleteHelperSessionRecovery(id: string): Promise<void> {
   const artifactIndex = `helper-artifacts:${id}`;
-  await registrations.get(artifactIndex)?.catch(() => {});
   const artifactKeys = JSON.parse((await loadHelperRecovery(artifactIndex)) ?? '[]') as string[];
   await Promise.all(
     [
@@ -72,19 +70,4 @@ export async function deleteHelperSessionRecovery(id: string): Promise<void> {
       await writeHelperRecovery(key, null);
     })
   );
-}
-
-export async function registerHelperArtifactRecovery(
-  sessionId: string,
-  key: string
-): Promise<void> {
-  const indexKey = `helper-artifacts:${sessionId}`;
-  const next = (registrations.get(indexKey) ?? Promise.resolve())
-    .catch(() => {})
-    .then(async () => {
-      const old = JSON.parse((await loadHelperRecovery(indexKey)) ?? '[]') as string[];
-      if (!old.includes(key)) await writeHelperRecovery(indexKey, JSON.stringify([...old, key]));
-    });
-  registrations.set(indexKey, next);
-  await next;
 }

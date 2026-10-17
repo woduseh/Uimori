@@ -25,11 +25,17 @@ test('AUDIT2 acknowledged runtime save remains successful when the reader refres
   expect(created.ok()).toBe(true);
   const chat = (await created.json()) as Chat;
   await page.setViewportSize({ width: 412, height: 915 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
+  const runtime = dialog.getByRole('region', { name: '생성 설정', exact: true });
+  await runtime
+    .locator('summary')
+    .filter({ hasText: /^고급 실행 설정$/ })
+    .click();
+  const calls = runtime.getByLabel('작업당 모델 호출 한도', { exact: true });
   await calls.fill('16');
   let failedReads = 0;
   const writes: unknown[] = [];
@@ -46,11 +52,40 @@ test('AUDIT2 acknowledged runtime save remains successful when the reader refres
       response.request().method() === 'PATCH' &&
       response.url().endsWith(`/chats/${chat.id}/settings`)
   );
-  await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+  let releaseSave = () => {};
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  await page.route(`**/api/chats/${chat.id}/settings`, async (route) => {
+    if (route.request().method() === 'PATCH') await saveGate;
+    await route.continue();
+  });
+  const save = runtime.getByRole('button', { name: '설정 저장', exact: true });
+  await expect(save).toHaveText('저장');
+  await expect(save).toBeEnabled();
+  const idleBox = (await save.boundingBox())!;
+  try {
+    await save.click();
+    await expect(save).toHaveText('저장 중…');
+    await expect(save).toHaveAttribute('aria-busy', 'true');
+    await expect(save).toBeDisabled();
+    const pendingBox = (await save.boundingBox())!;
+    expect(Math.abs(pendingBox.width - idleBox.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(pendingBox.height - idleBox.height)).toBeLessThanOrEqual(1);
+    await expect(save.locator('svg')).toBeVisible();
+    expect(await save.locator('svg').evaluate((node) => getComputedStyle(node).animationName)).toBe(
+      'none'
+    );
+    await page.screenshot({ path: info.outputPath('runtime-save-pending-412.png') });
+  } finally {
+    releaseSave();
+  }
   expect((await saved).ok()).toBe(true);
-  await expect(dialog.getByRole('alert')).toContainText('실행 설정은 저장했어요.');
-  await expect(dialog.getByRole('alert')).toContainText('화면을 다시 불러오지 못했어요.');
-  await expect(dialog.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
+  await expect(runtime.getByRole('alert')).toContainText('실행 설정은 저장했어요.');
+  await expect(runtime.getByRole('alert')).toContainText('화면을 다시 불러오지 못했어요.');
+  await expect(runtime.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
+  await expect(save).toHaveText('저장');
+  await expect(save).toHaveAttribute('aria-busy', 'false');
   await expect(calls).toHaveValue('16');
   expect(failedReads).toBeGreaterThan(0);
   expect(writes).toHaveLength(1);
@@ -67,7 +102,7 @@ test('AUDIT2 acknowledged runtime save remains successful when the reader refres
 });
 
 for (const width of [360, 412]) {
-  test(`AUDIT2 runtime reload keeps the draft until explicit discard at ${width}px`, async ({
+  test(`AUDIT2 runtime cancellation keeps the draft until explicit discard at ${width}px`, async ({
     page,
     request,
   }, info) => {
@@ -88,12 +123,17 @@ for (const width of [360, 412]) {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`/?chat=${chat.id}`);
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '실행 옵션');
+    await selectChatSettingsSection(page, '프롬프트·모델');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
-    const reload = dialog.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true });
+    const runtime = dialog.getByRole('region', { name: '생성 설정', exact: true });
+    await runtime
+      .locator('summary')
+      .filter({ hasText: /^고급 실행 설정$/ })
+      .click();
+    const calls = runtime.getByLabel('작업당 모델 호출 한도', { exact: true });
+    const reload = runtime.getByRole('button', { name: '변경 취소', exact: true });
     const confirmation = page.getByRole('alertdialog', {
-      name: '실행 설정 다시 불러오기',
+      name: '생성 설정 변경 취소',
       exact: true,
     });
     await calls.fill(edited);
@@ -103,10 +143,10 @@ for (const width of [360, 412]) {
     await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
     await expect(calls).toHaveValue(edited);
     await reload.click();
-    await confirmation.getByRole('button', { name: '초안 버리고 불러오기', exact: true }).click();
+    await confirmation.getByRole('button', { name: '변경 버리기', exact: true }).click();
     await expect(confirmation).toBeHidden();
     await expect(calls).toHaveValue(original);
-    await expect(dialog.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
+    await expect(runtime.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
     expect(settingsWrites).toEqual([]);
     const after = await (await request.get(`/api/chats/${chat.id}`)).json();
     expect(after.chat.settings).toEqual(chat.settings);
@@ -126,7 +166,15 @@ for (const width of [360, 412]) {
     };
     const writes: unknown[] = [];
     let rejectSave = false;
+    let releaseBackup = () => {};
+    const backupGate = new Promise<void>((resolve) => {
+      releaseBackup = resolve;
+    });
     await page.route('**/api/backups', async (route) => {
+      if (route.request().method() === 'POST') {
+        await backupGate;
+        return route.fulfill({ json: {} });
+      }
       if (route.request().method() !== 'GET') return route.continue();
       const status: BackupStatus = {
         settings: saved,
@@ -163,6 +211,7 @@ for (const width of [360, 412]) {
     const panel = page.getByRole('region', { name: '자동 백업', exact: true });
     const retain = panel.getByLabel('성공본 보관 개수', { exact: true });
     const save = panel.getByRole('button', { name: '백업 설정 저장', exact: true });
+    await expect(save).toHaveText('저장');
     await retain.fill('6');
     const [acknowledged] = await Promise.all([
       page.waitForResponse(
@@ -195,6 +244,19 @@ for (const width of [360, 412]) {
     expect(saved.revision).toBe(8);
     expect(writes).toHaveLength(2);
     await page.screenshot({ path: info.outputPath(`audit2-backup-save-failed-${width}.png`) });
+    const backup = panel.getByRole('button', { name: '지금 백업', exact: true });
+    try {
+      await backup.click();
+      await expect(backup).toBeDisabled();
+      await expect(save).toBeDisabled();
+      await expect(save).toHaveText('저장');
+      await expect(save).toHaveAttribute('aria-busy', 'false');
+    } finally {
+      releaseBackup();
+    }
+    await expect(backup).toBeEnabled();
+    await expect(save).toBeEnabled();
+    expect(writes).toHaveLength(2);
   });
 }
 
@@ -320,8 +382,10 @@ for (const scope of ['global', 'chat'] as const) {
         expectedRevision: before.revision,
         main: {
           title: '옵션 충돌 결정 검증',
-          program: nativePrompt('', { customPromptTemplateToggle: 'tone=합성 문체=text' }),
-          values: { tone: '기준 문체' },
+          program: nativePrompt('', {
+            customPromptTemplateToggle: 'tone=합성 문체=text\nnote=독립 메모=text',
+          }),
+          values: { tone: '기준 문체', note: '기준 메모' },
         },
       },
     });
@@ -345,14 +409,40 @@ for (const scope of ['global', 'chat'] as const) {
       await panel.getByRole('button', { name: '합성 문체 개별 지정', exact: true }).click();
     const field = panel.getByLabel('합성 문체', { exact: true }).first();
     await field.fill('보존할 내 문체');
+    const optionWrites: Record<string, unknown>[] = [];
+    const endpoint =
+      scope === 'chat' ? `/api/chats/${chat.id}/options/fixed` : '/api/prompt-workspace';
+    const method = scope === 'chat' ? 'POST' : 'PUT';
+    page.on('request', (entry) => {
+      if (entry.method() === method && new URL(entry.url()).pathname === endpoint)
+        optionWrites.push(entry.postDataJSON());
+    });
+    let remoteRevision: number | undefined;
     if (scope === 'global') {
+      const cancel = panel.getByRole('button', { name: '변경 취소', exact: true });
+      const cancelDialog = page.getByRole('alertdialog', {
+        name: '전역 옵션 변경 취소',
+        exact: true,
+      });
+      await cancel.click();
+      await cancelDialog.getByRole('button', { name: '계속 편집', exact: true }).click();
+      await expect(field).toHaveValue('보존할 내 문체');
+      await cancel.click();
+      await cancelDialog.getByRole('button', { name: '변경 버리기', exact: true }).click();
+      await expect(field).toHaveValue('기준 문체');
+      expect(optionWrites).toEqual([]);
+      await field.fill('보존할 내 문체');
       const remote = await request.put('/api/prompt-workspace', {
         data: {
           expectedRevision: workspace.revision,
-          main: { ...workspace.main, values: { tone: '다른 창의 저장 문체' } },
+          main: {
+            ...workspace.main,
+            values: { tone: '다른 창의 저장 문체', note: '다른 창의 독립 메모' },
+          },
         },
       });
       expect(remote.ok(), await remote.text()).toBe(true);
+      remoteRevision = ((await remote.json()) as PromptWorkspace).revision;
     } else {
       const state = (await (
         await request.get(`/api/chats/${chat.id}/options`)
@@ -362,10 +452,11 @@ for (const scope of ['global', 'chat'] as const) {
           expectedRevision: state.revision,
           operationId: crypto.randomUUID(),
           binding: state.binding,
-          values: { tone: '다른 창의 저장 문체' },
+          values: { tone: '다른 창의 저장 문체', note: '다른 창의 독립 메모' },
         },
       });
       expect(remote.ok(), await remote.text()).toBe(true);
+      remoteRevision = ((await remote.json()) as ChatOptionState).revision;
     }
     const save = panel.getByRole('button', {
       name: scope === 'global' ? '현재 옵션 적용' : '채팅 고정 옵션 저장',
@@ -376,15 +467,127 @@ for (const scope of ['global', 'chat'] as const) {
       name: scope === 'global' ? '프롬프트 옵션 저장 내용 확인' : '채팅 옵션 저장 내용 확인',
       exact: true,
     });
+    {
+      let failReview = true;
+      await page.route(
+        scope === 'chat' ? `**/api/chats/${chat.id}/options` : '**/api/prompt-workspace',
+        async (route) => {
+          if (route.request().method() === 'GET' && failReview)
+            return route.fulfill({
+              status: 503,
+              json: { error: 'Synthetic option review failure' },
+            });
+          await route.continue();
+        }
+      );
+      const writesBeforeRead = optionWrites.length;
+      await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toContainText('(503)');
+      await expect(dialog.getByLabel('현재 저장본')).toHaveCount(0);
+      await expect(
+        dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true })
+      ).toHaveCount(0);
+      await dialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+      await expect(field).toHaveValue('보존할 내 문체');
+      expect(optionWrites).toHaveLength(writesBeforeRead);
+      failReview = false;
+      await save.click();
+      await expect(dialog).toBeVisible();
+      expect(optionWrites).toHaveLength(writesBeforeRead);
+    }
     await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
     await expect(dialog.getByLabel('현재 저장본')).toContainText('다른 창의 저장 문체');
+    await expect(dialog).toHaveCSS('opacity', '1');
+    await page.screenshot({ path: test.info().outputPath('option-review-' + scope + '-412.png') });
     await expect(dialog.getByLabel('현재 저장본')).not.toContainText('보존할 내 문체');
-    await dialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+    await dialog
+      .getByRole('button', {
+        name:
+          scope === 'chat' ? '채팅 옵션 저장 내용 확인 닫기' : '프롬프트 옵션 저장 내용 확인 닫기',
+        exact: true,
+      })
+      .click();
     await expect(field).toHaveValue('보존할 내 문체');
     // A dismissed conflict remains actionable; it cannot silently grant a newer CAS revision.
     await save.click();
     await expect(dialog).toBeVisible();
     await dialog.press('Escape');
     await expect(field).toHaveValue('보존할 내 문체');
+    {
+      const writesBeforeReview = optionWrites.length;
+      await expect(
+        panel.getByRole('button', {
+          name: scope === 'chat' ? '최신 상태 확인' : '최신 설정 다시 불러오기',
+          exact: true,
+        })
+      ).toHaveCount(0);
+      await expect(
+        panel.getByRole('button', {
+          name: scope === 'chat' ? '최신 옵션 불러오기' : '최신 설정에 내 옵션 유지',
+          exact: true,
+        })
+      ).toHaveCount(0);
+      await save.click();
+      await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+      await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(field).toHaveValue('보존할 내 문체');
+      await expect(panel.getByLabel('독립 메모', { exact: true }).first()).toHaveValue(
+        '다른 창의 독립 메모'
+      );
+      expect(optionWrites).toHaveLength(writesBeforeReview);
+      const acknowledged = page.waitForResponse(
+        (response) =>
+          response.request().method() === method && new URL(response.url()).pathname === endpoint
+      );
+      await save.click();
+      expect((await acknowledged).ok()).toBe(true);
+      await expect(save).toBeDisabled();
+      const saved = await (
+        await request.get(scope === 'chat' ? `/api/chats/${chat.id}/options` : endpoint)
+      ).json();
+      expect(scope === 'chat' ? saved.fixedValues : saved.main.values).toEqual({
+        tone: '보존할 내 문체',
+        note: '다른 창의 독립 메모',
+      });
+      expect(optionWrites).toHaveLength(writesBeforeReview + 1);
+      expect(optionWrites.at(-1)).toMatchObject({ expectedRevision: remoteRevision });
+    }
+    if (scope === 'global') {
+      let accepted: PromptWorkspace | undefined;
+      await page.route('**/api/prompt-workspace', async (route) => {
+        if (route.request().method() !== 'PUT') return route.continue();
+        const response = await route.fetch();
+        expect(response.ok(), await response.text()).toBe(true);
+        accepted = (await response.json()) as PromptWorkspace;
+        await route.fulfill({
+          status: 503,
+          json: { error: 'Synthetic lost global save acknowledgement' },
+        });
+      });
+      await field.fill('수락 응답을 놓친 문체');
+      await save.click();
+      await expect(dialog).toBeVisible();
+      const writesAfterLoss = optionWrites.length;
+      await dialog.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+      await expect(field).toHaveValue('수락 응답을 놓친 문체');
+      await save.click();
+      await expect(dialog).toBeVisible();
+      expect(optionWrites).toHaveLength(writesAfterLoss);
+      await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+      await expect(dialog.getByLabel('현재 저장본')).toContainText('수락 응답을 놓친 문체');
+      await dialog
+        .getByRole('button', { name: '입력 버리고 저장본 불러오기', exact: true })
+        .click();
+      await expect(dialog).toBeHidden();
+      await expect(field).toHaveValue('수락 응답을 놓친 문체');
+      await expect(save).toBeDisabled();
+      expect(optionWrites).toHaveLength(writesAfterLoss);
+      const persisted = (await (
+        await request.get('/api/prompt-workspace')
+      ).json()) as PromptWorkspace;
+      expect(persisted.revision).toBe(accepted!.revision);
+      expect(persisted.main.values).toEqual(accepted!.main.values);
+    }
   });
 }

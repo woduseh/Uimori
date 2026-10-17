@@ -58,7 +58,7 @@ export function JevProviderSettings({
   const [status, setStatus] = useState<JevProviderStatus | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
-  const [operation, setOperation] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'delete' | 'test' | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -71,7 +71,7 @@ export function JevProviderSettings({
   const lock = useRef(false);
   const alive = useRef(true);
   const polling = test?.status === 'running' && !testError;
-  const busy = loading || operation || polling;
+  const busy = loading || operation !== null || polling;
   const unresolved = !!attempt || test?.status === 'running';
   const score = test ? relevance(test) : null;
 
@@ -157,7 +157,7 @@ export function JevProviderSettings({
     if (!status || lock.current || busy || unresolved || conflict || (!remove && !apiKey.trim()))
       return false;
     lock.current = true;
-    setOperation(true);
+    setOperation(remove ? 'delete' : 'save');
     setError('');
     setMessage('');
     try {
@@ -188,7 +188,7 @@ export function JevProviderSettings({
       return false;
     } finally {
       lock.current = false;
-      if (alive.current) setOperation(false);
+      if (alive.current) setOperation(null);
     }
   }
 
@@ -197,7 +197,7 @@ export function JevProviderSettings({
   async function startTest() {
     if (!status || lock.current || busy || apiKey || conflict) return;
     lock.current = true;
-    setOperation(true);
+    setOperation('test');
     setTestError('');
     setMessage('');
     const previous = attemptRef.current;
@@ -229,12 +229,12 @@ export function JevProviderSettings({
         );
       } else {
         setTestError(
-          '요청 결과를 확인하지 못했어요. 상태 확인은 같은 요청을 복구하며 새 테스트를 추가하지 않아요.'
+          '테스트 결과를 확인하지 못했어요. ‘JEV 테스트 상태 확인’으로 같은 테스트의 결과를 다시 확인해 주세요. 새 테스트는 보내지 않아요.'
         );
       }
     } finally {
       lock.current = false;
-      if (alive.current) setOperation(false);
+      if (alive.current) setOperation(null);
     }
   }
 
@@ -272,7 +272,12 @@ export function JevProviderSettings({
           <RefreshIcon size={16} aria-hidden="true" /> 연결 상태 새로고침
         </button>
       </div>
-      {loading && <LoadingState compact label="연결 상태를 불러오는 중이에요…" />}
+      {loading && (
+        <LoadingState
+          presentation={status ? 'inline' : 'placeholder'}
+          label="연결 상태를 불러오는 중이에요…"
+        />
+      )}
       {status && (
         <>
           <form
@@ -357,7 +362,7 @@ export function JevProviderSettings({
               )}
               <SaveButton
                 label="JEV API 키 저장"
-                text="키 저장"
+                aria-busy={operation === 'save'}
                 disabled={!apiKey.trim() || busy || unresolved || conflict}
               />
             </div>

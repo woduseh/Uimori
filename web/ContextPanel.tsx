@@ -232,7 +232,7 @@ export function ContextPanel({
         <TransientNotice message={message} />
         {!detail ? (
           <LoadingState
-            compact
+            presentation="placeholder"
             loading={!error}
             error={error}
             label="컨텍스트를 불러오는 중이에요…"
@@ -264,7 +264,7 @@ export function ContextPanel({
             )}
             {!current && (
               <LoadingState
-                compact
+                presentation="inline"
                 label="대상 장면의 최신 컨텍스트를 확인하고 있어요. 작성 중인 초안은 유지해요."
               />
             )}
@@ -337,8 +337,8 @@ export function ContextPanel({
             </div>
             {working ? (
               <LoadingState
+                presentation="inline"
                 key={working.id}
-                compact
                 label={`${working.status === 'queued' ? '컨텍스트 압축을 기다리고 있어요.' : '컨텍스트를 정리하고 있어요.'} 이 화면을 닫아도 작업은 계속돼요.`}
               />
             ) : (

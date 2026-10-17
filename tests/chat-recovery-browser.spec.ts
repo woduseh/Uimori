@@ -184,14 +184,12 @@ for (const viewport of [
       await dialog.getByRole('button', { name: /새로고침/, exact: false }).click();
       await expect(
         dialog.getByText(
-          '서버의 변수 수정 번호나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 보존했어요.',
+          '변수 저장본이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 유지했어요.',
           { exact: true }
         )
       ).toBeVisible();
       await expect(value('trust')).toHaveValue('');
-      await dialog
-        .getByRole('button', { name: '최신 상태 기준으로 초안 유지', exact: true })
-        .click();
+      await dialog.getByRole('button', { name: '입력값 유지하고 계속 편집', exact: true }).click();
       const bodies: unknown[] = [];
       let loseResponse = true;
       await page.route(`**${endpoint}`, async (route) => {

@@ -85,7 +85,7 @@ export function PromptTemplatesDialog({
       </p>
       {loadError || templates === null ? (
         <LoadingState
-          compact
+          presentation="placeholder"
           loading={!loadError}
           error={loadError}
           errorLabel="기본 프롬프트를 불러오지 못했어요."
@@ -115,7 +115,9 @@ export function PromptTemplatesDialog({
           ))}
         </ul>
       )}
-      {adding && <LoadingState compact label={`${adding.title} 프리셋을 추가하는 중이에요…`} />}
+      {adding && (
+        <LoadingState presentation="inline" label={`${adding.title} 프리셋을 추가하는 중이에요…`} />
+      )}
       {failure && (
         <div className="prompt-templates-error">
           <NoticeBanner

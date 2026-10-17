@@ -94,7 +94,7 @@ export function analyzeNativeRisuImport(
   findings.add(
     'native-risu',
     'info',
-    '카드·모듈·CBS·정규식·트리거 원문을 Risu 자료로 보존해요. 저장용 본문·시작문·로어는 그 자료에서 읽은 표시이며, 보존 자체가 모든 스크립트의 실행 지원을 뜻하지는 않아요.'
+    '카드·모듈과 CBS·정규식·트리거 코드는 Risu 원문으로 보존해요. 본문·시작문·로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.'
   );
   if (
     nativeRisuTriggers(native).some(
@@ -113,7 +113,7 @@ export function analyzeNativeRisuImport(
     findings.add(
       'native-model-calls',
       'info',
-      '스크립트에 모델 호출로 보이는 코드가 있어요. 원래 호출은 유지해요. 상태창이나 이미지 선택을 위한 의미 판단은 JEV로 바꿀 후보가 될 수 있으며, 자유문·이미지 생성 호출 자체는 별도 기능이에요.'
+      '스크립트에서 모델 호출로 보이는 코드를 찾았어요. 가져오기에서는 이 코드를 유지하며, JEV 호출로 자동 변환하지 않아요.'
     );
   const transferInput = {
     input,

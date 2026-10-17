@@ -187,7 +187,7 @@ export function SelectionRevision(props: Props) {
             </NoticeBanner>
           )}
           {error && <NoticeBanner tone="error">{error} 작성한 내용은 유지돼요.</NoticeBanner>}
-          {busy && <LoadingState compact label="선택한 구절을 다듬고 있어요…" />}
+          {busy && <LoadingState presentation="inline" label="선택한 구절을 다듬고 있어요…" />}
           <div className="form-actions">
             {busy ? (
               <button type="button" className="secondary" onClick={cancel}>

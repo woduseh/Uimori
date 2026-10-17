@@ -94,7 +94,7 @@ export function projectNativeRisuPackage(
     findings.add(
       'native-variable-projection',
       'warning',
-      '기본 변수 원문은 보존했어요. 현재 변수 읽기 형식으로 표현할 수 없는 항목은 실행 범위를 확인해야 해요.'
+      '기본 변수 설정을 읽지 못했어요. 원문은 보존했지만 Uimori의 기본 변수 설정에는 반영하지 못했어요.'
     );
   }
   return { pkg, lore: lore.preview };

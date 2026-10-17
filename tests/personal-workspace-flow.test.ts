@@ -1,3 +1,4 @@
+import { legacyChatBackupFixture } from './fixtures/legacy-backup.js';
 import { applyRisuImport, prepareRisuImport } from '../server/risu-import.js';
 import { describe } from 'vitest';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -19,7 +20,7 @@ import { processImage } from '../server/image-processing.js';
 import { readImage, storeImage } from '../server/image-storage.js';
 import { JevCredentialStore } from '../server/jev-credentials.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
-import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { importChatBackup } from '../server/chat-backup.js';
 import { forkChat } from '../server/chat-fork.js';
 import { databaseBackupStream } from '../server/database-backup.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
@@ -242,7 +243,7 @@ test('independent copies and portable restores retain inline images, notes and c
     `/api/package-image-blobs/${image.hash}`
   );
   source.db.prepare('DELETE FROM assets WHERE id=?').run(asset.id);
-  const file = exportChatBackup(source, copy.id);
+  const file = legacyChatBackupFixture(source, copy.id);
   expect(file).not.toHaveProperty('records');
   const target = database();
   const restored = await importChatBackup(target, { backup: file, idempotencyKey: randomUUID() });
@@ -459,7 +460,7 @@ describe('Concurrent portable chat restore', () => {
   test('concurrent copies of the same backup return one committed result', async () => {
     const { store } = database();
     const { chat } = await manuscript(store);
-    const body = { backup: exportChatBackup(store, chat.id), idempotencyKey: 'same-copy' };
+    const body = { backup: legacyChatBackupFixture(store, chat.id), idempotencyKey: 'same-copy' };
     const [first, second] = await Promise.all([
       importChatBackup(store, body),
       importChatBackup(store, body),

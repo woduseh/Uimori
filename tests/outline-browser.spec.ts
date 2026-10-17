@@ -102,7 +102,7 @@ for (const width of WIDTHS) {
     });
     const panel = await open(page, chat.id, width);
     await expect(
-      panel.getByRole('heading', { name: '작은 장면에서 시작해도 좋아요.' })
+      panel.getByRole('button', { name: '도우미와 구성 시작', exact: true })
     ).toBeVisible();
     await page.screenshot({ path: info.outputPath(`outline-empty-${width}.png`) });
     await panel.getByRole('button', { name: '직접 추가', exact: true }).click();

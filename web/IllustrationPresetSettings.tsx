@@ -67,7 +67,8 @@ export function IllustrationPresetSettings({
   const [target, setTarget] = useState<'global' | 'bot' | 'chat'>('global');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [baseline, setBaseline] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'other' | null>(null);
+  const busy = operation !== null;
   const [error, setError] = useState('');
   const [loadError, setLoadError] = useState('');
   const [notice, setNotice] = useState('');
@@ -139,7 +140,7 @@ export function IllustrationPresetSettings({
   async function action(work: () => Promise<void>, saveAttempt = false): Promise<boolean> {
     if (locked.current) return false;
     locked.current = true;
-    setBusy(true);
+    setOperation(saveAttempt ? 'save' : 'other');
     setError('');
     setNotice('');
     setImportNotice('');
@@ -155,7 +156,7 @@ export function IllustrationPresetSettings({
       return false;
     } finally {
       locked.current = false;
-      setBusy(false);
+      setOperation(null);
     }
   }
   async function save(asCopy = false): Promise<boolean> {
@@ -252,9 +253,9 @@ export function IllustrationPresetSettings({
   }, [catalog, scope, onGeneratorChange]);
   if (!catalog)
     return (
-      <section aria-label="삽화 프리셋">
+      <section className="settings-loading-region" aria-label="삽화 프리셋">
         <LoadingState
-          compact
+          presentation="region"
           loading={!loadError}
           error={loadError}
           label="삽화 프리셋을 불러오는 중이에요…"
@@ -550,7 +551,7 @@ export function IllustrationPresetSettings({
 피할 표현:
 - 점처럼 깨지는 가장자리
 - 과도한 빛 번짐`}</pre>
-                <p>아티팩트 억제 지침은 원하는 표현을 설명할 뿐 결과를 보장하지 않아요.</p>
+                <p>그림의 깨짐이나 빛 번짐을 줄이는 지침이지만, 결과를 보장하지는 않아요.</p>
                 <p>
                   <strong>Anima 예시:</strong> 모델 전용 문법은 적용 대상을 명시해요.
                 </p>
@@ -647,6 +648,8 @@ export function IllustrationPresetSettings({
                 type="button"
                 className="ui-icon-button"
                 label="프리셋 저장"
+                text=""
+                aria-busy={operation === 'save'}
                 disabled={!dirty || conflict || deleted}
                 onClick={() => void save()}
               />

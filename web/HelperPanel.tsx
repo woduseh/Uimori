@@ -329,7 +329,7 @@ export function HelperPanel(props: Props) {
     personas[scopeKey] ??
     (conversation
       ? { text: conversation.persona, revision: conversation.revision, limits: conversation.limits }
-      : { text: '', revision: 0, limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 } });
+      : { text: '', revision: 0, limits: { totalCalls: 24, helperCalls: 12 } });
   const recorded = taskHistory?.taskId
     ? tasks.filter((task) => task.id === taskHistory.taskId)
     : tasks;
@@ -907,7 +907,6 @@ export function HelperPanel(props: Props) {
           >
             구성으로 돌아가기
           </button>
-          <small>선택한 구성과 함께 작업해요.</small>
         </div>
       )}
       <HelperSessionBar
@@ -983,7 +982,6 @@ export function HelperPanel(props: Props) {
                   [
                     ['totalCalls', '전체 호출 한도', 2, 100],
                     ['helperCalls', '도우미 판단 한도', 1, persona.limits.totalCalls],
-                    ['artifacts', '가정 장면 작업 한도', 1, 10],
                   ] as const
                 ).map(([field, label, min, max]) => (
                   <label key={field} className="settings-row">
@@ -1055,9 +1053,7 @@ export function HelperPanel(props: Props) {
                 persona.limits.totalCalls < 2 ||
                 persona.limits.totalCalls > 100 ||
                 persona.limits.helperCalls < 1 ||
-                persona.limits.helperCalls > persona.limits.totalCalls ||
-                persona.limits.artifacts < 1 ||
-                persona.limits.artifacts > 10
+                persona.limits.helperCalls > persona.limits.totalCalls
               }
               onClick={() => {
                 if (props.ready === false || scopeMismatch) return;
@@ -1067,7 +1063,10 @@ export function HelperPanel(props: Props) {
                   {
                     expectedRevision: persona.revision,
                     persona: persona.text,
-                    limits: persona.limits,
+                    limits: {
+                      totalCalls: persona.limits.totalCalls,
+                      helperCalls: persona.limits.helperCalls,
+                    },
                   },
                   'PATCH'
                 )
@@ -1143,16 +1142,14 @@ export function HelperPanel(props: Props) {
           )}
           {data.loading ? (
             <LoadingState
-              compact
+              presentation={messages.length ? 'inline' : 'region'}
               loading={!data.error}
               error={data.error}
               label="대화를 불러오는 중이에요…"
             />
           ) : (
             messages.length === 0 && (
-              <p className="helper-empty">
-                작품에 대해 묻거나, 설정을 다듬거나, 가정 장면을 부탁해 보세요.
-              </p>
+              <p className="helper-empty">작품이나 설정에 대해 물어보세요.</p>
             )
           )}
           {messages.map((message) => {
@@ -1200,13 +1197,6 @@ export function HelperPanel(props: Props) {
                     conversationId={conversation.id}
                     key={`${artifact.id}:${artifact.revision}`}
                     {...artifact}
-                    readOnly={scopeMismatch}
-                    onRevise={(value) => {
-                      editDraft(
-                        `가정 장면 ${value.id} 수정 번호 ${value.revision}을 다음과 같이 수정해줘: `
-                      );
-                      input.current?.focus();
-                    }}
                   />
                 ))}
                 {message.role === 'user' &&

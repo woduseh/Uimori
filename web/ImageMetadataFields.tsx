@@ -33,9 +33,9 @@ export function ImageMetadataFields({
         />
       </label>
       <label>
-        에셋 용도
+        이미지 용도
         <select
-          aria-label="에셋 용도"
+          aria-label="이미지 용도"
           value={image.allowedUse}
           onChange={(event) =>
             onChange({ ...image, allowedUse: event.target.value as PackageImage['allowedUse'] })
@@ -50,7 +50,7 @@ export function ImageMetadataFields({
       </label>
       <p className="muted">
         이름과 설명은 JEV의 이미지 선택에 사용돼요. 본문이 포함된 용도는 자동 이미지 배치 후보가
-        돼요.{portrait ? ' 현재 대표 이미지는 프로필 사용을 유지해야 해요.' : ''}
+        돼요.{portrait ? ' 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.' : ''}
       </p>
     </>
   );

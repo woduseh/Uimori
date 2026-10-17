@@ -6,7 +6,7 @@ import './save-conflict-dialog.css';
 import './settings-layout.css';
 
 export type SavedSettingField = { label: string; value: string };
-type SavedReview = SavedSettingField[] | { content: ReactNode };
+type SavedReview = SavedSettingField[] | { content: ReactNode; actions?: ReactNode };
 
 /** Reviewing the saved version never changes the editable draft or its revision. */
 export function SaveConflictDialog({
@@ -41,6 +41,7 @@ export function SaveConflictDialog({
   async function review() {
     const request = ++version.current;
     setLoading(true);
+    setFields(null);
     setError('');
     try {
       const saved = await readSaved();
@@ -52,9 +53,10 @@ export function SaveConflictDialog({
       if (request === version.current) setLoading(false);
     }
   }
-  return (
-    <Dialog open={open} title={title} variant="confirmation" role="alertdialog" onClose={onClose}>
-      <p>다른 곳에서 저장 내용이 바뀌었어요. 현재 입력은 그대로 남아 있어요.</p>
+  const reviewActions = fields && !Array.isArray(fields) ? fields.actions : null;
+  const reviewContent = (
+    <>
+      <p>현재 입력은 그대로 두고 저장된 내용을 확인할 수 있어요.</p>
       <p className="muted">저장본을 확인한 뒤 계속 편집할 수 있어요.</p>
       {fields && (
         <section aria-label="현재 저장본" className="settings-group-body saved-version-review">
@@ -69,8 +71,20 @@ export function SaveConflictDialog({
             : fields.content}
         </section>
       )}
-      {loading && <LoadingState compact label="저장본을 확인하고 있어요…" />}
+      {loading && <LoadingState presentation="placeholder" label="저장본을 확인하고 있어요…" />}
       {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+    </>
+  );
+  return (
+    <Dialog
+      open={open}
+      title={title}
+      variant="confirmation"
+      role="alertdialog"
+      onClose={onClose}
+      className={reviewActions ? 'saved-review-dialog' : ''}
+    >
+      {reviewActions ? <div className="saved-review-content">{reviewContent}</div> : reviewContent}
       <div className="form-actions">
         <button
           type="button"
@@ -94,9 +108,11 @@ export function SaveConflictDialog({
             저장본 확인 완료
           </button>
         )}
-        <button ref={keepInput} type="button" className="primary" onClick={onClose}>
-          현재 입력 유지
-        </button>
+        {reviewActions ?? (
+          <button ref={keepInput} type="button" className="primary" onClick={onClose}>
+            현재 입력 유지
+          </button>
+        )}
       </div>
     </Dialog>
   );

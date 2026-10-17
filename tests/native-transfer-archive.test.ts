@@ -1,3 +1,4 @@
+import { legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
 import { afterEach, expect, test } from 'vitest';
 import Fastify from 'fastify';
 import { createHash, randomBytes } from 'node:crypto';
@@ -12,7 +13,11 @@ import { processImage } from '../server/image-processing.js';
 import { readImage } from '../server/image-storage.js';
 import { prepareNativeArchive } from '../server/native-transfer-archive.js';
 import { readNativeArchive } from '../server/native-transfer-archive-codec.js';
-import { exportChatBackupArchive, importChatBackupArchiveRequest } from '../server/chat-backup.js';
+import {
+  exportChatBackupArchive,
+  importChatBackupArchiveRequest,
+  importChatBackup,
+} from '../server/chat-backup.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
@@ -260,4 +265,31 @@ test('native archive cancellation releases the shared preparation budget before 
     0
   );
   await app.close();
+});
+
+test('an explicit v1 JSON backup still restores without a JSON output endpoint', async () => {
+  const source = database();
+  const chat = createFixtureChat(source, 'Legacy input');
+  const botId = source.product
+    .profile(chat.id)
+    .packageAttachments!.find((ref) => ref.role === 'bot')!.id;
+  const owner = source.product.get<Content>('content', botId);
+  const backup = legacyChatBackupWithBot(owner, chat.settings, {
+    title: 'Archived JSON conversation',
+    text: 'The old manuscript stays readable.',
+    translation: '예전 원고를 계속 읽을 수 있어요.',
+  });
+  const target = database();
+  const command = { backup, idempotencyKey: 'legacy-json-input' };
+  const restored = await importChatBackup(target, command);
+  expect(restored.created).toBe(true);
+  expect(exportChatTranscript(target, restored.chat.id).entries).toEqual([
+    {
+      request: 'Write',
+      text: 'The old manuscript stays readable.',
+      translation: '예전 원고를 계속 읽을 수 있어요.',
+    },
+  ]);
+  expect((await importChatBackup(target, command)).created).toBe(false);
+  expect(target.chats()).toHaveLength(1);
 });

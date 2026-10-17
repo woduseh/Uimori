@@ -138,7 +138,7 @@ const ChatSettingsPanel = deferredPanel(
     default: (await import('./ChatSettingsPanel.js')).ChatSettingsPanel,
   }),
   (content, props) => (
-    <Dialog open title="채팅 설정" onClose={props.onClose} wide>
+    <Dialog open title="채팅 설정" onClose={props.onClose} wide className="settings-dialog">
       {content}
     </Dialog>
   )
@@ -152,7 +152,7 @@ const AppSettingsPanel = deferredPanel(
     default: (await import('./WorkspacePanels.js')).AppSettingsPanel,
   }),
   (content, props) => (
-    <Dialog open title="설정" onClose={props.onClose} wide>
+    <Dialog open title="설정" onClose={props.onClose} wide className="settings-dialog">
       {content}
     </Dialog>
   )
@@ -192,6 +192,12 @@ function App() {
 
   // Compact widths open the scene list from the header title; the rail owns it otherwise.
   const [sceneList, setSceneList] = useState(false);
+  const sceneListOpener = useRef<HTMLButtonElement>(null);
+  const [scenePosition, setScenePosition] = useState<{ scope: string; label: string } | null>(null);
+  const updateScenePosition = useCallback(
+    (label: string) => setScenePosition({ scope: s.viewKey, label }),
+    [s.viewKey]
+  );
   const sceneCount = s.detail?.reader.navigation.length ?? 0;
   // Chat settings may open on a specific section (the failure card's 모델 설정).
   const [settingsSection, setSettingsSection] = useState<ChatSettingsSection | undefined>();
@@ -899,6 +905,11 @@ function App() {
           bot={importBot}
           onClose={() => setImportBot(null)}
           onImported={s.loadChats}
+          onOpenBackups={() => {
+            setImportBot(null);
+            setSettingsTab('data');
+            setPanel('settings');
+          }}
         />
       )}
       <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
@@ -915,16 +926,23 @@ function App() {
                   <ChevronDown size={14} aria-hidden="true" className="header-title-caret" />
                 )}
               </h1>
-              <small>
-                {s.bot?.title
-                  ? `${s.bot.title}${s.persona ? ` · 페르소나 ${s.persona.title}` : ''}`
-                  : s.selected
-                    ? '채팅을 이어가는 중'
-                    : '나의 채팅'}
-              </small>
+              {(s.bot?.title ||
+                (compact && showSceneNavigator && scenePosition?.scope === s.viewKey)) && (
+                <small className="header-reading-context">
+                  {compact && showSceneNavigator && scenePosition?.scope === s.viewKey && (
+                    <span className="header-scene-position">{scenePosition.label}</span>
+                  )}
+                  {s.bot?.title && (
+                    <span className="header-chat-context">
+                      {`${s.bot.title}${s.persona ? ` · 페르소나 ${s.persona.title}` : ''}`}
+                    </span>
+                  )}
+                </small>
+              )}
               {compact && showSceneNavigator && s.selected && sceneCount > 0 && (
                 <button
                   type="button"
+                  ref={sceneListOpener}
                   className="header-title-hit"
                   aria-label="장면 목록 열기"
                   title="장면 목록"
@@ -1168,6 +1186,7 @@ function App() {
                   '프롬프트',
                   navigationControls,
                   <LoadingState
+                    presentation="region"
                     loading={!s.libraryError}
                     error={s.libraryError}
                     label="프롬프트를 불러오는 중이에요…"
@@ -1553,6 +1572,8 @@ function App() {
                   hideControls={compact && sourceEditing}
                   listOpen={sceneList}
                   onListOpenChange={setSceneList}
+                  onCurrentLabel={updateScenePosition}
+                  compactListOpener={sceneListOpener}
                 />
               )}
             </div>

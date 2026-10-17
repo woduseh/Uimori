@@ -1,305 +1,253 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { CheckIcon, CloseIcon } from './ui-icons.js';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy } from 'lucide-react';
 import type { HelperArtifact } from '../core/helper.js';
-import { api, ApiError } from './api.js';
+import { api } from './api.js';
 import { IconButton } from './IconButton.js';
 import { PlainProse } from './Prose.js';
-import { SaveConflictDialog } from './SaveConflictDialog.js';
-import {
-  cachedHelperRecovery,
-  clearHelperRecoveryIf,
-  loadHelperRecovery,
-  registerHelperArtifactRecovery,
-  writeHelperRecovery,
-} from './helper-recovery.js';
+import { loadHelperRecovery } from './helper-recovery.js';
 
 export type HelperArtifactView = HelperArtifact;
-type Draft = { revision: number; text: string; requestKey?: string };
-function storedDraft(key: string): Draft | null {
+type Draft = { key: string; revision: number | null; text: string };
+
+function storedDraft(key: string, raw: string): Draft {
   try {
-    const value = JSON.parse(
-      cachedHelperRecovery(key.replace(/^uimori:/u, '')) ?? 'null'
-    ) as Draft | null;
-    return value &&
+    const value = JSON.parse(raw) as { revision?: unknown; text?: unknown } | null;
+    if (
+      value &&
       Number.isSafeInteger(value.revision) &&
-      value.revision > 0 &&
+      Number(value.revision) > 0 &&
       typeof value.text === 'string'
-      ? value
-      : null;
+    )
+      return { key, revision: Number(value.revision), text: value.text };
   } catch {
-    return null;
+    // An unrecognized legacy buffer remains readable and copyable without rewriting it.
   }
+  return { key, revision: null, text: raw };
 }
 
-/** The message keeps its original exact reference; this card can inspect or create another revision. */
+/** Retired artifacts keep their exact message reference, saved revisions and device drafts readable. */
 export function HelperArtifactCard({
   id,
   revision,
   conversationId,
-  onRevise,
-  readOnly = false,
 }: {
   id: string;
   revision: number;
   conversationId: string;
-  readOnly?: boolean;
-  onRevise: (artifact: HelperArtifactView) => void;
 }) {
-  const storageKey = `uimori:helper-artifact-draft:${id}:${revision}`;
+  const [selectedRevision, setSelectedRevision] = useState(revision);
+  const [latestRevision, setLatestRevision] = useState(revision);
   const [artifact, setArtifact] = useState<HelperArtifactView>();
-  const [draft, setDraft] = useState<Draft | null | undefined>(() =>
-    cachedHelperRecovery(storageKey.replace(/^uimori:/u, '')) === undefined
-      ? undefined
-      : storedDraft(storageKey)
-  );
-  const [error, setError] = useState('');
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [readError, setReadError] = useState('');
+  const [historyError, setHistoryError] = useState('');
+  const [draftError, setDraftError] = useState('');
+  const [copyError, setCopyError] = useState('');
   const [message, setMessage] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [conflictDialog, setConflictDialog] = useState(false);
-  const reviewedArtifact = useRef<HelperArtifactView | null>(null);
-  const alive = useRef(true),
-    locked = useRef(false);
-  const conflict = Boolean(draft && artifact && draft.revision !== artifact.revision);
+  const [reload, setReload] = useState(0);
+  const path = `/helper/artifacts/${encodeURIComponent(id)}`;
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reload is an explicit retry of this read.
   useEffect(() => {
-    alive.current = true;
-    void loadHelperRecovery(storageKey.replace(/^uimori:/u, ''))
-      .then(() => {
-        const restored = storedDraft(storageKey);
-        setDraft((current) => (current === undefined ? restored : current));
-        return api<HelperArtifactView>(
-          `/helper/artifacts/${encodeURIComponent(id)}?revision=${restored?.revision ?? revision}`
-        );
-      })
+    let current = true;
+    setHistoryError('');
+    void api<HelperArtifactView>(path)
       .then((value) => {
-        if (alive.current) setArtifact(value);
+        if (current) setLatestRevision(value.revision);
       })
       .catch((cause) => {
-        if (alive.current) setError(cause.message);
+        if (current) setHistoryError(cause.message);
       });
     return () => {
-      alive.current = false;
+      current = false;
     };
-  }, [id, revision, storageKey]);
+  }, [path, reload]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reload is an explicit retry of this read.
   useEffect(() => {
-    if (!draft) return;
-    void registerHelperArtifactRecovery(conversationId, storageKey.replace(/^uimori:/u, '')).catch(
-      () => {}
-    );
-    void writeHelperRecovery(storageKey.replace(/^uimori:/u, ''), JSON.stringify(draft)).catch(
-      () => {
-        if (alive.current)
-          setError('초안을 이 기기에 보관하지 못했어요. 입력은 현재 화면에 남아 있어요.');
+    let current = true;
+    setArtifact(undefined);
+    setReadError('');
+    void api<HelperArtifactView>(`${path}?revision=${selectedRevision}`)
+      .then((value) => {
+        if (current) setArtifact(value);
+      })
+      .catch((cause) => {
+        if (current) setReadError(cause.message);
+      });
+    return () => {
+      current = false;
+    };
+  }, [path, selectedRevision, reload]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reload is an explicit retry of this read.
+  useEffect(() => {
+    let current = true;
+    const prefix = `helper-artifact-draft:${id}:`;
+    async function readDrafts() {
+      const keys = new Set([`${prefix}${revision}`]);
+      let failed = false;
+      try {
+        const index = JSON.parse(
+          (await loadHelperRecovery(`helper-artifacts:${conversationId}`)) ?? '[]'
+        ) as unknown;
+        if (!Array.isArray(index)) throw new Error('Invalid draft index');
+        for (const key of index)
+          if (typeof key === 'string' && key.startsWith(prefix)) keys.add(key);
+      } catch {
+        failed = true;
       }
-    );
-  }, [draft, storageKey, conversationId]);
-  async function latest() {
-    const value = await api<HelperArtifactView>(`/helper/artifacts/${encodeURIComponent(id)}`);
-    if (alive.current) setArtifact(value);
-    return value;
-  }
-  async function save() {
-    if (readOnly || !draft || locked.current) return;
-    if (conflict) {
-      reviewedArtifact.current = null;
-      setConflictDialog(true);
-      return;
+      const stored = await Promise.allSettled(
+        [...keys].sort().map(async (key) => {
+          const raw = await loadHelperRecovery(key);
+          return raw === null ? null : storedDraft(key, raw);
+        })
+      );
+      if (!current) return;
+      setDrafts(
+        stored.flatMap((result) =>
+          result.status === 'fulfilled' && result.value ? [result.value] : []
+        )
+      );
+      setDraftError(
+        failed || stored.some((result) => result.status === 'rejected')
+          ? '일부 편집 초안을 불러오지 못했어요. 이 기기의 저장 내용은 지우지 않았어요.'
+          : ''
+      );
     }
-    locked.current = true;
-    setBusy(true);
-    setError('');
+    void readDrafts();
+    return () => {
+      current = false;
+    };
+  }, [id, revision, conversationId, reload]);
+
+  async function copy(text: string) {
+    setCopyError('');
     setMessage('');
     try {
-      const requestKey = draft.requestKey ?? crypto.randomUUID();
-      const pending = { ...draft, requestKey };
-      try {
-        await writeHelperRecovery(storageKey.replace(/^uimori:/u, ''), JSON.stringify(pending));
-      } catch {
-        throw new Error(
-          '편집 요청을 보관하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 저장해 주세요.'
-        );
-      }
-      setDraft(pending);
-      const value = await api<HelperArtifactView>(
-        `/helper/artifacts/${encodeURIComponent(id)}`,
-        {
-          expectedRevision: draft.revision,
-          text: draft.text,
-          requestKey,
-        },
-        'PATCH'
-      );
-      void clearHelperRecoveryIf(
-        storageKey.replace(/^uimori:/u, ''),
-        JSON.stringify(pending)
-      ).catch(() => {
-        if (alive.current) setError('장면은 저장됐지만 이 기기의 복구 초안을 지우지 못했어요.');
-      });
-      if (!alive.current) return;
-      setArtifact(value);
-      setDraft(null);
-      setMessage('편집한 장면을 새 저장본으로 저장했어요.');
-      window.dispatchEvent(new Event('uimori-helper-updated'));
-    } catch (cause) {
-      if (!alive.current) return;
-      setError(cause instanceof Error ? cause.message : '장면을 저장하지 못했어요.');
-      if (cause instanceof ApiError && cause.status === 409) {
-        reviewedArtifact.current = null;
-        setConflictDialog(true);
-        try {
-          await latest();
-        } catch {
-          /* Preserve both the current card and local draft. */
-        }
-      }
-    } finally {
-      locked.current = false;
-      if (alive.current) setBusy(false);
+      await navigator.clipboard.writeText(text);
+      setMessage('복사했어요.');
+    } catch {
+      setCopyError('복사하지 못했어요. 내용을 선택해 복사해 주세요.');
     }
   }
+  const selected =
+    artifact?.id === id && artifact.revision === selectedRevision ? artifact : undefined;
+  const retry = () => setReload((value) => value + 1);
   return (
-    <section className="helper-artifact" aria-label="독립 가정 장면">
-      <SaveConflictDialog
-        open={conflictDialog}
-        title="가정 장면 저장 충돌"
-        onClose={() => setConflictDialog(false)}
-        readSaved={async () => {
-          const value = await latest();
-          reviewedArtifact.current = value;
-          return { content: <PlainProse text={value.text} /> };
-        }}
-        onAcceptSaved={() => {
-          const value = reviewedArtifact.current;
-          if (!value) return;
-          setDraft((current) => current && { text: current.text, revision: value.revision });
-          setError('');
-        }}
-      />
+    <section className="helper-artifact" aria-label="보관된 가정 장면">
       <header>
-        <strong>가정 장면</strong>
-        <small>
-          수정 번호 {artifact?.revision ?? revision} ·{' '}
-          {artifact?.origin === 'edit' ? '직접 편집' : '생성한 장면'} · 본편과 별도
-        </small>
+        <strong>보관된 가정 장면</strong>
+        <label>
+          수정 번호
+          <select
+            aria-label="가정 장면 수정 번호"
+            value={selectedRevision}
+            onChange={(event) => setSelectedRevision(Number(event.target.value))}
+          >
+            {Array.from(
+              { length: Math.max(latestRevision, revision) },
+              (_, index) => index + 1
+            ).map((value) => (
+              <option key={value} value={value}>
+                {value}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selected && (
+          <small>{selected.origin === 'edit' ? '직접 편집한 저장본' : '생성한 저장본'}</small>
+        )}
       </header>
-      {artifact && error && <NoticeBanner tone="error">{error}</NoticeBanner>}
-      <TransientNotice message={message} />
-      {artifact ? (
+      <p className="muted">
+        보관된 장면은 읽기와 복사만 할 수 있어요. 다른 전개는 채팅 메뉴에서 새 채팅으로 복사한 뒤
+        본문에서 이어 써 주세요.
+      </p>
+      {historyError && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button type="button" onClick={retry}>
+              다시 불러오기
+            </button>
+          }
+        >
+          수정 이력을 확인하지 못했어요. {historyError}
+        </NoticeBanner>
+      )}
+      {selected ? (
         <>
           <div className="helper-prose">
-            <PlainProse text={artifact.text} />
+            <PlainProse text={selected.text} />
           </div>
-          {draft ? (
-            <form
-              className="helper-artifact-editor"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void save();
-              }}
-            >
-              {conflict && (
-                <div className="context-conflict" role="alert">
-                  <p>다른 변경이 저장됐어요. 현재 입력은 유지돼요.</p>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      reviewedArtifact.current = null;
-                      setConflictDialog(true);
-                    }}
-                  >
-                    저장본 확인
-                  </button>
-                </div>
-              )}
-              <label>
-                가정 장면 직접 편집
-                <textarea
-                  rows={10}
-                  maxLength={500000}
-                  value={draft.text}
-                  disabled={busy}
-                  onChange={(event) =>
-                    setDraft({ revision: draft.revision, text: event.target.value })
-                  }
-                />
-              </label>
-              <div className="form-actions">
-                <button disabled={readOnly || busy || !draft.text.trim()}>
-                  <CheckIcon size={18} aria-hidden="true" />
-                  장면 편집 저장{' '}
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    setDraft(null);
-                    void writeHelperRecovery(storageKey.replace(/^uimori:/u, ''), null).catch(
-                      () => {
-                        if (alive.current) setError('취소한 초안을 이 기기에서 지우지 못했어요.');
-                      }
-                    );
-                    setError('');
-                  }}
-                >
-                  <CloseIcon size={18} aria-hidden="true" />
-                  장면 편집 취소
-                </button>
-              </div>
-            </form>
-          ) : (
-            <footer>
-              <IconButton
-                label="가정 장면 복사"
-                icon={Copy}
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(artifact.text)
-                    .catch(() => setError('복사하지 못했어요. 본문을 선택해 복사해 주세요.'))
-                }
-              />
-              <button
-                type="button"
-                className="secondary"
-                disabled={readOnly}
-                onClick={() => {
-                  setDraft({ revision: artifact.revision, text: artifact.text });
-                  setError('');
-                  setMessage('');
-                }}
-              >
-                직접 편집
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                disabled={readOnly}
-                onClick={() => onRevise(artifact)}
-              >
-                이 장면 수정 요청
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => void latest().catch((cause) => setError(cause.message))}
-              >
-                최신 저장본 확인
-              </button>
-            </footer>
-          )}
+          <details className="helper-artifact-request">
+            <summary>장면 요청</summary>
+            <PlainProse text={selected.request} />
+            <IconButton
+              label="가정 장면 요청 복사"
+              icon={Copy}
+              onClick={() => void copy(selected.request)}
+            />
+          </details>
+          <footer>
+            <IconButton
+              label="가정 장면 복사"
+              icon={Copy}
+              onClick={() => void copy(selected.text)}
+            />
+          </footer>
         </>
       ) : (
         <LoadingState
-          compact
-          loading={!error}
-          error={error}
+          presentation="placeholder"
+          loading={!readError}
+          error={readError}
           label="가정 장면을 불러오는 중이에요…"
+          onRetry={retry}
         />
       )}
+      {drafts.length > 0 && (
+        <details className="helper-artifact-drafts">
+          <summary>이 기기에 남은 편집 초안 {drafts.length}개</summary>
+          <p>
+            이전 편집 초안은 새로 저장할 수 없어요. 필요한 내용은 복사해 보관해 주세요. 초안은 이
+            기기에 그대로 남겨 둬요.
+          </p>
+          {drafts.map((draft, index) => (
+            <section key={draft.key} aria-label={`보관된 편집 초안 ${index + 1}`}>
+              <h4>
+                초안 {index + 1} ·{' '}
+                {draft.revision === null ? '원래 저장 형식' : `수정 번호 ${draft.revision} 기준`}
+              </h4>
+              <div className="helper-prose">
+                <PlainProse text={draft.text} />
+              </div>
+              <IconButton
+                label="가정 장면 초안 복사"
+                icon={Copy}
+                onClick={() => void copy(draft.text)}
+              />
+            </section>
+          ))}
+        </details>
+      )}
+      {draftError && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button type="button" onClick={retry}>
+              초안 다시 불러오기
+            </button>
+          }
+        >
+          {draftError}
+        </NoticeBanner>
+      )}
+      {copyError && <NoticeBanner tone="error">{copyError}</NoticeBanner>}
+      <TransientNotice message={message} />
     </section>
   );
 }

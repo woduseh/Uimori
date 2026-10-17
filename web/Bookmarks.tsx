@@ -244,7 +244,9 @@ export function BookmarkList({
   }, [chatId, revision]);
   return (
     <section className="bookmark-list" aria-label="이 채팅의 책갈피">
-      {!loaded && !error && <LoadingState compact label="책갈피를 불러오는 중이에요…" />}
+      {!loaded && !error && (
+        <LoadingState presentation="inline" label="책갈피를 불러오는 중이에요…" />
+      )}
       {loaded && !items.length && (
         <p>아직 책갈피가 없어요. 장면 아래에서 책갈피를 추가할 수 있어요.</p>
       )}

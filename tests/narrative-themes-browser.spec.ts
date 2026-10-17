@@ -799,15 +799,51 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   )
     .png()
     .toBuffer();
-  await page
-    .getByLabel('배경 이미지 선택', { exact: true })
-    .setInputFiles({ name: 'landscape.png', mimeType: 'image/png', buffer: bytes });
-  await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeEnabled();
+  const saveBackground = page.getByRole('button', { name: '배경 저장', exact: true });
+  let releaseUpload!: () => void;
+  const uploadGate = new Promise<void>((resolve) => {
+    releaseUpload = resolve;
+  });
+  await page.route('**/api/package-image-blobs', async (route) => {
+    await uploadGate;
+    await route.continue();
+  });
+  const uploading = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith('/api/package-image-blobs')
+  );
+  try {
+    await page
+      .getByLabel('배경 이미지 선택', { exact: true })
+      .setInputFiles({ name: 'landscape.png', mimeType: 'image/png', buffer: bytes });
+    await uploading;
+    await expect(saveBackground).toBeDisabled();
+    await expect(saveBackground).toHaveAttribute('aria-busy', 'false');
+  } finally {
+    releaseUpload();
+  }
+  await expect(saveBackground).toBeEnabled();
+  await page.unroute('**/api/package-image-blobs');
   await page.getByLabel('배경 흐림', { exact: true }).fill('7');
   await page.getByLabel('밝은 모드 배경 덮개', { exact: true }).fill('25');
   await page.getByLabel('어두운 모드 배경 덮개', { exact: true }).fill('55');
-  await page.getByRole('button', { name: '배경 저장', exact: true }).click();
-  await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
+  let releaseSave!: () => void;
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  await page.route('**/api/themes/background', async (route) => {
+    await saveGate;
+    await route.continue();
+  });
+  try {
+    await saveBackground.click();
+    await expect(saveBackground).toBeDisabled();
+    await expect(saveBackground).toHaveAttribute('aria-busy', 'true');
+  } finally {
+    releaseSave();
+  }
+  await expect(saveBackground).toHaveAttribute('aria-busy', 'false');
+  await expect(saveBackground).toBeDisabled();
+  await page.unroute('**/api/themes/background');
   await page.screenshot({
     path: info.outputPath('background-settings-desktop.png'),
     fullPage: true,
@@ -1021,7 +1057,7 @@ for (const layout of layouts) {
       );
       await page.reload();
       await expect(scene.getByTestId('source-text')).toContainText(endMarker);
-      await expect(page.locator('.scene-mini-navigator')).toHaveCount(enabled ? 1 : 0);
+      await expect(page.locator('.header-title-hit')).toHaveCount(enabled ? 1 : 0);
       await page.setViewportSize({ width: 412, height: 700 });
       await reader.evaluate((node) => {
         node.scrollTop = node.scrollHeight;
@@ -1031,9 +1067,11 @@ for (const layout of layouts) {
       const actionsBox = (await lastActions.boundingBox())!;
       const composerBox = (await page.locator('.composer-dock').boundingBox())!;
       expect(actionsBox.y + actionsBox.height).toBeLessThan(composerBox.y);
-      if (enabled) {
-        const navigatorBox = (await page.locator('.scene-mini-navigator').boundingBox())!;
-        expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(navigatorBox.y);
+      if (enabled && (await page.locator('.scene-latest-row').count())) {
+        const jumpBox = (await page.locator('.scene-latest-row').boundingBox())!;
+        const readerBox = (await reader.boundingBox())!;
+        expect(jumpBox.y).toBeGreaterThanOrEqual(readerBox.y + readerBox.height);
+        expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(jumpBox.y);
       } else {
         const padding = await page
           .locator('.reader')
@@ -1047,7 +1085,8 @@ for (const layout of layouts) {
     await openChatMenu(page);
     await page.getByRole('button', { name: '집중 읽기', exact: true }).click();
     await expect(gallery).toBeHidden();
-    await expect(page.locator('.scene-mini-navigator')).toHaveCount(0);
+    await expect(page.locator('.scene-latest-row')).toHaveCount(0);
+    await expect(page.locator('.header-title-hit')).toHaveCount(0);
     await expect(bodyScroll).toBeVisible();
     await noHorizontalOverflow(page, scene);
     await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();

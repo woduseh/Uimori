@@ -20,7 +20,9 @@ export function RisuImageHandoffFields({
         전달해요. 원문은 유지해요. 인식한 태그: {policy.tagTemplates.join(', ')}
       </p>
       {!policy.ranges.length && (
-        <p>이미지 표시 태그는 찾았지만 안전하게 분리할 지시 범위를 찾지 못했어요.</p>
+        <p>
+          이미지 표시 태그는 찾았지만, 다른 지시와 분리할 수 있는 이미지 지시 구간은 찾지 못했어요.
+        </p>
       )}
       {policy.ranges.map((range) => (
         <details key={range.id}>
