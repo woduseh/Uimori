@@ -907,9 +907,7 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
       },
     });
     expect(newerPrompt.ok()).toBeTruthy();
-    await page
-      .getByLabel('캐릭터 설정', { exact: true })
-      .fill('Synthetic updated second revision.');
+    await page.getByLabel('카드 설명', { exact: true }).fill('Synthetic updated second revision.');
     await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
     await libraryWaiting;
     await navigationAction(page, '새 채팅', title);
@@ -1419,7 +1417,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
   });
   expect(changed.ok()).toBeTruthy();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
   await expect(
     page.getByText('저장한 설정은 다음 실행부터 적용해요.', { exact: true })
   ).toBeVisible();
@@ -1893,7 +1891,7 @@ test('UI whole-source translation retains completed results across retry and can
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
   await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
   if (visualReview)
@@ -1996,8 +1994,9 @@ test('UI chat settings close right after saving does not warn while the refresh 
   await page.goto(`/?chat=${chat.id}`);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '실행 옵션');
-  const runtime = dialog.locator('section.settings');
+  await selectChatSettingsSection(page, '프롬프트·모델');
+  const runtime = dialog.getByRole('region', { name: '생성 설정', exact: true });
+  await runtime.getByText('고급 실행 설정', { exact: true }).click();
   const maxCalls = (await data(request, chat.id)).chat.settings.maxCalls === 6 ? 7 : 6;
   await runtime.getByLabel('작업당 모델 호출 한도', { exact: true }).fill(String(maxCalls));
   // Hold the post-save reader refresh so the close arrives while it is still in flight.
@@ -2045,6 +2044,14 @@ test('UI compact title remains readable when keyboard focus returns from the sce
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
     await expect(dialog).toBeVisible();
+    const search = dialog.getByRole('searchbox', { name: '장면 번호, 이름 또는 요청으로 찾기' });
+    await search.fill('1');
+    for (const width of [820, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect(dialog).toBeVisible();
+      await expect(search).toHaveValue('1');
+      await expect(dialog.getByRole('button', { name: /^1번째 장면 ·/ })).toBeVisible();
+    }
     await page.keyboard.press('Tab');
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
@@ -2053,7 +2060,8 @@ test('UI compact title remains readable when keyboard focus returns from the sce
     expect(await trigger.evaluate((node) => node.matches(':focus-visible'))).toBe(true);
     await expect(trigger).toHaveCSS('outline-style', 'solid');
     await expect(title.locator('h1')).toHaveText(chat.title);
-    await expect(title.locator('small')).toHaveText('Synthetic fixture owner');
+    await expect(title.locator('.header-chat-context')).toHaveText('Synthetic fixture owner');
+    await expect(title.locator('.header-scene-position')).toHaveText('1 / 1');
     expect(await title.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe(
       'rgba(0, 0, 0, 0)'
     );

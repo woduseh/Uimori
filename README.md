@@ -1,8 +1,8 @@
 # Uimori
 
-긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별 채팅·폴더, Risu 원본 봇·페르소나·모듈, 프롬프트와 모델의 독립 설정, 원문·번역 편집, 독립 채팅 복사, 이야기 기억과 백업을 제공해요.
+긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별로 채팅·폴더를 관리하고 Risu 원본 봇·페르소나·모듈을 사용할 수 있어요. 프롬프트와 모델은 따로 설정하며, 원문·번역을 직접 편집하거나 채팅을 독립 사본으로 복사할 수 있어요. 이야기 기억과 백업 기능도 제공해요.
 
-이 소스의 앱 버전은 **`v0.10.6`**예요. Anthropic에서 일부 Risu 프롬프트의 메시지 배치를 전송 단계에서 보정하고, 수정하지 않은 과거 장면의 모델 전달 형식을 유지해요. 저장된 원고·프롬프트·실행 기록과 기존 캐시 기준점을 보존해요. 개인용 초기 개발 릴리스이며 기능과 데이터 형식은 앞으로 바뀔 수 있어요. **DB 스키마는 15**로 유지해요. 자세한 변경과 제한은 [릴리스 노트](docs/releases/v0.10.6.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
+이 소스의 앱 버전은 **`v0.11.0`**예요. 모바일 탐색·로딩·설정과 안내 문구를 정리하고, 기본 프리셋을 Phēmē v5.4.1·Hermēneía v1.1.0으로 갱신했어요. 새 백업 출력은 `.uimori`로 통일하고 도우미의 독립 가정 장면 생성·편집을 종료해요. 과거 JSON 백업 가져오기와 저장된 가정 장면 읽기는 유지해요. **DB 스키마는 15**예요. 자세한 변경은 [릴리스 노트](docs/releases/v0.11.0.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
 
 개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → Codex 연결**에서 로그인해요.
 
@@ -10,10 +10,10 @@
 
 Node **24.14 이상 24.x**, npm, Chrome 또는 Edge가 필요해요. SQLite는 Node에 포함된 기능을 사용해요.
 
-태그 기반 설치는 `v0.10.6`을 사용해요. 설치 전에 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 해당 릴리스가 공개됐는지 확인해요.
+태그 기반 설치는 `v0.11.0`을 사용해요. 설치 전에 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 해당 릴리스가 공개됐는지 확인해요.
 
 ```powershell
-git clone --branch v0.10.6 --single-branch https://github.com/woduseh/Uimori.git
+git clone --branch v0.11.0 --single-branch https://github.com/woduseh/Uimori.git
 cd Uimori
 npm ci
 npm run dev

@@ -188,7 +188,7 @@ export function ActivityNotifications({
                   실행 결과가 불확실해요. 확인은 알림만 정리하며 작업 기록과 상태는 유지돼요.
                 </small>
               ) : !canAcknowledge(item) ? (
-                <small>진행 중인 작업은 아직 확인할 수 없어요.</small>
+                <small>진행 중인 작업 알림은 아직 ‘확인’으로 표시할 수 없어요.</small>
               ) : null}
               {recoverable && recoveryError && (
                 <NoticeBanner tone="error">{recoveryError}</NoticeBanner>
@@ -205,7 +205,9 @@ export function ActivityNotifications({
         })}
       </ul>
       {!visible.length && !loading && !error && <p role="status">확인할 알림이 없어요.</p>}
-      {loading && !error && <LoadingState compact label="이전 작업을 불러오는 중이에요…" />}
+      {loading && !error && (
+        <LoadingState presentation="inline" label="이전 작업을 불러오는 중이에요…" />
+      )}
       {error && (
         <NoticeBanner
           tone="error"
@@ -279,7 +281,12 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
   }, [kind, runId, generation]);
   if (error || !result)
     return (
-      <LoadingState compact loading={!error} error={error} label="상세를 불러오는 중이에요…" />
+      <LoadingState
+        presentation="inline"
+        loading={!error}
+        error={error}
+        label="상세를 불러오는 중이에요…"
+      />
     );
   const diagnostic = result.error ? auxiliaryErrorDiagnostic(result.error) : null;
   return (

@@ -734,7 +734,7 @@ function SourceReaderContent({
               <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
             )}
             {hasPackages && !presentation ? (
-              <LoadingState compact label="봇 화면을 준비하고 있어요…" />
+              <LoadingState presentation="placeholder" label="봇 화면을 준비하고 있어요…" />
             ) : projected?.format === 'risu-html' &&
               (mode === 'original' ||
                 (validTranslation && projected.translation?.html !== undefined)) ? (
@@ -842,7 +842,10 @@ function SourceReaderContent({
                 role={translationLoading ? undefined : 'status'}
               >
                 {translationLoading ? (
-                  <LoadingState compact label="한국어 번역을 준비하고 있어요. 원문은 저장됐어요." />
+                  <LoadingState
+                    presentation="placeholder"
+                    label="한국어 번역을 준비하고 있어요. 원문은 저장됐어요."
+                  />
                 ) : (
                   <p>
                     {translation
@@ -1512,7 +1515,7 @@ function TextEditor({
               <>
                 <p className="source-saved-review-text">{text}</p>
                 <p className="muted">
-                  현재 입력을 유지한 뒤 수정 취소를 선택하면 저장된 본문으로 돌아갈 수 있어요.
+                  작성한 내용을 먼저 복사해 두세요. ‘수정 취소’를 누르면 저장된 본문으로 돌아가요.
                 </p>
               </>
             ),

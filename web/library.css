@@ -1170,6 +1170,65 @@
   padding: 0;
   background: transparent;
 }
+@media (max-width: 760px) {
+  .library-page .library-portrait-card[data-has-portrait="false"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--control-h);
+    grid-column: 1 / -1;
+    align-items: start;
+    gap: 8px;
+    padding: 12px;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"] .library-open-content {
+    grid-area: 1 / 1;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"] .library-item-avatar {
+    --content-avatar-size: 40px;
+    width: var(--content-avatar-size);
+    height: var(--content-avatar-size);
+    aspect-ratio: auto;
+    font-size: 18px;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"] .library-item-copy {
+    padding: 0;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"] .library-item-copy strong {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"] .library-item-copy > span {
+    min-height: 0;
+    -webkit-line-clamp: 1;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"] > .library-item-menu {
+    position: relative;
+    inset: auto;
+    grid-area: 1 / 2;
+    background: transparent;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"] > .library-start-chat {
+    grid-column: 1 / -1;
+    justify-self: end;
+    width: auto;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"][data-selecting="true"] {
+    grid-template-columns: var(--control-h) minmax(0, 1fr);
+  }
+  .library-page
+    .library-portrait-card[data-has-portrait="false"][data-selecting="true"]
+    .library-open-content {
+    grid-area: 1 / 2;
+  }
+  .library-page .library-portrait-card[data-has-portrait="false"] > .library-select-check {
+    position: static;
+    grid-area: 1 / 1;
+  }
+}
 .library-empty-actions {
   display: flex;
   justify-content: center;

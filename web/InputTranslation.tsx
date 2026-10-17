@@ -121,7 +121,10 @@ export function InputTranslationFeedback({ translation, disabled }: Props) {
   return (
     <section className="input-translation-feedback" aria-label="입력 번역 상태">
       {translation.busy && (
-        <LoadingState compact label="입력을 번역하고 있어요. 계속 수정해도 괜찮아요." />
+        <LoadingState
+          presentation="placeholder"
+          label="입력을 번역하고 있어요. 계속 수정해도 괜찮아요."
+        />
       )}
       {translation.original !== null && (
         <div className="input-translation-original">

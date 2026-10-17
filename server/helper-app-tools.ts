@@ -246,12 +246,6 @@ const TOOLS: ProviderTool[] = [
     ),
   },
   {
-    name: 'artifact.generate',
-    description:
-      'Write ONE independent what-if scene using the pinned writing prompt, model, actual story context and read-only state. Returns its saved ID/revision and textChars, not the prose. Return that reference; read artifact.read pages only when the task also requires inspecting the scene.',
-    inputSchema: schema({ request: str, artifactId: str, expectedRevision: integer }, ['request']),
-  },
-  {
     name: 'artifact.read',
     description:
       'Read an exact artifact revision in UTF-16 pages. field=text (default) reads the hypothetical scene; field=request reads its original generation request. offset defaults to 0 and limit to 4000 (max 10000); follow nextOffset for unread text. A saved reference alone does not mean you read its prose. This artifact is not a played story event.',
@@ -282,7 +276,6 @@ const chatToolNames = new Set([
   'context.edit',
   'context.compact',
   'notes.write',
-  'artifact.generate',
   ...helperOptionTools.map((tool) => tool.name),
   ...MAIN_READ_TOOLS.map((tool) => tool.name),
 ]);
@@ -313,7 +306,6 @@ const writingNames = new Set([
   'context.edit',
   'context.compact',
   'notes.write',
-  'artifact.generate',
 ]);
 
 /** Shared dispatch/discovery policy; conditional tools keep their action-specific effects. */
@@ -356,7 +348,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.tools',
     description:
-      'Discover app operations for editing resources/themes, saved original or translated scenes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or generating an independent what-if scene. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
+      'Discover app operations for editing resources/themes, saved original or translated scenes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or reading archived independent scenes. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
     inputSchema: schema(
       {
         names: { type: 'array', maxItems: 4, items: str },

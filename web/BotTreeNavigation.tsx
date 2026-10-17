@@ -677,7 +677,7 @@ export function BotNavigation(
                 <p className="bot-navigation-empty">서재에서 새 채팅을 시작해 보세요.</p>
               ) : (
                 <LoadingState
-                  compact
+                  presentation="inline"
                   loading={!props.libraryError}
                   error={props.libraryError}
                   label="봇을 불러오는 중이에요…"

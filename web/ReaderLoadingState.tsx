@@ -36,12 +36,12 @@ export function ReaderLoadingState({
           </div>
         )}
         <LoadingState
+          presentation="placeholder"
           loading={loading}
           error={error}
           errorLabel="본문을 불러오지 못했어요."
           onRetry={onRetry}
           retryLabel="본문 다시 불러오기"
-          compact
         />
       </div>
     );

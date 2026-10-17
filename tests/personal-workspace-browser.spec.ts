@@ -1,3 +1,4 @@
+import { legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
@@ -67,7 +68,7 @@ for (const width of [1440, 412]) {
     page.on('request', (req) => paths.push(new URL(req.url()).pathname));
     page.on('pageerror', (error) => errors.push(error.message));
     await openEditor(page, original.title);
-    const description = page.getByLabel('캐릭터 설정', { exact: true });
+    const description = page.getByLabel('카드 설명', { exact: true });
     const originalDescription = await description.inputValue();
     await description.fill(`${originalDescription}\nTemporary edit`);
     await description.fill(originalDescription);
@@ -137,7 +138,7 @@ test('PERSONAL images retain native alias while display metadata and WebP persis
   await page.getByLabel('이미지 설명', { exact: true }).fill('비 오는 하굣길, 투명 우산과 미소');
   await page
     .getByLabel('선택한 에셋', { exact: true })
-    .getByLabel('에셋 용도', { exact: true })
+    .getByLabel('이미지 용도', { exact: true })
     .selectOption('inline');
   const saved = await save(page);
   expect(saved.package.images![0]).toMatchObject({
@@ -222,9 +223,17 @@ test('PERSONAL chat backup rejects malformed previews then imports independent c
   });
   expect(created.ok(), await created.text()).toBe(true);
   const original = (await created.json()).chat;
-  const backupResponse = await request.get(`/api/chats/${original.id}/backup`);
-  expect(backupResponse.ok(), await backupResponse.text()).toBe(true);
-  const backup = await backupResponse.body();
+  const retired = await request.get(`/api/chats/${original.id}/backup`);
+  expect(retired.status()).toBe(404);
+  const backup = Buffer.from(
+    JSON.stringify(
+      legacyChatBackupWithBot(bot, original.settings, {
+        title: original.title,
+        text: 'Preserved source.',
+        translation: '보존된 번역',
+      })
+    )
+  );
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '설정');
@@ -393,6 +402,17 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
     await expect(title).toBeDisabled();
     await expect(description).toBeDisabled();
     await expect(submit).toBeDisabled();
+    const pending = page
+      .getByRole('status')
+      .filter({ hasText: '이미지 정보를 저장하는 중이에요…' });
+    await expect(pending).toBeVisible();
+    const indicator = (await pending.locator('svg').boundingBox())!;
+    const label = (await pending.locator('p').boundingBox())!;
+    expect(indicator.x + indicator.width).toBeLessThan(label.x);
+    expect(Math.abs(indicator.y + indicator.height / 2 - label.y - label.height / 2)).toBeLessThan(
+      2
+    );
+    expect((await pending.boundingBox())!.height).toBeLessThan(40);
     await page.screenshot({
       path: info.outputPath('personal-metadata-pending-disabled.png'),
       fullPage: true,

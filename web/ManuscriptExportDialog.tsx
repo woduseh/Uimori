@@ -161,7 +161,7 @@ export function ManuscriptExportDialog({
       )}
       {!metadata && (
         <LoadingState
-          compact
+          presentation="inline"
           loading={!error}
           error={error}
           label="원고 목록을 불러오는 중이에요…"

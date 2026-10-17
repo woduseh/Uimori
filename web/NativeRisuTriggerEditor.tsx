@@ -220,7 +220,7 @@ export function NativeRisuTriggerEditor({
         </>
       )}
       {value.length === 0 && !pending && (
-        <p className="empty-state">등록된 Lua · 트리거가 없어요.</p>
+        <p className="native-trigger-empty">등록된 Lua · 트리거가 없어요.</p>
       )}
       {value.length === 0 && pending && jsonEditor}
       {value.length > 0 && (

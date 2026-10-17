@@ -24,6 +24,7 @@ Read only the references needed for the task:
 
 - [README](README.md): product overview and usage.
 - [CODE-MAP](docs/CODE-MAP.md): feature contracts and entry points.
+- [UI-PRINCIPLES](docs/UI-PRINCIPLES.md): read before changing app-owned UI, layout, visible copy, or loading/error/empty states. Start with its working checklist.
 - [THEME-AUTHORING](docs/THEME-AUTHORING.md): read when creating or changing themes and their public styling contract.
 - [DEVELOPMENT](docs/DEVELOPMENT.md): setup, check selection, commands, and troubleshooting.
 - [ORACLE-RELEASE](docs/ORACLE-RELEASE.md): read when preparing or performing an authorized Oracle deployment.

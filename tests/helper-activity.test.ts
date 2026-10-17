@@ -32,7 +32,7 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
       model: store.product.modelSnapshot(model.id),
       history: [],
       persona: '',
-      limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
+      limits: { totalCalls: 24, helperCalls: 12 },
     });
     workspace.event(conversation.id, task.id, 'attempt.started', {
       id: 'native',

@@ -490,6 +490,7 @@ export function OutlinePanel({
       )}
       {!outline && (
         <LoadingState
+          presentation="region"
           loading={!error}
           error={error}
           label="구성을 불러오는 중이에요…"
@@ -501,8 +502,7 @@ export function OutlinePanel({
           <div className="outline-welcome-symbol">
             <GitBranch size={32} />
           </div>
-          <p className="outline-eyebrow">이야기의 다음 방향</p>
-          <h3>작은 장면에서 시작해도 좋아요.</h3>
+          <p className="outline-eyebrow">아직 구성이 없어요.</p>
           <p>
             작품 전체를 설계하거나, 이번 회차만 가볍게 정해요.
             <br />
@@ -711,7 +711,8 @@ export function OutlinePanel({
                       <span>
                         유지할 조건
                         <small>
-                          일반 상세화에서는 보존해요. 명확한 변경 요청으로 바꿀 수 있어요.
+                          구성을 자세히 만들 때 이 조건을 지키도록 도우미에게 요청해요. 조건을
+                          바꾸려면 직접 고치거나 도우미에게 변경을 요청해 주세요.
                         </small>
                       </span>
                     </label>
@@ -971,7 +972,7 @@ export function OutlinePanel({
                   {previewing && brief && (
                     <section className="outline-brief">
                       <h4>이번 집필에 함께 들어가는 구성</h4>
-                      <p>저장된 구성으로 조립한 미리보기예요. 별도 모델을 호출하지 않아요.</p>
+                      <p>이번 집필에 사용할 저장된 구성을 모아 보여줘요. 모델은 호출하지 않아요.</p>
                       {[
                         ['상위 방향과 선택 단위', brief.outline.path],
                         ['하위 사건', brief.outline.children],
@@ -1002,7 +1003,7 @@ export function OutlinePanel({
                         <h4>
                           연결된 원문 <small>{sources.length}</small>
                         </h4>
-                        <span>구성 충족 여부와는 달라요.</span>
+                        <span>원문이 연결돼 있어도 구성 내용을 모두 쓴 것은 아닐 수 있어요.</span>
                       </div>
                       {sources.map((source, index) => (
                         <button
@@ -1079,7 +1080,6 @@ export function OutlinePanel({
         )
       )}
       <footer className="outline-workspace-footer">
-        <span>계획과 실제 원문을 구분해서 이어가요.</span>
         <button type="button" className="text-button" onClick={() => void load()}>
           <RefreshCw size={13} />
           새로고침

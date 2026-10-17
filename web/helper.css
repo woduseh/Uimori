@@ -278,6 +278,9 @@
 .helper-thread-empty > .loading-state {
   width: 100%;
 }
+.helper-thread-empty > .loading-state-region {
+  min-height: 0;
+}
 .helper-activity-stages .notice-banner-message {
   white-space: pre-wrap;
 }
@@ -344,22 +347,19 @@
 .helper-outbox p {
   margin: 0 0 8px;
 }
-.helper-artifact-editor {
-  display: grid;
-  gap: 12px;
-  margin-top: 16px;
-}
-.helper-artifact-editor label {
-  display: grid;
+.helper-artifact header label {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
-.helper-artifact-editor textarea {
-  width: 100%;
-  min-width: 0;
-  max-height: 65dvh;
-  resize: vertical;
-  font-size: 16px;
-  line-height: 1.7;
+.helper-artifact-request,
+.helper-artifact-drafts {
+  margin-top: 12px;
+}
+.helper-artifact-drafts > section + section {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 16px;
 }
 .helper-task p {
   white-space: pre-wrap;

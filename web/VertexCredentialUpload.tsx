@@ -33,7 +33,7 @@ export function VertexCredentialUpload({
           <CredentialFileIcon size={18} aria-hidden="true" />
           서비스 계정 JSON
         </strong>
-        <span className="provider-status">{stored ? 'JSON 인증 선택됨' : '파일로 간편 등록'}</span>
+        {stored && <span className="provider-status">JSON 인증 선택됨</span>}
       </div>
       <p>
         Google Cloud에서 발급한 서비스 계정 키 파일을 선택해요. 프로젝트 ID와 인증 설정을 자동으로

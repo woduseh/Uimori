@@ -89,7 +89,7 @@ export function HelperActivityDetails({
         <>
           {(!data || error) && (
             <LoadingState
-              compact
+              presentation="inline"
               loading={!error}
               error={error}
               errorLabel="활동 내역을 새로 읽지 못했어요."

@@ -16,6 +16,10 @@ import {
 import { evaluateNativeRisuFields } from '../server/risu-native-cbs.js';
 import pheme from '../server/builtin-prompts/pheme.json' with { type: 'json' };
 import defaults from '../server/builtin-prompts/pheme-options.json' with { type: 'json' };
+import phemeNovel from '../server/builtin-prompts/pheme-novel.json' with { type: 'json' };
+import novelDefaults from '../server/builtin-prompts/pheme-novel-options.json' with {
+  type: 'json',
+};
 
 const slots = {
   description: 'Character description',
@@ -134,12 +138,21 @@ describe('native Risu prompt composition', () => {
     program.nativeRisuPreset.preset.customPromptTemplateToggle += '\ntoString=Named toggle';
     expect(resolvePromptValues(program).toString).toBe('0');
   });
-  test.each(['0', '1', '2'].flatMap((mode) => ['0', '1'].map((botType) => [mode, botType])))(
-    'bundled Phēmē source executes native CBS with session mode %s and bot type %s',
-    async (mode, botType) => {
-      const selectedValues = { ...defaults, pheme_session_mode: mode, pheme_bot_type: botType };
-      const program = validateRisuPrompt(pheme),
+  test.each(
+    [
+      { name: 'RP', bundled: pheme, defaults, mode: 'roleplay' },
+      { name: 'novel', bundled: phemeNovel, defaults: novelDefaults, mode: 'novel_writing' },
+    ].flatMap((template) => ['0', '1'].map((botType) => ({ ...template, botType })))
+  )(
+    'bundled Phēmē $name source executes native CBS with bot type $botType and keeps its fixed mode',
+    async ({ bundled, defaults, mode, botType }) => {
+      const selectedValues = { ...defaults, pheme_bot_type: botType };
+      const program = validateRisuPrompt(bundled),
         source = program.nativeRisuPreset;
+      expect(selectedValues).not.toHaveProperty('pheme_session_mode');
+      expect(promptControls(program).map((control) => control.id)).not.toContain(
+        'pheme_session_mode'
+      );
       const before = JSON.stringify(program);
       const fields = await evaluateNativeRisuFields({
         native: {
@@ -174,25 +187,21 @@ describe('native Risu prompt composition', () => {
       expect(text).toContain('Character description');
       expect(text).not.toMatch(/\{\{/u);
       expect(text.match(/Character description/gu)).toHaveLength(1);
-      const wrappers = [
-        '<character primary_ai_authored="true">',
-        '<roleplay_setting>',
-        '<session_reference purpose="ooc_source_material">',
-      ];
-      const selectedWrapper = wrappers[mode === '2' ? 2 : Number(botType)]!;
+      const wrappers = ['<character primary_ai_authored="true">', '<roleplay_setting>'];
+      const selectedWrapper = wrappers[Number(botType)]!;
       expect(text).toContain(selectedWrapper);
       for (const wrapper of wrappers.filter((item) => item !== selectedWrapper))
         expect(text).not.toContain(wrapper);
+      expect(text).toContain(`<mode_contract family="fiction" mode="${mode}">`);
       expect(text).toContain(
-        mode !== '2'
-          ? 'Use detail when it improves perception, character'
-          : 'Use detail when it improves correctness or verification'
+        mode === 'roleplay'
+          ? 'Continue the collaborative narrative turn by turn.'
+          : 'Write the requested manuscript unit: a scene, chapter, excerpt, continuation, or revision.'
       );
       expect(text).not.toContain(
-        mode !== '2'
-          ? 'correctness or verification in the requested task.'
-          : 'perception, character, causality, atmosphere, or consequence in fiction.'
+        `<mode_contract family="fiction" mode="${mode === 'roleplay' ? 'novel_writing' : 'roleplay'}">`
       );
+      expect(text).not.toContain('<session_reference purpose="ooc_source_material">');
       expect(JSON.stringify(program)).toBe(before);
     },
     30000

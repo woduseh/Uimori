@@ -192,7 +192,6 @@ export function NativeCollectionEditor({
         ) : (
           <div className="native-empty">
             <strong>아직 {label} 항목이 없어요.</strong>
-            <p className="muted">첫 항목을 추가해 편집을 시작하세요.</p>
             <button type="button" onClick={add}>
               {label} 추가
             </button>

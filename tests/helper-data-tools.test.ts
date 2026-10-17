@@ -49,7 +49,7 @@ function fixture() {
     model: store.product.modelSnapshot(model.id),
     history: [],
     persona: '',
-    limits: { helperCalls: 12, totalCalls: 24, artifacts: 1 },
+    limits: { helperCalls: 12, totalCalls: 24 },
   };
   const task = workspace.enqueue(conversation.id, 'task', 'Find authored evidence', snapshot);
   const invoke = (name: DataOperation['name'], args: Record<string, unknown>, timeout = 3000) =>

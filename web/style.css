@@ -510,6 +510,25 @@ input[type="checkbox"] {
   text-overflow: ellipsis;
   font-size: 11px;
 }
+.header-title .header-reading-context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.header-scene-position {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.header-scene-position:not(:empty)::after {
+  content: "·";
+  margin-left: 6px;
+  color: var(--muted);
+}
+.header-chat-context {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .header-actions {
   display: flex;
   gap: 1px;
@@ -1357,10 +1376,6 @@ input[type="checkbox"] {
   .reader {
     padding: 24px 20px 36px;
   }
-  /* Leave last-scene actions above the floating navigator; preserve theme overrides. */
-  :where(.reader-stage.has-scenes) .reader {
-    padding-bottom: 72px;
-  }
   .story-context {
     margin-bottom: 22px;
     font-size: 11px;
@@ -1602,6 +1617,25 @@ input[type="checkbox"] {
   overflow: auto;
   overscroll-behavior: contain;
 }
+
+/* Only initial reads consume the page body. Loaded forms keep their normal flow. */
+.settings-page:has(> .loading-state-region),
+.settings-page:has(> .settings-loading-region) {
+  display: flex;
+  flex-direction: column;
+}
+.settings-page > .settings-loading-region {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+}
+.settings-page > .loading-state-region,
+.settings-loading-region > .loading-state-region {
+  min-height: 0;
+}
+
 .settings-page[hidden] {
   display: none;
 }

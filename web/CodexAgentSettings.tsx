@@ -143,7 +143,10 @@ export function CodexAgentSettings({
     }
   })();
   return (
-    <section className="codex-agent-settings" aria-label="Codex 에이전트 연결">
+    <section
+      className={`codex-agent-settings${!status ? ' settings-loading-region' : ''}`}
+      aria-label="Codex 에이전트 연결"
+    >
       <div className="codex-agent-heading">
         <p className="muted">Uimori 서버에서 사용하는 ChatGPT 구독 연결</p>
         <IconButton
@@ -156,7 +159,7 @@ export function CodexAgentSettings({
         />
       </div>
       {!status ? (
-        <LoadingState compact loading={!error} label="연결 상태를 확인하고 있어요…" />
+        <LoadingState presentation="region" loading={!error} label="연결 상태를 확인하고 있어요…" />
       ) : (
         <>
           {!(status.authenticated && status.authMode === 'chatgpt') && (

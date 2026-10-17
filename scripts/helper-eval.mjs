@@ -301,7 +301,7 @@ async function main() {
         });
         let conversation = runtime.workspace.open({ kind: 'library', workId: 'helper-eval' });
         conversation = runtime.workspace.update(conversation.id, conversation.revision, {
-          limits: { ...config.limits, artifacts: 1 },
+          limits: { ...config.limits },
         });
         const before = snapshot(store);
         let turn = 0;

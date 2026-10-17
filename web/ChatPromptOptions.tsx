@@ -1,9 +1,9 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { CloseIcon, RefreshIcon } from './ui-icons.js';
+import { CloseIcon } from './ui-icons.js';
 import type { Library, PromptWorkspace } from '../core/product.js';
-import { resolvePromptValues, reconcilePromptValues } from '../core/risu-prompt.js';
+import { resolvePromptValues, type PromptControl, type PromptValue } from '../core/risu-prompt.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { api, ApiError } from './api.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
@@ -11,6 +11,9 @@ import { promptControls } from '../core/risu-prompt.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { ChatOptionSettings } from './ChatOptionSettings.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
+import { reviewGlobalOptionDraft } from './global-option-review.js';
 import './chat-prompt-options.css';
 type Props = {
   open: boolean;
@@ -182,7 +185,7 @@ export function ChatPromptOptions(props: Props) {
           />
         ) : (
           <LoadingState
-            compact
+            presentation="placeholder"
             loading={!props.workspaceError}
             error={props.workspaceError}
             label="현재 프롬프트를 불러오는 중이에요…"
@@ -257,34 +260,38 @@ function ChatScopeEditor({
 
 function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorkspace }) {
   const [saveConflict, setSaveConflict] = useState(false);
+  const [needsReview, setNeedsReview] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [base, setBase] = useState(workspace);
   const [values, setValues] = useState(workspace.main.values);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const lock = useRef(false);
+  const current = useRef({ base, values });
+  current.current = { base, values };
   const dirty = JSON.stringify(values) !== JSON.stringify(base.main.values);
-  const conflict = workspace.revision > base.revision;
+  const conflict = needsReview || workspace.revision > base.revision;
   const combinations =
     props.library?.promptCombinations?.filter((item) =>
       matchesPromptCombination(item, combinationOwner(base.main, 'main'), 'main', base.main.program)
     ) ?? [];
   useEffect(() => {
-    if (!dirty && !busy) {
+    if (!dirty && !busy && !needsReview && workspace.revision >= base.revision) {
       setBase(workspace);
       setValues(workspace.main.values);
     }
-  }, [workspace, dirty, busy]);
+  }, [workspace, dirty, busy, needsReview, base.revision]);
   useEffect(() => {
-    props.onDirtyChange(dirty);
+    props.onDirtyChange(dirty || needsReview);
     return () => props.onDirtyChange(false);
-  }, [dirty, props.onDirtyChange]);
+  }, [dirty, needsReview, props.onDirtyChange]);
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty && !needsReview) return;
     const warn = (event: BeforeUnloadEvent) => event.preventDefault();
     addEventListener('beforeunload', warn);
     return () => removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  }, [dirty, needsReview]);
   async function save() {
     if (lock.current || props.disabled) return;
     if (conflict) {
@@ -306,9 +313,19 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
       );
       setBase(accepted);
       setValues(accepted.main.values);
+      setNeedsReview(false);
+      setMessage('현재 옵션을 적용했어요.');
     } catch (caught) {
-      setError(`${(caught as Error).message} 입력한 옵션은 유지했어요.`);
-      if (caught instanceof ApiError && caught.status === 409) setSaveConflict(true);
+      const uncertain = !(caught instanceof ApiError) || caught.status >= 500;
+      setError(
+        uncertain
+          ? '저장 여부를 확인하지 못했어요. 저장본을 확인해 주세요. 입력한 옵션은 유지했어요.'
+          : `${(caught as Error).message} 입력한 옵션은 유지했어요.`
+      );
+      if (uncertain || (caught instanceof ApiError && caught.status === 409)) {
+        setNeedsReview(true);
+        setSaveConflict(true);
+      }
     } finally {
       lock.current = false;
       setBusy(false);
@@ -322,14 +339,72 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
         title="프롬프트 옵션 저장 내용 확인"
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
-          const value = await api<PromptWorkspace>('/prompt-workspace');
-          return [
-            { label: '프롬프트', value: value.main.title },
-            ...promptControls(value.main.program).map((control) => ({
-              label: control.label,
-              value: String(value.main.values[control.id] ?? control.default ?? ''),
-            })),
-          ];
+          const draft = current.current;
+          const saved = await api<PromptWorkspace>('/prompt-workspace');
+          const controls = promptControls(saved.main.program);
+          const previousControls = promptControls(draft.base.main.program);
+          const review = reviewGlobalOptionDraft(draft.base.main, draft.values, saved.main);
+          const adopt = (keepInput: boolean) => {
+            setBase(saved);
+            setValues(keepInput ? review.values : saved.main.values);
+            setNeedsReview(false);
+            setError('');
+            setMessage(keepInput ? '입력을 확인한 뒤 적용해 주세요.' : '저장본을 불러왔어요.');
+            setSaveConflict(false);
+          };
+          return {
+            content: (
+              <>
+                <div className="settings-row">
+                  <span className="settings-row-copy">프롬프트</span>
+                  <span className="settings-row-control">{saved.main.title}</span>
+                </div>
+                {controls.map((control) => (
+                  <div className="settings-row" key={control.id}>
+                    <span className="settings-row-copy">{control.label}</span>
+                    <span className="settings-row-control">
+                      {optionText(control, saved.main.values[control.id])}
+                    </span>
+                  </div>
+                ))}
+                {review.discarded.length > 0 && (
+                  <section aria-label="유지할 수 없는 입력">
+                    <h3>유지할 수 없는 입력</h3>
+                    <p>계속 편집하면 아래 입력은 제외해요. 필요한 내용은 먼저 복사해 두세요.</p>
+                    {review.discarded.map((item) => {
+                      const control = previousControls.find((entry) => entry.id === item.id);
+                      return (
+                        <div className="settings-row" key={item.id}>
+                          <span className="settings-row-copy">
+                            {item.label}
+                            <small>{item.reason}</small>
+                          </span>
+                          <span className="settings-row-control">
+                            {item.unset
+                              ? '프롬프트 기본값으로'
+                              : control
+                                ? optionText(control, item.value)
+                                : String(item.value ?? '') || '비어 있음'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </section>
+                )}
+                <p className="muted">저장본을 불러오면 작성 중인 옵션 입력을 버려요.</p>
+              </>
+            ),
+            actions: (
+              <>
+                <button type="button" className="secondary" onClick={() => adopt(false)}>
+                  입력 버리고 저장본 불러오기
+                </button>
+                <button type="button" className="primary" onClick={() => adopt(true)}>
+                  입력 유지하고 계속 편집
+                </button>
+              </>
+            ),
+          };
         }}
       />
       <div className="chat-options-body">
@@ -365,56 +440,70 @@ function OptionsEditor({ workspace, ...props }: Props & { workspace: PromptWorks
             프롬프트 기본값으로
           </button>
         </fieldset>
-        {conflict && dirty && (
+        {workspace.revision > base.revision && dirty && (
           <NoticeBanner tone="error">
-            다른 곳에서 현재 프롬프트가 바뀌었어요. 초안은 유지했어요. 최신 설정을 다시 불러온 뒤
-            적용해 주세요.
+            다른 곳에서 현재 프롬프트가 바뀌었어요. 입력은 유지했어요. 적용할 때 변경 내용을 확인해
+            주세요.
           </NoticeBanner>
         )}
         <TransientNotice message={message} />
         {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
-        {(error || conflict) && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() =>
-              void api<PromptWorkspace>('/prompt-workspace')
-                .then((latest) => {
-                  setBase(latest);
-                  setValues(reconcilePromptValues(latest.main.program, values).values);
-                  setError('');
-                })
-                .catch((caught) => setError(caught.message))
-            }
-          >
-            최신 설정에 내 옵션 유지
-          </button>
+        {props.workspaceError && (
+          <NoticeBanner tone="error">
+            {props.workspaceError}
+            {props.onRetryWorkspace && (
+              <button type="button" disabled={busy} onClick={props.onRetryWorkspace}>
+                다시 불러오기
+              </button>
+            )}
+          </NoticeBanner>
         )}
       </div>
       <footer className="chat-options-footer">
         <small>
           {dirty ? '저장하지 않은 변경이 있어요.' : '현재 옵션은 모든 채팅의 다음 요청에 사용해요.'}
         </small>
+        {dirty && !conflict && (
+          <button type="button" disabled={busy} onClick={() => setConfirmDiscard(true)}>
+            변경 취소
+          </button>
+        )}
         <button
           type="button"
-          disabled={busy}
-          onClick={() => {
-            setBase(workspace);
-            setValues(workspace.main.values);
-            setError('');
-          }}
-        >
-          <RefreshIcon size={18} aria-hidden="true" />
-          최신 설정 다시 불러오기
-        </button>
-        <button
-          type="button"
-          disabled={!dirty || busy || props.disabled}
+          disabled={(!dirty && !needsReview) || busy || props.disabled}
           onClick={() => void save()}
         >
           {busy ? '적용 중…' : '현재 옵션 적용'}
         </button>
       </footer>
+      <Dialog
+        open={confirmDiscard}
+        title="전역 옵션 변경 취소"
+        variant="confirmation"
+        role="alertdialog"
+        onClose={() => setConfirmDiscard(false)}
+      >
+        <p>저장하지 않은 옵션 입력을 버릴까요?</p>
+        <DraftDiscardActions
+          open={confirmDiscard}
+          onContinue={() => setConfirmDiscard(false)}
+          onDiscard={() => {
+            setValues(base.main.values);
+            setError('');
+            setMessage('');
+            setConfirmDiscard(false);
+          }}
+          discardLabel="변경 버리기"
+        />
+      </Dialog>
     </>
   );
+}
+
+function optionText(control: PromptControl, value: PromptValue | undefined): string {
+  const current = value ?? control.default;
+  const choice = control.options?.find((option) => option.value === current);
+  if (choice) return choice.label;
+  if (typeof current === 'boolean') return current ? '켬' : '끔';
+  return current === '' || current === null ? '비어 있음' : String(current);
 }

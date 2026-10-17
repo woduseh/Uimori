@@ -53,6 +53,7 @@ function MiniNavigatorFixture() {
   const reader = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState('opening:id');
   const [listOpen, setListOpen] = useState(false);
+  const [currentLabel, setCurrentLabel] = useState('');
   const [extra, setExtra] = useState(false);
   const entries = [
     { id: 'opening:id', number: 0, label: 'Opening', opening: true },
@@ -74,6 +75,11 @@ function MiniNavigatorFixture() {
         Append scene
       </button>
       <output aria-label="Selected source">{selected}</output>
+      <header>
+        <button type="button" aria-label="장면 목록 열기" onClick={() => setListOpen(true)}>
+          {currentLabel}
+        </button>
+      </header>
       <div
         className="reader-stage has-scenes"
         style={{ height: 440, width: 380, flex: 'none', display: 'flex', flexDirection: 'column' }}
@@ -107,6 +113,7 @@ function MiniNavigatorFixture() {
           compact
           listOpen={listOpen}
           onListOpenChange={setListOpen}
+          onCurrentLabel={setCurrentLabel}
         />
       </div>
     </>

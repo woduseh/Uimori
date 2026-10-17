@@ -139,7 +139,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .locator('.section-navigation')
       .filter({ visible: true })
       .locator('button .section-navigation-title')
-  ).toHaveText(['대화 구성', '프롬프트·모델', '이야기 가이드', '기억·로어', '이미지', '실행 옵션']);
+  ).toHaveText(['대화 구성', '프롬프트·모델', '이야기 가이드', '기억·로어', '이미지']);
   await selectChatSettingsSection(page, '대화 구성');
   await page.getByText('함께 사용하는 모듈 · 자료 추가', { exact: true }).click();
   await selectContent(page, '추가할 패키지', added.title);
@@ -155,7 +155,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await library.getByRole('tab', { name: '모듈', exact: true }).click();
   await editLibraryContent(page, `Mira ${unique}`);
   await page
-    .getByLabel('캐릭터 설정', { exact: true })
+    .getByLabel('카드 설명', { exact: true })
     .fill('Mira is a synthetic harbor keeper. Her compass is silver in this revision.');
   const savedContent = waitForContentSave(page, added.id);
   await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();

@@ -556,7 +556,7 @@ function IllustrationCard({
         className="source-info-dialog"
       >
         {detailError ? (
-          <LoadingState compact loading={false} error={detailError} />
+          <LoadingState presentation="inline" loading={false} error={detailError} />
         ) : detail ? (
           <div className="illustration-diagnostic">
             <p>
@@ -615,7 +615,7 @@ function IllustrationCard({
             {!detail.diagnostic && <p>저장된 추가 생성 정보가 없어요.</p>}
           </div>
         ) : (
-          <LoadingState compact label="생성 정보를 불러오는 중이에요…" />
+          <LoadingState presentation="inline" label="생성 정보를 불러오는 중이에요…" />
         )}
       </Dialog>
     </article>

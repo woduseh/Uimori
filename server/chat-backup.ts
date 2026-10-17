@@ -1,23 +1,18 @@
 import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { remapChatAuthoring } from './chat-copy-authoring.js';
-import { copiedMessageTexts, mapCopiedMessageTexts } from './chat-copy-messages.js';
-import {
-  transcriptImages,
-  rewriteTranscriptMedia,
-  remapTranscriptRequestImages,
-} from './chat-media.js';
+import { mapCopiedMessageTexts } from './chat-copy-messages.js';
+import { rewriteTranscriptMedia, remapTranscriptRequestImages } from './chat-media.js';
 import type { Store } from './store.js';
 import {
   CHAT_BACKUP_FORMAT,
   CHAT_BACKUP_VERSION,
-  CHAT_BACKUP_MAX_BYTES,
   type ChatBackup,
   type ChatBackupImport,
   type ChatCopy,
 } from '../core/chat-backup.js';
 import { captureChatCopy, restoreChatCopy } from './chat-copy.js';
 import {
-  exportResourceBundle,
+  captureResourceBundle,
   importResourceBundle,
   inspectBundle,
   bundleDigest,
@@ -37,60 +32,6 @@ import {
   deletePreparedArchive,
   type PreparedArchive,
 } from './native-transfer-archive.js';
-
-/** Export the current chat as an independent continuing conversation, with its resources. */
-export function exportChatBackup(store: Store, chatId: string): ChatBackup {
-  return store.transaction(() => {
-    const chat = store.chat(chatId);
-    const copy = captureChatCopy(store, chatId);
-    if (copy.state.profile.pinned) delete copy.state.profile.pinned.mainModel;
-    const chats = [copy];
-    const selected = new Map<string, { kind: 'content' | 'prompt-preset'; id: string }>();
-    for (const copy of chats) {
-      for (const ref of copy.transcript.packageAttachments)
-        selected.set(`content:${ref.id}`, { kind: 'content', id: ref.id });
-      const prompt = copy.state.profile.pinned?.mainPromptPresetId;
-      if (prompt) selected.set(`prompt:${prompt}`, { kind: 'prompt-preset', id: prompt });
-    }
-    const resources = exportResourceBundle(store, [...selected.values()]);
-    resources.images = [
-      ...new Map(
-        [
-          ...resources.images,
-          ...transcriptImages(
-            store,
-            chats.map((copy) => ({
-              ...copy.transcript,
-              entries: [
-                ...copy.transcript.entries,
-                ...copiedMessageTexts(copy.state.messages ?? []).map((text) => ({
-                  request: '',
-                  text,
-                  translation: null,
-                })),
-              ],
-            }))
-          ),
-        ].map((image) => [image.hash, image])
-      ).values(),
-    ];
-    const result: ChatBackup = {
-      format: CHAT_BACKUP_FORMAT,
-      version: CHAT_BACKUP_VERSION,
-      createdAt: new Date().toISOString(),
-      title: chat.title,
-      resources,
-      chats,
-      notices: [
-        '모델 연결과 API 키는 가져오지 않아요. 대상 작업실의 모델을 사용해요.',
-        '실행 기록·도우미 내부 작업·자동 요약 체크포인트·일회성 옵션은 복원하지 않아요. 원문과 메모로 다시 이어가요.',
-      ],
-    };
-    if (Buffer.byteLength(JSON.stringify(result)) > CHAT_BACKUP_MAX_BYTES)
-      throw new HttpError(413, '채팅 백업이 256MiB를 넘어요.');
-    return result;
-  });
-}
 
 function checkedBackup(value: unknown, binary = false): ChatBackup {
   const body = record(value);
@@ -129,7 +70,7 @@ export function exportChatBackupArchive(store: Store, chatId: string) {
     selected.set(`content:${ref.id}`, { kind: 'content', id: ref.id });
   const prompt = copy.state.profile.pinned?.mainPromptPresetId;
   if (prompt) selected.set(`prompt:${prompt}`, { kind: 'prompt-preset', id: prompt });
-  const resources = exportResourceBundle(store, [...selected.values()], true);
+  const resources = captureResourceBundle(store, [...selected.values()]);
   return exportNativeArchive(store, resources, {
     format: CHAT_BACKUP_FORMAT,
     version: CHAT_BACKUP_VERSION,

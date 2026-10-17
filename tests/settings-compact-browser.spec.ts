@@ -11,7 +11,7 @@ import {
   startProviderConnection,
 } from './ui-navigation.js';
 
-test('CSUILAYOUT all six chat settings sections fit shared desktop and phone settings styles', async ({
+test('CSUILAYOUT all chat settings sections fit shared desktop and phone settings styles', async ({
   page,
   request,
 }, info) => {
@@ -33,25 +33,19 @@ test('CSUILAYOUT all six chat settings sections fit shared desktop and phone set
       await page.goto(`/?chat=${chat.id}`);
       await openChatSettings(page);
       const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-      for (const section of [
-        '대화 구성',
-        '프롬프트·모델',
-        '기억·로어',
-        '이미지',
-        '실행 옵션',
-        '카드 변수',
-      ]) {
+      for (const section of ['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '카드 변수']) {
         await selectChatSettingsSection(page, section);
         const pane = dialog.getByRole('tabpanel');
         expect(
           await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
         ).toBeLessThanOrEqual(1);
-        if (section === '실행 옵션') {
+        if (section === '프롬프트·모델') {
+          await pane.getByText('고급 실행 설정', { exact: true }).click();
           const fields = (await pane.locator('.chat-runtime-fields').boundingBox())!;
-          const group = (await pane
-            .locator('.chat-runtime-fields > .settings-group')
-            .boundingBox())!;
-          expect(Math.abs(fields.width - group.width)).toBeLessThanOrEqual(1);
+          for (const group of await pane.locator('.chat-runtime-fields > .settings-group').all()) {
+            const bounds = (await group.boundingBox())!;
+            expect(Math.abs(fields.width - bounds.width)).toBeLessThanOrEqual(1);
+          }
         }
         for (const toggle of await pane.locator('.settings-row-toggle [role="switch"]').all()) {
           if (!(await toggle.isVisible())) continue;

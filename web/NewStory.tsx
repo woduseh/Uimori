@@ -416,7 +416,7 @@ export function NewStory({
           disabled={locked}
         />
         {!defaultsReady && !defaultsError && (
-          <LoadingState compact label="기본 페르소나를 불러오는 중이에요…" />
+          <LoadingState presentation="inline" label="기본 페르소나를 불러오는 중이에요…" />
         )}
         {defaultsError && (
           <p className="error" role="alert">
@@ -426,7 +426,7 @@ export function NewStory({
         <div className="new-story-main-model" aria-label="새 채팅에 사용할 전역 설정">
           {!workspace ? (
             <LoadingState
-              compact
+              presentation="inline"
               loading={refreshingWorkspace || !workspaceError}
               error={refreshingWorkspace ? '' : workspaceError}
               errorLabel="전역 모델과 프롬프트를 불러오지 못했어요."
@@ -472,7 +472,7 @@ export function NewStory({
                 </button>
               )}
               {refreshingWorkspace && (
-                <LoadingState compact label="전역 설정을 다시 불러오는 중이에요…" />
+                <LoadingState presentation="inline" label="전역 설정을 다시 불러오는 중이에요…" />
               )}
               {workspaceError && !refreshingWorkspace && (
                 <NoticeBanner
@@ -494,7 +494,9 @@ export function NewStory({
             </>
           )}
         </div>
-        {packageLoading && <LoadingState compact label="시작 자료를 불러오는 중이에요…" />}
+        {packageLoading && (
+          <LoadingState presentation="inline" label="시작 자료를 불러오는 중이에요…" />
+        )}
         {!!activeBot?.package?.starts?.length && (
           <section className="new-story-opening" aria-label="첫 메시지">
             <label>

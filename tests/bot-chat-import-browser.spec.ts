@@ -1,3 +1,4 @@
+import { legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -29,15 +30,18 @@ for (const viewport of [
       .getByRole('button', { name: `${target.bot.title} 채팅 목록`, exact: true })
       .hover();
     await navigation.getByLabel(`${target.bot.title} 관리`, { exact: true }).click();
-    await navigation.getByRole('button', { name: '채팅 가져오기', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: '채팅 가져오기', exact: true });
+    await navigation.getByRole('button', { name: '이 봇으로 본문 가져오기', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '이 봇으로 본문 가져오기', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(target.bot.title, { exact: true })).toBeVisible();
     expect(
       await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
     ).toBeLessThanOrEqual(1);
+    await expect(dialog).toHaveCSS('opacity', '1');
     await page.screenshot({ path: info.outputPath(`bot-chat-import-${viewport.width}.png`) });
-    await dialog.getByRole('button', { name: /본문만 가져오기/ }).click();
+    await expect(dialog.getByLabel('본문 JSON 파일')).toBeVisible();
+    const openBackups = dialog.getByRole('button', { name: '채팅 백업 복원', exact: true });
+    await expect(openBackups).toBeEnabled();
     const transcript = {
       format: 'uimori-chat-transcript',
       version: 2,
@@ -83,12 +87,14 @@ for (const viewport of [
       buffer: Buffer.from(JSON.stringify(transcript)),
     });
     await expect(dialog.getByText(`“${target.bot.title}”의 새 채팅으로 가져와요.`)).toBeVisible();
+    await expect(openBackups).toBeDisabled();
     expect(requests).toHaveLength(0);
     await dialog.getByRole('button', { name: '새 채팅으로 가져오기', exact: true }).click();
     await expect(dialog.getByRole('button', { name: '같은 요청 확인' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('본문 JSON 파일')).toBeDisabled();
+    await expect(openBackups).toBeDisabled();
     const responseEvent = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/chats/import-transcript') && response.status() === 200
@@ -102,9 +108,14 @@ for (const viewport of [
     await expect(dialog.getByRole('status')).toContainText('새 채팅으로 가져왔어요');
     const imported = await (await request.get(`/api/chats/${result.chat.id}`)).json();
     expect(imported.sources.map((item: { text: string }) => item.text)).toEqual(['원본 장면']);
+    // The shortcut opens the common backup screen after the selected transcript is resolved.
+    await expect(openBackups).toBeEnabled();
+    await openBackups.click();
+    await expect(dialog).toBeHidden();
+    const settings = page.getByRole('dialog', { name: '설정', exact: true });
+    const backupPanel = settings.getByRole('region', { name: '채팅 가져오기', exact: true });
+    await expect(backupPanel).toBeVisible();
     // A backup restores its own independent bot copy, never the preselected bot.
-    await dialog.getByRole('button', { name: '가져오기 방식 변경' }).click();
-    await dialog.getByRole('button', { name: /채팅 백업 복원/ }).click();
     const backupRequests: unknown[] = [];
     let restoredBotId = '';
     await page.route('**/api/chats/import-backup', async (route) => {
@@ -118,30 +129,28 @@ for (const viewport of [
         await route.abort('failed');
       } else await route.continue();
     });
-    const backup = await (await request.get(`/api/chats/${original.chat.id}/backup`)).json();
-    await dialog.getByLabel('채팅 백업 파일 선택').setInputFiles({
+    const backup = legacyChatBackupWithBot(original.bot, original.chat.settings);
+    await backupPanel.getByLabel('채팅 백업 파일 선택').setInputFiles({
       name: 'original.uimori-chat.json',
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(backup)),
     });
     expect(backupRequests).toHaveLength(0);
-    await dialog.getByRole('button', { name: '새 채팅으로 가져오기', exact: true }).click();
-    await expect(dialog.getByRole('button', { name: '같은 요청 확인', exact: true })).toBeEnabled();
-    await expect(dialog.getByLabel('채팅 백업 파일 선택')).toBeDisabled();
-    await expect(dialog.getByRole('button', { name: '선택 취소', exact: true })).toBeDisabled();
+    await backupPanel.getByRole('button', { name: '새 채팅으로 가져오기', exact: true }).click();
     await expect(
-      dialog.getByRole('button', { name: '가져오기 방식 변경', exact: true })
+      backupPanel.getByRole('button', { name: '같은 요청 확인', exact: true })
+    ).toBeEnabled();
+    await expect(backupPanel.getByLabel('채팅 백업 파일 선택')).toBeDisabled();
+    await expect(
+      backupPanel.getByRole('button', { name: '선택 취소', exact: true })
     ).toBeDisabled();
-    await expect(dialog.getByRole('button', { name: '닫기', exact: true })).toBeDisabled();
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeVisible();
     const backupEvent = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/chats/import-backup') &&
         response.request().method() === 'POST' &&
         response.status() === 200
     );
-    await dialog.getByRole('button', { name: '같은 요청 확인', exact: true }).click();
+    await backupPanel.getByRole('button', { name: '같은 요청 확인', exact: true }).click();
     const restored = await (await backupEvent).json();
     expect(restored.created).toBe(false);
     expect(restored.chat.botId).toBe(restoredBotId);
@@ -150,9 +159,8 @@ for (const viewport of [
     expect(copiedBot.title).toBe(original.bot.title);
     expect(backupRequests).toHaveLength(2);
     expect(backupRequests[1]).toEqual(backupRequests[0]);
-    await expect(dialog.getByRole('status')).toContainText('복원했어요');
-    await expect(dialog.getByRole('button', { name: '닫기', exact: true })).toBeEnabled();
+    await expect(backupPanel.getByRole('status')).toContainText('복원했어요');
     await page.keyboard.press('Escape');
-    await expect(dialog).toBeHidden();
+    await expect(settings).toBeHidden();
   });
 }

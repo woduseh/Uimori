@@ -101,8 +101,8 @@ export function SettingsEditor({
     }
   }
   return (
-    <section className="settings">
-      {!hideHeading && <h3>실행 옵션</h3>}
+    <section className="settings" aria-label="생성 설정">
+      {!hideHeading && <h3>자동 번역과 호출 한도</h3>}
       <small>저장한 설정은 다음 실행부터 적용해요.</small>
       <form
         onSubmit={(event) => {
@@ -111,30 +111,6 @@ export function SettingsEditor({
         }}
       >
         <fieldset className="editor-fields full chat-runtime-fields" disabled={saving}>
-          <div className="settings-group full">
-            <h4 className="settings-group-heading">모델 호출</h4>
-            <div className="settings-group-body">
-              <label className="settings-row">
-                <span className="settings-row-copy">
-                  <strong>작업당 모델 호출 한도</strong>
-                  <small>
-                    1~32회. 본문의 조회 후속 호출과 컨텍스트 요약을 함께 세어요. 번역·도우미는 각
-                    기능의 별도 호출 한도를 사용해요.
-                  </small>
-                </span>
-                <input
-                  type="number"
-                  aria-label="작업당 모델 호출 한도"
-                  min={1}
-                  max={32}
-                  step={1}
-                  required
-                  value={Number.isFinite(value.maxCalls) ? value.maxCalls : ''}
-                  onChange={(event) => update('maxCalls', event.target.valueAsNumber)}
-                />
-              </label>
-            </div>
-          </div>
           <div className="settings-group full">
             <h4 className="settings-group-heading">본문 번역</h4>
             <div className="settings-group-body">
@@ -173,11 +149,35 @@ export function SettingsEditor({
               </label>
             </div>
           </div>
+          <details className="settings-group full">
+            <summary>고급 실행 설정</summary>
+            <div className="settings-group-body">
+              <label className="settings-row">
+                <span className="settings-row-copy">
+                  <strong>작업당 모델 호출 한도</strong>
+                  <small>
+                    1~32회. 본문의 조회 후속 호출과 컨텍스트 요약을 함께 세어요. 번역·도우미는 각
+                    기능의 별도 호출 한도를 사용해요.
+                  </small>
+                </span>
+                <input
+                  type="number"
+                  aria-label="작업당 모델 호출 한도"
+                  min={1}
+                  max={32}
+                  step={1}
+                  required
+                  value={Number.isFinite(value.maxCalls) ? value.maxCalls : ''}
+                  onChange={(event) => update('maxCalls', event.target.valueAsNumber)}
+                />
+              </label>
+            </div>
+          </details>
           <div className="form-actions full settings-save-actions">
             {dirty && (
               <button type="button" className="secondary" onClick={() => setConfirmReload(true)}>
                 <RefreshIcon size={18} aria-hidden="true" />
-                저장된 설정 다시 불러오기
+                변경 취소
               </button>
             )}
             <SaveButton label="설정 저장" disabled={!dirty || saving} aria-busy={saving} />
@@ -192,14 +192,14 @@ export function SettingsEditor({
       </form>
       <Dialog
         open={confirmReload}
-        title="실행 설정 다시 불러오기"
+        title="생성 설정 변경 취소"
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!saving) setConfirmReload(false);
         }}
       >
-        <p>저장된 실행 설정을 불러오면 현재 초안이 사라져요.</p>
+        <p>저장하지 않은 자동 번역·호출 한도 변경을 버릴까요?</p>
         <DraftDiscardActions
           open={confirmReload}
           disabled={saving}
@@ -213,7 +213,7 @@ export function SettingsEditor({
             onError('');
             setConfirmReload(false);
           }}
-          discardLabel="초안 버리고 불러오기"
+          discardLabel="변경 버리기"
         />
       </Dialog>
     </section>

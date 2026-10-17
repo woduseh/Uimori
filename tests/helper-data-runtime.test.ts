@@ -214,7 +214,7 @@ test('native Chat continuation receives new user instructions and budget without
   const f = fixture();
   const conversation = f.runtime.workspace.open({ kind: 'library', workId: 'steer-wire' });
   f.runtime.workspace.update(conversation.id, conversation.revision, {
-    limits: { helperCalls: 3, totalCalls: 4, artifacts: 2 },
+    limits: { helperCalls: 3, totalCalls: 4 },
   });
   const before = authoredState(f);
   const bodies = provider((wire, round) => {
@@ -253,7 +253,6 @@ test('native Chat continuation receives new user instructions and budget without
     expect(update.controls).toMatchObject({
       helperCallsRemaining: 2,
       totalCallsRemaining: 3,
-      artifactsRemaining: 2,
     });
     return answer('자료는 저장하지 않았어요.');
   });

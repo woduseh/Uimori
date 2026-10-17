@@ -2,16 +2,32 @@
 
 Uimori is a writing and reading workspace. Keep the manuscript and composer prominent, frequent actions nearby, and occasional controls in contextual menus.
 
-- Use familiar navigation and consistent names across desktop and mobile. Adapt the layout to available space; avoid stretching prose and long forms across wide screens.
-- Reuse shared controls and icons. Give icon buttons accessible names, keep essential actions available without hover, and support keyboard and touch input.
-- Show useful progress, errors, and unsaved changes without making execution logs the default view. Keep internal implementation terms out of ordinary product copy. Reversible settings such as enabling a provider or model apply immediately; do not add a second confirmation step.
-- Preserve the user's place and unfinished work when opening panels, changing layouts, or returning from an editor. Respect [reading preferences](READING.md).
-- Make each screen's primary action easy to find. Distinguish an empty collection, an empty folder, no search results, and a loading or failed request.
-- In settings, place section titles above their panels and keep related controls in one group. Put names and short explanations together, with values and actions alongside; stack them on narrow screens. Use one divider between rows, without extra lines at the start or end of a group. Keep selection cards and status summaries where they communicate a real choice or state. Give image selection its own row and group related effect sliders below it.
+## Working checklist
+
+1. State the user's task, the screen's primary action, and the observable result before implementation. Resolve routine layout choices from existing patterns.
+2. Inspect the current screen and a relevant existing example. Keep the manuscript and composer prominent; put occasional actions in contextual menus and internal diagnostics in disclosures.
+3. Reuse the app's shared controls, Lucide icons, and style tokens. Review an external UI kit against a concrete missing behavior or pattern; preserve app themes and authored-content boundaries.
+4. Group settings by task: section title, related controls, then actions. Keep names and short explanations together, align values/actions, and stack the same order on narrow screens. Show each useful explanation once.
+5. Distinguish initial loading, background refresh, inline work, empty collections/folders, no search results, failure, unsaved work, and completion. Place feedback in the region it describes; follow the detailed state contracts below and keep already-useful content visible.
+6. Preserve drafts, selections, reading position, and focus across menus, panels, responsive changes, and failures. Make essential actions available to keyboard and touch users without requiring hover. Respect [reading preferences](READING.md).
+7. Check the changed flow with realistic Korean text and relevant data/state variations at the affected widths and themes. Inspect actual screenshots as well as interaction results; capture success alone is not design acceptance. Use [DEVELOPMENT](DEVELOPMENT.md#verification) to select checks.
+8. Update the owning component/style and this document only for adopted conventions. Keep investigation history, temporary proposals, and duplicate token/verification tables out of standing instructions.
+
+## Layout and state contracts
+
+Use familiar navigation and consistent names across desktop and mobile. Adapt the layout to available space; avoid stretching prose and long forms across wide screens. Give icon buttons accessible names and make each screen's primary action easy to find. Keep internal implementation terms out of ordinary product copy.
+
+In settings, place section titles above their panels and keep related controls in one group. Use one divider between rows, without extra lines at the start or end of a group. Keep selection cards and status summaries where they communicate a real choice or state. Give image selection its own row and group related effect sliders below it. Reversible settings such as enabling a provider or model apply immediately without a second confirmation step.
 
 Keep settings action groups aligned to the right below their content, and toggle names on the left with switches on the right. Repeated usage meters share the same column boundaries regardless of adjacent text length.
 
 Apply the same grouping to chat settings and helper settings. Picker dialogs own their filter layout; compact controls in the surrounding composer must not shrink or restyle the dialog's search and folder fields.
+
+Loading feedback has three presentations in the shared LoadingState: a region that fills and centers within the available destination or panel, a centered placeholder inside response/translation content, and an inline icon/message for a small operation. Initial panel loading keeps the header and navigation available and uses the same region while its module and data arrive. Keep the 200ms quiet window and existing read/retry/cancellation owners. Manuscript loading follows its separate skeleton contract below.
+
+Refreshing a loaded result keeps the matching result visible with a small progress indicator. A refresh failure keeps that result and shows a nearby error with retry; changing the query must not present a previous query's result as current. Section-local empty lists use compact spacing, without the viewport-sized padding of a whole-screen empty state.
+
+Primary form saves show a short visible action (normally 저장), the full accessible action name, and a spinner with pending text inside the same button during that save. Keep its size stable and prevent duplicate submission. Other operations such as reload, backup, or connection tests must not appear as saving. Existing narrow icon toolbars remain icon-only and use the same pending icon without adding a second action row.
 
 Non-modal notices follow their purpose. Save and other completed-action feedback uses the shared bottom notice for four seconds without moving content or taking focus; it can remain visible after its settings panel closes. Unsaved drafts, conflicts, uncertain admission and failures stay near their affected operation until resolved or explicitly dismissed. Persistent reading and maintenance banners share message and action spacing, while execution progress keeps its compact activity bar. Maintenance details are available through a disclosure.
 
@@ -21,9 +37,9 @@ A missing manuscript page stays quiet for the first 200 milliseconds, then shows
 
 Response waiting, empty response streams, translation preparation and input translation reuse that centered spinner and message. Already-visible response text and translations remain readable while work continues; empty, failed or cancelled results do not keep a loading spinner. Composer-menu actions share left alignment, icon spacing and normal text color; disabled actions retain their disabled appearance.
 
-Check vertical centers as well as horizontal alignment: icon/text pairs, switch labels and neighboring action buttons keep consistent centers when text wraps. Empty helper conversations occupy the conversation area centrally; populated conversations retain their normal reading flow. A usage chart with no calls shows an empty-state message instead of instructions to select absent bars. Compact-screen navigation and translation controls keep the shared touch height. Identical completion messages replace the previous notice and renew its four-second lifetime.
+Check vertical centers as well as horizontal alignment: icon/text pairs, switch labels and neighboring action buttons keep consistent centers when text wraps. Empty helper conversations occupy the conversation area centrally; populated conversations retain their normal reading flow. A usage period with no calls keeps the totals and period controls, then shows one compact empty message in place of empty charts and breakdowns. Calls with zero known cost or unknown/partial cost still show their records. Keep coverage and undated-call evidence available. Completed task-history rows prioritize the request, status and result actions; their existing usage and execution disclosures share a compact row and expand to full width. Detailed token/context summaries stay inside those disclosures. Pending context, failures, partial output and recovery actions remain visible. Compact-screen navigation and translation controls keep the shared touch height. Identical completion messages replace the previous notice and renew its four-second lifetime.
 
-On phones, resource editors keep the title and helper action in the first header row, with save and other editing actions in a second row. Their sticky section navigation follows the actual header height, including wrapped actions. Opening uploaded-image metadata gives its form the available width and releases the thumbnail grid's height limit; closing it restores the compact gallery. Scene-navigation page labels remain on one line so the navigation cannot cover nearby actions.
+On phones, resource editors keep the title and helper action in the first header row, with save and other editing actions in a second row. Their sticky section navigation follows the actual header height, including wrapped actions. Opening uploaded-image metadata gives its form the available width and releases the thumbnail grid's height limit; closing it restores the compact gallery. Scene-navigation page labels remain on one line so the navigation cannot cover nearby actions. Compact readers open the scene list from the title with the current position alongside the chat context. Latest-position actions occupy normal flow outside the manuscript and disappear during composer input or source editing; they do not overlay prose. Image-less bot/persona cards use a compact mobile identity row while portrait cards and saved card/list preferences retain their layout. When no selectable models exist, place the setup action beside the primary model choices.
 
 Explicitly reloading role-model settings asks before discarding a draft; failed reads preserve the draft and its revision. Settings tabs that depend on the library use the same loading, failure and retry surface. A mobile input-language menu closes on outside interaction or Escape and restores its opener's focus after Escape or selection.
 
@@ -41,9 +57,17 @@ Use the current components and styles as the starting point. [Library](LIBRARY.m
 
 Detailed editor behavior is in [LIBRARY](LIBRARY.md#저장과-취소); helper sessions are in [READING](READING.md#helper-sessions).
 
+Chat option editing refreshes automatically when idle and preserves drafts when settings change elsewhere. Keep read retries next to read failures; do not expose separate manual refresh/rebase controls. Saving, reserving or cancelling with a conflict opens the existing saved-version review. Closing the review changes no input or revision. Only an explicit choice adopts the reviewed state, either retaining compatible local edits or discarding drafts. Name excluded inputs before the choice, preserve unrelated saved edits, and require a separate save/reservation afterward. Unknown write outcomes keep the original operation for acknowledgement.
+
 ## Korean terminology
 
 Use the same terms in visible copy, accessible names and user documentation.
+
+Write guidance in plain Korean 해요체 and use short action labels for controls. Name the affected object, observable result and next action; remove decorative encouragement and explanations that repeat a nearby label or button. Keep familiar domain terms such as 봇, 페르소나 and 로어, but explain internal execution terms in ordinary controls. Technical identifiers can remain in diagnostics where they help interpretation.
+
+Avoid permanent refresh controls when an ordinary view already refreshes on entry or relevant changes; offer retry beside failed or stale reads. Resolve option-save conflicts through the shared review dialog, preserving drafts and save revisions until an explicit decision. Keep developer-only setup in the existing test mode, and hide mode-inapplicable fields without clearing their saved values.
+
+Distinguish reading or refreshing from saving, applying, discarding and acknowledging an alert. Preserve the conditions that matter for drafts, stored data, cost, failures and scope. Describe instructions sent to a model as requests rather than guaranteed outcomes. Update visible text, accessible names and the relevant user documentation together.
 
 | Meaning | Term |
 | --- | --- |

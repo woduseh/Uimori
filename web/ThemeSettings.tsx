@@ -76,7 +76,8 @@ export function ThemeSettings({
   const [baseline, setBaseline] = useState('');
   const [mode, setMode] = useState<'light' | 'dark'>('light');
   const [scope, setScope] = useState<'global' | 'bot' | 'chat'>('global');
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'other' | null>(null);
+  const busy = operation !== null;
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [importNotice, setImportNotice] = useState('');
@@ -151,7 +152,7 @@ export function ThemeSettings({
   async function action(work: () => Promise<void>, saveAttempt = false) {
     if (locked.current) return;
     locked.current = true;
-    setBusy(true);
+    setOperation(saveAttempt ? 'save' : 'other');
     setError('');
     setNotice('');
     setImportNotice('');
@@ -165,7 +166,7 @@ export function ThemeSettings({
       setError((cause as Error).message);
     } finally {
       locked.current = false;
-      setBusy(false);
+      setOperation(null);
     }
   }
   function edit(theme?: Theme, copy = false) {
@@ -596,8 +597,8 @@ export function ThemeSettings({
                     />
                     <IconButton
                       icon={ResetIcon}
-                      title="기본값 상속"
-                      label={`${mode} ${key} 초기화`}
+                      title="기본 색상으로 되돌리기"
+                      label={`${mode === 'light' ? '밝은 색' : '어두운 색'} ${labels[key] ?? key} 기본 색상으로 되돌리기`}
                       disabled={!draft.model.colors[mode][key]}
                       onClick={() => {
                         const colors = { ...draft.model.colors[mode] };
@@ -649,6 +650,8 @@ export function ThemeSettings({
             <SaveButton
               type="button"
               label="테마 저장"
+              text=""
+              aria-busy={operation === 'save'}
               disabled={busy || !dirty}
               onClick={() => void save()}
             />

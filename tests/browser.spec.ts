@@ -52,7 +52,8 @@ async function expectSourceRaw(page: Page, text: string) {
 async function storySettings(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible())) await openChatSettings(page);
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
+  await page.getByText('고급 실행 설정', { exact: true }).click();
 }
 async function openWork(page: Page) {
   await closeDialog(page);
@@ -167,10 +168,10 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await expect(
       aSecondTab.getByRole('dialog', { name: '채팅 설정', exact: true }).getByRole('alert')
     ).toContainText('다른 요청이 먼저 반영됐어요');
-    await aSecondTab.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
+    await aSecondTab.getByRole('button', { name: '변경 취소', exact: true }).click();
     await aSecondTab
-      .getByRole('alertdialog', { name: '실행 설정 다시 불러오기', exact: true })
-      .getByRole('button', { name: '초안 버리고 불러오기', exact: true })
+      .getByRole('alertdialog', { name: '생성 설정 변경 취소', exact: true })
+      .getByRole('button', { name: '변경 버리기', exact: true })
       .click();
     await expect(aSecondTab.getByRole('alert')).toHaveCount(0);
     expect((await detail(request, a.id)).runs[0].snapshot.settings.maxCalls).toBe(8);

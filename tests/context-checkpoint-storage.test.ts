@@ -362,7 +362,7 @@ describe('Current checkpoint lifetime', () => {
       },
     }).chat;
     const snapshot = () =>
-      prepareNativeRisuReadOnly(helperWritingSnapshot(store, chat.id, 'context'), 'context');
+      prepareNativeRisuReadOnly(helperWritingSnapshot(store, chat.id), 'context');
     return { store, chat, model, helper, bot, snapshot };
   }
 

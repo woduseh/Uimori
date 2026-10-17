@@ -492,7 +492,9 @@ export function ProviderModelFields({
               <option value="realtime">실시간</option>
               <option value="batch">Batch · 비동기 · 50% 할인</option>
             </select>
-            <small>본문 Run을 Anthropic Batch로 실행해요. 응답은 완료될 때 한 번에 표시돼요.</small>
+            <small>
+              본문 생성에 Anthropic Batch를 사용해요. 응답은 완료될 때 한 번에 표시돼요.
+            </small>
           </label>
         )}
         {protocol && (sends('serviceTier') || value.serviceTier) && (
@@ -526,8 +528,8 @@ export function ProviderModelFields({
           )}
           {codex && (
             <p>
-              출력 토큰은 소프트 예산이에요. 이 값을 채우려고 늘리지 않으며, 프롬프트의 분량 지시가
-              우선해요.
+              출력 토큰 수는 모델에 전달하는 참고값이며, 최대 길이를 보장하지 않아요. 원하는 분량은
+              프롬프트에 적어 주세요.
             </p>
           )}
         </details>
@@ -891,37 +893,36 @@ export function ProviderModelFields({
           />
           {value.evaluationToolsEnabled && (
             <>
-              <label className="full">
-                평가 메타데이터
-                {automaticMetadata ? (
-                  <input
-                    aria-label="평가 메타데이터"
-                    readOnly
-                    value={`${evaluationMetadataLabels[automaticMetadata]} · 프로바이더 자동 선택`}
-                  />
-                ) : (
-                  <select
-                    aria-label="평가 메타데이터"
-                    value={evaluation.metadataProfile ?? 'neutral'}
-                    onChange={(event) =>
-                      setEvaluation({
-                        ...evaluation,
-                        metadataProfile: event.target.value as EvaluationMetadataProfile,
-                      })
-                    }
-                  >
-                    {Object.entries(evaluationMetadataLabels).map(([profile, label]) => (
-                      <option key={profile} value={profile}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <small>
-                  평가 컨텍스트·검토자 결과를 제공할 때 사용해요. 원본 기반 직접 작성에서는 사용하지
-                  않아요.
-                </small>
-              </label>
+              {evaluation.contextMode !== 'source-bound' && (
+                <label className="full">
+                  평가 메타데이터
+                  {automaticMetadata ? (
+                    <input
+                      aria-label="평가 메타데이터"
+                      readOnly
+                      value={`${evaluationMetadataLabels[automaticMetadata]} · 프로바이더 자동 선택`}
+                    />
+                  ) : (
+                    <select
+                      aria-label="평가 메타데이터"
+                      value={evaluation.metadataProfile ?? 'neutral'}
+                      onChange={(event) =>
+                        setEvaluation({
+                          ...evaluation,
+                          metadataProfile: event.target.value as EvaluationMetadataProfile,
+                        })
+                      }
+                    >
+                      {Object.entries(evaluationMetadataLabels).map(([profile, label]) => (
+                        <option key={profile} value={profile}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <small>평가 컨텍스트·검토자 결과에 사용할 정보를 선택해요.</small>
+                </label>
+              )}
               <label className="full">
                 평가 컨텍스트 제공
                 <select
@@ -948,17 +949,16 @@ export function ProviderModelFields({
                 )}
                 {evaluation.contextMode === 'source-bound' && (
                   <small>
-                    평가 컨텍스트·검토자·case 단계를 생략하고 원본 컨텍스트로 바로 작성해요. 자료
-                    조회와 조언은 사용할 수 있고, 결과는 제출 도구로 완료해야 해요. 내부 처리 메모는
-                    선택사항이에요.
+                    별도 평가 단계를 거치지 않고 기존 입력으로 바로 작성해요. 작성 중 자료 조회와
+                    조언을 요청할 수 있어요.
                   </small>
                 )}
               </label>
               {evaluation.contextMode === 'preloaded' && (
                 <label className="full">
-                  첫 case 라운드 추론
+                  첫 평가 단계의 추론 설정
                   <select
-                    aria-label="첫 case 라운드 추론"
+                    aria-label="첫 평가 단계의 추론 설정"
                     value={evaluation.approvalReasoningMode}
                     onChange={(event) =>
                       setEvaluation({
@@ -969,8 +969,12 @@ export function ProviderModelFields({
                     }
                   >
                     <option value="configured">프리셋 설정 유지</option>
-                    <option value="economized">8,000 토큰·low로 절약</option>
+                    <option value="economized">출력·추론 설정 낮추기</option>
                   </select>
+                  <small>
+                    낮추기를 선택하면 출력 설정은 기존 값과 8,000토큰 중 작은 값을 사용해요. 설정된
+                    추론·출력 강도는 low로 낮추고, 추론 강도의 none·minimal은 유지해요.
+                  </small>
                 </label>
               )}
               <label>
@@ -998,12 +1002,13 @@ export function ProviderModelFields({
                     setEvaluation({ ...evaluation, terminalLateCorrections: event.target.checked })
                   }
                 />
-                제출 원고의 정확한 문자열 교정 허용
+                제출할 원고의 문구 찾아 바꾸기 허용
               </label>
+              <small className="full">원고에서 한 번만 나오는 문구를 찾아 바꿔요.</small>
             </>
           )}
           <small className="full">
-            모델이 원고를 검토하고 교정하도록 도와요. 추가 호출이 발생할 수 있어요.
+            원고 검토·교정 도구를 모델에 제공해요. 추가 호출이 발생할 수 있어요.
           </small>
         </fieldset>
         <h4 className="provider-field-heading full">요금</h4>

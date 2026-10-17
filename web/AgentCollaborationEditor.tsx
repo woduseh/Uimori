@@ -149,7 +149,7 @@ export function AgentCollaborationEditor({
       <div id={`${id}-content`} hidden={!expanded}>
         <div className="ac-content">
           <p className="muted">
-            에이전트가 인물이나 설정에 관한 의견을 제안하고, 메인이 최종 문장을 써요.
+            보조 에이전트가 인물이나 설정에 관한 의견을 제안하고, 본문 모델이 최종 원고를 써요.
           </p>
           {!collaboration.enabled && (
             <p className="muted">
@@ -371,7 +371,10 @@ export function AgentCollaborationEditor({
               <section className="ac-shared-summary" aria-label="전달할 창작 옵션">
                 <div>
                   <strong>전달할 창작 옵션</strong>
-                  <p className="muted">선택한 옵션의 실행 시점 값을 읽기용으로 전달해요.</p>
+                  <p className="muted">
+                    작문 요청을 준비할 때의 옵션 값을 보조 에이전트에게 전달해요. 보조 에이전트는
+                    값을 읽기만 해요.
+                  </p>
                 </div>
                 <button
                   type="button"

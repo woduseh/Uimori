@@ -11,7 +11,7 @@ export function LoadingState({
   errorLabel = '불러오지 못했어요.',
   onRetry,
   retryLabel = '다시 불러오기',
-  compact = false,
+  presentation = 'region',
 }: {
   loading?: boolean;
   error?: string;
@@ -19,7 +19,7 @@ export function LoadingState({
   errorLabel?: string;
   onRetry?: () => void;
   retryLabel?: string;
-  compact?: boolean;
+  presentation?: 'region' | 'placeholder' | 'inline';
 }) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
@@ -28,9 +28,9 @@ export function LoadingState({
     const timer = setTimeout(() => setVisible(true), 200);
     return () => clearTimeout(timer);
   }, [loading, error]);
-  if (!error && (!loading || !visible)) return null;
+  if (!error && (!loading || (!visible && presentation !== 'region'))) return null;
   return (
-    <div className={`loading-state${compact ? ' loading-state-compact' : ''}`}>
+    <div className={`loading-state loading-state-${presentation}`}>
       {error ? (
         <>
           <div role="alert">
@@ -43,12 +43,16 @@ export function LoadingState({
             </button>
           )}
         </>
-      ) : (
+      ) : visible ? (
         <div role="status">
-          <RunningIcon size={22} className="activity-spinner" aria-hidden="true" />
+          <RunningIcon
+            size={presentation === 'inline' ? 18 : 22}
+            className="activity-spinner"
+            aria-hidden="true"
+          />
           <p>{label}</p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -372,7 +372,11 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   request,
 }, info) => {
   await seed(request);
-  await settings(request, { generator: 'none' });
+  const stored = await (await request.get('/api/illustration-settings')).json();
+  await settings(request, {
+    generator: 'none',
+    comfyui: { ...stored.comfyui, pollIntervalMs: 250 },
+  });
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
@@ -409,11 +413,11 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
     });
     expect(offset).toBeLessThan(2);
     await page.screenshot({ path: info.outputPath(`illustration-form-${width}.png`) });
-    await section.getByLabel('확인 간격 (초)', { exact: true }).scrollIntoViewIfNeeded();
+    await section.getByLabel('시간 제한 (초)', { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`illustration-comfyui-${width}.png`) });
   }
   await section.getByLabel('시간 제한 (초)', { exact: true }).fill('60');
-  await section.getByLabel('확인 간격 (초)', { exact: true }).fill('0.25');
+  await expect(section.getByLabel('확인 간격 (초)', { exact: true })).toHaveCount(0);
   await section.getByLabel('테스트 삽화 생성기', { exact: true }).selectOption('');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(

@@ -17,6 +17,7 @@ type Props = {
   modelConnections: Connection[];
   conflict: boolean;
   busy: boolean;
+  saving: boolean;
   forcedVertexTier?: VertexRequestTier;
   modelSection: 'basic' | 'advanced';
   onSectionChange: (section: 'basic' | 'advanced') => void;
@@ -35,6 +36,7 @@ export function ProviderModelForm({
   modelConnections,
   conflict,
   busy,
+  saving,
   forcedVertexTier,
   modelSection,
   onSectionChange,
@@ -209,7 +211,7 @@ export function ProviderModelForm({
           onClick={() => onDone()}
         />
         {editingModel ? (
-          <SaveButton label="모델 변경 저장" disabled={busy || !chosen} aria-busy={busy} />
+          <SaveButton label="모델 변경 저장" disabled={busy || !chosen} aria-busy={saving} />
         ) : (
           <button className="primary" disabled={busy || !chosen}>
             모델 프리셋 등록

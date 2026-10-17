@@ -3,7 +3,7 @@ import { BookmarkList } from './Bookmarks.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { BackIcon, ForwardIcon, DownIcon, ListIcon, EditIcon } from './ui-icons.js';
+import { DownIcon, ListIcon, EditIcon } from './ui-icons.js';
 import type { ReaderDetail, ReaderNavigationItem } from '../core/types.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -19,8 +19,10 @@ export function SceneNavigator({
   onLatest,
   compact = false,
   hideControls = false,
-  listOpen = false,
+  listOpen,
   onListOpenChange,
+  onCurrentLabel,
+  compactListOpener,
 }: {
   detail: ReaderDetail;
   reader: RefObject<HTMLDivElement | null>;
@@ -28,29 +30,28 @@ export function SceneNavigator({
   onSelect: (id: string) => void;
   onTarget?: (target: ReaderTarget) => void;
   onLatest: () => void;
-  /** Compact widths show previous/current/next above the composer; the header can also open the list. */
+  /** Compact widths open the scene list from the header and keep the latest action below the reader. */
   compact?: boolean;
-  /** Hide compact floating controls without unmounting the list or its bookmark drafts. */
+  /** Hide the compact latest action without unmounting the list or its bookmark drafts. */
   hideControls?: boolean;
-  /** Controlled list state on compact widths (the header owns the opener). */
-  listOpen?: boolean;
-  onListOpenChange?: (open: boolean) => void;
+  /** One list state survives switches between the header opener and desktop rail. */
+  listOpen: boolean;
+  onListOpenChange: (open: boolean) => void;
+  onCurrentLabel?: (label: string) => void;
+  compactListOpener?: RefObject<HTMLButtonElement | null>;
 }) {
   const entries = detail.reader.navigation;
   const [current, setCurrent] = useState(target || detail.reader.order[0] || '');
   const [awayFromBottom, setAwayFromBottom] = useState(false);
-  const [ownOpen, setOwnOpen] = useState(false);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState<ReaderNavigationItem | null>(null);
-  const open = compact ? listOpen : ownOpen;
-  const setOpen = (next: boolean) => {
-    if (compact) onListOpenChange?.(next);
-    else setOwnOpen(next);
-  };
+  const open = listOpen;
+  const setOpen = onListOpenChange;
   const [query, setQuery] = useState('');
   const [offset, setOffset] = useState(0);
   const [capacity, setCapacity] = useState(20);
   const list = useRef<HTMLOListElement>(null);
+  const railListOpener = useRef<HTMLButtonElement>(null);
   const focusList = useRef(false);
   const orderKey = detail.reader.order.join(',');
   useEffect(() => {
@@ -73,7 +74,7 @@ export function SceneNavigator({
       );
       const top = node.getBoundingClientRect().top + 32;
       // At the physical end, the last source is the scene being read even when the
-      // taller floating-control layout leaves a sliver of the previous source visible.
+      // page layout leaves a sliver of the previous source visible.
       const visible =
         distance <= 2
           ? sources.at(-1)
@@ -123,13 +124,13 @@ export function SceneNavigator({
     setOffset(Math.floor(index / 60) * 60);
     setOpen(true);
   }
-  // biome-ignore lint/correctness/useExhaustiveDependencies: The header opener only signals; the list starts from the scene being read at that moment.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Opening starts at the scene being read; resizing an open list preserves its query and page.
   useEffect(() => {
-    if (compact && listOpen) {
+    if (listOpen) {
       setQuery('');
       setOffset(Math.floor(index / 60) * 60);
     }
-  }, [compact, listOpen]);
+  }, [listOpen]);
   const active = entries[index];
   const last = entries.at(-1);
   const canGoLatest = awayFromBottom || last?.id !== detail.reader.order.at(-1);
@@ -150,6 +151,14 @@ export function SceneNavigator({
   }, [entries, query]);
   const page = filtered.slice(offset, offset + 60);
   const sceneCount = entries.filter((entry) => !entry.opening).length;
+  const currentLabel = active
+    ? active.opening
+      ? '첫 메시지'
+      : `${active.number} / ${sceneCount}`
+    : '';
+  useEffect(() => {
+    onCurrentLabel?.(currentLabel);
+  }, [currentLabel, onCurrentLabel]);
   function select(id: string) {
     setOpen(false);
     onSelect(id);
@@ -167,7 +176,18 @@ export function SceneNavigator({
     />
   );
   const dialog = (
-    <Dialog open={open} title="장면 목록" onClose={() => setOpen(false)} className="scene-dialog">
+    <Dialog
+      open={open}
+      title="장면 목록"
+      onClose={() => setOpen(false)}
+      onAfterClose={() => {
+        // Resizing can replace the original opener while the native dialog stays open.
+        (compact ? compactListOpener?.current : railListOpener.current)?.focus({
+          preventScroll: true,
+        });
+      }}
+      className="scene-dialog"
+    >
       {onTarget && (
         <details>
           <summary>본문·번역 검색</summary>
@@ -263,47 +283,13 @@ export function SceneNavigator({
   if (compact)
     return (
       <>
-        {!hideControls && (
-          <nav className="scene-mini-navigator" aria-label="장면 탐색">
-            <button
-              type="button"
-              className="ghost"
-              aria-label="이전 장면"
-              disabled={index === 0}
-              onClick={() => select(entries[index - 1].id)}
-            >
-              <BackIcon size={19} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              className="ghost scene-mini-current"
-              aria-label="장면 목록 열기"
-              onClick={openList}
-            >
-              <ListIcon size={19} aria-hidden="true" />
-              <span>{active.opening ? '첫 메시지' : `${active.number} / ${sceneCount}`}</span>
-            </button>
-            <button
-              type="button"
-              className="ghost"
-              aria-label="다음 장면"
-              disabled={index === entries.length - 1}
-              onClick={() => select(entries[index + 1].id)}
-            >
-              <ForwardIcon size={19} aria-hidden="true" />
-            </button>
-          </nav>
-        )}
         {!hideControls && last && canGoLatest && (
-          <button
-            type="button"
-            className="scene-latest-floating"
-            aria-label="본문 맨 아래로"
-            title="본문 맨 아래로"
-            onClick={onLatest}
-          >
-            <DownIcon size={20} aria-hidden="true" />
-          </button>
+          <div className="scene-latest-row">
+            <button type="button" className="ghost" aria-label="본문 맨 아래로" onClick={onLatest}>
+              <DownIcon size={18} aria-hidden="true" />
+              <span>맨 아래</span>
+            </button>
+          </div>
         )}
         {titleEditor}
         {dialog}
@@ -314,6 +300,7 @@ export function SceneNavigator({
       <nav className="scene-navigator" aria-label="장면 탐색">
         <button
           type="button"
+          ref={railListOpener}
           className="scene-list-toggle"
           aria-label="장면 목록 열기"
           title="장면 목록 열기"

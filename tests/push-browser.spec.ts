@@ -61,7 +61,7 @@ test('AUDIT2 push settings initial read shows centered loading and recovers from
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '일반');
     const panel = page.getByRole('region', { name: '작업 완료 알림', exact: true });
-    const loading = panel.locator('.loading-state-compact');
+    const loading = panel.locator('.loading-state-placeholder');
     await expect(loading.getByRole('status')).toContainText('알림 설정을 불러오는 중이에요…');
     await expect(panel.getByRole('button', { name: '알림 켜기', exact: true })).toBeHidden();
     for (const width of [360, 412]) {

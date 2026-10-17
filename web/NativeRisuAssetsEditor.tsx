@@ -167,7 +167,10 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
       )}
       <p className="muted">{images.length}개 이미지</p>
       {busy && (
-        <LoadingState compact label="이미지를 업로드하고 있어요. 업로드가 끝난 뒤 저장해 주세요." />
+        <LoadingState
+          presentation="inline"
+          label="이미지를 업로드하고 있어요. 업로드가 끝난 뒤 저장해 주세요."
+        />
       )}
       {notice && <NoticeBanner>{notice}</NoticeBanner>}
       {error && (

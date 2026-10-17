@@ -1,3 +1,4 @@
+import { legacyChatBackupFixture } from './fixtures/legacy-backup.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,7 +10,7 @@ import {
   type StoryGuideConfig,
 } from '../core/story-guide.js';
 import type { RunSnapshot } from '../core/types.js';
-import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { importChatBackup } from '../server/chat-backup.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { forkChat } from '../server/chat-fork.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
@@ -185,7 +186,7 @@ test('forks and portable backups copy preferences only; legacy backups stay disa
     idempotencyKey: randomUUID(),
   });
   expect(store.storyGuide.get(copied.id)).toEqual({ revision: 1, config, brief: null });
-  const backup = exportChatBackup(store, chat.id);
+  const backup = legacyChatBackupFixture(store, chat.id);
   expect(backup.chats[0].state.storyGuide).toEqual(config);
   expect(JSON.stringify(backup)).not.toContain('Keep the harbor closed until spring.');
   const target = database().store;

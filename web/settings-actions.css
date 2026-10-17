@@ -1,3 +1,24 @@
+.settings-save-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.settings-save-button > svg {
+  flex: none;
+}
+.settings-save-label {
+  display: inline-grid;
+}
+.settings-save-label > span,
+.settings-save-label::after {
+  grid-area: 1 / 1;
+}
+.settings-save-label::after {
+  content: attr(data-pending-label);
+  visibility: hidden;
+}
 .settings-save-actions {
   justify-content: flex-end;
 }
@@ -106,6 +127,9 @@
   flex: 1;
   min-width: 0;
   width: 100%;
+}
+.model-setup-prompt .settings-row-control {
+  justify-content: flex-end;
 }
 .model-workspace-settings .model-summary-note {
   padding: 10px 0 12px;

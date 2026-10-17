@@ -93,7 +93,7 @@ function queuedTask(f: Fixture, key = 'edit') {
     model: f.store.product.modelSnapshot(f.model.id),
     history: [],
     persona: '',
-    limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
+    limits: { totalCalls: 24, helperCalls: 12 },
   });
 }
 function runningTask(f: Fixture, key = 'edit') {

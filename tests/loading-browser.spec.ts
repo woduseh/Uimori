@@ -6,6 +6,7 @@ import { waitForNativeLayout } from './fixtures/native-message.js';
 import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail, ReaderRun, Run } from '../core/types.js';
 import type { Content } from '../core/product.js';
+import type { ChatTranscript } from '../core/chat-transcript.js';
 import { navigationAction } from './ui-navigation.js';
 
 test.setTimeout(120000);
@@ -100,7 +101,7 @@ test('LOADUI08 task history loads on demand and preserves off-page reading, insp
   await expect(panel.getByTestId('run')).toHaveCount(8);
   await panel.locator('summary').filter({ hasText: '전체 역할의 호출과 비용' }).click();
   await expect(
-    panel.getByText('보관된 원문 Run 8개 · 완료 8개 · 거절 0개 · 부분 0개')
+    panel.getByText('보관된 본문 생성 기록 8개 · 완료 8개 · 거절 0개 · 부분 생성 0개')
   ).toBeVisible();
   const task = panel.locator(`[data-testid="run"][data-run-id="${target.runId}"]`);
   await task.getByRole('button', { name: '원고 읽기', exact: true }).click();
@@ -226,15 +227,19 @@ test('LOADUI06 scene navigator respects focus and visibility settings across des
   await page.keyboard.press('Escape');
 
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
-  // Compact widths retain previous/current/next navigation; the header also opens the list.
-  await expect(navigator).toBeVisible();
+  // Compact widths use the existing header opener without a floating mini navigator.
+  await expect(navigator).toHaveCount(0);
+  const opener = page.locator('.header-title').getByRole('button', {
+    name: '장면 목록 열기',
+    exact: true,
+  });
+  await expect(opener).toBeVisible();
   await openChatMenu(page);
   await page.getByRole('button', { name: '집중 읽기', exact: true }).click();
   await expect(navigator).toHaveCount(0);
   await expect(page.getByRole('button', { name: '장면 목록 열기', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '집중 읽기 종료', exact: true }).click();
-  await expect(navigator).toBeVisible();
-  const opener = navigator.getByRole('button', { name: '장면 목록 열기', exact: true });
+  await expect(navigator).toHaveCount(0);
   await expect(opener).toBeVisible();
   await opener.click();
   const choice = list.getByRole('button', { name: /^3번째 장면 · Synthetic page 3\./ });
@@ -624,7 +629,7 @@ test('LOADUI03 large library uses summaries then fetches current content on clic
   });
   expect(update.ok()).toBeTruthy();
   await editLibraryContent(page, `${first.title}`);
-  await expect(page.getByLabel('캐릭터 설정', { exact: true })).toHaveValue(
+  await expect(page.getByLabel('카드 설명', { exact: true })).toHaveValue(
     'Current content replaces the earlier library summary on open.'
   );
   expect(revisionRequests).toHaveLength(1);
@@ -916,4 +921,164 @@ test('LOADUI07 synthetic navigation metadata covers long-list paging, search and
     seeded.runs.map(({ id, request, sourceRevision }) => ({ id, request, sourceRevision }))
   );
   expect(after.attempts).toEqual(seeded.attempts);
+});
+
+test('LOADUI11 mobile long-story navigation reads persisted off-page bodies without obscuring or moving the manuscript', async ({
+  page,
+  request,
+}, info) => {
+  // Import real saved bodies through the public transcript API. No provider calls are
+  // needed to seed a story larger than both the 5-body reader and 60-scene list pages.
+  const ownerResponse = await postFixtureChat(request, {
+    data: { title: `Long story owner ${Date.now()}` },
+  });
+  expect(ownerResponse.ok()).toBe(true);
+  const owner = (await ownerResponse.json()) as Chat;
+  const transcriptResponse = await request.get(`/api/chats/${owner.id}/transcript`);
+  expect(transcriptResponse.ok()).toBe(true);
+  const transcript = (await transcriptResponse.json()) as ChatTranscript;
+  transcript.title = `긴 원고 탐색 ${Date.now()}`;
+  transcript.entries = Array.from({ length: 120 }, (_, index) => ({
+    request: `긴 원고 ${index + 1}번 장면`,
+    text:
+      `저장된 장면 ${index + 1}의 시작이에요.\n\n` +
+      Array.from(
+        { length: 64 },
+        (_, paragraph) =>
+          `${paragraph + 1}번째 문단. 강가의 등불 아래에서 오랫동안 기다리던 이야기를 읽어요. 바람이 페이지를 넘길 때마다 두 사람은 지난 계절의 약속을 천천히 떠올렸어요.`
+      ).join('\n\n') +
+      `\n\n저장된 장면 ${index + 1}의 마지막이에요.`,
+    translation: null,
+  }));
+  const imported = await request.post('/api/chats/import-transcript', {
+    data: { transcript, idempotencyKey: crypto.randomUUID() },
+  });
+  expect(imported.ok(), await imported.text()).toBe(true);
+  const chat = (await imported.json()).chat as Chat;
+  const settings = await request.patch(`/api/chats/${chat.id}/settings`, {
+    data: { ...chat.settings, expectedSettingsRevision: chat.settingsRevision },
+  });
+  expect(settings.ok()).toBe(true);
+  const seeded = await detail(request, chat.id);
+  expect(seeded.sources.map((source) => source.text)).toEqual(
+    transcript.entries.map((entry) => entry.text)
+  );
+  const ids = seeded.sources.map((source) => source.id);
+
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  const firstResponse = page.waitForResponse(
+    (response) => response.url().includes(`/chats/${chat.id}/reader?`) && response.ok()
+  );
+  await page.goto(`/?chat=${chat.id}`);
+  const first = (await (await firstResponse).json()) as ReaderDetail;
+  expect(first.sources).toHaveLength(5);
+  expect(first.reader.navigation).toHaveLength(120);
+  expect(first.sources.some((source) => source.id === ids[66])).toBe(false);
+  await expect(articles(page)).toHaveCount(5);
+  await waitForNativeLayout(article(page, ids[0]).getByTestId('source-text'));
+  const reader = page.locator('[data-reader-scrollport]');
+  const opener = page.locator('.header-title').getByRole('button', {
+    name: '장면 목록 열기',
+    exact: true,
+  });
+  const position = page.locator('.header-title .header-scene-position');
+  const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
+  const latest = page.getByRole('button', { name: '본문 맨 아래로', exact: true });
+  await expect(position).toHaveText('1 / 120');
+  await expect(page.getByRole('navigation', { name: '장면 탐색', exact: true })).toHaveCount(0);
+  expect((await article(page, ids[0]).boundingBox())!.height).toBeGreaterThan(
+    (await reader.boundingBox())!.height * 3
+  );
+
+  await opener.click();
+  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(60);
+  await list.getByRole('button', { name: '다음 목록', exact: true }).click();
+  await list.getByRole('button', { name: '67번째 장면 · 긴 원고 67번 장면', exact: true }).click();
+  await expect(list).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`source=${ids[66]}`));
+  await expect(articles(page)).toHaveCount(5);
+  await expect(article(page, ids[0])).toHaveCount(0);
+  await expect(article(page, ids[66]).getByTestId('source-text')).toContainText(
+    '저장된 장면 67의 마지막이에요.'
+  );
+  await waitForNativeLayout(article(page, ids[66]).getByTestId('source-text'));
+  await expect(position).toHaveText('67 / 120');
+  await article(page, ids[66]).evaluate((node) => {
+    const viewport = node.closest<HTMLElement>('[data-reader-scrollport]')!;
+    viewport.scrollTop +=
+      node.getBoundingClientRect().top - viewport.getBoundingClientRect().top + 450;
+  });
+  const readingTop = await reader.evaluate((node) => node.scrollTop);
+  expect(readingTop).toBeGreaterThan(400);
+
+  await opener.click();
+  await expect(
+    list.getByRole('button', { name: '67번째 장면 · 긴 원고 67번 장면', exact: true })
+  ).toHaveAttribute('aria-current', 'location');
+  await page.keyboard.press('Escape');
+  await expect(list).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - readingTop)).toBeLessThan(3);
+
+  // The jump action occupies its own row below the reader, including while a long
+  // scene is being read midway. Its touch target must never cover manuscript text.
+  await expect(latest).toBeVisible();
+  const readerBounds = (await reader.boundingBox())!;
+  const latestBounds = (await latest.boundingBox())!;
+  const headerBounds = (await opener.boundingBox())!;
+  const rowBounds = (await page.locator('.scene-latest-row').boundingBox())!;
+  expect(latestBounds.y).toBeGreaterThanOrEqual(readerBounds.y + readerBounds.height - 1);
+  expect(rowBounds.y).toBeGreaterThanOrEqual(readerBounds.y + readerBounds.height - 1);
+  expect(headerBounds.y + headerBounds.height).toBeLessThanOrEqual(readerBounds.y + 1);
+  expect(latestBounds.width).toBeGreaterThanOrEqual(44);
+  expect(latestBounds.height).toBeGreaterThanOrEqual(44);
+  await page.getByLabel('다음 장면 요청').focus();
+  await expect(latest).toBeHidden();
+  await opener.focus();
+  await expect(latest).toBeVisible();
+
+  // One local synthetic completion exercises real save + SSE refresh. Reading an
+  // earlier page must not follow it or replace the source route with the new end.
+  const beforeRun = await detail(request, chat.id);
+  const runResponse = await request.post(`/api/chats/${chat.id}/runs`, {
+    data: {
+      request: 'Synthetic new ending while the reader stays in scene 67.',
+      expectedRevision: beforeRun.chat.headRevision,
+      expectedSettingsRevision: beforeRun.chat.settingsRevision,
+      idempotencyKey: `long-story-${chat.id}`,
+    },
+  });
+  expect(runResponse.ok(), await runResponse.text()).toBe(true);
+  const run = (await runResponse.json()) as Run;
+  await expect
+    .poll(
+      async () => (await detail(request, chat.id)).runs.find((item) => item.id === run.id)?.status,
+      { timeout: 30000 }
+    )
+    .toBe('completed');
+  await expect(position).toHaveText('67 / 121');
+  await expect(page).toHaveURL(new RegExp(`source=${ids[66]}`));
+  await expect(articles(page)).toHaveCount(5);
+  expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - readingTop)).toBeLessThan(3);
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('long-story-mobile-middle.png') });
+
+  await latest.click();
+  const completed = await detail(request, chat.id);
+  const ending = completed.sources[120];
+  await expect(article(page, ending.id)).toBeVisible();
+  await expect(article(page, ending.id).getByTestId('source-text')).toContainText(
+    'Synthetic new ending while the reader stays in scene 67.'
+  );
+  await waitForNativeLayout(article(page, ending.id).getByTestId('source-text'));
+  await expect(articles(page)).toHaveCount(1);
+  await expect(position).toHaveText('121 / 121');
+  await expect
+    .poll(() => reader.evaluate((node) => node.scrollHeight - node.clientHeight - node.scrollTop))
+    .toBeLessThanOrEqual(2);
+  await expect(latest).toHaveCount(0);
+  expect(completed.sources.slice(0, 120)).toEqual(seeded.sources);
+  expect(completed.runs.slice(0, 120)).toEqual(seeded.runs);
+  if (visualReview)
+    await page.screenshot({ path: info.outputPath('long-story-mobile-latest.png') });
 });

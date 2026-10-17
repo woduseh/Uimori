@@ -18,7 +18,6 @@ import { forkChat } from './chat-fork.js';
 import { exportChatTranscript, importChatTranscript } from './chat-transcript.js';
 import { exportManuscript, manuscriptExportMetadata } from './manuscript-export.js';
 import {
-  exportChatBackup,
   importChatBackup,
   exportChatBackupArchive,
   importChatBackupArchiveRequest,
@@ -83,11 +82,6 @@ export function productRoutes(
     if (result.created) options.publish(result.chat.id);
     return result;
   });
-  app.get<{ Params: { id: string } }>('/api/chats/:id/backup', async (request, reply) =>
-    reply
-      .header('Content-Disposition', 'attachment; filename="chat-backup.json"')
-      .send(exportChatBackup(store, request.params.id))
-  );
   app.get<{ Params: { id: string } }>('/api/chats/:id/backup-archive', (request, reply) =>
     reply
       .type('application/zip')

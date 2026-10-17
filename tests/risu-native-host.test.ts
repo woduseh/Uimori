@@ -1,3 +1,4 @@
+import { legacyChatBackupFixture } from './fixtures/legacy-backup.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import * as projections from '../server/run-projections.js';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -11,7 +12,7 @@ import { prepareRisuImport, applyRisuImport } from '../server/risu-import.js';
 import { createPackageStart } from '../server/package-start.js';
 import { applyNativeRisuAction, nativeSourceSnapshot } from '../server/risu-native-actions.js';
 import { forkChat } from '../server/chat-fork.js';
-import { exportChatBackup, importChatBackup } from '../server/chat-backup.js';
+import { importChatBackup } from '../server/chat-backup.js';
 import { readChatVariables } from '../server/chat-variables.js';
 import { packagePresentationRoutes } from '../server/package-presentation-routes.js';
 import { nativeRisuPreview } from '../server/risu-native-preview.js';
@@ -227,7 +228,7 @@ test('native variables-only buttons retain each user attachment through repeated
     idempotencyKey: 'image-button-copy',
   });
   expect(attachments(store, copied.id)).toEqual(expected);
-  const backup = exportChatBackup(store, chatId);
+  const backup = legacyChatBackupFixture(store, chatId);
   expect(backup.chats[0].transcript.entries.slice(1).map((entry) => entry.requestImages)).toEqual([
     references,
     references,
@@ -791,7 +792,7 @@ test('Lua-authored extra messages survive independent copy and portable restore 
   const target = new Store(join(path, 'app.sqlite'));
   owned.push({ path, store: target });
   const restored = await importChatBackup(target, {
-    backup: exportChatBackup(store, chatId),
+    backup: legacyChatBackupFixture(store, chatId),
     idempotencyKey: 'native-restore',
   });
   expect(view(target, restored.chat.id, restored.chat.headRevision!)).toEqual(expected);

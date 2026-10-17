@@ -14,44 +14,16 @@
   border-radius: 8px;
 }
 .chat-import-target > div,
-.chat-import-choices button span,
 .chat-import-review {
   display: grid;
   gap: 6px;
   min-width: 0;
 }
 .chat-import-target small,
-.chat-import-choices small,
 .chat-import-review small {
   color: var(--muted);
   font-size: 12px;
   overflow-wrap: anywhere;
-}
-.chat-import-choices > button {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 4px;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-}
-.chat-import-choices button span {
-  flex: 1;
-}
-.chat-import-choices svg {
-  flex: 0 0 auto;
-}
-.chat-import-choices > p {
-  font-size: 12px;
-  margin-block: 20px;
-}
-.chat-import-back {
-  margin-bottom: 20px;
 }
 .chat-transcript-import {
   display: grid;

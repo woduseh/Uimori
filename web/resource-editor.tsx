@@ -240,7 +240,8 @@ export function ResourceEditorProvider({
                 <>
                   <SavedResourcePreview model={saved.model} />
                   <p className="muted">
-                    현재 입력을 유지한 뒤, 편집 취소를 선택하면 최신 저장본으로 돌아갈 수 있어요.
+                    입력한 내용을 남기려면 먼저 복사해 두세요. ‘편집 취소’를 누르면 현재 입력을
+                    버리고 최신 저장본을 불러와요.
                   </p>
                 </>
               ) : (
@@ -351,7 +352,7 @@ export function ResourceEditorStatus({
     <div className="resource-editor-status">
       {!state.ready ? (
         <LoadingState
-          compact
+          presentation="placeholder"
           loading={!state.error}
           error={state.error}
           label="자료를 불러오는 중이에요…"

@@ -153,13 +153,13 @@ export function TasksPanel({
       )}
       <ActivityDetails activities={detail.reader.activity ?? []} />
       <LoadingState
+        presentation={allRuns ? 'inline' : 'placeholder'}
         loading={!listed || listed.loading}
         error={listed?.error}
         label="작업 목록을 불러오는 중이에요…"
         errorLabel="작업 목록을 불러오지 못했어요."
         onRetry={() => setRunRetry((value) => value + 1)}
         retryLabel="작업 목록 다시 불러오기"
-        compact
       />
       {allRuns && !listed?.loading && !listed?.error && !runs.length && (
         <p className="muted">
@@ -182,6 +182,7 @@ export function TasksPanel({
               refresh={refresh}
               onError={state.setError}
               initiallyInspect={!!inspectedRun}
+              presentation="list"
             >
               <div className="form-actions">
                 {run.sourceRevision && (
@@ -217,11 +218,11 @@ export function TasksPanel({
         ))}
       </div>
       <LoadingState
+        presentation="inline"
         loading={!jobs && !jobsError}
         error={jobsError}
         label="보조 작업 목록을 불러오는 중이에요…"
         errorLabel="보조 작업 목록을 불러오지 못했어요."
-        compact
       />
       {allRuns && (
         <AttemptInspector
@@ -597,12 +598,12 @@ export function AppSettingsPanel({
                   {key === 'about' && <AppAbout />}
                   {librarySettingsSubjects[key] && !state.library && (
                     <LoadingState
+                      presentation="region"
                       loading={!state.libraryError}
                       error={state.libraryError}
                       label={`${librarySettingsSubjects[key]} 불러오는 중이에요…`}
                       errorLabel={`${librarySettingsSubjects[key]} 불러오지 못했어요.`}
                       onRetry={() => void state.retryLibrary().catch(() => {})}
-                      compact
                     />
                   )}
                   {key === 'general' && (

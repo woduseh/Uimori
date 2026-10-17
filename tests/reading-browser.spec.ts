@@ -295,7 +295,7 @@ async function helperFixture(page: Page, before: ChatDetail) {
     title: '합성 읽기 도우미',
     revision: 1,
     persona: helperPersona,
-    limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
+    limits: { totalCalls: 24, helperCalls: 12 },
     createdAt: time,
     updatedAt: time,
   };

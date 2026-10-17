@@ -298,7 +298,8 @@ export function LoreContextPolicyEditor({
             </ul>
             <p className="muted">토큰은 로컬 추정값으로, 모델의 실제 사용량과 다를 수 있어요.</p>
             <p className="muted">
-              조회 로어는 한도에 맞춰 정리하고, 고정 자료는 초과 시 자르지 않고 알려요.
+              조회 로어가 한도를 넘으면 일부 구간을 다음 입력에서 제외해요. 고정 자료가 한도를
+              넘으면 자르지 않고 오류를 알려요.
             </p>
             <p className="muted">
               관련성 판단은 JEV를 사용해요. 전체 입력 한도와 프롬프트 배치는 별도예요.

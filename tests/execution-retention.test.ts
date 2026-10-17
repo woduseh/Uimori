@@ -255,7 +255,7 @@ describe('Completed execution payload retention', () => {
         model: store.product.modelSnapshot(model.id),
         history: [{ id: 'old', role: 'assistant', text: 'Prior large conversation.' }],
         persona: '',
-        limits: { totalCalls: 4, helperCalls: 4, artifacts: 1 },
+        limits: { totalCalls: 4, helperCalls: 4 },
       });
       expect(workspace.start(task.id, 'owner')).toBe(true);
       workspace.finish(task.id, 'owner', 1, status, 'Saved answer', null);
@@ -290,7 +290,7 @@ describe('Completed execution payload retention', () => {
       model: store.product.modelSnapshot(model.id),
       history: [{ id: 'prior', role: 'assistant', text: 'x'.repeat(1024 * 1024) }],
       persona: '',
-      limits: { totalCalls: 8, helperCalls: 8, artifacts: 1 },
+      limits: { totalCalls: 8, helperCalls: 8 },
     });
     workspace.start(task.id, 'owner');
     const result = { text: 'r'.repeat(256 * 1024) };
@@ -311,13 +311,27 @@ describe('Completed execution payload retention', () => {
     expect(Buffer.byteLength(JSON.stringify(updates))).toBeLessThan(4000);
     workspace.operation(task.id, 'read-receipt', {}, () => result);
     const usage = { modelCalls: 1, inputTokens: 0, outputTokens: 0, costUsd: 0 };
-    const artifact = workspace.saveArtifact(task.id, 'artifact', 'Draft', 'A short draft.', usage);
-    workspace.finish(task.id, 'owner', 1, 'completed', 'Done', null, [
-      { id: artifact.id, revision: artifact.revision },
-    ]);
-    const edited = workspace.editArtifact(artifact.id, 1, 'Edit 1', 'edit-1');
-    workspace.editArtifact(artifact.id, 2, 'Edit 2', 'edit-2');
-    expect(workspace.editArtifact(artifact.id, 1, 'Edit 1', 'edit-1')).toEqual(edited);
+    const artifact = { id: randomUUID(), revision: 1 };
+    const insertArtifact = store.db.prepare(
+      'INSERT INTO helper_artifacts VALUES(?,?,?,?,?,?,?,?,?)'
+    );
+    for (const [index, text] of ['A short draft.', 'Edit 1', 'Edit 2'].entries())
+      insertArtifact.run(
+        artifact.id,
+        index + 1,
+        conversation.id,
+        task.id,
+        'Draft',
+        text,
+        JSON.stringify(usage),
+        new Date().toISOString(),
+        index ? 'edit' : 'model'
+      );
+    workspace.finish(task.id, 'owner', 1, 'completed', 'Done', null);
+    store.db
+      .prepare("UPDATE helper_messages SET artifacts=? WHERE task_id=? AND role='assistant'")
+      .run(JSON.stringify([artifact]), task.id);
+    expect(workspace.artifact(artifact.id, 1).text).toBe('A short draft.');
     expect(workspace.artifact(artifact.id).text).toBe('Edit 2');
     expect(
       store.db

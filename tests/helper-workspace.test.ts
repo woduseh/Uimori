@@ -423,14 +423,14 @@ function snapshot(f: ReturnType<typeof fixture>): HelperTaskSnapshot {
     model: f.store.product.modelSnapshot(f.model.id),
     history: [],
     persona: '',
-    limits: { totalCalls: 24, helperCalls: 12, artifacts: 1 },
+    limits: { totalCalls: 24, helperCalls: 12 },
   };
 }
 
-test('helper requests expose configured artifact allowance and remaining calls at each boundary', async () => {
+test('helper requests expose only remaining host calls at each boundary', async () => {
   const f = fixture();
   f.workspace.update(f.conversation.id, f.conversation.revision, {
-    limits: { helperCalls: 2, totalCalls: 3, artifacts: 4 },
+    limits: { helperCalls: 2, totalCalls: 3 },
   });
   const requests: transport.ProviderRequest[] = [];
   mockSend((request, _options, index) => {
@@ -454,18 +454,39 @@ test('helper requests expose configured artifact allowance and remaining calls a
     expect.objectContaining({
       helperCallsRemaining: 2,
       totalCallsRemaining: 3,
-      artifactsRemaining: 4,
       includesCurrentCall: true,
       nativeInternalCalls: null,
     }),
     expect.objectContaining({
       helperCallsRemaining: 1,
       totalCallsRemaining: 2,
-      artifactsRemaining: 4,
       includesCurrentCall: true,
       nativeInternalCalls: null,
     }),
   ]);
+});
+
+test('legacy helper limits remain readable without rewriting stored conversation or task bytes', () => {
+  const f = fixture();
+  const limits = '{"totalCalls":24, "helperCalls":12, "artifacts":7}';
+  f.store.db
+    .prepare('UPDATE helper_conversations SET limits=? WHERE id=?')
+    .run(limits, f.conversation.id);
+  expect(f.workspace.conversation(f.conversation.id).limits).toEqual({
+    totalCalls: 24,
+    helperCalls: 12,
+  });
+  const task = f.workspace.enqueue(f.conversation.id, 'legacy-limits', 'Read legacy', snapshot(f));
+  const legacySnapshot = JSON.stringify({ ...task.snapshot, limits: JSON.parse(limits) });
+  f.store.db.prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?').run(legacySnapshot, task.id);
+  expect(f.workspace.task(task.id).snapshot.limits).toEqual({ totalCalls: 24, helperCalls: 12 });
+  expect(
+    f.store.db.prepare('SELECT limits FROM helper_conversations WHERE id=?').get(f.conversation.id)
+      ?.limits
+  ).toBe(limits);
+  expect(
+    f.store.db.prepare('SELECT snapshot FROM helper_tasks WHERE id=?').get(task.id)?.snapshot
+  ).toBe(legacySnapshot);
 });
 
 test('HTTP steering skips a stale write, delivers once and retains the correction in future history', async () => {
@@ -619,7 +640,7 @@ test('live helper counters preserve attempt budgets and completion without loadi
   const task = f.workspace.enqueue(f.conversation.id, 'live-state', '사용량 확인', {
     ...snapshot(f),
     history: [{ id: 'large-history', role: 'user', text: 'Reserved prose. '.repeat(350_000) }],
-    limits: { totalCalls: 1, helperCalls: 1, artifacts: 1 },
+    limits: { totalCalls: 1, helperCalls: 1 },
   });
   const prepare = f.store.db.prepare.bind(f.store.db);
   const returnedRows: Record<string, unknown>[] = [];

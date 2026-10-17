@@ -217,7 +217,7 @@ export function RisuPresetImport({
                       setError('');
                     }}
                   />
-                  <span>위 미지원 항목이 반영되지 않는 부분 가져오기에 동의해요.</span>
+                  <span>위의 미지원 항목을 적용하지 않고 가져오는 데 동의해요.</span>
                 </label>
               )}
               {uncertain && (
@@ -250,7 +250,7 @@ export function RisuPresetImport({
               )}
             </>
           )}
-          {busy && <LoadingState compact label="파일을 처리하고 있어요…" />}
+          {busy && <LoadingState presentation="inline" label="파일을 처리하고 있어요…" />}
           {notice && <NoticeBanner>{notice}</NoticeBanner>}
           {error && (
             <NoticeBanner className="error" tone="error">

@@ -1,3 +1,4 @@
+import { legacyResourceBundleFixture } from './fixtures/legacy-backup.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -8,7 +9,6 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Store } from '../server/store.js';
 import {
   applyNativeTransfer,
-  exportNativeTransfer,
   nativeTransferRoutes,
   prepareNativeTransfer,
 } from '../server/native-transfer.js';
@@ -170,13 +170,11 @@ function sourceFixture() {
     owner: { kind: 'preset', id: prompt.id },
     controls: [{ id: 'old', label: 'Old', type: 'text', default: null }],
   });
-  const file = exportNativeTransfer(store, {
-    items: [
-      { kind: 'content', id: bot.id },
-      { kind: 'content', id: persona.id },
-      { kind: 'prompt-preset', id: prompt.id },
-    ],
-  });
+  const file = legacyResourceBundleFixture(store, [
+    { kind: 'content', id: bot.id },
+    { kind: 'content', id: persona.id },
+    { kind: 'prompt-preset', id: prompt.id },
+  ]);
   return { store, app, file, bot, persona, middle, shared: newer, prompt };
 }
 function request(file: NativeTransferFile, key = 'synthetic-import') {
@@ -509,4 +507,23 @@ test('NATIVE12 the native file uses the existing module depth limit before persi
     }),
   };
   expect(() => prepareNativeTransfer({ file })).toThrow('Package module dependency limit');
+});
+
+test('JSON resource output is retired while archive output remains available', async () => {
+  const source = sourceFixture();
+  const items = [{ kind: 'content', id: source.bot.id }];
+  const retired = await source.app.inject({
+    method: 'POST',
+    url: '/api/native-transfers/export',
+    payload: { items },
+  });
+  expect(retired.statusCode).toBe(404);
+  const archive = await source.app.inject({
+    method: 'POST',
+    url: '/api/native-transfers/export-archive',
+    payload: { items },
+  });
+  expect(archive.statusCode, archive.body).toBe(200);
+  expect(archive.headers['content-type']).toContain('application/zip');
+  expect(archive.rawPayload.subarray(0, 2).toString()).toBe('PK');
 });

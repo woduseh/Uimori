@@ -30,7 +30,8 @@ export function BackupSettings({
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'backup' | null>(null);
+  const busy = operation !== null;
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [reload, setReload] = useState(0);
@@ -86,7 +87,7 @@ export function BackupSettings({
   async function save(): Promise<boolean> {
     if (!draft || invalid || busy) return false;
     if (!dirty) return true;
-    setBusy(true);
+    setOperation('save');
     setError('');
     setMessage('');
     try {
@@ -110,13 +111,13 @@ export function BackupSettings({
       setError((caught as Error).message);
       return false;
     } finally {
-      setBusy(false);
+      setOperation(null);
     }
   }
   useSettingsSaveHandler(onSaveHandlerChange, save);
   async function start() {
     if (busy) return;
-    setBusy(true);
+    setOperation('backup');
     setError('');
     try {
       await api('/backups', {});
@@ -124,7 +125,7 @@ export function BackupSettings({
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
-      setBusy(false);
+      setOperation(null);
     }
   }
   return (
@@ -249,7 +250,7 @@ export function BackupSettings({
               <SaveButton
                 type="button"
                 label="백업 설정 저장"
-                text={busy ? '처리 중…' : '설정 저장'}
+                aria-busy={operation === 'save'}
                 disabled={busy || !dirty || invalid}
                 onClick={() => void save()}
               />
@@ -286,7 +287,9 @@ export function BackupSettings({
             <small className="muted">서버 장애에 대비한 백업은 별도 기기에 보관해 주세요.</small>
           </>
         )}
-        {!status && !error && <LoadingState compact label="백업 설정을 불러오는 중이에요…" />}
+        {!status && !error && (
+          <LoadingState presentation="placeholder" label="백업 설정을 불러오는 중이에요…" />
+        )}
         <TransientNotice message={message} />
         <Dialog
           open={confirmReload}

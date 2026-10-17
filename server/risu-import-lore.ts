@@ -202,7 +202,7 @@ export function importRisuLore({
       findings.add(
         'lore-not-activated',
         'warning',
-        '활성화하지 않는 로어는 모델에 보내지 않아요. 자료가 스스로 쓰는 자료·코드로 보고 원본 파일에만 보존해요.'
+        '@@dont_activate가 지정된 로어는 모델에 보내지 않고 Risu 원문에 보존해요.'
       );
     for (const { decorator, notice } of reportedDecorators(parsed.decorators)) {
       if (nativePosition && ['end', 'depth', 'reverse_depth', 'role'].includes(decorator)) continue;
@@ -247,7 +247,7 @@ export function importRisuLore({
     findings.add(
       'lore-decorator-unknown',
       'unsupported',
-      `Risu가 모르는 \`@@\` 지시문은 본문에서 빠진 채 사라져요: ${names.join(', ')}${rest ? ` 외 ${rest}개` : ''}`
+      `Risu가 인식하지 못하는 \`@@\` 지시문은 가져온 로어 본문에서 제외돼요. Risu 원문에는 남아요: ${names.join(', ')}${rest ? ` 외 ${rest}개` : ''}`
     );
   }
   if (preview.some((item) => !item.enabled))

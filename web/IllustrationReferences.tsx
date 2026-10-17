@@ -74,7 +74,7 @@ export function IllustrationReferencesEditor({
       <section className="illustration-references" aria-label="삽화 참조 이미지">
         <h4>삽화 참조 이미지</h4>
         <LoadingState
-          compact
+          presentation="placeholder"
           loading={!loadError}
           error={loadError}
           label="삽화 참조 이미지를 불러오는 중이에요…"

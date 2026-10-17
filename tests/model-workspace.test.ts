@@ -439,7 +439,7 @@ test('deleted or disabled pins block new main work while profile repair and glob
   select(store, global.id);
   pin(store, chat.id, { mainModel: { id: local.id }, mainPromptPresetId: preset.id });
   const first = complete(store, chat.id);
-  const prepared = helperWritingSnapshot(store, chat.id, 'context');
+  const prepared = helperWritingSnapshot(store, chat.id);
   prepared.contextPlan = {
     ...prepared.contextPlan!,
     status: 'ready',

@@ -12,6 +12,7 @@ import type { Chat, ChatDetail } from '../core/types.js';
 import type { StoryDetail } from '../core/story.js';
 import type { StoryGuideDetail } from '../core/story-guide.js';
 import { nativeContent } from './fixtures/native-content.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import {
   navigationAction,
@@ -21,19 +22,36 @@ import {
 } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
-const sections = [
-  '대화 구성',
-  '프롬프트·모델',
-  '이야기 가이드',
-  '기억·로어',
-  '이미지',
-  '실행 옵션',
-];
+const sections = ['대화 구성', '프롬프트·모델', '이야기 가이드', '기억·로어', '이미지'];
 
-async function prepare(page: Page, request: APIRequestContext, title: string) {
+async function prepare(
+  page: Page,
+  request: APIRequestContext,
+  title: string,
+  program?: ReturnType<typeof nativePrompt>
+) {
   const response = await postFixtureChat(request, { data: { title } });
   expect(response.ok(), await response.text()).toBe(true);
   const chat = (await response.json()) as Chat;
+  if (program) {
+    // Navigation fixtures own their prompt variables instead of inheriting the shipped preset.
+    const created = await request.post('/api/prompt-presets', {
+      data: { title: `${title} prompt`, role: 'main', program },
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    const preset = (await created.json()) as { id: string };
+    const profile = ((await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail)
+      .profile!;
+    const pinned = await request.put(`/api/chats/${chat.id}/profile`, {
+      data: {
+        expectedRevision: profile.revision,
+        image: profile.image,
+        packageAttachments: profile.packageAttachments,
+        pinned: { ...profile.pinned, mainPromptPresetId: preset.id },
+      },
+    });
+    expect(pinned.ok(), await pinned.text()).toBe(true);
+  }
   const before = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
   const writes: string[] = [];
   const errors: string[] = [];
@@ -106,7 +124,12 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
   request,
 }, info) => {
   test.setTimeout(90000);
-  const { before, writes, errors } = await prepare(page, request, `CSUI01 ${Date.now()}`);
+  const { before, writes, errors } = await prepare(
+    page,
+    request,
+    `CSUI01 ${Date.now()}`,
+    nativePrompt('Synthetic navigation fixture without prompt variables.')
+  );
   await expect(page.getByRole('region', { name: '채팅 상태와 행동', exact: true })).toHaveCount(0);
   for (const width of reviewWidths([320, 360, 390, 412, 768, 1440])) {
     await page.setViewportSize({ width, height: 900 });
@@ -157,6 +180,10 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
       if (name === '프롬프트·모델') {
         await expect(dialog.getByLabel('원문 모델', { exact: true })).toHaveCount(0);
         await expect(dialog.getByLabel('작가 노트', { exact: true })).toBeVisible();
+        await expect(
+          dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true })
+        ).toBeVisible();
+        await expect(dialog.getByLabel('작업당 모델 호출 한도', { exact: true })).toBeHidden();
         await expect(
           dialog.getByRole('button', { name: '전역 모델 설정', exact: true })
         ).toBeVisible();
@@ -214,9 +241,11 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   const originalImage = await image.isChecked();
   await image.setChecked(!originalImage);
   await translationImage.uncheck();
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
   await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toHaveCount(0);
   const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
+  await expect(calls).toBeHidden();
+  await dialog.getByText('고급 실행 설정', { exact: true }).click();
   const originalCalls = await calls.inputValue();
   const draftCalls = originalCalls === '6' ? '7' : '6';
   await calls.fill(draftCalls);
@@ -232,7 +261,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '이미지');
   await expect(image).toBeChecked({ checked: !originalImage });
   await expect(translationImage).not.toBeChecked();
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
   await expect(calls).toHaveValue(draftCalls);
   await calls.focus();
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
@@ -240,7 +269,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '이미지');
   await expect(image).toBeChecked({ checked: !originalImage });
   await expect(translationImage).not.toBeChecked();
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
   await expect(calls).toHaveValue(draftCalls);
   await calls.focus();
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
@@ -264,7 +293,9 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await selectChatSettingsSection(page, '이미지');
   await expect(image).toBeChecked({ checked: originalImage });
   await expect(translationImage).toBeChecked();
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
+  await expect(calls).toBeHidden();
+  await dialog.getByText('고급 실행 설정', { exact: true }).click();
   await expect(calls).toHaveValue(originalCalls);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -277,7 +308,12 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   request,
 }) => {
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
-  const { before, writes, errors } = await prepare(page, request, `CSUI03 ${Date.now()}`);
+  const { before, writes, errors } = await prepare(
+    page,
+    request,
+    `CSUI03 ${Date.now()}`,
+    nativePrompt('Synthetic navigation fixture without prompt variables.')
+  );
   const dialog = await openSettings(page);
   const nav = dialog.getByRole('tablist', { name: '채팅 설정 분류', exact: true });
   const first = nav.getByRole('tab', { name: sections[0], exact: true });
@@ -292,11 +328,11 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await expect(nav.locator('[tabindex="0"]')).toHaveCount(1);
   // Reading settings are no longer a chat settings section; the last section keeps its panel.
   await expect(dialog.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveCount(0);
-  await expect(dialog.getByLabel('작업당 모델 호출 한도', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toBeVisible();
   await last.focus();
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(dialog.getByRole('tabpanel')).toBeFocused();
-  await expect(dialog.getByLabel('작업당 모델 호출 한도', { exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toBeVisible();
   await page.evaluate(() => history.back());
   await expect(
     dialog.getByRole('navigation', { name: '채팅 설정 분류', exact: true })
@@ -612,7 +648,7 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   test.setTimeout(60000);
   const { chat, errors } = await prepare(page, request, 'CSUI08 ' + Date.now());
   let dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
   const globalDefault = (await (await request.get('/api/auto-translation-defaults')).json()) as {
     autoTranslate: boolean;
   };
@@ -628,7 +664,7 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(true);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '실행 옵션');
+  await selectChatSettingsSection(page, '프롬프트·모델');
   choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
   await expect(choice).toHaveValue('on');
   await choice.selectOption('off');

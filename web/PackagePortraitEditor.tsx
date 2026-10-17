@@ -184,7 +184,7 @@ export function PackagePortraitEditor({
         <small>PNG · JPEG · WebP · AVIF · GIF, 최대 64MiB · 자동 WebP 변환</small>
         {busy && (
           <div className="package-portrait-actions">
-            <LoadingState compact label="대표 이미지를 업로드하고 있어요…" />
+            <LoadingState presentation="inline" label="대표 이미지를 업로드하고 있어요…" />
             <button
               type="button"
               className="ghost"

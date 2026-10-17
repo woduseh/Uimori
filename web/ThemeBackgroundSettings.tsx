@@ -42,7 +42,8 @@ export function ThemeBackgroundSettings({
     scope === 'global' ? {} : scope === 'bot' ? { botId: targetId } : state.scope
   );
   const [draft, setDraft] = useState<ThemeBackground>(selected ?? inherited);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<'save' | 'upload' | null>(null);
+  const busy = operation !== null;
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const upload = useRef<AbortController | null>(null);
@@ -70,7 +71,7 @@ export function ThemeBackgroundSettings({
   async function saveValue(background: ThemeBackground | null): Promise<boolean> {
     if (disabled || locked.current) return false;
     locked.current = true;
-    setBusy(true);
+    setOperation('save');
     setError('');
     setNotice('');
     try {
@@ -93,7 +94,7 @@ export function ThemeBackgroundSettings({
       return false;
     } finally {
       locked.current = false;
-      if (alive.current) setBusy(false);
+      if (alive.current) setOperation(null);
     }
   }
   useSettingsSaveHandler(onSaveHandlerChange, () =>
@@ -104,7 +105,7 @@ export function ThemeBackgroundSettings({
     locked.current = true;
     const controller = new AbortController();
     upload.current = controller;
-    setBusy(true);
+    setOperation('upload');
     setError('');
     setNotice('');
     try {
@@ -116,7 +117,7 @@ export function ThemeBackgroundSettings({
     } finally {
       if (upload.current === controller) upload.current = null;
       locked.current = false;
-      if (alive.current) setBusy(false);
+      if (alive.current) setOperation(null);
     }
   }
   return (
@@ -202,6 +203,8 @@ export function ThemeBackgroundSettings({
         <SaveButton
           type="button"
           label="배경 저장"
+          text=""
+          aria-busy={operation === 'save'}
           disabled={disabled || busy || state.loading || !dirty}
           onClick={() => void saveValue(draft)}
         />

@@ -53,7 +53,7 @@ export function RisuStartPreview({
   if (!preview || preview.identity !== identity || error)
     return (
       <LoadingState
-        compact
+        presentation="placeholder"
         loading={!error}
         error={error}
         errorLabel="시작 화면을 미리 볼 수 없어요."

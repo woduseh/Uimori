@@ -5,6 +5,7 @@ import { USAGE_KIND_LABELS, type UsageReport, type UsageTotals } from '../core/u
 import { api } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
+import { NoticeBanner } from './NoticeBanner.js';
 import { UsageChart } from './UsageChart.js';
 import {
   exactCost,
@@ -90,7 +91,7 @@ export function UsagePanel({
   const [refresh, setRefresh] = useState(0);
   const [report, setReport] = useState<UsageReport | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [failure, setFailure] = useState<{ query: string; message: string } | null>(null);
   useEffect(() => {
     if (
       period !== 'custom' ||
@@ -106,13 +107,15 @@ export function UsagePanel({
   useEffect(() => {
     const controller = new AbortController();
     setBusy(true);
-    setError('');
     void api<UsageReport>(`/usage?${query}`, undefined, 'GET', controller.signal)
       .then((value) => {
-        if (!controller.signal.aborted) setReport(value);
+        if (!controller.signal.aborted) {
+          setReport(value);
+          setFailure(null);
+        }
       })
       .catch((caught) => {
-        if (!controller.signal.aborted) setError(caught.message);
+        if (!controller.signal.aborted) setFailure({ query, message: caught.message });
       })
       .finally(() => {
         if (!controller.signal.aborted) setBusy(false);
@@ -126,6 +129,8 @@ export function UsagePanel({
     setDraft(next);
   }
   const current = report?.from === range.from && report.to === range.to ? report : null;
+  const error = failure?.query === query ? failure.message : '';
+  const retry = () => setRefresh((value) => value + 1);
   const invalid = period === 'custom' && !validUsageRange(draft);
   const exports = (group: string) =>
     `/api/usage/export?${new URLSearchParams({ ...range, group })}`;
@@ -171,12 +176,7 @@ export function UsagePanel({
           </button>
         </div>
         <div className="usage-toolbar-actions">
-          <IconButton
-            icon={RefreshCw}
-            label="사용량 새로고침"
-            disabled={busy}
-            onClick={() => setRefresh((value) => value + 1)}
-          />
+          <IconButton icon={RefreshCw} label="사용량 새로고침" disabled={busy} onClick={retry} />
           {current && !busy && !error && (
             <ActionMenu label="CSV 내보내기" icon={Download} viewport>
               {(
@@ -238,13 +238,32 @@ export function UsagePanel({
       <p className="usage-period-label">
         {range.from} — {range.to} · 한국 시간
       </p>
-      {busy && !error && <LoadingState compact label="사용량을 불러오는 중이에요…" />}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
+      {!current && (
+        <LoadingState
+          loading={busy}
+          error={error}
+          label="사용량을 불러오는 중이에요…"
+          errorLabel="사용량을 불러오지 못했어요."
+          onRetry={retry}
+        />
       )}
-      {current && !error && (
+      {current && busy && (
+        <LoadingState presentation="inline" label="사용량을 새로 불러오는 중이에요…" />
+      )}
+      {current && error && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button type="button" className="secondary" disabled={busy} onClick={retry}>
+              다시 불러오기
+            </button>
+          }
+        >
+          <p>새로고침하지 못했어요. 이전 결과를 표시해요.</p>
+          <p>{error}</p>
+        </NoticeBanner>
+      )}
+      {current && (
         <div className="usage-results" aria-busy={busy}>
           <div className="usage-cards">
             <section aria-label="사용 비용">
@@ -299,61 +318,71 @@ export function UsagePanel({
             </section>
           </div>
           <p className="usage-note">비용은 호출 당시 기록 기준이며 실제 청구액과 다를 수 있어요.</p>
-          <UsageChart key={`${current.from}:${current.to}`} report={current} />
-          <section className="usage-models" aria-label="모델별 비용">
-            <header className="usage-section-heading">
-              <h3>모델별 비용</h3>
-              <small>상위 5개 · 확인된 금액 기준</small>
-            </header>
-            {rows.slice(0, 5).map((item) => (
-              <div className="usage-model-row" key={item.id}>
-                <div className="usage-model-name">
-                  <strong title={item.label}>{item.label}</strong>
-                  <small>
-                    {item.detail} · {usageNumber(item.calls)}회
-                  </small>
-                </div>
-                <div className="usage-model-meter" aria-hidden="true">
-                  <span
-                    style={{ width: `${totalCost > 0 ? (knownCost(item) / totalCost) * 100 : 0}%` }}
-                  />
-                </div>
-                <div className="usage-model-cost" title={exactCost(item)}>
-                  <strong>{usageCost(item)}</strong>
-                  <small>
-                    {totalCost > 0 && knownCost(item) > 0
-                      ? `${((knownCost(item) / totalCost) * 100).toFixed(1)}%`
-                      : '—'}
-                    {item.unknownCostCalls || item.partialCalls ? ' · 일부 미확인' : ''}
-                  </small>
-                </div>
-              </div>
-            ))}
-            {!rows.length && <p className="usage-empty">선택한 기간에 기록이 없어요.</p>}
-          </section>
-          <details className="usage-section">
-            <summary>
-              모델별 상세 <span>{rows.length}개</span>
-            </summary>
-            <TotalsTable label="모델" rows={rows} />
-          </details>
-          <details className="usage-section">
-            <summary>일별·용도별 상세</summary>
-            <h4>일별</h4>
-            <TotalsTable
-              label="날짜"
-              rows={current.days.map((item) => ({ ...item, id: item.day, label: item.day }))}
-            />
-            <h4>용도별</h4>
-            <TotalsTable
-              label="용도"
-              rows={current.kinds.map((item) => ({
-                ...item,
-                id: item.kind,
-                label: USAGE_KIND_LABELS[item.kind] ?? '용도 미분류',
-              }))}
-            />
-          </details>
+          {current.totals.calls === 0 ? (
+            <p className="usage-period-empty" role="status">
+              선택한 기간에 기록이 없어요.
+            </p>
+          ) : (
+            <>
+              <UsageChart key={`${current.from}:${current.to}`} report={current} />
+              <section className="usage-models" aria-label="모델별 비용">
+                <header className="usage-section-heading">
+                  <h3>모델별 비용</h3>
+                  <small>상위 5개 · 확인된 금액 기준</small>
+                </header>
+                {rows.slice(0, 5).map((item) => (
+                  <div className="usage-model-row" key={item.id}>
+                    <div className="usage-model-name">
+                      <strong title={item.label}>{item.label}</strong>
+                      <small>
+                        {item.detail} · {usageNumber(item.calls)}회
+                      </small>
+                    </div>
+                    <div className="usage-model-meter" aria-hidden="true">
+                      <span
+                        style={{
+                          width: `${totalCost > 0 ? (knownCost(item) / totalCost) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="usage-model-cost" title={exactCost(item)}>
+                      <strong>{usageCost(item)}</strong>
+                      <small>
+                        {totalCost > 0 && knownCost(item) > 0
+                          ? `${((knownCost(item) / totalCost) * 100).toFixed(1)}%`
+                          : '—'}
+                        {item.unknownCostCalls || item.partialCalls ? ' · 일부 미확인' : ''}
+                      </small>
+                    </div>
+                  </div>
+                ))}
+                {!rows.length && <p className="usage-empty">선택한 기간에 기록이 없어요.</p>}
+              </section>
+              <details className="usage-section">
+                <summary>
+                  모델별 상세 <span>{rows.length}개</span>
+                </summary>
+                <TotalsTable label="모델" rows={rows} />
+              </details>
+              <details className="usage-section">
+                <summary>일별·용도별 상세</summary>
+                <h4>일별</h4>
+                <TotalsTable
+                  label="날짜"
+                  rows={current.days.map((item) => ({ ...item, id: item.day, label: item.day }))}
+                />
+                <h4>용도별</h4>
+                <TotalsTable
+                  label="용도"
+                  rows={current.kinds.map((item) => ({
+                    ...item,
+                    id: item.kind,
+                    label: USAGE_KIND_LABELS[item.kind] ?? '용도 미분류',
+                  }))}
+                />
+              </details>
+            </>
+          )}
           <details className="usage-section usage-help">
             <summary>집계 기준</summary>
             <p>

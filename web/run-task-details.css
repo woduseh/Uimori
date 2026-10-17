@@ -1,7 +1,7 @@
 .run-task-details {
   min-width: 0;
 }
-.run-task-details > .scene-usage,
+.run-input-details > .scene-usage,
 .run-input-details > .inspector {
   margin-top: 12px;
   border: 1px solid var(--line);
@@ -12,17 +12,17 @@
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.run-task-details > .scene-usage > summary,
+.run-input-details > .scene-usage > summary,
 .run-input-details > .inspector > summary {
   min-height: var(--control-h);
   padding: 12px 14px;
   cursor: pointer;
 }
-.run-task-details > .scene-usage[open] > summary,
+.run-input-details > .scene-usage[open] > summary,
 .run-input-details > .inspector[open] > summary {
   border-bottom: 1px solid var(--line);
 }
-.run-task-details > .scene-usage > summary:focus-visible,
+.run-input-details > .scene-usage > summary:focus-visible,
 .run-input-details > .inspector > summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -35,11 +35,31 @@
   margin-inline: 14px;
 }
 @media (max-width: 600px) {
-  .run-task-details > .scene-usage > summary,
+  .run-input-details > .scene-usage > summary,
   .run-input-details > .inspector > summary {
     padding-inline: 12px;
   }
   .run-input-details > .inspector > :not(summary) {
     margin-inline: 12px;
   }
+}
+
+.run-diagnostics-compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+.run-diagnostics-compact > .scene-usage,
+.run-diagnostics-compact > .inspector {
+  margin-top: 0;
+  min-width: 0;
+}
+.run-diagnostics-compact > .scene-usage[open],
+.run-diagnostics-compact > .inspector[open] {
+  grid-column: 1 / -1;
+}
+.run-diagnostics-compact > .scene-usage > summary,
+.run-diagnostics-compact > .inspector > summary {
+  padding: 10px 12px;
 }

@@ -1,3 +1,4 @@
+import { legacyChatBackupFixture } from './fixtures/legacy-backup.js';
 import { afterEach, expect, test } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -23,7 +24,6 @@ import { forkChat } from '../server/chat-fork.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { pruneUnusedData } from '../server/unused-data.js';
 import {
-  exportChatBackup,
   importChatBackup,
   exportChatBackupArchive,
   importChatBackupArchiveRequest,
@@ -232,7 +232,7 @@ test('settlement, retry, independent copies, JSON and binary backups retain both
   expect(retried.snapshot.requestImages).toEqual(prepared.images);
   store.finishRun(retried.id, 'cancelled', 'Test cancelled');
   deleteChat(store, retried.chatId, {});
-  const json = exportChatBackup(store, chat.id),
+  const json = legacyChatBackupFixture(store, chat.id),
     archive = await collect(exportChatBackupArchive(store, chat.id));
   expect(json.resources.images.map((image) => image.hash)).toEqual(
     expect.arrayContaining([prepared.images[0].hash, prepared.images[0].input.hash])

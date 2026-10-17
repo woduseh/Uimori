@@ -109,7 +109,7 @@ export function ProfileEditor({
   };
   async function save(work: () => Promise<ChatProfile>, message = '채팅 설정을 저장했어요.') {
     if (lorePending) {
-      setError('로어 컨텍스트 정책의 숫자 초안을 먼저 확인해 주세요.');
+      setError('로어 설정에 입력한 숫자를 확인한 뒤 저장해 주세요.');
       return false;
     }
     setSaving(true);
@@ -158,11 +158,7 @@ export function ProfileEditor({
     isModelSelectable(item, library.models, library.connections)
   );
   return (
-    <section
-      className="profile-editor"
-      data-testid="profile-editor"
-      aria-label="콘텐츠와 창작 제어"
-    >
+    <section className="profile-editor" data-testid="profile-editor" aria-label="채팅 설정">
       {!hideNavigation && (
         <p className="muted profile-intro">이 채팅에서 사용할 인물과 창작 방식을 정해요.</p>
       )}
@@ -283,7 +279,10 @@ export function ProfileEditor({
                     </button>
                   </div>
                 ) : (
-                  <LoadingState compact label="전역 로어 기본값을 불러오는 중이에요…" />
+                  <LoadingState
+                    presentation="inline"
+                    label="전역 로어 기본값을 불러오는 중이에요…"
+                  />
                 ))}
               <LoreContextPolicyEditor
                 key={`${profile.chatId}:${loreResetVersion}`}
@@ -335,7 +334,7 @@ export function ProfileEditor({
                 <p className="error" role="alert">
                   {!selectedModelId
                     ? '본문 모델이 지정되지 않았어요. 저장된 원고는 읽을 수 있지만 새 생성은 시작할 수 없어요.'
-                    : '선택한 본문 모델을 사용할 수 없어 새 본문 실행이 차단돼요. 사용 가능한 모델을 고르거나 전체 설정을 확인해 주세요.'}
+                    : '선택한 본문 모델을 사용할 수 없어 새 원문을 생성할 수 없어요. 사용 가능한 모델을 고르거나 전체 설정을 확인해 주세요.'}
                 </p>
               )}
               <div className="form-actions">
@@ -389,8 +388,8 @@ export function ProfileEditor({
                 </label>
                 {promptId && !pinnedPrompt && (
                   <p className="error" role="alert">
-                    고정한 작문 프리셋을 사용할 수 없어 새 본문 실행이 차단돼요. 다른 프리셋을
-                    고르거나 전역 따르기로 바꿔 저장해 주세요.
+                    이 채팅에 지정한 작문 프롬프트를 사용할 수 없어 새 원문을 생성할 수 없어요. 다른
+                    프롬프트를 고르거나 ‘전역 따르기’로 바꿔 저장해 주세요.
                   </p>
                 )}
                 <label className="settings-row">

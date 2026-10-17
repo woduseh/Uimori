@@ -88,7 +88,7 @@ export function BotDefaultPersona({
         <p>{bot.title}의 새 채팅을 시작할 때 사용할 페르소나예요. 기존 채팅은 바뀌지 않아요.</p>
         {!saved && (
           <LoadingState
-            compact
+            presentation="placeholder"
             loading={!error}
             error={error}
             errorLabel="기본 페르소나를 불러오지 못했어요."

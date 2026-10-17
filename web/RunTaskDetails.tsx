@@ -50,6 +50,7 @@ export function RunTaskDetails({
   children,
   afterJobs,
   initiallyInspect = false,
+  presentation = 'detail',
 }: {
   run: ReaderRun;
   jobs: Pick<Job, 'id' | 'sourceRevision' | 'kind' | 'status' | 'error' | 'attempt'>[];
@@ -60,10 +61,12 @@ export function RunTaskDetails({
   children?: ReactNode;
   afterJobs?: ReactNode;
   initiallyInspect?: boolean;
+  presentation?: 'detail' | 'list';
 }) {
   const [cancelling, setCancelling] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
   const canCancel = ['queued', 'running'].includes(run.status);
+  const compact = presentation === 'list' && run.status === 'completed' && !initiallyInspect;
   return (
     <div className="run-task-details">
       <div className="task-heading">
@@ -74,7 +77,9 @@ export function RunTaskDetails({
             : run.modelTitle || 'Scripted mock · 모의 생성'}
         </small>
       </div>
-      <ContextSummaryStatus summary={run.contextSummary} />
+      {(!compact || run.contextSummary?.status !== 'ready') && (
+        <ContextSummaryStatus summary={run.contextSummary} />
+      )}
       {run.error &&
         !(run.contextSummary?.status === 'failed' && run.contextSummary.error === run.error) && (
           <p className="error">{mainJudgmentError(run.error) ?? run.error}</p>
@@ -85,7 +90,7 @@ export function RunTaskDetails({
       )}
       {!canCancel && run.partialText && (
         <details className="partial-result">
-          <summary>보존된 출력 · 확정 원문에 합류하지 않음</summary>
+          <summary>보관된 응답 · 장면 본문에 반영되지 않음</summary>
           <div className="form-actions">
             <button
               type="button"
@@ -154,8 +159,8 @@ export function RunTaskDetails({
           )
         )}
       {afterJobs}
-      {run.sourceRevision && <SceneUsage usage={run.sceneUsage} />}
-      <div className="run-input-details">
+      <div className={`run-input-details${compact ? ' run-diagnostics-compact' : ''}`}>
+        {run.sourceRevision && <SceneUsage usage={run.sceneUsage} compact={compact} />}
         <LazyDiagnostics<Run>
           path={`/runs/${run.id}`}
           revision={revision}
@@ -167,6 +172,9 @@ export function RunTaskDetails({
         >
           {(full) => (
             <>
+              {compact && run.contextSummary?.status === 'ready' && (
+                <ContextSummaryStatus summary={run.contextSummary} />
+              )}
               <p>
                 Run {full.id} · 실행 요청 {full.usage.modelCalls}회 · 입력{' '}
                 {full.usage.inputTokens ?? '미확인'} / 출력 {full.usage.outputTokens ?? '미확인'}{' '}

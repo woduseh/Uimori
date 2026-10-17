@@ -35,7 +35,7 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
         code: 'RISU_PRESET_UNSUPPORTED_BLOCK',
         level: 'unsupported' as const,
         path: `promptTemplate[${index}]`,
-        message: `${index + 1}번 블록(${String(item.type)})은 원본만 보존해요. 실행하려면 지원하는 네이티브 블록으로 수정해야 해요.`,
+        message: `${index + 1}번 블록(${String(item.type)})은 저장되지만 실행되지 않아요. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요.`,
       })),
       ...['utilOverride', 'customChainOfThought']
         .filter((key) => settings?.[key] === true)
@@ -43,7 +43,7 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
           code: 'RISU_PRESET_HOST_SETTING',
           level: 'unsupported' as const,
           path: `promptSettings.${key}`,
-          message: `${key}의 Risu 앱 내장 프롬프트 전환은 실행하지 않아요. 명시한 네이티브 블록과 Uimori의 작업·모델 설정을 사용해요.`,
+          message: `${key}로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요. 프리셋의 프롬프트 블록과 Uimori의 작업·모델 설정을 사용해요.`,
         })),
       ...((native.preset.promptTemplate as Record<string, unknown>[]).some(
         (item) => item.type === 'memory'
@@ -53,7 +53,7 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
               code: 'RISU_PRESET_HOST_MEMORY',
               level: 'warning' as const,
               message:
-                'memory 블록의 위치·감싸는 문구는 적용하지 않아요. 요약과 기억은 Uimori의 컨텍스트 정책으로 전달해요.',
+                'memory 블록에 지정한 위치와 앞뒤 문구는 적용하지 않아요. 요약과 기억을 모델에 보낼 때는 Uimori의 컨텍스트 처리 방식을 따라요.',
             },
           ]
         : []),

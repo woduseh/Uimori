@@ -243,7 +243,7 @@ function StoryGuideEditor({
   if (!loaded)
     return (
       <LoadingState
-        compact
+        presentation="region"
         loading={!error}
         error={error}
         label="이야기 가이드를 불러오는 중이에요…"
@@ -259,7 +259,8 @@ function StoryGuideEditor({
   return (
     <section className="story-guide" aria-label="이야기 가이드 내용">
       <p className="muted">
-        원작의 설정과 인물 성격을 참고하면서, 이 이야기에서 달라진 선택과 관계를 존중해요.
+        모델이 원작 설정과 인물 성격을 참고해 집필 참고문을 만들어요. 현재 이야기의 선택과 관계도
+        함께 고려하도록 요청해요.
       </p>
       <form
         className="settings-group"
@@ -338,7 +339,7 @@ function StoryGuideEditor({
         </fieldset>
         {dirty && (
           <div className="form-actions">
-            <SaveButton label="이야기 가이드 저장" text="저장" disabled={busy} />
+            <SaveButton label="이야기 가이드 저장" aria-busy={saving} disabled={busy} />
             <small className="muted">저장하면 다음 요청부터 반영해요.</small>
           </div>
         )}
@@ -365,7 +366,8 @@ function StoryGuideEditor({
           </button>
         </div>
         <p className="muted">
-          저장한 설정과 작성 중인 요청으로 살펴봐요. 자동 사용을 꺼도 만들 수 있어요.
+          저장한 설정과 작성 중인 요청으로 집필 참고문을 만들어요. 이야기 가이드 사용을 꺼도
+          미리보기를 만들 수 있어요.
         </p>
         {hasDraft && <p className="muted">수정한 설정과 메모를 저장한 뒤 사용할 수 있어요.</p>}
         {working === 'refresh' && <p role="status">이야기를 살펴보고 있어요…</p>}

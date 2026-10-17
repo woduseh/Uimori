@@ -36,7 +36,7 @@ const categories = [
     id: 'prompts',
     title: '프롬프트·모델',
     icon: PromptIcon,
-    description: '작문 지침과 창작 옵션',
+    description: '작문 지침·모델·자동 번역',
     group: '기본',
   },
   {
@@ -58,13 +58,6 @@ const categories = [
     title: '이미지',
     icon: ImagesIcon,
     description: '이 채팅에 등록한 이미지와 삽화 참조',
-    group: '고급',
-  },
-  {
-    id: 'runtime',
-    title: '실행 옵션',
-    icon: BehaviorIcon,
-    description: '작업당 모델 호출 한도',
     group: '고급',
   },
   {
@@ -90,7 +83,10 @@ export function ChatSettingsPanel({
   initialSection?: Section;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
 }) {
-  const startSection = initialSection === 'models' ? 'prompts' : (initialSection ?? 'characters');
+  const startSection =
+    initialSection === 'models' || initialSection === 'runtime'
+      ? 'prompts'
+      : (initialSection ?? 'characters');
   const [active, setActive] = useState<Section>(startSection);
   const [profileTab, setProfileTab] = useState<ProfileSection>(
     isProfile(startSection) ? startSection : 'characters'
@@ -317,6 +313,18 @@ export function ChatSettingsPanel({
                 {categories.find((item) => item.id === profileTab)!.title}
               </h3>
             )}
+            {visited.includes('prompts') && detail && (
+              <div hidden={profileTab !== 'prompts'}>
+                <SettingsEditor
+                  chat={detail.chat}
+                  onSaved={() => state.refresh(state.selected)}
+                  onError={state.setError}
+                  hideHeading
+                  onDirtyChange={setRuntimeDirty}
+                  onSaveHandlerChange={saveGroup.registrations.runtime}
+                />
+              </div>
+            )}
             {detail?.profile && library && (
               <ProfileEditor
                 ownerBotId={detail.chat.botId}
@@ -408,16 +416,6 @@ export function ChatSettingsPanel({
                         onError={state.setError}
                         onDirtyChange={setGuideDirty}
                         onSaveHandlerChange={saveGroup.registrations.guide}
-                      />
-                    )}
-                    {section === 'runtime' && (
-                      <SettingsEditor
-                        chat={detail.chat}
-                        onSaved={() => state.refresh(state.selected)}
-                        onError={state.setError}
-                        hideHeading
-                        onDirtyChange={setRuntimeDirty}
-                        onSaveHandlerChange={saveGroup.registrations.runtime}
                       />
                     )}
                     {section === 'packages' && packageFeatures && (

@@ -1,18 +1,28 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
+import { nativeContent } from './fixtures/native-content.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Content, Library } from '../core/product.js';
+import type { PackageImage } from '../core/package-images.js';
 import type { LibraryOrganization } from '../core/library-organization.js';
 
-async function seed(request: APIRequestContext, title: string, kind: Content['kind'] = 'bot') {
+async function seed(
+  request: APIRequestContext,
+  title: string,
+  kind: Content['kind'] = 'bot',
+  pkg?: Content['package']
+) {
   const response = await request.post('/api/content', {
     data: {
       kind,
       title,
-      description: '긴 한글 이름과 설명을 가진 합성 자료예요. 전체 소개는 상세에서 확인해요.',
-      text: 'Synthetic local content for compact UI verification.',
+      description:
+        pkg?.description ??
+        '긴 한글 이름과 설명을 가진 합성 자료예요. 전체 소개는 상세에서 확인해요.',
+      text: pkg?.body ?? 'Synthetic local content for compact UI verification.',
       loading: 'pinned',
       relatedIds: [],
+      package: pkg,
     },
   });
   expect(response.ok(), await response.text()).toBe(true);
@@ -88,6 +98,105 @@ test('LCOM01 compact library keeps row actions aligned across mobile and desktop
       expect((await panel.locator('.library-list-item').first().boundingBox())!.y).toBeLessThan(
         245
       );
+  }
+});
+
+test('LCOM04 mobile cards keep image-less characters compact and portrait cards intact', async ({
+  page,
+  request,
+}, info) => {
+  const stamp = `LCOM04 ${Date.now()}`;
+  const bot = await seed(request, `${stamp} 골목 서점의 주인 하윤과 비 오는 날에만 문을 여는 서점`);
+  const persona = await seed(
+    request,
+    `${stamp} 오래된 이야기를 모으러 골목을 찾아온 여행자 소윤`,
+    'persona'
+  );
+  const image = await request.post('/api/package-image-blobs', {
+    data: {
+      mime: 'image/png',
+      base64:
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
+    },
+  });
+  expect(image.ok(), await image.text()).toBe(true);
+  const { hash, mime } = (await image.json()) as { hash: string; mime: PackageImage['mime'] };
+  const title = `${stamp} 대표 이미지가 있는 봇`;
+  const portrait = await seed(
+    request,
+    title,
+    'bot',
+    nativeContent(
+      { name: title },
+      {
+        images: [
+          {
+            id: 'portrait',
+            title: '합성 이미지',
+            description: '',
+            blobHash: hash,
+            mime,
+            allowedUse: 'profile',
+          },
+        ],
+        portraitImageId: 'portrait',
+      }
+    )
+  );
+  await page.setViewportSize({ width: 412, height: 900 });
+  await page.goto('/');
+  const panel = page.getByTestId('library-panel');
+  for (const item of [bot, persona]) {
+    await panel
+      .getByRole('tab', { name: item.kind === 'bot' ? '봇' : '페르소나', exact: true })
+      .click();
+    await panel.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(stamp);
+    await panel.getByRole('button', { name: '카드', exact: true }).click();
+    const card = panel.locator(`[data-library-item-id="${item.id}"]`);
+    for (const width of [360, 412]) {
+      await page.setViewportSize({ width, height: 900 });
+      const avatar = (await card.locator('.library-item-avatar').boundingBox())!;
+      const copy = (await card.locator('.library-item-copy').boundingBox())!;
+      expect(avatar.width).toBeLessThanOrEqual(44);
+      expect(avatar.height).toBeLessThanOrEqual(44);
+      expect(copy.x).toBeGreaterThanOrEqual(avatar.x + avatar.width);
+      expect((await card.boundingBox())!.height).toBeLessThan(200);
+      await expect(card.locator('strong')).toHaveText(item.title);
+      await expectTouchTarget(card.getByLabel(`${item.title} 메뉴`, { exact: true }));
+      if (item.kind === 'bot') {
+        const chat = card.getByRole('button', { name: `${item.title} 새 채팅`, exact: true });
+        await expect(chat.locator('span')).toBeVisible();
+        await expectTouchTarget(chat);
+        const portraitAvatar = panel.locator(
+          `[data-library-item-id="${portrait.id}"] .library-item-avatar`
+        );
+        await expect(portraitAvatar.locator('img')).toHaveAttribute(
+          'src',
+          `/api/package-image-blobs/${hash}`
+        );
+        expect((await portraitAvatar.boundingBox())!.height).toBeGreaterThan(200);
+      }
+      await expectNoOverflow(page);
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`library-text-${item.kind}-${width}.png`) });
+    }
+    await card.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
+    await expect(card.getByRole('button', { name: '편집', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    const options = panel.getByLabel('목록 관리', { exact: true });
+    await options.click();
+    await panel.getByRole('button', { name: '선택', exact: true }).click();
+    await card.getByRole('button', { name: `${item.title} 선택`, exact: true }).click();
+    await expect(
+      card.getByRole('checkbox', { name: `${item.title} 선택`, exact: true })
+    ).toBeChecked();
+    await expectNoOverflow(page);
+    await panel.getByRole('button', { name: '완료', exact: true }).click();
+    if (item.kind === 'bot') {
+      await card.getByRole('button', { name: `${item.title} 새 채팅`, exact: true }).click();
+      await expect(page.getByRole('dialog', { name: '새 채팅', exact: true })).toBeVisible();
+      await page.keyboard.press('Escape');
+    }
   }
 });
 

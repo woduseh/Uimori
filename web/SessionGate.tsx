@@ -68,7 +68,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
         Uimori
       </a>
       {session?.required && <h1>개인 작업실에 연결</h1>}
-      {!session && !error && <LoadingState compact label="작업실 연결을 확인하고 있어요…" />}
+      {!session && !error && (
+        <LoadingState presentation="placeholder" label="작업실 연결을 확인하고 있어요…" />
+      )}
       {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
       {session?.required && (
         <form

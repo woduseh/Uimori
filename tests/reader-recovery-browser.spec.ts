@@ -666,6 +666,12 @@ test('NOTICELOAD response waits are centered and keep streamed text until the sa
       await expect(spinner).toHaveCSS('animation-name', 'activity-spin');
       const hostBounds = await pending.locator('.loading-state').boundingBox();
       const spinnerBounds = await spinner.boundingBox();
+      const statusBounds = (await waiting.boundingBox())!;
+      expect(hostBounds!.height).toBeGreaterThanOrEqual(128);
+      expect(
+        Math.abs(statusBounds.y + statusBounds.height / 2 - hostBounds!.y - hostBounds!.height / 2)
+      ).toBeLessThan(2);
+
       expect(
         Math.abs(
           spinnerBounds!.x + spinnerBounds!.width / 2 - (hostBounds!.x + hostBounds!.width / 2)
