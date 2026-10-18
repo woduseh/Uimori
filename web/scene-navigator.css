@@ -230,6 +230,8 @@
     color: var(--muted);
   }
   .story-workspace:has(.composer-dock textarea:focus) .scene-latest-row {
-    display: none;
+    /* Keep reader actions still when focus leaves the composer during a pointer click. */
+    visibility: hidden;
+    pointer-events: none;
   }
 }
