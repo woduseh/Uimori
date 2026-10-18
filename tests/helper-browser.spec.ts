@@ -1457,6 +1457,7 @@ test('HELPUI07 keeps the displayed response until the delayed final message arri
   await panel.getByLabel('도우미에게 요청').fill('완료 화면 연결 검사');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
   await expect(panel.getByText('완료 화면 연결 검사', { exact: true }).first()).toBeVisible();
+  await expect.poll(() => state.current().tasks.length).toBe(1);
   const task = state.current().tasks[0];
   const text = '이미 화면에 표시된 응답 내용이에요.';
   state.progress(task, text, text.length);
