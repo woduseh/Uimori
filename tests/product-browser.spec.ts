@@ -344,8 +344,20 @@ test('P09 copying a scene creates an independent chat and keeps each tab draft',
   page,
   context,
   request,
-}) => {
+}, info) => {
   const chat = await createChat(page, `합성 P09-${Date.now()}`);
+  // A capped scene body exposes focus-driven reader resizing while returning from another tab.
+  const catalog = await (await request.get('/api/themes')).json();
+  const selectedTheme = await request.post('/api/themes/selection', {
+    data: {
+      scope: 'chat',
+      targetId: chat.id,
+      themeId: 'builtin:classic-frame',
+      expectedRevision: catalog.preferences.revision,
+    },
+  });
+  expect(selectedTheme.ok()).toBe(true);
+  await page.reload();
   const first = await send(
     page,
     'SYNTHETIC first scene.\n\n' + 'A quiet harbor remains open to every choice.\n\n'.repeat(50)
@@ -379,9 +391,16 @@ test('P09 copying a scene creates an independent chat and keeps each tab draft',
     );
     const firstArticle = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
     await openSourceActions(firstArticle);
-    await firstArticle
-      .getByRole('button', { name: '이 장면까지 새 채팅으로 복사', exact: true })
-      .click();
+    const copyScene = firstArticle.getByRole('button', {
+      name: '이 장면까지 새 채팅으로 복사',
+      exact: true,
+    });
+    await expect(copyScene).toBeVisible();
+    await page.screenshot({
+      path: info.outputPath('scene-copy-menu-412.png'),
+      animations: 'disabled',
+    });
+    await copyScene.click();
     const response = await copiedResponse;
     expect(response.ok(), await response.text()).toBe(true);
     const fork = (await response.json()) as Chat;
