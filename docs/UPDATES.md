@@ -8,17 +8,19 @@ Use this path for source installations; see [SELF-HOST](SELF-HOST.md#저장과-�
 
 Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재-버전) before updating. Finish active generation and edits. Download the app's consistent SQLite snapshot, record the running app/image version, and preserve external Codex login files separately. Stop the server before switching code or restoring data. Do not use `reset:dev` or `docker compose down -v` to update an existing workspace.
 
-**v0.11.0 keeps the same schema 15 used by v0.10.6 and earlier schema-15 releases since v0.4.0.** A workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
+**v0.11.1 keeps the same schema 15 used by v0.11.0 and earlier schema-15 releases since v0.4.0.** A workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
 
-This release removes JSON resource/chat backup export endpoints and helper hypothetical-scene generation/editing. Existing JSON backup imports, stored scene revisions and device recovery drafts remain readable; see the [release notes](releases/v0.11.0.md).
+This release changes the current prompt from a copied body to a library preset reference. Startup preserves an independent old body as a preset before switching; new requests follow the selected source and explicit option overrides. Keep the pre-update backup for rollback. Manuscripts, existing helper conversations and historical execution records remain readable; see the [release notes](releases/v0.11.1.md) for retired APIs and evaluation settings.
 
-Use the published `v0.11.0` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
+Finish queued or running evaluation Batch work under its original runtime before updating. Both retained evaluation modes now require a valid final submission, and the retired `source-bound` mode is disabled for new execution. The new runtime does not emulate the previous evaluation protocol.
+
+Use the published `v0.11.1` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
 
 From a clean source checkout, with the existing server stopped:
 
 ```sh
 git fetch origin --tags
-git switch --detach v0.11.0
+git switch --detach v0.11.1
 npm ci
 npm run dev
 ```
