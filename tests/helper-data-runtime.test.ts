@@ -357,6 +357,37 @@ const requestData = (wire: any) =>
       .content.replace(/^Request data \(JSON\):\n/, '')
   );
 
+test('helper keeps its task date and completes a tool continuation across UTC midnight', async () => {
+  // Keep real I/O timers while only the wall clock crosses midnight between provider calls.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-17T23:59:59Z'));
+  try {
+    const f = fixture();
+    const bodies = provider((body, round) => {
+      if (round === 0) {
+        vi.setSystemTime(new Date('2026-10-18T00:00:01Z'));
+        return answer(
+          '',
+          [{ id: 'date-tools', name: 'app.tools', args: { names: ['model.pricing.read'] } }],
+          body
+        );
+      }
+      return answer('Completed after midnight.');
+    });
+    const result = await f.run('가격 도구를 확인해 주세요.');
+    expect(result.error).toBeNull();
+    expect(result).toMatchObject({ status: 'completed', usage: { modelCalls: 2 } });
+    expect(bodies).toHaveLength(2);
+    expect(bodies.map((body) => requestData(body).source.currentDateUtc)).toEqual([
+      '2026-10-17',
+      '2026-10-17',
+    ]);
+    expect(new Date().toISOString().slice(0, 10)).toBe('2026-10-18');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test('native Chat continuation receives new user instructions and budget without replaying a stale write', async () => {
   const f = fixture();
   const conversation = f.runtime.workspace.open({ kind: 'library', workId: 'steer-wire' });
