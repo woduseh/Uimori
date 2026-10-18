@@ -1,6 +1,7 @@
 import { PROVIDER_PROTOCOLS, type ModelGeneration, type ModelPreset } from '../core/product.js';
 import {
   defaultEvaluationToolOptions,
+  EVALUATION_TOOL_ROUND_LIMIT,
   resolveEvaluationMetadataProfile,
   validateEvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
@@ -46,13 +47,10 @@ export function createEvaluationToolSession(
     options,
     session,
     definitions: evaluationToolDefinitions(options),
-    allNames:
-      options.contextMode === 'source-bound'
-        ? ['eval_submit_artifact']
-        : [...EVALUATION_TOOL_NAMES],
-    requiresSubmission: options.contextMode === 'source-bound',
+    allNames: [...EVALUATION_TOOL_NAMES],
+    requiresSubmission: true,
     bootstrap: options.contextMode === 'preloaded' ? evaluationBootstrap(session) : [],
-    maxCalls: options.maximumToolRounds + 1,
+    maxCalls: EVALUATION_TOOL_ROUND_LIMIT + 1,
     toolChoice: (completedToolResults: number) =>
       options.contextMode === 'preloaded'
         ? completedToolResults === 0

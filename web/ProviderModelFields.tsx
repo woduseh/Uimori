@@ -1,4 +1,3 @@
-import { Switch } from './BooleanControls.js';
 import { ToggleRow } from './ToggleRow.js';
 import { ModelPricingEditor } from './ModelPricingEditor.js';
 import { AddIcon, CloseIcon } from './ui-icons.js';
@@ -893,36 +892,34 @@ export function ProviderModelFields({
           />
           {value.evaluationToolsEnabled && (
             <>
-              {evaluation.contextMode !== 'source-bound' && (
-                <label className="full">
-                  평가 메타데이터
-                  {automaticMetadata ? (
-                    <input
-                      aria-label="평가 메타데이터"
-                      readOnly
-                      value={`${evaluationMetadataLabels[automaticMetadata]} · 프로바이더 자동 선택`}
-                    />
-                  ) : (
-                    <select
-                      aria-label="평가 메타데이터"
-                      value={evaluation.metadataProfile ?? 'neutral'}
-                      onChange={(event) =>
-                        setEvaluation({
-                          ...evaluation,
-                          metadataProfile: event.target.value as EvaluationMetadataProfile,
-                        })
-                      }
-                    >
-                      {Object.entries(evaluationMetadataLabels).map(([profile, label]) => (
-                        <option key={profile} value={profile}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  <small>평가 컨텍스트·검토자 결과에 사용할 정보를 선택해요.</small>
-                </label>
-              )}
+              <label className="full">
+                평가 메타데이터
+                {automaticMetadata ? (
+                  <input
+                    aria-label="평가 메타데이터"
+                    readOnly
+                    value={`${evaluationMetadataLabels[automaticMetadata]} · 프로바이더 자동 선택`}
+                  />
+                ) : (
+                  <select
+                    aria-label="평가 메타데이터"
+                    value={evaluation.metadataProfile ?? 'neutral'}
+                    onChange={(event) =>
+                      setEvaluation({
+                        ...evaluation,
+                        metadataProfile: event.target.value as EvaluationMetadataProfile,
+                      })
+                    }
+                  >
+                    {Object.entries(evaluationMetadataLabels).map(([profile, label]) => (
+                      <option key={profile} value={profile}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <small>평가 컨텍스트·검토자 결과에 사용할 정보를 선택해요.</small>
+              </label>
               <label className="full">
                 평가 컨텍스트 제공
                 <select
@@ -935,8 +932,7 @@ export function ProviderModelFields({
                     })
                   }
                 >
-                  <option value="model-selected">모델이 네 도구 중 선택</option>
-                  <option value="source-bound">원본 기반 직접 작성</option>
+                  <option value="model-selected">모델이 도구 선택</option>
                   <option value="preloaded" disabled={capability?.forcedTools === false}>
                     컨텍스트·검토자 결과를 먼저 제공
                     {capability?.forcedTools === false ? ' · 이 모델 미지원' : ''}
@@ -947,12 +943,7 @@ export function ProviderModelFields({
                     이 모델은 컨텍스트·검토자 결과를 먼저 제공하는 방식을 지원하지 않아요.
                   </small>
                 )}
-                {evaluation.contextMode === 'source-bound' && (
-                  <small>
-                    별도 평가 단계를 거치지 않고 기존 입력으로 바로 작성해요. 작성 중 자료 조회와
-                    조언을 요청할 수 있어요.
-                  </small>
-                )}
+                <small>두 방식 모두 모델이 최종 제출해야 원고가 완성돼요.</small>
               </label>
               {evaluation.contextMode === 'preloaded' && (
                 <label className="full">
@@ -977,39 +968,9 @@ export function ProviderModelFields({
                   </small>
                 </label>
               )}
-              <label>
-                최대 평가 도구 라운드
-                <input
-                  aria-label="최대 평가 도구 라운드"
-                  type="number"
-                  min={0}
-                  max={32}
-                  required
-                  value={evaluation.maximumToolRounds}
-                  onChange={(event) =>
-                    setEvaluation({ ...evaluation, maximumToolRounds: event.target.value })
-                  }
-                />
-                <small>
-                  Codex 본문에서는 정상 최종 제출을 제외한 도구 교환 횟수예요. 내부 추론 횟수와는
-                  달라요.
-                </small>
-              </label>
-              <label className="check">
-                <Switch
-                  checked={evaluation.terminalLateCorrections}
-                  onChange={(event) =>
-                    setEvaluation({ ...evaluation, terminalLateCorrections: event.target.checked })
-                  }
-                />
-                제출할 원고의 문구 찾아 바꾸기 허용
-              </label>
-              <small className="full">원고에서 한 번만 나오는 문구를 찾아 바꿔요.</small>
             </>
           )}
-          <small className="full">
-            원고 검토·교정 도구를 모델에 제공해요. 추가 호출이 발생할 수 있어요.
-          </small>
+          <small className="full">평가 과정에서 추가 모델 호출이 발생할 수 있어요.</small>
         </fieldset>
         <h4 className="provider-field-heading full">요금</h4>
         <ModelPricingEditor

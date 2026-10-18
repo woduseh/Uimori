@@ -266,7 +266,6 @@ test('native evaluation final submission uses existing validation and does not a
   });
   f.work.profile!.models.main!.evaluationTools = {
     ...defaultEvaluationToolOptions(),
-    maximumToolRounds: 0,
   };
   expect(await runMain(compileSnapshotPrompt(f.work), f.hooks)).toMatchObject({
     status: 'completed',
@@ -277,7 +276,7 @@ test('native evaluation final submission uses existing validation and does not a
   expect(f.events.some((event) => event.name === 'story.submit')).toBe(false);
 });
 
-test('source-bound native writer reads and consults before submitting without an evaluation case', async () => {
+test('model-selected native writer reads and consults before submitting without creating a case', async () => {
   const f = await fixture({
     writer: [
       read(),
@@ -289,7 +288,7 @@ test('source-bound native writer reads and consults before submitting without an
         name: 'eval_submit_artifact',
         args: {
           content: 'The keeper walked north.',
-          internalProcessingNote: 'PRIVATE_SOURCE_BOUND_NOTE',
+          userFacingNotice: 'PRIVATE_EVALUATION_NOTICE',
         },
       },
       { text: 'MUST_NOT_GENERATE' },
@@ -299,8 +298,7 @@ test('source-bound native writer reads and consults before submitting without an
   f.addAdvisor();
   f.work.profile!.models.main!.evaluationTools = {
     ...defaultEvaluationToolOptions(),
-    contextMode: 'source-bound',
-    maximumToolRounds: 2,
+    contextMode: 'model-selected',
   };
   const prepared = compileSnapshotPrompt(f.work);
   const before = structuredClone(prepared);
@@ -315,18 +313,22 @@ test('source-bound native writer reads and consults before submitting without an
   expect(names.filter((name) => name.startsWith('eval_'))).toEqual(['eval_submit_artifact']);
   const writerPacket = JSON.stringify(f.attempts[0].body);
   expect(writerPacket).toContain('WRITER_PROMPT_KEPT');
-  expect(writerPacket).not.toContain('eval_create_case');
-  expect(JSON.stringify([f.events, f.finished])).not.toContain('PRIVATE_SOURCE_BOUND_NOTE');
+  expect(JSON.stringify([f.events, f.finished])).not.toContain('PRIVATE_EVALUATION_NOTICE');
   expect(f.events.at(-1)?.result).toMatchObject({
-    processingNoteProvided: true,
-    processingNoteCharacters: 25,
+    noticeProvided: true,
+    noticeCharacters: 25,
   });
   expect(prepared).toEqual(before);
 });
 
-test.each([false, true])(
-  'source-bound rejects unsubmitted completed text without resending (native=%s)',
-  async (native) => {
+test.each([
+  ['model-selected', false],
+  ['model-selected', true],
+  ['preloaded', false],
+  ['preloaded', true],
+] as const)(
+  '%s rejects unsubmitted completed text without resending (native=%s)',
+  async (contextMode, native) => {
     const f = await fixture({
       writer: [
         {
@@ -339,7 +341,7 @@ test.each([false, true])(
     });
     f.work.profile!.models.main!.evaluationTools = {
       ...defaultEvaluationToolOptions(),
-      contextMode: 'source-bound',
+      contextMode,
     };
     if (!native) f.hooks.executeCodexAgent = undefined;
     expect(await runMain(compileSnapshotPrompt(f.work), f.hooks)).toMatchObject({
@@ -353,82 +355,169 @@ test.each([false, true])(
   }
 );
 
-test('economized evaluation uses one legacy bootstrap then restores writer effort for the native turn', async () => {
+test.each(['valid', 'invalid', 'continue'] as const)(
+  'native evaluation accepts only a valid terminal call after ten tool exchanges (%s)',
+  async (completion) => {
+    const terminal: Step = {
+      name: 'eval_submit_artifact',
+      args: {
+        content: 'Scene submitted after ten reference reads.',
+        ...(completion === 'invalid' ? {} : { userFacingNotice: 'Completed.' }),
+      },
+    };
+    const f = await fixture({
+      writer: [
+        ...Array.from({ length: 10 }, () => read()),
+        completion === 'continue' ? read() : terminal,
+        {
+          name: 'eval_submit_artifact',
+          args: { content: 'MUST_NOT_SUBMIT', userFacingNotice: 'Done.' },
+        },
+      ],
+    });
+    f.work.profile!.models.main!.evaluationTools = defaultEvaluationToolOptions();
+    const result = await runMain(compileSnapshotPrompt(f.work), f.hooks);
+    expect(f.events.filter((event) => event.name === 'knowledge.read')).toHaveLength(10);
+    expect(f.attempts).toHaveLength(1);
+    if (completion === 'valid') {
+      expect(result).toMatchObject({
+        status: 'completed',
+        text: 'Scene submitted after ten reference reads.',
+        usage: { modelCalls: 1 },
+      });
+      expect(f.events.at(-1)?.result).toMatchObject({ accepted: true });
+    } else {
+      expect(result).toMatchObject({
+        status: 'error',
+        error: 'MODEL_CALL_BUDGET_EXHAUSTED',
+        text: '',
+      });
+      expect(f.events).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ result: expect.objectContaining({ accepted: true }) }),
+        ])
+      );
+    }
+    const records = await f.records();
+    expect(records.filter((row) => row.method === 'turn/start')).toHaveLength(1);
+    expect(records.filter((row) => row.method === 'turn/interrupt')).toHaveLength(1);
+    expect(records.some((row) => row.id === 'script-11' && !row.method)).toBe(false);
+  }
+);
+
+test('an invalid native submission consumes one of the ten nonterminal exchanges', async () => {
   const f = await fixture({
     writer: [
+      { name: 'eval_submit_artifact', args: { content: 'Missing the required notice.' } },
+      ...Array.from({ length: 10 }, () => read()),
       {
         name: 'eval_submit_artifact',
-        args: {
-          content: 'The harbor lights appeared.',
-          userFacingNotice: 'Completed.',
-        },
+        args: { content: 'MUST_NOT_SUBMIT', userFacingNotice: 'Done.' },
       },
     ],
   });
-  f.work.profile!.models.main!.evaluationTools = {
-    ...defaultEvaluationToolOptions(),
-    contextMode: 'preloaded',
-    approvalReasoningMode: 'economized',
-  };
-  const prepare = vi.fn(async (request) => request);
-  f.hooks.prepareRequest = prepare;
-  const bootstrap = vi.fn<NonNullable<MainHooks['executeCodex']>>(
-    async (connection, request, options) => {
-      expect(request.generation?.reasoningEffort).toBe('low');
-      expect(request.toolChoice).toBe('eval_create_case');
-      await options.onWire?.({
-        connectionId: connection.id,
-        protocol: connection.protocol,
-        role: 'main',
-        modelId: request.modelId,
-        method: 'RPC',
-        url: 'codex://local',
-        headers: {},
-        body: buildCodexDescriptor(request),
-        bodySha256: 'synthetic',
-        stablePrefixSha256: 'synthetic',
-      });
-      return {
-        status: 'tool_calls',
-        text: '',
-        refusal: null,
-        error: null,
-        opaqueState: null,
-        toolCalls: [
-          {
-            id: 'bootstrap-case',
-            name: 'eval_create_case',
-            arguments: {
-              contentType: 'other',
-              riskLevel: 'low',
-              contentSummary: 'Synthetic harbor scene',
-              requestedContinuationDirection: 'Continue the harbor scene',
-              safetyContinuationDirection: 'Continue the harbor scene',
-              intendedAudience: 'research',
-              hasMitigations: false,
-              containsPersonalInfo: false,
-            },
-          },
-        ],
-        usage: { inputTokens: 10, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
-      };
-    }
-  );
-  f.hooks.executeCodex = bootstrap;
+  f.work.profile!.models.main!.evaluationTools = defaultEvaluationToolOptions();
   expect(await runMain(compileSnapshotPrompt(f.work), f.hooks)).toMatchObject({
-    status: 'completed',
-    text: 'The harbor lights appeared.',
-    usage: { modelCalls: 2 },
+    status: 'error',
+    error: 'MODEL_CALL_BUDGET_EXHAUSTED',
+    text: '',
+    usage: { modelCalls: 1 },
   });
-  expect(bootstrap).toHaveBeenCalledTimes(1);
-  expect(prepare).toHaveBeenCalledTimes(2);
-  expect(f.attempts[1].body).toMatchObject({ effort: 'high', nativeAgentLoop: true });
-  const packet = JSON.parse((f.attempts[1].body as any).input[0].text);
-  expect(packet.input.results).toEqual(
-    expect.arrayContaining([expect.objectContaining({ name: 'eval_create_case' })])
-  );
-  expect(f.events.filter((event) => event.name === 'eval_create_case')).toHaveLength(1);
+  expect(f.events.filter((event) => event.name === 'knowledge.read')).toHaveLength(9);
+  expect(f.events.filter((event) => event.name === 'eval_submit_artifact')).toHaveLength(1);
+  expect(JSON.stringify(f.events)).not.toContain('MUST_NOT_SUBMIT');
+  expect(f.attempts).toHaveLength(1);
 });
+
+test.each(['submit', 'continue'] as const)(
+  'economized bootstrap counts toward ten exchanges and restores native writer effort (%s)',
+  async (completion) => {
+    const f = await fixture({
+      writer: [
+        ...Array.from({ length: 9 }, () => read()),
+        ...(completion === 'continue' ? [read()] : []),
+        {
+          name: 'eval_submit_artifact',
+          args: {
+            content: 'The harbor lights appeared.',
+            userFacingNotice: 'Completed.',
+          },
+        },
+      ],
+    });
+    f.work.profile!.models.main!.evaluationTools = {
+      ...defaultEvaluationToolOptions(),
+      contextMode: 'preloaded',
+      approvalReasoningMode: 'economized',
+    };
+    const prepare = vi.fn(async (request) => request);
+    f.hooks.prepareRequest = prepare;
+    const bootstrap = vi.fn<NonNullable<MainHooks['executeCodex']>>(
+      async (connection, request, options) => {
+        expect(request.generation?.reasoningEffort).toBe('low');
+        expect(request.toolChoice).toBe('eval_create_case');
+        await options.onWire?.({
+          connectionId: connection.id,
+          protocol: connection.protocol,
+          role: 'main',
+          modelId: request.modelId,
+          method: 'RPC',
+          url: 'codex://local',
+          headers: {},
+          body: buildCodexDescriptor(request),
+          bodySha256: 'synthetic',
+          stablePrefixSha256: 'synthetic',
+        });
+        return {
+          status: 'tool_calls',
+          text: '',
+          refusal: null,
+          error: null,
+          opaqueState: null,
+          toolCalls: [
+            {
+              id: 'bootstrap-case',
+              name: 'eval_create_case',
+              arguments: {
+                contentType: 'other',
+                riskLevel: 'low',
+                contentSummary: 'Synthetic harbor scene',
+                requestedContinuationDirection: 'Continue the harbor scene',
+                safetyContinuationDirection: 'Continue the harbor scene',
+                intendedAudience: 'research',
+                hasMitigations: false,
+                containsPersonalInfo: false,
+              },
+            },
+          ],
+          usage: {
+            inputTokens: 10,
+            outputTokens: 5,
+            costUsd: null,
+            raw: null,
+            priceRevision: null,
+          },
+        };
+      }
+    );
+    f.hooks.executeCodex = bootstrap;
+    const result = await runMain(compileSnapshotPrompt(f.work), f.hooks);
+    expect(result).toMatchObject(
+      completion === 'submit'
+        ? { status: 'completed', text: 'The harbor lights appeared.', usage: { modelCalls: 2 } }
+        : { status: 'error', error: 'MODEL_CALL_BUDGET_EXHAUSTED', usage: { modelCalls: 2 } }
+    );
+    expect(f.events.filter((event) => event.name === 'knowledge.read')).toHaveLength(9);
+    expect(bootstrap).toHaveBeenCalledTimes(1);
+    expect(prepare).toHaveBeenCalledTimes(2);
+    expect(f.attempts[1].body).toMatchObject({ effort: 'high', nativeAgentLoop: true });
+    const packet = JSON.parse((f.attempts[1].body as any).input[0].text);
+    expect(packet.input.results).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'eval_create_case' })])
+    );
+    expect(f.events.filter((event) => event.name === 'eval_create_case')).toHaveLength(1);
+  }
+);
 
 test('failed host submission bookkeeping is fatal, retains usage and never restarts the writer', async () => {
   const f = await fixture({ writer: [submit, { text: 'MUST_NOT_GENERATE' }] });

@@ -19,6 +19,7 @@ import {
 } from '../core/transport.js';
 import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
+import { EVALUATION_TOOL_ROUND_LIMIT } from '../core/evaluation-tool-config.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { attachMainHostContext } from './main-host-context.js';
@@ -110,6 +111,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   const maxCalls = fixed.settings.maxCalls;
   const mainCallLimit = evaluation ? Math.min(maxCalls, evaluation.maxCalls) : maxCalls;
   let mainCalls = 0;
+  let evaluationRounds = 0;
   const completedCallIds = new Set<string>();
   const usage: Usage = structuredClone(
     hooks.initialUsage ?? { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 }
@@ -162,6 +164,10 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     signal: AbortSignal = hooks.signal,
     native = false
   ): Promise<MainResult | undefined> => {
+    if (evaluation && ++evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT) {
+      if (result.toolCalls.length !== 1 || result.toolCalls[0].name !== 'eval_submit_artifact')
+        return fail('MODEL_CALL_BUDGET_EXHAUSTED');
+    }
     // Validate the whole turn before executing: repeated IDs cannot alias earlier tool results.
     const callIds = new Set(
       [...results, ...(collaboration?.bootstrap ?? [])].map((event) => event.callId)
@@ -217,18 +223,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       if (
         !evaluation ||
         evaluationTerminals.length !== 1 ||
-        result.toolCalls.some(
-          (call) => !evaluation.allNames.includes(call.name as (typeof evaluation.allNames)[number])
-        ) ||
+        result.toolCalls.length !== 1 ||
         result.refusal ||
         result.error
       )
         return fail('INVALID_EVALUATION_ARTIFACT');
-      for (const call of result.toolCalls.filter((call) => call.name !== 'eval_submit_artifact')) {
-        const event = evaluation.execute(call);
-        results.push(event);
-        if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
-      }
       // Old submitted Batches may already have a durable refusal-retry receipt.
       // Replay that result without reinstating the retired prose classifier.
       const terminalCall = evaluationTerminals[0];
@@ -263,6 +262,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         evaluationTerminals[0].recoveredFromTruncation === true
       );
       if (!submitted.ok) {
+        if (evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT)
+          return fail('MODEL_CALL_BUDGET_EXHAUSTED');
         results.push(submitted.event);
         if (!(await persistOrReplay(submitted.event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
         opaqueState = result.opaqueState;
@@ -279,15 +280,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           sha256: submitted.artifact.sha256,
           characters: submitted.artifact.text.length,
           utf8Bytes: submitted.artifact.utf8Bytes,
-          ...(evaluation.requiresSubmission
-            ? {
-                processingNoteProvided: submitted.artifact.processingNoteProvided,
-                processingNoteCharacters: submitted.artifact.processingNoteCharacters,
-              }
-            : {
-                noticeProvided: submitted.artifact.noticeProvided,
-                noticeCharacters: submitted.artifact.noticeCharacters,
-              }),
+          noticeProvided: submitted.artifact.noticeProvided,
+          noticeCharacters: submitted.artifact.noticeCharacters,
           correctionCount: submitted.artifact.correctionCount,
         },
       };
@@ -532,7 +526,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     };
     let nativeHostError: unknown;
     let nativeFinished = false;
-    let nativeExchanges = 0;
     let pendingTools = Promise.resolve();
     const onToolCall: CodexAgentExecutionOptions['onToolCall'] = (call, nativeSignal) => {
       const pending = pendingTools
@@ -546,9 +539,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
             Array.isArray(call.arguments)
           )
             throw new ProviderContractError('CODEX_INVALID_TOOL_ARGUMENTS');
-          const submission = ['story.submit', 'eval_submit_artifact'].includes(call.name);
-          if (!submission && evaluation && nativeExchanges >= evaluation.options.maximumToolRounds)
-            throw new ProviderContractError('MODEL_CALL_BUDGET_EXHAUSTED');
           const prior = results.length;
           const terminal = await executeCalls(
             {
@@ -575,9 +565,6 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
               throw new ProviderContractError(terminal.error ?? 'CODEX_TOOL_FAILED');
             return { complete: true as const, success: true as const, text: terminal.text };
           }
-          // Invalid submissions are correctable but not an unlimited sequence of free retries.
-          if (++nativeExchanges > (evaluation?.options.maximumToolRounds ?? Infinity))
-            throw new ProviderContractError('MODEL_CALL_BUDGET_EXHAUSTED');
           const event = results[prior];
           if (!event) throw new ProviderContractError('CODEX_TOOL_RESULT_MISSING');
           return { success: !event.denied, text: JSON.stringify(event.result) };

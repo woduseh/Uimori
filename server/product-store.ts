@@ -36,7 +36,10 @@ import { combinationOwner } from '../core/prompt-combinations.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { randomUUID, createHash } from 'node:crypto';
-import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import {
+  readEvaluationToolOptions,
+  validateEvaluationToolOptions,
+} from '../core/evaluation-tool-config.js';
 import type { Store } from './store.js';
 import {
   defaultProfile,
@@ -95,8 +98,10 @@ type Row = Record<string, any>;
 const json = JSON.stringify;
 function currentModelFields<T>(kind: string, value: T): T {
   if (kind !== 'model') return value;
-  const { contextTools: _retired, pdfInput: _retiredPdf, ...model } = value as Row;
-  return model as T;
+  const { contextTools: _retired, pdfInput: _retiredPdf, evaluationTools, ...model } = value as Row;
+  const evaluation =
+    evaluationTools === undefined ? undefined : readEvaluationToolOptions(evaluationTools);
+  return { ...model, ...(evaluation ? { evaluationTools: evaluation } : {}) } as T;
 }
 export const modelRef = (v: unknown): ModelRef => {
   const b = record(v);
