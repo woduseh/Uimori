@@ -1420,13 +1420,12 @@ export function useStory() {
           )
         )
           throw new Error('현재 프롬프트와 옵션 정의가 일치하는 조합을 선택해 주세요.');
-        if (pinnedPromptId) {
+        {
           const state = await api<ChatOptionState>(`/chats/${chatId}/options`);
           if (
-            state.binding.owner !== `preset:${pinnedPromptId}` ||
             !matchesPromptCombination(
               preset,
-              { kind: 'preset', id: pinnedPromptId },
+              combinationOwner(currentPrompt, 'main'),
               'main',
               state.program
             )
@@ -1439,12 +1438,6 @@ export function useStory() {
             values: preset.values,
           });
           dispatchEvent(new Event('chat-options-changed'));
-        } else {
-          await api('/prompt-workspace/apply-options', {
-            expectedRevision: promptWorkspace.revision,
-            role: 'main',
-            combinationId: preset.id,
-          });
         }
       } else if (kind === 'module') {
         const epoch = navigation.current.epoch;

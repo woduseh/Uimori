@@ -29,6 +29,7 @@ import type { PricingSnapshot } from './pricing-types.js';
 import { createPublicTextProgress, type ProviderProgress } from './provider-progress.js';
 import type { ProviderOptions } from './provider-options.js';
 import type { ProviderCacheBoundary } from './provider-cache-diagnostics.js';
+import { helperWebSearchCapability } from './helper-web-search.js';
 export type { ProviderProgress } from './provider-progress.js';
 export { ProviderContractError } from './provider-errors.js';
 export {
@@ -60,6 +61,8 @@ export function transportConnection(connection: ProviderConnection): ProviderCon
 }
 export type ProviderTool = { name: string; description: string; inputSchema: Json };
 export type ProviderRequest = {
+  /** Explicit helper-only hosted search; never inferred for writing or evaluation. */
+  webSearch?: true;
   /** Frozen host pricing metadata; never serialized into a provider payload. */
   pricingSnapshot?: PricingSnapshot;
   role: ProviderRole;
@@ -117,6 +120,8 @@ export type ProviderToolArgumentDiagnostic = {
   parseOffset: number | null;
 };
 export type ProviderResult = {
+  /** A successful hosted-search pause, resumed within the caller's existing call/time budget. */
+  continuation?: 'web-search-pause';
   status: 'completed' | 'tool_calls' | 'refused' | 'partial' | 'error' | 'cancelled';
   text: string;
   toolCalls: ProviderToolCall[];
@@ -227,6 +232,12 @@ export async function executeProvider(
   requestValue: ProviderRequest,
   options: ProviderExecutionOptions
 ): Promise<ProviderResult> {
+  if (requestValue.webSearch !== undefined) {
+    if (requestValue.webSearch !== true || requestValue.role !== 'helper')
+      reject('INVALID_WEB_SEARCH');
+    if (!helperWebSearchCapability(connectionValue.protocol).supported)
+      reject('WEB_SEARCH_UNSUPPORTED');
+  }
   if (requestValue.providerOptions !== undefined && connectionValue.protocol !== 'vercel-chat-v1')
     reject('UNSUPPORTED_PROVIDER_OPTIONS');
   if (requestValue.pricingSnapshot) {
@@ -248,7 +259,10 @@ export async function executeProvider(
         serviceTier: forced,
         rates: rates ?? { input: null, cacheRead: null, cacheWrite: null, output: null },
         longContext:
-          forced === 'flex' ? pricingSnapshot.flexLongContext : pricingSnapshot.longContext,
+          forced === 'flex'
+            ? pricingSnapshot.flexLongContext
+            : (pricingSnapshot.standardLongContext ??
+              (pricingSnapshot.serviceTier !== 'flex' ? pricingSnapshot.longContext : undefined)),
       };
     }
     const onWire = options.onWire;

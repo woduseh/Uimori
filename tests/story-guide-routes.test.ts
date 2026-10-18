@@ -8,6 +8,7 @@ import { defaultStoryGuideConfig, type StoryGuideBrief } from '../core/story-gui
 import { createApp, type App } from '../server/app.js';
 import { importChatTranscript } from '../server/chat-transcript.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import { readHelperChatContext } from '../server/helper-context.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 
 const owned: { app: App; path: string }[] = [];
@@ -18,15 +19,6 @@ afterEach(async () => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-const success: transport.ProviderResult = {
-  status: 'completed',
-  text: '원작과 달리 이 이야기에서는 미라가 비밀을 알고 있어요.',
-  toolCalls: [],
-  refusal: null,
-  error: null,
-  usage: { inputTokens: 10, outputTokens: 20, costUsd: null, raw: null, priceRevision: null },
-  opaqueState: null,
-};
 async function setup() {
   const path = mkdtempSync(join(tmpdir(), 'uimori-story-guide-routes-'));
   const app = await createApp({
@@ -90,135 +82,6 @@ async function setup() {
     });
   return { app, store, chat, config, post, put };
 }
-function mockSend(wait?: () => Promise<void>) {
-  return vi
-    .spyOn(transport, 'executeProvider')
-    .mockImplementation(async (connection, request, options) => {
-      transport.validateRequest(request);
-      await options.beforeTurn?.();
-      await options.onWire?.({
-        connectionId: connection.id,
-        protocol: connection.protocol,
-        role: request.role,
-        modelId: request.modelId,
-        method: 'POST',
-        url: connection.endpoint,
-        headers: {},
-        body: {},
-        bodySha256: 'fixture',
-        stablePrefixSha256: 'fixture',
-      });
-      await wait?.();
-      return success;
-    });
-}
-function authoredState(app: App) {
-  return [
-    'chats',
-    'sources',
-    'runs',
-    'author_notes',
-    'author_note_heads',
-    'author_note_commands',
-  ].map((table) => app.store.db.prepare(`SELECT * FROM ${table}`).all());
-}
-
-test('explicit questions and previews work while automatic guidance is off, using current sources without changing story or cached writing advice', async () => {
-  const f = await setup();
-  const summary = await f.app.inject({
-    method: 'PUT',
-    url: `/api/chats/${f.chat.id}/context/summary`,
-    payload: {
-      expectedRevision: 0,
-      expectedHeadRevision: f.chat.headRevision,
-      idempotencyKey: randomUUID(),
-      summary: 'EXISTING_DERIVED_SUMMARY',
-    },
-  });
-  expect(summary.statusCode, summary.body).toBe(200);
-  const before = authoredState(f.app);
-  const revision = (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json()
-    .analysisRevision;
-  const send = mockSend();
-  const answer = await f.post('ask', {
-    question: 'QUESTION_ABOUT_ORIGINAL',
-    request: 'NEXT_SCENE_REQUEST',
-  });
-  expect(answer.statusCode, answer.body).toBe(200);
-  expect(answer.json()).toEqual({ text: success.text });
-  const input = JSON.stringify(send.mock.calls[0][1]);
-  for (const marker of [
-    'QUESTION_ABOUT_ORIGINAL',
-    'NEXT_SCENE_REQUEST',
-    'USER_REVEALS_SECRET',
-    'MIRA_NOW_KNOWS_SECRET',
-    'AUTHOR_REFERENCE',
-    'EXISTING_DERIVED_SUMMARY',
-  ])
-    expect(input).toContain(marker);
-  const preview = await f.post('refresh', {});
-  expect(preview.statusCode, preview.body).toBe(200);
-  expect(send).toHaveBeenCalledTimes(2);
-  expect(f.store.storyGuide.get(f.chat.id).brief).toBeNull();
-  expect(authoredState(f.app)).toEqual(before);
-  f.store.event(f.chat.id, 'story-guide.generated', 'synthetic-result');
-  f.store.event(f.chat.id, 'run.usage', 'synthetic-run');
-  expect((await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json().analysisRevision).toBe(
-    revision
-  );
-  const receipts = f.store.db
-    .prepare('SELECT usage_kind,usage_detached,request,response FROM attempts')
-    .all();
-  expect(receipts).toHaveLength(2);
-  for (const receipt of receipts) {
-    expect(receipt).toMatchObject({ usage_kind: 'story-guide', usage_detached: 1, request: '{}' });
-    expect(String(receipt.response)).not.toContain(success.text);
-  }
-});
-
-test.each(['settings', 'source'] as const)(
-  'a late answer is rejected after %s changes, without replacing writing advice',
-  async (change) => {
-    const f = await setup();
-    const inputRevision = (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json()
-      .analysisRevision;
-    expect((await f.put(0)).statusCode).toBe(409);
-    let started!: () => void;
-    let finish!: () => void;
-    const ready = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    const pending = new Promise<void>((resolve) => {
-      finish = resolve;
-    });
-    mockSend(async () => {
-      started();
-      await pending;
-    });
-    const response = Promise.resolve(f.post('ask', { question: 'What did Mira know?' }));
-    await ready;
-    if (change === 'settings')
-      expect((await f.put(1, { ...f.config, position: 'Chapter 9' })).statusCode).toBe(200);
-    else
-      f.store.editSource(f.chat.headRevision!, {
-        expectedRevision: 0,
-        text: 'MIRA_DOES_NOT_KNOW_SECRET',
-      });
-    expect(
-      (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json().analysisRevision
-    ).toBeGreaterThan(inputRevision);
-    finish();
-    const answer = await response;
-    expect(answer.statusCode, answer.body).toBe(409);
-    expect(answer.json()).toEqual({ error: 'STORY_GUIDE_STALE' });
-    expect(f.store.storyGuide.get(f.chat.id)).toMatchObject({
-      revision: change === 'settings' ? 2 : 1,
-      config: { position: change === 'settings' ? 'Chapter 9' : '' },
-      brief: null,
-    });
-  }
-);
-
 test.each(['off', 'failed'] as const)(
   'the last writing brief survives a newer %s guide run when only its receipt was published',
   async (nextGuide) => {
@@ -316,30 +179,29 @@ test.each(['off', 'failed'] as const)(
   }
 );
 
-test('shutdown cancels an explicit guide call and does not publish its late text', async () => {
+test('settings remain optional and revision guarded; helper reads the same original-work context', async () => {
   const f = await setup();
-  let started!: () => void;
-  const ready = new Promise<void>((resolve) => {
-    started = resolve;
+  const value = (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json();
+  expect(value.config).toMatchObject({ enabled: false, work: 'Silver Isles' });
+  expect(value).not.toHaveProperty('analysisRevision');
+  expect((await f.put(0, { ...f.config, work: 'Stale overwrite' })).statusCode).toBe(409);
+  expect((await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json().config).toEqual(
+    f.config
+  );
+  expect(readHelperChatContext(f.store, f.chat.id)).toMatchObject({
+    storyGuide: { revision: 1, config: f.config },
+    headRevision: f.chat.headRevision,
   });
-  let cancelled = false;
-  vi.spyOn(transport, 'executeProvider').mockImplementation(async (_, __, options) => {
-    started();
-    await new Promise<void>((resolve) =>
-      options.signal.addEventListener(
-        'abort',
-        () => {
-          cancelled = true;
-          resolve();
-        },
-        { once: true }
-      )
-    );
-    return success;
-  });
-  const response = Promise.resolve(f.post('refresh', {}));
-  await ready;
-  await f.app.close();
-  expect(cancelled).toBe(true);
-  expect((await response).statusCode).toBe(408);
+});
+
+test('retired preview and question endpoints cannot call a model or change story data', async () => {
+  const f = await setup();
+  const provider = vi.spyOn(transport, 'executeProvider');
+  const before = f.store.db.prepare('SELECT * FROM runs').all();
+  const state = f.store.storyGuide.get(f.chat.id);
+  for (const action of ['ask', 'refresh'] as const)
+    expect((await f.post(action, { question: 'Why?', request: 'Continue' })).statusCode).toBe(404);
+  expect(provider).not.toHaveBeenCalled();
+  expect(f.store.storyGuide.get(f.chat.id)).toEqual(state);
+  expect(f.store.db.prepare('SELECT * FROM runs').all()).toEqual(before);
 });

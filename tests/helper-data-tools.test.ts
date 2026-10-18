@@ -29,6 +29,7 @@ function fixture() {
   const path = mkdtempSync(join(tmpdir(), 'uimori-data-tools-'));
   const store = new Store(join(path, 'test.sqlite'));
   owned.push({ store, path });
+  const initialPresets = store.product.all('prompt-preset') as PromptPreset[];
   const connection = store.product.connection({
     title: 'Unused fixture',
     protocol: 'fixture-sse-v1',
@@ -62,7 +63,7 @@ function fixture() {
     store.db
       .prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?')
       .run(JSON.stringify({ ...snapshot, ...patch }), task.id);
-  return { store, task, invoke, setSnapshot };
+  return { store, task, invoke, setSnapshot, initialPresets };
 }
 function bot(
   f: ReturnType<typeof fixture>,
@@ -177,7 +178,19 @@ test('branched conversation keeps exact searchable dialogue independent of origi
   const workspace = new HelperWorkspace(f.store);
   workspace.start(f.task.id, 'owner');
   workspace.finish(f.task.id, 'owner', 1, 'completed', '분기한 고유 답변 원본', null);
-  const branch = workspace.branch(f.task.conversationId, 'seed-data-branch');
+  const branch = workspace.create(f.task.snapshot.scope, 'legacy-seed', '기존 분기');
+  const add = f.store.db.prepare(`INSERT INTO helper_seed_messages
+    (id,conversation_id,ordinal,role,text,created_at) VALUES(?,?,?,?,?,?)`);
+  helperHistory(f.store, f.task.conversationId).forEach((message, ordinal) => {
+    add.run(
+      crypto.randomUUID(),
+      branch.id,
+      ordinal,
+      message.role,
+      message.text,
+      new Date().toISOString()
+    );
+  });
   const seeded = helperHistory(f.store, branch.id);
   expect(seeded.map((message) => message.text)).toContain('분기한 고유 답변 원본');
   const next = workspace.enqueue(branch.id, 'seek-seed', '이전 문장을 검색해 주세요', {
@@ -760,13 +773,15 @@ test('library filters distinguish bot/persona/module, hide retired library entri
   ).toBe(p.id);
   f.store.db.prepare('INSERT INTO library_hidden VALUES(?,?)').run('content', m.id);
   const list = await f.invoke('data.search', {});
-  expect(list.items).toHaveLength(2);
+  expect(list.items.map((item: any) => item.ref.id).sort()).toEqual(
+    [...f.initialPresets.map((preset) => preset.id), b.id, p.id].sort()
+  );
   const directory = await readOne(f, list.items.find((i: any) => i.ref.id === b.id).ref, {
     limit: 1,
   });
   expect(directory.fields).toHaveLength(1);
   expect(directory.nextOffset).toBe(1);
-  const found = await f.invoke('data.search', { patterns: ['나이'] });
+  const found = await f.invoke('data.search', { ids: [b.id, p.id, m.id], patterns: ['나이'] });
   const refs = found.items.map((i: any) => i.ref);
   const batch = await f.invoke('data.read', {
     refs: [...refs, { ...refs[0], hash: '0'.repeat(64) }],
@@ -808,7 +823,7 @@ test('library document search lists current resources by title, ID, category and
     role: 'main',
     text: 'PRIVATE_PROMPT_BODY ' + 'prompt '.repeat(25_000),
   });
-  f.store.product.promptPreset({
+  const translation = f.store.product.promptPreset({
     title: 'Translation Archive',
     role: 'translation',
     text: 'Translation prompt body',
@@ -836,9 +851,11 @@ test('library document search lists current resources by title, ID, category and
   const listed = await f.invoke('data.search', {
     scope: 'library',
     output: 'documents',
-    limit: 5,
+    limit: f.initialPresets.length + 3,
   });
-  expect(listed.items).toHaveLength(3);
+  expect(listed.items.map((item: any) => item.id).sort()).toEqual(
+    [...f.initialPresets.map((preset) => preset.id), current.id, main.id, translation.id].sort()
+  );
   expect(JSON.stringify(listed)).not.toContain('PRIVATE_CARD_BODY');
   expect(JSON.stringify(listed)).not.toContain('PRIVATE_PROMPT_BODY');
   expect(
@@ -1012,13 +1029,16 @@ test('SQL rejects writes, multiple statements, application credential tables and
   });
   expect(
     (await f.invoke('db.query', { sql: 'SELECT COUNT(*) n FROM agent_resources' })).rows[0].n
-  ).toBe(1);
+  ).toBe(f.initialPresets.length + 1);
 });
 
 test('SQL marks bounded rows/cells, interrupts runaway native queries, and preserves application responsiveness', async () => {
   const f = fixture();
-  bot(f, 'long '.repeat(3000));
-  const cells = await f.invoke('db.query', { sql: 'SELECT document FROM agent_resources' });
+  const b = bot(f, 'long '.repeat(3000));
+  const cells = await f.invoke('db.query', {
+    sql: 'SELECT document FROM agent_resources WHERE id=?',
+    params: [b.id],
+  });
   expect(cells.truncatedCells).toBe(1);
   expect(cells.rows[0].document.truncated).toBe(true);
   const rows = await f.invoke('db.query', {
@@ -1039,11 +1059,12 @@ test('SQL marks bounded rows/cells, interrupts runaway native queries, and prese
 
 test('cancellation stops the isolated process and zero-width regex/surrogate reads make forward progress', async () => {
   const f = fixture();
-  bot(f, '😀 나이: 27세\n끝');
-  const found = await f.invoke('data.search', { patterns: ['^'], regex: true });
+  const b = bot(f, '😀 나이: 27세\n끝');
+  const found = await f.invoke('data.search', { ids: [b.id], patterns: ['^'], regex: true });
   expect(found.items.filter((item: any) => item.ref.field === '/card/description')).toHaveLength(1);
   expect(found.complete).toBe(true);
-  const ref: DataRef = (await f.invoke('data.search', { patterns: ['나이'] })).items[0].ref;
+  const ref: DataRef = (await f.invoke('data.search', { ids: [b.id], patterns: ['나이'] })).items[0]
+    .ref;
   const read = await readOne(f, ref, { offset: 1, limit: 1 });
   expect(read.text).toBe('😀');
   expect(read.nextOffset).toBe(2);

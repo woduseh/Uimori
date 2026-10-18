@@ -197,6 +197,24 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await openPromptActions(panel);
   await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
   await confirm(page);
+  const selectedPrompt = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
+  await expect(selectedPrompt.getByRole('alert')).toContainText('다른 프롬프트를 선택한 뒤');
+  await selectedPrompt.getByRole('button', { name: '취소', exact: true }).click();
+  await panel.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '현재 프롬프트');
+  await settings
+    .getByLabel('현재 프롬프트 프리셋', { exact: true })
+    .selectOption(workspace.main.presetId);
+  await expect
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.presetId)
+    .toBe(workspace.main.presetId);
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await navigationAction(page, '프롬프트');
+  await panel.getByRole('button', { name: `${prompt.title} 프롬프트 편집`, exact: true }).click();
+  await openPromptActions(panel);
+  await panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true }).click();
+  await confirm(page);
   await expect(
     panel.getByRole('button', { name: `${prompt.title} 프롬프트 삭제`, exact: true })
   ).toHaveCount(0);

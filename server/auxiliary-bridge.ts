@@ -29,6 +29,9 @@ export function auxiliaryBridge(
         readRunSnapshot(store, source.runId),
         job.input
       );
+      const imageOwner = (job.input as { imageOwner?: string } | null)?.imageOwner;
+      if (snapshot.profile && (imageOwner === 'writer' || imageOwner === 'jev'))
+        snapshot.profile.image = imageOwner === 'jev';
       return {
         job: { ...job, kind: job.kind },
         source,

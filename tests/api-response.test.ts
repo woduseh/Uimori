@@ -139,8 +139,6 @@ test('accepted task mutations wake activity views while reads and rejected reque
 });
 
 test.each([
-  '/scene-commands/synthetic/cancel',
-  '/chats/synthetic/scene-commands',
   '/sources/synthetic/translation',
   '/sources/synthetic/images',
   '/illustrations/synthetic/cancel',

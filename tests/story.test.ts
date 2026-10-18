@@ -228,7 +228,7 @@ test('explicit notes need no transcripts, use CAS and preserve their replaced re
   );
 });
 
-test('long requests share one bound for new runs and scene reservations, without starting invalid work', async () => {
+test('long requests share one bound for new runs and outline writing, without starting invalid work', async () => {
   const app = await application();
   const created = await api(app, 'POST', '/api/chats', { title: 'Long scene request' });
   const longRequest = '가'.repeat(REQUEST_TEXT_MAX_CHARS);
@@ -245,11 +245,23 @@ test('long requests share one bound for new runs and scene reservations, without
   });
   expect(response.statusCode, response.body).toBe(409);
   expect(response.json()).toEqual({ error: 'Settings revision conflict' });
-  const command = await api(app, 'POST', `/api/chats/${created.id}/scene-commands`, {
-    label: 'Long scene',
-    request: longRequest,
-    idempotencyKey: randomUUID(),
-  });
+  const outline = app.store.outline.apply(
+    created.id,
+    {
+      idempotencyKey: randomUUID(),
+      operations: [{ op: 'create', level: 'episode', title: 'Long scene', intent: '' }],
+    },
+    'user'
+  );
+  const command = await api(
+    app,
+    'POST',
+    `/api/outline-nodes/${outline.created[0].id}/scene-command`,
+    {
+      request: longRequest,
+      idempotencyKey: randomUUID(),
+    }
+  );
   expect(command.request).toBe(longRequest);
   expect(app.store.story.command(command.id).request).toBe(longRequest);
   const rejected = await app.inject({
@@ -259,5 +271,26 @@ test('long requests share one bound for new runs and scene reservations, without
   });
   expect(rejected.statusCode, rejected.body).toBe(400);
   expect(app.store.detail(created.id).runs).toEqual([]);
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+
+test('independent scene queue endpoints are retired while stored command bytes remain', async () => {
+  const app = await application();
+  const created = await api(app, 'POST', '/api/chats', { title: 'Retired queue' });
+  const command = app.store.story.createCommand(created.id, {
+    label: 'Archived command',
+    request: 'Preserved exact request',
+    idempotencyKey: randomUUID(),
+  });
+  for (const [method, url] of [
+    ['POST', `/api/chats/${created.id}/scene-commands`],
+    ['POST', `/api/scene-commands/${command.id}/cancel`],
+    ['DELETE', `/api/scene-commands/${command.id}`],
+  ] as const) {
+    const response = await app.inject({ method, url, payload: {} });
+    expect(response.statusCode, response.body).toBe(404);
+  }
+  expect(app.store.story.command(command.id)).toEqual(command);
+  expect(await api(app, 'GET', `/api/chats/${created.id}/story`)).not.toHaveProperty('commands');
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });

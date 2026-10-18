@@ -89,13 +89,13 @@ test('ITRAN long requests survive composer translation, send, edit and reload', 
   await send(page).click();
   await expect.poll(async () => (await detail(request, chat.id)).runs[0]?.status).toBe('completed');
   expect((await detail(request, chat.id)).runs[0].request).toBe(translated);
-  await page.getByRole('button', { name: '요청 편집', exact: true }).click();
-  const editor = page.getByRole('textbox', { name: '요청 수정 내용', exact: true });
+  await page.getByRole('button', { name: '다시 쓰기', exact: true }).first().click();
+  const editor = page.getByRole('textbox', { name: '다시 쓸 요청', exact: true });
   await expect(editor).toHaveValue(translated);
   const edited = translated + '\n수정한 전개';
   await editor.fill(edited);
   await expect(editor).toHaveValue(edited);
-  await page.getByRole('button', { name: '수정 후 재생성', exact: true }).click();
+  await page.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(chat.id);
   const copyId = new URL(page.url()).searchParams.get('chat')!;
   await expect.poll(async () => (await detail(request, copyId)).runs[0]?.status).toBe('completed');
@@ -478,7 +478,8 @@ test('ICOPY full stored input is copied, not transformed or collapsed text, even
     await open(page, chat.id);
     const source = page.getByTestId('source').first();
     await expect(source.getByTestId('source-request')).toHaveText('DISPLAY_ONLY_TEXT_NOT_FOR_COPY');
-    const edit = source.getByRole('button', { name: '요청 편집', exact: true });
+    await source.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
+    const edit = source.getByRole('button', { name: '문맥용 요청 수정', exact: true });
     await expect(edit).toBeDisabled();
     const before = await detail(request, chat.id);
     const copy = source.getByRole('button', { name: '요청 복사', exact: true });

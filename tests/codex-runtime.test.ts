@@ -110,6 +110,9 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     ]);
     expect(onCommentary).toHaveBeenCalledExactlyOnceWith('Checking the draft.');
     expect(records().filter((row) => row.method === 'thread/start')).toHaveLength(1);
+    expect(records().find((row) => row.method === 'thread/start').params.config.web_search).toBe(
+      'live'
+    );
     expect(records().filter((row) => row.method === 'turn/start')).toHaveLength(1);
     expect(records().find((row) => row.method === 'turn/start').params).not.toHaveProperty(
       'outputSchema'
@@ -541,8 +544,12 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
     expect(result.status).toBe('completed');
     const start = records().find((row) => row.method === 'thread/start').params;
     expect(start.baseInstructions).toBe(built.baseInstructions);
+    expect(start.config.web_search).toBe('live');
     expect(start.developerInstructions).toBe(built.developerInstructions);
-    expect(wire?.body).toMatchObject({ baseInstructions: built.baseInstructions });
+    expect(wire?.body).toMatchObject({
+      baseInstructions: built.baseInstructions,
+      builtinTools: { webSearch: 'live' },
+    });
     expect(wire?.stablePrefixSha256).toBe(
       createHash('sha256')
         .update(JSON.stringify([built.baseInstructions, built.developerInstructions]))

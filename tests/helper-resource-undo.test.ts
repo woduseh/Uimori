@@ -204,6 +204,9 @@ test('a repeated clone receipt creates one copy and a structural patch undoes on
     expectedSourceRevision: source.revision,
     title: 'Version 2',
   };
+  const presetsBefore = (f.store.product.all('prompt-preset') as PromptPreset[]).map(
+    (preset) => preset.id
+  );
   const copy = mutate(f, task, 'resource.clone', args, 'copy') as {
     id: string;
     revision: number;
@@ -216,8 +219,8 @@ test('a repeated clone receipt creates one copy and a structural patch undoes on
   expect(copy.id).not.toBe(source.id);
   expect(mutate(f, task, 'resource.clone', args, 'copy')).toEqual(copy);
   expect(
-    f.store.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='prompt-preset'").get()!.n
-  ).toBe(2);
+    (f.store.product.all('prompt-preset') as PromptPreset[]).map((preset) => preset.id).sort()
+  ).toEqual([...presetsBefore, copy.id].sort());
   expect(lastEdit(f)).toBeNull();
   expect(
     f.workspace.events(f.conversation.id).filter((event) => event.kind === 'resource.updated')
@@ -262,6 +265,9 @@ test('runtime cloning uses saved source while an unsaved editor remains analysis
     ...editableResource('prompt-preset', source),
     program: nativePrompt('Unsaved draft body'),
   };
+  const presetsBefore = (f.store.product.all('prompt-preset') as PromptPreset[]).map(
+    (preset) => preset.id
+  );
   providerMutation('resource.clone', {
     kind: 'prompt-preset',
     sourceId: source.id,
@@ -283,10 +289,16 @@ test('runtime cloning uses saved source while an unsaved editor remains analysis
   );
   await Promise.all(f.work);
   expect(f.workspace.task(task.id).status).toBe('completed');
-  const row = f.store.db
-    .prepare("SELECT id FROM versions WHERE kind='prompt-preset' AND id<>?")
-    .get(source.id)!;
-  expect(readResource(f.store, 'prompt-preset', String(row.id))).toMatchObject({
+  const operations = f.store.db
+    .prepare('SELECT id FROM helper_operations WHERE task_id=?')
+    .all(task.id);
+  expect(operations).toHaveLength(1);
+  const copies = (f.store.product.all('prompt-preset') as PromptPreset[]).filter(
+    (preset) => !presetsBefore.includes(preset.id)
+  );
+  expect(copies).toHaveLength(1);
+  const copy = copies[0];
+  expect(readResource(f.store, 'prompt-preset', copy.id)).toMatchObject({
     title: 'Stored copy',
     revision: 1,
     program: source.program,

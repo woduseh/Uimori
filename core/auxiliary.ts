@@ -191,6 +191,15 @@ export function translationInput(
 ): AuxiliaryInput {
   validateSourceIdentity(source);
   if (snapshot.chatId !== source.chatId) throw new Error('SOURCE_SCOPE_MISMATCH');
+  const imagePolicyRelevant =
+    snapshot.profile?.image === true ||
+    !!snapshot.imageCatalog?.length ||
+    snapshot.profile?.packages?.some((pkg) =>
+      pkg.images?.some(
+        (image) => image.allowedUse !== 'profile' && image.id !== pkg.portraitImageId
+      )
+    ) ||
+    /!\[[^\]\r\n]*\]\(|<\s*img(?:\s|=)|\{\{(?:img|image|emotion|asset)::/iu.test(source.text);
   snapshot = translationSnapshot(snapshot, mode);
   if (mode === 'source-only')
     context = {
@@ -229,7 +238,11 @@ export function translationInput(
         ? { translationGuide: structuredClone(snapshot.translationGuide) }
         : {}),
     },
-    contract: '',
+    contract: !imagePolicyRelevant
+      ? ''
+      : snapshot.profile?.image
+        ? 'JEV owns existing catalog images. Translate the prose and preserve structural delimiters; do not add catalog image tags or image placeholders.'
+        : 'Preserve authored image tags and their positions exactly while translating the surrounding prose. Do not choose additional images.',
     referencePolicy:
       (mode === 'source-only' ? '' : AUTHOR_NOTE_GUIDANCE + '\n' + CATALOG_READ_GUIDANCE) +
       (snapshot.translationGuide ? '\n' + TRANSLATION_GUIDE_POLICY : '') +

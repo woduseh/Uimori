@@ -1,5 +1,4 @@
 import { detachAttemptUsage, helperUsageKind } from './usage-accounting.js';
-import { helperHistory } from './helper-context.js';
 import { releaseCompletedHelperInputs } from './execution-retention.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type {
@@ -16,6 +15,7 @@ import type {
   HelperInstruction,
   HelperLimits,
 } from '../core/helper.js';
+import { HELPER_TASK_LIMITS } from '../core/helper.js';
 import type { Usage } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { HttpError } from './request-validation.js';
@@ -130,80 +130,9 @@ export class HelperWorkspace {
           '',
           time,
           time,
-          json({ totalCalls: 24, helperCalls: 12 })
+          json(HELPER_TASK_LIMITS)
         );
       return this.conversation(id);
-    });
-  }
-  branch(id: string, requestKey: string, untilMessageId?: string): HelperConversation {
-    return this.store.transaction(() => {
-      const source = this.conversation(id);
-      const scopeKey = json(source.scope);
-      const creationKey = `branch:${requestKey}`;
-      const creationHash = createHash('sha256')
-        .update(json({ sourceId: id, untilMessageId: untilMessageId ?? null }))
-        .digest('hex');
-      const existing = this.store.db
-        .prepare(
-          'SELECT id,creation_hash FROM helper_conversations WHERE scope_key=? AND creation_key=?'
-        )
-        .get(scopeKey, creationKey) as Row | undefined;
-      if (existing) {
-        if (existing.creation_hash !== creationHash)
-          throw new HttpError(409, '같은 분기 요청 키가 다른 대상에 사용됐어요.');
-        return this.conversation(existing.id);
-      }
-      if (
-        this.store.db
-          .prepare(
-            "SELECT 1 FROM helper_tasks WHERE conversation_id=? AND status IN ('queued','running') LIMIT 1"
-          )
-          .get(id)
-      )
-        throw new HttpError(409, '진행 중인 작업을 마친 뒤 세션을 분기해 주세요.');
-      const history = helperHistory(this.store, id);
-      const accepted = (message: (typeof history)[number]) =>
-        message.role === 'assistant' &&
-        (!this.store.db.prepare('SELECT 1 FROM helper_messages WHERE id=?').get(message.id) ||
-          this.store.db
-            .prepare(`SELECT 1 FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id
-            WHERE m.id=? AND t.status='completed'`)
-            .get(message.id));
-      const selected = untilMessageId
-        ? history.find((message) => message.id === untilMessageId && accepted(message))
-        : history.findLast(accepted);
-      if (!selected) throw new HttpError(409, '완료된 도우미 응답이 있어야 분기할 수 있어요.');
-      const prefix = history.slice(
-        0,
-        history.findIndex((message) => message.id === selected.id) + 1
-      );
-      const time = now(),
-        newId = randomUUID();
-      this.store.db
-        .prepare(`INSERT INTO helper_conversations
-        (id,scope_key,creation_key,creation_hash,chat_id,scope,title,auto_title,revision,persona,created_at,updated_at,limits)
-        VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?)`)
-        .run(
-          newId,
-          scopeKey,
-          creationKey,
-          creationHash,
-          source.scope.kind === 'chat' ? source.scope.chatId : null,
-          scopeKey,
-          `${source.title} · 분기`.slice(0, 200),
-          0,
-          source.persona,
-          time,
-          time,
-          json(source.limits)
-        );
-      const add = this.store.db.prepare(`INSERT INTO helper_seed_messages
-        (id,conversation_id,ordinal,role,text,created_at) VALUES(?,?,?,?,?,?)`);
-      prefix.forEach((message, ordinal) => {
-        add.run(randomUUID(), newId, ordinal, message.role, message.text, time);
-      });
-      this.event(newId, null, 'conversation.branched', { sourceId: id, messages: prefix.length });
-      return this.conversation(newId);
     });
   }
   list(scope: { kind: 'chat'; chatId: string } | { kind: 'library' }): HelperConversationSummary[] {
@@ -227,24 +156,23 @@ export class HelperWorkspace {
       latestEventSeq: Number(row.latest_seq),
     }));
   }
-  persona(id: string, revision: number, persona: string, limits = this.conversation(id).limits) {
-    return this.update(id, revision, { persona, limits });
+  persona(id: string, revision: number, persona: string) {
+    return this.update(id, revision, { persona });
   }
   update(
     id: string,
     revision: number,
-    changes: Partial<Pick<HelperConversation, 'title' | 'persona' | 'limits'>>
+    changes: Partial<Pick<HelperConversation, 'title' | 'persona'>>
   ) {
     const previous = this.conversation(id);
     const changed = this.store.db
       .prepare(
-        'UPDATE helper_conversations SET title=?,auto_title=CASE WHEN ? THEN 0 ELSE auto_title END,persona=?,limits=?,updated_at=?,revision=revision+1 WHERE id=? AND revision=?'
+        'UPDATE helper_conversations SET title=?,auto_title=CASE WHEN ? THEN 0 ELSE auto_title END,persona=?,updated_at=?,revision=revision+1 WHERE id=? AND revision=?'
       )
       .run(
         changes.title ?? previous.title,
         Number(changes.title !== undefined),
         changes.persona ?? previous.persona,
-        json(changes.limits ?? previous.limits),
         now(),
         id,
         revision

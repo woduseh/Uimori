@@ -166,6 +166,7 @@ describe('Small library summaries and option receipts', () => {
 
   test('library summary never contains preset programs and variable retries never overwrite current values', () => {
     const { store, chat } = fixture();
+    const initialPresetIds = store.product.library(true).promptPresets!.map((preset) => preset.id);
     const presets = Array.from({ length: 8 }, (_, i) =>
       store.product.promptPreset({
         title: 'Preset ' + i,
@@ -174,7 +175,10 @@ describe('Small library summaries and option receipts', () => {
       })
     );
     const summary = store.product.library(true);
-    expect(summary.promptPresets).toHaveLength(8);
+    expect(summary.promptPresets).toHaveLength(initialPresetIds.length + presets.length);
+    expect(summary.promptPresets!.map((preset) => preset.id)).toEqual(
+      expect.arrayContaining([...initialPresetIds, ...presets.map((preset) => preset.id)])
+    );
     expect(summary.promptPresets!.every((p) => !('program' in p))).toBe(true);
     expect(Buffer.byteLength(JSON.stringify(summary))).toBeLessThan(16000);
     expect(store.product.get('prompt-preset', presets[0].id)).toHaveProperty('program');

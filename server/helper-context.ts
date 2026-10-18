@@ -17,7 +17,9 @@ const refs = (history: HelperTaskSnapshot['history']) =>
 export function readHelperChatContext(store: Store, chatId: string) {
   const current = store.context.current(chatId),
     checkpoint = current.checkpoint;
+  const { revision, config } = store.storyGuide.get(chatId);
   return {
+    storyGuide: { revision, config },
     scopeKey: current.scopeKey,
     activeRevision: current.activeRevision,
     notesRevision: current.notesRevision,

@@ -419,22 +419,38 @@ export class ProductStore {
         );
       }
     }
-    return (inTransaction ? this.saveInTransaction : this.save).call(
-      this,
-      'prompt-preset',
-      {
-        title: text(b.title, 'title', 200),
-        role,
-        program,
-        values: resolveEditablePromptValues(
+    const save = () => {
+      if (id) {
+        const selected = this.db
+          .prepare(`SELECT json_extract(body,'$.main.presetId') AS main,
+            json_extract(body,'$.translation.presetId') AS translation FROM prompt_workspace WHERE id=1`)
+          .get() as { main: string | null; translation: string | null };
+        if (
+          (selected.main === id && role !== 'main') ||
+          (selected.translation === id && role !== 'translation')
+        )
+          throw new HttpError(
+            409,
+            '기본 프롬프트로 사용 중이에요. 현재 프롬프트 설정에서 다른 프리셋을 선택한 뒤 역할을 바꿔 주세요.'
+          );
+      }
+      return this.saveInTransaction(
+        'prompt-preset',
+        {
+          title: text(b.title, 'title', 200),
+          role,
           program,
-          b.values === undefined ? {} : record(b.values)
-        ),
-      },
-      id,
-      id ? number(b.expectedRevision, 'revision') : undefined,
-      createId
-    );
+          values: resolveEditablePromptValues(
+            program,
+            b.values === undefined ? {} : record(b.values)
+          ),
+        },
+        id,
+        id ? number(b.expectedRevision, 'revision') : undefined,
+        createId
+      );
+    };
+    return inTransaction ? save() : this.store.transaction(save);
   }
   prepareConnection(value: unknown, id?: string) {
     return prepareConnection(this, value, id);
@@ -623,6 +639,7 @@ export class ProductStore {
     } catch {
       throw new HttpError(400, 'Invalid lore context policy');
     }
+    if (b.imageTranslation !== undefined) boolean(b.imageTranslation);
     return this.store.transaction(() => {
       const prior = this.profile(chatId);
       if (prior.revision !== number(b.expectedRevision, 'profile revision'))
@@ -667,10 +684,6 @@ export class ProductStore {
           ...(pinned?.mainModel ? { main: structuredClone(pinned.mainModel) } : {}),
         },
         image,
-        imageTranslation:
-          b.imageTranslation === undefined
-            ? (prior.imageTranslation ?? true)
-            : boolean(b.imageTranslation),
         ...(packageAttachments !== undefined ? { packageAttachments } : {}),
       };
       this.db
@@ -952,9 +965,17 @@ export class ProductStore {
       result.usage,
       request?.pricingStartedAt ?? '',
       // Batch reports its execution tier; frozen rates remain standard before the discount below.
-      anthropicBatch && reportedTier === 'batch' ? 'standard' : reportedTier
+      anthropicBatch &&
+        reportedTier === 'batch' &&
+        request?.pricingSnapshot?.serviceTier !== 'batch'
+        ? 'standard'
+        : reportedTier
     );
-    if (anthropicBatch && estimatedCost.status !== 'unavailable')
+    if (
+      anthropicBatch &&
+      request?.pricingSnapshot?.serviceTier !== 'batch' &&
+      estimatedCost.status !== 'unavailable'
+    )
       estimatedCost = {
         ...estimatedCost,
         usd: estimatedCost.usd === null ? null : estimatedCost.usd * 0.5,
@@ -1137,10 +1158,9 @@ function currentRef(product: ProductStore, kind: string, reference: ContentRef):
 }
 /** Pure current-settings projection. Frozen Run/source profiles never pass through this path. */
 function currentProfile(product: ProductStore, saved: ChatProfile): ChatProfile {
-  const current = saved;
+  const { imageTranslation: _retiredTranslationOwner, ...current } = saved;
   const result = {
     ...current,
-    imageTranslation: current.imageTranslation ?? true,
     routes: {
       ...currentModelRoutes(product.store),
       ...(saved.pinned?.mainModel ? { main: structuredClone(saved.pinned.mainModel) } : {}),

@@ -131,16 +131,19 @@ function inline(
       offset += protectedToken.length;
       continue;
     }
-    const link = rest.match(/^(!?)\[([^\]\n]{0,1000})\]\(([^)\s]{1,2000})\)/u);
+    const link = rest.match(
+      /^(!?)\[([^\]\n]{0,1000})\]\((?:<([^<>\n]{1,2000})>|([^)\s]{1,2000}))\)/u
+    );
     if (link) {
-      const href = !link[1] ? safeProseLink(link[3]) : undefined;
-      if (link[1] && imageUrls?.has(link[3])) {
+      const target = link[3] ?? link[4];
+      const href = !link[1] ? safeProseLink(target) : undefined;
+      if (link[1] && imageUrls?.has(target)) {
         flush();
         nodes.push(
           <img
             key={offset}
             className="prose-embedded-image"
-            src={link[3]}
+            src={target}
             alt={link[2]}
             loading="lazy"
             decoding="async"
@@ -604,7 +607,7 @@ export const Prose = memo(function Prose({
     () =>
       new Set(
         (allowedImageUrls ?? []).filter((url) =>
-          /^\/api\/package-image-blobs\/[a-f0-9]{64}$/u.test(url)
+          /^\/api\/(?:package-image-blobs\/[a-f0-9]{64}|assets\/[A-Za-z0-9_-]+)$/u.test(url)
         )
       ),
     [allowedImageUrls]

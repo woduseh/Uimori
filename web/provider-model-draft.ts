@@ -34,6 +34,13 @@ type PricingDraft = {
   rates: RateDraft;
   flexEnabled: boolean;
   flexRates: RateDraft;
+  batchEnabled: boolean;
+  batchRates: RateDraft;
+  longContext: { aboveInputTokens: string; rates: RateDraft };
+  flexLongContext: { aboveInputTokens: string; rates: RateDraft };
+  batchLongContext: { aboveInputTokens: string; rates: RateDraft };
+  sourceUrl: string;
+  checkedAt: string;
 };
 const emptyRateDraft = (): RateDraft => ({
   input: '',
@@ -49,11 +56,23 @@ function rateDraft(rates?: TokenRates): RateDraft {
   return draft;
 }
 export function pricingDraft(pricing?: ModelPricing): PricingDraft {
+  const manual = pricing?.mode === 'manual' ? pricing : undefined;
+  const context = (value?: { aboveInputTokens: number; rates: TokenRates }) => ({
+    aboveInputTokens: value ? String(value.aboveInputTokens) : '',
+    rates: rateDraft(value?.rates),
+  });
   return {
     mode: pricing?.mode ?? 'official',
     rates: rateDraft(pricing?.mode === 'manual' ? pricing.rates : undefined),
     flexEnabled: pricing?.mode === 'manual' && pricing.flexRates !== undefined,
-    flexRates: rateDraft(pricing?.mode === 'manual' ? pricing.flexRates : undefined),
+    flexRates: rateDraft(manual?.flexRates),
+    batchEnabled: manual?.batchRates !== undefined,
+    batchRates: rateDraft(manual?.batchRates),
+    longContext: context(manual?.longContext),
+    flexLongContext: context(manual?.flexLongContext),
+    batchLongContext: context(manual?.batchLongContext),
+    sourceUrl: manual?.sourceUrl ?? '',
+    checkedAt: manual?.checkedAt ?? '',
   };
 }
 export function pricingPayload(draft: PricingDraft): ModelPricing {
@@ -73,6 +92,25 @@ export function pricingPayload(draft: PricingDraft): ModelPricing {
         mode: 'manual',
         rates: rates(draft.rates),
         ...(draft.flexEnabled ? { flexRates: rates(draft.flexRates) } : {}),
+        ...(draft.batchEnabled ? { batchRates: rates(draft.batchRates) } : {}),
+        ...Object.fromEntries(
+          (['longContext', 'flexLongContext', 'batchLongContext'] as const)
+            .filter(
+              (key) =>
+                draft[key].aboveInputTokens.trim() &&
+                (key !== 'flexLongContext' || draft.flexEnabled) &&
+                (key !== 'batchLongContext' || draft.batchEnabled)
+            )
+            .map((key) => [
+              key,
+              {
+                aboveInputTokens: Number(draft[key].aboveInputTokens),
+                rates: rates(draft[key].rates),
+              },
+            ])
+        ),
+        ...(draft.sourceUrl.trim() ? { sourceUrl: draft.sourceUrl.trim() } : {}),
+        ...(draft.checkedAt.trim() ? { checkedAt: draft.checkedAt.trim() } : {}),
       };
 }
 

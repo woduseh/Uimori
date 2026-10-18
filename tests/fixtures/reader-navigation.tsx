@@ -62,6 +62,7 @@ function MiniNavigatorFixture() {
     ...(extra ? [{ id: 'source:new', number: 3, label: 'Arrived later' }] : []),
   ];
   const detail = {
+    chat: { id: 'navigator-chat', botId: 'navigator-bot' },
     reader: { navigation: entries, order: entries.map((entry) => entry.id) },
   } as ReaderDetail;
   function choose(id: string) {
@@ -107,6 +108,7 @@ function MiniNavigatorFixture() {
           reader={reader}
           target={selected}
           onSelect={choose}
+          onTarget={(target) => choose(target.sourceId)}
           onLatest={() => {
             if (reader.current) reader.current.scrollTop = reader.current.scrollHeight;
           }}

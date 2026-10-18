@@ -294,7 +294,7 @@ test('guide serializes prepared character examples with their identities and sou
   expect(String(vi.mocked(fetch).mock.calls.at(-1)![1]!.body)).toContain('CHANGED_PREPARED_VOICE');
 });
 
-test('disabled automatic guide is a no-op, explicit requests work, and writer calls remain reserved', async () => {
+test('disabled automatic guide is a no-op and writer calls remain reserved', async () => {
   const source = await snapshot();
   source.storyGuide!.config.enabled = false;
   const log = observed();
@@ -304,10 +304,6 @@ test('disabled automatic guide is a no-op, explicit requests work, and writer ca
     usage: { modelCalls: 0 },
   });
   expect(log.wires).toHaveLength(0);
-  expect((await prepareStoryGuide(source, log.hooks, { force: true })).brief).toBeTruthy();
-  expect(
-    (await prepareStoryGuide(source, log.hooks, { question: '이 인물의 행동 이유는?' })).brief
-  ).toBeTruthy();
   source.storyGuide!.config.enabled = true;
   source.settings.maxCalls = 2;
   const exhausted = await prepareStoryGuide(
@@ -320,7 +316,7 @@ test('disabled automatic guide is a no-op, explicit requests work, and writer ca
     error: 'STORY_GUIDE_CALL_BUDGET_EXHAUSTED',
     usage: { modelCalls: 0 },
   });
-  expect(log.wires).toHaveLength(2);
+  expect(log.wires).toHaveLength(0);
 });
 
 test('cancellation after the provider settles propagates with its accounted usage', async () => {

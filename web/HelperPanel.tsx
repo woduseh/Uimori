@@ -37,7 +37,6 @@ import {
   editorContextChanged,
   captureActiveEditorContext,
   getActiveEditorContext,
-  refreshActiveEditor,
   type ActiveEditorContext,
 } from './resource-editor.js';
 import { useHelperSessions } from './useHelperSessions.js';
@@ -297,9 +296,7 @@ export function HelperPanel(props: Props) {
   const [taskHistory, setTaskHistory] = useState<{ taskId?: string } | null>(null);
   const [hiddenActivity, setHiddenActivity] = useState<string[]>([]);
   const [openTaskActivities, setOpenTaskActivities] = useState<Record<string, boolean>>({});
-  const [personas, setPersonas] = useState<
-    Record<string, { text: string; revision: number; limits: HelperConversation['limits'] }>
-  >({});
+  const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
   const compact = props.modal ?? false;
   const closeButton = useRef<HTMLButtonElement>(null),
@@ -328,8 +325,8 @@ export function HelperPanel(props: Props) {
   const persona =
     personas[scopeKey] ??
     (conversation
-      ? { text: conversation.persona, revision: conversation.revision, limits: conversation.limits }
-      : { text: '', revision: 0, limits: { totalCalls: 24, helperCalls: 12 } });
+      ? { text: conversation.persona, revision: conversation.revision }
+      : { text: '', revision: 0 });
   const recorded = taskHistory?.taskId
     ? tasks.filter((task) => task.id === taskHistory.taskId)
     : tasks;
@@ -918,8 +915,6 @@ export function HelperPanel(props: Props) {
         busy={props.ready === false || busy || Boolean(outbox)}
         onSelect={sessions.select}
         onCreate={() => void sessions.create()}
-        onBranch={() => void sessions.branch()}
-        branching={sessions.branching}
         onUpdate={(value) => {
           data.updateConversation(value);
           void sessions.reload().catch((cause) => setError(cause.message));
@@ -975,39 +970,6 @@ export function HelperPanel(props: Props) {
                 </p>
               </div>
             </section>
-            <details className="helper-limits settings-group">
-              <summary>작업 한도</summary>
-              <div className="settings-group-body">
-                {(
-                  [
-                    ['totalCalls', '전체 호출 한도', 2, 100],
-                    ['helperCalls', '도우미 판단 한도', 1, persona.limits.totalCalls],
-                  ] as const
-                ).map(([field, label, min, max]) => (
-                  <label key={field} className="settings-row">
-                    <span className="settings-row-copy">{label}</span>
-                    <span className="settings-row-control">
-                      <input
-                        type="number"
-                        min={min}
-                        max={max}
-                        value={Number.isFinite(persona.limits[field]) ? persona.limits[field] : ''}
-                        onChange={(event) =>
-                          setPersonas((old) => ({
-                            ...old,
-                            [scopeKey]: {
-                              ...persona,
-                              limits: { ...persona.limits, [field]: event.target.valueAsNumber },
-                            },
-                          }))
-                        }
-                      />
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <p className="muted">새 요청부터 적용해요.</p>
-            </details>
             {persona.revision !== conversation.revision && (
               <p role="alert">
                 도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.{' '}
@@ -1049,11 +1011,7 @@ export function HelperPanel(props: Props) {
                 props.ready === false ||
                 scopeMismatch ||
                 savingPersona ||
-                persona.revision !== conversation.revision ||
-                persona.limits.totalCalls < 2 ||
-                persona.limits.totalCalls > 100 ||
-                persona.limits.helperCalls < 1 ||
-                persona.limits.helperCalls > persona.limits.totalCalls
+                persona.revision !== conversation.revision
               }
               onClick={() => {
                 if (props.ready === false || scopeMismatch) return;
@@ -1063,10 +1021,6 @@ export function HelperPanel(props: Props) {
                   {
                     expectedRevision: persona.revision,
                     persona: persona.text,
-                    limits: {
-                      totalCalls: persona.limits.totalCalls,
-                      helperCalls: persona.limits.helperCalls,
-                    },
                   },
                   'PATCH'
                 )
@@ -1077,7 +1031,6 @@ export function HelperPanel(props: Props) {
                       [scopeKey]: {
                         text: value.persona,
                         revision: value.revision,
-                        limits: value.limits,
                       },
                     }));
                   })
@@ -1342,12 +1295,6 @@ export function HelperPanel(props: Props) {
         {editor && !props.resource && (
           <div className="helper-editor">
             <span>편집 중 · {editor.title || '이름 없는 자료'}</span>
-            <button
-              type="button"
-              onClick={() => void refreshActiveEditor().catch((cause) => setError(cause.message))}
-            >
-              초안 새로고침
-            </button>
           </div>
         )}
         {selectedOutline && (

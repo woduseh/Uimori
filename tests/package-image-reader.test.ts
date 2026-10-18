@@ -98,6 +98,7 @@ test('transformed prose suppresses unplaceable images and identifies an authored
     },
   } as Job;
   const props = {
+    imageOwner: true,
     source,
     index: 0,
     jobs: [job],
@@ -110,6 +111,9 @@ test('transformed prose suppresses unplaceable images and identifies an authored
   };
   const normal = renderToStaticMarkup(createElement(SourceReader, props));
   expect(normal).toContain('/api/assets/asset');
+  const writer = renderToStaticMarkup(createElement(SourceReader, { ...props, imageOwner: false }));
+  expect(writer).not.toContain('/api/assets/asset');
+  expect(job.result?.annotations).toHaveLength(1);
   expect(normal).toContain('첫 메시지');
   expect(normal).not.toContain('INTERNAL_START_COMMAND');
   projection.data = {

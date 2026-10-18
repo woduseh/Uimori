@@ -340,9 +340,18 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   await expect(trigger).toBeFocused();
   await expect(trigger).toContainText(persona.title);
   await trigger.click();
-  await expect(picker.getByRole('button', { name: '모든 자료', exact: true })).toHaveCount(0);
+  await expect(picker.getByRole('button', { name: '모든 자료', exact: true })).toBeVisible();
   await picker.getByRole('searchbox').fill(module.title);
   await expect(picker.getByText(module.title, { exact: true })).toHaveCount(0);
+  await picker.getByRole('button', { name: '모든 자료', exact: true }).click();
+  const moduleChoice = picker
+    .locator('[data-content-choice]')
+    .filter({ has: page.getByText(module.title, { exact: true }) });
+  await expect(moduleChoice).toContainText('페르소나로 사용');
+  await moduleChoice.click();
+  await expect(trigger).toContainText(module.title);
+  expect((await (await request.get(`/api/content/${module.id}`)).json()).kind).toBe('module');
+  await trigger.click();
   await picker.getByRole('searchbox').fill(persona.title);
   await expect(choice.locator('img')).toHaveAttribute(
     'src',

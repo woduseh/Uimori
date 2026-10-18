@@ -7,7 +7,7 @@ import type { PackageModuleRef } from '../core/package-features.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import { api } from './api.js';
-import { AddIcon, RefreshIcon } from './ui-icons.js';
+import { RefreshIcon } from './ui-icons.js';
 import './package-authoring.css';
 
 const referenceKey = (ref: PackageModuleRef | null | undefined) =>
@@ -25,7 +25,6 @@ export function PackageFeaturesEditor({
 }) {
   const [library, setLibrary] = useState<Library | null>(null),
     [statuses, setStatuses] = useState<Record<string, ReferenceStatus>>({});
-  const [selected, setSelected] = useState('');
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
     [error, setError] = useState(''),
@@ -48,11 +47,10 @@ export function PackageFeaturesEditor({
   useEffect(() => {
     actionVersion.current++;
     setBusy(false);
-    setSelected('');
   }, [scope]);
   useEffect(() => {
-    onDirtyChange?.(busy || !!selected);
-  }, [selected, busy, onDirtyChange]);
+    onDirtyChange?.(busy);
+  }, [busy, onDirtyChange]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit reload retries the available module lists for this package.
   useEffect(() => {
     let active = true;
@@ -126,8 +124,8 @@ export function PackageFeaturesEditor({
       return false;
     }
   }
-  async function addModule() {
-    const item = library?.contents.find((content) => referenceKey(content) === selected);
+  async function addModule(reference: string) {
+    const item = library?.contents.find((content) => referenceKey(content) === reference);
     if (!item) return;
     await act(async (request, id) => {
       const content = await api<Content>(`/content/${encodeURIComponent(item.id)}`);
@@ -136,12 +134,9 @@ export function PackageFeaturesEditor({
       const current = latest.current.value;
       if (content.id === current.id || current.modules?.some((ref) => ref.id === content.id))
         throw new Error('자기 자신이나 이미 연결한 자료는 추가할 수 없어요.');
-      if (
-        update({
-          modules: [...(current.modules ?? []), { id: content.id, revision: content.revision }],
-        })
-      )
-        setSelected('');
+      update({
+        modules: [...(current.modules ?? []), { id: content.id, revision: content.revision }],
+      });
     });
   }
   return (
@@ -183,22 +178,13 @@ export function PackageFeaturesEditor({
         <div className="package-module-connect">
           <ContentPicker
             library={library ?? { contents: [], connections: [], models: [], assets: [] }}
-            value={selected}
-            onChange={setSelected}
+            value=""
+            onChange={(reference) => void addModule(reference)}
             role="module"
             label="연결할 공통 모듈"
             disabled={busy || loading || !library}
             excludeIds={[value.id, ...(value.modules ?? []).map((ref) => ref.id)]}
           />
-          <button
-            type="button"
-            className="primary package-module-connect-button"
-            disabled={!selected || busy}
-            onClick={() => void addModule()}
-          >
-            <AddIcon size={17} aria-hidden="true" />
-            모듈 연결
-          </button>
         </div>
         <footer className="package-module-footer">
           <small>서재에서 모듈을 수정하면 다음 실행부터 최신 내용을 사용해요.</small>

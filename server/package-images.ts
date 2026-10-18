@@ -304,7 +304,7 @@ export function reserveImageJob(
     ).revision ?? 0;
   const id = previous?.id ?? randomUUID(),
     time = new Date().toISOString();
-  const input = { ...frozen, imageTarget };
+  const input = { ...frozen, imageTarget, imageOwner: 'jev' };
   if (previous) {
     store.db.prepare('DELETE FROM job_results WHERE job_id=?').run(id);
     store.db
@@ -370,6 +370,8 @@ export function requestImages(store: Store, sourceId: string, value: unknown) {
     throw new HttpError(400, 'Invalid image target');
   return store.transaction(() => {
     const source = store.source(sourceId);
+    if (!store.product.profile(source.chatId).image)
+      throw new HttpError(409, '이미지 담당을 JEV로 선택한 뒤 다시 배치해 주세요.');
     const job = latestImageJob(store, sourceId, mode);
     if (
       source.hash !== request.expectedSourceHash ||

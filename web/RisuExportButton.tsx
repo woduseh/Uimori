@@ -5,10 +5,7 @@ import { sessionRequiredEvent } from './api.js';
 
 const messages: Record<string, string> = {
   RISU_EXPORT_MODULE_UNSUPPORTED: '이 모듈에는 내보낼 수 있는 Risu 원문이 없어요.',
-  RISU_EXPORT_LINKED_MODULES:
-    '연결 모듈을 현재 Risu 파일 형식에 보존할 수 없어요. 개별 자료로 내보내거나 전체 백업을 사용해 주세요.',
-  RISU_EXPORT_MODULE_CONFLICT:
-    '연결 모듈의 권한·설정 또는 자산 이름을 하나의 파일에 보존할 수 없어요. 개별 자료로 내보내거나 전체 백업을 사용해 주세요.',
+  RISU_EXPORT_MODULE_CONFLICT: '이 자료의 모듈 에셋 이름이 겹쳐요. 에셋을 확인해 주세요.',
   RISU_EXPORT_ASSET_UNAVAILABLE:
     '원문에 연결된 에셋 파일을 찾을 수 없어요. 에셋 탭에서 확인해 주세요.',
   RISU_EXPORT_ASSET_PATH: '원문 에셋의 파일 경로가 겹치거나 올바르지 않아요. 에셋을 확인해 주세요.',
@@ -24,6 +21,7 @@ export function RisuExportButton({
   revision,
   title,
   disabled,
+  linkedModules = false,
   onError,
 }: {
   kind: 'content' | 'prompt-presets';
@@ -32,6 +30,7 @@ export function RisuExportButton({
   revision: number;
   title: string;
   disabled?: boolean;
+  linkedModules?: boolean;
   onError: (message: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -53,7 +52,9 @@ export function RisuExportButton({
         title={
           disabled
             ? '편집 내용을 저장한 뒤 내보내 주세요.'
-            : '현재 저장본을 ' + format + ' 파일로 내보내기'
+            : '이 자료의 현재 저장본만 ' +
+              format +
+              ' 파일로 내보내요. 연결한 자료는 각각 내보내 주세요.'
         }
         onClick={async () => {
           if (controller.current) return;
@@ -101,6 +102,11 @@ export function RisuExportButton({
         <DownloadIcon size={18} aria-hidden="true" />
         {busy ? '내보내는 중…' : format + ' 내보내기'}
       </button>
+      {linkedModules && (
+        <small className="muted">
+          Risu 파일에는 이 자료만 담아요. 연결한 모듈은 각각 내보내 주세요.
+        </small>
+      )}
     </>
   );
 }

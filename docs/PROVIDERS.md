@@ -28,7 +28,7 @@ Batch의 `runId`·`attemptId`·`batchId`·`customId`와 요청 해시를 SQLite�
 
 사용자가 Run을 취소하면 로컬 Run이 즉시 취소되고, 생성된 Anthropic Batch가 있으면 원격 취소도 best-effort로 요청해요. 서버 종료는 사용자 취소가 아니므로 원격 Batch를 취소하지 않아요. 취소 뒤 늦게 도착한 결과는 source로 commit하지 않아요.
 
-Anthropic Batch 요금은 공식 Batch 가격 정책의 50% 할인을 반영해 화면의 예상 비용도 절반으로 계산해요. 이 값은 저장된 토큰 단가와 프로바이더 사용량에 따른 추정치이며 실제 청구 내역은 Anthropic이 기준이에요.
+Anthropic Batch 추정 비용은 모델에 별도로 입력한 Batch 단가를 사용해요. Batch 단가가 없으면 미확인으로 표시하며 기본 단가에 자동 할인을 적용하지 않아요. 업데이트 전에 예약된 작업의 가격 snapshot은 당시 계산을 유지해요. 실제 청구 내역은 Anthropic이 기준이에요.
 
 ## 모델 목록과 응답 확인
 

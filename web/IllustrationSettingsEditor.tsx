@@ -44,11 +44,13 @@ function IllustrationEnvironmentEditor({
   activeGenerator,
   onDirtyChange,
   onSaveHandlerChange,
+  onSavedChange,
 }: {
   library: Library;
   activeGenerator: IllustrationPresetGenerator;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
+  onSavedChange: (settings: IllustrationSettings) => void;
 }) {
   const [saved, setSaved] = useState<IllustrationSettings | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -77,6 +79,9 @@ function IllustrationEnvironmentEditor({
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    if (saved) onSavedChange(saved);
+  }, [saved, onSavedChange]);
   useEffect(() => {
     if (saved && !dirty && !busy) setDraft(structuredClone(saved));
   }, [saved, dirty, busy]);
@@ -572,6 +577,7 @@ export function IllustrationSettingsEditor({
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
   const [activeGenerator, setActiveGenerator] = useState<IllustrationPresetGenerator>('codex');
+  const [environment, setEnvironment] = useState<IllustrationSettings | null>(null);
   const [presetsDirty, setPresetsDirty] = useState(false);
   const [environmentDirty, setEnvironmentDirty] = useState(false);
   const group = useSettingsSaveGroup(illustrationSections);
@@ -585,17 +591,23 @@ export function IllustrationSettingsEditor({
   return (
     <>
       <IllustrationPresetSettings
+        library={library}
+        environment={environment}
         scope={scope}
         onGeneratorChange={setActiveGenerator}
         onDirtyChange={setPresetsDirty}
         onSaveHandlerChange={group.registrations.presets}
       />
-      <IllustrationEnvironmentEditor
-        library={library}
-        activeGenerator={activeGenerator}
-        onDirtyChange={setEnvironmentDirty}
-        onSaveHandlerChange={group.registrations.environment}
-      />
+      <details className="illustration-preset-disclosure">
+        <summary>기본 생성 환경·자동 생성 관리</summary>
+        <IllustrationEnvironmentEditor
+          library={library}
+          onSavedChange={setEnvironment}
+          activeGenerator={activeGenerator}
+          onDirtyChange={setEnvironmentDirty}
+          onSaveHandlerChange={group.registrations.environment}
+        />
+      </details>
     </>
   );
 }

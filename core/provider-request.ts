@@ -117,6 +117,7 @@ function validateGeneration(value: unknown): asserts value is ModelGeneration {
 
 export function validateRequest(value: unknown): ProviderRequest {
   keys(value, [
+    'webSearch',
     'pricingSnapshot',
     'role',
     'modelId',
@@ -142,6 +143,8 @@ export function validateRequest(value: unknown): ProviderRequest {
     }
   }
   if (!MODEL_ROLES.includes(value.role as ModelRole)) reject('INVALID_ROLE');
+  if (value.webSearch !== undefined && (value.webSearch !== true || value.role !== 'helper'))
+    reject('INVALID_WEB_SEARCH');
   string(value.modelId);
   if (value.generation !== undefined) validateGeneration(value.generation);
   if (value.providerOptions !== undefined) {

@@ -791,12 +791,12 @@ test('NOTICELOAD translation admission and active jobs wait centrally while fail
     const scene = page.getByTestId('source');
     const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
     await draft.fill('번역 대기와 재시도 뒤에도 남을 초안');
-    await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
     const waiting = scene.locator('.translation-placeholder .loading-state').getByRole('status');
     await expect(waiting).toBeVisible();
     await expect(waiting.locator('svg')).toBeVisible();
     await expect(waiting).toHaveCSS('justify-items', 'center');
-    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toBeDisabled();
+    await expect(scene.getByRole('button', { name: '번역 생성', exact: true })).toBeDisabled();
     expect(submissions).toBe(1);
     release();
     await expect.poll(() => job?.status).toBe('queued');

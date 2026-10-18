@@ -31,6 +31,9 @@ import {
   type IllustrationPresetGenerator,
 } from '../core/illustration-presets.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import type { Library } from '../core/product.js';
+import type { IllustrationSettings } from '../core/illustration.js';
+import { isModelSelectable } from './model-selection.js';
 import { api, ApiError, saveDownload } from './api.js';
 import { Dialog } from './Dialog.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
@@ -53,11 +56,15 @@ const messageOf = (error: unknown) => {
   return /^COMFYUI_/u.test(message) ? illustrationErrorMessage(message) : message;
 };
 export function IllustrationPresetSettings({
+  library,
+  environment,
   scope,
   onDirtyChange,
   onSaveHandlerChange,
   onGeneratorChange,
 }: {
+  library: Library;
+  environment: IllustrationSettings | null;
   scope: IllustrationPresetScope;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
@@ -272,6 +279,24 @@ export function IllustrationPresetSettings({
         ? p.botPresets[scope.botId ?? '']
         : p.chatPresets[scope.chatId ?? ''];
   const effective = resolveIllustrationPreset(catalog, scope);
+  const modelRef =
+    environment &&
+    (effective.generator === 'codex' ? environment.codex.model : environment.comfyui.promptModel);
+  const model = library.models.find((item) => item.id === modelRef?.id);
+  const modelReady = !!model && isModelSelectable(model, library.models, library.connections);
+  const codexConnection =
+    model && library.connections.find((item) => item.id === model.connectionId);
+  const readiness = !environment
+    ? '기본 생성 환경을 열어 저장된 설정을 확인해 주세요.'
+    : !modelReady
+      ? '설정 필요 · 사용할 모델을 지정하고 모델과 프로바이더를 켜 주세요.'
+      : effective.generator === 'codex' && codexConnection?.protocol !== 'codex-app-server-v1'
+        ? '설정 필요 · Codex 프로바이더의 모델을 선택해 주세요.'
+        : effective.generator === 'comfyui' && !environment.comfyui.baseUrl.trim()
+          ? '설정 필요 · 기본 생성 환경에 ComfyUI 주소를 입력해 주세요.'
+          : effective.generator === 'comfyui' && !effective.comfyui.workflow.trim()
+            ? '설정 필요 · 현재 프리셋에 ComfyUI 워크플로를 저장해 주세요.'
+            : '필수 설정 완료 · 실제 연결·로그인은 생성할 때 확인해요.';
   const conflict =
     !!draft?.id &&
     !!catalog.presets.find((item) => item.id === draft.id && item.revision !== draft.revision);
@@ -292,254 +317,265 @@ export function IllustrationPresetSettings({
       className="illustration-preset-settings illustration-settings"
       aria-label="삽화 프리셋"
     >
-      <div className="illustration-preset-heading">
-        <div>
-          <h3>삽화 프리셋</h3>
-          <p>생성기와 그림 지침을 함께 선택해요. 연결과 모델은 아래 공용 환경을 사용해요.</p>
-        </div>
-        <div className="illustration-preset-list-actions">
-          <button
-            className="primary"
-            aria-label="새 삽화 프리셋"
-            disabled={busy || dirty}
-            onClick={() => edit()}
-          >
-            <Plus size={16} aria-hidden="true" /> 새 프리셋
-          </button>
-          <button
-            aria-label="프리셋 가져오기"
-            disabled={busy || dirty}
-            onClick={() => input.current?.click()}
-          >
-            <Upload size={16} aria-hidden="true" /> 가져오기
-          </button>
-        </div>
-      </div>
-      <div className="illustration-preset-toolbar settings-group-body">
-        <div className="settings-row">
-          <div className="settings-row-copy">
-            <span>적용 범위</span>
-            <p
-              className="illustration-preset-current"
-              title="채팅 → 봇 → 작업실 순으로 적용해요. 새 생성부터 사용돼요."
-            >
-              {scope.chatId ? '현재 채팅' : '작업실 기본'} · <strong>{effective.title}</strong>
-              {' · '}
-              {effective.generator === 'comfyui' ? 'ComfyUI' : 'Codex'}
-            </p>
+      <section
+        className="settings-card illustration-current-summary illustration-preset-current"
+        aria-label="현재 삽화 설정"
+      >
+        <h3>현재 삽화 설정</h3>
+        <p>
+          {scope.chatId ? '현재 채팅' : scope.botId ? '현재 봇' : '작업실 기본'} ·{' '}
+          <strong>{effective.title}</strong>
+        </p>
+        <p>생성기 · {effective.generator === 'comfyui' ? 'ComfyUI' : 'Codex'}</p>
+        <p>
+          {effective.generator === 'comfyui' ? '프롬프트 모델' : '삽화 모델'} ·{' '}
+          {model?.title ?? (environment ? '모델 미지정' : '확인 중')}
+        </p>
+        <p role="status">{readiness}</p>
+      </section>
+      <details className="illustration-preset-disclosure">
+        <summary>프리셋·적용 범위 관리</summary>
+        <div className="illustration-preset-heading">
+          <div>
+            <h3>삽화 프리셋</h3>
+            <p>생성기와 그림 지침을 함께 선택해요. 연결과 모델은 아래 공용 환경을 사용해요.</p>
           </div>
-          <div className="settings-row-control">
-            <select
-              aria-label="삽화 프리셋 적용 범위"
-              value={target}
-              disabled={busy || dirty}
-              onChange={(event) => setTarget(event.target.value as typeof target)}
-            >
-              <option value="global">작업실 기본</option>
-              {scope.botId && <option value="bot">현재 봇의 기본</option>}
-              {scope.chatId && <option value="chat">현재 채팅만</option>}
-            </select>
-            {target !== 'global' && (
-              <button disabled={busy || dirty || !selectedId} onClick={() => void choose(null)}>
-                <RotateCcw size={16} aria-hidden="true" /> 상위 설정 따르기
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-      {(error || loadError) && <NoticeBanner tone="error">{error || loadError}</NoticeBanner>}
-      {loadError && (
-        <button onClick={() => void refresh()}>
-          <RefreshCw size={16} aria-hidden="true" /> 다시 불러오기
-        </button>
-      )}
-      <TransientNotice message={notice} />
-      {importNotice && <NoticeBanner>{importNotice}</NoticeBanner>}
-      <div className="illustration-preset-grid" aria-label="저장된 삽화 프리셋">
-        {catalog.presets.map((preset) => (
-          <article
-            className={`illustration-preset-card${selectedId === preset.id ? ' selected' : ''}`}
-            key={preset.id}
-          >
+          <div className="illustration-preset-list-actions">
             <button
-              className="illustration-preset-apply"
-              aria-label={`${preset.title} 삽화 프리셋 적용`}
-              aria-pressed={selectedId === preset.id}
+              className="primary"
+              aria-label="새 삽화 프리셋"
               disabled={busy || dirty}
-              onClick={() => void choose(preset.id)}
+              onClick={() => edit()}
             >
-              <div className="illustration-preset-title">
-                <strong>{preset.title}</strong>
-                {selectedId === preset.id && (
-                  <span className="illustration-preset-selected">
-                    <Check size={14} aria-hidden="true" /> 선택됨
-                  </span>
-                )}
-              </div>
-              <span>
-                {preset.id.startsWith('builtin:')
-                  ? '장면과 캐릭터를 따라 그려요.'
-                  : preset.description || '사용자 삽화 프리셋'}
-              </span>
-              <small>
-                {preset.generator === 'codex'
-                  ? 'Codex · 공용 삽화 모델'
-                  : preset.comfyui.workflow.trim()
-                    ? 'ComfyUI · 워크플로 포함'
-                    : 'ComfyUI · 워크플로 설정 필요'}
-              </small>
+              <Plus size={16} aria-hidden="true" /> 새 프리셋
             </button>
-            <div className="illustration-preset-actions">
-              {preset.id.startsWith('builtin:') ? (
-                <button
-                  disabled={busy || dirty}
-                  aria-label={`${preset.title} 삽화 프리셋 편집`}
-                  title={`${preset.title} 삽화 프리셋 복제 후 편집`}
-                  onClick={() => edit(preset)}
-                >
-                  <Copy size={16} aria-hidden="true" /> 복제 후 편집
+            <button
+              aria-label="프리셋 가져오기"
+              disabled={busy || dirty}
+              onClick={() => input.current?.click()}
+            >
+              <Upload size={16} aria-hidden="true" /> 가져오기
+            </button>
+          </div>
+        </div>
+        <div className="illustration-preset-toolbar settings-group-body">
+          <div className="settings-row">
+            <div className="settings-row-copy">
+              <span>적용 범위</span>
+            </div>
+            <div className="settings-row-control">
+              <select
+                aria-label="삽화 프리셋 적용 범위"
+                value={target}
+                disabled={busy || dirty}
+                onChange={(event) => setTarget(event.target.value as typeof target)}
+              >
+                <option value="global">작업실 기본</option>
+                {scope.botId && <option value="bot">현재 봇의 기본</option>}
+                {scope.chatId && <option value="chat">현재 채팅만</option>}
+              </select>
+              {target !== 'global' && (
+                <button disabled={busy || dirty || !selectedId} onClick={() => void choose(null)}>
+                  <RotateCcw size={16} aria-hidden="true" /> 상위 설정 따르기
                 </button>
-              ) : (
-                <IconButton
-                  disabled={busy || dirty}
-                  label={`${preset.title} 삽화 프리셋 편집`}
-                  icon={Pencil}
-                  onClick={() => edit(preset)}
-                />
               )}
-              <ActionMenu label={`${preset.title} 프리셋 메뉴`} viewport>
-                {!preset.id.startsWith('builtin:') && (
+            </div>
+          </div>
+        </div>
+        {(error || loadError) && <NoticeBanner tone="error">{error || loadError}</NoticeBanner>}
+        {loadError && (
+          <button onClick={() => void refresh()}>
+            <RefreshCw size={16} aria-hidden="true" /> 다시 불러오기
+          </button>
+        )}
+        <TransientNotice message={notice} />
+        {importNotice && <NoticeBanner>{importNotice}</NoticeBanner>}
+        <div className="illustration-preset-grid" aria-label="저장된 삽화 프리셋">
+          {catalog.presets.map((preset) => (
+            <article
+              className={`illustration-preset-card${selectedId === preset.id ? ' selected' : ''}`}
+              key={preset.id}
+            >
+              <button
+                className="illustration-preset-apply"
+                aria-label={`${preset.title} 삽화 프리셋 적용`}
+                aria-pressed={selectedId === preset.id}
+                disabled={busy || dirty}
+                onClick={() => void choose(preset.id)}
+              >
+                <div className="illustration-preset-title">
+                  <strong>{preset.title}</strong>
+                  {selectedId === preset.id && (
+                    <span className="illustration-preset-selected">
+                      <Check size={14} aria-hidden="true" /> 선택됨
+                    </span>
+                  )}
+                </div>
+                <span>
+                  {preset.id.startsWith('builtin:')
+                    ? '장면과 캐릭터를 따라 그려요.'
+                    : preset.description || '사용자 삽화 프리셋'}
+                </span>
+                <small>
+                  {preset.generator === 'codex'
+                    ? 'Codex · 공용 삽화 모델'
+                    : preset.comfyui.workflow.trim()
+                      ? 'ComfyUI · 워크플로 포함'
+                      : 'ComfyUI · 워크플로 설정 필요'}
+                </small>
+              </button>
+              <div className="illustration-preset-actions">
+                {preset.id.startsWith('builtin:') ? (
                   <button
                     disabled={busy || dirty}
-                    aria-label={`${preset.title} 삽화 프리셋 복제`}
-                    onClick={() => edit(preset, true)}
+                    aria-label={`${preset.title} 삽화 프리셋 편집`}
+                    title={`${preset.title} 삽화 프리셋 복제 후 편집`}
+                    onClick={() => edit(preset)}
                   >
-                    <Copy size={16} aria-hidden="true" /> 복제
+                    <Copy size={16} aria-hidden="true" /> 복제 후 편집
                   </button>
-                )}
-                <button
-                  disabled={busy}
-                  aria-label={`${preset.title} 삽화 프리셋 내보내기`}
-                  onClick={() => {
-                    void action(async () =>
-                      saveDownload(
-                        `${preset.title}.uimori-illustration.json`,
-                        illustrationPresetFile(preset)
-                      )
-                    );
-                  }}
-                >
-                  <Download size={16} aria-hidden="true" /> 내보내기
-                </button>
-                {!preset.id.startsWith('builtin:') && (
-                  <button
+                ) : (
+                  <IconButton
                     disabled={busy || dirty}
-                    className="danger"
-                    aria-label={`${preset.title} 삽화 프리셋 삭제`}
+                    label={`${preset.title} 삽화 프리셋 편집`}
+                    icon={Pencil}
+                    onClick={() => edit(preset)}
+                  />
+                )}
+                <ActionMenu label={`${preset.title} 프리셋 메뉴`} viewport>
+                  {!preset.id.startsWith('builtin:') && (
+                    <button
+                      disabled={busy || dirty}
+                      aria-label={`${preset.title} 삽화 프리셋 복제`}
+                      onClick={() => edit(preset, true)}
+                    >
+                      <Copy size={16} aria-hidden="true" /> 복제
+                    </button>
+                  )}
+                  <button
+                    disabled={busy}
+                    aria-label={`${preset.title} 삽화 프리셋 내보내기`}
                     onClick={() => {
-                      setError('');
-                      setDeleting(preset);
+                      void action(async () =>
+                        saveDownload(
+                          `${preset.title}.uimori-illustration.json`,
+                          illustrationPresetFile(preset)
+                        )
+                      );
                     }}
                   >
-                    <Trash2 size={16} aria-hidden="true" /> 삭제
+                    <Download size={16} aria-hidden="true" /> 내보내기
                   </button>
-                )}
-              </ActionMenu>
-            </div>
-          </article>
-        ))}
-      </div>
-      <input
-        ref={input}
-        type="file"
-        accept=".json"
-        hidden
-        aria-label="삽화 프리셋 파일"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = '';
-          if (file) void importFile(file);
-        }}
-      />
-      {draft && (
-        <section
-          ref={editor}
-          className="settings-group illustration-preset-editor"
-          aria-label="삽화 프리셋 편집기"
-        >
-          <div className="illustration-preset-heading">
-            <h4>{draft.id ? '프리셋 편집' : '새 프리셋 만들기'}</h4>
-            <small>{dirty ? '미저장 변경' : '저장됨'}</small>
-          </div>
-          {(conflict || deleted) && (
-            <NoticeBanner tone="error">
-              {deleted
-                ? '이 프리셋이 다른 곳에서 삭제됐어요.'
-                : '다른 곳에서 저장된 프리셋이 바뀌었어요.'}{' '}
-              편집 내용은 유지했어요. 사본으로 저장하거나 편집을 닫고 최신 항목을 다시 열어 주세요.
-            </NoticeBanner>
-          )}
-          <fieldset
-            className="control-grid settings-group-body illustration-preset-editor-body"
-            disabled={busy}
+                  {!preset.id.startsWith('builtin:') && (
+                    <button
+                      disabled={busy || dirty}
+                      className="danger"
+                      aria-label={`${preset.title} 삽화 프리셋 삭제`}
+                      onClick={() => {
+                        setError('');
+                        setDeleting(preset);
+                      }}
+                    >
+                      <Trash2 size={16} aria-hidden="true" /> 삭제
+                    </button>
+                  )}
+                </ActionMenu>
+              </div>
+            </article>
+          ))}
+        </div>
+        <input
+          ref={input}
+          type="file"
+          accept=".json"
+          hidden
+          aria-label="삽화 프리셋 파일"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) void importFile(file);
+          }}
+        />
+        {draft && (
+          <section
+            ref={editor}
+            className="settings-group illustration-preset-editor"
+            aria-label="삽화 프리셋 편집기"
           >
-            <label className="full">
-              프리셋 이름
-              <input
-                aria-label="삽화 프리셋 이름"
-                value={draft.model.title}
-                maxLength={100}
-                onChange={(event) => patch({ title: event.target.value })}
-              />
-            </label>
-            <label className="full">
-              설명 (선택)
-              <input
-                aria-label="삽화 프리셋 설명"
-                value={draft.model.description}
-                maxLength={2000}
-                onChange={(event) => patch({ description: event.target.value })}
-              />
-            </label>
-            <label className="full">
-              생성기
-              <select
-                aria-label="프리셋 삽화 생성기"
-                value={draft.model.generator}
-                onChange={(event) =>
-                  patch({
-                    generator: event.target.value as IllustrationPresetGenerator,
-                  })
-                }
-              >
-                <option value="codex">Codex · ChatGPT 구독의 이미지 생성</option>
-                <option value="comfyui">ComfyUI · 원격 PC의 API</option>
-              </select>
-              <small>프리셋을 적용하면 해당 생성기의 공용 연결·모델을 사용해요.</small>
-            </label>
-            <label className="full">
-              그림 지침
-              <textarea
-                aria-label="삽화 그림 지침"
-                aria-describedby={`${editorId}-style-help`}
-                className="illustration-style-guidance"
-                rows={8}
-                maxLength={SOURCE_TEXT_MAX_CHARS}
-                value={draft.model.styleGuidance}
-                placeholder="예: 차분한 색감, 부드러운 빛, 깔끔한 선화. 과도한 빛 번짐은 피해 주세요."
-                onChange={(event) => patch({ styleGuidance: event.target.value })}
-              />
-              <small id={`${editorId}-style-help`}>
-                스타일과 표현 조건, 피할 내용을 적어요. 자연어·목록·JSON을 사용할 수 있어요.
-              </small>
-            </label>
-            <details className="full illustration-preset-disclosure">
-              <summary>작성 예시</summary>
-              <div className="illustration-preset-help">
-                <p>
-                  필요한 항목만 자유롭게 적어요. 아래 예시는 입력 내용에 자동으로 추가되지 않아요.
-                </p>
-                <pre>{`핵심 특징:
+            <div className="illustration-preset-heading">
+              <h4>{draft.id ? '프리셋 편집' : '새 프리셋 만들기'}</h4>
+              <small>{dirty ? '미저장 변경' : '저장됨'}</small>
+            </div>
+            {(conflict || deleted) && (
+              <NoticeBanner tone="error">
+                {deleted
+                  ? '이 프리셋이 다른 곳에서 삭제됐어요.'
+                  : '다른 곳에서 저장된 프리셋이 바뀌었어요.'}{' '}
+                편집 내용은 유지했어요. 사본으로 저장하거나 편집을 닫고 최신 항목을 다시 열어
+                주세요.
+              </NoticeBanner>
+            )}
+            <fieldset
+              className="control-grid settings-group-body illustration-preset-editor-body"
+              disabled={busy}
+            >
+              <label className="full">
+                프리셋 이름
+                <input
+                  aria-label="삽화 프리셋 이름"
+                  value={draft.model.title}
+                  maxLength={100}
+                  onChange={(event) => patch({ title: event.target.value })}
+                />
+              </label>
+              <label className="full">
+                설명 (선택)
+                <input
+                  aria-label="삽화 프리셋 설명"
+                  value={draft.model.description}
+                  maxLength={2000}
+                  onChange={(event) => patch({ description: event.target.value })}
+                />
+              </label>
+              <label className="full">
+                생성기
+                <select
+                  aria-label="프리셋 삽화 생성기"
+                  value={draft.model.generator}
+                  onChange={(event) =>
+                    patch({
+                      generator: event.target.value as IllustrationPresetGenerator,
+                    })
+                  }
+                >
+                  <option value="codex">Codex · ChatGPT 구독의 이미지 생성</option>
+                  <option value="comfyui">ComfyUI · 원격 PC의 API</option>
+                </select>
+                <small>프리셋을 적용하면 해당 생성기의 공용 연결·모델을 사용해요.</small>
+              </label>
+              <label className="full">
+                그림 지침
+                <textarea
+                  aria-label="삽화 그림 지침"
+                  aria-describedby={`${editorId}-style-help`}
+                  className="illustration-style-guidance"
+                  rows={8}
+                  maxLength={SOURCE_TEXT_MAX_CHARS}
+                  value={draft.model.styleGuidance}
+                  placeholder="예: 차분한 색감, 부드러운 빛, 깔끔한 선화. 과도한 빛 번짐은 피해 주세요."
+                  onChange={(event) => patch({ styleGuidance: event.target.value })}
+                />
+                <small id={`${editorId}-style-help`}>
+                  스타일과 표현 조건, 피할 내용을 적어요. 자연어·목록·JSON을 사용할 수 있어요.
+                </small>
+              </label>
+              <details className="full illustration-preset-disclosure">
+                <summary>작성 예시</summary>
+                <div className="illustration-preset-help">
+                  <p>
+                    필요한 항목만 자유롭게 적어요. 아래 예시는 입력 내용에 자동으로 추가되지 않아요.
+                  </p>
+                  <pre>{`핵심 특징:
 - 차분한 색감
 - 부드러운 방향성 조명
 - 깔끔하고 섬세한 선화
@@ -551,130 +587,131 @@ export function IllustrationPresetSettings({
 피할 표현:
 - 점처럼 깨지는 가장자리
 - 과도한 빛 번짐`}</pre>
-                <p>그림의 깨짐이나 빛 번짐을 줄이는 지침이지만, 결과를 보장하지는 않아요.</p>
-                <p>
-                  <strong>Anima 예시:</strong> 모델 전용 문법은 적용 대상을 명시해요.
-                </p>
-                <pre>{`ComfyUI에서 Anima용 프롬프트를 작성할 때:
+                  <p>그림의 깨짐이나 빛 번짐을 줄이는 지침이지만, 결과를 보장하지는 않아요.</p>
+                  <p>
+                    <strong>Anima 예시:</strong> 모델 전용 문법은 적용 대상을 명시해요.
+                  </p>
+                  <pre>{`ComfyUI에서 Anima용 프롬프트를 작성할 때:
 단순한 외형은 태그로, 복잡한 관계와 표현 조건은 자연어로 설명한다.
 일반 태그에는 언더스코어 대신 공백을 사용한다.`}</pre>
-                <p>
-                  일반 스타일 JSON은 그림 지침에 붙여 넣고, ‘가져오기’에는 Uimori 프리셋 파일을
-                  사용해 주세요.
-                </p>
-              </div>
-            </details>
-            {(draft.model.generator === 'comfyui' || workflowError) && (
-              <details className="full illustration-preset-disclosure">
-                <summary>
-                  ComfyUI 설정
-                  <small>
-                    {draft.model.comfyui.workflow.trim() ? '워크플로 있음' : '워크플로 없음'}
-                  </small>
-                </summary>
-                <fieldset className="control-grid">
-                  <small className="full">
-                    Codex는 아래 설정을 사용하지 않아요. 워크플로 있음 표시는 입력 여부이며, 실제
-                    실행 호환성을 뜻하지 않아요.
-                  </small>
-                  <label className="full">
-                    추가 제외 지침
-                    <textarea
-                      aria-label="ComfyUI 네거티브 프롬프트 지침"
-                      aria-describedby={`${editorId}-negative-help`}
-                      rows={3}
-                      maxLength={SOURCE_TEXT_MAX_CHARS}
-                      value={draft.model.comfyui.negativeGuidance}
-                      onChange={(event) =>
-                        patch({
-                          comfyui: {
-                            ...draft.model.comfyui,
-                            negativeGuidance: event.target.value,
-                          },
-                        })
-                      }
-                    />
-                    <small id={`${editorId}-negative-help`}>
-                      그림 지침의 ‘피할 표현’에 더할 내용이에요. 반영하려면 워크플로의 적절한 제외
-                      입력에 {'{{negative}}'}를 연결해 주세요.
-                    </small>
-                  </label>
-                  <label className="full">
-                    워크플로 JSON (API 형식)
-                    <textarea
-                      aria-label="ComfyUI 워크플로 JSON"
-                      aria-invalid={workflowError ? true : undefined}
-                      aria-describedby={workflowError ? `${editorId}-workflow-error` : undefined}
-                      rows={10}
-                      maxLength={ILLUSTRATION_WORKFLOW_MAX_CHARS}
-                      value={draft.model.comfyui.workflow}
-                      placeholder="ComfyUI에서 내보낸 API 형식 JSON"
-                      onChange={(event) => {
-                        setWorkflowError('');
-                        patch({
-                          comfyui: {
-                            ...draft.model.comfyui,
-                            workflow: event.target.value,
-                          },
-                        });
-                      }}
-                    />
-                    {workflowError && (
-                      <small id={`${editorId}-workflow-error`} className="error">
-                        {workflowError}
-                      </small>
-                    )}
-                  </label>
-                  <details className="full">
-                    <summary>워크플로 작성·공유 도움말</summary>
-                    <p>
-                      문자열 입력의 {'{{prompt}}'}는 그림 설명, {'{{negative}}'}는 제외 지침,{' '}
-                      {'{{seed}}'}는 시드로 바뀌어요. 모델·해상도는 워크플로에서 정해요.
-                    </p>
-                    <p>
-                      상대 ComfyUI에도 같은 모델·LoRA·커스텀 노드가 필요해요. 워크플로 내용은 그대로
-                      내보내므로 직접 넣은 비밀값이나 개인 경로가 없는지 확인해 주세요.
-                    </p>
-                  </details>
-                </fieldset>
+                  <p>
+                    일반 스타일 JSON은 그림 지침에 붙여 넣고, ‘가져오기’에는 Uimori 프리셋 파일을
+                    사용해 주세요.
+                  </p>
+                </div>
               </details>
-            )}
-            <small className="full">
-              저장하면 이 프리셋을 사용하는 채팅의 다음 생성부터 반영돼요. 진행 중인 작업과 기존
-              삽화는 바뀌지 않아요.
-            </small>
-            <div className="illustration-preset-actions illustration-preset-editor-actions full">
-              <SaveButton
-                type="button"
-                className="ui-icon-button"
-                label="프리셋 저장"
-                text=""
-                aria-busy={operation === 'save'}
-                disabled={!dirty || conflict || deleted}
-                onClick={() => void save()}
-              />
-              {draft.id && (
-                <button
-                  className="illustration-preset-copy-save"
-                  aria-label="사본으로 저장"
-                  title="사본으로 저장"
-                  onClick={() => void save(true)}
-                >
-                  <Copy size={16} aria-hidden="true" /> 사본 저장
-                </button>
+              {(draft.model.generator === 'comfyui' || workflowError) && (
+                <details className="full illustration-preset-disclosure">
+                  <summary>
+                    ComfyUI 설정
+                    <small>
+                      {draft.model.comfyui.workflow.trim() ? '워크플로 있음' : '워크플로 없음'}
+                    </small>
+                  </summary>
+                  <fieldset className="control-grid">
+                    <small className="full">
+                      Codex는 아래 설정을 사용하지 않아요. 워크플로 있음 표시는 입력 여부이며, 실제
+                      실행 호환성을 뜻하지 않아요.
+                    </small>
+                    <label className="full">
+                      추가 제외 지침
+                      <textarea
+                        aria-label="ComfyUI 네거티브 프롬프트 지침"
+                        aria-describedby={`${editorId}-negative-help`}
+                        rows={3}
+                        maxLength={SOURCE_TEXT_MAX_CHARS}
+                        value={draft.model.comfyui.negativeGuidance}
+                        onChange={(event) =>
+                          patch({
+                            comfyui: {
+                              ...draft.model.comfyui,
+                              negativeGuidance: event.target.value,
+                            },
+                          })
+                        }
+                      />
+                      <small id={`${editorId}-negative-help`}>
+                        그림 지침의 ‘피할 표현’에 더할 내용이에요. 반영하려면 워크플로의 적절한 제외
+                        입력에 {'{{negative}}'}를 연결해 주세요.
+                      </small>
+                    </label>
+                    <label className="full">
+                      워크플로 JSON (API 형식)
+                      <textarea
+                        aria-label="ComfyUI 워크플로 JSON"
+                        aria-invalid={workflowError ? true : undefined}
+                        aria-describedby={workflowError ? `${editorId}-workflow-error` : undefined}
+                        rows={10}
+                        maxLength={ILLUSTRATION_WORKFLOW_MAX_CHARS}
+                        value={draft.model.comfyui.workflow}
+                        placeholder="ComfyUI에서 내보낸 API 형식 JSON"
+                        onChange={(event) => {
+                          setWorkflowError('');
+                          patch({
+                            comfyui: {
+                              ...draft.model.comfyui,
+                              workflow: event.target.value,
+                            },
+                          });
+                        }}
+                      />
+                      {workflowError && (
+                        <small id={`${editorId}-workflow-error`} className="error">
+                          {workflowError}
+                        </small>
+                      )}
+                    </label>
+                    <details className="full">
+                      <summary>워크플로 작성·공유 도움말</summary>
+                      <p>
+                        문자열 입력의 {'{{prompt}}'}는 그림 설명, {'{{negative}}'}는 제외 지침,{' '}
+                        {'{{seed}}'}는 시드로 바뀌어요. 모델·해상도는 워크플로에서 정해요.
+                      </p>
+                      <p>
+                        상대 ComfyUI에도 같은 모델·LoRA·커스텀 노드가 필요해요. 워크플로 내용은
+                        그대로 내보내므로 직접 넣은 비밀값이나 개인 경로가 없는지 확인해 주세요.
+                      </p>
+                    </details>
+                  </fieldset>
+                </details>
               )}
-              <IconButton
-                label="편집 닫기"
-                icon={X}
-                onClick={() => {
-                  if (dirty) setDiscard(true);
-                  else setDraft(null);
-                }}
-              />
-            </div>
-          </fieldset>
-        </section>
-      )}
+              <small className="full">
+                저장하면 이 프리셋을 사용하는 채팅의 다음 생성부터 반영돼요. 진행 중인 작업과 기존
+                삽화는 바뀌지 않아요.
+              </small>
+              <div className="illustration-preset-actions illustration-preset-editor-actions full">
+                <SaveButton
+                  type="button"
+                  className="ui-icon-button"
+                  label="프리셋 저장"
+                  text=""
+                  aria-busy={operation === 'save'}
+                  disabled={!dirty || conflict || deleted}
+                  onClick={() => void save()}
+                />
+                {draft.id && (
+                  <button
+                    className="illustration-preset-copy-save"
+                    aria-label="사본으로 저장"
+                    title="사본으로 저장"
+                    onClick={() => void save(true)}
+                  >
+                    <Copy size={16} aria-hidden="true" /> 사본 저장
+                  </button>
+                )}
+                <IconButton
+                  label="편집 닫기"
+                  icon={X}
+                  onClick={() => {
+                    if (dirty) setDiscard(true);
+                    else setDraft(null);
+                  }}
+                />
+              </div>
+            </fieldset>
+          </section>
+        )}
+      </details>
       <SaveConflictDialog
         open={saveConflict}
         title="삽화 프리셋 저장 내용 확인"

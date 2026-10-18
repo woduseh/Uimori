@@ -13,5 +13,6 @@ export function newChatPersona(
   explicit?: ContentRef | null
 ): ContentRef | null {
   if (explicit !== undefined) return explicit;
-  return bot.mode === 'persona' ? bot.persona : bot.mode === 'none' ? null : folder;
+  if (folder !== null) return folder;
+  return bot.mode === 'persona' ? bot.persona : null;
 }

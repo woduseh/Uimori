@@ -33,6 +33,10 @@
 .app-dialog.source-retry-dialog {
   --dialog-size: 520px;
 }
+.source-retry-dialog textarea {
+  width: 100%;
+  resize: vertical;
+}
 .app-dialog.source-info-dialog {
   min-width: 0;
   --dialog-size: 620px;

@@ -28,7 +28,7 @@ export function translationSnapshot(
           profile: {
             chatId: profile.chatId,
             revision: profile.revision,
-            image: false,
+            image: profile.image,
             routes: { main: null, translation: profile.routes.translation },
             models: profile.models.translation ? { translation: profile.models.translation } : {},
             ...(preset ? { promptPresets: { translation: preset } } : {}),

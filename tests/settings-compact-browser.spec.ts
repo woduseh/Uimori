@@ -133,13 +133,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
         '삽화',
         '사용량',
         '데이터 관리',
-        '접근 보안',
         '앱 정보·라이선스',
       ]) {
         await selectSettingsSection(page, section);
         const pane = dialog.getByRole('tabpanel');
         if (section === '일반') {
           await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
+          await expect(pane.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
+          await expect(dialog.getByRole('tab', { name: '접근 보안', exact: true })).toHaveCount(0);
           const toggle = pane.getByLabel('Enter로 보내기', { exact: true });
           const toggleBox = (await toggle.boundingBox())!;
           const rowBox = (await toggle.locator('xpath=ancestor::label').boundingBox())!;
@@ -148,7 +149,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
           ).toBeLessThanOrEqual(1);
         } else if (section === '테마·색상') {
           const controls = pane.locator('.theme-control-bar select');
-          await expect(controls).toHaveCount(3);
+          await expect(controls).toHaveCount(4);
+          await expect(pane.getByLabel('기본 외관', { exact: true })).toBeVisible();
+          await expect(pane.getByLabel('테마 적용 범위', { exact: true })).toBeHidden();
+          await pane.getByText('고급 외관·테마 제작', { exact: true }).click();
           await expect(
             pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
           ).toBeVisible();
@@ -166,11 +170,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
             .locator('details')
             .filter({ has: page.locator('summary', { hasText: '전체 복원 방법' }) });
           await expect(
-            pane.getByRole('heading', { name: '자료 가져오기', exact: true })
+            pane.getByRole('heading', { name: '백업 파일 가져오기', exact: true })
           ).toBeVisible();
-          await expect(
-            pane.getByRole('heading', { name: '채팅 가져오기', exact: true })
-          ).toBeVisible();
+          await expect(pane.getByLabel('백업 파일 선택', { exact: true })).toHaveCount(1);
           await expect(restore).not.toHaveAttribute('open', '');
           await restore.locator('summary').click();
           await expect(restore).toContainText('서버를 종료하고');
@@ -194,13 +196,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
         } else if (section === '프로바이더·모델') {
           await expect(pane.getByLabel('프로바이더·모델 검색', { exact: true })).toBeVisible();
         } else if (section === '삽화') {
+          await expect(
+            pane.getByRole('region', { name: '현재 삽화 설정', exact: true })
+          ).toBeVisible();
+          await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeHidden();
+          await pane.getByText('프리셋·적용 범위 관리', { exact: true }).click();
           await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeVisible();
         } else if (section === '사용량') {
           await expect(
             pane.getByRole('button', { name: '사용량 새로고침', exact: true })
           ).toBeVisible();
-        } else if (section === '접근 보안') {
-          await expect(pane.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
         } else {
           await expect(pane.getByTestId('app-version')).toHaveText(`v${packageJson.version}`);
           await expect(pane.getByTestId('app-build-id')).toHaveText(health.buildId);
@@ -384,7 +389,7 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   await page.keyboard.press('End');
   await expect(nav.getByRole('tab', { name: '앱 정보·라이선스', exact: true })).toBeFocused();
   await expect(dialog.getByRole('region', { name: 'Uimori 앱 정보' })).toBeVisible();
-  await nav.getByRole('tab', { name: '접근 보안', exact: true }).press('Home');
+  await nav.getByRole('tab', { name: '앱 정보·라이선스', exact: true }).press('Home');
   await expect(nav.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
   for (const section of ['테마·색상', '역할별 모델', '현재 프롬프트', '프로바이더·모델']) {
     await page.keyboard.press('ArrowDown');
@@ -649,6 +654,7 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '삽화');
+    await page.getByText('기본 생성 환경·자동 생성 관리', { exact: true }).click();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const count = settings.getByLabel('장면당 최대 삽화 개수', { exact: true });
     await count.fill('0');

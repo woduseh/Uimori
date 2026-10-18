@@ -53,7 +53,8 @@ test('library folders and cross-category moves preserve exact content revisions,
   const chat = store.createChat('Story', { botId: bot.id });
   const beforeContent = store.product.get('content', bot.id),
     beforeProfile = store.product.profile(chat.id);
-  const beforeRevision = revision(store);
+  const beforeOrganization = store.libraryOrganization.snapshot();
+  const beforeRevision = beforeOrganization.revision;
   const moved = store.libraryOrganization.move({
     expectedRevision: beforeRevision,
     items: [key(bot), key(persona)],
@@ -61,10 +62,13 @@ test('library folders and cross-category moves preserve exact content revisions,
     folderId: destination.id,
   });
   expect(moved.revision).toBe(beforeRevision + 1);
-  expect(moved.items).toHaveLength(2);
-  expect(
-    moved.items.every((item) => item.category === 'module' && item.folderId === destination.id)
-  ).toBe(true);
+  expect(moved.items).toEqual(
+    beforeOrganization.items.map((item) =>
+      item.kind === 'content' && [bot.id, persona.id].includes(item.id)
+        ? { ...item, category: 'module', folderId: destination.id }
+        : item
+    )
+  );
   expect(store.product.get('content', bot.id)).toEqual(beforeContent);
   expect(store.product.profile(chat.id)).toEqual(beforeProfile);
   expect(store.chat(chat.id).botId).toBe(bot.id);
@@ -83,6 +87,7 @@ test('library folders and cross-category moves preserve exact content revisions,
 
 test('reordering is category scoped and folder deletion moves members to unclassified without deleting contents', () => {
   const store = fixture(),
+    initialItems = store.libraryOrganization.snapshot().items,
     a = folder(store, 'A'),
     b = folder(store, 'B'),
     c = folder(store, 'C'),
@@ -115,12 +120,16 @@ test('reordering is category scoped and folder deletion moves members to unclass
   expect(
     current.folders.filter((item) => item.category === 'bot').map((item) => item.sortPosition)
   ).toEqual([0, 1]);
-  expect(current.items).toEqual([{ ...key(bot), category: 'bot', folderId: null }]);
+  expect(current.items).toHaveLength(initialItems.length + 1);
+  expect(current.items).toEqual(
+    expect.arrayContaining([...initialItems, { ...key(bot), category: 'bot', folderId: null }])
+  );
   expect(store.product.get('content', bot.id)).toEqual(bot);
 });
 
 test('item deletion cleans placement and retains immutable references', () => {
   const store = fixture(),
+    initialItems = store.libraryOrganization.snapshot().items,
     unused = content(store, 'Unused'),
     used = content(store, 'Used');
   const dest = folder(store, 'Folder');
@@ -134,7 +143,11 @@ test('item deletion cleans placement and retains immutable references', () => {
   const before = revision(store);
   deleteLibraryItem(store, 'content', unused.id, { expectedRevision: unused.revision });
   expect(revision(store)).toBe(before + 1);
-  expect(store.libraryOrganization.snapshot().items.map((item) => item.id)).toEqual([used.id]);
+  const remainingItems = store.libraryOrganization.snapshot().items;
+  expect(remainingItems).toHaveLength(initialItems.length + 1);
+  expect(remainingItems).toEqual(
+    expect.arrayContaining([...initialItems, { ...key(used), category: 'bot', folderId: dest.id }])
+  );
   expect(() =>
     deleteLibraryItem(store, 'content', used.id, { expectedRevision: used.revision })
   ).not.toThrow();
@@ -163,12 +176,13 @@ test('HTTP routes share one organization revision and reject hidden or unknown f
     payload?: Record<string, unknown>
   ) => built.inject({ method, url, ...(payload ? { payload } : {}) });
   try {
-    const initial = (await inject('GET', '/api/library/organization')).json();
-    expect(initial).toEqual({ revision: 1, folders: [], items: [] });
+    // Initialization also places the current default prompt presets in the library.
+    const initial = built.store.libraryOrganization.snapshot();
+    expect((await inject('GET', '/api/library/organization')).json()).toEqual(initial);
     expect(
       (
         await inject('POST', '/api/library/folders', {
-          expectedRevision: 1,
+          expectedRevision: initial.revision,
           category: ['bot'],
           title: 'Invalid',
         })
@@ -176,7 +190,7 @@ test('HTTP routes share one organization revision and reject hidden or unknown f
     ).toBe(400);
     expect((await inject('GET', '/api/library/organization')).json()).toEqual(initial);
     const created = await inject('POST', '/api/library/folders', {
-      expectedRevision: 1,
+      expectedRevision: initial.revision,
       category: 'prompts',
       title: 'Writing',
     });
@@ -184,7 +198,7 @@ test('HTTP routes share one organization revision and reject hidden or unknown f
     expect(
       (
         await inject('POST', '/api/library/folders', {
-          expectedRevision: 1,
+          expectedRevision: initial.revision,
           category: 'bot',
           title: 'Stale',
         })
@@ -203,7 +217,11 @@ test('HTTP routes share one organization revision and reject hidden or unknown f
     const removed = await inject('DELETE', `/api/library/folders/${org.folders[0].id}`, {
       expectedRevision: org.revision,
     });
-    expect(removed.json()).toEqual({ revision: org.revision + 1, folders: [], items: [] });
+    expect(removed.json()).toEqual({
+      revision: org.revision + 1,
+      folders: initial.folders,
+      items: initial.items,
+    });
   } finally {
     await built.close();
     owned.pop();

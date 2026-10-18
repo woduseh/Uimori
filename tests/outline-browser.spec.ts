@@ -138,19 +138,60 @@ for (const width of WIDTHS) {
     const chat = await seed(request, width);
     let panel = await open(page, chat.id, width);
     await choose(page, '1화 · 열람권의 대가', width);
+    const initial: OutlineDetail = await (
+      await request.get(`/api/chats/${chat.id}/outline`)
+    ).json();
+    const episode = initial.nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
+    const second = initial.nodes.find((node) => node.title === '2화 · 돌아온 출입증')!;
+    const oldDraft = '이전 구성 전문과 사용자가 덧붙인 지시를 그대로 보관해요.';
+    const oldKey = `outline-workspace:${chat.id}:request:${episode.id}`;
+    await page.evaluate(({ key, value }) => sessionStorage.setItem(key, JSON.stringify(value)), {
+      key: oldKey,
+      value: oldDraft,
+    });
+    const linked = await request.post(`/api/chats/${chat.id}/outline`, {
+      data: {
+        idempotencyKey: crypto.randomUUID(),
+        operations: [
+          {
+            op: 'update',
+            id: episode.id,
+            expectedRevision: episode.revision,
+            relatedIds: [second.id],
+          },
+        ],
+      },
+    });
+    expect(linked.ok()).toBe(true);
+    await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+    const links = panel.locator('.outline-related-list');
+    await expect(links).not.toHaveAttribute('open');
+    await links.locator('summary').click();
+    await expect(links.getByRole('button', { name: second.title })).toBeVisible();
     await expect(panel.locator('.outline-intent-card')).toContainText('멈출 지점');
     await page.screenshot({ path: info.outputPath(`outline-detail-light-${width}.png`) });
     await panel.getByRole('button', { name: '이번 구성의 입력 컨텍스트 보기' }).click();
     await expect(panel.locator('.outline-brief')).toContainText('감춰진 이름과 되찾는 선택');
     expect(await sourceCount(request, chat.id)).toBe(0);
     await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
+    const additional = panel.getByLabel('이번 추가 지시와 멈출 지점 (선택)', { exact: true });
+    await expect(additional).toHaveValue('');
+    const previous = panel
+      .locator('details')
+      .filter({ hasText: '이전 집필 요청 초안 · 읽기·복사' });
+    await previous.locator('summary').click();
+    await expect(previous.getByRole('textbox')).toHaveValue(oldDraft);
+    await expect(previous.getByRole('textbox')).toHaveAttribute('readonly');
     await panel
-      .getByLabel('추가 지시와 멈출 지점')
+      .getByLabel('이번 추가 지시와 멈출 지점 (선택)', { exact: true })
       .fill('선택한 1화만 집필해요. 문이 열리기 직전에 멈춰요.');
     await page.screenshot({ path: info.outputPath(`outline-writing-${width}.png`) });
     await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
     await expect(panel).toHaveCount(0);
     await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
+    expect(
+      await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null'), oldKey)
+    ).toBe(oldDraft);
     panel = await open(page, chat.id, width);
     await choose(page, '1화 · 열람권의 대가', width);
     await expect(panel.locator('.outline-status-line')).toContainText('원문 1개 연결');
@@ -282,7 +323,7 @@ for (const width of WIDTHS) {
     expect(await sourceCount(request, chat.id)).toBe(0);
   });
   if (width === 1440)
-    test(`OUTUI06 ${width} explicit review stays read-only, links its conversation and becomes stale after a plan edit`, async ({
+    test(`OUTUI06 ${width} explicit review stays read-only and keeps its result in the helper conversation`, async ({
       page,
       request,
     }, info) => {
@@ -335,6 +376,12 @@ for (const width of WIDTHS) {
         let panel = await open(page, chat.id, width);
         await choose(page, '1화 · 열람권의 대가', width);
         await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
+        await expect(panel.getByRole('region', { name: '현재 구성', exact: true })).toContainText(
+          '두 사람이 처음으로 조건부 협력을 시작해요.'
+        );
+        await expect(
+          panel.getByRole('textbox', { name: '이번 추가 지시와 멈출 지점 (선택)', exact: true })
+        ).toHaveValue('');
         await panel.getByRole('button', { name: '집필 시작', exact: true }).click();
         await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
         panel = await open(page, chat.id, width);
@@ -347,13 +394,12 @@ for (const width of WIDTHS) {
           (
             (await (await request.get(`/api/chats/${chat.id}/outline`)).json()) as OutlineDetail
           ).nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
-        await expect.poll(async () => (await current()).latestReview?.status).toBe('completed');
+        await expect(helper.locator('.helper-messages')).toContainText('합성 점검이에요.');
         expect(await sourceCount(request, chat.id)).toBe(1);
         await helper.getByRole('button', { name: '구성으로 돌아가기', exact: true }).click();
-        await expect(panel.locator('.outline-review')).toContainText('점검 의견 있음');
+        await expect(panel.locator('.outline-review')).toHaveCount(0);
         const before = await current();
-        expect(before.latestReview?.sources).toHaveLength(1);
-        expect(before.latestReview?.stale).toBe(false);
+        expect(before).not.toHaveProperty('latestReview');
         expect(peer.requests).toHaveLength(1);
         const saved = await request.post(`/api/chats/${chat.id}/outline`, {
           data: {
@@ -370,9 +416,9 @@ for (const width of WIDTHS) {
         });
         expect(saved.ok()).toBe(true);
         await panel.getByRole('button', { name: '새로고침', exact: true }).click();
-        await expect(panel.locator('.outline-review')).toContainText('이후 변경됨');
+        await expect(panel.locator('.outline-review')).toHaveCount(0);
         await page.screenshot({ path: info.outputPath(`outline-review-${width}.png`) });
-        await panel.getByRole('button', { name: '도우미에서 점검 의견 보기' }).click();
+        await panel.getByRole('button', { name: '도우미', exact: true }).click();
         await expect(helper).toBeVisible();
         await expect(helper.locator('.helper-messages')).not.toBeEmpty();
       } finally {

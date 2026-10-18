@@ -11,15 +11,19 @@ type TagInput = Omit<NativeRisuRenderInput, 'text'> & {
   templates: string[];
   guidance?: string;
 };
-
-/** A candidate is accepted only when the original display rules resolve it to this exact asset. */
-export function nativeImageTagInWorker(input: TagInput): string | null {
-  const native = structuredClone(input.native);
+function withoutBackground(source: TagInput['native']) {
+  const native = structuredClone(source);
   const extensions = native.card.extensions as Record<string, unknown> | undefined;
   native.card.extensions = {
     ...extensions,
     risuai: { ...(extensions?.risuai as Record<string, unknown> | undefined), backgroundHTML: '' },
   };
+  return native;
+}
+
+/** A candidate is accepted only when the original display rules resolve it to this exact asset. */
+export function nativeImageTagInWorker(input: TagInput): string | null {
+  const native = withoutBackground(input.native);
   const rules = nativeRisuRegex(native).filter(
     (rule) => rule.type === 'editdisplay' && /img/iu.test(rule.in)
   );
@@ -89,6 +93,36 @@ export function nativeImageTag(input: TagInput): Promise<string | null> {
   return runNativeRisuWorker(
     new URL('./risu-native-image-tags.js', import.meta.url),
     'nativeImageTagInWorker',
+    input,
+    5000
+  );
+}
+
+type AuthoredTagsInput = NativeRisuRenderInput & { urls: string[] };
+/** Resolve authored aliases through their own display rules, including state-dependent outfits. */
+export function nativeCatalogImageTagsInWorker(input: AuthoredTagsInput): string[] {
+  const native = withoutBackground(input.native);
+  const tags = [
+    ...new Set(
+      input.text.match(
+        /!\[[^\]\r\n]*\]\((?:[^()\r\n]|\([^()\r\n]*\))*\)|<\s*img(?:\s|=)[^>]*>|\{\{(?:img|image|emotion|asset)::[^{}]*\}\}/giu
+      ) ?? []
+    ),
+  ];
+  return tags.filter((tag) => {
+    const rendered = renderNativeRisuMessageInWorker({ ...input, native, text: tag });
+    const sources = [...rendered.html.matchAll(/<img\b[^>]*\bsrc="([^"]*)"/giu)].map(
+      (match) => match[1]
+    );
+    return !rendered.html.includes(tag) && sources.some((url) => input.urls.includes(url));
+  });
+}
+export function nativeCatalogImageTags(input: AuthoredTagsInput): Promise<string[]> {
+  if (!/!\[|<\s*img(?:\s|=)|\{\{(?:img|image|emotion|asset)::/iu.test(input.text))
+    return Promise.resolve([]);
+  return runNativeRisuWorker(
+    new URL('./risu-native-image-tags.js', import.meta.url),
+    'nativeCatalogImageTagsInWorker',
     input,
     5000
   );

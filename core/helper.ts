@@ -34,6 +34,10 @@ export type HelperStatus =
   | 'cancelled'
   | 'interrupted';
 export type HelperLimits = { totalCalls: number; helperCalls: number };
+/** Host-visible model calls per newly admitted task; native internal requests are unobservable. */
+export const HELPER_TASK_LIMITS: Readonly<HelperLimits> = { totalCalls: 128, helperCalls: 64 };
+/** Tool callbacks are observable even when a native agent owns its internal model loop. */
+export const HELPER_TOOL_CALL_LIMIT = 256;
 export type HelperInstruction = {
   id: number;
   requestKey: string;

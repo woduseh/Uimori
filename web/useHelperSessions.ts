@@ -93,7 +93,6 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
   const [selected, setSelected] = useState<Record<string, string | null>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [creating, setCreating] = useState(false);
-  const [branching, setBranching] = useState(false);
   const [seen, setSeen] = useState<Record<string, number>>({});
   const versions = useRef(new Map<string, number>());
   const selectionVersions = useRef(new Map<string, number>());
@@ -106,7 +105,6 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
   viewedScope.current = scopeKey;
   const alive = useRef(true);
   const createLock = useRef(false);
-  const branchLock = useRef(false);
   const sessions = lists[group] ?? [];
   const currentId = selected[group] ?? null;
   useEffect(() => {
@@ -275,42 +273,6 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
       if (alive.current) setCreating(false);
     }
   };
-  const branch = async () => {
-    if (branchLock.current || !currentId) return;
-    branchLock.current = true;
-    setBranching(true);
-    setErrors((old) => ({ ...old, [group]: '' }));
-    const key = `uimori:helper-branch:${currentId}`;
-    const selectionVersion = selectionVersions.current.get(group) ?? 0;
-    const originalScope = viewedScope.current;
-    try {
-      const request = JSON.parse(read(key) ?? 'null') ?? { requestKey: crypto.randomUUID() };
-      remember(key, JSON.stringify(request));
-      const value = await api<HelperConversation>(
-        `/helper/conversations/${encodeURIComponent(currentId)}/branch`,
-        request
-      );
-      remember(key, null);
-      // A delayed branch must not steal selection after the user opens another session/tab.
-      if (
-        alive.current &&
-        viewedScope.current === originalScope &&
-        (selectionVersions.current.get(group) ?? 0) === selectionVersion
-      )
-        select(value);
-      void reload().catch(() => {});
-    } catch (cause) {
-      if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status))
-        remember(key, null);
-      setErrors((old) => ({
-        ...old,
-        [group]: cause instanceof Error ? cause.message : '세션 분기에 실패했어요.',
-      }));
-    } finally {
-      branchLock.current = false;
-      setBranching(false);
-    }
-  };
   return {
     sessions,
     unread,
@@ -318,8 +280,6 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
     select,
     create,
     creating,
-    branch,
-    branching,
     reload,
     error: errors[group] ?? '',
     clearError: () => setErrors((old) => ({ ...old, [group]: '' })),

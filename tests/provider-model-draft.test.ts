@@ -1,3 +1,4 @@
+import { pricingDraft, pricingPayload } from '../web/provider-model-draft.js';
 import { effectiveModelFamily } from '../core/model-family.js';
 import { describe, expect, test } from 'vitest';
 import type { Connection, ModelPreset } from '../core/product.js';
@@ -293,4 +294,31 @@ describe('model numeric drafts', () => {
       ).toMatch(/providerOptions/);
     }
   );
+});
+
+test('manual pricing editor round-trips source metadata and independent Flex, Batch and long-context rates', () => {
+  const pricing = {
+    mode: 'manual' as const,
+    rates: { input: 2, cacheRead: 0, cacheWrite: null, output: 8 },
+    flexRates: { input: 1, cacheRead: null, cacheWrite: null, output: 3 },
+    batchRates: { input: 1.5, cacheRead: 0, cacheWrite: 2, cacheWrite1h: 4, output: 7 },
+    longContext: {
+      aboveInputTokens: 200000,
+      rates: { input: 4, cacheRead: 0, cacheWrite: null, output: 12 },
+    },
+    flexLongContext: {
+      aboveInputTokens: 200000,
+      rates: { input: 3, cacheRead: null, cacheWrite: null, output: 6 },
+    },
+    batchLongContext: {
+      aboveInputTokens: 200000,
+      rates: { input: 5, cacheRead: 0, cacheWrite: 6, output: 10 },
+    },
+    sourceUrl: 'https://example.com/pricing',
+    checkedAt: '2026-10-18',
+  };
+  const draft = pricingDraft(pricing);
+  expect(pricingPayload(draft)).toEqual(pricing);
+  expect(draft.rates.cacheRead).toBe('0');
+  expect(draft.rates.cacheWrite).toBe('');
 });

@@ -78,7 +78,6 @@ import { admissionOpen, maintenanceRoutes, maintenanceStatus } from './maintenan
 import { risuPresetImportRoutes } from './risu-preset-import.js';
 import { risuExportRoutes } from './risu-export.js';
 import { NativeTransferError } from '../core/native-transfer-validation.js';
-import { diagnosticReportRoutes } from './diagnostic-report.js';
 import { packageFeatureRoutes } from './package-features.js';
 import { reconcileIllustrationJob, runIllustrationJob } from './illustration-runner.js';
 import {
@@ -852,14 +851,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     vertexRequestTier: options.vertexRequestTier,
     track,
   });
-  storyGuideRoutes(app, store, {
-    signal: stopping.signal,
-    resolveCredential,
-    executeCodex,
-    vertexRequestTier: options.vertexRequestTier,
-    track,
-    publish,
-  });
+  storyGuideRoutes(app, store, { publish });
   selectionRevisionRoutes(app, store, {
     signal: stopping.signal,
     resolveCredential,
@@ -952,7 +944,6 @@ export async function createApp(options: AppOptions): Promise<App> {
   );
   risuPresetImportRoutes(app, store);
   risuExportRoutes(app, store);
-  diagnosticReportRoutes(app, store, { buildId: options.buildId, testMode: options.testMode });
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
     const result = createPackageStart(store, request.params.id, request.body);
     if (result.created) {

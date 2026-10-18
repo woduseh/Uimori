@@ -86,11 +86,11 @@ for (const width of [360, 1440]) {
     await expect(
       page.getByTestId('source-request').getByRole('img', { name: 'reference.png', exact: true })
     ).toBeVisible();
-    await page.getByRole('button', { name: '요청 편집', exact: true }).click();
+    await page.getByRole('button', { name: '다시 쓰기', exact: true }).first().click();
     await page
-      .getByRole('textbox', { name: '요청 수정 내용', exact: true })
+      .getByRole('textbox', { name: '다시 쓸 요청', exact: true })
       .fill('같은 옷차림으로 다시 이어 줘.');
-    await page.getByRole('button', { name: '수정 후 재생성', exact: true }).click();
+    await page.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(chat.id);
     const copied = new URL(page.url()).searchParams.get('chat')!;
     await expect

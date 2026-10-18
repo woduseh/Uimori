@@ -2,7 +2,7 @@ import { themeBodyScroll } from './theme-body-scroll.js';
 import { BookmarkList } from './Bookmarks.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type RefObject } from 'react';
 import { DownIcon, ListIcon, EditIcon } from './ui-icons.js';
 import type { ReaderDetail, ReaderNavigationItem } from '../core/types.js';
 import { Dialog } from './Dialog.js';
@@ -48,6 +48,9 @@ export function SceneNavigator({
   const open = listOpen;
   const setOpen = onListOpenChange;
   const [query, setQuery] = useState('');
+  const [searchTarget, setSearchTarget] = useState<'scenes' | 'manuscript'>('scenes');
+  const [composing, setComposing] = useState(false);
+  const searchFormId = useId();
   const [offset, setOffset] = useState(0);
   const [capacity, setCapacity] = useState(20);
   const list = useRef<HTMLOListElement>(null);
@@ -189,20 +192,6 @@ export function SceneNavigator({
       className="scene-dialog"
     >
       {onTarget && (
-        <details>
-          <summary>본문·번역 검색</summary>
-          <ManuscriptSearchPanel
-            initialScope="chat"
-            chatId={detail.chat.id}
-            botId={detail.chat.botId}
-            onNavigate={(target) => {
-              setOpen(false);
-              onTarget(target);
-            }}
-          />
-        </details>
-      )}
-      {onTarget && (
         <details onToggle={(event) => setBookmarksOpen(event.currentTarget.open)}>
           <summary>책갈피</summary>
           {open && bookmarksOpen && (
@@ -219,64 +208,117 @@ export function SceneNavigator({
       <label className="scene-search">
         <input
           type="search"
-          aria-label="장면 번호, 이름 또는 요청으로 찾기"
-          placeholder="장면 번호, 이름 또는 요청으로 찾기"
+          form={searchTarget === 'manuscript' ? searchFormId : undefined}
+          aria-label="장면 검색어"
+          placeholder={
+            searchTarget === 'scenes'
+              ? '장면 번호, 이름 또는 요청으로 찾기'
+              : '본문·번역·요청으로 찾기'
+          }
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
             setOffset(0);
           }}
+          onCompositionStart={() => setComposing(true)}
+          onCompositionEnd={() => setComposing(false)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Escape' || event.nativeEvent.isComposing || event.keyCode === 229)
+              return;
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(false);
+          }}
         />
       </label>
-      {sceneCount > 0 && <p className="scene-list-count">현재 채팅 · 장면 {sceneCount}개</p>}
-      <ol className="scene-list" start={offset + 1} ref={list}>
-        {page.map((entry) => (
-          <li key={entry.id}>
-            <button
-              type="button"
-              aria-current={entry.id === active.id ? 'location' : undefined}
-              aria-label={entry.opening ? entry.label : `${entry.number}번째 장면 · ${entry.label}`}
-              onClick={() => select(entry.id)}
-            >
-              <span className="scene-list-number" aria-hidden="true">
-                {entry.opening ? <ListIcon size={16} /> : entry.number}
-              </span>
-              <span className="scene-list-title">{entry.label}</span>
-              {entry.id === active.id && <small>읽는 중</small>}
-            </button>
-            <IconButton
-              label={`${entry.opening ? '첫 메시지' : `${entry.number}번째 장면`} 이름 편집`}
-              icon={EditIcon}
-              size={16}
-              className="scene-title-edit"
-              onClick={() => setEditingTitle(entry)}
-            />
-          </li>
-        ))}
-      </ol>
-      {!filtered.length && <p role="status">일치하는 장면이 없어요.</p>}
-      {filtered.length > 60 && (
-        <div className="scene-list-pages">
+      {onTarget && (
+        <div className="segmented" role="group" aria-label="장면 검색 대상">
           <button
             type="button"
-            className="secondary"
-            disabled={offset === 0}
-            onClick={() => changePage(Math.max(0, offset - 60))}
+            aria-pressed={searchTarget === 'scenes'}
+            onClick={() => setSearchTarget('scenes')}
           >
-            이전 목록
+            장면 목록
           </button>
-          <span>
-            {offset + 1}–{Math.min(offset + 60, filtered.length)} / {filtered.length}
-          </span>
           <button
             type="button"
-            className="secondary"
-            disabled={offset + 60 >= filtered.length}
-            onClick={() => changePage(offset + 60)}
+            aria-pressed={searchTarget === 'manuscript'}
+            onClick={() => setSearchTarget('manuscript')}
           >
-            다음 목록
+            본문
           </button>
         </div>
+      )}
+      {searchTarget === 'manuscript' && onTarget ? (
+        <ManuscriptSearchPanel
+          initialScope="chat"
+          chatId={detail.chat.id}
+          botId={detail.chat.botId}
+          query={query}
+          queryComposing={composing}
+          hideQueryInput
+          formId={searchFormId}
+          onNavigate={(target) => {
+            setOpen(false);
+            onTarget(target);
+          }}
+        />
+      ) : (
+        <>
+          <h3>장면 목록 결과</h3>
+          {sceneCount > 0 && <p className="scene-list-count">현재 채팅 · 장면 {sceneCount}개</p>}
+          <ol className="scene-list" start={offset + 1} ref={list}>
+            {page.map((entry) => (
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  aria-current={entry.id === active.id ? 'location' : undefined}
+                  aria-label={
+                    entry.opening ? entry.label : `${entry.number}번째 장면 · ${entry.label}`
+                  }
+                  onClick={() => select(entry.id)}
+                >
+                  <span className="scene-list-number" aria-hidden="true">
+                    {entry.opening ? <ListIcon size={16} /> : entry.number}
+                  </span>
+                  <span className="scene-list-title">{entry.label}</span>
+                  {entry.id === active.id && <small>읽는 중</small>}
+                </button>
+                <IconButton
+                  label={`${entry.opening ? '첫 메시지' : `${entry.number}번째 장면`} 이름 편집`}
+                  icon={EditIcon}
+                  size={16}
+                  className="scene-title-edit"
+                  onClick={() => setEditingTitle(entry)}
+                />
+              </li>
+            ))}
+          </ol>
+          {!filtered.length && <p role="status">일치하는 장면이 없어요.</p>}
+          {filtered.length > 60 && (
+            <div className="scene-list-pages">
+              <button
+                type="button"
+                className="secondary"
+                disabled={offset === 0}
+                onClick={() => changePage(Math.max(0, offset - 60))}
+              >
+                이전 목록
+              </button>
+              <span>
+                {offset + 1}–{Math.min(offset + 60, filtered.length)} / {filtered.length}
+              </span>
+              <button
+                type="button"
+                className="secondary"
+                disabled={offset + 60 >= filtered.length}
+                onClick={() => changePage(offset + 60)}
+              >
+                다음 목록
+              </button>
+            </div>
+          )}
+        </>
       )}
     </Dialog>
   );

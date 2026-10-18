@@ -77,6 +77,10 @@ for (const width of [412, 1440]) {
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '테마·색상');
+    {
+      const advanced = page.locator('.theme-advanced:not([open]) > summary');
+      if (await advanced.isVisible()) await advanced.click();
+    }
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     await expectShell(page, settings, 1160);
     const title = `Dialog consistency theme ${width}`;
@@ -332,6 +336,10 @@ for (const width of [412, 1440]) {
       await page.goto('/');
       await navigationAction(page, '설정');
       await selectSettingsSection(page, '테마·색상');
+      {
+        const advanced = page.locator('.theme-advanced:not([open]) > summary');
+        if (await advanced.isVisible()) await advanced.click();
+      }
       const background = page.getByRole('region', { name: '배경 이미지', exact: true });
       const effects = background.getByRole('group', { name: '배경 효과', exact: true });
       await expect(effects.getByRole('slider')).toHaveCount(3);
@@ -374,6 +382,10 @@ for (const width of [412, 1440]) {
       await page.reload();
       await navigationAction(page, '설정');
       await selectSettingsSection(page, '테마·색상');
+      {
+        const advanced = page.locator('.theme-advanced:not([open]) > summary');
+        if (await advanced.isVisible()) await advanced.click();
+      }
       await expect(blur).toHaveValue(changed);
     } finally {
       const current = await read<ThemeCatalog>(request, '/themes');

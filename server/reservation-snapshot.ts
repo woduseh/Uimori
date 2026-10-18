@@ -20,7 +20,7 @@ export type ReservationPurpose =
       sceneCommandId?: string;
       supersedesRunId?: string;
     }
-  | { purpose: 'helper-context' | 'story-guide' }
+  | { purpose: 'helper-context' }
   | {
       purpose: 'preview-main' | 'preview-translation';
       executionClock: () => NonNullable<RunSnapshot['executionClock']>;

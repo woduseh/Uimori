@@ -311,6 +311,14 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
+  {
+    const management = page.getByText('기본 생성 환경·자동 생성 관리', { exact: true });
+    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
+  }
+  {
+    const management = page.getByText('프리셋·적용 범위 관리', { exact: true });
+    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
+  }
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
   await expect(section).toBeVisible();
   const generator = section.getByLabel('테스트 삽화 생성기', { exact: true });
@@ -380,6 +388,14 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
+  {
+    const management = page.getByText('기본 생성 환경·자동 생성 관리', { exact: true });
+    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
+  }
+  {
+    const management = page.getByText('프리셋·적용 범위 관리', { exact: true });
+    if ((await management.locator('..').getAttribute('open')) === null) await management.click();
+  }
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
   await section.locator('summary').filter({ hasText: 'ComfyUI 생성 환경' }).click();
   await page.getByRole('button', { name: '새 삽화 프리셋', exact: true }).click();

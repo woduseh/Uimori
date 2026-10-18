@@ -169,10 +169,6 @@ test.each<{
     expected: ['variables', 'story', 'logical-history', 'lore', 'context', 'previous-summary'],
   },
   {
-    options: { purpose: 'story-guide' },
-    expected: ['variables', 'story', 'logical-history', 'lore'],
-  },
-  {
     options: { purpose: 'preview-main', executionClock: () => clock },
     expected: ['variables', 'story', 'logical-history', 'clock', 'lore'],
   },

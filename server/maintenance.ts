@@ -25,7 +25,6 @@ const ALWAYS_ADMITTED = new Set([
   '/api/runs/:id/skip-package-after-response',
   '/api/jobs/:id/cancel',
   '/api/illustrations/:id/cancel',
-  '/api/scene-commands/:id/cancel',
   '/api/helper/tasks/:id/cancel',
 ]);
 

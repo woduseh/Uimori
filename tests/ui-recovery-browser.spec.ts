@@ -232,6 +232,11 @@ for (const viewport of viewports) {
         editor.getByLabel('시스템 메시지로 보내기 설정에서도 원래 대화 역할 유지', { exact: true })
       ).toHaveCount(0);
       await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+      const optionGroups = editor.locator('.prompt-option-group');
+      for (const group of await optionGroups.all()) {
+        await expect(group).not.toHaveAttribute('open', '');
+        await group.locator(':scope > summary').click();
+      }
       for (const label of [
         '탈옥 프롬프트 사용',
         '사고 지침 사용',
@@ -578,27 +583,13 @@ for (const viewport of viewports) {
         name: '연결할 공통 모듈',
         exact: true,
       });
-      const moduleConnect = moduleEditor.getByRole('button', { name: '모듈 연결', exact: true });
       await expect(modulePicker).toBeEnabled();
-      await expect(moduleConnect).toBeDisabled();
+      await expect(
+        moduleEditor.getByRole('button', { name: '모듈 연결', exact: true })
+      ).toHaveCount(0);
       await expect(
         moduleEditor.getByRole('button', { name: '목록 새로고침', exact: true })
       ).toBeVisible();
-      const [pickerBounds, connectBounds] = await Promise.all([
-        modulePicker.boundingBox(),
-        moduleConnect.boundingBox(),
-      ]);
-      if (viewport.width >= 1200) {
-        expect(
-          Math.abs(
-            pickerBounds!.y + pickerBounds!.height - connectBounds!.y - connectBounds!.height
-          )
-        ).toBeLessThanOrEqual(1);
-        expect(connectBounds!.x).toBeGreaterThan(pickerBounds!.x + pickerBounds!.width);
-      } else {
-        expect(connectBounds!.y).toBeGreaterThanOrEqual(pickerBounds!.y + pickerBounds!.height);
-        expect(Math.abs(connectBounds!.width - pickerBounds!.width)).toBeLessThanOrEqual(1);
-      }
       await page.screenshot({ path: info.outputPath(`bot-advanced-modules-${viewport.name}.png`) });
 
       const moduleDialogErrors: string[] = [];

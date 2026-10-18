@@ -45,7 +45,6 @@ export class StoryStore {
     return {
       notes: this.notes.entries(scope),
       notesRevision: this.notes.revision(chatId),
-      commands: this.commands(chatId),
     };
   }
   commands(chatId: string): SceneCommand[] {

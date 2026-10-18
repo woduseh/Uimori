@@ -58,6 +58,27 @@ export function preservePromptWorkspace() {
     try {
       let current = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
       for (const role of ['main', 'translation'] as const) {
+        const id = original[role].presetId!;
+        const latest = (await (
+          await request.get(`/api/prompt-presets/${id}`)
+        ).json()) as PromptPreset;
+        if (
+          JSON.stringify(latest.program) !== JSON.stringify(original[role].program) ||
+          latest.title !== original[role].title ||
+          JSON.stringify(latest.values) !== JSON.stringify(original[role].defaultValues)
+        ) {
+          const source = await request.put(`/api/prompt-presets/${id}`, {
+            data: {
+              expectedRevision: latest.revision,
+              role,
+              title: original[role].title,
+              program: original[role].program,
+              values: original[role].defaultValues,
+            },
+          });
+          expect(source.ok(), await source.text()).toBe(true);
+          current = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
+        }
         if (current[role].presetId === original[role].presetId) continue;
         const applied = await request.post('/api/prompt-workspace/apply', {
           data: { expectedRevision: current.revision, role, presetId: original[role].presetId },
@@ -68,8 +89,16 @@ export function preservePromptWorkspace() {
       const restored = await request.put('/api/prompt-workspace', {
         data: {
           expectedRevision: current.revision,
-          main: original.main,
-          translation: original.translation,
+          main: {
+            ...current.main,
+            values: original.main.values,
+            optionValues: original.main.optionValues ?? {},
+          },
+          translation: {
+            ...current.translation,
+            values: original.translation.values,
+            optionValues: original.translation.optionValues ?? {},
+          },
           translationPolicy: original.translationPolicy,
         },
       });

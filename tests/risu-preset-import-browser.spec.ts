@@ -142,6 +142,9 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
     'true'
   );
   await composer.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  const options = composer.locator('.prompt-option-group').first();
+  await expect(options).not.toHaveAttribute('open');
+  await options.locator('summary').click();
   await expect(
     page.getByTestId('prompt-editor').getByLabel('프롬프트 이름', { exact: true })
   ).toHaveValue(title);
@@ -185,6 +188,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await page.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
   await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
   await composer.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  await expect(options).toHaveAttribute('open');
   await expect(composer.getByLabel('Imported Mood', { exact: true })).toHaveValue('"1"');
   await expect(composer.getByLabel('Imported Memo', { exact: true })).toHaveValue(
     'First line\nSecond line'
@@ -237,7 +241,8 @@ test('RISUPRESETUI03 display projection keeps the original edit value and cancel
   await page.goto(`/?chat=${chat.id}`);
   const source = page.getByTestId('source').first();
   await expect(source.getByTestId('source-request')).toHaveText('화면 요청');
-  await source.getByRole('button', { name: '요청 편집', exact: true }).click();
+  await source.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
+  await source.getByRole('button', { name: '문맥용 요청 수정', exact: true }).click();
   await expect(source.getByLabel('요청 수정 내용', { exact: true })).toHaveValue('원래 요청');
   await source.getByRole('button', { name: '요청 수정 취소', exact: true }).click();
   await expect(source.getByTestId('source-request')).toHaveText('화면 요청');

@@ -82,13 +82,16 @@ export type PromptPreset = ContentRef & {
   program: import('./risu-prompt.js').RisuPrompt;
   values?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
-/** Editable, application-wide working copies. Applying a preset copies its content. */
+/** Current read projection of the selected preset and explicit global option overrides. */
 export type CurrentPrompt = {
   presetId?: string;
+  presetRevision?: number;
   title: string;
   program: import('./risu-prompt.js').RisuPrompt;
   values: Record<string, import('./risu-prompt.js').PromptValue>;
-  /** Defaults copied when the preset was applied, independent of later library edits. */
+  /** Explicit global overrides; values above include the current preset defaults. */
+  optionValues?: Record<string, import('./risu-prompt.js').PromptValue>;
+  /** The selected preset's current saved option values. */
   defaultValues?: Record<string, import('./risu-prompt.js').PromptValue>;
 };
 export type ModelWorkspace = {
@@ -232,8 +235,9 @@ export type ChatProfile = {
   revision: number;
   /** Read-only effective selection, including a pinned main model; frozen by each execution. */
   routes: Record<TaskModelRole, ModelRef | null>;
+  /** True selects JEV placement; false selects writer-authored image tags for both languages. */
   image: boolean;
-  /** Automatically place images after a model translation completes. Defaults to true. */
+  /** Archived input only. Current original and translation placement share image. */
   imageTranslation?: boolean;
   packageAttachments?: import('./risu-content.js').ContentAttachment[];
 };
@@ -322,7 +326,6 @@ export const defaultProfile = (chatId: string): ChatProfile => ({
   packageAttachments: [],
   routes: { main: null, translation: null },
   image: false,
-  imageTranslation: true,
 });
 
 export const VERTEX_GEMINI_DEFAULT_TIMEOUT_MS = 300_000;

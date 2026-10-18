@@ -32,7 +32,6 @@ import {
   PromptIcon,
   AgentIcon,
   DataIcon,
-  SecurityIcon,
   BackIcon,
   IllustrationIcon,
   LibraryIcon,
@@ -42,7 +41,6 @@ import type { StoryState } from './useStory.js';
 import { api } from './api.js';
 import { ConnectionEditor } from './ProviderManagement.js';
 import { ArchivePanel } from './ArchivePanel.js';
-import { DiagnosticReport } from './DiagnosticReport.js';
 import { AttemptInspector } from './AttemptInspector.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
 
@@ -277,6 +275,7 @@ const settingsCategories: SettingsCategory[] = [
         anchor: 'reading',
       },
       { label: '앱과 알림', terms: '알림 푸시 설치 PWA', anchor: 'services' },
+      { label: '접속 해제', terms: '로그아웃 접속 해제 세션', anchor: 'session' },
     ],
   },
   { key: 'themes', label: '테마·색상', icon: Palette, terms: '밝게 어둡게 CSS HTML' },
@@ -307,9 +306,7 @@ const settingsCategories: SettingsCategory[] = [
         terms: '자동 백업 시간 보관 개수 다운로드 복원 DB 자료 가져오기 채팅 가져오기',
       },
     ],
-    terms: '문제 보고용 진단',
   },
-  { key: 'security', label: '접근 보안', icon: SecurityIcon, terms: '로그아웃 접속 해제 세션' },
   { key: 'about', label: '앱 정보·라이선스', icon: Info, terms: '버전 빌드 저작권' },
 ];
 
@@ -801,40 +798,42 @@ export function AppSettingsPanel({
                         onDirtyChange={setArchiveDirty}
                         onSaveHandlerChange={saveGroup.registrations.archive}
                       />
-                      <details className="recovery-settings-disclosure">
-                        <summary>문제 보고용 진단</summary>
-                        <DiagnosticReport scope={{ scope: 'system' }} label="시스템 진단 만들기" />
-                        {state.selected && (
-                          <DiagnosticReport
-                            scope={{ scope: 'chat', chatId: state.selected }}
-                            label="선택 채팅 진단 만들기"
-                          />
-                        )}
-                      </details>
                     </>
                   )}
-                  {key === 'security' && (
-                    <section className="settings-section">
-                      <p className="muted">
-                        현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지
-                        않아요.
-                      </p>
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={signingOut}
-                        onClick={() => {
-                          setSigningOut(true);
-                          void api('/session', {}, 'DELETE')
-                            .then(() => location.reload())
-                            .catch((error) => {
-                              state.setError(error.message);
-                              setSigningOut(false);
-                            });
-                        }}
-                      >
-                        접속 해제
-                      </button>
+                  {key === 'general' && (
+                    <section
+                      id={`${id}-general-session`}
+                      tabIndex={-1}
+                      className="settings-section"
+                    >
+                      <h3>접속 세션</h3>
+                      <div className="settings-row">
+                        <div className="settings-row-copy">
+                          <span>현재 브라우저</span>
+                          <p className="muted">
+                            현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지
+                            않아요.
+                          </p>
+                        </div>
+                        <div className="settings-row-control">
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={signingOut}
+                            onClick={() => {
+                              setSigningOut(true);
+                              void api('/session', {}, 'DELETE')
+                                .then(() => location.reload())
+                                .catch((error) => {
+                                  state.setError(error.message);
+                                  setSigningOut(false);
+                                });
+                            }}
+                          >
+                            접속 해제
+                          </button>
+                        </div>
+                      </div>
                     </section>
                   )}
                 </>

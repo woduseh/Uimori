@@ -1,4 +1,5 @@
 import { promptOptionOwner } from '../core/chat-options.js';
+import { isDeepStrictEqual } from 'node:util';
 import {
   DEFAULT_SUMMARY_LENGTH,
   SUMMARY_LENGTH_VALUES,
@@ -31,11 +32,13 @@ import {
   validateRisuPrompt,
   validateEditableRisuPrompt,
   resolveEditablePromptValues,
+  reconcilePromptValues,
 } from '../core/risu-prompt.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { assertModelSelection } from './provider-selection.js';
 import type { Store } from './store.js';
+import { promptCombinationRoutes } from './prompt-combinations.js';
 
 const roles = ['main', 'translation'] as const;
 const roleValue = (value: unknown): PromptRole => {
@@ -45,17 +48,38 @@ const roleValue = (value: unknown): PromptRole => {
 
 export function validateCurrentPrompt(value: unknown, role: PromptRole): CurrentPrompt {
   const b = record(value);
-  fields(b, ['title', 'program', 'values', 'presetId', 'defaultValues']);
+  fields(b, [
+    'title',
+    'program',
+    'values',
+    'presetId',
+    'presetRevision',
+    'defaultValues',
+    'optionValues',
+  ]);
   const program = validateRisuPrompt(b.program);
   if (role !== 'main' && program.collaboration)
     throw new HttpError(400, 'Collaboration requires the main prompt');
+  if (
+    b.optionValues !== undefined &&
+    Object.values(record(b.optionValues)).some(
+      (value) => value !== null && !['string', 'number', 'boolean'].includes(typeof value)
+    )
+  )
+    throw new HttpError(400, 'Invalid explicit prompt option value');
   return {
     ...(b.presetId !== undefined ? { presetId: text(b.presetId, 'prompt preset ID', 100) } : {}),
+    ...(b.presetRevision !== undefined
+      ? { presetRevision: number(b.presetRevision, 'prompt preset revision') }
+      : {}),
     title: text(b.title, 'prompt title', 200),
     program,
     values: resolvePromptValues(program, record(b.values)),
+    ...(b.optionValues !== undefined
+      ? { optionValues: record(b.optionValues) as CurrentPrompt['values'] }
+      : {}),
     ...(b.defaultValues !== undefined
-      ? { defaultValues: resolvePromptValues(program, record(b.defaultValues)) }
+      ? { defaultValues: reconcilePromptValues(program, record(b.defaultValues)).values }
       : {}),
   };
 }
@@ -159,16 +183,138 @@ export function defaultPromptWorkspace(): PromptWorkspace {
   };
 }
 
-export function promptWorkspace(store: Store): PromptWorkspace {
+type PromptSelection = { presetId: string; values: CurrentPrompt['values'] };
+type StoredPromptWorkspace = Omit<PromptWorkspace, 'main' | 'translation'> & {
+  main: PromptSelection | CurrentPrompt;
+  translation: PromptSelection | CurrentPrompt;
+};
+
+function savedWorkspace(store: Store): StoredPromptWorkspace {
   const row = store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get() as {
     body: string;
   };
-  const saved = JSON.parse(row.body) as PromptWorkspace;
+  return JSON.parse(row.body) as StoredPromptWorkspace;
+}
+
+/** Upgrade copied/anonymous bodies at boot, before accepting read-only requests. */
+export function initializePromptWorkspaceReferences(store: Store): void {
+  const saved = savedWorkspace(store);
+  if (!roles.some((role) => 'program' in saved[role])) return;
+  store.transaction(() => {
+    // Validate the complete old configuration before writing. A bad route/policy
+    // must leave its bytes and every preserved preset unchanged.
+    validatePromptWorkspace({
+      ...saved,
+      ...Object.fromEntries(
+        roles.map((role) => [
+          role,
+          'program' in saved[role] ? saved[role] : resolveSelection(store, saved[role], role),
+        ])
+      ),
+    });
+    for (const role of roles) {
+      const current = saved[role];
+      if (!('program' in current)) continue;
+      let source: PromptPreset | undefined;
+      if (current.presetId) {
+        try {
+          store.product.assertAvailable('prompt-preset', current.presetId);
+          const candidate = store.product.get<PromptPreset>('prompt-preset', current.presetId);
+          if (
+            candidate.role === role &&
+            candidate.title === current.title &&
+            isDeepStrictEqual(candidate.program, current.program)
+          )
+            source = candidate;
+        } catch (error) {
+          if (!(error instanceof HttpError)) throw error;
+        }
+      }
+      source ??= store.product.saveInTransaction('prompt-preset', {
+        title: current.title,
+        role,
+        program: structuredClone(current.program),
+        values: resolvePromptValues(current.program, current.defaultValues ?? current.values),
+      }) as PromptPreset;
+      const oldDefaults = current.defaultValues
+        ? resolvePromptValues(current.program, current.defaultValues)
+        : undefined;
+      const explicit =
+        current.optionValues ??
+        (oldDefaults
+          ? Object.fromEntries(
+              Object.entries(current.values).filter(
+                ([id, value]) => !isDeepStrictEqual(value, oldDefaults[id])
+              )
+            )
+          : current.values);
+      saved[role] = { presetId: source.id, values: structuredClone(explicit) };
+      // Anonymous-slot combinations belong to the preserved preset after migration.
+      for (const combo of store.product.all('prompt-combination') as SavedPromptCombination[]) {
+        if (combo.role !== role || combo.owner?.kind !== 'workspace' || combo.owner.role !== role)
+          continue;
+        const { id, revision, ...body } = combo;
+        store.product.saveInTransaction(
+          'prompt-combination',
+          { ...body, owner: { kind: 'preset', id: source.id } },
+          id,
+          revision
+        );
+      }
+    }
+    store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(saved));
+  });
+}
+
+function resolveSelection(
+  store: Store,
+  selection: PromptSelection | CurrentPrompt,
+  role: PromptRole
+): CurrentPrompt {
+  if (!selection.presetId) throw new HttpError(409, 'PROMPT_SOURCE_REQUIRED');
+  store.product.assertAvailable('prompt-preset', selection.presetId);
+  const preset = store.product.get<PromptPreset>('prompt-preset', selection.presetId);
+  if (preset.role !== role) throw new HttpError(409, 'Prompt role mismatch');
+  const defaultValues = resolvePromptValues(preset.program, preset.values ?? {});
+  const reconciled = reconcilePromptValues(preset.program, selection.values);
+  const compatible = Object.fromEntries(
+    Object.entries(selection.values).filter(([id]) => !reconciled.resetKeys.includes(id))
+  );
+  return {
+    presetId: preset.id,
+    presetRevision: preset.revision,
+    title: preset.title,
+    program: structuredClone(preset.program),
+    values: { ...defaultValues, ...compatible },
+    defaultValues,
+    optionValues: structuredClone(selection.values),
+  };
+}
+
+/** Persist selections and explicit values only; the API projects the latest preset body. */
+export function savePromptWorkspace(store: Store, workspace: PromptWorkspace): void {
+  const saved = {
+    ...workspace,
+    ...Object.fromEntries(
+      roles.map((role) => [
+        role,
+        {
+          presetId: workspace[role].presetId,
+          values: workspace[role].optionValues ?? workspace[role].values,
+        },
+      ])
+    ),
+  };
+  store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(saved));
+}
+
+export function promptWorkspace(store: Store): PromptWorkspace {
+  const saved = savedWorkspace(store);
   return {
     ...saved,
     summaryLength: validateSummaryLength(saved.summaryLength),
-    main: validateCurrentPrompt(saved.main, 'main'),
-    translation: validateCurrentPrompt(saved.translation, 'translation'),
+    main: resolveSelection(store, saved.main, 'main'),
+    translation: resolveSelection(store, saved.translation, 'translation'),
     titleModel: validateTitleModel(saved.titleModel ?? null),
     helperModel: validateTitleModel(saved.helperModel ?? null),
     contextModel: validateTitleModel(saved.contextModel ?? null),
@@ -217,10 +363,12 @@ export function chatPromptWorkspace(
     const values = resolvePromptValues(preset.program, preset.values ?? {});
     workspace.main = {
       presetId: preset.id,
+      presetRevision: preset.revision,
       title: preset.title,
       program: structuredClone(preset.program),
       values,
       defaultValues: structuredClone(values),
+      optionValues: {},
     };
     workspace.pinnedMainPreset = { id: preset.id, revision: preset.revision };
   }
@@ -316,7 +464,7 @@ export function updateModelWorkspace(store: Store, value: unknown): ModelWorkspa
     assertModelSelection(store.product, next.contextModel ?? null, prior.contextModel ?? null);
     assertModelSelection(store.product, next.scriptModel ?? null, prior.scriptModel ?? null);
 
-    store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(next));
+    savePromptWorkspace(store, next);
     for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
     return modelWorkspace(store);
   });
@@ -351,8 +499,53 @@ export function updatePromptWorkspace(
           incoming.values = resolveEditablePromptValues(incoming.program, incoming.values);
           if (incoming.presetId !== undefined && incoming.presetId !== prior[role].presetId)
             throw new HttpError(400, 'Prompt preset source can only change when applying a preset');
-          const presetId = appliedPreset?.role === role ? appliedPreset.id : prior[role].presetId;
-          return [role, { ...incoming, ...(presetId ? { presetId } : {}) }];
+          const applying = appliedPreset?.role === role;
+          const presetId = applying ? appliedPreset.id : prior[role].presetId;
+          if (
+            !applying &&
+            incoming.presetRevision !== undefined &&
+            incoming.presetRevision !== prior[role].presetRevision
+          )
+            throw new HttpError(
+              409,
+              '프롬프트 저장본이 변경됐어요. 입력을 확인한 뒤 다시 저장해 주세요.'
+            );
+          if (
+            !applying &&
+            (!isDeepStrictEqual(incoming.program, prior[role].program) ||
+              incoming.title !== prior[role].title)
+          ) {
+            // Older clients can still author through this endpoint. Save the source itself,
+            // never recreate a second current-body authority.
+            store.product.promptPreset(
+              {
+                title: incoming.title,
+                role,
+                program: incoming.program,
+                values: reconcilePromptValues(incoming.program, prior[role].defaultValues).values,
+                expectedRevision: prior[role].presetRevision,
+              },
+              presetId,
+              true
+            );
+          }
+          const raw = record(b[role]);
+          const overrides =
+            applying || Object.keys(record(raw.values)).length === 0
+              ? {}
+              : Object.hasOwn(raw, 'optionValues') &&
+                  !isDeepStrictEqual(incoming.optionValues, prior[role].optionValues)
+                ? incoming.optionValues!
+                : {
+                    ...prior[role].optionValues,
+                    ...Object.fromEntries(
+                      Object.entries(incoming.values).filter(
+                        ([id, value]) => !isDeepStrictEqual(value, prior[role].values[id])
+                      )
+                    ),
+                  };
+          const next = resolveSelection(store, { presetId: presetId!, values: overrides }, role);
+          return [role, next];
         })
     );
     const result = validatePromptWorkspace({
@@ -372,7 +565,7 @@ export function updatePromptWorkspace(
         store.product.assertAvailable('model', agent.model.id);
         store.product.get('model', agent.model.id);
       }
-    store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(result));
+    savePromptWorkspace(store, result);
     for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
     return result;
   };
@@ -390,7 +583,13 @@ export function freezeCurrentPrompts(
   const prompts: NonNullable<ProfileSnapshot['prompts']> = {};
   const promptControls: NonNullable<ProfileSnapshot['promptControls']> = {};
   for (const role of roles) {
-    const { presetId: _presetId, defaultValues: _defaultValues, ...current } = workspace[role];
+    const {
+      presetId: _presetId,
+      presetRevision: _presetRevision,
+      optionValues: _optionValues,
+      defaultValues: _defaultValues,
+      ...current
+    } = workspace[role];
     const preset = {
       ...structuredClone(current),
       id:
@@ -424,6 +623,7 @@ export function promptWorkspaceRoutes(
   store: Store,
   publish: (chatId: string) => void
 ) {
+  promptCombinationRoutes(app, store, () => promptWorkspace(store));
   const publishResult = <T>(result: T): T => {
     for (const chat of store.chats()) publish(chat.id);
     return result;
@@ -481,7 +681,7 @@ export function promptWorkspaceRoutes(
     return publishResult(
       updatePromptWorkspace(store, {
         expectedRevision: b.expectedRevision,
-        [role]: { ...current, values: preset.values },
+        [role]: { ...current, values: preset.values, optionValues: preset.values },
       })
     );
   });

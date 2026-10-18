@@ -27,6 +27,7 @@ test('library summary metadata keeps current visible items without loading full 
   const path = mkdtempSync(join(tmpdir(), 'uimori-library-metadata-'));
   const store = new Store(join(path, 'synthetic.sqlite'));
   owned.push({ store, path });
+  const initialMetadata = store.product.libraryMetadata();
   const content = store.product.content(
     fixtureBotInput('Original', 'Body '.repeat(7000))
   ) as Content;
@@ -51,11 +52,22 @@ test('library summary metadata keeps current visible items without loading full 
     });
     return statement;
   });
-  expect(store.product.libraryMetadata()).toEqual({
-    contents: [{ id: content.id, revision: changed.revision, title: 'Current', kind: 'bot' }],
-    prompts: [{ id: prompt.id, revision: prompt.revision, title: prompt.title, role: 'main' }],
+  const metadata = store.product.libraryMetadata();
+  expect(metadata).toEqual({
+    contents: expect.arrayContaining([
+      ...initialMetadata.contents,
+      { id: content.id, revision: changed.revision, title: 'Current', kind: 'bot' },
+    ]),
+    prompts: expect.arrayContaining([
+      ...initialMetadata.prompts,
+      { id: prompt.id, revision: prompt.revision, title: prompt.title, role: 'main' },
+    ]),
   });
-  expect(returnedRows).toHaveLength(2);
+  expect(metadata.contents).toHaveLength(initialMetadata.contents.length + 1);
+  expect(metadata.prompts).toHaveLength(initialMetadata.prompts.length + 1);
+  expect(returnedRows).toHaveLength(
+    initialMetadata.contents.length + initialMetadata.prompts.length + 2
+  );
   expect(returnedRows.every((row) => !('body' in row) && !('package' in row))).toBe(true);
 });
 

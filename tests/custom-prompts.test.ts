@@ -111,6 +111,26 @@ describe('full editable prompt boundaries', () => {
     ).toBe('x'.repeat(200001));
     expect(() => validateRequest({ ...value, modelId: '' })).toThrow('INVALID_STRING');
   });
+
+  test('image ownership adds only relevant host policy while preserving the authored translation prompt', () => {
+    const selected = snapshot();
+    selected.profile!.promptPresets = { translation: preset('translation', literal) };
+    const text = '![](/api/assets/scene)\n\nThe harbor waited.';
+    const source = {
+      id: 'source-images',
+      chatId: selected.chatId,
+      text,
+      hash: createHash('sha256').update(text).digest('hex'),
+    };
+    const input = translationInput(source, sourceTimeContext(selected, 'translation'), selected);
+    expect(input.contract).toContain('Preserve authored image tags and their positions exactly');
+    const compilation = compileTranslationPrompt(input, selected, 'task')!;
+    expect(compilation.messages[0].content[0]).toEqual({ type: 'text', text: literal });
+    expect(input.sourceText).toBe(text);
+    expect(selected.profile!.promptPresets.translation!.program).toEqual(
+      preset('translation', literal).program
+    );
+  });
 });
 
 const variants: { protocol: ProviderProtocol; endpoint: string }[] = [

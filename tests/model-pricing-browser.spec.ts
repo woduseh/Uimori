@@ -22,7 +22,7 @@ async function library(request: APIRequestContext): Promise<Library> {
 }
 
 for (const width of DEFAULT_WIDTHS) {
-  test(`PRICEUI${width} official Flex and manual zero/unknown rates survive save and restore`, async ({
+  test(`PRICEUI${width} catalog fallback and manual Flex zero/unknown rates survive save and restore`, async ({
     page,
     request,
   }, info) => {
@@ -59,12 +59,7 @@ for (const width of DEFAULT_WIDTHS) {
     await form.getByRole('button', { name: '고급', exact: true }).click();
     const pricing = form.getByTestId('model-pricing-editor');
     await pricing.locator('summary').first().click();
-    await expect(pricing).toContainText('공식 요금');
-    await expect(pricing).toContainText('50%');
-    await expect(pricing.getByRole('link', { name: '요금 출처' })).toHaveAttribute(
-      'href',
-      /https:\/\//
-    );
+    await expect(pricing).toContainText('요금은 미확인');
     await pricing.getByLabel('요금 기준').selectOption('manual');
     await pricing.getByLabel('Standard 입력 요금', { exact: true }).fill('3');
     await pricing.getByLabel('Standard 캐시 읽기 요금', { exact: true }).fill('0');
@@ -76,8 +71,10 @@ for (const width of DEFAULT_WIDTHS) {
     await pricing.getByLabel('Flex 캐시 읽기 요금', { exact: true }).fill('0');
     await pricing.getByLabel('Flex 캐시 쓰기 요금', { exact: true }).fill('');
     await pricing.getByLabel('Flex 출력 요금', { exact: true }).fill('9');
+    await pricing.getByLabel('요금 출처 URL').fill('https://example.com/pricing');
+    await pricing.getByLabel('요금 확인일').fill('2026-10-18');
     await pricing.getByLabel('Standard 입력 요금', { exact: true }).fill('-1');
-    await expect(pricing.getByRole('alert')).toContainText('0 이상의 유한한 숫자');
+    await expect(pricing.getByRole('alert')).toContainText('0 이상');
     await form.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
     await expect(pricing.getByLabel('Standard 입력 요금', { exact: true })).toHaveValue('-1');
     expect((await library(request)).models.find((model) => model.title === title)).toBeUndefined();
@@ -104,9 +101,9 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(pricing.getByLabel('Standard 캐시 읽기 요금', { exact: true })).toHaveValue('0');
     await expect(pricing.getByLabel('Standard 캐시 쓰기 요금', { exact: true })).toHaveValue('');
     await expect(pricing.getByLabel('Flex 입력 요금', { exact: true })).toHaveValue('2');
-    await pricing.getByRole('button', { name: '공식 요금으로 복원' }).click();
+    await pricing.getByRole('button', { name: '모델 목록 요금으로 복원' }).click();
     await expect(pricing.getByLabel('요금 기준')).toHaveValue('official');
-    await expect(pricing).toContainText('50%');
+    await expect(pricing).toContainText('요금은 미확인');
     await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
     await expect
       .poll(

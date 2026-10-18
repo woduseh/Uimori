@@ -15,6 +15,7 @@ import { countTextTokens } from './text-tokens.js';
 import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import { PROMPT_COMPILER_VERSIONS } from './risu-prompt.js';
+import { packageImages } from './package-images.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
@@ -116,6 +117,10 @@ function collectRoleResources(snapshot: RunSnapshot, packages: readonly Resolved
   return resources;
 }
 export type MainInput = ModelInput & {
+  imagePlacement?: {
+    owner: 'writer' | 'jev';
+    catalog?: { ref: string; title: string; description: string; name?: string; tag?: string }[];
+  };
   contextSummary?: NonNullable<ReturnType<typeof conversationSummary>>;
   pinnedSources?: {
     risuSource?: Resource['risuSource'];
@@ -173,6 +178,51 @@ export function buildMainInput(
     results: structuredClone([...results]),
   };
   const packageData = packageContextFromCompiled(packages);
+  if (snapshot.profile?.image) {
+    input.imagePlacement = { owner: 'jev' };
+    input.contract +=
+      '\nJEV selects existing catalog images after writing. Write the narrative without catalog image tags; do not insert image placeholders.';
+  } else if (snapshot.profile) {
+    const profile = snapshot.profile;
+    const assets =
+      snapshot.imageCatalog ??
+      packageImages(profile)
+        .filter(
+          (asset) =>
+            asset.allowedUse !== 'profile' &&
+            profile.packages?.find((pkg) => pkg.id === asset.packageOwner?.id)?.portraitImageId !==
+              asset.packageOwner?.imageId
+        )
+        .map((asset) => ({
+          ref: asset.id,
+          alt: asset.title,
+          caption: asset.description,
+          url: asset.url,
+        }));
+    if (assets.length) {
+      input.imagePlacement = {
+        owner: 'writer',
+        catalog: assets.map((asset) => {
+          const owner = /^package:([^:]+):(bot|persona|module):([^:]+)$/u.exec(asset.ref);
+          const pkg = owner && profile.packages?.find((entry) => entry.id === owner[1]);
+          const native = pkg?.nativeRisu?.assets.find((entry) => entry.imageId === owner?.[3]);
+          return {
+            ref: asset.ref,
+            title: asset.alt,
+            description: asset.caption,
+            ...(native
+              ? {
+                  name: native.name,
+                  ...(!pkg?.imageHandoff ? { tag: `{{img::${native.name}}}` } : {}),
+                }
+              : { tag: `![](${asset.url})` }),
+          };
+        }),
+      };
+      input.contract +=
+        '\nYou select existing images while writing. Follow the authored image instructions and their tag syntax for the supplied catalog names; where an exact tag is supplied, use it at the intended position. Images are optional; use only supplied catalog images. No separate image model adds images afterward.';
+    }
+  }
   if (packageData) {
     const pinned = [
       ...packageData.pinned.map((r) => ({

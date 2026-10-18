@@ -176,7 +176,8 @@ export function AuthorNotesEditor({
         개
       </summary>
       <p className="muted">
-        이후 요청에서 지킬 설정이나 정정을 직접 남겨요. 원문과 요약은 별도로 보존해요.
+        이후 요청에서도 지킬 설정·지시나 정정을 남겨요. Risu 프롬프트 안의 배치용 작가 노트와는
+        별개예요. 원문과 요약은 별도로 보존해요.
         {notes.some((note) => note.kind === 'imported-memory') &&
           ' 가져온 기억은 외부 자료의 기록으로 구분해요.'}
       </p>

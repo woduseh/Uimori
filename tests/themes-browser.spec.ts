@@ -21,6 +21,10 @@ async function openThemes(page: Page, url = '/') {
   await page.goto(url);
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '테마·색상');
+  {
+    const advanced = page.locator('.theme-advanced:not([open]) > summary');
+    if (await advanced.isVisible()) await advanced.click();
+  }
 }
 
 test('THEMES mobile primary choices precede background and preserve its unsaved edits', async ({
@@ -29,13 +33,20 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
 }, info) => {
   await page.setViewportSize({ width: 412, height: 844 });
   const before = await (await request.get('/api/themes')).json();
-  await openThemes(page);
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '테마·색상');
+  await expect(page.getByLabel('기본 외관', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByLabel('테마 화면 모드', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('.theme-advanced')).not.toHaveAttribute('open', '');
   const layout = page.getByRole('region', { name: '레이아웃', exact: true });
   const palette = page.getByRole('region', { name: '색상 팔레트', exact: true });
   const background = page.getByRole('region', { name: '배경 이미지', exact: true });
-  await expect(layout.getByRole('button', { name: '기본 테마 적용', exact: true })).toBeInViewport({
-    ratio: 0.5,
-  });
+  await expect(layout).toBeHidden();
+  await expect(background).toBeHidden();
+  await page.screenshot({ path: info.outputPath('theme-primary-mobile.png') });
+  await page.getByText('고급 외관·테마 제작', { exact: true }).click();
+  await expect(layout).toBeVisible();
   const layoutBox = await layout.boundingBox();
   const paletteBox = await palette.boundingBox();
   const backgroundBox = await background.boundingBox();

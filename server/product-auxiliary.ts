@@ -260,7 +260,7 @@ function providerInput(
     ...modelFields,
     stable: {
       contract:
-        (compilation ? '' : input.contract) +
+        input.contract +
         (input.referencePolicy ? '\n' + input.referencePolicy : '') +
         (evaluation
           ? '\nThe selected evaluation tool set is scoped to this model preset and this source-time task. Finish by calling eval_submit_artifact alone with the complete task output in content, preserving the requested output format and source identity. userFacingNotice remains separate metadata. Ordinary final text does not complete the task.'

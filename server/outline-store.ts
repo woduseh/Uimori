@@ -22,7 +22,6 @@ import {
   type OutlineProgress,
   type OutlineSnapshot,
   type OutlineWriting,
-  type OutlineReview,
   type OutlineHelperContext,
   type OutlineTarget,
 } from '../core/outline.js';
@@ -91,7 +90,6 @@ function outlineIndex(nodes: readonly OutlineNode[]) {
   };
   return { selection, descendants, sources };
 }
-type OutlineIndex = ReturnType<typeof outlineIndex>;
 
 function outlineSources(nodes: readonly OutlineNode[]): OutlineWriting[] {
   const unique = new Map<string, OutlineWriting>();
@@ -368,24 +366,7 @@ export class OutlineStore {
   }
   detail(chatId: string): OutlineDetail {
     this.store.chat(chatId);
-    const nodes = this.nodes(chatId);
-    const index = outlineIndex(nodes);
-    const reviews = new Map(
-      this.db
-        .prepare(`SELECT r.*,t.status,t.conversation_id FROM outline_nodes n
-          JOIN outline_reviews r ON r.rowid=(SELECT latest.rowid FROM outline_reviews latest
-            WHERE latest.node_id=n.id ORDER BY latest.created_at DESC,latest.rowid DESC LIMIT 1)
-          JOIN helper_tasks t ON t.id=r.task_id WHERE n.chat_id=?`)
-        .all(chatId)
-        .map((row) => [String(row.node_id), row])
-    );
-    return {
-      chatId,
-      nodes: nodes.map((node) => {
-        const review = reviews.get(node.id);
-        return review ? { ...node, latestReview: this.mapReview(review, index) } : node;
-      }),
-    };
+    return { chatId, nodes: this.nodes(chatId) };
   }
 
   writings(nodeId: string): OutlineWriting[] {
@@ -498,9 +479,6 @@ export class OutlineStore {
       }
       return {
         target,
-        ...(target.purpose === 'review'
-          ? { reviewVersion: this.reviewVersion(target.nodeId!) }
-          : {}),
         sources,
         partial,
         brief: {
@@ -512,85 +490,6 @@ export class OutlineStore {
       };
     });
   }
-  recordReview(taskId: string, context: OutlineHelperContext) {
-    if (context.target.purpose !== 'review' || !context.target.nodeId) return;
-    this.db
-      .prepare('INSERT OR IGNORE INTO outline_reviews VALUES(?,?,?,?,?,?)')
-      .run(
-        taskId,
-        context.target.nodeId,
-        context.reviewVersion ?? this.planHash(context.target.nodeId),
-        JSON.stringify(context.sources.map(({ text: _text, ...ref }) => ref)),
-        Number(context.partial),
-        now()
-      );
-    this.store.event(this.node(context.target.nodeId).chatId, 'outline.review', taskId);
-  }
-  latestReview(id: string, nodes?: OutlineNode[]): OutlineReview | null {
-    const row = this.db
-      .prepare(`SELECT r.*,t.status,t.conversation_id FROM outline_reviews r
-      JOIN helper_tasks t ON t.id=r.task_id WHERE r.node_id=? ORDER BY r.created_at DESC,r.rowid DESC LIMIT 1`)
-      .get(id);
-    if (!row) return null;
-    return this.mapReview(row, outlineIndex(nodes ?? this.nodes(this.node(id).chatId)));
-  }
-  /** Review freshness covers this plan's path, descendants, related plans and source hashes only.
-   * It is not a pagination token or a claim that every source was read. */
-  private reviewVersion(
-    id: string,
-    index = outlineIndex(this.nodes(this.node(id).chatId))
-  ): string {
-    const { path, related } = index.selection(id);
-    const planned = [...path, ...index.descendants(id), ...related];
-    return (
-      'review:' +
-      createHash('sha256')
-        .update(
-          JSON.stringify([
-            planned.map((node) => [
-              node.id,
-              node.parentId,
-              node.level,
-              node.position,
-              node.revision,
-              node.relatedIds,
-            ]),
-            index.sources(id).map((source) => [source.sourceRevision, source.sourceHash]),
-          ])
-        )
-        .digest('hex')
-    );
-  }
-  private mapReview(row: Row, index: OutlineIndex): OutlineReview {
-    const id = String(row.node_id);
-    const sources = JSON.parse(String(row.sources)) as OutlineReview['sources'];
-    let stale: boolean;
-    if (String(row.plan_hash).startsWith('review:')) {
-      stale = row.plan_hash !== this.reviewVersion(id, index);
-    } else {
-      // Existing reviews use the original plan hash and their supplied source references.
-      const current = index.sources(id);
-      stale =
-        row.plan_hash !== plannedHash(index.selection(id)) ||
-        sources.length !== current.length ||
-        sources.some(
-          (source) =>
-            !current.some(
-              (item) => item.sourceRevision === source.id && item.sourceHash === source.hash
-            )
-        );
-    }
-    return {
-      taskId: String(row.task_id),
-      conversationId: String(row.conversation_id),
-      status: String(row.status),
-      createdAt: String(row.created_at),
-      partial: !!row.partial,
-      stale,
-      sources,
-    };
-  }
-
   // -------------------------------------------------------------------------
   // Writing composition
   // -------------------------------------------------------------------------
@@ -803,7 +702,25 @@ export class OutlineStore {
   /** Bind one composition unit to a scene command on the existing main writing path. */
   sceneCommand(id: string, value: unknown) {
     const body = record(value);
-    fields(body, ['idempotencyKey', 'request', 'expectedRevision', 'expectedPlanHash']);
+    fields(body, [
+      'idempotencyKey',
+      'request',
+      'additionalInstruction',
+      'expectedRevision',
+      'expectedPlanHash',
+    ]);
+    if (body.request !== undefined && body.additionalInstruction !== undefined)
+      throw new HttpError(400, '집필 추가 지시를 한 번만 보내 주세요.');
+    const additionalInstruction =
+      body.additionalInstruction === undefined
+        ? ''
+        : text(body.additionalInstruction, 'additional instruction', REQUEST_TEXT_MAX_CHARS, true);
+    const request =
+      body.request !== undefined
+        ? text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS)
+        : additionalInstruction.trim()
+          ? additionalInstruction
+          : '선택한 구성에 따라 이 단위를 집필해 주세요.';
     const key = text(body.idempotencyKey, 'command key', 120);
     return this.store.transaction(() => {
       const node = this.node(id);
@@ -824,8 +741,8 @@ export class OutlineStore {
           throw new HttpError(409, '이 집필 요청 키는 다른 구성 예약에 사용됐어요.');
         const command = this.store.story.command(prior.id);
         if (
-          body.request !== undefined &&
-          text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS) !== command.request
+          (body.request !== undefined || body.additionalInstruction !== undefined) &&
+          request !== command.request
         )
           throw new HttpError(409, '집필 요청 키가 다른 내용에 사용됐어요.');
         return command;
@@ -845,21 +762,12 @@ export class OutlineStore {
       if (node.progress.state === 'scheduled' && node.progress.commandId) {
         const command = this.store.story.command(node.progress.commandId);
         if (
-          body.request !== undefined &&
-          text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS) !== command.request
+          (body.request !== undefined || body.additionalInstruction !== undefined) &&
+          request !== command.request
         )
           throw new HttpError(409, '이 구성은 다른 요청문으로 이미 예약됐어요.');
         return command;
       }
-      const request =
-        body.request === undefined
-          ? [
-              `${OUTLINE_LEVEL_LABELS[node.level]} ${this.unitSources(node.id).length ? '이어 쓰기' : '집필 요청'}: ${node.title}`,
-              node.intent,
-            ]
-              .filter(Boolean)
-              .join('\n')
-          : text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS);
       const command = this.store.story.createCommand(node.chatId, {
         label: `${OUTLINE_LEVEL_LABELS[node.level]} ${node.title}`.slice(0, 120),
         request,

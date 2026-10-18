@@ -22,8 +22,6 @@ type Props = {
   busy: boolean;
   onSelect: (session: HelperConversation) => void;
   onCreate: () => void;
-  onBranch: () => void;
-  branching: boolean;
   onUpdate: (session: HelperConversation) => void;
   onDelete: () => void;
 };
@@ -132,14 +130,6 @@ export function HelperSessionBar(props: Props) {
             onClick={props.onCreate}
           />
           <ActionMenu label="도우미 세션 관리" viewport>
-            <button
-              type="button"
-              disabled={!props.conversation || props.busy || props.branching}
-              onClick={props.onBranch}
-            >
-              <Plus size={18} aria-hidden="true" />
-              {props.branching ? '분기 중…' : '세션 분기 (완료 대화 복사)'}
-            </button>
             <button
               type="button"
               disabled={!props.conversation || props.busy}

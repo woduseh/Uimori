@@ -6,7 +6,6 @@ import {
   type StoryGuideConfig,
   type StoryGuideDetail,
 } from '../core/story-guide.js';
-import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { api, ApiError } from './api.js';
 import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { SelectionCheckbox, Switch } from './BooleanControls.js';
@@ -23,31 +22,14 @@ import {
 import './story-guide.css';
 
 const saveSections = ['notes'] as const;
-const questionExamples = [
-  {
-    label: '말투·관계',
-    question:
-      '이번 장면에 등장할 인물들의 말투·호칭·행동은 어떤 점을 참고하면 좋을까요? 이 이야기에서 달라진 관계도 반영해 주세요.',
-  },
-  {
-    label: '세계관·설정',
-    question:
-      '현재 장소와 상황에 도움이 될 원작의 세계관·설정을 알려 주세요. 설정한 스포일러 범위 안에서, 제공된 자료와 모델 지식을 구분해 주세요.',
-  },
-  {
-    label: '다음 전개',
-    question:
-      '현재 관계와 남은 약속을 고려하면 어떤 전개가 가능할까요? 원작과 달라진 점, 인물들이 아는 정보와 사건의 성립 조건을 짚고 선택지로 제안해 주세요.',
-  },
-];
 type Props = {
   chatId: string;
   headRevision: string | null;
   profileRevision?: number;
   refreshKey: number;
   active: boolean;
-  nextRequest: string;
   onChanged: () => void;
+  onOpenHelper?: () => void;
   onError: (message: string) => void;
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
@@ -63,8 +45,8 @@ function StoryGuideEditor({
   profileRevision,
   refreshKey,
   active,
-  nextRequest,
   onChanged,
+  onOpenHelper,
   onError,
   onDirtyChange,
   onSaveHandlerChange,
@@ -82,17 +64,11 @@ function StoryGuideEditor({
   const savingRef = useRef(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [question, setQuestion] = useState('');
-  const questionInput = useRef<HTMLTextAreaElement>(null);
-  const [working, setWorking] = useState<'ask' | 'refresh' | null>(null);
-  const [answer, setAnswer] = useState<{ question: string; text: string } | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
   const [conflictOpen, setConflictOpen] = useState(false);
   const reviewed = useRef<StoryGuideDetail | null>(null);
   const alive = useRef(true);
   const loadSequence = useRef(0);
   const readRequest = useRef<AbortController | null>(null);
-  const modelRequest = useRef<AbortController | null>(null);
   const saveGroup = useSettingsSaveGroup(saveSections);
   const base = `/chats/${encodeURIComponent(chatId)}`;
 
@@ -101,7 +77,6 @@ function StoryGuideEditor({
     return () => {
       alive.current = false;
       readRequest.current?.abort();
-      modelRequest.current?.abort();
       onDirtyChange(false);
     };
   }, [onDirtyChange]);
@@ -110,7 +85,7 @@ function StoryGuideEditor({
   }, [dirty, notesDirty, saving, onDirtyChange]);
 
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : '이야기 가이드를 불러오지 못했어요.';
+    const text = caught instanceof Error ? caught.message : '원작·인물 참고를 불러오지 못했어요.';
     setError(text);
     onError(text);
   }
@@ -145,15 +120,6 @@ function StoryGuideEditor({
   useEffect(() => {
     if (active) void load();
   }, [active, headRevision, profileRevision, refreshKey]);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Invalidate only when analysis inputs change, not on usage/progress events or re-entry.
-  useEffect(() => {
-    modelRequest.current?.abort();
-    modelRequest.current = null;
-    setWorking(null);
-    setPreview(null);
-    setAnswer(null);
-  }, [headRevision, profileRevision, loaded?.analysisRevision, nextRequest]);
-
   function update<K extends keyof StoryGuideConfig>(key: K, value: StoryGuideConfig[K]) {
     const next = { ...draft, [key]: value };
     dirtyRef.current = JSON.stringify(next) !== JSON.stringify(baseline.current);
@@ -162,7 +128,7 @@ function StoryGuideEditor({
     setMessage('');
   }
   async function save() {
-    if (savingRef.current || modelRequest.current || !loaded) return false;
+    if (savingRef.current || !loaded) return false;
     if (!dirtyRef.current) return true;
     if (draftRevision !== loaded.revision) {
       setConflictOpen(true);
@@ -182,9 +148,7 @@ function StoryGuideEditor({
       loadSequence.current++;
       setLoaded(value);
       acceptSaved(value);
-      setPreview(null);
-      setAnswer(null);
-      setMessage('이야기 가이드를 저장했어요. 다음 집필부터 반영해요.');
+      setMessage('원작·인물 참고를 저장했어요. 다음 집필부터 반영해요.');
       onError('');
       onChanged();
       return true;
@@ -203,61 +167,23 @@ function StoryGuideEditor({
     return saveGroup.save({ notes: notesDirty });
   });
 
-  function cancel() {
-    modelRequest.current?.abort();
-    modelRequest.current = null;
-    setWorking(null);
-  }
-  async function generate(kind: 'ask' | 'refresh') {
-    if (modelRequest.current || savingRef.current || dirtyRef.current || notesDirty) return;
-    const asked = question.trim();
-    if (kind === 'ask' && !asked) return;
-    const controller = new AbortController();
-    modelRequest.current = controller;
-    setWorking(kind);
-    setError('');
-    setMessage('');
-    try {
-      const result = await api<{ text: string }>(
-        `${base}/story-guide/${kind}`,
-        { ...(kind === 'ask' ? { question: asked } : {}), request: nextRequest },
-        'POST',
-        controller.signal
-      );
-      if (!alive.current || controller.signal.aborted || modelRequest.current !== controller)
-        return;
-      if (kind === 'ask') setAnswer({ question: asked, text: result.text });
-      else setPreview(result.text);
-      onError('');
-    } catch (caught) {
-      if (alive.current && !controller.signal.aborted && modelRequest.current === controller)
-        report(caught);
-    } finally {
-      if (alive.current && modelRequest.current === controller) {
-        modelRequest.current = null;
-        setWorking(null);
-      }
-    }
-  }
-
   if (!loaded)
     return (
       <LoadingState
         presentation="region"
         loading={!error}
         error={error}
-        label="이야기 가이드를 불러오는 중이에요…"
-        errorLabel="이야기 가이드를 불러오지 못했어요."
+        label="원작·인물 참고를 불러오는 중이에요…"
+        errorLabel="원작·인물 참고를 불러오지 못했어요."
         onRetry={() => {
           setError('');
           void load();
         }}
       />
     );
-  const busy = saving || working !== null;
-  const hasDraft = dirty || notesDirty;
+  const busy = saving;
   return (
-    <section className="story-guide" aria-label="이야기 가이드 내용">
+    <section className="story-guide" aria-label="원작·인물 참고 내용">
       <p className="muted">
         모델이 원작 설정과 인물 성격을 참고해 집필 참고문을 만들어요. 현재 이야기의 선택과 관계도
         함께 고려하도록 요청해요.
@@ -272,12 +198,12 @@ function StoryGuideEditor({
         <fieldset disabled={busy} className="story-guide-config">
           <label className="settings-row settings-row-toggle">
             <span className="settings-row-copy">
-              <strong>집필에 이야기 가이드 사용</strong>
-              <small>본문 모델로 참고문을 만든 뒤 집필해요.</small>
+              <strong>집필 전에 원작·인물 참고</strong>
+              <small>선택 사항이에요. 참고문 생성에 모델 호출과 비용이 추가될 수 있어요.</small>
             </span>
             <span className="settings-row-control">
               <Switch
-                aria-label="집필에 이야기 가이드 사용"
+                aria-label="집필 전에 원작·인물 참고"
                 checked={draft.enabled}
                 onChange={(event) => update('enabled', event.target.checked)}
               />
@@ -289,12 +215,12 @@ function StoryGuideEditor({
             onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
           >
             <summary>
-              가이드 설정
+              참고 설정
               {!settingsOpen && <small>{draft.work || '작품·참고 범위'}</small>}
             </summary>
             <div className="story-guide-fields">
               <label>
-                작품·세계관
+                작품·판본·세계관
                 <input
                   value={draft.work}
                   maxLength={STORY_GUIDE_LIMITS.work}
@@ -339,7 +265,7 @@ function StoryGuideEditor({
         </fieldset>
         {dirty && (
           <div className="form-actions">
-            <SaveButton label="이야기 가이드 저장" aria-busy={saving} disabled={busy} />
+            <SaveButton label="원작·인물 참고 저장" aria-busy={saving} disabled={busy} />
             <small className="muted">저장하면 다음 요청부터 반영해요.</small>
           </div>
         )}
@@ -350,35 +276,7 @@ function StoryGuideEditor({
         </p>
       )}
       <TransientNotice message={message} />
-      <section className="story-guide-section" aria-label="현재 이야기 분석">
-        <div className="story-guide-heading">
-          <h4>현재 이야기 분석</h4>
-          <button
-            type="button"
-            className="secondary"
-            disabled={saving || hasDraft || working === 'ask'}
-            onClick={() => {
-              if (working === 'refresh') cancel();
-              else void generate('refresh');
-            }}
-          >
-            {working === 'refresh' ? '미리보기 중지' : '미리보기 만들기'}
-          </button>
-        </div>
-        <p className="muted">
-          저장한 설정과 작성 중인 요청으로 집필 참고문을 만들어요. 이야기 가이드 사용을 꺼도
-          미리보기를 만들 수 있어요.
-        </p>
-        {hasDraft && <p className="muted">수정한 설정과 메모를 저장한 뒤 사용할 수 있어요.</p>}
-        {working === 'refresh' && <p role="status">이야기를 살펴보고 있어요…</p>}
-        {preview && (
-          <details key={preview} className="story-guide-preview" open>
-            <summary>가이드 미리보기</summary>
-            <div className="story-guide-result" aria-label="가이드 미리보기">
-              <Prose text={preview} />
-            </div>
-          </details>
-        )}
+      <section className="story-guide-section" aria-label="마지막 집필 참고문">
         {loaded.brief ? (
           <details className="story-guide-last-brief">
             <summary>마지막 집필 참고문</summary>
@@ -395,79 +293,18 @@ function StoryGuideEditor({
         )}
         {loaded.latestRun?.error && (
           <p className="muted">
-            최근 집필은 이야기 가이드를 사용하지 못했어요. 미리보기를 만들어 설정을 확인할 수
-            있어요.
+            최근 집필은 참고문 없이 진행했어요. 모델 연결과 호출 한도를 확인해 주세요.
           </p>
         )}
       </section>
-      <section className="story-guide-section" aria-label="원작 질문">
-        <h4>원작에 물어보기</h4>
-        <p className="muted">원작이나 인물에 관해 질문해요. 답변은 이야기를 변경하지 않아요.</p>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void generate('ask');
-          }}
-        >
-          {!question.trim() && (
-            <div className="story-guide-question-examples" role="group" aria-label="질문 예시">
-              {questionExamples.map((example) => (
-                <button
-                  key={example.label}
-                  type="button"
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    setQuestion(example.question);
-                    questionInput.current?.focus();
-                  }}
-                >
-                  {example.label}
-                </button>
-              ))}
-            </div>
-          )}
-          <label>
-            원작·인물 질문
-            <textarea
-              ref={questionInput}
-              value={question}
-              maxLength={REQUEST_TEXT_MAX_CHARS}
-              rows={3}
-              disabled={busy}
-              placeholder="예: 이 인물은 원작에서 어떤 이유로 동료를 불신하나요?"
-              onChange={(event) => setQuestion(event.target.value)}
-            />
-          </label>
-          <div className="form-actions">
-            {working === 'ask' ? (
-              <>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    cancel();
-                  }}
-                >
-                  질문 중지
-                </button>
-                <span role="status">답변을 만들고 있어요…</span>
-              </>
-            ) : (
-              <button className="secondary" disabled={busy || hasDraft || !question.trim()}>
-                질문하기
-              </button>
-            )}
-          </div>
-        </form>
-        {answer && (
-          <div className="story-guide-result" aria-label="원작 질문 답변">
-            <p className="story-guide-question">{answer.question}</p>
-            <Prose text={answer.text} />
-          </div>
+      <div className="form-actions">
+        <p className="muted">원작이나 인물에 관한 질문은 이 채팅의 도우미에서 이어가요.</p>
+        {onOpenHelper && (
+          <button type="button" className="secondary" onClick={onOpenHelper}>
+            도우미에게 질문
+          </button>
         )}
-      </section>
+      </div>
       {story && (
         <AuthorNotesEditor
           headRevision={headRevision}
@@ -480,8 +317,6 @@ function StoryGuideEditor({
           onRefresh={async () => {
             await load();
             if (!alive.current) return;
-            setPreview(null);
-            setAnswer(null);
             onChanged();
           }}
           onError={onError}
@@ -491,7 +326,7 @@ function StoryGuideEditor({
       )}
       <SaveConflictDialog
         open={conflictOpen}
-        title="이야기 가이드 저장 충돌"
+        title="원작·인물 참고 저장 충돌"
         onClose={() => {
           setConflictOpen(false);
           reviewed.current = null;
@@ -501,7 +336,7 @@ function StoryGuideEditor({
           reviewed.current = value;
           return [
             { label: '집필에 사용', value: value.config.enabled ? '켜짐' : '꺼짐' },
-            { label: '작품·세계관', value: value.config.work },
+            { label: '작품·판본·세계관', value: value.config.work },
             { label: '기준 시점·스포일러 범위', value: value.config.position },
             { label: '원작의 사건 전개도 참고', value: value.config.followCanon ? '예' : '아니요' },
             { label: '추가 참고 자료', value: value.config.reference },

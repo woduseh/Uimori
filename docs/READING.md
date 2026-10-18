@@ -12,7 +12,7 @@ Reader는 SSE의 목표 cursor까지 조회를 이어가며, 일시적인 조회
 
 서버에 실행 중인 요청이 보이더라도 수락 여부가 불확실한 로컬 기록이 있으면 전송 버튼은 ‘이전 요청 확인’을 유지해요. 저장된 동일 요청 키로 수락을 확인한 뒤 실행 취소 버튼을 보여주므로, 확인 도중 상태 갱신이 클릭을 취소 동작으로 바꾸지 않아요.
 
-설정 → 일반 → 원고 읽기 또는 채팅 메뉴 → 읽기 설정에서 바꿔요. 읽기 스타일·간격·부호별 역할은 `uimori:readability` localStorage에 저장하며 같은 origin의 다른 탭에도 반영해요. 도우미 답변·독립 가정 장면·생성 중 공개 텍스트와 설정 예문은 앱의 인용 스타일을 사용해요. 원문·저장된 번역과 설정 미리보기의 Risu 메시지는 열린 Shadow DOM으로 표시해요. Markdown에서 생성한 일반 문단·제목·목록에는 글꼴·크기·줄간격·문단 간격과 인용 강조·줄바꿈을 적용해요. 작성자 HTML과 컨트롤의 구조는 유지하며, 임의 HTML이나 inline HTML이 포함된 문단을 일반 서술문으로 추측해 재작성하지 않아요. 입력한 요청, 편집 초안, 설정 지침, 도구 JSON, 상태·진단 카드는 적용 대상이 아니에요.
+설정 → 일반 → 원고 읽기 또는 채팅 메뉴 → 읽기 설정에서 바꿔요. 읽기 스타일·간격·부호별 역할은 `uimori:readability` localStorage에 저장하며 같은 origin의 다른 탭에도 반영해요. 도우미 답변·생성 중 공개 텍스트와 설정 예문은 앱의 인용 스타일을 사용해요. 원문·저장된 번역과 설정 미리보기의 Risu 메시지는 열린 Shadow DOM으로 표시해요. Markdown에서 생성한 일반 문단·제목·목록에는 글꼴·크기·줄간격·문단 간격과 인용 강조·줄바꿈을 적용해요. 작성자 HTML과 컨트롤의 구조는 유지하며, 임의 HTML이나 inline HTML이 포함된 문단을 일반 서술문으로 추측해 재작성하지 않아요. 입력한 요청, 편집 초안, 설정 지침, 도구 JSON, 상태·진단 카드는 적용 대상이 아니에요.
 
 기본값은 강조·대사 줄바꿈·생각 줄바꿈 모두 꺼짐이며, 간격은 기존 화면 값을 유지해요. 기존 글꼴·본문 크기·폭 선택은 유지해요. 본문 크기는 9~28px을 1px 단위로 고르며 기본은 18px이에요. 채팅과 전역 읽기 설정이 같은 선택을 사용하고 새로고침 후에도 저장한 크기를 복원해요. 도우미의 기존 Markdown 문자와 줄바꿈도 기본값에서는 그대로 표시해요.
 
@@ -37,7 +37,7 @@ Reader는 SSE의 목표 cursor까지 조회를 이어가며, 일시적인 조회
 
 `web/reading-preferences.ts`가 기본값과 브라우저 저장값 검증을, `web/useReadingPreferences.ts`가 저장·탭 반영·표시 간격·읽던 블록/메시지 위치 복원을 맡아요. 설정은 `web/ReadabilitySettings.tsx`, Risu 본문·미리보기는 `web/RisuMessageSurface.tsx`, 도우미·안전한 일반 Markdown은 `web/Prose.tsx`예요. 부호 짝맞춤은 `web/reading-quotes.ts`, DOM 장식은 `web/reading-dom.ts`, 공통 인용 스타일은 `web/reading-prose.css`를 사용해요. `server/risu-reading-markdown.ts`는 표시용 Markdown 토큰에만 읽기 대상 마커를 붙이고, `web/reader-dom.ts`는 Shadow DOM의 선택 범위와 읽기 위치를 연결해요.
 
-표시용 React/DOM 요소와 CSS만 바꿔요. 저장된 원문·번역문·hash·offset·block anchor와 이미지 귀속은 바꾸지 않아요. 기존 패키지 표시 변환 뒤의 화면 텍스트에 적용하고, 모델 입력·사용량·백업·내보내기에는 읽기 설정을 넣지 않아요. 본문·가정 장면 복사 버튼은 기존 저장 텍스트를 복사해요. 드래그 선택 복사는 브라우저의 시각적 개행 처리를 따를 수 있어요.
+표시용 React/DOM 요소와 CSS만 바꿔요. 저장된 원문·번역문·hash·offset·block anchor와 이미지 귀속은 바꾸지 않아요. 기존 패키지 표시 변환 뒤의 화면 텍스트에 적용하고, 모델 입력·사용량·백업·내보내기에는 읽기 설정을 넣지 않아요. 본문 복사 버튼은 기존 저장 텍스트를 복사해요. 드래그 선택 복사는 브라우저의 시각적 개행 처리를 따를 수 있어요.
 
 일반 Markdown과 문자 그대로 표시하는 본문 모두 `{{…}}`의 닫힘 위치를 먼저 확인해요. 닫히지 않은 `{{`가 긴 문단에서 반복돼도 매번 남은 본문 전체를 검색하지 않으며, 완성된 보호 토큰과 뒤따르는 Markdown의 표시 규칙은 유지해요.
 
@@ -65,11 +65,17 @@ Risu 메시지의 기본 글자색·글자 크기·글꼴·줄간격은 상속�
 
 번역 결과를 새로 불러오는 동안 같은 채팅·원문 저장본의 원문 메시지 DOM을 유지해 읽던 위치가 줄어든 임시 화면으로 이동하지 않게 해요. 이전 번역은 새 번역처럼 표시하지 않고, 갱신 중에는 봇의 실행 버튼을 잠시 비활성화해요.
 
+번역이 없으면 **번역 생성**, 실패했다면 **번역 다시 시도**, 저장된 번역이 있으면 **번역 보기**를 표시해요. 번역 보기는 저장된 결과만 열고 모델을 호출하지 않아요. 새로 번역하는 작업은 장면 메뉴의 **다시 번역**에서 별도로 시작해요.
+
 봇 자체의 고정 폭·고정 위치 UI를 모바일용으로 자동 재배치하지는 않아요. 따라서 앱의 탐색·입력창이 정상이어도 원본 카드 내부의 버튼이나 문구가 좁은 화면에서 겹칠 수 있어요.
 
 ## Helper sessions
 
 Each independent chat can have multiple helper sessions. A session owns its conversation, draft and context; closing the panel or selecting another session does not cancel its work. Tools can explicitly target another chat when requested. Copying a chat produces an independent chat, not a shared branch with a mutable default.
+
+새 도우미 세션을 만들거나 같은 대화를 이어갈 수 있어요. 도우미 세션의 신규 분기는 제공하지 않지만 기존 분기 대화와 복사된 기록은 계속 읽고 이어갈 수 있어요. 소설 채팅 사본은 별도 기능으로 유지해요. 현재 편집 중인 자료는 표시하고 요청할 때 최신 초안을 자동으로 참고해요. 초안 조회·저장 오류와 충돌은 해당 편집기에서 확인해요.
+
+대화별 호출 한도는 편집하지 않아요. 새로 접수하는 작업은 내부 정책인 도우미 판단 64회·전체 모델 호출 128회와 호스트 도구 호출 256회를 사용해요. 이미 접수한 작업은 저장된 호출 한도를 유지해요. 20분 실행 기한과 취소·작업별 재시도도 유지해요. 네이티브 Codex의 내부 모델 요청은 관측할 수 없으므로 이 한도는 비용 상한을 뜻하지 않아요.
 
 Opening the reader or helper takes a current view and event cursor, then follows newer changes; historical notifications are not replayed just to rebuild the screen. Message content updates preserve the reading position, and both native HTML and ordinary prose use the same outer block anchors.
 

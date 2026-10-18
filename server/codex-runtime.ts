@@ -385,6 +385,8 @@ export const CODEX_RUNTIME_CONFIG = {
   'features.unbounded_connection_retries': false,
   'features.image_generation': false,
 } as const;
+
+const CODEX_HELPER_CONFIG = { ...CODEX_RUNTIME_CONFIG, web_search: 'live' } as const;
 /** Illustration text decisions expose no tools. Image turns add only image generation. */
 export const CODEX_ILLUSTRATION_TEXT_CONFIG = {
   ...CODEX_RUNTIME_CONFIG,
@@ -757,7 +759,11 @@ export class CodexRuntime implements CodexRuntimeService {
           ? JSON.stringify([built.baseInstructions, built.developerInstructions])
           : built.developerInstructions,
         config:
-          request.role === 'illustration' ? CODEX_ILLUSTRATION_TEXT_CONFIG : CODEX_RUNTIME_CONFIG,
+          request.role === 'illustration'
+            ? CODEX_ILLUSTRATION_TEXT_CONFIG
+            : request.role === 'helper'
+              ? CODEX_HELPER_CONFIG
+              : CODEX_RUNTIME_CONFIG,
         allowedItems: TEXT_ITEMS,
       };
     } catch (caught) {
@@ -798,7 +804,8 @@ export class CodexRuntime implements CodexRuntimeService {
           request.developerInstructions,
           dynamicTools,
         ]),
-        config: CODEX_RUNTIME_CONFIG,
+        config:
+          (request.role ?? 'helper') === 'helper' ? CODEX_HELPER_CONFIG : CODEX_RUNTIME_CONFIG,
         allowedItems: [...TEXT_ITEMS, 'dynamicToolCall'],
         dynamicTools,
         toolNames,

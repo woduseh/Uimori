@@ -166,14 +166,16 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
       .toBe(a.settingsRevision + 1);
     await aSecondTab.getByRole('button', { name: '설정 저장', exact: true }).click();
     await expect(
-      aSecondTab.getByRole('dialog', { name: '채팅 설정', exact: true }).getByRole('alert')
+      aSecondTab.getByRole('region', { name: '생성 설정', exact: true }).getByRole('alert')
     ).toContainText('다른 요청이 먼저 반영됐어요');
     await aSecondTab.getByRole('button', { name: '변경 취소', exact: true }).click();
     await aSecondTab
       .getByRole('alertdialog', { name: '생성 설정 변경 취소', exact: true })
       .getByRole('button', { name: '변경 버리기', exact: true })
       .click();
-    await expect(aSecondTab.getByRole('alert')).toHaveCount(0);
+    await expect(
+      aSecondTab.getByRole('region', { name: '생성 설정', exact: true }).getByRole('alert')
+    ).toHaveCount(0);
     expect((await detail(request, a.id)).runs[0].snapshot.settings.maxCalls).toBe(8);
     await page.close();
     await control(request, 'release', { barrier: 'run' });
@@ -199,7 +201,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     await sourceDetails(aSecondTab);
     await expectSourceRaw(aSecondTab, aSource.text);
     expect(aDone.jobs.some((job) => job.kind === 'translation')).toBe(false);
-    await aSecondTab.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await aSecondTab.getByRole('button', { name: '번역 생성', exact: true }).click();
     await expect(aSecondTab.getByTestId('source').getByTestId('job-translation')).toContainText(
       '한국어 번역'
     );
@@ -295,7 +297,7 @@ test('F05 failed auxiliary result retries independently while a later source is 
   await control(request, 'fail-next', { point: 'translation' });
   await send(page, 'SYNTHETIC_FIRST: A letter rests on the desk.');
   await expect(page.getByTestId('source')).toHaveCount(1);
-  await page.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await page.getByRole('button', { name: '번역 생성', exact: true }).click();
   await sourceDetails(page);
   await expect(page.getByTestId('source').getByTestId('job-translation')).toContainText('실패');
   const before = await detail(request, chat.id);
@@ -418,7 +420,7 @@ test('F03 F05 an older real HTTP response cannot hide a newly committed source',
     });
     expect(response.ok()).toBeTruthy();
     await expect(page.getByTestId('source')).toHaveCount(1);
-    await page.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await page.getByRole('button', { name: '번역 생성', exact: true }).click();
     await expect
       .poll(
         async () =>

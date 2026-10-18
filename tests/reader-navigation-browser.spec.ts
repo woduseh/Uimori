@@ -203,6 +203,39 @@ test('CHATREC03 compact scene list follows source IDs and keeps the opening outs
   await expect(list).toHaveText('첫 메시지');
 });
 
+test('scene search keeps one query when switching between scene list and manuscript results', async ({
+  page,
+}) => {
+  const queries: string[] = [];
+  await page.route('**/api/search', async (route) => {
+    queries.push(route.request().postDataJSON().query);
+    await route.fulfill({ json: { items: [], nextCursor: null, coverage: 'complete' } });
+  });
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    const path = '/tests/fixtures/reader-navigation.tsx';
+    const { mountMiniNavigator } = await import(path);
+    mountMiniNavigator();
+  });
+  await page.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
+  const query = dialog.getByRole('searchbox', { name: '장면 검색어', exact: true });
+  await query.fill('Scene');
+  await expect(dialog.getByRole('heading', { name: '장면 목록 결과' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /번째 장면 · Scene/ })).toHaveCount(2);
+  await dialog.getByRole('button', { name: '본문', exact: true }).click();
+  await expect(query).toHaveValue('Scene');
+  await expect(dialog.getByRole('searchbox')).toHaveCount(1);
+  await expect(dialog.getByRole('heading', { name: '본문 검색 결과' })).toBeVisible();
+  await expect.poll(() => queries).toEqual(['Scene']);
+  await query.fill('밤');
+  await query.press('Enter');
+  await expect.poll(() => queries).toEqual(['Scene', '밤']);
+  await dialog.getByRole('button', { name: '장면 목록', exact: true }).click();
+  await expect(query).toHaveValue('밤');
+  await expect(dialog.getByText('일치하는 장면이 없어요.', { exact: true })).toBeVisible();
+});
+
 // One JS task reproduces A -> B -> A before React can commit a different query.
 // The reader must reject the old response by intent, not by comparing URL fields alone.
 for (const action of ['same-chat', 'A-B-A'] as const) {

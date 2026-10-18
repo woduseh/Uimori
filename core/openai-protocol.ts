@@ -24,6 +24,7 @@ import {
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
 import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
+import { webCitationLinks } from './helper-web-search.js';
 
 export class OpenAIProtocolError extends Error {
   constructor(readonly code: string) {
@@ -52,6 +53,7 @@ const hash = (value: Json) => createHash('sha256').update(canonical(value)).dige
 export type OpenAIToolAlias = { name: string; providerName: string };
 export type OpenAIPendingCall = { id: string; name: string; providerName: string };
 export type OpenAITurn = {
+  webSearch?: true;
   version: 'openai-responses-turn-v1' | 'openai-chat-turn-v1';
   modelId: string;
   bindingHash: string;
@@ -98,6 +100,11 @@ function prepare(
     : 'openai-responses-v1'
 ) {
   const continuationInput = continuationInputText(request);
+  if (
+    request.webSearch !== undefined &&
+    (request.webSearch !== true || request.role !== 'helper' || protocol !== 'openai-responses-v1')
+  )
+    reject('INVALID_WEB_SEARCH');
   if (!nonempty(request.modelId) || request.modelId.length > 200) reject('INVALID_MODEL_ID');
   if (request.providerOptions !== undefined) {
     if (protocol !== 'vercel-chat-v1') reject('UNSUPPORTED_PROVIDER_OPTIONS');
@@ -129,6 +136,7 @@ function prepare(
     copy(
       {
         role: request.role,
+        ...(request.webSearch ? { webSearch: true } : {}),
         modelId: request.modelId,
         stable: request.stable,
         generation: request.generationBinding ?? generation ?? null,
@@ -490,15 +498,18 @@ export function encodeResponses(request: ProviderRequest): {
         }
       : {}),
     ...(Object.keys(reasoning).length ? { reasoning } : {}),
-    ...(aliases.length
+    ...(aliases.length || request.webSearch
       ? {
-          tools: request.stable.tools.map((tool, index) => ({
-            type: 'function',
-            name: aliases[index].providerName,
-            description: tool.description,
-            parameters: copy(tool.inputSchema),
-            strict: false,
-          })),
+          tools: [
+            ...request.stable.tools.map((tool, index) => ({
+              type: 'function',
+              name: aliases[index].providerName,
+              description: tool.description,
+              parameters: copy(tool.inputSchema),
+              strict: false,
+            })),
+            ...(request.webSearch ? [{ type: 'web_search', external_web_access: true }] : []),
+          ],
           ...(request.toolChoice
             ? {
                 tool_choice:
@@ -520,6 +531,7 @@ export function encodeResponses(request: ProviderRequest): {
     messageMetadata: nativeMessageMetadata(plan),
     context: seal({
       version: 'openai-responses-turn-v1',
+      ...(request.webSearch ? { webSearch: true as const } : {}),
       modelId: request.modelId,
       bindingHash: prepared.bindingHash,
       phase: 'request',
@@ -604,6 +616,7 @@ export class ResponsesDecoder {
   }
   private refresh(strict: boolean): void {
     let text = '';
+    const citations: Json[] = [];
     let refusal = '';
     this.publicTail = undefined;
     const calls: ProviderToolCall[] = [];
@@ -629,6 +642,10 @@ export class ResponsesDecoder {
           }
           if (part.type === 'output_text' && typeof part.text === 'string') {
             text += part.text;
+            if (this.context.webSearch && Array.isArray(part.annotations))
+              citations.push(
+                ...part.annotations.filter((item) => object(item) && item.type === 'url_citation')
+              );
             if (part.text) this.publicTail = { outputIndex, contentIndex };
           } else if (part.type === 'refusal' && typeof part.refusal === 'string')
             refusal += part.refusal;
@@ -639,10 +656,12 @@ export class ResponsesDecoder {
         if (ids.has(call.id)) reject('DUPLICATE_TOOL_ID');
         ids.add(call.id);
         calls.push(call);
+      } else if (item.type === 'web_search_call' && this.context.webSearch) {
+        // Hosted search output remains opaque provider history, never a host tool invocation.
       } else if (item.type !== 'function_call' && item.type !== 'reasoning' && strict)
         reject('UNSUPPORTED_OUTPUT_ITEM');
     }
-    this.result.text = text;
+    this.result.text = text + (strict && this.context.webSearch ? webCitationLinks(citations) : '');
     this.result.refusal = refusal || null;
     this.result.toolCalls = calls;
   }
@@ -844,7 +863,9 @@ export class ResponsesDecoder {
       return this.result.text;
     } else if (
       event.type.startsWith('response.reasoning_') ||
-      event.type === 'response.output_text.annotation.added'
+      event.type === 'response.output_text.annotation.added' ||
+      (this.context.webSearch &&
+        /^response\.web_search_call\.(in_progress|searching|completed)$/u.test(event.type))
     ) {
       // Completed response.output is authoritative for opaque reasoning and annotations.
       return;

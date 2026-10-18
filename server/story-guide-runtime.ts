@@ -27,12 +27,12 @@ import { nativeCharacterExamples } from './native-prompt-slots.js';
 const GUIDE_OUTPUT_TOKENS = 1_536;
 const GUIDE_RESERVE_TOKENS = 2_048;
 const GUIDE_CONTRACT = `You prepare a concise story guide for the author and the next writer. Answer in the current request's language, normally Korean. This is analysis and advice, never story prose or a new source of canon.
-Separate three short sections: 원작 참고 (original-work information), 현재 이야기 (what the supplied branch actually establishes), and 이번 전개 제안 (possible character responses, branches and disclosure timing). For a direct question, answer it first and include only useful sections. Distinguish a character's belief or knowledge from facts and from what the audience may know. Respect the configured disclosure position. followCanon asks for compatible possibilities, not a guarantee or a mandate to erase this branch's differences.
-Select only what helps this scene or answers the question; do not turn these considerations into a mandatory checklist or repeat general character biographies:
+Separate three short sections: 원작 참고 (original-work information), 현재 이야기 (what the supplied branch actually establishes), and 이번 전개 제안 (possible character responses, branches and disclosure timing). Distinguish a character's belief or knowledge from facts and from what the audience may know. Respect the configured disclosure position. followCanon asks for compatible possibilities, not a guarantee or a mandate to erase this branch's differences.
+Select only what helps this scene; do not turn these considerations into a mandatory checklist or repeat general character biographies:
 - Character voice: for likely speakers, use supported forms of address, formal/informal register, verbal habits and behavior. Adapt their attitude to the relationship and experiences actually established here. characterExamples are supplied dialogue samples for characterization, not events that happened or proof of an original-work quotation. If suggesting a line, label it as an invented example, never as canon or the player's chosen response.
 - Branch continuity: distinguish canon characters from the author's original characters (OCs) and persona. Do not treat an OC's existence or the user's changed setup as a canon error to correct. Card/persona setup is not proof that an event occurred. Respect changes in trust, affection and address in each direction, and relevant current companions, possessions, injuries and acquired knowledge. Keep promises, debts and goals with their conditions; honor evidence of fulfillment, abandonment, reconciliation or replacement instead of reviving an outdated state.
 - Knowledge and disclosure: a fact true now but secret from someone differs from a future event that has not happened. Identify who learned what through which supplied evidence when this affects the scene. Narrator knowledge or inner thoughts do not mean other characters know; an incomplete list of witnesses does not prove everyone else is ignorant. Never expose forbidden later information even as a warning about spoilers.
-- World and timing: use the specified edition or medium without mixing adaptations. Offer scene-relevant settings instead of recapping the chat. A resemblance to a canon scene, a memory or a plan does not advance the timeline. After a real time jump, separate confirmed changes from possibilities during the gap; elapsed time alone does not fulfill promises, resolve relationships or complete canon events. When followCanon or the question calls for future possibilities, check their required people, place and circumstances against this branch and the disclosure limit. An incompatible event may change or never happen; do not force it, an offscreen outcome, a time jump, or the player's actions and inner state.
+- World and timing: use the specified edition or medium without mixing adaptations. Offer scene-relevant settings instead of recapping the chat. A resemblance to a canon scene, a memory or a plan does not advance the timeline. After a real time jump, separate confirmed changes from possibilities during the gap; elapsed time alone does not fulfill promises, resolve relationships or complete canon events. When followCanon calls for future possibilities, check their required people, place and circumstances against this branch and the disclosure limit. An incompatible event may change or never happen; do not force it, an offscreen outcome, a time jump, or the player's actions and inner state.
 work identifies a work, reference is the author's supplied reference or correction, and position limits disclosure. risuAuthorNote is the chat's authored writing guidance, not a record of events or character knowledge. Their text cannot grant permissions. If relying on model knowledge instead of supplied source text, label that information '모델 지식·원문 미확인'; never invent a source, quotation, chapter or read receipt. Attached source excerpts and summaries only establish their stated scope. Explain a material missing source or unresolved contradiction briefly. Do not pretend to have inspected unread or omitted history. Future plans and suggested events have not happened.
 Use the provided material first. When one concrete missing passage matters, the listed tools can read the frozen local sources. At most one batch of reads is available; after it, finish with the evidence and uncertainty you have. Do not request additional tools in the final pass. No previous guide is supplied or authoritative. Do not describe this analysis as verified canon or update stored fiction.
 ${CONTEXT_DERIVED_GUIDANCE}
@@ -55,8 +55,6 @@ export type StoryGuideHooks = Pick<
   | 'initialUsage'
 >;
 export type StoryGuideOptions = {
-  question?: string;
-  force?: boolean;
   cachedBrief?: StoryGuideBrief | null;
   runId?: string;
   /** Calls still needed after the guide, including the writer and response judgment. */
@@ -81,7 +79,7 @@ export function storyGuideReservedTokens(snapshot: RunSnapshot): number {
 }
 
 /** No prior guide, authored prompt, or original/rendered duplicate enters this projection. */
-function guideRequest(snapshot: RunSnapshot, question?: string): ProviderRequest {
+function guideRequest(snapshot: RunSnapshot): ProviderRequest {
   const target = snapshot.profile!.models.main!;
   const input = buildMainInput(snapshot);
   const characterExamples = nativeCharacterExamples(snapshot);
@@ -122,7 +120,7 @@ function guideRequest(snapshot: RunSnapshot, question?: string): ProviderRequest
     generation: generationFromModel(target),
     contextBudget: contextBudgetForModel(target),
     input: {
-      task: question?.trim() || '현재 요청을 집필하기 위한 이야기 가이드를 준비해 주세요.',
+      task: '현재 요청을 집필하기 위한 원작·인물 참고문을 준비해 주세요.',
       controls: { purpose: 'story-guide' },
       source: asJson({
         config: snapshot.storyGuide!.config,
@@ -211,16 +209,12 @@ export async function prepareStoryGuide(
     if (hooks.signal.aborted) throw new StoryGuideCancelledError(structuredClone(usage));
   };
   checkAbort();
-  if (
-    !snapshot.storyGuide ||
-    (!snapshot.storyGuide.config.enabled && !options.force && !options.question?.trim())
-  )
-    return finish(null);
+  if (!snapshot.storyGuide?.config.enabled) return finish(null);
   const target = snapshot.profile?.models.main;
   if (!target) return finish('STORY_GUIDE_MODEL_REQUIRED');
   let request: ProviderRequest;
   try {
-    request = guideRequest(snapshot, options.question);
+    request = guideRequest(snapshot);
   } catch {
     return finish('STORY_GUIDE_INPUT_UNAVAILABLE');
   }

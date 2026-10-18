@@ -47,7 +47,7 @@ async function fixture() {
 }
 const ref = (content: Content) => ({ id: content.id, revision: content.revision });
 
-test('new chats prefer explicit persona, then bot default including none, then folder', async () => {
+test('new chats prefer explicit persona including none, then folder, then bot default', async () => {
   const { store, bot, persona, nextPersona } = await fixture();
   const org = store.organization;
   const folder = org.createFolder(bot.id, {
@@ -66,13 +66,33 @@ test('new chats prefer explicit persona, then bot default including none, then f
     expectedRevision: 1,
     persona: { mode: 'persona', persona: ref(nextPersona) },
   });
-  expect(selected()).toBe(nextPersona.id);
-  expect(selected({ persona: ref(persona) })).toBe(persona.id);
+  expect(selected()).toBe(persona.id);
+  const unfiled = store.createChat('Unfiled', { botId: bot.id });
+  expect(store.product.profile(unfiled.id).packageAttachments).toContainEqual({
+    ...ref(nextPersona),
+    role: 'persona',
+  });
+  const emptyFolder = org.createFolder(bot.id, { title: 'No folder persona' });
+  const fallback = store.createChat('Fallback bot', { botId: bot.id, folderId: emptyFolder.id });
+  expect(store.product.profile(fallback.id).packageAttachments).toContainEqual({
+    ...ref(nextPersona),
+    role: 'persona',
+  });
+  org.move(unfiled.id, { expectedRevision: 1, folderId: folder.id });
+  expect(store.product.profile(unfiled.id).packageAttachments).toContainEqual({
+    ...ref(nextPersona),
+    role: 'persona',
+  });
+  expect(selected({ persona: ref(nextPersona) })).toBe(nextPersona.id);
   expect(selected({ persona: null })).toBeNull();
   const before = store.chats().map((chat) => store.product.profile(chat.id));
   org.updateDefaults(bot.id, { expectedRevision: 2, persona: { mode: 'none' } });
   expect(store.chats().map((chat) => store.product.profile(chat.id))).toEqual(before);
-  expect(selected()).toBeNull();
+  expect(selected()).toBe(persona.id);
+  const noPersona = store.createChat('Fallback none', { botId: bot.id, folderId: emptyFolder.id });
+  expect(store.product.profile(noPersona.id).packageAttachments).not.toEqual(
+    expect.arrayContaining([expect.objectContaining({ role: 'persona' })])
+  );
   expect(() =>
     org.updateDefaults(bot.id, { expectedRevision: 2, persona: { mode: 'inherit' } })
   ).toThrow('변경됐어요');
