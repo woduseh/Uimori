@@ -48,7 +48,7 @@ export type MainHooks = {
   reserveCalls?: number;
   executeAnthropicBatch?: import('../core/transport.js').ProviderExecutionOptions['executeAnthropicBatch'];
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
-  /** Explicitly wired for real writing Runs, not helper-generated hypothetical scenes. */
+  /** Native Codex advisor execution for main writing Runs. */
   executeCodexAgent?: import('./codex-runtime.js').CodexRuntimeService['executeAgent'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   resolveImage?: import('../core/transport.js').ProviderExecutionOptions['resolveImage'];

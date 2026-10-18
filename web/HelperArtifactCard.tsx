@@ -185,7 +185,7 @@ export function HelperArtifactCard({
           </div>
           <details className="helper-artifact-request">
             <summary>장면 요청</summary>
-            <PlainProse text={selected.request} />
+            <div className="helper-artifact-literal">{selected.request}</div>
             <IconButton
               label="가정 장면 요청 복사"
               icon={Copy}
@@ -222,9 +222,7 @@ export function HelperArtifactCard({
                 초안 {index + 1} ·{' '}
                 {draft.revision === null ? '원래 저장 형식' : `수정 번호 ${draft.revision} 기준`}
               </h4>
-              <div className="helper-prose">
-                <PlainProse text={draft.text} />
-              </div>
+              <div className="helper-artifact-literal">{draft.text}</div>
               <IconButton
                 label="가정 장면 초안 복사"
                 icon={Copy}

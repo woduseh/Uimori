@@ -1259,15 +1259,17 @@ export function ConnectionEditor({
                   </button>
                   <ActionMenu label={item.title + ' 프로바이더 메뉴'}>
                     {orderMenu('connection', item.id)}
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      aria-label={item.title + ' 프로바이더 복제'}
-                      onClick={() => showConnection(item, true)}
-                    >
-                      <CopyIcon size={18} aria-hidden="true" /> 복제
-                    </button>
+                    {(testMode || item.protocol !== 'fixture-sse-v1') && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        aria-label={item.title + ' 프로바이더 복제'}
+                        onClick={() => showConnection(item, true)}
+                      >
+                        <CopyIcon size={18} aria-hidden="true" /> 복제
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="secondary"

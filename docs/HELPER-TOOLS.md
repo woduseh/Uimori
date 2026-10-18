@@ -110,7 +110,7 @@ When an HTTP provider returns adjacent `data.search`, `data.read` or `db.query` 
 
 ## Discovering and executing app operations
 
-An explicit `chatId` selects the target chat for that operation without changing the helper conversation's default scope. Metadata reads, renames, lore operations and outline navigation do not prepare an unused writing snapshot. Only operations that consume reserved story/reference context, ancestry or a writing head prepare it for an explicit target: story/reference reads, forks, notes, context edits/compaction, independent scenes, and outline detail with `section=writings`. Calls without an explicit target retain the task's original reservation. Read/write classification, outline-review availability and writing-context needs share one helper tool policy; `chat.lore` and `library.organize` remain reads only for `action=read`.
+An explicit `chatId` selects the target chat for that operation without changing the helper conversation's default scope. Metadata reads, renames, lore operations and outline navigation do not prepare an unused writing snapshot. Only operations that consume reserved story/reference context, ancestry or a writing head prepare it for an explicit target: story/reference reads, forks, notes, context edits/compaction, and outline detail with `section=writings`. Calls without an explicit target retain the task's original reservation. Read/write classification, outline-review availability and writing-context needs share one helper tool policy; `chat.lore` and `library.organize` remain reads only for `action=read`.
 
 For operations unfamiliar to the helper, request their exact schemas first:
 
