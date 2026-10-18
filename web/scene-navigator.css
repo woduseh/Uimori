@@ -205,6 +205,9 @@
 }
 /* Compact navigation leaves manuscript text unobscured. */
 @media (max-width: 760px) {
+  .scene-dialog .segmented button {
+    min-height: var(--control-h);
+  }
   .reader-stage.has-scenes {
     flex-direction: column;
   }
