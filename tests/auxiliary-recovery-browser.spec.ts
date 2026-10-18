@@ -48,12 +48,13 @@ test('translation failures show safe causes while retired status jobs stay hidde
   ];
   // Only projected failure data and action responses are synthetic. Backend admission
   // and snapshot integrity are covered separately in prompt-settings.test.ts.
+  const readerResponse = await request.get(`/api/chats/${chat.id}/reader?source=${source.id}`);
+  expect(readerResponse.ok()).toBe(true);
+  const reader: ReaderDetail = await readerResponse.json();
   try {
     await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
-      const response = await route.fetch();
-      const body: ReaderDetail = await response.json();
-      body.jobs = jobs;
-      await route.fulfill({ response, json: body });
+      // The reader is unchanged in this case; avoid leaving fetches pending at route teardown.
+      await route.fulfill({ json: { ...reader, jobs } });
     });
     await page.goto(`/?chat=${chat.id}`);
     const panel = page.getByTestId('turn-activity').first();
