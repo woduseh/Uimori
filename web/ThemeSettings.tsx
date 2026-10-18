@@ -135,6 +135,11 @@ export function ThemeSettings({
     state.catalog.themes.find((theme) => theme.id === state.active.id) ??
     getBuiltinTheme(state.active.id);
   const originalColors = activeLayout?.colors;
+  const defaultLegacyLayout = getBuiltinTheme(p.defaultThemeId);
+  const globalLayouts =
+    defaultLegacyLayout && !state.catalog.themes.some((theme) => theme.id === p.defaultThemeId)
+      ? [...state.catalog.themes, defaultLegacyLayout]
+      : state.catalog.themes;
   const selectedLegacyLayout = selectedId && getBuiltinTheme(selectedId);
   const layouts =
     selectedLegacyLayout && !state.catalog.themes.some((theme) => theme.id === selectedId)
@@ -307,7 +312,7 @@ export function ThemeSettings({
             disabled={busy || backgroundDirty || state.loading}
             onChange={(event) => choose(event.target.value, 'global')}
           >
-            {layouts.map((theme) => (
+            {globalLayouts.map((theme) => (
               <option key={theme.id} value={theme.id}>
                 {theme.title}
               </option>

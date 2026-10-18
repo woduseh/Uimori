@@ -281,6 +281,42 @@ test('THEMES rejects leading executable markup instead of silently dropping it o
   expect(await page.evaluate(() => 'themeScriptExecuted' in window)).toBe(false);
 });
 
+test('THEMES legacy global appearance stays selected across advanced scopes', async ({
+  page,
+  request,
+}) => {
+  const botResponse = await request.post('/api/content', {
+    data: fixtureBotInput(`Legacy theme scope ${randomUUID()}`),
+  });
+  expect(botResponse.ok()).toBe(true);
+  const bot = await botResponse.json();
+  const chatResponse = await request.post('/api/chats', {
+    data: { title: 'Legacy theme scope', botId: bot.id },
+  });
+  expect(chatResponse.ok()).toBe(true);
+  const chat = await chatResponse.json();
+  for (const selection of [
+    { scope: 'global', themeId: 'builtin:library' },
+    { scope: 'bot', targetId: bot.id, themeId: 'builtin:letter' },
+    { scope: 'chat', targetId: chat.id, themeId: 'builtin:scrapbook' },
+  ]) {
+    const catalog = await (await request.get('/api/themes')).json();
+    const selected = await request.post('/api/themes/selection', {
+      data: { ...selection, expectedRevision: catalog.preferences.revision },
+    });
+    expect(selected.ok()).toBe(true);
+  }
+  const before = await (await request.get('/api/themes')).json();
+  await openThemes(page, `/?chat=${chat.id}`);
+  const appearance = page.getByLabel('기본 외관', { exact: true });
+  for (const scope of ['global', 'bot', 'chat', 'global']) {
+    await page.getByLabel('테마 적용 범위', { exact: true }).selectOption(scope);
+    await expect(appearance).toHaveValue('builtin:library');
+    await expect(appearance.locator('option:checked')).toHaveText('서재');
+  }
+  expect((await (await request.get('/api/themes')).json()).preferences).toEqual(before.preferences);
+});
+
 test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard navigation', async ({
   page,
   request,
