@@ -1485,7 +1485,8 @@ export class HelperRuntime {
         history: asJson(history),
         source: asJson({
           webSearch: helperWebSearchCapability(target.connection.protocol),
-          currentDateUtc: new Date().toISOString().slice(0, 10),
+          // Source participates in provider continuation binding, so keep this task's date fixed.
+          currentDateUtc: task.createdAt.slice(0, 10),
           summary: {
             kind: 'derived-helper-summary',
             text: summary,
