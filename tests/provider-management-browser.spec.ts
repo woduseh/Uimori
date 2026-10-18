@@ -411,6 +411,63 @@ test('PMUI tokenizer advanced selection survives save and model edits and can re
   expect(observed.generations).toEqual([]);
 });
 
+for (const testMode of [false, true]) {
+  test(`PMUI fixture cloning respects test mode ${testMode}`, async ({ page, request }, info) => {
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+    const title = `PMUI fixture clone ${testMode} ${Date.now()}`;
+    const original = await api<Connection>(request, '/connections', {
+      title,
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9/events',
+      enabled: false,
+    });
+    await page.route('**/api/health', async (route) => {
+      const response = await route.fetch();
+      const health = await response.json();
+      await route.fulfill({ response, json: { ...health, testMode } });
+    });
+    await settings(page);
+    await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
+    await page.getByLabel('프로바이더·모델 검색').fill(title);
+    await openProviderMenu(page, '프로바이더', title);
+    const clone = page.getByRole('button', { name: title + ' 프로바이더 복제', exact: true });
+    const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
+    if (!testMode) {
+      await expect(clone).toHaveCount(0);
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath('fixture-clone-unavailable-mobile.png') });
+      await page.keyboard.press('Escape');
+      await page.getByRole('button', { name: title + ' 프로바이더 수정', exact: true }).click();
+      await expect(form.getByLabel('프로바이더 프로토콜')).toHaveValue('fixture-sse-v1');
+      await form.getByLabel('프로바이더 이름', { exact: true }).fill(title + ' 수정');
+      await form.getByRole('button', { name: '프로바이더 변경 저장', exact: true }).click();
+      await expect
+        .poll(async () => (await api<Connection>(request, `/connections/${original.id}`)).title)
+        .toBe(title + ' 수정');
+      expect(
+        (await library(request)).connections.filter((item) => item.title.startsWith(title))
+      ).toHaveLength(1);
+    } else {
+      await clone.click();
+      await expect(form.getByLabel('프로바이더 프로토콜')).toHaveValue('fixture-sse-v1');
+      await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(
+        title + ' 복사'
+      );
+      await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
+      await expect
+        .poll(async () =>
+          (await library(request)).connections.find((item) => item.title === title + ' 복사')
+        )
+        .toMatchObject({ protocol: 'fixture-sse-v1', enabled: false });
+      const copied = (await library(request)).connections.find(
+        (item) => item.title === title + ' 복사'
+      )!;
+      expect(copied.id).not.toBe(original.id);
+      expect(await api<Connection>(request, `/connections/${original.id}`)).toEqual(original);
+    }
+  });
+}
+
 test('PMUI02 connection clone requires review and stale edits retain their draft and CAS revision until explicit reload', async ({
   page,
   request,
@@ -418,6 +475,11 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const title = 'PMUI02 ' + Date.now(),
     observed = observe(page);
+  await page.route('**/api/health', async (route) => {
+    const response = await route.fetch();
+    const health = await response.json();
+    await route.fulfill({ response, json: { ...health, testMode: false } });
+  });
   const original = await api<Connection>(request, '/connections', connectionInput(title));
   await settings(page);
   const form = page.getByRole('form', { name: '프로바이더 편집 양식' });

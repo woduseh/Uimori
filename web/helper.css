@@ -352,6 +352,10 @@
   align-items: center;
   gap: 8px;
 }
+.helper-artifact-literal {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .helper-artifact-request,
 .helper-artifact-drafts {
   margin-top: 12px;

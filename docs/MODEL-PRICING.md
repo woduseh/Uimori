@@ -31,7 +31,7 @@ Vercel의 2026-09-09 공개 GET 목록에서 Sol·Grok의 snake_case 단가·컨
 - 사용량이나 단가가 없으면 전체 추정 금액은 미확인이에요. 확인된 항목은 부분합으로 보여요. 사용량이 명시적으로 0이면 단가가 미확인이어도 그 항목의 금액은 0이에요. Vertex는 유효한 `promptTokenCount`가 있는 usage에서 생략된 캐시 읽기 필드만 proto3 기본값 0으로 해석해요. 누락된 usage 전체나 명시적인 `null`은 미확인으로 남겨요.
 - 실제 서비스 tier가 고정 가격과 다르면 금액을 추정하지 않아요. Anthropic의 `standard_only`는 응답의 `standard`와 같은 기준이에요. 저장된 실행 모드가 Anthropic Batch인 호출의 `batch` 응답은 표준 단가 계산 후 50% 할인을 한 번 적용해요. 기존 미확인 호출은 최신 요금으로 소급 계산하지 않아요.
 - 본문에는 작문과 작문 보조의 추정 비용을 표시해요. 번역·제목 등 후속 작업은 작업 현황에서 별도로 확인해요. 상세에는 프로바이더 보고 비용과 추정 비용을 분리해 표시해요.
-- 도우미의 문서 생성은 `helper-artifact`, 그 과정의 컨텍스트 요약 호출은 `summary`로 집계해요.
+- 과거 도우미 가정 장면 생성의 사용량은 `helper-artifact`, 당시 컨텍스트 요약 호출은 `summary`로 보존해요. 가정 장면 생성 기능이 종료돼도 이 기록은 유지해요.
 - JSON 보관은 가격 snapshot과 추정 결과를 보존하며 형식·모델 귀속·계산 일치를 검증해요. 가격은 실행 허가나 누적 금액 차단 조건이 아니에요. 취소·중복·불확실 실행·원문 귀속 계약은 유지해요.
 
 검증은 `tests/model-pricing.test.ts`, `tests/pricing-estimate.test.ts`, `tests/pricing-store.test.ts`, `tests/pricing-transport.test.ts`, `tests/model-pricing-browser.spec.ts`에서 수행해요. 합성 검사는 실제 프로바이더 청구액 일치나 실제 휴대폰 검증을 의미하지 않아요.

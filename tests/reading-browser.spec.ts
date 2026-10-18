@@ -32,6 +32,10 @@ const translatedText =
 const helperAnswer = '**“문을 열어 주세요.”**\n“다시 한 번 확인해요.”\n‘마음속 약속’도 있어요.';
 const helperAnswerText = '“문을 열어 주세요.”\n“다시 한 번 확인해요.”\n‘마음속 약속’도 있어요.';
 const artifactText = '그녀가 돌아섰다. 「다시 만나요.」 그는 ‘꼭 돌아오겠어.’라고 생각했다.';
+const artifactRequest =
+  '  “장면 요청은 그대로”  읽어요.\n‘첫 줄의 조건’\n\n  다음 문단도 그대로예요.  ';
+const artifactDraft =
+  '  “보관 초안도 그대로”  남겨요.\n‘첫 줄의 생각’\n\n  다음 문단도 그대로예요.  ';
 const streamText = '장면을 살펴보고 있어요. “이 장면의 선택”을 설명할게요.';
 const helperRequest = '“이 요청은 그대로” 읽으며 확인해 주세요.';
 const helperPersona = '“설정 지침도 그대로” 보관해요.';
@@ -319,7 +323,7 @@ async function helperFixture(page: Page, before: ChatDetail) {
     taskId: tasks[1].id,
     revision: 1,
     origin: 'model',
-    request: helperRequest,
+    request: artifactRequest,
     text: artifactText,
     usage,
     createdAt: time,
@@ -401,10 +405,40 @@ async function helperFixture(page: Page, before: ChatDetail) {
       json: { ...streams, chunks: streams.chunks.filter((chunk) => chunk.seq > after) },
     });
   });
+  // Seed an old device draft before mounting the archived scene; no helper write is issued.
+  await page.goto(`/?chat=${before.chat.id}`);
+  await page.evaluate(
+    async ({ key, text }) => {
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('uimori-editor-recovery', 1);
+        request.onupgradeneeded = () => request.result.createObjectStore('buffers');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const transaction = database.transaction('buffers', 'readwrite');
+          transaction.objectStore('buffers').put(
+            {
+              revision: null,
+              model: JSON.stringify({ revision: 1, text }),
+              rawFields: {},
+            },
+            key
+          );
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        });
+      } finally {
+        database.close();
+      }
+    },
+    { key: `helper:helper-artifact-draft:${artifact.id}:1`, text: artifactDraft }
+  );
   return { unexpected };
 }
 
-test('READUI02 helper answers, independent scenes and public streams share reading styles while requests and diagnostics stay literal', async ({
+test('READUI02 helper answers, archived scenes and public streams share reading styles while requests, drafts and diagnostics stay literal', async ({
   page,
   request,
 }, info) => {
@@ -419,12 +453,13 @@ test('READUI02 helper answers, independent scenes and public streams share readi
       await openHelper(page);
       const panel = page.locator('#helper-panel');
       const answer = panel.locator('.helper-message.assistant > .helper-prose');
-      const card = panel.getByRole('region', { name: '독립 가정 장면', exact: true });
+      const card = panel.getByRole('region', { name: '보관된 가정 장면', exact: true });
+      const scene = card.locator(':scope > .helper-prose');
       const stream = panel.locator('.streaming-text');
       await expect(answer).toHaveText(helperAnswerText);
       await expect(answer.locator('strong')).toHaveText('“문을 열어 주세요.”');
       const answerHeight = (await answer.boundingBox())!.height;
-      await expect(card.locator('.helper-prose')).toHaveText(artifactText);
+      await expect(scene).toHaveText(artifactText);
       await expect(stream).toHaveText(streamText);
       await expect(panel.locator('.reading-quote-break')).toHaveCount(0);
       await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
@@ -433,16 +468,17 @@ test('READUI02 helper answers, independent scenes and public streams share readi
       await settings
         .getByLabel('읽기 스타일', { exact: true })
         .selectOption({ label: '대사 중심' });
+      await settings.getByLabel('문단 간격', { exact: true }).selectOption('1');
       await closeDialog(page, settings);
       await openHelper(page);
-      for (const text of [answer, card.locator('.helper-prose'), stream]) {
+      for (const text of [answer, scene, stream]) {
         await expect(quotes(text, 'dialogue').first()).toHaveClass(/reading-quote-break/u);
         await expect(quotes(text, 'dialogue').first()).toHaveAttribute('data-emphasis', 'subtle');
       }
       expect((await answer.textContent())?.trimEnd()).toBe(helperAnswerText);
       // Even authored single-newline dialogue gains paragraph space with this option enabled.
       expect((await answer.boundingBox())!.height).toBeGreaterThan(answerHeight);
-      expect(await card.locator('.helper-prose').textContent()).toBe(artifactText);
+      expect(await scene.textContent()).toBe(artifactText);
       expect(await stream.textContent()).toBe(streamText);
       await expect(panel.getByTestId('source-request')).toHaveCount(2);
       await expect(panel.getByTestId('source-request').locator('.reading-quote')).toHaveCount(0);
@@ -459,11 +495,25 @@ test('READUI02 helper answers, independent scenes and public streams share readi
       await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
       await card.getByRole('button', { name: '가정 장면 복사', exact: true }).click();
       expect(copied.at(-1)).toBe(artifactText);
-      await card.getByRole('button', { name: '직접 편집', exact: true }).click();
-      await expect(
-        card.getByRole('textbox', { name: '가정 장면 직접 편집', exact: true })
-      ).toHaveValue(artifactText);
-      await card.getByRole('button', { name: '장면 편집 취소', exact: true }).click();
+      await expect(card.getByRole('button', { name: '직접 편집', exact: true })).toHaveCount(0);
+      await expect(card.getByRole('textbox')).toHaveCount(0);
+      await card.getByText('장면 요청', { exact: true }).click();
+      await card.getByText('이 기기에 남은 편집 초안 1개', { exact: true }).click();
+      const savedRequest = card.locator('.helper-artifact-request .helper-artifact-literal');
+      const draft = card.getByRole('region', { name: '보관된 편집 초안 1', exact: true });
+      const draftText = draft.locator('.helper-artifact-literal');
+      for (const [text, expected] of [
+        [savedRequest, artifactRequest],
+        [draftText, artifactDraft],
+      ] as const) {
+        expect(await text.textContent()).toBe(expected);
+        await expect(text).toHaveCSS('white-space', 'pre-wrap');
+        await expect(text.locator('.reading-quote, .reading-plain-paragraph')).toHaveCount(0);
+      }
+      await card.getByRole('button', { name: '가정 장면 요청 복사', exact: true }).click();
+      expect(copied.at(-1)).toBe(artifactRequest);
+      await draft.getByRole('button', { name: '가정 장면 초안 복사', exact: true }).click();
+      expect(copied.at(-1)).toBe(artifactDraft);
       await fits(page, panel);
       if (visualReview)
         await page.screenshot({ path: info.outputPath(`reading-helper-${width}.png`) });
