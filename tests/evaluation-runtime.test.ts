@@ -82,9 +82,8 @@ async function fixture(
   handler: (body: Body, response: ServerResponse, requestNumber: number) => void | Promise<void>,
   settings: {
     timeoutMs?: number;
-    maximumToolRounds?: number;
     maxCalls?: number;
-    contextMode?: 'preloaded' | 'model-selected' | 'source-bound';
+    contextMode?: 'preloaded' | 'model-selected';
     metadataProfile?: EvaluationMetadataProfile;
     structuredOutput?: boolean;
   } = {}
@@ -183,7 +182,6 @@ async function fixture(
       ...defaultEvaluationToolOptions(),
       ...(settings.contextMode ? { contextMode: settings.contextMode } : {}),
       ...(settings.metadataProfile ? { metadataProfile: settings.metadataProfile } : {}),
-      maximumToolRounds: settings.maximumToolRounds ?? 8,
     },
   });
   const workspace = await api<PromptWorkspace>(app, '/api/prompt-workspace');
@@ -316,7 +314,7 @@ const translated = (body: Body): string => {
   return '합성 번역: ' + translationFixtureRenderedSlot(texts, 'source');
 };
 
-test.each(['model-selected', 'source-bound'] as const)(
+test.each(['model-selected', 'preloaded'] as const)(
   '%s evaluation submission reaches JEV once without regex rejection or writer resubmission',
   async (contextMode) => {
     for (const scenario of [
@@ -335,7 +333,7 @@ test.each(['model-selected', 'source-bound'] as const)(
               'eval_submit_artifact',
               {
                 content: scenario.text,
-                ...(contextMode === 'source-bound' ? {} : { userFacingNotice: marker }),
+                userFacingNotice: marker,
               },
               'submitted'
             ),
@@ -593,27 +591,79 @@ test('evaluation timeout ends a stalled real HTTP response with no implicit retr
   expect((await state.detail()).attempts).toHaveLength(1);
 });
 
-test('both host maxCalls and evaluation maximumToolRounds bound actual HTTP requests', async () => {
-  for (const settings of [
-    { maxCalls: 2, maximumToolRounds: 8 },
-    { maxCalls: 8, maximumToolRounds: 0 },
-  ]) {
+test('host maxCalls still bounds evaluated HTTP requests below the fixed tool limit', async () => {
+  const state = await fixture(
+    async (body, target, number) =>
+      send(target, [call(body, 'eval_get_context', {}, `context-${number}`)]),
+    { maxCalls: 2 }
+  );
+  const result = await settled(state, (await state.start()).id);
+  expect(result).toMatchObject({
+    status: 'failed',
+    error: 'MODEL_CALL_BUDGET_EXHAUSTED',
+    sourceRevision: null,
+    usage: { modelCalls: 1 },
+  });
+  expect(state.provider.requests).toHaveLength(1);
+  expect((await state.detail()).sources).toEqual([]);
+});
+
+test.each(['submit', 'continue'] as const)(
+  'ten HTTP tool exchanges leave exactly one final provider request (%s)',
+  async (completion) => {
     const state = await fixture(
-      async (body, target, number) =>
-        send(target, [call(body, 'eval_get_context', {}, `context-${number}`)]),
-      settings
+      async (body, target, number) => {
+        await send(target, [
+          number === 11 && completion === 'submit'
+            ? artifact(body, 'The eleventh response submits the scene.')
+            : call(body, 'eval_get_context', {}, `context-${number}`),
+        ]);
+      },
+      { maxCalls: 16 }
+    );
+    const result = await settled(state, (await state.start()).id);
+    expect(state.provider.requests).toHaveLength(11);
+    if (completion === 'submit') {
+      expect(result).toMatchObject({ status: 'completed', usage: { modelCalls: 12 } });
+      expect((await state.detail()).sources[0].text).toBe(
+        'The eleventh response submits the scene.'
+      );
+      expect(
+        (JSON.parse(state.provider.requests[10].body) as Body).input
+          .filter((item) => item.type === 'function_call_output')
+          .map((item) => JSON.parse(item.output))
+          .filter((value) => value.environment === 'evaluation-sandbox')
+      ).toHaveLength(10);
+    } else {
+      expect(result).toMatchObject({
+        status: 'failed',
+        error: 'MODEL_CALL_BUDGET_EXHAUSTED',
+        sourceRevision: null,
+        usage: { modelCalls: 11 },
+      });
+      expect((await state.detail()).sources).toEqual([]);
+    }
+  }
+);
+
+test.each(['model-selected', 'preloaded'] as const)(
+  '%s rejects ordinary final HTTP text without requesting another response',
+  async (contextMode) => {
+    const state = await fixture(
+      async (_body, target) => send(target, [message('Unsubmitted scene.')]),
+      { contextMode }
     );
     const result = await settled(state, (await state.start()).id);
     expect(result).toMatchObject({
       status: 'failed',
-      error: 'MODEL_CALL_BUDGET_EXHAUSTED',
+      error: 'EVALUATION_SUBMISSION_REQUIRED',
       sourceRevision: null,
       usage: { modelCalls: 1 },
     });
     expect(state.provider.requests).toHaveLength(1);
     expect((await state.detail()).sources).toEqual([]);
   }
-});
+);
 
 test('duplicate call IDs and terminal plus host calls cannot commit or dispatch a skipped host operation', async () => {
   for (const mode of ['duplicate', 'mixed']) {
@@ -639,7 +689,7 @@ test('source edit CAS fences an in-flight evaluated translation without mutating
   const gate = deferred();
   const state = await fixture(async (body, target) => {
     if (!packet(body).source.sourceRevision)
-      await send(target, [message('Original fixture source.')]);
+      await send(target, [artifact(body, 'Original fixture source.')]);
     else {
       received.release();
       await gate.promise;
@@ -683,20 +733,17 @@ test('source edit CAS fences an in-flight evaluated translation without mutating
   expect(state.failures).toEqual([]);
 });
 
-test('source-bound translation permits reference reads, unwraps structured submission and discards optional processing notes', async () => {
+test('evaluated translation permits reference reads, unwraps structured submission and discards private notices', async () => {
   const text = '항구의 관리인은 구리 천문대를 바라보았다.';
   const state = await fixture(
     async (body, target) => {
       const source = packet(body).source;
-      expect(body.tools.some((tool) => /eval_create_case|eval_get_context/.test(tool.name))).toBe(
-        false
-      );
       if (!source.sourceRevision) {
         await send(target, [
           call(
             body,
             'eval_submit_artifact',
-            { content: 'The keeper watched the copper observatory.' },
+            { content: 'The keeper watched the copper observatory.', userFacingNotice: marker },
             'main-submit'
           ),
         ]);
@@ -727,7 +774,7 @@ test('source-bound translation permits reference reads, unwraps structured submi
                 sourceHash: source.sourceHash,
                 text,
               }),
-              internalProcessingNote: marker,
+              userFacingNotice: marker,
             },
             'translated-submit'
           ),
@@ -735,7 +782,7 @@ test('source-bound translation permits reference reads, unwraps structured submi
         true
       );
     },
-    { contextMode: 'source-bound', structuredOutput: true }
+    { contextMode: 'model-selected', structuredOutput: true }
   );
   await settled(state, (await state.start()).id);
   const source = (await state.detail()).sources[0];
@@ -753,9 +800,14 @@ test('source-bound translation permits reference reads, unwraps structured submi
   expect(JSON.stringify(detail.jobs[0])).not.toContain('noticeProvided');
 });
 
-test.each(['plain', 'wrong-source', 'duplicate-submit'] as const)(
-  'source-bound translation rejects %s completion without automatic resend',
-  async (mode) => {
+test.each([
+  ['model-selected', 'plain'],
+  ['preloaded', 'plain'],
+  ['model-selected', 'wrong-source'],
+  ['model-selected', 'duplicate-submit'],
+] as const)(
+  '%s translation rejects %s completion without automatic resend',
+  async (contextMode, mode) => {
     const state = await fixture(
       async (body, target) => {
         const source = packet(body).source;
@@ -764,7 +816,7 @@ test.each(['plain', 'wrong-source', 'duplicate-submit'] as const)(
             call(
               body,
               'eval_submit_artifact',
-              { content: 'Original harbor scene.' },
+              { content: 'Original harbor scene.', userFacingNotice: marker },
               'main-submit'
             ),
           ]);
@@ -783,6 +835,7 @@ test.each(['plain', 'wrong-source', 'duplicate-submit'] as const)(
                     sourceHash: source.sourceHash,
                     text: '다른 원본의 번역문',
                   }),
+                  userFacingNotice: marker,
                 },
                 'translated-submit'
               ),
@@ -791,7 +844,7 @@ test.each(['plain', 'wrong-source', 'duplicate-submit'] as const)(
                     call(
                       body,
                       'eval_submit_artifact',
-                      { content: 'Duplicate artifact.' },
+                      { content: 'Duplicate artifact.', userFacingNotice: marker },
                       'duplicate-submit'
                     ),
                   ]
@@ -800,7 +853,7 @@ test.each(['plain', 'wrong-source', 'duplicate-submit'] as const)(
             true
           );
       },
-      { contextMode: 'source-bound', structuredOutput: true }
+      { contextMode, structuredOutput: true }
     );
     await settled(state, (await state.start()).id);
     const source = (await state.detail()).sources[0];

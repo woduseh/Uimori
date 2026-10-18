@@ -549,8 +549,6 @@ describe('Exact native main preview and terminal submission (synthetic loopback 
     evaluated.profile!.models.main!.evaluationTools = {
       contextMode: 'model-selected',
       approvalReasoningMode: 'configured',
-      maximumToolRounds: 8,
-      terminalLateCorrections: false,
     };
     expect(storySubmissionEnabled(evaluated)).toBe(false);
     expect(
@@ -859,7 +857,7 @@ describe('Batch recovery in the real main tool loop', () => {
     }
   );
 
-  test('source-bound submission keeps the original request and replays its durable receipt', async () => {
+  test('evaluation submission keeps the original request and replays its durable receipt', async () => {
     const work = await snapshot('https://api.anthropic.com/v1');
     const target = work.profile!.models.main!;
     target.connection.protocol = 'anthropic-messages-v1';
@@ -867,15 +865,15 @@ describe('Batch recovery in the real main tool loop', () => {
     target.modelId = 'claude-opus-5';
     target.evaluationTools = {
       ...defaultEvaluationToolOptions(),
-      contextMode: 'source-bound',
+      contextMode: 'model-selected',
     };
     work.executionClock = { iso: '2026-09-29T00:00:00.000Z', unix: 1790640000 };
     const before = structuredClone(work);
     const preview = buildMainProviderRequest(work).request;
     expect(
       preview.stable.tools.filter((tool) => tool.name.startsWith('eval_')).map((tool) => tool.name)
-    ).toEqual(['eval_submit_artifact']);
-    expect(preview.stable.contract).toContain('Ordinary final text does not complete this mode.');
+    ).toContain('eval_submit_artifact');
+    expect(preview.stable.contract).toContain('eval_submit_artifact');
     expect(preview.bootstrap).toBeUndefined();
     const execute = (log: ReturnType<typeof hooks>) => {
       const requests: string[] = [];
@@ -886,7 +884,7 @@ describe('Batch recovery in the real main tool loop', () => {
           request.stable.tools
             .filter((tool) => tool.name.startsWith('eval_'))
             .map((tool) => tool.name)
-        ).toEqual(['eval_submit_artifact']);
+        ).toContain('eval_submit_artifact');
         expect(request.bootstrap).toBeUndefined();
         expect(request.toolChoice).toBeUndefined();
         expect(JSON.stringify(request.prompt)).toContain('SYNTHETIC_CURRENT_ONCE');
@@ -899,7 +897,7 @@ describe('Batch recovery in the real main tool loop', () => {
           url: 'https://api.anthropic.com/v1/messages/batches',
           headers: {},
           body: {},
-          bodySha256: 'source-bound-body',
+          bodySha256: 'evaluation-submit-body',
           stablePrefixSha256: 'stable',
           executionMode: 'batch',
         });
@@ -911,11 +909,11 @@ describe('Batch recovery in the real main tool loop', () => {
           opaqueState: null,
           toolCalls: [
             {
-              id: 'source-bound-submit',
+              id: 'evaluation-submit',
               name: 'eval_submit_artifact',
               arguments: {
-                content: 'Source-bound Batch artifact.',
-                internalProcessingNote: 'PRIVATE_PROCESSING_NOTE',
+                content: 'Submitted Batch artifact.',
+                userFacingNotice: 'PRIVATE_EVALUATION_NOTICE',
               },
             },
           ],
@@ -931,22 +929,22 @@ describe('Batch recovery in the real main tool loop', () => {
       return requests;
     };
     const original = hooks('');
-    original.value.evaluationRunId = 'source-bound-run';
+    original.value.evaluationRunId = 'evaluation-submit-run';
     const originalRequests = execute(original);
     expect(await runMain(work, original.value)).toMatchObject({
       status: 'completed',
-      text: 'Source-bound Batch artifact.',
+      text: 'Submitted Batch artifact.',
       usage: { modelCalls: 1 },
     });
     expect(original.events).toHaveLength(1);
     expect(original.events[0].result).toMatchObject({
       accepted: true,
-      processingNoteProvided: true,
-      processingNoteCharacters: 23,
+      noticeProvided: true,
+      noticeCharacters: 25,
     });
-    expect(original.events[0].result).not.toHaveProperty('noticeProvided');
+    expect(original.events[0].result).not.toHaveProperty('processingNoteProvided');
     expect(JSON.stringify([original.events, original.finished])).not.toContain(
-      'PRIVATE_PROCESSING_NOTE'
+      'PRIVATE_EVALUATION_NOTICE'
     );
     const resumed = hooks('');
     resumed.value.evaluationRunId = original.value.evaluationRunId;
@@ -954,7 +952,7 @@ describe('Batch recovery in the real main tool loop', () => {
     const replayRequests = execute(resumed);
     expect(await runMain(work, resumed.value)).toMatchObject({
       status: 'completed',
-      text: 'Source-bound Batch artifact.',
+      text: 'Submitted Batch artifact.',
     });
     expect(replayRequests).toEqual(originalRequests);
     expect(resumed.events).toEqual([]);
@@ -1012,10 +1010,21 @@ describe('Batch recovery in the real main tool loop', () => {
             executionMode: 'batch',
           });
           return {
-            status: calls === 1 ? 'tool_calls' : 'completed',
-            text: calls === 1 ? '' : 'Batch continuation complete.',
+            status: 'tool_calls',
+            text: '',
             toolCalls:
-              calls === 1 ? [{ id: 'eval-case', name: 'eval_create_case', arguments: args }] : [],
+              calls === 1
+                ? [{ id: 'eval-case', name: 'eval_create_case', arguments: args }]
+                : [
+                    {
+                      id: 'eval-submit',
+                      name: 'eval_submit_artifact',
+                      arguments: {
+                        content: 'Batch continuation complete.',
+                        userFacingNotice: 'Completed.',
+                      },
+                    },
+                  ],
             refusal: null,
             error: null,
             usage: {
@@ -1038,7 +1047,7 @@ describe('Batch recovery in the real main tool loop', () => {
         expect(original.requests.join('\n')).toContain(
           metadataProfile === undefined ? 'OpenAI Responses API' : 'Anthropic Messages API'
         );
-      expect(first.events).toHaveLength(1);
+      expect(first.events).toHaveLength(2);
       expect(first.events[0]).toMatchObject({
         callId: 'eval-case',
         name: 'eval_create_case',

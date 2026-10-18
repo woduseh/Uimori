@@ -11,6 +11,10 @@ import {
 } from '../core/evaluation-tool-config.js';
 import type { Connection, ModelPreset } from '../core/product.js';
 import { modelDraft, modelPayload } from '../web/provider-model-draft.js';
+import {
+  validateModelSnapshot,
+  validateProviderSettingVersion,
+} from '../server/provider-archive.js';
 
 const owned: { directory: string; store: Store }[] = [];
 const database = () => {
@@ -59,15 +63,8 @@ test('tool options are explicit and independently validated', () => {
     contextMode: 'model-selected',
     metadataProfile: 'neutral',
     approvalReasoningMode: 'configured',
-    maximumToolRounds: 8,
-    terminalLateCorrections: false,
   });
   expect(validateEvaluationToolOptions(defaults)).toEqual(defaults);
-  expect(validateEvaluationToolOptions({ ...defaults, contextMode: 'source-bound' })).toMatchObject(
-    {
-      contextMode: 'source-bound',
-    }
-  );
   for (const invalid of [
     undefined,
     null,
@@ -75,9 +72,11 @@ test('tool options are explicit and independently validated', () => {
     { ...defaults, maximumToolRounds: 33 },
     { ...defaults, maximumToolRounds: -1 },
     { ...defaults, contextMode: 'unknown' },
+    { ...defaults, contextMode: 'source-bound' },
     { ...defaults, metadataProfile: 'unknown' },
     { ...defaults, outputRecovery: undefined },
     { ...defaults, outputRecovery: 'true' },
+    { ...defaults, terminalLateCorrections: 'true' },
     { ...defaults, serviceTier: 'flex' },
     { ...defaults, extra: true },
   ])
@@ -85,7 +84,14 @@ test('tool options are explicit and independently validated', () => {
   for (const outputRecovery of [true, false])
     expect(
       validateEvaluationToolOptions({ ...defaults, maximumToolRounds: 0, outputRecovery })
-    ).toEqual({ ...defaults, maximumToolRounds: 0 });
+    ).toEqual(defaults);
+  expect(
+    validateEvaluationToolOptions({
+      ...defaults,
+      maximumToolRounds: 32,
+      terminalLateCorrections: true,
+    })
+  ).toEqual(defaults);
   const { metadataProfile: _metadataProfile, ...legacy } = defaults;
   expect(validateEvaluationToolOptions(legacy)).toEqual(legacy);
   expect(validateEvaluationToolOptions({ ...legacy, outputRecovery: true })).toEqual(legacy);
@@ -101,6 +107,63 @@ test('editing a legacy preset drops retired refusal controls without rewriting t
   expect(draft.evaluationTools).not.toHaveProperty('outputRecovery');
   expect(modelPayload(draft, c).evaluationTools).toEqual({ ...legacy, metadataProfile: 'neutral' });
   expect(saved.evaluationTools).toEqual({ ...legacy, outputRecovery: true });
+});
+
+test('retired source-bound presets and imported snapshots stay readable without enabling another mode', () => {
+  const store = database(),
+    c = connection(store),
+    model = store.product.model(modelBody(c)) as ModelPreset;
+  const legacy = {
+    ...model,
+    evaluationTools: {
+      ...defaultEvaluationToolOptions(),
+      contextMode: 'source-bound',
+      maximumToolRounds: 3,
+      terminalLateCorrections: true,
+      outputRecovery: true,
+    },
+  };
+  const body = JSON.stringify(legacy);
+  store.db
+    .prepare("UPDATE provider_settings SET body=? WHERE kind='model' AND id=?")
+    .run(body, model.id);
+  expect(store.product.get<ModelPreset>('model', model.id)).not.toHaveProperty('evaluationTools');
+  expect(store.product.modelSnapshot(model.id)).not.toHaveProperty('evaluationTools');
+  expect(() =>
+    validateProviderSettingVersion({ kind: 'model', id: model.id, revision: model.revision, body })
+  ).not.toThrow();
+  const archived = { ...legacy, connection: c };
+  expect(validateModelSnapshot(archived)).not.toHaveProperty('evaluationTools');
+  expect(JSON.stringify(legacy)).toBe(body);
+  expect(
+    store.db.prepare("SELECT body FROM provider_settings WHERE kind='model' AND id=?").get(model.id)
+      ?.body
+  ).toBe(body);
+  expect(() =>
+    store.product.model(modelBody(c, { evaluationTools: legacy.evaluationTools }))
+  ).toThrow('INVALID_EVALUATION_TOOL_OPTIONS');
+});
+
+test('current views of old evaluation settings drop retired controls without rewriting stored evidence', () => {
+  const store = database(),
+    c = connection(store),
+    options = { ...defaultEvaluationToolOptions(), metadataProfile: 'deepmind' as const },
+    model = store.product.model(modelBody(c, { evaluationTools: options })) as ModelPreset;
+  const legacy = {
+    ...model,
+    evaluationTools: { ...options, maximumToolRounds: 1, terminalLateCorrections: true },
+  };
+  const body = JSON.stringify(legacy);
+  store.db
+    .prepare("UPDATE provider_settings SET body=? WHERE kind='model' AND id=?")
+    .run(body, model.id);
+  expect(store.product.get<ModelPreset>('model', model.id).evaluationTools).toEqual(options);
+  expect(store.product.modelSnapshot(model.id).evaluationTools).toEqual(options);
+  expect(validateModelSnapshot({ ...legacy, connection: c }).evaluationTools).toEqual(options);
+  expect(
+    store.db.prepare("SELECT body FROM provider_settings WHERE kind='model' AND id=?").get(model.id)
+      ?.body
+  ).toBe(body);
 });
 
 test('fresh snapshots opt legacy presets into metadata selection without rewriting saved settings', () => {
@@ -137,7 +200,7 @@ test('only selected model presets persist evaluation tools and captured runs ret
     expect(disabled).not.toHaveProperty('evaluationTools');
     const options = {
       ...defaultEvaluationToolOptions(),
-      ...(protocol === 'anthropic-messages-v1' ? { contextMode: 'source-bound' as const } : {}),
+      ...(protocol === 'anthropic-messages-v1' ? { contextMode: 'preloaded' as const } : {}),
     };
     const selected = store.product.model(modelBody(c, { evaluationTools: options })) as ModelPreset;
     expect(selected.evaluationTools).toEqual(options);

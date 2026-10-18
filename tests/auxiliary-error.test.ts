@@ -3,7 +3,7 @@ import { auxiliaryErrorDiagnostic } from '../web/auxiliary-error.js';
 import { mainJudgmentError } from '../web/main-judgment-error.js';
 
 describe('safe auxiliary error diagnostics', () => {
-  it('explains missing source-bound submission in main and auxiliary tasks without suggesting an automatic resend', () => {
+  it('explains missing evaluation submission in main and auxiliary tasks without suggesting an automatic resend', () => {
     const diagnostic = auxiliaryErrorDiagnostic('EVALUATION_SUBMISSION_REQUIRED');
     expect(diagnostic.code).toBe('EVALUATION_SUBMISSION_REQUIRED');
     expect(diagnostic.message).toContain('결과 제출 도구');

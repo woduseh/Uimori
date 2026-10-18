@@ -150,7 +150,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
       .filter({ hasText: '이 모델 프리셋에 평가 도구 사용' })
       .screenshot({ path: info.outputPath('model-evaluation-switch.png') });
 
-  await modelForm.getByLabel('최대 평가 도구 라운드').fill('2');
+  await expect(modelForm.getByLabel('최대 평가 도구 라운드')).toHaveCount(0);
   await expect(modelForm.getByLabel('이 모델 프리셋에 컨텍스트 메모·전환 도구 사용')).toHaveCount(
     0
   );
@@ -196,7 +196,11 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   expect(saved).toMatchObject({
     connectionId: connection.id,
     modelId: 'synthetic/manual-id',
-    evaluationTools: { maximumToolRounds: 2 },
+    evaluationTools: {
+      contextMode: 'model-selected',
+      approvalReasoningMode: 'configured',
+      metadataProfile: 'neutral',
+    },
     source: { kind: 'manual', catalogUpdatedAt: null },
   });
   expect(observed.errors).toEqual([]);

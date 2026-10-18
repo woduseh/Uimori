@@ -114,24 +114,89 @@ describe('model numeric drafts', () => {
   );
 
   test('converts edited numeric strings on save and restores numeric presets as text', () => {
-    const draft = { ...initialModel(), maxOutputTokens: '4096', evaluationToolsEnabled: true };
-    draft.evaluationTools.maximumToolRounds = '0';
+    const draft = { ...initialModel(), maxOutputTokens: '4096' };
     expect(modelDraftError(draft, connection)).toBe('');
     const payload = modelPayload(draft, connection);
     expect(payload.maxOutputTokens).toBe(4096);
-    expect(payload.evaluationTools?.maximumToolRounds).toBe(0);
     const restored = modelDraft({ ...payload, id: 'model', revision: 1 } as ModelPreset);
     expect(restored.maxOutputTokens).toBe('4096');
-    expect(restored.evaluationTools.maximumToolRounds).toBe('0');
   });
 
-  test.each(['', ' ', '-1', '0.5', 'NaN', '33'])(
-    'does not treat an invalid evaluation round draft %j as a valid zero',
-    (maximumToolRounds) => {
-      const draft = initialModel();
-      draft.evaluationToolsEnabled = true;
-      draft.evaluationTools.maximumToolRounds = maximumToolRounds;
-      expect(modelDraftError(draft, connection)).not.toBe('');
+  test.each(['openai', 'anthropic', 'deepmind', 'neutral'] as const)(
+    'keeps the manual %s evaluation profile across context modes and connection changes',
+    (metadataProfile) => {
+      for (const contextMode of ['model-selected', 'preloaded'] as const) {
+        const draft = {
+          ...initialModel(),
+          evaluationToolsEnabled: true,
+          evaluationTools: {
+            contextMode,
+            approvalReasoningMode: 'economized' as const,
+            metadataProfile,
+          },
+        };
+        const changed = selectModelConnection(draft, anthropicConnection);
+        expect(modelDraftError(changed, anthropicConnection)).toBe('');
+        const payload = modelPayload(changed, anthropicConnection);
+        expect(payload.evaluationTools).toEqual({
+          contextMode,
+          approvalReasoningMode: 'economized',
+          metadataProfile,
+        });
+        expect(payload.evaluationTools).not.toBe(changed.evaluationTools);
+        const restored = modelDraft({ ...payload, id: 'model', revision: 1 } as ModelPreset);
+        expect(restored.evaluationTools).toEqual(payload.evaluationTools);
+        expect(
+          modelPayload({ ...restored, evaluationToolsEnabled: false }, anthropicConnection)
+        ).not.toHaveProperty('evaluationTools');
+      }
+    }
+  );
+
+  test('opens a retired source-bound preset with evaluation disabled and omits it on save', () => {
+    const preset = {
+      ...modelPayload(initialModel(), connection),
+      id: 'legacy-model',
+      revision: 1,
+      evaluationTools: {
+        contextMode: 'source-bound',
+        approvalReasoningMode: 'configured',
+        metadataProfile: 'deepmind',
+        maximumToolRounds: 8,
+        terminalLateCorrections: true,
+      },
+    } as unknown as ModelPreset;
+    const draft = modelDraft(preset);
+    expect(draft.evaluationToolsEnabled).toBe(false);
+    expect(draft.evaluationTools.contextMode).toBe('model-selected');
+    expect(modelDraftError(draft, connection)).toBe('');
+    expect(modelPayload(draft, connection)).not.toHaveProperty('evaluationTools');
+  });
+
+  test.each(['model-selected', 'preloaded'] as const)(
+    'keeps legacy %s evaluation choices while dropping retired settings from the next save',
+    (contextMode) => {
+      const preset = {
+        ...modelPayload(initialModel(), connection),
+        id: 'legacy-model',
+        revision: 1,
+        evaluationTools: {
+          contextMode,
+          approvalReasoningMode: 'economized',
+          metadataProfile: 'anthropic',
+          maximumToolRounds: 3,
+          terminalLateCorrections: true,
+          outputRecovery: true,
+        },
+      } as unknown as ModelPreset;
+      const draft = modelDraft(preset);
+      expect(draft.evaluationToolsEnabled).toBe(true);
+      expect(modelDraftError(draft, connection)).toBe('');
+      expect(modelPayload(draft, connection).evaluationTools).toEqual({
+        contextMode,
+        approvalReasoningMode: 'economized',
+        metadataProfile: 'anthropic',
+      });
     }
   );
 

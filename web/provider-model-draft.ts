@@ -18,6 +18,7 @@ import {
 } from '../core/model-capabilities.js';
 import {
   defaultEvaluationToolOptions,
+  readEvaluationToolOptions,
   validateEvaluationToolOptions,
   type EvaluationToolOptions,
 } from '../core/evaluation-tool-config.js';
@@ -102,7 +103,7 @@ export type ModelDraft = {
   thinkingMode: string;
   enabled: boolean;
   evaluationToolsEnabled: boolean;
-  evaluationTools: Omit<EvaluationToolOptions, 'maximumToolRounds'> & { maximumToolRounds: string };
+  evaluationTools: EvaluationToolOptions;
   providerOptions: string;
   pricing: PricingDraft;
 };
@@ -133,14 +134,15 @@ export const initialModel = (): ModelDraft => ({
   thinkingMode: '',
   enabled: true,
   evaluationToolsEnabled: false,
-  evaluationTools: {
-    ...defaultEvaluationToolOptions(),
-    maximumToolRounds: String(defaultEvaluationToolOptions().maximumToolRounds),
-  },
+  evaluationTools: defaultEvaluationToolOptions(),
   providerOptions: '',
   pricing: pricingDraft(),
 });
 export function modelDraft(value: ModelPreset): ModelDraft {
+  const evaluationTools =
+    value.evaluationTools === undefined
+      ? undefined
+      : readEvaluationToolOptions(value.evaluationTools);
   return {
     title: value.title,
     connectionRef: value.connectionId,
@@ -168,13 +170,10 @@ export function modelDraft(value: ModelPreset): ModelDraft {
     cacheTtl: value.cacheTtl ?? '',
     thinkingMode: value.thinkingMode ?? '',
     enabled: value.enabled !== false,
-    evaluationToolsEnabled: value.evaluationTools !== undefined,
+    evaluationToolsEnabled: evaluationTools !== undefined,
     evaluationTools: {
       ...defaultEvaluationToolOptions(),
-      ...validateEvaluationToolOptions(value.evaluationTools ?? defaultEvaluationToolOptions()),
-      maximumToolRounds: String(
-        (value.evaluationTools ?? defaultEvaluationToolOptions()).maximumToolRounds
-      ),
+      ...evaluationTools,
     },
     providerOptions:
       value.providerOptions === undefined ? '' : JSON.stringify(value.providerOptions, null, 2),
@@ -250,10 +249,7 @@ export function modelPayload(draft: ModelDraft, connection: Connection) {
     ...(draft.thinkingMode ? { thinkingMode: draft.thinkingMode } : {}),
     ...(draft.evaluationToolsEnabled
       ? {
-          evaluationTools: {
-            ...structuredClone(draft.evaluationTools),
-            maximumToolRounds: Number(draft.evaluationTools.maximumToolRounds),
-          },
+          evaluationTools: structuredClone(draft.evaluationTools),
         }
       : {}),
     ...(providerOptions !== undefined ? { providerOptions } : {}),
@@ -305,8 +301,6 @@ export function modelDraftError(
     validateModelPricing(pricingPayload(draft.pricing));
     if (!draft.maxOutputTokens.trim()) return '최대 출력 토큰을 입력해 주세요.';
     if (draft.evaluationToolsEnabled) {
-      if (!draft.evaluationTools.maximumToolRounds.trim())
-        return '최대 평가 도구 라운드를 입력해 주세요.';
       validateEvaluationToolOptions(modelPayload(draft, connection).evaluationTools);
     }
     validateModelOptions(

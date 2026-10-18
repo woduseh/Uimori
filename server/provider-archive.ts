@@ -11,7 +11,7 @@ import {
   validateModelOptions,
 } from '../core/model-capabilities.js';
 import { validCredentialRef } from '../core/credential-reference.js';
-import { validateEvaluationToolOptions } from '../core/evaluation-tool-config.js';
+import { readEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 import { TOKENIZER_PROFILES } from '../core/tokenizer-profiles.js';
 import { ProviderOptionsError, validateProviderOptions } from '../core/provider-options.js';
 import {
@@ -111,7 +111,7 @@ export function validateModelGeneration(value: Row, protocol?: Connection['proto
     );
   if (value.evaluationTools !== undefined)
     try {
-      validateEvaluationToolOptions(value.evaluationTools);
+      readEvaluationToolOptions(value.evaluationTools);
     } catch {
       throw new HttpError(400, 'Invalid evaluation tool options');
     }
@@ -304,6 +304,11 @@ export function validateModelSnapshot(value: unknown): ModelSnapshot {
     )
       throw new HttpError(400, 'Pricing snapshot model mismatch');
   }
-  const { contextTools: _retired, pdfInput: _retiredPdf, ...current } = snapshot;
-  return structuredClone(current) as ModelSnapshot;
+  const { contextTools: _retired, pdfInput: _retiredPdf, evaluationTools, ...current } = snapshot;
+  const evaluation =
+    evaluationTools === undefined ? undefined : readEvaluationToolOptions(evaluationTools);
+  return structuredClone({
+    ...current,
+    ...(evaluation ? { evaluationTools: evaluation } : {}),
+  }) as ModelSnapshot;
 }

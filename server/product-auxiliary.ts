@@ -42,6 +42,7 @@ import {
 } from '../core/transport.js';
 import type { ImageTarget, RunSnapshot, ToolEvent } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
+import { EVALUATION_TOOL_ROUND_LIMIT } from '../core/evaluation-tool-config.js';
 import {
   translationContextMode,
   translationPolicy,
@@ -262,9 +263,7 @@ function providerInput(
         (compilation ? '' : input.contract) +
         (input.referencePolicy ? '\n' + input.referencePolicy : '') +
         (evaluation
-          ? evaluation.requiresSubmission
-            ? '\nThe source-bound evaluation tool set is scoped to this model preset and this source-time task. Complete the requested translation directly from the supplied source and task instructions; no evaluation case or continuation direction is needed. Permitted reference reads remain available. Finish by calling eval_submit_artifact with the complete task output in content, preserving the requested output format and source identity. internalProcessingNote is optional separate metadata; ordinary assistant text does not complete the task.'
-            : '\nThe selected evaluation tool set is scoped to this model preset and this run. eval_submit_artifact returns content as the completed task output; userFacingNotice remains separate metadata.'
+          ? '\nThe selected evaluation tool set is scoped to this model preset and this source-time task. Finish by calling eval_submit_artifact alone with the complete task output in content, preserving the requested output format and source identity. userFacingNotice remains separate metadata. Ordinary final text does not complete the task.'
           : ''),
       tools: [
         ...toolSchemas
@@ -397,6 +396,7 @@ export async function runAuxiliaryJob(
   let contextBytes = 0;
   const readTranslation = translationReader(snapshot, bundle.translationReferences ?? []);
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
+  let evaluationRounds = 0;
   // Fixture annotations remain explicitly marked; live output still requires artifact validation.
   const mock =
     !bundle.judgmentRecovery &&
@@ -504,6 +504,12 @@ export async function runAuxiliaryJob(
       stage = job.kind;
       const result = await callProvider(target, body, evaluation);
       if (result.status === 'tool_calls') {
+        if (evaluation && ++evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT) {
+          if (result.toolCalls.length !== 1 || result.toolCalls[0].name !== 'eval_submit_artifact')
+            throw Object.assign(new Error('Auxiliary call budget exhausted'), {
+              name: 'BudgetError',
+            });
+        }
         if (
           evaluation?.requiresSubmission &&
           result.toolCalls.some((call) => call.name === 'eval_submit_artifact') &&
@@ -558,7 +564,13 @@ export async function runAuxiliaryJob(
           };
           if (action.name !== 'eval_submit_artifact') return evaluation!.execute(call);
           const submitted = evaluation!.submit(call, action.recoveredFromTruncation === true);
-          if (!submitted.ok) return submitted.event;
+          if (!submitted.ok) {
+            if (evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT)
+              throw Object.assign(new Error('Auxiliary call budget exhausted'), {
+                name: 'BudgetError',
+              });
+            return submitted.event;
+          }
           return {
             event: {
               callId: action.callId,
@@ -570,15 +582,8 @@ export async function runAuxiliaryJob(
                 sha256: submitted.artifact.sha256,
                 characters: submitted.artifact.text.length,
                 utf8Bytes: submitted.artifact.utf8Bytes,
-                ...(evaluation!.requiresSubmission
-                  ? {
-                      processingNoteProvided: submitted.artifact.processingNoteProvided,
-                      processingNoteCharacters: submitted.artifact.processingNoteCharacters,
-                    }
-                  : {
-                      noticeProvided: submitted.artifact.noticeProvided,
-                      noticeCharacters: submitted.artifact.noticeCharacters,
-                    }),
+                noticeProvided: submitted.artifact.noticeProvided,
+                noticeCharacters: submitted.artifact.noticeCharacters,
                 correctionCount: submitted.artifact.correctionCount,
               },
             },
