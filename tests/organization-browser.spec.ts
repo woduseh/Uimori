@@ -295,7 +295,26 @@ for (const width of DEFAULT_WIDTHS) {
       data: { title: concurrent, expectedTitleRevision: chat.titleRevision ?? 0 },
     });
     expect(changed.ok()).toBe(true);
+    // The live conflict notice changes the mobile dialog's height. Wait for that update before
+    // clicking Save, so the test submits the retained draft after receiving the concurrent title.
+    await expect(
+      menu.getByText(
+        '제목이 다른 곳에서 변경됐어요. 입력한 내용은 유지돼요. 취소하면 최신 제목을 불러와요.',
+        { exact: true }
+      )
+    ).toBeVisible();
+    const rejectedSave = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/chats/${chat.id}/title`) &&
+        response.request().method() === 'PATCH'
+    );
     await menu.getByRole('button', { name: '제목 저장', exact: true }).click();
+    const rejected = await rejectedSave;
+    expect(rejected.request().postDataJSON()).toEqual({
+      title: renamed,
+      expectedTitleRevision: chat.titleRevision ?? 0,
+    });
+    expect(rejected.status()).toBe(409);
     await expect(menu.getByRole('alert')).toBeVisible();
     await expect(title).toHaveValue(renamed);
     expect((await (await request.get(`/api/chats/${chat.id}`)).json()).chat.title).toBe(concurrent);
