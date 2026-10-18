@@ -1681,10 +1681,10 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   expect(observed.legacyReads).toEqual([]);
 });
 
-test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and save reviewed options on mobile', async ({
+test('PMUI17 DeepSeek template registers locally without outbound actions on mobile', async ({
   page,
   request,
-}, info) => {
+}) => {
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   const prefix = 'PMUI17 ' + Date.now(),
     observed = observe(page),
@@ -1718,42 +1718,59 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
       endpoint: 'https://api.deepseek.com/v1',
       enabled: false,
     });
-  const cases = [
-    {
-      protocol: 'vertex-gemini-v1',
-      endpoint:
-        'https://aiplatform.googleapis.com/v1/projects/synthetic-new-models/locations/global/publishers/google/models',
-      modelId: 'gemini-3.5-flash-lite',
-      options: { '사고 강도': ['MINIMAL', 'MEDIUM', 'HIGH'] },
-      choices: { '사고 강도': 'MINIMAL' },
-      saved: { thinkingLevel: 'MINIMAL', temperature: null },
-    },
-    {
-      protocol: 'vercel-chat-v1',
-      endpoint: 'https://ai-gateway.vercel.sh/v1',
-      modelId: 'spacexai/grok-4.6',
-      options: { '사고 강도': ['low', 'medium', 'high', 'xhigh'] },
-      choices: { '사고 강도': 'xhigh' },
-      saved: { reasoningEffort: 'xhigh' },
-    },
-    {
-      protocol: 'vercel-chat-v1',
-      endpoint: 'https://ai-gateway.vercel.sh/v1',
-      modelId: 'openai/gpt-5.6-sol',
-      options: { '사고 강도': ['none', 'low', 'medium', 'high', 'xhigh'] },
-      choices: { '사고 강도': 'xhigh' },
-      saved: { reasoningEffort: 'xhigh' },
-    },
-    ...['deepseek-v4-pro', 'deepseek-v4-flash'].map((modelId) => ({
-      protocol: 'deepseek-chat-v1',
-      endpoint: 'https://api.deepseek.com/v1',
-      modelId,
-      options: { '사고 강도': ['none', 'low', 'high', 'max'] },
-      choices: { '사고 강도': modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
-      saved: { reasoningEffort: modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
-    })),
-  ];
-  for (const [index, item] of cases.entries()) {
+  expect(outboundActions).toEqual([]);
+  expect(observed.errors).toEqual([]);
+  expect(observed.generations).toEqual([]);
+  expect(observed.legacyReads).toEqual([]);
+});
+
+for (const [index, item] of [
+  {
+    protocol: 'vertex-gemini-v1',
+    endpoint:
+      'https://aiplatform.googleapis.com/v1/projects/synthetic-new-models/locations/global/publishers/google/models',
+    modelId: 'gemini-3.5-flash-lite',
+    options: { '사고 강도': ['MINIMAL', 'MEDIUM', 'HIGH'] },
+    choices: { '사고 강도': 'MINIMAL' },
+    saved: { thinkingLevel: 'MINIMAL', temperature: null },
+  },
+  {
+    protocol: 'vercel-chat-v1',
+    endpoint: 'https://ai-gateway.vercel.sh/v1',
+    modelId: 'spacexai/grok-4.6',
+    options: { '사고 강도': ['low', 'medium', 'high', 'xhigh'] },
+    choices: { '사고 강도': 'xhigh' },
+    saved: { reasoningEffort: 'xhigh' },
+  },
+  {
+    protocol: 'vercel-chat-v1',
+    endpoint: 'https://ai-gateway.vercel.sh/v1',
+    modelId: 'openai/gpt-5.6-sol',
+    options: { '사고 강도': ['none', 'low', 'medium', 'high', 'xhigh'] },
+    choices: { '사고 강도': 'xhigh' },
+    saved: { reasoningEffort: 'xhigh' },
+  },
+  ...['deepseek-v4-pro', 'deepseek-v4-flash'].map((modelId) => ({
+    protocol: 'deepseek-chat-v1',
+    endpoint: 'https://api.deepseek.com/v1',
+    modelId,
+    options: { '사고 강도': ['none', 'low', 'high', 'max'] },
+    choices: { '사고 강도': modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
+    saved: { reasoningEffort: modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
+  })),
+].entries()) {
+  test(`PMUI17 ${item.modelId} is selectable locally and saves reviewed options on mobile`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+    const prefix = 'PMUI17 ' + Date.now(),
+      observed = observe(page),
+      outboundActions: string[] = [];
+    page.on('request', (request) => {
+      if (/\/(?:catalog|test)$/.test(new URL(request.url()).pathname))
+        outboundActions.push(request.url());
+    });
     const title = prefix + ' ' + item.modelId,
       connection = await api<Connection>(request, '/connections', {
         title,
@@ -1801,12 +1818,12 @@ test('PMUI17 new Google, Vercel and DeepSeek models are selectable locally and s
     await expect
       .poll(async () => (await library(request)).models.find((model) => model.title === title))
       .toMatchObject({ connectionId: connection.id, modelId: item.modelId, ...item.saved });
-  }
-  expect(outboundActions).toEqual([]);
-  expect(observed.errors).toEqual([]);
-  expect(observed.generations).toEqual([]);
-  expect(observed.legacyReads).toEqual([]);
-});
+    expect(outboundActions).toEqual([]);
+    expect(observed.errors).toEqual([]);
+    expect(observed.generations).toEqual([]);
+    expect(observed.legacyReads).toEqual([]);
+  });
+}
 
 preservePromptWorkspace();
 
