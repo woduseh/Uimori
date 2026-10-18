@@ -182,7 +182,8 @@ jobs:
     needs: changes
     if: github.event_name == 'workflow_dispatch' && inputs.browser
     runs-on: windows-latest
-    timeout-minutes: 25
+    # Includes browser installation and serial long-reader cases on hosted Windows.
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -213,7 +214,7 @@ jobs:
           overwrite: true
           retention-days: 7
       - uses: actions/upload-artifact@v7
-        if: failure()
+        if: failure() || cancelled()
         with:
           name: browser-diagnostics-${{ matrix.shard }}
           path: output/playwright/
