@@ -160,6 +160,8 @@ for (const viewport of [
     expect(backupRequests).toHaveLength(2);
     expect(backupRequests[1]).toEqual(backupRequests[0]);
     await expect(backupPanel.getByRole('status')).toContainText('복원했어요');
+    // Import acknowledgement precedes the list/reader refresh owned by this operation.
+    await expect(backupPanel.getByLabel('백업 파일 선택')).toBeEnabled();
     await page.keyboard.press('Escape');
     await expect(settings).toBeHidden();
   });

@@ -550,6 +550,8 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   await hero.scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('storyboard-desktop.png') });
   const pages = page.context().pages().length;
+  // Reach the inline cut before opening its lazily loaded image.
+  await firstInline.scrollIntoViewIfNeeded();
   const preview = firstInline.getByRole('button', { name: '삽화 크게 보기', exact: true });
   await preview.click();
   const enlarged = page.getByRole('dialog', { name: '삽화 크게 보기', exact: true });
