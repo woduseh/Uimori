@@ -482,7 +482,7 @@ for (const width of [412, 1440]) {
     const reading = new Promise<void>((resolve) => {
       readStarted = resolve;
     });
-    await page.goto('/');
+    // The app and new-chat dialog share the initial workspace read.
     await page.route('**/api/prompt-workspace', async (route) => {
       if (route.request().method() !== 'GET' || !failRead) return route.continue();
       failRead = false;
@@ -491,6 +491,7 @@ for (const width of [412, 1440]) {
       await route.fulfill({ status: 503, json: { error: 'AUDIT2_WORKSPACE_READ_FAILED' } });
     });
     try {
+      await page.goto('/');
       await navigationAction(page, '새 채팅', bot.title);
       const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
       await reading;
