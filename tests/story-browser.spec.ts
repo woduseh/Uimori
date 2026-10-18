@@ -133,64 +133,6 @@ test('S04 explicit user note and correction remain separate from prose after rel
     });
 });
 
-test('S06 scene commands distinguish successful original, failed original and cancelled reservation', async ({
-  page,
-  request,
-}, testInfo) => {
-  const chat = await create(page, 'S05 합성 장면 예약');
-  async function add(label: string) {
-    const commands = await open(await panel(page), /^장면 예약/);
-    await commands.getByLabel('예약 이름').fill(label);
-    await commands.getByLabel('장면 요청').fill(`SYNTHETIC_COMMAND ${label}`);
-    await commands.getByRole('button', { name: '장면 예약 추가', exact: true }).click();
-    await expect
-      .poll(async () =>
-        (await story(request, chat.id)).commands.some((item) => item.label === label)
-      )
-      .toBe(true);
-    return commands.getByRole('listitem').filter({ has: page.getByText(label, { exact: true }) });
-  }
-  const successful = await add('성공할 장면');
-  await successful.getByRole('button', { name: '이 장면 쓰기', exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await story(request, chat.id)).commands.find((item) => item.label === '성공할 장면')
-          ?.status
-    )
-    .toBe('consumed');
-  const sourceCount = (await detail(request, chat.id)).sources.length;
-  expect(sourceCount).toBe(1);
-  const failed = await add('실패할 장면');
-  await control(request, 'fail-next', { point: 'source-transaction' });
-  await failed.getByRole('button', { name: '이 장면 쓰기', exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await story(request, chat.id)).commands.find((item) => item.label === '실패할 장면')
-          ?.status
-    )
-    .toBe('failed');
-  await expect(failed).toContainText('실패 · 재시도 가능');
-  expect((await detail(request, chat.id)).sources).toHaveLength(sourceCount);
-  const cancelled = await add('취소할 장면');
-  await cancelled.getByRole('button', { name: '예약 취소', exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await story(request, chat.id)).commands.find((item) => item.label === '취소할 장면')
-          ?.status
-    )
-    .toBe('cancelled');
-  await expect(cancelled).toContainText('취소됨');
-  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
-  if (visualReview)
-    await page.screenshot({
-      path: testInfo.outputPath('S05-desktop-command-outcomes.png'),
-      fullPage: true,
-    });
-});
-
 test('S06 S07 reading preserves source text while the asset catalog does not preload bytes', async ({
   page,
   request,
@@ -297,7 +239,7 @@ test('S06 S07 reading preserves source text while the asset catalog does not pre
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('STUI01 story memory and scene reservations fit mobile and desktop', async ({
+test('STUI01 story memory fits mobile and desktop without the retired independent queue', async ({
   page,
 }, info) => {
   await create(page, '기억과 메모 배치 합성');
@@ -306,7 +248,7 @@ test('STUI01 story memory and scene reservations fit mobile and desktop', async 
     await page.setViewportSize({ width, height: 1000 });
     await section.scrollIntoViewIfNeeded();
     await expect(section.locator('summary').filter({ hasText: /^사용자 메모·정정/ })).toBeVisible();
-    await expect(section.locator('summary').filter({ hasText: /^장면 예약/ })).toBeVisible();
+    await expect(section.locator('summary').filter({ hasText: /^장면 예약/ })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );

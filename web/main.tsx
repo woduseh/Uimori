@@ -78,7 +78,6 @@ import {
   X,
 } from 'lucide-react';
 import type { Content } from '../core/product.js';
-import { reconcilePromptValues } from '../core/risu-prompt.js';
 import { refValue } from './content-ref.js';
 import { deferredPanel } from './deferredPanel.js';
 import { LoadingState } from './LoadingState.js';
@@ -455,17 +454,6 @@ function App() {
       recentChatByContent[chat.botId] = chat.id;
     }
   }
-  const currentProgram = currentPrompt?.program;
-  const currentCombination = creativePresets.find((c) => {
-    // Chat-fixed values are edited through the chat options API, separate from preset defaults.
-    if (pinned?.mainPromptPresetId) return false;
-    if (!currentPrompt || !currentProgram || c.role !== 'main') return false;
-    const currentValues = reconcilePromptValues(currentProgram, currentPrompt.values).values;
-    const savedValues = reconcilePromptValues(currentProgram, c.values).values;
-    return promptControls(currentProgram).every(
-      (control) => currentValues[control.id] === savedValues[control.id]
-    );
-  });
   const mainModelRef = pinned?.mainModel ?? s.promptWorkspace?.modelRoutes.main;
   const mainModel = s.library?.models.find((item) => item.id === mainModelRef?.id);
   const mainAvailable =
@@ -1024,7 +1012,7 @@ function App() {
                       }}
                     >
                       <BookOpen size={18} aria-hidden="true" />
-                      이야기 가이드
+                      원작·인물 참고
                     </button>
                     <button
                       type="button"
@@ -1412,6 +1400,7 @@ function App() {
                                 (item) => item.sourceRevision === source.id
                               )}
                               assets={s.detail!.assets ?? []}
+                              imageOwner={s.detail!.profile?.image === true}
                               refresh={() => s.refresh(s.selected)}
                               onError={s.setError}
                               onFork={s.fork}
@@ -1420,17 +1409,10 @@ function App() {
                               }
                               onRetry={
                                 s.canReuseRun(source.runId)
-                                  ? async (mode) => {
-                                      await s.generate(source.runId, undefined, false, mode);
-                                    }
+                                  ? (mode, text) => s.generate(source.runId, text, false, mode)
                                   : undefined
                               }
                               retryCanReplace={source.id === s.detail!.chat.headRevision}
-                              onEditRequest={
-                                s.canReuseRun(source.runId)
-                                  ? (text) => s.generate(source.runId, text)
-                                  : undefined
-                              }
                               onCheckRequest={
                                 s.pendingEditedRunId === source.runId
                                   ? () => submitRequest(true)
@@ -1851,7 +1833,7 @@ function App() {
                               <span>옵션 조합</span>
                               <select
                                 aria-label="빠른 옵션 조합"
-                                value={currentCombination ? refValue(currentCombination) : ''}
+                                value=""
                                 disabled={
                                   s.quickBusy ||
                                   optionsBusy ||
@@ -1863,7 +1845,7 @@ function App() {
                                   void s.quickChange('combination', event.target.value);
                                 }}
                               >
-                                <option value="">현재 선택값</option>
+                                <option value="">이 채팅에 적용</option>
                                 {creativePresets.map((item) => (
                                   <option value={refValue(item)} key={refValue(item)}>
                                     {item.title}
@@ -2388,6 +2370,7 @@ function App() {
           key={s.selected}
           state={s}
           onClose={() => setPanel('')}
+          onOpenHelper={() => setWorkspacePanel('helper')}
           initialSection={settingsSection}
           onGlobalSettings={(section) => {
             setSettingsTab(section);

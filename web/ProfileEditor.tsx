@@ -1,7 +1,6 @@
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
-import { Switch } from './BooleanControls.js';
 import { SettingsIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import { useEffect, useState } from 'react';
@@ -35,11 +34,9 @@ export function ProfileEditor({
   initialTab = 'characters',
   activeTab,
   hideNavigation = false,
-  ownerBotId,
   nextRequest = '',
   loreContextReset = false,
 }: {
-  ownerBotId?: string;
   profile: ChatProfile;
   library: Library;
   onSaved: () => Promise<void>;
@@ -142,7 +139,6 @@ export function ProfileEditor({
     pinned: next.pinned ?? {},
     authorNote: next.authorNote ?? '',
     image: next.image,
-    imageTranslation: next.imageTranslation !== false,
     ...(next.packageAttachments ? { packageAttachments: next.packageAttachments } : {}),
     ...(next.loreContext ? { loreContext: next.loreContext } : {}),
   });
@@ -216,7 +212,6 @@ export function ProfileEditor({
             <div hidden={tab !== 'characters'} className="settings-group">
               <h3 className="settings-group-heading">대화 자료</h3>
               <ContentAttachments
-                ownerBotId={ownerBotId}
                 profile={value}
                 library={library}
                 onChange={change}
@@ -225,40 +220,27 @@ export function ProfileEditor({
               />
             </div>
             <div hidden={tab !== 'images'} className="chat-profile-image-options settings-group">
-              <h3 className="settings-group-heading">사용 가능한 이미지 자동 배치</h3>
+              <h3 className="settings-group-heading">사용 가능한 이미지 배치</h3>
               <div className="settings-group-body">
-                <label className="settings-row settings-row-toggle">
+                <label className="settings-row">
                   <span className="settings-row-copy">
-                    <strong>원문 이미지 자동 배치</strong>
+                    <strong>이미지 배치 담당</strong>
                     <small>
-                      새 원문이 완성되면 채팅 이미지와 봇·페르소나·모듈의 본문용 이미지 중 어울리는
-                      이미지를 골라 문단 사이에 배치해요.
+                      작문 모델은 글과 함께 이미지 태그를 넣고, JEV는 완성된 글에서 이미지를 골라요.
+                      원문과 번역에 같은 방식을 사용해요.
                     </small>
                   </span>
                   <span className="settings-row-control">
-                    <Switch
-                      aria-label="원문 이미지 자동 배치"
-                      checked={value.image}
-                      onChange={(event) => change({ ...value, image: event.target.checked })}
-                    />
-                  </span>
-                </label>
-                <label className="settings-row settings-row-toggle">
-                  <span className="settings-row-copy">
-                    <strong>번역 이미지 자동 배치</strong>
-                    <small>
-                      새 번역이 완성되면 번역문에 맞춰 이미지를 별도로 배치해요. 꺼도 각 보기의 장면
-                      메뉴에서 직접 실행할 수 있어요.
-                    </small>
-                  </span>
-                  <span className="settings-row-control">
-                    <Switch
-                      aria-label="번역 이미지 자동 배치"
-                      checked={value.imageTranslation !== false}
+                    <select
+                      aria-label="이미지 배치 담당"
+                      value={value.image ? 'jev' : 'writer'}
                       onChange={(event) =>
-                        change({ ...value, imageTranslation: event.target.checked })
+                        change({ ...value, image: event.target.value === 'jev' })
                       }
-                    />
+                    >
+                      <option value="writer">작문 모델</option>
+                      <option value="jev">JEV</option>
+                    </select>
                   </span>
                 </label>
               </div>
@@ -394,14 +376,14 @@ export function ProfileEditor({
                 )}
                 <label className="settings-row">
                   <span className="settings-row-copy">
-                    <strong>작가 노트</strong>
+                    <strong>Risu 작가 노트</strong>
                     <small>
-                      Risu 프롬프트의 작가 노트 위치에 넣어요. 비워 두면 프롬프트에 저장된 기본값을
-                      사용해요.
+                      Risu 프롬프트의 작가 노트 위치에 넣어요. 일반적인 지속 조건은 기억·로어의
+                      메모·정정에 적어요. 비워 두면 프롬프트에 저장된 기본값을 사용해요.
                     </small>
                   </span>
                   <textarea
-                    aria-label="작가 노트"
+                    aria-label="Risu 작가 노트"
                     rows={5}
                     maxLength={32000}
                     value={value.authorNote ?? ''}

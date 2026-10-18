@@ -71,10 +71,11 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   const oldScene = page.locator(`[data-testid="source"][data-source-id="${old.id}"]`);
   const reopen = async () => {
     await openSourceActions(oldScene);
-    await oldScene.getByRole('button', { name: '현재 설정으로 다시 요청', exact: true }).click();
+    await oldScene.getByRole('button', { name: '다시 쓰기', exact: true }).last().click();
   };
   await reopen();
-  const dialog = page.getByRole('dialog', { name: '현재 설정으로 다시 요청', exact: true });
+  const dialog = page.getByRole('dialog', { name: '다시 쓰기', exact: true });
+  await expect(dialog.getByRole('textbox', { name: '다시 쓸 요청' })).toHaveValue('마지막 장면');
   await expect(
     dialog.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true })
   ).toBeVisible();
@@ -87,7 +88,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
     });
   }
   await page.setViewportSize({ width: 412, height: 900 });
-  await dialog.getByRole('button', { name: '취소', exact: true }).click();
+  await dialog.getByRole('button', { name: '닫기', exact: true }).click();
   expect(modes).toHaveLength(0);
   await expect(oldScene).toBeVisible();
 
@@ -147,7 +148,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   const replaced = (await detail(request, before.chat.id)).sources.at(-1)!;
   const replacedScene = page.locator(`[data-testid="source"][data-source-id="${replaced.id}"]`);
   await openSourceActions(replacedScene);
-  await replacedScene.getByRole('button', { name: '현재 설정으로 다시 요청', exact: true }).click();
+  await replacedScene.getByRole('button', { name: '다시 쓰기', exact: true }).last().click();
   await dialog.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(before.chat.id);
   const copiedChatId = new URL(page.url()).searchParams.get('chat')!;
@@ -156,11 +157,13 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   expect((await detail(request, before.chat.id)).chat.headRevision).toBe(replaced.id);
   await page.goto(`/?chat=${before.chat.id}`);
 
-  // Earlier scenes still take the existing copy path without offering destructive replacement.
+  // Earlier scenes use the same review flow, with replacement unavailable.
   const first = page.locator(`[data-testid="source"][data-source-id="${before.sources[0].id}"]`);
   await openSourceActions(first);
-  await first.getByRole('button', { name: '현재 설정으로 다시 요청', exact: true }).click();
-  await expect(dialog).not.toBeVisible();
+  await first.getByRole('button', { name: '다시 쓰기', exact: true }).last().click();
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '기존 응답 교체', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(before.chat.id);
   const earlierCopyChatId = new URL(page.url()).searchParams.get('chat')!;
   await expect.poll(async () => (await detail(request, earlierCopyChatId)).sources.length).toBe(1);
@@ -216,10 +219,9 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     // The row already edits the current view, so the menu offers the other editor only.
     await expect(actions.getByRole('button')).toHaveText([
       '도우미에게 물어보기',
-      '현재 설정으로 다시 요청',
+      '다시 쓰기',
       '이 장면까지 새 채팅으로 복사',
       '번역 수정',
-      '이미지 자동 배치',
       '삽화 생성',
       '원문 연결 정보',
       ...(before.attempts?.some((attempt) => attempt.runId === source.runId)

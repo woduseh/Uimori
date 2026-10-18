@@ -14,4 +14,4 @@ export type SceneCommand = {
   runId: string | null;
   sourceRevision: string | null;
 };
-export type StoryDetail = { notes: AuthorNote[]; notesRevision: number; commands: SceneCommand[] };
+export type StoryDetail = { notes: AuthorNote[]; notesRevision: number };

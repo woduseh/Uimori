@@ -6,8 +6,11 @@ import type { RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
 import { imageCatalog, imageTargetSource, latestImageJob } from './package-images.js';
 import { nativeRisuContext, nativeRisuPackages } from './risu-native-context.js';
-import { nativeImageTag } from './risu-native-image-tags.js';
+import { nativeCatalogImageTags, nativeImageTag } from './risu-native-image-tags.js';
 import { evaluateNativeRisuFields, type NativeRisuCbsContext } from './risu-native-cbs.js';
+import { imageOwnerDisplayText } from '../core/image-placement.js';
+import { successfulTranslation } from './translation-artifacts.js';
+import { packageImages } from '../core/package-images.js';
 
 async function imageGuidanceByPackage(
   snapshot: RunSnapshot,
@@ -93,17 +96,49 @@ export async function nativeImageDisplayText(
   const source = store.source(sourceId);
   if (source.chatId !== snapshot.chatId) throw new Error('NATIVE_IMAGE_SOURCE_SCOPE');
   const job = latestImageJob(store, sourceId, mode);
-  const fallback = mode === 'original' ? source.text : '';
+  const fallback =
+    mode === 'original' ? source.text : (successfulTranslation(store, source)?.result?.text ?? '');
+  if (!snapshot.profile?.image) return { text: fallback, issues: [] };
+  const context = nativeRisuContext(snapshot);
+  const assets = [
+    ...store.product.assets(source.chatId).filter((asset) => asset.allowedUse !== 'profile'),
+    ...packageImages(snapshot.profile).filter(
+      (asset) =>
+        asset.allowedUse !== 'profile' &&
+        snapshot.profile!.packages?.find((pkg) => pkg.id === asset.packageOwner?.id)
+          ?.portraitImageId !== asset.packageOwner?.imageId
+    ),
+    ...(job?.status === 'completed' && job.sourceHash === source.hash
+      ? imageCatalog(job.input)
+      : []),
+  ];
+  const taggedText =
+    job?.status === 'completed' && job.sourceHash === source.hash && job.result?.annotations
+      ? imageTargetSource(store, job, true).text
+      : fallback;
+  const authoredTags = context
+    ? await nativeCatalogImageTags({
+        native: context.native,
+        context: { ...context, viewport },
+        text: taggedText,
+        urls: assets.map((asset) => asset.url),
+      })
+    : [];
+  const display = (text: string) =>
+    authoredTags.reduce(
+      (value, tag) => value.split(tag).join(''),
+      imageOwnerDisplayText(text, snapshot.profile!, assets)
+    );
   if (
     !job ||
     job.status !== 'completed' ||
     job.sourceHash !== source.hash ||
     !job.result?.annotations
   )
-    return { text: fallback, issues: [] };
+    return { text: display(fallback), issues: [] };
   const target = imageTargetSource(store, job, true);
-  const context = nativeRisuContext(snapshot);
-  if (!context) return { text: target.text, issues: [] };
+  const displayText = display(target.text);
+  if (!context) return { text: displayText, issues: [] };
   const catalog = imageCatalog(job.input);
   const validated = validatePresentation(
     target,
@@ -120,7 +155,7 @@ export async function nativeImageDisplayText(
   try {
     guidance = await imageGuidanceByPackage(snapshot, viewport);
   } catch {
-    return { text: target.text, issues: ['native-image-guidance-evaluation'] };
+    return { text: displayText, issues: ['native-image-guidance-evaluation'] };
   }
   const inserts: { offset: number; text: string; order: number }[] = [];
   for (const [order, annotation] of validated.entries.entries()) {
@@ -173,16 +208,19 @@ export async function nativeImageDisplayText(
     // host-validated URL. Markdown keeps them in the normal Risu message without inventing syntax.
     if (!tag && annotation.presentationIntent === 'inline') tag = `![](${asset.url})`;
     if (!tag) continue;
-    if (target.text.includes(tag)) continue;
+    if (displayText.includes(tag)) continue;
     const block = blocks.find((entry) => entry.anchor === annotation.blockAnchor)!;
     const before = /before (?:the )?paragraph|문단.*앞/iu.test(instructions);
     inserts.push({ offset: before ? block.start : block.end, text: `\n\n${tag}\n\n`, order });
   }
-  const text = inserts
-    .sort((a, b) => b.offset - a.offset || b.order - a.order)
-    .reduce(
-      (value, entry) => value.slice(0, entry.offset) + entry.text + value.slice(entry.offset),
-      target.text
-    );
+  // Anchors still belong to the exact stored target. Remove authored catalog tags after insertion
+  // by projecting each original text segment, so deleting a tag never shifts a saved anchor.
+  let text = '';
+  let cursor = 0;
+  for (const entry of inserts.sort((a, b) => a.offset - b.offset || a.order - b.order)) {
+    text += display(target.text.slice(cursor, entry.offset)) + entry.text;
+    cursor = entry.offset;
+  }
+  text += display(target.text.slice(cursor));
   return { text, issues: [...new Set(issues)] };
 }

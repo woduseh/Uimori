@@ -82,7 +82,7 @@ export async function api<T>(
   if (
     body !== undefined &&
     typeof window !== 'undefined' &&
-    /^(?:\/(?:runs|jobs|scene-commands|illustrations)\/|\/sources\/[^/]+\/(?:translation|retranslate|images|illustrations)|\/chats\/[^/]+\/(?:runs|context|scene-commands)|\/helper\/(?:conversations\/[^/]+\/messages|tasks\/))/u.test(
+    /^(?:\/(?:runs|jobs|scene-commands|illustrations)\/|\/sources\/[^/]+\/(?:translation|retranslate|images|illustrations)|\/chats\/[^/]+\/(?:runs|context)|\/helper\/(?:conversations\/[^/]+\/messages|tasks\/))/u.test(
       path
     )
   )

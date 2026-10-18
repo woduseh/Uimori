@@ -30,7 +30,7 @@ import {
 } from './source-editing.js';
 import { validateTranslationArtifact } from './translation-artifacts.js';
 import { ProductStore } from './product-store.js';
-import { promptWorkspace } from './prompt-workspace.js';
+import { initializePromptWorkspaceReferences, promptWorkspace } from './prompt-workspace.js';
 import { mainJudgmentThreshold } from '../core/main-judgment-settings.js';
 import { isSourceOnlyTranscript } from '../core/authored-history.js';
 import { HttpError, text } from './request-validation.js';
@@ -50,6 +50,7 @@ import { splitSource, validateSourceIdentity } from '../core/auxiliary.js';
 import { IDENTITY_PATTERN } from '../core/identity.js';
 import {
   imageJobInput,
+  imageCatalog,
   mergedReaderAssets,
   imageTargetSource,
   scheduleTranslationImages,
@@ -157,6 +158,7 @@ export class Store {
         initChatOptions(this);
         initResponseStreams(this.db);
       });
+      initializePromptWorkspaceReferences(this);
       // The maintenance row belongs to every boot, not only to a fresh database.
       initializeActivityFeed(this);
       initMaintenance(this);
@@ -479,6 +481,7 @@ export class Store {
       sceneCommandId: command.sceneCommandId,
       supersedesRunId: command.retryOf,
     });
+    if (!authored) frozen.imageCatalog = imageCatalog(imageJobInput(this, frozen));
     const status = 'queued';
     this.db
       .prepare(

@@ -90,7 +90,7 @@ for (const viewport of [
     await expect(openBackups).toBeDisabled();
     expect(requests).toHaveLength(0);
     await dialog.getByRole('button', { name: '새 채팅으로 가져오기', exact: true }).click();
-    await expect(dialog.getByRole('button', { name: '같은 요청 확인' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '같은 요청 확인', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('본문 JSON 파일')).toBeDisabled();
@@ -99,7 +99,7 @@ for (const viewport of [
       (response) =>
         response.url().endsWith('/api/chats/import-transcript') && response.status() === 200
     );
-    await dialog.getByRole('button', { name: '같은 요청 확인' }).click();
+    await dialog.getByRole('button', { name: '같은 요청 확인', exact: true }).click();
     const result = await (await responseEvent).json();
     expect(requests).toHaveLength(2);
     expect(requests[1]).toEqual(requests[0]);
@@ -113,7 +113,7 @@ for (const viewport of [
     await openBackups.click();
     await expect(dialog).toBeHidden();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
-    const backupPanel = settings.getByRole('region', { name: '채팅 가져오기', exact: true });
+    const backupPanel = settings.getByRole('region', { name: '백업 파일 가져오기', exact: true });
     await expect(backupPanel).toBeVisible();
     // A backup restores its own independent bot copy, never the preselected bot.
     const backupRequests: unknown[] = [];
@@ -130,7 +130,7 @@ for (const viewport of [
       } else await route.continue();
     });
     const backup = legacyChatBackupWithBot(original.bot, original.chat.settings);
-    await backupPanel.getByLabel('채팅 백업 파일 선택').setInputFiles({
+    await backupPanel.getByLabel('백업 파일 선택').setInputFiles({
       name: 'original.uimori-chat.json',
       mimeType: 'application/json',
       buffer: Buffer.from(JSON.stringify(backup)),
@@ -138,9 +138,9 @@ for (const viewport of [
     expect(backupRequests).toHaveLength(0);
     await backupPanel.getByRole('button', { name: '새 채팅으로 가져오기', exact: true }).click();
     await expect(
-      backupPanel.getByRole('button', { name: '같은 요청 확인', exact: true })
+      backupPanel.getByRole('button', { name: '같은 요청으로 다시 확인', exact: true })
     ).toBeEnabled();
-    await expect(backupPanel.getByLabel('채팅 백업 파일 선택')).toBeDisabled();
+    await expect(backupPanel.getByLabel('백업 파일 선택')).toBeDisabled();
     await expect(
       backupPanel.getByRole('button', { name: '선택 취소', exact: true })
     ).toBeDisabled();
@@ -150,7 +150,7 @@ for (const viewport of [
         response.request().method() === 'POST' &&
         response.status() === 200
     );
-    await backupPanel.getByRole('button', { name: '같은 요청 확인', exact: true }).click();
+    await backupPanel.getByRole('button', { name: '같은 요청으로 다시 확인', exact: true }).click();
     const restored = await (await backupEvent).json();
     expect(restored.created).toBe(false);
     expect(restored.chat.botId).toBe(restoredBotId);

@@ -6,7 +6,6 @@ import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { JobCard } from './SourceReader.js';
-import { DiagnosticReport } from './DiagnosticReport.js';
 import { mainJudgmentError } from './main-judgment-error.js';
 import { SceneUsage } from './SceneUsage.js';
 import './run-task-details.css';
@@ -170,9 +169,6 @@ export function RunTaskDetails({
             revision={revision}
             initiallyOpen={initiallyInspect}
             title="실행과 실제 입력 확인"
-            actions={
-              <DiagnosticReport scope={{ scope: 'chat', chatId: run.chatId, runId: run.id }} />
-            }
           >
             {(full) => (
               <>

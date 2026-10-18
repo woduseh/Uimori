@@ -5,11 +5,25 @@ import { describe, expect, test } from 'vitest';
 import { Prose, safeProseLink } from '../web/Prose.js';
 import { SourceReader } from '../web/SourceReader.js';
 import { splitSource } from '../core/auxiliary.js';
+import { webCitationLinks } from '../core/helper-web-search.js';
 import type { Job, Source } from '../core/types.js';
 
 const render = (text: string) => renderToStaticMarkup(createElement(Prose, { text }));
 
 describe('safe prose rendering', () => {
+  test('renders provider search citations as safe clickable links, including URL parentheses', () => {
+    const html = render(
+      webCitationLinks([
+        { title: '공식 요금', url: 'https://example.com/pricing_(standard)?version=1' },
+        { title: '위험', url: 'javascript:alert(1)' },
+      ])
+    );
+    expect(html).toContain(
+      '<a href="https://example.com/pricing_(standard)?version=1" rel="noreferrer noopener">공식 요금</a>'
+    );
+    expect(html).not.toContain('위험');
+    expect(render('[실행](<javascript:alert(1)>)')).not.toContain('<a ');
+  });
   test('renders only explicitly registered local images and keeps code and external images literal', () => {
     const local = `/api/package-image-blobs/${'a'.repeat(64)}`;
     const other = `/api/package-image-blobs/${'b'.repeat(64)}`;
@@ -283,5 +297,63 @@ test('reader without a current translation renders the original even when transl
   expect(html).toContain('data-testid="source-text"');
   expect(html).toContain('UNTRANSLATED_ORIGINAL');
   expect(html).not.toContain('data-testid="translation-text"');
-  expect(html).toContain('번역 보기');
+  expect(html).toContain('번역 생성');
+});
+
+test.each([
+  ['queued', false, '번역 보기'],
+  ['running', false, '번역 보기'],
+  ['failed', false, '번역 다시 시도'],
+  ['cancelled', false, '번역 다시 시도'],
+  ['failed', true, '번역 보기'],
+  ['completed', true, '번역 보기'],
+] as const)('translation action describes %s with saved text %s', (status, saved, label) => {
+  const source: Source = {
+    id: 'translation-action-source',
+    runId: 'run',
+    chatId: 'chat',
+    parentRevision: null,
+    text: 'Original source',
+    hash: 'current',
+    editRevision: 0,
+  };
+  const job: Job = {
+    id: 'translation-action-job',
+    chatId: source.chatId,
+    sourceRevision: source.id,
+    sourceHash: source.hash,
+    kind: 'translation',
+    status,
+    attempt: 1,
+    error: null,
+    result: saved
+      ? { mock: false, sourceRevision: source.id, sourceHash: source.hash, text: '저장된 번역' }
+      : null,
+  };
+  if (saved && status !== 'completed')
+    job.previousResult = {
+      jobId: 'previous-success',
+      revision: 1,
+      result: {
+        mock: false,
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        text: '저장된 번역',
+      },
+    };
+  const html = renderToStaticMarkup(
+    createElement(SourceReader, {
+      source,
+      index: 0,
+      jobs: [job],
+      assets: [],
+      refresh: async () => {
+        throw new Error('unexpected model request');
+      },
+      onError: () => {},
+      onFork: async () => {},
+    })
+  );
+  expect(html).toContain(`aria-label="${label}"`);
+  if (saved) expect(html).toContain('저장된 번역');
 });

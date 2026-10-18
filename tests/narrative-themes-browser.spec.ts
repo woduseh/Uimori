@@ -634,6 +634,10 @@ for (const width of [1440, 412]) {
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '테마·색상');
+    {
+      const advanced = page.locator('.theme-advanced:not([open]) > summary');
+      if (await advanced.isVisible()) await advanced.click();
+    }
     await page.getByText('현재 테마로 예문 보기', { exact: true }).click();
     const sample = page.locator('.theme-sample');
     const frame = sample.locator('[data-uimori-part="scene-frame"]');
@@ -792,6 +796,10 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   await openStory(page, data, 'classic-frame', 1440, 'light');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '테마·색상');
+  {
+    const advanced = page.locator('.theme-advanced:not([open]) > summary');
+    if (await advanced.isVisible()) await advanced.click();
+  }
   const bytes = await sharp(
     Buffer.from(
       '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600"><rect width="900" height="600" fill="#73a7ab"/><circle cx="680" cy="140" r="90" fill="#ffd181"/><path d="M0 600V450L240 180L500 430L700 300L900 500V600Z" fill="#456253"/></svg>'
@@ -885,6 +893,10 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   await expect(background).toBeVisible();
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '테마·색상');
+  {
+    const advanced = page.locator('.theme-advanced:not([open]) > summary');
+    if (await advanced.isVisible()) await advanced.click();
+  }
   await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('dark');
   await page.getByLabel('테마 적용 범위', { exact: true }).selectOption('chat');
   await page.getByRole('button', { name: '배경 초기화', exact: true }).click();
@@ -933,6 +945,10 @@ test('BACKGROUND pending upload discard and dirty save-close preserve scope owne
   await openStory(page, data, 'classic-frame', 1440, 'light');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '테마·색상');
+  {
+    const advanced = page.locator('.theme-advanced:not([open]) > summary');
+    if (await advanced.isVisible()) await advanced.click();
+  }
   let release!: () => void;
   const delayed = new Promise<void>((resolve) => {
     release = resolve;
@@ -966,6 +982,10 @@ test('BACKGROUND pending upload discard and dirty save-close preserve scope owne
   await page.unroute('**/api/package-image-blobs');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '테마·색상');
+  {
+    const advanced = page.locator('.theme-advanced:not([open]) > summary');
+    if (await advanced.isVisible()) await advanced.click();
+  }
   await expect(page.getByRole('button', { name: '배경 저장', exact: true })).toBeDisabled();
   await page.getByLabel('배경 흐림', { exact: true }).fill('9');
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();

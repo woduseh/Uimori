@@ -21,8 +21,218 @@ import type {
 } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
+import { repairPromptCombinationValues } from '../core/prompt-combinations.js';
+import { initializePromptWorkspaceReferences } from '../server/prompt-workspace.js';
 
 const owned: { directory: string; app?: App }[] = [];
+test.each(['main', 'translation'] as const)(
+  'selected %s preset role cannot change or poison workspace reads',
+  async (role) => {
+    const app = await application();
+    const initial = await workspace(app);
+    const preset = await request<PromptPreset>(app, '/prompt-presets', {
+      title: '선택한 프롬프트 역할 보존',
+      role,
+      program: createDefaultRisuPrompt('선택 원본', role),
+    });
+    const selected = await apply(app, preset);
+    const otherRole = role === 'main' ? 'translation' : 'main';
+    const beforeChanges = app.store.db.prepare('SELECT total_changes() AS n').get();
+    const rejected = await request(
+      app,
+      `/prompt-presets/${preset.id}`,
+      {
+        expectedRevision: preset.revision,
+        title: '반영하면 안 되는 변경',
+        role: otherRole,
+        program: createDefaultRisuPrompt('바뀐 역할 본문', otherRole),
+      },
+      409,
+      'PUT'
+    );
+    expect(rejected.error).toContain('다른 프리셋을 선택한 뒤');
+    expect(app.store.product.get<PromptPreset>('prompt-preset', preset.id)).toEqual(preset);
+    expect(await workspace(app)).toEqual(selected);
+    expect((await read(app, '/model-workspace')).revision).toBe(selected.revision);
+    expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(beforeChanges);
+    // The user can follow the error's recovery instruction and then change the unused preset role.
+    await apply(app, app.store.product.get<PromptPreset>('prompt-preset', initial[role].presetId!));
+    const revised = await request<PromptPreset>(
+      app,
+      `/prompt-presets/${preset.id}`,
+      {
+        expectedRevision: preset.revision,
+        title: preset.title,
+        role: otherRole,
+        program: createDefaultRisuPrompt('사용하지 않는 원본의 역할 변경', otherRole),
+      },
+      200,
+      'PUT'
+    );
+    expect(revised).toMatchObject({
+      id: preset.id,
+      revision: preset.revision + 1,
+      role: otherRole,
+    });
+    expect((await workspace(app))[role].presetId).toBe(initial[role].presetId);
+  }
+);
+
+test('legacy copied defaults become inheritance while values different from that baseline remain explicit', async () => {
+  const app = await application();
+  const baseline = await workspace(app);
+  const program = createDefaultRisuPrompt('기본값 전환');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle =
+    'tone=문체=text\ninstruction=추가 지시=text';
+  const preset = await request<PromptPreset>(app, '/prompt-presets', {
+    title: '기본값 원본',
+    role: 'main',
+    program,
+    values: { tone: '새 기본값', instruction: '새 지시 기본값' },
+  });
+  app.store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(
+    JSON.stringify({
+      ...baseline,
+      main: {
+        presetId: preset.id,
+        title: preset.title,
+        program,
+        defaultValues: { tone: '옛 기본값', instruction: '옛 지시 기본값' },
+        values: { tone: '옛 기본값', instruction: '사용자 직접 지정' },
+      },
+    })
+  );
+  initializePromptWorkspaceReferences(app.store);
+  const migrated = await workspace(app);
+  expect(migrated.main.presetId).toBe(preset.id);
+  expect(migrated.main.optionValues).toEqual({ instruction: '사용자 직접 지정' });
+  expect(migrated.main.values).toEqual({ tone: '새 기본값', instruction: '사용자 직접 지정' });
+});
+
+test('legacy independent workspace bodies are preserved as presets once before following sources', async () => {
+  const app = await application();
+  const baseline = await workspace(app);
+  const program = createDefaultRisuPrompt('  Keep my independent body\r\n');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text';
+  const legacy = {
+    ...baseline,
+    main: {
+      title: '독립 보존본',
+      presetId: baseline.main.presetId,
+      program,
+      values: { tone: '직접 선택' },
+    },
+  };
+  app.store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(JSON.stringify(legacy));
+  initializePromptWorkspaceReferences(app.store);
+  const migrated = await workspace(app);
+  expect(migrated.main.presetId).not.toBe(baseline.main.presetId);
+  const preserved = app.store.product.get<PromptPreset>('prompt-preset', migrated.main.presetId!);
+  expect(preserved).toMatchObject({ title: '독립 보존본', program, values: { tone: '직접 선택' } });
+  expect(migrated.main.values).toEqual({ tone: '직접 선택' });
+  const raw = app.store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get() as {
+    body: string;
+  };
+  expect(JSON.parse(raw.body).main).toEqual({
+    presetId: preserved.id,
+    values: { tone: '직접 선택' },
+  });
+  const before = app.store.db.prepare('SELECT total_changes() AS n').get();
+  expect(await workspace(app)).toEqual(migrated);
+  expect(app.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(before);
+});
+
+test('obsolete same-owner combinations stay retained and can be repaired with both revisions guarded', async () => {
+  const app = await application();
+  const program = createDefaultRisuPrompt('Repairable prompt');
+  program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text\nold=Old=text';
+  const preset = await request<PromptPreset>(app, '/prompt-presets', {
+    title: 'Repair',
+    role: 'main',
+    program,
+  });
+  await apply(app, preset);
+  const combo = await request<SavedPromptCombination>(app, '/prompt-combinations', {
+    title: '조합 보존',
+    role: 'main',
+    owner: { kind: 'preset', id: preset.id },
+    expectedRevision: preset.revision,
+    values: { tone: 'keep', old: 'retained in old combo until explicit repair' },
+  });
+  const changed = structuredClone(program);
+  changed.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text\nnew=New=text';
+  const saved = await request<PromptPreset>(
+    app,
+    `/prompt-presets/${preset.id}`,
+    {
+      expectedRevision: preset.revision,
+      title: preset.title,
+      role: 'main',
+      program: changed,
+    },
+    200,
+    'PUT'
+  );
+  const latest = await workspace(app);
+  expect(
+    matchesPromptCombination(
+      combo,
+      combinationOwner(latest.main, 'main'),
+      'main',
+      latest.main.program
+    )
+  ).toBe(false);
+  expect((await read(app, '/library')).promptCombinations).toContainEqual(combo);
+  await request(
+    app,
+    '/prompt-workspace/apply-options',
+    { expectedRevision: latest.revision, role: 'main', combinationId: combo.id },
+    409
+  );
+  expect(repairPromptCombinationValues(combo, changed)).toEqual({ tone: 'keep' });
+  const repaired = await request<SavedPromptCombination>(
+    app,
+    `/prompt-combinations/${combo.id}`,
+    {
+      expectedRevision: combo.revision,
+      sourceRevision: saved.revision,
+      title: combo.title,
+      values: { ...repairPromptCombinationValues(combo, changed), new: 'repaired' },
+    },
+    200,
+    'PUT'
+  );
+  expect(repaired.id).toBe(combo.id);
+  expect(repaired.revision).toBe(combo.revision + 1);
+  expect(
+    matchesPromptCombination(repaired, combinationOwner(latest.main, 'main'), 'main', changed)
+  ).toBe(true);
+  await request(
+    app,
+    `/prompt-combinations/${combo.id}`,
+    {
+      expectedRevision: combo.revision,
+      sourceRevision: saved.revision,
+      title: combo.title,
+      values: {},
+    },
+    409,
+    'PUT'
+  );
+  await request(
+    app,
+    `/prompt-combinations/${combo.id}`,
+    {
+      expectedRevision: repaired.revision,
+      sourceRevision: preset.revision,
+      title: combo.title,
+      values: {},
+    },
+    409,
+    'PUT'
+  );
+});
+
 test('large plain presets remain editable in the library, workspace and read-only request preview', async () => {
   const app = await application();
   const literal = ' '.repeat(9 * 1024 * 1024) + 'Preserve this complete instruction.';
@@ -376,7 +586,7 @@ async function apply(app: App, preset: PromptPreset) {
   });
 }
 
-test('applied prompt defaults stay pinned across library edits and option autosaves', async () => {
+test('selected prompt follows its latest saved body and defaults while explicit global options remain', async () => {
   const app = await application();
   const program = createDefaultRisuPrompt('Pinned options');
   program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=Tone=text';
@@ -401,7 +611,9 @@ test('applied prompt defaults stay pinned across library edits and option autosa
     200,
     'PUT'
   );
-  expect((await workspace(app)).main.defaultValues).toEqual({ tone: 'preset default' });
+  current = await workspace(app);
+  expect(current.main.defaultValues).toEqual({ tone: 'revised default' });
+  expect(current.main.values).toEqual({ tone: 'revised default' });
   current = await request(
     app,
     '/prompt-workspace',
@@ -413,7 +625,14 @@ test('applied prompt defaults stay pinned across library edits and option autosa
     'PUT'
   );
   expect(current.main.values).toEqual({ tone: 'user selection' });
-  expect(current.main.defaultValues).toEqual({ tone: 'preset default' });
+  expect(current.main.defaultValues).toEqual({ tone: 'revised default' });
+  const row = app.store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get() as {
+    body: string;
+  };
+  expect(JSON.parse(row.body).main).toEqual({
+    presetId: preset.id,
+    values: { tone: 'user selection' },
+  });
   const reapplied = await apply(app, revised);
   expect(reapplied.main.defaultValues).toEqual({ tone: 'revised default' });
   expect(reapplied.main.values).toEqual({ tone: 'revised default' });
@@ -468,6 +687,7 @@ describe('global working prompts and independent library copies', () => {
   });
   test('saves exact whitespace, empty text and version history, rejecting stale writes and invalid shapes without generation', async () => {
     const app = await application();
+    const initialCount = (await read(app, '/library')).promptPresets.length;
     const literal = `\r\n  {{char}} \${literal}\n<instructions>Keep my exact wording.</instructions>\t\n`;
     const first = await request<PromptPreset>(app, '/prompt-presets', prompt('main', literal));
     expect(first.program).toEqual(createDefaultRisuPrompt(literal));
@@ -512,7 +732,7 @@ describe('global working prompts and independent library copies', () => {
         .statusCode
     ).toBe(404);
     const library = await read(app, '/library');
-    expect(library.promptPresets).toHaveLength(3);
+    expect(library.promptPresets).toHaveLength(initialCount + 3);
     expect(library.promptPresets.find((item: PromptPreset) => item.id === first.id)).toEqual(next);
     for (const changes of [
       { role: 'status' },
@@ -593,7 +813,7 @@ describe('global working prompts and independent library copies', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('applying a preset copies its exact program and values; later edits and deletion do not change the workspace', async () => {
+  test('selected presets follow saves and cannot be deleted until another preset is selected', async () => {
     const app = await application();
     const preset = await request<PromptPreset>(app, '/prompt-presets', prompt('translation', ''));
     const current = await apply(app, preset);
@@ -605,7 +825,9 @@ describe('global working prompts and independent library copies', () => {
       200,
       'PUT'
     );
-    expect(await workspace(app)).toEqual(current);
+    const latest = await workspace(app);
+    expect(latest.translation.program).toEqual(edited.program);
+    expect(latest.revision).toBeGreaterThan(current.revision);
     await request(
       app,
       '/prompt-workspace/apply',
@@ -620,11 +842,9 @@ describe('global working prompts and independent library copies', () => {
       payload: { expectedRevision: 2 },
       headers: { host: '127.0.0.1' },
     });
-    expect(response.statusCode, response.body).toBe(200);
+    expect(response.statusCode, response.body).toBe(409);
     expect(await workspace(app)).toEqual(applied);
-    expect(() => app.store.product.get('prompt-preset', preset.id, 1)).toThrow(
-      'revision not found'
-    );
+    expect(app.store.product.get<PromptPreset>('prompt-preset', preset.id).id).toBe(preset.id);
   });
 
   test('option presets copy only values into the current role and never retarget a saved prompt', async () => {
@@ -655,7 +875,11 @@ describe('global working prompts and independent library copies', () => {
       role: 'main',
       combinationId: options.id,
     });
-    expect(applied.main).toEqual({ ...updated.main, values: { tone: 'bold' } });
+    expect(applied.main).toEqual({
+      ...updated.main,
+      values: { tone: 'bold' },
+      optionValues: { tone: 'bold' },
+    });
     expect(applied.translation).toEqual(updated.translation);
     await request(
       app,

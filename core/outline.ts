@@ -53,7 +53,6 @@ export type OutlineNode = {
   progress: OutlineProgress;
   relatedIds?: string[];
   writings?: OutlineWriting[];
-  latestReview?: OutlineReview | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -62,15 +61,6 @@ export type OutlineWriting = {
   sourceHash: string;
   nodeId: string;
   createdAt: string;
-};
-export type OutlineReview = {
-  taskId: string;
-  conversationId: string;
-  status: string;
-  createdAt: string;
-  stale: boolean;
-  partial: boolean;
-  sources: { id: string; hash: string; start: number; end: number; total: number }[];
 };
 /** Explicit, one-request selection; never inferred from which panel is visible. */
 export type OutlineTarget = {
@@ -82,9 +72,7 @@ export type OutlineHelperContext = {
   target: OutlineTarget;
   /** Bounded metadata/preview projection; not the writer's full frozen composition. */
   brief: import('./transport.js').Json | null;
-  /** Host-only input signature for review freshness; independent of read pagination. */
-  reviewVersion?: string;
-  sources: (OutlineReview['sources'][number] & { text: string })[];
+  sources: { id: string; hash: string; start: number; end: number; total: number; text: string }[];
   partial: boolean;
 };
 

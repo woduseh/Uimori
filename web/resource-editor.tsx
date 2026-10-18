@@ -82,7 +82,6 @@ export async function discardActiveEditor(editorKey?: string) {
     : activeSession();
   await session?.discard();
 }
-export const refreshActiveEditor = () => activeSession()?.refresh() ?? Promise.resolve();
 export function useEditorSaveCommand(session: ResourceEditorSession, save: () => Promise<boolean>) {
   const current = useRef(save);
   current.current = save;

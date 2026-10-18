@@ -1,7 +1,6 @@
 import { BackupSettings } from './BackupSettings.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChatBackupImport } from './ChatBackupImport.js';
-import { ResourceBundleImport } from './ResourceBundleImport.js';
+import { BackupFileImport } from './BackupFileImport.js';
 import { DownloadIcon } from './ui-icons.js';
 import {
   useSettingsSaveHandler,
@@ -24,8 +23,7 @@ export function ArchivePanel({
   active?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
-  const [chatDirty, setChatDirty] = useState(false);
-  const [resourceDirty, setResourceDirty] = useState(false);
+  const [importDirty, setImportDirty] = useState(false);
   const [backupDirty, setBackupDirty] = useState(false);
   const [error, setError] = useState('');
   const backupSave = useRef<SettingsSaveHandler | null>(null);
@@ -33,10 +31,10 @@ export function ArchivePanel({
     backupSave.current = handler;
   }, []);
   useEffect(() => {
-    onDirtyChange?.(busy || chatDirty || resourceDirty || backupDirty);
-  }, [busy, chatDirty, resourceDirty, backupDirty, onDirtyChange]);
+    onDirtyChange?.(busy || importDirty || backupDirty);
+  }, [busy, importDirty, backupDirty, onDirtyChange]);
   useSettingsSaveHandler(onSaveHandlerChange, async () => {
-    if (chatDirty || resourceDirty)
+    if (importDirty)
       throw new Error(
         '데이터 관리에 선택한 가져오기 파일이 있어요. 계속 편집에서 가져오기를 완료하거나 선택을 취소해 주세요.'
       );
@@ -106,8 +104,7 @@ export function ArchivePanel({
         </div>
       </section>
       <BackupSettings onDirtyChange={setBackupDirty} onSaveHandlerChange={registerBackupSave} />
-      <ResourceBundleImport onImported={onImported} onDirtyChange={setResourceDirty} />
-      <ChatBackupImport onImported={onImported} onDirtyChange={setChatDirty} disabled={busy} />
+      <BackupFileImport onImported={onImported} onDirtyChange={setImportDirty} disabled={busy} />
     </Container>
   );
 }

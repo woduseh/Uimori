@@ -1,6 +1,6 @@
 import type { OutlineTarget } from '../core/outline.js';
 import type { FastifyInstance } from 'fastify';
-import type { HelperScope, HelperEditor, HelperLimits } from '../core/helper.js';
+import type { HelperScope, HelperEditor } from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
 import { lastHelperResourceEdit, undoHelperResourceEdit } from './helper-resource-undo.js';
 import { readHelperActivity } from './helper-activity.js';
@@ -62,15 +62,6 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       body.title === undefined ? undefined : text(body.title, 'conversation title', 200)
     );
   });
-  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/branch', (request) => {
-    const body = record(request.body);
-    fields(body, ['requestKey', 'untilMessageId']);
-    return store.branch(
-      request.params.id,
-      text(body.requestKey, 'request key', 100),
-      body.untilMessageId === undefined ? undefined : text(body.untilMessageId, 'message ID', 100)
-    );
-  });
   app.get<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) =>
     store.conversation(request.params.id)
   );
@@ -98,19 +89,9 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   });
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) => {
     const body = record(request.body);
-    fields(body, ['expectedRevision', 'title', 'persona', 'limits']);
-    if (body.title === undefined && body.persona === undefined && body.limits === undefined)
+    fields(body, ['expectedRevision', 'title', 'persona']);
+    if (body.title === undefined && body.persona === undefined)
       throw new HttpError(400, '변경할 도우미 설정이 필요해요.');
-    let limits: HelperLimits | undefined;
-    if (body.limits !== undefined) {
-      const value = record(body.limits);
-      fields(value, ['totalCalls', 'helperCalls']);
-      const totalCalls = number(value.totalCalls, 'total call limit', 2, 100);
-      limits = {
-        totalCalls,
-        helperCalls: number(value.helperCalls, 'helper call limit', 1, totalCalls),
-      };
-    }
     return store.update(
       request.params.id,
       number(body.expectedRevision, 'helper settings revision'),
@@ -119,7 +100,6 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         ...(body.persona === undefined
           ? {}
           : { persona: text(body.persona, 'helper persona', HELPER_PERSONA_MAX_CHARS, true) }),
-        ...(limits === undefined ? {} : { limits }),
       }
     );
   });

@@ -1,10 +1,21 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, selectSettingsSection, visibleNavigation } from './ui-navigation.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 
 test.setTimeout(60000);
+
+async function finishShortSearch(dialog: Locator, match?: Locator) {
+  const search = dialog.getByRole('button', { name: '검색', exact: true });
+  const more = dialog.getByRole('button', { name: '계속 찾기 · 남은 원고 검색', exact: true });
+  await expect(search).toBeEnabled();
+  // Workspace fixtures can exceed one short-query scan. An empty page is not a final miss.
+  while ((await more.isVisible()) && (!match || !(await match.isVisible()))) {
+    await more.click();
+    await expect(search).toBeEnabled();
+  }
+}
 test('AUDIT2 search explains an empty target selection and resumes after choosing one at 360px', async ({
   page,
   request,
@@ -42,11 +53,12 @@ test('AUDIT2 search explains an empty target selection and resumes after choosin
   await dialog.getByRole('button', { name: '번역', exact: true }).click();
   await expect(dialog.getByRole('button', { name: '검색', exact: true })).toBeEnabled();
   await dialog.getByRole('button', { name: '검색', exact: true }).click();
+  await finishShortSearch(dialog, dialog.locator('.manuscript-search-results article').first());
   await expect(dialog.locator('.manuscript-search-results article').first()).toContainText(
     '보라색 우산'
   );
   await expect(dialog.getByText('검색 대상을 하나 이상 선택해 주세요.')).toHaveCount(0);
-  expect(searches).toHaveLength(1);
+  expect(searches.length).toBeGreaterThan(0);
 });
 
 test('PWUI01 search uses the saved translation and opens its exact scene on desktop and mobile without model work', async ({
@@ -95,6 +107,7 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
     );
     await dialog.getByLabel('전체 채팅 검색', { exact: true }).fill('미카');
     await dialog.getByRole('button', { name: '검색', exact: true }).click();
+    await finishShortSearch(dialog);
     await expect(dialog.getByText('일치하는 원고가 없어요.', { exact: true })).toBeVisible();
     await expect(search).toHaveValue('미카');
     await dialog.getByRole('button', { name: '번역', exact: true }).focus();
@@ -108,6 +121,7 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
       .locator('.manuscript-search-results article')
       .filter({ hasText: chat.title })
       .first();
+    await finishShortSearch(dialog, result);
     await expect(result).toContainText('보라색 우산');
     await expect(
       dialog.getByRole('heading', { name: '본문 검색 결과', exact: true })

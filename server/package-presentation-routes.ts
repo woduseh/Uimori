@@ -29,6 +29,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
             profile: store.product.snapshot(stored.chatId, 'inspect', stored.parentRevision),
           }
         : stored;
+      if (snapshot.profile) snapshot.profile.image = store.product.profile(source.chatId).image;
       if (snapshot.chatId !== source.chatId) throw new HttpError(409, 'Source run mismatch');
       const job = successfulTranslation(store, source);
       let translation: { text: string; sourceRevision: string; sourceHash: string } | undefined;
@@ -79,7 +80,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
           {
             viewport,
             nativeMessages: messages,
-            ...(imageTranslation?.text ? { nativeTranslationText: imageTranslation.text } : {}),
+            ...(imageTranslation ? { nativeTranslationText: imageTranslation.text } : {}),
           }
         );
         const head = live.snapshot.parentRevision!;

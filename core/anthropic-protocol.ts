@@ -24,6 +24,7 @@ import {
 } from './provider-messages.js';
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
+import { webCitationLinks } from './helper-web-search.js';
 
 export class AnthropicProtocolError extends Error {
   constructor(
@@ -60,6 +61,8 @@ const VERSION = 'anthropic-messages-turn-v1' as const;
 type ToolName = { name: string; wireName: string };
 type PendingCall = { id: string; name: string; wireName: string; index: number };
 export type AnthropicTurn = {
+  webSearch?: true;
+  webSearchPaused?: true;
   version: typeof VERSION;
   modelId: string;
   bindingHash: string;
@@ -124,6 +127,8 @@ export function encodeAnthropic(request: ProviderRequest): {
   messageMetadata?: NativeMessageMetadata;
 } {
   const continuationInput = continuationInputText(request);
+  if (request.webSearch !== undefined && (request.webSearch !== true || request.role !== 'helper'))
+    reject('INVALID_WEB_SEARCH');
   if (
     !nonempty(request.modelId) ||
     request.modelId.length > 200 ||
@@ -185,6 +190,7 @@ export function encodeAnthropic(request: ProviderRequest): {
     copy(
       {
         role: request.role,
+        ...(request.webSearch ? { webSearch: true } : {}),
         modelId: request.modelId,
         stable: request.stable,
         generation: request.generationBinding ?? generation ?? null,
@@ -207,9 +213,13 @@ export function encodeAnthropic(request: ProviderRequest): {
       canonical(previous.toolNames as unknown as Json) !== canonical(toolNames as unknown as Json)
     )
       reject('ANTHROPIC_CONTINUATION_MISMATCH');
+    const paused =
+      previous.webSearchPaused === true &&
+      previous.webSearch === true &&
+      previous.phase === 'partial' &&
+      previous.pending.length === 0;
     if (
-      previous.phase !== 'tool_calls' ||
-      !previous.pending.length ||
+      (!paused && (previous.phase !== 'tool_calls' || !previous.pending.length)) ||
       results.length !== previous.completedResults.length + previous.pending.length ||
       canonical(results.slice(0, previous.completedResults.length)) !==
         canonical(previous.completedResults)
@@ -267,13 +277,19 @@ export function encodeAnthropic(request: ProviderRequest): {
     if (fresh.size) reject('TOOL_RESULT_MISMATCH');
     messages = [
       ...previous.messages,
-      {
-        role: 'user',
-        content: [
-          ...responses,
-          ...(continuationInput !== undefined ? [{ type: 'text', text: continuationInput }] : []),
-        ],
-      },
+      ...(!paused || continuationInput !== undefined
+        ? [
+            {
+              role: 'user',
+              content: [
+                ...responses,
+                ...(continuationInput !== undefined
+                  ? [{ type: 'text', text: continuationInput }]
+                  : []),
+              ],
+            },
+          ]
+        : []),
     ];
     usedIds = previous.usedIds;
   } else {
@@ -359,13 +375,18 @@ export function encodeAnthropic(request: ProviderRequest): {
           ]
         : []),
     ],
-    ...(toolNames.length
+    ...(toolNames.length || request.webSearch
       ? {
-          tools: request.stable.tools.map((tool, index) => ({
-            name: toolNames[index].wireName,
-            description: 'Host tool: ' + tool.name + '. ' + tool.description,
-            input_schema: copy(tool.inputSchema, 'INVALID_TOOLS'),
-          })),
+          tools: [
+            ...request.stable.tools.map((tool, index) => ({
+              name: toolNames[index].wireName,
+              description: 'Host tool: ' + tool.name + '. ' + tool.description,
+              input_schema: copy(tool.inputSchema, 'INVALID_TOOLS'),
+            })),
+            ...(request.webSearch
+              ? [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }]
+              : []),
+          ],
           tool_choice:
             request.toolChoice && request.toolChoice !== 'auto'
               ? {
@@ -388,6 +409,7 @@ export function encodeAnthropic(request: ProviderRequest): {
     messageMetadata: nativeMessageMetadata(plan),
     context: seal({
       version: VERSION,
+      ...(request.webSearch ? { webSearch: true as const } : {}),
       modelId: request.modelId,
       bindingHash,
       phase: 'request',
@@ -500,6 +522,7 @@ export class AnthropicDecoder {
   private stopSequence: string | null = null;
   private explicitRefusal = false;
   private fault: string | null = null;
+  private searchError = false;
   private faultDiagnostic: ProviderToolArgumentDiagnostic | null = null;
   private observedUsage: ProviderUsage = {
     inputTokens: null,
@@ -614,7 +637,7 @@ export class AnthropicDecoder {
           reject('ANTHROPIC_TOOL_TERMINAL_MISMATCH');
       }
       this.stopped = true;
-      return;
+      return this.context.webSearch ? this.publicText() : undefined;
     }
     if (this.stopReason) reject('ANTHROPIC_CONTENT_AFTER_TERMINAL');
     if (
@@ -632,6 +655,38 @@ export class AnthropicDecoder {
       )
         reject('ANTHROPIC_INVALID_EVENT_ORDER');
       const content = structuredClone(event.content_block);
+      if (content.type === 'server_tool_use') {
+        if (
+          !this.context.webSearch ||
+          content.name !== 'web_search' ||
+          !nonempty(content.id) ||
+          (content.input !== undefined && !object(content.input))
+        )
+          reject('ANTHROPIC_UNSUPPORTED_SERVER_TOOL');
+        if (this.ids.has(content.id)) reject('DUPLICATE_TOOL_ID');
+        this.ids.add(content.id);
+      }
+      if (content.type === 'web_search_tool_result') {
+        if (
+          !this.context.webSearch ||
+          !nonempty(content.tool_use_id) ||
+          ![
+            ...this.blocks.map((block) => block.content),
+            ...this.context.messages.flatMap((message) =>
+              object(message) && message.role === 'assistant' && Array.isArray(message.content)
+                ? message.content
+                : []
+            ),
+          ].some(
+            (block) =>
+              object(block) && block.type === 'server_tool_use' && block.id === content.tool_use_id
+          )
+        )
+          reject('ANTHROPIC_INVALID_SEARCH_RESULT');
+        if (object(content.content) && content.content.type === 'web_search_tool_result_error')
+          this.searchError = true;
+        else if (!Array.isArray(content.content)) reject('ANTHROPIC_INVALID_SEARCH_RESULT');
+      }
       if (content.type === 'text' && typeof content.text !== 'string')
         reject('INVALID_ANTHROPIC_CONTENT_BLOCK');
       if (content.type === 'thinking') {
@@ -699,10 +754,10 @@ export class AnthropicDecoder {
         block.content.signature = ((block.content.signature as string) ?? '') + delta.signature;
       else if (
         delta.type === 'input_json_delta' &&
-        block.content.type === 'tool_use' &&
+        (block.content.type === 'tool_use' || block.content.type === 'server_tool_use') &&
         typeof delta.partial_json === 'string'
       ) {
-        if (Object.keys(block.content.input as Record<string, Json>).length)
+        if (Object.keys((block.content.input as Record<string, Json>) ?? {}).length)
           reject('ANTHROPIC_TOOL_INPUT_CHANGED');
         block.json += delta.partial_json;
         block.hasJsonDelta = true;
@@ -724,7 +779,7 @@ export class AnthropicDecoder {
     block.open = false;
     if (block.content.type === 'thinking' && !nonempty(block.content.signature))
       block.invalid = 'ANTHROPIC_INCOMPLETE_THINKING';
-    if (block.content.type === 'tool_use') {
+    if (block.content.type === 'tool_use' || block.content.type === 'server_tool_use') {
       if (block.hasJsonDelta) {
         let parsed: unknown;
         try {
@@ -754,6 +809,7 @@ export class AnthropicDecoder {
         }
         block.content.input = structuredClone(parsed);
       }
+      if (block.content.type === 'server_tool_use') return;
       const tool = this.context.toolNames.find((item) => item.wireName === block.content.name)!;
       this.calls.push({
         id: block.content.id as string,
@@ -777,16 +833,36 @@ export class AnthropicDecoder {
     return { text, offset: this.publicLength };
   }
   publicText(): string {
-    return this.blocks
+    const text = this.blocks
       .filter((block) => block.content.type === 'text')
       .map((block) => block.content.text as string)
       .join('');
+    const citations =
+      this.stopped && this.context.webSearch
+        ? this.blocks.flatMap((block) =>
+            Array.isArray(block.content.citations)
+              ? block.content.citations.filter(
+                  (item) => object(item) && item.type === 'web_search_result_location'
+                )
+              : []
+          )
+        : [];
+    return text + webCitationLinks(citations);
   }
   isTerminal(): boolean {
     return this.stopped;
   }
   snapshot(): ProviderResult {
     const text = this.publicText();
+    const searchPaused =
+      this.stopped &&
+      this.stopReason === 'pause_turn' &&
+      this.context.webSearch === true &&
+      !this.fault &&
+      !this.explicitRefusal &&
+      !this.searchError &&
+      !this.calls.length &&
+      this.blocks.length > 0;
     let status: ProviderResult['status'] = text || this.blocks.length ? 'partial' : 'error';
     let error: ProviderResult['error'] = this.fault
       ? {
@@ -833,16 +909,27 @@ export class AnthropicDecoder {
           { role: 'assistant', content: this.blocks.map((block) => block.content) },
         ]
       : this.context.messages;
+    if (
+      this.searchError &&
+      this.stopped &&
+      (!error || error.code === 'EMPTY_COMPLETION') &&
+      status !== 'refused'
+    ) {
+      status = text ? 'partial' : 'error';
+      error = { code: 'ANTHROPIC_WEB_SEARCH_ERROR' };
+    }
     const { stateHash: _stateHash, ...base } = this.context;
     return structuredClone({
+      ...(searchPaused ? { continuation: 'web-search-pause' } : {}),
       status,
       text,
       toolCalls: this.calls,
       refusal,
-      error,
+      error: searchPaused ? null : error,
       usage: this.observedUsage,
       opaqueState: seal({
         ...base,
+        ...(searchPaused ? { webSearchPaused: true } : {}),
         phase: status,
         messages,
         pending: this.pending,

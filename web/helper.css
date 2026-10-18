@@ -227,8 +227,7 @@
 .helper-persona {
   padding-block: 14px;
 }
-.helper-persona p,
-.helper-limits > p {
+.helper-persona p {
   margin: 8px 0 0;
   font-size: 13px;
   line-height: 1.6;
@@ -299,24 +298,6 @@
   border-color: transparent;
   background: var(--panel);
   font-size: 14px;
-}
-.helper-limits {
-  margin: 0;
-}
-.helper-limits label {
-  font-size: 13px;
-}
-.helper-limits input {
-  width: 100%;
-  min-width: 0;
-}
-.helper-limits summary {
-  min-height: var(--control-h);
-  align-content: center;
-  cursor: pointer;
-}
-.helper-limits[open] > .settings-group-body {
-  margin-top: 12px;
 }
 .helper-task-history .task-request {
   margin: 8px 0 0;

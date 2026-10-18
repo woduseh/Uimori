@@ -19,7 +19,6 @@ import type { Store } from './store.js';
 import { assertLibraryVisible } from './library-deletion.js';
 import { readImage } from './image-storage.js';
 import { HttpError } from './request-validation.js';
-import { bundleRisuModules } from './risu-export-modules.js';
 import {
   assertExportPath,
   exportJson,
@@ -54,9 +53,8 @@ export function exportRisuContent(product: ProductStore, content: Content): Risu
     content.kind === 'module' && !Object.keys(content.package.nativeRisu.card).length;
   if (standalone && !content.package.nativeRisu.module)
     throw new HttpError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
-  if (standalone && content.package.modules?.length)
-    throw new HttpError(409, 'RISU_EXPORT_MODULE_CONFLICT');
-  const pkg = bundleRisuModules(product, content).package;
+  // Linked resources keep their own Risu identities and are exported individually.
+  const pkg = structuredClone(content.package);
   if (!standalone && !Object.keys(pkg.nativeRisu.card).length)
     throw new HttpError(409, 'RISU_EXPORT_MODULE_UNSUPPORTED');
   const native = validateRisuContentSource(pkg.nativeRisu),

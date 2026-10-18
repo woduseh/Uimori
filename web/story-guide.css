@@ -5,9 +5,7 @@
   gap: 16px;
   min-width: 0;
 }
-.story-guide > p,
-.story-guide-section > h4,
-.story-guide-heading h4 {
+.story-guide > p {
   margin: 0;
 }
 .story-guide-config {
@@ -16,8 +14,7 @@
   border: 0;
 }
 .story-guide-fields > label:not(.story-guide-check),
-.story-guide-reference label,
-.story-guide-section form > label {
+.story-guide-reference label {
   display: grid;
   gap: 8px;
   min-width: 0;
@@ -39,16 +36,8 @@
   padding-top: 20px;
   border-top: 1px solid var(--line);
 }
-.story-guide-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
 .story-guide-reference > summary,
 .story-guide-settings > summary,
-.story-guide-preview > summary,
 .story-guide-last-brief > summary {
   cursor: pointer;
   min-height: 44px;
@@ -79,15 +68,4 @@
   overflow-wrap: anywhere;
   font-size: 14px;
   line-height: 1.7;
-}
-.story-guide-question {
-  margin-top: 0;
-  font-weight: 600;
-  white-space: pre-wrap;
-}
-.story-guide-question-examples {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
 }

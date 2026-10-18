@@ -41,9 +41,9 @@ const categories = [
   },
   {
     id: 'guide',
-    title: '이야기 가이드',
+    title: '원작·인물 참고',
     icon: LoreIcon,
-    description: '원작과 현재 이야기 살펴보기',
+    description: '집필 전 원작 설정과 인물 참고',
     group: '기본',
   },
   {
@@ -76,12 +76,14 @@ export function ChatSettingsPanel({
   onClose,
   initialSection,
   onGlobalSettings,
+  onOpenHelper,
 }: {
   state: StoryState;
   onClose: () => void;
   /** Open directly on this section (compact widths open its detail); the list is the default. */
   initialSection?: Section;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
+  onOpenHelper: () => void;
 }) {
   const startSection =
     initialSection === 'models' || initialSection === 'runtime'
@@ -327,7 +329,6 @@ export function ChatSettingsPanel({
             )}
             {detail?.profile && library && (
               <ProfileEditor
-                ownerBotId={detail.chat.botId}
                 profile={detail.profile}
                 library={library}
                 activeTab={profileTab}
@@ -409,7 +410,7 @@ export function ChatSettingsPanel({
                         profileRevision={detail.profile?.revision}
                         refreshKey={detail.reader.cursor}
                         active={active === 'guide' && showingDetail}
-                        nextRequest={state.pendingRequest ?? state.draft}
+                        onOpenHelper={() => requestClose(onOpenHelper)}
                         onChanged={() => {
                           void state.refresh(state.selected);
                         }}

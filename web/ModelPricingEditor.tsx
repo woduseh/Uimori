@@ -44,7 +44,7 @@ function PricingSummary({
       </p>
       <small>
         {snapshot.source === 'manual' && context === 'current'
-          ? '직접 입력한 참고 단가'
+          ? `직접 입력한 참고 단가 · 기준일: ${snapshot.checkedAt.slice(0, 10)}`
           : `${snapshot.source === 'manual' ? '요금 고정일' : '확인일'}: ${snapshot.checkedAt.slice(0, 10)}`}
         {snapshot.sourceUrl && (
           <>
@@ -166,12 +166,46 @@ export function ModelPricingEditor({
             : value.serviceTier || undefined) as ModelPreset['serviceTier'],
           cacheTtl: (value.cacheTtl || undefined) as ModelPreset['cacheTtl'],
           pricing,
+          executionMode: value.executionMode,
         },
         connection
       );
   } catch {
-    error = '요금은 0 이상의 유한한 숫자로 입력해 주세요. 확인되지 않은 요금은 비워 두세요.';
+    error =
+      '요금은 0 이상, 장문 기준은 양의 정수로 입력해 주세요. 출처는 HTTPS 주소와 유효한 확인일을 사용해요.';
   }
+  const longInput = (
+    key: 'longContext' | 'flexLongContext' | 'batchLongContext',
+    label: string
+  ) => (
+    <details
+      className="model-pricing-optional"
+      open={draft[key].aboveInputTokens !== '' || undefined}
+    >
+      <summary>{label} 장문 요금</summary>
+      <label>
+        적용 기준 입력 토큰 초과
+        <input
+          type="number"
+          min={1}
+          step={1}
+          aria-label={label + ' 장문 요금 기준 입력 토큰'}
+          value={draft[key].aboveInputTokens}
+          placeholder="사용하지 않음"
+          onChange={(event) =>
+            onChange({ ...draft, [key]: { ...draft[key], aboveInputTokens: event.target.value } })
+          }
+        />
+      </label>
+      {draft[key].aboveInputTokens !== '' && (
+        <RateInputs
+          label={label + ' 장문'}
+          rates={draft[key].rates}
+          onChange={(rates) => onChange({ ...draft, [key]: { ...draft[key], rates } })}
+        />
+      )}
+    </details>
+  );
   return (
     <details className="model-pricing full" data-testid="model-pricing-editor">
       <summary>요금과 추정 비용</summary>
@@ -180,7 +214,10 @@ export function ModelPricingEditor({
           호출 후 프로바이더가 보고한 토큰에 이 요금을 적용해 추정 비용을 계산해요. 단위는 USD /
           100만 토큰이에요.
         </p>
-        <p className="muted">참고용 추정 금액이며 실제 청구액과 다를 수 있어요.</p>
+        <p className="muted">
+          참고용 추정 금액이며 실제 청구액과 다를 수 있어요. 내장 요금표는 제공하지 않으며, 연결한
+          프로바이더의 모델 목록에 요금이 없으면 직접 입력해요.
+        </p>
         <label>
           요금 기준
           <select
@@ -190,7 +227,7 @@ export function ModelPricingEditor({
               onChange({ ...draft, mode: event.target.value as 'official' | 'manual' })
             }
           >
-            <option value="official">공식 요금 사용</option>
+            <option value="official">모델 목록 요금 사용</option>
             <option value="manual">요금 직접 입력</option>
           </select>
         </label>
@@ -201,6 +238,7 @@ export function ModelPricingEditor({
               label="Standard"
               onChange={(rates) => onChange({ ...draft, rates })}
             />
+            {longInput('longContext', 'Standard')}
             <ToggleRow
               label="Flex 요금 직접 입력"
               description="Flex 요금은 별도로 확인해 입력해요. Standard 요금의 절반으로 가정하지 않아요."
@@ -214,9 +252,47 @@ export function ModelPricingEditor({
                 onChange={(flexRates) => onChange({ ...draft, flexRates })}
               />
             )}
+            {draft.flexEnabled && longInput('flexLongContext', 'Flex')}
+            {connection?.protocol === 'anthropic-messages-v1' && (
+              <>
+                <ToggleRow
+                  label="Batch 요금 직접 입력"
+                  description="Batch 요금은 별도로 확인해 입력해요."
+                  checked={draft.batchEnabled}
+                  onChange={(batchEnabled) => onChange({ ...draft, batchEnabled })}
+                />
+                {draft.batchEnabled && (
+                  <>
+                    <RateInputs
+                      label="Batch"
+                      rates={draft.batchRates}
+                      onChange={(batchRates) => onChange({ ...draft, batchRates })}
+                    />
+                    {longInput('batchLongContext', 'Batch')}
+                  </>
+                )}
+              </>
+            )}
+            <label>
+              요금 출처 URL
+              <input
+                type="url"
+                value={draft.sourceUrl}
+                placeholder="https://"
+                onChange={(event) => onChange({ ...draft, sourceUrl: event.target.value })}
+              />
+            </label>
+            <label>
+              요금 확인일
+              <input
+                type="date"
+                value={draft.checkedAt.slice(0, 10)}
+                onChange={(event) => onChange({ ...draft, checkedAt: event.target.value })}
+              />
+            </label>
             <small>빈칸은 미확인이에요. 무료인 항목만 0을 입력하세요.</small>
             <button type="button" className="secondary" onClick={() => onChange(pricingDraft())}>
-              공식 요금으로 복원
+              모델 목록 요금으로 복원
             </button>
           </>
         )}

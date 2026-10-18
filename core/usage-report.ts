@@ -20,7 +20,7 @@ export const USAGE_KIND_LABELS: Record<UsageKind, string> = {
   writing: '본문 작성',
   translation: '번역',
   'input-translation': '입력 번역',
-  'story-guide': '이야기 가이드',
+  'story-guide': '원작·인물 참고',
   summary: '컨텍스트 요약',
   advisor: '협업 조언',
   helper: '도우미',

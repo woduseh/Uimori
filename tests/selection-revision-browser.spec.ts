@@ -112,7 +112,10 @@ for (const width of [360, 1440]) {
       await route.fulfill({ json: { text: proposal } });
     });
     await page.goto(`/?chat=${before.chat.id}`);
-    const navigation = page.getByRole('navigation', { name: '장면 탐색', exact: true });
+    const navigation =
+      width > 760
+        ? page.getByRole('navigation', { name: '장면 탐색', exact: true })
+        : page.getByRole('button', { name: '장면 목록 열기', exact: true });
     await expect(navigation).toBeVisible();
     const scene = page.locator(`[data-source-id="${source.id}"][data-testid="source"]`);
     await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
@@ -132,7 +135,9 @@ for (const width of [360, 1440]) {
     expect((await detail(request, before.chat.id)).sources[0].text).toBe(original);
     await expectReachable(cancel);
     await expectReachable(save);
-    await expect(navigation).toBeVisible({ visible: width > 760 });
+    await expect(navigation).toBeVisible();
+    if (width <= 760)
+      await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toBeHidden();
     await page.screenshot({ path: info.outputPath(`selected-revision-${width}.png`) });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
@@ -158,7 +163,9 @@ for (const width of [360, 1440]) {
     expect(after.runs).toEqual(before.runs);
     await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
     await field.fill('저장하지 않을 수정');
-    await expect(navigation).toBeVisible({ visible: width > 760 });
+    await expect(navigation).toBeVisible();
+    if (width <= 760)
+      await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toBeHidden();
     await expectReachable(cancel);
     await cancel.click();
     await expect(field).toHaveCount(0);

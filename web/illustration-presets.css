@@ -204,3 +204,12 @@
   overflow-wrap: anywhere;
   font: inherit;
 }
+
+.illustration-current-summary {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+.illustration-preset-settings > .illustration-preset-disclosure > :not(summary) {
+  margin-top: 16px;
+}

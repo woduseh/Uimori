@@ -1417,6 +1417,7 @@ function ContentEditor({
                 <>
                   <RisuExportButton
                     kind="content"
+                    linkedModules={!!selected.package?.modules?.length}
                     format={
                       selected.kind === 'module' &&
                       !Object.keys(selected.package?.nativeRisu.card ?? {}).length
@@ -1459,7 +1460,6 @@ function ContentEditor({
         >
           <fieldset className="editor-fields full" disabled={editorUnavailable}>
             <RisuNativeFields
-              kind={value.kind}
               value={value.package}
               onChange={(pkg) =>
                 setValue((current) => ({ ...current, title: pkg.title, package: pkg }))

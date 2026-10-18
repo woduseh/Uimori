@@ -238,7 +238,7 @@ test('PERSONAL chat backup rejects malformed previews then imports independent c
   await page.goto('/');
   await navigationAction(page, '설정');
   await page.getByRole('tab', { name: '데이터 관리', exact: true }).click();
-  const input = page.getByLabel('채팅 백업 파일 선택', { exact: true });
+  const input = page.getByLabel('백업 파일 선택', { exact: true });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   for (const invalid of [
@@ -466,12 +466,14 @@ test('PERSONAL binary resource backup downloads and imports through the archive 
   await page.getByRole('button', { name: '서재 목록', exact: true }).click();
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '데이터 관리');
-  await page.getByLabel('Uimori 자료 백업 파일', { exact: true }).setInputFiles({
+  await page.getByLabel('백업 파일 선택', { exact: true }).setInputFiles({
     name: 'resource.uimori',
     mimeType: 'application/zip',
     buffer: await (await import('node:fs/promises')).readFile(path!),
   });
-  await expect(page.getByText('1개 자료 · 0개 프리셋 · 0개 이미지', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('자료 백업 · 1개 자료 · 0개 프리셋 · 0개 이미지', { exact: true })
+  ).toBeVisible();
   const applied = page.waitForResponse((response) =>
     response.url().endsWith('/api/native-transfers/apply-archive')
   );
@@ -582,8 +584,8 @@ for (const width of [412, 1440]) {
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '데이터 관리');
-    const importer = page.getByRole('region', { name: '자료 가져오기', exact: true });
-    const file = importer.getByLabel('Uimori 자료 백업 파일', { exact: true });
+    const importer = page.getByRole('region', { name: '백업 파일 가져오기', exact: true });
+    const file = importer.getByLabel('백업 파일 선택', { exact: true });
     await file.setInputFiles({
       name: 'audit2-resource.uimori',
       mimeType: 'application/zip',

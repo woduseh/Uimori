@@ -511,7 +511,8 @@ describe('hierarchical composition', () => {
     expect(store.outline.node(episode.id).intent).toBe(intent);
     const key = randomUUID();
     const generated = store.outline.sceneCommand(episode.id, { idempotencyKey: key });
-    expect(generated.request).toBe(`회차 집필 요청: ${episode.title}\n${intent}`);
+    expect(generated.request).toBe('선택한 구성에 따라 이 단위를 집필해 주세요.');
+    expect(generated.request).not.toContain(intent);
     expect(
       store.outline.sceneCommand(episode.id, { idempotencyKey: key, request: generated.request })
     ).toEqual(generated);
@@ -523,6 +524,53 @@ describe('hierarchical composition', () => {
     expect(store.outline.sceneCommand(next.id, explicit)).toEqual(command);
     expect(store.detail(chat.id).runs).toEqual([]);
     expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  test('additional instructions stay separate from the plan and both freeze for admitted writing', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, '구성과 추가 지시');
+    compose(store, chat.id);
+    const episode = find(store, chat.id, '1화 잠긴 문');
+    const preview = store.outline.preview(episode.id);
+    const input = {
+      idempotencyKey: randomUUID(),
+      additionalInstruction: '대화 위주로 쓰고 문을 열기 전에 멈춰 주세요.',
+      expectedRevision: preview.expectedRevision,
+      expectedPlanHash: preview.planHash,
+    };
+    const command = store.outline.sceneCommand(episode.id, input);
+    expect(command.request).toBe(input.additionalInstruction);
+    expect(command.request).not.toContain(episode.intent);
+    const { run } = write(store, chat.id, command.id, '문 앞의 대화.');
+    expect(run.snapshot.request).toBe(command.request);
+    expect(run.snapshot.outline?.path.at(-1)?.intent).toBe(episode.intent);
+    expect(store.outline.sceneCommand(episode.id, input).id).toBe(command.id);
+    expect(
+      failure(() =>
+        store.outline.sceneCommand(episode.id, {
+          ...input,
+          additionalInstruction: '다른 지시',
+        })
+      ).statusCode
+    ).toBe(409);
+    const latest = store.outline.node(episode.id);
+    store.outline.apply(
+      chat.id,
+      {
+        idempotencyKey: randomUUID(),
+        operations: [
+          {
+            op: 'update',
+            id: episode.id,
+            expectedRevision: latest.revision,
+            intent: '접수 뒤 새 계획',
+          },
+        ],
+      },
+      'user'
+    );
+    expect(run.snapshot.outline?.path.at(-1)?.intent).toBe(episode.intent);
+    expect(run.snapshot.request).toBe(command.request);
   });
 
   test('a scene-command key cannot bind an identically named second unit', async () => {
@@ -552,7 +600,7 @@ describe('hierarchical composition', () => {
       failure(() => store.outline.sceneCommand(second, { idempotencyKey: key })).statusCode
     ).toBe(409);
     expect(store.outline.node(second).progress.state).toBe('planned');
-    expect(store.story.detail(chat.id).commands).toHaveLength(1);
+    expect(store.story.commands(chat.id)).toHaveLength(1);
   });
 
   test.each([
@@ -752,7 +800,7 @@ describe('hierarchical composition', () => {
     });
   });
 
-  test('large detail reads preserve source and review projections without queries per node', async () => {
+  test('large detail reads preserve source projections and archive bytes without exposing retired reviews', async () => {
     const { HelperWorkspace } = await import('../server/helper-workspace.js');
     const store = await database();
     const chat = createFixtureChat(store, '구성 일괄 조회');
@@ -814,6 +862,9 @@ describe('hierarchical composition', () => {
     };
     for (const node of initial) review(node.id);
     const latestTask = review(episode.id, 'cancelled', true);
+    const archivedReview = store.db
+      .prepare('SELECT * FROM outline_reviews WHERE task_id=?')
+      .get(latestTask);
     const prepare = vi.spyOn(store.db, 'prepare');
     const small = store.outline.detail(chat.id);
     const smallReads = prepare.mock.calls.length;
@@ -825,13 +876,6 @@ describe('hierarchical composition', () => {
         commandId: command.id,
         runId: run.id,
         sourceRevision: source.id,
-      },
-      latestReview: {
-        taskId: latestTask,
-        status: 'cancelled',
-        partial: true,
-        stale: false,
-        sources: [{ id: source.id, hash: source.hash }],
       },
     });
     expect(small.nodes.find((node) => node.id === second.id)?.progress.state).toBe('scheduled');
@@ -857,7 +901,7 @@ describe('hierarchical composition', () => {
     expect(prepare.mock.calls.length).toBe(smallReads);
     expect(large.nodes).toHaveLength(207);
     expect(large.nodes.slice(0, 7)).toEqual(small.nodes);
-    expect(large.nodes.slice(7).every((node) => node.latestReview?.stale === false)).toBe(true);
+    expect(large.nodes.every((node) => !('latestReview' in node))).toBe(true);
     const edited = store.editSource(source.id, {
       expectedRevision: store.source(source.id).editRevision ?? 0,
       text: '문은 열려 있었다.',
@@ -867,9 +911,11 @@ describe('hierarchical composition', () => {
     expect(prepare.mock.calls.length).toBe(smallReads);
     const current = changed.nodes.find((node) => node.id === episode.id)!;
     expect(current.writings?.[0].sourceHash).toBe(edited.hash);
-    expect(current.latestReview).toMatchObject({ taskId: latestTask, stale: true });
+    expect(current).not.toHaveProperty('latestReview');
     expect(store.outline.unitSources(episode.id, changed.nodes)).toHaveLength(1);
-    expect(current.latestReview).toEqual(store.outline.latestReview(episode.id));
+    expect(
+      store.db.prepare('SELECT * FROM outline_reviews WHERE task_id=?').get(latestTask)
+    ).toEqual(archivedReview);
     for (const status of ['failed', 'cancelled', 'pending']) {
       store.db
         .prepare('UPDATE scene_commands SET status=?,source_revision=NULL WHERE id=?')
@@ -887,7 +933,7 @@ describe('hierarchical composition', () => {
     compose(store, chat.id);
     const episode = find(store, chat.id, '1화 잠긴 문');
     const command = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
-    expect(command.request).toContain('1화 잠긴 문');
+    expect(command.request).toBe('선택한 구성에 따라 이 단위를 집필해 주세요.');
     expect(store.outline.node(episode.id).progress.state).toBe('scheduled');
 
     const { run, source } = write(store, chat.id, command.id, '문은 잠겨 있었다.');
@@ -899,7 +945,11 @@ describe('hierarchical composition', () => {
       'arc',
       'episode',
     ]);
-    expect(outline.path.at(-1)?.id).toBe(episode.id);
+    expect(outline.path.at(-1)).toMatchObject({
+      id: episode.id,
+      title: episode.title,
+      intent: episode.intent,
+    });
     expect(outline.children.map((item) => item.title)).toEqual(['열쇠 없는 자물쇠']);
     // Only this unit is named; sibling episodes stay out of the frozen composition.
     expect(JSON.stringify(outline)).not.toContain('2화 장부의 첫 장');
@@ -1064,8 +1114,17 @@ describe('hierarchical composition', () => {
     const first = store.outline.sceneCommand(beat.id, { idempotencyKey: randomUUID() });
     const one = write(store, chat.id, first.id, '자물쇠를 발견했다.');
     const second = store.outline.sceneCommand(beat.id, { idempotencyKey: randomUUID() });
-    expect(second.request).toContain('이어 쓰기');
+    expect(second.request).toBe('선택한 구성에 따라 이 단위를 집필해 주세요.');
     const two = write(store, chat.id, second.id, '문 뒤에서 작은 소리가 났다.');
+    expect(two.run.snapshot.outline?.path.at(-1)?.id).toBe(beat.id);
+    expect(two.run.snapshot.outline?.sources).toEqual([
+      {
+        nodeId: beat.id,
+        sourceRevision: one.source.id,
+        sourceHash: one.source.hash,
+        createdAt: expect.any(String),
+      },
+    ]);
     expect(store.outline.node(beat.id).writings?.map((source) => source.sourceRevision)).toEqual([
       one.source.id,
       two.source.id,
@@ -1096,7 +1155,7 @@ describe('hierarchical composition', () => {
     expect(store.outline.detail(chat.id).nodes.some((node) => node.id === third.id)).toBe(false);
     // The reserved command was never run, so nothing about it is history worth keeping.
     expect(failure(() => store.story.command(command.id)).statusCode).toBe(404);
-    expect(store.story.detail(chat.id).commands).toEqual([]);
+    expect(store.story.commands(chat.id)).toEqual([]);
   });
 
   test('adding detail beneath a keep-condition does not rewrite the parent', async () => {

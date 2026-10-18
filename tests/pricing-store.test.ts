@@ -161,3 +161,30 @@ test('absent usage stays unknown after cancellation and provider tier mismatch i
     notes: ['SERVICE_TIER_MISMATCH'],
   });
 });
+
+test('new explicit Batch snapshot uses entered Batch rates once while preserving provider-reported cost', () => {
+  const { store, chat, wire } = setup();
+  const request = wire();
+  request.protocol = 'anthropic-messages-v1';
+  request.executionMode = 'batch';
+  request.pricingSnapshot = {
+    ...request.pricingSnapshot!,
+    protocol: 'anthropic-messages-v1',
+    serviceTier: 'batch',
+    rates: { input: 1.5, cacheRead: 0, cacheWrite: null, output: 7 },
+  };
+  const attempt = store.product.startAttempt(chat.id, null, null, request);
+  const response = result('completed', 0.125);
+  response.usage.raw = {
+    input_tokens: 1000,
+    output_tokens: 100,
+    cache_read_input_tokens: 0,
+    cache_creation_input_tokens: 0,
+    service_tier: 'batch',
+  };
+  store.product.finishAttempt(attempt, response);
+  const saved = store.product.attempts(chat.id)[0];
+  expect(saved.estimatedCost).toMatchObject({ status: 'estimated', usd: 0.0022 });
+  expect(saved.estimatedCost?.notes).not.toContain('ANTHROPIC_BATCH_50_PERCENT');
+  expect(saved.costUsd).toBe(0.125);
+});

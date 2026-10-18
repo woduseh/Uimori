@@ -128,5 +128,13 @@ test('TGUIDE invalid incomplete row stays editable; only bot editor exposes the 
   await page.getByRole('button', { name: `${persona.title} 상세 보기`, exact: true }).click();
   await page.getByRole('button', { name: '편집', exact: true }).click();
   await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
-  await expect(page.getByRole('tab', { name: '번역 지침', exact: true })).toHaveCount(0);
+  await selectPackageSection(page, '번역 지침');
+  const personaGuide = page.getByLabel('봇 번역 지침', { exact: true });
+  await personaGuide.fill('봇으로 사용할 때만 적용할 페르소나 자료의 번역 지침');
+  await save(page);
+  const savedPersona = await (await request.get(`/api/content/${persona.id}`)).json();
+  expect(savedPersona.kind).toBe('persona');
+  expect(savedPersona.package.nativeRisu.card.extensions.uimori.translationGuide.instructions).toBe(
+    '봇으로 사용할 때만 적용할 페르소나 자료의 번역 지침'
+  );
 });

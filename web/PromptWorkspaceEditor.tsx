@@ -7,15 +7,18 @@ import { ExpandIcon, ExternalLinkIcon, SaveIcon, CloseIcon } from './ui-icons.js
 import { useCallback, useEffect, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceEditModel } from '../core/resource-editing.js';
-import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
+import {
+  combinationOwner,
+  matchesPromptCombination,
+  ownsPromptCombination,
+} from '../core/prompt-combinations.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { resolvePromptValues } from '../core/risu-prompt.js';
 import { api } from './api.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
 import { PromptControlFields } from './PromptControlFields.js';
-import { Switch } from './BooleanControls.js';
 import { ActionMenu } from './ActionMenu.js';
-import { DeleteButton } from './DeleteButton.js';
+import { PromptCombinationManager } from './PromptCombinationManager.js';
 import { Dialog } from './Dialog.js';
 import {
   ResourceEditorProvider,
@@ -127,7 +130,7 @@ export function PromptWorkspaceEditor({
       });
       await session.reloadSaved();
       setSelectedCombo('');
-      setMessage('프롬프트와 기본 옵션을 적용했어요.');
+      setMessage('기본 프롬프트를 선택했어요.');
     } catch (caught) {
       setApplyError((caught as Error).message);
       await session.refresh().catch(() => {});
@@ -153,8 +156,12 @@ export function PromptWorkspaceEditor({
     library.promptCombinations?.filter((item) =>
       matchesPromptCombination(item, combinationOwner(current, role), role, current.program)
     ) ?? [];
+  const ownedCombinations =
+    library.promptCombinations?.filter((item) =>
+      ownsPromptCombination(item, combinationOwner(current, role), role)
+    ) ?? [];
   const defaultValues = resolvePromptValues(current.program, current.defaultValues ?? {});
-  const values = resolvePromptValues(current.program, current.values);
+  const values = resolvePromptValues(current.program, { ...defaultValues, ...current.values });
   const selected = combinations.find((item) => item.id === selectedCombo);
   const equalValues = (other: typeof values) =>
     Object.keys(values).every((key) => JSON.stringify(values[key]) === JSON.stringify(other[key]));
@@ -168,7 +175,10 @@ export function PromptWorkspaceEditor({
   return (
     <ResourceEditorProvider value={shared}>
       <section aria-label="현재 프롬프트 설정" className="prompt-editor prompt-current-settings">
-        <p className="muted">변경사항은 자동 저장하며 모든 채팅의 다음 요청부터 사용해요.</p>
+        <p className="muted">
+          선택한 프리셋의 최신 저장본을 사용해요. 기본 옵션 변경은 모든 채팅의 다음 요청부터
+          적용해요.
+        </p>
         {showRecovery && <ResourceEditorActions value={shared} hideSyncError />}
         <div className="prompt-editor-fields">
           <section className="settings-group">
@@ -212,16 +222,6 @@ export function PromptWorkspaceEditor({
                 </select>
               </label>
               <div className="prompt-current-links">
-                {preset && (
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={busy || dirty || conflict}
-                    onClick={() => void applyPreset(preset.id)}
-                  >
-                    최신 저장본 적용
-                  </button>
-                )}
                 {onEditPrompt && (
                   <button
                     type="button"
@@ -247,7 +247,7 @@ export function PromptWorkspaceEditor({
                     : selected?.title}
               </small>
             </summary>
-            {promptControls(current.program).length || combinations.length ? (
+            {promptControls(current.program).length || ownedCombinations.length ? (
               <div className="settings-group-body prompt-current-options">
                 <div className="prompt-combination-toolbar">
                   <label>
@@ -267,8 +267,9 @@ export function PromptWorkspaceEditor({
                             ...draft[role],
                             values:
                               id === 'default'
-                                ? defaultValues
+                                ? {}
                                 : resolvePromptValues(current.program, item!.values),
+                            optionValues: id === 'default' ? {} : item!.values,
                           },
                         }));
                       }}
@@ -305,7 +306,7 @@ export function PromptWorkspaceEditor({
                 <fieldset className="prompt-editor-fields" disabled={applying || conflict}>
                   <PromptControlFields
                     program={current.program}
-                    values={current.values}
+                    values={values}
                     onChange={(id, value) => {
                       setSelectedCombo('');
                       edit((draft) => ({
@@ -313,6 +314,7 @@ export function PromptWorkspaceEditor({
                         [role]: {
                           ...draft[role],
                           values: { ...draft[role].values, [id]: value },
+                          optionValues: { ...draft[role].optionValues, [id]: value },
                         },
                       }));
                     }}
@@ -323,40 +325,6 @@ export function PromptWorkspaceEditor({
               <p className="muted">이 프롬프트에는 선택할 옵션이 없어요.</p>
             )}
           </details>
-          {role === 'main' && (
-            <div className="settings-group-body">
-              <label className="settings-row settings-row-toggle full">
-                <span className="settings-row-copy">
-                  <span>에이전트 협업</span>
-                  {!current.program.collaboration?.agents.length && (
-                    <small>프롬프트 편집에서 협업을 구성해 주세요.</small>
-                  )}
-                </span>
-                <span className="settings-row-control">
-                  <Switch
-                    aria-label="협업 사용"
-                    checked={current.program.collaboration?.enabled ?? false}
-                    disabled={!current.program.collaboration?.agents.length || busy || conflict}
-                    onChange={(event) =>
-                      edit((draft) => ({
-                        ...draft,
-                        main: {
-                          ...draft.main,
-                          program: {
-                            ...draft.main.program,
-                            collaboration: {
-                              ...draft.main.program.collaboration!,
-                              enabled: event.target.checked,
-                            },
-                          },
-                        },
-                      }))
-                    }
-                  />
-                </span>
-              </label>
-            </div>
-          )}
         </div>
         {(conflict || saveError) && (
           <NoticeBanner tone="error">
@@ -382,29 +350,15 @@ export function PromptWorkspaceEditor({
           </p>
         )}
         <TransientNotice message={busy || dirty ? '' : message} />
-        <Dialog
+        <PromptCombinationManager
           open={manageCombinations}
-          title="옵션 조합 관리"
           onClose={() => setManageCombinations(false)}
-        >
-          {combinations.length ? (
-            combinations.map((item) => (
-              <div key={item.id} className="prompt-combination-toolbar">
-                <span>{item.title}</span>
-                <DeleteButton
-                  path={`/prompt-combinations/${item.id}`}
-                  revision={item.revision}
-                  title={item.title}
-                  onDeleted={async () => {
-                    await reload?.();
-                  }}
-                />
-              </div>
-            ))
-          ) : (
-            <p>저장한 조합이 없어요.</p>
-          )}
-        </Dialog>
+          current={current}
+          role={role}
+          workspaceRevision={state.document.baseRevision ?? 0}
+          combinations={library.promptCombinations ?? []}
+          reload={reload}
+        />
         <Dialog
           open={comboOpen}
           title="옵션 조합 저장"

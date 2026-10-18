@@ -43,7 +43,6 @@ const appLabels = {
   illustrations: '삽화',
   usage: '사용량',
   data: '데이터 관리',
-  security: '접근 보안',
   about: '앱 정보·라이선스',
 };
 const chatLabels = {
@@ -301,6 +300,5 @@ export const screens = [
   appSettings('illustrations', '삽화'),
   appSettings('usage', '사용량'),
   appSettings('data', '데이터 관리'),
-  appSettings('security', '접근 보안'),
   appSettings('about', '앱 정보·라이선스'),
 ];

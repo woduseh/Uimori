@@ -393,6 +393,9 @@ test('native preset editor keeps raw CBS, toggle values, and invalid regex draft
   });
   const editor = page.getByRole('region', { name: 'Risu 프롬프트 원본 편집' });
   await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+  const options = editor.locator('.prompt-option-group').first();
+  await expect(options).not.toHaveAttribute('open');
+  await options.locator('summary').click();
   await editor.getByLabel('Mood', { exact: true }).selectOption('"1"');
   await editor.getByRole('tab', { name: '구성', exact: true }).click();
   await expect(editor.getByLabel('1번 프롬프트 본문')).toHaveValue('{{getvar::place}}');

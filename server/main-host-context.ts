@@ -30,6 +30,7 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
       facts: structured || input.pinnedSources?.length ? [] : input.facts,
       pinnedSources: structured ? [] : (input.pinnedSources ?? []),
       prefetch: input.prefetch,
+      ...(input.imagePlacement ? { imagePlacement: input.imagePlacement } : {}),
       ...(collaboration?.enabled
         ? {
             collaboration: {

@@ -167,7 +167,6 @@ export function deleteSceneCommand(store: Store, id: string, value: unknown) {
 export function chatDeletionRoutes(
   app: FastifyInstance,
   store: Store,
-  publish: (chatId: string) => void,
   onChatDeleted?: (chatId: string) => void
 ) {
   app.get<{ Params: { id: string } }>('/api/chats/:id/deletion-impact', async (request) =>
@@ -176,12 +175,6 @@ export function chatDeletionRoutes(
   app.delete<{ Params: { id: string } }>('/api/chats/:id', async (request) => {
     const result = deleteChat(store, request.params.id, request.body);
     onChatDeleted?.(request.params.id);
-    return result;
-  });
-
-  app.delete<{ Params: { id: string } }>('/api/scene-commands/:id', async (request) => {
-    const result = deleteSceneCommand(store, request.params.id, request.body ?? {});
-    publish(result.chatId);
     return result;
   });
 }

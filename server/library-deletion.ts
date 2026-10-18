@@ -3,7 +3,7 @@ import { pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, number, record } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
-import { promptWorkspace } from './prompt-workspace.js';
+import { promptWorkspace, savePromptWorkspace } from './prompt-workspace.js';
 
 export type LibraryKind =
   | 'content'
@@ -26,6 +26,14 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
     const latest = store.product.get<{ revision: number }>(kind, id);
     if (latest.revision !== expected)
       throw new HttpError(409, '항목이 변경됐어요. 새로고침한 뒤 다시 삭제해 주세요.');
+    if (kind === 'prompt-preset') {
+      const workspace = promptWorkspace(store);
+      if (workspace.main.presetId === id || workspace.translation.presetId === id)
+        throw new HttpError(
+          409,
+          '기본 프롬프트로 사용 중이에요. 다른 프롬프트를 선택한 뒤 삭제해 주세요.'
+        );
+    }
     if (kind === 'connection') {
       // Revoke future sends, including workers holding an earlier frozen connection.
       // Credentials and already transmitted provider work are not deleted or replayed.
@@ -55,19 +63,34 @@ export function deleteLibraryItem(store: Store, kind: LibraryKind, id: string, v
         }
       }
       const collaboration = workspace.main.program.collaboration;
+      let collaborationChanged = false;
       for (const agent of collaboration?.agents ?? []) {
         if (agent.model && store.product.isHidden('model', agent.model.id)) {
           agent.model = null;
           // Deleting a selected advisor must not silently send its instructions to another model.
           collaboration!.enabled = false;
           changed = true;
+          collaborationChanged = true;
         }
       }
       if (changed) {
+        if (collaborationChanged) {
+          const current = workspace.main;
+          const preset = store.product.promptPreset(
+            {
+              title: current.title,
+              role: 'main',
+              program: current.program,
+              values: current.defaultValues,
+              expectedRevision: current.presetRevision,
+            },
+            current.presetId,
+            true
+          );
+          current.presetRevision = preset.revision;
+        }
         workspace.revision++;
-        store.db
-          .prepare('UPDATE prompt_workspace SET body=? WHERE id=1')
-          .run(JSON.stringify(workspace));
+        savePromptWorkspace(store, workspace);
         for (const chat of store.chats()) store.event(chat.id, 'prompt-workspace.updated', chat.id);
       }
     }

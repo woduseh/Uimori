@@ -9,6 +9,7 @@ import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import {
   emptyModelRoutes,
+  initializePromptWorkspaceReferences,
   modelWorkspace,
   promptWorkspace,
   updateModelWorkspace,
@@ -261,8 +262,14 @@ test('reading an explicit null global routes object rejects corruption without m
     prior = promptWorkspace(store);
   const body = JSON.stringify({ ...prior, modelRoutes: null });
   store.db.prepare('UPDATE prompt_workspace SET body=? WHERE id=1').run(body);
+  const changes = store.db.prepare('SELECT total_changes() AS n').get();
+  const presets = store.product.all('prompt-preset');
   expect(() => modelWorkspace(store)).toThrow('Expected an object');
   expect(store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get()?.body).toBe(body);
+  expect(() => initializePromptWorkspaceReferences(store)).toThrow('Expected an object');
+  expect(store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1').get()?.body).toBe(body);
+  expect(store.product.all('prompt-preset')).toEqual(presets);
+  expect(store.db.prepare('SELECT total_changes() AS n').get()).toEqual(changes);
 });
 
 function pin(store: Store, chatId: string, pinned: unknown, expectedRevision?: number) {

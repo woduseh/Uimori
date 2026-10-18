@@ -421,3 +421,10 @@
     padding: 12px;
   }
 }
+
+.theme-advanced > summary {
+  padding-block: 12px;
+}
+.theme-advanced > :not(summary) {
+  margin-top: 16px;
+}

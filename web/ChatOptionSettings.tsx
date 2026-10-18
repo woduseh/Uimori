@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatOptionState } from '../core/chat-options.js';
 import { api, ApiError } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
+import { PromptOptionGroup } from './PromptOptionGroup.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { reviewChatOptionDraft } from './chat-option-review.js';
 
@@ -502,6 +503,7 @@ function SelectiveValues({
               program={program}
               definitions={definitions}
               controlIds={[control.id]}
+              compact
               values={{ [control.id]: current }}
               onChange={(id, value) => onChange({ ...values, [id]: value })}
             />
@@ -539,15 +541,21 @@ function SelectiveValues({
       {[...groups].map(([group, items]) => {
         const scoped = items.filter((control) => Object.hasOwn(values, control.id)).length;
         return (
-          <details key={group} open className="chat-option-group">
-            <summary>
-              <span className="chat-option-group-name">{group}</span>
-              <span className="chat-option-group-count">
-                {scoped > 0 ? `${scoped}개 지정 · 전체 ${items.length}개` : `${items.length}개`}
-              </span>
-            </summary>
+          <PromptOptionGroup
+            key={group}
+            identity={`chat:${mode}:${group}`}
+            className="chat-option-group"
+            summary={
+              <>
+                <span className="chat-option-group-name">{group}</span>
+                <span className="chat-option-group-count">
+                  {scoped > 0 ? `${scoped}개 지정 · 전체 ${items.length}개` : `${items.length}개`}
+                </span>
+              </>
+            }
+          >
             <div className="chat-option-group-body">{items.map(row)}</div>
-          </details>
+          </PromptOptionGroup>
         );
       })}
     </div>

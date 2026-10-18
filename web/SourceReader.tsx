@@ -1,4 +1,6 @@
 import type { RequestImage } from '../core/request-images.js';
+import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { imageOwnerDisplayText } from '../core/image-placement.js';
 import { themeBodyScroll, readerLocation } from './theme-body-scroll.js';
 import { BookmarkButton } from './Bookmarks.js';
 import { captureReaderLocation } from './useReadingSync.js';
@@ -12,6 +14,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -59,6 +62,7 @@ import { PackagePresentationIssues, usePackagePresentation } from './PackagePres
 import './source-edit.css';
 import { SourceVersions } from './SourceVersions.js';
 import { RequestMessage } from './RequestMessage.js';
+import { StoredRequestImages } from './RequestImages.js';
 import { SelectionRevision } from './SelectionRevision.js';
 
 type ReaderMode = 'original' | 'translation';
@@ -76,11 +80,12 @@ type ReaderProps = {
   illustrations?: Illustration[];
   illustrationsCollapsed?: boolean;
   assets: Asset[];
+  imageOwner?: boolean;
   refresh: () => Promise<void>;
   onError: (error: string) => void;
   onNativeNotice?: (messages: string[]) => void;
   onFork: (sourceId: string) => Promise<void>;
-  onRetry?: (mode?: 'replace' | 'copy') => Promise<void>;
+  onRetry?: (mode?: 'replace' | 'copy', text?: string) => Promise<boolean>;
   retryCanReplace?: boolean;
   onModelSettings?: () => void;
   retryDisabled?: boolean;
@@ -89,7 +94,6 @@ type ReaderProps = {
   requestImages?: RequestImage[];
   /** The newest scene keeps its request actions standing on narrow widths. */
   latest?: boolean;
-  onEditRequest?: (text: string) => Promise<boolean>;
   onCheckRequest?: () => Promise<boolean>;
   onAskHelper?: (sourceId: string, text: string) => void;
   contextSummary?: ReaderRun['contextSummary'];
@@ -194,6 +198,7 @@ function SourceReaderContent({
   illustrations = [],
   illustrationsCollapsed = false,
   assets,
+  imageOwner = false,
   refresh: refreshSource,
   onError,
   onNativeNotice,
@@ -206,7 +211,6 @@ function SourceReaderContent({
   request,
   requestImages,
   latest,
-  onEditRequest,
   onCheckRequest,
   onAskHelper,
   contextSummary,
@@ -465,6 +469,7 @@ function SourceReaderContent({
   const image =
     latestImageJob && matchesImageTarget(latestImageJob.imageTarget) ? latestImageJob : undefined;
   const annotations =
+    imageOwner &&
     image?.status === 'completed' &&
     image.result?.sourceRevision === source.id &&
     image.result.sourceHash === source.hash &&
@@ -472,6 +477,17 @@ function SourceReaderContent({
       ? (image.result.annotations ?? [])
       : [];
   const translationText = validTranslation?.text ?? '';
+  const displayText = (text: string) =>
+    imageOwnerDisplayText(text, { image: imageOwner, chatId: source.chatId }, assets);
+  const allowedImageUrls = useMemo(
+    () =>
+      imageOwner
+        ? []
+        : assets
+            .filter((asset) => asset.chatId === source.chatId && asset.allowedUse !== 'profile')
+            .map((asset) => asset.url),
+    [assets, imageOwner, source.chatId]
+  );
   const translationBlocks = displayTranslation?.translationLayout?.blocks ?? [];
   const displayedNative = mode === 'original' ? projected?.original : projected?.translation;
   const [nativeAnchors, setNativeAnchors] = useState<{ html?: string; anchors: string[] }>({
@@ -506,6 +522,31 @@ function SourceReaderContent({
   });
   const [illustrationDialog, setIllustrationDialog] = useState(false);
   const [retryDialog, setRetryDialog] = useState(false);
+  const [rewriteText, setRewriteText] = useState('');
+  const rewriteInput = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (retryDialog) rewriteInput.current?.focus({ preventScroll: true });
+  }, [retryDialog]);
+  const rewriteKey = `request-edit:${source.runId}`;
+  const openRewrite = () => {
+    try {
+      setRewriteText(sessionStorage.getItem(rewriteKey) ?? effectiveRequest);
+    } catch {
+      setRewriteText(effectiveRequest);
+    }
+    setRetryDialog(true);
+  };
+  const rewrite = (mode: 'replace' | 'copy') =>
+    void action('retry', async () => {
+      const accepted = onCheckRequest ? await onCheckRequest() : await onRetry?.(mode, rewriteText);
+      if (accepted === false || !mounted.current) return;
+      try {
+        sessionStorage.removeItem(rewriteKey);
+      } catch {
+        /* The accepted request remains authoritative when browser storage is unavailable. */
+      }
+      setRetryDialog(false);
+    });
   const [startPickerOpen, setStartPickerOpen] = useState(false);
   const [illustrationCount, setIllustrationCount] = useState(1);
   const illustrationRequestKey = useRef('');
@@ -572,6 +613,12 @@ function SourceReaderContent({
       await refresh();
     });
   };
+  const translationActionLabel =
+    validTranslation || (translation && activeJob(translation))
+      ? '번역 보기'
+      : translation
+        ? '번역 다시 시도'
+        : '번역 생성';
   const inline = (anchor: string) =>
     annotations
       .filter((annotation) => annotation.blockAnchor === anchor)
@@ -609,12 +656,12 @@ function SourceReaderContent({
     <div className="segmented compact" role="group" aria-label="원문과 번역 보기">
       <button
         type="button"
-        aria-label="번역 보기"
+        aria-label={translationActionLabel}
         aria-pressed={mode === 'translation'}
         disabled={pending === 'translation'}
         onClick={viewTranslation}
       >
-        {showToggle ? '번역' : '번역 보기'}
+        {translationActionLabel}
       </button>
       {showToggle && (
         <button
@@ -693,9 +740,13 @@ function SourceReaderContent({
               onToggleRequest={async () => {
                 await saveSceneContext({ requestEnabled: !requestEnabled });
               }}
+              sceneEnabled={sceneEnabled}
+              onToggleScene={async () => {
+                await saveSceneContext({ sceneEnabled: !sceneEnabled });
+              }}
               compactActions={latest ? 'always' : 'tap'}
-              onSubmit={onEditRequest}
-              onConfirm={onCheckRequest}
+              onRewrite={onRetry || onCheckRequest ? openRewrite : undefined}
+              rewriteDisabled={retryDisabled && !onCheckRequest}
               disabled={retryDisabled}
               onEditingChange={onRequestEditing}
             />
@@ -773,7 +824,10 @@ function SourceReaderContent({
                   className="source-block"
                   data-block-anchor={blocks.map((block) => block.anchor).join(' ')}
                 >
-                  <Prose text={projected.original.text} />
+                  <Prose
+                    text={displayText(projected.original.text)}
+                    allowedImageUrls={allowedImageUrls}
+                  />
                 </div>
                 {annotations.length > 0 && (
                   <p className="muted" role="status">
@@ -784,7 +838,10 @@ function SourceReaderContent({
             ) : mode === 'translation' && validTranslation && projected?.translation?.changed ? (
               <div className="prose translated" data-testid="translation-text">
                 <div className="source-block">
-                  <Prose text={projected.translation.text} />
+                  <Prose
+                    text={displayText(projected.translation.text)}
+                    allowedImageUrls={allowedImageUrls}
+                  />
                 </div>
                 {annotations.length > 0 && (
                   <p className="muted" role="status">
@@ -794,7 +851,7 @@ function SourceReaderContent({
               </div>
             ) : mode === 'original' ? (
               <div className="prose" data-testid="source-text">
-                {source.text.slice(0, blocks[0].start)}
+                {displayText(source.text.slice(0, blocks[0].start))}
                 {blocks.map((block, position) => (
                   <Fragment key={block.anchor}>
                     <div
@@ -803,9 +860,12 @@ function SourceReaderContent({
                       id={`block-${source.id}-${block.anchor}`}
                     >
                       <Prose
-                        text={source.text.slice(
-                          block.start,
-                          blocks[position + 1]?.start ?? source.text.length
+                        allowedImageUrls={allowedImageUrls}
+                        text={displayText(
+                          source.text.slice(
+                            block.start,
+                            blocks[position + 1]?.start ?? source.text.length
+                          )
                         )}
                       />
                     </div>
@@ -818,18 +878,19 @@ function SourceReaderContent({
               <div className="prose translated" data-testid="translation-text">
                 {translationBlocks.length ? (
                   <>
-                    {translationText.slice(0, translationBlocks[0].start)}
+                    {displayText(translationText.slice(0, translationBlocks[0].start))}
                     {translationBlocks.map((block, position) => (
                       <Fragment key={block.anchor}>
                         <div className="source-block" data-block-anchor={block.anchor}>
                           <Prose
-                            text={
+                            allowedImageUrls={allowedImageUrls}
+                            text={displayText(
                               block.text +
-                              translationText.slice(
-                                block.end,
-                                translationBlocks[position + 1]?.start ?? translationText.length
-                              )
-                            }
+                                translationText.slice(
+                                  block.end,
+                                  translationBlocks[position + 1]?.start ?? translationText.length
+                                )
+                            )}
                           />
                         </div>
                         {inline(block.anchor)}
@@ -839,7 +900,10 @@ function SourceReaderContent({
                   </>
                 ) : (
                   <div className="source-block">
-                    <Prose text={translationText} />
+                    <Prose
+                      text={displayText(translationText)}
+                      allowedImageUrls={allowedImageUrls}
+                    />
                   </div>
                 )}
               </div>
@@ -862,16 +926,6 @@ function SourceReaderContent({
                   </p>
                 )}
                 <div className="form-actions">
-                  {translation && retryable(translation.status) && (
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!!editor || !!pending || retryDisabled}
-                      onClick={viewTranslation}
-                    >
-                      번역 다시 시도
-                    </button>
-                  )}
                   <button
                     type="button"
                     className="secondary"
@@ -972,23 +1026,25 @@ function SourceReaderContent({
                 시작문 바꾸기
               </button>
             )}
-            <button
-              type="button"
-              className="secondary"
-              disabled={!!editor || !!pending || retryDisabled}
-              onClick={() =>
-                void action('scene-context', async () => {
-                  await saveSceneContext({ sceneEnabled: !sceneEnabled });
-                })
-              }
-            >
-              {sceneEnabled ? (
-                <EyeOff size={18} aria-hidden="true" />
-              ) : (
-                <Eye size={18} aria-hidden="true" />
-              )}
-              {sceneEnabled ? '장면을 문맥에서 제외' : '장면을 문맥에 포함'}
-            </button>
+            {(packageStart?.mode === 'authored' || (!request && !requestImages?.length)) && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={!!editor || !!pending || retryDisabled}
+                onClick={() =>
+                  void action('scene-context', async () => {
+                    await saveSceneContext({ sceneEnabled: !sceneEnabled });
+                  })
+                }
+              >
+                {sceneEnabled ? (
+                  <EyeOff size={18} aria-hidden="true" />
+                ) : (
+                  <Eye size={18} aria-hidden="true" />
+                )}
+                {sceneEnabled ? '장면을 문맥에서 제외' : '장면을 문맥에 포함'}
+              </button>
+            )}
             {onAskHelper && (
               <button
                 type="button"
@@ -1002,18 +1058,17 @@ function SourceReaderContent({
                 도우미에게 물어보기
               </button>
             )}
-            {onRetry && (
+            {(onRetry || onCheckRequest) && (
               <button
                 type="button"
                 className="secondary"
-                disabled={!!editor || !!pending || retryDisabled}
+                disabled={!!editor || !!pending || (retryDisabled && !onCheckRequest)}
                 onClick={() => {
-                  if (retryCanReplace) setRetryDialog(true);
-                  else void action('retry', () => onRetry('copy'));
+                  openRewrite();
                 }}
               >
                 <RefreshIcon size={18} aria-hidden="true" />
-                현재 설정으로 다시 요청
+                다시 쓰기
               </button>
             )}
             {canRetranslate && (
@@ -1047,34 +1102,36 @@ function SourceReaderContent({
               <EditIcon size={18} aria-hidden="true" />
               {editorLabel(otherEditor)}
             </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!!editor || !!pending || !imageTarget || (!!image && activeJob(image))}
-              onClick={() =>
-                void action('images', async () => {
-                  await api(`/sources/${source.id}/images`, {
-                    target: mode,
-                    expectedSourceHash: source.hash,
-                    expectedRevision: latestImageJob?.revision ?? 0,
-                    ...(imageTarget?.mode === 'translation'
-                      ? {
-                          expectedTranslationJobId: imageTarget.translationJobId,
-                          expectedTranslationRevision: imageTarget.translationRevision,
-                        }
-                      : {}),
-                  });
-                  await refresh();
-                })
-              }
-            >
-              <ImagesIcon size={18} aria-hidden="true" />
-              {pending === 'images' || (image && activeJob(image))
-                ? '이미지를 배치하는 중…'
-                : image?.status === 'completed'
-                  ? '이미지 다시 배치'
-                  : '이미지 자동 배치'}
-            </button>
+            {imageOwner && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={!!editor || !!pending || !imageTarget || (!!image && activeJob(image))}
+                onClick={() =>
+                  void action('images', async () => {
+                    await api(`/sources/${source.id}/images`, {
+                      target: mode,
+                      expectedSourceHash: source.hash,
+                      expectedRevision: latestImageJob?.revision ?? 0,
+                      ...(imageTarget?.mode === 'translation'
+                        ? {
+                            expectedTranslationJobId: imageTarget.translationJobId,
+                            expectedTranslationRevision: imageTarget.translationRevision,
+                          }
+                        : {}),
+                    });
+                    await refresh();
+                  })
+                }
+              >
+                <ImagesIcon size={18} aria-hidden="true" />
+                {pending === 'images' || (image && activeJob(image))
+                  ? '이미지를 배치하는 중…'
+                  : image?.status === 'completed'
+                    ? '이미지 다시 배치'
+                    : '이미지 자동 배치'}
+              </button>
+            )}
             <button
               type="button"
               className="secondary"
@@ -1139,42 +1196,83 @@ function SourceReaderContent({
           )}
           <Dialog
             open={retryDialog}
-            onClose={() => setRetryDialog(false)}
-            title="현재 설정으로 다시 요청"
+            onClose={() => {
+              if (!pending) setRetryDialog(false);
+            }}
+            title="다시 쓰기"
             className="source-retry-dialog"
           >
-            <p>새 응답을 어디에 남길까요?</p>
+            <StoredRequestImages images={requestImages} />
+            <label>
+              생성에 사용할 요청
+              <textarea
+                ref={rewriteInput}
+                aria-label="다시 쓸 요청"
+                rows={6}
+                maxLength={REQUEST_TEXT_MAX_CHARS}
+                value={rewriteText}
+                disabled={!!pending || !!onCheckRequest}
+                onChange={(event) => {
+                  setRewriteText(event.target.value);
+                  try {
+                    sessionStorage.setItem(rewriteKey, event.target.value);
+                  } catch {
+                    /* Keep the in-memory draft. */
+                  }
+                }}
+              />
+            </label>
+            <p>위 문구를 현재 설정으로 보내요. 문맥용 요청 저장과는 별개예요.</p>
             <p className="muted">
               기존 응답 교체는 새 생성이 성공했을 때만 적용해요. 실패하거나 취소하면 기존 응답을
               유지해요.
             </p>
             <div className="form-actions">
-              <button type="button" className="secondary" onClick={() => setRetryDialog(false)}>
-                취소
-              </button>
               <button
                 type="button"
                 className="secondary"
-                disabled={!!pending || retryDisabled}
-                onClick={() => {
-                  setRetryDialog(false);
-                  void action('retry', () => onRetry?.('copy') ?? Promise.resolve());
-                }}
+                disabled={!!pending}
+                onClick={() => setRetryDialog(false)}
               >
-                <GitFork size={18} aria-hidden="true" />새 채팅에서 다시 요청
+                닫기
               </button>
-              <button
-                type="button"
-                disabled={!!pending || retryDisabled || !retryCanReplace}
-                onClick={() => {
-                  setRetryDialog(false);
-                  void action('retry', () => onRetry?.('replace') ?? Promise.resolve());
-                }}
-              >
-                <RefreshIcon size={18} aria-hidden="true" />
-                기존 응답 교체
-              </button>
+              {onCheckRequest ? (
+                <button type="button" disabled={!!pending} onClick={() => rewrite('copy')}>
+                  이전 요청 확인
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={
+                      !!pending || retryDisabled || (!rewriteText.trim() && !requestImages?.length)
+                    }
+                    onClick={() => rewrite('copy')}
+                  >
+                    <GitFork size={18} aria-hidden="true" />새 채팅에서 다시 요청
+                  </button>
+                  <button
+                    type="button"
+                    disabled={
+                      !!pending ||
+                      retryDisabled ||
+                      !retryCanReplace ||
+                      (!rewriteText.trim() && !requestImages?.length)
+                    }
+                    onClick={() => rewrite('replace')}
+                  >
+                    <RefreshIcon size={18} aria-hidden="true" />
+                    기존 응답 교체
+                  </button>
+                </>
+              )}
             </div>
+            {actionError && (
+              <p className="error" role="alert">
+                {actionError}
+              </p>
+            )}
           </Dialog>
           <Dialog
             open={illustrationDialog}

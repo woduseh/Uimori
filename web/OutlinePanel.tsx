@@ -60,7 +60,12 @@ type Pending =
       nodeId: string;
       commandKey: string;
       commandId?: string;
-      commandRequest: { request: string; expectedRevision: number; expectedPlanHash: string };
+      commandRequest: {
+        request?: string;
+        additionalInstruction?: string;
+        expectedRevision: number;
+        expectedPlanHash: string;
+      };
       body: {
         expectedRevision: string | null;
         expectedSettingsRevision: number;
@@ -124,6 +129,7 @@ export function OutlinePanel({
   const [brief, setBrief] = useState<Brief | null>(null);
   const [writing, setWriting] = useState(false);
   const [requestText, setRequestText] = useState('');
+  const [previousRequest, setPreviousRequest] = useState('');
   const [previewing, setPreviewing] = useState(false);
   const mounted = useRef(true),
     sending = useRef(false),
@@ -291,7 +297,7 @@ export function OutlinePanel({
       }
       if (!remember(null, operation.body.idempotencyKey)) return;
       if (operation.kind === 'write' && mounted.current) {
-        retain(`${prefix}:request:${operation.nodeId}`, null);
+        retain(`${prefix}:additional-instruction:${operation.nodeId}`, null);
         await state.refresh(chatId);
         if (mounted.current) onClose();
       }
@@ -330,20 +336,20 @@ export function OutlinePanel({
       setWriting(!previewOnly);
       setEditing(false);
       setAdding(false);
-      const defaultRequest = `${OUTLINE_LEVEL_LABELS[selected.level]} ${next.outline.sources?.length ? '이어 쓰기' : '집필'}: ${selected.title}\n${selected.intent}`;
-      setRequestText(stored(`${prefix}:request:${selected.id}`, defaultRequest));
+      setRequestText(stored(`${prefix}:additional-instruction:${selected.id}`, ''));
+      setPreviousRequest(stored(`${prefix}:request:${selected.id}`, ''));
     } catch (cause) {
       if (mounted.current) setError((cause as Error).message);
     }
   }
   function writeUnit() {
-    if (!selected || !brief || !state.detail || disabled || !requestText.trim()) return;
+    if (!selected || !brief || !state.detail || disabled) return;
     void send({
       kind: 'write',
       nodeId: selected.id,
       commandKey: crypto.randomUUID(),
       commandRequest: {
-        request: requestText,
+        additionalInstruction: requestText,
         expectedRevision: brief.expectedRevision,
         expectedPlanHash: brief.planHash,
       },
@@ -454,7 +460,6 @@ export function OutlinePanel({
         .map((source) => [source.sourceRevision, source])
     ).values(),
   ];
-  const review = selected?.latestReview;
   return (
     <section className="outline-panel" aria-label="계층형 구성">
       <header className="outline-workspace-header">
@@ -673,7 +678,7 @@ export function OutlinePanel({
                   <details className="outline-reference-picker">
                     <summary>
                       <Link2 size={15} />
-                      함께 참고할 구성 <small>{draft.relatedIds.length}</small>
+                      고급 · 함께 참고할 구성 <small>{draft.relatedIds.length}</small>
                     </summary>
                     <p>다른 회차의 준비·회수 등 관련된 계획만 연결해요.</p>
                     {nodes
@@ -886,11 +891,11 @@ export function OutlinePanel({
                     )}
                   </article>
                   {!!selected.relatedIds?.length && (
-                    <div className="outline-related-list">
-                      <span>
+                    <details className="outline-related-list">
+                      <summary>
                         <Link2 size={15} />
-                        함께 참고할 구성
-                      </span>
+                        고급 · 함께 참고할 구성
+                      </summary>
                       {selected.relatedIds.map((id) => {
                         const node = nodes.find((item) => item.id === id);
                         return node ? (
@@ -905,7 +910,7 @@ export function OutlinePanel({
                           </button>
                         ) : null;
                       })}
-                    </div>
+                    </details>
                   )}
                   {writing && brief && (
                     <form
@@ -930,18 +935,58 @@ export function OutlinePanel({
                         대상 · {selected.title}
                         {sources.length ? ' · 기존 원문 뒤에 이어 써요.' : ''}
                       </p>
+                      <section aria-label="현재 구성" className="outline-writing-plan">
+                        <h4>현재 구성 · 읽기 전용</h4>
+                        <Prose
+                          text={brief.outline.path.at(-1)?.intent || '아직 구성 내용이 없어요.'}
+                        />
+                        <p className="muted">
+                          저장된 구성과 아래 추가 지시를 집필 접수 때 함께 고정해요.
+                        </p>
+                      </section>
                       <label>
-                        추가 지시와 멈출 지점
+                        이번 추가 지시와 멈출 지점 (선택)
                         <textarea
                           rows={5}
+                          maxLength={OUTLINE_INTENT_MAX}
                           value={requestText}
                           disabled={disabled}
                           onChange={(event) => {
                             setRequestText(event.target.value);
-                            retain(`${prefix}:request:${selected.id}`, event.target.value);
+                            retain(
+                              `${prefix}:additional-instruction:${selected.id}`,
+                              event.target.value
+                            );
                           }}
                         />
                       </label>
+                      {previousRequest && (
+                        <details className="outline-reference-picker">
+                          <summary>이전 집필 요청 초안 · 읽기·복사</summary>
+                          <p>
+                            이전 초안은 그대로 보관해요. 필요한 추가 지시만 위 입력에 옮겨 주세요.
+                          </p>
+                          <label>
+                            이전 집필 요청 초안
+                            <textarea rows={5} value={previousRequest} readOnly />
+                          </label>
+                          <button
+                            type="button"
+                            className="secondary"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(previousRequest);
+                              } catch {
+                                setError(
+                                  '초안을 복사하지 못했어요. 초안 내용을 선택해 복사해 주세요.'
+                                );
+                              }
+                            }}
+                          >
+                            이전 초안 복사
+                          </button>
+                        </details>
+                      )}
                       <div className="outline-form-actions">
                         <button
                           type="button"
@@ -950,10 +995,7 @@ export function OutlinePanel({
                         >
                           입력 컨텍스트 {previewing ? '접기' : '미리보기'}
                         </button>
-                        <button
-                          type="submit"
-                          disabled={disabled || !!state.active || !requestText.trim()}
-                        >
+                        <button type="submit" disabled={disabled || !!state.active}>
                           집필 시작
                         </button>
                       </div>
@@ -1024,51 +1066,6 @@ export function OutlinePanel({
                           <ChevronRight size={16} />
                         </button>
                       ))}
-                    </section>
-                  )}
-                  {review && (
-                    <section className={`outline-review ${review.stale ? 'is-stale' : ''}`}>
-                      <div className="outline-card-heading">
-                        <h4>
-                          <ScanText size={16} />
-                          최근 원문 점검
-                        </h4>
-                        <span>
-                          {review.stale
-                            ? '이후 변경됨'
-                            : review.status === 'completed'
-                              ? '점검 의견 있음'
-                              : review.status === 'running' || review.status === 'queued'
-                                ? '점검 중'
-                                : '점검 미완료'}
-                        </span>
-                      </div>
-                      <p>
-                        {review.partial
-                          ? '처음에는 일부 구간을 제공했어요. 추가 조회 근거는 점검 대화에서 확인해요.'
-                          : '연결된 원문 전체를 참고 자료로 제공했어요.'}{' '}
-                        원문이나 계획을 자동 수정하지 않아요.
-                      </p>
-                      <small>
-                        {review.sources
-                          .map((source) => `${source.start}–${source.end} / ${source.total}자`)
-                          .join(' · ')}
-                      </small>
-                      <button
-                        type="button"
-                        className="secondary"
-                        onClick={() =>
-                          onHelp({
-                            key: crypto.randomUUID(),
-                            scope: { kind: 'chat', chatId },
-                            conversationId: review.conversationId,
-                            title: '점검 대화',
-                            text: '',
-                          })
-                        }
-                      >
-                        도우미에서 점검 의견 보기
-                      </button>
                     </section>
                   )}
                 </>

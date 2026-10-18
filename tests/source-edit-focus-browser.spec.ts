@@ -131,8 +131,23 @@ for (const [label, viewport] of [
       .toBe(true);
 
     await trigger.scrollIntoViewIfNeeded();
-    const offset = await readerOffset(trigger);
+    // Native layout and the compact latest row can settle during click actionability.
+    // Compare against the position where the user actually starts editing.
+    await trigger.evaluate((element) => {
+      element.addEventListener(
+        'pointerdown',
+        () => {
+          const reader = element.closest<HTMLElement>('[data-reader-scrollport]')!;
+          element.setAttribute(
+            'data-edit-origin-offset',
+            String(element.getBoundingClientRect().top - reader.getBoundingClientRect().top)
+          );
+        },
+        { once: true }
+      );
+    });
     await trigger.click();
+    const offset = Number(await trigger.getAttribute('data-edit-origin-offset'));
     await expect(field).toBeFocused();
     await expect(scene.getByTestId('source-text')).toBeHidden();
     await insideReader(field);
@@ -233,10 +248,7 @@ test('C04V saved versions stay read-only until saved, preserve the previous draf
   await expect(field).toHaveCount(0);
   expect((await detail(request, before.chat.id)).sources[0].text).toBe(source.text);
 
-  await page
-    .getByRole('navigation', { name: '장면 탐색' })
-    .getByRole('button', { name: '장면 목록 열기', exact: true })
-    .click();
+  await page.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
   const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
   await list.getByRole('button', { name: '1번째 장면 이름 편집' }).click();
   const name = page.getByRole('dialog', { name: '장면 이름', exact: true });
@@ -245,16 +257,13 @@ test('C04V saved versions stay read-only until saved, preserve the previous draf
   await expect(
     list.getByRole('button', { name: '1번째 장면 · The quiet lighthouse', exact: true })
   ).toBeVisible();
-  const search = list.getByRole('searchbox', { name: '장면 번호, 이름 또는 요청으로 찾기' });
+  const search = list.getByRole('searchbox', { name: '장면 검색어' });
   await search.fill('lighthouse');
   await expect(list.getByText('The quiet lighthouse', { exact: true })).toBeVisible();
   await search.fill('source editor focus');
   await expect(list.getByText('The quiet lighthouse', { exact: true })).toBeVisible();
   await page.reload();
-  await page
-    .getByRole('navigation', { name: '장면 탐색' })
-    .getByRole('button', { name: '장면 목록 열기', exact: true })
-    .click();
+  await page.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
   await expect(list.getByText('The quiet lighthouse', { exact: true })).toBeVisible();
   const after = await detail(request, before.chat.id);
   expect(after.runs).toEqual(before.runs);

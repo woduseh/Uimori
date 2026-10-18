@@ -532,30 +532,40 @@ test('standalone RISUM preserves authored fields, scripts and asset bytes throug
   expect(saved).toEqual(before);
 });
 
-test('linked modules reject mixed permissions, scoped metadata, missing payload and asset name conflicts', () => {
-  const { store } = fixture();
-  for (const extra of [
-    { namespace: 'separate-scope' },
-    { assets: [['main', '', 'png']] },
-    { trigger: [{ type: 'start', effect: [] }], lowLevelAccess: false },
-  ]) {
-    const saved = imported(store, card(), { trigger: [{ type: 'start', effect: [] }] });
-    const dependency = importedModule(store, 'dependency', extra);
+test.each([false, true])(
+  'individual Risu export preserves own source and linked data without bundling standalone=%s',
+  (standalone) => {
+    const { store } = fixture();
+    const saved = standalone
+      ? importedModule(store, 'own', { lorebook: [{ key: 'own', content: 'own module lore' }] })
+      : imported(store, card(), { lorebook: [{ key: 'own', content: 'own embedded lore' }] });
+    const dependency = importedModule(store, 'dependency', {
+      namespace: 'separate-scope',
+      assets: [['main', '', 'png']],
+      lorebook: [{ key: 'linked', content: 'LINKED_ONLY' }],
+      trigger: [{ type: 'start', effect: [] }],
+      lowLevelAccess: false,
+    });
     saved.package.modules = [{ id: dependency.id, revision: dependency.revision }];
-    expect(() => exportRisuContent(store.product, saved)).toThrow('RISU_EXPORT_MODULE_CONFLICT');
+    const before = structuredClone(saved);
+    const linkedBefore = store.product.get<Content>('content', dependency.id);
+    const exported = exportRisuContent(store.product, saved);
+    const read = readCharacterCard(source(exported.bytes, exported.filename));
+    expect(read.nativeModule).toMatchObject(before.package.nativeRisu.module!);
+    expect(JSON.stringify(read.nativeModule)).not.toContain('LINKED_ONLY');
+    if (!standalone) {
+      expect((read.nativeCard as Record<string, unknown>).description).toBe(
+        before.package.nativeRisu.card.description
+      );
+      expect(cardZip(exported.bytes).size).toBe(3);
+    }
+    expect(saved).toEqual(before);
+    expect(store.product.get<Content>('content', dependency.id)).toEqual(linkedBefore);
+    // Exporting an individual resource never resolves or mutates its external links.
+    saved.package.modules = [{ id: 'missing-linked-resource', revision: 1 }];
+    expect(exportRisuContent(store.product, saved).bytes).toEqual(exported.bytes);
   }
-  const saved = imported(store);
-  const dependency = importedModule(store, 'missing', { assets: [['scene', '', 'png']] });
-  dependency.package.nativeRisu.assets = [];
-  dependency.package.images = [];
-  const { id, revision, ...body } = dependency;
-  store.product.content({ ...body, expectedRevision: revision }, id);
-  saved.package.modules = [{ id, revision }];
-  expect(() => exportRisuContent(store.product, saved)).toThrow('RISU_EXPORT_ASSET_UNAVAILABLE');
-  const empty = structuredClone(dependency);
-  delete empty.package.nativeRisu.module;
-  expect(() => exportRisuContent(store.product, empty)).toThrow('RISU_EXPORT_MODULE_UNSUPPORTED');
-});
+);
 
 test('saving and exporting a historical RISUP silently removes retired execution data without changing its input', () => {
   const { store } = fixture();

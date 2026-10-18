@@ -39,14 +39,13 @@ export function ContentPicker({
     [folder, setFolder] = useState('all'),
     [page, setPage] = useState({ key: '', count: 50 });
   const id = useId();
-  const allowAll = role !== 'persona';
   const list = useRef<HTMLDivElement>(null);
   const current =
     selectedContent && reference(selectedContent) === value
       ? selectedContent
       : library.contents.find((content) => reference(content) === value);
   const folders = (library.organization?.folders ?? [])
-    .filter((item) => item.category !== 'prompts' && ((allowAll && all) || item.category === role))
+    .filter((item) => item.category !== 'prompts' && (all || item.category === role))
     .toSorted((a, b) => a.sortPosition - b.sortPosition || a.title.localeCompare(b.title));
   const activeFolder =
     folder === 'all' || folder === 'none' || folders.some((item) => item.id === folder)
@@ -59,7 +58,7 @@ export function ContentPicker({
       excludeIds.includes(content.id)
     )
       return false;
-    if ((!allowAll || !all) && libraryCategory(library, content) !== role) return false;
+    if (!all && libraryCategory(library, content) !== role) return false;
     const folderId = libraryFolderOf(library, { kind: 'content', id: content.id });
     if (
       activeFolder === 'none'
@@ -72,10 +71,7 @@ export function ContentPicker({
   const pageKey = `${role}:${all}:${activeFolder}:${needle}`;
   const visibleCount = page.key === pageKey ? page.count : 50;
   const visible = candidates.slice(0, visibleCount);
-  const currentOutside =
-    current &&
-    (allowAll || libraryCategory(library, current) === role) &&
-    !visible.some((content) => reference(content) === value);
+  const currentOutside = current && !visible.some((content) => reference(content) === value);
   const choose = (next: string) => {
     if (disabled) return;
     onChange(next);
@@ -125,12 +121,10 @@ export function ContentPicker({
       <span className="content-picker-copy">
         <strong title={content.title}>{content.title}</strong>
         {content.description && <small>{content.description}</small>}
-        {(role !== 'persona' || pinned) && (
-          <small className="content-picker-meta">
-            {role !== 'persona' ? roleTitles[libraryCategory(library, content)] : ''}
-            {pinned ? `${role !== 'persona' ? ' · ' : ''}현재 선택 v${content.revision}` : ''}
-          </small>
-        )}
+        <small className="content-picker-meta">
+          {roleTitles[libraryCategory(library, content)]}
+          {pinned ? ` · 현재 선택 v${content.revision}` : ''}
+        </small>
       </span>
       {reference(content) === value ? (
         <CheckIcon size={18} aria-hidden="true" />
@@ -173,32 +167,30 @@ export function ContentPicker({
         className="content-picker-dialog"
       >
         <div className="content-picker-filters">
-          {allowAll && (
-            <div className="content-picker-scope" aria-label="자료 분류 범위">
-              <button
-                type="button"
-                className="secondary"
-                aria-pressed={!all}
-                onClick={() => {
-                  setAll(false);
-                  setFolder('all');
-                }}
-              >
-                {roleTitles[role]}
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                aria-pressed={all}
-                onClick={() => {
-                  setAll(true);
-                  setFolder('all');
-                }}
-              >
-                모든 자료
-              </button>
-            </div>
-          )}
+          <div className="content-picker-scope" aria-label="자료 분류 범위">
+            <button
+              type="button"
+              className="secondary"
+              aria-pressed={!all}
+              onClick={() => {
+                setAll(false);
+                setFolder('all');
+              }}
+            >
+              {roleTitles[role]}
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              aria-pressed={all}
+              onClick={() => {
+                setAll(true);
+                setFolder('all');
+              }}
+            >
+              모든 자료
+            </button>
+          </div>
           <label className="content-picker-search">
             <span className="content-picker-filter-label">검색</span>
             <span className="content-picker-search-field">
@@ -267,8 +259,8 @@ export function ContentPicker({
             <div className="content-picker-empty">
               <strong>{emptyTitle}</strong>
               <small>
-                {allowAll && !all
-                  ? '다른 분류까지 넓혀서 찾거나 서재에서 새 모듈을 추가해 보세요.'
+                {!all
+                  ? '다른 분류까지 넓혀서 찾거나 서재에서 새 자료를 추가해 보세요.'
                   : '검색어나 폴더를 바꾸거나 서재에서 새 자료를 추가해 보세요.'}
               </small>
             </div>
@@ -283,9 +275,9 @@ export function ContentPicker({
             자료 더 보기 ({Math.min(visibleCount, candidates.length)} / {candidates.length})
           </button>
         )}
-        {(allowAll && !all) || activeFolder !== 'all' ? (
+        {!all || activeFolder !== 'all' ? (
           <div className="content-picker-footer">
-            {allowAll && !all && (
+            {!all && (
               <button
                 type="button"
                 className="ghost"

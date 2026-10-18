@@ -287,6 +287,7 @@ const readNames = new Set([
   'settings.read',
   'usage.read',
   'model.list',
+  'model.pricing.read',
   'task.inspect',
   'task.list',
   'app.tools',

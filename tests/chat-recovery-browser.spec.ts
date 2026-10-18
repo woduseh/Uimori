@@ -43,7 +43,7 @@ for (const viewport of [
       const chat = await fixture(request);
       const dialog = await open(page, chat.id);
       await selectChatSettingsSection(page, '대화 구성');
-      await expect(dialog.getByLabel('원문 이미지 자동 배치', { exact: true })).toBeHidden();
+      await expect(dialog.getByLabel('이미지 배치 담당', { exact: true })).toBeHidden();
       await expect(dialog.getByRole('region', { name: '로어 컨텍스트 정책' })).toBeHidden();
       await selectChatSettingsSection(page, '기억·로어');
       await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toBeHidden();
@@ -80,9 +80,14 @@ for (const viewport of [
       expect(imageAddBox?.height).toBeGreaterThanOrEqual(44);
       await dialog.getByLabel('이미지 이름', { exact: true }).fill('');
       await manager.locator(':scope > summary').click();
-      const image = dialog.getByRole('switch', { name: '원문 이미지 자동 배치', exact: true });
-      const originalImage = await image.isChecked();
-      await image.setChecked(!originalImage);
+      const image = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
+      await expect(image).not.toHaveAttribute('multiple');
+      await expect(image.locator('option')).toHaveText(['작문 모델', 'JEV']);
+      await expect(dialog.getByLabel('원문 이미지 자동 배치', { exact: true })).toHaveCount(0);
+      await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toHaveCount(0);
+      const originalImage = await image.inputValue();
+      const draftImage = originalImage === 'jev' ? 'writer' : 'jev';
+      await image.selectOption(draftImage);
       await expect(
         dialog.getByRole('button', { name: '채팅 설정 저장', exact: true })
       ).toBeDisabled();
@@ -123,10 +128,14 @@ for (const viewport of [
       expect(saveBox?.width).toBeGreaterThanOrEqual(44);
       expect(saveBox?.height).toBeGreaterThanOrEqual(44);
       await saveButton.click();
-      expect((await saved).ok()).toBe(true);
+      const savedResponse = await saved;
+      expect(savedResponse.ok()).toBe(true);
+      expect(savedResponse.request().postDataJSON()).not.toHaveProperty('imageTranslation');
       const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
       expect(detail.profile.loreContext.judgment.threshold).toBe(0.7);
-      expect(detail.profile.image).toBe(!originalImage);
+      expect(detail.profile.image).toBe(draftImage === 'jev');
+      await selectChatSettingsSection(page, '이미지');
+      await expect(image).toHaveValue(draftImage);
       expect(detail.runs).toHaveLength(0);
       expect(
         await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)

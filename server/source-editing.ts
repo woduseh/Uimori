@@ -147,7 +147,7 @@ export function requestTranslation(
     const workspace = promptWorkspace(store);
     const selected = workspaceModelRef(workspace, 'translation');
     const profile = store.product.snapshot(source.chatId, 'translation');
-    const automatic = profile?.imageTranslation !== false;
+    const automatic = profile?.image === true;
     const selection = automatic
       ? automaticImageSelection(store, {
           ...readRunSnapshot(store, source.runId),
@@ -155,6 +155,7 @@ export function requestTranslation(
         })
       : undefined;
     const input = {
+      imageOwner: automatic ? 'jev' : 'writer',
       ...(autoTranslateRunId ? { autoTranslateRunId } : {}),
       ...(selection ? { translationImageSelection: selection } : {}),
       translationGuide: currentBotTranslationGuide(store, source.chatId),

@@ -9,7 +9,7 @@ import {
   validateRisuImageHandoff,
 } from '../core/risu-image-handoff.js';
 import { nativeRisuAssetNames, type RisuContentSource } from '../core/risu-native.js';
-import { nativeImageTag } from '../server/risu-native-image-tags.js';
+import { nativeCatalogImageTags, nativeImageTag } from '../server/risu-native-image-tags.js';
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { readCharacterCard } from '../server/character-card-file.js';
 import { analyzeNativeRisuImport } from '../server/risu-native-import.js';
@@ -240,6 +240,8 @@ test('reverse mapping verifies state-dependent wardrobe resolution against the s
     ],
   };
   native.assets = [{ name: 'daily_smiling.webp', uri: 'embeded://daily.webp', imageId: 'daily' }];
+  (native.card.extensions as { risuai: Record<string, unknown> }).risuai.backgroundHTML =
+    '{{img::daily_smiling.webp}}';
   const url = '/api/package-image-blobs/' + 'a'.repeat(64);
   const context = {
     charName: 'Harper',
@@ -256,6 +258,18 @@ test('reverse mapping verifies state-dependent wardrobe resolution against the s
     templates: ['<img="{asset}">'],
   };
   expect(await nativeImageTag(input)).toBe('<img="Harper_smiling">');
+  expect(
+    await nativeCatalogImageTags({
+      native,
+      context,
+      urls: [url],
+      text: '< img = "Harper_smiling"> <img="unknown"> <img src="https://example.test/external.png"> ![표정]({{raw::daily_smiling.webp}}) ![]({{path::daily_smiling.webp}}) [이미지 링크]({{path::daily_smiling.webp}}) {{raw::daily_smiling.webp}}',
+    })
+  ).toEqual([
+    '< img = "Harper_smiling">',
+    '![표정]({{raw::daily_smiling.webp}})',
+    '![]({{path::daily_smiling.webp}})',
+  ]);
   expect(
     await nativeImageTag({ ...input, context: { ...context, variables: { outfit: 'other' } } })
   ).toBeNull();

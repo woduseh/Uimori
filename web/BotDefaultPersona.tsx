@@ -104,7 +104,7 @@ export function BotDefaultPersona({
             value={mode}
             onChange={(event) => setMode(event.target.value as BotPersonaDefault['mode'])}
           >
-            <option value="inherit">폴더 기본값 따르기</option>
+            <option value="inherit">기본 페르소나 미지정</option>
             <option value="none">페르소나 없음</option>
             <option value="persona">페르소나 지정</option>
           </select>
@@ -125,7 +125,10 @@ export function BotDefaultPersona({
             )}
           </>
         )}
-        <p className="muted">새 채팅 화면에서 직접 고른 값이 가장 우선해요.</p>
+        <p className="muted">
+          새 채팅에서 직접 고른 값(페르소나 없음 포함), 폴더 기본값, 봇 기본값 순서로 사용해요.
+          폴더에서 지정하지 않으면 이 설정을 사용해요.
+        </p>
         {saved && error && <NoticeBanner tone="error">{error}</NoticeBanner>}
         <button disabled={!saved || busy || (mode === 'persona' && !selected)}>
           {busy ? '저장하는 중…' : '기본 페르소나 저장'}

@@ -1,3 +1,4 @@
+import { HELPER_PRICING_TOOLS, invokeHelperPricingTool } from './helper-pricing-tools.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import type { Settings } from '../core/types.js';
 import type { Connection, ModelPreset, WorkspaceModelRole } from '../core/product.js';
@@ -27,6 +28,7 @@ const settings = [
 ] as const;
 
 export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
+  ...HELPER_PRICING_TOOLS,
   {
     name: 'model.list',
     description:
@@ -73,6 +75,7 @@ export function invokeHelperSettingsTool(
   value: unknown,
   chatId?: string
 ): unknown {
+  if (name.startsWith('model.pricing.')) return invokeHelperPricingTool(store, name, value);
   const args = record(value);
   if (name === 'model.list') {
     fields(args, []);

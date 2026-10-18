@@ -10,7 +10,7 @@ import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { putImageBlob, requestImages } from '../server/package-images.js';
-import { imageCatalog, imageJobInput } from '../server/package-images.js';
+import { imageCatalog, imageJobInput, latestImageJob } from '../server/package-images.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 
@@ -137,13 +137,24 @@ function target(job: Job) {
     }
   ).imageTarget;
 }
-function selectTranslation(store: Store, source: Source, translation: Job, expectedRevision = 0) {
+function selectTranslation(
+  store: Store,
+  source: Source,
+  translation: Job,
+  expectedRevision = latestImageJob(store, source.id, 'translation')?.revision ?? 0
+) {
   return requestImages(store, source.id, {
     target: 'translation',
     expectedSourceHash: source.hash,
     expectedRevision,
     expectedTranslationJobId: translation.id,
     expectedTranslationRevision: translation.revision,
+  });
+}
+function selectOriginal(store: Store, source: Source) {
+  return requestImages(store, source.id, {
+    expectedSourceHash: source.hash,
+    expectedRevision: latestImageJob(store, source.id, 'original')?.revision ?? 0,
   });
 }
 async function finishImage(store: Store, job: Job) {
@@ -187,13 +198,21 @@ async function finishImage(store: Store, job: Job) {
   return store.job(job.id);
 }
 
-test('defaults reserve images only after generated translation, never on original completion', () => {
+test('writer ownership never reserves original or translated JEV images, including legacy translation defaults', () => {
   const { store, source, chat } = fixture();
-  expect(store.product.profile(chat.id)).toMatchObject({ image: false, imageTranslation: true });
+  expect(store.product.profile(chat.id).image).toBe(false);
   expect(images(store, source)).toHaveLength(0);
-  const translation = translate(store, source);
+  translate(store, source);
+  expect(images(store, source)).toHaveLength(0);
+  expect(() => selectOriginal(store, source)).toThrow('이미지 담당을 JEV로');
+});
+
+test('JEV ownership reserves original and translated placement despite a legacy translation opt-out', () => {
+  const { store, source } = fixture({ image: true, imageTranslation: false });
   expect(images(store, source)).toHaveLength(1);
-  expect(target(images(store, source)[0])).toMatchObject({
+  const translation = translate(store, source);
+  expect(images(store, source)).toHaveLength(2);
+  expect(target(latestImageJob(store, source.id, 'translation')!)).toMatchObject({
     mode: 'translation',
     translationJobId: translation.id,
     translationRevision: translation.revision,
@@ -201,7 +220,7 @@ test('defaults reserve images only after generated translation, never on origina
 });
 
 test('the synthetic image worker preserves original provenance with a translation target', async () => {
-  const { store, source } = fixture({ imageTranslation: false });
+  const { store, source } = fixture({ image: true });
   const translation = translate(store, source);
   const job = selectTranslation(store, source, translation);
   await runAuxiliaryJob(
@@ -255,8 +274,8 @@ test('the synthetic image worker preserves original provenance with a translatio
   });
 });
 
-test('automatic translation placement respects its switch, catalog availability and direct edit boundary', () => {
-  for (const options of [{ imageTranslation: false }, { images: false }]) {
+test('automatic translation placement respects ownership, catalog availability and direct edit boundary', () => {
+  for (const options of [{ image: false }, { image: true, images: false }]) {
     const { store, source } = fixture(options);
     translate(store, source);
     expect(images(store, source)).toHaveLength(0);
@@ -271,12 +290,9 @@ test('automatic translation placement respects its switch, catalog availability 
 });
 
 test('each view reads its own text and retains the other view when images are placed again', async () => {
-  const { store, source } = fixture({ imageTranslation: false });
+  const { store, source } = fixture({ image: true });
   const translation = translate(store, source);
-  const original = requestImages(store, source.id, {
-    expectedSourceHash: source.hash,
-    expectedRevision: 0,
-  });
+  const original = selectOriginal(store, source);
   const localized = selectTranslation(store, source, translation);
   expect(localized.id).not.toBe(original.id);
   const bridge = auxiliaryBridge(store, new Controls(), new AbortController().signal);
@@ -294,15 +310,9 @@ test('each view reads its own text and retains the other view when images are pl
 });
 
 test('translation edits invalidate only translated placement and fence an already running worker', async () => {
-  const { store, source } = fixture({ imageTranslation: false });
+  const { store, source } = fixture({ image: true });
   const translation = translate(store, source);
-  const original = await finishImage(
-    store,
-    requestImages(store, source.id, {
-      expectedSourceHash: source.hash,
-      expectedRevision: 0,
-    })
-  );
+  const original = await finishImage(store, selectOriginal(store, source));
   const localized = selectTranslation(store, source, translation);
   const claimed = store.claimJob(localized.id, 'late-worker', {})!;
   const manual = store.editTranslation(source.id, {
@@ -334,9 +344,9 @@ test('translation edits invalidate only translated placement and fence an alread
 });
 
 test('an unavailable JEV connection records an image failure without rolling back translated text', async () => {
-  const { store, source } = fixture();
+  const { store, source } = fixture({ image: true });
   const translation = translate(store, source);
-  const job = images(store, source)[0];
+  const job = selectTranslation(store, source, translation);
   await runAuxiliaryJob(
     auxiliaryBridge(store, new Controls(), new AbortController().signal),
     job.id,
@@ -360,7 +370,7 @@ test('an unavailable JEV connection records an image failure without rolling bac
 });
 
 test('pending and failed retranslations retain images until a successful replacement invalidates them', async () => {
-  const { store, source } = fixture({ imageTranslation: false });
+  const { store, source } = fixture({ image: true });
   const previous = translate(store, source);
   const image = await finishImage(store, selectTranslation(store, source, previous));
   const pending = store.retranslate(source.id);
@@ -370,7 +380,11 @@ test('pending and failed retranslations retain images until a successful replace
   expect(store.job(image.id)).toEqual(image);
   const replacement = translate(store, source);
   expect(replacement.id).not.toBe(previous.id);
-  expect(store.job(image.id).status).toBe('stale');
+  expect(store.job(image.id)).toMatchObject({ status: 'queued', result: null });
+  expect(target(store.job(image.id))).toMatchObject({
+    translationJobId: replacement.id,
+    translationRevision: replacement.revision,
+  });
 });
 
 test('representative portraits and profile-only assets never enter the placement catalog', () => {

@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { ArrowUp, Check, Copy, Eye, EyeOff, Pencil, RefreshCw, Save, X } from 'lucide-react';
 import { IconButton } from './IconButton.js';
-import { SHEET_MEDIA } from './ActionMenu.js';
+import { ActionMenu, SHEET_MEDIA } from './ActionMenu.js';
 import './request-message.css';
 
 export function RequestMessage({
@@ -18,6 +18,10 @@ export function RequestMessage({
   onSave,
   requestEnabled = true,
   onToggleRequest,
+  sceneEnabled = true,
+  onToggleScene,
+  onRewrite,
+  rewriteDisabled = disabled,
   onConfirm,
   onEditingChange,
   editHint = '수정한 요청으로 새 채팅에서 생성해요.',
@@ -39,10 +43,14 @@ export function RequestMessage({
   onSave?: (text: string) => Promise<boolean>;
   requestEnabled?: boolean;
   onToggleRequest?: () => Promise<void>;
+  sceneEnabled?: boolean;
+  onToggleScene?: () => Promise<void>;
+  onRewrite?: () => void;
+  rewriteDisabled?: boolean;
   onConfirm?: () => Promise<boolean>;
   onEditingChange?: (editing: boolean) => void;
 }) {
-  const key = `request-edit:${runId}`;
+  const key = `${onSave ? 'request-context-edit' : 'request-edit'}:${runId}`;
   const shownRequest = displayText ?? request;
   const [editing, setEditing] = useState(false);
   const [revealed, setRevealed] = useState(false);
@@ -101,6 +109,14 @@ export function RequestMessage({
     if (!onConfirm) saveDraft();
     setEditing(false);
     requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true }));
+  };
+  const openEditor = () => {
+    try {
+      setDraft(sessionStorage.getItem(key) ?? request);
+    } catch {
+      setDraft(request);
+    }
+    setEditing(true);
   };
   return (
     <div
@@ -255,15 +271,6 @@ export function RequestMessage({
             </details>
           )}
           <div className="request-message-actions">
-            {onToggleRequest && (
-              <IconButton
-                icon={requestEnabled ? EyeOff : Eye}
-                label={requestEnabled ? '입력을 문맥에서 제외' : '입력을 문맥에 포함'}
-                className="secondary"
-                disabled={disabled}
-                onClick={() => void onToggleRequest()}
-              />
-            )}
             <IconButton
               icon={copyState === 'copied' ? Check : Copy}
               label={copyState === 'copied' ? '요청 복사됨' : '요청 복사'}
@@ -274,22 +281,76 @@ export function RequestMessage({
             <span className="sr-only" role="status">
               {copyState === 'copied' ? '요청을 복사했어요.' : ''}
             </span>
-            {(onSubmit || onSave) && (
+            {onRewrite && (
+              <button
+                type="button"
+                className="secondary"
+                disabled={rewriteDisabled}
+                onClick={onRewrite}
+              >
+                <RefreshCw size={18} aria-hidden="true" />
+                다시 쓰기
+              </button>
+            )}
+            {!onSave && !onToggleRequest && !onToggleScene && onSubmit && (
               <IconButton
                 ref={trigger}
                 icon={Pencil}
                 label="요청 편집"
                 className="secondary"
                 disabled={disabled && !onConfirm}
-                onClick={() => {
-                  try {
-                    setDraft(sessionStorage.getItem(key) ?? request);
-                  } catch {
-                    setDraft(request);
-                  }
-                  setEditing(true);
-                }}
+                onClick={openEditor}
               />
+            )}
+            {(onSave || onToggleRequest || onToggleScene) && (
+              <ActionMenu label="요청과 문맥 메뉴" placement="top" viewport>
+                {(onSubmit || onSave) && (
+                  <button
+                    ref={trigger}
+                    type="button"
+                    className="secondary"
+                    disabled={disabled && !onConfirm}
+                    onClick={(event) => {
+                      const menu = event.currentTarget.closest('details');
+                      if (menu) menu.open = false;
+                      openEditor();
+                    }}
+                  >
+                    <Pencil size={18} aria-hidden="true" />
+                    {onSave ? '문맥용 요청 수정' : '요청 편집'}
+                  </button>
+                )}
+                {onToggleRequest && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={disabled}
+                    onClick={() => void onToggleRequest()}
+                  >
+                    {requestEnabled ? (
+                      <EyeOff size={18} aria-hidden="true" />
+                    ) : (
+                      <Eye size={18} aria-hidden="true" />
+                    )}
+                    {requestEnabled ? '입력을 문맥에서 제외' : '입력을 문맥에 포함'}
+                  </button>
+                )}
+                {onToggleScene && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={disabled}
+                    onClick={() => void onToggleScene()}
+                  >
+                    {sceneEnabled ? (
+                      <EyeOff size={18} aria-hidden="true" />
+                    ) : (
+                      <Eye size={18} aria-hidden="true" />
+                    )}
+                    {sceneEnabled ? '장면을 문맥에서 제외' : '장면을 문맥에 포함'}
+                  </button>
+                )}
+              </ActionMenu>
             )}
           </div>
           {copyState === 'failed' && (

@@ -29,7 +29,6 @@ export function mount() {
     return (
       <>
         <RisuNativeFields
-          kind="bot"
           value={value}
           onChange={setValue}
           onDraftChange={setPending}

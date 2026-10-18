@@ -155,7 +155,7 @@ test('AUXREC translation failure retries from the reader without changing the so
   ).toBe(true);
   await page.goto(`/?chat=${chat.id}`);
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-  await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
   const retry = scene.getByRole('button', { name: '번역 다시 시도', exact: true });
   await expect(retry).toBeVisible();
   await expect(scene.locator('.translation-placeholder')).toContainText('원문은 보존돼요.');

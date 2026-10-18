@@ -34,7 +34,10 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-function fixture(inputTokenLimit = 272000) {
+function fixture(
+  inputTokenLimit = 272000,
+  protocol: 'openai-chat-v1' | 'anthropic-messages-v1' = 'openai-chat-v1'
+) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-data-runtime-')),
     store = new Store(join(path, 'test.sqlite')),
     work: Promise<void>[] = [],
@@ -42,8 +45,12 @@ function fixture(inputTokenLimit = 272000) {
   owned.push({ store, path, work, controller });
   const connection = store.product.connection({
     title: 'Synthetic native Chat',
-    protocol: 'openai-chat-v1',
-    endpoint: 'http://127.0.0.1:9/v1/chat/completions',
+    protocol,
+    ...(protocol === 'anthropic-messages-v1' ? { apiKey: 'synthetic-fixture-key' } : {}),
+    endpoint:
+      protocol === 'anthropic-messages-v1'
+        ? 'http://127.0.0.1:9/v1/messages'
+        : 'http://127.0.0.1:9/v1/chat/completions',
     enabled: true,
   });
   const helper = store.product.model({
@@ -71,6 +78,7 @@ function fixture(inputTokenLimit = 272000) {
     contextModel: { id: context.id },
   });
   const runtime = new HelperRuntime(store, {
+    resolveCredential: () => 'synthetic-fixture-key',
     owner: 'data-runtime',
     signal: controller.signal,
     track: (p) => work.push(p),
@@ -125,6 +133,145 @@ function provider(action: (body: any, round: number) => Response) {
   );
   return bodies;
 }
+function anthropicResponse(content: unknown[], stopReason: string) {
+  const events = [
+    {
+      type: 'message_start',
+      message: {
+        type: 'message',
+        role: 'assistant',
+        id: 'synthetic-search',
+        content: [],
+        stop_reason: null,
+        usage: { input_tokens: 11, output_tokens: 0 },
+      },
+    },
+    ...content.flatMap((content_block, index) => [
+      { type: 'content_block_start', index, content_block },
+      { type: 'content_block_stop', index },
+    ]),
+    { type: 'message_delta', delta: { stop_reason: stopReason }, usage: { output_tokens: 7 } },
+    { type: 'message_stop' },
+  ];
+  return new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
+    headers: { 'content-type': 'text/event-stream' },
+  });
+}
+
+test('helper resumes a valid Anthropic search pause with exact blocks and accounts for both calls', async () => {
+  const f = fixture(272000, 'anthropic-messages-v1');
+  const paused = [
+    {
+      type: 'server_tool_use',
+      id: 'search-paused',
+      name: 'web_search',
+      input: { query: 'current official pricing' },
+    },
+    {
+      type: 'web_search_tool_result',
+      tool_use_id: 'search-paused',
+      content: [
+        {
+          type: 'web_search_result',
+          title: 'Official source',
+          url: 'https://example.com/source',
+          encrypted_content: 'retain-original-encrypted-result',
+        },
+      ],
+    },
+  ];
+  const bodies = provider((body, round) => {
+    if (round === 0) return anthropicResponse(paused, 'pause_turn');
+    expect(body.messages.find((message: any) => message.role === 'assistant').content).toEqual(
+      paused
+    );
+    expect(body.tools).toEqual(bodies[0].tools);
+    expect(body.messages.at(-1).content[0].text).toContain('helperCallsRemaining');
+    return anthropicResponse(
+      [
+        {
+          type: 'text',
+          text: 'Verified current source.',
+          citations: [
+            {
+              type: 'web_search_result_location',
+              url: 'https://example.com/source',
+              title: 'Official source',
+              encrypted_index: 'retain-index',
+              cited_text: 'Current source',
+            },
+          ],
+        },
+      ],
+      'end_turn'
+    );
+  });
+  const result = await f.run('공식 자료를 검색해 주세요.');
+  expect(result.status).toBe('completed');
+  expect(result.usage).toMatchObject({ modelCalls: 2, inputTokens: 22, outputTokens: 14 });
+  expect(
+    f.runtime.workspace.messages(f.conversation.id).find((message) => message.role === 'assistant')
+      ?.text
+  ).toContain('https://example.com/source');
+  expect(bodies).toHaveLength(2);
+});
+
+test('repeated Anthropic search pauses exhaust the existing call budget without replaying from scratch', async () => {
+  const f = fixture(272000, 'anthropic-messages-v1');
+  const task = f.runtime.enqueue(
+    f.conversation.id,
+    randomUUID(),
+    'Search official sources.',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false
+  );
+  task.snapshot.limits = { helperCalls: 2, totalCalls: 2 };
+  f.store.db
+    .prepare('UPDATE helper_tasks SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(task.snapshot), task.id);
+  const bodies = provider((_body, round) =>
+    anthropicResponse(
+      [
+        {
+          type: 'server_tool_use',
+          id: `search-${round}`,
+          name: 'web_search',
+          input: { query: 'official source' },
+        },
+      ],
+      'pause_turn'
+    )
+  );
+  f.runtime.pump();
+  await Promise.all(f.work);
+  expect(f.runtime.workspace.task(task.id)).toMatchObject({
+    status: 'failed',
+    error: 'MODEL_CALL_BUDGET_EXHAUSTED',
+    usage: { modelCalls: 2 },
+  });
+  expect(bodies).toHaveLength(2);
+  expect(
+    bodies[1].messages.some(
+      (message: any) => message.role === 'assistant' && message.content[0].id === 'search-0'
+    )
+  ).toBe(true);
+});
+
+test('helper does not resume an Anthropic truncated search answer', async () => {
+  const f = fixture(272000, 'anthropic-messages-v1');
+  const bodies = provider(() =>
+    anthropicResponse([{ type: 'text', text: 'Incomplete search answer' }], 'max_tokens')
+  );
+  expect(await f.run('Search official sources.')).toMatchObject({
+    status: 'failed',
+    error: 'MAX_TOKENS',
+    usage: { modelCalls: 1 },
+  });
+  expect(bodies).toHaveLength(1);
+});
 const toolResult = (body: any, id: string) =>
   JSON.parse(
     body.messages.findLast((m: any) => m.role === 'tool' && m.tool_call_id === id).content
@@ -213,9 +360,6 @@ const requestData = (wire: any) =>
 test('native Chat continuation receives new user instructions and budget without replaying a stale write', async () => {
   const f = fixture();
   const conversation = f.runtime.workspace.open({ kind: 'library', workId: 'steer-wire' });
-  f.runtime.workspace.update(conversation.id, conversation.revision, {
-    limits: { helperCalls: 3, totalCalls: 4 },
-  });
   const before = authoredState(f);
   const bodies = provider((wire, round) => {
     if (round === 0) {
@@ -251,8 +395,8 @@ test('native Chat continuation receives new user instructions and budget without
     );
     expect(update.additionalUserInstructions).toEqual(['저장하지 말고 설명만 해줘.']);
     expect(update.controls).toMatchObject({
-      helperCallsRemaining: 2,
-      totalCallsRemaining: 3,
+      helperCallsRemaining: 63,
+      totalCallsRemaining: 127,
     });
     return answer('자료는 저장하지 않았어요.');
   });

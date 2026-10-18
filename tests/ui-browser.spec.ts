@@ -375,7 +375,7 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
     const chat = await seed(request, `합성 UI arrivals ${Date.now()}`, longPrompt, 1);
     await page.goto(`/?chat=${chat.id}`);
     await expect(page.getByTestId('source')).toHaveCount(1);
-    await page.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await page.getByRole('button', { name: '번역 생성', exact: true }).click();
     await page.getByRole('button', { name: '원문 보기', exact: true }).click();
     await waitForNativeLayout(page.getByTestId('source-text'));
     const reader = page.locator('[data-reader-scrollport]');
@@ -1315,15 +1315,13 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   await selectCurrentSettingsSection(page, '현재 프롬프트');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const editor = dialog.getByRole('region', { name: '현재 프롬프트 설정' });
-  expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
-    createDefaultRisuPrompt(originalText, 'main')
-  );
-  await editor.getByRole('button', { name: '최신 저장본 적용', exact: true }).click();
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
     .toEqual(createDefaultRisuPrompt('Latest library writing prompt.', 'main'));
-  // The API can finish before the editor's refresh clears its busy/dirty projection.
-  await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toBeEnabled();
+  await expect(editor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toHaveValue(first.id);
+  await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toHaveCount(
+    0
+  );
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(dialog).toBeHidden();
   await nav(page, '프롬프트');
@@ -1332,30 +1330,32 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   const edited = 'Unsaved custom full prompt.\n' + 'Keep my edited text intact.\n'.repeat(30);
   await (await promptBody(libraryEditor)).fill(edited);
   const current = await (await request.get('/api/prompt-workspace')).json();
-  const concurrent = await request.put('/api/prompt-workspace', {
+  const concurrentText = 'Concurrent saved source prompt.';
+  const concurrent = await request.put(`/api/prompt-presets/${first.id}`, {
     data: {
-      expectedRevision: current.revision,
-      main: {
-        ...current.main,
-        program: createDefaultRisuPrompt('Concurrent current prompt.', 'main'),
-      },
+      expectedRevision: current.main.presetRevision,
+      title: first.title,
+      role: 'main',
+      program: createDefaultRisuPrompt(concurrentText, 'main'),
     },
   });
   expect(concurrent.ok()).toBeTruthy();
+  await expect
+    .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
+    .toEqual(createDefaultRisuPrompt(concurrentText, 'main'));
   await expect(await promptBody(libraryEditor)).toHaveValue(edited);
   await libraryEditor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
-  await expect
-    .poll(
-      async () =>
-        (await (await request.get('/api/library')).json()).promptPresets.find(
-          (item: { id: string }) => item.id === first.id
-        ).revision
-    )
-    .toBe(3);
+  const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
+  await expect(review).toBeVisible();
+  await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
+  await expect(review).toContainText(concurrentText);
+  await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
+  await expect(await promptBody(libraryEditor)).toHaveValue(edited);
   const stored = await (await request.get(`/api/prompt-presets/${first.id}`)).json();
-  expect(stored.program).toEqual(createDefaultRisuPrompt(edited, 'main'));
+  expect(stored.revision).toBe(3);
+  expect(stored.program).toEqual(createDefaultRisuPrompt(concurrentText, 'main'));
   expect((await (await request.get('/api/prompt-workspace')).json()).main.program).toEqual(
-    createDefaultRisuPrompt('Concurrent current prompt.', 'main')
+    createDefaultRisuPrompt(concurrentText, 'main')
   );
   const after = await data(request, chat.id);
   expect(after.profile).toEqual(profile);
@@ -1430,7 +1430,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
     (await data(request, other.id)).jobs.filter((job) => job.kind === 'translation')
   ).toHaveLength(0);
   await request.post('/api/test/control', { data: { action: 'hold', barrier: 'translation' } });
-  await page.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await page.getByRole('button', { name: '번역 생성', exact: true }).click();
   await expect
     .poll(
       async () =>
@@ -1522,7 +1522,7 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   await expect(nativeProse(scene.getByTestId('source-text'))).toContainText(
     'Final authored source.'
   );
-  await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
   await expect(scene.getByTestId('translation-text')).toBeVisible();
   const regenerated = await data(request, chat.id);
   const currentJobs = regenerated.jobs.filter(
@@ -1664,7 +1664,7 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
         await route.fulfill({ response });
       } else await route.continue();
     });
-    await page.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await page.getByRole('button', { name: '번역 생성', exact: true }).click();
     await translationAccepted;
     await expect
       .poll(
@@ -1900,7 +1900,7 @@ test('UI whole-source translation retains completed results across retry and can
     });
   await close(page);
   const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
-  await scene.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
   const latest = async () =>
     (await data(request, chat.id)).jobs
       .filter((job) => job.kind === 'translation')
@@ -2044,7 +2044,7 @@ test('UI compact title remains readable when keyboard focus returns from the sce
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
     await expect(dialog).toBeVisible();
-    const search = dialog.getByRole('searchbox', { name: '장면 번호, 이름 또는 요청으로 찾기' });
+    const search = dialog.getByRole('searchbox', { name: '장면 검색어' });
     await search.fill('1');
     for (const width of [820, 390]) {
       await page.setViewportSize({ width, height: 844 });

@@ -1,13 +1,7 @@
-import {
-  PROVIDER_PROTOCOLS,
-  validateVertexEndpoint,
-  type Connection,
-  type ModelPreset,
-} from './product.js';
+import { PROVIDER_PROTOCOLS, type Connection, type ModelPreset } from './product.js';
 import type { ModelPricing, PricingSnapshot, TokenRates } from './pricing-types.js';
 import { ProviderContractError } from './provider-errors.js';
 
-const CHECKED_AT = '2026-09-09';
 const fail = (): never => {
   throw new ProviderContractError('INVALID_MODEL_PRICING');
 };
@@ -46,18 +40,64 @@ function integer(value: unknown, min: number, max: number): number {
     return fail();
   return value;
 }
+function checkedDate(value: unknown): string {
+  const result = string(value, 40);
+  if (
+    !/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z)?$/.test(result) ||
+    !Number.isFinite(Date.parse(result)) ||
+    new Date(result).toISOString().slice(0, 10) !== result.slice(0, 10)
+  )
+    return fail();
+  return result;
+}
+function sourceUrl(value: unknown): string {
+  const result = string(value, 2000);
+  let url: URL;
+  try {
+    url = new URL(result);
+  } catch {
+    return fail();
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) return fail();
+  return result;
+}
+function contextRates(value: unknown) {
+  const b = object(value, ['aboveInputTokens', 'rates']);
+  return { aboveInputTokens: integer(b.aboveInputTokens, 1, 100_000_000), rates: rates(b.rates) };
+}
 export function validateModelPricing(value: unknown): ModelPricing {
-  const b = object(value, ['mode', 'rates', 'flexRates']);
+  const b = object(value, [
+    'mode',
+    'rates',
+    'flexRates',
+    'batchRates',
+    'longContext',
+    'flexLongContext',
+    'batchLongContext',
+    'sourceUrl',
+    'checkedAt',
+  ]);
   if (b.mode === 'official') {
     if (Object.keys(b).length !== 1) return fail();
     return { mode: 'official' };
   }
   if (b.mode !== 'manual') return fail();
-  return {
+  const result: Extract<ModelPricing, { mode: 'manual' }> = {
     mode: 'manual',
     rates: rates(b.rates),
-    ...(Object.hasOwn(b, 'flexRates') ? { flexRates: rates(b.flexRates) } : {}),
   };
+  for (const key of ['flexRates', 'batchRates'] as const)
+    if (Object.hasOwn(b, key)) result[key] = rates(b[key]);
+  for (const key of ['longContext', 'flexLongContext', 'batchLongContext'] as const)
+    if (Object.hasOwn(b, key)) result[key] = contextRates(b[key]);
+  if (
+    (result.flexLongContext && !result.flexRates) ||
+    (result.batchLongContext && !result.batchRates)
+  )
+    return fail();
+  if (Object.hasOwn(b, 'sourceUrl')) result.sourceUrl = sourceUrl(b.sourceUrl);
+  if (Object.hasOwn(b, 'checkedAt')) result.checkedAt = checkedDate(b.checkedAt);
+  return result;
 }
 export function validatePricingSnapshot(value: unknown): PricingSnapshot {
   const b = object(value, [
@@ -70,6 +110,7 @@ export function validatePricingSnapshot(value: unknown): PricingSnapshot {
     'serviceTier',
     'rates',
     'standardRates',
+    'standardLongContext',
     'flexRates',
     'flexLongContext',
     'longContext',
@@ -112,6 +153,8 @@ export function validatePricingSnapshot(value: unknown): PricingSnapshot {
     if (url.protocol !== 'https:' || url.username || url.password) return fail();
     result.sourceUrl = value;
   }
+  if (Object.hasOwn(b, 'standardLongContext'))
+    result.standardLongContext = contextRates(b.standardLongContext);
   if (Object.hasOwn(b, 'standardRates')) result.standardRates = rates(b.standardRates);
   if (Object.hasOwn(b, 'flexRates')) result.flexRates = rates(b.flexRates);
   if (Object.hasOwn(b, 'cacheTtl')) result.cacheTtl = string(b.cacheTtl, 100);
@@ -156,23 +199,6 @@ export function validatePricingSnapshot(value: unknown): PricingSnapshot {
   }
   return result;
 }
-const tokenRates = (
-  input: number,
-  cacheRead: number | null,
-  cacheWrite: number | null,
-  output: number,
-  cacheWrite1h?: number
-): TokenRates => ({
-  input,
-  cacheRead,
-  cacheWrite,
-  output,
-  ...(cacheWrite1h !== undefined ? { cacheWrite1h } : {}),
-});
-const scale = (value: TokenRates, factor: number): TokenRates =>
-  Object.fromEntries(
-    Object.entries(value).map(([key, amount]) => [key, amount === null ? null : amount * factor])
-  ) as TokenRates;
 function exactEndpoint(connection: Connection, host: string, paths = ['/v1']): boolean {
   try {
     const url = new URL(connection.endpoint);
@@ -189,13 +215,14 @@ function exactEndpoint(connection: Connection, host: string, paths = ['/v1']): b
   }
 }
 
-/** Current reference rates only. The caller freezes this result with the execution snapshot. */
+/** User rates or prices published by this connection only. The caller freezes this result with the execution snapshot. */
 export function resolveModelPricing(
-  model: Pick<ModelPreset, 'modelId' | 'serviceTier' | 'cacheTtl' | 'pricing'>,
+  model: Pick<ModelPreset, 'modelId' | 'serviceTier' | 'cacheTtl' | 'pricing' | 'executionMode'>,
   connection: Connection,
   now = new Date().toISOString()
 ): PricingSnapshot | undefined {
-  const tier = model.serviceTier ?? 'default';
+  const batch = connection.protocol === 'anthropic-messages-v1' && model.executionMode === 'batch';
+  const tier = batch ? 'batch' : (model.serviceTier ?? 'default');
   const base = {
     version: 1 as const,
     protocol: connection.protocol,
@@ -208,168 +235,32 @@ export function resolveModelPricing(
       ? { mode: 'official' as const }
       : validateModelPricing(model.pricing);
   if (config.mode === 'manual') {
-    if (tier === 'flex' && !config.flexRates) return undefined;
+    const selected = batch ? config.batchRates : tier === 'flex' ? config.flexRates : config.rates;
+    if (!selected) return undefined;
+    const longContext = batch
+      ? config.batchLongContext
+      : tier === 'flex'
+        ? config.flexLongContext
+        : config.longContext;
     return validatePricingSnapshot({
       ...base,
       source: 'manual',
-      checkedAt: now,
-      rates: tier === 'flex' ? config.flexRates : config.rates,
-      ...(config.flexRates ? { standardRates: config.rates, flexRates: config.flexRates } : {}),
+      checkedAt: config.checkedAt ?? now,
+      ...(config.sourceUrl ? { sourceUrl: config.sourceUrl } : {}),
+      rates: selected,
+      ...(longContext ? { longContext } : {}),
+      ...(config.longContext ? { standardLongContext: config.longContext } : {}),
+      ...(!batch && config.flexRates
+        ? {
+            standardRates: config.rates,
+            flexRates: config.flexRates,
+            ...(config.flexLongContext ? { flexLongContext: config.flexLongContext } : {}),
+          }
+        : {}),
       notes: ['사용자가 입력한 참고 단가예요. 실제 청구액과 다를 수 있어요.'],
     });
   }
-  const standard = ['auto', 'default', 'standard', 'standard_only'].includes(tier);
-  const official = (
-    data: Omit<PricingSnapshot, keyof typeof base | 'source' | 'checkedAt'>,
-    checkedAt = CHECKED_AT
-  ): PricingSnapshot =>
-    validatePricingSnapshot({ ...base, source: 'official', checkedAt, ...data });
-  if (
-    ['openai-responses-v1', 'openai-chat-v1'].includes(connection.protocol) &&
-    exactEndpoint(connection, 'api.openai.com')
-  ) {
-    if (
-      !['auto', 'default', 'flex', 'priority', 'fast'].includes(tier) ||
-      (model.cacheTtl && model.cacheTtl !== '30m')
-    )
-      return undefined;
-    const table: Record<string, TokenRates> = {
-      'gpt-6-astra': tokenRates(10, 1, 12.5, 50),
-      'gpt-5.6-sol': tokenRates(4, 0.4, 5, 20),
-      'gpt-5.6': tokenRates(4, 0.4, 5, 20),
-      'gpt-5.6-terra': tokenRates(2, 0.2, 2.5, 12),
-      'gpt-5.6-luna': tokenRates(0.2, 0.02, 0.25, 1.2),
-    };
-    const normal = table[model.modelId];
-    if (!normal) return undefined;
-    const selected = scale(
-      normal,
-      tier === 'flex' ? 0.5 : ['priority', 'fast'].includes(tier) ? 2 : 1
-    );
-    const long = scale(selected, 2);
-    long.output = selected.output! * 1.5;
-    return official({
-      rates: selected,
-      standardRates: normal,
-      longContext: { aboveInputTokens: 272_000, rates: long },
-      sourceUrl: 'https://developers.openai.com/api/docs/pricing',
-      notes: [
-        '입력 272K 초과 시 요청 전체에 장문 요금을 적용해요.',
-        ...(model.modelId === 'gpt-5.6-sol' || model.modelId === 'gpt-5.6'
-          ? [
-              'Sol 프로모션 단가는 최소 2026-11-21까지예요. 이후에는 공식 가격을 다시 확인해 주세요.',
-            ]
-          : []),
-        ...(tier === 'auto'
-          ? ['auto는 표준 단가를 기준으로 해요. 실제 적용된 tier를 확인해야 해요.']
-          : []),
-      ],
-    });
-  }
-  if (
-    connection.protocol === 'anthropic-messages-v1' &&
-    exactEndpoint(connection, 'api.anthropic.com')
-  ) {
-    if (
-      !['auto', 'default', 'standard_only'].includes(tier) ||
-      (model.cacheTtl && !['5m', '1h'].includes(model.cacheTtl))
-    )
-      return undefined;
-    const value =
-      model.modelId === 'claude-fable-5-1'
-        ? tokenRates(10, 0.25, 12.5, 50, 20)
-        : model.modelId === 'claude-opus-5'
-          ? tokenRates(5, 0.5, 6.25, 25, 10)
-          : model.modelId === 'claude-opus-5-5'
-            ? tokenRates(4, 0.2, 5, 20, 8)
-            : undefined;
-    if (!value) return undefined;
-    return official(
-      {
-        rates: value,
-        sourceUrl: 'https://platform.claude.com/docs/en/about-claude/pricing',
-        notes: [
-          '1M 컨텍스트까지 같은 단가예요. 캐시 쓰기는 5분과 1시간을 구분해요.',
-          '전역 추론 기준이며 US-only 추론과 Fast 모드의 추가 요금은 포함하지 않아요.',
-        ],
-      },
-      model.modelId === 'claude-opus-5-5' ? '2026-09-29' : CHECKED_AT
-    );
-  }
-  if (connection.protocol === 'vertex-gemini-v1') {
-    try {
-      validateVertexEndpoint(connection.endpoint);
-    } catch {
-      return undefined;
-    }
-    if (!['auto', 'default', 'standard', 'flex'].includes(tier)) return undefined;
-    const flex = tier === 'flex',
-      promo = now < '2027-01-01';
-    let value: TokenRates, longContext: PricingSnapshot['longContext'];
-    const notes = [
-      'Google Cloud global endpoint 기준이에요. 명시적 캐시 저장시간 요금은 포함하지 않아요.',
-    ];
-    if (model.modelId === 'gemini-3.1-pro-preview') {
-      value = flex ? tokenRates(1, null, null, 6) : tokenRates(2, 0.2, null, 12);
-      longContext = {
-        aboveInputTokens: 200_000,
-        rates: flex ? tokenRates(2, null, null, 9) : tokenRates(4, 0.4, null, 18),
-      };
-      if (flex) notes.push('공식 Vertex Flex 표의 캐시 읽기 단가는 N/A예요.');
-    } else if (model.modelId === 'gemini-3.5-flash-lite')
-      value = scale(tokenRates(0.3, 0.03, null, 2.5), flex ? 0.5 : 1);
-    else if (model.modelId === 'gemini-3.8-flash') {
-      value = scale(tokenRates(1.5, 0.15, null, 7.5), (flex ? 0.5 : 1) * (promo ? 0.5 : 1));
-      if (promo) notes.push('2026-12-31까지 50% 출시 할인이 적용된 단가예요.');
-    } else return undefined;
-    return official({
-      rates: value,
-      standardRates:
-        model.modelId === 'gemini-3.1-pro-preview'
-          ? tokenRates(2, 0.2, null, 12)
-          : flex
-            ? scale(value, 2)
-            : value,
-      flexRates:
-        model.modelId === 'gemini-3.1-pro-preview'
-          ? tokenRates(1, null, null, 6)
-          : flex
-            ? value
-            : scale(value, 0.5),
-      ...(longContext
-        ? { flexLongContext: { aboveInputTokens: 200_000, rates: tokenRates(2, null, null, 9) } }
-        : {}),
-      ...(longContext ? { longContext } : {}),
-      sourceUrl: 'https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing',
-      notes,
-    });
-  }
-  if (
-    ['deepseek-chat-v1', 'openai-chat-v1'].includes(connection.protocol) &&
-    exactEndpoint(connection, 'api.deepseek.com', ['', '/v1'])
-  ) {
-    if (!standard || tier === 'standard_only') return undefined;
-    const value =
-      model.modelId === 'deepseek-v4-flash'
-        ? tokenRates(0.22, 0.007, null, 0.66)
-        : model.modelId === 'deepseek-v4-pro'
-          ? tokenRates(0.66, 0.022, null, 1.98)
-          : undefined;
-    if (!value) return undefined;
-    return official({
-      rates: value,
-      schedule: {
-        peakRates: scale(value, 2),
-        weekdays: [1, 2, 3, 4, 5],
-        utcHours: [
-          [1, 4],
-          [6, 10],
-        ],
-      },
-      sourceUrl: 'https://api-docs.deepseek.com/quick_start/pricing/',
-      notes: ['월–금 UTC 01–04시와 06–10시는 혼잡 요금, 나머지는 비혼잡 요금이에요.'],
-    });
-  }
+
   if (
     connection.protocol === 'vercel-chat-v1' &&
     exactEndpoint(connection, 'ai-gateway.vercel.sh')
@@ -390,6 +281,7 @@ export function resolveModelPricing(
       checkedAt: connection.catalogUpdatedAt ?? now,
       rates: selected.rates,
       standardRates: entry.pricing.rates,
+      ...(entry.pricing.longContext ? { standardLongContext: entry.pricing.longContext } : {}),
       ...(selected.longContext ? { longContext: selected.longContext } : {}),
       ...(flex
         ? {

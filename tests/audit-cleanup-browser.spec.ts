@@ -93,12 +93,13 @@ for (const width of [412, 1440]) {
     expect(presentations).toBeGreaterThan(baseline);
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
-    await page.getByRole('tab', { name: '이 채팅', exact: true }).click();
+    await expect(page.getByRole('tab', { name: '이 채팅', exact: true })).toHaveCount(0);
     await expect(page.getByText('도우미에게 옵션 조정 위임', { exact: true })).toHaveCount(0);
     await page
       .locator('summary')
       .filter({ hasText: /^다음 생성에만 적용$/ })
       .click();
+    await page.locator('.chat-options-extra .chat-option-group > summary').first().click();
     await page
       .getByRole('button', { name: /검사 문체.*다음 생성만 지정|다음 생성만 지정.*검사 문체/ })
       .click();

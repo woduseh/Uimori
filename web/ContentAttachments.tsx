@@ -1,7 +1,7 @@
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
-import type { RisuContent, ContentAttachment, ContentRole } from '../core/risu-content.js';
+import type { RisuContent, ContentAttachment } from '../core/risu-content.js';
 import { api } from './api.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
@@ -21,21 +21,17 @@ export function ContentAttachments({
   library,
   onChange,
   onError,
-  ownerBotId,
   onPendingChange,
 }: {
   profile: ChatProfile;
   library: Library;
   onChange: (profile: ChatProfile) => void;
   onError: (message: string) => void;
-  ownerBotId?: string;
   onPendingChange?: (pending: boolean) => void;
 }) {
   const attachments = profile.packageAttachments ?? [],
     viewKey = requestKey(profile.chatId, attachments);
   const [resolved, setResolved] = useState<{ key: string; value: ResolvedPackages } | null>(null),
-    [selected, setSelected] = useState(''),
-    [role, setRole] = useState<ContentRole>('module'),
     [busy, setBusy] = useState(false),
     [loadError, setLoadError] = useState(''),
     [reload, setReload] = useState(0);
@@ -46,8 +42,8 @@ export function ContentAttachments({
   const [changing, setChanging] = useState(false);
   const changeVersion = useRef(0);
   useEffect(() => {
-    onPendingChange?.(selected !== '' || changing);
-  }, [selected, changing, onPendingChange]);
+    onPendingChange?.(changing);
+  }, [changing, onPendingChange]);
   useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: viewKey includes all attachments and the chat; reload retries without reacting to array identity.
   useEffect(() => {
@@ -104,7 +100,6 @@ export function ContentAttachments({
         ...current,
         packageAttachments: next,
       });
-      setSelected('');
     } catch (caught) {
       if (version.current === request && latest.current.viewKey === initialKey) {
         const message = `자료 연결을 바꾸지 못했어요. (${(caught as Error).message}) 모듈 연결 문제라면 필요한 모듈이 빠졌거나 모듈끼리 서로를 다시 연결하는지 확인해 주세요.`;
@@ -116,20 +111,13 @@ export function ContentAttachments({
       if (version.current === request) setBusy(false);
     }
   }
-  function add() {
-    const item = library.contents.find((content) => refValue(content) === selected);
-    if (!item) return;
-    if (role === 'bot' && ownerBotId !== item.id) {
-      onError('채팅의 소속 봇은 바꿀 수 없어요.');
-      return;
-    }
-    const ref = { id: item.id, revision: item.revision, role },
-      next = attachments.filter(
-        (current) =>
-          !(current.id === ref.id && current.role === ref.role) &&
-          (role === 'module' || current.role !== role)
-      );
-    void changeAttachments([...next, ref]);
+  function add(reference: string) {
+    const item = library.contents.find((content) => refValue(content) === reference);
+    if (!item || attachments.some((ref) => ref.id === item.id && ref.role === 'module')) return;
+    void changeAttachments([
+      ...attachments,
+      { id: item.id, revision: item.revision, role: 'module' },
+    ]);
   }
   const persona = attachments.find((item) => item.role === 'persona');
   const current = resolved?.key === viewKey ? resolved.value : null;
@@ -273,35 +261,19 @@ export function ContentAttachments({
         <summary>함께 사용하는 모듈 · 자료 추가</summary>
         <fieldset className="package-entry" disabled={busy}>
           <legend>자료 추가</legend>
-          <label>
-            이 채팅에서의 역할
-            <select
-              aria-label="패키지 장착 역할"
-              value={role}
-              onChange={(event) => {
-                setRole(event.target.value as ContentRole);
-                setSelected('');
-              }}
-            >
-              <option value="module">모듈 · 추가 지침과 설정</option>
-              <option value="persona">페르소나 · 내가 맡는 인물</option>
-            </select>
-          </label>
           <ContentPicker
             library={{
               ...library,
               contents: library.contents.filter((content) => content.package || content.hasPackage),
             }}
-            role={role}
+            role="module"
             label="추가할 패키지"
-            value={selected}
-            onChange={setSelected}
+            value=""
+            onChange={add}
             disabled={busy}
-            excludeIds={attachments.filter((ref) => ref.role === role).map((ref) => ref.id)}
+            excludeIds={attachments.filter((ref) => ref.role === 'module').map((ref) => ref.id)}
           />
-          <button type="button" className="secondary" disabled={!selected || busy} onClick={add}>
-            패키지 장착
-          </button>
+
           <small>
             같은 자료를 다른 역할로 사용할 수 있어요. 요구하는 모듈도 함께 연결하며 공유 모듈은 한
             번만 포함해요.

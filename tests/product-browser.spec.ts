@@ -139,11 +139,17 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .locator('.section-navigation')
       .filter({ visible: true })
       .locator('button .section-navigation-title')
-  ).toHaveText(['대화 구성', '프롬프트·모델', '이야기 가이드', '기억·로어', '이미지']);
+  ).toHaveText(['대화 구성', '프롬프트·모델', '원작·인물 참고', '기억·로어', '이미지']);
   await selectChatSettingsSection(page, '대화 구성');
   await page.getByText('함께 사용하는 모듈 · 자료 추가', { exact: true }).click();
   await selectContent(page, '추가할 패키지', added.title);
-  await page.getByRole('button', { name: '패키지 장착', exact: true }).click();
+  await expect(
+    profile
+      .locator('.package-attachment')
+      .filter({ has: page.getByRole('heading', { name: added.title, exact: true }) })
+  ).toBeVisible();
+  expect((await getDetail(request, chat.id)).profile?.packageAttachments).toEqual([owner]);
+  await expect(page.getByRole('button', { name: '패키지 장착', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect
     .poll(async () => (await getDetail(request, chat.id)).profile?.packageAttachments)
@@ -176,6 +182,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   const editor = await promptTab(page);
   await editor.getByLabel('현재 프롬프트 프리셋', { exact: true }).selectOption(choice.prompt.id);
   await editor.getByText('창작 옵션', { exact: true }).click();
+  await editor.locator('.prompt-option-group > summary').first().click();
   const composer = editor;
   for (const combination of [choice.combination, second]) {
     await composer.getByLabel('옵션 조합', { exact: true }).selectOption(combination.id);

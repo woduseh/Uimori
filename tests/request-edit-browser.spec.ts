@@ -64,7 +64,7 @@ for (const width of DEFAULT_WIDTHS) {
     await page.route('**/api/sources/*/translation', (route) =>
       route.fulfill({ status: 400, json: { error: 'Synthetic invalid request' } })
     );
-    await source.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await source.getByRole('button', { name: '번역 생성', exact: true }).click();
     const error = source.locator('.source-action-error');
     await expect(error).toContainText('요청을 처리할 수 없어요. (400)');
     const action = error.getByRole('button', { name: '전역 모델 설정' });
@@ -85,7 +85,8 @@ for (const width of DEFAULT_WIDTHS) {
     const message = source.getByTestId('source-request');
     await message.hover();
     if (width !== DESKTOP_WIDTH) await message.click();
-    await source.getByRole('button', { name: '요청 편집', exact: true }).click();
+    await source.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
+    await source.getByRole('button', { name: '문맥용 요청 수정', exact: true }).click();
     await page.getByRole('textbox', { name: '요청 수정 내용' }).fill('저장된 수정 입력');
     await page.getByRole('button', { name: '입력 저장' }).click();
     await expect(message).toContainText('저장된 수정 입력');
@@ -97,20 +98,21 @@ for (const width of DEFAULT_WIDTHS) {
       .toBe('저장된 수정 입력');
     await message.hover();
     if (width !== DESKTOP_WIDTH) await message.click();
+    await source.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
     await source.getByRole('button', { name: '입력을 문맥에서 제외' }).click();
     await expect(message).toHaveClass(/request-context-disabled/);
     await expect
       .poll(async () => (await readerSource(request, chat.id)).sceneContext?.requestEnabled)
       .toBe(false);
 
-    await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+    await source.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
     await source.getByRole('button', { name: '장면을 문맥에서 제외' }).click();
     await expect(source).toHaveClass(/scene-context-muted/);
     await expect(source.locator('.scene-context-notice')).toContainText('이후 생성 문맥에서 제외');
     await page.reload();
     const restored = page.getByTestId('source').first();
     await expect(restored).toHaveClass(/scene-context-muted/);
-    await restored.getByLabel('장면 작업 메뉴', { exact: true }).click();
+    await restored.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
     await restored.getByRole('button', { name: '장면을 문맥에 포함' }).click();
     await expect(restored).not.toHaveClass(/scene-context-muted/);
     const after = await detail(request, chat.id);
@@ -120,6 +122,22 @@ for (const width of DEFAULT_WIDTHS) {
       requestEnabled: false,
       sceneEnabled: true,
     });
+    await restored.getByRole('button', { name: '다시 쓰기', exact: true }).first().click();
+    const rewrite = page.getByRole('dialog', { name: '다시 쓰기', exact: true });
+    await expect(rewrite.getByRole('textbox', { name: '다시 쓸 요청' })).toHaveValue(
+      '저장된 수정 입력'
+    );
+    let sent: Record<string, unknown> | undefined;
+    await page.route(`**/api/runs/${run.id}/retry`, async (route) => {
+      sent = route.request().postDataJSON();
+      await route.fulfill({ status: 400, json: { error: 'Synthetic rejected rewrite' } });
+    });
+    await rewrite.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
+    await expect.poll(() => sent).toMatchObject({ request: '저장된 수정 입력', mode: 'copy' });
+    await expect(rewrite.getByRole('textbox', { name: '다시 쓸 요청' })).toHaveValue(
+      '저장된 수정 입력'
+    );
+    expect((await detail(request, chat.id)).runs).toHaveLength(1);
   });
   test(`REDIT01 ${width} inline request editing preserves drafts and original answers while copying a chat`, async ({
     page,
@@ -129,7 +147,7 @@ for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${chat.id}`);
     const source = page.getByTestId('source').first();
-    const edit = source.getByRole('button', { name: '요청 편집', exact: true });
+    const edit = source.getByRole('button', { name: '다시 쓰기', exact: true }).first();
     const composer = page.getByRole('textbox', { name: '다음 장면 요청' });
     await composer.fill('입력창에 보존할 초안');
     await page.route('**/api/chats/*/input-translation', (route) =>
@@ -146,20 +164,24 @@ for (const width of DEFAULT_WIDTHS) {
       await expect(source.locator('.request-message-actions')).toHaveCSS('opacity', '1');
     }
     await edit.click();
-    const field = page.getByRole('textbox', { name: '요청 수정 내용' });
+    const field = page.getByRole('textbox', { name: '다시 쓸 요청' });
     await expect(field).toBeFocused();
     await expect(field).toHaveValue('원래 합성 요청');
     await field.fill('취소할 초안');
     await page.keyboard.press('Escape');
-    await expect(edit).toBeFocused();
     await expect(field).not.toBeVisible();
+    await expect(edit).toBeFocused();
     await edit.click();
-    await expect(field).toHaveValue('원래 합성 요청');
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue('취소할 초안');
     await field.fill('수정한 합성 요청');
     await page.reload();
     await edit.click();
     await expect(field).toHaveValue('수정한 합성 요청');
-    await page.screenshot({ path: info.outputPath(`request-edit-${width}.png`) });
+    await page.screenshot({
+      path: info.outputPath(`request-edit-${width}.png`),
+      animations: 'disabled',
+    });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
@@ -170,10 +192,13 @@ for (const width of DEFAULT_WIDTHS) {
       if (calls.length === 1) await route.abort('failed');
       else await route.fulfill({ response });
     });
-    await page.getByRole('button', { name: '수정 후 재생성' }).click();
+    await page.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
     await expect(field).toHaveValue('수정한 합성 요청');
     await expect(field).toBeDisabled();
-    await page.getByRole('button', { name: '이전 요청 확인' }).click();
+    await page
+      .getByRole('dialog', { name: '다시 쓰기', exact: true })
+      .getByRole('button', { name: '이전 요청 확인', exact: true })
+      .click();
     await page
       .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
       .getByRole('button', { name: '접수 확인', exact: true })

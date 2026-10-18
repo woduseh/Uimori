@@ -79,7 +79,7 @@ for (const width of DEFAULT_WIDTHS) {
     await page.goto(`/?chat=${existing.id}`);
     await page.getByRole('button', { name: /^현재 본문 모델 ·/ }).click();
     const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
-    await expect(editor).toContainText('모든 채팅의 이후 요청에 적용');
+    await expect(editor).toContainText('변경한 설정은 이후 작업부터 적용돼요.');
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
     await expect(editor.getByText('핵심 작업', { exact: true })).toBeVisible();
     await expect(editor.getByLabel('도우미 모델', { exact: true })).toBeHidden();
@@ -549,7 +549,7 @@ for (const width of DEFAULT_WIDTHS) {
       await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
       await chip.click();
       await expect(promptSelect).toHaveValue(preset.id);
-      await expect(settings.getByRole('alert')).toContainText('고정한 작문 프리셋');
+      await expect(settings.getByRole('alert')).toContainText('이 채팅에 지정한 작문 프롬프트');
       await promptSelect.selectOption('');
       await settings.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
       await expect

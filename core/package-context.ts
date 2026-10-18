@@ -23,7 +23,7 @@ export function compiledPackages(snapshot: RunSnapshot, target: ContentTarget): 
       (p) => p.id === attachment.id && p.revision === attachment.revision
     );
     const authored =
-      stored && projectRisuImageHandoff(stored, target === 'main' && profile?.image === true);
+      stored && projectRisuImageHandoff(stored, target !== 'image' && profile?.image === true);
     const pkg =
       authored && projectNativeRisuFields(authored, attachment, snapshot.nativeRisuExecution);
     if (!pkg) throw new RisuContentError('PACKAGE_SNAPSHOT_REVISION_MISSING', attachment.id);

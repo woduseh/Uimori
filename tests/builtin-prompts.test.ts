@@ -232,17 +232,19 @@ test.each(['pheme', 'pheme-novel'])(
   }
 );
 
-test('reopening an existing database preserves saved working programs, options and library edits', async () => {
+test('reopening preserves legacy working programs as preset references, options and existing library edits', async () => {
   const entry = await application();
   const prior = promptWorkspace(entry.app!.store);
+  const initialPresetCount = entry.app!.store.product.all('prompt-preset').length;
   expect(prior.main.title).toBe('Phēmē · RP');
   expect(prior.main.values).not.toHaveProperty('pheme_session_mode');
   expect(prior.main.program.collaboration).toMatchObject({ enabled: false });
   prior.main = {
     title: 'My saved writing prompt',
     program: createDefaultRisuPrompt('MY SAVED INSTRUCTIONS'),
-    values: {},
+    values: { tone: 'KEEP_OPTION' },
   };
+  prior.main.program.nativeRisuPreset.preset.customPromptTemplateToggle = 'tone=보존 문체=text';
   prior.translation = {
     title: 'My saved translation',
     program: createDefaultRisuPrompt('MY TRANSLATION', 'translation'),
@@ -269,10 +271,28 @@ test('reopening an existing database preserves saved working programs, options a
   await entry.app!.close();
   entry.app = undefined;
   const reopened = await application(entry.directory);
-  expect(promptWorkspace(reopened.app!.store)).toEqual(prior);
+  const migrated = promptWorkspace(reopened.app!.store);
+  expect(migrated).toMatchObject(prior);
+  for (const role of ['main', 'translation'] as const) {
+    expect(
+      reopened.app!.store.product.get('prompt-preset', migrated[role].presetId!)
+    ).toMatchObject({
+      title: prior[role].title,
+      role,
+      program: prior[role].program,
+      values: prior[role].values,
+    });
+  }
+  const stored = reopened
+    .app!.store.db.prepare('SELECT body FROM prompt_workspace WHERE id=1')
+    .get()!;
+  expect(JSON.parse(String(stored.body)).main).toEqual({
+    presetId: migrated.main.presetId,
+    values: prior.main.values,
+  });
   expect(reopened.app!.store.product.get('prompt-preset', preset.id)).toEqual(preset);
   expect(reopened.app!.store.product.get('prompt-preset', legacyOoc.id)).toEqual(legacyOoc);
-  expect(reopened.app!.store.product.all('prompt-preset')).toHaveLength(2);
+  expect(reopened.app!.store.product.all('prompt-preset')).toHaveLength(initialPresetCount + 4);
   expect(
     (await reopened.app!.inject({ method: 'GET', url: '/api/prompt-templates' })).json()
   ).toHaveLength(3);
@@ -291,5 +311,12 @@ test('reopening an existing database preserves saved working programs, options a
       })
     ).json()
   ).toEqual(legacyOoc);
-  expect(promptWorkspace(reopened.app!.store)).toEqual(prior);
+  const changes = reopened.app!.store.db.prepare('SELECT total_changes() AS n').get();
+  expect(promptWorkspace(reopened.app!.store)).toEqual(migrated);
+  expect(reopened.app!.store.db.prepare('SELECT total_changes() AS n').get()).toEqual(changes);
+  await reopened.app!.close();
+  reopened.app = undefined;
+  const again = await application(entry.directory);
+  expect(promptWorkspace(again.app!.store)).toEqual(migrated);
+  expect(again.app!.store.product.all('prompt-preset')).toHaveLength(initialPresetCount + 4);
 });

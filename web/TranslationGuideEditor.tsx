@@ -19,10 +19,10 @@ export function TranslationGuideEditor({
       <div className="translation-guide-intro">
         <Languages size={22} aria-hidden="true" />
         <div>
-          <h3>이 봇의 번역 지침</h3>
+          <h3>봇으로 사용할 때의 번역 지침</h3>
           <p>
-            번역 프리셋의 공통 원칙에 이 작품의 표기와 말투를 더해요. 같은 봇의 모든 채팅에서 다음
-            번역·재번역부터 사용하며, 저장된 번역과 진행 중인 작업은 바꾸지 않아요.
+            번역 프리셋의 공통 원칙에 이 작품의 표기와 말투를 더해요. 이 자료를 봇으로 사용하는
+            채팅의 다음 번역·재번역부터 사용해요. 페르소나·모듈 역할로 장착하면 적용하지 않아요.
           </p>
         </div>
       </div>

@@ -34,8 +34,7 @@ async function openOptions(page: Page, chat: Chat, width = 412) {
   await page.goto(`/?chat=${chat.id}`);
   await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
-  await page.getByRole('tab', { name: '이 채팅', exact: true }).click();
-  return page.getByRole('tabpanel', { name: '이 채팅 옵션', exact: true });
+  return page.locator('#chat-prompt-options');
 }
 
 async function readOptions(request: APIRequestContext, chat: Chat) {
@@ -84,6 +83,10 @@ test('OPTIONREVIEW1 failed reads expose retry; removed fixed and oneoff inputs a
   failRead = false;
   await retry.click();
   await expect(retry).toHaveCount(0);
+  await panel
+    .locator('section[aria-label="이 채팅 고정 옵션"] .chat-option-group > summary')
+    .first()
+    .click();
   await expect(
     panel.getByRole('button', { name: '합성 문체 개별 지정', exact: true })
   ).toBeVisible();
@@ -100,6 +103,7 @@ test('OPTIONREVIEW1 failed reads expose retry; removed fixed and oneoff inputs a
     .locator('summary')
     .filter({ hasText: /^다음 생성에만 적용$/ })
     .click();
+  await panel.locator('.chat-options-extra .chat-option-group > summary').first().click();
   await panel.getByRole('button', { name: '합성 문체 다음 생성만 지정', exact: true }).click();
   await panel.getByLabel('합성 문체', { exact: true }).last().fill('사라질 1회 입력');
   const changed = await request.put('/api/prompt-workspace', {
@@ -165,9 +169,14 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   const { chat } = await fixture(request);
   const panel = await openOptions(page, chat, 1440);
   await panel
+    .locator('section[aria-label="이 채팅 고정 옵션"] .chat-option-group > summary')
+    .first()
+    .click();
+  await panel
     .locator('summary')
     .filter({ hasText: /^다음 생성에만 적용$/ })
     .click();
+  await panel.locator('.chat-options-extra .chat-option-group > summary').first().click();
   await panel.getByRole('button', { name: '합성 문체 다음 생성만 지정', exact: true }).click();
   const oneoffTone = panel.getByLabel('합성 문체', { exact: true }).last();
   await oneoffTone.fill('다음 생성 문체');

@@ -10,17 +10,17 @@ type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
   ...requestImageErrors,
-  STORY_GUIDE_STALE: '가이드 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 요청해 주세요.',
-  STORY_GUIDE_CANCELLED: '이야기 가이드 요청이 중단됐어요.',
-  STORY_GUIDE_TIMEOUT: '이야기 가이드가 제한 시간 안에 끝나지 않았어요. 다시 요청해 주세요.',
-  STORY_GUIDE_FAILED: '이야기 가이드를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
-  STORY_GUIDE_REFUSED: '모델이 이야기 가이드 요청을 거절했어요.',
-  STORY_GUIDE_CALL_BUDGET_EXHAUSTED: '가이드에 사용할 모델 호출 횟수가 부족해요.',
-  STORY_GUIDE_OUTPUT_TOO_LARGE: '가이드 답변이 너무 길어요. 질문이나 참고 범위를 좁혀 주세요.',
+  STORY_GUIDE_STALE: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
+  STORY_GUIDE_CANCELLED: '원작·인물 참고가 중단됐어요.',
+  STORY_GUIDE_TIMEOUT: '원작·인물 참고가 제한 시간 안에 끝나지 않았어요. 다시 집필해 주세요.',
+  STORY_GUIDE_FAILED: '원작·인물 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
+  STORY_GUIDE_REFUSED: '모델이 원작·인물 참고 요청을 거절했어요.',
+  STORY_GUIDE_CALL_BUDGET_EXHAUSTED: '원작·인물 참고에 사용할 모델 호출 횟수가 부족해요.',
+  STORY_GUIDE_OUTPUT_TOO_LARGE: '참고 분석이 너무 길어요. 참고 범위를 좁혀 주세요.',
   STORY_GUIDE_READ_CALL_LIMIT:
-    '추가 자료를 더 읽어야 해서 답변을 마치지 못했어요. 질문이나 참고 범위를 좁혀 주세요.',
+    '추가 자료를 더 읽어야 해서 분석을 마치지 못했어요. 참고 범위를 좁혀 주세요.',
   STORY_GUIDE_PROVIDER_FAILED:
-    '이야기 가이드를 준비하지 못했어요. 본문 모델과 연결을 확인해 주세요.',
+    '원작·인물 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
   MANUSCRIPT_RANGE_CHANGED: '원고 범위가 바뀌었어요. 내보내기를 다시 열어 범위를 확인해 주세요.',
   MANUSCRIPT_EMPTY: '내보낼 원고가 아직 없어요.',
   MANUSCRIPT_RANGE_INVALID: '내보낼 장면 범위를 확인해 주세요.',

@@ -26,10 +26,52 @@ export function matchesPromptCombination(
   program: RisuPrompt
 ): boolean {
   return (
-    item.role === role &&
-    item.owner !== undefined &&
+    ownsPromptCombination(item, owner, role) &&
     item.controls !== undefined &&
-    canonical(item.owner) === canonical(owner) &&
     canonical(item.controls) === canonical(promptControls(program))
+  );
+}
+
+/** Management keeps obsolete definitions visible; application still requires an exact match. */
+export function ownsPromptCombination(
+  item: SavedPromptCombination,
+  owner: PromptCombinationOwner,
+  role: PromptRole
+): boolean {
+  return (
+    item.role === role && item.owner !== undefined && canonical(item.owner) === canonical(owner)
+  );
+}
+
+/** Only values whose meaning and accepted type survive a definition change are prefilled. */
+export function repairPromptCombinationValues(
+  item: SavedPromptCombination,
+  program: RisuPrompt
+): SavedPromptCombination['values'] {
+  const previous = item.controls ?? [];
+  return Object.fromEntries(
+    promptControls(program).flatMap((control) => {
+      const old = previous.find((entry) => entry.id === control.id);
+      const value = item.values[control.id];
+      if (
+        !old ||
+        old.type !== control.type ||
+        old.input !== control.input ||
+        old.nativeKey !== control.nativeKey ||
+        old.label !== control.label ||
+        value === undefined
+      )
+        return [];
+      if (control.type === 'select' && !control.options?.some((option) => option.value === value))
+        return [];
+      if (
+        control.type === 'select' &&
+        old.options?.find((option) => option.value === value)?.label !==
+          control.options?.find((option) => option.value === value)?.label
+      )
+        return [];
+      if (control.type === 'text' && typeof value !== 'string') return [];
+      return [[control.id, value]];
+    })
   );
 }

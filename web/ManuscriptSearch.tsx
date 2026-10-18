@@ -26,6 +26,10 @@ export function ManuscriptSearchPanel({
   library,
   folders = [],
   label = '원고 검색',
+  query: suppliedQuery,
+  queryComposing = false,
+  hideQueryInput = false,
+  formId,
   onNavigate,
   onChat,
 }: {
@@ -36,17 +40,24 @@ export function ManuscriptSearchPanel({
   library?: Library | null;
   folders?: ChatFolder[];
   label?: string;
+  /** A containing search dialog can own one query across different result kinds. */
+  query?: string;
+  queryComposing?: boolean;
+  hideQueryInput?: boolean;
+  formId?: string;
   onNavigate: (target: ReaderTarget) => void;
   onChat?: (id: string) => void;
 }) {
-  const [query, setQuery] = useState('');
+  const [localQuery, setQuery] = useState('');
+  const query = suppliedQuery ?? localQuery;
   const [titleLimit, setTitleLimit] = useState(30);
   const [scope, setScope] = useState(initialScope);
   const [kinds, setKinds] = useState<SearchKind[]>(['original', 'translation', 'request']);
   const [result, setResult] = useState<ManuscriptSearchResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [composing, setComposing] = useState(false);
+  const [localComposing, setComposing] = useState(false);
+  const composing = localComposing || queryComposing;
   const currentRequest = useRef<AbortController | null>(null);
   const latest = useRef({ query, scope, kinds });
   latest.current = { query, scope, kinds };
@@ -111,39 +122,42 @@ export function ManuscriptSearchPanel({
   return (
     <section className="manuscript-search" aria-label="원고와 채팅 찾기">
       <form
+        id={formId}
         onSubmit={(event) => {
           event.preventDefault();
           if (!composing) void run();
         }}
       >
         <div className="manuscript-search-input">
-          <span className="manuscript-search-field">
-            <SearchIcon size={18} aria-hidden="true" />
-            <input
-              type="search"
-              aria-label={label}
-              placeholder="제목·본문·번역·요청으로 찾기"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (
-                  event.key !== 'Escape' ||
-                  event.nativeEvent.isComposing ||
-                  event.keyCode === 229
-                )
-                  return;
-                const dialog = event.currentTarget.closest('dialog');
-                if (!dialog) return;
-                // Chromium's search input otherwise consumes Escape just to clear text,
-                // leaving the modal open and the underlying navigation inert.
-                event.preventDefault();
-                event.stopPropagation();
-                dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
-              }}
-              onCompositionStart={() => setComposing(true)}
-              onCompositionEnd={() => setComposing(false)}
-            />
-          </span>
+          {!hideQueryInput && (
+            <span className="manuscript-search-field">
+              <SearchIcon size={18} aria-hidden="true" />
+              <input
+                type="search"
+                aria-label={label}
+                placeholder="제목·본문·번역·요청으로 찾기"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key !== 'Escape' ||
+                    event.nativeEvent.isComposing ||
+                    event.keyCode === 229
+                  )
+                    return;
+                  const dialog = event.currentTarget.closest('dialog');
+                  if (!dialog) return;
+                  // Chromium's search input otherwise consumes Escape just to clear text,
+                  // leaving the modal open and the underlying navigation inert.
+                  event.preventDefault();
+                  event.stopPropagation();
+                  dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+                }}
+                onCompositionStart={() => setComposing(true)}
+                onCompositionEnd={() => setComposing(false)}
+              />
+            </span>
+          )}
           <button type="submit" disabled={composing || busy || !query.trim() || !kinds.length}>
             검색
           </button>

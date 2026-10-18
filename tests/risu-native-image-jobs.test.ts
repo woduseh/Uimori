@@ -9,6 +9,9 @@ import { readRunSnapshot } from '../server/run-projections.js';
 import { imageCatalog, latestImageJob, putImageBlob } from '../server/package-images.js';
 import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { nativeRisuContext } from '../server/risu-native-context.js';
+import { buildMainInput } from '../core/provider.js';
+import { requestInput } from '../server/main-host-context.js';
+import { imageOwnerDisplayText } from '../core/image-placement.js';
 import {
   claimIllustration,
   completeIllustration,
@@ -81,8 +84,17 @@ function fixture() {
 
 test('validated image annotations use native boxes and placement without changing source or annotation receipts', async () => {
   const { store, chat } = fixture();
-  const source = completedSource(store, chat.id, 'Mira smiles.\n\nThe afternoon stays quiet.');
+  const source = completedSource(
+    store,
+    chat.id,
+    'Mira smiles.\n\n<img="Mira_happy">\n\n![]({{raw::Mira_happy}})\n\n![]({{path::Mira_happy}})\n\n[이미지 링크]({{path::Mira_happy}})\n\n원문 주소 {{raw::Mira_happy}}\n\nThe afternoon stays quiet.'
+  );
   const snapshot = readRunSnapshot(store, source.runId!);
+  const ownerProjection = imageOwnerDisplayText(source.text, snapshot.profile!);
+  expect(ownerProjection).not.toContain('![]({{raw::Mira_happy}})');
+  expect(ownerProjection).not.toContain('![]({{path::Mira_happy}})');
+  expect(ownerProjection).toContain('[이미지 링크]({{path::Mira_happy}})');
+  expect(ownerProjection).toContain('원문 주소 {{raw::Mira_happy}}');
   expect(await nativeImageGuidance(snapshot)).toContain('Outfit: school.');
   expect(
     await nativeImageGuidance({ ...snapshot, profile: { ...snapshot.profile!, image: false } })
@@ -116,6 +128,11 @@ test('validated image annotations use native boxes and placement without changin
   const receipt = structuredClone(store.job(pending.id));
   const display = await nativeImageDisplayText(store, snapshot, source.id);
   expect(display.issues).toEqual([]);
+  expect(display.text.match(/<img="Mira_happy">/gu)).toHaveLength(1);
+  expect(display.text).not.toContain('![]({{raw::Mira_happy}})');
+  expect(display.text).not.toContain('![]({{path::Mira_happy}})');
+  expect(display.text).toContain('[이미지 링크]({{path::Mira_happy}})');
+  expect(display.text).toContain('원문 주소 {{raw::Mira_happy}}');
   expect(display.text.indexOf('<img="Mira_happy">')).toBeLessThan(
     display.text.indexOf('Mira smiles.')
   );
@@ -127,6 +144,8 @@ test('validated image annotations use native boxes and placement without changin
   });
   expect(rendered.html).toContain('class="authored-image-box"');
   expect(rendered.html).toContain(asset.url);
+  expect(rendered.html.match(/<img\b/gu)).toHaveLength(1);
+  expect(rendered.html).toContain(`<a href="${asset.url}">이미지 링크</a>`);
   const genericSnapshot = structuredClone(snapshot);
   genericSnapshot.profile!.packages!.find((entry) => entry.nativeRisu)!.imageHandoff = undefined;
   const genericDisplay = await nativeImageDisplayText(store, genericSnapshot, source.id);
@@ -178,6 +197,32 @@ test('native model output reserves the existing independent illustration queue a
   });
   expect(latestImageJob(store, source.id, 'original')?.status).toBe('queued');
   expect(store.source(source.id)).toEqual(source);
+});
+
+test('one owner controls authored tags and JEV display copies without rewriting saved prose', async () => {
+  const { store, chat } = fixture();
+  const raw =
+    'Mira smiles.\n\n<img="Mira_happy">\n\n{{img::Mira_happy.png}}\n\n<img src="https://example.test/author.png">';
+  const source = completedSource(store, chat.id, raw);
+  const snapshot = readRunSnapshot(store, source.runId);
+  const display = await nativeImageDisplayText(store, snapshot, source.id);
+  expect(display.text).not.toContain('Mira_happy');
+  expect(display.text).toContain('https://example.test/author.png');
+  const writer = { ...snapshot, profile: { ...snapshot.profile!, image: false } };
+  expect((await nativeImageDisplayText(store, writer, source.id)).text).toBe(raw);
+  expect(imageOwnerDisplayText(raw, writer.profile)).toBe(raw);
+  expect(store.source(source.id)).toEqual(source);
+  const writerInput = buildMainInput(writer);
+  expect(writerInput.facts.join('\n')).toContain('Use <img="Mira_happy">');
+  expect(writerInput.imagePlacement?.catalog).toEqual([
+    expect.objectContaining({ name: 'Mira_happy' }),
+  ]);
+  expect((requestInput(writer, writerInput).source as any).imagePlacement).toEqual(
+    writerInput.imagePlacement
+  );
+  const jevInput = buildMainInput(snapshot);
+  expect(jevInput.facts.join('\n')).not.toContain('Use <img="Mira_happy">');
+  expect(jevInput.imagePlacement).toEqual({ owner: 'jev' });
 });
 
 test('image guidance preserves outer CBS conditions and excludes surrounding story instructions', async () => {

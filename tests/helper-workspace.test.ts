@@ -15,7 +15,11 @@ import { editableResource } from '../core/resource-editing.js';
 import { readResource, saveResource } from '../server/resource-service.js';
 import { putImageBlob } from '../server/package-images.js';
 import * as transport from '../core/transport.js';
-import type { HelperTaskSnapshot } from '../core/helper.js';
+import {
+  HELPER_TASK_LIMITS,
+  HELPER_TOOL_CALL_LIMIT,
+  type HelperTaskSnapshot,
+} from '../core/helper.js';
 import Fastify from 'fastify';
 import { helperRoutes } from '../server/helper-routes.js';
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -429,9 +433,6 @@ function snapshot(f: ReturnType<typeof fixture>): HelperTaskSnapshot {
 
 test('helper requests expose only remaining host calls at each boundary', async () => {
   const f = fixture();
-  f.workspace.update(f.conversation.id, f.conversation.revision, {
-    limits: { helperCalls: 2, totalCalls: 3 },
-  });
   const requests: transport.ProviderRequest[] = [];
   mockSend((request, _options, index) => {
     requests.push(structuredClone(request));
@@ -452,18 +453,23 @@ test('helper requests expose only remaining host calls at each boundary', async 
   });
   expect(requests.map((request) => request.input.controls)).toEqual([
     expect.objectContaining({
-      helperCallsRemaining: 2,
-      totalCallsRemaining: 3,
+      helperCallsRemaining: 64,
+      totalCallsRemaining: 128,
       includesCurrentCall: true,
       nativeInternalCalls: null,
     }),
     expect.objectContaining({
-      helperCallsRemaining: 1,
-      totalCallsRemaining: 2,
+      helperCallsRemaining: 63,
+      totalCallsRemaining: 127,
       includesCurrentCall: true,
       nativeInternalCalls: null,
     }),
   ]);
+  expect(requests[0].webSearch).toBeUndefined();
+  expect(requests[0].input.source).toMatchObject({
+    webSearch: { supported: false, mode: 'unavailable' },
+    currentDateUtc: new Date().toISOString().slice(0, 10),
+  });
 });
 
 test('legacy helper limits remain readable without rewriting stored conversation or task bytes', () => {
@@ -487,7 +493,96 @@ test('legacy helper limits remain readable without rewriting stored conversation
   expect(
     f.store.db.prepare('SELECT snapshot FROM helper_tasks WHERE id=?').get(task.id)?.snapshot
   ).toBe(legacySnapshot);
+  const admitted = f.runtime.enqueue(
+    f.conversation.id,
+    'current-policy',
+    'Use current policy',
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false
+  );
+  expect(admitted.snapshot.limits).toEqual(HELPER_TASK_LIMITS);
+  expect(f.workspace.task(task.id).snapshot.limits).toEqual({ totalCalls: 24, helperCalls: 12 });
 });
+
+test.each(['provider', 'native'] as const)(
+  'helper %s execution stops after 256 host tool callbacks',
+  async (execution) => {
+    const f = fixture();
+    const calls = Array.from({ length: HELPER_TOOL_CALL_LIMIT }, (_, index) => ({
+      id: `callback-${index}`,
+      name: 'missing.tool',
+      arguments: {},
+    }));
+    let runtime = f.runtime;
+    let nativeSignal: AbortSignal | undefined;
+    if (execution === 'native') {
+      const connection = f.store.product.connection({
+        title: 'Native callback guard',
+        protocol: 'codex-app-server-v1',
+        endpoint: 'codex://local',
+        enabled: true,
+      });
+      const model = f.store.product.model({
+        title: 'Native callback guard',
+        connectionId: connection.id,
+        modelId: 'synthetic-helper',
+        temperature: null,
+        maxOutputTokens: 1024,
+      });
+      const selected = modelWorkspace(f.store);
+      updateModelWorkspace(f.store, {
+        expectedRevision: selected.revision,
+        routes: selected.routes,
+        translationPolicy: selected.translationPolicy,
+        helperModel: { id: model.id },
+      });
+      runtime = new HelperRuntime(f.store, {
+        owner: 'native-callback-guard',
+        signal: f.controller.signal,
+        track: (work) => f.work.push(work),
+        streams: f.streams,
+        executeCodexAgent: async (_connection, _request, options) => {
+          nativeSignal = options.signal;
+          for (const call of calls) {
+            await options.onToolCall(
+              { name: call.name, arguments: call.arguments, callId: call.id },
+              options.signal
+            );
+          }
+          await expect(
+            options.onToolCall(
+              { name: 'missing.tool', arguments: {}, callId: 'over-budget' },
+              options.signal
+            )
+          ).rejects.toThrow('HELPER_TOOL_CALL_BUDGET_EXHAUSTED');
+          // A late native completion cannot convert the host guard into success.
+          return structuredClone(success);
+        },
+      });
+    } else {
+      mockSend((_request, _options, index) => ({
+        ...structuredClone(success),
+        status: 'tool_calls',
+        text: '',
+        toolCalls:
+          index === 0 ? calls : [{ id: 'over-budget', name: 'missing.tool', arguments: {} }],
+      }));
+    }
+    const task = runtime.enqueue(f.conversation.id, 'callback-guard', '도구를 확인해줘');
+    await Promise.all(f.work);
+    expect(f.workspace.task(task.id)).toMatchObject({
+      status: 'failed',
+      error: 'HELPER_TOOL_CALL_BUDGET_EXHAUSTED',
+    });
+    expect(
+      f.workspace.events(f.conversation.id).filter((event) => event.kind === 'tool.finished')
+    ).toHaveLength(HELPER_TOOL_CALL_LIMIT);
+    if (execution === 'native') expect(nativeSignal?.aborted).toBe(true);
+  }
+);
 
 test('HTTP steering skips a stale write, delivers once and retains the correction in future history', async () => {
   const f = fixture();
@@ -1513,12 +1608,13 @@ test('selected outline review allows evidence reads, rejects writes and retains 
   expect(f.store.outline.node(node.id).intent).toBe(node.intent);
   expect(f.workspace.task(task.id).status).toBe('completed');
   expect(f.workspace.task(task.id).snapshot.outline).toBeUndefined();
-  expect(f.store.outline.latestReview(node.id)).toMatchObject({
+  expect(f.workspace.messages(conversation.id).at(-1)).toMatchObject({
+    role: 'assistant',
     taskId: task.id,
-    status: 'completed',
-    stale: false,
-    partial: false,
   });
+  expect(
+    f.store.db.prepare('SELECT count(*) AS n FROM outline_reviews WHERE task_id=?').get(task.id)?.n
+  ).toBe(0);
   expect(
     f.runtime.enqueue(
       conversation.id,
@@ -1531,34 +1627,6 @@ test('selected outline review allows evidence reads, rejects writes and retains 
     ).id
   ).toBe(task.id);
   expect(requests).toHaveLength(2);
-  const sibling = f.store.outline.applyReceipt(
-    chat.id,
-    {
-      idempotencyKey: 'review-unrelated',
-      operations: [{ op: 'create', level: 'arc', title: '관계없는 부', intent: '별개 계획' }],
-    },
-    'user'
-  ).created[0].id;
-  expect(f.store.outline.latestReview(node.id)?.stale).toBe(false);
-  f.store.outline.applyReceipt(
-    chat.id,
-    {
-      idempotencyKey: 'review-unrelated-edit',
-      operations: [{ op: 'update', id: sibling, expectedRevision: 1, intent: '별개 계획 수정' }],
-    },
-    'user'
-  );
-  expect(f.store.outline.latestReview(node.id)?.stale).toBe(false);
-  const { editSource } = await import('../server/source-editing.js');
-  editSource(f.store, source.id, {
-    expectedRevision: source.editRevision,
-    text: 'Mira had already left the pier.',
-  });
-  expect(f.store.outline.latestReview(node.id)?.stale).toBe(true);
-  const row = f.store.db
-    .prepare('SELECT sources FROM outline_reviews WHERE task_id=?')
-    .get(task.id);
-  expect(JSON.stringify(row)).not.toContain(source.text);
   expect(
     f.store.db.prepare('SELECT count(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
       ?.n
@@ -1660,80 +1728,61 @@ test('outline selection scope and revisions are checked before a provider call; 
   expect(f.store.chat(chat.id).headRevision).toBeNull();
 });
 
-test('helper session branching stores only independent text history and can branch again after source deletion', () => {
+test('existing helper branch seeds remain readable and usable after source deletion', async () => {
   const f = fixture();
   const source = f.conversation;
-  const time = new Date().toISOString(),
-    tid = crypto.randomUUID();
-  f.store.db
-    .prepare(`INSERT INTO helper_tasks
-    (id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?)`)
-    .run(
-      tid,
-      source.id,
-      tid,
-      '초기 질문',
-      'completed',
-      JSON.stringify({ model: { title: 'Synthetic model' }, history: [] }),
-      JSON.stringify({ modelCalls: 1 }),
-      time,
-      time
-    );
-  const makeMessage = f.store.db.prepare(`INSERT INTO helper_messages
-    (id,conversation_id,task_id,role,text,artifacts,created_at) VALUES(?,?,?,?,?,'[]',?)`);
-  makeMessage.run(crypto.randomUUID(), source.id, tid, 'user', '초기 질문', time);
-  const answer = crypto.randomUUID();
-  makeMessage.run(answer, source.id, tid, 'assistant', '초기 답변', time);
-  const branched = f.workspace.branch(source.id, 'branch-id');
-  expect(f.workspace.branch(source.id, 'branch-id').id).toBe(branched.id);
-  expect(branched.id).not.toBe(source.id);
-  expect(f.workspace.taskSummaries(branched.id)).toEqual([]);
-  expect(f.workspace.messages(branched.id).map((m) => m.text)).toEqual(['초기 질문', '초기 답변']);
-  expect(helperHistory(f.store, branched.id).map((m) => m.text)).toEqual([
+  const branched = f.workspace.create(source.scope, 'legacy-branch', '기존 분기');
+  const add = f.store.db.prepare(`INSERT INTO helper_seed_messages
+    (id,conversation_id,ordinal,role,text,created_at) VALUES(?,?,?,?,?,?)`);
+  const time = new Date().toISOString();
+  add.run(crypto.randomUUID(), branched.id, 0, 'user', '초기 질문', time);
+  add.run(crypto.randomUUID(), branched.id, 1, 'assistant', '초기 답변', time);
+  f.workspace.delete(source.id, f.workspace.deletionImpact(source.id).request);
+  expect(f.workspace.messages(branched.id).map((message) => message.text)).toEqual([
     '초기 질문',
     '초기 답변',
   ]);
-  expect(
-    Number(
-      f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(tid)?.n
-    )
-  ).toBe(0);
-  expect(() => f.workspace.branch(source.id, 'branch-id', 'different-message')).toThrow();
-  const next = f.workspace.branch(branched.id, 'next');
-  expect(helperHistory(f.store, next.id).map((m) => m.text)).toEqual(['초기 질문', '초기 답변']);
-  const deletion = f.workspace.deletionImpact(source.id);
-  f.workspace.delete(source.id, deletion.request);
-  expect(f.workspace.messages(branched.id).map((m) => m.text)).toEqual(['초기 질문', '초기 답변']);
-  expect(
-    Number(
-      f.store.db
-        .prepare('SELECT COUNT(*) AS n FROM helper_tasks WHERE conversation_id=?')
-        .get(branched.id)?.n
-    )
-  ).toBe(0);
+  expect(helperHistory(f.store, branched.id).map((message) => message.text)).toEqual([
+    '초기 질문',
+    '초기 답변',
+  ]);
+  const requests: transport.ProviderRequest[] = [];
+  mockSend((request) => {
+    requests.push(structuredClone(request));
+    return structuredClone(success);
+  });
+  const task = f.runtime.enqueue(branched.id, 'continue-seed', '이어서 답해줘');
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  expect(requests[0].input.history).toMatchObject([
+    { role: 'user', text: '초기 질문' },
+    { role: 'assistant', text: '초기 답변' },
+  ]);
 });
 
-test('helper branch refuses active work and invalid cut positions', () => {
+test('helper routes reject retired branching and limit editing without changing settings', async () => {
   const f = fixture();
-  const source = f.conversation;
-  expect(() => f.workspace.branch(source.id, 'blank')).toThrow('완료된 도우미 응답');
-  const time = new Date().toISOString(),
-    tid = crypto.randomUUID();
-  f.store.db
-    .prepare(`INSERT INTO helper_tasks
-    (id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at)
-    VALUES(?,?,?,?,?,?,?,?,?)`)
-    .run(
-      tid,
-      source.id,
-      tid,
-      'pending',
-      'running',
-      JSON.stringify({ model: { title: 'Synthetic model' }, history: [] }),
-      JSON.stringify({ modelCalls: 0 }),
-      time,
-      time
-    );
-  expect(() => f.workspace.branch(source.id, 'running')).toThrow('진행 중인 작업');
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  try {
+    const branch = await app.inject({
+      method: 'POST',
+      url: `/api/helper/conversations/${f.conversation.id}/branch`,
+      payload: { requestKey: 'retired' },
+    });
+    expect(branch.statusCode).toBe(404);
+    const limits = await app.inject({
+      method: 'PATCH',
+      url: `/api/helper/conversations/${f.conversation.id}`,
+      payload: {
+        expectedRevision: f.conversation.revision,
+        persona: '변경되지 않는 말투',
+        limits: { helperCalls: 2, totalCalls: 3 },
+      },
+    });
+    expect(limits.statusCode).toBe(400);
+    expect(f.workspace.conversation(f.conversation.id)).toEqual(f.conversation);
+  } finally {
+    await app.close();
+  }
 });

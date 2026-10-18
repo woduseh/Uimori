@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import { ToggleRow } from './ToggleRow.js';
+import { PromptOptionGroup } from './PromptOptionGroup.js';
 import './prompt-control-fields.css';
 import { type PromptControl, type RisuPrompt, type PromptValue } from '../core/risu-prompt.js';
 import { nativeRisuToggleItems, type NativeRisuToggleItem } from '../core/risu-native-preset.js';
@@ -183,8 +184,12 @@ export function PromptControlFields({
   return (
     <div className="prompt-option-groups">
       {groups.map(({ name, items }, index) => (
-        <details key={index} open className="prompt-option-group">
-          <summary>{name}</summary>
+        <PromptOptionGroup
+          key={`${name}:${index}`}
+          identity={`controls:${name}`}
+          className="prompt-option-group"
+          summary={name}
+        >
           <div className="pc-control-values">
             {items.map((item, index) => {
               if (item.type === 'caption')
@@ -216,7 +221,7 @@ export function PromptControlFields({
               );
             })}
           </div>
-        </details>
+        </PromptOptionGroup>
       ))}
     </div>
   );

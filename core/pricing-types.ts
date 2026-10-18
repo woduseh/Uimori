@@ -8,9 +8,21 @@ export type TokenRates = {
   output: number | null;
   cacheWrite1h?: number | null;
 };
+export type ContextRates = { aboveInputTokens: number; rates: TokenRates };
 export type ModelPricing =
+  // Legacy name retained for saved settings: only connection catalog pricing is automatic.
   | { mode: 'official' }
-  | { mode: 'manual'; rates: TokenRates; flexRates?: TokenRates };
+  | {
+      mode: 'manual';
+      rates: TokenRates;
+      flexRates?: TokenRates;
+      batchRates?: TokenRates;
+      longContext?: ContextRates;
+      flexLongContext?: ContextRates;
+      batchLongContext?: ContextRates;
+      sourceUrl?: string;
+      checkedAt?: string;
+    };
 /** Host-only, frozen when a model is reserved; never a provider request parameter. */
 export type PricingSnapshot = {
   version: 1;
@@ -22,6 +34,7 @@ export type PricingSnapshot = {
   serviceTier: string;
   rates: TokenRates;
   standardRates?: TokenRates;
+  standardLongContext?: ContextRates;
   flexRates?: TokenRates;
   flexLongContext?: { aboveInputTokens: number; rates: TokenRates };
   longContext?: { aboveInputTokens: number; rates: TokenRates };

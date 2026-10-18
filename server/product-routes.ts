@@ -56,7 +56,7 @@ export function productRoutes(
   const product = store.product;
   libraryDeletionRoutes(app, store);
   promptRoutes(app, store);
-  chatDeletionRoutes(app, store, options.publish, options.onChatDeleted);
+  chatDeletionRoutes(app, store, options.onChatDeleted);
   assetDeletionRoutes(app, store, options.publish);
   chatOrganizationRoutes(app, store, options.publish);
   libraryOrganizationRoutes(app, store);

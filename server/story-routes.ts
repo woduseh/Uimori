@@ -15,21 +15,6 @@ export function storyRoutes(
   app.get<{ Params: { id: string } }>('/api/chats/:id/story', async (request) =>
     store.story.detail(request.params.id)
   );
-  app.post<{ Params: { id: string } }>(
-    '/api/chats/:id/scene-commands',
-    { bodyLimit: 16 * 1024 * 1024 },
-    async (request) => {
-      const command = store.story.createCommand(request.params.id, request.body);
-      hooks.publish(command.chatId);
-      return command;
-    }
-  );
-  app.post<{ Params: { id: string } }>('/api/scene-commands/:id/cancel', async (request) => {
-    fields(record(request.body ?? {}), []);
-    const command = store.story.cancelCommand(request.params.id);
-    hooks.publish(command.chatId);
-    return command;
-  });
   app.post<{ Params: { id: string } }>('/api/scene-commands/:id/run', async (request) => {
     const body = record(request.body);
     fields(body, [

@@ -65,6 +65,8 @@ export type Usage = {
   costUsd: number | null;
 };
 export type RunSnapshot = {
+  /** Existing image choices frozen with this writing request. */
+  imageCatalog?: import('./auxiliary.js').AssetEntry[];
   /** Authored user attachments retained after execution inputs are settled. */
   requestImages?: import('./request-images.js').RequestImage[];
   storyGuide?: import('./story-guide.js').StoryGuideSnapshot;
