@@ -67,7 +67,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.versions',
     description:
-      'List retained ORIGINAL version metadata (initial original and up to two recent edits), never a full archive. Select versionRevision to read bounded text pages; copy nextRead unchanged. Translation history is not supported. editTarget guards the current original for restore.',
+      'List retained ORIGINAL version metadata (initial original and up to two recent edits), never a full archive. Select versionRevision to read bounded text pages; copy nextRead unchanged. For random access, copy the source revision/hash from editTarget and expectedTextHash from the selected version page textHash (not editTarget.expectedTextHash for the current original). Translation history is not supported. editTarget guards the current original for restore.',
     inputSchema: schema({ sourceId, versionRevision: revision, ...paging }, ['sourceId']),
   },
   {
@@ -157,7 +157,7 @@ function page(
   )
     throw new HttpError(
       400,
-      'SCENE_PAGE_GUARDS_REQUIRED: Nonzero offset requires expectedRevision, expectedSourceHash and expectedTextHash from the same scene.read result. Copy nextRead or restart at offset=0.'
+      'SCENE_PAGE_GUARDS_REQUIRED: Nonzero offset requires expectedRevision, expectedSourceHash and expectedTextHash from the same text page (use editTarget.expectedRevision, editTarget.expectedSourceHash and page.textHash). Copy nextRead or restart at offset=0.'
     );
   checkGuards(args, editTarget, offset > 0);
   const textHash = digest(content);

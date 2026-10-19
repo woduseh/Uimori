@@ -183,6 +183,25 @@ test('retained original versions expose metadata and bounded text, restore as a 
   const first = call('scene.versions', { sourceId: source.id, versionRevision: 0, limit: 7 });
   expect(first.text).toBe('Initial');
   expect(call('scene.versions', first.nextRead).text).toBe(' origin');
+  expect(first.textHash).not.toBe(first.editTarget.expectedTextHash);
+  const historicalPage = { sourceId: source.id, versionRevision: 0, offset: 7 };
+  const { target: _target, ...versionGuards } = first.editTarget;
+  expect(() => call('scene.versions', historicalPage)).toThrow(
+    /SCENE_PAGE_GUARDS_REQUIRED.*same text page.*textHash/
+  );
+  expect(() => call('scene.versions', { ...historicalPage, ...versionGuards })).toThrow(
+    /text changed/
+  );
+  expect(
+    call('scene.versions', {
+      ...historicalPage,
+      ...versionGuards,
+      expectedTextHash: first.textHash,
+    })
+  ).toMatchObject({
+    text: ' original',
+    nextOffset: null,
+  });
   const guards = listing.editTarget;
   expect(() => call('scene.restore', { ...guards, versionRevision: 1 })).toThrow(/retained/);
   expect(call('scene.restore', { ...guards, versionRevision: 0 })).toMatchObject({
