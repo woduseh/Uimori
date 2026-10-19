@@ -111,6 +111,127 @@ test('literal scene changes save once and fail atomically for ambiguous, overlap
   });
 });
 
+test('exact-count replacements are atomic and reject overlap, mismatch and stale guards', () => {
+  const { store, source, call, read } = fixture('Chihiro-han, my lord! Chihiro-han, my lord!');
+  const editTarget = read().editTarget;
+  const changes = [
+    { oldText: 'Chihiro-han', newText: 'Chihiro-san', expectedCount: 2 },
+    { oldText: 'my lord', newText: 'Producer', expectedCount: 2 },
+  ];
+  for (const invalid of [
+    [{ ...changes[0], expectedCount: 3 }, changes[1]],
+    [changes[0], { oldText: 'my lord', newText: 'Producer' }],
+    [{ oldText: 'Chihiro', newText: 'M', expectedCount: 2 }, changes[0]],
+    [changes[0], { ...changes[0] }],
+    [{ ...changes[0], expectedCount: 0 }],
+    [{ ...changes[0], expectedCount: 1.5 }],
+  ]) {
+    expect(() => call('scene.patch', { ...editTarget, changes: invalid })).toThrow();
+    expect(store.source(source.id).editRevision).toBe(0);
+  }
+  expect(call('scene.patch', { ...editTarget, changes })).toMatchObject({
+    changed: true,
+    revision: 1,
+    translationInvalidated: true,
+  });
+  expect(store.source(source.id).text).toBe('Chihiro-san, Producer! Chihiro-san, Producer!');
+  expect(() => call('scene.patch', { ...editTarget, changes })).toThrow(/changed/);
+});
+
+test('overlapping literal occurrences remain ambiguous even for expectedCount', () => {
+  const { store, source, call, read } = fixture('aaaaa');
+  const original = read().editTarget;
+  expect(
+    call('scene.search', { sourceId: source.id, target: 'original', patterns: ['aaa'] }).counts[0]
+      .count
+  ).toBe(3);
+  for (const count of [1, 2, 3])
+    expect(() =>
+      call('scene.patch', {
+        ...original,
+        changes: [{ oldText: 'aaa', newText: 'x', expectedCount: count }],
+      })
+    ).toThrow();
+  expect(store.source(source.id).text).toBe('aaaaa');
+  expect(store.source(source.id).editRevision).toBe(0);
+});
+
+test('live literal search pages matches, preserves counts and provides patch guards', () => {
+  const { store, source, call } = fixture('😀 Chihiro-han A Chihiro-han B Chihiro-han');
+  const args = {
+    sourceId: source.id,
+    target: 'original',
+    patterns: ['Chihiro-han', 'chihiro-han', '😀'],
+    context: 2,
+    limit: 2,
+  };
+  const first = call('scene.search', args);
+  expect(first).toMatchObject({
+    totalMatches: 4,
+    counts: [{ count: 3 }, { count: 0 }, { count: 1 }],
+    matches: [{ patternIndex: 0, start: 3, match: 'Chihiro-han' }, { patternIndex: 0 }],
+    nextOffset: 2,
+  });
+  expect(call('scene.search', first.nextSearch)).toMatchObject({
+    offset: 2,
+    nextOffset: null,
+    matches: [{ patternIndex: 0 }, { patternIndex: 2, start: 0, end: 2 }],
+  });
+  expect(() => call('scene.search', { ...args, offset: 2 })).toThrow(
+    /SCENE_SEARCH_GUARDS_REQUIRED/
+  );
+  const prior = first.nextSearch;
+  call('scene.patch', {
+    ...first.editTarget,
+    changes: [{ oldText: 'Chihiro-han', newText: 'Chihiro-san', expectedCount: 3 }],
+  });
+  expect(() => call('scene.search', prior)).toThrow(/changed/);
+  expect(call('scene.search', args).counts[0].count).toBe(0);
+  expect(store.source(source.id).text).toContain('Chihiro-san');
+});
+
+test('scene search bounds large output, protects chat scope and searches translations', () => {
+  const { store, source, chatId, call } = fixture('a'.repeat(56000));
+  expect(() =>
+    call('scene.search', { sourceId: source.id, target: 'original', patterns: [] })
+  ).toThrow();
+  expect(() =>
+    call('scene.search', { sourceId: source.id, target: 'original', patterns: [''] })
+  ).toThrow();
+  const many = call('scene.search', {
+    sourceId: source.id,
+    target: 'original',
+    patterns: ['a'],
+    context: 100,
+    limit: 20,
+  });
+  expect(many).toMatchObject({ totalLength: 56000, totalMatches: 56000, nextOffset: 20 });
+  expect(many.matches).toHaveLength(20);
+  expect(JSON.stringify(many).length).toBeLessThan(16000);
+  expect(call('scene.search', many.nextSearch).matches[0].start).toBe(20);
+  const otherChat = createFixtureChat(store, 'Another').id;
+  expect(otherChat).not.toBe(chatId);
+  expect(() =>
+    invokeHelperSceneTool(store, otherChat, 'scene.search', {
+      sourceId: source.id,
+      target: 'original',
+      patterns: ['a'],
+    })
+  ).toThrow(/ancestry/);
+  store.editTranslation(source.id, {
+    text: '번역어 번역어',
+    expectedRevision: 0,
+    expectedSourceHash: source.hash,
+  });
+  const translated = call('scene.search', {
+    sourceId: source.id,
+    target: 'translation',
+    patterns: ['번역어'],
+  });
+  expect(translated).toMatchObject({ totalMatches: 2, counts: [{ count: 2 }] });
+  expect(translated.editTarget.target).toBe('translation');
+});
+
 test('bounded reads require stable snapshots and reject sources outside the live chat', () => {
   const { store, source, chatId, call } = fixture('abcdefghij');
   const first = call('scene.read', { sourceId: source.id, target: 'original', limit: 4 });
