@@ -440,6 +440,74 @@ test('native Chat continuation receives new user instructions and budget without
   expect(completed.instructions).toEqual([expect.objectContaining({ status: 'delivered' })]);
 });
 
+test('invalid SQL column gives schema-discovery recovery without relaxing other SQL errors', async () => {
+  const f = fixture();
+  const bodies = provider((wire, round) => {
+    if (round === 0)
+      return answer(
+        '',
+        [
+          {
+            id: 'unknown-column',
+            name: 'db.query',
+            args: { sql: 'SELECT position FROM agent_messages' },
+          },
+          { id: 'syntax-error', name: 'db.query', args: { sql: 'SELECT FROM agent_messages' } },
+          { id: 'forbidden', name: 'db.query', args: { sql: 'SELECT body FROM versions' } },
+        ],
+        wire
+      );
+    if (round === 1) {
+      expect(toolResult(wire, 'unknown-column')).toMatchObject({
+        error: 'no such column: position',
+        code: 'DATA_SQL_UNKNOWN_COLUMN',
+        recoverable: true,
+        retryMode: 'correct_arguments',
+        outcome: 'unchanged',
+      });
+      expect(toolResult(wire, 'unknown-column').nextAction).toContain('without sql');
+      for (const id of ['syntax-error', 'forbidden'])
+        expect(toolResult(wire, id)).toMatchObject({ recoverable: false, retryMode: 'never' });
+      return answer('', [{ id: 'schema', name: 'db.query', args: {} }], wire);
+    }
+    if (round === 2) {
+      const columns = toolResult(wire, 'schema').views.find(
+        (v: any) => v.name === 'agent_messages'
+      ).columns;
+      expect(columns).toContain('scene_number');
+      expect(columns).not.toContain('position');
+      return answer(
+        '',
+        [
+          {
+            id: 'corrected',
+            name: 'db.query',
+            args: {
+              sql: 'SELECT id,scene_number FROM agent_messages ORDER BY scene_number LIMIT 1',
+            },
+          },
+        ],
+        wire
+      );
+    }
+    expect(toolResult(wire, 'corrected')).toMatchObject({ scope: 'live-database', rows: [] });
+    return answer('Corrected SQL succeeded.');
+  });
+  const task = await f.run('Find the scene order in the SQL view.');
+  expect(task.status).toBe('completed');
+  expect(bodies).toHaveLength(4);
+  expect(
+    f.runtime.workspace
+      .events(task.conversationId)
+      .find(
+        (event) =>
+          event.taskId === task.id &&
+          event.kind === 'tool.finished' &&
+          (event.data as any).callId === 'unknown-column'
+      )?.data
+  ).toMatchObject({ denied: true, errorKind: 'recoverable' });
+});
+
 test('independent helper data reads refill a free slot while results, budgets and mutations retain call order', async () => {
   const f = fixture();
   const releases: (() => void)[] = [];

@@ -246,21 +246,27 @@ function smallerHelperRead(
   };
 }
 
-function helperToolError(error: unknown, readOnly: boolean) {
+function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
   const batch = error instanceof HelperResourceBatchError ? error : undefined;
   const cause = batch?.cause ?? error;
   const patch = cause instanceof HelperResourcePatchError ? cause : undefined;
   const message = error instanceof Error ? error.message : 'HELPER_TOOL_FAILED';
   const status =
     error instanceof HttpError || error instanceof RisuContentError ? error.statusCode : undefined;
-  const code = patch
-    ? `PATCH_${patch.details.reason.toUpperCase()}`
-    : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
-      (status === 409
-        ? 'SOURCE_CONFLICT'
-        : status === 400
-          ? 'INVALID_ARGUMENTS'
-          : 'HELPER_TOOL_FAILED'));
+  // SQLite uses ERR_SQLITE_ERROR for both user mistakes and authorization failures.
+  // Classify only this proven SQL authoring error, and only for the read-only query tool.
+  const unknownSqlColumn =
+    readOnly && toolName === 'db.query' && /^no such column: [^\r\n]+$/u.test(message);
+  const code = unknownSqlColumn
+    ? 'DATA_SQL_UNKNOWN_COLUMN'
+    : patch
+      ? `PATCH_${patch.details.reason.toUpperCase()}`
+      : (/^[A-Z][A-Z_]+/u.exec(message)?.[0] ??
+        (status === 409
+          ? 'SOURCE_CONFLICT'
+          : status === 400
+            ? 'INVALID_ARGUMENTS'
+            : 'HELPER_TOOL_FAILED'));
   const stopped =
     status === 401 ||
     status === 403 ||
@@ -269,7 +275,7 @@ function helperToolError(error: unknown, readOnly: boolean) {
     );
   const retryMode = stopped
     ? 'never'
-    : patch
+    : unknownSqlColumn || patch
       ? 'correct_arguments'
       : status === 409 || status === 404
         ? 'refresh_then_retry'
@@ -294,8 +300,9 @@ function helperToolError(error: unknown, readOnly: boolean) {
           },
         }
       : {}),
-    nextAction:
-      retryMode === 'refresh_then_retry'
+    nextAction: unknownSqlColumn
+      ? 'Call db.query without sql to inspect available columns, then correct the SQL query. Do not repeat the unchanged query.'
+      : retryMode === 'refresh_then_retry'
         ? 'Read the affected source or task state again in the same scope before changing the request.'
         : retryMode === 'correct_arguments'
           ? 'Correct the arguments using the discovered tool schema; do not repeat the same request.'
@@ -996,7 +1003,7 @@ export class HelperRuntime {
             result: null,
             denied: false,
           });
-          output = helperToolError(error, readOnly);
+          output = helperToolError(error, readOnly, call.name);
           if ((output as { recoverable: boolean }).recoverable) errorKind = 'recoverable';
           // Unexpected write failures may follow a committed effect. Stop this task;
           // the existing receipt/status path decides whether another attempt is safe.

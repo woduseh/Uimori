@@ -65,7 +65,7 @@ export const HELPER_DATA_TOOLS: ProviderTool[] = [
   {
     name: 'db.query',
     description:
-      'Read-only SQL SELECT/CTE over agent_resources, agent_chats, agent_messages, agent_usage, agent_helper_inputs. Omit sql to read schemas/examples. Use for joins, filters and counts, not full resource dumps. Live database across chats: filter chat_id explicitly. Positional ? params, row/cell/output bounds and a 3-second execution deadline. No mutations, credentials or arbitrary filesystem access; save through app.call.',
+      'Read-only SQL SELECT/CTE over agent_resources, agent_chats, agent_messages, agent_usage, agent_helper_inputs. Omit sql to read schemas/examples before querying unfamiliar views or after an unknown-column error. Use for joins, filters and counts, not full resource dumps. Live database across chats: filter chat_id explicitly. Positional ? params, row/cell/output bounds and a 3-second execution deadline. No mutations, credentials or arbitrary filesystem access; save through app.call.',
     inputSchema: {
       type: 'object',
       properties: {

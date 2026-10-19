@@ -34,7 +34,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.read',
     description:
-      'Read the latest editable stored original or displayed completed translation in this chat ancestry, not rendered HTML. Discover sourceId through chat.read/story tools. Pages use UTF-16 offsets (default limit 6000, max 10000); copy nextRead unchanged. Read every relevant page before full replacement. editTarget contains current save guards, while displayedTranslation identifies the visible previous success during regeneration. Missing translation is an error. Stale pages require restarting.',
+      'Read the latest editable stored original or displayed completed translation in this chat ancestry, not rendered HTML. Discover sourceId through chat.read/story tools. Pages use UTF-16 offsets (default limit 6000, max 10000); copy nextRead unchanged for sequential pages. For a nonzero offset or random access, pass all three guards (expectedRevision, expectedSourceHash, expectedTextHash) from the same scene.read result. Read every relevant page before full replacement. editTarget contains current save guards, while displayedTranslation identifies the visible previous success during regeneration. Missing translation is an error. Stale pages require restarting.',
     inputSchema: schema({ sourceId, target, ...paging }, ['sourceId', 'target']),
   },
   {
@@ -149,6 +149,16 @@ function page(
   const offset =
     args.offset === undefined ? 0 : number(args.offset, 'text offset', 0, SOURCE_TEXT_MAX_CHARS);
   const limit = args.limit === undefined ? 6000 : number(args.limit, 'text limit', 1, 10000);
+  if (
+    offset > 0 &&
+    (args.expectedRevision === undefined ||
+      args.expectedSourceHash === undefined ||
+      args.expectedTextHash === undefined)
+  )
+    throw new HttpError(
+      400,
+      'SCENE_PAGE_GUARDS_REQUIRED: Nonzero offset requires expectedRevision, expectedSourceHash and expectedTextHash from the same scene.read result. Copy nextRead or restart at offset=0.'
+    );
   checkGuards(args, editTarget, offset > 0);
   const textHash = digest(content);
   if ((offset > 0 || args.expectedTextHash !== undefined) && args.expectedTextHash !== textHash)
