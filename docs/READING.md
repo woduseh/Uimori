@@ -35,6 +35,8 @@ Reader는 SSE의 목표 cursor까지 조회를 이어가며, 일시적인 조회
 
 ## 원문 보존과 구현
 
+일반 원문·번역과 완료된 도우미 본문은 저장 텍스트를 유지하면서 안전한 Markdown으로 표시해요. 속성 없는 HTML 중 루비 문자(ruby·rb·rt·rp), 밑줄(u), 첨자(sup·sub), 강조(mark), 작은 글씨(small), 단순 서식(b·i·s), 줄바꿈(br)만 제한적으로 지원해요. 그 밖의 HTML과 속성이 포함된 태그는 문자 그대로 표시해요. 생성 중 응답은 원문 그대로 유지하고, Risu 네이티브 메시지는 별도의 정화된 HTML 렌더러를 사용해요.
+
 `web/reading-preferences.ts`가 기본값과 브라우저 저장값 검증을, `web/useReadingPreferences.ts`가 저장·탭 반영·표시 간격·읽던 블록/메시지 위치 복원을 맡아요. 설정은 `web/ReadabilitySettings.tsx`, Risu 본문·미리보기는 `web/RisuMessageSurface.tsx`, 도우미·안전한 일반 Markdown은 `web/Prose.tsx`예요. 부호 짝맞춤은 `web/reading-quotes.ts`, DOM 장식은 `web/reading-dom.ts`, 공통 인용 스타일은 `web/reading-prose.css`를 사용해요. `server/risu-reading-markdown.ts`는 표시용 Markdown 토큰에만 읽기 대상 마커를 붙이고, `web/reader-dom.ts`는 Shadow DOM의 선택 범위와 읽기 위치를 연결해요.
 
 표시용 React/DOM 요소와 CSS만 바꿔요. 저장된 원문·번역문·hash·offset·block anchor와 이미지 귀속은 바꾸지 않아요. 기존 패키지 표시 변환 뒤의 화면 텍스트에 적용하고, 모델 입력·사용량·백업·내보내기에는 읽기 설정을 넣지 않아요. 본문 복사 버튼은 기존 저장 텍스트를 복사해요. 드래그 선택 복사는 브라우저의 시각적 개행 처리를 따를 수 있어요.

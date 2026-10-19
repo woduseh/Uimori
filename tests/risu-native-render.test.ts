@@ -318,6 +318,21 @@ test('native regex rule count is not limited to the legacy 32-rule conversion', 
   ).toContain('step40');
 });
 
+test('native Risu completed text retains inline ruby and reading markup', async () => {
+  const result = await renderNativeRisuMessage({
+    native: native(),
+    text:
+      'Han Byeol jabbed two fingers into the projected interface—her ' +
+      '<ruby>Runtime Overlay<rt>runtime overlay</rt></ruby> sparking, ' +
+      '<u>underlined</u> and <mark>highlighted</mark>.',
+    context: { variables: {} },
+  });
+  expect(result.html).toContain('<ruby>Runtime Overlay<rt>runtime overlay</rt></ruby>');
+  expect(result.html).toContain('<u>underlined</u>');
+  expect(result.html).toContain('<mark>highlighted</mark>');
+  expect(result.html).not.toContain('&lt;ruby&gt;');
+});
+
 test('indented native selector HTML stays interactive while explicit Markdown fences stay code', async () => {
   const result = await renderNativeRisuMessage({
     native: native(),
