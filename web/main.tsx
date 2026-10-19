@@ -31,7 +31,7 @@ import { RequestPreviewDialog } from './RequestPreviewDialog.js';
 import { ManuscriptExportDialog } from './ManuscriptExportDialog.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { IconButton } from './IconButton.js';
-import { PinIcon, CloseIcon } from './ui-icons.js';
+import { PinIcon, CloseIcon, DownIcon } from './ui-icons.js';
 import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
@@ -197,6 +197,13 @@ function App() {
     (label: string) => setScenePosition({ scope: s.viewKey, label }),
     [s.viewKey]
   );
+  const [latestPosition, setLatestPosition] = useState<{ scope: string; visible: boolean } | null>(
+    null
+  );
+  const updateLatestPosition = useCallback(
+    (visible: boolean) => setLatestPosition({ scope: s.viewKey, visible }),
+    [s.viewKey]
+  );
   const sceneCount = s.detail?.reader.navigation.length ?? 0;
   // Chat settings may open on a specific section (the failure card's 모델 설정).
   const [settingsSection, setSettingsSection] = useState<ChatSettingsSection | undefined>();
@@ -339,9 +346,10 @@ function App() {
     () => readPresentationChoice('uimori:scene-navigator', ['true', 'false'], 'true') === 'true'
   );
   const showSceneNavigator = sceneNavigatorEnabled && !focus;
+  // Hiding visual navigation must not disable the title's scene-list shortcut.
   useEffect(() => {
-    if (!showSceneNavigator) setSceneList(false);
-  }, [showSceneNavigator]);
+    if (focus) setSceneList(false);
+  }, [focus]);
   useEffect(() => {
     writePresentationSetting('uimori:scene-navigator', String(sceneNavigatorEnabled));
   }, [sceneNavigatorEnabled]);
@@ -795,7 +803,9 @@ function App() {
             <div className="reading-option-toggle">
               <div>
                 <strong>채팅 네비게이터</strong>
-                <small>장면 이동 컨트롤을 표시해요. 집중 읽기에서는 항상 숨겨요.</small>
+                <small>
+                  장면 눈금과 맨 아래 이동을 표시해요. 제목의 장면 목록은 계속 열 수 있어요.
+                </small>
               </div>
               <label className="check">
                 <Switch
@@ -910,14 +920,13 @@ function App() {
             <div className="header-title">
               <h1>
                 {s.detail?.chat.title || 'Uimori'}
-                {compact && showSceneNavigator && sceneCount > 0 && (
+                {compact && !focus && sceneCount > 0 && (
                   <ChevronDown size={14} aria-hidden="true" className="header-title-caret" />
                 )}
               </h1>
-              {(s.bot?.title ||
-                (compact && showSceneNavigator && scenePosition?.scope === s.viewKey)) && (
+              {(s.bot?.title || (compact && !focus && scenePosition?.scope === s.viewKey)) && (
                 <small className="header-reading-context">
-                  {compact && showSceneNavigator && scenePosition?.scope === s.viewKey && (
+                  {compact && !focus && scenePosition?.scope === s.viewKey && (
                     <span className="header-scene-position">{scenePosition.label}</span>
                   )}
                   {s.bot?.title && (
@@ -927,7 +936,7 @@ function App() {
                   )}
                 </small>
               )}
-              {compact && showSceneNavigator && s.selected && sceneCount > 0 && (
+              {compact && !focus && s.selected && sceneCount > 0 && (
                 <button
                   type="button"
                   ref={sceneListOpener}
@@ -1235,7 +1244,7 @@ function App() {
               </NoticeBanner>
             )}
             <div
-              className={`reader-stage ${showSceneNavigator && s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
+              className={`reader-stage ${!compact && showSceneNavigator && s.detail?.reader.navigation.length ? 'has-scenes' : ''}`}
             >
               <ThemeBackground />
               {s.detail?.chat.id === s.selected && s.attachmentsReady && s.bot && (
@@ -1556,7 +1565,7 @@ function App() {
                   )}
                 </section>
               </div>
-              {s.detail && showSceneNavigator && (
+              {s.detail && !focus && (compact || showSceneNavigator) && (
                 <SceneNavigator
                   key={s.viewKey}
                   detail={s.detail}
@@ -1566,7 +1575,7 @@ function App() {
                   onSelect={s.chooseSource}
                   onLatest={s.chooseLatest}
                   compact={compact}
-                  hideControls={compact && sourceEditing}
+                  onLatestVisibilityChange={compact ? updateLatestPosition : undefined}
                   listOpen={sceneList}
                   onListOpenChange={setSceneList}
                   onCurrentLabel={updateScenePosition}
@@ -1942,6 +1951,20 @@ function App() {
                       disabled={inputTranslationDisabled}
                       empty={!s.draft.trim()}
                     />
+                    {compact &&
+                      sceneNavigatorEnabled &&
+                      !focus &&
+                      !sourceEditing &&
+                      latestPosition?.scope === s.viewKey &&
+                      latestPosition.visible && (
+                        <IconButton
+                          label="본문 맨 아래로"
+                          icon={DownIcon}
+                          size={18}
+                          className="scene-latest-inline"
+                          onClick={s.chooseLatest}
+                        />
+                      )}
                   </div>
                   {s.active && !s.pendingRequest ? (
                     <button

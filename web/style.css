@@ -1119,7 +1119,7 @@ input[type="checkbox"] {
   gap: 6px;
 }
 .turn-failure-actions > button {
-  min-height: 40px;
+  min-height: var(--control-h);
   font-size: 13px;
 }
 .empty-state {
@@ -1361,7 +1361,7 @@ input[type="checkbox"] {
   }
   .model-chip {
     min-height: var(--control-h);
-    max-width: 132px;
+    max-width: clamp(92px, 28vw, 120px);
     margin-right: 2px;
     font-size: 12px;
     padding: 4px 10px;
