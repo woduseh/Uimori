@@ -62,6 +62,38 @@ test('RSURFACE successful controls wait for a refreshed revision', async ({ page
   await expect(page.locator('output')).toHaveText('2');
 });
 
+test('RSURFACE completed Risu text displays ruby and safe reading tags in Shadow DOM', async ({
+  page,
+}) => {
+  await page.goto(origin);
+  await page.evaluate(async () => {
+    const fixturePath = '/tests/fixtures/native-risu-frame.tsx';
+    const { mount } = await import(fixturePath);
+    mount(
+      '<p>Han Byeol jabbed two fingers into the projected interface—her ' +
+        '<ruby>Runtime Overlay<rt>runtime overlay</rt></ruby> sparking. ' +
+        '<u>Important</u> <mark>highlighted</mark>.</p>' +
+        '<script>globalThis.__uimoriRubyUnsafe = true</script>'
+    );
+  });
+  const surface = page.locator('.risu-message-surface');
+  await expect(surface.locator('ruby')).toHaveCount(1);
+  await expect(surface.locator('ruby rt')).toHaveText('runtime overlay');
+  await expect(surface.locator('u')).toHaveText('Important');
+  await expect(surface.locator('mark')).toHaveText('highlighted');
+  await expect(surface.locator('script')).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          globalThis as typeof globalThis & {
+            __uimoriRubyUnsafe?: boolean;
+          }
+        ).__uimoriRubyUnsafe
+    )
+  ).toBeUndefined();
+});
+
 test('RSURFACE plain paragraphs use natural flow after reading size changes', async ({ page }) => {
   for (const viewport of [
     { width: MOBILE_WIDTH, height: MOBILE_HEIGHT },
