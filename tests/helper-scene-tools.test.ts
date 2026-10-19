@@ -117,8 +117,17 @@ test('bounded reads require stable snapshots and reject sources outside the live
   expect(first).toMatchObject({ text: 'abcd', totalLength: 10, nextOffset: 4 });
   expect(call('scene.read', first.nextRead)).toMatchObject({ text: 'efgh', nextOffset: 8 });
   expect(() => call('scene.read', { sourceId: source.id, target: 'original', offset: 4 })).toThrow(
-    /revision/
+    /SCENE_PAGE_GUARDS_REQUIRED/
   );
+  for (const omitted of ['expectedRevision', 'expectedSourceHash', 'expectedTextHash']) {
+    const args = { ...first.editTarget, offset: 4 };
+    delete args[omitted as keyof typeof args];
+    expect(() => call('scene.read', args)).toThrow(/SCENE_PAGE_GUARDS_REQUIRED/);
+  }
+  expect(call('scene.read', { ...first.editTarget, offset: 8, limit: 2 })).toMatchObject({
+    text: 'ij',
+    nextOffset: null,
+  });
   call('scene.patch', { ...first.editTarget, text: 'X' });
   expect(() => call('scene.read', first.nextRead)).toThrow(/changed/);
   const other = createFixtureChat(store, 'Other chat').id;
