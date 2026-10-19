@@ -16,8 +16,8 @@ import './prose.css';
 /**
  * Deliberate Markdown subset for reading saved prose. This produces React nodes,
  * never HTML. Source strings, hashes and translation anchors are not rewritten.
- * Raw HTML and unapproved Markdown images remain literal text. Only attribute-free
- * <ruby>base<rt>reading</rt></ruby> (optional rb/rp) becomes native ruby.
+ * Raw HTML and unapproved Markdown images remain literal text, except for a small
+ * attribute-free reading/typography subset rendered as React nodes.
  */
 export function safeProseLink(value: string): string | undefined {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: Reject C0 controls and DEL before URL parsing can normalize them away.
@@ -104,19 +104,43 @@ function inline(
       continue;
     }
     const ruby = rest.match(
-      /^<ruby>(?:<rb>([^<>\n]+)<\/rb>|([^<>\n]+))(?:<rp>[^<>\n]*<\/rp>)?<rt>([^<>\n]+)<\/rt>(?:<rp>[^<>\n]*<\/rp>)?<\/ruby>/u
+      /^<ruby>((?:(?:<rb>[^<>\n]+<\/rb>|[^<>\n]+)(?:<rp>[^<>\n]*<\/rp>)?<rt>[^<>\n]+<\/rt>(?:<rp>[^<>\n]*<\/rp>)?)+)<\/ruby>/u
     );
     if (ruby) {
       flush();
+      const readings = [
+        ...ruby[1].matchAll(
+          /(?:<rb>([^<>\n]+)<\/rb>|([^<>\n]+))(?:<rp>[^<>\n]*<\/rp>)?<rt>([^<>\n]+)<\/rt>(?:<rp>[^<>\n]*<\/rp>)?/gu
+        ),
+      ];
       nodes.push(
         <ruby key={offset}>
-          {ruby[1] ?? ruby[2]}
-          <rp>(</rp>
-          <rt>{ruby[3]}</rt>
-          <rp>)</rp>
+          {readings.map((part, index) => (
+            <Fragment key={index}>
+              {part[1] ?? part[2]}
+              <rp>(</rp>
+              <rt>{part[3]}</rt>
+              <rp>)</rp>
+            </Fragment>
+          ))}
         </ruby>
       );
       offset += ruby[0].length;
+      continue;
+    }
+    const readingTag = rest.match(/^<(u|sup|sub|mark|small|b|i|s)>([^<>\n]+)<\/\1>/u);
+    if (readingTag) {
+      flush();
+      const Tag = readingTag[1] as 'u' | 'sup' | 'sub' | 'mark' | 'small' | 'b' | 'i' | 's';
+      nodes.push(<Tag key={offset}>{readingTag[2]}</Tag>);
+      offset += readingTag[0].length;
+      continue;
+    }
+    const readingBreak = rest.match(/^<br\s*\/?>/u);
+    if (readingBreak) {
+      flush();
+      nodes.push(<br key={offset} />);
+      offset += readingBreak[0].length;
       continue;
     }
     const protectedToken =

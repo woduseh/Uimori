@@ -95,6 +95,41 @@ describe('safe prose rendering', () => {
     expect(html).toContain('&lt;ruby onclick=&quot;alert(1)&quot;&gt;');
   });
 
+  test('supports safe reading HTML in completed prose without executing arbitrary HTML', () => {
+    const html = render(
+      'Han Byeol touched her <ruby>Runtime Overlay<rt>runtime overlay</rt></ruby>.\n' +
+        '<ruby><rb>漢</rb><rt>かん</rt><rb>字</rb><rt>じ</rt></ruby> ' +
+        '<u>underline</u> <sup>2</sup> <sub>i</sub> <mark>highlight</mark> ' +
+        '<small>aside</small> <b>bold</b> <i>italic</i> <s>obsolete</s><br>next<br />line'
+    );
+    expect(html).toContain('<ruby>Runtime Overlay<rp>(</rp><rt>runtime overlay</rt>');
+    expect(html).toContain('<ruby>漢<rp>(</rp><rt>かん</rt><rp>)</rp>字<rp>(</rp><rt>じ</rt>');
+    for (const fragment of [
+      '<u>underline</u>',
+      '<sup>2</sup>',
+      '<sub>i</sub>',
+      '<mark>highlight</mark>',
+      '<small>aside</small>',
+      '<b>bold</b>',
+      '<i>italic</i>',
+      '<s>obsolete</s>',
+    ])
+      expect(html).toContain(fragment);
+    expect(html).toContain('<br/>next<br/>line');
+    const unsafe = render(
+      '<mark onclick="alert(1)">unsafe</mark> ' +
+        '<ruby style="color:red">危険<rt>きけん</rt></ruby> ' +
+        '<img src=x onerror=alert(1)> ' +
+        '<script>alert(1)</script> ' +
+        '<mark><img src=x onerror=alert(1)></mark>'
+    );
+    expect(unsafe).not.toMatch(/<(?:img|script)\b/u);
+    expect(unsafe).not.toContain('<mark onclick');
+    expect(unsafe).not.toContain('<ruby style=');
+    expect(unsafe).toContain('&lt;mark onclick=');
+    expect(unsafe).toContain('&lt;ruby style=');
+  });
+
   test('keeps fenced code, protected placeholders, template syntax and machine identifiers literal', () => {
     const html = render(
       '```json\n{"assetRef":"harbor_01","mode":"READY"}\n\n<script>literal</script>\n```\n\n`**literal**` {{**user**}} [[p_ab12_1]] asset:harbor_01 SOME_ENUM'

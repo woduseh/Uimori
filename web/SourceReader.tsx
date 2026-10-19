@@ -1374,8 +1374,9 @@ function SourceReaderContent({
                     <pre data-testid="source-raw">{source.text}</pre>
                   </details>
                   <p>
-                    제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 ruby의 본문과 rt만 읽기
-                    표기로 표시하고, 나머지 HTML과 Markdown 이미지는 문자로 남겨요.
+                    제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 루비 문자·밑줄·
+                    첨자·하이라이트 등 읽기용 HTML만 표시하고, 나머지 HTML과 허용되지 않은 이미지는
+                    문자로 남겨요.
                   </p>
                 </div>
               </>

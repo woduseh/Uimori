@@ -49,3 +49,9 @@
   flex: none;
   margin-block-start: 0.35em;
 }
+
+.prose mark,
+.helper-prose mark {
+  color: inherit;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
