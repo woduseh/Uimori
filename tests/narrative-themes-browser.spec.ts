@@ -1077,7 +1077,8 @@ for (const layout of layouts) {
       );
       await page.reload();
       await expect(scene.getByTestId('source-text')).toContainText(endMarker);
-      await expect(page.locator('.header-title-hit')).toHaveCount(enabled ? 1 : 0);
+      // The scene-list shortcut is independent from the visual navigator setting.
+      await expect(page.locator('.header-title-hit')).toHaveCount(1);
       await page.setViewportSize({ width: 412, height: 700 });
       await reader.evaluate((node) => {
         node.scrollTop = node.scrollHeight;
@@ -1087,17 +1088,33 @@ for (const layout of layouts) {
       const actionsBox = (await lastActions.boundingBox())!;
       const composerBox = (await page.locator('.composer-dock').boundingBox())!;
       expect(actionsBox.y + actionsBox.height).toBeLessThan(composerBox.y);
-      if (enabled && (await page.locator('.scene-latest-row').count())) {
-        const jumpBox = (await page.locator('.scene-latest-row').boundingBox())!;
+      const jump = page.getByRole('button', { name: '본문 맨 아래로', exact: true });
+      if (enabled) {
+        await bodyScroll.focus();
+        await bodyScroll.evaluate((node) => {
+          node.scrollTop = 0;
+        });
+        await reader.evaluate((node) => {
+          node.scrollTop = 0;
+        });
+        await expect(jump).toBeVisible();
+        const toolbar = jump.locator('..');
+        await expect(toolbar).toHaveClass(/quick-controls/u);
+        const jumpBox = (await jump.boundingBox())!;
+        const toolbarBox = (await toolbar.boundingBox())!;
         const readerBox = (await reader.boundingBox())!;
-        expect(jumpBox.y).toBeGreaterThanOrEqual(readerBox.y + readerBox.height);
-        expect(actionsBox.y + actionsBox.height).toBeLessThanOrEqual(jumpBox.y);
+        expect(toolbarBox.y).toBeGreaterThanOrEqual(readerBox.y + readerBox.height - 1);
+        expect(jumpBox.y).toBeGreaterThanOrEqual(toolbarBox.y);
+        expect(jumpBox.y + jumpBox.height).toBeLessThanOrEqual(
+          toolbarBox.y + toolbarBox.height + 1
+        );
       } else {
-        const padding = await page
-          .locator('.reader')
-          .evaluate((node) => parseFloat(getComputedStyle(node).paddingBottom));
-        expect(padding).toBeLessThanOrEqual(32);
+        await expect(jump).toHaveCount(0);
       }
+      const padding = await page
+        .locator('.reader')
+        .evaluate((node) => parseFloat(getComputedStyle(node).paddingBottom));
+      expect(padding).toBeLessThanOrEqual(32);
       await page.screenshot({
         path: info.outputPath(`${layout}-412x700-navigator-${enabled}.png`),
       });
@@ -1105,7 +1122,7 @@ for (const layout of layouts) {
     await openChatMenu(page);
     await page.getByRole('button', { name: '집중 읽기', exact: true }).click();
     await expect(gallery).toBeHidden();
-    await expect(page.locator('.scene-latest-row')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '본문 맨 아래로', exact: true })).toHaveCount(0);
     await expect(page.locator('.header-title-hit')).toHaveCount(0);
     await expect(bodyScroll).toBeVisible();
     await noHorizontalOverflow(page, scene);

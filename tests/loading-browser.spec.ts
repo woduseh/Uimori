@@ -1021,15 +1021,20 @@ test('LOADUI11 mobile long-story navigation reads persisted off-page bodies with
   await expect(opener).toBeFocused();
   expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - readingTop)).toBeLessThan(3);
 
-  // The jump action occupies its own row below the reader, including while a long
-  // scene is being read midway. Its touch target must never cover manuscript text.
+  // The jump action shares the composer's toolbar instead of reserving its own
+  // row or covering the manuscript. It remains reachable while reading off-page.
   await expect(latest).toBeVisible();
   const readerBounds = (await reader.boundingBox())!;
   const latestBounds = (await latest.boundingBox())!;
   const headerBounds = (await opener.boundingBox())!;
-  const rowBounds = (await page.locator('.scene-latest-row').boundingBox())!;
-  expect(latestBounds.y).toBeGreaterThanOrEqual(readerBounds.y + readerBounds.height - 1);
-  expect(rowBounds.y).toBeGreaterThanOrEqual(readerBounds.y + readerBounds.height - 1);
+  const toolbar = latest.locator('..');
+  await expect(toolbar).toHaveClass(/quick-controls/u);
+  const toolbarBounds = (await toolbar.boundingBox())!;
+  expect(toolbarBounds.y).toBeGreaterThanOrEqual(readerBounds.y + readerBounds.height - 1);
+  expect(latestBounds.y).toBeGreaterThanOrEqual(toolbarBounds.y);
+  expect(latestBounds.y + latestBounds.height).toBeLessThanOrEqual(
+    toolbarBounds.y + toolbarBounds.height + 1
+  );
   expect(headerBounds.y + headerBounds.height).toBeLessThanOrEqual(readerBounds.y + 1);
   expect(latestBounds.width).toBeGreaterThanOrEqual(44);
   expect(latestBounds.height).toBeGreaterThanOrEqual(44);
