@@ -282,15 +282,14 @@ export function RequestMessage({
               {copyState === 'copied' ? '요청을 복사했어요.' : ''}
             </span>
             {onRewrite && (
-              <button
-                type="button"
+              <IconButton
+                icon={RefreshCw}
+                label="다시 쓰기"
+                size={18}
                 className="secondary"
                 disabled={rewriteDisabled}
                 onClick={onRewrite}
-              >
-                <RefreshCw size={18} aria-hidden="true" />
-                다시 쓰기
-              </button>
+              />
             )}
             {!onSave && !onToggleRequest && !onToggleScene && onSubmit && (
               <IconButton

@@ -136,7 +136,8 @@ export const screens = [
     ready: { testid: 'source-text' },
     steps: [
       { click: { testid: 'source-request' } },
-      { visible: { role: 'button', name: '요청 편집' } },
+      { menu: '요청과 문맥 메뉴', which: 'first' },
+      { visible: { role: 'button', name: '문맥용 요청 수정', within: inMenu } },
     ],
     viewports: ['mobile'],
   },

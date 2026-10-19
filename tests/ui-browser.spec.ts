@@ -2024,6 +2024,56 @@ test('UI chat settings close right after saving does not warn while the refresh 
 
 preservePromptWorkspace();
 
+test('UI mobile jump shares the composer row and navigator preference keeps scene list accessible', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request, '길게 작성한 합성 모바일 장면 제목', longPrompt, 2);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?chat=${chat.id}`);
+  const reader = page.locator('.reader-scrollport');
+  await expect(page.getByTestId('source-text').last()).toBeVisible();
+  await reader.evaluate((node) => {
+    node.scrollTop = 0;
+    node.dispatchEvent(new Event('scroll'));
+  });
+  const jump = page.getByRole('button', { name: '본문 맨 아래로', exact: true });
+  await expect(jump).toBeVisible();
+  expect(await jump.locator('..').getAttribute('class')).toContain('quick-controls');
+  const readerBounds = (await reader.boundingBox())!;
+  const jumpBounds = (await jump.boundingBox())!;
+  expect(jumpBounds.y).toBeGreaterThanOrEqual(readerBounds.y + readerBounds.height);
+  await page.getByLabel('다음 장면 요청', { exact: true }).focus();
+  await expect(jump).toBeHidden();
+  await reader.click({ position: { x: 5, y: 40 } });
+  await expect(jump).toBeVisible();
+  for (const width of [320, 412]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    const button = (await jump.boundingBox())!;
+    expect(button.height).toBeGreaterThanOrEqual(44);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await jump.click();
+  await expect(jump).toBeHidden();
+  await page.evaluate(() => localStorage.setItem('uimori:scene-navigator', 'false'));
+  await page.reload();
+  const title = page.locator('.header-title').getByRole('button', { name: '장면 목록 열기' });
+  await expect(title).toBeVisible();
+  await expect(jump).toHaveCount(0);
+  await title.click();
+  await expect(page.getByRole('dialog', { name: '장면 목록' })).toBeVisible();
+  await page
+    .getByRole('dialog', { name: '장면 목록' })
+    .getByRole('button', { name: /^1번째 장면 ·/ })
+    .click();
+  await expect(page.locator('.header-scene-position')).toHaveText('1 / 2');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.getByRole('navigation', { name: '장면 탐색' })).toHaveCount(0);
+});
+
 test('UI compact title remains readable when keyboard focus returns from the scene list', async ({
   page,
   request,

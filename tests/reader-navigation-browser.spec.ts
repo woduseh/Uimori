@@ -184,8 +184,11 @@ test('CHATREC03 compact scene list follows source IDs and keeps the opening outs
   await expect(list).toHaveText('1 / 2');
   await expect(latest).toBeVisible();
   const reader = (await page.locator('.reader-scrollport').boundingBox())!;
+  const toolbar = (await page.locator('.quick-controls').boundingBox())!;
   const jump = (await latest.boundingBox())!;
-  expect(jump.y).toBeGreaterThanOrEqual(reader.y + reader.height);
+  expect(toolbar.y).toBeGreaterThanOrEqual(reader.y + reader.height);
+  expect(jump.y).toBeGreaterThanOrEqual(toolbar.y);
+  expect(jump.y + jump.height).toBeLessThanOrEqual(toolbar.y + toolbar.height);
   const before = await page.locator('.reader-scrollport').evaluate((node) => node.scrollTop);
   await list.click();
   await page.keyboard.press('Escape');

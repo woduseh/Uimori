@@ -54,6 +54,7 @@ function MiniNavigatorFixture() {
   const [selected, setSelected] = useState('opening:id');
   const [listOpen, setListOpen] = useState(false);
   const [currentLabel, setCurrentLabel] = useState('');
+  const [latestVisible, setLatestVisible] = useState(false);
   const [extra, setExtra] = useState(false);
   const entries = [
     { id: 'opening:id', number: 0, label: 'Opening', opening: true },
@@ -116,7 +117,25 @@ function MiniNavigatorFixture() {
           listOpen={listOpen}
           onListOpenChange={setListOpen}
           onCurrentLabel={setCurrentLabel}
+          onLatestVisibilityChange={setLatestVisible}
         />
+      </div>
+      <div className="quick-controls" style={{ height: 44, display: 'flex', alignItems: 'center' }}>
+        <button type="button" style={{ height: 44 }}>
+          메뉴
+        </button>
+        {latestVisible && (
+          <button
+            type="button"
+            aria-label="본문 맨 아래로"
+            style={{ height: 44, width: 44 }}
+            onClick={() => {
+              if (reader.current) reader.current.scrollTop = reader.current.scrollHeight;
+            }}
+          >
+            ↓
+          </button>
+        )}
       </div>
     </>
   );

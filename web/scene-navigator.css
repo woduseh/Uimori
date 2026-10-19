@@ -203,37 +203,22 @@
   gap: 8px;
   font-size: 12px;
 }
-/* Compact navigation leaves manuscript text unobscured. */
+/* The compact jump action shares the composer's existing toolbar height. */
 @media (max-width: 760px) {
   .scene-dialog .segmented button {
     min-height: var(--control-h);
   }
-  .reader-stage.has-scenes {
-    flex-direction: column;
-  }
-  .reader-stage.has-scenes > .reader-scrollport {
-    padding-inline: 0;
-  }
-  .scene-navigator {
-    display: none;
-  }
-  .scene-latest-row {
-    display: flex;
-    flex: none;
-    justify-content: flex-end;
-    padding: 0 12px;
-    background: var(--bg);
-  }
-  .scene-latest-row button {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    min-height: var(--control-h);
-    padding: 6px 10px;
+  .scene-latest-inline {
+    flex: 0 0 var(--control-h);
+    min-width: var(--control-h);
+    height: var(--control-h);
+    border: 0;
+    background: transparent;
+    box-shadow: none;
     color: var(--muted);
   }
-  .story-workspace:has(.composer-dock textarea:focus) .scene-latest-row {
-    /* Keep reader actions still when focus leaves the composer during a pointer click. */
+  .story-workspace:has(.composer-dock textarea:focus) .scene-latest-inline {
+    /* Keep the pointer target stationary when focus leaves the composer. */
     visibility: hidden;
     pointer-events: none;
   }

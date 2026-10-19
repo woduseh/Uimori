@@ -18,7 +18,7 @@ export function SceneNavigator({
   onTarget,
   onLatest,
   compact = false,
-  hideControls = false,
+  onLatestVisibilityChange,
   listOpen,
   onListOpenChange,
   onCurrentLabel,
@@ -30,10 +30,9 @@ export function SceneNavigator({
   onSelect: (id: string) => void;
   onTarget?: (target: ReaderTarget) => void;
   onLatest: () => void;
-  /** Compact widths open the scene list from the header and keep the latest action below the reader. */
+  /** Compact widths keep the scene dialog here and surface jump visibility to the composer. */
   compact?: boolean;
-  /** Hide the compact latest action without unmounting the list or its bookmark drafts. */
-  hideControls?: boolean;
+  onLatestVisibilityChange?: (visible: boolean) => void;
   /** One list state survives switches between the header opener and desktop rail. */
   listOpen: boolean;
   onListOpenChange: (open: boolean) => void;
@@ -137,6 +136,9 @@ export function SceneNavigator({
   const active = entries[index];
   const last = entries.at(-1);
   const canGoLatest = awayFromBottom || last?.id !== detail.reader.order.at(-1);
+  useEffect(() => {
+    if (compact) onLatestVisibilityChange?.(canGoLatest);
+  }, [compact, canGoLatest, onLatestVisibilityChange]);
   const count = Math.min(capacity, entries.length);
   const marks = new Set<number>();
   for (let i = 0; i < count; i++)
@@ -325,14 +327,6 @@ export function SceneNavigator({
   if (compact)
     return (
       <>
-        {!hideControls && last && canGoLatest && (
-          <div className="scene-latest-row">
-            <button type="button" className="ghost" aria-label="본문 맨 아래로" onClick={onLatest}>
-              <DownIcon size={18} aria-hidden="true" />
-              <span>맨 아래</span>
-            </button>
-          </div>
-        )}
         {titleEditor}
         {dialog}
       </>
