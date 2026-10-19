@@ -7,6 +7,7 @@ import { createApp, type App } from '../server/app.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { editTranslation } from '../server/source-editing.js';
+import { updateSceneContext } from '../server/scene-context.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
 import type { HelperConversation, HelperTask } from '../core/helper.js';
@@ -242,6 +243,116 @@ test('library helper targets an explicit chat and edits translation without chan
   expect(f.store.job(String(latest.id)).result).toMatchObject({
     text: '요시노가 “안녕하세요.” 하고 말했다.',
   });
+});
+
+test('chat.read numbers only visible scenes and returns optional bounded live previews', async () => {
+  const f = await fixture();
+  f.store.editSource(f.source.id, {
+    text: `${'a'.repeat(119)}😀z`,
+    expectedRevision: 0,
+  });
+  updateSceneContext(f.store, f.source.id, { expectedRevision: 0, sceneEnabled: false });
+  const second = completedSource(f.store, f.chat.id, 'Visible second scene.');
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('compact', 'chat.read', {}),
+        call('previews', 'chat.read', { includePreview: true })
+      );
+    const compact = result(request, 'compact').messages as Record<string, unknown>[];
+    const previews = result(request, 'previews').messages as Record<string, unknown>[];
+    expect(compact).toMatchObject([
+      { id: f.source.id, sceneNumber: null, sceneEnabled: false, originalLength: 122 },
+      { id: second.id, sceneNumber: 1, sceneEnabled: true, originalLength: 21 },
+    ]);
+    expect(compact.every((message) => !Object.hasOwn(message, 'preview'))).toBe(true);
+    expect(previews[0].preview).toBe('a'.repeat(119));
+    expect(previews[1].preview).toBe('Visible second scene.');
+    return structuredClone(success);
+  });
+  await submit(f, '채팅의 장면을 확인해줘.');
+});
+
+test('oversized scene search suggests a narrower continuation without losing its scope', async () => {
+  const f = await fixture();
+  f.store.editSource(f.source.id, { text: '\u0001'.repeat(5000), expectedRevision: 0 });
+  const patterns = Array.from({ length: 8 }, () => '\u0001'.repeat(256));
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('search', 'scene.search', {
+          sourceId: f.source.id,
+          target: 'original',
+          patterns,
+          context: 120,
+          limit: 20,
+        })
+      );
+    const searchEvent = event(request, 'search');
+    expect(searchEvent).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { error: 'HELPER_READ_TOO_LARGE' },
+    });
+    const next = (searchEvent.result as any).nextRead;
+    expect(next).toMatchObject({
+      name: 'app.call',
+      arguments: {
+        name: 'scene.search',
+        arguments: {
+          sourceId: f.source.id,
+          target: 'original',
+          patterns,
+          context: 60,
+          limit: 10,
+        },
+      },
+    });
+    return structuredClone(success);
+  });
+  await submit(f, '빈번한 제어문자를 검색해서 확인해줘.');
+});
+
+test('helper searches live words and atomically patches all exact matches', async () => {
+  const f = await fixture();
+  f.store.editSource(f.source.id, {
+    text: 'Yoshino-san spoke. Yoshino-san smiled.',
+    expectedRevision: 0,
+  });
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('search', 'scene.search', {
+          sourceId: f.source.id,
+          target: 'original',
+          patterns: ['Yoshino-san'],
+          limit: 1,
+        })
+      );
+    if (round === 1) {
+      const found = result(request, 'search');
+      expect(found).toMatchObject({ totalMatches: 2, counts: [{ count: 2 }], nextOffset: 1 });
+      const continuation = found.nextSearch as {
+        name: string;
+        arguments: Record<string, transport.Json>;
+      };
+      return calls({ id: 'next', name: continuation.name, arguments: continuation.arguments });
+    }
+    if (round === 2) {
+      const found = result(request, 'next');
+      expect(found).toMatchObject({ totalMatches: 2, offset: 1, nextOffset: null });
+      return calls(
+        call('save', 'scene.patch', {
+          ...(found.editTarget as Record<string, unknown>),
+          changes: [{ oldText: 'Yoshino-san', newText: 'Yoshino-sama', expectedCount: 2 }],
+        })
+      );
+    }
+    expect(result(request, 'save')).toMatchObject({ changed: true, revision: 2 });
+    return structuredClone(success);
+  });
+  await submit(f, '호칭을 모두 수정하고 저장해줘.');
+  expect(f.store.source(f.source.id).text).toBe('Yoshino-sama spoke. Yoshino-sama smiled.');
 });
 
 test('scene patch rejects a source outside the helper chat before mutating it', async () => {

@@ -38,9 +38,32 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
     inputSchema: schema({ sourceId, target, ...paging }, ['sourceId', 'target']),
   },
   {
+    name: 'scene.search',
+    description:
+      'Search the live editable original or displayed translation by exact case-sensitive literal patterns (including overlapping matches). Return match positions, bounded context, total counts per pattern, and editTarget guards for scene.patch; no full-scene read required. Results are ordered by pattern then text offset; offset paginates matches, not characters. Copy nextSearch unchanged for later pages; stale versions require restarting. No regex.',
+    inputSchema: schema(
+      {
+        sourceId,
+        target,
+        patterns: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 8,
+          items: { type: 'string', minLength: 1, maxLength: 256 },
+        },
+        context: { type: 'integer', minimum: 0, maximum: 120 },
+        offset: { type: 'integer', minimum: 0 },
+        limit: { type: 'integer', minimum: 1, maximum: 20 },
+        ...guards,
+        expectedTextHash: hash,
+      },
+      ['sourceId', 'target', 'patterns']
+    ),
+  },
+  {
     name: 'scene.patch',
     description:
-      'Save one existing original or translation only after the user requests saving. Copy editTarget from scene.read. Supply either complete text or changes of literal oldText/newText. Every oldText must match exactly once in the same pre-edit text; overlapping changes fail atomically. No regex. Source edits invalidate translations and preserve only original plus two recent edits. Translation edits require an existing usable translation. Conflicts require rereading; never overwrite unseen concurrent work.',
+      'Save one existing original or translation only after the user requests saving. Copy editTarget from scene.read/search. Supply either complete text or changes of literal oldText/newText. Each oldText must occur exactly expectedCount times (default 1); replace all occurrences atomically only if their ranges do not overlap, including matches within the same change. No regex or unchecked replace-all. Source edits invalidate translations and preserve only original plus two recent edits. Translation edits require an existing usable translation. Conflicts require rereading; never overwrite unseen concurrent work.',
     inputSchema: schema(
       {
         sourceId,
@@ -56,6 +79,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
             {
               oldText: { type: 'string', minLength: 1, maxLength: SOURCE_TEXT_MAX_CHARS },
               newText: { type: 'string', maxLength: SOURCE_TEXT_MAX_CHARS },
+              expectedCount: { type: 'integer', minimum: 1, maximum: 100000 },
             },
             ['oldText', 'newText']
           ),
@@ -138,6 +162,15 @@ function checkGuards(
   if (rev !== expected.expectedRevision || sourceHash !== expected.expectedSourceHash)
     throw new HttpError(409, 'Scene changed; read the current scene again');
 }
+function splitsPair(content: string, index: number) {
+  return (
+    index > 0 &&
+    index < content.length &&
+    /[\uD800-\uDBFF]/u.test(content[index - 1]!) &&
+    /[\uDC00-\uDFFF]/u.test(content[index]!)
+  );
+}
+
 function page(
   content: string,
   args: Record<string, unknown>,
@@ -164,18 +197,14 @@ function page(
   if ((offset > 0 || args.expectedTextHash !== undefined) && args.expectedTextHash !== textHash)
     throw new HttpError(409, 'Scene text changed; restart paging');
   if (offset > content.length) throw new HttpError(400, 'Text offset exceeds scene length');
-  const splitsPair = (index: number) =>
-    index > 0 &&
-    index < content.length &&
-    /[\uD800-\uDBFF]/u.test(content[index - 1]!) &&
-    /[\uDC00-\uDFFF]/u.test(content[index]!);
-  if (splitsPair(offset)) throw new HttpError(400, 'Text offset splits a Unicode character');
+  if (splitsPair(content, offset))
+    throw new HttpError(400, 'Text offset splits a Unicode character');
   let end = Math.min(offset + limit, content.length);
-  if (splitsPair(end)) end = end === offset + 1 ? end + 1 : end - 1;
+  if (splitsPair(content, end)) end = end === offset + 1 ? end + 1 : end - 1;
   // Reserve room for guards and provenance; control characters can expand sixfold in JSON.
   while (JSON.stringify(content.slice(offset, end)).length > 18000) {
     end = offset + Math.floor((end - offset) / 2);
-    if (splitsPair(end)) end--;
+    if (splitsPair(content, end)) end--;
   }
   const nextOffset = end < content.length ? end : null;
   return {
@@ -203,6 +232,96 @@ function page(
           },
   };
 }
+function sceneSearch(current: ReturnType<typeof snapshot>, args: Record<string, unknown>) {
+  const raw = args.patterns;
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 8)
+    throw new HttpError(400, 'Invalid search patterns');
+  const patterns = raw.map((value) => text(value, 'search pattern', 256));
+  const context = args.context === undefined ? 80 : number(args.context, 'search context', 0, 120);
+  const offset = args.offset === undefined ? 0 : number(args.offset, 'match offset', 0);
+  const limit = args.limit === undefined ? 10 : number(args.limit, 'match limit', 1, 20);
+  if (
+    offset > 0 &&
+    (args.expectedRevision === undefined ||
+      args.expectedSourceHash === undefined ||
+      args.expectedTextHash === undefined)
+  )
+    throw new HttpError(
+      400,
+      'SCENE_SEARCH_GUARDS_REQUIRED: Copy nextSearch or search again from offset=0'
+    );
+  checkGuards(args, current.editTarget, offset > 0);
+  if (
+    args.expectedTextHash !== undefined &&
+    args.expectedTextHash !== current.editTarget.expectedTextHash
+  )
+    throw new HttpError(409, 'Scene text changed; restart search');
+  const content = current.content;
+  const matches: {
+    patternIndex: number;
+    start: number;
+    end: number;
+    match: string;
+    before: string;
+    after: string;
+  }[] = [];
+  const counts: { pattern: string; count: number }[] = [];
+  let totalMatches = 0;
+  for (const [patternIndex, pattern] of patterns.entries()) {
+    let count = 0;
+    for (
+      let start = content.indexOf(pattern);
+      start !== -1;
+      start = content.indexOf(pattern, start + 1)
+    ) {
+      if (totalMatches >= offset && matches.length < limit) {
+        const end = start + pattern.length;
+        let beforeStart = Math.max(0, start - context);
+        let afterEnd = Math.min(content.length, end + context);
+        if (splitsPair(content, beforeStart)) beforeStart--;
+        if (splitsPair(content, afterEnd)) afterEnd++;
+        matches.push({
+          patternIndex,
+          start,
+          end,
+          match: content.slice(start, end),
+          before: content.slice(beforeStart, start),
+          after: content.slice(end, afterEnd),
+        });
+      }
+      count++;
+      totalMatches++;
+    }
+    counts.push({ pattern, count });
+  }
+  const nextOffset = offset + matches.length < totalMatches ? offset + matches.length : null;
+  return {
+    editTarget: current.editTarget,
+    totalLength: content.length,
+    counts,
+    totalMatches,
+    offset,
+    matches,
+    nextOffset,
+    nextSearch:
+      nextOffset === null
+        ? null
+        : {
+            name: 'app.call',
+            arguments: {
+              name: 'scene.search',
+              arguments: {
+                ...current.editTarget,
+                patterns,
+                context,
+                offset: nextOffset,
+                limit,
+              },
+            },
+          },
+  };
+}
+
 function replacement(content: string, args: Record<string, unknown>) {
   if ((args.text === undefined) === (args.changes === undefined))
     throw new HttpError(400, 'Supply either complete text or literal changes');
@@ -210,16 +329,28 @@ function replacement(content: string, args: Record<string, unknown>) {
   if (!Array.isArray(args.changes) || args.changes.length < 1 || args.changes.length > 100)
     throw new HttpError(400, 'Invalid scene changes');
   const changes = args.changes
-    .map((value) => {
+    .flatMap((value) => {
       const change = record(value);
-      fields(change, ['oldText', 'newText']);
+      fields(change, ['oldText', 'newText', 'expectedCount']);
       const oldText = text(change.oldText, 'old text', SOURCE_TEXT_MAX_CHARS, true);
       if (oldText.length === 0) throw new HttpError(400, 'Invalid old text');
       const newText = text(change.newText, 'new text', SOURCE_TEXT_MAX_CHARS, true);
-      const start = content.indexOf(oldText);
-      if (start < 0 || content.indexOf(oldText, start + 1) !== -1)
-        throw new HttpError(409, 'Each oldText must match exactly once');
-      return { start, end: start + oldText.length, newText };
+      const expectedCount =
+        change.expectedCount === undefined
+          ? 1
+          : number(change.expectedCount, 'expected count', 1, 100000);
+      const matches: { start: number; end: number; newText: string }[] = [];
+      for (
+        let start = content.indexOf(oldText);
+        start !== -1;
+        start = content.indexOf(oldText, start + 1)
+      ) {
+        matches.push({ start, end: start + oldText.length, newText });
+        if (matches.length > expectedCount) break;
+      }
+      if (matches.length !== expectedCount)
+        throw new HttpError(409, 'Scene replacement count mismatch');
+      return matches;
     })
     .sort((a, b) => a.start - b.start);
   if (changes.some((item, index) => index > 0 && item.start < changes[index - 1]!.end))
@@ -241,6 +372,16 @@ export function invokeHelperSceneTool(
     const common = ['sourceId', 'expectedRevision', 'expectedSourceHash'];
     if (name === 'scene.read')
       fields(args, [...common, 'target', 'offset', 'limit', 'expectedTextHash']);
+    else if (name === 'scene.search')
+      fields(args, [
+        ...common,
+        'target',
+        'patterns',
+        'context',
+        'offset',
+        'limit',
+        'expectedTextHash',
+      ]);
     else if (name === 'scene.patch')
       fields(args, [...common, 'target', 'text', 'changes', 'expectedTextHash']);
     else if (name === 'scene.versions')
@@ -275,6 +416,7 @@ export function invokeHelperSceneTool(
           name
         ),
       };
+    if (name === 'scene.search') return sceneSearch(current, args);
     if (name === 'scene.versions') {
       checkGuards(args, editTarget, false);
       const retained = sourceVersions(store, source.id);

@@ -51,8 +51,8 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'chat.read',
     description:
-      'Read a chat, its current head and message IDs. Set chatId to work with any chat, including from the library.',
-    inputSchema: schema({ chatId: itemId }),
+      'Read a chat, its current head and scene IDs with visible scene numbers (including any introduction), original lengths and enabled state. includePreview:true adds up to 120 characters of live original per scene. Hidden scenes have sceneNumber:null; no inferred Greeting label. Set chatId to work with any chat, including from the library.',
+    inputSchema: schema({ chatId: itemId, includePreview: { type: 'boolean' } }),
   },
   ...helperOptionTools,
   {
@@ -299,6 +299,7 @@ const readNames = new Set([
   'options.read',
   'artifact.read',
   'scene.read',
+  'scene.search',
   'scene.versions',
 ]);
 const writingNames = new Set([
