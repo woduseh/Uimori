@@ -8,19 +8,19 @@ Use this path for source installations; see [SELF-HOST](SELF-HOST.md#저장과-�
 
 Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재-버전) before updating. Finish active generation and edits. Download the app's consistent SQLite snapshot, record the running app/image version, and preserve external Codex login files separately. Stop the server before switching code or restoring data. Do not use `reset:dev` or `docker compose down -v` to update an existing workspace.
 
-**v0.11.4 keeps the same schema 15 used by v0.11.3 and earlier schema-15 releases since v0.4.0.** A workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
+**v0.11.5 keeps the same schema 15 used by v0.11.4 and earlier schema-15 releases since v0.4.0.** A workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
 
-The v0.11.4 patch adds live scene search, guarded exact-count replacements and compact chat scene metadata; it has no database migration or saved-text transformation during upgrade. The previous v0.11.3 patch improved helper tool recovery hints, v0.11.2 changed mobile reading controls, and v0.11.1 changed the current prompt from a copied body to a library preset reference. Startup preserves an independent old body as a preset before switching; new requests follow the selected source and explicit option overrides. Keep the pre-update backup for rollback. Manuscripts, existing helper conversations and historical execution records remain readable; see the [v0.11.1 notes](releases/v0.11.1.md) for retired APIs and evaluation settings, the [v0.11.2 notes](releases/v0.11.2.md) for mobile controls, the [v0.11.3 notes](releases/v0.11.3.md) for error recovery, and the [v0.11.4 notes](releases/v0.11.4.md) for this patch.
+The v0.11.5 patch adds a limited safe HTML typography subset for completed prose and a browser ruby rendering regression; it does not rewrite stored text. The v0.11.4 patch added live scene search, guarded exact-count replacements and compact chat scene metadata; it has no database migration or saved-text transformation during upgrade. The previous v0.11.3 patch improved helper tool recovery hints, v0.11.2 changed mobile reading controls, and v0.11.1 changed the current prompt from a copied body to a library preset reference. Startup preserves an independent old body as a preset before switching; new requests follow the selected source and explicit option overrides. Keep the pre-update backup for rollback. Manuscripts, existing helper conversations and historical execution records remain readable; see the [v0.11.1 notes](releases/v0.11.1.md) for retired APIs and evaluation settings, the [v0.11.2 notes](releases/v0.11.2.md) for mobile controls, the [v0.11.3 notes](releases/v0.11.3.md) for error recovery, the [v0.11.4 notes](releases/v0.11.4.md) for scene search, and the [v0.11.5 notes](releases/v0.11.5.md) for the safe reading patch.
 
 Finish queued or running evaluation Batch work under its original runtime before updating. Both retained evaluation modes now require a valid final submission, and the retired `source-bound` mode is disabled for new execution. The new runtime does not emulate the previous evaluation protocol.
 
-Use the published `v0.11.4` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
+Use the published `v0.11.5` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
 
 From a clean source checkout, with the existing server stopped:
 
 ```sh
 git fetch origin --tags
-git switch --detach v0.11.4
+git switch --detach v0.11.5
 npm ci
 npm run dev
 ```
