@@ -852,11 +852,14 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
     'limit',
     'context',
     'searchHash',
+    'expectedRevision',
+    'expectedSourceHash',
+    'expectedTextHash',
   ]);
   const chatId = string(args.chatId, '', 100);
   const requestedId = args.sourceId === undefined ? undefined : string(args.sourceId, '', 100);
   const target = string(args.target, '', 20);
-  if (!chatId || !['original', 'translation'].includes(target) || !args.regex)
+  if (!chatId || !['original', 'translation'].includes(target) || args.regex !== true)
     throw new Error('SCENE_REGEX_INVALID_ARGUMENTS');
   if (args.includeDisabled !== undefined && typeof args.includeDisabled !== 'boolean')
     throw new Error('SCENE_REGEX_INVALID_ARGUMENTS');
@@ -892,7 +895,12 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
     ORDER BY j.revision DESC,j.created_at DESC,j.id DESC LIMIT 1`);
   const snapshotDigest = createHash('sha256');
   snapshotDigest.update(
-    JSON.stringify({ head: chat.head, target, includeDisabled: args.includeDisabled === true })
+    JSON.stringify({
+      head: chat.head,
+      target,
+      patterns,
+      includeDisabled: args.includeDisabled === true,
+    })
   );
   const matches: Record<string, unknown>[] = [];
   let totalMatches = 0;
@@ -949,6 +957,25 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
       expectedSourceHash: sourceHash,
       expectedTextHash: sha(content),
     };
+    if (
+      args.expectedRevision !== undefined ||
+      args.expectedSourceHash !== undefined ||
+      args.expectedTextHash !== undefined
+    ) {
+      if (
+        !requestedId ||
+        (args.expectedRevision !== undefined) !== (args.expectedSourceHash !== undefined)
+      )
+        throw new Error('SCENE_SEARCH_GUARDS_REQUIRED: Supply matching scene guards');
+      if (
+        (args.expectedRevision !== undefined &&
+          number(args.expectedRevision, 0, Number.MAX_SAFE_INTEGER) !== revision) ||
+        (args.expectedSourceHash !== undefined && args.expectedSourceHash !== sourceHash) ||
+        (args.expectedTextHash !== undefined &&
+          args.expectedTextHash !== editTarget.expectedTextHash)
+      )
+        throw new Error('Scene changed; read the current scene again');
+    }
     snapshotDigest.update(JSON.stringify(editTarget));
     let foundInScene = false;
     for (const [patternIndex, expression] of expressions.entries()) {
@@ -965,15 +992,39 @@ function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
         if (totalMatches >= offset && matches.length < limit) {
           const start = match.index;
           const end = start + match[0].length;
-          const before = content.slice(Math.max(0, start - context), start);
-          const after = content.slice(end, Math.min(content.length, end + context));
+          let beforeStart = Math.max(0, start - context);
+          let afterEnd = Math.min(content.length, end + context);
+          if (
+            beforeStart > 0 &&
+            beforeStart < content.length &&
+            /[\uD800-\uDBFF]/u.test(content[beforeStart - 1]!) &&
+            /[\uDC00-\uDFFF]/u.test(content[beforeStart]!)
+          )
+            beforeStart--;
+          if (
+            afterEnd > 0 &&
+            afterEnd < content.length &&
+            /[\uD800-\uDBFF]/u.test(content[afterEnd - 1]!) &&
+            /[\uDC00-\uDFFF]/u.test(content[afterEnd]!)
+          )
+            afterEnd++;
+          const before = content.slice(beforeStart, start);
+          const after = content.slice(end, afterEnd);
+          // Truncate only at a Unicode code point boundary; never expose a lone surrogate.
+          let previewEnd = Math.min(match[0].length, 1000);
+          if (
+            previewEnd < match[0].length &&
+            /[\uD800-\uDBFF]/u.test(match[0][previewEnd - 1]!) &&
+            /[\uDC00-\uDFFF]/u.test(match[0][previewEnd]!)
+          )
+            previewEnd--;
           matches.push({
             editTarget,
             patternIndex,
             start,
             end,
-            match: match[0].slice(0, 1000),
-            truncated: match[0].length > 1000,
+            match: match[0].slice(0, previewEnd),
+            truncated: match[0].length > previewEnd,
             before,
             after,
           });

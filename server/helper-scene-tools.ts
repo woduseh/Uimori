@@ -390,6 +390,7 @@ function searchChatScenes(store: Store, chatId: string, args: Record<string, unk
       chatHead: chat.headRevision,
       target,
       includeDisabled,
+      patterns,
       scenes: snapshots.map((item) => item.editTarget),
     })
   );

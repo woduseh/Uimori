@@ -689,6 +689,57 @@ test('isolated regex bounds matched text and rejects unsafe regex without touchi
   expect(store.source(source.id).editRevision).toBe(0);
 });
 
+test('chat-wide literal continuation rejects a changed pattern instead of skipping matches', () => {
+  const { chatId, store, call } = fixture('alpha alpha beta');
+  appendScene(store, chatId, 'alpha beta');
+  const first = call('scene.search', { target: 'original', patterns: ['alpha'], limit: 1 });
+  expect(first).toMatchObject({ totalMatches: 3, nextOffset: 1 });
+  const altered = { ...first.nextSearch.arguments.arguments, patterns: ['beta'] };
+  expect(() => call('scene.search', altered)).toThrow(/changed/);
+});
+
+test('isolated regex continuation rejects a changed pattern and previews complete unicode characters', async () => {
+  const { store, chatId } = fixture('alpha alpha beta');
+  const first = (await invokeSceneRegexSearch(store, chatId, {
+    target: 'original',
+    regex: true,
+    patterns: ['alpha'],
+    limit: 1,
+  })) as Record<string, any>;
+  const altered = { ...first.nextSearch.arguments.arguments, patterns: ['beta'] };
+  delete altered.chatId;
+  await expect(invokeSceneRegexSearch(store, chatId, altered)).rejects.toThrow(/changed/);
+  const emoji = appendScene(store, chatId, '`<ruby>' + 'a'.repeat(992) + '😀suffix</ruby>`');
+  const longMatch = (await invokeSceneRegexSearch(store, chatId, {
+    sourceId: emoji.id,
+    target: 'original',
+    regex: true,
+    patterns: ['`<ruby>[^`]+</ruby>`'],
+  })) as Record<string, any>;
+  expect(longMatch.matches[0].truncated).toBe(true);
+  expect(longMatch.matches[0].match).toBe('`<ruby>' + 'a'.repeat(992));
+});
+
+test('isolated regex honors single-scene read guards and preserves unicode context', async () => {
+  const { store, source, chatId, call } = fixture('😀X😀');
+  const guards = call('scene.read', { sourceId: source.id, target: 'original' }).editTarget;
+  const found = (await invokeSceneRegexSearch(store, chatId, {
+    ...guards,
+    regex: true,
+    patterns: ['X'],
+    context: 1,
+  })) as Record<string, any>;
+  expect(found.matches[0]).toMatchObject({ match: 'X', before: '😀', after: '😀' });
+  store.editSource(source.id, { text: '😀Y😀', expectedRevision: 0 });
+  await expect(
+    invokeSceneRegexSearch(store, chatId, {
+      ...guards,
+      regex: true,
+      patterns: ['Y'],
+    })
+  ).rejects.toThrow(/changed/);
+});
+
 test('many-scene literal search returns bounded matches without rereading ancestry per scene', () => {
   const { store, chatId, call } = fixture('test word 0');
   for (let index = 1; index < 50; index++) appendScene(store, chatId, `test word ${index}`);
