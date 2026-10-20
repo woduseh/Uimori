@@ -319,7 +319,11 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
       helperResourceOperation(name, args)?.readOnly ||
       readNames.has(name) ||
       ((name === 'chat.lore' || name === 'library.organize') && args.action === 'read'),
-    reviewAllowed: data || name === 'app.tools' || name === 'outline.read' || writingRead,
+    reviewAllowed:
+      (data && name !== 'data.exec') ||
+      name === 'app.tools' ||
+      name === 'outline.read' ||
+      writingRead,
     direct:
       data || HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name) || name.startsWith('task.'),
     writingRead,
@@ -364,7 +368,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.call',
     description:
-      'Execute a discovered app operation using its exact name and arguments. Read app.tools schema when unfamiliar. Clear user edit requests include saving; proposals do not. Existing revision checks, source scope, and successful-write receipts remain unchanged. Use data.search/read for ordinary factual lookup instead of full edit JSON.',
+      'Execute a discovered app operation using its exact name and arguments. Read app.tools schema when unfamiliar. Clear user edit requests include saving; proposals do not. Existing revision checks, source scope, and successful-write receipts remain unchanged. Use data.exec for free-form local search and transformation; app.call can save typed application changes.',
     inputSchema: schema(
       { name: str, arguments: { type: 'object' } },
       ['name', 'arguments'],

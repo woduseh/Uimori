@@ -688,7 +688,7 @@ test('cancelling helper reads drains active work without starting queued reads o
   }
 });
 
-test('a native two-call fact lookup sends five stable tools, no full editor JSON, and bounded exact evidence', async () => {
+test('a native two-call fact lookup sends six stable tools, no full editor JSON, and bounded exact evidence', async () => {
   const f = fixture();
   const body =
     'Name: Harin. Age: 27.\n' + 'Irrelevant native design and visual details. '.repeat(1500);
@@ -701,8 +701,9 @@ test('a native two-call fact lookup sends five stable tools, no full editor JSON
     model: editableResource('content', bot),
   };
   const bodies = provider((wire, round) => {
-    expect(wire.tools).toHaveLength(5);
+    expect(wire.tools).toHaveLength(6);
     expect(wire.tools.map((t: any) => t.function.name.replace(/^tool_\d+_/, ''))).toEqual([
+      'data_exec',
       'data_search',
       'data_read',
       'db_query',

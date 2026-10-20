@@ -16,7 +16,7 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 FROM base AS runtime
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
+  && apt-get install -y --no-install-recommends ca-certificates bash coreutils findutils grep sed gawk jq ripgrep python3 \
   && rm -rf /var/lib/apt/lists/*
 ARG UIMORI_REVISION=""
 LABEL io.uimori.managed="true" org.opencontainers.image.revision=$UIMORI_REVISION
@@ -29,8 +29,13 @@ COPY --from=build /app/package.json ./package.json
 COPY --from=build /app/LICENSE /app/THIRD_PARTY_NOTICES.md ./
 COPY --from=build /app/third_party ./third_party
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/runner ./runner
+RUN ln -s /app/runner/uimori.mjs /usr/local/bin/uimori \
+  && chmod +x /app/runner/uimori.mjs
 # An empty named volume receives this directory's initial content and ownership.
-RUN mkdir -p /data /backups && touch /data/.uimori-data /backups/.uimori-backups && chown -R node:node /data /backups
+RUN mkdir -p /data /backups /helper-workspaces /workspace \
+  && touch /data/.uimori-data /backups/.uimori-backups \
+  && chown -R node:node /data /backups /helper-workspaces /workspace
 USER node
 EXPOSE 4310
 CMD ["node", "dist/server/index.js"]

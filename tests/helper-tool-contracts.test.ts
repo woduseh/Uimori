@@ -1299,6 +1299,7 @@ test('helper gateway follows browse results into an exact reference read without
   const f = await fixture();
   mockSend((request, round) => {
     expect(request.stable.tools.map((tool) => tool.name)).toEqual([
+      'data.exec',
       'data.search',
       'data.read',
       'db.query',
