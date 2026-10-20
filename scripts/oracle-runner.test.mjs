@@ -106,7 +106,7 @@ with tempfile.TemporaryDirectory() as temp:
     r.summary={}; r.volume_name='new'; r.old_volume='old'; r.image='sha256:new'; r.old_image='sha256:old'; r.previous='previous'; r.old_env='original'; r.private=pathlib.Path(temp); r.app=r.private; r.env=r.private/'env'
     r.env.write_text('original'); r.old_routing={}
     r.rollback()
-    assert events==['maintenance','inspect','stop','maintenance','inspect','restore','git','env','start','healthy','control-open'],events
+    assert events==['maintenance','inspect','stop','stop','maintenance','inspect','restore','git','env','start','healthy','control-open'],events
     assert r.summary['rollback']=='PASS'
     assert 'sha256:old' in (r.private/'rollback.json').read_text()
 `));

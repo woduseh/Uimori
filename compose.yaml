@@ -19,6 +19,7 @@ services:
       UIMORI_HOST: 0.0.0.0
       UIMORI_PORT: "4310"
       UIMORI_DB: /data/uimori.sqlite
+      UIMORI_SHELL_ROOT: /helper-workspaces
       UIMORI_BACKUP_DIR: /backups
       UIMORI_PUBLIC_ORIGIN: ${UIMORI_PUBLIC_ORIGIN:?Set the exact HTTPS origin in .env.self-host}
       UIMORI_ACCESS_TOKEN: ${UIMORI_ACCESS_TOKEN:?Set a random access token of at least 32 characters}
@@ -32,6 +33,7 @@ services:
     volumes:
       - data:/data
       - backups:/backups
+      - helper_workspaces:/helper-workspaces
     # No host port: HTTPS traffic must enter through the proxy.
     healthcheck:
       test:
@@ -55,6 +57,24 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  shell-runner:
+    image: ${UIMORI_IMAGE:-uimori:local}
+    command: ["node", "/app/runner/runner.mjs"]
+    environment:
+      UIMORI_SHELL_ROOT: /workspace
+    init: true
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - helper_workspaces:/workspace
 
   proxy:
     image: nginx:stable
@@ -83,3 +103,6 @@ volumes:
     name: ${UIMORI_BACKUP_VOLUME:-uimori_backups}
   data:
     name: ${UIMORI_DATA_VOLUME:-uimori_data}
+
+  helper_workspaces:
+    name: ${UIMORI_HELPER_WORKSPACE_VOLUME:-uimori_helper_workspaces}

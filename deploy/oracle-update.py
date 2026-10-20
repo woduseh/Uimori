@@ -414,7 +414,7 @@ class Runner:
             if config["services"]["app"]["image"] != self.image:
                 raise RuntimeError("Compose must support the pinned UIMORI_IMAGE reference")
             self.candidate_started = True
-            self.compose("up", "-d", "--no-build", "app")
+            self.compose("up", "-d", "--no-build", "app", "shell-runner")
         with self.stage("health"):
             self.wait_healthy(self.image, self.volume_name)
             self.assert_closed_data(self.volume_name, self.image)
@@ -446,6 +446,7 @@ class Runner:
                 # Do not overwrite work submitted by a user after the new app became available.
                 self.assert_closed_data(self.volume_name, self.image)
                 self.compose("stop", "app")
+                self.compose("stop", "shell-runner")
                 self.assert_closed_data(self.volume_name, self.image)
             if self.backed_up and self.candidate_started and not self.args.fresh:
                 self.data("restore", self.old_volume, ("bind", str(self.private / "data")))
