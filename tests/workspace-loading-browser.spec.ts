@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { navigationAction, visibleNavigation, selectSettingsSection } from './ui-navigation.js';
+import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 
 for (const width of [412, 1440]) {
   for (const destination of ['서재', '프롬프트']) {
@@ -266,6 +267,72 @@ for (const width of [412, 1440]) {
       releaseLibrary();
       releaseWorkspace();
       releaseLore();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+  });
+}
+
+for (const width of [412, 1440]) {
+  test(`WORKLOAD resource editor loading is centered for bots and prompts at ${width}px`, async ({
+    page,
+    request,
+  }) => {
+    const title = `WORKLOAD editor ${width} ${Date.now()}`;
+    const saved = await request.post('/api/content', {
+      data: {
+        kind: 'bot',
+        title,
+        description: '',
+        text: '합성 자료',
+        loading: 'pinned',
+        relatedIds: [],
+      },
+    });
+    expect(saved.ok()).toBe(true);
+    const promptResponse = await request.post('/api/prompt-presets', {
+      data: { title, role: 'main', program: createDefaultRisuPrompt('합성 지시', 'main') },
+    });
+    expect(promptResponse.ok()).toBe(true);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    const checkCenter = async () => {
+      const scrollport = page.locator('.destination-scroll');
+      const status = scrollport
+        .getByRole('status')
+        .filter({ hasText: '자료를 불러오는 중이에요…' });
+      await expect(status).toBeVisible();
+      const bounds = (await status.boundingBox())!;
+      const container = (await scrollport.boundingBox())!;
+      expect(
+        Math.abs(bounds.x + bounds.width / 2 - (container.x + container.width / 2))
+      ).toBeLessThan(3);
+      expect(
+        Math.abs(bounds.y + bounds.height / 2 - (container.y + container.height / 2))
+      ).toBeLessThan(4);
+    };
+    const pending: Array<() => void> = [];
+    await page.route('**/api/resources/*/*', async (route) => {
+      await new Promise<void>((resolve) => pending.push(resolve));
+      await route.continue();
+    });
+    try {
+      const panel = page.getByTestId('library-panel');
+      await panel.getByLabel('서재 검색', { exact: true }).fill(title);
+      await panel.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
+      await panel.getByRole('button', { name: '편집', exact: true }).first().click();
+      await checkCenter();
+      pending.shift()?.();
+      await expect(panel.getByRole('region', { name: '자료 상세', exact: true })).toBeVisible();
+      await panel.getByRole('button', { name: '서재 목록', exact: true }).click();
+      await navigationAction(page, '프롬프트');
+      const prompts = page.getByTestId('prompt-library');
+      await prompts.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+      await prompts.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+      await checkCenter();
+      pending.shift()?.();
+      await expect(prompts.getByLabel('프롬프트 이름', { exact: true })).toBeVisible();
+    } finally {
+      for (const release of pending) release();
       await page.unrouteAll({ behavior: 'wait' });
     }
   });

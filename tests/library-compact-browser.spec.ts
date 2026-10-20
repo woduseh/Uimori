@@ -48,6 +48,33 @@ async function expectTouchTarget(locator: Locator) {
   expect(box!.height).toBeGreaterThanOrEqual(44);
 }
 
+test('LCOM05 opening a bot from a scrolled mobile list starts its detail at the top', async ({
+  page,
+  request,
+}) => {
+  const prefix = `LCOM05 ${Date.now()}`;
+  const items = await Promise.all(
+    Array.from({ length: 18 }, (_, index) =>
+      seed(request, `${prefix} ${String(index).padStart(2, '0')}`)
+    )
+  );
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 760 });
+  await page.goto('/');
+  const panel = page.getByTestId('library-panel');
+  await panel.getByLabel('서재 검색', { exact: true }).fill(prefix);
+  await panel.getByRole('button', { name: '목록', exact: true }).click();
+  const last = items.at(-1)!;
+  const open = panel.getByRole('button', { name: `${last.title} 상세 보기`, exact: true });
+  await open.click({ trial: true });
+  const scrollport = page.locator('.destination-scroll');
+  expect(await scrollport.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+  await open.click();
+  const detail = panel.getByRole('region', { name: '자료 상세', exact: true });
+  await expect(detail.locator('.library-detail-title > h2')).toHaveText(last.title);
+  expect(await scrollport.evaluate((node) => node.scrollTop)).toBe(0);
+  await expect(detail.locator('.library-detail-title')).toBeInViewport();
+});
+
 test('LCOM01 compact library keeps row actions aligned across mobile and desktop widths', async ({
   page,
   request,
