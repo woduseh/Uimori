@@ -10,6 +10,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { Store } from '../server/store.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
 import { HelperShell, HelperShellExecutionError } from '../server/helper-shell.js';
+import { helperWritingSnapshot } from '../server/helper-runtime.js';
+import { updateSceneContext } from '../server/scene-context.js';
 import { fixtureBotInput, createFixtureChat } from './fixtures/chat.js';
 import { completedSource } from './fixtures/illustration.js';
 import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
@@ -158,6 +160,84 @@ linuxTest('external revision change rejects stale shell edits instead of overwri
   );
 });
 
+linuxTest(
+  'workspace guide and frozen current scene index distinguish live saved changes',
+  async () => {
+    const f = await fixture();
+    const chat = createFixtureChat(f.store, 'Frozen story');
+    const first = completedSource(f.store, chat.id, '시작🙂\n첫 장면');
+    const second = completedSource(f.store, chat.id, '나'.repeat(175_000));
+    const third = completedSource(f.store, chat.id, '끝 장면');
+    updateSceneContext(f.store, second.id, { expectedRevision: 0, sceneEnabled: false });
+    const conversation = f.workspace.open({ kind: 'chat', chatId: chat.id });
+    const fixed = helperWritingSnapshot(f.store, chat.id);
+    const task = f.workspace.enqueue(conversation.id, 'frozen-scene-index', 'Review scenes', {
+      scope: conversation.scope,
+      model: f.task.snapshot.model,
+      writing: fixed,
+      history: [],
+      persona: '',
+      limits: { helperCalls: 12, totalCalls: 24 },
+    });
+    f.workspace.start(task.id, 'shell-fixture');
+    f.store.editSource(first.id, { text: 'Changed after task admission', expectedRevision: 0 });
+    const exported = await f.shell.exec(
+      f.workspace.task(task.id),
+      'export',
+      'cat INDEX.md | head -5',
+      5000
+    );
+    expect(exported.exitCode).toBe(0);
+    expect(exported.output).toContain('GUIDE.md');
+    const base = join(f.root, 'tasks', task.id);
+    const guide = readFileSync(join(base, 'GUIDE.md'), 'utf8');
+    expect(guide).toContain('source ancestry');
+    expect(guide).toContain('not independent authored sources');
+    expect(guide).toContain('uimori call context.read');
+
+    const current = JSON.parse(readFileSync(join(base, 'current/scenes.json'), 'utf8'));
+    const saved = JSON.parse(readFileSync(join(base, `chats/${chat.id}/scenes.json`), 'utf8'));
+    expect(current.map((scene: { sceneNumber: number | null }) => scene.sceneNumber)).toEqual([
+      1,
+      null,
+      2,
+    ]);
+    expect(saved.map((scene: { sceneNumber: number | null }) => scene.sceneNumber)).toEqual([
+      1,
+      null,
+      2,
+    ]);
+    expect(current[0]).toMatchObject({
+      sourceId: first.id,
+      file: `current/scenes/${first.id}.txt`,
+      sceneEnabled: true,
+      charCount: '시작🙂\n첫 장면'.length,
+      byteCount: Buffer.byteLength('시작🙂\n첫 장면'),
+    });
+    expect(current[0].contentHash).toMatch(/^[a-f0-9]{64}$/u);
+    expect(saved[0]).toMatchObject({
+      sourceId: first.id,
+      revision: 1,
+      charCount: 'Changed after task admission'.length,
+    });
+    expect(readFileSync(join(base, `current/scenes/${first.id}.txt`), 'utf8')).toBe(
+      '시작🙂\n첫 장면'
+    );
+    expect(readFileSync(join(base, `chats/${chat.id}/scenes/${first.id}.txt`), 'utf8')).toBe(
+      'Changed after task admission'
+    );
+    expect(current[1]).toMatchObject({
+      sourceId: second.id,
+      sceneEnabled: false,
+      sceneNumber: null,
+      charCount: 175_000,
+      byteCount: Buffer.byteLength('나'.repeat(175_000)),
+    });
+    expect([...current[1].preview]).toHaveLength(120);
+    expect(current[2].sourceId).toBe(third.id);
+  }
+);
+
 linuxTest('native Linux text edits apply to saved scenes and retain edit revisions', async () => {
   const f = await fixture();
   const chat = createFixtureChat(f.store, 'Shell scene');
@@ -174,7 +254,16 @@ linuxTest('native Linux text edits apply to saved scenes and retain edit revisio
     JSON.parse(
       readFileSync(join(f.root, 'tasks', f.task.id, `chats/${chat.id}/scenes.json`), 'utf8')
     )
-  ).toContainEqual({ sourceId: source.id, revision: 1, file });
+  ).toContainEqual(
+    expect.objectContaining({
+      sourceId: source.id,
+      revision: 1,
+      file,
+      charCount: 'Edited scene narrative'.length,
+      byteCount: Buffer.byteLength('Edited scene narrative'),
+      preview: 'Edited scene narrative',
+    })
+  );
 });
 
 function fileModel(f: Awaited<ReturnType<typeof fixture>>) {
@@ -602,13 +691,29 @@ linuxTest(
     f.store.editSource(source.id, { text: 'External scene', expectedRevision: 0 });
     const clean = await f.shell.exec(f.task, 'clean', `${cli} refresh ${file}`, 5000);
     expect(JSON.parse(clean.output)).toMatchObject({ dirty: false, latestPath: file, revision: 1 });
-    expect(sceneIndex()).toContainEqual({ sourceId: source.id, revision: 1, file });
+    expect(sceneIndex()).toContainEqual(
+      expect.objectContaining({
+        sourceId: source.id,
+        revision: 1,
+        file,
+        charCount: 'External scene'.length,
+        preview: 'External scene',
+      })
+    );
     writeFileSync(filename, 'Local scene draft');
     f.store.editSource(source.id, { text: 'New external scene', expectedRevision: 1 });
     const refreshed = await f.shell.exec(f.task, 'dirty', `${cli} refresh ${file}`, 5000);
     const latest = JSON.parse(refreshed.output);
     expect(readFileSync(filename, 'utf8')).toBe('Local scene draft');
-    expect(sceneIndex()).toContainEqual({ sourceId: source.id, revision: 1, file });
+    expect(sceneIndex()).toContainEqual(
+      expect.objectContaining({
+        sourceId: source.id,
+        revision: 1,
+        file,
+        charCount: 'External scene'.length,
+        preview: 'External scene',
+      })
+    );
     expect(readFileSync(join(f.root, 'tasks', f.task.id, latest.latestPath), 'utf8')).toBe(
       'New external scene'
     );
@@ -623,7 +728,9 @@ linuxTest(
       editRevision: 3,
     });
     expect(readFileSync(filename, 'utf8')).toBe('Local scene draft');
-    expect(sceneIndex()).toContainEqual({ sourceId: source.id, revision: 1, file });
+    expect(sceneIndex()).toContainEqual(
+      expect.objectContaining({ sourceId: source.id, revision: 1, file })
+    );
   }
 );
 
