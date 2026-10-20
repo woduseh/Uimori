@@ -229,6 +229,13 @@ describe('UI locale presentation boundary', () => {
     );
     expect(formatMessage('helpers.m043', 'ja')).toContain('ライブラリ');
     expect(formatMessage('helpers.m043', 'zh')).toContain('资料库');
+    expect(formatMessage('reader.contextSummary', 'ja')).toBe('コンテキストの要約');
+    expect(formatMessage('visualpanels.workspaceDefault', 'ja')).toBe('ワークスペースの既定');
+    expect(formatMessage('transfer.m141', 'en')).toContain('internal assistant tasks');
+    expect(formatMessage('settings.m193', 'ko')).toBe(' 에이전트를 이 프롬프트에서 삭제할까요?');
+    expect(formatMessage('settings.m193', 'en')).toBe(' — remove this agent from the prompt?');
+    expect(formatMessage('settings.m193', 'ja')).toBe('をこのプロンプトから削除しますか？');
+    expect(formatMessage('settings.m193', 'zh')).toBe('：要从此提示词中删除该智能体吗？');
     expect(formatMessage('helpers.m056', 'en')).toBe('Confirm latest settings');
     expect(formatMessage('shared.reviewDone', 'en')).toBe('Finish reviewing saved version');
     expect(formatMessage('shared.reviewDone', 'ja')).toBe('保存済み内容の確認完了');

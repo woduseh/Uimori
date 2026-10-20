@@ -248,7 +248,7 @@ export const messages = {
   'visualpanels.workspaceDefault': {
     ko: '작업실 기본',
     en: 'Workspace default',
-    ja: '作業室の既定',
+    ja: 'ワークスペースの既定',
     zh: '工作室默认',
   },
   'visualpanels.currentBotDefault': {
@@ -512,7 +512,7 @@ export const messages = {
   'visualpanels.appCssAppliesToTheWorkspaceBody': {
     ko: '앱 CSS는 작업실, 본문 CSS는 봇 메시지 안에 적용해요. 레이아웃은 request·heading·body·actions 슬롯을 각각 하나씩 포함해야 해요. JavaScript와 Risu CBS는 실행하지 않아요.',
     en: 'App CSS applies to the workspace; body CSS applies inside bot messages. Layouts need exactly one each of the request, heading, body and actions slots. JavaScript and Risu CBS do not run.',
-    ja: 'アプリCSSは作業室に、本文CSSはボットメッセージ内に適用されます。レイアウトにはrequest・heading・body・actionsスロットを1つずつ含めてください。JavaScriptとRisu CBSは実行しません。',
+    ja: 'アプリCSSはワークスペースに、本文CSSはボットメッセージ内に適用されます。レイアウトにはrequest・heading・body・actionsスロットを1つずつ含めてください。JavaScriptとRisu CBSは実行しません。',
     zh: '应用CSS作用于工作室，正文CSS作用于机器人消息内部。布局必须各包含一个request、heading、body和actions插槽。不会运行JavaScript和Risu CBS。',
   },
   'visualpanels.appCss': {
@@ -1220,7 +1220,7 @@ export const messages = {
   'visualpanels.deletePresetBotsAndChatsUsingIt': {
     ko: '‘{v0}’ 프리셋을 삭제해요. 이 항목을 선택한 봇·채팅은 상위 설정을 따르고, 작업실 기본이었다면 기본 프리셋으로 돌아가요. 진행 중인 작업과 기존 삽화는 유지돼요.',
     en: 'Delete preset “{v0}”. Bots and chats using it will inherit parent settings; a workspace default reverts to the built-in preset. Ongoing work and existing illustrations are preserved.',
-    ja: '「{v0}」プリセットを削除します。選択中のボットとチャットは上位設定に従い、作業室の既定だった場合は基本プリセットに戻ります。進行中の作業と既存の挿絵は保持されます。',
+    ja: '「{v0}」プリセットを削除します。選択中のボットとチャットは上位設定に従い、ワークスペースの既定だった場合は基本プリセットに戻ります。進行中の作業と既存の挿絵は保持されます。',
     zh: '删除“{v0}”预设。使用它的机器人和聊天将继承上级设置，工作室默认设置将恢复内置预设。进行中的任务和现有插图会保留。',
   },
   'visualpanels.theNextGenerationUsesTheReplacementPreset': {
@@ -1652,7 +1652,7 @@ export const messages = {
   'visualpanels.workspaceUsage': {
     ko: '작업실 사용량',
     en: 'Workspace usage',
-    ja: '作業室の使用量',
+    ja: 'ワークスペースの使用量',
     zh: '工作室用量',
   },
   'visualpanels.usageReportPeriod': {

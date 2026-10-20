@@ -687,7 +687,7 @@ export const messages = {
   'transfer.m132': {
     ko: '전체 작업실 백업이에요. 서버를 종료하고 이 백업 DB를 별도 경로에 둔 뒤 UIMORI_DB에 지정해 다시 시작해요. 복원을 확인할 때까지 기존 DB는 보관해 주세요.',
     en: 'This is a full workspace backup. Stop the server, place this backup DB at a separate path, set UIMORI_DB to it, and restart. Keep the current DB until restoration is verified.',
-    ja: '作業室全体のバックアップです。サーバーを停止し、バックアップDBを別の場所に置いてUIMORI_DBに指定し、再起動してください。復元を確認するまで既存のDBは保持してください。',
+    ja: 'ワークスペース全体のバックアップです。サーバーを停止し、バックアップDBを別の場所に置いてUIMORI_DBに指定し、再起動してください。復元を確認するまで既存のDBは保持してください。',
     zh: '这是完整工作室备份。请停止服务器，将备份数据库放在单独路径，在 UIMORI_DB 中指定该路径后重启。确认恢复成功前请保留现有数据库。',
   },
   'transfer.m137': {
@@ -698,8 +698,8 @@ export const messages = {
   },
   'transfer.m141': {
     ko: '전역 프롬프트·역할 모델은 현재 작업실 설정을 사용하며 실행 기록과 도우미 내부 작업은 가져오지 않아요.',
-    en: 'Global prompts and role models use the current workspace settings. Execution history and internal helper tasks are excluded.',
-    ja: '全体のプロンプトと役割モデルは現在の作業室の設定を使い、実行記録とアシスタント内部の作業は取り込みません。',
+    en: 'Global prompts and role models use the current workspace settings. Execution history and internal assistant tasks are excluded.',
+    ja: '全体のプロンプトと役割モデルは現在のワークスペースの設定を使い、実行記録とアシスタント内部の作業は取り込みません。',
     zh: '全局提示词和角色模型使用当前工作室设置，不导入执行记录和助手内部任务。',
   },
   'transfer.m142': {
@@ -735,7 +735,7 @@ export const messages = {
   'transfer.m147': {
     ko: 'Uimori 자료·채팅 백업이나 전체 작업실 백업 파일을 선택해 주세요.',
     en: 'Choose a Uimori resource, chat, or full workspace backup file.',
-    ja: 'Uimoriの資料・チャット、または作業室全体のバックアップを選んでください。',
+    ja: 'Uimoriの資料・チャット、またはワークスペース全体のバックアップを選んでください。',
     zh: '请选择 Uimori 资料、聊天或完整工作室备份文件。',
   },
   'transfer.m148': {
@@ -945,7 +945,7 @@ export const messages = {
   'transfer.m182': {
     ko: '작업실 전체 백업',
     en: 'Full workspace backup',
-    ja: '作業室全体のバックアップ',
+    ja: 'ワークスペース全体のバックアップ',
     zh: '完整工作室备份',
   },
   'transfer.m183': {
@@ -1149,7 +1149,7 @@ export const messages = {
   'transfer.m216': {
     ko: '전체 작업실',
     en: 'Entire workspace',
-    ja: '作業室全体',
+    ja: 'ワークスペース全体',
     zh: '整个工作室',
   },
   'transfer.m217': {
