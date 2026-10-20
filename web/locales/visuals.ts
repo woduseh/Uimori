@@ -234,7 +234,7 @@ export const messages = {
     zh: '未指定模型',
   },
   'visuals.m043': {
-    ko: '선택한 모델 · 삭제되었거나 확인 필요',
+    ko: '선택한 모델 · 삭제됐거나 확인 필요',
     en: 'Selected model · deleted or needs attention',
     ja: '選択モデル · 削除済み、または確認が必要',
     zh: '所选模型 · 已删除或需要检查',
@@ -1452,7 +1452,7 @@ export const messages = {
     zh: 'Scripted mock · 模拟生成',
   },
   'visuals.m278': {
-    ko: '요청에 대한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.',
+    ko: '요청한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.',
     en: 'Generation was refused. No replacement manuscript was automatically generated.',
     ja: '生成が拒否されました。代替原稿は自動生成していません。',
     zh: '生成被拒绝，未自动生成替代原稿。',
