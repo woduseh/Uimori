@@ -43,8 +43,8 @@ export const messages = {
   },
   'main.m008': {
     ko: '본문 모델을 확인하고 있어요',
-    en: 'Checking the writing model',
-    ja: '本文モデルを確認しています',
+    en: 'Checking writing model',
+    ja: '本文モデルを確認中',
     zh: '正在检查正文模型',
   },
   'main.m009': {
@@ -61,13 +61,13 @@ export const messages = {
   },
   'main.m011': {
     ko: '선택한 도우미 모델 · 확인 필요',
-    en: 'Selected helper model · needs review',
+    en: 'Selected assistant model · needs review',
     ja: '選択中のアシスタントモデル · 要確認',
     zh: '所选助手模型 · 需要检查',
   },
   'main.m012': {
     ko: '도우미 모델을 선택해 주세요',
-    en: 'Select a helper model',
+    en: 'Select an assistant model',
     ja: 'アシスタントモデルを選択してください',
     zh: '请选择助手模型',
   },
@@ -122,13 +122,13 @@ export const messages = {
   'main.m021': {
     ko: '원문 생성 취소 중…',
     en: 'Cancelling generation…',
-    ja: '原文の生成をキャンセルしています…',
+    ja: '原文の生成をキャンセル中…',
     zh: '正在取消原文生成…',
   },
   'main.m022': {
     ko: '참고 이미지를 준비하고 있어요…',
     en: 'Preparing reference images…',
-    ja: '参考画像を準備しています…',
+    ja: '参考画像を準備中…',
     zh: '正在准备参考图片…',
   },
   'main.m023': {
@@ -141,7 +141,7 @@ export const messages = {
     ko: '선택한 모델의 이미지 지원 여부는 미확인이에요. 첨부한 상태로 전송할 수 있어요.',
     en: 'Image support for this model is unknown. You can submit with attachments.',
     ja: 'このモデルの画像対応は未確認です。添付したまま送信できます。',
-    zh: '尚未确认此模型是否支持图片。您仍可携带附件提交。',
+    zh: '尚未确认此模型是否支持图片。仍可携带附件提交。',
   },
   'main.m025': {
     ko: '채팅 설정에 미저장 변경',
@@ -464,7 +464,7 @@ export const messages = {
   'main.m078': {
     ko: '프롬프트를 불러오는 중이에요…',
     en: 'Loading prompts…',
-    ja: 'プロンプトを読み込んでいます…',
+    ja: 'プロンプトを読み込み中…',
     zh: '正在加载提示词…',
   },
   'main.m079': {
@@ -519,7 +519,7 @@ export const messages = {
     ko: '서재에서 봇을 고르거나, 원하는 장면으로 시작해요.',
     en: 'Choose a bot from the library or start with a scene of your own.',
     ja: 'ライブラリでボットを選ぶか、好きなシーンから始めましょう。',
-    zh: '从资料库选择一个机器人，或从您想要的场景开始。',
+    zh: '从资料库选择机器人，或从想要的场景开始。',
   },
   'main.m088': {
     ko: '서재 둘러보기',
@@ -531,7 +531,7 @@ export const messages = {
     ko: '등장인물',
     en: 'Character',
     ja: '登場人物',
-    zh: '角色',
+    zh: '登场人物',
   },
   'main.m090': {
     ko: '연결을 다시 확인하는 중이에요.',
@@ -549,7 +549,7 @@ export const messages = {
     ko: '배경과 인물, 일어나길 바라는 일을 아래에 적어주세요.',
     en: 'Describe the setting, characters and what you would like to happen below.',
     ja: '舞台や人物、起こってほしいことを下に書いてください。',
-    zh: '请在下方描述背景、人物和您希望发生的事。',
+    zh: '请在下方写下背景、人物和希望发生的事。',
   },
   'main.m093': {
     ko: '시작문을 바꿨어요.',
@@ -699,25 +699,25 @@ export const messages = {
     ko: '페르소나',
     en: 'Persona',
     ja: 'ペルソナ',
-    zh: '用户角色',
+    zh: '角色',
   },
   'main.m118': {
     ko: '빠른 페르소나',
     en: 'Quick persona',
     ja: 'ペルソナを選択',
-    zh: '快捷用户角色',
+    zh: '快捷角色',
   },
   'main.m119': {
     ko: '페르소나 없음',
     en: 'No persona',
     ja: 'ペルソナなし',
-    zh: '无用户角色',
+    zh: '无角色',
   },
   'main.m120': {
     ko: '페르소나 확인 중…',
     en: 'Checking persona…',
-    ja: 'ペルソナを確認しています…',
-    zh: '正在检查用户角色…',
+    ja: 'ペルソナを確認中…',
+    zh: '正在检查角色…',
   },
   'main.m121': {
     ko: '창작 옵션',
@@ -741,7 +741,7 @@ export const messages = {
     ko: '마지막 장면의 로어',
     en: 'Last scene lore',
     ja: '最後のシーンのロア',
-    zh: '最后场景的世界设定',
+    zh: '最后场景的设定',
   },
   'main.m125': {
     ko: '수동 컨텍스트 압축',
@@ -787,9 +787,9 @@ export const messages = {
   },
   'main.m132': {
     ko: '이전 전송의 수락 확인',
-    en: 'Check previous submission acceptance',
-    ja: '前回の送信の受理を確認',
-    zh: '确认上次提交是否被接受',
+    en: 'Check previous request acceptance',
+    ja: '前回のリクエストの受付を確認',
+    zh: '确认上次请求是否被接收',
   },
   'main.m133': {
     ko: '시작 설정 저장',
@@ -818,7 +818,7 @@ export const messages = {
   'main.m137': {
     ko: '저장 중…',
     en: 'Saving…',
-    ja: '保存しています…',
+    ja: '保存中…',
     zh: '正在保存…',
   },
   'main.m138': {
@@ -915,7 +915,7 @@ export const messages = {
     ko: '{bot}{hasPersona, select, true { · 페르소나 {persona}} other {}}',
     en: '{bot}{hasPersona, select, true { · persona {persona}} other {}}',
     ja: '{bot}{hasPersona, select, true { · ペルソナ {persona}} other {}}',
-    zh: '{bot}{hasPersona, select, true { · 用户角色 {persona}} other {}}',
+    zh: '{bot}{hasPersona, select, true { · 角色 {persona}} other {}}',
   },
   'main.forkNotice': {
     ko: '「{title}」에서 복사한 새 채팅이에요.',
@@ -1009,7 +1009,7 @@ export const messages = {
   },
   'main.story7': {
     ko: '이전 요청 기록을 읽을 수 없어 새 요청을 보내지 않았어요. 기록을 보존한 상태로 복구가 필요해요.',
-    en: 'The previous request record could not be read, so no new request was sent. Recovery must preserve that record.',
+    en: 'Could not read the previous request record, so no new request was sent. Recover while keeping the existing record.',
     ja: '前回のリクエスト記録を読めなかったため、新しいリクエストは送信していません。記録を保持したまま復旧が必要です。',
     zh: '无法读取上次请求记录，因此未发送新请求。需要在保留记录的前提下恢复。',
   },
@@ -1095,7 +1095,7 @@ export const messages = {
     ko: '선택한 페르소나를 찾지 못했어요.',
     en: 'The selected persona was not found.',
     ja: '選択したペルソナが見つかりません。',
-    zh: '找不到所选用户角色。',
+    zh: '找不到所选角色。',
   },
   'main.story22': {
     ko: '다음 요청에 적용할 설정을 저장했어요.',

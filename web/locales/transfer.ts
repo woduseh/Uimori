@@ -22,7 +22,7 @@ export const messages = {
     ko: '페르소나',
     en: 'Persona',
     ja: 'ペルソナ',
-    zh: '用户角色',
+    zh: '角色',
   },
   'transfer.m005': {
     ko: '봇',
@@ -76,7 +76,7 @@ export const messages = {
     ko: '페르소나 등록은 완료했어요. 서재를 새로고침한 뒤 사용할 수 있어요.',
     en: 'The persona was registered. Refresh the library to use it.',
     ja: 'ペルソナを登録しました。ライブラリを更新すると使えます。',
-    zh: '用户角色已添加，刷新资料库后即可使用。',
+    zh: '角色已添加，刷新资料库后即可使用。',
   },
   'transfer.m014': {
     ko: '가져오기는 완료했어요. 목록을 새로고침한 뒤 채팅을 열어 주세요.',
@@ -136,13 +136,13 @@ export const messages = {
     ko: '자동은 카드를 봇으로, 모듈 파일을 모듈로 가져와요. 카드를 페르소나로 쓰거나 CharX를 모듈로 쓰려면 종류를 바꿔 주세요.',
     en: 'Automatic imports cards as bots and module files as modules. Change the type to use a card as a persona or CharX as a module.',
     ja: '自動ではカードをボット、モジュールファイルをモジュールとして取り込みます。カードをペルソナに、CharXをモジュールにする場合は種類を変更してください。',
-    zh: '自动模式将卡片导入为机器人，将模块文件导入为模块。若要将卡片用作用户角色或将 CharX 用作模块，请更改类型。',
+    zh: '自动模式将卡片导入为机器人，将模块文件导入为模块。若要将卡片用作角色或将 CharX 用作模块，请更改类型。',
   },
   'transfer.m026': {
     ko: '사용 중인 로어도 함께 가져와요.',
     en: 'Active lore is imported too.',
     ja: '使用中のロアも取り込みます。',
-    zh: '也会导入启用的世界书。',
+    zh: '也会导入启用的设定。',
   },
   'transfer.m027': {
     ko: '원본 파일은 변경하지 않으며, 파일의 코드나 외부 URL을 자동으로 실행하지 않아요.',
@@ -154,7 +154,7 @@ export const messages = {
     ko: '로어',
     en: 'Lore',
     ja: 'ロア',
-    zh: '世界书',
+    zh: '设定',
   },
   'transfer.m029': {
     ko: '첫 메시지',
@@ -208,7 +208,7 @@ export const messages = {
     ko: '제목 없는 로어',
     en: 'Untitled lore',
     ja: '無題のロア',
-    zh: '未命名世界书',
+    zh: '未命名设定',
   },
   'transfer.m040': {
     ko: '사용 중',
@@ -250,13 +250,13 @@ export const messages = {
     ko: '모듈을 서재에 등록했어요. 기존 채팅의 봇·페르소나·모듈 설정에서 장착해 주세요.',
     en: 'The module was added to the library. Attach it from the bot, persona, and module settings of an existing chat.',
     ja: 'ライブラリにモジュールを登録しました。既存チャットのボット・ペルソナ・モジュール設定から装着してください。',
-    zh: '模块已添加到资料库，请在现有聊天的机器人、用户角色和模块设置中附加。',
+    zh: '模块已添加到资料库，请在现有聊天的机器人、角色和模块设置中附加。',
   },
   'transfer.m053': {
     ko: '페르소나를 서재에 등록했어요. 새 채팅이나 기존 채팅에서 선택할 수 있어요.',
     en: 'The persona was added to the library. Select it in a new or existing chat.',
     ja: 'ライブラリにペルソナを登録しました。新規または既存のチャットで選べます。',
-    zh: '用户角色已添加到资料库，可在新聊天或现有聊天中选择。',
+    zh: '角色已添加到资料库，可在新聊天或现有聊天中选择。',
   },
   'transfer.m054': {
     ko: '봇과 새 채팅을 가져왔어요.',
@@ -315,7 +315,7 @@ export const messages = {
   'transfer.m063': {
     ko: '파일을 처리하고 있어요…',
     en: 'Processing file…',
-    ja: 'ファイルを処理しています…',
+    ja: 'ファイルを処理中…',
     zh: '正在处理文件…',
   },
   'transfer.m064': {
@@ -357,7 +357,7 @@ export const messages = {
   'transfer.m070': {
     ko: 'Risu 프롬프트·토글·정규식 원본을 새 작문 프롬프트로 저장해요. 원본 파일도 보존해요. 가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.',
     en: 'Save the original Risu prompts, toggles, and regular expressions as a new writing prompt. The original file is also preserved. After importing, select it as the writing prompt for the current chat.',
-    ja: 'Risuのプロンプト・トグル・正規表現の原本を新しい執筆プロンプトとして保存します。元ファイルも保持します。取り込み後、現在のチャットの執筆プロンプトとして選べます。',
+    ja: 'Risuのプロンプト・トグル・正規表現の原本を新しい作家プロンプトとして保存します。元ファイルも保持します。取り込み後、現在のチャットの作家プロンプトとして選べます。',
     zh: '将原始 Risu 提示词、开关和正则表达式保存为新的写作提示词，同时保留原始文件。导入后可将其选为当前聊天的写作提示词。',
   },
   'transfer.m071': {
@@ -381,7 +381,7 @@ export const messages = {
   'transfer.m074': {
     ko: '작문 프롬프트',
     en: 'Writing prompt',
-    ja: '執筆プロンプト',
+    ja: '作家プロンプト',
     zh: '写作提示词',
   },
   'transfer.m075': {
@@ -441,7 +441,7 @@ export const messages = {
   'transfer.m084': {
     ko: '새 작문 프롬프트로 저장했어요.',
     en: 'Saved as a new writing prompt.',
-    ja: '新しい執筆プロンプトとして保存しました。',
+    ja: '新しい作家プロンプトとして保存しました。',
     zh: '已保存为新的写作提示词。',
   },
   'transfer.m085': {
@@ -453,14 +453,14 @@ export const messages = {
   'transfer.m086': {
     ko: '작문 프롬프트로 저장',
     en: 'Save as writing prompt',
-    ja: '執筆プロンプトとして保存',
+    ja: '作家プロンプトとして保存',
     zh: '保存为写作提示词',
   },
   'transfer.m087': {
     ko: '이 모듈에는 내보낼 수 있는 Risu 원문이 없어요.',
-    en: 'This module has no original Risu content to export.',
-    ja: 'このモジュールには書き出せるRisu原本がありません。',
-    zh: '此模块没有可导出的 Risu 原始内容。',
+    en: 'This module has no Risu source to export.',
+    ja: 'このモジュールには書き出せるRisuソースがありません。',
+    zh: '此模块没有可导出的 Risu 源码。',
   },
   'transfer.m088': {
     ko: '이 자료의 모듈 에셋 이름이 겹쳐요. 에셋을 확인해 주세요.',
@@ -470,15 +470,15 @@ export const messages = {
   },
   'transfer.m089': {
     ko: '원문에 연결된 에셋 파일을 찾을 수 없어요. 에셋 탭에서 확인해 주세요.',
-    en: 'An asset linked to the original content is missing. Check the assets tab.',
-    ja: '原本に関連するアセットファイルが見つかりません。アセットタブで確認してください。',
-    zh: '找不到原始内容关联的资源文件，请检查资源标签页。',
+    en: 'An asset linked to the source is missing. Check the assets tab.',
+    ja: 'ソースに関連するアセットファイルが見つかりません。アセットタブで確認してください。',
+    zh: '找不到源码关联的资源文件，请检查资源标签页。',
   },
   'transfer.m090': {
     ko: '원문 에셋의 파일 경로가 겹치거나 올바르지 않아요. 에셋을 확인해 주세요.',
-    en: 'Original asset paths conflict or are invalid. Check the assets.',
-    ja: '原本アセットのパスが重複しているか無効です。アセットを確認してください。',
-    zh: '原始资源路径重复或无效，请检查资源。',
+    en: 'Source asset paths conflict or are invalid. Check the assets.',
+    ja: 'ソースアセットのパスが重複しているか無効です。アセットを確認してください。',
+    zh: '源码资源路径重复或无效，请检查资源。',
   },
   'transfer.m091': {
     ko: '내보낼 자료가 파일 크기 한도를 넘었어요.',
@@ -489,8 +489,8 @@ export const messages = {
   'transfer.m092': {
     ko: '자료가 다른 곳에서 변경됐어요. 최신 저장본을 확인한 뒤 다시 내보내 주세요.',
     en: 'This resource changed elsewhere. Review the latest saved version, then export again.',
-    ja: '資料が別の場所で変更されました。最新の保存内容を確認してから再度書き出してください。',
-    zh: '资料已在其他位置更改，请检查最新保存版本后重新导出。',
+    ja: '資料が別の場所で変更されました。最新の保存済み内容を確認してから再度書き出してください。',
+    zh: '资料已在其他位置更改，请检查最新已保存版本后重新导出。',
   },
   'transfer.m093': {
     ko: '편집 내용을 저장한 뒤 내보내 주세요.',
@@ -501,13 +501,13 @@ export const messages = {
   'transfer.m096': {
     ko: '파일을 내보내지 못했어요. 저장본을 확인한 뒤 다시 시도해 주세요.',
     en: 'Could not export the file. Review the saved version and try again.',
-    ja: 'ファイルを書き出せませんでした。保存内容を確認してから再試行してください。',
-    zh: '无法导出文件，请检查保存版本后重试。',
+    ja: 'ファイルを書き出せませんでした。保存済み内容を確認してから再試行してください。',
+    zh: '无法导出文件，请检查已保存版本后重试。',
   },
   'transfer.m097': {
     ko: '내보내는 중…',
     en: 'Exporting…',
-    ja: '書き出しています…',
+    ja: '書き出し中…',
     zh: '正在导出…',
   },
   'transfer.m099': {
@@ -585,7 +585,7 @@ export const messages = {
   'transfer.m115': {
     ko: '가져오는 중…',
     en: 'Importing…',
-    ja: '取り込んでいます…',
+    ja: '取り込み中…',
     zh: '正在导入…',
   },
   'transfer.m116': {
@@ -603,13 +603,13 @@ export const messages = {
   'transfer.m118': {
     ko: '채팅 본문을 가져오는 중이에요…',
     en: 'Importing chat transcript…',
-    ja: 'チャット本文を取り込んでいます…',
+    ja: 'チャット本文を取り込み中…',
     zh: '正在导入聊天正文…',
   },
   'transfer.m119': {
     ko: '파일을 읽고 있어요…',
     en: 'Reading file…',
-    ja: 'ファイルを読み込んでいます…',
+    ja: 'ファイルを読み込み中…',
     zh: '正在读取文件…',
   },
   'transfer.m120': {
@@ -681,7 +681,7 @@ export const messages = {
   'transfer.m131': {
     ko: '백업 파일을 읽고 있어요…',
     en: 'Reading backup file…',
-    ja: 'バックアップファイルを読み込んでいます…',
+    ja: 'バックアップファイルを読み込み中…',
     zh: '正在读取备份文件…',
   },
   'transfer.m132': {
@@ -705,7 +705,7 @@ export const messages = {
   'transfer.m142': {
     ko: '처리 중…',
     en: 'Processing…',
-    ja: '処理しています…',
+    ja: '処理中…',
     zh: '正在处理…',
   },
   'transfer.m143': {
@@ -723,7 +723,7 @@ export const messages = {
   'transfer.m145': {
     ko: '백업을 가져오는 중이에요…',
     en: 'Importing backup…',
-    ja: 'バックアップを取り込んでいます…',
+    ja: 'バックアップを取り込み中…',
     zh: '正在导入备份…',
   },
   'transfer.m146': {
@@ -891,7 +891,7 @@ export const messages = {
   'transfer.m173': {
     ko: '백업 설정을 불러오는 중이에요…',
     en: 'Loading backup settings…',
-    ja: 'バックアップ設定を読み込んでいます…',
+    ja: 'バックアップ設定を読み込み中…',
     zh: '正在加载备份设置…',
   },
   'transfer.m174': {
@@ -957,7 +957,7 @@ export const messages = {
   'transfer.m184': {
     ko: '백업 준비 중…',
     en: 'Preparing backup…',
-    ja: 'バックアップを準備しています…',
+    ja: 'バックアップを準備中…',
     zh: '正在准备备份…',
   },
   'transfer.m185': {
@@ -1077,7 +1077,7 @@ export const messages = {
   'transfer.m204': {
     ko: '원고 목록을 불러오는 중이에요…',
     en: 'Loading manuscript list…',
-    ja: '原稿一覧を読み込んでいます…',
+    ja: '原稿一覧を読み込み中…',
     zh: '正在加载原稿列表…',
   },
   'transfer.m205': {
@@ -1095,7 +1095,7 @@ export const messages = {
   'transfer.m207': {
     ko: '원고 준비 중…',
     en: 'Preparing manuscript…',
-    ja: '原稿を準備しています…',
+    ja: '原稿を準備中…',
     zh: '正在准备原稿…',
   },
   'transfer.m208': {
@@ -1221,7 +1221,7 @@ export const messages = {
   'transfer.m230': {
     ko: '원고를 찾고 있어요…',
     en: 'Searching manuscripts…',
-    ja: '原稿を検索しています…',
+    ja: '原稿を検索中…',
     zh: '正在搜索原稿…',
   },
   'transfer.m231': {
@@ -1335,13 +1335,13 @@ export const messages = {
   'transfer.m251': {
     ko: '기본 페르소나',
     en: 'Default persona',
-    ja: '既定のペルソナ',
-    zh: '默认用户角色',
+    ja: '初期ペルソナ',
+    zh: '默认角色',
   },
   'transfer.m252': {
     ko: '폴더를 불러오는 중이에요…',
     en: 'Loading folders…',
-    ja: 'フォルダーを読み込んでいます…',
+    ja: 'フォルダーを読み込み中…',
     zh: '正在加载文件夹…',
   },
   'transfer.m253': {
@@ -1383,7 +1383,7 @@ export const messages = {
   'transfer.m259': {
     ko: '저장 중…',
     en: 'Saving…',
-    ja: '保存しています…',
+    ja: '保存中…',
     zh: '正在保存…',
   },
   'transfer.m260': {
@@ -1635,7 +1635,7 @@ export const messages = {
   'transfer.m303': {
     ko: '봇을 불러오는 중이에요…',
     en: 'Loading bots…',
-    ja: 'ボットを読み込んでいます…',
+    ja: 'ボットを読み込み中…',
     zh: '正在加载机器人…',
   },
   'transfer.m304': {
@@ -1683,14 +1683,14 @@ export const messages = {
   'transfer.m312': {
     ko: '기본 페르소나가 삭제됐어요. 시작 페르소나를 직접 선택해 주세요.',
     en: 'The default persona was deleted. Select a starting persona yourself.',
-    ja: '既定のペルソナが削除されました。開始ペルソナを選んでください。',
-    zh: '默认用户角色已删除，请手动选择起始用户角色。',
+    ja: '初期ペルソナが削除されました。開始ペルソナを選んでください。',
+    zh: '默认角色已删除，请手动选择起始角色。',
   },
   'transfer.m313': {
     ko: '기본 페르소나를 확인한 뒤 시작해 주세요.',
     en: 'Review the default persona before starting.',
-    ja: '既定のペルソナを確認してから開始してください。',
-    zh: '请先检查默认用户角色再开始。',
+    ja: '初期ペルソナを確認してから開始してください。',
+    zh: '请先检查默认角色再开始。',
   },
   'transfer.m314': {
     ko: '선택한 자료를 불러온 뒤 시작해 주세요.',
@@ -1762,19 +1762,19 @@ export const messages = {
     ko: '시작 페르소나',
     en: 'Starting persona',
     ja: '開始ペルソナ',
-    zh: '起始用户角色',
+    zh: '起始角色',
   },
   'transfer.m327': {
     ko: '페르소나 없음',
     en: 'No persona',
     ja: 'ペルソナなし',
-    zh: '无用户角色',
+    zh: '无角色',
   },
   'transfer.m328': {
     ko: '기본 페르소나를 불러오는 중이에요…',
     en: 'Loading default persona…',
-    ja: '既定のペルソナを読み込んでいます…',
-    zh: '正在加载默认用户角色…',
+    ja: '初期ペルソナを読み込み中…',
+    zh: '正在加载默认角色…',
   },
   'transfer.m329': {
     ko: '새 채팅에 사용할 전역 설정',
@@ -1791,12 +1791,12 @@ export const messages = {
   'transfer.m331': {
     ko: '전역 모델과 프롬프트를 불러오는 중이에요…',
     en: 'Loading global model and prompts…',
-    ja: '全体のモデルとプロンプトを読み込んでいます…',
+    ja: '全体のモデルとプロンプトを読み込み中…',
     zh: '正在加载全局模型和提示词…',
   },
   'transfer.m332': {
     ko: '본문 모델',
-    en: 'Manuscript model',
+    en: 'Story model',
     ja: '本文モデル',
     zh: '正文模型',
   },
@@ -1820,14 +1820,14 @@ export const messages = {
   },
   'transfer.m336': {
     ko: '본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도 있어요.',
-    en: 'Select an available global manuscript model before generating text. You can create the chat first.',
+    en: 'Select an available global story model before generating text. You can create the chat first.',
     ja: '本文を生成する前に、使用できる全体の本文モデルを選んでください。先にチャットだけ作成することもできます。',
     zh: '生成正文前请选择可用的全局正文模型，也可先创建聊天。',
   },
   'transfer.m337': {
     ko: '전역 설정을 다시 불러오는 중이에요…',
     en: 'Reloading global settings…',
-    ja: '全体設定を再読込しています…',
+    ja: '全体設定を再読込中…',
     zh: '正在重新加载全局设置…',
   },
   'transfer.m338': {
@@ -1845,7 +1845,7 @@ export const messages = {
   'transfer.m340': {
     ko: '시작 자료를 불러오는 중이에요…',
     en: 'Loading starting resources…',
-    ja: '開始資料を読み込んでいます…',
+    ja: '開始資料を読み込み中…',
     zh: '正在加载起始资料…',
   },
   'transfer.m341': {
@@ -1887,7 +1887,7 @@ export const messages = {
   'transfer.m347': {
     ko: '모듈 확인 중…',
     en: 'Reviewing module…',
-    ja: 'モジュールを確認しています…',
+    ja: 'モジュールを確認中…',
     zh: '正在检查模块…',
   },
   'transfer.m348': {
@@ -1923,7 +1923,7 @@ export const messages = {
   'transfer.m353': {
     ko: '채팅을 준비하는 중…',
     en: 'Preparing chat…',
-    ja: 'チャットを準備しています…',
+    ja: 'チャットを準備中…',
     zh: '正在准备聊天…',
   },
   'transfer.m354': {
@@ -2091,8 +2091,8 @@ export const messages = {
   'transfer.d023': {
     ko: '{v0} 기본 페르소나',
     en: 'Default persona for {v0}',
-    ja: '{v0}の既定のペルソナ',
-    zh: '{v0} 默认用户角色',
+    ja: '{v0}の初期ペルソナ',
+    zh: '{v0} 默认角色',
   },
   'transfer.d024': {
     ko: '활동 · 미확인 채팅 {v0, number}개',
@@ -2146,31 +2146,31 @@ export const messages = {
     ko: '{kind, select, bot {봇으로} module {모듈로} persona {페르소나로} other {자료로}} 가져오기 · 변경',
     en: 'Import as {kind, select, bot {bot} module {module} persona {persona} other {resource}} · Change',
     ja: '{kind, select, bot {ボット} module {モジュール} persona {ペルソナ} other {資料}}として取り込む・変更',
-    zh: '导入为{kind, select, bot {机器人} module {模块} persona {用户角色} other {资料}} · 更改',
+    zh: '导入为{kind, select, bot {机器人} module {模块} persona {角色} other {资料}} · 更改',
   },
   'transfer.importKind': {
     ko: '{kind, select, module {모듈} persona {페르소나} other {봇}} 가져오기',
     en: 'Import {kind, select, module {module} persona {persona} other {bot}}',
     ja: '{kind, select, module {モジュール} persona {ペルソナ} other {ボット}}を取り込む',
-    zh: '导入{kind, select, module {模块} persona {用户角色} other {机器人}}',
+    zh: '导入{kind, select, module {模块} persona {角色} other {机器人}}',
   },
   'transfer.lorePreview': {
     ko: '로어 미리보기 ({count, number}개)',
     en: 'Lore preview ({count, plural, one {# entry} other {# entries}})',
     ja: 'ロアのプレビュー（{count, number}件）',
-    zh: '世界书预览（{count, number} 项）',
+    zh: '设定预览（{count, number} 项）',
   },
   'transfer.uncertainResource': {
     ko: '서버의 완료 여부를 확인하지 못했어요. 파일과 선택을 유지한 같은 요청으로 다시 확인하면 {kind, select, module {모듈이} persona {페르소나가} chat {봇과 채팅이} other {봇이}} 중복 생성되지 않아요. 이 창을 닫아도 요청은 유지돼요.',
     en: 'The server outcome is unknown. Rechecking the same request with its retained file and choices avoids creating duplicate {kind, select, module {modules} persona {personas} chat {bots and chats} other {bots}}. The request is kept even if you close this window.',
     ja: 'サーバーでの完了状況を確認できませんでした。同じファイルと選択を保持したリクエストで再確認すれば、{kind, select, module {モジュール} persona {ペルソナ} chat {ボットとチャット} other {ボット}}は重複作成されません。この画面を閉じてもリクエストは保持されます。',
-    zh: '无法确认服务器是否完成。保留文件和选项并重新检查同一请求，可避免重复创建{kind, select, module {模块} persona {用户角色} chat {机器人和聊天} other {机器人}}。关闭此窗口后请求仍会保留。',
+    zh: '无法确认服务器是否完成。保留文件和选项并重新检查同一请求，可避免重复创建{kind, select, module {模块} persona {角色} chat {机器人和聊天} other {机器人}}。关闭此窗口后请求仍会保留。',
   },
   'transfer.exportDescription': {
     ko: '이 자료의 현재 저장본만 {format} 파일로 내보내요. 연결한 자료는 각각 내보내 주세요.',
     en: 'Export only the current saved version of this resource as a {format} file. Export linked resources separately.',
-    ja: 'この資料の現在の保存内容のみを{format}ファイルとして書き出します。関連資料は個別に書き出してください。',
-    zh: '仅将此资料的当前保存版本导出为 {format} 文件，请分别导出关联资料。',
+    ja: 'この資料の現在の保存済み内容のみを{format}ファイルとして書き出します。関連資料は個別に書き出してください。',
+    zh: '仅将此资料的当前已保存版本导出为 {format} 文件，请分别导出关联资料。',
   },
   'transfer.exportFormat': {
     ko: '{format} 내보내기',
@@ -2247,8 +2247,8 @@ export const messages = {
   'transfer.personaValue': {
     ko: '기본 페르소나 · {name}',
     en: 'Default persona · {name}',
-    ja: '既定のペルソナ・{name}',
-    zh: '默认用户角色 · {name}',
+    ja: '初期ペルソナ・{name}',
+    zh: '默认角色 · {name}',
   },
   'transfer.runningCount': {
     ko: '진행 중 {count, number}',
@@ -2288,9 +2288,9 @@ export const messages = {
   },
   'transfer.finding.lore-not-activated': {
     ko: '@@dont_activate가 지정된 로어는 모델에 보내지 않고 Risu 원문에 보존해요.',
-    en: 'Lore marked @@dont_activate is kept in the original Risu document and is not sent to the model.',
-    ja: '@@dont_activateが指定されたロアはモデルに送らず、Risu原本に保持します。',
-    zh: '标记为 @@dont_activate 的世界书不会发送给模型，将保留在 Risu 原始内容中。',
+    en: 'Lore marked @@dont_activate is kept in the Risu source and is not sent to the model.',
+    ja: '@@dont_activateが指定されたロアはモデルに送らず、Risuソースに保持します。',
+    zh: '标记为 @@dont_activate 的设定不会发送给模型，将保留在 Risu 源码中。',
   },
   'transfer.finding.lore-decorator-position': {
     ko: '본문 중간의 `@@` 지시문은 해석하지 않고 그대로 남겨요. 원래 규칙과 다르게 동작할 수 있어요.',
@@ -2302,31 +2302,31 @@ export const messages = {
     ko: '비활성 로어는 적용하지 않고 원본 파일에 보존해요.',
     en: 'Disabled lore is not applied and is kept in the original file.',
     ja: '無効なロアは適用せず、元ファイルに保持します。',
-    zh: '不应用停用的世界书，将其保留在原始文件中。',
+    zh: '不应用停用的设定，将其保留在原始文件中。',
   },
   'transfer.finding.creator-notes-truncated': {
     ko: '자료 설명은 앞 4000자까지 표시해요. 제작자 코멘트 전체는 Risu 카드 원문에 보존해요.',
-    en: 'The resource description shows only the first 4,000 characters. The full creator notes remain in the original Risu card.',
-    ja: '資料の説明は先頭4,000文字まで表示します。制作者コメントの全文はRisuカード原本に保持します。',
-    zh: '资料说明仅显示前 4,000 个字符，完整的作者备注保留在 Risu 原始卡片中。',
+    en: 'The resource description shows only the first 4,000 characters. The full creator notes remain in the Risu card source.',
+    ja: '資料の説明は先頭4,000文字まで表示します。制作者コメントの全文はRisuカードのソースに保持します。',
+    zh: '资料说明仅显示前 4,000 个字符，完整的制作者备注保留在 Risu 卡片源码中。',
   },
   'transfer.finding.native-lore-model': {
     ko: '로어 원문과 규칙은 보존하며 선택적 로어의 관련성은 JEV가 판단해요. 선택되지 않은 로어도 작문 모델이 조회할 수 있어요.',
-    en: 'Original lore and rules are preserved. JEV judges the relevance of optional lore, and the writing model can also look up lore that was not selected.',
-    ja: 'ロアの原文と規則を保持し、任意のロアの関連性はJEVが判断します。選ばれなかったロアも執筆モデルが参照できます。',
-    zh: '保留世界书原文和规则，由 JEV 判断可选世界书的相关性，写作模型也可查询未选中的世界书。',
+    en: 'Lore source and rules are preserved. JEV judges the relevance of optional lore, and the writing model can also look up lore that was not selected.',
+    ja: 'ロアのソースと規則を保持し、任意のロアの関連性はJEVが判断します。選ばれなかったロアも作家モデルが参照できます。',
+    zh: '保留设定源码和规则，由 JEV 判断可选设定的相关性，写作模型也可查询未选中的设定。',
   },
   'transfer.finding.source-file-not-retained': {
     ko: '카드·모듈 원문과 지원 이미지는 자료에 보존해요. 원본 파일 자체가 필요하면 직접 보관해 주세요.',
-    en: 'Original card and module content and supported images are kept in the resource. Keep the original file yourself if you need it.',
-    ja: 'カード・モジュールの原本と対応画像は資料に保持します。元ファイル自体が必要な場合はご自身で保管してください。',
-    zh: '卡片、模块原始内容和支持的图片将保留在资料中。如需原始文件本身，请自行保存。',
+    en: 'Card and module source and supported images are kept in the resource. Keep the original file yourself if you need it.',
+    ja: 'カード・モジュールのソースと対応画像は資料に保持します。元ファイル自体が必要な場合はご自身で保管してください。',
+    zh: '卡片、模块源码和支持的图片将保留在资料中。如需原始文件本身，请自行保存。',
   },
   'transfer.finding.native-risu': {
     ko: '카드·모듈과 CBS·정규식·트리거 코드는 Risu 원문으로 보존해요. 본문·시작문·로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.',
-    en: 'Cards, modules, and CBS, regex, and trigger code are preserved as original Risu content. Text, openings, and lore are read from it for display. Preserving the original does not mean every script can run.',
-    ja: 'カード・モジュールとCBS・正規表現・トリガーコードはRisu原本として保持します。本文・開始文・ロアは原本から読み込んで表示します。原本を保持してもすべてのスクリプトが実行できるわけではありません。',
-    zh: '卡片、模块以及 CBS、正则表达式和触发器代码将作为 Risu 原始内容保留。正文、开场和世界书从中读取并显示。保留原始内容并不表示所有脚本均可执行。',
+    en: 'Cards, modules, and CBS, regex, and trigger code are preserved as Risu source. Text, openings, and lore are read from it for display. Preserving the source does not mean every script can run.',
+    ja: 'カード・モジュールとCBS・正規表現・トリガーコードはRisuソースとして保持します。本文・開始文・ロアはソースから読み込んで表示します。ソースを保持してもすべてのスクリプトが実行できるわけではありません。',
+    zh: '卡片、模块以及 CBS、正则表达式和触发器代码将作为 Risu 源码保留。正文、开场和设定从中读取并显示。保留源码并不表示所有脚本均可执行。',
   },
   'transfer.finding.native-model-calls': {
     ko: '스크립트에서 모델 호출로 보이는 코드를 찾았어요. 가져오기에서는 이 코드를 유지하며, JEV 호출로 자동 변환하지 않아요.',
@@ -2336,9 +2336,9 @@ export const messages = {
   },
   'transfer.finding.native-variable-projection': {
     ko: '기본 변수 설정을 읽지 못했어요. 원문은 보존했지만 Uimori의 기본 변수 설정에는 반영하지 못했어요.',
-    en: 'Default variables could not be read. The original is preserved, but the values could not be applied to Uimori’s default variables.',
-    ja: '既定の変数設定を読み込めませんでした。原本は保持しましたが、Uimoriの既定の変数設定には反映できませんでした。',
-    zh: '无法读取默认变量设置。已保留原始内容，但未能将其应用到 Uimori 的默认变量设置。',
+    en: 'Default variables could not be read. The source is preserved, but the values could not be applied to Uimori’s default variables.',
+    ja: '既定の変数設定を読み込めませんでした。ソースは保持しましたが、Uimoriの既定の変数設定には反映できませんでした。',
+    zh: '无法读取默认变量设置。已保留源码，但未能将其应用到 Uimori 的默认变量设置。',
   },
   'transfer.finding.RISU_PRESET_HOST_MEMORY': {
     ko: 'memory 블록에 지정한 위치와 앞뒤 문구는 적용하지 않아요. 요약과 기억을 모델에 보낼 때는 Uimori의 컨텍스트 처리 방식을 따라요.',
@@ -2354,21 +2354,21 @@ export const messages = {
   },
   'transfer.finding.decoratorPosition': {
     ko: '로어의 `@@{decorator}` 위치·삽입 지시문은 원본에 보존하지만 현재 컨텍스트 배치에는 적용하지 않아요.',
-    en: 'The lore position or insertion instruction `@@{decorator}` is preserved in the original but is not applied to the current context layout.',
-    ja: 'ロアの位置・挿入指示 `@@{decorator}` は原本に保持しますが、現在のコンテキスト配置には適用しません。',
-    zh: '世界书的位置或插入指令 `@@{decorator}` 将保留在原始内容中，但不应用于当前上下文布局。',
+    en: 'The lore position or insertion instruction `@@{decorator}` is preserved in the source but is not applied to the current context layout.',
+    ja: 'ロアの位置・挿入指示 `@@{decorator}` はソースに保持しますが、現在のコンテキスト配置には適用しません。',
+    zh: '设定的位置或插入指令 `@@{decorator}` 将保留在源码中，但不应用于当前上下文排布。',
   },
   'transfer.finding.decoratorActivation': {
     ko: '로어의 `@@{decorator}` 규칙은 원본에 보존해요. 선택적 로어는 JEV 관련성 판단과 작문 모델의 조회로 제공해요.',
-    en: 'The lore rule `@@{decorator}` is preserved in the original. Optional lore is provided through JEV relevance checks and writing-model lookups.',
-    ja: 'ロアの規則 `@@{decorator}` は原本に保持します。任意のロアはJEVの関連性判断と執筆モデルの参照で提供します。',
-    zh: '世界书规则 `@@{decorator}` 将保留在原始内容中。可选世界书通过 JEV 相关性判断和写作模型查询提供。',
+    en: 'The lore rule `@@{decorator}` is preserved in the source. Optional lore is provided through JEV relevance checks and writing-model lookups.',
+    ja: 'ロアの規則 `@@{decorator}` はソースに保持します。任意のロアはJEVの関連性判断と作家モデルの参照で提供します。',
+    zh: '设定规则 `@@{decorator}` 将保留在源码中。可选设定通过 JEV 相关性判断和写作模型查询提供。',
   },
   'transfer.finding.decoratorUnknown': {
     ko: 'Risu가 인식하지 못하는 `@@` 지시문은 가져온 로어 본문에서 제외돼요. Risu 원문에는 남아요: {names}{more, plural, =0 {} other { 외 #개}}',
-    en: 'Unrecognized `@@` instructions are excluded from the imported lore text but remain in the original Risu content: {names}{more, plural, =0 {} one { and # more} other { and # more}}',
-    ja: 'Risuが認識しない `@@` 指示は取り込んだロア本文から除外しますが、Risu原本には残します：{names}{more, plural, =0 {} other { ほか#件}}',
-    zh: '无法识别的 `@@` 指令将从导入的世界书正文中排除，但会保留在 Risu 原始内容中：{names}{more, plural, =0 {} other {，以及另外 # 项}}',
+    en: 'Unrecognized `@@` instructions are excluded from the imported lore text but remain in the Risu source: {names}{more, plural, =0 {} one { and # more} other { and # more}}',
+    ja: 'Risuが認識しない `@@` 指示は取り込んだロア本文から除外しますが、Risuソースには残します：{names}{more, plural, =0 {} other { ほか#件}}',
+    zh: '无法识别的 `@@` 指令将从导入的设定正文中排除，但会保留在 Risu 源码中：{names}{more, plural, =0 {} other {，以及另外 # 项}}',
   },
   'transfer.finding.unsupportedBlock': {
     ko: '{index, number}번 블록({type})은 저장되지만 실행되지 않아요. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요.',

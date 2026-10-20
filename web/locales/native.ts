@@ -87,19 +87,19 @@ export const messages = {
   'native.text_6b1779397e': {
     ko: 'Risu 에셋 편집',
     en: 'Edit Risu assets',
-    ja: 'Risuエセット編集',
+    ja: 'Risuアセット編集',
     zh: '编辑Risu资源',
   },
   'native.text_a887a65c92': {
     ko: '에셋 검색',
     en: 'Search assets',
-    ja: 'エセット検索',
+    ja: 'アセット検索',
     zh: '搜索资源',
   },
   'native.text_4671f4390f': {
     ko: '에셋 이름으로 검색',
     en: 'Search by asset name',
-    ja: 'エセット名で検索',
+    ja: 'アセット名で検索',
     zh: '按资源名称搜索',
   },
   'native.text_d4d4ce5c0e': {
@@ -134,9 +134,9 @@ export const messages = {
   },
   'native.text_384374b51a': {
     ko: '대표 이미지',
-    en: 'Portrait image',
+    en: 'Portrait',
     ja: '代表画像',
-    zh: '代表图片',
+    zh: '封面',
   },
   'native.text_a9a4407910': {
     ko: '검색 결과가 없어요.',
@@ -153,7 +153,7 @@ export const messages = {
   'native.text_9c9dbdd18c': {
     ko: '선택한 에셋',
     en: 'Selected asset',
-    ja: '選択中のエセット',
+    ja: '選択中のアセット',
     zh: '所选资源',
   },
   'native.text_24016d85c7': {
@@ -165,14 +165,14 @@ export const messages = {
   'native.text_59d5a7b430': {
     ko: '에셋 이름은 원문의 연결에 사용돼요. 파일을 교체해도 이름과 연결을 유지해요.',
     en: 'Source references use asset names. Replacing files preserves names and references.',
-    ja: 'エセット名は原文の参照に使われます。ファイルを置き換えても名前と参照は保持されます。',
-    zh: '资源名称用于原文引用，替换文件后名称和引用保持不变。',
+    ja: 'アセット名はソースの参照に使われます。ファイルを置き換えても名前と参照は保持されます。',
+    zh: '资源名称用于源码引用，替换文件后名称和引用保持不变。',
   },
   'native.text_f87c057551': {
     ko: '대표 이미지 등으로 추가한 이미지예요. CHARX 내보내기에도 포함돼요.',
     en: 'Added as a portrait or other image. Included in CHARX exports.',
     ja: '代表画像などとして追加した画像です。CHARXの書き出しにも含まれます。',
-    zh: '此图片作为代表图片等添加，也会包含在CHARX导出中。',
+    zh: '此图片作为封面等添加，也会包含在CHARX导出中。',
   },
   'native.text_597b8746b1': {
     ko: '파일 교체',
@@ -189,13 +189,13 @@ export const messages = {
   'native.text_8a2c3b9aec': {
     ko: '선택한 에셋 제거',
     en: 'Remove selected asset',
-    ja: '選択中のエセットを取り除く',
+    ja: '選択中のアセットを取り除く',
     zh: '移除所选资源',
   },
   'native.text_7900d467e4': {
     ko: '이 에셋을 자료에서 제거할까요?',
     en: 'Remove this asset from the resource?',
-    ja: 'このエセットを資料から取り除きますか？',
+    ja: 'このアセットを資料から取り除きますか？',
     zh: '要从资料中移除此资源吗？',
   },
   'native.text_07afd47e83': {
@@ -225,7 +225,7 @@ export const messages = {
   'native.text_3f51da3e6a': {
     ko: '에셋 제거',
     en: 'Remove asset',
-    ja: 'エセットを取り除く',
+    ja: 'アセットを取り除く',
     zh: '移除资源',
   },
   'native.text_5ce4911d95': {
@@ -465,8 +465,8 @@ export const messages = {
   'native.text_bf1eea5b75': {
     ko: '조건·배치·원문 설정',
     en: 'Conditions, placement and source',
-    ja: '条件・配置・原文設定',
-    zh: '条件、位置与原文设置',
+    ja: '条件・配置・ソース設定',
+    zh: '条件、位置与源码设置',
   },
   'native.text_1922bfdd27': {
     ko: '키워드',
@@ -513,8 +513,8 @@ export const messages = {
   'native.text_e2d7fc1a5d': {
     ko: 'CBS 조건과 나머지 원문 필드는 그대로 유지돼요.',
     en: 'CBS conditions and other source fields are preserved.',
-    ja: 'CBS条件とその他の原文フィールドは保持されます。',
-    zh: 'CBS条件和其他原文字段保持不变。',
+    ja: 'CBS条件とその他のソースフィールドは保持されます。',
+    zh: 'CBS条件和其他源码字段保持不变。',
   },
   'native.text_c4a928ce23': {
     ko: '첫 로어를 추가하거나 폴더부터 만들어 정리하세요.',
@@ -562,7 +562,7 @@ export const messages = {
     ko: '페르소나',
     en: 'Persona',
     ja: 'ペルソナ',
-    zh: '用户角色',
+    zh: '角色',
   },
   'native.text_c0a10149c3': {
     ko: '대화 기록',
@@ -573,8 +573,8 @@ export const messages = {
   'native.text_ec0f0b70df': {
     ko: '작가 노트',
     en: 'Author note',
-    ja: '作者ノート',
-    zh: '作者笔记',
+    ja: '作家ノート',
+    zh: '作者备注',
   },
   'native.text_bc212cb334': {
     ko: '마지막 지침',
@@ -633,8 +633,8 @@ export const messages = {
   'native.text_f1ab612224': {
     ko: 'Risu 프롬프트 원본 편집',
     en: 'Edit Risu prompt source',
-    ja: 'Risuプロンプト原文の編集',
-    zh: '编辑Risu提示词原文',
+    ja: 'Risuプロンプトソースの編集',
+    zh: '编辑Risu提示词源码',
   },
   'native.text_a8a8b42c1a': {
     ko: '프리셋 편집 영역',
@@ -645,8 +645,8 @@ export const messages = {
   'native.text_9cceef2250': {
     ko: '직접 편집 중인 원문이 있어요. 저장할 때 함께 반영해요.',
     en: 'You have source edits. Saving includes them.',
-    ja: '編集中の原文があります。保存時に一緒に反映されます。',
-    zh: '有正在编辑的原文，保存时会一并应用。',
+    ja: '編集中のソースがあります。保存時に一緒に反映されます。',
+    zh: '有正在编辑的源码，保存时会一并应用。',
   },
   'native.text_944b1569af': {
     ko: '프롬프트 블록 목록',
@@ -735,8 +735,8 @@ export const messages = {
   'native.text_d955c69f94': {
     ko: '작가 노트 기본값',
     en: 'Default author note',
-    ja: '作者ノートの既定値',
-    zh: '作者笔记默认值',
+    ja: '作家ノートの既定値',
+    zh: '作者备注默认值',
   },
   'native.text_eb0f40ca8a': {
     ko: '캐시 대상 메시지 수',
@@ -951,8 +951,8 @@ export const messages = {
   'native.text_f07553a49b': {
     ko: '원문 확인 필요',
     en: 'Review source',
-    ja: '原文の確認が必要',
-    zh: '需要检查原文',
+    ja: 'ソースの確認が必要',
+    zh: '需要检查源码',
   },
   'native.text_79e318b649': {
     ko: '고급 JSON에서 이 항목을 확인해 주세요.',
@@ -1047,20 +1047,20 @@ export const messages = {
   'native.text_ce80b34836': {
     ko: '플래그 원문',
     en: 'Raw flags',
-    ja: 'フラグ原文',
-    zh: '标志原文',
+    ja: 'フラグソース',
+    zh: '标志源码',
   },
   'native.text_8ec54ac45b': {
     ko: '정규식 플래그 원문',
     en: 'Raw regex flags',
-    ja: '正規表現フラグの原文',
-    zh: '正则标志原文',
+    ja: '正規表現フラグのソース',
+    zh: '正则标志源码',
   },
   'native.text_977c8a35ea': {
     ko: '이 적용 단계는 Uimori에서 실행하지 않아요. 원문은 유지돼요.',
     en: 'Uimori does not run this stage. Source is preserved.',
-    ja: 'この段階はUimoriで実行されません。原文は保持されます。',
-    zh: 'Uimori不执行此阶段，原文保持不变。',
+    ja: 'この段階はUimoriで実行されません。ソースは保持されます。',
+    zh: 'Uimori不执行此阶段，源码保持不变。',
   },
   'native.text_fe5438dade': {
     ko: '정규식 복제',
@@ -1155,14 +1155,14 @@ export const messages = {
   'native.text_5d82dab127': {
     ko: '변수·토글 원문을 폼에 반영해 주세요.',
     en: 'Apply variable and toggle source to the form.',
-    ja: '変数・トグルの原文をフォームに反映してください。',
-    zh: '请将变量和开关原文应用到表单。',
+    ja: '変数・トグルのソースをフォームに反映してください。',
+    zh: '请将变量和开关源码应用到表单。',
   },
   'native.text_0286f638be': {
     ko: '원문에서 편집',
     en: 'Edit source',
-    ja: '原文で編集',
-    zh: '编辑原文',
+    ja: 'ソースで編集',
+    zh: '在源码中编辑',
   },
   'native.text_7be99394f7': {
     ko: '표시 이름',
@@ -1263,14 +1263,14 @@ export const messages = {
   'native.text_7c6aebe728': {
     ko: '원문 항목',
     en: 'Source item',
-    ja: '原文の項目',
-    zh: '原文项目',
+    ja: 'ソース項目',
+    zh: '源码项目',
   },
   'native.text_8ba13a8495': {
     ko: '원문',
     en: 'Source',
-    ja: '原文',
-    zh: '原文',
+    ja: 'ソース',
+    zh: '源码',
   },
   'native.text_0de1511afe': {
     ko: '위로 이동',
@@ -1299,8 +1299,8 @@ export const messages = {
   'native.text_85cd7d3b63': {
     ko: '토글 정의 원문',
     en: 'Toggle definition source',
-    ja: 'トグル定義の原文',
-    zh: '开关定义原文',
+    ja: 'トグル定義のソース',
+    zh: '开关定义源码',
   },
   'native.text_fcaba2262e': {
     ko: '채팅 변수 기본값',
@@ -1317,8 +1317,8 @@ export const messages = {
   'native.text_bd9c1a150a': {
     ko: '적용하지 않은 원문이 있어요.',
     en: 'You have unapplied source edits.',
-    ja: '未反映の原文があります。',
-    zh: '有未应用的原文编辑。',
+    ja: '未反映のソースがあります。',
+    zh: '有未应用的源码编辑。',
   },
   'native.text_72d58851e7': {
     ko: '한 줄에 한 항목',
@@ -1329,8 +1329,8 @@ export const messages = {
   'native.text_ba1543a09d': {
     ko: '원문 적용',
     en: 'Apply source',
-    ja: '原文を反映',
-    zh: '应用原文',
+    ja: 'ソースを反映',
+    zh: '应用源码',
   },
   'native.text_0510e453e9': {
     ko: '기본 변수',
@@ -1359,14 +1359,14 @@ export const messages = {
   'native.text_c8c2007be6': {
     ko: '원문 보존',
     en: 'Source preserved',
-    ja: '原文を保持',
-    zh: '原文已保留',
+    ja: 'ソースを保持',
+    zh: '源码已保留',
   },
   'native.text_f97e342c2b': {
     ko: '변수를 추가하거나 원문을 붙여 넣으세요.',
     en: 'Add a variable or paste source.',
-    ja: '変数を追加するか原文を貼り付けてください。',
-    zh: '请添加变量或粘贴原文。',
+    ja: '変数を追加するかソースを貼り付けてください。',
+    zh: '请添加变量或粘贴源码。',
   },
   'native.text_0bf2a9eced': {
     ko: '토글 그룹 선택',
@@ -1515,8 +1515,8 @@ export const messages = {
   'native.text_3a377aba0a': {
     ko: '적용하지 않은 원문이 있어요. 원문 보기에서 적용해 주세요.',
     en: 'Apply pending source edits in Source view.',
-    ja: '未反映の原文を原文表示で反映してください。',
-    zh: '请在原文视图中应用待处理的原文编辑。',
+    ja: '未反映のソースをソース表示で反映してください。',
+    zh: '请在源码视图中应用待处理的源码编辑。',
   },
   'native.text_d91f83a968': {
     ko: '편집 되돌리기',
@@ -1575,8 +1575,8 @@ export const messages = {
   'native.text_14a5c18b9e': {
     ko: '트리거 원문 JSON',
     en: 'Trigger source JSON',
-    ja: 'トリガー原文JSON',
-    zh: '触发器原文JSON',
+    ja: 'トリガーソースJSON',
+    zh: '触发器源码JSON',
   },
   'native.text_1109f0e44c': {
     ko: '저장을 누르면 JSON도 함께 저장해요. 다른 항목을 편집하려면 먼저 폼에 반영해 주세요.',
@@ -1617,8 +1617,8 @@ export const messages = {
   'native.text_33506f6f0f': {
     ko: '동작 원문은 Risu 문법과 실행 순서를 유지해요.',
     en: 'Source preserves Risu syntax and execution order.',
-    ja: '原文はRisuの構文と実行順序を保持します。',
-    zh: '原文保留Risu语法和执行顺序。',
+    ja: 'ソースはRisuの構文と実行順序を保持します。',
+    zh: '源码保留Risu语法和执行顺序。',
   },
   'native.text_b5b6dfa0bb': {
     ko: '트리거 선택',
@@ -1635,14 +1635,14 @@ export const messages = {
   'native.text_8601ddaaf9': {
     ko: 'Lua 원문',
     en: 'Lua source',
-    ja: 'Lua原文',
-    zh: 'Lua原文',
+    ja: 'Luaソース',
+    zh: 'Lua源码',
   },
   'native.text_a21e47d201': {
     ko: '실행 조건과 순서 · 원문 편집',
     en: 'Conditions and order · edit source',
-    ja: '実行条件と順序 · 原文編集',
-    zh: '执行条件和顺序 · 编辑原文',
+    ja: '実行条件と順序 · ソース編集',
+    zh: '执行条件和顺序 · 编辑源码',
   },
   'native.text_8898368573': {
     ko: '등록된 Lua · 트리거가 없어요.',
@@ -1653,8 +1653,8 @@ export const messages = {
   'native.text_139e9c1c9b': {
     ko: '콘텐츠 원문을 확인해 주세요.',
     en: 'Check the content source.',
-    ja: 'コンテンツの原文を確認してください。',
-    zh: '请检查内容原文。',
+    ja: 'コンテンツのソースを確認してください。',
+    zh: '请检查内容源码。',
   },
   'native.text_eb7f501b0e': {
     ko: '기본 정보',
@@ -1671,14 +1671,14 @@ export const messages = {
   'native.text_b1a821ee46': {
     ko: '에셋',
     en: 'Assets',
-    ja: 'エセット',
+    ja: 'アセット',
     zh: '资源',
   },
   'native.text_ecc580fe68': {
     ko: '번역 지침',
     en: 'Translation instructions',
     ja: '翻訳指示',
-    zh: '翻译指令',
+    zh: '翻译指引',
   },
   'native.text_772fa878ec': {
     ko: '고급 설정',
@@ -1707,8 +1707,8 @@ export const messages = {
   'native.text_405989e7a8': {
     ko: 'Risu 원문 편집 대상',
     en: 'Risu source edit target',
-    ja: 'Risu原文の編集対象',
-    zh: 'Risu原文编辑对象',
+    ja: 'Risuソースの編集対象',
+    zh: 'Risu源码编辑对象',
   },
   'native.text_1c7e81d795': {
     ko: '대체 시작문',
@@ -1737,14 +1737,14 @@ export const messages = {
   'native.text_2ccb4d60c2': {
     ko: '원문 JSON',
     en: 'Source JSON',
-    ja: '原文JSON',
-    zh: '原文JSON',
+    ja: 'ソースJSON',
+    zh: '源码JSON',
   },
   'native.text_086d9f609b': {
     ko: 'Risu 원문 JSON',
     en: 'Risu source JSON',
-    ja: 'Risu原文JSON',
-    zh: 'Risu原文JSON',
+    ja: 'RisuソースJSON',
+    zh: 'Risu源码JSON',
   },
   'native.text_b891876a9a': {
     ko: '자료 편집 영역',
@@ -1755,14 +1755,14 @@ export const messages = {
   'native.text_0b4d698c5c': {
     ko: '미적용 원문이 있어요.',
     en: 'There are unapplied source edits.',
-    ja: '未反映の原文があります。',
-    zh: '有未应用的原文编辑。',
+    ja: '未反映のソースがあります。',
+    zh: '有未应用的源码编辑。',
   },
   'native.text_609d8be788': {
     ko: '원문 확인',
     en: 'Review source',
-    ja: '原文を確認',
-    zh: '查看原文',
+    ja: 'ソースを確認',
+    zh: '查看源码',
   },
   'native.text_d63d79b1e2': {
     ko: 'Risu 자료 이름',
@@ -2067,8 +2067,8 @@ export const messages = {
   'native.imagesMissing': {
     ko: '이미지로 읽지 못한 원문 에셋 {count, number}개는 보존하고 있어요. 이 화면에서는 편집할 수 없으며, 내장 파일이 누락된 자료는 CHARX 내보내기가 제한될 수 있어요.',
     en: '{count, plural, one {# unreadable source asset is preserved.} other {# unreadable source assets are preserved.}} These cannot be edited here. Missing embedded files may limit CHARX exports.',
-    ja: '画像として読み込めなかった原文エセット{count, number}件を保持しています。この画面では編集できません。内蔵ファイルが欠けた資料はCHARXの書き出しが制限される場合があります。',
-    zh: '已保留{count, number}个无法作为图片读取的原文资源，无法在此编辑。缺少内嵌文件的资料可能无法完整导出CHARX。',
+    ja: '画像として読み込めなかったソースアセット{count, number}件を保持しています。この画面では編集できません。内蔵ファイルが欠けた資料はCHARXの書き出しが制限される場合があります。',
+    zh: '已保留{count, number}个无法作为图片读取的源码资源，无法在此编辑。缺少内嵌文件的资料可能无法完整导出CHARX。',
   },
   'native.imageCount': {
     ko: '{count, number}개 이미지',
@@ -2079,7 +2079,7 @@ export const messages = {
   'native.removeImageDescription': {
     ko: '{name} 이미지와 이 자료의 에셋 연결을 제거해요. 원본 파일은 삭제하지 않아요.',
     en: 'Remove image {name} and its asset reference in this resource. The original file is kept.',
-    ja: '画像{name}とこの資料のエセット参照を取り除きます。元のファイルは削除されません。',
+    ja: '画像{name}とこの資料のアセット参照を取り除きます。元のファイルは削除されません。',
     zh: '移除图片{name}及此资料中的资源引用，原文件不会删除。',
   },
   'native.loreMoved': {
@@ -2187,8 +2187,8 @@ export const messages = {
   'native.unsupportedFlags': {
     ko: '실행 미지원 플래그: {flags}. 원문은 유지돼요.',
     en: 'Unsupported flags: {flags}. Source is preserved.',
-    ja: '実行未対応のフラグ：{flags}。原文は保持されます。',
-    zh: '不支持的标志：{flags}。原文保持不变。',
+    ja: '実行未対応のフラグ：{flags}。ソースは保持されます。',
+    zh: '不支持的标志：{flags}。源码保持不变。',
   },
   'native.optionNumber': {
     ko: '선택지 {number, number}',
@@ -2265,8 +2265,8 @@ export const messages = {
   'native.toggleCounts': {
     ko: '{groups, number}개 그룹 · {settings, number}개 설정{unknown, plural, =0 {} other { · 원문 항목 #개 보존}}',
     en: '{groups, plural, one {# group} other {# groups}} · {settings, plural, one {# setting} other {# settings}}{unknown, plural, =0 {} one { · # source item preserved} other { · # source items preserved}}',
-    ja: 'グループ{groups, number}件 · 設定{settings, number}件{unknown, plural, =0 {} other { · 原文項目#件を保持}}',
-    zh: '{groups, number}个分组 · {settings, number}项设置{unknown, plural, =0 {} other { · 已保留#个原文项目}}',
+    ja: 'グループ{groups, number}件 · 設定{settings, number}件{unknown, plural, =0 {} other { · ソース項目#件を保持}}',
+    zh: '{groups, number}个分组 · {settings, number}项设置{unknown, plural, =0 {} other { · 已保留#个源码项目}}',
   },
   'native.triggerNumber': {
     ko: '트리거 {number, number}',
@@ -2277,8 +2277,8 @@ export const messages = {
   'native.luaNumber': {
     ko: 'Lua 원문 {number, number}',
     en: 'Lua source {number, number}',
-    ja: 'Lua原文{number, number}',
-    zh: 'Lua原文{number, number}',
+    ja: 'Luaソース{number, number}',
+    zh: 'Lua源码{number, number}',
   },
   'native.resourceCounts': {
     ko: '로어 {lore, number}개 · 정규식 {regex, number}개 · 트리거 {triggers, number}개',
@@ -2301,8 +2301,8 @@ export const messages = {
   'native.handoffDescription': {
     ko: '채팅의 자동 이미지 배치가 켜졌을 때만 선택한 지시를 작문 입력에서 빼고 이미지 선택 모델에 전달해요. 원문은 유지해요. 인식한 태그: {tags}',
     en: 'Only when automatic image placement is enabled, selected instructions are moved from writing input to the image selection model. Source is preserved. Recognized tags: {tags}',
-    ja: '自動画像配置が有効な場合だけ、選択した指示を作文入力から除き画像選択モデルに渡します。原文は保持されます。認識したタグ：{tags}',
-    zh: '仅在启用自动图片布局时，将所选指令从写作输入中移出并交给图片选择模型。原文保持不变。识别的标签：{tags}',
+    ja: '自動画像配置が有効な場合だけ、選択した指示を作文入力から除き画像選択モデルに渡します。ソースは保持されます。認識したタグ：{tags}',
+    zh: '仅在启用自动图片排布时，将所选指令从写作输入中移出并交给图片选择模型。源码保持不变。识别的标签：{tags}',
   },
   'native.previewIssues': {
     ko: '미리보기에서 확인이 필요한 항목 ({count, number})',
@@ -2349,14 +2349,14 @@ export const messages = {
   'native.sourceCardEditor': {
     ko: '콘텐츠 편집기에서만 카드 원문을 저장할 수 있어요.',
     en: 'Card source can only be saved in the content editor.',
-    ja: 'カード原文はコンテンツ編集画面でのみ保存できます。',
-    zh: '只能在内容编辑器中保存卡片原文。',
+    ja: 'カードソースはコンテンツ編集画面でのみ保存できます。',
+    zh: '只能在内容编辑器中保存卡片源码。',
   },
   'native.toggleBoundary': {
     ko: '그룹 경계가 올바르지 않아요. 원문에서 그룹 시작과 끝을 먼저 수정해 주세요.',
     en: 'Invalid group boundaries. Fix group starts and ends in the source first.',
-    ja: 'グループ境界が無効です。原文で開始と終了を修正してください。',
-    zh: '分组边界无效，请先在原文中修正分组起止位置。',
+    ja: 'グループ境界が無効です。ソースで開始と終了を修正してください。',
+    zh: '分组边界无效，请先在源码中修正分组起止位置。',
   },
   'native.groupNotFound': {
     ko: '그룹을 찾을 수 없어요.',
@@ -2409,8 +2409,8 @@ export const messages = {
   'native.toggleFieldInvalid': {
     ko: '정의 필드에는 등호나 줄바꿈을 넣을 수 없어요. 원문에서 편집해 주세요.',
     en: 'Definition fields cannot contain equals signs or line breaks. Edit the source.',
-    ja: '定義フィールドに等号や改行は使えません。原文で編集してください。',
-    zh: '定义字段不能包含等号或换行，请编辑原文。',
+    ja: '定義フィールドに等号や改行は使えません。ソースで編集してください。',
+    zh: '定义字段不能包含等号或换行，请编辑源码。',
   },
   'native.regexArrayRequired': {
     ko: '정규식은 JSON 객체의 배열이어야 해요.',

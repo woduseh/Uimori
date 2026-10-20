@@ -200,8 +200,8 @@ export const messages = {
   'prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown': {
     ko: '원문 입력은 저장할 때 함께 검증해요. 오류가 있으면 입력을 유지하고 알려드려요.',
     en: 'Source input is validated on save. Errors are shown while keeping your input.',
-    ja: '原文入力は保存時に検証します。エラーがあれば入力を残してお知らせします。',
-    zh: '保存时验证原文输入。如有错误，会保留输入并提示。',
+    ja: 'ソース入力は保存時に検証します。エラーがあれば入力を保持してお知らせします。',
+    zh: '保存时验证源码输入。如有错误，会保留输入并提示。',
   },
   'prompts.uiSelectedPromptNotFound': {
     ko: '선택한 프롬프트를 찾을 수 없어요.',
@@ -397,7 +397,7 @@ export const messages = {
   },
   'prompts.uiAskHelper': {
     ko: '도우미에게 묻기',
-    en: 'Ask helper',
+    en: 'Ask assistant',
     ja: 'アシスタントに質問',
     zh: '询问助手',
   },
@@ -649,7 +649,7 @@ export const messages = {
   },
   'prompts.uiHelper': {
     ko: '도우미',
-    en: 'Helper',
+    en: 'Assistant',
     ja: 'アシスタント',
     zh: '助手',
   },
@@ -697,7 +697,7 @@ export const messages = {
   },
   'prompts.uiStartOutliningWithHelper': {
     ko: '도우미와 구성 시작',
-    en: 'Start outlining with helper',
+    en: 'Start outlining with assistant',
     ja: 'アシスタントと構成を始める',
     zh: '与助手开始规划',
   },
@@ -817,7 +817,7 @@ export const messages = {
   },
   'prompts.uiTheHelperIsAskedToPreserveThisConditionWhile': {
     ko: '구성을 자세히 만들 때 이 조건을 지키도록 도우미에게 요청해요. 조건을 바꾸려면 직접 고치거나 도우미에게 변경을 요청해 주세요.',
-    en: 'The helper is asked to preserve this condition while elaborating. Edit it yourself or ask the helper to change it.',
+    en: 'The assistant is asked to preserve this condition while elaborating. Edit it yourself or ask the assistant to change it.',
     ja: '詳細化する際にこの条件を守るようアシスタントに依頼します。変更する場合は直接編集するか、変更を依頼してください。',
     zh: '细化大纲时会要求助手保留此条件。若需更改，请直接编辑或要求助手更改。',
   },
@@ -925,7 +925,7 @@ export const messages = {
   },
   'prompts.uiNothingHereYetAskTheHelperToElaborateOr': {
     ko: '아직 비어 있어요. 도우미에게 상세화를 요청하거나 직접 적어 보세요.',
-    en: 'Nothing here yet. Ask the helper to elaborate or write it yourself.',
+    en: 'Nothing here yet. Ask the assistant to elaborate or write it yourself.',
     ja: 'まだ空です。アシスタントに詳細化を頼むか、自分で書いてみましょう。',
     zh: '这里还是空的。可请助手细化，或自行填写。',
   },
@@ -1075,39 +1075,39 @@ export const messages = {
   },
   'prompts.uiUnableToLoadCanonAndCharacterReferences': {
     ko: '원작·인물 참고를 불러오지 못했어요.',
-    en: 'Unable to load canon and character references.',
-    ja: '原作・人物参考を読み込めませんでした。',
-    zh: '无法加载原作与人物参考。',
+    en: 'Unable to load story and character reference.',
+    ja: '原作・人物の参照を読み込めませんでした。',
+    zh: '无法加载原作与角色参考。',
   },
   'prompts.uiCanonAndCharacterReferencesSavedTheyApplyFromThe': {
     ko: '원작·인물 참고를 저장했어요. 다음 집필부터 반영해요.',
-    en: 'Canon and character references saved. They apply from the next writing request.',
-    ja: '原作・人物参考を保存しました。次の執筆から反映します。',
-    zh: '已保存原作与人物参考，从下次写作开始生效。',
+    en: 'Story and character reference saved. Applies from the next writing request.',
+    ja: '原作・人物の参照を保存しました。次の執筆から反映します。',
+    zh: '已保存原作与角色参考，从下次写作开始生效。',
   },
   'prompts.uiLoadingCanonAndCharacterReferences': {
     ko: '원작·인물 참고를 불러오는 중이에요…',
-    en: 'Loading canon and character references…',
-    ja: '原作・人物参考を読み込み中…',
-    zh: '正在加载原作与人物参考…',
+    en: 'Loading story and character reference…',
+    ja: '原作・人物の参照を読み込み中…',
+    zh: '正在加载原作与角色参考…',
   },
   'prompts.uiCanonAndCharacterReferenceContent': {
     ko: '원작·인물 참고 내용',
-    en: 'Canon and character reference content',
-    ja: '原作・人物参考の内容',
-    zh: '原作与人物参考内容',
+    en: 'Story and character reference content',
+    ja: '原作・人物の参照の内容',
+    zh: '原作与角色参考内容',
   },
   'prompts.uiTheModelCreatesAWritingBriefFromCanonSettings': {
     ko: '모델이 원작 설정과 인물 성격을 참고해 집필 참고문을 만들어요. 현재 이야기의 선택과 관계도 함께 고려하도록 요청해요.',
     en: 'The model creates a writing brief from canon settings and character traits, while considering choices and relationships in this story.',
     ja: 'モデルが原作設定や人物の性格を参考に執筆参考文を作ります。現在の物語の選択や関係も考慮するよう依頼します。',
-    zh: '模型参考原作设定与人物性格生成写作参考文，并考虑当前故事中的选择和关系。',
+    zh: '模型参考原作设定与角色性格生成写作参考文，并考虑当前故事中的选择和关系。',
   },
   'prompts.uiConsultCanonAndCharactersBeforeWriting': {
     ko: '집필 전에 원작·인물 참고',
-    en: 'Consult canon and characters before writing',
+    en: 'Consult story and character reference before writing',
     ja: '執筆前に原作・人物を参照',
-    zh: '写作前参考原作与人物',
+    zh: '写作前参考原作与角色',
   },
   'prompts.uiOptionalGeneratingABriefMayAddAModelCall': {
     ko: '선택 사항이에요. 참고문 생성에 모델 호출과 비용이 추가될 수 있어요.',
@@ -1177,9 +1177,9 @@ export const messages = {
   },
   'prompts.uiSaveCanonAndCharacterReferences': {
     ko: '원작·인물 참고 저장',
-    en: 'Save canon and character references',
-    ja: '原作・人物参考を保存',
-    zh: '保存原作与人物参考',
+    en: 'Save story and character reference',
+    ja: '原作・人物の参照を保存',
+    zh: '保存原作与角色参考',
   },
   'prompts.uiSavedChangesApplyFromTheNextRequest': {
     ko: '저장하면 다음 요청부터 반영해요.',
@@ -1219,21 +1219,21 @@ export const messages = {
   },
   'prompts.uiAskMoreAboutCanonOrCharactersInThisChat': {
     ko: '원작이나 인물에 관한 질문은 이 채팅의 도우미에서 이어가요.',
-    en: "Ask more about canon or characters in this chat's helper.",
+    en: "Ask more about the story or characters in this chat's assistant.",
     ja: '原作や人物への質問はこのチャットのアシスタントで続けられます。',
-    zh: '有关原作或人物的问题可继续询问此聊天的助手。',
+    zh: '有关原作或角色的问题可继续询问此聊天的助手。',
   },
   'prompts.uiAskHelper2': {
     ko: '도우미에게 질문',
-    en: 'Ask helper',
+    en: 'Ask assistant',
     ja: 'アシスタントに質問',
     zh: '询问助手',
   },
   'prompts.uiReferenceSaveConflict': {
     ko: '원작·인물 참고 저장 충돌',
-    en: 'Reference save conflict',
-    ja: '原作・人物参考の保存競合',
-    zh: '参考资料保存冲突',
+    en: 'Story and character reference save conflict',
+    ja: '原作・人物の参照の保存競合',
+    zh: '原作与角色参考保存冲突',
   },
   'prompts.uiUseForWriting': {
     ko: '집필에 사용',
@@ -1310,8 +1310,8 @@ export const messages = {
   'prompts.uiTranslatingYourInputYouCanKeepEditing': {
     ko: '입력을 번역하고 있어요. 계속 수정해도 괜찮아요.',
     en: 'Translating your input. You can keep editing.',
-    ja: '入力を翻訳しています。引き続き編集できます。',
-    zh: '正在翻译输入，您可以继续编辑。',
+    ja: '入力を翻訳中… 引き続き編集できます。',
+    zh: '正在翻译输入，可以继续编辑。',
   },
   'prompts.uiViewOriginalInput': {
     ko: '번역 전 원문 보기',
@@ -1370,14 +1370,14 @@ export const messages = {
   'prompts.uiIncludeRetrievedLoreAgain': {
     ko: '조회 로어 제외 해제',
     en: 'Include retrieved lore again',
-    ja: '取得ロアの除外を解除',
-    zh: '取消排除检索设定',
+    ja: '参照ロアの除外を解除',
+    zh: '取消排除查询设定',
   },
   'prompts.uiExcludeRetrievedLore': {
     ko: '조회 로어 제외',
     en: 'Exclude retrieved lore',
-    ja: '取得ロアを除外',
-    zh: '排除检索设定',
+    ja: '参照ロアを除外',
+    zh: '排除查询设定',
   },
   'prompts.uiMoreInputOptions': {
     ko: '입력창 더보기',
@@ -1406,8 +1406,8 @@ export const messages = {
   'prompts.uiExcludeRetrievedLoreFromNextGeneration': {
     ko: '다음 생성에서 조회 로어 제외',
     en: 'Exclude retrieved lore from next generation',
-    ja: '次の生成で取得ロアを除外',
-    zh: '下次生成时排除检索设定',
+    ja: '次の生成で参照ロアを除外',
+    zh: '下次生成时排除查询设定',
   },
   'prompts.uiAppliesOnlyToThisRequest': {
     ko: '이번 요청에만 적용',

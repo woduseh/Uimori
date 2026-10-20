@@ -499,6 +499,10 @@ test('I18N10 saved conflict reviews re-render field statuses and React content f
       ).toContainText(before.mainJudgmentEnabled ? 'オン' : 'オフ');
       await expect(review).not.toContainText('Response review');
       expect(reads).toBe(1);
+      await switchFromAnotherTab(page, 'zh');
+      await expect(review).toHaveAccessibleName('当前已保存版本');
+      await expect(dialog.getByRole('button', { name: '保留当前输入', exact: true })).toBeVisible();
+      await switchFromAnotherTab(page, 'ja');
       await dialog.getByRole('button', { name: '現在の入力を保持', exact: true }).click();
       expect(await field!.evaluate((element) => element.isConnected)).toBe(true);
       expect(await field!.evaluate((element: HTMLInputElement) => element.value)).toBe(

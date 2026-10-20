@@ -481,9 +481,9 @@ export const messages = {
   },
   'library.editingTheOriginalChangesWillBeChecked': {
     ko: '원문 편집 중이에요. 저장할 때 함께 확인하고 반영해요.',
-    en: 'Editing the original. Changes will be checked and applied when you save.',
-    ja: '原文を編集中です。保存時に確認して反映します。',
-    zh: '正在编辑原文，保存时会一并检查并应用。',
+    en: 'Editing source. Changes are checked and applied when you save.',
+    ja: 'ソースを編集中です。保存時に確認して反映します。',
+    zh: '正在编辑源码，保存时会一并检查并应用。',
   },
   'library.startChat': {
     ko: '채팅 시작',
@@ -1045,9 +1045,9 @@ export const messages = {
   },
   'library.chooseAPromptToPinItTo': {
     ko: '직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요. 모델·프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 과거·진행 중인 작업은 바뀌지 않고, 창작 옵션은 선택한 프롬프트를 따라요.',
-    en: 'Choose a prompt to pin it to this chat, or follow global settings. Updated models and prompts apply to the next request; past and running jobs stay unchanged. Creative options follow the selected prompt.',
-    ja: '直接選ぶとこのチャットに固定し、「全体に従う」では全体設定を使います。モデルとプロンプトの最新保存版は次のリクエストから反映され、過去や実行中の作業は変わりません。創作オプションは選択したプロンプトに従います。',
-    zh: '直接选择会固定用于此聊天，也可使用全局设置。模型与提示词的最新保存版本从下次请求起生效，过去与进行中的任务不变，创作选项遵循所选提示词。',
+    en: 'Choose a prompt to pin it to this chat, or follow global settings. The latest saved versions of models and prompts apply to the next request; past and running jobs stay unchanged. Creative options follow the selected prompt.',
+    ja: '直接選ぶとこのチャットに固定し、「全体に従う」では全体設定を使います。モデルとプロンプトの最新の保存済み内容は次のリクエストから反映され、過去や実行中の作業は変わりません。創作オプションは選択したプロンプトに従います。',
+    zh: '直接选择会固定用于此聊天，也可使用全局设置。模型与提示词的最新已保存版本从下次请求起生效，过去与进行中的任务不变，创作选项遵循所选提示词。',
   },
   'library.loading': {
     ko: '불러오는 중…',
@@ -1155,13 +1155,13 @@ export const messages = {
     ko: '프로필과 본문',
     en: 'Profile and story',
     ja: 'プロフィールと本文',
-    zh: '头像与正文',
+    zh: '资料与正文',
   },
   'library.profile': {
     ko: '프로필',
     en: 'Profile',
     ja: 'プロフィール',
-    zh: '头像',
+    zh: '资料',
   },
   'library.story': {
     ko: '본문',
@@ -1591,9 +1591,9 @@ export const messages = {
   },
   'library.theOriginalSnapshotDiffersFromThePresentation': {
     ko: '표시 결과의 원문 저장본이 달라요.',
-    en: 'The original snapshot differs from the presentation result.',
-    ja: '表示結果の原文保存版が異なります。',
-    zh: '显示结果对应的原文保存版本不同。',
+    en: 'The saved original differs from the displayed result.',
+    ja: '表示結果の原文の保存済み内容が異なります。',
+    zh: '显示结果对应的原文已保存版本不同。',
   },
   'library.unsupportedPresentationFormat': {
     ko: '지원하지 않는 표시 형식이에요.',
@@ -1603,9 +1603,9 @@ export const messages = {
   },
   'library.theTranslationSnapshotDiffersFromThePresentation': {
     ko: '표시 결과의 번역 저장본이 달라요.',
-    en: 'The translation snapshot differs from the presentation result.',
-    ja: '表示結果の翻訳保存版が異なります。',
-    zh: '显示结果对应的译文保存版本不同。',
+    en: 'The saved translation differs from the displayed result.',
+    ja: '表示結果の翻訳の保存済み内容が異なります。',
+    zh: '显示结果对应的译文已保存版本不同。',
   },
   'library.couldNotApplyDisplayTransformationsShowingThe': {
     ko: '표시 변환을 적용하지 못해 저장된 본문을 표시해요. {v0}',

@@ -152,8 +152,8 @@ export const messages = {
   'reader.preparingTheBotView': {
     ko: '봇 화면을 준비하고 있어요…',
     en: 'Preparing the bot view…',
-    ja: 'ボット画面を準備しています…',
-    zh: '正在准备机器人界面…',
+    ja: 'ボット画面を準備中…',
+    zh: '正在准备角色界面…',
   },
   'reader.preparingTheKoreanTranslationTheOriginalIsSaved': {
     ko: '한국어 번역을 준비하고 있어요. 원문은 저장됐어요.',
@@ -171,7 +171,7 @@ export const messages = {
     ko: '이 장면에는 아직 한국어 번역이 없어요.',
     en: 'This scene has no Korean translation yet.',
     ja: 'このシーンにはまだ韓国語訳がありません。',
-    zh: '此场景尚无韩语翻译。',
+    zh: '此场景尚无韩语译文。',
   },
   'reader.readTheOriginalFirst': {
     ko: '원문부터 읽기',
@@ -235,7 +235,7 @@ export const messages = {
   },
   'reader.askTheHelper': {
     ko: '도우미에게 물어보기',
-    en: 'Ask the helper',
+    en: 'Ask the assistant',
     ja: 'アシスタントに質問',
     zh: '询问助手',
   },
@@ -254,19 +254,19 @@ export const messages = {
   'reader.copyingChat': {
     ko: '채팅 복사 중…',
     en: 'Copying chat…',
-    ja: 'チャットをコピーしています…',
+    ja: 'チャットをコピー中…',
     zh: '正在复制聊天…',
   },
   'reader.copyThroughThisSceneToANewChat': {
     ko: '이 장면까지 새 채팅으로 복사',
     en: 'Copy through this scene to a new chat',
     ja: 'このシーンまで新しいチャットにコピー',
-    zh: '将截至此场景的内容复制到新聊天',
+    zh: '复制到此场景并新建聊天',
   },
   'reader.placingImages': {
     ko: '이미지를 배치하는 중…',
     en: 'Placing images…',
-    ja: '画像を配置しています…',
+    ja: '画像を配置中…',
     zh: '正在布局图片…',
   },
   'reader.placeImagesAgain': {
@@ -284,20 +284,20 @@ export const messages = {
   'reader.choosingIllustrationPassages': {
     ko: '삽화 구간을 고르는 중…',
     en: 'Choosing illustration passages…',
-    ja: '挿絵の区間を選んでいます…',
-    zh: '正在选择插画片段…',
+    ja: '挿絵の区間を選択中…',
+    zh: '正在选择插图片段…',
   },
   'reader.generateNewIllustrations': {
     ko: '새 삽화 생성',
     en: 'Generate new illustrations',
     ja: '新しい挿絵を生成',
-    zh: '生成新插画',
+    zh: '生成新插图',
   },
   'reader.generateIllustrations': {
     ko: '삽화 생성',
     en: 'Generate illustrations',
     ja: '挿絵を生成',
-    zh: '生成插画',
+    zh: '生成插图',
   },
   'reader.originalLinkageDetails': {
     ko: '원문 연결 정보',
@@ -333,7 +333,7 @@ export const messages = {
     ko: '위 문구를 현재 설정으로 보내요. 문맥용 요청 저장과는 별개예요.',
     en: 'Send this text with the current settings. This is separate from saving the context request.',
     ja: '上の文を現在の設定で送信します。文脈用リクエストの保存とは別の操作です。',
-    zh: '使用当前设置发送以上内容。这与保存上下文请求是独立的操作。',
+    zh: '使用当前设置发送上方内容，与保存上下文请求互不影响。',
   },
   'reader.replaceTheExistingResponseOnlyWhenGenerationSucceedsFailure': {
     ko: '기존 응답 교체는 새 생성이 성공했을 때만 적용해요. 실패하거나 취소하면 기존 응답을 유지해요.',
@@ -392,14 +392,14 @@ export const messages = {
   'reader.reserving': {
     ko: '예약 중…',
     en: 'Reserving…',
-    ja: '予約しています…',
+    ja: '予約中…',
     zh: '正在预约…',
   },
   'reader.createIllustrations': {
     ko: '삽화 만들기',
     en: 'Create illustrations',
     ja: '挿絵を作成',
-    zh: '制作插画',
+    zh: '制作插图',
   },
   'reader.start': {
     ko: '시작',
@@ -435,7 +435,7 @@ export const messages = {
     ko: '호출 후 프로바이더가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며 실제 청구액과 다를 수 있어요.',
     en: 'Calculated from provider-reported tokens and the price fixed for each call. These estimates may differ from actual charges.',
     ja: '呼び出し後にプロバイダーが報告したトークンと呼び出しに固定した料金で計算します。参考用の推定額で、実際の請求額とは異なる場合があります。',
-    zh: '根据提供商报告的令牌数和各次调用固定的价格计算。仅供参考，可能与实际账单不同。',
+    zh: '根据提供商报告的 token 数和各次调用固定的价格计算。仅供参考，可能与实际账单不同。',
   },
   'reader.coversTextAndWritingAssistanceCallsSeeTaskActivity': {
     ko: '본문과 작문 보조 호출 기준 · 번역·제목 등 후속 작업은 작업 현황에서 확인해요.',
@@ -494,7 +494,7 @@ export const messages = {
   'reader.saving': {
     ko: '저장 중…',
     en: 'Saving…',
-    ja: '保存しています…',
+    ja: '保存中…',
     zh: '正在保存…',
   },
   'reader.saveValue': {
@@ -596,7 +596,7 @@ export const messages = {
   'reader.loadingSavedVersions': {
     ko: '저장본을 불러오는 중이에요…',
     en: 'Loading saved versions…',
-    ja: '保存版を読み込んでいます…',
+    ja: '保存版を読み込み中…',
     zh: '正在加载保存版本…',
   },
   'reader.versionToCompare': {
@@ -638,7 +638,7 @@ export const messages = {
   'reader.reloadingText': {
     ko: '본문을 다시 불러오는 중이에요…',
     en: 'Reloading text…',
-    ja: '本文を再読み込みしています…',
+    ja: '本文を再読み込み中…',
     zh: '正在重新加载正文…',
   },
   'reader.couldNotLoadTheText': {
@@ -656,7 +656,7 @@ export const messages = {
   'reader.loadingText': {
     ko: '본문을 불러오는 중이에요…',
     en: 'Loading text…',
-    ja: '本文を読み込んでいます…',
+    ja: '本文を読み込み中…',
     zh: '正在加载正文…',
   },
   'reader.thisIsTakingALittleLongerThanUsual': {
@@ -729,7 +729,7 @@ export const messages = {
     ko: '나의 페르소나',
     en: 'My persona',
     ja: '自分のペルソナ',
-    zh: '我的角色设定',
+    zh: '我的角色',
   },
   'reader.tapAnImageToViewItLarger': {
     ko: '이미지를 눌러 크게 감상해요',
@@ -741,7 +741,7 @@ export const messages = {
     ko: '등장인물',
     en: 'Character',
     ja: '登場人物',
-    zh: '角色',
+    zh: '登场人物',
   },
   'reader.sceneList': {
     ko: '장면 목록',
@@ -939,7 +939,7 @@ export const messages = {
     ko: '페르소나 선택',
     en: 'Persona selection',
     ja: 'ペルソナ選択',
-    zh: '角色设定选择',
+    zh: '角色选择',
   },
   'reader.noneSelected': {
     ko: '선택 없음',
@@ -981,7 +981,7 @@ export const messages = {
     ko: '이 호출의 모델·프롬프트·페르소나·요약 기록이 없어요.',
     en: 'No model, prompt, persona or summary record for this call.',
     ja: 'この呼び出しのモデル・プロンプト・ペルソナ・要約の記録がありません。',
-    zh: '本次调用没有模型、提示词、角色设定或摘要记录。',
+    zh: '本次调用没有模型、提示词、角色或摘要记录。',
   },
   'reader.input': {
     ko: '입력 ',
@@ -1011,7 +1011,7 @@ export const messages = {
     ko: '캐시 읽기 {v0} / 쓰기 {v1} 토큰',
     en: 'Cache read {v0} / write {v1} tokens',
     ja: 'キャッシュ読込 {v0} / 書込 {v1}トークン',
-    zh: '缓存读取{v0} / 写入{v1}令牌',
+    zh: '缓存读取{v0} / 写入{v1} token',
   },
   'reader.noCacheUsageRecord': {
     ko: '캐시 사용량 기록이 없어요.',
@@ -1045,7 +1045,7 @@ export const messages = {
   },
   'reader.pinnedMaterial': {
     ko: '고정 자료',
-    en: 'Pinned material',
+    en: 'Pinned resource',
     ja: '固定資料',
     zh: '固定资料',
   },
@@ -1100,7 +1100,7 @@ export const messages = {
   'reader.loadingCacheAndLoreRecords': {
     ko: '캐시·로어 기록을 불러오는 중이에요…',
     en: 'Loading cache and lore records…',
-    ja: 'キャッシュ・ロア記録を読み込んでいます…',
+    ja: 'キャッシュ・ロア記録を読み込み中…',
     zh: '正在加载缓存与设定资料记录…',
   },
   'reader.aboutUsage': {
@@ -1137,7 +1137,7 @@ export const messages = {
     ko: '캐시 토큰은 입력에 포함된 값이며 입력량에 다시 더하지 않아요.',
     en: 'Cache tokens are part of the input and are not added again.',
     ja: 'キャッシュトークンは入力に含まれており、入力量に再加算しません。',
-    zh: '缓存令牌已包含在输入中，不会重复累加。',
+    zh: '缓存 token 已包含在输入中，不会重复累加。',
   },
   'reader.noCallRecordUsageIsNotEstimatedForImported': {
     ko: '호출 기록이 없어요. 가져온 원고나 기록 보존 이전 장면은 사용량을 추정하지 않아요.',
@@ -1165,8 +1165,8 @@ export const messages = {
   },
   'reader.selectAPassageInTheOriginalToAskThe': {
     ko: '원문에서 구절을 선택하면 도우미 모델에 퇴고를 부탁할 수 있어요.',
-    en: 'Select a passage in the original to ask the helper model to revise it.',
-    ja: '原文で文章を選択すると、補助モデルに推敲を依頼できます。',
+    en: 'Select a passage in the original to ask the assistant model to revise it.',
+    ja: '原文で文章を選択すると、アシスタントモデルに推敲を依頼できます。',
     zh: '选择原文中的片段，即可请助手模型润色。',
   },
   'reader.closeRevision': {
@@ -1201,8 +1201,8 @@ export const messages = {
   },
   'reader.callsTheHelperModelOnceChargesMayApplyDepending': {
     ko: '도우미 모델을 한 번 호출해요. 이용 중인 모델에 따라 비용이 발생할 수 있어요. 제안은 초안에만 반영되며, 원문 저장으로 확정해요.',
-    en: 'Calls the helper model once. Charges may apply depending on your model. Suggestions affect only the draft; save the original to confirm.',
-    ja: '補助モデルを1回呼び出します。モデルにより費用が発生する場合があります。提案は下書きにのみ反映し、原文の保存で確定します。',
+    en: 'Calls the assistant model once. Charges may apply depending on your model. Suggestions affect only the draft; save the original to confirm.',
+    ja: 'アシスタントモデルを1回呼び出します。モデルにより費用が発生する場合があります。提案は下書きにのみ反映し、原文の保存で確定します。',
     zh: '会调用助手模型一次，可能因模型而产生费用。建议仅应用于草稿，保存原文后才会确定。',
   },
   'reader.theDraftOrSelectionChangedYourInputIsPreserved': {
@@ -1214,7 +1214,7 @@ export const messages = {
   'reader.refiningTheSelectedPassage': {
     ko: '선택한 구절을 다듬고 있어요…',
     en: 'Refining the selected passage…',
-    ja: '選択した文章を推敲しています…',
+    ja: '選択した文章を推敲中…',
     zh: '正在润色所选片段…',
   },
   'reader.cancelRevisionRequest': {
@@ -1262,7 +1262,7 @@ export const messages = {
   'reader.loadingResult': {
     ko: '결과 불러오는 중…',
     en: 'Loading result…',
-    ja: '結果を読み込んでいます…',
+    ja: '結果を読み込み中…',
     zh: '正在加载结果…',
   },
   'reader.couldNotLoadThePartialResponseCheckYourConnection': {
@@ -1280,7 +1280,7 @@ export const messages = {
   'reader.loadingPartialResponse': {
     ko: '일부 응답을 불러오는 중…',
     en: 'Loading partial response…',
-    ja: '部分的な応答を読み込んでいます…',
+    ja: '部分的な応答を読み込み中…',
     zh: '正在加载部分回复…',
   },
   'reader.noPartialResponseToShow': {
@@ -1513,7 +1513,7 @@ export const messages = {
   },
   'reader.appliesToRegularTextAndHelperContentBotCreated': {
     ko: '일반 본문과 도우미 내용에 적용하며 봇이 만든 상태창·컨트롤 스타일은 보존해요.',
-    en: 'Applies to regular text and helper content. Bot-created status panels and controls keep their styles.',
+    en: 'Applies to regular text and assistant content. Bot-created status panels and controls keep their styles.',
     ja: '通常の本文とアシスタントの内容に適用します。ボットが作成したステータス画面やコントロールのスタイルは保持します。',
     zh: '应用于普通正文和助手内容，保留机器人创建的状态栏和控件样式。',
   },
@@ -1551,7 +1551,7 @@ export const messages = {
     ko: '이야기에서 일어난 일은 요약으로, 이후 요청에서도 지킬 조건은 메모·정정으로 관리해요. 카드 변수는 봇의 원본 스크립트가 관리해요.',
     en: 'Manage story events with summaries, and conditions for future requests with notes and corrections. Card variables are managed by the bot’s original scripts.',
     ja: '物語で起きた出来事は要約で、今後のリクエストでも守る条件はメモ・訂正で管理します。カード変数はボットの元スクリプトが管理します。',
-    zh: '用摘要管理故事事件，用备注与修正管理后续请求仍需遵守的条件。卡片变量由机器人的原始脚本管理。',
+    zh: '用摘要管理故事事件，用备注与修正管理后续请求仍需遵守的条件。卡片变量由角色卡的原始脚本管理。',
   },
   'reader.enterABookmarkName': {
     ko: '책갈피 이름을 입력해 주세요.',
@@ -1616,7 +1616,7 @@ export const messages = {
   'reader.loadingBookmarks': {
     ko: '책갈피를 불러오는 중이에요…',
     en: 'Loading bookmarks…',
-    ja: 'ブックマークを読み込んでいます…',
+    ja: 'ブックマークを読み込み中…',
     zh: '正在加载书签…',
   },
   'reader.noBookmarksYetAddOneBelowAScene': {
@@ -1844,7 +1844,7 @@ export const messages = {
   'reader.checkingTheNextRequest': {
     ko: '다음 요청을 확인하고 있어요…',
     en: 'Checking the next request…',
-    ja: '次のリクエストを確認しています…',
+    ja: '次のリクエストを確認中…',
     zh: '正在检查下次请求…',
   },
   'reader.contextOrSettingsChangedDuringTheCheckCheckAgain': {
@@ -1855,19 +1855,19 @@ export const messages = {
   },
   'reader.selectATextModelToCalculateInputSize': {
     ko: '본문 모델을 선택하면 입력량을 계산할 수 있어요.',
-    en: 'Select a text model to calculate input size.',
+    en: 'Select a writing model to calculate input size.',
     ja: '本文モデルを選ぶと入力量を計算できます。',
     zh: '选择正文模型后可计算输入量。',
   },
   'reader.couldNotCalculateInputSizeUnderTheCurrentConditions': {
     ko: '현재 조건의 입력량을 계산하지 못했어요. 자료와 프롬프트 설정을 확인해 주세요.',
-    en: 'Could not calculate input size under the current conditions. Check material and prompt settings.',
+    en: 'Could not calculate input size under the current conditions. Check resource and prompt settings.',
     ja: '現在の条件では入力量を計算できませんでした。資料とプロンプトの設定を確認してください。',
     zh: '无法计算当前条件下的输入量，请检查资料与提示词设置。',
   },
   'reader.textModel': {
     ko: '본문 모델',
-    en: 'Text model',
+    en: 'Writing model',
     ja: '本文モデル',
     zh: '正文模型',
   },
@@ -1893,7 +1893,7 @@ export const messages = {
     ko: '페르소나',
     en: 'Persona',
     ja: 'ペルソナ',
-    zh: '角色设定',
+    zh: '角色',
   },
   'reader.none': {
     ko: '없음',
@@ -1965,7 +1965,7 @@ export const messages = {
     ko: '입력 약 {v0} / {v1} 토큰',
     en: 'Estimated input {v0} / {v1} tokens',
     ja: '推定入力 {v0} / {v1}トークン',
-    zh: '估算输入{v0} / {v1}令牌',
+    zh: '估算输入{v0} / {v1} token',
   },
   'reader.estimatedContextRelativeToTheNextRequestsInputLimit': {
     ko: '다음 요청의 입력 한도 대비 추정 컨텍스트',
@@ -2011,7 +2011,7 @@ export const messages = {
   },
   'reader.loreCountsReflectCurrentlyPreparedMaterialCheckActualInclusion': {
     ko: '로어 수는 현재 준비된 자료 기준이에요. 실제 포함 기록은 생성 후 확인해요.',
-    en: 'Lore counts reflect currently prepared material. Check actual inclusion records after generation.',
+    en: 'Lore counts reflect currently prepared resources. Check actual inclusion records after generation.',
     ja: 'ロア数は現在準備できている資料が基準です。実際の包含記録は生成後に確認できます。',
     zh: '设定资料数量基于当前已准备的资料。实际包含记录请在生成后查看。',
   },
@@ -2019,7 +2019,7 @@ export const messages = {
     ko: '이미지는 전송용 해상도로 별도 추정해요. 모델별 실제 이미지 토큰과 과금량을 보장하지 않으며, 이미지 변환과 스크립트 처리 후 입력량이 달라질 수 있어요.',
     en: 'Images are estimated separately at their sending resolution. Actual image tokens and charges per model are not guaranteed, and input size may change after image conversion and script processing.',
     ja: '画像は送信用の解像度で別途推定します。モデルごとの実際の画像トークンや課金量を保証するものではなく、画像変換やスクリプト処理後に入力量が変わる場合があります。',
-    zh: '图片按发送分辨率单独估算，不保证各模型实际图片令牌数与费用。图片转换与脚本处理后，输入量可能改变。',
+    zh: '图片按发送分辨率单独估算，不保证各模型实际图片 token 数与费用。图片转换与脚本处理后，输入量可能改变。',
   },
   'reader.risuInputStartAndRequestEditScriptsRunDuring': {
     ko: 'Risu의 입력·시작·요청 수정 스크립트는 생성할 때 실행해요.',
@@ -2097,7 +2097,7 @@ export const messages = {
     ko: '요청 {input} · 응답 {output} 토큰',
     en: 'Request {input} · Response {output} tokens',
     ja: '入力 {input} · 出力 {output}トークン',
-    zh: '请求{input} · 回复{output}令牌',
+    zh: '请求{input} · 回复{output} token',
   },
   'reader.contextPercent': {
     ko: ' · 컨텍스트 사용량 {estimated, select, true {약 {percent}%} other {{percent}%}}',
@@ -2133,7 +2133,7 @@ export const messages = {
     ko: '참고 이미지 {count}장 · 이미지 입력 약 {tokens}토큰 포함',
     en: '{count, plural, one {# reference image} other {# reference images}} · Includes about {tokens} image input tokens',
     ja: '参考画像 {count}枚 · 画像入力の推定 {tokens}トークンを含む',
-    zh: '参考图片{count}张 · 含约{tokens}个图片输入令牌',
+    zh: '参考图片{count}张 · 含约{tokens}个图片输入 token',
   },
   'reader.quote.straightDouble': {
     ko: '"큰따옴표"',

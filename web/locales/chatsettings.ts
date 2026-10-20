@@ -97,7 +97,7 @@ export const messages = {
   },
   'chatsettings.m17': {
     ko: '화면 테마 Enter 보내기 도우미 패널 폭 사이드바 좌측 탐색 크기',
-    en: 'Display theme Enter send helper panel width sidebar navigation size',
+    en: 'Display theme Enter send assistant helper panel width sidebar navigation size',
     ja: '画面 テーマ Enter 送信 アシスタント パネル 幅 サイドバー ナビゲーション サイズ',
     zh: '显示 主题 Enter 发送 助手 面板 宽度 侧栏 导航 大小',
   },
@@ -163,7 +163,7 @@ export const messages = {
   },
   'chatsettings.m28': {
     ko: '원문 작문 번역 도우미 컨텍스트 요약 채팅 제목 확장 호출 스크립트 거절 판정 모델 선택',
-    en: 'Original writing translation helper context summary chat title extension call script refusal model selection',
+    en: 'Original writing translation assistant helper context summary chat title extension call script refusal model selection',
     ja: '原文 執筆 翻訳 アシスタント コンテキスト 要約 チャット タイトル 拡張 呼び出し スクリプト 拒否 モデル 選択',
     zh: '原文 写作 翻译 助手 上下文 摘要 聊天 标题 扩展 调用 脚本 拒绝 模型 选择',
   },
@@ -195,13 +195,13 @@ export const messages = {
     ko: '로어 컨텍스트',
     en: 'Lore context',
     ja: 'ロアコンテキスト',
-    zh: '世界书上下文',
+    zh: '设定上下文',
   },
   'chatsettings.m34': {
     ko: '기본값 토큰 선별 예산',
     en: 'Defaults tokens selection budget',
     ja: '初期設定 トークン 選別 予算',
-    zh: '默认 词元 筛选 预算',
+    zh: '设定 世界书 默认 词元 Token 筛选 预算',
   },
   'chatsettings.m35': {
     ko: 'Codex 연결',
@@ -237,7 +237,7 @@ export const messages = {
     ko: '비용 토큰',
     en: 'Cost tokens',
     ja: '費用 トークン',
-    zh: '费用 词元',
+    zh: '费用 词元 Token',
   },
   'chatsettings.m41': {
     ko: '데이터 관리',
@@ -427,7 +427,7 @@ export const messages = {
   },
   'chatsettings.m72': {
     ko: '도우미·창작 옵션 패널 폭',
-    en: 'Helper and creative options panel width',
+    en: 'Assistant and writing options panel width',
     ja: 'アシスタント・創作オプションパネルの幅',
     zh: '助手与创作选项面板宽度',
   },
@@ -523,8 +523,8 @@ export const messages = {
   },
   'chatsettings.m88': {
     ko: '원작·인물 참고',
-    en: 'Source and character references',
-    ja: '原作・人物参考',
+    en: 'Story and character reference',
+    ja: '原作・人物の参照',
     zh: '原作与角色参考',
   },
   'chatsettings.m89': {
@@ -537,7 +537,7 @@ export const messages = {
     ko: '기억·로어',
     en: 'Memory and lore',
     ja: '記憶・ロア',
-    zh: '记忆与世界书',
+    zh: '记忆与设定',
   },
   'chatsettings.m91': {
     ko: '장면 기억과 메모 관리',
@@ -555,13 +555,13 @@ export const messages = {
     ko: '이미지',
     en: 'Images',
     ja: '画像',
-    zh: '图像',
+    zh: '图片',
   },
   'chatsettings.m94': {
     ko: '이 채팅에 등록한 이미지와 삽화 참조',
     en: 'Images and illustration references in this chat',
     ja: 'このチャットの画像と挿絵の参照',
-    zh: '此聊天中的图像与插图参考',
+    zh: '此聊天中的图片与插图参考',
   },
   'chatsettings.m95': {
     ko: '카드 변수',
@@ -609,7 +609,7 @@ export const messages = {
     ko: '이미지 관리',
     en: 'Manage images',
     ja: '画像の管理',
-    zh: '图像管理',
+    zh: '图片管理',
   },
   'chatsettings.m105': {
     ko: '미저장 채팅 설정 확인',
@@ -692,7 +692,7 @@ export const messages = {
   'chatsettings.m118': {
     ko: '1회 옵션',
     en: 'One-time options',
-    ja: '1 回オプション',
+    ja: '1回オプション',
     zh: '单次选项',
   },
   'chatsettings.m119': {
@@ -710,7 +710,7 @@ export const messages = {
   'chatsettings.m121': {
     ko: '저장본을 불러오면 작성 중인 고정 옵션과 1회 옵션 입력을 버려요. 이미 예약한 옵션은 취소하지 않아요.',
     en: 'Loading saved content discards fixed and one-time option drafts. Scheduled options remain.',
-    ja: '保存済みの内容を読み込むと編集中の固定・1 回オプションを破棄します。予約済みオプションは取り消しません。',
+    ja: '保存済みの内容を読み込むと編集中の固定・1回オプションを破棄します。予約済みオプションは取り消しません。',
     zh: '加载保存版本将丢弃固定和单次选项草稿。已预约的选项不会取消。',
   },
   'chatsettings.m122': {
@@ -758,7 +758,7 @@ export const messages = {
   'chatsettings.m129': {
     ko: '1회 옵션 예약',
     en: 'Schedule one-time options',
-    ja: '1 回オプションを予約',
+    ja: '1回オプションを予約',
     zh: '预约单次选项',
   },
   'chatsettings.m130': {
@@ -901,13 +901,13 @@ export const messages = {
   },
   'chatsettings.m153': {
     ko: '창작 옵션 패널',
-    en: 'Creative options panel',
+    en: 'Writing options panel',
     ja: '創作オプションパネル',
     zh: '创作选项面板',
   },
   'chatsettings.m154': {
     ko: '창작 옵션',
-    en: 'Creative options',
+    en: 'Writing options',
     ja: '創作オプション',
     zh: '创作选项',
   },
@@ -919,7 +919,7 @@ export const messages = {
   },
   'chatsettings.m156': {
     ko: '창작 옵션 닫기',
-    en: 'Close creative options',
+    en: 'Close writing options',
     ja: '創作オプションを閉じる',
     zh: '关闭创作选项',
   },

@@ -2080,7 +2080,7 @@ export const messages = {
     ko: '로어 관련성 판정: 채팅 설정 → 기억·로어에서 관련성 기준과 예산을 조절해요.',
     en: 'Lore relevance detection: adjust relevance thresholds and budgets under Chat settings → Memory and lore.',
     ja: 'ロアの関連性判定：チャット設定 → 記憶・ロアで関連性の基準と予算を調整します。',
-    zh: '世界观相关性判断：在聊天设置 → 记忆与世界观中调整相关性阈值和预算。',
+    zh: '设定相关性判断：在聊天设置 → 记忆与设定中调整相关性阈值和预算。',
   },
   'providers.m391': {
     ko: '이미지 선택: 본문에 사용할 이미지 후보를 선택해요.',
@@ -3580,6 +3580,6 @@ export const messages = {
     ko: '로어 선별 · 생성 거절 판정 · 이미지 배치',
     en: 'Lore selection · refusal detection · image placement',
     ja: 'ロアの選別 · 生成拒否の判定 · 画像配置',
-    zh: 'Lore 筛选 · 生成拒绝判定 · 图片布置',
+    zh: '设定筛选 · 生成拒绝判定 · 图片布置',
   },
 };

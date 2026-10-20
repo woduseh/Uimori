@@ -2,13 +2,13 @@ export const messages = {
   'helpers.m002': {
     ko: '요청을 접수했어요 · 앞선 작업을 기다려요',
     en: 'Request received · Waiting for earlier tasks',
-    ja: 'リクエスト受付済み · 先の作業を待っています',
+    ja: 'リクエスト受付済み · 先の作業を待機中',
     zh: '请求已接收 · 等待前面的任务',
   },
   'helpers.m003': {
     ko: '처리 중이에요',
     en: 'Processing',
-    ja: '処理中です',
+    ja: '処理中',
     zh: '正在处理',
   },
   'helpers.m004': {
@@ -170,8 +170,8 @@ export const messages = {
   'helpers.m043': {
     ko: '서재 작업',
     en: 'Library tasks',
-    ja: '書庫の作業',
-    zh: '书库任务',
+    ja: 'ライブラリの作業',
+    zh: '资料库任务',
   },
   'helpers.m044': {
     ko: '도우미 말투 설정',
@@ -235,7 +235,7 @@ export const messages = {
   },
   'helpers.m054': {
     ko: '저장 후 새로 접수한 요청부터 반영해요. 작품과 저장 자료의 문체는 바꾸지 않아요.',
-    en: 'Applies to requests received after saving. The style of your work and saved materials stays unchanged.',
+    en: 'Applies to requests received after saving. The style of your work and saved resources stays unchanged.',
     ja: '保存後に受け付けた依頼から反映します。作品や保存資料の文体は変更しません。',
     zh: '保存后接收的新请求将应用此设置。作品和已保存资料的文风保持不变。',
   },
@@ -247,9 +247,9 @@ export const messages = {
   },
   'helpers.m056': {
     ko: '최신 설정을 확인했어요',
-    en: 'I have checked the latest settings',
-    ja: '最新の設定を確認しました',
-    zh: '我已确认最新设置',
+    en: 'Confirm latest settings',
+    ja: '最新の設定を確認',
+    zh: '确认最新设置',
   },
   'helpers.m057': {
     ko: '우이 프리셋 불러오기',
@@ -278,7 +278,7 @@ export const messages = {
   'helpers.m061': {
     ko: '대화를 불러오는 중이에요…',
     en: 'Loading conversation…',
-    ja: '会話を読み込み中です…',
+    ja: '会話を読み込み中…',
     zh: '正在加载对话…',
   },
   'helpers.m062': {
@@ -385,7 +385,7 @@ export const messages = {
   },
   'helpers.m085': {
     ko: '이름 없는 자료',
-    en: 'Untitled material',
+    en: 'Untitled resource',
     ja: '名前のない資料',
     zh: '未命名资料',
   },
@@ -465,7 +465,7 @@ export const messages = {
     ko: '상태 표시만 숨겨요. 작업은 계속 진행되고 입력도 계속할 수 있어요.',
     en: 'Only the status display is hidden. Work continues, and you can keep typing.',
     ja: '状態表示だけを隠します。作業は続行され、入力も続けられます。',
-    zh: '仅隐藏状态显示。任务会继续执行，您也可以继续输入。',
+    zh: '仅隐藏状态显示。任务会继续执行，也可以继续输入。',
   },
   'helpers.m101': {
     ko: '모델 설정',
@@ -584,7 +584,7 @@ export const messages = {
   'helpers.m120': {
     ko: '활동 내역을 불러오는 중이에요…',
     en: 'Loading activity…',
-    ja: '活動履歴を読み込み中です…',
+    ja: '活動履歴を読み込み中…',
     zh: '正在加载活动记录…',
   },
   'helpers.m121': {
@@ -710,7 +710,7 @@ export const messages = {
   'helpers.m142': {
     ko: '가정 장면을 불러오는 중이에요…',
     en: 'Loading hypothetical scene…',
-    ja: '仮定の場面を読み込み中です…',
+    ja: '仮定の場面を読み込み中…',
     zh: '正在加载假设场景…',
   },
   'helpers.m145': {
@@ -751,7 +751,7 @@ export const messages = {
   },
   'helpers.m152': {
     ko: '이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.',
-    en: 'Save or cancel your edits to this material before restoring it.',
+    en: 'Save or cancel your edits to this resource before restoring it.',
     ja: 'この資料の編集を保存するか取り消してから、元に戻してください。',
     zh: '请先保存或取消对此资料的编辑，再恢复。',
   },
@@ -775,7 +775,7 @@ export const messages = {
   },
   'helpers.m156': {
     ko: '도우미 최근 자료 수정',
-    en: 'Recent assistant material edits',
+    en: 'Recent assistant resource edits',
     ja: 'アシスタントによる最近の資料編集',
     zh: '助手最近的资料修改',
   },
@@ -793,7 +793,7 @@ export const messages = {
   },
   'helpers.m159': {
     ko: '마지막 자료 수정 되돌리기',
-    en: 'Undo last material edit',
+    en: 'Undo last resource edit',
     ja: '最後の資料編集を元に戻す',
     zh: '撤销上一次资料修改',
   },
@@ -805,7 +805,7 @@ export const messages = {
   },
   'helpers.m161': {
     ko: '자료 수정 되돌리기',
-    en: 'Undo material edits',
+    en: 'Undo resource edits',
     ja: '資料の編集を元に戻す',
     zh: '撤销资料修改',
   },
@@ -818,7 +818,7 @@ export const messages = {
   'helpers.m166': {
     ko: '되돌리는 중…',
     en: 'Restoring…',
-    ja: '元に戻しています…',
+    ja: '復元中…',
     zh: '正在恢复…',
   },
   'helpers.m167': {
@@ -931,8 +931,8 @@ export const messages = {
   },
   'helpers.m188': {
     ko: '삭제할 자료와 진행 중인 작업을 확인하고 있어요…',
-    en: 'Checking materials to delete and running tasks…',
-    ja: '削除する資料と進行中の作業を確認しています…',
+    en: 'Checking resources to delete and running tasks…',
+    ja: '削除する資料と進行中の作業を確認中…',
     zh: '正在检查将删除的资料和进行中的任务…',
   },
   'helpers.m192': {
@@ -961,7 +961,7 @@ export const messages = {
   },
   'helpers.m196': {
     ko: '자료·설정 변경',
-    en: 'Changing materials and settings',
+    en: 'Changing resources and settings',
     ja: '資料・設定の変更',
     zh: '修改资料与设置',
   },
@@ -979,7 +979,7 @@ export const messages = {
   },
   'helpers.m199': {
     ko: '자료 확인',
-    en: 'Checking materials',
+    en: 'Checking resources',
     ja: '資料の確認',
     zh: '查看资料',
   },
@@ -1183,7 +1183,7 @@ export const messages = {
   },
   'helpers.m235': {
     ko: '{v0} 자료 변경 · 확인 필요',
-    en: '{v0} materials changed · Needs review',
+    en: '{v0} resources changed · Needs review',
     ja: '{v0}の資料変更 · 確認が必要',
     zh: '{v0}资料已更改 · 需要查看',
   },
@@ -1280,7 +1280,7 @@ export const messages = {
   'helpers.m254': {
     ko: '연결을 다시 확인하는 중이에요. 아래는 마지막으로 확인한 상태예요.',
     en: 'Checking the connection again. The last confirmed status is shown below.',
-    ja: '接続を再確認しています。以下は最後に確認した状態です。',
+    ja: '接続を再確認中です。以下は最後に確認した状態です。',
     zh: '正在重新检查连接。以下显示的是最后确认的状态。',
   },
   'helpers.m255': {
@@ -1400,8 +1400,8 @@ export const messages = {
   'helpers.m276': {
     ko: '서재 도우미',
     en: 'Library assistant',
-    ja: '書庫アシスタント',
-    zh: '书库助手',
+    ja: 'ライブラリアシスタント',
+    zh: '资料库助手',
   },
   'helpers.m277': {
     ko: '대기 중',
@@ -1532,7 +1532,7 @@ export const messages = {
   'helpers.m298': {
     ko: '이전 작업을 불러오는 중이에요…',
     en: 'Loading older tasks…',
-    ja: '以前の作業を読み込み中です…',
+    ja: '以前の作業を読み込み中…',
     zh: '正在加载以前的任务…',
   },
   'helpers.m299': {
@@ -1556,7 +1556,7 @@ export const messages = {
   'helpers.m302': {
     ko: '상세를 불러오는 중이에요…',
     en: 'Loading details…',
-    ja: '詳細を読み込み中です…',
+    ja: '詳細を読み込み中…',
     zh: '正在加载详情…',
   },
   'helpers.m305': {
@@ -1599,7 +1599,7 @@ export const messages = {
     ko: '실행 요청 {calls}회 · 누적 입력 {input} / 출력 {output} 토큰',
     en: 'Execution requests: {calls} · Total input: {input} / Output: {output} tokens',
     ja: '実行リクエスト{calls}回 · 累計入力{input} / 出力{output}トークン',
-    zh: '执行请求{calls}次 · 累计输入{input} / 输出{output}个令牌',
+    zh: '执行请求{calls}次 · 累计输入{input} / 输出{output}词元',
   },
   'helpers.m312': {
     ko: '저장한 작업 · {labels}',
@@ -1627,7 +1627,7 @@ export const messages = {
   },
   'helpers.m316': {
     ko: '참고 자료 · {title}',
-    en: 'Reference material · {title}',
+    en: 'Reference resource · {title}',
     ja: '参考資料 · {title}',
     zh: '参考资料 · {title}',
   },
@@ -1663,7 +1663,7 @@ export const messages = {
   },
   'helpers.m322': {
     ko: '다음 자료 {count}개를 도우미 수정 직전 저장본으로 함께 되돌릴까요?',
-    en: "Restore the following {count} materials to the versions saved immediately before the assistant's edits?",
+    en: "Restore the following {count} resources to the versions saved immediately before the assistant's edits?",
     ja: '次の資料{count}件を、アシスタントの編集直前の保存版にまとめて戻しますか？',
     zh: '要将以下{count}项资料一并恢复到助手修改前的保存版本吗？',
   },
@@ -1693,7 +1693,7 @@ export const messages = {
   },
   'helpers.m327': {
     ko: '이 도우미 대화의 메시지·작업·가정 장면·개인 요약을 삭제해요. 이미 저장한 본편·공통 자료와 다음 요청 옵션은 유지돼요. 사용량 숫자는 내용 없이 유지해요. 진행 중인 작업은 먼저 중지해 주세요.',
-    en: "Deletes this assistant conversation's messages, tasks, hypothetical scenes, and personal summaries. Saved main stories, shared materials, and next-request options are preserved. Usage counts are retained without content. Stop running tasks first.",
+    en: "Deletes this assistant conversation's messages, tasks, hypothetical scenes, and personal summaries. Saved main stories, shared resources, and next-request options are preserved. Usage counts are retained without content. Stop running tasks first.",
     ja: 'このアシスタントの会話のメッセージ・作業・仮定の場面・個人用要約を削除します。保存済みの本編・共通資料と次の依頼のオプションは保持します。使用量の数値は内容を含めずに保持します。進行中の作業は先に停止してください。',
     zh: '删除此助手对话的消息、任务、假设场景和个人摘要。已保存的正文、共享资料和下次请求选项会保留。使用量仅保留数字，不保留内容。请先停止进行中的任务。',
   },
@@ -1747,9 +1747,9 @@ export const messages = {
   },
   'helpers.m336': {
     ko: '{kind, select, summary {대화 내용 정리 중이에요} whatif {가정 장면 작성 중이에요} other {도우미가 요청을 처리하고 있어요}}',
-    en: '{kind, select, summary {Summarizing the conversation} whatif {Writing a hypothetical scene} other {The assistant is processing your request}}',
-    ja: '{kind, select, summary {会話内容を整理しています} whatif {仮定の場面を作成しています} other {アシスタントが依頼を処理しています}}',
-    zh: '{kind, select, summary {正在整理对话内容} whatif {正在编写假设场景} other {助手正在处理您的请求}}',
+    en: '{kind, select, summary {Summarizing the conversation} whatif {Writing a hypothetical scene} other {The assistant is processing the request}}',
+    ja: '{kind, select, summary {会話内容を整理中} whatif {仮定の場面を作成中} other {アシスタントが依頼を処理中}}',
+    zh: '{kind, select, summary {正在整理对话内容} whatif {正在编写假设场景} other {助手正在处理请求}}',
   },
   'helpers.m337': {
     ko: '{mode, select, translation {번역 이미지 배치} other {원문 이미지 배치}}',
@@ -1777,13 +1777,13 @@ export const messages = {
   },
   'helpers.m341': {
     ko: '최근 수정 이후 자료가 변경되어 되돌릴 수 없어요.',
-    en: 'Cannot restore because the material has changed since the latest edit.',
+    en: 'Cannot restore because the resource has changed since the latest edit.',
     ja: '最近の編集以降に資料が変更されたため、元に戻せません。',
     zh: '资料在最近一次修改后发生了更改，无法恢复。',
   },
   'helpers.m342': {
     ko: '자료를 찾을 수 없어 되돌릴 수 없어요.',
-    en: 'Cannot restore because the material could not be found.',
+    en: 'Cannot restore because the resource could not be found.',
     ja: '資料が見つからないため、元に戻せません。',
     zh: '找不到资料，无法恢复。',
   },
