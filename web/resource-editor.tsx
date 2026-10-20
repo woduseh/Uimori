@@ -348,10 +348,12 @@ export function ResourceEditorStatus({
 }) {
   const { state, session } = value;
   return (
-    <div className="resource-editor-status">
+    <div
+      className={`resource-editor-status${!state.ready ? ' resource-editor-status-loading' : ''}`}
+    >
       {!state.ready ? (
         <LoadingState
-          presentation="placeholder"
+          presentation="region"
           loading={!state.error}
           error={state.error}
           label="자료를 불러오는 중이에요…"

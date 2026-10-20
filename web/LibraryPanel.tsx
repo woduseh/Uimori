@@ -27,7 +27,15 @@ import {
   type ResourceSaveResult,
 } from '../core/resource-editing.js';
 import { ResourceEditorSession } from './resource-editor-session.js';
-import { useEffect, useId, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from 'react';
 import type { Content, ContentKind, Library } from '../core/product.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryCategory, libraryFolderOf } from '../core/library-organization.js';
@@ -248,6 +256,12 @@ export function LibraryPanel({
   latestLibrary.current = library;
   const externalTab = useRef(initialTab);
   const organizer = useLibraryOrganization(library, reload, onError);
+  // The list and detail share a scrollport. A newly opened resource must start at its heading,
+  // not at the list position retained by the browser.
+  useLayoutEffect(() => {
+    if (detail || editing)
+      panelRef.current?.closest<HTMLElement>('.destination-scroll')?.scrollTo({ top: 0 });
+  }, [detail, editing]);
   const organizedLibrary = library
     ? { ...library, organization: organizer.organization ?? library.organization }
     : null;
