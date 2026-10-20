@@ -1,3 +1,4 @@
+import { useI18n } from './i18n.js';
 import { Switch } from './BooleanControls.js';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Ellipsis, X } from 'lucide-react';
@@ -6,16 +7,17 @@ import './composer-more.css';
 type Props = { selected: boolean; disabled: boolean; onChange: (value: boolean) => void };
 
 export function LoreResetChip({ selected, disabled, onChange }: Props) {
+  const { t } = useI18n();
   return selected ? (
     <div className="composer-request-chips">
       <button
         type="button"
         className="lore-reset-chip"
         disabled={disabled}
-        aria-label="조회 로어 제외 해제"
+        aria-label={t('prompts.uiIncludeRetrievedLoreAgain')}
         onClick={() => onChange(false)}
       >
-        조회 로어 제외
+        {t('prompts.uiExcludeRetrievedLore')}
         <X size={14} aria-hidden="true" />
       </button>
     </div>
@@ -28,6 +30,7 @@ export function ComposerMore({
   onChange,
   children,
 }: Props & { children?: ReactNode }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null),
     trigger = useRef<HTMLButtonElement>(null),
@@ -69,10 +72,11 @@ export function ComposerMore({
     >
       <button
         ref={trigger}
+        data-composer-more
         type="button"
         className="icon-button"
-        aria-label="입력창 더보기"
-        title="대화 설정과 이번 요청 옵션"
+        aria-label={t('prompts.uiMoreInputOptions')}
+        title={t('prompts.uiChatSettingsAndRequestOptions')}
         aria-expanded={open}
         aria-controls={id}
         disabled={disabled}
@@ -81,16 +85,24 @@ export function ComposerMore({
         <Ellipsis size={18} />
       </button>
       {open && (
-        <div id={id} className="composer-more-panel" role="group" aria-label="이번 요청 옵션">
+        <div
+          id={id}
+          className="composer-more-panel"
+          role="group"
+          aria-label={t('prompts.uiOptionsForThisRequest')}
+        >
           {children && (
-            <div className="composer-extra-settings" aria-label="입력 도구와 설정">
+            <div
+              className="composer-extra-settings"
+              aria-label={t('prompts.uiInputToolsAndSettings')}
+            >
               {children}
             </div>
           )}
           <label className="composer-lore-toggle">
             <span className="composer-lore-copy">
-              <span>다음 생성에서 조회 로어 제외</span>
-              <small aria-hidden="true">이번 요청에만 적용</small>
+              <span>{t('prompts.uiExcludeRetrievedLoreFromNextGeneration')}</span>
+              <small aria-hidden="true">{t('prompts.uiAppliesOnlyToThisRequest')}</small>
             </span>
             <Switch
               ref={choice}

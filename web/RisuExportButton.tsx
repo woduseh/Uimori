@@ -1,18 +1,17 @@
+import { t, useI18n, message as retainedMessage } from './i18n.js';
 import { ResourceExportButton } from './ResourceExportButton.js';
 import { useEffect, useRef, useState } from 'react';
 import { DownloadIcon } from './ui-icons.js';
 import { sessionRequiredEvent } from './api.js';
 
-const messages: Record<string, string> = {
-  RISU_EXPORT_MODULE_UNSUPPORTED: '이 모듈에는 내보낼 수 있는 Risu 원문이 없어요.',
-  RISU_EXPORT_MODULE_CONFLICT: '이 자료의 모듈 에셋 이름이 겹쳐요. 에셋을 확인해 주세요.',
-  RISU_EXPORT_ASSET_UNAVAILABLE:
-    '원문에 연결된 에셋 파일을 찾을 수 없어요. 에셋 탭에서 확인해 주세요.',
-  RISU_EXPORT_ASSET_PATH: '원문 에셋의 파일 경로가 겹치거나 올바르지 않아요. 에셋을 확인해 주세요.',
-  RISU_EXPORT_TOO_LARGE: '내보낼 자료가 파일 크기 한도를 넘었어요.',
-  RISU_EXPORT_REVISION_CHANGED:
-    '자료가 다른 곳에서 변경됐어요. 최신 저장본을 확인한 뒤 다시 내보내 주세요.',
-};
+const exportMessages = (): Record<string, string> => ({
+  RISU_EXPORT_MODULE_UNSUPPORTED: retainedMessage('transfer.m087'),
+  RISU_EXPORT_MODULE_CONFLICT: retainedMessage('transfer.m088'),
+  RISU_EXPORT_ASSET_UNAVAILABLE: retainedMessage('transfer.m089'),
+  RISU_EXPORT_ASSET_PATH: retainedMessage('transfer.m090'),
+  RISU_EXPORT_TOO_LARGE: retainedMessage('transfer.m091'),
+  RISU_EXPORT_REVISION_CHANGED: retainedMessage('transfer.m092'),
+});
 
 export function RisuExportButton({
   kind,
@@ -33,6 +32,7 @@ export function RisuExportButton({
   linkedModules?: boolean;
   onError: (message: string) => void;
 }) {
+  useI18n();
   const [busy, setBusy] = useState(false);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => () => controller.current?.abort(), []);
@@ -49,13 +49,7 @@ export function RisuExportButton({
         type="button"
         className="secondary"
         disabled={disabled || busy}
-        title={
-          disabled
-            ? '편집 내용을 저장한 뒤 내보내 주세요.'
-            : '이 자료의 현재 저장본만 ' +
-              format +
-              ' 파일로 내보내요. 연결한 자료는 각각 내보내 주세요.'
-        }
+        title={disabled ? t('transfer.m093') : t('transfer.exportDescription', { format })}
         onClick={async () => {
           if (controller.current) return;
           const request = new AbortController();
@@ -77,8 +71,7 @@ export function RisuExportButton({
                 error?: string;
               } | null;
               throw new Error(
-                messages[payload?.error ?? ''] ??
-                  '파일을 내보내지 못했어요. 저장본을 확인한 뒤 다시 시도해 주세요.'
+                exportMessages()[payload?.error ?? ''] ?? retainedMessage('transfer.m096')
               );
             }
             const blob = await response.blob();
@@ -100,13 +93,9 @@ export function RisuExportButton({
         }}
       >
         <DownloadIcon size={18} aria-hidden="true" />
-        {busy ? '내보내는 중…' : format + ' 내보내기'}
+        {busy ? t('transfer.m097') : t('transfer.exportFormat', { format })}
       </button>
-      {linkedModules && (
-        <small className="muted">
-          Risu 파일에는 이 자료만 담아요. 연결한 모듈은 각각 내보내 주세요.
-        </small>
-      )}
+      {linkedModules && <small className="muted">{t('transfer.m099')}</small>}
     </>
   );
 }

@@ -1,83 +1,104 @@
+import { t, useI18n, getLocale } from './i18n.js';
 import type { LoreContextSnapshot } from '../core/lore-context.js';
 import './lore-context.css';
 
-const reasons: Record<string, string> = {
-  disabled: '조회 로어 유지 끔',
-  'new-scene': '새 장면 요청으로 조회 로어 정리',
-  'source-or-canon-changed': '원문이나 확정 설정 변경',
-  'provided-as-pinned': '고정 자료로 제공되어 조회 사본 제외',
-  'resource-scope-or-revision-changed': '자료의 사용 범위나 자료 내용 변경',
-  'retention-budget': '조회 로어 예산에 맞춰 정리',
-};
+const reasons = (): Record<string, string> => ({
+  disabled: t('settings.m248'),
+  'new-scene': t('settings.m249'),
+  'source-or-canon-changed': t('settings.m250'),
+  'provided-as-pinned': t('settings.m251'),
+  'resource-scope-or-revision-changed': t('settings.m252'),
+  'retention-budget': t('settings.m253'),
+});
 
 export function LoreContextDiagnostics({
   snapshot,
   reset = false,
-  label = '조회 로어 유지 결과',
+  label = t('settings.m254'),
 }: {
   snapshot?: LoreContextSnapshot;
   reset?: boolean;
   label?: string;
 }) {
-  if (!snapshot) return <p className="muted">이 실행에는 조회 로어 유지 기록이 없어요.</p>;
+  useI18n();
+  if (!snapshot) return <p className="muted">{t('settings.m255')}</p>;
   return (
     <section className="lore-context-result" aria-label={label}>
       <h4>{label}</h4>
-      <p className="muted">
-        이 실행의 로컬 o200k 토큰 추정값이에요. 전체 요청이나 실제 청구 토큰 수는 아니에요.
-      </p>
+      <p className="muted">{t('settings.m256')}</p>
       <dl className="lore-context-stats">
         <div>
-          <dt>유지한 구간</dt>
+          <dt>{t('settings.m257')}</dt>
           <dd>
-            {snapshot.stats.retainedEntries.toLocaleString()} /{' '}
-            {snapshot.policy.maxRetainedEntries.toLocaleString()}개
+            {t('settings.flow14', {
+              v0: snapshot.stats.retainedEntries.toLocaleString(getLocale()),
+              v1: snapshot.policy.maxRetainedEntries.toLocaleString(getLocale()),
+            })}
           </dd>
         </div>
         <div>
-          <dt>유지한 추정 토큰</dt>
+          <dt>{t('settings.m258')}</dt>
           <dd>
-            {snapshot.stats.retainedTokens.toLocaleString()} /{' '}
-            {snapshot.policy.maxRetainedTokens.toLocaleString()}토큰
+            {t('settings.flow15', {
+              v0: snapshot.stats.retainedTokens.toLocaleString(getLocale()),
+              v1: snapshot.policy.maxRetainedTokens.toLocaleString(getLocale()),
+            })}
           </dd>
         </div>
         <div>
-          <dt>새로 더한 문자</dt>
-          <dd>{snapshot.stats.appendedChars.toLocaleString()}자</dd>
+          <dt>{t('settings.m260')}</dt>
+          <dd>
+            {t('settings.flow16', { v0: snapshot.stats.appendedChars.toLocaleString(getLocale()) })}
+          </dd>
         </div>
         <div>
-          <dt>정리한 구간</dt>
-          <dd>{snapshot.stats.droppedEntries.toLocaleString()}개</dd>
+          <dt>{t('settings.m262')}</dt>
+          <dd>
+            {t('settings.flow17', {
+              v0: snapshot.stats.droppedEntries.toLocaleString(getLocale()),
+            })}
+          </dd>
         </div>
         <div>
-          <dt>고정 자료 한도</dt>
-          <dd>{snapshot.policy.maxPinnedTokens.toLocaleString()}토큰</dd>
+          <dt>{t('settings.m263')}</dt>
+          <dd>
+            {t('settings.flow18', {
+              v0: snapshot.policy.maxPinnedTokens.toLocaleString(getLocale()),
+            })}
+          </dd>
         </div>
       </dl>
-      {reset && <p>이 요청에서 새 장면 정리를 선택했어요.</p>}
+      {reset && <p>{t('settings.m264')}</p>}
       {snapshot.stats.reasons.length > 0 && (
         <ul className="lore-context-reasons">
           {snapshot.stats.reasons.map((reason) => (
-            <li key={reason}>{reasons[reason] ?? reason}</li>
+            <li key={reason}>{reasons()[reason] ?? reason}</li>
           ))}
         </ul>
       )}
       {!!snapshot.entries.length && (
         <details>
-          <summary>유지한 로어와 읽은 출처 · {snapshot.entries.length}구간</summary>
+          <summary>{t('settings.flow19', { v0: snapshot.entries.length })}</summary>
           <ol className="lore-context-entries">
             {snapshot.entries.map((entry, index) => (
               <li key={`${entry.id}:${entry.revision}:${entry.start}:${entry.end}:${index}`}>
                 <strong>{entry.title || entry.id}</strong>
                 <span>
-                  v{entry.revision} · UTF-16 {entry.start.toLocaleString()}–
-                  {entry.end.toLocaleString()} · {entry.text.length.toLocaleString()}자
+                  {t('settings.flow20', {
+                    v0: entry.revision,
+                    v1: entry.start.toLocaleString(getLocale()),
+                    v2: entry.end.toLocaleString(getLocale()),
+                    v3: entry.text.length.toLocaleString(getLocale()),
+                  })}
                 </span>
                 <small>
-                  처음 읽은 원문 {entry.origin.sourceRevision} · Run {entry.origin.runId}
+                  {t('settings.flow21', {
+                    v0: entry.origin.sourceRevision,
+                    v1: entry.origin.runId,
+                  })}
                 </small>
                 <details>
-                  <summary>읽은 범위의 본문</summary>
+                  <summary>{t('settings.m267')}</summary>
                   <pre>{entry.text}</pre>
                 </details>
               </li>
@@ -85,9 +106,7 @@ export function LoreContextDiagnostics({
           </ol>
         </details>
       )}
-      <small className="muted">
-        성공한 본문 창작의 자료 읽기만 이어 사용해요. 과거 도구 호출이나 응답을 재실행하지 않아요.
-      </small>
+      <small className="muted">{t('settings.m268')}</small>
     </section>
   );
 }

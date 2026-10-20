@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
@@ -19,6 +20,7 @@ export function BotChatImportDialog({
   onImported: () => Promise<void>;
   onOpenBackups: () => void;
 }) {
+  useI18n();
   const [selection, setSelection] = useState<{
     name: string;
     transcript: ChatTranscript;
@@ -82,11 +84,12 @@ export function BotChatImportDialog({
       setUncertain(false);
       if (fileInput.current) fileInput.current.value = '';
       setMessage(
-        `“${result.chat.title}”을 새 채팅으로 가져왔어요.${result.skippedAttachments.length ? ` 찾을 수 없는 연결 자료 ${result.skippedAttachments.length}개는 제외됐어요.` : ''}`
+        retainedMessage('transfer.transcriptImported', {
+          title: result.chat.title,
+          skipped: result.skippedAttachments.length,
+        })
       );
-      await onImported().catch(() =>
-        setError('가져오기는 완료했어요. 채팅 목록을 새로고침해 주세요.')
-      );
+      await onImported().catch(() => setError(retainedMessage('transfer.m104')));
     } catch (caught) {
       const definite =
         caught instanceof ApiError &&
@@ -94,11 +97,7 @@ export function BotChatImportDialog({
         caught.status < 500 &&
         caught.status !== 408;
       setUncertain(!definite);
-      setError(
-        definite
-          ? caught.message
-          : '결과를 확인하지 못했어요. 같은 요청 확인을 눌러 중복 없이 확인할 수 있어요.'
-      );
+      setError(definite ? caught.message : retainedMessage('transfer.m105'));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -108,7 +107,7 @@ export function BotChatImportDialog({
   return (
     <Dialog
       open
-      title="이 봇으로 본문 가져오기"
+      title={t('transfer.m106')}
       className="bot-chat-import-dialog"
       onClose={() => {
         if (!blocked) onClose();
@@ -118,13 +117,13 @@ export function BotChatImportDialog({
         <ContentAvatar content={bot} />
         <div>
           <strong>{bot.title}</strong>
-          <small>본문을 가져올 봇</small>
+          <small>{t('transfer.m107')}</small>
         </div>
       </div>
-      <section aria-label="본문 가져오기" className="chat-transcript-import">
-        <p className="muted">원문·요청·번역·메모를 새 채팅으로 가져와요.</p>
+      <section aria-label={t('transfer.m108')} className="chat-transcript-import">
+        <p className="muted">{t('transfer.m109')}</p>
         <label>
-          본문 JSON 파일
+          {t('transfer.m110')}
           <input
             ref={fileInput}
             type="file"
@@ -137,36 +136,39 @@ export function BotChatImportDialog({
           <div className="chat-import-review">
             <strong>{selection.transcript.title}</strong>
             <small>
-              {selection.name} · 본문 {selection.transcript.entries.length}개 · 메모{' '}
-              {selection.transcript.notes.length}개
+              {t('transfer.transcriptSummary', {
+                name: selection.name,
+                entries: selection.transcript.entries.length,
+                notes: selection.transcript.notes.length,
+              })}
             </small>
-            <p>“{bot.title}”의 새 채팅으로 가져와요.</p>
+            <p>{t('transfer.transcriptTarget', { title: bot.title })}</p>
             <button type="button" disabled={busy} onClick={() => void restore()}>
-              {busy ? '가져오는 중…' : uncertain ? '같은 요청 확인' : '새 채팅으로 가져오기'}
+              {busy ? t('transfer.m115') : uncertain ? t('transfer.m116') : t('transfer.m117')}
             </button>
           </div>
         )}
         {busy && (
           <LoadingState
             presentation="inline"
-            label={selection ? '채팅 본문을 가져오는 중이에요…' : '파일을 읽고 있어요…'}
+            label={selection ? t('transfer.m118') : t('transfer.m119')}
           />
         )}
-        {message && <NoticeBanner>{message}</NoticeBanner>}
-        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        {message && <NoticeBanner>{translateMessage(message)}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       </section>
       <div className="form-actions">
         <button
           type="button"
           className="ghost"
           disabled={blocked || !!selection}
-          title="데이터 관리에서 채팅 백업 복원"
+          title={t('transfer.m120')}
           onClick={onOpenBackups}
         >
-          채팅 백업 복원
+          {t('transfer.m121')}
         </button>
         <button type="button" className="secondary" disabled={blocked} onClick={onClose}>
-          닫기
+          {t('transfer.m122')}
         </button>
       </div>
     </Dialog>

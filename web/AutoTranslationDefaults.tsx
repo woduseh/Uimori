@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
 import type { AutoTranslationDefaults as Defaults } from '../core/chat-settings.js';
 import { api } from './api.js';
@@ -7,6 +8,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 
 /** Unlike device-only reading preferences, translation jobs use the saved server choice. */
 export function AutoTranslationDefaults() {
+  useI18n();
   const [defaults, setDefaults] = useState<Defaults | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -59,8 +61,8 @@ export function AutoTranslationDefaults() {
         presentation="placeholder"
         loading={loading}
         error={!defaults ? error : ''}
-        label="자동 번역 기본값을 불러오는 중이에요…"
-        errorLabel="자동 번역 기본값을 불러오지 못했어요."
+        label={t('settings.m99')}
+        errorLabel={t('settings.m100')}
         onRetry={() => {
           setLoading(true);
           setReload((value) => value + 1);
@@ -69,15 +71,12 @@ export function AutoTranslationDefaults() {
       {defaults && (
         <label className="settings-row settings-row-toggle">
           <span className="settings-row-copy">
-            <strong>본문 생성 후 자동 번역</strong>
-            <small>
-              채팅별 선택이 없는 경우 새로 생성한 본문을 자동 번역해요. 기존 작업에는 소급 적용하지
-              않으며, 현재 번역 모델을 사용해요.
-            </small>
+            <strong>{t('settings.m85')}</strong>
+            <small>{t('settings.m101')}</small>
           </span>
           <span className="settings-row-control">
             <Switch
-              aria-label="전체 자동 번역 기본값"
+              aria-label={t('settings.m102')}
               checked={defaults.autoTranslate}
               disabled={saving || loading || !!error}
               onChange={(event) => void change(event.target.checked)}
@@ -87,7 +86,7 @@ export function AutoTranslationDefaults() {
       )}
       {defaults && error && (
         <NoticeBanner tone="error">
-          {error}{' '}
+          {translateMessage(error)}{' '}
           <button
             type="button"
             className="link-button"
@@ -97,7 +96,7 @@ export function AutoTranslationDefaults() {
               setReload((value) => value + 1);
             }}
           >
-            다시 불러오기
+            {t('settings.m103')}
           </button>
         </NoticeBanner>
       )}

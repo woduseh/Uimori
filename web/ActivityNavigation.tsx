@@ -1,3 +1,5 @@
+import { t, useI18n, translateMessage, formatDate, formatNumber } from './i18n.js';
+import { activityStatusLabel } from './ActivityStatus.js';
 import {
   AlertCircle,
   Check,
@@ -60,6 +62,7 @@ function ActivitySection({
   children: (limit: number) => ReactNode;
   empty: string;
 }) {
+  useI18n();
   const [expanded, setExpanded] = useState(() => readExpanded(id));
   const [limit, setLimit] = useState(5);
   const contentsId = useId();
@@ -92,7 +95,7 @@ function ActivitySection({
           )}
           <strong>{label}</strong>
         </span>
-        <span>{total}</span>
+        <span>{formatNumber(total)}</span>
       </button>
       <div id={contentsId} hidden={!expanded}>
         {expanded && (total ? children(limit) : <p className="activity-nav-empty">{empty}</p>)}
@@ -103,7 +106,7 @@ function ActivitySection({
             onClick={() => setLimit((current) => Math.min(current + 20, total))}
           >
             <ChevronDown size={14} aria-hidden="true" />
-            {Math.min(20, total - limit)}개 더 보기
+            {t('helpers.m331', { count: formatNumber(Math.min(20, total - limit)) })}
           </button>
         )}
       </div>
@@ -114,10 +117,12 @@ function timeLabel(date: string) {
   const time = Date.parse(date);
   if (!Number.isFinite(time)) return '';
   const elapsed = Date.now() - time;
-  if (elapsed >= 0 && elapsed < 60000) return '방금';
-  if (elapsed >= 0 && elapsed < 3600000) return `${Math.floor(elapsed / 60000)}분 전`;
-  if (elapsed >= 0 && elapsed < 86400000) return `${Math.floor(elapsed / 3600000)}시간 전`;
-  return new Date(time).toLocaleDateString();
+  if (elapsed >= 0 && elapsed < 60000) return t('helpers.m257');
+  if (elapsed >= 0 && elapsed < 3600000)
+    return t('helpers.m258', { v0: Math.floor(elapsed / 60000) });
+  if (elapsed >= 0 && elapsed < 86400000)
+    return t('helpers.m259', { v0: Math.floor(elapsed / 3600000) });
+  return formatDate(new Date(time), { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
 export function ActivityNavigation({
   chats,
@@ -131,6 +136,7 @@ export function ActivityNavigation({
   onOpenHelper,
   onRetry,
 }: Props) {
+  useI18n();
   const names = new Map(library?.contents.map((bot) => [bot.id, bot.title]) ?? []);
   const chatById = new Map(chats.map((chat) => [chat.id, chat]));
   const grouped = new Map<string, ActivityFeedItem[]>();
@@ -147,16 +153,16 @@ export function ActivityNavigation({
   );
   const running = new Map<string, { count: number; kinds: Set<string> }>();
   const labels: Record<string, string> = {
-    main: '본문',
-    translation: '번역',
-    image: '이미지',
-    illustration: '삽화',
+    main: t('helpers.m216'),
+    translation: t('helpers.m217'),
+    image: t('helpers.m218'),
+    illustration: t('helpers.m220'),
   };
   for (const task of feed.running) {
     if (!chatById.has(task.chatId)) continue;
     const info = running.get(task.chatId) ?? { count: 0, kinds: new Set<string>() };
     info.count += task.count;
-    info.kinds.add(labels[task.kind] ?? '작업');
+    info.kinds.add(labels[task.kind] ?? t('helpers.m224'));
     running.set(task.chatId, info);
   }
   // The recent-chat index is for navigation, not an inbox: never exclude busy or unread chats.
@@ -164,8 +170,8 @@ export function ActivityNavigation({
     (a, b) =>
       (b.lastActivityAt ?? '').localeCompare(a.lastActivityAt ?? '') || b.id.localeCompare(a.id)
   );
-  const title = (chat: Chat) => chat.title || '이름 없는 채팅';
-  const botName = (chat: Chat) => names.get(chat.botId) ?? '봇';
+  const title = (chat: Chat) => chat.title || t('helpers.m260');
+  const botName = (chat: Chat) => names.get(chat.botId) ?? t('helpers.m261');
   const openItem = (chatId: string, item: ActivityFeedItem) => {
     onInspect(item);
     onSelect(
@@ -180,12 +186,12 @@ export function ActivityNavigation({
     );
   };
   return (
-    <nav className="activity-navigation" aria-label="채팅 활동">
+    <nav className="activity-navigation" aria-label={t('helpers.m262')}>
       <ActivitySection
         id="unread"
-        label="확인할 활동"
+        label={t('helpers.m263')}
         total={unread.length}
-        empty="확인할 활동이 없어요."
+        empty={t('helpers.m264')}
       >
         {(limit) =>
           unread.slice(0, limit).map(([chatId, items]) => {
@@ -209,8 +215,10 @@ export function ActivityNavigation({
                   <span className="activity-nav-copy">
                     <strong>{title(chat)}</strong>
                     <small>
-                      {botName(chat)} · {relevant.label}
-                      {items.length > 1 ? ` 외 ${items.length - 1}건` : ''}
+                      {botName(chat)} · {activityStatusLabel(relevant)}
+                      {items.length > 1
+                        ? t('helpers.m265', { v0: formatNumber(items.length - 1) })
+                        : ''}
                     </small>
                   </span>
                   <time dateTime={relevant.at}>{timeLabel(relevant.at)}</time>
@@ -219,10 +227,14 @@ export function ActivityNavigation({
                   <button
                     type="button"
                     className="activity-nav-confirm"
-                    aria-label={`${title(chat)} 활동 ${available.length}건 확인`}
+                    aria-label={t('helpers.m266', {
+                      v0: title(chat),
+                      v1: formatNumber(available.length),
+                    })}
                     onClick={() => onAcknowledge(available)}
                   >
-                    <Check size={14} aria-hidden="true" /> 확인
+                    <Check size={14} aria-hidden="true" />
+                    {t('helpers.m267')}
                   </button>
                 )}
               </div>
@@ -232,9 +244,9 @@ export function ActivityNavigation({
       </ActivitySection>
       <ActivitySection
         id="running"
-        label="진행 중"
+        label={t('helpers.m113')}
         total={running.size}
-        empty="진행 중인 작업이 없어요."
+        empty={t('helpers.m268')}
       >
         {(limit) =>
           [...running].slice(0, limit).map(([chatId, info]) => {
@@ -250,7 +262,10 @@ export function ActivityNavigation({
                 <span className="activity-nav-copy">
                   <strong>{title(chat)}</strong>
                   <small>
-                    {[...info.kinds].join(' · ')} {info.count}개 진행 중
+                    {t('helpers.m332', {
+                      kinds: [...info.kinds].join(' · '),
+                      count: formatNumber(info.count),
+                    })}
                   </small>
                 </span>
               </button>
@@ -260,9 +275,9 @@ export function ActivityNavigation({
       </ActivitySection>
       <ActivitySection
         id="recent"
-        label="최근 채팅"
+        label={t('helpers.m270')}
         total={recent.length}
-        empty="최근 채팅이 없어요."
+        empty={t('helpers.m271')}
       >
         {(limit) =>
           recent.slice(0, limit).map((chat) => (
@@ -284,9 +299,9 @@ export function ActivityNavigation({
       </ActivitySection>
       <ActivitySection
         id="helpers"
-        label="최근 도우미 작업"
+        label={t('helpers.m272')}
         total={feed.helpers?.length ?? 0}
-        empty="최근 도우미 작업이 없어요."
+        empty={t('helpers.m273')}
       >
         {(limit) =>
           (feed.helpers ?? []).slice(0, limit).map((task) => (
@@ -305,22 +320,26 @@ export function ActivityNavigation({
                 <AlertCircle size={16} className="activity-nav-warning" aria-hidden="true" />
               )}
               <span className="activity-nav-copy">
-                <strong>{task.title || '도우미 대화'}</strong>
+                <strong>{task.title || t('helpers.m274')}</strong>
                 <small>
-                  {task.chatId ? (chatById.get(task.chatId)?.title ?? '작품 채팅') : '서재 도우미'}{' '}
+                  {task.chatId
+                    ? (chatById.get(task.chatId)?.title ?? t('helpers.m275'))
+                    : t('helpers.m276')}{' '}
                   ·{' '}
                   {task.status === 'running'
-                    ? '진행 중'
+                    ? t('helpers.m113')
                     : task.status === 'queued'
-                      ? '대기 중'
+                      ? t('helpers.m277')
                       : task.status === 'completed'
-                        ? '완료'
+                        ? t('helpers.m278')
                         : task.status === 'failed'
-                          ? '실패'
+                          ? t('helpers.m279')
                           : task.status === 'cancelled'
-                            ? '취소'
-                            : '중단'}
-                  {task.committedEffects > 0 ? ` · 확정된 앱 작업 ${task.committedEffects}건` : ''}
+                            ? t('helpers.m165')
+                            : t('helpers.m280')}
+                  {task.committedEffects > 0
+                    ? t('helpers.m281', { v0: formatNumber(task.committedEffects) })
+                    : ''}
                 </small>
               </span>
               <time dateTime={task.updatedAt}>{timeLabel(task.updatedAt)}</time>
@@ -330,9 +349,9 @@ export function ActivityNavigation({
       </ActivitySection>
       {error && (
         <p className="activity-nav-error" role="alert">
-          {error}{' '}
+          {translateMessage(error)}{' '}
           <button type="button" onClick={onRetry}>
-            다시 시도
+            {t('helpers.m282')}
           </button>
         </p>
       )}

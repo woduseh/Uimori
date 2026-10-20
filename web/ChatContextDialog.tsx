@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { ContextPanel } from './ContextPanel.js';
 import { Dialog } from './Dialog.js';
 import { LastSceneLore } from './LastSceneLore.js';
@@ -21,12 +22,13 @@ export function ChatContextDialog({
   onRefresh: () => Promise<void>;
   onError: (message: string) => void;
 }) {
+  useI18n();
   return (
     <>
-      <Dialog open={mode === 'lore'} title="마지막 장면의 로어" onClose={onClose}>
+      <Dialog open={mode === 'lore'} title={t('settings.m104')} onClose={onClose}>
         <LastSceneLore chatId={chatId} headRevision={headRevision} />
       </Dialog>
-      <Dialog open={mode === 'compact'} title="수동 컨텍스트 압축" onClose={onClose}>
+      <Dialog open={mode === 'compact'} title={t('settings.m105')} onClose={onClose}>
         <ContextPanel
           mode="compact"
           chatId={chatId}

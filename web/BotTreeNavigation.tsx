@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
@@ -63,32 +64,33 @@ export function NavigationQuickActions({
   /** The collapsed rail shows the same two actions as icons. */
   compact?: boolean;
 }) {
+  useI18n();
   return (
     <div className={`navigation-quick-actions${compact ? ' compact' : ''}`}>
       {compact ? (
         <>
-          <IconButton label="새 채팅" icon={AddIcon} onClick={() => onLibrary('bot')} />
-          <IconButton label="전체 채팅 검색" icon={SearchIcon} onClick={onSearch} />
+          <IconButton label={t('transfer.m246')} icon={AddIcon} onClick={() => onLibrary('bot')} />
+          <IconButton label={t('transfer.m276')} icon={SearchIcon} onClick={onSearch} />
         </>
       ) : (
         <>
           <button
             type="button"
             className="nav-button"
-            aria-label="새 채팅"
+            aria-label={t('transfer.m246')}
             onClick={() => onLibrary('bot')}
           >
             <AddIcon size={20} aria-hidden="true" />
-            <span>새 채팅</span>
+            <span>{t('transfer.m246')}</span>
           </button>
           <button
             type="button"
             className="nav-button"
-            aria-label="전체 채팅 검색"
+            aria-label={t('transfer.m276')}
             onClick={onSearch}
           >
             <SearchIcon size={20} aria-hidden="true" />
-            <span>채팅 검색</span>
+            <span>{t('transfer.m248')}</span>
           </button>
         </>
       )}
@@ -107,6 +109,7 @@ export function BotNavigation(
     onToggleCollapse?: () => void;
   }
 ) {
+  useI18n();
   const {
     library,
     chats,
@@ -129,7 +132,8 @@ export function BotNavigation(
   const [runningPicker, setRunningPicker] = useState(false);
   const running = Object.entries(activities).filter(([, item]) => item.count > 0);
   const runningTotal = running.reduce((total, [, item]) => total + item.count, 0);
-  const chatTitle = (id: string) => chats.find((chat) => chat.id === id)?.title ?? '이름 없는 채팅';
+  const chatTitle = (id: string) =>
+    chats.find((chat) => chat.id === id)?.title ?? t('transfer.m277');
   const openRunning = () => {
     const only = running.length === 1 ? running[0] : undefined;
     if (only) {
@@ -140,12 +144,12 @@ export function BotNavigation(
   const runningDialog = (
     <Dialog
       open={runningPicker}
-      title="진행 중인 작업"
+      title={t('transfer.m278')}
       onClose={() => setRunningPicker(false)}
       className="bot-organize-dialog"
     >
-      <p className="muted">작업 현황은 채팅별로 열려요. 확인할 채팅을 골라 주세요.</p>
-      <nav className="bot-search-results" aria-label="진행 중인 채팅">
+      <p className="muted">{t('transfer.m279')}</p>
+      <nav className="bot-search-results" aria-label={t('transfer.m280')}>
         {running.map(([id, item]) => (
           <button
             key={id}
@@ -160,7 +164,7 @@ export function BotNavigation(
             <small>{item.label}</small>
           </button>
         ))}
-        {!running.length && <p>진행 중인 작업이 끝났어요.</p>}
+        {!running.length && <p>{t('transfer.m281')}</p>}
       </nav>
     </Dialog>
   );
@@ -268,7 +272,7 @@ export function BotNavigation(
       setEditing(null);
       return true;
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : '폴더를 저장하지 못했어요.';
+      const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m282');
       setError(message);
       onError(message);
       await onLibraryChanged().catch(() => {});
@@ -411,7 +415,7 @@ export function BotNavigation(
         <div className="sidebar-rail-head">
           <IconButton
             className="sidebar-toggle"
-            label="좌측 패널 펼치기"
+            label={t('transfer.m283')}
             icon={PanelLeftOpen}
             aria-expanded={false}
             aria-controls="workspace-sidebar"
@@ -419,16 +423,16 @@ export function BotNavigation(
           />
         </div>
         <NavigationQuickActions compact onSearch={props.onSearch} onLibrary={onLibrary} />
-        <nav className="sidebar-rail-destinations" aria-label="작업 공간">
+        <nav className="sidebar-rail-destinations" aria-label={t('transfer.m284')}>
           <IconButton
-            label="서재"
+            label={t('transfer.m285')}
             icon={LibraryIcon}
             aria-current={inLibrary && onLibraryTab !== 'prompts' ? 'page' : undefined}
             className={inLibrary && onLibraryTab !== 'prompts' ? 'selected' : ''}
             onClick={() => onLibrary('bot')}
           />
           <IconButton
-            label="프롬프트"
+            label={t('transfer.m286')}
             icon={PromptIcon}
             aria-current={inLibrary && onLibraryTab === 'prompts' ? 'page' : undefined}
             className={inLibrary && onLibraryTab === 'prompts' ? 'selected' : ''}
@@ -436,7 +440,7 @@ export function BotNavigation(
           />
         </nav>
         <IconButton
-          label="봇 탐색"
+          label={t('transfer.m287')}
           icon={MessageCircle}
           onClick={() => {
             setMode('bots');
@@ -444,7 +448,7 @@ export function BotNavigation(
           }}
         />
         <IconButton
-          label={`활동 · 미확인 채팅 ${unreadChats}개`}
+          label={t('transfer.d024', { v0: unreadChats })}
           icon={Inbox}
           onClick={() => {
             setMode('activity');
@@ -452,16 +456,16 @@ export function BotNavigation(
           }}
         />
         <div className="sidebar-rail-spacer" />
-        <nav className="sidebar-app-actions" aria-label="앱 탐색">
+        <nav className="sidebar-app-actions" aria-label={t('transfer.m288')}>
           {runningTotal > 0 && (
             <IconButton
               className="nav-progress"
-              label={`작업 현황 · 전체 채팅에서 진행 중 ${runningTotal}개`}
+              label={t('transfer.d025', { v0: runningTotal })}
               icon={RunningIcon}
               onClick={openRunning}
             />
           )}
-          <IconButton label="설정" icon={SettingsIcon} onClick={onSettings} />
+          <IconButton label={t('transfer.m289')} icon={SettingsIcon} onClick={onSettings} />
         </nav>
         {runningDialog}
       </div>
@@ -476,7 +480,7 @@ export function BotNavigation(
         {props.onToggleCollapse && (
           <IconButton
             className="sidebar-toggle"
-            label="좌측 패널 접기"
+            label={t('transfer.m290')}
             icon={PanelLeftClose}
             aria-expanded
             aria-controls="workspace-sidebar"
@@ -489,7 +493,7 @@ export function BotNavigation(
           <NavigationQuickActions onSearch={props.onSearch} onLibrary={onLibrary} />
         </div>
       )}
-      <nav className="sidebar-destinations" aria-label="작업 공간">
+      <nav className="sidebar-destinations" aria-label={t('transfer.m284')}>
         <button
           type="button"
           className={`nav-button${props.destination === 'library' && props.libraryTab !== 'prompts' ? ' selected' : ''}`}
@@ -499,7 +503,7 @@ export function BotNavigation(
           onClick={() => onLibrary('bot')}
         >
           <LibraryIcon size={20} aria-hidden="true" />
-          서재
+          {t('transfer.m285')}
         </button>
         <button
           type="button"
@@ -510,24 +514,24 @@ export function BotNavigation(
           onClick={() => onLibrary('prompts')}
         >
           <PromptIcon size={20} aria-hidden="true" />
-          프롬프트
+          {t('transfer.m286')}
         </button>
       </nav>
-      <nav className="bot-navigation-modes" aria-label="사이드바 보기 방식">
+      <nav className="bot-navigation-modes" aria-label={t('transfer.m291')}>
         <button
           type="button"
-          aria-label="봇 탐색"
+          aria-label={t('transfer.m287')}
           aria-pressed={view.mode === 'bots'}
-          title="봇 탐색"
+          title={t('transfer.m287')}
           onClick={() => setMode('bots')}
         >
           <MessageCircle size={19} />
         </button>
         <button
           type="button"
-          aria-label={`활동 · 미확인 채팅 ${unreadChats}개`}
+          aria-label={t('transfer.d024', { v0: unreadChats })}
           aria-pressed={view.mode === 'activity'}
-          title="활동"
+          title={t('transfer.m292')}
           onClick={() => setMode('activity')}
         >
           <Inbox size={19} />
@@ -542,18 +546,19 @@ export function BotNavigation(
         >
           <button
             className="bot-folder-toggle"
-            aria-label="봇"
+            aria-label={t('transfer.m005')}
             aria-expanded={!!view.open.section}
             onClick={() => toggle('section')}
           >
-            봇<ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
+            {t('transfer.m005')}
+            <ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
           </button>
           <div className="bot-row-actions">
-            <ActionMenu label="봇 목록 메뉴" viewport>
+            <ActionMenu label={t('transfer.m293')} viewport>
               <label>
-                봇 정렬 기준
+                {t('transfer.m294')}
                 <select
-                  aria-label="봇 정렬 기준"
+                  aria-label={t('transfer.m294')}
                   value={view.sort}
                   onChange={(event) =>
                     setView((current) => ({
@@ -562,8 +567,8 @@ export function BotNavigation(
                     }))
                   }
                 >
-                  <option value="recent">최근 채팅 활동순</option>
-                  <option value="manual">수동 정렬</option>
+                  <option value="recent">{t('transfer.m295')}</option>
+                  <option value="manual">{t('transfer.m296')}</option>
                 </select>
               </label>
               <button
@@ -572,11 +577,12 @@ export function BotNavigation(
                   setEditing('new');
                 }}
               >
-                <FolderAddIcon size={16} />새 봇 폴더
+                <FolderAddIcon size={16} />
+                {t('transfer.m297')}
               </button>
               <button onClick={() => onLibrary('bot')}>
                 <LibraryIcon size={16} />
-                서재에서 관리
+                {t('transfer.m250')}
               </button>
             </ActionMenu>
           </div>
@@ -589,7 +595,7 @@ export function BotNavigation(
             library={library}
             selected={selected}
             feed={activityFeed.feed}
-            error={activityFeed.error}
+            error={translateMessage(activityFeed.error)}
             onSelect={onSelect}
             onAcknowledge={(items) => void activityFeed.acknowledge(items)}
             onInspect={activityFeed.inspect}
@@ -599,7 +605,7 @@ export function BotNavigation(
         )}
         {view.mode === 'bots' && view.open.section && (
           <nav
-            aria-label="봇별 채팅"
+            aria-label={t('transfer.m298')}
             onKeyDown={(event) => {
               if (event.key === 'Escape') clearDrag();
             }}
@@ -623,7 +629,7 @@ export function BotNavigation(
                   >
                     <button
                       className="bot-folder-toggle"
-                      aria-label={`${entry.title} 봇 폴더`}
+                      aria-label={t('transfer.d026', { v0: entry.title })}
                       aria-expanded={!!view.open[entry.key]}
                       onClick={() => toggle(entry.key)}
                     >
@@ -632,7 +638,7 @@ export function BotNavigation(
                       <span>{entry.title}</span>
                     </button>
                     <div className="bot-row-actions">
-                      <ActionMenu label={`${entry.title} 봇 폴더 메뉴`} viewport>
+                      <ActionMenu label={t('transfer.d027', { v0: entry.title })} viewport>
                         <button
                           onClick={() => {
                             setEditing(entry.folder!);
@@ -640,7 +646,7 @@ export function BotNavigation(
                           }}
                         >
                           <EditIcon size={18} aria-hidden="true" />
-                          폴더 이름 변경
+                          {t('transfer.m299')}
                         </button>
                         <button
                           disabled={busy}
@@ -648,7 +654,7 @@ export function BotNavigation(
                             void mutate(`/library/folders/${entry.folder!.id}`, {}, 'DELETE')
                           }
                         >
-                          폴더 해제 · 봇 유지
+                          {t('transfer.m300')}
                         </button>
                       </ActionMenu>
                     </div>
@@ -669,18 +675,18 @@ export function BotNavigation(
                 onDragOver={(event) => overEntry(event, 'unfiled')}
                 onDrop={(event) => void dropEntry(event, null)}
               >
-                미분류로 이동
+                {t('transfer.m301')}
               </div>
             )}
             {!bots.length &&
               (library ? (
-                <p className="bot-navigation-empty">서재에서 새 채팅을 시작해 보세요.</p>
+                <p className="bot-navigation-empty">{t('transfer.m302')}</p>
               ) : (
                 <LoadingState
                   presentation="inline"
                   loading={!props.libraryError}
-                  error={props.libraryError}
-                  label="봇을 불러오는 중이에요…"
+                  error={props.libraryError ? translateMessage(props.libraryError) : undefined}
+                  label={t('transfer.m303')}
                   onRetry={() => void onLibraryChanged().catch(() => {})}
                 />
               ))}
@@ -688,13 +694,13 @@ export function BotNavigation(
         )}
         {view.mode === 'bots' && error && (
           <p className="error" role="alert">
-            {error}
+            {translateMessage(error)}
           </p>
         )}
       </div>
       <Dialog
         open={editing !== null}
-        title={editing === 'new' ? '봇 폴더 만들기' : '봇 폴더 이름 변경'}
+        title={editing === 'new' ? t('transfer.m304') : t('transfer.m305')}
         onClose={() => !busy && setEditing(null)}
       >
         <form
@@ -712,22 +718,22 @@ export function BotNavigation(
           }}
         >
           <label>
-            봇 폴더 이름
+            {t('transfer.m306')}
             <input
-              aria-label="봇 폴더 이름"
+              aria-label={t('transfer.m306')}
               required
               maxLength={200}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          <small>서재에도 반영돼요. 채팅이 있는 봇을 넣으면 사이드바에 표시돼요.</small>
+          <small>{t('transfer.m307')}</small>
           {error && (
             <p className="error" role="alert">
-              {error}
+              {translateMessage(error)}
             </p>
           )}
-          <button disabled={busy || !title.trim()}>저장</button>
+          <button disabled={busy || !title.trim()}>{t('transfer.m308')}</button>
         </form>
       </Dialog>
       {runningDialog}
@@ -735,17 +741,17 @@ export function BotNavigation(
         {runningTotal > 0 && (
           <button
             className="nav-button nav-progress"
-            aria-label={`작업 현황 · 전체 채팅에서 진행 중 ${runningTotal}개`}
+            aria-label={t('transfer.d025', { v0: runningTotal })}
             onClick={openRunning}
           >
             <RunningIcon size={17} />
-            진행 중 {runningTotal}
+            {t('transfer.runningCount', { count: runningTotal })}
           </button>
         )}
-        <nav className="sidebar-app-actions" aria-label="앱 탐색">
+        <nav className="sidebar-app-actions" aria-label={t('transfer.m288')}>
           <button type="button" className="nav-button" onClick={onSettings}>
             <SettingsIcon size={18} />
-            설정
+            {t('transfer.m289')}
           </button>
         </nav>
       </div>

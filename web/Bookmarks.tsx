@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { BookmarkPlus, Pencil } from 'lucide-react';
@@ -30,6 +31,7 @@ function BookmarkEditor({
   onSaved: (value: Bookmark) => void;
   onClose: () => void;
 }) {
+  useI18n();
   const [title, setTitle] = useState(item.title);
   const [note, setNote] = useState(item.note);
   const [busy, setBusy] = useState(false);
@@ -49,7 +51,7 @@ function BookmarkEditor({
     setBusy(true);
     setError('');
     try {
-      if (!title.trim()) throw new Error('책갈피 이름을 입력해 주세요.');
+      if (!title.trim()) throw new Error(uiMessage('reader.enterABookmarkName'));
       onSaved(
         await api<Bookmark>(
           `/bookmarks/${item.id}`,
@@ -74,17 +76,17 @@ function BookmarkEditor({
       {/* Close the nested confirmation first on unmount, then restore the editor opener. */}
       <Dialog
         open={discard}
-        title="미저장 책갈피 확인"
+        title={t('reader.unsavedBookmarkEdits')}
         variant="confirmation"
         role="alertdialog"
         onClose={continueEditing}
       >
-        <p>닫으면 저장하지 않은 책갈피 편집 내용이 사라져요.</p>
+        <p>{t('reader.closingDiscardsUnsavedBookmarkEdits')}</p>
         <DraftDiscardActions
           open={discard}
           disabled={busy}
-          discardLabel="수정 버리고 닫기"
-          saveLabel="저장하고 닫기"
+          discardLabel={t('reader.discardEditsAndClose')}
+          saveLabel={t('reader.saveAndClose')}
           onContinue={continueEditing}
           onDiscard={() => {
             if (!lock.current) onClose();
@@ -92,7 +94,7 @@ function BookmarkEditor({
           onSave={save}
         />
       </Dialog>
-      <Dialog open title="책갈피 편집" onClose={close} className="bookmark-dialog">
+      <Dialog open title={t('reader.editBookmark')} onClose={close} className="bookmark-dialog">
         <form
           onSubmit={async (event) => {
             event.preventDefault();
@@ -105,7 +107,7 @@ function BookmarkEditor({
         >
           <fieldset disabled={busy}>
             <label>
-              책갈피 이름
+              {t('reader.bookmarkName')}
               <input
                 value={title}
                 maxLength={200}
@@ -113,7 +115,7 @@ function BookmarkEditor({
               />
             </label>
             <label>
-              책갈피 메모
+              {t('reader.bookmarkNote')}
               <textarea
                 value={note}
                 maxLength={4000}
@@ -122,12 +124,12 @@ function BookmarkEditor({
               />
             </label>
             <button type="submit" disabled={!title.trim() || !dirty}>
-              {busy ? '저장 중…' : '책갈피 변경 저장'}
+              {busy ? t('reader.saving') : t('reader.saveBookmarkChanges')}
             </button>
           </fieldset>
           {error && (
             <p role="alert" className="error">
-              {error}
+              {translateMessage(error)}
             </p>
           )}
         </form>
@@ -145,6 +147,7 @@ export function BookmarkButton({
   title: string;
   disabled?: boolean;
 }) {
+  useI18n();
   const [saved, setSaved] = useState<Bookmark | null>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -186,7 +189,7 @@ export function BookmarkButton({
   return (
     <>
       <IconButton
-        label={saved ? '책갈피 추가됨 · 메모 편집' : '책갈피 추가'}
+        label={saved ? t('reader.bookmarkAddedEditNote') : t('reader.addBookmark')}
         icon={BookmarkPlus}
         size={18}
         className="scene-action"
@@ -195,7 +198,7 @@ export function BookmarkButton({
       />
       {error && (
         <span role="alert" className="error">
-          {error}
+          {translateMessage(error)}
         </span>
       )}
       {saved && editing && (
@@ -219,6 +222,7 @@ export function BookmarkList({
   chatId: string;
   onNavigate: (target: ReaderTarget) => void;
 }) {
+  useI18n();
   const [items, setItems] = useState<Bookmark[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -243,16 +247,14 @@ export function BookmarkList({
     return () => controller.abort();
   }, [chatId, revision]);
   return (
-    <section className="bookmark-list" aria-label="이 채팅의 책갈피">
+    <section className="bookmark-list" aria-label={t('reader.bookmarksInThisChat')}>
       {!loaded && !error && (
-        <LoadingState presentation="inline" label="책갈피를 불러오는 중이에요…" />
+        <LoadingState presentation="inline" label={t('reader.loadingBookmarks')} />
       )}
-      {loaded && !items.length && (
-        <p>아직 책갈피가 없어요. 장면 아래에서 책갈피를 추가할 수 있어요.</p>
-      )}
+      {loaded && !items.length && <p>{t('reader.noBookmarksYetAddOneBelowAScene')}</p>}
       {error && (
         <p role="alert" className="error">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
       {items.map((item) => (
@@ -260,20 +262,24 @@ export function BookmarkList({
           <button type="button" className="bookmark-title" onClick={() => onNavigate(item.target)}>
             {item.title}
           </button>
-          <small>{item.target.representation === 'translation' ? '번역' : '원문'}</small>
+          <small>
+            {item.target.representation === 'translation'
+              ? t('reader.translation')
+              : t('reader.original')}
+          </small>
           {item.quote && <blockquote>{item.quote}</blockquote>}
           {item.note && <p>{item.note}</p>}
           <div>
             <IconButton
-              label={`${item.title} 책갈피 편집`}
+              label={t('reader.editValueBookmark', { v0: item.title })}
               icon={Pencil}
               onClick={() => setEditing(item)}
             />
             <DeleteButton
               path={`/bookmarks/${item.id}`}
               revision={item.revision}
-              title={`${item.title} 책갈피`}
-              description="책갈피만 삭제해요. 원고는 유지돼요."
+              title={t('reader.valueBookmark', { v0: item.title })}
+              description={t('reader.onlyTheBookmarkIsDeletedTheManuscriptIsPreserved')}
               iconOnly
               onDeleted={() => setItems((old) => old.filter((value) => value.id !== item.id))}
             />
@@ -281,7 +287,7 @@ export function BookmarkList({
         </article>
       ))}
       <button type="button" onClick={() => setRevision((value) => value + 1)}>
-        책갈피 새로 고침
+        {t('reader.refreshBookmarks')}
       </button>
       {editing && (
         <BookmarkEditor

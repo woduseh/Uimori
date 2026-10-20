@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage, messageRef } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import { ListRestart } from 'lucide-react';
 import type { Content } from '../core/product.js';
@@ -41,6 +42,7 @@ export function PackageStartPicker({
   onError: (message: string) => void;
   onChanged?: () => void;
 }) {
+  useI18n();
   const [content, setContent] = useState<Content | null>(null);
   const [readError, setReadError] = useState('');
   const [readAttempt, setReadAttempt] = useState(0);
@@ -120,7 +122,9 @@ export function PackageStartPicker({
             ?.focus({ preventScroll: true });
         });
       } catch (cause) {
-        onError('시작문은 바꿨지만 화면을 갱신하지 못했어요. ' + (cause as Error).message);
+        onError(
+          uiMessage('library.openingRefreshError', { error: messageRef((cause as Error).message) })
+        );
       }
     } catch (cause) {
       if (!mounted.current) return;
@@ -130,7 +134,7 @@ export function PackageStartPicker({
         setError((cause as Error).message);
       } else {
         setUncertain(true);
-        setError('변경 결과를 확인하지 못했어요. 같은 선택의 결과를 다시 확인해 주세요.');
+        setError(uiMessage('library.couldNotConfirmTheResultCheckThe'));
       }
     } finally {
       submitting.current = false;
@@ -143,19 +147,19 @@ export function PackageStartPicker({
       onClose={() => {
         if (!submitting.current) onClose();
       }}
-      title="시작문 바꾸기"
+      title={t('library.changeOpening')}
     >
       {!content || readError ? (
         <LoadingState
-          label="시작문을 불러오는 중이에요…"
+          label={t('library.loadingOpenings')}
           error={readError}
-          errorLabel="시작문을 불러오지 못했어요."
+          errorLabel={t('library.couldNotLoadOpenings')}
           onRetry={() => setReadAttempt((value) => value + 1)}
         />
       ) : (
         <>
           <label>
-            첫 메시지 선택
+            {t('library.chooseFirstMessage')}
             <select
               value={selected}
               disabled={busy || uncertain || disabled}
@@ -177,9 +181,12 @@ export function PackageStartPicker({
             className="package-start-preview"
             onToggle={(event) => setExpanded(event.currentTarget.open)}
           >
-            <summary>미리보기</summary>
+            <summary>{t('library.preview')}</summary>
             {expanded && (
-              <div className="package-start-preview-body" aria-label="첫 메시지 전체 미리보기">
+              <div
+                className="package-start-preview-body"
+                aria-label={t('library.fullFirstMessagePreview')}
+              >
                 <RisuStartPreview
                   content={content}
                   startId={selected}
@@ -188,18 +195,18 @@ export function PackageStartPicker({
               </div>
             )}
           </details>
-          <p className="muted">이 채팅의 첫 메시지를 바꿔요. 작성 중인 입력은 그대로 유지해요.</p>
+          <p className="muted">{t('library.changesThisChatSFirstMessageYour')}</p>
         </>
       )}
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       <div className="form-actions">
         <button type="button" className="secondary" disabled={busy} onClick={onClose}>
-          취소
+          {t('library.cancel')}
         </button>
         <SaveButton
           type="button"
-          label={uncertain ? '시작문 변경 결과 확인' : '시작문 바꾸기'}
-          text={uncertain ? '결과 확인' : '바꾸기'}
+          label={uncertain ? t('library.checkOpeningChangeResult') : t('library.changeOpening')}
+          text={uncertain ? t('library.checkResult') : t('library.change')}
           icon={ListRestart}
           aria-busy={busy}
           disabled={

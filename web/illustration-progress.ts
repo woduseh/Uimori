@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import type { Illustration } from '../core/illustration.js';
 import { illustrationSkipped } from './illustration-labels.js';
 
@@ -25,9 +26,15 @@ export function cutsFor(items: Illustration[], sourceHash: string): Cut[] {
 }
 
 export const illustrationTaskNames = {
-  plan: '장면 선택',
-  render: '그림 생성',
-  placement: '번역 위치 연결',
+  get plan() {
+    return t('visuals.m247');
+  },
+  get render() {
+    return t('visuals.m248');
+  },
+  get placement() {
+    return t('visuals.m249');
+  },
 };
 
 /** A render retry is still one cut. Planning and translation alignment never count as pictures. */
@@ -55,19 +62,22 @@ export function illustrationProgress(items: Illustration[]) {
     phases.push({
       task: 'plan',
       status: plan.status,
-      detail: illustrationSkipped(plan) ? `생략 · ${plan.diagnostic?.skipped}` : '',
+      detail: illustrationSkipped(plan)
+        ? t('visuals.m250', { v0: plan.diagnostic?.skipped ?? '' })
+        : '',
     });
   if (renders.length)
     phases.push({
       task: 'render',
       status: renderStatus,
-      detail: `${completed}/${renders.length}컷 완료${failed ? ` · ${failed}컷 실패` : ''}`,
+      detail: t('visuals.progressRender', { completed, total: renders.length, failed }),
     });
   if (placement)
     phases.push({
       task: 'placement',
       status: placement.status,
-      detail: placement.status === 'completed' && unresolved ? `${unresolved}컷 위치 미지정` : '',
+      detail:
+        placement.status === 'completed' && unresolved ? t('visuals.m252', { v0: unresolved }) : '',
     });
   const active = phases.find((phase) => ['queued', 'running'].includes(phase.status));
   const issue = phases.find((phase) =>
@@ -76,12 +86,15 @@ export function illustrationProgress(items: Illustration[]) {
   const status = active?.status ?? issue?.status ?? (unresolved ? 'partial' : 'completed');
   const summary = active
     ? active.task === 'render'
-      ? `삽화 ${active.status === 'queued' ? '생성 대기' : '생성 중'} · ${completed}/${renders.length}컷 완료`
-      : `${illustrationTaskNames[active.task]} ${active.status === 'queued' ? '대기' : '중'}`
+      ? t('visuals.activeRender', { status: active.status, completed, total: renders.length })
+      : t('visuals.phaseStatus', {
+          task: illustrationTaskNames[active.task],
+          status: active.status,
+        })
     : issue
-      ? `${illustrationTaskNames[issue.task]} ${issue.status === 'cancelled' ? '취소됨' : '실패'}`
+      ? t('visuals.phaseStatus', { task: illustrationTaskNames[issue.task], status: issue.status })
       : unresolved
-        ? `삽화 ${unresolved}컷 번역 위치 미지정`
-        : '삽화 완료';
+        ? t('visuals.m258', { v0: unresolved })
+        : t('visuals.m259');
   return { phases, status, summary, unresolved };
 }

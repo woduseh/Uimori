@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { useState, type ReactNode } from 'react';
 import type { Job, ReaderRun, Run } from '../core/types.js';
 import { api, labels } from './api.js';
@@ -15,6 +16,7 @@ import './run-task-details.css';
  * are summed from the run's own frozen resources rather than counted again.
  */
 function LoreSelectionStatus({ snapshot }: { snapshot: Run['snapshot'] }) {
+  useI18n();
   const receipt = snapshot.loreSelection;
   if (!receipt?.entries.length) return null;
   const chars = (key: string, ids: string[]) => {
@@ -27,12 +29,17 @@ function LoreSelectionStatus({ snapshot }: { snapshot: Run['snapshot'] }) {
     );
   };
   return (
-    <ul className="muted" aria-label="로어 선별 결과">
+    <ul className="muted" aria-label={t('visuals.m273')}>
       {receipt.entries.map((entry) => (
         <li key={entry.key}>
           {entry.error
-            ? `로어 선별을 건너뛰었어요 (${entry.error})`
-            : `로어 선별 · ${entry.selected.length}개 선택 · 문자 ${chars(entry.key, entry.selected).toLocaleString()} / 예산 ${entry.budget.toLocaleString()} · 제외 ${entry.omitted.length}`}
+            ? t('visuals.m274', { v0: entry.error })
+            : t('visuals.m275', {
+                v0: entry.selected.length,
+                v1: formatNumber(chars(entry.key, entry.selected)),
+                v2: formatNumber(entry.budget),
+                v3: entry.omitted.length,
+              })}
         </li>
       ))}
     </ul>
@@ -62,6 +69,7 @@ export function RunTaskDetails({
   initiallyInspect?: boolean;
   presentation?: 'detail' | 'list';
 }) {
+  useI18n();
   const [cancelling, setCancelling] = useState(false);
   const [copiedOutput, setCopiedOutput] = useState(false);
   const authored = run.packageStart?.mode === 'authored';
@@ -72,8 +80,8 @@ export function RunTaskDetails({
       {!authored && (
         <>
           <div className="task-heading">
-            <strong>{`원문 ${labels[run.status]}`}</strong>
-            <small>{run.modelTitle || 'Scripted mock · 모의 생성'}</small>
+            <strong>{t('visuals.m276', { v0: translateMessage(labels[run.status]) })}</strong>
+            <small>{run.modelTitle || t('visuals.m277')}</small>
           </div>
           {(!compact || run.contextSummary?.status !== 'ready') && (
             <ContextSummaryStatus summary={run.contextSummary} />
@@ -83,14 +91,10 @@ export function RunTaskDetails({
               run.contextSummary?.status === 'failed' && run.contextSummary.error === run.error
             ) && <p className="error">{mainJudgmentError(run.error) ?? run.error}</p>}
           {run.rejection && <ProviderRejectionNotice rejection={run.rejection} />}
-          {run.status === 'refused' && (
-            <p className="error">
-              요청에 대한 생성이 거절됐어요. 대체 원고를 자동 생성하지 않았어요.
-            </p>
-          )}
+          {run.status === 'refused' && <p className="error">{t('visuals.m278')}</p>}
           {!canCancel && run.partialText && (
             <details className="partial-result">
-              <summary>보관된 응답 · 장면 본문에 반영되지 않음</summary>
+              <summary>{t('visuals.m279')}</summary>
               <div className="form-actions">
                 <button
                   type="button"
@@ -101,11 +105,11 @@ export function RunTaskDetails({
                       await navigator.clipboard.writeText(run.partialText!);
                       setCopiedOutput(true);
                     } catch {
-                      onError('출력을 복사하지 못했어요. 아래 글을 직접 선택해 복사해 주세요.');
+                      onError(uiMessage('visuals.m280'));
                     }
                   }}
                 >
-                  {copiedOutput ? '출력 복사됨' : '출력 복사'}
+                  {copiedOutput ? t('visuals.m281') : t('visuals.m282')}
                 </button>
               </div>
               <pre>{run.partialText}</pre>
@@ -131,7 +135,7 @@ export function RunTaskDetails({
                   }
                 }}
               >
-                원문 생성 취소
+                {t('visuals.m283')}
               </button>
             </div>
           )}
@@ -154,7 +158,14 @@ export function RunTaskDetails({
               key={job.id}
               path={`/jobs/${job.id}`}
               revision={revision}
-              title={`${{ translation: '번역', image: '이미지', status: '이전 보조 작업' }[job.kind]} · ${labels[job.status]} · 작업 관리`}
+              title={t('visuals.m284', {
+                v0: {
+                  translation: t('visuals.translation'),
+                  image: t('visuals.image'),
+                  status: t('visuals.legacyJob'),
+                }[job.kind],
+                v1: translateMessage(labels[job.status]),
+              })}
             >
               {(full) => <JobCard job={full} refresh={refresh} onError={onError} hideText />}
             </LazyDiagnostics>
@@ -168,7 +179,7 @@ export function RunTaskDetails({
             path={`/runs/${run.id}`}
             revision={revision}
             initiallyOpen={initiallyInspect}
-            title="실행과 실제 입력 확인"
+            title={t('visuals.m285')}
           >
             {(full) => (
               <>
@@ -176,9 +187,22 @@ export function RunTaskDetails({
                   <ContextSummaryStatus summary={run.contextSummary} />
                 )}
                 <p>
-                  Run {full.id} · 실행 요청 {full.usage.modelCalls}회 · 입력{' '}
-                  {full.usage.inputTokens ?? '미확인'} / 출력 {full.usage.outputTokens ?? '미확인'}{' '}
-                  토큰 · 비용 {full.usage.costUsd === null ? '미확인' : `$${full.usage.costUsd}`}
+                  {t('visuals.runUsage', {
+                    id: full.id,
+                    calls: formatNumber(full.usage.modelCalls),
+                    input:
+                      full.usage.inputTokens == null
+                        ? t('visuals.m165')
+                        : formatNumber(full.usage.inputTokens),
+                    output:
+                      full.usage.outputTokens == null
+                        ? t('visuals.m165')
+                        : formatNumber(full.usage.outputTokens),
+                    cost:
+                      full.usage.costUsd == null
+                        ? t('visuals.m165')
+                        : formatNumber(full.usage.costUsd, { style: 'currency', currency: 'USD' }),
+                  })}
                 </p>
                 <LoreContextDiagnostics
                   snapshot={full.snapshot.loreContext}

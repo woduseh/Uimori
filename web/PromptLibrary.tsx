@@ -1,3 +1,4 @@
+import { useI18n, registerMessage, message as uiMessage, messageRef } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { MessageCircle } from 'lucide-react';
 import { LoadingState } from './LoadingState.js';
@@ -22,7 +23,7 @@ import type { Library, PromptPreset, PromptPresetSummary, PromptRole } from '../
 import type { ResourceSaveResult } from '../core/resource-editing.js';
 import type { LibraryItemKey, LibraryOrganization } from '../core/library-organization.js';
 import { libraryFolderOf } from '../core/library-organization.js';
-import { api } from './api.js';
+import { api, ApiError } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { PromptEditor } from './PromptEditor.js';
@@ -95,6 +96,7 @@ export function PromptLibrary({
   /** Bumped when the navigation entry is chosen, so an open editor returns to the list. */
   listRequest?: number;
 }) {
+  const { t, locale } = useI18n();
   const [folder, setFolder] = useState<FolderFilter>('all');
   const [query, setQuery] = useState('');
   const [role, setRole] = useState<'all' | PromptRole>('all');
@@ -135,7 +137,7 @@ export function PromptLibrary({
           onInitialPresetHandled?.();
         });
     else {
-      onError('선택한 프롬프트를 찾을 수 없어요.');
+      onError(uiMessage('prompts.uiSelectedPromptNotFound'));
       onInitialPresetHandled?.();
     }
   }, [initialPresetId, library, onError, onInitialPresetHandled]);
@@ -214,12 +216,12 @@ export function PromptLibrary({
     })
     .sort((a, b) => {
       if (sort !== 'manual')
-        return (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko');
+        return (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, locale);
       const aIndex = manualOrder.indexOf(a.id);
       const bIndex = manualOrder.indexOf(b.id);
       return (
         (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
-          (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) || a.title.localeCompare(b.title, 'ko')
+          (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) || a.title.localeCompare(b.title, locale)
       );
     });
   const folders =
@@ -236,7 +238,7 @@ export function PromptLibrary({
       ...manualOrder.filter((itemId) => available.has(itemId)),
       ...presets
         .filter((item) => !manualOrder.includes(item.id))
-        .sort((a, b) => a.title.localeCompare(b.title, 'ko'))
+        .sort((a, b) => a.title.localeCompare(b.title, locale))
         .map((item) => item.id),
     ].filter((itemId) => itemId !== id);
     const index = beforeId === null ? ordered.length : ordered.indexOf(beforeId);
@@ -342,7 +344,7 @@ export function PromptLibrary({
       'POST',
       current.revision
     );
-    if (!placed) throw new Error('폴더 배치를 완료하지 못했어요.');
+    if (!placed) throw new Error(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
   }
   async function clone(item: PromptPresetSummary) {
     if (mutation.current) return;
@@ -356,22 +358,37 @@ export function PromptLibrary({
         title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
       });
       const copy = result.saved as PromptPreset;
-      const warnings: string[] = [];
+      const warnings: (() => string)[] = [];
       try {
         await placeCreated(copy, true);
       } catch (error) {
-        warnings.push(
-          `프롬프트는 복제됐어요. 폴더에 배치하지 못했어요. ${(error as Error).message}`
+        warnings.push(() =>
+          t('prompts.clonedPlacement', {
+            error:
+              error instanceof ApiError
+                ? error.displayMessage
+                : messageRef((error as Error).message),
+          })
         );
       }
       try {
         await reload();
       } catch (error) {
-        warnings.push(
-          `프롬프트는 복제됐어요. 목록을 다시 불러오지 못했어요. ${(error as Error).message}`
+        warnings.push(() =>
+          t('prompts.clonedReload', {
+            error:
+              error instanceof ApiError
+                ? error.displayMessage
+                : messageRef((error as Error).message),
+          })
         );
       }
-      if (warnings.length) onError(warnings.join('\n'));
+      if (warnings.length) {
+        const renderWarnings = () => warnings.map((render) => render()).join('\n');
+        const warning = renderWarnings();
+        registerMessage(warning, renderWarnings);
+        onError(warning);
+      }
     } catch (error) {
       onError((error as Error).message);
     } finally {
@@ -395,14 +412,30 @@ export function PromptLibrary({
       try {
         await placeCreated(created, true);
       } catch (error) {
-        onError(`프롬프트는 추가됐어요. 폴더에 배치하지 못했어요. ${(error as Error).message}`);
+        const renderWarning = () =>
+          t('prompts.addedPlacement', {
+            error:
+              error instanceof ApiError
+                ? error.displayMessage
+                : messageRef((error as Error).message),
+          });
+        const warning = renderWarning();
+        registerMessage(warning, renderWarning);
+        onError(warning);
       }
       try {
         await reload();
       } catch (error) {
-        onError(
-          `프롬프트는 추가됐어요. 목록을 다시 불러오지 못했어요. ${(error as Error).message}`
-        );
+        const renderWarning = () =>
+          t('prompts.addedReload', {
+            error:
+              error instanceof ApiError
+                ? error.displayMessage
+                : messageRef((error as Error).message),
+          });
+        const warning = renderWarning();
+        registerMessage(warning, renderWarning);
+        onError(warning);
       }
       return created;
     } finally {
@@ -413,12 +446,12 @@ export function PromptLibrary({
   return (
     <section
       className={`library-page prompt-library${editing ? ' library-page-editing' : ''}`}
-      aria-label="프롬프트 관리"
+      aria-label={t('prompts.uiManagePrompts')}
       data-testid="prompt-library"
     >
       <header className="library-heading" hidden={!!editing}>
         {headerLeading}
-        <h1>프롬프트</h1>
+        <h1>{t('prompts.uiPrompts')}</h1>
         {headerTrailing}
       </header>
       <PromptTemplatesDialog
@@ -435,14 +468,14 @@ export function PromptLibrary({
       />
       <Dialog
         open={discard}
-        title="미저장 프롬프트 확인"
+        title={t('prompts.uiUnsavedPrompt')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!savingNavigation) setDiscard(false);
         }}
       >
-        <p>이동하면 저장하지 않은 프롬프트 편집 내용이 사라져요.</p>
+        <p>{t('prompts.uiLeavingWillDiscardUnsavedPromptEdits')}</p>
         <ResourceEditorLeaveWarning />
         <DraftDiscardActions
           open={discard}
@@ -466,7 +499,7 @@ export function PromptLibrary({
               onError((error as Error).message);
             }
           }}
-          discardLabel="초안 버리고 이동"
+          discardLabel={t('prompts.uiDiscardDraftAndLeave')}
         />
       </Dialog>
       <LibraryMoveDialog
@@ -481,7 +514,7 @@ export function PromptLibrary({
         }}
       />
       {!library ? (
-        <LoadingState presentation="region" label="프롬프트를 불러오는 중이에요…" />
+        <LoadingState presentation="region" label={t('prompts.uiLoadingPrompts')} />
       ) : editing ? (
         <div className="library-prompt-editor">
           <PromptEditor
@@ -490,12 +523,12 @@ export function PromptLibrary({
                 {headerLeading}
                 <IconButton
                   className="secondary"
-                  label="프롬프트 목록"
+                  label={t('prompts.uiPromptList')}
                   icon={BackIcon}
                   onClick={close}
                 />
                 <h2 ref={editorHeading} tabIndex={-1}>
-                  {editing.preset?.title ?? '새 프롬프트'}
+                  {editing.preset?.title ?? t('prompts.uiNewPrompt')}
                 </h2>
               </>
             }
@@ -534,27 +567,33 @@ export function PromptLibrary({
                 />
               )}
               {selecting ? (
-                <div className="library-bulk-toolbar" role="group" aria-label="프롬프트 선택 작업">
-                  <span role="status">{selection.length}개 선택</span>
+                <div
+                  className="library-bulk-toolbar"
+                  role="group"
+                  aria-label={t('prompts.uiPromptSelectionActions')}
+                >
+                  <span role="status">
+                    {t('prompts.selectedCount', { count: selection.length })}
+                  </span>
                   <button
                     type="button"
                     className="secondary"
-                    aria-label="표시된 프롬프트 전체 선택"
+                    aria-label={t('prompts.uiSelectAllDisplayedPrompts')}
                     onClick={() => setSelection(filtered.map((item) => item.id))}
                   >
                     <SelectIcon size={18} aria-hidden="true" />
-                    <span>전체 선택</span>
+                    <span>{t('prompts.uiSelectAll')}</span>
                   </button>
                   <button
                     type="button"
-                    aria-label="선택한 프롬프트 이동"
+                    aria-label={t('prompts.uiMoveSelectedPrompts')}
                     disabled={!selection.length || organizer.busy}
                     onClick={() =>
                       setMoving(selection.map((id) => ({ kind: 'prompt-preset', id })))
                     }
                   >
                     <MoveIcon size={18} aria-hidden="true" />
-                    <span>이동</span>
+                    <span>{t('prompts.uiMove')}</span>
                   </button>
                   <button
                     type="button"
@@ -564,7 +603,7 @@ export function PromptLibrary({
                       setSelection([]);
                     }}
                   >
-                    완료
+                    {t('prompts.uiDone')}
                   </button>
                 </div>
               ) : (
@@ -572,43 +611,43 @@ export function PromptLibrary({
                   <>
                     <label className="library-search-field">
                       <SearchIcon size={20} aria-hidden="true" />
-                      <span className="sr-only">프롬프트 검색</span>
+                      <span className="sr-only">{t('prompts.uiSearchPrompts')}</span>
                       <input
                         type="search"
-                        aria-label="프롬프트 검색"
-                        placeholder="이름으로 찾기"
+                        aria-label={t('prompts.uiSearchPrompts')}
+                        placeholder={t('prompts.uiSearchByName')}
                         value={query}
                         onChange={(event) => setQuery(event.target.value)}
                       />
                     </label>
                     <LibraryItemMenu
-                      title="목록 관리"
+                      title={t('prompts.uiManageList')}
                       className="library-list-options"
                       icon={OptionsIcon}
                     >
                       <div className="library-list-options-body">
                         <label>
-                          역할
+                          {t('prompts.uiRole')}
                           <select
-                            aria-label="프롬프트 역할 필터"
+                            aria-label={t('prompts.uiFilterPromptRoles')}
                             value={role}
                             onChange={(event) => setRole(event.target.value as typeof role)}
                           >
-                            <option value="all">모든 역할</option>
-                            <option value="main">작문</option>
-                            <option value="translation">번역</option>
+                            <option value="all">{t('prompts.uiAllRoles')}</option>
+                            <option value="main">{t('prompts.uiWriting')}</option>
+                            <option value="translation">{t('prompts.uiTranslation')}</option>
                           </select>
                         </label>
                         <label>
-                          정렬
+                          {t('prompts.uiSort')}
                           <select
-                            aria-label="프롬프트 정렬"
+                            aria-label={t('prompts.uiSortPrompts')}
                             value={sort}
                             onChange={(event) => changeSort(event.target.value as PromptSort)}
                           >
-                            <option value="name">이름순</option>
-                            <option value="name-desc">이름 역순</option>
-                            <option value="manual">수동 정렬</option>
+                            <option value="name">{t('prompts.uiNameAscending')}</option>
+                            <option value="name-desc">{t('prompts.uiNameDescending')}</option>
+                            <option value="manual">{t('prompts.uiManualOrder')}</option>
                           </select>
                         </label>
                         <button
@@ -620,7 +659,7 @@ export function PromptLibrary({
                           }}
                         >
                           <SelectIcon size={18} aria-hidden="true" />
-                          선택
+                          {t('prompts.uiSelect')}
                         </button>
                       </div>
                     </LibraryItemMenu>
@@ -640,8 +679,8 @@ export function PromptLibrary({
                   <button
                     type="button"
                     className="secondary prompt-settings-link ui-icon-button"
-                    aria-label="현재 프롬프트 설정"
-                    title="현재 프롬프트 설정"
+                    aria-label={t('prompts.uiCurrentPromptSettings')}
+                    title={t('prompts.uiCurrentPromptSettings')}
                     onClick={onOpenCurrentPrompts}
                   >
                     <SettingsIcon size={18} aria-hidden="true" />
@@ -649,8 +688,8 @@ export function PromptLibrary({
                   <button
                     type="button"
                     className="secondary prompt-templates-open ui-icon-button"
-                    aria-label="기본 프롬프트"
-                    title="기본 프롬프트"
+                    aria-label={t('prompts.uiBuiltInPrompts')}
+                    title={t('prompts.uiBuiltInPrompts')}
                     disabled={busy || organizer.busy}
                     onClick={() => setTemplatesOpen(true)}
                   >
@@ -662,25 +701,25 @@ export function PromptLibrary({
                 <button
                   type="button"
                   className={`library-create${categoryEmpty ? ' secondary' : ' primary'}`}
-                  aria-label="새 프롬프트"
-                  title="새 프롬프트"
+                  aria-label={t('prompts.uiNewPrompt')}
+                  title={t('prompts.uiNewPrompt')}
                   disabled={!library}
                   onClick={() =>
                     changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
                   }
                 >
-                  <AddIcon size={18} aria-hidden="true" /> <span>새 프롬프트</span>
+                  <AddIcon size={18} aria-hidden="true" /> <span>{t('prompts.uiNewPrompt')}</span>
                 </button>
               )}
             </div>
             {!!query && !selecting && (
               <p className="library-result-count muted" role="status">
-                검색 결과 {filtered.length}개
+                {t('prompts.searchCount', { count: filtered.length })}
               </p>
             )}
             {showFolders && folders.length > 0 && (
-              <section className="library-folder-section" aria-label="폴더 목록">
-                <h2>폴더</h2>
+              <section className="library-folder-section" aria-label={t('prompts.uiFolderList')}>
+                <h2>{t('prompts.uiFolders')}</h2>
                 <LibraryFolders
                   presentation="cards"
                   draggedItemId={draggedItemId}
@@ -702,7 +741,7 @@ export function PromptLibrary({
               </section>
             )}
             {showFolders && folders.length > 0 && (
-              <h2 className="library-section-title">전체 프롬프트</h2>
+              <h2 className="library-section-title">{t('prompts.uiAllPrompts')}</h2>
             )}
 
             <div className="library-list">
@@ -723,9 +762,11 @@ export function PromptLibrary({
                 >
                   {selecting && (
                     <label className="library-select-check">
-                      <span className="sr-only">{item.title} 선택</span>
+                      <span className="sr-only">
+                        {t('prompts.selectNamed', { name: item.title })}
+                      </span>
                       <SelectionCheckbox
-                        aria-label={`${item.title} 선택`}
+                        aria-label={t('prompts.selectNamed', { name: item.title })}
                         checked={selection.includes(item.id)}
                         onChange={(event) =>
                           setSelection((current) =>
@@ -740,7 +781,7 @@ export function PromptLibrary({
                   <button
                     type="button"
                     className="library-open-content"
-                    aria-label={`${item.title} 프롬프트 편집`}
+                    aria-label={t('prompts.editNamed', { name: item.title })}
                     onClick={() => void editPreset(item)}
                   >
                     <span className="library-prompt-icon" aria-hidden="true">
@@ -748,19 +789,21 @@ export function PromptLibrary({
                     </span>
                     <span className="library-item-copy">
                       <strong>{item.title}</strong>
-                      <span>{item.role === 'main' ? '작문' : '번역'} 프롬프트</span>
+                      <span>{t('prompts.rolePrompt', { role: item.role })}</span>
                     </span>
                   </button>
-                  <LibraryItemMenu title={`${item.title} 메뉴`}>
+                  <LibraryItemMenu title={t('prompts.menuNamed', { name: item.title })}>
                     <button
                       type="button"
                       className="secondary"
                       onClick={() => void editPreset(item)}
                     >
-                      <EditIcon size={18} aria-hidden="true" /> 편집
+                      <EditIcon size={18} aria-hidden="true" />
+                      {t('prompts.uiEdit2')}
                     </button>
                     <button type="button" className="secondary" onClick={() => onAskHelper(item)}>
-                      <MessageCircle size={18} aria-hidden="true" /> 도우미에게 묻기
+                      <MessageCircle size={18} aria-hidden="true" />
+                      {t('prompts.uiAskHelper')}
                     </button>
                     <button
                       type="button"
@@ -768,7 +811,8 @@ export function PromptLibrary({
                       disabled={organizer.busy}
                       onClick={() => setMoving([{ kind: 'prompt-preset', id: item.id }])}
                     >
-                      <MoveIcon size={18} aria-hidden="true" /> 폴더 이동
+                      <MoveIcon size={18} aria-hidden="true" />
+                      {t('prompts.uiMoveToFolder')}
                     </button>
                     {sort === 'manual' && (
                       <>
@@ -778,7 +822,8 @@ export function PromptLibrary({
                           disabled={filtered[0]?.id === item.id}
                           onClick={() => moveByOffset(item.id, -1)}
                         >
-                          <UpIcon size={18} aria-hidden="true" /> 위로 이동
+                          <UpIcon size={18} aria-hidden="true" />
+                          {t('prompts.uiMoveUp')}
                         </button>
                         <button
                           type="button"
@@ -786,7 +831,8 @@ export function PromptLibrary({
                           disabled={filtered.at(-1)?.id === item.id}
                           onClick={() => moveByOffset(item.id, 1)}
                         >
-                          <DownIcon size={18} aria-hidden="true" /> 아래로 이동
+                          <DownIcon size={18} aria-hidden="true" />
+                          {t('prompts.uiMoveDown')}
                         </button>
                       </>
                     )}
@@ -796,7 +842,8 @@ export function PromptLibrary({
                       disabled={busy}
                       onClick={() => void clone(item)}
                     >
-                      <CopyIcon size={18} aria-hidden="true" /> 복제
+                      <CopyIcon size={18} aria-hidden="true" />
+                      {t('prompts.uiDuplicate')}
                     </button>
                     <DeleteButton
                       path={`/prompt-presets/${encodeURIComponent(item.id)}`}
@@ -811,11 +858,11 @@ export function PromptLibrary({
             </div>
             {!filtered.length && (
               <div className="library-empty">
-                <h2>{query ? '찾는 프롬프트가 없어요' : '아직 프롬프트가 없어요'}</h2>
-                <p>작문과 번역에 사용할 지침을 만들어 보세요.</p>
+                <h2>{query ? t('prompts.uiNoMatchingPrompts') : t('prompts.uiNoPromptsYet')}</h2>
+                <p>{t('prompts.uiCreateInstructionsForWritingAndTranslation')}</p>
                 {folder !== 'all' && (
                   <button type="button" className="secondary" onClick={() => setFolder('all')}>
-                    전체에서 찾기
+                    {t('prompts.uiSearchAll')}
                   </button>
                 )}
                 <button
@@ -825,7 +872,7 @@ export function PromptLibrary({
                     changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
                   }
                 >
-                  새 프롬프트
+                  {t('prompts.uiNewPrompt')}
                 </button>
               </div>
             )}

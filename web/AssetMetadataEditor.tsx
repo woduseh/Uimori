@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Asset } from '../core/product.js';
 import { api } from './api.js';
@@ -12,6 +13,7 @@ export function AssetMetadataEditor({
   asset: Asset;
   onSaved: () => Promise<void>;
 }) {
+  useI18n();
   const [draft, setDraft] = useState(asset);
   const accepted = useRef(asset);
   const [busy, setBusy] = useState(false);
@@ -31,11 +33,11 @@ export function AssetMetadataEditor({
   }, [asset, busy, draft.title, draft.description]);
   return (
     <details aria-busy={busy}>
-      <summary>이름·설명 편집</summary>
+      <summary>{t('library.editNameAndDescription')}</summary>
       <label>
-        이미지 이름
+        {t('library.imageName')}
         <input
-          aria-label="업로드 이미지 이름"
+          aria-label={t('library.uploadedImageName')}
           disabled={busy}
           value={draft.title}
           maxLength={200}
@@ -43,16 +45,16 @@ export function AssetMetadataEditor({
         />
       </label>
       <label>
-        설명 · 선택
+        {t('library.descriptionOptional')}
         <textarea
-          aria-label="업로드 이미지 설명"
+          aria-label={t('library.uploadedImageDescription')}
           disabled={busy}
           value={draft.description}
           maxLength={2000}
           onChange={(event) => setDraft({ ...draft, description: event.target.value })}
         />
       </label>
-      <small>저장하면 다음 이미지 자동 배치에 반영돼요.</small>
+      <small>{t('library.savedChangesApplyToTheNextAutomatic')}</small>
       <button
         type="button"
         className="primary"
@@ -80,10 +82,10 @@ export function AssetMetadataEditor({
           }
         }}
       >
-        이미지 정보 저장
+        {t('library.saveImageInformation')}
       </button>
-      {busy && <LoadingState presentation="inline" label="이미지 정보를 저장하는 중이에요…" />}
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {busy && <LoadingState presentation="inline" label={t('library.savingImageInformation')} />}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </details>
   );
 }

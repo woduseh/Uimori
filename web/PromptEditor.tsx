@@ -1,3 +1,11 @@
+import { ApiError } from './api.js';
+import {
+  useI18n,
+  translateMessage,
+  registerMessage,
+  message as uiMessage,
+  messageRef,
+} from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -80,6 +88,7 @@ export function PromptEditor({
   onError,
   onDirtyChange,
 }: Props) {
+  const { t } = useI18n();
   const [role, setRole] = useState<PromptRole>(initialRole);
   const [localPresets, setLocalPresets] = useState<PromptPreset[]>([]);
   // Tabs retain session owners, never copies of their models or dirty flags.
@@ -187,26 +196,38 @@ export function PromptEditor({
         ...current.filter((item) => item.id !== accepted.id),
         accepted,
       ]);
-      setStatus('프롬프트를 저장했어요.');
+      setStatus(uiMessage('prompts.uiPromptSaved'));
       // Placement is a separate write; neither it nor a list read can undo this save.
       setPlacing(true);
-      const warnings: string[] = [];
+      const warnings: (() => string)[] = [];
       try {
         await onSaved?.(accepted, !update);
       } catch (caught) {
-        warnings.push(
-          `프롬프트는 저장됐어요. 폴더에 배치하지 못했어요. ${(caught as Error).message}`
+        warnings.push(() =>
+          t('prompts.savedPlacement', {
+            error:
+              caught instanceof ApiError
+                ? caught.displayMessage
+                : messageRef((caught as Error).message),
+          })
         );
       }
       try {
         await reload?.();
       } catch (caught) {
-        warnings.push(
-          `프롬프트는 저장됐어요. 목록을 다시 불러오지 못했어요. ${(caught as Error).message}`
+        warnings.push(() =>
+          t('prompts.savedReload', {
+            error:
+              caught instanceof ApiError
+                ? caught.displayMessage
+                : messageRef((caught as Error).message),
+          })
         );
       }
       if (warnings.length) {
-        const warning = warnings.join('\n');
+        const renderWarnings = () => warnings.map((render) => render()).join('\n');
+        const warning = renderWarnings();
+        registerMessage(warning, renderWarnings);
         setError(warning);
         onError(warning);
       }
@@ -221,9 +242,7 @@ export function PromptEditor({
   }
   useEditorSaveCommand(session, () => {
     if ([...cache.current.values()].some((other) => other !== session && other.snapshot().dirty))
-      throw new Error(
-        '다른 역할이나 프리셋에도 미저장 초안이 있어요. 계속 편집에서 각 초안을 저장한 뒤 이동해 주세요.'
-      );
+      throw new Error(uiMessage('prompts.uiOtherRolesOrPresetsHaveUnsavedDraftsContinueEditing'));
     return save(!!base);
   });
   if (!state.ready) return <ResourceEditorStatus value={shared} />;
@@ -238,10 +257,10 @@ export function PromptEditor({
           className="primary native-editor-save"
           onClick={() => void save(!!draft.base)}
         >
-          <SaveIcon size={18} aria-hidden="true" /> <span>프리셋 저장</span>
+          <SaveIcon size={18} aria-hidden="true" /> <span>{t('prompts.uiSavePreset')}</span>
         </button>
         {draft.base && (
-          <ActionMenu label="프롬프트 관리" className="prompt-management-menu">
+          <ActionMenu label={t('prompts.uiManagePrompts')} className="prompt-management-menu">
             <RisuExportButton
               kind="prompt-presets"
               id={draft.base.id}
@@ -257,7 +276,8 @@ export function PromptEditor({
                 disabled={busy || !!collaborationIssue || !draft.title.trim()}
                 onClick={() => void save(false)}
               >
-                <CopyIcon size={18} aria-hidden="true" /> 복사본으로 저장
+                <CopyIcon size={18} aria-hidden="true" />
+                {t('prompts.uiSaveACopy')}
               </button>
             )}
             {draft.base && (
@@ -265,7 +285,7 @@ export function PromptEditor({
                 path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
                 revision={draft.base.revision}
                 title={draft.base.title}
-                label="프롬프트 삭제"
+                label={t('prompts.uiDeletePrompt')}
                 disabled={busy}
                 onError={onError}
                 onDeleted={async () => {
@@ -287,7 +307,7 @@ export function PromptEditor({
                       ) as Record<PromptRole, ResourceEditorSession>
                   );
                   await reload?.();
-                  setStatus('프롬프트를 삭제했어요.');
+                  setStatus(uiMessage('prompts.uiPromptDeleted'));
                 }}
               />
             )}
@@ -300,9 +320,9 @@ export function PromptEditor({
     <div className="prompt-metadata-fields">
       <div className="prompt-editor-row">
         <label>
-          역할
+          {t('prompts.uiRole')}
           <select
-            aria-label="프롬프트 역할"
+            aria-label={t('prompts.uiPromptRole')}
             disabled={busy || pendingTemplate || !!initialPreset}
             value={role}
             onChange={(event) => {
@@ -311,21 +331,21 @@ export function PromptEditor({
               setStatus('');
             }}
           >
-            <option value="main">작문</option>
-            <option value="translation">번역</option>
+            <option value="main">{t('prompts.uiWriting')}</option>
+            <option value="translation">{t('prompts.uiTranslation')}</option>
           </select>
         </label>
         {initialPreset === undefined && (
           <label>
-            불러올 프롬프트
+            {t('prompts.uiPromptToLoad')}
             <select
-              aria-label="불러올 프롬프트"
+              aria-label={t('prompts.uiPromptToLoad')}
               disabled={busy || pendingTemplate}
               value={draft.source === 'builtin' || draft.source === 'new' ? '' : draft.source}
               onChange={(event) => choose(event.target.value)}
             >
               <option value="" disabled>
-                저장된 프롬프트 선택
+                {t('prompts.uiSelectASavedPrompt')}
               </option>
               {presets
                 .filter((item) => item.role === role)
@@ -335,7 +355,9 @@ export function PromptEditor({
                   </option>
                 ))}
               {draft.base && !presets.some((item) => keyOf(item) === draft.source) && (
-                <option value={draft.source}>{draft.title} · 편집 중</option>
+                <option value={draft.source}>
+                  {t('prompts.editingNamed', { name: draft.title })}
+                </option>
               )}
             </select>
           </label>
@@ -347,7 +369,7 @@ export function PromptEditor({
             disabled={busy || pendingTemplate}
             onClick={() => choose('new')}
           >
-            새 프롬프트 생성
+            {t('prompts.uiCreatePrompt')}
           </button>
         )}
       </div>
@@ -358,26 +380,26 @@ export function PromptEditor({
       <section
         className="prompt-editor"
         data-testid="prompt-editor"
-        aria-label="전체 프롬프트 편집"
+        aria-label={t('prompts.uiFullPromptEditor')}
       >
         <div ref={editorHeading} className="prompt-editor-heading">
-          {heading ?? <h2>{draft.title || '프롬프트 편집'}</h2>}
+          {heading ?? <h2>{draft.title || t('prompts.uiEditPrompt')}</h2>}
           <ResourceEditorActions value={shared} hideSyncError />
           {saveActions}
           {headingTrailing}
-          <DismissibleError message={exportError} onDismiss={() => setExportError('')} />
+          <DismissibleError
+            message={translateMessage(exportError)}
+            onDismiss={() => setExportError('')}
+          />
         </div>
         {initialPreset === undefined && (
-          <p className="muted">
-            본문·메시지 구성과 옵션을 독립된 프리셋으로 저장해요. 현재 프롬프트에서 불러와 사용할 수
-            있어요.
-          </p>
+          <p className="muted">{t('prompts.uiSaveTextMessageStructureAndOptionsAsASeparate')}</p>
         )}
         <fieldset className="prompt-editor-fields" disabled={busy}>
           <label className="prompt-title-field">
-            프롬프트 이름 (필수)
+            {t('prompts.uiPromptNameRequired')}
             <input
-              aria-label="프롬프트 이름"
+              aria-label={t('prompts.uiPromptName')}
               required
               maxLength={160}
               value={draft.title}
@@ -421,17 +443,15 @@ export function PromptEditor({
         </fieldset>
         {busy && (
           <p role="status" className="prompt-status">
-            처리 중…
+            {t('prompts.uiProcessing')}
           </p>
         )}
         <TransientNotice message={busy ? '' : status} />
         {pendingTemplate && (
-          <p className="muted">
-            원문 입력은 저장할 때 함께 검증해요. 오류가 있으면 입력을 유지하고 알려드려요.
-          </p>
+          <p className="muted">{t('prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown')}</p>
         )}
         <DismissibleError
-          message={error ? `${error} 편집 내용은 유지했어요.` : ''}
+          message={error ? t('prompts.errorKept', { error: translateMessage(error) }) : ''}
           onDismiss={() => setError('')}
         />
       </section>

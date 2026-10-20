@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { ActionMenu } from './ActionMenu.js';
 import { HistoryIcon, IssueIcon } from './ui-icons.js';
 import './retry-failure.css';
@@ -22,43 +23,44 @@ export function RetryFailure({
   onDetails: () => void;
   onHistory: () => void;
 }) {
+  useI18n();
   const settings =
     /PROMPT_|UNSUPPORTED_OPTIONS|HTTP_40[0134]|JEV_|MAIN_RESPONSE_REFUSED|MAIN_JUDGMENT_CALL_BUDGET|EVALUATION_SUBMISSION_REQUIRED|IMAGE_INPUT_UNSUPPORTED/u.test(
       error ?? ''
     );
   const message =
     status === 'cancelled'
-      ? '응답 생성을 취소했어요.'
+      ? t('shared.cancelled')
       : status === 'interrupted'
-        ? '응답 생성이 중단됐어요.'
+        ? t('shared.interrupted')
         : status === 'refused'
-          ? '모델이 요청에 답하지 못했어요.'
+          ? t('shared.refused')
           : status === 'partial'
-            ? '응답이 일부만 생성됐어요.'
+            ? t('shared.partial')
             : error?.includes('PROMPT_UNKNOWN_SLOT')
-              ? '프롬프트에 사용할 수 없는 항목이 있어요.'
+              ? t('shared.unknownSlot')
               : error?.includes('UNSUPPORTED_OPTIONS')
-                ? '모델이 요청 옵션을 지원하지 않아요.'
+                ? t('shared.unsupportedOptions')
                 : error?.includes('429')
-                  ? '요청이 많아 응답을 만들지 못했어요. 잠시 후 다시 시도해 주세요.'
-                  : '응답을 만들지 못했어요.';
+                  ? t('shared.rateLimit')
+                  : t('shared.responseFailure');
   return (
-    <div className="turn-failure chat-retry-failure" role="group" aria-label="실패한 요청">
-      <p>
-        {onRejudge
-          ? '본문은 생성됐지만 판정을 완료하지 못했어요. 보존된 본문을 다시 판정할 수 있어요.'
-          : (mainJudgmentError(error) ?? message)}
-      </p>
+    <div
+      className="turn-failure chat-retry-failure"
+      role="group"
+      aria-label={t('shared.failedRequest')}
+    >
+      <p>{onRejudge ? t('shared.rejudgeDescription') : (mainJudgmentError(error) ?? message)}</p>
       <div className="turn-failure-actions">
         {onRejudge && (
           <button
             type="button"
             className="secondary"
             disabled={disabled}
-            title="보존된 본문을 다시 판정해요. 본문 생성은 반복하지 않아요."
+            title={t('shared.rejudgeHelp')}
             onClick={onRejudge}
           >
-            판정만 다시 시도
+            {t('shared.rejudge')}
           </button>
         )}
         {onRetry && (
@@ -66,25 +68,25 @@ export function RetryFailure({
             type="button"
             className="secondary"
             disabled={disabled}
-            title="같은 요청을 현재 설정으로 다시 실행해요"
+            title={t('shared.retryHelp')}
             onClick={onRetry}
           >
-            다시 시도
+            {t('shared.retry')}
           </button>
         )}
         {settings && onSettings && (
           <button type="button" className="secondary" onClick={onSettings}>
-            설정 확인
+            {t('shared.checkSettings')}
           </button>
         )}
-        <ActionMenu label="실패한 요청 더보기">
+        <ActionMenu label={t('shared.failedMore')}>
           <button type="button" onClick={onDetails}>
             <IssueIcon size={18} aria-hidden="true" />
-            오류 상세
+            {t('shared.errorDetails')}
           </button>
           <button type="button" onClick={onHistory}>
             <HistoryIcon size={18} aria-hidden="true" />
-            작업 기록
+            {t('shared.history')}
           </button>
         </ActionMenu>
       </div>

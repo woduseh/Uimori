@@ -1,3 +1,4 @@
+import { translateMessage, useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { RunningIcon } from './ui-icons.js';
 import './loading-state.css';
@@ -21,6 +22,7 @@ export function LoadingState({
   retryLabel?: string;
   presentation?: 'region' | 'placeholder' | 'inline';
 }) {
+  useI18n();
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     setVisible(false);
@@ -34,12 +36,12 @@ export function LoadingState({
       {error ? (
         <>
           <div role="alert">
-            <p>{errorLabel}</p>
-            <p className="muted">{error}</p>
+            <p>{translateMessage(errorLabel)}</p>
+            <p className="muted">{translateMessage(error)}</p>
           </div>
           {onRetry && (
             <button type="button" className="secondary" disabled={loading} onClick={onRetry}>
-              {retryLabel}
+              {translateMessage(retryLabel)}
             </button>
           )}
         </>
@@ -50,7 +52,7 @@ export function LoadingState({
             className="activity-spinner"
             aria-hidden="true"
           />
-          <p>{label}</p>
+          <p>{translateMessage(label)}</p>
         </div>
       ) : null}
     </div>

@@ -1,3 +1,4 @@
+import { message as retainedMessage } from './i18n.js';
 import { ApiError, sessionRequiredEvent } from './api.js';
 
 /** Blob downloads never parse a large binary archive into a JSON/base64 string. */
@@ -15,7 +16,7 @@ export async function downloadArchive(path: string, name: string, body?: unknown
   if (!response.ok) {
     if (response.status === 401) window.dispatchEvent(new Event(sessionRequiredEvent));
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    throw new ApiError(payload?.error ?? '백업 파일을 받지 못했어요.', response.status);
+    throw new ApiError(payload?.error ?? retainedMessage('transfer.m188'), response.status);
   }
   const url = URL.createObjectURL(await response.blob()),
     link = document.createElement('a');

@@ -1,3 +1,11 @@
+import {
+  t,
+  useI18n,
+  translateMessage,
+  formatNumber,
+  message as uiMessage,
+  messageRef,
+} from './i18n.js';
 import type { RequestImage } from '../core/request-images.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { imageOwnerDisplayText } from '../core/image-placement.js';
@@ -161,18 +169,24 @@ const retryable = (status: string) =>
 const activeJob = (job: Job) => job.status === 'queued' || job.status === 'running';
 const jobTitle = (job: Job) =>
   job.kind === 'translation'
-    ? '한국어 번역'
+    ? t('reader.koreanTranslation')
     : job.kind === 'status'
-      ? '이전 보조 작업'
-      : `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`;
+      ? t('reader.previousAuxiliaryTask')
+      : t('reader.valueImagePlacement', {
+          v0:
+            job.imageTarget?.mode === 'translation'
+              ? t('reader.translation')
+              : t('reader.original'),
+        });
 const translationPlaceholderMessages: Partial<Record<Job['status'], string>> = {
-  failed: '한국어 번역을 완료하지 못했어요. 원문은 보존돼요.',
-  cancelled: '한국어 번역을 취소했어요. 원문은 보존돼요.',
-  interrupted: '한국어 번역이 중단됐어요. 원문은 보존돼요.',
-  partial: '한국어 번역이 일부만 생성됐어요. 원문은 보존돼요.',
+  failed: 'reader.couldNotCompleteTheKoreanTranslationTheOriginalIs',
+  cancelled: 'reader.koreanTranslationCancelledTheOriginalIsPreserved',
+  interrupted: 'reader.koreanTranslationInterruptedTheOriginalIsPreserved',
+  partial: 'reader.koreanTranslationIsPartialTheOriginalIsPreserved',
 };
 
 export function SourceReader(props: ReaderProps) {
+  useI18n();
   return <SourceReaderContent key={props.source.id} {...props} />;
 }
 function latestTranslation(source: Source, jobs: Job[]) {
@@ -223,6 +237,7 @@ function SourceReaderContent({
   presentationRefreshKey,
   nativeInteractionRevision,
 }: ReaderProps) {
+  useI18n();
   const onRequestEditing = useCallback(
     (editing: boolean) => {
       onEditingChange?.(`${source.id}:request`, editing);
@@ -402,7 +417,7 @@ function SourceReaderContent({
       await refresh();
       return true;
     } catch (error) {
-      onError(error instanceof Error ? error.message : '기록 변경에 실패했어요.');
+      onError(error instanceof Error ? error.message : uiMessage('reader.couldNotUpdateTheRecord'));
       return false;
     }
   };
@@ -589,7 +604,8 @@ function SourceReaderContent({
     try {
       await operation();
     } catch (error) {
-      const message = error instanceof Error ? error.message : '요청을 완료하지 못했어요.';
+      const message =
+        error instanceof Error ? error.message : uiMessage('reader.couldNotCompleteTheRequest');
       if (mounted.current) setActionError(message);
     } finally {
       requestPending.current = false;
@@ -615,10 +631,10 @@ function SourceReaderContent({
   };
   const translationActionLabel =
     validTranslation || (translation && activeJob(translation))
-      ? '번역 보기'
+      ? t('reader.viewTranslation')
       : translation
-        ? '번역 다시 시도'
-        : '번역 생성';
+        ? t('reader.retryTranslation')
+        : t('reader.generateTranslation');
   const inline = (anchor: string) =>
     annotations
       .filter((annotation) => annotation.blockAnchor === anchor)
@@ -640,20 +656,24 @@ function SourceReaderContent({
   const leading = (
     <span className="folio">
       {packageStart?.mode === 'authored'
-        ? '첫 메시지 · ' + packageStart.title
-        : '장면 ' + (sceneNumber ?? index + 1)}
+        ? t('reader.openingTitle', { title: packageStart.title })
+        : t('reader.sceneValue', { v0: formatNumber(sceneNumber ?? index + 1) })}
     </span>
   );
   const badges = (
     <>
-      {!sceneEnabled && <span className="scene-badge">문맥에서 제외됨</span>}
+      {!sceneEnabled && <span className="scene-badge">{t('reader.excludedFromContext')}</span>}
       {validTranslation?.manual && mode === 'translation' && (
-        <span className="scene-badge">직접 수정한 번역</span>
+        <span className="scene-badge">{t('reader.manuallyEditedTranslation')}</span>
       )}
     </>
   );
   const trailing = (
-    <div className="segmented compact" role="group" aria-label="원문과 번역 보기">
+    <div
+      className="segmented compact"
+      role="group"
+      aria-label={t('reader.originalAndTranslationView')}
+    >
       <button
         type="button"
         aria-label={translationActionLabel}
@@ -666,11 +686,11 @@ function SourceReaderContent({
       {showToggle && (
         <button
           type="button"
-          aria-label="원문 보기"
+          aria-label={t('reader.viewOriginal')}
           aria-pressed={mode === 'original'}
           onClick={() => switchMode('original')}
         >
-          원문
+          {t('reader.original')}
         </button>
       )}
     </div>
@@ -693,11 +713,13 @@ function SourceReaderContent({
     });
   };
   const otherEditor: ReaderMode = mode === 'translation' ? 'original' : 'translation';
-  const editorLabel = (role: ReaderMode) => (role === 'translation' ? '번역 수정' : '원문 수정');
+  const editorLabel = (role: ReaderMode) =>
+    role === 'translation' ? t('reader.editTranslation') : t('reader.editOriginal');
   const copyCurrent = () =>
     void action('copy', async () => {
       const text = mode === 'translation' ? (validTranslation?.text ?? '') : source.text;
-      if (!navigator.clipboard) throw new Error('이 브라우저에서는 복사를 지원하지 않아요.');
+      if (!navigator.clipboard)
+        throw new Error(uiMessage('reader.copyingIsUnavailableInThisBrowser'));
       await navigator.clipboard.writeText(text);
     });
   return (
@@ -764,7 +786,7 @@ function SourceReaderContent({
           </div>
           {!sceneEnabled && (
             <p className="scene-context-notice" role="status">
-              이 장면의 입력과 본문은 이후 생성 문맥에서 제외돼요. 이미 생성된 다른 장면은 유지돼요.
+              {t('reader.thisScenesRequestAndTextAreExcludedFromFuture')}
             </p>
           )}
           {!activityNode && <ContextSummaryStatus summary={contextSummary} />}
@@ -789,10 +811,12 @@ function SourceReaderContent({
           <div hidden={!!editor} className="source-reading-content">
             {illustrationLayout.header}
             {validTranslation && translation?.status !== 'completed' && mode === 'translation' && (
-              <p role="status">이전 완료 번역을 표시하고 있어요. 새 번역이 성공하면 교체돼요.</p>
+              <p role="status">
+                {t('reader.showingThePreviousCompletedTranslationItWillBeReplaced')}
+              </p>
             )}
             {hasPackages && !presentation ? (
-              <LoadingState presentation="placeholder" label="봇 화면을 준비하고 있어요…" />
+              <LoadingState presentation="placeholder" label={t('reader.preparingTheBotView')} />
             ) : projected?.format === 'risu-html' &&
               (mode === 'original' ||
                 (validTranslation && projected.translation?.html !== undefined)) ? (
@@ -831,7 +855,7 @@ function SourceReaderContent({
                 </div>
                 {annotations.length > 0 && (
                   <p className="muted" role="status">
-                    {IMAGE_POSITION_UNAVAILABLE}
+                    {translateMessage(IMAGE_POSITION_UNAVAILABLE)}
                   </p>
                 )}
               </div>
@@ -845,7 +869,7 @@ function SourceReaderContent({
                 </div>
                 {annotations.length > 0 && (
                   <p className="muted" role="status">
-                    {IMAGE_POSITION_UNAVAILABLE}
+                    {translateMessage(IMAGE_POSITION_UNAVAILABLE)}
                   </p>
                 )}
               </div>
@@ -915,14 +939,16 @@ function SourceReaderContent({
                 {translationLoading ? (
                   <LoadingState
                     presentation="placeholder"
-                    label="한국어 번역을 준비하고 있어요. 원문은 저장됐어요."
+                    label={t('reader.preparingTheKoreanTranslationTheOriginalIsSaved')}
                   />
                 ) : (
                   <p>
                     {translation
-                      ? (translationPlaceholderMessages[translation.status] ??
-                        '한국어 번역이 아직 준비되지 않았어요. 원문은 보존돼요.')
-                      : '이 장면에는 아직 한국어 번역이 없어요.'}
+                      ? t(
+                          translationPlaceholderMessages[translation.status] ??
+                            'reader.theKoreanTranslationIsNotReadyYetTheOriginal'
+                        )
+                      : t('reader.thisSceneHasNoKoreanTranslationYet')}
                   </p>
                 )}
                 <div className="form-actions">
@@ -931,7 +957,7 @@ function SourceReaderContent({
                     className="secondary"
                     onClick={() => switchMode('original')}
                   >
-                    원문부터 읽기
+                    {t('reader.readTheOriginalFirst')}
                   </button>
                 </div>
               </div>
@@ -940,12 +966,12 @@ function SourceReaderContent({
           </div>
           {presentation?.error && (
             <p className="error" role="alert">
-              {presentation.error}
+              {translateMessage(presentation.error)}
             </p>
           )}
           <PackagePresentationIssues data={presentation?.data} />
           {!activityNode && (
-            <div className="derived-summary" aria-label="이 장면의 후속 작업">
+            <div className="derived-summary" aria-label={t('reader.followUpTasksForThisScene')}>
               {attentionJobs.length
                 ? attentionJobs.map((job) => (
                     <div
@@ -955,7 +981,7 @@ function SourceReaderContent({
                     >
                       <span>
                         {jobTitle(job)} · {labels[job.status]}
-                        {retryable(job.status) ? ' · 원문 보존됨' : ''}
+                        {retryable(job.status) ? t('reader.originalPreserved') : ''}
                       </span>
                       {job.error && <AuxiliaryError error={job.error} />}
                       <JobActions job={job} refresh={refresh} onError={setActionError} compact />
@@ -973,7 +999,7 @@ function SourceReaderContent({
         </div>
         <div slot="actions" data-uimori-part="actions" className="source-actions">
           <IconButton
-            label="본문 복사"
+            label={t('reader.copyText')}
             icon={CopyIcon}
             size={18}
             className="scene-action"
@@ -989,7 +1015,11 @@ function SourceReaderContent({
             onClick={(event) => openEditor(mode, event.currentTarget)}
           />
           <BookmarkButton
-            title={sceneNumber ? `장면 ${sceneNumber}` : '첫 메시지'}
+            title={
+              sceneNumber
+                ? t('reader.sceneValue', { v0: formatNumber(sceneNumber) })
+                : t('reader.openingMessage2')
+            }
             disabled={!!editor || !!pending}
             capture={() => {
               const article = container.current;
@@ -1007,7 +1037,7 @@ function SourceReaderContent({
                 : null;
             }}
           />
-          <ActionMenu label="장면 작업 메뉴" placement="top" viewport>
+          <ActionMenu label={t('reader.sceneActions')} placement="top" viewport>
             {startSelection && (
               <button
                 type="button"
@@ -1023,7 +1053,7 @@ function SourceReaderContent({
                 }}
               >
                 <ListRestart size={18} aria-hidden="true" />
-                시작문 바꾸기
+                {t('reader.changeOpeningMessage')}
               </button>
             )}
             {(packageStart?.mode === 'authored' || (!request && !requestImages?.length)) && (
@@ -1042,7 +1072,9 @@ function SourceReaderContent({
                 ) : (
                   <Eye size={18} aria-hidden="true" />
                 )}
-                {sceneEnabled ? '장면을 문맥에서 제외' : '장면을 문맥에 포함'}
+                {sceneEnabled
+                  ? t('reader.excludeSceneFromContext')
+                  : t('reader.includeSceneInContext')}
               </button>
             )}
             {onAskHelper && (
@@ -1055,7 +1087,7 @@ function SourceReaderContent({
                 }}
               >
                 <MessageCircleQuestion size={18} aria-hidden="true" />
-                도우미에게 물어보기
+                {t('reader.askTheHelper')}
               </button>
             )}
             {(onRetry || onCheckRequest) && (
@@ -1068,7 +1100,7 @@ function SourceReaderContent({
                 }}
               >
                 <RefreshIcon size={18} aria-hidden="true" />
-                다시 쓰기
+                {t('reader.rewrite')}
               </button>
             )}
             {canRetranslate && (
@@ -1079,7 +1111,7 @@ function SourceReaderContent({
                 onClick={retranslate}
               >
                 <Languages size={18} aria-hidden="true" />
-                현재 설정으로 새 번역
+                {t('reader.newTranslationWithCurrentSettings')}
               </button>
             )}
             <button
@@ -1091,7 +1123,9 @@ function SourceReaderContent({
               }}
             >
               <GitFork size={18} aria-hidden="true" />
-              {pending === 'fork' ? '채팅 복사 중…' : '이 장면까지 새 채팅으로 복사'}
+              {pending === 'fork'
+                ? t('reader.copyingChat')
+                : t('reader.copyThroughThisSceneToANewChat')}
             </button>
             <button
               type="button"
@@ -1126,10 +1160,10 @@ function SourceReaderContent({
               >
                 <ImagesIcon size={18} aria-hidden="true" />
                 {pending === 'images' || (image && activeJob(image))
-                  ? '이미지를 배치하는 중…'
+                  ? t('reader.placingImages')
                   : image?.status === 'completed'
-                    ? '이미지 다시 배치'
-                    : '이미지 자동 배치'}
+                    ? t('reader.placeImagesAgain')
+                    : t('reader.placeImagesAutomatically')}
               </button>
             )}
             <button
@@ -1158,10 +1192,10 @@ function SourceReaderContent({
                   item.task === 'plan' &&
                   illustrationActive(item)
               )
-                ? '삽화 구간을 고르는 중…'
+                ? t('reader.choosingIllustrationPassages')
                 : illustrations.some((item) => item.images.length > 0)
-                  ? '새 삽화 생성'
-                  : '삽화 생성'}
+                  ? t('reader.generateNewIllustrations')
+                  : t('reader.generateIllustrations')}
             </button>
             <button
               type="button"
@@ -1169,7 +1203,7 @@ function SourceReaderContent({
               onClick={(event) => openInfo(event.currentTarget, 'details')}
             >
               <Info size={18} aria-hidden="true" />
-              {activityNode ? '원문 연결 정보' : '작업 상세'}
+              {activityNode ? t('reader.originalLinkageDetails') : t('reader.taskDetails')}
             </button>
             {estimatedCost && estimatedCost.attemptCount > 0 && (
               <button
@@ -1178,7 +1212,7 @@ function SourceReaderContent({
                 onClick={(event) => openInfo(event.currentTarget, 'cost')}
               >
                 <ReceiptText size={18} aria-hidden="true" />
-                본문 추정 비용
+                {t('reader.estimatedTextCost')}
               </button>
             )}
           </ActionMenu>
@@ -1199,15 +1233,15 @@ function SourceReaderContent({
             onClose={() => {
               if (!pending) setRetryDialog(false);
             }}
-            title="다시 쓰기"
+            title={t('reader.rewrite')}
             className="source-retry-dialog"
           >
             <StoredRequestImages images={requestImages} />
             <label>
-              생성에 사용할 요청
+              {t('reader.requestToUseForGeneration')}
               <textarea
                 ref={rewriteInput}
-                aria-label="다시 쓸 요청"
+                aria-label={t('reader.requestToRewrite')}
                 rows={6}
                 maxLength={REQUEST_TEXT_MAX_CHARS}
                 value={rewriteText}
@@ -1222,10 +1256,9 @@ function SourceReaderContent({
                 }}
               />
             </label>
-            <p>위 문구를 현재 설정으로 보내요. 문맥용 요청 저장과는 별개예요.</p>
+            <p>{t('reader.sendThisTextWithTheCurrentSettingsThisIs')}</p>
             <p className="muted">
-              기존 응답 교체는 새 생성이 성공했을 때만 적용해요. 실패하거나 취소하면 기존 응답을
-              유지해요.
+              {t('reader.replaceTheExistingResponseOnlyWhenGenerationSucceedsFailure')}
             </p>
             <div className="form-actions">
               <button
@@ -1234,11 +1267,11 @@ function SourceReaderContent({
                 disabled={!!pending}
                 onClick={() => setRetryDialog(false)}
               >
-                닫기
+                {t('reader.close')}
               </button>
               {onCheckRequest ? (
                 <button type="button" disabled={!!pending} onClick={() => rewrite('copy')}>
-                  이전 요청 확인
+                  {t('reader.checkPreviousRequest')}
                 </button>
               ) : (
                 <>
@@ -1250,7 +1283,8 @@ function SourceReaderContent({
                     }
                     onClick={() => rewrite('copy')}
                   >
-                    <GitFork size={18} aria-hidden="true" />새 채팅에서 다시 요청
+                    <GitFork size={18} aria-hidden="true" />
+                    {t('reader.requestAgainInANewChat')}
                   </button>
                   <button
                     type="button"
@@ -1263,14 +1297,14 @@ function SourceReaderContent({
                     onClick={() => rewrite('replace')}
                   >
                     <RefreshIcon size={18} aria-hidden="true" />
-                    기존 응답 교체
+                    {t('reader.replaceExistingResponse')}
                   </button>
                 </>
               )}
             </div>
             {actionError && (
               <p className="error" role="alert">
-                {actionError}
+                {translateMessage(actionError)}
               </p>
             )}
           </Dialog>
@@ -1279,15 +1313,13 @@ function SourceReaderContent({
             onClose={() => {
               if (pending !== 'illustrate') setIllustrationDialog(false);
             }}
-            title="삽화 생성"
+            title={t('reader.generateIllustrations')}
           >
-            <p>
-              응답에서 서로 다른 순간을 골라요. 대표 컷은 맨 위에, 나머지는 해당 문단 뒤에 넣어요.
-            </p>
+            <p>{t('reader.chooseDifferentMomentsFromTheResponseTheMainImage')}</p>
             <label>
-              최대 컷 수
+              {t('reader.maximumImages')}
               <select
-                aria-label="최대 컷 수"
+                aria-label={t('reader.maximumImages')}
                 value={illustrationCount}
                 disabled={pending === 'illustrate'}
                 onChange={(event) => {
@@ -1297,18 +1329,15 @@ function SourceReaderContent({
               >
                 {Array.from({ length: 8 }, (_, index) => (
                   <option key={index + 1} value={index + 1}>
-                    {index + 1}컷
+                    {t('reader.imageCount', { count: index + 1 })}
                   </option>
                 ))}
               </select>
             </label>
-            <p className="muted">
-              그릴 만한 순간이 적으면 더 적게 만들어요. 응답당 남은 한도 안에서 예약하며, 생성
-              중에도 다음 채팅을 이어갈 수 있어요.
-            </p>
+            <p className="muted">{t('reader.fewerImagesAreMadeIfFewerMomentsSuitIllustration')}</p>
             {actionError && (
               <p className="error" role="alert">
-                {actionError}
+                {translateMessage(actionError)}
               </p>
             )}
             <div className="form-actions">
@@ -1318,7 +1347,7 @@ function SourceReaderContent({
                 disabled={pending === 'illustrate'}
                 onClick={() => setIllustrationDialog(false)}
               >
-                닫기
+                {t('reader.close')}
               </button>
               <button
                 type="button"
@@ -1335,14 +1364,14 @@ function SourceReaderContent({
                   })
                 }
               >
-                {pending === 'illustrate' ? '예약 중…' : '삽화 만들기'}
+                {pending === 'illustrate' ? t('reader.reserving') : t('reader.createIllustrations')}
               </button>
             </div>
           </Dialog>
           <Dialog
             open={detailsOpen}
             onClose={() => setDetailsOpen(false)}
-            title={activityNode ? '원문 연결 정보' : '작업 상세'}
+            title={activityNode ? t('reader.originalLinkageDetails') : t('reader.taskDetails')}
             className="source-info-dialog"
           >
             {detailsOpen && (
@@ -1365,19 +1394,15 @@ function SourceReaderContent({
                     <dt>source revision</dt>
                     <dd>{source.id}</dd>
                     <dt>parent revision</dt>
-                    <dd>{source.parentRevision || '시작'}</dd>
+                    <dd>{source.parentRevision || t('reader.start')}</dd>
                     <dt>SHA-256</dt>
                     <dd>{source.hash}</dd>
                   </dl>
                   <details>
-                    <summary>현재 원문</summary>
+                    <summary>{t('reader.currentOriginal')}</summary>
                     <pre data-testid="source-raw">{source.text}</pre>
                   </details>
-                  <p>
-                    제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 루비 문자·밑줄·
-                    첨자·하이라이트 등 읽기용 HTML만 표시하고, 나머지 HTML과 허용되지 않은 이미지는
-                    문자로 남겨요.
-                  </p>
+                  <p>{t('reader.displaysHeadingsEmphasisListsQuotesLinksAndCodeOnly')}</p>
                 </div>
               </>
             )}
@@ -1387,30 +1412,34 @@ function SourceReaderContent({
           <Dialog
             open={costOpen}
             onClose={() => setCostOpen(false)}
-            title="본문 추정 비용"
+            title={t('reader.estimatedTextCost')}
             className="source-info-dialog"
           >
             <p className="source-cost-value">
               {estimatedCost.usd !== null && estimatedCost.unknownCount === 0
                 ? formatUsd(estimatedCost.usd)
-                : `· 확인분 부분합 ${estimatedCost.subtotalUsd === 0 && estimatedCost.unknownCount === estimatedCost.attemptCount ? '미확인' : formatUsd(estimatedCost.subtotalUsd)} · 미확인 ${estimatedCost.unknownCount}회 포함`}
+                : t('reader.knownSubtotalValueIncludesValueUnpricedCalls', {
+                    v0:
+                      estimatedCost.subtotalUsd === 0 &&
+                      estimatedCost.unknownCount === estimatedCost.attemptCount
+                        ? t('reader.unknown')
+                        : formatUsd(estimatedCost.subtotalUsd),
+                    v1: estimatedCost.unknownCount,
+                  })}
             </p>
-            <p>
-              호출 후 프로바이더가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정
-              금액이며 실제 청구액과 다를 수 있어요.
-            </p>
-            <p>본문과 작문 보조 호출 기준 · 번역·제목 등 후속 작업은 작업 현황에서 확인해요.</p>
+            <p>{t('reader.calculatedFromProviderReportedTokensAndThePriceFixed')}</p>
+            <p>{t('reader.coversTextAndWritingAssistanceCallsSeeTaskActivity')}</p>
             {estimatedCost.unknownCount > 0 && (
-              <p>부분합은 확인된 금액만 더한 값이며 전체 추정 비용은 아직 미확인이에요.</p>
+              <p>{t('reader.theSubtotalAddsOnlyKnownAmountsTheTotalEstimate')}</p>
             )}
           </Dialog>
         )}
         {actionError && (
           <p className="error source-action-error" role="alert">
-            {actionError}
+            {translateMessage(actionError)}
             {onModelSettings && (
               <button type="button" className="secondary" onClick={onModelSettings}>
-                전역 모델 설정
+                {t('reader.globalModelSettings')}
               </button>
             )}
           </p>
@@ -1452,6 +1481,7 @@ function TextEditor({
   onCancel: () => void;
   onSaved: () => Promise<void>;
 }) {
+  useI18n();
   const key = draftKey(source.id, role);
   const displayed = displayTranslationJob(source, translation);
   const savedText = role === 'original' ? source.text : (displayed?.result?.text ?? '');
@@ -1488,7 +1518,7 @@ function TextEditor({
     });
     return () => cancelAnimationFrame(frame);
   }, []);
-  const title = role === 'original' ? '원문' : '번역';
+  const title = role === 'original' ? t('reader.original') : t('reader.translation');
   const conflict = draft.expectedSourceHash !== source.hash || draft.expectedRevision !== revision;
   const persist = (next: Draft) => {
     draftVersion.current++;
@@ -1545,7 +1575,9 @@ function TextEditor({
         } catch (cause) {
           if (cause instanceof ApiError && cause.status === 409) setConflictOpen(true);
           setError(
-            cause instanceof Error ? cause.message : '저장하지 못했어요. 작성한 내용은 유지돼요.'
+            cause instanceof Error
+              ? cause.message
+              : uiMessage('reader.couldNotSaveYourEditsArePreserved')
           );
         } finally {
           busy.current = false;
@@ -1554,10 +1586,10 @@ function TextEditor({
       }}
     >
       <label>
-        {title} 수정
+        {t('reader.editRole', { role })}
         <textarea
           ref={input}
-          aria-label={`${title} 수정 내용`}
+          aria-label={t('reader.editValueText', { v0: title })}
           rows={12}
           maxLength={2000000}
           value={draft.text}
@@ -1603,21 +1635,21 @@ function TextEditor({
       )}
       {conflict && (
         <div role="alert" className="error">
-          <p>편집 중 저장된 내용이 바뀌었어요. 작성한 내용은 유지돼요.</p>
+          <p>{t('reader.theSavedTextChangedWhileYouWereEditingYour')}</p>
           <button
             type="button"
             className="secondary"
             disabled={saving}
             onClick={() => setConflictOpen(true)}
           >
-            저장 충돌 확인
+            {t('reader.reviewSaveConflict')}
           </button>
         </div>
       )}
       <div className="form-actions source-edit-actions">
         <IconButton
           icon={X}
-          label="수정 취소"
+          label={t('reader.cancelEditing')}
           className="secondary"
           disabled={saving}
           onClick={cancel}
@@ -1625,42 +1657,44 @@ function TextEditor({
         <IconButton
           icon={Save}
           className="source-edit-save"
-          label={saving ? '저장 중…' : `${title} 저장`}
+          label={saving ? t('reader.saving') : t('reader.saveValue', { v0: title })}
           type="submit"
           disabled={saving || !draft.text.trim()}
         />
       </div>
       <SaveConflictDialog
         open={conflictOpen}
-        title={`${title} 저장 충돌`}
+        title={t('reader.valueSaveConflict', { v0: title })}
         onClose={() => setConflictOpen(false)}
         readSaved={async () => {
           const detail = await api<ChatDetail>(`/chats/${source.chatId}`);
           const current = detail.sources.find((item) => item.id === source.id);
-          if (!current) throw new Error('현재 장면을 찾지 못했어요. 작성한 내용은 유지돼요.');
+          if (!current)
+            throw new Error(uiMessage('reader.couldNotFindTheCurrentSceneYourEditsAre'));
           const currentTranslation = displayTranslationJob(
             current,
             latestTranslation(current, detail.jobs)
           );
-          const text =
-            role === 'original'
-              ? current.text
-              : (currentTranslation?.result?.text ?? '저장된 번역 없음');
-          return {
-            content: (
-              <>
-                <p className="source-saved-review-text">{text}</p>
-                <p className="muted">
-                  작성한 내용을 먼저 복사해 두세요. ‘수정 취소’를 누르면 저장된 본문으로 돌아가요.
-                </p>
-              </>
-            ),
+
+          return () => {
+            const text =
+              role === 'original'
+                ? current.text
+                : (currentTranslation?.result?.text ?? t('reader.noSavedTranslation'));
+            return {
+              content: (
+                <>
+                  <p className="source-saved-review-text">{text}</p>
+                  <p className="muted">{t('reader.copyYourEditsFirstCancelEditingReturnsToThe')}</p>
+                </>
+              ),
+            };
           };
         }}
       />
       {error && (
         <p className="error" role="alert">
-          {error} 작성한 내용은 유지돼요.
+          {t('reader.errorEditsPreserved', { error: translateMessage(error) })}
         </p>
       )}
     </form>
@@ -1678,6 +1712,7 @@ function JobActions({
   onError: (error: string) => void;
   compact?: boolean;
 }) {
+  useI18n();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const perform = async (operation: 'retry' | 'cancel' | 'rejudge') => {
@@ -1688,9 +1723,16 @@ function JobActions({
       await api(`/jobs/${job.id}/${operation}`, {});
       await refresh();
     } catch (error) {
-      const message = error instanceof Error ? error.message : '요청을 완료하지 못했어요.';
+      const message =
+        error instanceof Error ? error.message : uiMessage('reader.couldNotCompleteTheRequest');
       setError(message);
-      onError(`${jobTitle(job)}: ${message}`);
+      onError(
+        uiMessage('reader.jobFailure', {
+          kind: job.kind,
+          mode: job.imageTarget?.mode ?? 'original',
+          error: messageRef(message),
+        })
+      );
     } finally {
       setPending(false);
     }
@@ -1704,7 +1746,7 @@ function JobActions({
           disabled={pending}
           onClick={() => void perform('rejudge')}
         >
-          번역 판정만 다시 시도
+          {t('reader.retryTranslationJudgmentOnly')}
         </button>
       )}
       {job.kind !== 'status' && retryable(job.status) && (
@@ -1717,10 +1759,10 @@ function JobActions({
           }}
         >
           {job.kind === 'translation'
-            ? '현재 설정으로 번역 재시도'
+            ? t('reader.retryTranslationWithCurrentSettings')
             : compact
-              ? `${jobTitle(job)} 재시도`
-              : '이 작업만 재시도'}
+              ? t('reader.retryValue', { v0: jobTitle(job) })
+              : t('reader.retryThisTaskOnly')}
         </button>
       )}
       {job.kind !== 'status' && activeJob(job) && (
@@ -1732,12 +1774,12 @@ function JobActions({
             void perform('cancel');
           }}
         >
-          {jobTitle(job)} 취소
+          {t('reader.cancelJob', { title: jobTitle(job) })}
         </button>
       )}
       {error && (
         <small className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </small>
       )}
     </>
@@ -1755,6 +1797,7 @@ export function JobCard({
   onError: (error: string) => void;
   hideText?: boolean;
 }) {
+  useI18n();
   const title = jobTitle(job);
   return (
     <section
@@ -1764,14 +1807,16 @@ export function JobCard({
       data-job-id={job.id}
     >
       <h3>
-        {job.result?.mock ? '모의 ' : ''}
-        {title} <small>{labels[job.status]}</small>
+        {t('reader.jobHeading', { mock: !!job.result?.mock, title })}{' '}
+        <small>{labels[job.status]}</small>
       </h3>
       {!hideText && job.result && (job.kind !== 'translation' || job.status === 'completed') && (
         <p>
           {job.result.text ||
             job.result.label ||
-            (job.kind === 'image' ? `${job.result.annotations?.length ?? 0}개 이미지 표시` : '')}
+            (job.kind === 'image'
+              ? t('reader.valueImagesDisplayed', { v0: job.result.annotations?.length ?? 0 })
+              : '')}
         </p>
       )}
       {job.error && <AuxiliaryError error={job.error} />}
@@ -1780,7 +1825,7 @@ export function JobCard({
       <LazyDiagnostics<Job & { input?: unknown }>
         path={`/jobs/${job.id}`}
         revision={`${job.status}:${job.attempt}:${job.revision}`}
-        title="보조 작업의 실제 입력과 도구"
+        title={t('reader.actualAuxiliaryTaskInputAndTools')}
       >
         {(value) => (
           <pre>
@@ -1803,12 +1848,13 @@ export function JobCard({
 }
 
 function AuxiliaryError({ error }: { error: string }) {
+  useI18n();
   const diagnostic = auxiliaryErrorDiagnostic(error);
   return (
     <div className="error" role="alert">
-      <p>{diagnostic.message} 원문은 보존돼요.</p>
-      <p>{diagnostic.action}</p>
-      {diagnostic.code && <small>오류 코드: {diagnostic.code}</small>}
+      <p>{t('reader.errorOriginalPreserved', { error: translateMessage(diagnostic.message) })}</p>
+      <p>{translateMessage(diagnostic.action)}</p>
+      {diagnostic.code && <small>{t('reader.diagnosticCode', { code: diagnostic.code })}</small>}
     </div>
   );
 }

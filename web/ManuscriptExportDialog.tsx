@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -17,6 +18,7 @@ export function ManuscriptExportDialog({
   chatId: string;
   onClose: () => void;
 }) {
+  useI18n();
   const [metadata, setMetadata] = useState<ManuscriptExportMetadata | null>(null);
   const [mode, setMode] = useState<ManuscriptExportMode>('source');
   const [range, setRange] = useState(false);
@@ -85,15 +87,15 @@ export function ManuscriptExportDialog({
   return (
     <Dialog
       open={open}
-      title="원고 내보내기"
-      headerTitle="원고 내보내기"
+      title={t('transfer.m192')}
+      headerTitle={t('transfer.m192')}
       onClose={onClose}
       scopeKey={chatId}
     >
-      <p>요청·작업 기록·메모를 제외한 본문만 Markdown 파일로 저장해요.</p>
+      <p>{t('transfer.m193')}</p>
       <fieldset className="editor-fields" disabled={busy || !metadata}>
         <label className="full">
-          내보낼 본문
+          {t('transfer.m194')}
           <select
             value={mode}
             onChange={(event) => {
@@ -101,12 +103,12 @@ export function ManuscriptExportDialog({
               setError('');
             }}
           >
-            <option value="source">원문</option>
-            <option value="translation">저장된 번역</option>
+            <option value="source">{t('transfer.m195')}</option>
+            <option value="translation">{t('transfer.m196')}</option>
           </select>
         </label>
         <label className="full">
-          장면 범위
+          {t('transfer.m197')}
           <select
             value={range ? 'range' : 'all'}
             onChange={(event) => {
@@ -114,14 +116,14 @@ export function ManuscriptExportDialog({
               setError('');
             }}
           >
-            <option value="all">전체 채팅</option>
-            <option value="range">장면 범위 선택</option>
+            <option value="all">{t('transfer.m198')}</option>
+            <option value="range">{t('transfer.m199')}</option>
           </select>
         </label>
         {range && (
           <>
             <label>
-              시작 장면
+              {t('transfer.m200')}
               <select
                 value={from}
                 onChange={(event) => {
@@ -131,13 +133,15 @@ export function ManuscriptExportDialog({
               >
                 {metadata?.scenes.map((scene) => (
                   <option key={scene.number} value={scene.number}>
-                    {scene.label}
+                    {scene.number === 0
+                      ? t('transfer.m029')
+                      : t('transfer.d011', { v0: scene.number })}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              끝 장면
+              {t('transfer.m201')}
               <select
                 value={to}
                 onChange={(event) => {
@@ -147,7 +151,9 @@ export function ManuscriptExportDialog({
               >
                 {metadata?.scenes.map((scene) => (
                   <option key={scene.number} value={scene.number}>
-                    {scene.label}
+                    {scene.number === 0
+                      ? t('transfer.m029')
+                      : t('transfer.d011', { v0: scene.number })}
                   </option>
                 ))}
               </select>
@@ -155,27 +161,25 @@ export function ManuscriptExportDialog({
           </>
         )}
       </fieldset>
-      <p className="muted">HTML·Risu 상태창 표기는 그대로 담아요. 이미지·EPUB는 포함하지 않아요.</p>
-      {mode === 'translation' && (
-        <p className="muted">범위 안에 유효한 번역이 없는 장면이 있으면 다운로드하지 않아요.</p>
-      )}
+      <p className="muted">{t('transfer.m202')}</p>
+      {mode === 'translation' && <p className="muted">{t('transfer.m203')}</p>}
       {!metadata && (
         <LoadingState
           presentation="inline"
           loading={!error}
-          error={error}
-          label="원고 목록을 불러오는 중이에요…"
+          error={translateMessage(error)}
+          label={t('transfer.m204')}
         />
       )}
-      {metadata && !metadata.scenes.length && <p role="status">내보낼 원고가 아직 없어요.</p>}
+      {metadata && !metadata.scenes.length && <p role="status">{t('transfer.m205')}</p>}
       {metadata && error && (
         <p className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
       <div className="form-actions">
         <button type="button" className="secondary" onClick={onClose}>
-          취소
+          {t('transfer.m206')}
         </button>
         <button
           type="button"
@@ -183,7 +187,7 @@ export function ManuscriptExportDialog({
           disabled={busy || !metadata?.scenes.length || (range && from > to)}
           onClick={() => void download()}
         >
-          {busy ? '원고 준비 중…' : 'Markdown 다운로드'}
+          {busy ? t('transfer.m207') : t('transfer.m208')}
         </button>
       </div>
     </Dialog>

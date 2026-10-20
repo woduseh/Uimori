@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import type { ChatOptionState, OptionValues } from '../core/chat-options.js';
 import { promptControls, reconcilePromptValues, type PromptValue } from '../core/risu-prompt.js';
 
@@ -26,17 +27,17 @@ export function reviewChatOptionDraft(
     const previous = oldControls.find((control) => control.id === id);
     const control = controls.find((control) => control.id === id);
     let reason = '';
-    if (!sameOwner) reason = '사용하는 프롬프트가 바뀌었어요.';
-    else if (!control) reason = '이 옵션이 없어졌어요.';
-    else if (!previous || previous.type !== control.type) reason = '입력 형식이 바뀌었어요.';
+    if (!sameOwner) reason = t('settings.m106');
+    else if (!control) reason = t('settings.m107');
+    else if (!previous || previous.type !== control.type) reason = t('settings.m108');
     else if (reconcilePromptValues([control], { [id]: value }).resetKeys.length)
-      reason = '이 값은 더 이상 사용할 수 없어요.';
+      reason = t('settings.m109');
     else if (
       control.type === 'select' &&
       previous.options?.find((option) => option.value === (value ?? previous.default))?.label !==
         control.options?.find((option) => option.value === (value ?? control.default))?.label
     )
-      reason = '선택지의 뜻이 바뀌었어요. 다시 선택해 주세요.';
+      reason = t('settings.m110');
     if (reason) {
       discarded.push({ scope, id, label: previous?.label ?? control?.label ?? id, value, reason });
     } else {
@@ -61,7 +62,7 @@ export function reviewChatOptionDraft(
           label: previous?.label ?? id,
           value: null,
           unset: true,
-          reason: '프롬프트나 입력 형식이 바뀌어 이 옵션의 해제 선택을 적용하지 않아요.',
+          reason: t('settings.m111'),
         });
     } else retain('fixed', id, fixed[id]!, nextFixed);
   }

@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { validRevisionRange, type SelectionRevisionResult } from '../core/selection-revision.js';
@@ -27,6 +28,7 @@ type Captured = Pick<
 >;
 
 export function SelectionRevision(props: Props) {
+  useI18n();
   const current = useRef(props);
   current.current = props;
   const [captured, setCaptured] = useState<Captured | null>(null);
@@ -109,7 +111,11 @@ export function SelectionRevision(props: Props) {
       if (pending.current === controller && !controller.signal.aborted) setProposal(result.text);
     } catch (cause) {
       if (pending.current === controller && !controller.signal.aborted)
-        setError(cause instanceof Error ? cause.message : '퇴고 제안을 받지 못했어요.');
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : uiMessage('reader.couldNotGetARevisionSuggestion')
+        );
     } finally {
       if (pending.current === controller) {
         pending.current = null;
@@ -118,7 +124,7 @@ export function SelectionRevision(props: Props) {
     }
   }
   return (
-    <section className="selection-revision" aria-label="선택 구절 퇴고">
+    <section className="selection-revision" aria-label={t('reader.reviseSelectedPassage')}>
       {!captured ? (
         <>
           <button
@@ -140,62 +146,66 @@ export function SelectionRevision(props: Props) {
               setError('');
             }}
           >
-            <EditIcon size={18} aria-hidden="true" /> 선택 구절 퇴고
+            <EditIcon size={18} aria-hidden="true" />
+            {t('reader.reviseSelectedPassage2')}
           </button>
-          <p className="muted">원문에서 구절을 선택하면 도우미 모델에 퇴고를 부탁할 수 있어요.</p>
+          <p className="muted">{t('reader.selectAPassageInTheOriginalToAskThe')}</p>
         </>
       ) : (
         <>
           <div className="selection-revision-heading">
-            <strong>선택 구절 퇴고</strong>
-            <IconButton label="퇴고 닫기" icon={CloseIcon} onClick={close} />
+            <strong>{t('reader.reviseSelectedPassage')}</strong>
+            <IconButton label={t('reader.closeRevision')} icon={CloseIcon} onClick={close} />
           </div>
           <div className="selection-revision-comparison">
             <div>
-              <strong>선택한 원문</strong>
+              <strong>{t('reader.selectedOriginal')}</strong>
               <pre>{captured.text.slice(captured.selection.start, captured.selection.end)}</pre>
             </div>
             {proposal !== null && (
               <div>
-                <strong>퇴고 제안</strong>
+                <strong>{t('reader.revisionSuggestion')}</strong>
                 <pre data-testid="selection-revision-proposal">{proposal}</pre>
               </div>
             )}
           </div>
           <label>
-            퇴고 요청
+            {t('reader.revisionRequest')}
             <textarea
               rows={3}
               maxLength={REQUEST_TEXT_MAX_CHARS}
               value={instruction}
               disabled={busy}
-              placeholder="뜻은 유지하고, 감정을 직접 설명하는 문장만 줄여줘."
+              placeholder={t('reader.keepTheMeaningButReduceSentencesThatDirectlyExplain')}
               onChange={(event) => {
                 setInstruction(event.target.value);
                 setProposal(null);
               }}
             />
           </label>
-          <p className="muted">
-            도우미 모델을 한 번 호출해요. 이용 중인 모델에 따라 비용이 발생할 수 있어요. 제안은
-            초안에만 반영되며, 원문 저장으로 확정해요.
-          </p>
+          <p className="muted">{t('reader.callsTheHelperModelOnceChargesMayApplyDepending')}</p>
           {stale && (
             <NoticeBanner>
-              초안이나 선택 구간이 바뀌었어요. 현재 입력은 유지했어요. 닫고 구절을 다시 선택해
-              주세요.
+              {t('reader.theDraftOrSelectionChangedYourInputIsPreserved')}
             </NoticeBanner>
           )}
-          {error && <NoticeBanner tone="error">{error} 작성한 내용은 유지돼요.</NoticeBanner>}
-          {busy && <LoadingState presentation="inline" label="선택한 구절을 다듬고 있어요…" />}
+          {error && (
+            <NoticeBanner tone="error">
+              {t('reader.errorEditsPreserved', { error: translateMessage(error) })}
+            </NoticeBanner>
+          )}
+          {busy && (
+            <LoadingState presentation="inline" label={t('reader.refiningTheSelectedPassage')} />
+          )}
           <div className="form-actions">
             {busy ? (
               <button type="button" className="secondary" onClick={cancel}>
-                <StopIcon size={18} aria-hidden="true" /> 퇴고 요청 취소
+                <StopIcon size={18} aria-hidden="true" />
+                {t('reader.cancelRevisionRequest')}
               </button>
             ) : proposal !== null ? (
               <IconButton
-                label="다시 제안 받기"
+                label={t('reader.getAnotherSuggestion')}
                 icon={RefreshIcon}
                 disabled={stale || !instruction.trim()}
                 onClick={() => void requestProposal()}
@@ -204,11 +214,12 @@ export function SelectionRevision(props: Props) {
               <button
                 type="button"
                 className="primary"
-                aria-label="퇴고 제안 받기"
+                aria-label={t('reader.getRevisionSuggestion')}
                 disabled={stale || !instruction.trim()}
                 onClick={() => void requestProposal()}
               >
-                <EditIcon size={18} aria-hidden="true" /> 제안 받기
+                <EditIcon size={18} aria-hidden="true" />
+                {t('reader.getSuggestion')}
               </button>
             )}
             {proposal !== null && (
@@ -227,7 +238,8 @@ export function SelectionRevision(props: Props) {
                   close();
                 }}
               >
-                <CheckIcon size={18} aria-hidden="true" /> 초안에 반영
+                <CheckIcon size={18} aria-hidden="true" />
+                {t('reader.applyToDraft')}
               </button>
             )}
           </div>

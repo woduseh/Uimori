@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import { CredentialFileIcon, UploadIcon } from './ui-icons.js';
@@ -15,6 +16,7 @@ export function VertexCredentialUpload({
   onRegistered: (credential: RegisteredCredential) => void;
   onBusy: (value: boolean) => void;
 }) {
+  useI18n();
   const [uploading, setUploading] = useState(false),
     [error, setError] = useState('');
   const [registered, setRegistered] = useState<RegisteredCredential>();
@@ -27,30 +29,23 @@ export function VertexCredentialUpload({
   );
   const stored = credentialRef.startsWith('UIMORI_PROVIDER_VERTEX_FILE_');
   return (
-    <section className="vertex-credential-upload full" aria-label="Google 서비스 계정 JSON">
+    <section className="vertex-credential-upload full" aria-label={t('providers.m392')}>
       <div className="provider-section-heading">
         <strong>
           <CredentialFileIcon size={18} aria-hidden="true" />
-          서비스 계정 JSON
+          {t('providers.m393')}
         </strong>
-        {stored && <span className="provider-status">JSON 인증 선택됨</span>}
+        {stored && <span className="provider-status">{t('providers.m394')}</span>}
       </div>
-      <p>
-        Google Cloud에서 발급한 서비스 계정 키 파일을 선택해요. 프로젝트 ID와 인증 설정을 자동으로
-        채워요.
-      </p>
+      <p>{t('providers.m395')}</p>
       <label className="vertex-upload-field">
         <span>
           <UploadIcon size={16} aria-hidden="true" />
-          {uploading
-            ? '서버에 등록하는 중…'
-            : stored
-              ? '다른 JSON 파일로 변경'
-              : 'Google 키 JSON 파일 선택'}
+          {uploading ? t('providers.m396') : stored ? t('providers.m397') : t('providers.m398')}
         </span>
         <input
           type="file"
-          aria-label="Google 키 JSON 파일"
+          aria-label={t('providers.m399')}
           accept=".json,application/json"
           disabled={disabled || uploading}
           onChange={async (event) => {
@@ -59,7 +54,7 @@ export function VertexCredentialUpload({
             if (!file) return;
             setError('');
             if (file.size > 64 * 1024) {
-              setError('64 KB 이하의 서비스 계정 JSON 파일을 선택해 주세요.');
+              setError(uiMessage('providers.m400'));
               return;
             }
             const current = ++epoch.current;
@@ -70,9 +65,7 @@ export function VertexCredentialUpload({
               try {
                 serviceAccount = JSON.parse(await file.text());
               } catch {
-                throw new Error(
-                  '서비스 계정 JSON 파일을 읽을 수 없어요. 파일 형식을 확인해 주세요.'
-                );
+                throw new Error(uiMessage('providers.m401'));
               }
               if (
                 !serviceAccount ||
@@ -80,9 +73,7 @@ export function VertexCredentialUpload({
                 Array.isArray(serviceAccount) ||
                 (serviceAccount as Record<string, unknown>).type !== 'service_account'
               )
-                throw new Error(
-                  'type이 service_account인 Google Cloud 키 JSON 파일을 선택해 주세요.'
-                );
+                throw new Error(uiMessage('providers.m402'));
               const value = await api<RegisteredCredential>(
                 '/provider-management/vertex-credentials',
                 { serviceAccount }
@@ -94,10 +85,10 @@ export function VertexCredentialUpload({
               if (current === epoch.current)
                 setError(
                   caught instanceof ApiError && caught.status === 400
-                    ? '유효한 Google Cloud 서비스 계정 키 파일인지 확인해 주세요. 프로젝트·이메일·개인 키 정보가 필요해요.'
+                    ? uiMessage('providers.m403')
                     : caught instanceof Error
                       ? caught.message
-                      : '키 파일을 등록하지 못했어요.'
+                      : uiMessage('providers.m404')
                 );
             } finally {
               if (current === epoch.current) {
@@ -110,16 +101,13 @@ export function VertexCredentialUpload({
       </label>
       {stored && registered?.credentialRef === credentialRef && (
         <p role="status">
-          등록됨 · {registered.projectId}
+          {t('providers.m582', { value0: registered.projectId })}
           <br />
           <small>{registered.clientEmail}</small>
         </p>
       )}
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
-      <small>
-        키 파일은 서버에 보관돼요. 등록만으로 Google에 요청하지 않으며, 저장된 키 원문은 다시
-        표시하거나 일반 백업에 포함하지 않아요.
-      </small>
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      <small>{t('providers.m406')}</small>
     </section>
   );
 }

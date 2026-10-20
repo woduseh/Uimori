@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { RequestPreview } from '../core/request-preview.js';
 import type { RequestImagePreview } from '../core/request-images.js';
@@ -9,8 +10,9 @@ import { NoticeBanner } from './NoticeBanner.js';
 import './request-preview.css';
 
 const amount = (value: number | null) =>
-  value === null ? '미확인' : value.toLocaleString('ko-KR');
-const entries = (value: number | null) => (value === null ? '미확인' : `${amount(value)}개`);
+  value === null ? t('reader.unknown') : formatNumber(value);
+const entries = (value: number | null) =>
+  value === null ? t('reader.unknown') : t('reader.valueEntries', { v0: amount(value) });
 const noImages: readonly RequestImagePreview[] = [];
 
 export function RequestPreviewDialog({
@@ -32,6 +34,7 @@ export function RequestPreviewDialog({
   unavailable: boolean;
   onClose: () => void;
 }) {
+  useI18n();
   const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState<{ key: string; value: RequestPreview } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
@@ -97,7 +100,8 @@ export function RequestPreviewDialog({
         if (!controller.signal.aborted && sequence.current === version)
           setFailure({
             key,
-            message: cause instanceof Error ? cause.message : '미리보기를 불러오지 못했어요.',
+            message:
+              cause instanceof Error ? cause.message : uiMessage('reader.couldNotLoadThePreview'),
           });
       });
     return () => {
@@ -120,80 +124,90 @@ export function RequestPreviewDialog({
   return (
     <Dialog
       open={open}
-      title="다음 요청 미리보기"
-      headerTitle="다음 요청 미리보기"
+      title={t('reader.nextRequestPreview')}
+      headerTitle={t('reader.nextRequestPreview')}
       className="request-preview-dialog"
       scopeKey={chatId}
       onClose={onClose}
     >
       {!hasInput ? (
-        <p>장면 요청을 입력하면 다음 생성의 설정과 컨텍스트를 확인할 수 있어요.</p>
+        <p>{t('reader.enterASceneRequestToReviewSettingsAndContext')}</p>
       ) : unavailable ? (
-        <NoticeBanner>현재 작업을 마치고 미리보기를 다시 확인해 주세요.</NoticeBanner>
+        <NoticeBanner>{t('reader.finishTheCurrentTaskBeforeCheckingThePreviewAgain')}</NoticeBanner>
       ) : (
         <>
           <div className="request-preview-heading">
-            <p className="muted">작성 중인 요청 기준 · 추가 모델 호출 없음</p>
+            <p className="muted">{t('reader.basedOnYourDraftRequestNoExtraModelCalls')}</p>
             {(error || preview?.error || preview?.snapshot.stale) && (
               <button
                 type="button"
                 className="secondary"
                 onClick={() => setRefresh((value) => value + 1)}
               >
-                다시 확인
+                {t('reader.checkAgain')}
               </button>
             )}
           </div>
           {error ? (
-            <NoticeBanner tone="error">{error}</NoticeBanner>
+            <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>
           ) : !preview ? (
-            <LoadingState presentation="placeholder" label="다음 요청을 확인하고 있어요…" />
+            <LoadingState presentation="placeholder" label={t('reader.checkingTheNextRequest')} />
           ) : preview.snapshot.stale ? (
-            <NoticeBanner>확인 중에 컨텍스트나 설정이 바뀌었어요. 다시 확인해 주세요.</NoticeBanner>
+            <NoticeBanner>
+              {t('reader.contextOrSettingsChangedDuringTheCheckCheckAgain')}
+            </NoticeBanner>
           ) : (
             <div data-testid="request-preview">
               {preview.error && (
                 <NoticeBanner>
                   {preview.error === 'MAIN_MODEL_REQUIRED'
-                    ? '본문 모델을 선택하면 입력량을 계산할 수 있어요.'
-                    : '현재 조건의 입력량을 계산하지 못했어요. 자료와 프롬프트 설정을 확인해 주세요.'}
+                    ? t('reader.selectATextModelToCalculateInputSize')
+                    : t('reader.couldNotCalculateInputSizeUnderTheCurrentConditions')}
                 </NoticeBanner>
               )}
               <dl className="request-preview-facts">
                 <div>
-                  <dt>본문 모델</dt>
-                  <dd>{preview.selected.model?.title ?? '선택하지 않음'}</dd>
+                  <dt>{t('reader.textModel')}</dt>
+                  <dd>{preview.selected.model?.title ?? t('reader.notSelected')}</dd>
                 </div>
                 <div>
-                  <dt>프롬프트</dt>
-                  <dd>{preview.selected.prompt?.title ?? '기본 프롬프트'}</dd>
+                  <dt>{t('reader.prompt')}</dt>
+                  <dd>{preview.selected.prompt?.title ?? t('reader.defaultPrompt')}</dd>
                 </div>
                 <div>
-                  <dt>페르소나</dt>
-                  <dd>{preview.selected.persona?.title ?? '없음'}</dd>
+                  <dt>{t('reader.persona')}</dt>
+                  <dd>{preview.selected.persona?.title ?? t('reader.none')}</dd>
                 </div>
                 <div>
-                  <dt>로어 준비</dt>
+                  <dt>{t('reader.lorePreparation')}</dt>
                   <dd>
-                    고정 {entries(preview.lore.pinnedEntries)} · 유지{' '}
-                    {entries(preview.lore.retainedEntries)}
-                    {preview.lore.selectionPending && <small>추가 로어 선별 예정</small>}
-                    {preview.lore.resetRequested && <small>이번 요청에서 조회 로어 제외</small>}
+                    {t('reader.lorePreparationCounts', {
+                      pinned: entries(preview.lore.pinnedEntries),
+                      retained: entries(preview.lore.retainedEntries),
+                    })}
+                    {preview.lore.selectionPending && (
+                      <small>{t('reader.additionalLoreSelectionPending')}</small>
+                    )}
+                    {preview.lore.resetRequested && (
+                      <small>{t('reader.retrievedLoreExcludedFromThisRequest')}</small>
+                    )}
                   </dd>
                 </div>
                 <div>
-                  <dt>컨텍스트 요약</dt>
+                  <dt>{t('reader.contextSummary')}</dt>
                   <dd>
                     {preview.summary.inUse
-                      ? `${entries(preview.summary.compactedSources)} 장면 요약 사용`
+                      ? t('reader.usingValueSceneSummaries', {
+                          v0: amount(preview.summary.compactedSources),
+                        })
                       : preview.summary.inUse === null
-                        ? '포함 여부 미확인'
-                        : '요약 사용 안 함'}
+                        ? t('reader.inclusionUnknown')
+                        : t('reader.summaryNotUsed')}
                     {preview.caveats.includes('SUMMARY_NOT_REUSABLE') && (
-                      <small>이전 요약은 현재 요청에 사용할 수 없어요.</small>
+                      <small>{t('reader.thePreviousSummaryCannotBeUsedForThisRequest')}</small>
                     )}
                     {preview.caveats.includes('SUMMARY_INCLUSION_UNVERIFIED') && (
-                      <small>요약은 있지만 현재 프롬프트에 포함됐는지 확인하지 못했어요.</small>
+                      <small>{t('reader.aSummaryExistsButItsInclusionInTheCurrent')}</small>
                     )}
                   </dd>
                 </div>
@@ -201,57 +215,60 @@ export function RequestPreviewDialog({
               <div className="request-preview-budget">
                 <p>
                   {tokens?.estimatedInputTokens == null
-                    ? '입력량 미확인'
-                    : `입력 약 ${amount(tokens.estimatedInputTokens)} / ${amount(tokens.inputTokenLimit)} 토큰`}
-                  {percent !== null &&
-                    ` · ${percent.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}%`}
+                    ? t('reader.inputSizeUnknown')
+                    : t('reader.estimatedInputValueValueTokens', {
+                        v0: amount(tokens.estimatedInputTokens),
+                        v1: amount(tokens.inputTokenLimit),
+                      })}
+                  {percent !== null && ` · ${formatNumber(percent, { maximumFractionDigits: 1 })}%`}
                 </p>
                 {percent !== null && tokens?.inputTokenLimit && (
                   <meter
-                    aria-label="다음 요청의 입력 한도 대비 추정 컨텍스트"
+                    aria-label={t('reader.estimatedContextRelativeToTheNextRequestsInputLimit')}
                     min={0}
                     max={tokens.inputTokenLimit}
                     value={Math.min(tokens.estimatedInputTokens!, tokens.inputTokenLimit)}
                   />
                 )}
-                {tokenizer && <small className="muted">{tokenizer.label} · 로컬 추정</small>}
+                {tokenizer && (
+                  <small className="muted">
+                    {t('reader.tokenizerEstimate', {
+                      tokenizer: translateMessage(tokenizer.label),
+                    })}
+                  </small>
+                )}
                 {!!tokens?.imageCount && (
                   <small className="muted">
-                    참고 이미지 {tokens.imageCount}장 · 이미지 입력 약{' '}
-                    {amount(tokens.estimatedImageTokens ?? null)}토큰 포함
+                    {t('reader.imageTokenEstimate', {
+                      count: tokens.imageCount,
+                      tokens: amount(tokens.estimatedImageTokens ?? null),
+                    })}
                   </small>
                 )}
                 {preview.summary.compactionPending && (
-                  <p role="status">컨텍스트 정리가 필요해 실제 전송량은 달라질 수 있어요.</p>
+                  <p role="status">{t('reader.contextCleanupIsNeededSoTheActualInputSize')}</p>
                 )}
                 {tokens?.tokenizerInfo?.fallback && (
-                  <p role="status">선택한 토크나이저를 불러오지 못해 일반 추정치를 사용했어요.</p>
+                  <p role="status">{t('reader.theSelectedTokenizerCouldNotBeLoadedAGeneral2')}</p>
                 )}
                 {preview.caveats.includes('NATIVE_CALLBACKS_DEFERRED') && (
-                  <small className="muted">Risu 스크립트의 요청 변경 전 추정이에요.</small>
+                  <small className="muted">
+                    {t('reader.estimatedBeforeRisuScriptsModifyTheRequest')}
+                  </small>
                 )}
               </div>
               <details className="request-preview-help">
-                <summary>추정 기준</summary>
-                <p>
-                  현재 저장된 설정과 작성 중인 요청으로 첫 입력을 계산해요. 입력 한도와 비교하며
-                  로컬 추정에는 10% 여유분을 포함해요.
-                </p>
-                <p>
-                  생성 중 로어 선별·압축·도구 사용에 따라 입력이 달라질 수 있어요. 캐시 적중과 응답
-                  길이는 미리 알 수 없어요.
-                </p>
-                <p>로어 수는 현재 준비된 자료 기준이에요. 실제 포함 기록은 생성 후 확인해요.</p>
+                <summary>{t('reader.estimationBasis')}</summary>
+                <p>{t('reader.calculatesTheInitialInputFromSavedSettingsAndYour')}</p>
+                <p>{t('reader.inputMayChangeDuringGenerationDueToLoreSelection')}</p>
+                <p>{t('reader.loreCountsReflectCurrentlyPreparedMaterialCheckActualInclusion')}</p>
                 {!!tokens?.imageCount && (
-                  <p>
-                    이미지는 전송용 해상도로 별도 추정해요. 모델별 실제 이미지 토큰과 과금량을
-                    보장하지 않으며, 이미지 변환과 스크립트 처리 후 입력량이 달라질 수 있어요.
-                  </p>
+                  <p>{t('reader.imagesAreEstimatedSeparatelyAtTheirSendingResolutionActual')}</p>
                 )}
                 {preview.caveats.includes('NATIVE_CALLBACKS_DEFERRED') && (
-                  <p>Risu의 입력·시작·요청 수정 스크립트는 생성할 때 실행해요.</p>
+                  <p>{t('reader.risuInputStartAndRequestEditScriptsRunDuring')}</p>
                 )}
-                <p>이후 설정이나 원고를 바꾸면 다시 확인해 주세요.</p>
+                <p>{t('reader.checkAgainAfterChangingSettingsOrTheManuscript')}</p>
               </details>
             </div>
           )}

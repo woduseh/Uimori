@@ -1,3 +1,11 @@
+import {
+  t,
+  useI18n,
+  translateMessage,
+  formatDate,
+  formatNumber,
+  message as retainedMessage,
+} from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -13,7 +21,7 @@ import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 
 const date = (value: string) =>
-  new Date(value).toLocaleString('ko-KR', {
+  formatDate(new Date(value), {
     timeZone: 'Asia/Seoul',
     month: 'long',
     day: 'numeric',
@@ -27,6 +35,7 @@ export function BackupSettings({
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
+  useI18n();
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -104,7 +113,7 @@ export function BackupSettings({
       );
       setDraft(saved);
       setDirty(false);
-      setMessage('백업 설정을 저장했어요.');
+      setMessage(retainedMessage('transfer.m150'));
       setReload((value) => value + 1);
       return true;
     } catch (caught) {
@@ -129,19 +138,19 @@ export function BackupSettings({
     }
   }
   return (
-    <section className="settings-group scheduled-backups" aria-label="자동 백업">
+    <section className="settings-group scheduled-backups" aria-label={t('transfer.m151')}>
       <header className="settings-group-heading">
-        <h3>자동 백업</h3>
+        <h3>{t('transfer.m151')}</h3>
       </header>
       <div className="settings-group-body archive-management-card">
         <div className="backup-heading settings-row settings-row-toggle">
           <div className="settings-row-copy">
-            <strong>매일 자동 백업</strong>
-            <p className="muted">매일 서버에 복구용 사본을 보관해요.</p>
+            <strong>{t('transfer.m152')}</strong>
+            <p className="muted">{t('transfer.m153')}</p>
           </div>
           {draft && (
             <Switch
-              aria-label="매일 자동 백업"
+              aria-label={t('transfer.m152')}
               checked={draft.enabled}
               disabled={busy}
               onChange={(event) => change({ enabled: event.target.checked })}
@@ -154,11 +163,12 @@ export function BackupSettings({
               {draft.enabled && (
                 <label>
                   <span>
-                    백업 시간 <small>한국 시간</small>
+                    {t('transfer.m154')}
+                    <small>{t('transfer.m155')}</small>
                   </span>
                   <input
                     type="time"
-                    aria-label="백업 시간"
+                    aria-label={t('transfer.m154')}
                     required
                     value={
                       Number.isFinite(draft.hour + draft.minute)
@@ -176,14 +186,15 @@ export function BackupSettings({
               )}
               <label>
                 <span>
-                  보관 개수 <small>1–30개</small>
+                  {t('transfer.m156')}
+                  <small>{t('transfer.m157')}</small>
                 </span>
                 <input
                   type="number"
                   min={1}
                   max={30}
                   required
-                  aria-label="성공본 보관 개수"
+                  aria-label={t('transfer.m158')}
                   value={Number.isFinite(draft.retain) ? draft.retain : ''}
                   aria-invalid={
                     !Number.isInteger(draft.retain) || draft.retain < 1 || draft.retain > 30
@@ -192,9 +203,7 @@ export function BackupSettings({
                 />
               </label>
             </div>
-            {invalid && (
-              <NoticeBanner tone="error">백업 시간과 보관 개수를 확인해 주세요.</NoticeBanner>
-            )}
+            {invalid && <NoticeBanner tone="error">{t('transfer.m159')}</NoticeBanner>}
           </fieldset>
         )}
         {error && (
@@ -209,47 +218,51 @@ export function BackupSettings({
                   else reloadSettings();
                 }}
               >
-                <RefreshCw size={16} aria-hidden="true" /> 다시 확인
+                <RefreshCw size={16} aria-hidden="true" />
+                {t('transfer.m160')}
               </button>
             }
           >
-            {error}
+            {translateMessage(error)}
           </NoticeBanner>
         )}
         {status && (
           <>
             <dl className="backup-status" aria-live="polite">
               <div>
-                <dt>최근 백업</dt>
+                <dt>{t('transfer.m161')}</dt>
                 <dd>
                   {status.status === 'running'
-                    ? '생성·검증 중…'
+                    ? t('transfer.m162')
                     : status.lastSuccess
-                      ? `${date(status.lastSuccess.createdAt)} · 성공`
-                      : '아직 없음'}
+                      ? t('transfer.d008', { v0: date(status.lastSuccess.createdAt) })
+                      : t('transfer.m163')}
                 </dd>
               </div>
               <div>
-                <dt>다음 백업</dt>
+                <dt>{t('transfer.m164')}</dt>
                 <dd>
-                  {status.settings.nextRunAt ? date(status.settings.nextRunAt) : '예약 안 함'}
-                  {dirty && <small>저장된 설정 기준</small>}
+                  {status.settings.nextRunAt ? date(status.settings.nextRunAt) : t('transfer.m165')}
+                  {dirty && <small>{t('transfer.m166')}</small>}
                 </dd>
               </div>
             </dl>
-            {status.error && <NoticeBanner tone="error">{status.error}</NoticeBanner>}
-            {status.warning && <NoticeBanner>{status.warning}</NoticeBanner>}
+            {status.error && (
+              <NoticeBanner tone="error">{translateMessage(status.error)}</NoticeBanner>
+            )}
+            {status.warning && <NoticeBanner>{translateMessage(status.warning)}</NoticeBanner>}
             <div className="backup-actions">
               <button
                 type="button"
                 disabled={busy || status.status === 'running'}
                 onClick={() => void start()}
               >
-                <DatabaseBackup size={16} aria-hidden="true" /> 지금 백업
+                <DatabaseBackup size={16} aria-hidden="true" />
+                {t('transfer.m167')}
               </button>
               <SaveButton
                 type="button"
-                label="백업 설정 저장"
+                label={t('transfer.m168')}
                 aria-busy={operation === 'save'}
                 disabled={busy || !dirty || invalid}
                 onClick={() => void save()}
@@ -258,53 +271,61 @@ export function BackupSettings({
             {status.backups.length ? (
               <details className="backup-list">
                 <summary>
-                  저장된 백업 <span>{status.backups.length}개</span>
+                  {t('transfer.m169')}
+                  <span>{t('transfer.count', { count: status.backups.length })}</span>
                 </summary>
                 {status.backups.map((item) => (
                   <div key={item.id} className="archive-action-row">
                     <span>
                       {date(item.createdAt)}
                       <small>
-                        {(item.bytes / 1048576).toFixed(1)} MiB · DB {item.schema}
+                        {t('transfer.backupSize', {
+                          size: formatNumber(item.bytes / 1048576, {
+                            minimumFractionDigits: 1,
+                            maximumFractionDigits: 1,
+                          }),
+                          schema: item.schema,
+                        })}
                       </small>
                     </span>
                     <a
                       href={`/api/backups/${item.id}/download`}
                       download
-                      aria-label={`${date(item.createdAt)} 백업 다운로드`}
+                      aria-label={t('transfer.d009', { v0: date(item.createdAt) })}
                     >
-                      <Download size={16} aria-hidden="true" /> 다운로드
+                      <Download size={16} aria-hidden="true" />
+                      {t('transfer.m170')}
                     </a>
                   </div>
                 ))}
               </details>
             ) : (
               <div className="backup-empty">
-                <span>저장된 백업</span>
-                <span>0개</span>
+                <span>{t('transfer.m169')}</span>
+                <span>{t('transfer.count', { count: 0 })}</span>
               </div>
             )}
-            <small className="muted">서버 장애에 대비한 백업은 별도 기기에 보관해 주세요.</small>
+            <small className="muted">{t('transfer.m172')}</small>
           </>
         )}
         {!status && !error && (
-          <LoadingState presentation="placeholder" label="백업 설정을 불러오는 중이에요…" />
+          <LoadingState presentation="placeholder" label={t('transfer.m173')} />
         )}
         <TransientNotice message={message} />
         <Dialog
           open={confirmReload}
-          title="백업 설정 변경 버리기"
+          title={t('transfer.m174')}
           variant="confirmation"
           role="alertdialog"
           onClose={() => setConfirmReload(false)}
         >
-          <p>작성 중인 백업 설정을 버리고 최신 설정을 불러올까요?</p>
+          <p>{t('transfer.m175')}</p>
           <DraftDiscardActions
             open={confirmReload}
             disabled={busy}
             onContinue={() => setConfirmReload(false)}
             onDiscard={reloadSettings}
-            discardLabel="초안 버리고 불러오기"
+            discardLabel={t('transfer.m176')}
           />
         </Dialog>
       </div>

@@ -1,3 +1,4 @@
+import { useI18n, translateMessage } from './i18n.js';
 import { TranslationGuideEditor } from './TranslationGuideEditor.js';
 import { readTranslationGuide, withTranslationGuide } from '../core/translation-guide.js';
 import { editNativeSource, resourceWithNativeSource } from './native-source-edit.js';
@@ -51,6 +52,8 @@ export function RisuNativeFields({
   onDraftChange?: (dirty: boolean) => void;
   onPortraitBusy: (busy: boolean) => void;
 }) {
+  const { t } = useI18n();
+
   const native = value.nativeRisu;
   const standalone = !Object.keys(native.card).length && !!native.module;
   const id = useId();
@@ -202,13 +205,13 @@ export function RisuNativeFields({
     }
   }
   const sections: { id: Section; title: string }[] = [
-    { id: 'basic', title: '기본 정보' },
-    ...(!standalone ? [{ id: 'greetings' as const, title: '첫 메시지' }] : []),
-    { id: 'lore', title: '로어북' },
-    { id: 'assets', title: '에셋' },
-    { id: 'translation', title: '번역 지침' },
-    { id: 'advanced', title: '고급 설정' },
-    ...(!standalone ? [{ id: 'creator' as const, title: '제작 정보' }] : []),
+    { id: 'basic', title: t('native.text_eb7f501b0e') },
+    ...(!standalone ? [{ id: 'greetings' as const, title: t('native.text_be7723bd53') }] : []),
+    { id: 'lore', title: t('native.text_5ce4911d95') },
+    { id: 'assets', title: t('native.text_b1a821ee46') },
+    { id: 'translation', title: t('native.text_ecc580fe68') },
+    { id: 'advanced', title: t('native.text_772fa878ec') },
+    ...(!standalone ? [{ id: 'creator' as const, title: t('native.text_78def74816') }] : []),
   ];
   const panel = (key: Section) => ({
     id: id + '-' + key + '-panel',
@@ -219,30 +222,33 @@ export function RisuNativeFields({
   const rawEditor = section === 'advanced' && advanced === 'source' && (
     <div className="native-source-editor">
       <p className="muted">
-        로어 {lore.length}개 · 정규식 {nativeRisuRegex(native).length}개 · 트리거{' '}
-        {nativeRisuTriggers(native).length}개
+        {t('native.resourceCounts', {
+          lore: lore.length,
+          regex: nativeRisuRegex(native).length,
+          triggers: nativeRisuTriggers(native).length,
+        })}
       </p>
       <label>
-        편집 대상
+        {t('native.text_7e041cadf6')}
         <select
-          aria-label="Risu 원문 편집 대상"
+          aria-label={t('native.text_405989e7a8')}
           value={selectedPart}
           disabled={!!draft}
           onChange={(e) => setPart(e.target.value as SourcePart)}
         >
-          {!standalone && <option value="greetings">대체 시작문</option>}
-          <option value="lore">로어</option>
-          <option value="regex">정규식</option>
-          <option value="triggers">트리거 / Lua</option>
-          {!standalone && <option value="card">카드 전체 JSON</option>}
-          {native.module && <option value="module">모듈 전체 JSON</option>}
+          {!standalone && <option value="greetings">{t('native.text_1c7e81d795')}</option>}
+          <option value="lore">{t('native.text_4abddc7d5e')}</option>
+          <option value="regex">{t('native.text_fc7e4f6228')}</option>
+          <option value="triggers">{t('native.text_5aa9d342d6')}</option>
+          {!standalone && <option value="card">{t('native.text_c169575a0a')}</option>}
+          {native.module && <option value="module">{t('native.text_1601efd40a')}</option>}
         </select>
       </label>
       <label>
-        원문 JSON
+        {t('native.text_2ccb4d60c2')}
         <textarea
           className="native-main-text"
-          aria-label="Risu 원문 JSON"
+          aria-label={t('native.text_086d9f609b')}
           rows={18}
           spellCheck={false}
           value={draft?.text ?? JSON.stringify(source, null, 2)}
@@ -251,7 +257,7 @@ export function RisuNativeFields({
       </label>
       <div className="form-actions">
         <button type="button" disabled={!draft} onClick={applyJson}>
-          폼에 반영
+          {t('native.text_5c02cb8d1c')}
         </button>
         <button
           type="button"
@@ -262,7 +268,7 @@ export function RisuNativeFields({
             setError('');
           }}
         >
-          입력 되돌리기
+          {t('native.text_d688879ebd')}
         </button>
       </div>
     </div>
@@ -270,7 +276,7 @@ export function RisuNativeFields({
   return (
     <div className="native-editor native-content-editor full">
       <SectionNavigation
-        label="자료 편집 영역"
+        label={t('native.text_b891876a9a')}
         items={sections}
         value={section}
         onSelect={setSection}
@@ -280,7 +286,7 @@ export function RisuNativeFields({
       />
       {draft && (
         <p className="native-editor-notice" role="status">
-          미적용 원문이 있어요.{' '}
+          {t('native.text_0b4d698c5c')}{' '}
           <button
             type="button"
             className="ghost"
@@ -289,13 +295,13 @@ export function RisuNativeFields({
               setAdvanced('source');
             }}
           >
-            원문 확인
+            {t('native.text_609d8be788')}
           </button>
         </p>
       )}
       {error && (
         <p className="error" role="alert">
-          {error} · 입력은 유지했어요.
+          {t('native.inputPreserved', { error: translateMessage(error) })}
         </p>
       )}
       <fieldset disabled={!!draft} className="native-panel-fields">
@@ -319,19 +325,19 @@ export function RisuNativeFields({
             onDirtyChange={setPortraitBusy}
           />
           <label>
-            이름
+            {t('native.text_9aa18e5071')}
             <input
-              aria-label="Risu 자료 이름"
+              aria-label={t('native.text_d63d79b1e2')}
               value={string(standalone ? native.module?.name : native.card.name)}
               maxLength={200}
               onChange={(e) => field('name', e.target.value)}
             />
           </label>
           <label>
-            {standalone ? '모듈 설명' : '카드 설명'}
+            {standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
             <textarea
               className="native-main-text native-description"
-              aria-label={standalone ? '모듈 설명' : '카드 설명'}
+              aria-label={standalone ? t('native.text_9e7348ca61') : t('native.text_08117feaa5')}
               rows={12}
               value={string(standalone ? native.module?.description : native.card.description)}
               onChange={(e) => field('description', e.target.value)}
@@ -341,9 +347,12 @@ export function RisuNativeFields({
         {!standalone && (
           <div {...panel('greetings')}>
             <NativeCollectionEditor
-              label="첫 메시지"
+              label={t('native.text_be7723bd53')}
               items={greetings.map((message, i) => ({
-                title: i === 0 ? '기본 첫 메시지' : '대체 메시지 ' + i,
+                title:
+                  i === 0
+                    ? t('native.text_104a1f537a')
+                    : t('native.alternateMessage', { number: i }),
                 subtitle: message.replace(/<[^>]*>/g, '').slice(0, 55),
               }))}
               onAdd={() => writeGreetings([...greetings, ''])}
@@ -364,10 +373,10 @@ export function RisuNativeFields({
             >
               {(i) => (
                 <label>
-                  {i === 0 ? '기본 시작문' : '대체 시작문'}
+                  {i === 0 ? t('native.text_3a91359cae') : t('native.text_1c7e81d795')}
                   <textarea
                     className="native-main-text"
-                    aria-label={i === 0 ? '기본 시작문' : '대체 시작문'}
+                    aria-label={i === 0 ? t('native.text_3a91359cae') : t('native.text_1c7e81d795')}
                     rows={18}
                     value={greetings[i]}
                     onChange={(e) =>
@@ -388,7 +397,7 @@ export function RisuNativeFields({
             onChange={writeLore}
             selectionControl={
               <label>
-                로어 선택 방식
+                {t('native.text_1345bfd1e0')}
                 <select
                   value={value.loreActivation?.mode ?? 'model'}
                   onChange={(e) =>
@@ -401,8 +410,8 @@ export function RisuNativeFields({
                     })
                   }
                 >
-                  <option value="model">JEV 관련성 판단</option>
-                  <option value="discoverable">필요할 때 모델이 읽기</option>
+                  <option value="model">{t('native.text_d8aac6a860')}</option>
+                  <option value="discoverable">{t('native.text_f314bfcb7c')}</option>
                 </select>
               </label>
             }
@@ -414,9 +423,9 @@ export function RisuNativeFields({
         {!standalone && (
           <div {...panel('creator')} className="native-section-body">
             <label>
-              제작자 코멘트
+              {t('native.text_d9f63fc805')}
               <textarea
-                aria-label="제작자 코멘트"
+                aria-label={t('native.text_d9f63fc805')}
                 rows={4}
                 value={string(native.card.creator_notes)}
                 onChange={(e) => field('creator_notes', e.target.value)}
@@ -424,14 +433,14 @@ export function RisuNativeFields({
             </label>
             <div className="native-field-row">
               <label>
-                제작자
+                {t('native.text_59a4b7210d')}
                 <input
                   value={string(native.card.creator)}
                   onChange={(e) => field('creator', e.target.value)}
                 />
               </label>
               <label>
-                자료 버전
+                {t('native.text_f0da897630')}
                 <input
                   value={string(native.card.character_version)}
                   onChange={(e) => field('character_version', e.target.value)}
@@ -442,15 +451,15 @@ export function RisuNativeFields({
         )}
       </fieldset>
       <div {...panel('advanced')} className="native-section-body native-advanced-workspace">
-        <div className="native-advanced-tabs" role="group" aria-label="고급 설정 영역">
+        <div className="native-advanced-tabs" role="group" aria-label={t('native.text_2c737ca1dd')}>
           {(
             [
-              ['instructions', '지침', '글로벌 노트 · 예시 대화'],
-              ['variables', '기본 변수·토글', '초기값 · 토글 정의'],
-              ['display', '표시', '백그라운드 HTML / CSS'],
-              ['scripts', '스크립트', 'Lua · 트리거 · 정규식'],
-              ['modules', '연결 모듈', '함께 사용하는 자료'],
-              ['source', '원문', 'Risu 원문 JSON'],
+              ['instructions', t('native.text_af10d9b29e'), t('native.text_83fca869e0')],
+              ['variables', t('native.text_dc0ebb4fd3'), t('native.text_bdf1722abc')],
+              ['display', t('native.text_a61d568e9d'), t('native.text_ea790c9853')],
+              ['scripts', t('native.text_8b330f374f'), t('native.text_f31813202f')],
+              ['modules', t('native.text_ae90c98d27'), t('native.text_c8d1c0b8c0')],
+              ['source', t('native.text_8ba13a8495'), t('native.text_086d9f609b')],
             ] as const
           ).map(([key, title, subtitle]) => (
             <button
@@ -474,11 +483,11 @@ export function RisuNativeFields({
           disabled={!!draft}
         >
           <div hidden={advanced !== 'instructions'} className="native-form-stack">
-            <h3>추가 지침</h3>
+            <h3>{t('native.text_22a2af3f54')}</h3>
             {!standalone ? (
               <>
                 <label>
-                  글로벌노트
+                  {t('native.text_2d2a2c8204')}
                   <textarea
                     rows={8}
                     value={string(native.card.post_history_instructions)}
@@ -486,9 +495,9 @@ export function RisuNativeFields({
                   />
                 </label>
                 <label>
-                  대화 예시
+                  {t('native.text_07b2960ad0')}
                   <textarea
-                    aria-label="대화 예시"
+                    aria-label={t('native.text_07b2960ad0')}
                     rows={8}
                     value={string(native.card.mes_example)}
                     onChange={(e) => field('mes_example', e.target.value)}
@@ -496,13 +505,13 @@ export function RisuNativeFields({
                 </label>
               </>
             ) : (
-              <p className="muted">카드의 글로벌노트와 대화 예시는 봇 편집에서 설정해요.</p>
+              <p className="muted">{t('native.text_078e60fbef')}</p>
             )}
           </div>
           <div hidden={advanced !== 'variables'} className="native-form-stack">
-            <h3>기본 변수·토글</h3>
+            <h3>{t('native.text_dc0ebb4fd3')}</h3>
             <label>
-              기본 변수
+              {t('native.text_0510e453e9')}
               <textarea
                 rows={8}
                 value={string(
@@ -518,7 +527,7 @@ export function RisuNativeFields({
               />
             </label>
             <label>
-              토글 정의
+              {t('native.text_4c6723bcdd')}
               <textarea
                 rows={8}
                 value={string(
@@ -535,10 +544,10 @@ export function RisuNativeFields({
             </label>
           </div>
           <div hidden={advanced !== 'display'} className="native-form-stack">
-            <h3>배경 HTML·CSS와 이미지 설정</h3>
+            <h3>{t('native.text_98a6884c74')}</h3>
             {!standalone && (
               <label>
-                배경 HTML / CSS
+                {t('native.text_50262c6215')}
                 <textarea
                   rows={12}
                   className="native-main-text"
@@ -548,9 +557,7 @@ export function RisuNativeFields({
                 />
               </label>
             )}
-            {standalone && (
-              <p className="muted">배경 HTML / CSS는 봇 카드의 표시 설정에서 편집해요.</p>
-            )}
+            {standalone && <p className="muted">{t('native.text_a2c215763f')}</p>}
             {value.imageHandoff && (
               <RisuImageHandoffFields
                 policy={value.imageHandoff}
@@ -593,7 +600,7 @@ export function RisuNativeFields({
             disabled={!!draft}
           />
           <details className="native-advanced native-script-regex">
-            <summary>정규식 스크립트</summary>
+            <summary>{t('native.text_aa2a73abcc')}</summary>
             <NativeRisuRegexEditor
               value={Array.isArray(regex) ? regex : []}
               draftPath="package.native.regex"

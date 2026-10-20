@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { Switch } from './BooleanControls.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
 import {
@@ -45,49 +46,53 @@ export function ReadabilitySettings({
   value: ReadingStyle;
   onChange: (value: ReadingStyle) => void;
 }) {
+  useI18n();
   return (
-    <section className="reading-settings" aria-label="읽기 스타일 설정">
-      <section className="settings-group reading-settings-group" aria-label="스타일과 간격">
+    <section className="reading-settings" aria-label={t('reader.readingStyleSettings')}>
+      <section
+        className="settings-group reading-settings-group"
+        aria-label={t('reader.styleAndSpacing')}
+      >
         <header className="settings-group-heading">
-          <h4>읽기 스타일</h4>
+          <h4>{t('reader.readingStyle')}</h4>
         </header>
         <div className="settings-group-body reading-settings-rows">
           <label>
-            스타일
+            {t('reader.style')}
             <select
-              aria-label="읽기 스타일"
+              aria-label={t('reader.readingStyle')}
               value={currentPreset(value)}
               onChange={(event) =>
                 onChange({ ...preset(event.target.value), quoteRoles: value.quoteRoles })
               }
             >
-              <option value="default">기본</option>
-              <option value="relaxed">여유롭게</option>
-              <option value="dialogue">대사 중심</option>
+              <option value="default">{t('reader.default')}</option>
+              <option value="relaxed">{t('reader.relaxed')}</option>
+              <option value="dialogue">{t('reader.dialogueFocused')}</option>
               <option value="custom" disabled>
-                사용자 설정
+                {t('reader.custom')}
               </option>
             </select>
           </label>
           <label>
-            인용 강조
+            {t('reader.quoteEmphasis')}
             <select
-              aria-label="인용 강조"
+              aria-label={t('reader.quoteEmphasis')}
               value={value.emphasis}
               onChange={(event) =>
                 onChange({ ...value, emphasis: event.target.value as ReadingStyle['emphasis'] })
               }
             >
-              <option value="off">끄기</option>
-              <option value="subtle">은은하게</option>
-              <option value="strong">뚜렷하게</option>
+              <option value="off">{t('reader.off')}</option>
+              <option value="subtle">{t('reader.subtle')}</option>
+              <option value="strong">{t('reader.strong')}</option>
             </select>
           </label>
           <div className="reading-spacing">
             <label>
-              줄 간격
+              {t('reader.lineSpacing')}
               <select
-                aria-label="줄 간격"
+                aria-label={t('reader.lineSpacing')}
                 value={value.lineHeight ?? 'default'}
                 onChange={(event) =>
                   onChange({
@@ -97,16 +102,16 @@ export function ReadabilitySettings({
                   })
                 }
               >
-                <option value="default">기본</option>
-                <option value="1.6">촘촘하게</option>
-                <option value="1.9">보통</option>
-                <option value="2.2">여유롭게</option>
+                <option value="default">{t('reader.default')}</option>
+                <option value="1.6">{t('reader.tight')}</option>
+                <option value="1.9">{t('reader.normal')}</option>
+                <option value="2.2">{t('reader.relaxed')}</option>
               </select>
             </label>
             <label>
-              문단 간격
+              {t('reader.paragraphSpacing')}
               <select
-                aria-label="문단 간격"
+                aria-label={t('reader.paragraphSpacing')}
                 value={value.paragraphSpacing ?? 'default'}
                 onChange={(event) =>
                   onChange({
@@ -116,27 +121,30 @@ export function ReadabilitySettings({
                   })
                 }
               >
-                <option value="default">기본</option>
-                <option value="0.5">좁게</option>
-                <option value="1">보통</option>
-                <option value="1.5">여유롭게</option>
-                <option value="2">넓게</option>
+                <option value="default">{t('reader.default')}</option>
+                <option value="0.5">{t('reader.narrow')}</option>
+                <option value="1">{t('reader.normal')}</option>
+                <option value="1.5">{t('reader.relaxed')}</option>
+                <option value="2">{t('reader.wide')}</option>
               </select>
             </label>
           </div>
         </div>
       </section>
 
-      <section className="settings-group reading-settings-group" aria-label="보조 표시">
+      <section
+        className="settings-group reading-settings-group"
+        aria-label={t('reader.readingAids')}
+      >
         <header className="settings-group-heading">
           <div>
-            <h4>보조 표시</h4>
-            <p>대사·생각 앞뒤에 문단 여백을 넣어요. 원문은 바뀌지 않아요.</p>
+            <h4>{t('reader.readingAids')}</h4>
+            <p>{t('reader.addParagraphSpacingAroundDialogueAndThoughtsTheOriginal')}</p>
           </div>
         </header>
         <div className="settings-group-body reading-settings-rows">
           <label className="settings-row settings-row-toggle">
-            <span>대사 줄바꿈</span>
+            <span>{t('reader.dialogueLineBreaks')}</span>
             <span className="settings-row-control">
               <Switch
                 checked={value.dialogueBreaks}
@@ -145,7 +153,7 @@ export function ReadabilitySettings({
             </span>
           </label>
           <label className="settings-row settings-row-toggle">
-            <span>생각 줄바꿈</span>
+            <span>{t('reader.thoughtLineBreaks')}</span>
             <span className="settings-row-control">
               <Switch
                 checked={value.thoughtBreaks}
@@ -154,14 +162,14 @@ export function ReadabilitySettings({
             </span>
           </label>
           <details className="reading-quote-settings">
-            <summary>표기별 스타일</summary>
-            <p>부호에 따라 표시해요. 대사나 생각의 실제 의미를 판단하지 않아요.</p>
+            <summary>{t('reader.styleByPunctuation')}</summary>
+            <p>{t('reader.stylesFollowPunctuationTheyDoNotDetermineTheActual')}</p>
             <div className="reading-quote-rules">
               {QUOTE_PAIRS.map(({ id, label }) => (
                 <label key={id}>
-                  {label}
+                  {translateMessage(label)}
                   <select
-                    aria-label={`${label} 스타일`}
+                    aria-label={t('reader.valueStyle', { v0: translateMessage(label) })}
                     value={value.quoteRoles[id]}
                     onChange={(event) =>
                       onChange({
@@ -170,10 +178,10 @@ export function ReadabilitySettings({
                       })
                     }
                   >
-                    <option value="dialogue">대사</option>
-                    <option value="thought">생각</option>
-                    <option value="quote">일반 인용</option>
-                    <option value="off">처리 안 함</option>
+                    <option value="dialogue">{t('reader.dialogue')}</option>
+                    <option value="thought">{t('reader.thought')}</option>
+                    <option value="quote">{t('reader.generalQuote')}</option>
+                    <option value="off">{t('reader.noProcessing')}</option>
                   </select>
                 </label>
               ))}
@@ -184,12 +192,12 @@ export function ReadabilitySettings({
 
       <section
         className="settings-group reading-settings-group reading-preview-group"
-        aria-label="미리보기"
+        aria-label={t('reader.preview')}
       >
         <header className="settings-group-heading">
-          <h4>미리보기</h4>
+          <h4>{t('reader.preview')}</h4>
         </header>
-        <div className="reading-preview" aria-label="읽기 스타일 미리보기">
+        <div className="reading-preview" aria-label={t('reader.readingStylePreview')}>
           <div className="prose" data-testid="reading-preview">
             <RisuMessageSurface
               html={previewHtml}
@@ -202,9 +210,9 @@ export function ReadabilitySettings({
       </section>
 
       <div className="reading-settings-footer">
-        <small>일반 본문과 도우미 내용에 적용하며 봇이 만든 상태창·컨트롤 스타일은 보존해요.</small>
+        <small>{t('reader.appliesToRegularTextAndHelperContentBotCreated')}</small>
         <button type="button" className="secondary" onClick={() => onChange(DEFAULT_READABILITY)}>
-          읽기 스타일 초기화
+          {t('reader.resetReadingStyle')}
         </button>
       </div>
     </section>

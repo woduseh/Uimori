@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import DOMPurify from 'dompurify';
 import { useContext, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { DEFAULT_THEME_TEMPLATE, THEME_SLOTS } from '../core/themes.js';
@@ -19,14 +20,11 @@ export function themeTemplate(html: string): DocumentFragment {
     ALLOW_DATA_ATTR: true,
     FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'link', 'base', 'meta', 'form'],
   });
-  if (DOMPurify.removed.length)
-    throw new Error(
-      '레이아웃에 지원하지 않는 HTML이 있어요. 스크립트·이벤트 속성·iframe·form 대신 슬롯과 CSS를 사용해 주세요.'
-    );
+  if (DOMPurify.removed.length) throw new Error(uiMessage('visuals.m021'));
   const slots = [...fragment.querySelectorAll('slot')];
   for (const name of THEME_SLOTS) {
     if (slots.filter((slot) => slot.name === name).length !== 1)
-      throw new Error(`레이아웃에 <slot name="${name}"></slot>이 정확히 하나 필요해요.`);
+      throw new Error(uiMessage('visuals.m022', { slot: `<slot name="${name}"></slot>` }));
   }
   if (
     slots.some(
@@ -37,15 +35,14 @@ export function themeTemplate(html: string): DocumentFragment {
         !THEME_SLOTS.includes(slot.name as (typeof THEME_SLOTS)[number])
     )
   )
-    throw new Error('알 수 없는 레이아웃 슬롯이 있어요.');
+    throw new Error(uiMessage('visuals.m023'));
   if (
     ['portrait', 'request-persona'].some(
       (name) => slots.filter((slot) => slot.name === name).length > 1
     )
   )
-    throw new Error('등장인물 슬롯은 하나만 사용할 수 있어요.');
-  if (slots.filter((slot) => !slot.name).length > 1)
-    throw new Error('기본 슬롯은 하나만 사용할 수 있어요.');
+    throw new Error(uiMessage('visuals.m024'));
+  if (slots.filter((slot) => !slot.name).length > 1) throw new Error(uiMessage('visuals.m025'));
   if (!slots.some((slot) => !slot.name)) fragment.append(document.createElement('slot'));
   return fragment;
 }
@@ -58,6 +55,8 @@ export function ThemeFrame({
   portrait?: ReactNode;
   requestPersona?: ReactNode;
 }) {
+  useI18n();
+  const bodyLabel = t('visuals.m026');
   const theme = useContext(ThemeContext)?.active;
   const host = useRef<HTMLDivElement>(null);
   const [error, setError] = useState('');
@@ -94,7 +93,7 @@ export function ThemeFrame({
       body.setAttribute('data-uimori-body-scroll', '');
       body.setAttribute('tabindex', '0');
       body.setAttribute('role', 'region');
-      body.setAttribute('aria-label', '장면 본문');
+      body.setAttribute('aria-label', t('visuals.m026'));
       return () => {
         body.removeAttribute('data-uimori-body-scroll');
         for (const [name, value] of previous) {
@@ -105,10 +104,15 @@ export function ThemeFrame({
     }
     // React removes the host. Do not collapse live content between layout replacements.
   }, [html, css]);
+  useLayoutEffect(() => {
+    host.current?.querySelector('[data-uimori-body-scroll]')?.setAttribute('aria-label', bodyLabel);
+  }, [bodyLabel]);
   return (
     <>
       {error && (
-        <NoticeBanner tone="error">테마 레이아웃 대신 기본 화면을 표시해요. {error}</NoticeBanner>
+        <NoticeBanner tone="error">
+          {t('visuals.themeFallback', { error: translateMessage(error) })}
+        </NoticeBanner>
       )}
       <div
         ref={host}

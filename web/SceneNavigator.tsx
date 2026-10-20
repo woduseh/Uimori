@@ -1,3 +1,4 @@
+import { t, useI18n, formatNumber } from './i18n.js';
 import { themeBodyScroll } from './theme-body-scroll.js';
 import { BookmarkList } from './Bookmarks.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -39,6 +40,7 @@ export function SceneNavigator({
   onCurrentLabel?: (label: string) => void;
   compactListOpener?: RefObject<HTMLButtonElement | null>;
 }) {
+  useI18n();
   const entries = detail.reader.navigation;
   const [current, setCurrent] = useState(target || detail.reader.order[0] || '');
   const [awayFromBottom, setAwayFromBottom] = useState(false);
@@ -158,8 +160,8 @@ export function SceneNavigator({
   const sceneCount = entries.filter((entry) => !entry.opening).length;
   const currentLabel = active
     ? active.opening
-      ? '첫 메시지'
-      : `${active.number} / ${sceneCount}`
+      ? t('reader.openingMessage2')
+      : `${formatNumber(active.number)} / ${formatNumber(sceneCount)}`
     : '';
   useEffect(() => {
     onCurrentLabel?.(currentLabel);
@@ -183,7 +185,7 @@ export function SceneNavigator({
   const dialog = (
     <Dialog
       open={open}
-      title="장면 목록"
+      title={t('reader.sceneList')}
       onClose={() => setOpen(false)}
       onAfterClose={() => {
         // Resizing can replace the original opener while the native dialog stays open.
@@ -195,7 +197,7 @@ export function SceneNavigator({
     >
       {onTarget && (
         <details onToggle={(event) => setBookmarksOpen(event.currentTarget.open)}>
-          <summary>책갈피</summary>
+          <summary>{t('reader.bookmarks')}</summary>
           {open && bookmarksOpen && (
             <BookmarkList
               chatId={detail.chat.id}
@@ -211,11 +213,11 @@ export function SceneNavigator({
         <input
           type="search"
           form={searchTarget === 'manuscript' ? searchFormId : undefined}
-          aria-label="장면 검색어"
+          aria-label={t('reader.sceneSearchQuery')}
           placeholder={
             searchTarget === 'scenes'
-              ? '장면 번호, 이름 또는 요청으로 찾기'
-              : '본문·번역·요청으로 찾기'
+              ? t('reader.findBySceneNumberNameOrRequest')
+              : t('reader.findInTextTranslationsAndRequests')
           }
           value={query}
           onChange={(event) => {
@@ -234,20 +236,20 @@ export function SceneNavigator({
         />
       </label>
       {onTarget && (
-        <div className="segmented" role="group" aria-label="장면 검색 대상">
+        <div className="segmented" role="group" aria-label={t('reader.sceneSearchScope')}>
           <button
             type="button"
             aria-pressed={searchTarget === 'scenes'}
             onClick={() => setSearchTarget('scenes')}
           >
-            장면 목록
+            {t('reader.sceneList')}
           </button>
           <button
             type="button"
             aria-pressed={searchTarget === 'manuscript'}
             onClick={() => setSearchTarget('manuscript')}
           >
-            본문
+            {t('reader.text')}
           </button>
         </div>
       )}
@@ -267,8 +269,10 @@ export function SceneNavigator({
         />
       ) : (
         <>
-          <h3>장면 목록 결과</h3>
-          {sceneCount > 0 && <p className="scene-list-count">현재 채팅 · 장면 {sceneCount}개</p>}
+          <h3>{t('reader.sceneListResults')}</h3>
+          {sceneCount > 0 && (
+            <p className="scene-list-count">{t('reader.sceneCount', { count: sceneCount })}</p>
+          )}
           <ol className="scene-list" start={offset + 1} ref={list}>
             {page.map((entry) => (
               <li key={entry.id}>
@@ -276,18 +280,26 @@ export function SceneNavigator({
                   type="button"
                   aria-current={entry.id === active.id ? 'location' : undefined}
                   aria-label={
-                    entry.opening ? entry.label : `${entry.number}번째 장면 · ${entry.label}`
+                    entry.opening
+                      ? entry.label
+                      : t('reader.sceneValueValue', {
+                          v0: formatNumber(entry.number),
+                          v1: entry.label,
+                        })
                   }
                   onClick={() => select(entry.id)}
                 >
                   <span className="scene-list-number" aria-hidden="true">
-                    {entry.opening ? <ListIcon size={16} /> : entry.number}
+                    {entry.opening ? <ListIcon size={16} /> : formatNumber(entry.number)}
                   </span>
                   <span className="scene-list-title">{entry.label}</span>
-                  {entry.id === active.id && <small>읽는 중</small>}
+                  {entry.id === active.id && <small>{t('reader.reading')}</small>}
                 </button>
                 <IconButton
-                  label={`${entry.opening ? '첫 메시지' : `${entry.number}번째 장면`} 이름 편집`}
+                  label={t('reader.sceneNameAction', {
+                    opening: !!entry.opening,
+                    number: formatNumber(entry.number),
+                  })}
                   icon={EditIcon}
                   size={16}
                   className="scene-title-edit"
@@ -296,7 +308,7 @@ export function SceneNavigator({
               </li>
             ))}
           </ol>
-          {!filtered.length && <p role="status">일치하는 장면이 없어요.</p>}
+          {!filtered.length && <p role="status">{t('reader.noMatchingScenes')}</p>}
           {filtered.length > 60 && (
             <div className="scene-list-pages">
               <button
@@ -305,7 +317,7 @@ export function SceneNavigator({
                 disabled={offset === 0}
                 onClick={() => changePage(Math.max(0, offset - 60))}
               >
-                이전 목록
+                {t('reader.previousList')}
               </button>
               <span>
                 {offset + 1}–{Math.min(offset + 60, filtered.length)} / {filtered.length}
@@ -316,7 +328,7 @@ export function SceneNavigator({
                 disabled={offset + 60 >= filtered.length}
                 onClick={() => changePage(offset + 60)}
               >
-                다음 목록
+                {t('reader.nextList')}
               </button>
             </div>
           )}
@@ -333,26 +345,28 @@ export function SceneNavigator({
     );
   return (
     <>
-      <nav className="scene-navigator" aria-label="장면 탐색">
+      <nav className="scene-navigator" aria-label={t('reader.sceneNavigation')}>
         <button
           type="button"
           ref={railListOpener}
           className="scene-list-toggle"
-          aria-label="장면 목록 열기"
-          title="장면 목록 열기"
+          aria-label={t('reader.openSceneList')}
+          title={t('reader.openSceneList')}
           onClick={openList}
         >
           <ListIcon size={18} />
           <span>
             {active.opening
-              ? '첫 메시지'
+              ? t('reader.openingMessage2')
               : `${active.number} / ${entries.filter((entry) => !entry.opening).length}`}
           </span>
         </button>
         <div
           className="scene-marks"
           aria-label={
-            entries.length > capacity ? '일부 장면 눈금 · 전체 장면은 목록에서 선택' : '장면 눈금'
+            entries.length > capacity
+              ? t('reader.partialSceneScaleSelectAnySceneFromTheList')
+              : t('reader.sceneScale')
           }
         >
           {[...marks]
@@ -361,7 +375,7 @@ export function SceneNavigator({
               const entry = entries[i];
               const label = entry.opening
                 ? entry.label
-                : `${entry.number}번째 장면 · ${entry.label}`;
+                : t('reader.sceneValueValue', { v0: formatNumber(entry.number), v1: entry.label });
               return (
                 <button
                   type="button"
@@ -382,8 +396,8 @@ export function SceneNavigator({
         <button
           type="button"
           className="scene-latest"
-          aria-label="본문 맨 아래로"
-          title="본문 맨 아래로"
+          aria-label={t('reader.goToTheBottomOfTheText')}
+          title={t('reader.goToTheBottomOfTheText')}
           disabled={!canGoLatest}
           onClick={onLatest}
         >

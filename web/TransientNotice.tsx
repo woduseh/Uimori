@@ -1,3 +1,4 @@
+import { translateMessage, useI18n } from './i18n.js';
 import {
   createContext,
   useCallback,
@@ -16,6 +17,7 @@ const NoticeContext = createContext<(notice: Notice) => void>(() => {});
 
 /** Completion feedback never changes saved state or dismisses an unresolved problem. */
 export function TransientNoticeProvider({ children }: { children: ReactNode }) {
+  useI18n();
   const [notices, setNotices] = useState<Notice[]>([]);
   const host = useRef<HTMLDivElement>(null);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -58,7 +60,7 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
         {notices.map((notice) => (
           <div className="transient-notice" role="status" key={notice.id}>
             <CheckIcon size={18} aria-hidden="true" />
-            <span>{notice.message}</span>
+            <span>{translateMessage(notice.message)}</span>
           </div>
         ))}
       </div>
@@ -67,6 +69,7 @@ export function TransientNoticeProvider({ children }: { children: ReactNode }) {
 }
 
 export function TransientNotice({ message }: { message: string }) {
+  useI18n();
   const id = useId();
   const show = useContext(NoticeContext);
   useEffect(() => {

@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -29,6 +30,7 @@ export function ThemeBackgroundSettings({
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange: SettingsSaveRegistration;
 }) {
+  useI18n();
   const state = useThemes();
   const p = state.catalog.preferences;
   const selected =
@@ -86,7 +88,7 @@ export function ThemeBackgroundSettings({
         setDraft(background ?? inherited);
       }
       await state.refresh(true);
-      if (alive.current) setNotice('배경 설정을 저장했어요.');
+      if (alive.current) setNotice(uiMessage('visuals.m001'));
       return true;
     } catch (cause) {
       if (cause instanceof ApiError && cause.status === 409) await state.refresh();
@@ -124,37 +126,35 @@ export function ThemeBackgroundSettings({
     <section className="theme-dimension" aria-labelledby="theme-background-heading">
       <div className="theme-dimension-heading">
         <div>
-          <h3 id="theme-background-heading">배경 이미지</h3>
-          <p>레이아웃·팔레트와 별도로, 본문 상자 바깥에 표시해요. 저장하면 적용돼요.</p>
+          <h3 id="theme-background-heading">{t('visuals.m002')}</h3>
+          <p>{t('visuals.m003')}</p>
         </div>
         {scope !== 'global' && (
           <button
             disabled={disabled || busy || state.loading || !selected}
             onClick={() => void saveValue(null)}
           >
-            배경 상위 설정 따르기
+            {t('visuals.m004')}
           </button>
         )}
       </div>
-      {scope !== 'global' && !selected && (
-        <p className="theme-inherited">이 범위의 배경은 상위 설정을 따라요.</p>
-      )}
+      {scope !== 'global' && !selected && <p className="theme-inherited">{t('visuals.m005')}</p>}
       {draft.imageHash && (
         <div
           className="theme-background-preview"
-          aria-label="배경 이미지 미리보기"
+          aria-label={t('visuals.m006')}
           style={backgroundStyle(draft)}
         />
       )}
       <fieldset className="theme-background-controls" disabled={disabled || busy || state.loading}>
         <label className="settings-row theme-background-file">
           <span className="settings-row-copy">
-            <strong>배경 이미지 선택</strong>
-            {!draft.imageHash && <small>선택한 배경 이미지가 없어요.</small>}
+            <strong>{t('visuals.m007')}</strong>
+            {!draft.imageHash && <small>{t('visuals.m008')}</small>}
           </span>
           <input
             type="file"
-            aria-label="배경 이미지 선택"
+            aria-label={t('visuals.m007')}
             accept={PACKAGE_IMAGE_MIMES.join(',')}
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -163,11 +163,11 @@ export function ThemeBackgroundSettings({
             }}
           />
         </label>
-        <div className="theme-background-sliders" role="group" aria-label="배경 효과">
+        <div className="theme-background-sliders" role="group" aria-label={t('visuals.m009')}>
           <label>
-            배경 흐림 · {draft.blur}px
+            {t('visuals.blur', { value: formatNumber(draft.blur) })}
             <input
-              aria-label="배경 흐림"
+              aria-label={t('visuals.m011')}
               type="range"
               min="0"
               max="30"
@@ -176,9 +176,9 @@ export function ThemeBackgroundSettings({
             />
           </label>
           <label>
-            밝은 모드 흰 덮개 · {draft.lightOverlay}%
+            {t('visuals.lightOverlay', { value: formatNumber(draft.lightOverlay) })}
             <input
-              aria-label="밝은 모드 배경 덮개"
+              aria-label={t('visuals.m013')}
               type="range"
               min="0"
               max="100"
@@ -187,9 +187,9 @@ export function ThemeBackgroundSettings({
             />
           </label>
           <label>
-            어두운 모드 검은 덮개 · {draft.darkOverlay}%
+            {t('visuals.darkOverlay', { value: formatNumber(draft.darkOverlay) })}
             <input
-              aria-label="어두운 모드 배경 덮개"
+              aria-label={t('visuals.m015')}
               type="range"
               min="0"
               max="100"
@@ -202,7 +202,7 @@ export function ThemeBackgroundSettings({
       <div className="theme-toolbar theme-background-actions">
         <SaveButton
           type="button"
-          label="배경 저장"
+          label={t('visuals.m016')}
           text=""
           aria-busy={operation === 'save'}
           disabled={disabled || busy || state.loading || !dirty}
@@ -210,16 +210,17 @@ export function ThemeBackgroundSettings({
         />
         <button
           className="theme-background-reset"
-          aria-label="배경 초기화"
-          title="배경 이미지와 효과 초기화"
+          aria-label={t('visuals.m017')}
+          title={t('visuals.m018')}
           disabled={disabled || busy || state.loading || !draft.imageHash}
           onClick={() => setDraft({ ...defaultThemeBackground })}
         >
-          <ResetIcon size={18} aria-hidden="true" /> 초기화
+          <ResetIcon size={18} aria-hidden="true" />
+          {t('visuals.m019')}
         </button>
         {dirty && (
           <IconButton
-            label="배경 변경 취소"
+            label={t('visuals.m020')}
             icon={CloseIcon}
             disabled={disabled || busy}
             onClick={() => {
@@ -229,7 +230,7 @@ export function ThemeBackgroundSettings({
           />
         )}
       </div>
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       <TransientNotice message={notice} />
     </section>
   );

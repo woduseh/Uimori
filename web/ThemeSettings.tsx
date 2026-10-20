@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -70,6 +71,7 @@ export function ThemeSettings({
   onSaveHandlerChange?: SettingsSaveRegistration;
   active?: boolean;
 }) {
+  const { locale } = useI18n();
   const [saveConflict, setSaveConflict] = useState(false);
   const state = useThemes();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -129,8 +131,9 @@ export function ThemeSettings({
         : p.chatPalettes?.[state.scope.chatId ?? ''];
   const activePaletteId = resolvePaletteId(state.catalog, state.scope);
   const activePaletteTitle =
-    BUILTIN_PALETTES.find((palette) => palette.id === activePaletteId)?.title ??
-    '레이아웃 원래 색상';
+    translateMessage(
+      BUILTIN_PALETTES.find((palette) => palette.id === activePaletteId)?.title ?? ''
+    ) || t('visualpanels.originalLayoutColors');
   const activeLayout =
     state.catalog.themes.find((theme) => theme.id === state.active.id) ??
     getBuiltinTheme(state.active.id);
@@ -148,8 +151,8 @@ export function ThemeSettings({
   const palettes = [
     {
       id: THEME_PALETTE_ID,
-      title: '레이아웃 원래 색상',
-      description: '선택한 레이아웃에 저장된 색상을 사용해요.',
+      title: t('visualpanels.originalLayoutColors'),
+      description: t('visualpanels.useTheColorsSavedInTheSelected'),
       colors: originalColors ?? { light: {}, dark: {} },
     },
     ...BUILTIN_PALETTES,
@@ -276,7 +279,8 @@ export function ThemeSettings({
       return;
     }
     await action(async () => {
-      if (file.size > 4 * 1024 * 1024) throw new Error('테마 파일은 4MiB 이하로 가져와 주세요.');
+      if (file.size > 4 * 1024 * 1024)
+        throw new Error(uiMessage('visualpanels.importAThemeFileNoLargerThan'));
       const model = parseThemeFile(JSON.parse(await file.text()));
       themeTemplate(model.templateHtml);
       setDraft({ id: null, model });
@@ -287,58 +291,66 @@ export function ThemeSettings({
     });
   }
   return (
-    <section className="theme-settings" aria-label="테마와 색상">
+    <section className="theme-settings" aria-label={t('visualpanels.themesAndColors')}>
       <SaveConflictDialog
         open={saveConflict}
-        title="테마 저장 내용 확인"
+        title={t('visualpanels.reviewSavedTheme')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
           const value = (await api<ThemeCatalog>('/themes')).themes.find(
             (theme) => theme.id === draft?.id
           );
-          if (!value) throw new Error('저장본을 찾을 수 없어요. 현재 입력은 유지돼요.');
-          return [
-            { label: '이름', value: value.title },
-            { label: '설명', value: value.description },
+          if (!value)
+            throw new Error(uiMessage('visualpanels.savedVersionUnavailableYourCurrentInputIs'));
+          return () => [
+            { label: t('visualpanels.name'), value: value.title },
+            { label: t('visualpanels.description'), value: value.description },
           ];
         }}
       />
       <div className="settings-card theme-toolbar theme-control-bar">
         <label>
-          기본 외관
+          {t('visualpanels.defaultAppearance')}{' '}
           <select
-            aria-label="기본 외관"
+            aria-label={t('visualpanels.defaultAppearance')}
             value={p.defaultThemeId}
             disabled={busy || backgroundDirty || state.loading}
             onChange={(event) => choose(event.target.value, 'global')}
           >
             {globalLayouts.map((theme) => (
               <option key={theme.id} value={theme.id}>
-                {theme.title}
+                {theme.id.startsWith('builtin:') ? translateMessage(theme.title) : theme.title}
               </option>
             ))}
           </select>
         </label>
         <label>
-          화면 모드
+          {t('visualpanels.displayMode')}{' '}
           <select
-            aria-label="테마 화면 모드"
+            aria-label={t('visualpanels.themeDisplayMode')}
             value={appearanceMode}
             onChange={(e) => onAppearanceModeChange(e.target.value as typeof appearanceMode)}
           >
-            <option value="system">기기 설정 따르기</option>
-            <option value="light">밝게</option>
-            <option value="dark">어둡게</option>
+            <option value="system">{t('visualpanels.followDeviceSettings')}</option>
+            <option value="light">{t('visualpanels.light')}</option>
+            <option value="dark">{t('visualpanels.dark')}</option>
           </select>
         </label>
         <span className="theme-current">
-          현재 화면 · {state.active.title} / {state.preview ? '미리보기 색상' : activePaletteTitle}
+          {t('visualpanels.currentDisplay', {
+            v0: state.active.id.startsWith('builtin:')
+              ? translateMessage(state.active.title)
+              : state.active.title,
+            v1: state.preview ? t('visualpanels.previewColors') : activePaletteTitle,
+          })}
         </span>
       </div>
       {state.disabled && (
         <p role="status" className="theme-recovery">
-          이 탭에서는 사용자 테마를 잠시 껐어요.{' '}
-          <button onClick={() => state.setDisabled(false)}>테마 다시 켜기</button>
+          {t('visualpanels.customThemesAreTemporarilyDisabledInThis')}{' '}
+          <button onClick={() => state.setDisabled(false)}>
+            {t('visualpanels.enableThemesAgain')}
+          </button>
         </p>
       )}
       {state.error && (
@@ -346,65 +358,66 @@ export function ThemeSettings({
           tone="error"
           actions={
             <button type="button" className="secondary" onClick={() => void state.refresh()}>
-              다시 불러오기
+              {t('visualpanels.reload')}
             </button>
           }
         >
-          {state.error}
+          {translateMessage(state.error)}
         </NoticeBanner>
       )}
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       <TransientNotice message={notice} />
       <details className="theme-advanced">
-        <summary>고급 외관·테마 제작</summary>
+        <summary>{t('visualpanels.advancedAppearanceAndThemeCreation')}</summary>
         <p className="theme-intro">
-          레이아웃·팔레트·배경을 범위별로 조합하거나, 에이전트가 만든 테마 파일을 가져와 미리 보고
-          편집해요.
+          {t('visualpanels.combineLayoutsPalettesAndBackgroundsByScope')}
         </p>
         <div className="settings-card theme-toolbar theme-control-bar">
           <label>
-            적용 범위
+            {t('visualpanels.scope')}{' '}
             <select
-              aria-label="테마 적용 범위"
+              aria-label={t('visualpanels.themeScope')}
               value={scope}
               disabled={busy || backgroundDirty}
               onChange={(e) => setScope(e.target.value as typeof scope)}
             >
-              <option value="global">작업실 기본</option>
-              {state.scope.botId && <option value="bot">현재 봇의 기본</option>}
-              {state.scope.chatId && <option value="chat">현재 채팅만</option>}
+              <option value="global">{t('visualpanels.workspaceDefault')}</option>
+              {state.scope.botId && (
+                <option value="bot">{t('visualpanels.currentBotDefault')}</option>
+              )}
+              {state.scope.chatId && <option value="chat">{t('visualpanels.thisChatOnly')}</option>}
             </select>
           </label>
           <label>
-            미리보기 색상
+            {t('visualpanels.previewColors')}{' '}
             <select
-              aria-label="테마 색상 보기"
+              aria-label={t('visualpanels.themeColorPreview')}
               value={mode}
               onChange={(e) => setMode(e.target.value as typeof mode)}
             >
-              <option value="light">밝은 색</option>
-              <option value="dark">어두운 색</option>
+              <option value="light">{t('visualpanels.lightColors')}</option>
+              <option value="dark">{t('visualpanels.darkColors')}</option>
             </select>
           </label>
         </div>
         <section className="theme-dimension" aria-labelledby="theme-layout-heading">
           <div className="theme-dimension-heading">
             <div>
-              <h3 id="theme-layout-heading">레이아웃</h3>
+              <h3 id="theme-layout-heading">{t('visualpanels.layout')}</h3>
             </div>
             {scope !== 'global' && (
               <button
                 disabled={busy || backgroundDirty || state.loading || !selectedId}
                 onClick={() => choose(null)}
               >
-                레이아웃 상위 설정 따르기
+                {t('visualpanels.inheritLayout')}
               </button>
             )}
           </div>
           {scope !== 'global' && !selectedId && (
-            <p className="theme-inherited">이 범위의 레이아웃은 상위 설정을 따라요.</p>
+            <p className="theme-inherited">{t('visualpanels.thisScopeInheritsItsLayout')}</p>
           )}
-          <div className="theme-grid" aria-label="저장된 레이아웃">
+          <div className="theme-grid" aria-label={t('visualpanels.savedLayouts')}>
             {layouts.map((theme) => (
               <article
                 className={`theme-card ${selectedId === theme.id ? 'selected' : ''}`}
@@ -412,7 +425,11 @@ export function ThemeSettings({
               >
                 <button
                   className="theme-card-apply"
-                  aria-label={`${theme.title} 테마 적용`}
+                  aria-label={t('visualpanels.applyTheme', {
+                    v0: theme.id.startsWith('builtin:')
+                      ? translateMessage(theme.title)
+                      : theme.title,
+                  })}
                   aria-pressed={selectedId === theme.id}
                   disabled={busy || backgroundDirty || state.loading}
                   onClick={() => choose(theme.id)}
@@ -442,22 +459,44 @@ export function ThemeSettings({
                     </span>
                   </span>
                   <strong>
-                    {theme.title}
-                    {selectedId === theme.id ? ' · 선택됨' : ''}
+                    {t('visualpanels.selectedTitle', {
+                      title: theme.id.startsWith('builtin:')
+                        ? translateMessage(theme.title)
+                        : theme.title,
+                      selected: selectedId === theme.id,
+                    })}
                   </strong>
-                  <small>{theme.description || '사용자 테마'}</small>
+                  <small>
+                    {(theme.id.startsWith('builtin:')
+                      ? translateMessage(theme.description)
+                      : theme.description) || t('visualpanels.customTheme')}
+                  </small>
                 </button>
                 <div className="theme-card-actions">
                   <button
-                    aria-label={theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
-                    title={theme.id.startsWith('builtin:') ? '복제해서 꾸미기' : '편집'}
+                    aria-label={
+                      theme.id.startsWith('builtin:')
+                        ? t('visualpanels.duplicateAndCustomize')
+                        : t('visualpanels.edit')
+                    }
+                    title={
+                      theme.id.startsWith('builtin:')
+                        ? t('visualpanels.duplicateAndCustomize')
+                        : t('visualpanels.edit')
+                    }
                     disabled={busy || backgroundDirty}
                     onClick={() => edit(theme)}
                   >
-                    {theme.id.startsWith('builtin:') ? '꾸미기' : '편집'}
+                    {theme.id.startsWith('builtin:')
+                      ? t('visualpanels.customize')
+                      : t('visualpanels.edit')}
                   </button>
                   <IconButton
-                    label={`${theme.title} 내보내기`}
+                    label={t('visualpanels.export', {
+                      v0: theme.id.startsWith('builtin:')
+                        ? translateMessage(theme.title)
+                        : theme.title,
+                    })}
                     icon={DownloadIcon}
                     onClick={() =>
                       saveDownload(
@@ -468,24 +507,42 @@ export function ThemeSettings({
                   />
                 </div>
                 {!theme.id.startsWith('builtin:') && (
-                  <ActionMenu label={`${theme.title} 관리`} className="theme-card-menu" viewport>
+                  <ActionMenu
+                    label={t('visualpanels.manage', {
+                      v0: theme.id.startsWith('builtin:')
+                        ? translateMessage(theme.title)
+                        : theme.title,
+                    })}
+                    className="theme-card-menu"
+                    viewport
+                  >
                     <button
-                      aria-label={`${theme.title} 복제`}
+                      aria-label={t('visualpanels.duplicate', {
+                        v0: theme.id.startsWith('builtin:')
+                          ? translateMessage(theme.title)
+                          : theme.title,
+                      })}
                       disabled={busy || backgroundDirty}
                       onClick={() => edit(theme, true)}
                     >
-                      <CopyIcon size={18} aria-hidden="true" /> 복제해서 편집
+                      <CopyIcon size={18} aria-hidden="true" /> {t(
+                        'visualpanels.duplicateAndEdit'
+                      )}{' '}
                     </button>
                     <button
                       className="danger"
-                      aria-label={`${theme.title} 삭제`}
+                      aria-label={t('visualpanels.delete', {
+                        v0: theme.id.startsWith('builtin:')
+                          ? translateMessage(theme.title)
+                          : theme.title,
+                      })}
                       disabled={busy || dirty}
                       onClick={(event) => {
                         event.currentTarget.closest('details')?.querySelector('summary')?.focus();
                         setDeleting(theme);
                       }}
                     >
-                      <DeleteIcon size={18} aria-hidden="true" /> 삭제
+                      <DeleteIcon size={18} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
                     </button>
                   </ActionMenu>
                 )}
@@ -496,7 +553,7 @@ export function ThemeSettings({
         <section className="theme-dimension" aria-labelledby="theme-palette-heading">
           <div className="theme-dimension-heading">
             <div>
-              <h3 id="theme-palette-heading">색상 팔레트</h3>
+              <h3 id="theme-palette-heading">{t('visualpanels.colorPalette')}</h3>
             </div>
             <button
               disabled={
@@ -507,20 +564,24 @@ export function ThemeSettings({
               }
               onClick={() => choosePalette(null)}
             >
-              {scope === 'global' ? '팔레트 기본값으로' : '팔레트 상위 설정 따르기'}
+              {scope === 'global'
+                ? t('visualpanels.resetPaletteToDefault')
+                : t('visualpanels.inheritPalette')}
             </button>
           </div>
           {scope !== 'global' && !selectedPaletteId && (
-            <p className="theme-inherited">이 범위의 팔레트는 상위 설정을 따라요.</p>
+            <p className="theme-inherited">{t('visualpanels.thisScopeInheritsItsPalette')}</p>
           )}
-          <div className="theme-palette-grid" aria-label="색상 팔레트 선택">
+          <div className="theme-palette-grid" aria-label={t('visualpanels.selectColorPalette')}>
             {palettes.map((palette) => {
               const colors = { ...baselineThemeColors[mode], ...palette.colors[mode] };
               return (
                 <button
                   key={palette.id}
                   className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
-                  aria-label={`${palette.title} 팔레트 적용`}
+                  aria-label={t('visualpanels.applyPalette', {
+                    v0: translateMessage(palette.title),
+                  })}
                   aria-pressed={selectedPaletteId === palette.id}
                   disabled={busy || backgroundDirty || state.loading}
                   onClick={() => choosePalette(palette.id)}
@@ -531,10 +592,12 @@ export function ThemeSettings({
                     ))}
                   </span>
                   <strong>
-                    {palette.title}
-                    {selectedPaletteId === palette.id ? ' · 선택됨' : ''}
+                    {t('visualpanels.selectedTitle', {
+                      title: translateMessage(palette.title),
+                      selected: selectedPaletteId === palette.id,
+                    })}
                   </strong>
-                  <small>{palette.description}</small>
+                  <small>{translateMessage(palette.description)}</small>
                 </button>
               );
             })}
@@ -550,31 +613,28 @@ export function ThemeSettings({
           onDirtyChange={setBackgroundDirty}
           onSaveHandlerChange={registerBackgroundSave}
         />
-        <section className="theme-library-tools" aria-label="테마 관리">
+        <section className="theme-library-tools" aria-label={t('visualpanels.manageThemes')}>
           <div className="theme-library-copy">
-            <h4>테마 관리</h4>
-            <p>
-              커스텀 테마를 만들거나 파일에서 가져와요. 내보낸 파일에는 레이아웃 자체의 색상과
-              코드가 담겨요.
-            </p>
+            <h4>{t('visualpanels.manageThemes')}</h4>
+            <p>{t('visualpanels.createACustomThemeOrImportOne')}</p>
           </div>
           <div className="theme-library-actions">
             <button className="primary" disabled={busy || backgroundDirty} onClick={() => edit()}>
-              <AddIcon size={16} aria-hidden="true" /> 새 커스텀 테마
+              <AddIcon size={16} aria-hidden="true" /> {t('visualpanels.newCustomTheme')}{' '}
             </button>
             <button
               className="secondary"
               disabled={busy || backgroundDirty}
               onClick={() => input.current?.click()}
             >
-              <UploadIcon size={16} aria-hidden="true" /> 테마 가져오기
+              <UploadIcon size={16} aria-hidden="true" /> {t('visualpanels.importTheme')}{' '}
             </button>
             <input
               ref={input}
               type="file"
               accept=".json"
               hidden
-              aria-label="테마 파일"
+              aria-label={t('visualpanels.themeFile')}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = '';
@@ -584,25 +644,27 @@ export function ThemeSettings({
           </div>
         </section>
         {draft && (
-          <section className="theme-editor" aria-label="커스텀 테마 편집기">
+          <section className="theme-editor" aria-label={t('visualpanels.customThemeEditor')}>
             <div className="theme-editor-heading">
-              <h3>{draft.id ? '테마 편집' : '새 테마 만들기'}</h3>
-              <span className="muted">{dirty ? '미저장 변경' : '저장됨'}</span>
+              <h3>{draft.id ? t('visualpanels.editTheme') : t('visualpanels.createTheme')}</h3>
+              <span className="muted">
+                {dirty ? t('visualpanels.unsavedChanges') : t('visualpanels.saved')}
+              </span>
             </div>
             <fieldset disabled={busy || backgroundDirty}>
               <label>
-                테마 이름
+                {t('visualpanels.themeName')}{' '}
                 <input
-                  aria-label="테마 이름"
+                  aria-label={t('visualpanels.themeName')}
                   value={draft.model.title}
                   maxLength={100}
                   onChange={(e) => patch({ title: e.target.value })}
                 />
               </label>
               <label>
-                설명
+                {t('visualpanels.description')}{' '}
                 <input
-                  aria-label="테마 설명"
+                  aria-label={t('visualpanels.themeDescription')}
                   value={draft.model.description}
                   onChange={(e) => patch({ description: e.target.value })}
                 />
@@ -610,11 +672,19 @@ export function ThemeSettings({
               <div className="theme-colors">
                 {THEME_COLOR_KEYS.map((key) => (
                   <label key={key}>
-                    <span>{labels[key] ?? key}</span>
+                    <span>{translateMessage(labels[key] ?? key)}</span>
                     <div>
                       <input
                         type="color"
-                        aria-label={`${mode} ${key} 색상`}
+                        aria-label={t('visualpanels.color', {
+                          v0:
+                            locale === 'ko'
+                              ? mode
+                              : mode === 'light'
+                                ? t('visualpanels.lightColors')
+                                : t('visualpanels.darkColors'),
+                          v1: locale === 'ko' ? key : translateMessage(labels[key] ?? key),
+                        })}
                         value={colorInputValue(
                           draft.model.colors[mode][key] ?? baselineThemeColors[mode][key]
                         )}
@@ -629,8 +699,14 @@ export function ThemeSettings({
                       />
                       <IconButton
                         icon={ResetIcon}
-                        title="기본 색상으로 되돌리기"
-                        label={`${mode === 'light' ? '밝은 색' : '어두운 색'} ${labels[key] ?? key} 기본 색상으로 되돌리기`}
+                        title={t('visualpanels.resetToDefaultColor')}
+                        label={t('visualpanels.resetToDefaultColor2', {
+                          v0:
+                            mode === 'light'
+                              ? t('visualpanels.lightColors')
+                              : t('visualpanels.darkColors'),
+                          v1: translateMessage(labels[key] ?? key),
+                        })}
                         disabled={!draft.model.colors[mode][key]}
                         onClick={() => {
                           const colors = { ...draft.model.colors[mode] };
@@ -642,27 +718,17 @@ export function ThemeSettings({
                   </label>
                 ))}
               </div>
-              <p className="muted">
-                위 ‘미리보기 색상’에서 밝은 색과 어두운 색을 각각 편집해요. 지정하지 않은 색은
-                Uimori 기본 색상을 따라요. 편집한 색상은 레이아웃에 저장되며, 적용할 때는 팔레트에서
-                ‘레이아웃 원래 색상’을 골라 주세요.
-              </p>
+              <p className="muted">{t('visualpanels.editLightAndDarkColorsSeparatelyUsing')}</p>
               <details className="theme-code">
-                <summary>CSS·HTML 직접 편집</summary>
-                <p>
-                  앱 CSS는 작업실, 본문 CSS는 봇 메시지 안에 적용해요. 레이아웃은
-                  request·heading·body·actions 슬롯을 각각 하나씩 포함해야 해요. JavaScript와 Risu
-                  CBS는 실행하지 않아요.
-                </p>
-                <p>
-                  테마 제작 규약은 저장소의 <code>docs/THEME-AUTHORING.md</code>에 있어요.
-                </p>
+                <summary>{t('visualpanels.editCssAndHtmlDirectly')}</summary>
+                <p>{t('visualpanels.appCssAppliesToTheWorkspaceBody')}</p>
+                <p>{t('visualpanels.themeAuthoringHelp', { path: 'docs/THEME-AUTHORING.md' })}</p>
                 {(
                   [
-                    ['appCss', '앱 CSS'],
-                    ['messageCss', '본문 CSS'],
-                    ['templateHtml', '레이아웃 HTML'],
-                    ['templateCss', '레이아웃 CSS'],
+                    ['appCss', t('visualpanels.appCss')],
+                    ['messageCss', t('visualpanels.bodyCss')],
+                    ['templateHtml', t('visualpanels.layoutHtml')],
+                    ['templateCss', t('visualpanels.layoutCss')],
                   ] as const
                 ).map(([key, label]) => (
                   <label key={key}>
@@ -681,7 +747,7 @@ export function ThemeSettings({
             <div className="theme-toolbar theme-editor-actions">
               <SaveButton
                 type="button"
-                label="테마 저장"
+                label={t('visualpanels.saveTheme')}
                 text=""
                 aria-busy={operation === 'save'}
                 disabled={busy || !dirty}
@@ -701,17 +767,17 @@ export function ThemeSettings({
                   }
                 }}
               >
-                <DisplayIcon size={18} aria-hidden="true" /> 미리 적용
+                <DisplayIcon size={18} aria-hidden="true" /> {t('visualpanels.applyPreview')}{' '}
               </button>
               {state.preview && (
                 <IconButton
-                  label="미리보기 끝내기"
+                  label={t('visualpanels.endPreview')}
                   icon={StopIcon}
                   onClick={() => setPreview(null)}
                 />
               )}
               <IconButton
-                label="편집 취소"
+                label={t('visualpanels.cancelEditing')}
                 icon={CloseIcon}
                 disabled={busy || backgroundDirty}
                 onClick={() => {
@@ -724,36 +790,35 @@ export function ThemeSettings({
           </section>
         )}
         {state.preview && (
-          <p role="status">
-            저장하지 않은 테마를 미리 보고 있어요. 다른 설정으로 이동하거나 설정을 닫으면 원래
-            테마로 돌아가요.
-          </p>
+          <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>
         )}
         <details className="theme-sample">
-          <summary>현재 테마로 예문 보기</summary>
+          <summary>{t('visualpanels.previewSampleWithCurrentTheme')}</summary>
           <ThemeFrame>
-            <div slot="request">조용한 도서관에서 이야기를 시작해줘.</div>
+            <div slot="request">{t('visualpanels.startAStoryInAQuietLibrary')}</div>
             <div slot="heading" className="scene-header">
-              <strong>첫 번째 장면</strong>
-              <span>원문 · 번역</span>
+              <strong>{t('visualpanels.firstScene')}</strong>
+              <span>{t('visualpanels.originalTranslation')}</span>
             </div>
             <div slot="body">
               <RisuMessageSurface html={sample} onAction={async () => {}} disabled />
             </div>
             <div slot="actions" className="source-actions">
-              <button type="button">본문 작업 예시</button>
+              <button type="button">{t('visualpanels.bodyActionExample')}</button>
             </div>
           </ThemeFrame>
         </details>
-        {importNotice && <p role="status">{importNotice}</p>}
+        {importNotice && <p role="status">{translateMessage(importNotice)}</p>}
         <p className="theme-help">
-          꾸미다가 화면이 깨지면 <kbd>Ctrl/Cmd + .</kbd>로 이 탭의 테마를 끄세요. 주소에{' '}
-          <code>?theme-safe=1</code>을 붙여 열어도 돼요.
+          {t('visualpanels.themeRecoveryHelp', {
+            shortcut: 'Ctrl/Cmd + .',
+            query: '?theme-safe=1',
+          })}
         </p>
       </details>
       <Dialog
         open={!!deleting}
-        title="테마 삭제"
+        title={t('visualpanels.deleteTheme')}
         variant="confirmation"
         role="alertdialog"
         className="delete-dialog"
@@ -761,11 +826,8 @@ export function ThemeSettings({
           if (!busy) setDeleting(null);
         }}
       >
-        <p>
-          {deleting?.title} 테마를 삭제할까요? 이 테마를 선택한 봇과 채팅은 상위 또는 기본 테마로
-          돌아가요.
-        </p>
-        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        <p>{t('visualpanels.deleteTheThemeBotsAndChatsUsing', { v0: deleting?.title ?? '' })}</p>
+        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"
@@ -774,7 +836,7 @@ export function ThemeSettings({
             disabled={busy}
             onClick={() => setDeleting(null)}
           >
-            취소
+            {t('visualpanels.cancel')}
           </button>
           <button
             type="button"
@@ -795,7 +857,7 @@ export function ThemeSettings({
               });
             }}
           >
-            삭제
+            {t('visualpanels.delete2')}
           </button>
         </div>
       </Dialog>

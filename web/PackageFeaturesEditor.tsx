@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -23,6 +24,7 @@ export function PackageFeaturesEditor({
   onChange: (value: RisuContent) => void;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
+  useI18n();
   const [library, setLibrary] = useState<Library | null>(null),
     [statuses, setStatuses] = useState<Record<string, ReferenceStatus>>({});
   const [busy, setBusy] = useState(false),
@@ -61,7 +63,7 @@ export function PackageFeaturesEditor({
         const [contents] = results;
         if (contents.status === 'fulfilled') setLibrary(contents.value);
         if (results.some((result) => result.status === 'rejected'))
-          setError('자료 목록을 불러오지 못했어요. 다시 조회해 주세요.');
+          setError(uiMessage('library.couldNotLoadResourcesTryRefreshing'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -80,10 +82,15 @@ export function PackageFeaturesEditor({
           const content = await api<Content>(`/content/${encodeURIComponent(ref.id)}`);
           return [
             referenceKey(ref),
-            content.package ? { content } : { error: '연결한 자료가 공통 패키지가 아니에요.' },
+            content.package
+              ? { content }
+              : { error: uiMessage('library.theAttachedResourceIsNotACommon') },
           ] as const;
         } catch {
-          return [referenceKey(ref), { error: '연결한 자료를 찾거나 읽을 수 없어요.' }] as const;
+          return [
+            referenceKey(ref),
+            { error: uiMessage('library.couldNotFindOrReadTheAttached') },
+          ] as const;
         }
       })
     ).then((items) => {
@@ -117,7 +124,7 @@ export function PackageFeaturesEditor({
     try {
       latest.current.onChange(validateRisuContent({ ...latest.current.value, ...part }));
       setError('');
-      setNotice('자료 초안에 반영했어요. 저장하면 다음 실행부터 사용해요.');
+      setNotice(uiMessage('library.appliedToTheResourceDraftSaveTo'));
       return true;
     } catch (caught) {
       setError((caught as Error).message);
@@ -130,24 +137,25 @@ export function PackageFeaturesEditor({
     await act(async (request, id) => {
       const content = await api<Content>(`/content/${encodeURIComponent(item.id)}`);
       if (!currentAction(request, id)) return;
-      if (!content.package) throw new Error('공통 패키지인 자료만 연결할 수 있어요.');
+      if (!content.package)
+        throw new Error(uiMessage('library.onlyResourcesWithACommonPackageCan'));
       const current = latest.current.value;
       if (content.id === current.id || current.modules?.some((ref) => ref.id === content.id))
-        throw new Error('자기 자신이나 이미 연결한 자료는 추가할 수 없어요.');
+        throw new Error(uiMessage('library.youCannotAddTheResourceItselfOr'));
       update({
         modules: [...(current.modules ?? []), { id: content.id, revision: content.revision }],
       });
     });
   }
   return (
-    <div className="package-stack package-authoring-editor" aria-label="패키지 모듈과 기능 편집">
+    <div
+      className="package-stack package-authoring-editor"
+      aria-label={t('library.editPackageModulesAndFeatures')}
+    >
       <section className="package-stack package-module-section">
         <header className="package-module-heading">
-          <h3>함께 사용하는 모듈</h3>
-          <p className="muted">
-            이 자료를 장착하면 아래 모듈을 함께 사용해요. 여러 자료가 같은 모듈을 요구해도 한 번만
-            포함해요.
-          </p>
+          <h3>{t('library.sharedModules')}</h3>
+          <p className="muted">{t('library.attachingThisResourceAlsoUsesTheModules')}</p>
         </header>
         {(value.modules ?? []).map((ref) => {
           const status = statuses[referenceKey(ref)];
@@ -157,7 +165,7 @@ export function PackageFeaturesEditor({
               <ContentAvatar content={status?.content} title={status?.content?.title ?? ref.id} />
               {status?.error && (
                 <p className="error" role="alert">
-                  {status.error} 자료를 다시 확인하거나 연결을 해제해 주세요.
+                  {t('library.moduleError', { error: translateMessage(status.error) })}
                 </p>
               )}
               <div className="package-role-actions">
@@ -169,7 +177,7 @@ export function PackageFeaturesEditor({
                     update({ modules: value.modules?.filter((item) => item.id !== ref.id) });
                   }}
                 >
-                  모듈 연결 해제
+                  {t('library.detachModule')}
                 </button>
               </div>
             </fieldset>
@@ -181,13 +189,13 @@ export function PackageFeaturesEditor({
             value=""
             onChange={(reference) => void addModule(reference)}
             role="module"
-            label="연결할 공통 모듈"
+            label={t('library.commonModuleToAttach')}
             disabled={busy || loading || !library}
             excludeIds={[value.id, ...(value.modules ?? []).map((ref) => ref.id)]}
           />
         </div>
         <footer className="package-module-footer">
-          <small>서재에서 모듈을 수정하면 다음 실행부터 최신 내용을 사용해요.</small>
+          <small>{t('library.editsToModulesInTheLibraryApply')}</small>
           <button
             type="button"
             className="ghost package-module-refresh"
@@ -198,18 +206,20 @@ export function PackageFeaturesEditor({
             }}
           >
             <RefreshIcon size={16} aria-hidden="true" />
-            목록 새로고침
+            {t('library.refreshList')}
           </button>
         </footer>
       </section>
       <div className="package-module-status" aria-live="polite">
         {loading && (
-          <LoadingState presentation="inline" label="자료와 기능 목록을 불러오는 중이에요…" />
+          <LoadingState presentation="inline" label={t('library.loadingResourcesAndFeatures')} />
         )}
-        {busy && <LoadingState presentation="inline" label="선택한 자료를 불러오는 중이에요…" />}
+        {busy && (
+          <LoadingState presentation="inline" label={t('library.loadingSelectedResource')} />
+        )}
       </div>
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
-      {notice && <NoticeBanner>{notice}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
     </div>
   );
 }
