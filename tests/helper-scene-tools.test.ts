@@ -2,9 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { Store } from '../server/store.js';
 import { invokeHelperSceneTool } from '../server/helper-scene-tools.js';
+import { latestTranslation } from '../server/source-editing.js';
+import { invokeSceneRegexSearch } from '../server/helper-data-tools.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
 const stores: { store: Store; dir: string }[] = [];
@@ -437,4 +439,269 @@ test('escaped pages stay bounded and continuation never splits Unicode character
   expect(first.text).toBe('😀');
   expect(first.nextOffset).toBe(2);
   expect(() => call('scene.read', { ...first.editTarget, offset: 1, limit: 1 })).toThrow(/Unicode/);
+});
+
+function appendScene(store: Store, chatId: string, content: string) {
+  const chat = store.chat(chatId);
+  const run = store.createRun(
+    chatId,
+    {
+      request: 'test',
+      expectedRevision: chat.headRevision,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+    (current) => ({
+      chatId,
+      parentRevision: current.headRevision,
+      settingsRevision: current.settingsRevision,
+      settings: current.settings,
+      request: 'test',
+      history: store.history(current.headRevision),
+      resources: [],
+    })
+  ).run;
+  store.startRun(run.id);
+  return store.source(
+    store.completeRun(run.id, content, {
+      modelCalls: 0,
+      inputTokens: null,
+      outputTokens: null,
+      costUsd: null,
+    }).id
+  );
+}
+
+test('chat-wide scene search pages editable matches and invalidates a changed continuation', () => {
+  const { store, chatId, source, call } = fixture('ruby 0');
+  const later = appendScene(store, chatId, 'ruby 1 ruby 2');
+  const history = vi.spyOn(store, 'history');
+  const query = { target: 'original', patterns: ['ruby'], limit: 2 };
+  const first = call('scene.search', query);
+  expect(history).toHaveBeenCalledTimes(1);
+  expect(first).toMatchObject({
+    scannedScenes: 2,
+    matchedScenes: 2,
+    totalMatches: 3,
+    matches: [{ editTarget: { sourceId: source.id } }, { editTarget: { sourceId: later.id } }],
+    nextOffset: 2,
+  });
+  expect(call('scene.search', first.nextSearch)).toMatchObject({
+    matches: [{ editTarget: { sourceId: later.id }, start: 7 }],
+    nextOffset: null,
+  });
+  expect(() => call('scene.search', { ...query, offset: 2 })).toThrow(/GUARDS_REQUIRED/);
+  store.editSource(later.id, { text: 'updated', expectedRevision: 0 });
+  expect(() => call('scene.search', first.nextSearch)).toThrow(/changed/);
+});
+
+test('chat-wide translation search skips missing translations and returns usable patch guards', () => {
+  const { store, source, chatId, call } = fixture('no translation');
+  const later = appendScene(store, chatId, 'other');
+  store.editTranslation(later.id, {
+    text: 'ruby on',
+    expectedRevision: 0,
+    expectedSourceHash: later.hash,
+  });
+  const found = call('scene.search', { target: 'translation', patterns: ['ruby'] });
+  expect(found).toMatchObject({
+    scannedScenes: 1,
+    unmatchedTranslations: 1,
+    matches: [{ editTarget: { sourceId: later.id, target: 'translation' }, match: 'ruby' }],
+  });
+  expect(source.id).not.toBe(later.id);
+});
+
+test('scene.patchMany applies distinct scene edits atomically with per-item guards', () => {
+  const { store, source, chatId, call, read } = fixture('ruby first');
+  const other = appendScene(store, chatId, 'ruby second');
+  const original = read().editTarget;
+  const second = call('scene.read', { sourceId: other.id, target: 'original' }).editTarget;
+  const items = [
+    { ...original, changes: [{ oldText: 'ruby', newText: 'tag' }] },
+    { ...second, changes: [{ oldText: 'ruby', newText: 'tag' }] },
+  ];
+  expect(() => call('scene.patchMany', { items: [items[0], items[0]] })).toThrow(/Duplicate/);
+  expect(() =>
+    call('scene.patchMany', {
+      items: [
+        items[0],
+        {
+          ...items[1],
+          changes: [{ oldText: 'absent', newText: 'tag' }],
+        },
+      ],
+    })
+  ).toThrow(/item 1.*count mismatch/);
+  expect(store.source(source.id).text).toBe('ruby first');
+  expect(store.source(other.id).text).toBe('ruby second');
+  expect(call('scene.patchMany', { items })).toMatchObject({
+    changed: true,
+    sourceIds: [source.id, other.id],
+    items: [
+      { changed: true, revision: 1 },
+      { changed: true, revision: 1 },
+    ],
+  });
+  expect(store.source(source.id).text).toBe('tag first');
+  expect(store.source(other.id).text).toBe('tag second');
+  expect(() => call('scene.patchMany', { items })).toThrow(/changed/);
+});
+
+test('guarded original and translation co-edit keeps a new valid manual translation', () => {
+  const { store, source, call, read } = fixture('`<ruby>moon</ruby>`');
+  store.editTranslation(source.id, {
+    text: '`<ruby>달</ruby>`',
+    expectedRevision: 0,
+    expectedSourceHash: source.hash,
+  });
+  const original = read().editTarget;
+  const translation = read('translation').editTarget;
+  const patch = {
+    ...original,
+    changes: [{ oldText: '`<ruby>moon</ruby>`', newText: '<ruby>moon</ruby>' }],
+    translation: {
+      ...translation,
+      changes: [{ oldText: '`<ruby>달</ruby>`', newText: '<ruby>달</ruby>' }],
+    },
+  };
+  expect(() =>
+    call('scene.patch', {
+      ...patch,
+      translation: { ...patch.translation, expectedTextHash: '0'.repeat(64) },
+    })
+  ).toThrow(/translation changed/);
+  expect(store.source(source.id).text).toBe('`<ruby>moon</ruby>`');
+  expect(read('translation').text).toBe('`<ruby>달</ruby>`');
+  expect(call('scene.patch', patch)).toMatchObject({
+    changed: true,
+    revision: 1,
+    translationRevision: 2,
+    translationInvalidated: false,
+  });
+  const edited = store.source(source.id);
+  expect(edited.text).toBe('<ruby>moon</ruby>');
+  expect(read('translation').text).toBe('<ruby>달</ruby>');
+  expect(latestTranslation(store, source.id)).toMatchObject({
+    status: 'completed',
+    sourceHash: edited.hash,
+    result: { sourceHash: edited.hash, manual: true },
+  });
+  expect(() => call('scene.patch', patch)).toThrow(/changed/);
+});
+
+test('original and translation co-edit preserves existing translation when text unchanged', () => {
+  const { store, source, call, read } = fixture('original typo');
+  store.editTranslation(source.id, {
+    text: '번역 그대로',
+    expectedRevision: 0,
+    expectedSourceHash: source.hash,
+  });
+  const original = read().editTarget;
+  const translation = read('translation').editTarget;
+  const result = call('scene.patch', {
+    ...original,
+    changes: [{ oldText: 'typo', newText: 'fixed' }],
+    translation: { ...translation, text: '번역 그대로' },
+  });
+  expect(result).toMatchObject({
+    changed: true,
+    translationInvalidated: false,
+    translationRevision: 2,
+  });
+  expect(store.source(source.id).text).toBe('original fixed');
+  expect(read('translation').text).toBe('번역 그대로');
+});
+
+test('batch containing translation co-edit rolls back original, translated text and other scenes', () => {
+  const { store, source, chatId, call, read } = fixture('apple');
+  const second = appendScene(store, chatId, 'pear');
+  store.editTranslation(source.id, {
+    text: '사과',
+    expectedRevision: 0,
+    expectedSourceHash: source.hash,
+  });
+  const firstPatch = {
+    ...read().editTarget,
+    changes: [{ oldText: 'apple', newText: 'banana' }],
+    translation: { ...read('translation').editTarget, text: '바나나' },
+  };
+  const otherPatch = {
+    ...call('scene.read', { sourceId: second.id, target: 'original' }).editTarget,
+    changes: [{ oldText: 'missing', newText: 'something' }],
+  };
+  expect(() => call('scene.patchMany', { items: [firstPatch, otherPatch] })).toThrow(/item 1/);
+  expect(store.source(source.id)).toMatchObject({ text: 'apple', editRevision: 0 });
+  expect(store.source(second.id)).toMatchObject({ text: 'pear', editRevision: 0 });
+  expect(read('translation').text).toBe('사과');
+});
+
+test('isolated regex returns full ruby literal matches with guards across scenes', async () => {
+  const { store, source, chatId, call } = fixture('`<ruby>first</ruby>`');
+  const second = appendScene(store, chatId, 'prefix `<ruby>second</ruby>`');
+  const query = { target: 'original', patterns: ['`<ruby>[^`]+?</ruby>`'], regex: true, limit: 1 };
+  const first = (await invokeSceneRegexSearch(store, chatId, query)) as Record<string, any>;
+  expect(first).toMatchObject({
+    scannedScenes: 2,
+    matchedScenes: 2,
+    totalMatches: 2,
+    nextOffset: 1,
+    matches: [
+      {
+        match: '`<ruby>first</ruby>`',
+        truncated: false,
+        editTarget: { sourceId: source.id, target: 'original' },
+      },
+    ],
+  });
+  const { chatId: _chatId, ...continuation } = first.nextSearch.arguments.arguments;
+  const next = (await invokeSceneRegexSearch(store, chatId, continuation)) as Record<string, any>;
+  expect(next).toMatchObject({
+    nextOffset: null,
+    matches: [{ match: '`<ruby>second</ruby>`', editTarget: { sourceId: second.id } }],
+  });
+  expect(
+    call('scene.patch', {
+      ...first.matches[0].editTarget,
+      changes: [{ oldText: first.matches[0].match, newText: '<ruby>first</ruby>' }],
+    })
+  ).toMatchObject({ changed: true });
+  await expect(invokeSceneRegexSearch(store, chatId, continuation)).rejects.toThrow(/changed/);
+});
+
+test('isolated regex bounds matched text and rejects unsafe regex without touching source', async () => {
+  const { store, source, chatId } = fixture('`<ruby>' + 'a'.repeat(1500) + '</ruby>`');
+  const found = (await invokeSceneRegexSearch(store, chatId, {
+    sourceId: source.id,
+    target: 'original',
+    patterns: ['`<ruby>[^`]+</ruby>`'],
+    regex: true,
+  })) as Record<string, any>;
+  expect(found.matches[0]).toMatchObject({ start: 0, truncated: true });
+  expect(found.matches[0].match).toHaveLength(1000);
+  await expect(
+    invokeSceneRegexSearch(store, chatId, {
+      target: 'original',
+      patterns: ['(a+)+$'],
+      regex: true,
+    })
+  ).rejects.toThrow(/DATA_QUERY_TIMEOUT/);
+  expect(store.source(source.id).editRevision).toBe(0);
+});
+
+test('many-scene literal search returns bounded matches without rereading ancestry per scene', () => {
+  const { store, chatId, call } = fixture('test word 0');
+  for (let index = 1; index < 50; index++) appendScene(store, chatId, `test word ${index}`);
+  const history = vi.spyOn(store, 'history');
+  const first = call('scene.search', { target: 'original', patterns: ['test word'], limit: 10 });
+  expect(first).toMatchObject({
+    scannedScenes: 50,
+    matchedScenes: 50,
+    totalMatches: 50,
+    nextOffset: 10,
+  });
+  expect(first.matches).toHaveLength(10);
+  expect(JSON.stringify(first).length).toBeLessThan(15000);
+  expect(history).toHaveBeenCalledTimes(1);
+  expect(call('scene.search', first.nextSearch)).toMatchObject({ offset: 10, nextOffset: 20 });
 });

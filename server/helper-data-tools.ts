@@ -151,3 +151,21 @@ export function invokeDataTool(
     signal
   );
 }
+
+/** Uses the existing timeout- and memory-bounded read-only data process. */
+export function invokeSceneRegexSearch(
+  store: Store,
+  chatId: string,
+  args: Record<string, unknown>,
+  signal?: AbortSignal
+) {
+  return runDataProcess(
+    {
+      path: store.path,
+      taskId: '',
+      name: 'scene.regex',
+      args: { ...args, chatId },
+    },
+    signal
+  );
+}

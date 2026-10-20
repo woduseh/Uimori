@@ -30,6 +30,31 @@ const mutationRequired = [
   'expectedSourceHash',
   'expectedTextHash',
 ];
+const editProperties = {
+  chatId: sourceId,
+  sourceId,
+  target,
+  ...guards,
+  expectedTextHash: hash,
+  text: { type: 'string', minLength: 1, maxLength: SOURCE_TEXT_MAX_CHARS },
+  changes: {
+    type: 'array',
+    minItems: 1,
+    maxItems: 100,
+    items: schema(
+      {
+        oldText: { type: 'string', minLength: 1, maxLength: SOURCE_TEXT_MAX_CHARS },
+        newText: { type: 'string', maxLength: SOURCE_TEXT_MAX_CHARS },
+        expectedCount: { type: 'integer', minimum: 1, maximum: 100000 },
+      },
+      ['oldText', 'newText']
+    ),
+  },
+};
+const patchProperties = {
+  ...editProperties,
+  translation: schema(editProperties, mutationRequired),
+};
 export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.read',
@@ -40,7 +65,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.search',
     description:
-      'Search the live editable original or displayed translation by exact case-sensitive literal patterns (including overlapping matches). Return match positions, bounded context, total counts per pattern, and editTarget guards for scene.patch; no full-scene read required. Results are ordered by pattern then text offset; offset paginates matches, not characters. Copy nextSearch unchanged for later pages; stale versions require restarting. No regex.',
+      'Search exact case-sensitive literal patterns in one live sourceId, or omit sourceId to search all enabled editable scenes in the selected chat. includeDisabled also includes disabled scenes in a chat-wide search. Returns matched text, positions and patch editTarget guards; multi-scene pages have a stable searchHash. Copy nextSearch unchanged; a changed scene or ancestry invalidates the cursor. Set regex:true for bounded non-overlapping regular-expression matches in an isolated read-only worker; long matches return offsets plus a truncated preview.',
     inputSchema: schema(
       {
         sourceId,
@@ -51,41 +76,38 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
           maxItems: 8,
           items: { type: 'string', minLength: 1, maxLength: 256 },
         },
+        regex: { type: 'boolean' },
+        includeDisabled: { type: 'boolean' },
+        searchHash: hash,
         context: { type: 'integer', minimum: 0, maximum: 120 },
         offset: { type: 'integer', minimum: 0 },
         limit: { type: 'integer', minimum: 1, maximum: 20 },
         ...guards,
         expectedTextHash: hash,
       },
-      ['sourceId', 'target', 'patterns']
+      ['target', 'patterns']
     ),
   },
   {
     name: 'scene.patch',
     description:
-      'Save one existing original or translation only after the user requests saving. Copy editTarget from scene.read/search. Supply either complete text or changes of literal oldText/newText. Each oldText must occur exactly expectedCount times (default 1); replace all occurrences atomically only if their ranges do not overlap, including matches within the same change. No regex or unchecked replace-all. Source edits invalidate translations and preserve only original plus two recent edits. Translation edits require an existing usable translation. Conflicts require rereading; never overwrite unseen concurrent work.',
+      'Save one guarded original or translation using complete text or exact-count literal changes. For an original edit, an optional translation object accepts a second complete scene.patch request with its own translation editTarget: both patches save atomically, creating a current manual translation instead of invalidating it. Without this explicit translation object original edits invalidate translation. Conflicts reject all changes. No regex or unchecked replace-all.',
+    inputSchema: schema(patchProperties, mutationRequired),
+  },
+  {
+    name: 'scene.patchMany',
+    description:
+      'Atomically apply scene.patch to 1–16 different existing scenes. Each item requires independent editTarget guards and may include an explicitly guarded translation co-edit when target is original. Duplicate source IDs and any stale/invalid item reject the entire batch. Changed sourceIds are returned for reader notification; no automatic grouped undo.',
     inputSchema: schema(
       {
-        sourceId,
-        target,
-        ...guards,
-        expectedTextHash: hash,
-        text: { type: 'string', minLength: 1, maxLength: SOURCE_TEXT_MAX_CHARS },
-        changes: {
+        items: {
           type: 'array',
           minItems: 1,
-          maxItems: 100,
-          items: schema(
-            {
-              oldText: { type: 'string', minLength: 1, maxLength: SOURCE_TEXT_MAX_CHARS },
-              newText: { type: 'string', maxLength: SOURCE_TEXT_MAX_CHARS },
-              expectedCount: { type: 'integer', minimum: 1, maximum: 100000 },
-            },
-            ['oldText', 'newText']
-          ),
+          maxItems: 16,
+          items: schema(patchProperties, mutationRequired),
         },
       },
-      mutationRequired
+      ['items']
     ),
   },
   {
@@ -122,12 +144,18 @@ function scopedSource(store: Store, chatId: string, id: string) {
   if (source.chatId !== chatId) throw new HttpError(409, 'Scene belongs to another chat');
   return source;
 }
-function snapshot(store: Store, chatId: string, args: Record<string, unknown>, original = false) {
+function snapshot(
+  store: Store,
+  chatId: string,
+  args: Record<string, unknown>,
+  original = false,
+  knownOwned = false
+) {
   const id = text(args.sourceId, 'source ID', 100);
   const selected = original
     ? 'original'
     : choice(args.target, ['original', 'translation'], 'scene target');
-  const source = scopedSource(store, chatId, id);
+  const source = knownOwned ? store.source(id) : scopedSource(store, chatId, id);
   const latest = selected === 'translation' ? latestTranslation(store, id) : null;
   const displayed = latest ? displayTranslationJob(source, latest) : undefined;
   if (selected === 'translation' && typeof displayed?.result?.text !== 'string')
@@ -322,6 +350,122 @@ function sceneSearch(current: ReturnType<typeof snapshot>, args: Record<string, 
   };
 }
 
+/** The ancestry is enumerated once, not once per candidate scene. No index or cache is needed. */
+function searchChatScenes(store: Store, chatId: string, args: Record<string, unknown>) {
+  const raw = args.patterns;
+  if (!Array.isArray(raw) || raw.length < 1 || raw.length > 8)
+    throw new HttpError(400, 'Invalid search patterns');
+  const patterns = raw.map((value) => text(value, 'search pattern', 256));
+  const target = choice(args.target, ['original', 'translation'], 'scene target');
+  const includeDisabled = args.includeDisabled === true;
+  if (args.includeDisabled !== undefined && typeof args.includeDisabled !== 'boolean')
+    throw new HttpError(400, 'Invalid includeDisabled');
+  const context = args.context === undefined ? 80 : number(args.context, 'search context', 0, 120);
+  const offset = args.offset === undefined ? 0 : number(args.offset, 'match offset', 0);
+  const limit = args.limit === undefined ? 10 : number(args.limit, 'match limit', 1, 20);
+  const chat = store.chat(chatId);
+  const history = store.history(chat.headRevision);
+  const candidates = history.filter(
+    (entry) =>
+      (includeDisabled || entry.sceneContext?.sceneEnabled !== false) &&
+      store.source(entry.revision).chatId === chatId
+  );
+  // Capture every eligible scene's source/translation identity so continuations never mix versions.
+  const snapshots = candidates.flatMap((entry) => {
+    try {
+      return [snapshot(store, chatId, { sourceId: entry.revision, target }, false, true)];
+    } catch (error) {
+      if (
+        target === 'translation' &&
+        error instanceof HttpError &&
+        error.statusCode === 409 &&
+        error.message === 'Scene has no usable completed translation'
+      )
+        return [];
+      throw error;
+    }
+  });
+  const searchHash = digest(
+    JSON.stringify({
+      chatHead: chat.headRevision,
+      target,
+      includeDisabled,
+      scenes: snapshots.map((item) => item.editTarget),
+    })
+  );
+  if (offset > 0 && args.searchHash === undefined)
+    throw new HttpError(400, 'SCENE_SEARCH_GUARDS_REQUIRED: Copy nextSearch or restart');
+  if (args.searchHash !== undefined && args.searchHash !== searchHash)
+    throw new HttpError(409, 'Scene search changed; restart search');
+  const matches: Record<string, unknown>[] = [];
+  let totalMatches = 0;
+  let matchedScenes = 0;
+  for (const current of snapshots) {
+    const content = current.content;
+    let sceneMatched = false;
+    for (const [patternIndex, pattern] of patterns.entries()) {
+      for (
+        let start = content.indexOf(pattern);
+        start !== -1;
+        start = content.indexOf(pattern, start + 1)
+      ) {
+        sceneMatched = true;
+        if (totalMatches >= offset && matches.length < limit) {
+          const end = start + pattern.length;
+          let beforeStart = Math.max(0, start - context);
+          let afterEnd = Math.min(content.length, end + context);
+          if (splitsPair(content, beforeStart)) beforeStart--;
+          if (splitsPair(content, afterEnd)) afterEnd++;
+          matches.push({
+            editTarget: current.editTarget,
+            patternIndex,
+            start,
+            end,
+            match: content.slice(start, end),
+            before: content.slice(beforeStart, start),
+            after: content.slice(end, afterEnd),
+          });
+        }
+        totalMatches++;
+      }
+    }
+    if (sceneMatched) matchedScenes++;
+  }
+  const nextOffset = offset + matches.length < totalMatches ? offset + matches.length : null;
+  return {
+    chatId,
+    target,
+    searchHash,
+    scannedScenes: snapshots.length,
+    excludedScenes: history.length - candidates.length,
+    unmatchedTranslations: candidates.length - snapshots.length,
+    matchedScenes,
+    totalMatches,
+    offset,
+    matches,
+    nextOffset,
+    nextSearch:
+      nextOffset === null
+        ? null
+        : {
+            name: 'app.call',
+            arguments: {
+              name: 'scene.search',
+              arguments: {
+                chatId,
+                target,
+                patterns,
+                includeDisabled,
+                context,
+                searchHash,
+                offset: nextOffset,
+                limit,
+              },
+            },
+          },
+  };
+}
+
 function replacement(content: string, args: Record<string, unknown>) {
   if ((args.text === undefined) === (args.changes === undefined))
     throw new HttpError(400, 'Supply either complete text or literal changes');
@@ -374,6 +518,9 @@ export function invokeHelperSceneTool(
       fields(args, [...common, 'target', 'offset', 'limit', 'expectedTextHash']);
     else if (name === 'scene.search')
       fields(args, [
+        'includeDisabled',
+        'regex',
+        'searchHash',
         ...common,
         'target',
         'patterns',
@@ -383,13 +530,65 @@ export function invokeHelperSceneTool(
         'expectedTextHash',
       ]);
     else if (name === 'scene.patch')
-      fields(args, [...common, 'target', 'text', 'changes', 'expectedTextHash']);
-    else if (name === 'scene.versions')
+      fields(args, [...common, 'target', 'text', 'changes', 'translation', 'expectedTextHash']);
+    else if (name === 'scene.patchMany') {
+      fields(args, ['items']);
+      if (!Array.isArray(args.items) || args.items.length < 1 || args.items.length > 16)
+        throw new HttpError(400, 'Invalid scene batch');
+      const seen = new Set<string>();
+      const items = args.items.map((value) => {
+        const item = record(value);
+        fields(item, [
+          ...common,
+          'chatId',
+          'target',
+          'text',
+          'changes',
+          'translation',
+          'expectedTextHash',
+        ]);
+        if (item.chatId !== undefined && item.chatId !== chatId)
+          throw new HttpError(409, 'Scene batch chat mismatch');
+        const id = text(item.sourceId, 'source ID', 100);
+        if (seen.has(id)) throw new HttpError(400, 'Duplicate scene sourceId in batch');
+        seen.add(id);
+        return item;
+      });
+      // Each item uses the exact single-scene path inside the outer transaction.
+      const results = items.map((item, index) => {
+        try {
+          const { chatId: _itemChatId, ...patch } = item;
+          return invokeHelperSceneTool(store, chatId, 'scene.patch', patch);
+        } catch (error) {
+          throw new HttpError(
+            error instanceof HttpError ? error.statusCode : 500,
+            `Scene batch item ${index} (${item.sourceId}): ${error instanceof Error ? error.message : 'failed'}`
+          );
+        }
+      });
+      const receipts = results as { changed: boolean; sourceId: string }[];
+      return {
+        changed: receipts.some((item) => item.changed),
+        sourceIds: receipts.filter((item) => item.changed).map((item) => item.sourceId),
+        items: results,
+      };
+    } else if (name === 'scene.versions')
       fields(args, [...common, 'versionRevision', 'offset', 'limit', 'expectedTextHash']);
     else if (name === 'scene.restore') {
       fields(args, [...common, 'target', 'versionRevision', 'expectedTextHash']);
       if (args.target !== undefined) choice(args.target, ['original'], 'restore target');
     } else throw new HttpError(400, 'Unknown scene tool');
+    if (name === 'scene.search' && args.regex === true)
+      throw new HttpError(400, 'Regex scene search requires isolated worker');
+    if (name === 'scene.search' && args.regex !== undefined && args.regex !== false)
+      throw new HttpError(400, 'Invalid regex option');
+    if (name === 'scene.search' && args.sourceId === undefined)
+      return searchChatScenes(store, chatId, args);
+    if (
+      name === 'scene.search' &&
+      (args.searchHash !== undefined || args.includeDisabled !== undefined)
+    )
+      throw new HttpError(400, 'Chat-wide search parameters require omitted sourceId');
     const current = snapshot(store, chatId, args, original);
     const { source, editTarget } = current;
     if (name === 'scene.read')
@@ -466,6 +665,31 @@ export function invokeHelperSceneTool(
       if (!retained) throw new HttpError(404, 'Original version is no longer retained');
       content = retained.text;
     } else content = replacement(current.content, args);
+    // Validate both snapshots before either edit occurs. A saved source changes the
+    // dependency hash, so translation must be reauthored against the new hash atomically.
+    let translationEdit: { content: string; changed: boolean; revision: number } | undefined;
+    if (name === 'scene.patch' && args.translation !== undefined) {
+      if (current.target !== 'original')
+        throw new HttpError(400, 'Translation co-edit requires original target');
+      const patch = record(args.translation);
+      fields(patch, [...common, 'chatId', 'target', 'text', 'changes', 'expectedTextHash']);
+      if (
+        patch.sourceId !== source.id ||
+        (patch.chatId !== undefined && patch.chatId !== chatId) ||
+        patch.target !== 'translation'
+      )
+        throw new HttpError(400, 'Translation co-edit must target the same scene');
+      const translated = snapshot(store, chatId, patch, false, true);
+      checkGuards(patch, translated.editTarget, true);
+      if (patch.expectedTextHash !== translated.editTarget.expectedTextHash)
+        throw new HttpError(409, 'Scene translation changed; read it again');
+      const translatedContent = replacement(translated.content, patch);
+      translationEdit = {
+        content: translatedContent,
+        changed: translatedContent !== translated.content,
+        revision: translated.editTarget.expectedRevision,
+      };
+    }
     const changed = content !== current.content;
     let savedRevision = editTarget.expectedRevision;
     let sourceHash = source.hash;
@@ -476,7 +700,7 @@ export function invokeHelperSceneTool(
       });
       savedRevision = saved.editRevision ?? 0;
       sourceHash = saved.hash;
-    } else if (changed) {
+    } else if (changed && !translationEdit) {
       savedRevision =
         store.editTranslation(source.id, {
           text: content,
@@ -484,14 +708,24 @@ export function invokeHelperSceneTool(
           expectedSourceHash: source.hash,
         }).revision ?? 0;
     }
+    let translationRevision: number | undefined;
+    if (translationEdit && (changed || translationEdit.changed)) {
+      translationRevision =
+        store.editTranslation(source.id, {
+          text: translationEdit.content,
+          expectedRevision: translationEdit.revision,
+          expectedSourceHash: sourceHash,
+        }).revision ?? 0;
+    }
     return {
-      changed,
+      changed: changed || translationEdit?.changed === true,
       target: current.target,
       sourceId: source.id,
       chatId,
       revision: savedRevision,
       sourceHash,
-      translationInvalidated: changed && current.target === 'original',
+      translationInvalidated: changed && current.target === 'original' && !translationEdit,
+      ...(translationRevision !== undefined ? { translationRevision } : {}),
     };
   });
 }
