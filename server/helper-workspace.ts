@@ -16,6 +16,7 @@ import type {
   HelperLimits,
 } from '../core/helper.js';
 import { HELPER_TASK_LIMITS } from '../core/helper.js';
+import { UI_HELPER_PERSONA } from '../core/helper-persona.js';
 import type { Usage } from '../core/types.js';
 import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { HttpError } from './request-validation.js';
@@ -127,7 +128,7 @@ export class HelperWorkspace {
           key,
           title ?? '새 도우미 대화',
           Number(title === undefined),
-          '',
+          UI_HELPER_PERSONA,
           time,
           time,
           json(HELPER_TASK_LIMITS)
