@@ -19,7 +19,7 @@ export type DataRef = {
 export type DataOperation = {
   path: string;
   taskId: string;
-  name: 'data.search' | 'data.read' | 'db.query';
+  name: 'data.search' | 'data.read' | 'db.query' | 'scene.regex';
   args: Record<string, unknown>;
 };
 type Document = Omit<DataRef, 'field' | 'hash'> & {
@@ -839,6 +839,194 @@ function read(
   );
   return page;
 }
+/** Isolated, read-only regex search across the exact live editable sources of one chat. */
+function sceneRegex(db: DatabaseSync, args: Record<string, unknown>) {
+  only(args, [
+    'chatId',
+    'sourceId',
+    'target',
+    'patterns',
+    'regex',
+    'includeDisabled',
+    'offset',
+    'limit',
+    'context',
+    'searchHash',
+  ]);
+  const chatId = string(args.chatId, '', 100);
+  const requestedId = args.sourceId === undefined ? undefined : string(args.sourceId, '', 100);
+  const target = string(args.target, '', 20);
+  if (!chatId || !['original', 'translation'].includes(target) || !args.regex)
+    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS');
+  if (args.includeDisabled !== undefined && typeof args.includeDisabled !== 'boolean')
+    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS');
+  if (requestedId && args.includeDisabled !== undefined)
+    throw new Error('SCENE_REGEX_INVALID_ARGUMENTS');
+  const patterns = strings(args.patterns, 8);
+  if (!patterns.length || patterns.some((value) => !value.length || value.length > 256))
+    throw new Error('SCENE_REGEX_INVALID_PATTERNS');
+  const expressions = patterns.map((value) => new RegExp(value, 'gu'));
+  const offset = number(args.offset, 0, Number.MAX_SAFE_INTEGER);
+  const limit = number(args.limit, 10, 20, 1);
+  const context = number(args.context, 80, 120);
+  const chat = db.prepare('SELECT head_revision AS head FROM chats WHERE id=?').get(chatId);
+  if (!chat) throw new Error('SCENE_CHAT_UNAVAILABLE');
+  const list = db.prepare(`WITH RECURSIVE ancestry(id,depth) AS (
+    SELECT head_revision,0 FROM chats WHERE id=? AND head_revision IS NOT NULL
+    UNION ALL SELECT s.parent_revision,a.depth+1 FROM ancestry a JOIN sources s ON s.id=a.id
+      WHERE s.parent_revision IS NOT NULL
+  ) SELECT s.id,s.chat_id AS chatId,COALESCE(sc.scene_enabled,1) AS enabled,
+    COALESCE(e.revision,0) AS revision,COALESCE(e.hash,s.hash) AS sourceHash,
+    COALESCE(e.text,s.text) AS content
+    FROM ancestry a JOIN sources s ON s.id=a.id
+    LEFT JOIN scene_context sc ON sc.source_id=s.id
+    LEFT JOIN source_edits e ON e.source_id=s.id AND e.revision=(
+      SELECT MAX(revision) FROM source_edits WHERE source_id=s.id)
+    ORDER BY a.depth DESC`);
+  const latestTranslation = db.prepare(`SELECT id,revision,status,source_hash AS sourceHash
+    FROM jobs WHERE source_revision=? AND kind='translation'
+    ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1`);
+  const previousTranslation = db.prepare(`SELECT j.id,r.result FROM jobs j
+    JOIN job_results r ON r.job_id=j.id WHERE j.source_revision=? AND j.kind='translation'
+      AND j.source_hash=? AND j.status='completed' AND j.revision<=?
+    ORDER BY j.revision DESC,j.created_at DESC,j.id DESC LIMIT 1`);
+  const snapshotDigest = createHash('sha256');
+  snapshotDigest.update(
+    JSON.stringify({ head: chat.head, target, includeDisabled: args.includeDisabled === true })
+  );
+  const matches: Record<string, unknown>[] = [];
+  let totalMatches = 0;
+  let scannedScenes = 0;
+  let matchedScenes = 0;
+  let excludedScenes = 0;
+  let unmatchedTranslations = 0;
+  let targetFound = !requestedId;
+  for (const row of list.iterate(chatId)) {
+    const id = String(row.id);
+    if (requestedId && id !== requestedId) continue;
+    if (requestedId) targetFound = true;
+    if (
+      row.chatId !== chatId ||
+      (!requestedId && args.includeDisabled !== true && row.enabled === 0)
+    ) {
+      excludedScenes++;
+      if (requestedId) throw new Error('SCENE_NOT_EDITABLE_IN_CHAT');
+      continue;
+    }
+    const sourceHash = String(row.sourceHash);
+    let content = String(row.content);
+    let revision = Number(row.revision);
+    if (target === 'translation') {
+      const latest = latestTranslation.get(id);
+      if (!latest || latest.sourceHash !== sourceHash) {
+        unmatchedTranslations++;
+        continue;
+      }
+      revision = Number(latest.revision);
+      const available = previousTranslation.get(id, sourceHash, revision);
+      if (!available || (latest.status === 'completed' && available.id !== latest.id)) {
+        unmatchedTranslations++;
+        continue;
+      }
+      const result = JSON.parse(String(available.result));
+      if (
+        result.sourceRevision !== id ||
+        result.sourceHash !== sourceHash ||
+        typeof result.text !== 'string' ||
+        typeof result.mock !== 'boolean'
+      ) {
+        unmatchedTranslations++;
+        continue;
+      }
+      content = result.text;
+    }
+    scannedScenes++;
+    const editTarget = {
+      chatId,
+      sourceId: id,
+      target,
+      expectedRevision: revision,
+      expectedSourceHash: sourceHash,
+      expectedTextHash: sha(content),
+    };
+    snapshotDigest.update(JSON.stringify(editTarget));
+    let foundInScene = false;
+    for (const [patternIndex, expression] of expressions.entries()) {
+      expression.lastIndex = 0;
+      while (true) {
+        const match = expression.exec(content);
+        if (!match) break;
+        if (!match[0].length) {
+          // Ignore zero-width matches; they cannot be supplied as safe literal patches.
+          expression.lastIndex = match.index + (content.codePointAt(match.index)! > 0xffff ? 2 : 1);
+          continue;
+        }
+        foundInScene = true;
+        if (totalMatches >= offset && matches.length < limit) {
+          const start = match.index;
+          const end = start + match[0].length;
+          const before = content.slice(Math.max(0, start - context), start);
+          const after = content.slice(end, Math.min(content.length, end + context));
+          matches.push({
+            editTarget,
+            patternIndex,
+            start,
+            end,
+            match: match[0].slice(0, 1000),
+            truncated: match[0].length > 1000,
+            before,
+            after,
+          });
+        }
+        totalMatches++;
+      }
+    }
+    if (foundInScene) matchedScenes++;
+  }
+  if (!targetFound) throw new Error('SCENE_NOT_IN_CHAT_ANCESTRY');
+  const searchHash = snapshotDigest.digest('hex');
+  if (offset > 0 && args.searchHash === undefined)
+    throw new Error('SCENE_SEARCH_GUARDS_REQUIRED: Copy nextSearch');
+  if (args.searchHash !== undefined && args.searchHash !== searchHash)
+    throw new Error('Scene search changed; restart search');
+  const nextOffset = offset + matches.length < totalMatches ? offset + matches.length : null;
+  return {
+    chatId,
+    target,
+    regex: true,
+    searchHash,
+    scannedScenes,
+    excludedScenes,
+    unmatchedTranslations,
+    matchedScenes,
+    totalMatches,
+    offset,
+    matches,
+    nextOffset,
+    nextSearch:
+      nextOffset === null
+        ? null
+        : {
+            name: 'app.call',
+            arguments: {
+              name: 'scene.search',
+              arguments: {
+                chatId,
+                ...(requestedId ? { sourceId: requestedId } : {}),
+                target,
+                patterns,
+                regex: true,
+                ...(!requestedId ? { includeDisabled: args.includeDisabled === true } : {}),
+                context,
+                searchHash,
+                offset: nextOffset,
+                limit,
+              },
+            },
+          },
+  };
+}
+
 function runDataOperation(input: DataOperation): unknown {
   const db = new DatabaseSync(input.path, { readOnly: true, allowExtension: false });
   try {
@@ -847,6 +1035,7 @@ function runDataOperation(input: DataOperation): unknown {
     installViews(db);
     db.exec('PRAGMA query_only=ON');
     if (input.name === 'db.query') return query(db, input.args);
+    if (input.name === 'scene.regex') return sceneRegex(db, input.args);
     const row = db
       .prepare(
         "SELECT json_extract(snapshot,'$.scope') scope, json_type(snapshot,'$.editor.model') has_editor, json_type(snapshot,'$.writing') has_writing FROM helper_tasks WHERE id=?"

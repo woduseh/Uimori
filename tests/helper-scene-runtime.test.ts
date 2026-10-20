@@ -355,6 +355,48 @@ test('helper searches live words and atomically patches all exact matches', asyn
   expect(f.store.source(f.source.id).text).toBe('Yoshino-sama spoke. Yoshino-sama smiled.');
 });
 
+test('helper runs isolated regex chat search then commits a guarded scene batch', async () => {
+  const f = await fixture();
+  f.store.editSource(f.source.id, {
+    text: '`<ruby>first</ruby>`',
+    expectedRevision: 0,
+  });
+  const other = completedSource(f.store, f.chat.id, '`<ruby>second</ruby>`');
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('regex', 'scene.search', {
+          target: 'original',
+          regex: true,
+          patterns: ['`<ruby>[^`]+</ruby>`'],
+        })
+      );
+    if (round === 1) {
+      const found = result(request, 'regex') as {
+        matches: { editTarget: Record<string, unknown>; match: string }[];
+        matchedScenes: number;
+      };
+      expect(found.matchedScenes).toBe(2);
+      return calls(
+        call('batch', 'scene.patchMany', {
+          items: found.matches.map((match) => ({
+            ...match.editTarget,
+            changes: [{ oldText: match.match, newText: match.match.slice(1, -1) }],
+          })),
+        })
+      );
+    }
+    expect(result(request, 'batch')).toMatchObject({
+      changed: true,
+      sourceIds: [f.source.id, other.id],
+    });
+    return structuredClone(success);
+  });
+  await submit(f, '모든 장면의 루비 마크업 백틱을 제거해줘.');
+  expect(f.store.source(f.source.id).text).toBe('<ruby>first</ruby>');
+  expect(f.store.source(other.id).text).toBe('<ruby>second</ruby>');
+});
+
 test('scene patch rejects a source outside the helper chat before mutating it', async () => {
   const f = await fixture();
   const otherChat = createFixtureChat(f.store, 'Unrelated chat');
