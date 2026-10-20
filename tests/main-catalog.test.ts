@@ -2,6 +2,7 @@ import { countTextTokens } from '../core/text-tokens.js';
 import { expect, test } from 'vitest';
 import {
   buildMainInput,
+  resourceCatalog,
   CATALOG_TOKENS,
   CATALOG_READ_GUIDANCE,
   CATALOG_SUMMARY_TOKENS,
@@ -271,4 +272,28 @@ test('knowledge read pages preserve item errors, text offsets, and every unread 
   const read = (common.result as any).items[0].read;
   expect(read.text).toBe(resources[1].text.slice(0, read.range.end));
   expect(countTextTokens(JSON.stringify(common.result))).toBeLessThanOrEqual(KNOWLEDGE_READ_TOKENS);
+});
+
+test('catalog construction does not tokenize descriptions after the page is full', () => {
+  let descriptionsRead = 0;
+  const resources = Array.from({ length: 400 }, (_, index) => {
+    const resource = lore(index);
+    const description = resource.description;
+    Object.defineProperty(resource, 'description', {
+      get: () => {
+        descriptionsRead++;
+        return description;
+      },
+    });
+    return resource;
+  });
+  const result = resourceCatalog(resources);
+  expect(result.catalogPage!.total).toBe(400);
+  expect(result.catalog.length).toBeGreaterThan(0);
+  expect(result.catalog.map(({ id }) => id)).toEqual(
+    resources.slice(0, result.catalog.length).map(({ id }) => id)
+  );
+  expect(countTextTokens(JSON.stringify(result.catalog))).toBeLessThanOrEqual(CATALOG_TOKENS);
+  // One candidate can be inspected to discover that the current page is full.
+  expect(descriptionsRead).toBeLessThanOrEqual(result.catalog.length + 1);
 });

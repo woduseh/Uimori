@@ -1335,3 +1335,51 @@ test('tiny token limits return a recoverable error rather than a non-progressing
     });
   }
 });
+
+test.each(['lore', 'skill'] as const)(
+  '%s explicit UTF-16 limits preserve whole characters and cannot return an empty continuing page',
+  async (kind) => {
+    const fixed = await snapshot();
+    fixed.resources = [
+      {
+        id: 'emoji-limit',
+        chatId: fixed.chatId,
+        kind,
+        revision: 1,
+        title: 'emoji',
+        description: '',
+        text: '😀hello',
+      },
+    ];
+    const action = {
+      callId: 'explicit-limit',
+      name: kind === 'lore' ? 'knowledge.read' : 'skills.load',
+      args: { ...(kind === 'lore' ? { ids: ['emoji-limit'] } : { id: 'emoji-limit' }), limit: 1 },
+    };
+    expect(executeTool(fixed, action)).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { code: 'TOKEN_LIMIT_TOO_SMALL' },
+    });
+    const resumed = executeTool(fixed, { ...action, args: { ...action.args, limit: 2 } });
+    expect(resumed.denied).toBe(false);
+    const read = kind === 'lore' ? (resumed.result as any).items[0].read : resumed.result;
+    expect(read).toMatchObject({ text: '😀', range: { start: 0, end: 2 }, nextOffset: 2 });
+
+    // A nonempty prefix still returns the available whole characters before the limit.
+    fixed.resources[0].text = 'A😀hello';
+    const prefix = executeTool(fixed, { ...action, args: { ...action.args, limit: 2 } });
+    const prefixRead = kind === 'lore' ? (prefix.result as any).items[0].read : prefix.result;
+    expect(prefixRead).toMatchObject({ text: 'A', range: { start: 0, end: 1 }, nextOffset: 1 });
+    if (kind === 'lore') {
+      // Historical character receipts preserve their original UTF-16 slices exactly.
+      fixed.resources[0].text = '😀hello';
+      const legacy = executeTool(fixed, action, undefined, 'main', 6000);
+      expect((legacy.result as any).items[0].read).toMatchObject({
+        text: '\ud83d',
+        range: { start: 0, end: 1 },
+        nextOffset: 1,
+      });
+    }
+  }
+);
