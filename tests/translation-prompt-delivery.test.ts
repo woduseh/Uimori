@@ -10,6 +10,7 @@ import { PROVIDER_PROTOCOLS, type ProviderProtocol } from '../core/product.js';
 import { runAuxiliaryJob, type AuxiliaryBundle } from '../server/product-auxiliary.js';
 import { encodeMainPreview } from '../server/main-request.js';
 import { bridge, bundle, hooks, selectProvider } from './fixtures/translation-job.js';
+import { countTextTokens } from '../core/text-tokens.js';
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const sourceMarker =
@@ -285,9 +286,11 @@ test('large auxiliary catalogs execute with bounded discovery metadata and no du
   );
   const request = await capture(value);
   const source = request.input.source as Record<string, unknown>;
-  expect(source.catalogPage).toMatchObject({ total: 122 });
-  expect((request.input.catalog as unknown[]).length).toBeLessThan(122);
-  expect(JSON.stringify(request.input.catalog).length).toBeLessThanOrEqual(24_000);
+  const catalog = request.input.catalog as unknown[];
+  expect(source.catalogPage).toMatchObject({ total: 122, listed: catalog.length });
+  expect(catalog.length).toBeGreaterThan(0);
+  expect(catalog.length).toBeLessThan(122);
+  expect(countTextTokens(JSON.stringify(catalog))).toBeLessThanOrEqual(6000);
   expect(JSON.stringify(request.input.catalog)).not.toContain('package:bot:bot');
   expect(JSON.stringify(request.input.catalog)).toContain('An unprefetched name.');
   expect(request.stable.tools.some((tool) => tool.name === 'knowledge.search')).toBe(true);

@@ -169,10 +169,14 @@ test('before advisors run in order with scoped reads, selected models and explic
   expect(result.evidence).toMatchObject([
     {
       tool: 'knowledge.read',
-      args: { ids: [state.lore.id], offset: 0, limit: 4096 },
+      args: { ids: [state.lore.id], offset: 0, tokenLimit: 2000 },
       reference: `resource:${state.lore.id}@${state.lore.revision}#chars=0-${state.lore.text.length}`,
+      range: { start: 0, end: state.lore.text.length, unit: 'utf16-code-unit' },
+      totalChars: state.lore.text.length,
+      nextOffset: null,
     },
   ]);
+  expect(result.evidence[0].args).not.toHaveProperty('limit');
 });
 
 test('on-demand main -> advisor read loop -> main persists attempts before HTTP and caches duplicate consultations without double-counting usage', async () => {
