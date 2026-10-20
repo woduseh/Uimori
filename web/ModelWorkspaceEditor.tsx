@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n, getLocale, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -34,6 +35,7 @@ export function ModelWorkspaceEditor({
   onManage: () => void;
   onEditModel: (id: string) => void;
 }) {
+  useI18n();
   const { workspace, error, refresh } = usePromptWorkspace();
   const id = useId();
   const [draft, setDraft] = useState<ModelWorkspace | null>(null);
@@ -77,8 +79,8 @@ export function ModelWorkspaceEditor({
       <LoadingState
         presentation="region"
         loading={!error}
-        error={error}
-        label="역할별 모델 설정을 불러오는 중이에요…"
+        error={translateMessage(error)}
+        label={t('settings.m0')}
         onRetry={() => void refresh()}
       />
     );
@@ -127,7 +129,7 @@ export function ModelWorkspaceEditor({
         setDraft(accepted);
         setDirty(false);
         await refresh();
-        setMessage('역할별 모델 설정을 저장했어요. 모든 채팅의 이후 요청에 적용해요.');
+        setMessage(uiMessage('settings.m1'));
         return true;
       })
       .catch((caught: Error) => {
@@ -159,44 +161,40 @@ export function ModelWorkspaceEditor({
       setConfirmReload(false);
       void refresh();
     } catch {
-      setReloadError('설정을 불러오지 못했어요. 초안은 유지했어요.');
+      setReloadError(uiMessage('settings.m2'));
     } finally {
       lock.current = false;
       setOperation(null);
     }
   }
   const selector = (
+    role: string,
     label: string,
     selected: ModelRef | null,
     onChange: (ref: ModelRef | null) => void,
     description?: string
   ) => {
     const model = library.models.find((item) => item.id === selected?.id);
-    const displayLabel = label === '원문 모델' ? '본문 모델' : label;
-    const fieldId = `${id}-${label.replaceAll(' ', '-')}`;
+    const displayLabel = label;
+    const fieldId = `${id}-model-${role}`;
     return (
       <div className="settings-row model-role-setting">
         <div className="settings-row-copy">
           <label htmlFor={fieldId}>{displayLabel}</label>
           {description && <small>{description}</small>}
           {selected && (!model || !canSelect(model)) && (
-            <small role="status">
-              이 모델을 사용할 수 없어 새 작업을 시작할 수 없어요. 모델 프리셋과 프로바이더를
-              확인하거나 다른 모델을 선택해 주세요.
-            </small>
+            <small role="status">{t('settings.m5')}</small>
           )}
         </div>
         <div className="settings-row-control">
           <select
             id={fieldId}
-            aria-label={label}
+            aria-label={role === 'main' ? t('settings.m3') : label}
             value={selected?.id ?? ''}
             onChange={(event) => onChange(event.target.value ? { id: event.target.value } : null)}
           >
-            <option value="">모델 미지정</option>
-            {selected && !model && (
-              <option value={selected.id}>선택한 모델 · 삭제되었거나 확인 필요</option>
-            )}
+            <option value="">{t('settings.m6')}</option>
+            {selected && !model && <option value={selected.id}>{t('settings.m7')}</option>}
             {library.models
               .filter((item) => canSelect(item) || item.id === selected?.id)
               .map((item) => (
@@ -205,14 +203,14 @@ export function ModelWorkspaceEditor({
                   {canSelect(item)
                     ? library.connections.find((connection) => connection.id === item.connectionId)
                         ?.title
-                    : '모델 또는 프로바이더 비활성'}
+                    : t('settings.m8')}
                 </option>
               ))}
           </select>
           {model && (
             <IconButton
               icon={EditIcon}
-              label={`${displayLabel}의 선택 모델 편집`}
+              label={t('settings.m9', { v0: displayLabel })}
               className="secondary"
               onClick={() => onEditModel(model.id)}
             />
@@ -223,35 +221,35 @@ export function ModelWorkspaceEditor({
   };
   const configuredSummary = (values: Array<ModelRef | null | undefined>) => {
     const configured = values.filter(Boolean).length;
-    if (configured === 0) return '모두 미지정';
-    if (configured === values.length) return `${configured}개 설정됨`;
-    return `${configured}/${values.length}개 설정됨`;
+    if (configured === 0) return t('settings.m10');
+    if (configured === values.length) return t('settings.m11', { v0: configured });
+    return t('settings.m12', { v0: configured, v1: values.length });
   };
   const enabledJudgments =
     Number(draft.mainJudgmentEnabled === true) +
     Number(draft.translationPolicy.judgment.enabled !== false);
   return (
-    <section aria-label="역할별 모델 설정" className="settings-section model-workspace-settings">
-      <p className="model-workspace-intro">변경한 설정은 이후 작업부터 적용돼요.</p>
+    <section aria-label={t('settings.m13')} className="settings-section model-workspace-settings">
+      <p className="model-workspace-intro">{t('settings.m14')}</p>
       <fieldset disabled={busy} className="control-grid model-workspace-controls">
         <fieldset className="settings-group full model-primary-settings">
-          <legend className="settings-group-heading">핵심 작업</legend>
+          <legend className="settings-group-heading">{t('settings.m15')}</legend>
           <div className="settings-group-body">
-            {selector('원문 모델', draft.routes.main, (ref) =>
+            {selector('main', t('settings.m4'), draft.routes.main, (ref) =>
               change({ ...draft, routes: { ...draft.routes, main: ref } })
             )}
-            {selector('번역 모델', draft.routes.translation, (ref) =>
+            {selector('translation', t('settings.m16'), draft.routes.translation, (ref) =>
               change({ ...draft, routes: { ...draft.routes, translation: ref } })
             )}
             {choices.length === 0 && (
               <div className="settings-row model-setup-prompt">
                 <div className="settings-row-copy">
-                  <small>사용할 수 있는 모델이 없어요. 프로바이더와 모델을 설정해 주세요.</small>
+                  <small>{t('settings.m17')}</small>
                 </div>
                 <div className="settings-row-control">
                   <button type="button" className="secondary" onClick={onManage}>
                     <SettingsIcon size={18} aria-hidden="true" />
-                    프로바이더·모델 설정
+                    {t('settings.m18')}
                   </button>
                 </div>
               </div>
@@ -260,24 +258,26 @@ export function ModelWorkspaceEditor({
         </fieldset>
         <details className="settings-group full model-secondary-settings">
           <summary className="settings-group-heading">
-            대화와 자료 지원
+            {t('settings.m19')}
             <small>{configuredSummary([draft.helperModel, draft.contextModel])}</small>
           </summary>
           <div className="settings-group-body">
             {selector(
-              '도우미 모델',
+              'helper',
+              t('settings.m20'),
               draft.helperModel ?? null,
               (ref) => change({ ...draft, helperModel: ref }),
-              '작품 질문·자료 작업에 사용해요. 미지정 시 도우미 모델 호출을 하지 않아요.'
+              t('settings.m21')
             )}
             {selector(
-              '컨텍스트 요약 모델',
+              'context',
+              t('settings.m22'),
               draft.contextModel ?? null,
               (ref) => change({ ...draft, contextModel: ref }),
-              '자동·수동 요약에 사용해요. 미지정 시 압축 작업은 진행되지 않아요.'
+              t('settings.m23')
             )}
             {(['conversation', 'helper'] as const).map((role) => {
-              const label = role === 'conversation' ? '세션 요약 길이' : '도우미 요약 길이';
+              const label = role === 'conversation' ? t('settings.m24') : t('settings.m25');
               const selected = (draft.summaryLength ?? DEFAULT_SUMMARY_LENGTH)[role];
               return (
                 <div key={role} className="settings-row">
@@ -306,8 +306,8 @@ export function ModelWorkspaceEditor({
                       {SUMMARY_LENGTH_VALUES.map((value) => (
                         <option key={value} value={value}>
                           {value === 'auto'
-                            ? '자동 (권장)'
-                            : `${value.toLocaleString('ko-KR')}토큰`}
+                            ? t('settings.m26')
+                            : t('settings.m27', { v0: value.toLocaleString(getLocale()) })}
                         </option>
                       ))}
                     </select>
@@ -315,54 +315,54 @@ export function ModelWorkspaceEditor({
                 </div>
               );
             })}
-            <p className="model-summary-note">
-              자동 상한: 세션 8,192 · 도우미 4,096토큰. 실제 요약은 더 짧을 수 있으며 기존 요약은
-              유지돼요.
-            </p>
+            <p className="model-summary-note">{t('settings.m28')}</p>
           </div>
         </details>
         <details className="settings-group full model-secondary-settings">
           <summary className="settings-group-heading">
-            자동 작업
+            {t('settings.m29')}
             <small>{configuredSummary([draft.titleModel])}</small>
           </summary>
           <div className="settings-group-body">
-            {selector('채팅 제목 모델', draft.titleModel ?? null, (ref) =>
+            {selector('title', t('settings.m30'), draft.titleModel ?? null, (ref) =>
               change({ ...draft, titleModel: ref })
             )}
           </div>
         </details>
         <details className="settings-group full model-secondary-settings">
           <summary className="settings-group-heading">
-            확장 기능 <small>{draft.scriptModel ? '설정됨' : '미지정'}</small>
+            {t('settings.m31')}
+            <small>{draft.scriptModel ? t('settings.m32') : t('settings.m33')}</small>
           </summary>
           <div className="settings-group-body">
             {selector(
-              '확장 호출 모델',
+              'script',
+              t('settings.m34'),
               draft.scriptModel ?? null,
               (ref) => change({ ...draft, scriptModel: ref }),
-              '허용된 패키지의 추가 모델 호출에 사용해요. 미지정 시 호출하지 않아요.'
+              t('settings.m35')
             )}
           </div>
         </details>
         <details className="settings-group full model-secondary-settings task-behavior-settings">
           <summary className="settings-group-heading">
-            작업 동작
+            {t('settings.m36')}
             <small>
-              번역{' '}
-              {Number.isFinite(draft.translationPolicy.maxCalls)
-                ? draft.translationPolicy.maxCalls
-                : '확인 필요'}
-              회{' · '}거절 감지 {enabledJudgments}/2
+              {t('settings.flow0', {
+                v0: Number.isFinite(draft.translationPolicy.maxCalls)
+                  ? draft.translationPolicy.maxCalls
+                  : t('settings.m38'),
+                v1: enabledJudgments,
+              })}
             </small>
           </summary>
           <div className="settings-group-body task-behavior-settings-body">
             <section aria-labelledby="translation-task-heading" className="task-behavior-section">
-              <h4 id="translation-task-heading">번역 작업</h4>
+              <h4 id="translation-task-heading">{t('settings.m41')}</h4>
               <label>
-                번역 참고 범위
+                {t('settings.m42')}
                 <select
-                  aria-label="번역 참고 범위"
+                  aria-label={t('settings.m42')}
                   aria-describedby="translation-context-help"
                   value={draft.translationPolicy.contextMode ?? 'full'}
                   onChange={(event) =>
@@ -375,19 +375,18 @@ export function ModelWorkspaceEditor({
                     })
                   }
                 >
-                  <option value="full">관련 자료 포함(기존)</option>
-                  <option value="source-only">본문과 번역 지침만</option>
+                  <option value="full">{t('settings.m43')}</option>
+                  <option value="source-only">{t('settings.m44')}</option>
                 </select>
               </label>
               <p id="translation-context-help" className="refusal-settings-help">
-                본문과 번역 지침만 사용하면 봇·페르소나·로어·이전 장면·메모를 참고하지 않아요.
-                선택한 번역 프롬프트, 봇 번역 지침과 원문 전체는 유지해요.
+                {t('settings.m45')}
               </p>
               <div className="refusal-field-row">
-                <label htmlFor="translation-call-limit">번역 작업 호출 한도</label>
+                <label htmlFor="translation-call-limit">{t('settings.m46')}</label>
                 <input
                   id="translation-call-limit"
-                  aria-label="번역 작업 호출 한도"
+                  aria-label={t('settings.m46')}
                   type="number"
                   min={2}
                   max={64}
@@ -408,21 +407,16 @@ export function ModelWorkspaceEditor({
                   }
                 />
               </div>
-              <p className="refusal-settings-help">
-                번역 생성, 자료 조회 후속 요청, 거절 판정을 한 작업에서 합산해요. 범위는 2~64회예요.
-              </p>
+              <p className="refusal-settings-help">{t('settings.m47')}</p>
             </section>
             <section aria-labelledby="refusal-settings-heading" className="task-behavior-section">
-              <h4 id="refusal-settings-heading">거절 감지</h4>
-              <p className="refusal-settings-help">
-                전체 생성문에서 서비스 거절만 감지해요. 점수가 각 확신 기준 이상이면 거절로
-                처리해요.
-              </p>
-              <section aria-label="본문 서비스 거절 감지" className="refusal-role">
+              <h4 id="refusal-settings-heading">{t('settings.m40')}</h4>
+              <p className="refusal-settings-help">{t('settings.m48')}</p>
+              <section aria-label={t('settings.m49')} className="refusal-role">
                 <div className="refusal-role-heading">
-                  <h5>본문</h5>
+                  <h5>{t('settings.m50')}</h5>
                   <Switch
-                    aria-label="본문 서비스 거절 감지 사용"
+                    aria-label={t('settings.m51')}
                     checked={draft.mainJudgmentEnabled === true}
                     onChange={(event) =>
                       change({ ...draft, mainJudgmentEnabled: event.target.checked })
@@ -430,10 +424,10 @@ export function ModelWorkspaceEditor({
                   />
                 </div>
                 <div className="refusal-field-row">
-                  <label htmlFor="main-refusal-threshold">거절 확신 기준</label>
+                  <label htmlFor="main-refusal-threshold">{t('settings.m52')}</label>
                   <input
                     id="main-refusal-threshold"
-                    aria-label="본문 거절 확신 기준"
+                    aria-label={t('settings.m53')}
                     type="number"
                     min="0.51"
                     max="1"
@@ -448,15 +442,13 @@ export function ModelWorkspaceEditor({
                     }
                   />
                 </div>
-                <p className="refusal-settings-help">
-                  거절 시 출력을 보존하고 중단해요. 자동 재생성은 하지 않아요.
-                </p>
+                <p className="refusal-settings-help">{t('settings.m54')}</p>
               </section>
-              <section aria-label="번역 서비스 거절 감지" className="refusal-role">
+              <section aria-label={t('settings.m55')} className="refusal-role">
                 <div className="refusal-role-heading">
-                  <h5>번역</h5>
+                  <h5>{t('settings.m37')}</h5>
                   <Switch
-                    aria-label="번역 서비스 거절 감지 사용"
+                    aria-label={t('settings.m56')}
                     checked={draft.translationPolicy.judgment.enabled !== false}
                     onChange={(event) =>
                       change({
@@ -473,10 +465,10 @@ export function ModelWorkspaceEditor({
                   />
                 </div>
                 <div className="refusal-field-row">
-                  <label htmlFor="translation-refusal-threshold">거절 확신 기준</label>
+                  <label htmlFor="translation-refusal-threshold">{t('settings.m52')}</label>
                   <input
                     id="translation-refusal-threshold"
-                    aria-label="번역 거절 확신 기준"
+                    aria-label={t('settings.m57')}
                     type="number"
                     min="0.51"
                     max="1"
@@ -501,10 +493,10 @@ export function ModelWorkspaceEditor({
                   />
                 </div>
                 <div className="refusal-field-row">
-                  <label htmlFor="translation-refusal-retries">자동 재요청 횟수</label>
+                  <label htmlFor="translation-refusal-retries">{t('settings.m58')}</label>
                   <input
                     id="translation-refusal-retries"
-                    aria-label="번역 자동 재요청 횟수"
+                    aria-label={t('settings.m59')}
                     type="number"
                     min={0}
                     max={5}
@@ -525,14 +517,9 @@ export function ModelWorkspaceEditor({
                     }
                   />
                 </div>
-                <p className="refusal-settings-help">
-                  거절 시 설정한 횟수만큼 다시 요청해요. 실패하면 이전 번역을 유지해요.
-                </p>
+                <p className="refusal-settings-help">{t('settings.m60')}</p>
               </section>
-              <p className="refusal-settings-help">
-                확신 기준은 0.5 초과~1이에요. 끄면 JEV 검사 없이 결과를 채택해요. 생성 오류는 계속
-                처리해요.
-              </p>
+              <p className="refusal-settings-help">{t('settings.m61')}</p>
             </section>
           </div>
         </details>
@@ -548,12 +535,12 @@ export function ModelWorkspaceEditor({
               }}
             >
               <RefreshIcon size={18} aria-hidden="true" />
-              최신 설정 다시 불러오기
+              {t('settings.m62')}
             </button>
           )}
           <SaveButton
             type="button"
-            label="역할별 모델 설정 저장"
+            label={t('settings.m63')}
             aria-busy={operation === 'save'}
             disabled={!dirty || invalid}
             onClick={() => void save()}
@@ -562,56 +549,60 @@ export function ModelWorkspaceEditor({
       </fieldset>
       <Dialog
         open={confirmReload}
-        title="역할별 모델 설정 다시 불러오기"
+        title={t('settings.m64')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!busy) setConfirmReload(false);
         }}
       >
-        <p>저장된 설정을 불러오면 현재 초안이 사라져요.</p>
-        {reloadError && <NoticeBanner tone="error">{reloadError}</NoticeBanner>}
+        <p>{t('settings.m65')}</p>
+        {reloadError && <NoticeBanner tone="error">{translateMessage(reloadError)}</NoticeBanner>}
         <DraftDiscardActions
           open={confirmReload}
           disabled={busy}
           onContinue={() => setConfirmReload(false)}
           onDiscard={reload}
-          discardLabel="초안 버리고 불러오기"
+          discardLabel={t('settings.m66')}
         />
       </Dialog>
       <SaveConflictDialog
         open={saveConflict}
-        title="역할별 모델 저장 내용 확인"
+        title={t('settings.m67')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
           const value = await api<ModelWorkspace>('/model-workspace');
           const modelName = (ref: ModelRef | null | undefined) =>
             library.models.find((model) => model.id === ref?.id)?.title ??
-            (ref ? '확인 필요' : '기본값');
-          return [
-            { label: '제목 모델', value: modelName(value.titleModel) },
-            { label: '도우미 모델', value: modelName(value.helperModel) },
-            { label: '요약 모델', value: modelName(value.contextModel) },
-            { label: '스크립트 모델', value: modelName(value.scriptModel) },
-            { label: '응답 재검토', value: value.mainJudgmentEnabled ? '켜짐' : '꺼짐' },
-            { label: '번역 자동 재요청 횟수', value: String(value.translationPolicy.maxRetries) },
+            (ref ? t('settings.m38') : t('settings.m68'));
+          return () => [
+            { label: t('settings.m69'), value: modelName(value.titleModel) },
+            { label: t('settings.m20'), value: modelName(value.helperModel) },
+            { label: t('settings.m70'), value: modelName(value.contextModel) },
+            { label: t('settings.m71'), value: modelName(value.scriptModel) },
+            {
+              label: t('settings.m72'),
+              value: value.mainJudgmentEnabled ? t('settings.m73') : t('settings.m74'),
+            },
+            { label: t('settings.m59'), value: String(value.translationPolicy.maxRetries) },
           ];
         }}
       />
-      {conflict && dirty && (
+      {conflict && dirty && <NoticeBanner tone="error">{t('settings.m75')}</NoticeBanner>}
+      {saveError && (
         <NoticeBanner tone="error">
-          다른 곳에서 전역 설정이 바뀌었어요. 초안은 유지했어요. 최신 설정을 불러온 뒤 다시 적용해
-          주세요.
+          {t('settings.flow1', { v0: translateMessage(saveError) })}
         </NoticeBanner>
       )}
-      {saveError && <NoticeBanner tone="error">{saveError} 초안은 유지했어요.</NoticeBanner>}
       <TransientNotice message={message} />
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
-      {!confirmReload && reloadError && <NoticeBanner tone="error">{reloadError}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      {!confirmReload && reloadError && (
+        <NoticeBanner tone="error">{translateMessage(reloadError)}</NoticeBanner>
+      )}
       {choices.length > 0 && (
         <button type="button" className="secondary" onClick={onManage}>
           <SettingsIcon size={18} aria-hidden="true" />
-          모델 프리셋·프로바이더 관리{' '}
+          {t('settings.m77')}{' '}
         </button>
       )}
     </section>

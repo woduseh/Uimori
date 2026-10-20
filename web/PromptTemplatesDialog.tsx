@@ -1,3 +1,4 @@
+import { useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -30,6 +31,7 @@ export function PromptTemplatesDialog({
   onAdded: (preset: PromptPreset) => void;
   onError: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [templates, setTemplates] = useState<PromptTemplateSummary[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -79,44 +81,56 @@ export function PromptTemplatesDialog({
   }
   const pending = busy || adding !== null;
   return (
-    <Dialog open={open} title="기본 프롬프트" className="prompt-templates-dialog" onClose={onClose}>
+    <Dialog
+      open={open}
+      title={t('prompts.uiBuiltInPrompts')}
+      className="prompt-templates-dialog"
+      onClose={onClose}
+    >
       <p className="muted prompt-templates-description">
-        프리셋으로 추가해 자유롭게 편집하고, 현재 프롬프트 설정에서 불러와 사용할 수 있어요.
+        {t('prompts.uiAddAsAPresetToEditFreelyThenLoad')}
       </p>
       {loadError || templates === null ? (
         <LoadingState
           presentation="placeholder"
           loading={!loadError}
-          error={loadError}
-          errorLabel="기본 프롬프트를 불러오지 못했어요."
-          label="기본 프롬프트를 불러오는 중이에요…"
+          error={translateMessage(loadError)}
+          errorLabel={t('prompts.uiUnableToLoadBuiltInPrompts')}
+          label={t('prompts.uiLoadingBuiltInPrompts')}
           onRetry={() => setLoadAttempt((n) => n + 1)}
         />
       ) : (
-        <ul className="prompt-template-list" aria-label="기본 프롬프트 목록">
+        <ul className="prompt-template-list" aria-label={t('prompts.uiBuiltInPromptList')}>
           {templates.map((template) => (
             <li key={template.id} className="prompt-template-row">
               <div className="prompt-template-copy">
                 <h3>{template.title}</h3>
-                <span className="muted">{template.role === 'translation' ? '번역' : '작문'}</span>
-                <p>{template.description}</p>
+                <span className="muted">
+                  {template.role === 'translation'
+                    ? t('prompts.uiTranslation')
+                    : t('prompts.uiWriting')}
+                </span>
+                <p>{translateMessage(template.description)}</p>
               </div>
               <button
                 type="button"
                 className="secondary"
-                aria-label={`${template.title} 추가`}
+                aria-label={t('prompts.addNamed', { name: template.title })}
                 disabled={pending}
                 onClick={() => void add(template)}
               >
                 <AddIcon size={18} aria-hidden="true" />
-                추가
+                {t('prompts.uiAdd')}
               </button>
             </li>
           ))}
         </ul>
       )}
       {adding && (
-        <LoadingState presentation="inline" label={`${adding.title} 프리셋을 추가하는 중이에요…`} />
+        <LoadingState
+          presentation="inline"
+          label={t('prompts.addingNamed', { name: adding.title })}
+        />
       )}
       {failure && (
         <div className="prompt-templates-error">
@@ -127,14 +141,14 @@ export function PromptTemplatesDialog({
                 type="button"
                 className="secondary"
                 disabled={pending}
-                aria-label={`${failure.template.title} 다시 추가`}
+                aria-label={t('prompts.retryNamed', { name: failure.template.title })}
                 onClick={() => void add(failure.template)}
               >
-                다시 시도
+                {t('prompts.uiRetry')}
               </button>
             }
           >
-            프롬프트를 추가하지 못했어요. {failure.message}
+            {t('prompts.addFailed', { error: translateMessage(failure.message) })}
           </NoticeBanner>
         </div>
       )}

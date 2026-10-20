@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 /** Exact local codes only; untrusted provider error text is never rendered as instructions. */
 export const requestImageErrors: Record<string, string> = {
   REQUEST_IMAGE_COUNT_INVALID: '참고 이미지는 최대 8장까지 첨부할 수 있어요.',
@@ -26,5 +28,5 @@ export const requestImageErrors: Record<string, string> = {
 };
 
 export function requestImageError(error: string | null | undefined): string | undefined {
-  return error && Object.hasOwn(requestImageErrors, error) ? requestImageErrors[error] : undefined;
+  return error && Object.hasOwn(requestImageErrors, error) ? t(`errors.${error}`) : undefined;
 }

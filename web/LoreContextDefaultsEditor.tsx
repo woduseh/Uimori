@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -23,6 +24,7 @@ export function LoreContextDefaultsEditor({
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
+  useI18n();
   const [saved, setSaved] = useState<LoreContextDefaults | null>(null);
   const [draft, setDraft] = useState<LoreContextDefaults | null>(null);
   const [invalid, setInvalid] = useState(false);
@@ -60,7 +62,7 @@ export function LoreContextDefaultsEditor({
       );
       setSaved(accepted);
       setDraft(structuredClone(accepted));
-      setMessage('저장했어요. 새 채팅부터 적용돼요.');
+      setMessage(uiMessage('settings.m197'));
       return true;
     } catch (caught) {
       setError((caught as Error).message);
@@ -72,22 +74,19 @@ export function LoreContextDefaultsEditor({
   useSettingsSaveHandler(onSaveHandlerChange, save);
   if (!draft)
     return (
-      <section
-        className="settings-section settings-loading-region"
-        aria-label="로어 컨텍스트 기본값"
-      >
+      <section className="settings-section settings-loading-region" aria-label={t('settings.m198')}>
         <LoadingState
           presentation="region"
           loading={!error}
-          error={error}
-          label="로어 컨텍스트 기본값을 불러오는 중이에요…"
+          error={translateMessage(error)}
+          label={t('settings.m199')}
           onRetry={() => void load()}
         />
       </section>
     );
   return (
-    <section className="settings-section" aria-label="로어 컨텍스트 기본값">
-      <p className="muted">새 채팅의 기본값이에요. 기존 채팅은 바뀌지 않아요.</p>
+    <section className="settings-section" aria-label={t('settings.m198')}>
+      <p className="muted">{t('settings.m200')}</p>
       <fieldset disabled={busy} className="lore-context-fields">
         <LoreContextPolicyEditor
           value={policyOf(draft)}
@@ -97,13 +96,13 @@ export function LoreContextDefaultsEditor({
           }}
           onPendingChange={setInvalid}
           defaults={DEFAULT_LORE_CONTEXT}
-          resetLabel="초기값으로 되돌리기"
+          resetLabel={t('settings.m201')}
           profileRevision={draft.revision}
           footerAction={
             <SaveButton
               type="button"
-              label="로어 컨텍스트 기본값 저장"
-              text="저장"
+              label={t('settings.m202')}
+              text={t('settings.m203')}
               aria-busy={busy}
               disabled={!dirty || invalid || busy}
               onClick={save}
@@ -112,7 +111,7 @@ export function LoreContextDefaultsEditor({
         />
       </fieldset>
       <TransientNotice message={message} />
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </section>
   );
 }

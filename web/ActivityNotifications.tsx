@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatDate, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -42,6 +43,7 @@ export function ActivityNotifications({
   onClose: () => void;
   onRecords: () => void;
 }) {
+  useI18n();
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -61,8 +63,7 @@ export function ActivityNotifications({
       history.current(page.items);
       setCursor(page.nextCursor);
     } catch {
-      if (version === sequence.current)
-        setError('이전 작업을 불러오지 못했어요. 표시된 알림은 확인할 수 있어요.');
+      if (version === sequence.current) setError(uiMessage('helpers.m283'));
     } finally {
       if (version === sequence.current) setLoading(false);
     }
@@ -87,9 +88,14 @@ export function ActivityNotifications({
     (item) => canAcknowledge(item) && !acknowledged.includes(item.acknowledgementKey)
   );
   return (
-    <Dialog open={open} title="작업 알림" onClose={onClose} className="activity-notifications">
+    <Dialog
+      open={open}
+      title={t('helpers.m284')}
+      onClose={onClose}
+      className="activity-notifications"
+    >
       <div className="activity-notification-toolbar">
-        <p>확인하면 알림만 사라지고 작업 기록은 보존돼요.</p>
+        <p>{t('helpers.m285')}</p>
         <button
           type="button"
           className="secondary"
@@ -99,15 +105,10 @@ export function ActivityNotifications({
             setInspected(null);
           }}
         >
-          모두 확인
+          {t('helpers.m286')}
         </button>
       </div>
-      {persistenceError && (
-        <NoticeBanner tone="error">
-          확인 기록을 브라우저에 저장하지 못했어요. 이 화면에서는 숨겨지지만 앱을 다시 열면 알림이
-          나타날 수 있어요.
-        </NoticeBanner>
-      )}
+      {persistenceError && <NoticeBanner tone="error">{t('helpers.m287')}</NoticeBanner>}
       <ul className="activity-notification-items">
         {visible.map((item) => {
           const confirmed = acknowledged.includes(item.acknowledgementKey);
@@ -126,9 +127,15 @@ export function ActivityNotifications({
                   <strong>{message(item)}</strong>
                   <small>
                     <time dateTime={item.startedAt}>
-                      {new Date(item.startedAt).toLocaleString()}
+                      {formatDate(new Date(item.startedAt), {
+                        dateStyle: 'medium',
+                        timeStyle: 'medium',
+                      })}
                     </time>{' '}
-                    · {item.kind === 'request' ? '장면 생성' : `작업 ${item.runId.slice(0, 8)}`}
+                    ·{' '}
+                    {item.kind === 'request'
+                      ? t('helpers.m288')
+                      : t('helpers.m238', { v0: item.runId.slice(0, 8) })}
                   </small>
                 </div>
                 <div className="activity-notification-actions">
@@ -143,13 +150,13 @@ export function ActivityNotifications({
                         )
                       }
                     >
-                      상세
+                      {t('helpers.m246')}
                     </button>
                   )}
                   {item.kind === 'request' && item.status === 'uncertain' ? (
                     <>
                       <button type="button" className="secondary" onClick={() => onLater(item)}>
-                        나중에
+                        {t('helpers.m289')}
                       </button>
                       {recoverable && (
                         <button
@@ -158,7 +165,7 @@ export function ActivityNotifications({
                           aria-busy={recoveryBusy}
                           onClick={() => onRecoverRequest(item.runId)}
                         >
-                          {recoveryBusy ? '확인 중…' : '접수 확인'}
+                          {recoveryBusy ? t('helpers.m290') : t('helpers.m291')}
                         </button>
                       )}
                     </>
@@ -172,26 +179,20 @@ export function ActivityNotifications({
                         if (inspected === item.acknowledgementKey) setInspected(null);
                       }}
                     >
-                      {confirmed ? '확인됨' : '확인'}
+                      {confirmed ? t('helpers.m292') : t('helpers.m267')}
                     </button>
                   )}
                 </div>
               </div>
               {item.kind === 'request' && item.status === 'uncertain' ? (
-                <small>
-                  {recoverable
-                    ? '서버 응답을 받지 못했어요. 같은 요청으로 다시 확인하며, 아직 접수되지 않았다면 생성을 시작할 수 있어요. 이미 접수된 요청은 중복 생성하지 않아요.'
-                    : '이 탭에 복구 가능한 요청 정보가 없어요. 알림을 잠시 숨기거나 작업 기록을 확인할 수 있어요.'}
-                </small>
+                <small>{recoverable ? t('helpers.m293') : t('helpers.m294')}</small>
               ) : item.executionUncertain && canAcknowledge(item) ? (
-                <small>
-                  실행 결과가 불확실해요. 확인은 알림만 정리하며 작업 기록과 상태는 유지돼요.
-                </small>
+                <small>{t('helpers.m295')}</small>
               ) : !canAcknowledge(item) ? (
-                <small>진행 중인 작업 알림은 아직 ‘확인’으로 표시할 수 없어요.</small>
+                <small>{t('helpers.m296')}</small>
               ) : null}
               {recoverable && recoveryError && (
-                <NoticeBanner tone="error">{recoveryError}</NoticeBanner>
+                <NoticeBanner tone="error">{translateMessage(recoveryError)}</NoticeBanner>
               )}
               {inspected === item.acknowledgementKey && (
                 <NotificationDetail
@@ -204,10 +205,8 @@ export function ActivityNotifications({
           );
         })}
       </ul>
-      {!visible.length && !loading && !error && <p role="status">확인할 알림이 없어요.</p>}
-      {loading && !error && (
-        <LoadingState presentation="inline" label="이전 작업을 불러오는 중이에요…" />
-      )}
+      {!visible.length && !loading && !error && <p role="status">{t('helpers.m297')}</p>}
+      {loading && !error && <LoadingState presentation="inline" label={t('helpers.m298')} />}
       {error && (
         <NoticeBanner
           tone="error"
@@ -217,11 +216,11 @@ export function ActivityNotifications({
               className="secondary"
               onClick={() => void load(cursor ?? undefined)}
             >
-              다시 불러오기
+              {t('helpers.m137')}
             </button>
           }
         >
-          {error}
+          {translateMessage(error)}
         </NoticeBanner>
       )}
       {cursor && !error && (
@@ -231,17 +230,18 @@ export function ActivityNotifications({
           disabled={loading}
           onClick={() => void load(cursor)}
         >
-          이전 작업 더 보기
+          {t('helpers.m072')}
         </button>
       )}
       <button type="button" className="secondary" onClick={onRecords}>
-        전체 작업 기록
+        {t('helpers.m299')}
       </button>
     </Dialog>
   );
 }
 
 function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead: () => void }) {
+  useI18n();
   const [result, setResult] = useState<{ status: string; error?: string | null } | null>(null);
   const [error, setError] = useState('');
   const read = useRef(onRead);
@@ -261,9 +261,7 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
           actualGeneration !== undefined &&
           generation !== actualGeneration
         ) {
-          setError(
-            '새 실행으로 바뀌어 이 알림의 상세를 불러올 수 없어요. 확인 버튼으로 알림을 정리할 수 있어요.'
-          );
+          setError(uiMessage('helpers.m300'));
           return;
         }
         setResult(value);
@@ -272,7 +270,7 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
       .catch((cause) => {
         if (current)
           setError(
-            `상세를 불러오지 못했어요${cause instanceof ApiError ? ` (${cause.status})` : ''}. 확인 버튼으로 알림을 정리할 수 있어요.`
+            uiMessage('helpers.m301', { v0: cause instanceof ApiError ? ` (${cause.status})` : '' })
           );
       });
     return () => {
@@ -284,19 +282,19 @@ function NotificationDetail({ item, onRead }: { item: ActivityNoticeItem; onRead
       <LoadingState
         presentation="inline"
         loading={!error}
-        error={error}
-        label="상세를 불러오는 중이에요…"
+        error={translateMessage(error)}
+        label={t('helpers.m302')}
       />
     );
   const diagnostic = result.error ? auxiliaryErrorDiagnostic(result.error) : null;
   return (
     <div className="activity-notification-detail">
-      <p>상태: {labels[result.status] ?? '확인 필요'}</p>
+      <p>{t('helpers.m333', { status: labels[result.status] ?? t('helpers.m115') })}</p>
       {diagnostic && (
         <>
-          <p>{diagnostic.message}</p>
-          <p>{diagnostic.action}</p>
-          {diagnostic.code && <small>오류 코드: {diagnostic.code}</small>}
+          <p>{translateMessage(diagnostic.message)}</p>
+          <p>{translateMessage(diagnostic.action)}</p>
+          {diagnostic.code && <small>{t('helpers.m334', { code: diagnostic.code })}</small>}
         </>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { useI18n } from './i18n.js';
 import { useId } from 'react';
 import { ToggleRow } from './ToggleRow.js';
 import { PromptOptionGroup } from './PromptOptionGroup.js';
@@ -112,6 +113,7 @@ export function PromptControlFields({
   onChange: (id: string, value: PromptValue) => void;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   let items: NativeRisuToggleItem[];
   try {
     const declaration = program.nativeRisuPreset.preset.customPromptTemplateToggle;
@@ -125,7 +127,7 @@ export function PromptControlFields({
   } catch {
     return (
       <p role="alert" className="error">
-        옵션 표시 조건을 확인하지 못했어요. 프롬프트 정의를 확인해 주세요.
+        {t('prompts.uiUnableToCheckOptionConditionsCheckThePromptDefinition')}
       </p>
     );
   }
@@ -188,7 +190,13 @@ export function PromptControlFields({
           key={`${name}:${index}`}
           identity={`controls:${name}`}
           className="prompt-option-group"
-          summary={name}
+          summary={
+            items.every(
+              (item) => !(item.type === 'control' ? item.control.group : item.group)?.trim()
+            )
+              ? t('prompts.uiGeneralSettings')
+              : name
+          }
         >
           <div className="pc-control-values">
             {items.map((item, index) => {

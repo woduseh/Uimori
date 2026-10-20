@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n } from './i18n.js';
 import { Component, lazy, Suspense, type ComponentType, type ReactNode } from 'react';
 import { LoadingState } from './LoadingState.js';
 
@@ -25,6 +26,7 @@ export function deferredPanel<Props extends object>(
 ) {
   const Panel = lazy(loader);
   return function DeferredPanel(props: Props) {
+    useI18n();
     const wrap = (content: ReactNode) => (wrapFallback ? wrapFallback(content, props) : content);
     return (
       <PanelErrorBoundary
@@ -32,14 +34,17 @@ export function deferredPanel<Props extends object>(
           <LoadingState
             presentation="region"
             loading={false}
-            error="작성 중인 내용은 먼저 보관하고 연결을 확인한 뒤 새로고침해 주세요."
-            errorLabel="화면을 불러오지 못했어요."
+            error={t('shared.panelFailureHelp')}
+            errorLabel={t('shared.panelFailure')}
           />
         )}
       >
         <Suspense
           fallback={wrap(
-            <LoadingState presentation="region" label={`${label} 화면을 불러오는 중이에요…`} />
+            <LoadingState
+              presentation="region"
+              label={t('shared.panelLoading', { label: translateMessage(label) })}
+            />
           )}
         >
           <Panel {...props} />

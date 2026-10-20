@@ -1,35 +1,36 @@
+import { t, translateMessage, useI18n, formatNumber } from './i18n.js';
 import type { ReaderRun } from '../core/types.js';
 import './context-summary.css';
 
 export function ContextSummaryStatus({ summary }: { summary: ReaderRun['contextSummary'] }) {
+  useI18n();
   if (!summary) return null;
-  const amount = (value: number) => value.toLocaleString('ko-KR');
-  const input =
-    summary.estimatedInputTokens === null
-      ? '입력 추정치 미확인'
-      : `입력 약 ${amount(summary.estimatedInputTokens)}`;
   return (
     <aside
       className={`context-summary${summary.status === 'failed' ? ' context-summary-error' : ''}`}
       data-testid="context-summary"
       data-context-status={summary.status}
-      aria-label="입력 컨텍스트 상태"
+      aria-label={t('settings.m315')}
       role={summary.status === 'failed' ? 'alert' : 'status'}
     >
       {summary.status === 'pending' ? (
-        <span>컨텍스트 확인 중</span>
+        <span>{t('settings.m316')}</span>
       ) : summary.status === 'failed' ? (
         <>
-          <strong>컨텍스트 확인에 실패했어요.</strong>
-          <span>{summary.error || '입력 컨텍스트 한도와 모델 연결을 확인해 주세요.'}</span>
+          <strong>{t('settings.m317')}</strong>
+          <span>{summary.error ? translateMessage(summary.error) : t('settings.m318')}</span>
         </>
       ) : (
         <span>
-          {summary.compactedSources > 0 &&
-            `앞선 ${amount(summary.compactedSources)}개 원문 요약 · `}
-          {input} / {amount(summary.inputTokenLimit)} 토큰
-          {(summary.compactedSources > 0 || summary.summaryCalls > 0) &&
-            ` · 요약 ${amount(summary.summaryCalls)}회`}
+          {t('settings.contextReady', {
+            compacted: summary.compactedSources > 0 ? 'yes' : 'no',
+            sources: formatNumber(summary.compactedSources),
+            known: summary.estimatedInputTokens === null ? 'no' : 'yes',
+            input: formatNumber(summary.estimatedInputTokens ?? 0),
+            limit: formatNumber(summary.inputTokenLimit),
+            summarized: summary.compactedSources > 0 || summary.summaryCalls > 0 ? 'yes' : 'no',
+            calls: formatNumber(summary.summaryCalls),
+          })}
         </span>
       )}
     </aside>

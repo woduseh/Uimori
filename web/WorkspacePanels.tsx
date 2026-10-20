@@ -1,3 +1,5 @@
+import { LanguageSelect } from './LanguageSelect.js';
+import { t, useI18n, translateMessage } from './i18n.js';
 import { PushSettings } from './PushSettings.js';
 import { AutoTranslationDefaults } from './AutoTranslationDefaults.js';
 import { LoadingState } from './LoadingState.js';
@@ -55,6 +57,7 @@ export function TasksPanel({
   onInspect: (runId: string) => void;
   onClose: () => void;
 }) {
+  useI18n();
   const [pending, setPending] = useState<string[]>([]);
   const detail = state.detail;
   const [jobs, setJobs] = useState<
@@ -115,7 +118,7 @@ export function TasksPanel({
       alive = false;
     };
   }, [detail?.chat.id, detail?.reader.cursor]);
-  if (!detail) return <p className="muted">이야기를 열면 실행한 작업을 확인할 수 있어요.</p>;
+  if (!detail) return <p className="muted">{t('chatsettings.m0')}</p>;
   const listed = runList?.chatId === detail.chat.id ? runList : null;
   const allRuns = listed?.runs ?? null;
   const runs = inspectedRun
@@ -135,18 +138,18 @@ export function TasksPanel({
     }
   }
   return (
-    <section className="tasks-panel" aria-label="실행 기록">
+    <section className="tasks-panel" aria-label={t('chatsettings.m1')}>
       <div className="panel-intro">
-        <p className="muted">{detail.chat.title} · 이 화면을 닫아도 서버의 작업은 이어져요.</p>
+        <p className="muted">{t('chatsettings.taskIntro', { title: detail.chat.title })}</p>
         {inspectedRun && (
           <button type="button" className="secondary" onClick={() => onInspect('')}>
-            전체 작업 보기
+            {t('chatsettings.m3')}
           </button>
         )}
       </div>
       {!state.connected && (
         <p className="connection-notice" role="status">
-          연결을 다시 확인하는 중이에요. 원격 작업의 상태는 아직 확정할 수 없어요.
+          {t('chatsettings.m4')}
         </p>
       )}
       <ActivityDetails activities={detail.reader.activity ?? []} />
@@ -154,21 +157,15 @@ export function TasksPanel({
         presentation={allRuns ? 'inline' : 'placeholder'}
         loading={!listed || listed.loading}
         error={listed?.error}
-        label="작업 목록을 불러오는 중이에요…"
-        errorLabel="작업 목록을 불러오지 못했어요."
+        label={t('chatsettings.m5')}
+        errorLabel={t('chatsettings.m6')}
         onRetry={() => setRunRetry((value) => value + 1)}
-        retryLabel="작업 목록 다시 불러오기"
+        retryLabel={t('chatsettings.m7')}
       />
       {allRuns && !listed?.loading && !listed?.error && !runs.length && (
-        <p className="muted">
-          {inspectedRun ? '선택한 작업을 찾을 수 없어요.' : '아직 실행한 작업이 없어요.'}
-        </p>
+        <p className="muted">{inspectedRun ? t('chatsettings.m8') : t('chatsettings.m9')}</p>
       )}
-      {runs.some((run) => run.sourceRevision) && (
-        <p className="muted">
-          ‘새 채팅으로 복사’는 해당 장면까지의 독립 사본을 만들어요. 모델을 호출하지 않아요.
-        </p>
-      )}
+      {runs.some((run) => run.sourceRevision) && <p className="muted">{t('chatsettings.m10')}</p>}
       <div className="runs">
         {runs.map((run) => (
           <article key={run.id} data-testid="run" data-run-id={run.id} className="run">
@@ -193,7 +190,7 @@ export function TasksPanel({
                     }}
                   >
                     <LibraryIcon size={18} aria-hidden="true" />
-                    원고 읽기
+                    {t('chatsettings.m11')}
                   </button>
                 )}
                 {run.sourceRevision && (
@@ -207,7 +204,7 @@ export function TasksPanel({
                       });
                     }}
                   >
-                    새 채팅으로 복사
+                    {t('chatsettings.m12')}
                   </button>
                 )}
               </div>
@@ -218,9 +215,9 @@ export function TasksPanel({
       <LoadingState
         presentation="inline"
         loading={!jobs && !jobsError}
-        error={jobsError}
-        label="보조 작업 목록을 불러오는 중이에요…"
-        errorLabel="보조 작업 목록을 불러오지 못했어요."
+        error={translateMessage(jobsError)}
+        label={t('chatsettings.m13')}
+        errorLabel={t('chatsettings.m14')}
       />
       {allRuns && (
         <AttemptInspector
@@ -253,69 +250,88 @@ type SettingsCategory = {
   destinations?: SettingsDestination[];
 };
 
-const settingsCategories: SettingsCategory[] = [
-  {
-    key: 'general',
-    label: '일반',
-    icon: SettingsIcon,
-    destinations: [
-      {
-        label: '화면과 입력',
-        terms: '화면 테마 Enter 보내기 도우미 패널 폭 사이드바 좌측 탐색 크기',
-        anchor: 'display',
-      },
-      {
-        label: '생성 기본값',
-        terms: '전체 자동 번역 본문 생성 번역 기본값',
-        anchor: 'generation',
-      },
-      {
-        label: '원고 읽기',
-        terms: '글자 크기 글꼴 본문 폭 행간 줄 간격 문단 간격 번역 보기 응답 표시 실시간 완료',
-        anchor: 'reading',
-      },
-      { label: '앱과 알림', terms: '알림 푸시 설치 PWA', anchor: 'services' },
-      { label: '접속 해제', terms: '로그아웃 접속 해제 세션', anchor: 'session' },
-    ],
-  },
-  { key: 'themes', label: '테마·색상', icon: Palette, terms: '밝게 어둡게 CSS HTML' },
-  {
-    key: 'models',
-    label: '역할별 모델',
-    icon: ModelIcon,
-    terms: '원문 작문 번역 도우미 컨텍스트 요약 채팅 제목 확장 호출 스크립트 거절 판정 모델 선택',
-  },
-  { key: 'prompts', label: '현재 프롬프트', icon: PromptIcon, terms: '프리셋 기본 옵션' },
-  {
-    key: 'connections',
-    label: '프로바이더·모델',
-    icon: ConnectionIcon,
-    terms: 'API 연결 키 주소 사고 강도 추론 강도 Reasoning Effort 생성 옵션',
-  },
-  { key: 'lore', label: '로어 컨텍스트', icon: LibraryIcon, terms: '기본값 토큰 선별 예산' },
-  { key: 'agents', label: 'Codex 연결', icon: AgentIcon, terms: '로그인 실행기' },
-  { key: 'illustrations', label: '삽화', icon: IllustrationIcon, terms: '이미지 생성 ComfyUI' },
-  { key: 'usage', label: '사용량', icon: ChartNoAxesColumn, terms: '비용 토큰' },
-  {
-    key: 'data',
-    label: '데이터 관리',
-    icon: DataIcon,
-    destinations: [
-      {
-        label: '백업·복원',
-        terms: '자동 백업 시간 보관 개수 다운로드 복원 DB 자료 가져오기 채팅 가져오기',
-      },
-    ],
-  },
-  { key: 'about', label: '앱 정보·라이선스', icon: Info, terms: '버전 빌드 저작권' },
-];
+function getSettingsCategories(): SettingsCategory[] {
+  return [
+    {
+      key: 'general',
+      label: t('chatsettings.m15'),
+      icon: SettingsIcon,
+      destinations: [
+        {
+          label: t('chatsettings.m16'),
+          terms: t('chatsettings.m17'),
+          anchor: 'display',
+        },
+        {
+          label: t('chatsettings.m18'),
+          terms: t('chatsettings.m19'),
+          anchor: 'generation',
+        },
+        {
+          label: t('chatsettings.m11'),
+          terms: t('chatsettings.m20'),
+          anchor: 'reading',
+        },
+        { label: t('chatsettings.m21'), terms: t('chatsettings.m22'), anchor: 'services' },
+        { label: t('chatsettings.m23'), terms: t('chatsettings.m24'), anchor: 'session' },
+      ],
+    },
+    { key: 'themes', label: t('chatsettings.m25'), icon: Palette, terms: t('chatsettings.m26') },
+    {
+      key: 'models',
+      label: t('chatsettings.m27'),
+      icon: ModelIcon,
+      terms: t('chatsettings.m28'),
+    },
+    {
+      key: 'prompts',
+      label: t('chatsettings.m29'),
+      icon: PromptIcon,
+      terms: t('chatsettings.m30'),
+    },
+    {
+      key: 'connections',
+      label: t('chatsettings.m31'),
+      icon: ConnectionIcon,
+      terms: t('chatsettings.m32'),
+    },
+    { key: 'lore', label: t('chatsettings.m33'), icon: LibraryIcon, terms: t('chatsettings.m34') },
+    { key: 'agents', label: t('chatsettings.m35'), icon: AgentIcon, terms: t('chatsettings.m36') },
+    {
+      key: 'illustrations',
+      label: t('chatsettings.m37'),
+      icon: IllustrationIcon,
+      terms: t('chatsettings.m38'),
+    },
+    {
+      key: 'usage',
+      label: t('chatsettings.m39'),
+      icon: ChartNoAxesColumn,
+      terms: t('chatsettings.m40'),
+    },
+    {
+      key: 'data',
+      label: t('chatsettings.m41'),
+      icon: DataIcon,
+      destinations: [
+        {
+          label: t('chatsettings.m42'),
+          terms: t('chatsettings.m43'),
+        },
+      ],
+    },
+    { key: 'about', label: t('chatsettings.m44'), icon: Info, terms: t('chatsettings.m45') },
+  ];
+}
 
-const librarySettingsSubjects: Record<string, string> = {
-  models: '역할별 모델 설정을',
-  prompts: '현재 프롬프트를',
-  connections: '프로바이더 목록을',
-  illustrations: '삽화 설정을',
-};
+function getLibrarySettingsSubjects(): Record<string, string> {
+  return {
+    models: t('chatsettings.m46'),
+    prompts: t('chatsettings.m47'),
+    connections: t('chatsettings.m48'),
+    illustrations: t('chatsettings.m49'),
+  };
+}
 
 function searchText(value: string) {
   return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '');
@@ -359,6 +375,9 @@ export function AppSettingsPanel({
   onClose: () => void;
   onEditPrompt?: (presetId?: string) => void;
 }) {
+  useI18n();
+  const settingsCategories = getSettingsCategories();
+  const librarySettingsSubjects = getLibrarySettingsSubjects();
   const [signingOut, setSigningOut] = useState(false);
   const [active, setActive] = useState(initialTab);
   const [visited, setVisited] = useState([initialTab]);
@@ -407,7 +426,8 @@ export function AppSettingsPanel({
           }));
       })
     : [];
-  const title = settingsCategories.find((item) => item.key === active)?.label ?? '일반';
+  const title =
+    settingsCategories.find((item) => item.key === active)?.label ?? t('chatsettings.m15');
   const showingDetail = !compact || detail;
   function backToList() {
     setDetail(false);
@@ -474,30 +494,30 @@ export function AppSettingsPanel({
   return (
     <Dialog
       open
-      title="설정"
+      title={t('chatsettings.m50')}
       onClose={requestClose}
       wide
       className="settings-dialog"
       headerTitle={compact && detail ? title : undefined}
       headerLeading={
         compact && detail ? (
-          <IconButton label="설정 목록으로" icon={BackIcon} onClick={backToList} />
+          <IconButton label={t('chatsettings.m51')} icon={BackIcon} onClick={backToList} />
         ) : undefined
       }
     >
-      <section ref={root} className="app-settings-panel" aria-label="앱 설정">
+      <section ref={root} className="app-settings-panel" aria-label={t('chatsettings.m52')}>
         <div
           className="settings-navigation"
           hidden={compact && detail}
           role="navigation"
-          aria-label="설정 탐색"
+          aria-label={t('chatsettings.m53')}
         >
           <input
             ref={searchInput}
             type="search"
             className="settings-search"
-            aria-label="설정 검색"
-            placeholder="설정 검색"
+            aria-label={t('chatsettings.m54')}
+            placeholder={t('chatsettings.m54')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
@@ -505,7 +525,7 @@ export function AppSettingsPanel({
             className="settings-navigation-list"
             hidden={!!query}
             role={compact ? undefined : 'tablist'}
-            aria-label={compact ? undefined : '설정 항목'}
+            aria-label={compact ? undefined : t('chatsettings.m55')}
             aria-orientation={compact ? undefined : 'vertical'}
             onKeyDown={(event) => {
               if (compact) return;
@@ -545,7 +565,7 @@ export function AppSettingsPanel({
             ))}
           </div>
           {query && (
-            <div className="settings-search-results" aria-label="설정 검색 결과">
+            <div className="settings-search-results" aria-label={t('chatsettings.m56')}>
               {results.length ? (
                 results.map(({ key, label, section, anchor }) => (
                   <button
@@ -562,7 +582,7 @@ export function AppSettingsPanel({
                 ))
               ) : (
                 <p className="muted" role="status">
-                  검색 결과가 없어요.
+                  {t('chatsettings.m57')}
                 </p>
               )}
             </div>
@@ -598,8 +618,8 @@ export function AppSettingsPanel({
                       presentation="region"
                       loading={!state.libraryError}
                       error={state.libraryError}
-                      label={`${librarySettingsSubjects[key]} 불러오는 중이에요…`}
-                      errorLabel={`${librarySettingsSubjects[key]} 불러오지 못했어요.`}
+                      label={t(`chatsettings.${key}Loading`)}
+                      errorLabel={t(`chatsettings.${key}Error`)}
                       onRetry={() => void state.retryLibrary().catch(() => {})}
                     />
                   )}
@@ -610,38 +630,37 @@ export function AppSettingsPanel({
                       className="settings-section settings-group"
                     >
                       <h3>
-                        화면과 입력
-                        <span className="scope-badge">이 기기</span>
+                        {t('chatsettings.m16')}
+                        <span className="scope-badge">{t('chatsettings.m58')}</span>
                       </h3>
                       <div className="settings-group-body">
+                        <LanguageSelect />
                         <label className="settings-row">
                           <span className="settings-row-copy">
-                            <strong>화면 테마</strong>
+                            <strong>{t('chatsettings.m59')}</strong>
                           </span>
                           <select
-                            aria-label="앱 화면 테마"
+                            aria-label={t('chatsettings.m60')}
                             value={theme}
                             onChange={(event) =>
                               setTheme(event.target.value as 'system' | 'dark' | 'light')
                             }
                           >
-                            <option value="system">기기 설정 따르기</option>
-                            <option value="dark">어둡게</option>
-                            <option value="light">밝게</option>
+                            <option value="system">{t('chatsettings.m61')}</option>
+                            <option value="dark">{t('chatsettings.m62')}</option>
+                            <option value="light">{t('chatsettings.m63')}</option>
                           </select>
                         </label>
                         <label className="settings-row settings-row-toggle">
                           <span className="settings-row-copy">
-                            <strong>Enter로 보내기</strong>
+                            <strong>{t('chatsettings.m64')}</strong>
                             <small>
-                              {enterSend
-                                ? 'Enter로 보내고 Shift+Enter로 줄을 바꿔요.'
-                                : 'Enter는 줄바꿈, Ctrl/Cmd+Enter는 보내기예요.'}
+                              {enterSend ? t('chatsettings.m65') : t('chatsettings.m66')}
                             </small>
                           </span>
                           <span className="settings-row-control">
                             <Switch
-                              aria-label="Enter로 보내기"
+                              aria-label={t('chatsettings.m64')}
                               checked={enterSend}
                               onChange={(event) => setEnterSend(event.target.checked)}
                             />
@@ -649,32 +668,32 @@ export function AppSettingsPanel({
                         </label>
                         <label className="settings-row">
                           <span className="settings-row-copy">
-                            <strong>좌측 사이드바 폭</strong>
-                            <small>데스크톱에서 펼친 사이드바에 적용돼요.</small>
+                            <strong>{t('chatsettings.m67')}</strong>
+                            <small>{t('chatsettings.m68')}</small>
                           </span>
                           <select
-                            aria-label="좌측 사이드바 폭"
+                            aria-label={t('chatsettings.m67')}
                             value={sidebarWidth}
                             onChange={(event) => setSidebarWidth(Number(event.target.value))}
                           >
-                            <option value={248}>보통</option>
-                            <option value={320}>넓게</option>
-                            <option value={400}>매우 넓게</option>
+                            <option value={248}>{t('chatsettings.m69')}</option>
+                            <option value={320}>{t('chatsettings.m70')}</option>
+                            <option value={400}>{t('chatsettings.m71')}</option>
                           </select>
                         </label>
                         <label className="settings-row">
                           <span className="settings-row-copy">
-                            <strong>도우미·창작 옵션 패널 폭</strong>
-                            <small>공간이 부족하면 패널이 원고 위에 겹쳐 열려요.</small>
+                            <strong>{t('chatsettings.m72')}</strong>
+                            <small>{t('chatsettings.m73')}</small>
                           </span>
                           <select
-                            aria-label="도우미·창작 옵션 패널 폭"
+                            aria-label={t('chatsettings.m72')}
                             value={panelWidth}
                             onChange={(event) => setPanelWidth(Number(event.target.value))}
                           >
-                            <option value={360}>좁게</option>
-                            <option value={384}>보통</option>
-                            <option value={480}>넓게</option>
+                            <option value={360}>{t('chatsettings.m74')}</option>
+                            <option value={384}>{t('chatsettings.m69')}</option>
+                            <option value={480}>{t('chatsettings.m70')}</option>
                           </select>
                         </label>
                       </div>
@@ -687,8 +706,8 @@ export function AppSettingsPanel({
                       className="settings-section settings-group"
                     >
                       <h3>
-                        생성 기본값
-                        <span className="scope-badge">전체</span>
+                        {t('chatsettings.m18')}
+                        <span className="scope-badge">{t('chatsettings.m75')}</span>
                       </h3>
                       <AutoTranslationDefaults />
                     </section>
@@ -700,8 +719,8 @@ export function AppSettingsPanel({
                       className="settings-section"
                     >
                       <h3>
-                        원고 읽기
-                        <span className="scope-badge">이 기기</span>
+                        {t('chatsettings.m11')}
+                        <span className="scope-badge">{t('chatsettings.m58')}</span>
                       </h3>
                       {readingSettings}
                     </section>
@@ -711,10 +730,11 @@ export function AppSettingsPanel({
                       id={`${id}-general-services`}
                       tabIndex={-1}
                       className="settings-section settings-services"
-                      aria-label="앱과 알림"
+                      aria-label={t('chatsettings.m21')}
                     >
                       <h3>
-                        앱과 알림<span className="scope-badge">이 기기</span>
+                        {t('chatsettings.m21')}
+                        <span className="scope-badge">{t('chatsettings.m58')}</span>
                       </h3>
                       <InstallApp />
                       <PushSettings />
@@ -806,14 +826,11 @@ export function AppSettingsPanel({
                       tabIndex={-1}
                       className="settings-section"
                     >
-                      <h3>접속 세션</h3>
+                      <h3>{t('chatsettings.m76')}</h3>
                       <div className="settings-row">
                         <div className="settings-row-copy">
-                          <span>현재 브라우저</span>
-                          <p className="muted">
-                            현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지
-                            않아요.
-                          </p>
+                          <span>{t('chatsettings.m77')}</span>
+                          <p className="muted">{t('chatsettings.m78')}</p>
                         </div>
                         <div className="settings-row-control">
                           <button
@@ -830,7 +847,7 @@ export function AppSettingsPanel({
                                 });
                             }}
                           >
-                            접속 해제
+                            {t('chatsettings.m23')}
                           </button>
                         </div>
                       </div>
@@ -844,30 +861,30 @@ export function AppSettingsPanel({
       </section>
       {state.error && (
         <p className="error" role="alert">
-          {state.error}
+          {translateMessage(state.error)}
         </p>
       )}
       <Dialog
         open={discard}
-        title="미저장 설정 확인"
+        title={t('chatsettings.m79')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!discarding && !savingClose) setDiscard(false);
         }}
       >
-        <p>저장하지 않은 편집 내용이나 선택한 파일이 있어요. 닫으면 이 초안이 사라져요.</p>
+        <p>{t('chatsettings.m80')}</p>
         {promptDirty && <ResourceEditorLeaveWarning />}
         {discardError && (
           <p role="alert" className="error">
-            {discardError}
+            {translateMessage(discardError)}
           </p>
         )}
         <DraftDiscardActions
           open={discard}
           disabled={discarding}
           onSavingChange={setSavingClose}
-          saveLabel="저장하고 닫기"
+          saveLabel={t('chatsettings.m81')}
           onSave={async () => {
             if (
               !(await saveGroup.save({
@@ -899,7 +916,7 @@ export function AppSettingsPanel({
               setDiscarding(false);
             }
           }}
-          discardLabel="초안 버리고 닫기"
+          discardLabel={t('chatsettings.m82')}
         />
       </Dialog>
     </Dialog>

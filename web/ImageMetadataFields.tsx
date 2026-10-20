@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import type { PackageImage } from '../core/package-images.js';
 
 /** Display metadata is independent of image bytes and native script aliases. */
@@ -10,47 +11,47 @@ export function ImageMetadataFields({
   onChange: (image: PackageImage) => void;
   portrait?: boolean;
 }) {
+  useI18n();
   return (
     <>
       <label>
-        이미지 이름
+        {t('library.imageName')}
         <input
-          aria-label="이미지 이름"
+          aria-label={t('library.imageName')}
           value={image.title}
           maxLength={200}
           onChange={(event) => onChange({ ...image, title: event.target.value })}
         />
       </label>
       <label>
-        설명 · 선택
+        {t('library.descriptionOptional')}
         <textarea
-          aria-label="이미지 설명"
+          aria-label={t('library.imageDescription')}
           value={image.description}
           maxLength={2000}
           rows={4}
-          placeholder="인물, 복장, 장소, 표정 등 이미지 선택에 필요한 특징"
+          placeholder={t('library.featuresNeededToSelectImagesCharacterOutfit')}
           onChange={(event) => onChange({ ...image, description: event.target.value })}
         />
       </label>
       <label>
-        이미지 용도
+        {t('library.imageUse')}
         <select
-          aria-label="이미지 용도"
+          aria-label={t('library.imageUse')}
           value={image.allowedUse}
           onChange={(event) =>
             onChange({ ...image, allowedUse: event.target.value as PackageImage['allowedUse'] })
           }
         >
-          <option value="both">대표 이미지와 본문</option>
-          <option value="profile">대표 이미지 전용</option>
+          <option value="both">{t('library.portraitAndStory')}</option>
+          <option value="profile">{t('library.portraitOnly')}</option>
           <option value="inline" disabled={portrait}>
-            본문 전용
+            {t('library.storyOnly')}
           </option>
         </select>
       </label>
       <p className="muted">
-        이름과 설명은 JEV의 이미지 선택에 사용돼요. 본문이 포함된 용도는 자동 이미지 배치 후보가
-        돼요.{portrait ? ' 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.' : ''}
+        {t('library.imageMetadataHint', { portrait: portrait ? 'yes' : 'no' })}
       </p>
     </>
   );

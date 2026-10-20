@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useState } from 'react';
 import { downloadArchive } from './archive-download.js';
 import { DownloadIcon } from './ui-icons.js';
@@ -14,6 +15,7 @@ export function ResourceExportButton({
   disabled?: boolean;
   onError: (message: string) => void;
 }) {
+  useI18n();
   const [busy, setBusy] = useState(false);
   return (
     <span className="resource-export-action">
@@ -39,7 +41,7 @@ export function ResourceExportButton({
         }}
       >
         <DownloadIcon size={16} aria-hidden="true" />
-        {busy ? '내보내는 중…' : '자료 백업'}
+        {busy ? t('transfer.m097') : t('transfer.m100')}
       </button>
     </span>
   );

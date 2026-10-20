@@ -1,3 +1,4 @@
+import { t, useI18n, formatNumber, formatDate, translateMessage } from './i18n.js';
 import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
 import type { PricingSnapshot } from '../core/pricing-types.js';
 import { resolveModelPricing, validateModelPricing } from '../core/model-pricing.js';
@@ -20,13 +21,8 @@ function PricingSummary({
   snapshot: PricingSnapshot | undefined;
   context?: 'current' | 'attempt';
 }) {
-  if (!snapshot)
-    return (
-      <p className="muted">
-        이 모델·요청 등급의 요금은 미확인이에요. 요금을 직접 입력하면 호출 후 추정 비용에 사용할 수
-        있어요.
-      </p>
-    );
+  useI18n();
+  if (!snapshot) return <p className="muted">{t('providers.m474')}</p>;
   const keys = [
     ...primaryRates,
     ...(snapshot.rates.cacheWrite1h !== undefined ? ['cacheWrite1h' as const] : []),
@@ -34,31 +30,46 @@ function PricingSummary({
   return (
     <div className="model-pricing-summary">
       <p>
-        {context === 'attempt' ? '호출에 고정된 등급' : '현재 적용 등급'}:{' '}
+        {context === 'attempt' ? t('providers.m475') : t('providers.m476')}:{' '}
         <strong>{snapshot.serviceTier}</strong> ·{' '}
         {snapshot.source === 'manual'
-          ? '직접 입력 요금'
+          ? t('providers.m477')
           : snapshot.source === 'catalog'
-            ? '프로바이더 목록 요금'
-            : '공식 요금'}
+            ? t('providers.m478')
+            : t('providers.m479')}
       </p>
       <small>
         {snapshot.source === 'manual' && context === 'current'
-          ? `직접 입력한 참고 단가 · 기준일: ${snapshot.checkedAt.slice(0, 10)}`
-          : `${snapshot.source === 'manual' ? '요금 고정일' : '확인일'}: ${snapshot.checkedAt.slice(0, 10)}`}
+          ? t('providers.m591', {
+              value0: formatDate(snapshot.checkedAt, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                timeZone: 'UTC',
+              }),
+            })
+          : t('providers.m592', {
+              value0: snapshot.source === 'manual' ? t('providers.m480') : t('providers.m481'),
+              value1: formatDate(snapshot.checkedAt, {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                timeZone: 'UTC',
+              }),
+            })}
         {snapshot.sourceUrl && (
           <>
             {' '}
             ·{' '}
             <a href={snapshot.sourceUrl} target="_blank" rel="noreferrer">
-              요금 출처
+              {t('providers.m482')}
             </a>
           </>
         )}
       </small>
       <dl
         className="model-pricing-rates"
-        aria-label={context === 'attempt' ? '호출에 고정된 기준 요금' : '현재 적용 토큰 요금'}
+        aria-label={context === 'attempt' ? t('providers.m483') : t('providers.m484')}
       >
         {keys.map((key) => {
           const current = snapshot.rates[key];
@@ -77,8 +88,9 @@ function PricingSummary({
                 {formatUsd(current)}
                 {saving !== undefined && (
                   <small>
-                    Standard 대비 {saving.toLocaleString('ko-KR', { maximumFractionDigits: 1 })}%
-                    낮음
+                    {t('providers.m593', {
+                      value0: formatNumber(saving, { maximumFractionDigits: 1 }),
+                    })}
                   </small>
                 )}
               </dd>
@@ -88,8 +100,9 @@ function PricingSummary({
       </dl>
       {snapshot.longContext && (
         <p className="muted">
-          입력 {snapshot.longContext.aboveInputTokens.toLocaleString('ko-KR')} 토큰을 초과하면 장문
-          요금을 적용해요.
+          {t('providers.m594', {
+            value0: formatNumber(snapshot.longContext.aboveInputTokens),
+          })}
         </p>
       )}
       {snapshot.notes.length > 0 && (
@@ -112,6 +125,7 @@ function RateInputs({
   label: string;
   onChange: (rates: RateDraft) => void;
 }) {
+  useI18n();
   const field = (key: keyof RateDraft) => (
     <label key={key}>
       {pricingRateLabels[key]}
@@ -120,8 +134,8 @@ function RateInputs({
         min={0}
         step="any"
         inputMode="decimal"
-        aria-label={`${label} ${pricingRateLabels[key]} 요금`}
-        placeholder="미확인"
+        aria-label={t('providers.m595', { value0: label, value1: pricingRateLabels[key] })}
+        placeholder={t('providers.m489')}
         value={rates[key]}
         onChange={(event) => onChange({ ...rates, [key]: event.target.value })}
       />
@@ -129,10 +143,10 @@ function RateInputs({
   );
   return (
     <fieldset className="model-pricing-inputs">
-      <legend>{label} · USD / 100만 토큰</legend>
+      <legend>{t('providers.m596', { value0: label })}</legend>
       <div className="model-pricing-input-grid">{primaryRates.map(field)}</div>
       <details className="model-pricing-optional" open={rates.cacheWrite1h !== '' || undefined}>
-        <summary>1시간 캐시 쓰기 요금</summary>
+        <summary>{t('providers.m491')}</summary>
         {field('cacheWrite1h')}
       </details>
     </fieldset>
@@ -150,8 +164,9 @@ export function ModelPricingEditor({
   onChange: (pricing: ModelDraft['pricing']) => void;
   forcedVertexTier?: VertexRequestTier;
 }) {
+  useI18n();
   if (connection?.protocol === 'codex-app-server-v1')
-    return <p className="muted full">Codex 구독은 API 토큰 단가로 비용을 추정하지 않아요.</p>;
+    return <p className="muted full">{t('providers.m492')}</p>;
   const draft = value.pricing;
   let snapshot: PricingSnapshot | undefined;
   let error = '';
@@ -171,8 +186,7 @@ export function ModelPricingEditor({
         connection
       );
   } catch {
-    error =
-      '요금은 0 이상, 장문 기준은 양의 정수로 입력해 주세요. 출처는 HTTPS 주소와 유효한 확인일을 사용해요.';
+    error = t('providers.m493');
   }
   const longInput = (
     key: 'longContext' | 'flexLongContext' | 'batchLongContext',
@@ -182,16 +196,16 @@ export function ModelPricingEditor({
       className="model-pricing-optional"
       open={draft[key].aboveInputTokens !== '' || undefined}
     >
-      <summary>{label} 장문 요금</summary>
+      <summary>{t('providers.m597', { value0: label })}</summary>
       <label>
-        적용 기준 입력 토큰 초과
+        {t('providers.m495')}
         <input
           type="number"
           min={1}
           step={1}
-          aria-label={label + ' 장문 요금 기준 입력 토큰'}
+          aria-label={t('providers.m598', { value0: label })}
           value={draft[key].aboveInputTokens}
-          placeholder="사용하지 않음"
+          placeholder={t('providers.m497')}
           onChange={(event) =>
             onChange({ ...draft, [key]: { ...draft[key], aboveInputTokens: event.target.value } })
           }
@@ -199,7 +213,7 @@ export function ModelPricingEditor({
       </label>
       {draft[key].aboveInputTokens !== '' && (
         <RateInputs
-          label={label + ' 장문'}
+          label={t('providers.m599', { value0: label })}
           rates={draft[key].rates}
           onChange={(rates) => onChange({ ...draft, [key]: { ...draft[key], rates } })}
         />
@@ -208,27 +222,21 @@ export function ModelPricingEditor({
   );
   return (
     <details className="model-pricing full" data-testid="model-pricing-editor">
-      <summary>요금과 추정 비용</summary>
+      <summary>{t('providers.m499')}</summary>
       <div className="model-pricing-body">
-        <p>
-          호출 후 프로바이더가 보고한 토큰에 이 요금을 적용해 추정 비용을 계산해요. 단위는 USD /
-          100만 토큰이에요.
-        </p>
-        <p className="muted">
-          참고용 추정 금액이며 실제 청구액과 다를 수 있어요. 내장 요금표는 제공하지 않으며, 연결한
-          프로바이더의 모델 목록에 요금이 없으면 직접 입력해요.
-        </p>
+        <p>{t('providers.m500')}</p>
+        <p className="muted">{t('providers.m501')}</p>
         <label>
-          요금 기준
+          {t('providers.m502')}
           <select
-            aria-label="요금 기준"
+            aria-label={t('providers.m502')}
             value={draft.mode}
             onChange={(event) =>
               onChange({ ...draft, mode: event.target.value as 'official' | 'manual' })
             }
           >
-            <option value="official">모델 목록 요금 사용</option>
-            <option value="manual">요금 직접 입력</option>
+            <option value="official">{t('providers.m503')}</option>
+            <option value="manual">{t('providers.m504')}</option>
           </select>
         </label>
         {draft.mode === 'manual' && (
@@ -240,8 +248,8 @@ export function ModelPricingEditor({
             />
             {longInput('longContext', 'Standard')}
             <ToggleRow
-              label="Flex 요금 직접 입력"
-              description="Flex 요금은 별도로 확인해 입력해요. Standard 요금의 절반으로 가정하지 않아요."
+              label={t('providers.m505')}
+              description={t('providers.m506')}
               checked={draft.flexEnabled}
               onChange={(flexEnabled) => onChange({ ...draft, flexEnabled })}
             />
@@ -256,8 +264,8 @@ export function ModelPricingEditor({
             {connection?.protocol === 'anthropic-messages-v1' && (
               <>
                 <ToggleRow
-                  label="Batch 요금 직접 입력"
-                  description="Batch 요금은 별도로 확인해 입력해요."
+                  label={t('providers.m507')}
+                  description={t('providers.m508')}
                   checked={draft.batchEnabled}
                   onChange={(batchEnabled) => onChange({ ...draft, batchEnabled })}
                 />
@@ -274,7 +282,7 @@ export function ModelPricingEditor({
               </>
             )}
             <label>
-              요금 출처 URL
+              {t('providers.m509')}
               <input
                 type="url"
                 value={draft.sourceUrl}
@@ -283,22 +291,22 @@ export function ModelPricingEditor({
               />
             </label>
             <label>
-              요금 확인일
+              {t('providers.m510')}
               <input
                 type="date"
                 value={draft.checkedAt.slice(0, 10)}
                 onChange={(event) => onChange({ ...draft, checkedAt: event.target.value })}
               />
             </label>
-            <small>빈칸은 미확인이에요. 무료인 항목만 0을 입력하세요.</small>
+            <small>{t('providers.m511')}</small>
             <button type="button" className="secondary" onClick={() => onChange(pricingDraft())}>
-              모델 목록 요금으로 복원
+              {t('providers.m512')}
             </button>
           </>
         )}
         {error ? (
           <p className="error" role="alert">
-            {error}
+            {translateMessage(error)}
           </p>
         ) : (
           <PricingSummary snapshot={snapshot} />

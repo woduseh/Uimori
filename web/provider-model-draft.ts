@@ -1,3 +1,11 @@
+import { formatNumber, formatMessage, registerMessage, type MessageValues } from './i18n.js';
+
+// Validation callers retain canonical error strings; only presentation follows UI language.
+function validationMessage(key: string, values?: MessageValues): string {
+  const raw = formatMessage(key, 'ko', values);
+  registerMessage(raw, key, values);
+  return raw;
+}
 import type { GeminiSafetySettings } from '../core/gemini-safety.js';
 import type {
   Connection,
@@ -304,13 +312,15 @@ export function providerOptionsDraftError(draft: ModelDraft, connection: Connect
     switch (error instanceof ProviderOptionsError ? error.code : undefined) {
       case 'PROVIDER_OPTIONS_OBJECT':
       case 'PROVIDER_OPTIONS_JSON':
-        return 'providerOptions는 JSON 객체로 입력해 주세요.';
+        return validationMessage('providers.m322');
       case 'PROVIDER_OPTIONS_TOO_LARGE':
-        return `providerOptions가 너무 커요. ${PROVIDER_OPTIONS_MAX_CHARS.toLocaleString()}자 이하로 줄여 주세요.`;
+        return validationMessage('providers.m575', {
+          value0: formatNumber(PROVIDER_OPTIONS_MAX_CHARS),
+        });
       case 'PROVIDER_OPTIONS_SENSITIVE_FIELD':
-        return 'providerOptions에 API 키·토큰·비밀값을 넣지 마세요. 프로바이더의 API 키 입력란을 사용해 주세요.';
+        return validationMessage('providers.m323');
       default:
-        return 'providerOptions JSON을 확인해 주세요.';
+        return validationMessage('providers.m324');
     }
   }
 }
@@ -323,7 +333,9 @@ export function forcedServiceTierError(
     forcedVertexTier &&
     draft.serviceTier &&
     draft.serviceTier !== forcedVertexTier
-    ? `서버에서 서비스 등급을 ${forcedVertexTier === 'flex' ? 'Flex' : 'Standard'}로 제한해요. 모델 기본값이나 서버와 같은 값을 선택하세요.`
+    ? validationMessage('providers.m576', {
+        value0: forcedVertexTier === 'flex' ? 'Flex' : 'Standard',
+      })
     : '';
 }
 export function modelDraftError(
@@ -334,10 +346,10 @@ export function modelDraftError(
   const providerError = providerOptionsDraftError(draft, connection);
   if (providerError) return providerError;
   if (draft.tokenizer && !TOKENIZER_PROFILES.some((profile) => profile.id === draft.tokenizer))
-    return '토크나이저를 자동 또는 목록의 값으로 선택해 주세요.';
+    return validationMessage('providers.m325');
   try {
     validateModelPricing(pricingPayload(draft.pricing));
-    if (!draft.maxOutputTokens.trim()) return '최대 출력 토큰을 입력해 주세요.';
+    if (!draft.maxOutputTokens.trim()) return validationMessage('providers.m326');
     if (draft.evaluationToolsEnabled) {
       validateEvaluationToolOptions(modelPayload(draft, connection).evaluationTools);
     }
@@ -352,9 +364,11 @@ export function modelDraftError(
       draft.evaluationTools.contextMode === 'preloaded' &&
       modelCapability(connection.protocol, draft.modelId)?.forcedTools === false
     )
-      return '이 모델은 컨텍스트를 먼저 제공하는 평가 방식을 지원하지 않아요. 고급에서 평가 컨텍스트를 모델이 도구를 선택하는 방식으로 변경하세요.';
+      return validationMessage('providers.m327');
     return '';
   } catch (error) {
-    return `생성 설정을 확인해 주세요. ${error instanceof Error ? error.message : '모델이 지원하지 않는 옵션이에요.'}`;
+    return validationMessage('providers.m577', {
+      value0: error instanceof Error ? error.message : validationMessage('providers.m328'),
+    });
   }
 }

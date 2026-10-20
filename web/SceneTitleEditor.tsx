@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { useContext, useLayoutEffect, useRef, useState } from 'react';
 import type { ReaderNavigationItem } from '../core/types.js';
 import { api } from './api.js';
@@ -12,6 +13,7 @@ export function SceneTitleEditor({
   item: ReaderNavigationItem;
   onClose: () => void;
 }) {
+  useI18n();
   const [title, setTitle] = useState(item.title ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -46,19 +48,19 @@ export function SceneTitleEditor({
     <>
       <Dialog
         open={discard}
-        title="미저장 장면 이름"
+        title={t('reader.unsavedSceneName')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!lock.current) setDiscard(false);
         }}
       >
-        <p>저장하지 않은 장면 이름을 버릴까요?</p>
+        <p>{t('reader.discardTheUnsavedSceneName')}</p>
         <DraftDiscardActions
           open={discard}
           disabled={busy}
-          discardLabel="수정 버리고 닫기"
-          saveLabel="저장하고 닫기"
+          discardLabel={t('reader.discardEditsAndClose')}
+          saveLabel={t('reader.saveAndClose')}
           onContinue={() => setDiscard(false)}
           onDiscard={onClose}
           onSave={save}
@@ -66,7 +68,7 @@ export function SceneTitleEditor({
       </Dialog>
       <Dialog
         open
-        title="장면 이름"
+        title={t('reader.sceneName')}
         onClose={() => {
           if (lock.current) return;
           if (dirty) setDiscard(true);
@@ -85,7 +87,7 @@ export function SceneTitleEditor({
         >
           <fieldset disabled={busy}>
             <label>
-              장면 이름
+              {t('reader.sceneName')}
               <input
                 value={title}
                 maxLength={200}
@@ -93,16 +95,16 @@ export function SceneTitleEditor({
                 onChange={(event) => setTitle(event.target.value)}
               />
             </label>
-            <small>비워 두면 연결된 구성 제목이나 요청을 표시해요.</small>
+            <small>{t('reader.leaveBlankToShowTheLinkedConfigurationTitleOr')}</small>
             <div className="form-actions">
               <button type="submit" disabled={!dirty}>
-                {busy ? '저장 중…' : '이름 저장'}
+                {busy ? t('reader.saving') : t('reader.saveName')}
               </button>
             </div>
           </fieldset>
           {error && (
             <p role="alert" className="error">
-              {error}
+              {translateMessage(error)}
             </p>
           )}
         </form>

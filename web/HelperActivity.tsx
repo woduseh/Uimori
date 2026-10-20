@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useState } from 'react';
@@ -13,6 +14,7 @@ export function useHelperActivity(
   status: HelperStatus | undefined,
   visible: boolean
 ): ActivityView {
+  useI18n();
   const [view, setView] = useState<ActivityView>({ data: null, error: '' });
   useEffect(() => {
     if (!taskId || !visible) return;
@@ -31,7 +33,7 @@ export function useHelperActivity(
           setView((old) => ({
             taskId,
             data: old.data?.taskId === taskId ? old.data : null,
-            error: cause instanceof Error ? cause.message : '활동 내역을 읽지 못했어요.',
+            error: cause instanceof Error ? cause.message : uiMessage('helpers.m112'),
           }));
       } finally {
         pending = false;
@@ -55,11 +57,11 @@ export function useHelperActivity(
 }
 
 const stateLabels = {
-  running: '진행 중',
-  completed: '마침',
-  issue: '확인 필요',
-  stopped: '종료됨',
-  recorded: '기록',
+  running: 'helpers.m113',
+  completed: 'helpers.m114',
+  issue: 'helpers.m115',
+  stopped: 'helpers.m116',
+  recorded: 'helpers.m117',
 };
 
 export function HelperActivityDetails({
@@ -73,6 +75,7 @@ export function HelperActivityDetails({
   visible: boolean;
   source?: ActivityView;
 }) {
+  useI18n();
   const [open, setOpen] = useState(false);
   const own = useHelperActivity(taskId, status, visible && open && !source);
   const { data, error } = source ?? own;
@@ -84,22 +87,20 @@ export function HelperActivityDetails({
         if (event.target === event.currentTarget) setOpen(event.currentTarget.open);
       }}
     >
-      <summary>활동 내역</summary>
+      <summary>{t('helpers.m118')}</summary>
       {open && (
         <>
           {(!data || error) && (
             <LoadingState
               presentation="inline"
               loading={!error}
-              error={error}
-              errorLabel="활동 내역을 새로 읽지 못했어요."
-              label="활동 내역을 불러오는 중이에요…"
+              error={translateMessage(error)}
+              errorLabel={t('helpers.m119')}
+              label={t('helpers.m120')}
             />
           )}
-          {data?.hasEarlier && (
-            <p className="muted">최근 활동 80건을 표시해요. 이전 활동은 생략됐어요.</p>
-          )}
-          {data && !data.events.length && <p className="muted">아직 기록된 활동이 없어요.</p>}
+          {data?.hasEarlier && <p className="muted">{t('helpers.m121')}</p>}
+          {data && !data.events.length && <p className="muted">{t('helpers.m122')}</p>}
           {data && (
             <ol className="helper-activity-stages">
               {helperActivityStages({ ...data, status }).map((stage) => (
@@ -108,8 +109,10 @@ export function HelperActivityDetails({
                     <summary>
                       <span>{stage.label}</span>
                       <small>
-                        {stateLabels[stage.state]}
-                        {stage.events.length > 1 ? ` · ${stage.events.length}건` : ''}
+                        {t(stateLabels[stage.state])}
+                        {stage.events.length > 1
+                          ? t('helpers.m123', { v0: formatNumber(stage.events.length) })
+                          : ''}
                       </small>
                     </summary>
                     <ul className="helper-activity-records">
@@ -119,7 +122,7 @@ export function HelperActivityDetails({
                           {event.status && <span> · {event.status}</span>}
                           {event.purpose && <span> · {event.purpose}</span>}
                           {event.applied !== undefined && (
-                            <span> · {event.applied ? '정리 결과 적용' : '정리 결과 미적용'}</span>
+                            <span> · {event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
                           )}
                         </li>
                       ))}
@@ -129,12 +132,12 @@ export function HelperActivityDetails({
                     event.error || event.denied ? (
                       <NoticeBanner tone="error" key={event.seq}>
                         {event.name ? `${event.name} · ` : ''}
-                        {event.error ?? '실행이 허용되지 않았어요.'}
+                        {event.error ?? t('helpers.m126')}
                       </NoticeBanner>
                     ) : event.text ? (
                       <p key={event.seq}>
                         {event.text}
-                        {event.textTruncated ? '… (이후 메시지 생략)' : ''}
+                        {event.textTruncated ? t('helpers.m127') : ''}
                       </p>
                     ) : null
                   )}

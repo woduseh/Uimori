@@ -1,3 +1,4 @@
+import { useI18n, translateMessage } from './i18n.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useState } from 'react';
 import {
@@ -27,6 +28,8 @@ export function NativeRisuTriggerEditor({
   disabled?: boolean;
   prepareSave?: (model: ResourceModel, entries: unknown[]) => ResourceModel;
 }) {
+  const { t } = useI18n();
+
   const [selected, setSelected] = useState(0);
   const [draft, setDraft] = useBufferedEditorState<{ index: number; text: string } | null>(
     draftPath,
@@ -72,9 +75,9 @@ export function NativeRisuTriggerEditor({
   const jsonEditor = (
     <div className="native-trigger-json">
       <label>
-        트리거 원문 JSON
+        {t('native.text_14a5c18b9e')}
         <textarea
-          aria-label="트리거 원문 JSON"
+          aria-label={t('native.text_14a5c18b9e')}
           rows={14}
           spellCheck={false}
           disabled={disabled}
@@ -86,11 +89,7 @@ export function NativeRisuTriggerEditor({
           }}
         />
       </label>
-      {pending && (
-        <p className="muted">
-          저장을 누르면 JSON도 함께 저장해요. 다른 항목을 편집하려면 먼저 폼에 반영해 주세요.
-        </p>
-      )}
+      {pending && <p className="muted">{t('native.text_1109f0e44c')}</p>}
       <div className="form-actions">
         <button
           type="button"
@@ -111,7 +110,7 @@ export function NativeRisuTriggerEditor({
             }
           }}
         >
-          폼에 반영
+          {t('native.text_5c02cb8d1c')}
         </button>
         <button
           type="button"
@@ -122,23 +121,23 @@ export function NativeRisuTriggerEditor({
             setError('');
           }}
         >
-          입력 되돌리기
+          {t('native.text_d688879ebd')}
         </button>
       </div>
       {error && (
         <p className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
     </div>
   );
 
   return (
-    <section className="native-trigger-editor" aria-label="Lua · 트리거 편집기">
+    <section className="native-trigger-editor" aria-label={t('native.text_7895dc3794')}>
       <div className="native-trigger-heading">
         <div>
-          <h3>Lua · 트리거</h3>
-          <p className="muted">동작 원문은 Risu 문법과 실행 순서를 유지해요.</p>
+          <h3>{t('native.text_7ff77a77f6')}</h3>
+          <p className="muted">{t('native.text_33506f6f0f')}</p>
         </div>
         <button
           type="button"
@@ -157,13 +156,14 @@ export function NativeRisuTriggerEditor({
             setSelected(value.length);
           }}
         >
-          <AddIcon size={18} aria-hidden="true" /> 항목 추가
+          <AddIcon size={18} aria-hidden="true" />
+          {t('native.text_6d5ba8d015')}
         </button>
       </div>
       {value.length > 0 && (
         <>
           <select
-            aria-label="트리거 선택"
+            aria-label={t('native.text_b5b6dfa0bb')}
             disabled={disabled || pending}
             value={index}
             onChange={(event) => setSelected(Number(event.target.value))}
@@ -172,15 +172,15 @@ export function NativeRisuTriggerEditor({
               <option key={i} value={i}>
                 {record(item) && typeof item.comment === 'string' && item.comment
                   ? item.comment
-                  : `트리거 ${i + 1}`}
+                  : t('native.triggerNumber', { number: i + 1 })}
               </option>
             ))}
           </select>
           {record(entry) && (
             <label>
-              이름
+              {t('native.text_9aa18e5071')}
               <input
-                aria-label="트리거 이름"
+                aria-label={t('native.text_cd7c147edc')}
                 disabled={disabled || pending}
                 value={typeof entry.comment === 'string' ? entry.comment : ''}
                 onChange={(event) => replace({ ...entry, comment: event.target.value })}
@@ -191,9 +191,15 @@ export function NativeRisuTriggerEditor({
             <>
               {effects.map((effect, effectIndex) => (
                 <label key={effectIndex}>
-                  {effects.length > 1 ? `Lua 원문 ${effectIndex + 1}` : 'Lua 원문'}
+                  {effects.length > 1
+                    ? t('native.luaNumber', { number: effectIndex + 1 })
+                    : t('native.text_8601ddaaf9')}
                   <textarea
-                    aria-label={effects.length > 1 ? `Lua 원문 ${effectIndex + 1}` : 'Lua 원문'}
+                    aria-label={
+                      effects.length > 1
+                        ? t('native.luaNumber', { number: effectIndex + 1 })
+                        : t('native.text_8601ddaaf9')
+                    }
                     rows={14}
                     spellCheck={false}
                     disabled={disabled || pending}
@@ -210,7 +216,7 @@ export function NativeRisuTriggerEditor({
                 </label>
               ))}
               <details className="native-advanced" open={pending || undefined}>
-                <summary>실행 조건과 순서 · 원문 편집</summary>
+                <summary>{t('native.text_a21e47d201')}</summary>
                 {jsonEditor}
               </details>
             </>
@@ -220,7 +226,7 @@ export function NativeRisuTriggerEditor({
         </>
       )}
       {value.length === 0 && !pending && (
-        <p className="native-trigger-empty">등록된 Lua · 트리거가 없어요.</p>
+        <p className="native-trigger-empty">{t('native.text_8898368573')}</p>
       )}
       {value.length === 0 && pending && jsonEditor}
       {value.length > 0 && (
@@ -231,7 +237,7 @@ export function NativeRisuTriggerEditor({
             disabled={disabled || pending || index === 0}
             onClick={() => move(-1)}
           >
-            위로
+            {t('native.text_08f78639fa')}
           </button>
           <button
             type="button"
@@ -239,7 +245,7 @@ export function NativeRisuTriggerEditor({
             disabled={disabled || pending || index >= value.length - 1}
             onClick={() => move(1)}
           >
-            아래로
+            {t('native.text_d12567dd6d')}
           </button>
           <button
             type="button"
@@ -250,7 +256,7 @@ export function NativeRisuTriggerEditor({
               setSelected(Math.max(0, index - 1));
             }}
           >
-            항목 삭제
+            {t('native.text_28e82332d9')}
           </button>
         </div>
       )}

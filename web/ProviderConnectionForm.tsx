@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import type { ReactNode, RefObject, Dispatch, SetStateAction } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import type { Connection, ProviderProtocol } from '../core/product.js';
@@ -38,6 +39,7 @@ export function ProviderConnectionForm({
   onDone,
   deleteAction,
 }: Props) {
+  useI18n();
   const {
     value: connection,
     editing: editingConnection,
@@ -48,18 +50,18 @@ export function ProviderConnectionForm({
   const vertex = connection.protocol === 'vertex-gemini-v1';
   const definition = providerDefinition(connection.protocol);
   const endpointLabel = codex
-    ? 'Codex 실행 위치'
+    ? t('providers.m126')
     : vertex
-      ? 'Google Agent Platform 요청 주소'
+      ? t('providers.m127')
       : connection.protocol === 'fixture-sse-v1'
-        ? '로컬 요청 주소'
-        : 'API 기본 주소';
+        ? t('providers.m128')
+        : t('providers.m129');
   return (
     <form
       hidden={hidden}
       ref={formRef}
       className="editor-grid provider-management-form"
-      aria-label="프로바이더 편집 양식"
+      aria-label={t('providers.m130')}
       onSubmit={(event) => {
         event.preventDefault();
         void onSubmit();
@@ -67,20 +69,16 @@ export function ProviderConnectionForm({
     >
       <h3 className="full">
         {editingConnection
-          ? '프로바이더 수정'
+          ? t('providers.m131')
           : connectionCopy
-            ? '프로바이더 복제 검토'
-            : '프로바이더 등록'}
+            ? t('providers.m132')
+            : t('providers.m133')}
       </h3>
       {editingConnection && (
         <div className="provider-draft-note full">
-          <p>
-            저장한 변경은 다음 신규 생성부터 적용돼요. 진행 중이거나 완료된 실행의 설정은 유지돼요.
-          </p>
+          <p>{t('providers.m134')}</p>
           {connections.find((item) => item.id === editingConnection.id)?.revision !==
-            editingConnection.revision && (
-            <p>다른 곳에서 프로바이더가 변경됐어요. 입력한 초안은 유지했어요.</p>
-          )}
+            editingConnection.revision && <p>{t('providers.m135')}</p>}
           <button
             type="button"
             className="secondary"
@@ -89,25 +87,21 @@ export function ProviderConnectionForm({
               onReload();
             }}
           >
-            최신 프로바이더 설정 불러오기
+            {t('providers.m136')}
           </button>
         </div>
       )}
-      {connectionCopy && (
-        <p className="provider-draft-note full">
-          새 프로바이더로 복사해요. 주소와 키를 확인하고 저장해 주세요.
-        </p>
-      )}
+      {connectionCopy && <p className="provider-draft-note full">{t('providers.m137')}</p>}
       {conflict && (
         <NoticeBanner tone="error" className="full">
-          다른 곳에서 프로바이더가 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
+          {t('providers.m138')}
         </NoticeBanner>
       )}
       <fieldset className="editor-fields full provider-connection-fields" disabled={busy}>
         <label>
-          프로바이더 종류
+          {t('providers.m139')}
           <select
-            aria-label="프로바이더 프로토콜"
+            aria-label={t('providers.m140')}
             value={connection.protocol}
             onChange={(event) => {
               const protocol = event.target.value as ProviderProtocol,
@@ -125,15 +119,15 @@ export function ProviderConnectionForm({
               (item) => testMode || item.id !== 'fixture-sse-v1' || connection.protocol === item.id
             ).map((item) => (
               <option key={item.id} value={item.id}>
-                {item.label}
+                {translateMessage(item.label)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          프로바이더 이름
+          {t('providers.m43')}
           <input
-            aria-label="프로바이더 이름"
+            aria-label={t('providers.m43')}
             required
             maxLength={160}
             value={connection.title}
@@ -156,9 +150,9 @@ export function ProviderConnectionForm({
         )}
         {vertex && (
           <label className="full">
-            Google Cloud 프로젝트 ID
+            {t('providers.m141')}
             <input
-              aria-label="Google Cloud 프로젝트 ID"
+              aria-label={t('providers.m141')}
               placeholder="my-project"
               value={
                 connection.endpoint.match(/\/projects\/([^/]+)\/locations\/global\//)?.[1] ?? ''
@@ -172,7 +166,7 @@ export function ProviderConnectionForm({
                 })
               }
             />
-            <small>프로젝트 ID를 입력하면 요청 주소를 자동으로 채워요.</small>
+            <small>{t('providers.m142')}</small>
           </label>
         )}
         <label className="full">
@@ -186,7 +180,7 @@ export function ProviderConnectionForm({
               vertex
                 ? 'https://aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/global/publishers/google/models'
                 : connection.protocol === 'fixture-sse-v1'
-                  ? 'http://127.0.0.1:포트'
+                  ? t('providers.m143')
                   : 'https://provider.example/v1'
             }
             value={connection.endpoint}
@@ -195,17 +189,17 @@ export function ProviderConnectionForm({
         </label>
         {!codex && !vertex && (
           <label className="full">
-            API 키
+            {t('providers.m144')}
             <input
-              aria-label="API 키"
+              aria-label={t('providers.m144')}
               type="password"
               autoComplete="new-password"
               placeholder={
                 connection.credentialRef
-                  ? '등록됨 · 변경할 때 입력'
+                  ? t('providers.m145')
                   : connection.protocol === 'google-gemini-v1'
-                    ? 'Google AI Studio에서 발급한 API 키'
-                    : 'API 키 입력 · 인증 없는 서버는 생략'
+                    ? t('providers.m146')
+                    : t('providers.m147')
               }
               value={connection.apiKey ?? ''}
               onChange={(event) => onChange({ ...connection, apiKey: event.target.value })}
@@ -216,7 +210,7 @@ export function ProviderConnectionForm({
                 className="ghost"
                 onClick={() => onChange({ ...connection, apiKey: null, credentialRef: '' })}
               >
-                등록한 키 삭제
+                {t('providers.m148')}
               </button>
             )}
           </label>
@@ -226,33 +220,25 @@ export function ProviderConnectionForm({
             checked={connection.enabled}
             onChange={(event) => onChange({ ...connection, enabled: event.target.checked })}
           />
-          이 프로바이더 사용
+          {t('providers.m149')}
         </label>
         <small className="full">
-          {codex
-            ? '설정 → Codex 연결에서 로그인해 주세요.'
-            : vertex
-              ? '서비스 계정 JSON을 등록하면 사용할 수 있어요.'
-              : 'API 키는 서버 DB에 저장돼요. 키를 저장하면 재시작 없이 사용할 수 있어요.'}
+          {codex ? t('providers.m150') : vertex ? t('providers.m151') : t('providers.m152')}
         </small>
         <details className="provider-definition full">
-          <summary>연결 안내</summary>
+          <summary>{t('providers.m153')}</summary>
           <dl>
-            <dt>인증 방식</dt>
+            <dt>{t('providers.m154')}</dt>
             <dd>{definition.auth}</dd>
-            <dt>목록 방식</dt>
-            <dd>
-              {definition.catalog === 'remote'
-                ? '모델 목록 새로고침을 누르면 프로바이더에서 조회'
-                : '로그인한 에이전트 모델 목록'}
-            </dd>
+            <dt>{t('providers.m155')}</dt>
+            <dd>{definition.catalog === 'remote' ? t('providers.m156') : t('providers.m157')}</dd>
           </dl>
           <ul>
             {definition.limitations.map((item) => (
-              <li key={item}>{item}</li>
+              <li key={item}>{translateMessage(item)}</li>
             ))}
           </ul>
-          <p>이 정보는 Uimori의 연결 설정을 설명해요. 모델별 기능과 요금은 확인되지 않았어요.</p>
+          <p>{t('providers.m158')}</p>
         </details>
       </fieldset>
       <div className="provider-actions full provider-save-actions">
@@ -260,15 +246,15 @@ export function ProviderConnectionForm({
         <small className="provider-save-status">
           {editingConnection
             ? JSON.stringify(connection) === connectionBaseline
-              ? '저장한 프로바이더예요.'
-              : '아직 저장하지 않은 변경이 있어요.'
-            : '아직 저장하지 않은 프로바이더예요.'}
+              ? t('providers.m159')
+              : t('providers.m160')
+            : t('providers.m161')}
         </small>
         <button type="button" className="secondary" disabled={busy} onClick={() => onDone()}>
-          프로바이더 편집 끝내기
+          {t('providers.m162')}
         </button>
         <button className="primary" disabled={busy}>
-          {editingConnection ? '프로바이더 변경 저장' : '프로바이더 등록'}
+          {editingConnection ? t('providers.m163') : t('providers.m133')}
         </button>
       </div>
     </form>

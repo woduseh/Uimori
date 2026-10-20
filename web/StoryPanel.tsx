@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useRef, useState } from 'react';
 import { ContextPanel } from './ContextPanel.js';
@@ -38,6 +39,7 @@ function useScope(key: string) {
 }
 
 export function StoryPanel(props: PanelProps) {
+  useI18n();
   return <StoryPanelEditor key={props.chatId} {...props} />;
 }
 
@@ -54,6 +56,7 @@ function StoryPanelEditor({
   hideHeading = false,
   refreshKey,
 }: PanelProps) {
+  useI18n();
   const capture = useScope(
     JSON.stringify([chatId, headRevision, settingsRevision, profileRevision])
   );
@@ -72,7 +75,7 @@ function StoryPanelEditor({
   }, [hasUnsavedChanges, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : '작업을 완료하지 못했어요.';
+    const text = caught instanceof Error ? caught.message : t('reader.couldNotCompleteTheTask');
     setError(text);
     onError(text);
   }
@@ -100,15 +103,12 @@ function StoryPanelEditor({
     return true;
   });
   return (
-    <section className="story-panel" aria-label="이야기 기억과 컨텍스트">
-      {!hideHeading && <h3>기억과 컨텍스트</h3>}
-      <p className="muted">
-        이야기에서 일어난 일은 요약으로, 이후 요청에서도 지킬 조건은 메모·정정으로 관리해요. 카드
-        변수는 봇의 원본 스크립트가 관리해요.
-      </p>
+    <section className="story-panel" aria-label={t('reader.storyMemoryAndContext')}>
+      {!hideHeading && <h3>{t('reader.memoryAndContext')}</h3>}
+      <p className="muted">{t('reader.manageStoryEventsWithSummariesAndConditionsForFuture')}</p>
       {error && (
         <p className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
       <ContextPanel

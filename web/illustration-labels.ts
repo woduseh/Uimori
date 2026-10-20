@@ -1,113 +1,99 @@
+import { t, formatMessage, type UiLocale } from './i18n.js';
 import type { Illustration } from '../core/illustration.js';
 
 /** Error codes stay stable identifiers; remote provider messages are never shown verbatim. */
 const messages: Record<string, string> = {
-  ILLUSTRATION_GENERATOR_UNCONFIGURED: '설정 → 삽화에서 프리셋과 생성 환경을 확인해 주세요.',
-  ILLUSTRATION_CODEX_CONTENT_BLOCKED:
-    'JEV가 이 컷을 성적으로 노골적인 이미지 요청으로 판단해 Codex 이미지 생성으로 전송하지 않았어요.',
-  ILLUSTRATION_ACTIVE: '이 컷이 아직 생성 중이에요. 다른 컷과 다음 채팅은 계속할 수 있어요.',
-  ILLUSTRATION_PLAN_ACTIVE: '이 응답의 삽화 구간을 고르고 있어요.',
-  ILLUSTRATION_STORYBOARD_INVALID: '삽화 구간 응답을 해석하지 못했어요. 다시 요청해 주세요.',
-  ILLUSTRATION_PLACEMENT_INVALID:
-    '번역문 속 삽화 위치를 연결하지 못했어요. 그림은 그대로 보관해요.',
-  ILLUSTRATION_TARGET_UNAVAILABLE: '이 삽화의 원문 구간을 확인할 수 없어요.',
-  ILLUSTRATION_TARGET_CONFLICT:
-    '그 사이에 같은 구간의 삽화가 추가됐어요. 새 삽화 생성으로 다시 골라 주세요.',
-  ILLUSTRATION_PRESENTATION_CHANGED: '삽화가 갱신됐어요. 다시 선택해 주세요.',
-  ILLUSTRATION_LIMIT_REACHED:
-    '이 장면의 삽화 개수 한도에 도달했어요. 삽화를 삭제하거나 설정 → 삽화에서 장면당 최대 개수를 늘려 주세요.',
-  ILLUSTRATION_MODEL_REQUIRED: '설정 → 삽화에서 Codex 삽화 모델을 선택해 주세요.',
-  ILLUSTRATION_MODEL_UNAVAILABLE:
-    '삽화 모델 또는 연결을 사용할 수 없어요. 모델 프리셋과 연결 상태를 확인해 주세요.',
-  ILLUSTRATION_CODEX_CONNECTION_REQUIRED: 'Codex 삽화 모델은 Codex 연결의 모델 프리셋이어야 해요.',
-  ILLUSTRATION_PROMPT_MODEL_REQUIRED: '설정 → 삽화에서 ComfyUI용 프롬프트 모델을 선택해 주세요.',
-  ILLUSTRATION_SOURCE_CHANGED: '원문이 바뀌었어요. 새로고침한 뒤 다시 요청해 주세요.',
-  ILLUSTRATION_SOURCE_UNAVAILABLE: '요청 당시의 원문을 더 읽을 수 없어요.',
-  ILLUSTRATION_SOURCE_EMPTY: '삽화에 사용할 공개 본문이 없어요. 제외 구간은 전송하지 않아요.',
-  ILLUSTRATION_SOURCE_SEGMENTS_INVALID:
-    '원문의 구간 표시가 맞지 않아 삽화 생성을 멈췄어요. 원문을 확인해 주세요.',
-  ILLUSTRATION_IMAGE_INVALID:
-    '이미지 형식이나 크기가 맞지 않아요. PNG·JPEG·WebP 16MB 이하만 저장해요.',
-  ILLUSTRATION_NOT_RETRYABLE: '완료되거나 진행 중인 삽화는 다시 요청할 수 없어요.',
-  ILLUSTRATION_CANCELLED: '삽화 생성을 취소했어요.',
-  ILLUSTRATION_INTERRUPTED: '서버가 중단돼 결과를 확인할 수 없어요. 자동으로 다시 생성하지 않아요.',
-  ILLUSTRATION_SUPERSEDED: '취소된 뒤 도착한 결과라 저장하지 않았어요.',
-  ILLUSTRATION_FAILED: '삽화 생성을 완료하지 못했어요.',
-  ILLUSTRATION_RESERVATION_FAILED: '삽화 작업을 예약하지 못했어요. 설정 → 삽화를 확인해 주세요.',
-  ILLUSTRATION_PROMPT_REFUSED: '프롬프트 모델이 장면 설명 작성을 거절했어요.',
-  ILLUSTRATION_PROMPT_INVALID: '프롬프트 모델의 응답을 해석할 수 없었어요.',
-  INPUT_CONTEXT_LIMIT_EXCEEDED:
-    '삽화 입력이 선택 모델의 토큰 예산을 넘었어요. 모델의 입력 예산이나 삽화 지침을 확인해 주세요. 저장한 지침과 원문은 그대로예요.',
-  ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED:
-    '프롬프트 입력이 선택 모델의 토큰 예산을 넘었어요. 모델의 입력 예산이나 삽화 지침을 확인해 주세요. 저장한 지침과 원문은 그대로예요.',
-  CONNECTION_NOT_AUTHORIZED: '연결이 비활성화됐거나 설정이 바뀌었어요.',
-  CODEX_IMAGE_NOT_GENERATED:
-    'Codex가 이미지를 만들지 않았어요. 모델 선택과 Codex 로그인 상태를 확인하고 다시 요청해 주세요.',
-  CODEX_IMAGE_UNAVAILABLE:
-    'Codex가 이미지 도구를 사용할 수 없거나 요청을 거절했다고 알려왔어요. 자동으로 다시 생성하지 않아요.',
-  ILLUSTRATION_PROMPT_TIMEOUT:
-    '프롬프트 모델의 제한 시간이 지나 결과를 확인하지 못했어요. 자동으로 다시 요청하지 않아요. 다시 요청하면 사용량이 추가될 수 있어요.',
-  CODEX_IMAGE_USAGE_LIMIT: 'Codex 이미지 생성 사용량 한도에 도달했어요.',
-  CODEX_IMAGE_INVALID_REFERENCE: '참조 이미지를 Codex에 보낼 수 없는 형식이에요.',
-  CODEX_IMAGE_TOO_MANY_REFERENCES: '참조 이미지는 8개까지 보낼 수 있어요.',
-  CODEX_LOGIN_REQUIRED: 'ChatGPT 구독으로 Codex에 로그인해 주세요.',
-  CODEX_DISABLED: '서버에서 Codex 연결 기능을 활성화해 주세요.',
-  CODEX_NOT_INSTALLED: '서버에 공식 Codex 실행기가 없어요.',
-  CODEX_VERSION_UNSUPPORTED: '서버의 Codex 실행기 버전을 업데이트해 주세요.',
-  CODEX_TURN_FAILED: 'Codex 작업이 실패했어요.',
-  CODEX_EXECUTION_INTERRUPTED: 'Codex 작업이 중단됐어요.',
-  CODEX_TOOL_NOT_ALLOWED: 'Codex가 허용되지 않은 도구를 실행하려 해 작업을 중단했어요.',
-  CODEX_BUSY: 'Codex가 다른 작업을 처리하고 있어요. 잠시 후 다시 시도해 주세요.',
-  CODEX_UNAVAILABLE: 'Codex 실행기를 사용할 수 없어요.',
-  CODEX_INVALID_CONNECTION: 'Codex 연결 설정을 확인해 주세요.',
-  TIMEOUT: '제한 시간 안에 완료되지 않았어요.',
-  COMFYUI_UNCONFIGURED: '설정 → 삽화에서 ComfyUI 주소를 입력해 주세요.',
-  COMFYUI_WORKFLOW_MISSING: '설정 → 삽화에서 ComfyUI 워크플로 JSON을 입력해 주세요.',
-  COMFYUI_WORKFLOW_INVALID:
-    'ComfyUI 워크플로 JSON이 API 형식(노드 ID → class_type/inputs)이 아니에요.',
-  COMFYUI_WORKFLOW_UI_FORMAT:
-    'UI용 워크플로 파일이에요. ComfyUI에서 "Export (API)"로 저장한 JSON을 사용해 주세요.',
-  COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING:
-    '워크플로 노드의 inputs 안 문자열 값에 {{prompt}}를 넣어 주세요 (예: 6.inputs.text). 노드 제목이나 키에만 있으면 사용할 수 없어요.',
-  COMFYUI_BASE_URL_INVALID:
-    'ComfyUI 주소는 http:// 또는 https://로 시작하고 인증 정보·쿼리를 포함하지 않아야 해요.',
-  COMFYUI_CREDENTIAL_UNAVAILABLE: 'ComfyUI 인증 환경변수를 서버에서 읽을 수 없어요.',
-  COMFYUI_REDIRECT_REFUSED:
-    'ComfyUI 주소가 다른 주소로 이동(redirect)하고 있어요. 이동 뒤의 최종 주소를 설정에 직접 입력해 주세요.',
-  COMFYUI_UNREACHABLE:
-    'ComfyUI 서버에 연결할 수 없어요. 주소와 원격 PC의 ComfyUI 실행 상태, 방화벽을 확인해 주세요.',
-  COMFYUI_PROMPT_REJECTED: 'ComfyUI가 워크플로를 거절했어요. 아래 노드 오류를 확인해 주세요.',
-  COMFYUI_EXECUTION_FAILED: 'ComfyUI 실행 중 오류가 났어요.',
-  COMFYUI_TIMEOUT:
-    'ComfyUI 응답을 제한 시간 안에 받지 못했어요. 원격 작업이 끝났으면 결과 확인으로 가져올 수 있어요.',
-  COMFYUI_RESULT_PENDING: 'ComfyUI에 아직 결과가 없어요. 잠시 후 결과 확인을 다시 눌러 주세요.',
-  COMFYUI_RESULT_UNAVAILABLE:
-    '접수된 원격 작업의 결과를 확인하지 못했어요. 새로 생성하지 않고 결과 확인으로 다시 조회해 주세요.',
-  COMFYUI_SUBMISSION_UNCERTAIN:
-    'ComfyUI의 접수 여부를 확인하지 못했어요. 자동으로 다시 생성하지 않아요. 원격 작업 목록을 먼저 확인해 주세요.',
-  ILLUSTRATION_NOT_RECONCILABLE:
-    '기록된 ComfyUI 작업 ID가 있는 미완료 삽화만 결과를 확인할 수 있어요.',
-  COMFYUI_NO_IMAGE: 'ComfyUI 실행은 끝났지만 출력 이미지가 없어요. SaveImage 노드를 확인해 주세요.',
-  COMFYUI_IMAGE_INVALID:
-    'ComfyUI가 보낸 이미지를 읽을 수 없어요. PNG·JPEG·WebP 16MB 이하만 저장해요.',
-  COMFYUI_RESPONSE_INVALID: 'ComfyUI 응답 형식을 해석할 수 없어요.',
-  COMFYUI_HTTP_5XX: 'ComfyUI 서버 오류가 났어요.',
-  COMFYUI_HTTP_ERROR: 'ComfyUI 요청이 거절됐어요. 주소와 인증 설정을 확인해 주세요.',
-  FIXTURE_FAILURE: '모의 실패예요.',
+  ILLUSTRATION_GENERATOR_UNCONFIGURED: 'visuals.m176',
+  ILLUSTRATION_CODEX_CONTENT_BLOCKED: 'visuals.m177',
+  ILLUSTRATION_ACTIVE: 'visuals.m178',
+  ILLUSTRATION_PLAN_ACTIVE: 'visuals.m179',
+  ILLUSTRATION_STORYBOARD_INVALID: 'visuals.m180',
+  ILLUSTRATION_PLACEMENT_INVALID: 'visuals.m181',
+  ILLUSTRATION_TARGET_UNAVAILABLE: 'visuals.m182',
+  ILLUSTRATION_TARGET_CONFLICT: 'visuals.m183',
+  ILLUSTRATION_PRESENTATION_CHANGED: 'visuals.m184',
+  ILLUSTRATION_LIMIT_REACHED: 'visuals.m185',
+  ILLUSTRATION_MODEL_REQUIRED: 'visuals.m186',
+  ILLUSTRATION_MODEL_UNAVAILABLE: 'visuals.m187',
+  ILLUSTRATION_CODEX_CONNECTION_REQUIRED: 'visuals.m188',
+  ILLUSTRATION_PROMPT_MODEL_REQUIRED: 'visuals.m189',
+  ILLUSTRATION_SOURCE_CHANGED: 'visuals.m190',
+  ILLUSTRATION_SOURCE_UNAVAILABLE: 'visuals.m191',
+  ILLUSTRATION_SOURCE_EMPTY: 'visuals.m192',
+  ILLUSTRATION_SOURCE_SEGMENTS_INVALID: 'visuals.m193',
+  ILLUSTRATION_IMAGE_INVALID: 'visuals.m194',
+  ILLUSTRATION_NOT_RETRYABLE: 'visuals.m195',
+  ILLUSTRATION_CANCELLED: 'visuals.m196',
+  ILLUSTRATION_INTERRUPTED: 'visuals.m197',
+  ILLUSTRATION_SUPERSEDED: 'visuals.m198',
+  ILLUSTRATION_FAILED: 'visuals.m199',
+  ILLUSTRATION_RESERVATION_FAILED: 'visuals.m200',
+  ILLUSTRATION_PROMPT_REFUSED: 'visuals.m201',
+  ILLUSTRATION_PROMPT_INVALID: 'visuals.m202',
+  INPUT_CONTEXT_LIMIT_EXCEEDED: 'visuals.m203',
+  ILLUSTRATION_PROMPT_INPUT_CONTEXT_LIMIT_EXCEEDED: 'visuals.m204',
+  CONNECTION_NOT_AUTHORIZED: 'visuals.m205',
+  CODEX_IMAGE_NOT_GENERATED: 'visuals.m206',
+  CODEX_IMAGE_UNAVAILABLE: 'visuals.m207',
+  ILLUSTRATION_PROMPT_TIMEOUT: 'visuals.m208',
+  CODEX_IMAGE_USAGE_LIMIT: 'visuals.m209',
+  CODEX_IMAGE_INVALID_REFERENCE: 'visuals.m210',
+  CODEX_IMAGE_TOO_MANY_REFERENCES: 'visuals.m211',
+  CODEX_LOGIN_REQUIRED: 'visuals.m212',
+  CODEX_DISABLED: 'visuals.m213',
+  CODEX_NOT_INSTALLED: 'visuals.m214',
+  CODEX_VERSION_UNSUPPORTED: 'visuals.m215',
+  CODEX_TURN_FAILED: 'visuals.m216',
+  CODEX_EXECUTION_INTERRUPTED: 'visuals.m217',
+  CODEX_TOOL_NOT_ALLOWED: 'visuals.m218',
+  CODEX_BUSY: 'visuals.m219',
+  CODEX_UNAVAILABLE: 'visuals.m220',
+  CODEX_INVALID_CONNECTION: 'visuals.m221',
+  TIMEOUT: 'visuals.m222',
+  COMFYUI_UNCONFIGURED: 'visuals.m223',
+  COMFYUI_WORKFLOW_MISSING: 'visuals.m224',
+  COMFYUI_WORKFLOW_INVALID: 'visuals.m225',
+  COMFYUI_WORKFLOW_UI_FORMAT: 'visuals.m226',
+  COMFYUI_WORKFLOW_PROMPT_PLACEHOLDER_MISSING: 'visuals.m227',
+  COMFYUI_BASE_URL_INVALID: 'visuals.m228',
+  COMFYUI_CREDENTIAL_UNAVAILABLE: 'visuals.m229',
+  COMFYUI_REDIRECT_REFUSED: 'visuals.m230',
+  COMFYUI_UNREACHABLE: 'visuals.m231',
+  COMFYUI_PROMPT_REJECTED: 'visuals.m232',
+  COMFYUI_EXECUTION_FAILED: 'visuals.m233',
+  COMFYUI_TIMEOUT: 'visuals.m234',
+  COMFYUI_RESULT_PENDING: 'visuals.m235',
+  COMFYUI_RESULT_UNAVAILABLE: 'visuals.m236',
+  COMFYUI_SUBMISSION_UNCERTAIN: 'visuals.m237',
+  ILLUSTRATION_NOT_RECONCILABLE: 'visuals.m238',
+  COMFYUI_NO_IMAGE: 'visuals.m239',
+  COMFYUI_IMAGE_INVALID: 'visuals.m240',
+  COMFYUI_RESPONSE_INVALID: 'visuals.m241',
+  COMFYUI_HTTP_5XX: 'visuals.m242',
+  COMFYUI_HTTP_ERROR: 'visuals.m243',
+  FIXTURE_FAILURE: 'visuals.m244',
 };
-export function illustrationErrorMessage(code: string | null | undefined): string {
-  if (!code) return '삽화 생성을 완료하지 못했어요.';
-  if (messages[code]) return messages[code];
-  if (code.startsWith('ILLUSTRATION_PROMPT_'))
-    return '프롬프트 모델 호출을 완료하지 못했어요. 모델·연결 상태를 확인해 주세요. 다시 요청하면 사용량이 추가될 수 있어요.';
-  if (code.startsWith('MODEL_UNAVAILABLE:'))
-    return '삽화 모델 또는 연결을 사용할 수 없어요. 모델 프리셋과 연결 상태를 확인해 주세요.';
-  return '삽화 생성을 완료하지 못했어요.';
+export function illustrationErrorMessage(
+  code: string | null | undefined,
+  locale?: UiLocale
+): string {
+  const key = !code
+    ? 'visuals.m199'
+    : (messages[code] ??
+      (code.startsWith('ILLUSTRATION_PROMPT_')
+        ? 'visuals.m245'
+        : code.startsWith('MODEL_UNAVAILABLE:')
+          ? 'visuals.m187'
+          : 'visuals.m199'));
+  const values = key === 'visuals.m227' ? { placeholder: '{{prompt}}' } : undefined;
+  return locale ? formatMessage(key, locale, values) : t(key, values);
 }
 export const illustrationGeneratorLabels: Record<Illustration['generator'], string> = {
   codex: 'Codex',
   comfyui: 'ComfyUI',
-  fixture: '모의 생성기',
+  get fixture() {
+    return t('visuals.m246');
+  },
 };
 export const illustrationActive = (item: Pick<Illustration, 'status'>) =>
   item.status === 'queued' || item.status === 'running';

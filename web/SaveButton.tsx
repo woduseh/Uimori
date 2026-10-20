@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n } from './i18n.js';
 import type { ComponentPropsWithRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { RunningIcon, SaveIcon } from './ui-icons.js';
@@ -23,15 +24,20 @@ export function SaveButton({
   'aria-busy': ariaBusy,
   ...props
 }: Props) {
+  useI18n();
   const busy = ariaBusy === true || ariaBusy === 'true';
-  const pendingText = text ? `${text} 중…` : '';
+  const pendingText = text
+    ? text === '저장' || text === t('shared.save')
+      ? t('shared.saving')
+      : t('shared.working')
+    : '';
   return (
     <button
       {...props}
       type={type}
       className={`settings-save-button ${className}`}
-      aria-label={label}
-      title={label}
+      aria-label={translateMessage(label)}
+      title={translateMessage(label)}
       disabled={disabled || busy}
       aria-busy={ariaBusy}
     >
@@ -42,7 +48,7 @@ export function SaveButton({
       )}
       {text && (
         <span className="settings-save-label" data-pending-label={pendingText}>
-          <span>{busy ? pendingText : text}</span>
+          <span>{busy ? pendingText : translateMessage(text)}</span>
         </span>
       )}
     </button>

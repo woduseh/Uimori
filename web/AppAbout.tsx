@@ -1,3 +1,4 @@
+import { useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import './app-about.css';
@@ -9,6 +10,7 @@ import notices from '../THIRD_PARTY_NOTICES.md?raw';
 type AppBuild = { version: string; buildId: string };
 
 export function AppAbout() {
+  const { t } = useI18n();
   const [build, setBuild] = useState<AppBuild | null>(null);
   const [error, setError] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -29,31 +31,31 @@ export function AppAbout() {
     };
   }, [refresh]);
   return (
-    <section className="app-about" aria-label="Uimori 앱 정보">
+    <section className="app-about" aria-label={t('outside.aboutLabel')}>
       <div className="recovery-settings-brand">
         <LibraryIcon size={28} aria-hidden="true" />
         <div>
           <h3>Uimori</h3>
-          <p className="muted">앱 정보 · 실행 버전과 라이선스</p>
+          <p className="muted">{t('outside.about')}</p>
         </div>
       </div>
       <div className="settings-group-body app-about-details">
         <div className="settings-row">
           <div className="settings-row-copy">
-            <strong>실행 버전</strong>
-            <p className="muted">현재 서버의 앱 버전</p>
+            <strong>{t('outside.version')}</strong>
+            <p className="muted">{t('outside.serverVersion')}</p>
           </div>
           <code data-testid="app-version">
-            {build ? `v${build.version}` : error ? '확인 실패' : '확인 중…'}
+            {build ? `v${build.version}` : error ? t('outside.checkFailed') : t('outside.checking')}
           </code>
         </div>
         <div className="settings-row">
           <div className="settings-row-copy">
-            <strong>빌드 식별자</strong>
-            <p className="muted">같은 버전 안의 소스 변경을 구분해요.</p>
+            <strong>{t('outside.buildId')}</strong>
+            <p className="muted">{t('outside.buildDescription')}</p>
           </div>
           <code className="muted app-about-build-id" data-testid="app-build-id">
-            {build?.buildId ?? (error ? '확인 실패' : '확인 중…')}
+            {build?.buildId ?? (error ? t('outside.checkFailed') : t('outside.checking'))}
           </code>
         </div>
         {error && (
@@ -65,38 +67,38 @@ export function AppAbout() {
                 className="secondary"
                 onClick={() => setRefresh((value) => value + 1)}
               >
-                다시 확인
+                {t('outside.recheck')}
               </button>
             }
           >
-            실행 버전을 확인하지 못했어요.
+            {t('outside.versionFailure')}
           </NoticeBanner>
         )}
         <div className="settings-row">
           <div className="settings-row-copy">
-            <strong>라이선스</strong>
+            <strong>{t('outside.license')}</strong>
             <p className="muted">GNU Affero General Public License v3</p>
           </div>
           <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noreferrer">
-            <ExternalLinkIcon size={16} aria-hidden="true" /> 전문 보기
+            <ExternalLinkIcon size={16} aria-hidden="true" /> {t('outside.readFull')}
           </a>
         </div>
         <div className="settings-row">
           <div className="settings-row-copy">
-            <strong>소스 저장소</strong>
-            <p className="muted">Uimori 프로젝트 소스 코드</p>
+            <strong>{t('outside.sourceRepo')}</strong>
+            <p className="muted">{t('outside.sourceDescription')}</p>
           </div>
           <a href="https://github.com/woduseh/Uimori" target="_blank" rel="noreferrer">
-            <ExternalLinkIcon size={16} aria-hidden="true" /> 소스 보기
+            <ExternalLinkIcon size={16} aria-hidden="true" /> {t('outside.viewSource')}
           </a>
         </div>
       </div>
       <details className="recovery-settings-disclosure">
-        <summary>라이선스 전문</summary>
+        <summary>{t('outside.fullLicense')}</summary>
         <pre className="app-about-document">{license}</pre>
       </details>
       <details className="recovery-settings-disclosure">
-        <summary>저작권·제3자 고지</summary>
+        <summary>{t('outside.notices')}</summary>
         <pre className="app-about-document">{notices}</pre>
       </details>
     </section>

@@ -1,3 +1,4 @@
+import { useI18n } from './i18n.js';
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { Switch } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
@@ -20,7 +21,6 @@ import {
   loreFolderKey,
   loreParents,
   loreText,
-  loreTitle,
   moveLoreEntry,
   newLoreEntry,
   removeLoreFolder,
@@ -69,6 +69,10 @@ export function NativeRisuLoreEditor({
   onChange: (entries: LoreEntry[]) => void;
   selectionControl: ReactNode;
 }) {
+  const { t } = useI18n();
+  const loreTitle = (entry: LoreEntry) =>
+    loreText(entry.comment ?? entry.name) || t('native.unnamedLore');
+
   const [selected, setSelected] = useState(0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
@@ -84,7 +88,10 @@ export function NativeRisuLoreEditor({
     index: number | null;
     position: LoreDropPosition;
   } | null>(null);
-  const [moveAnnouncement, setMoveAnnouncement] = useState('');
+  const [moveAnnouncement, setMoveAnnouncement] = useState<{
+    title: string;
+    destination: string;
+  } | null>(null);
   const expandTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const expandKey = useRef('');
   const index = Math.min(selected, Math.max(0, entries.length - 1));
@@ -92,7 +99,7 @@ export function NativeRisuLoreEditor({
   const parents = loreParents(entries);
   const folders = entries.map((item, i) => ({ item, i })).filter(({ item }) => isLoreFolder(item));
   const folder = !!entry && isLoreFolder(entry);
-  const title = entry ? loreTitle(entry) : '로어북';
+  const title = entry ? loreTitle(entry) : t('native.text_5ce4911d95');
   const needle = query.trim().toLocaleLowerCase();
   const matches = entries.map(
     (item) =>
@@ -235,11 +242,11 @@ export function NativeRisuLoreEditor({
     setSelected(result.index);
     const destination =
       target.position === 'root' || target.index === null
-        ? '최상위'
+        ? t('native.text_93e97c7cec')
         : target.position === 'inside'
-          ? `${loreTitle(entries[target.index])} 폴더`
+          ? t('native.folderDestination', { name: loreTitle(entries[target.index]) })
           : loreTitle(entries[target.index]);
-    setMoveAnnouncement(`${sourceTitle} 항목을 ${destination}(으)로 이동했어요.`);
+    setMoveAnnouncement({ title: sourceTitle, destination });
   };
   const row = (i: number, depth: number): ReactNode => {
     if (!visible.has(i)) return null;
@@ -277,7 +284,9 @@ export function NativeRisuLoreEditor({
         >
           {isFolder && (
             <IconButton
-              label={`${loreTitle(item)} ${closed ? '펼치기' : '접기'}`}
+              label={t(closed ? 'native.expandLore' : 'native.collapseLore', {
+                title: loreTitle(item),
+              })}
               icon={closed ? ExpandIcon : DropdownIcon}
               aria-expanded={!closed}
               onClick={() =>
@@ -303,17 +312,21 @@ export function NativeRisuLoreEditor({
             </strong>
             <small>
               {isFolder
-                ? `${parents.filter((parent, child) => parent === i && !isLoreFolder(entries[child])).length}개 로어`
+                ? t('native.loreCount', {
+                    count: parents.filter(
+                      (parent, child) => parent === i && !isLoreFolder(entries[child])
+                    ).length,
+                  })
                 : item.enabled === false
-                  ? '사용 안 함'
+                  ? t('native.text_b2fd53af02')
                   : (moduleLore ? item.alwaysActive : item.constant)
-                    ? '항상 포함'
-                    : '필요할 때'}
+                    ? t('native.text_e1590afe08')
+                    : t('native.text_68500ad267')}
             </small>
           </button>
           <span
             className="nl-drag-handle"
-            title="끌어서 순서 또는 폴더 변경"
+            title={t('native.text_fb8317c25c')}
             aria-hidden="true"
             draggable
           >
@@ -335,20 +348,32 @@ export function NativeRisuLoreEditor({
         onClick={() => setShowList((current) => !current)}
       >
         <ListIcon size={18} />
-        {showList ? '로어 목록 닫기' : '로어 목록 보기'}
+        {showList ? t('native.text_183ab69081') : t('native.text_b1ffe0e82c')}
       </button>
-      <aside className="native-item-list nl-list" aria-label="로어 목록">
+      <aside className="native-item-list nl-list" aria-label={t('native.text_bd814ee4e1')}>
         <input
           type="search"
-          aria-label="로어 찾기"
-          placeholder="이름·본문으로 찾기"
+          aria-label={t('native.text_7f169b78d6')}
+          placeholder={t('native.text_ad125c2109')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <div className="native-list-heading">
-          <strong>로어북 · {entries.filter((item) => !isLoreFolder(item)).length}</strong>
-          <IconButton label="폴더 추가" icon={FolderAddIcon} onClick={() => add(true)} />
-          <IconButton label="로어 추가" icon={AddIcon} onClick={() => add(false)} />
+          <strong>
+            {t('native.loreHeading', {
+              count: entries.filter((item) => !isLoreFolder(item)).length,
+            })}
+          </strong>
+          <IconButton
+            label={t('native.text_5082d1ae8f')}
+            icon={FolderAddIcon}
+            onClick={() => add(true)}
+          />
+          <IconButton
+            label={t('native.text_08882fa086')}
+            icon={AddIcon}
+            onClick={() => add(false)}
+          />
         </div>
         <div className="nl-tree">
           {entries.map((_, i) => (parents[i] === null ? row(i, 0) : null))}
@@ -369,20 +394,20 @@ export function NativeRisuLoreEditor({
               }}
               onDrop={(event) => commitDrop(event, { index: null, position: 'root' })}
             >
-              최상위로 이동
+              {t('native.text_d484012528')}
             </div>
           )}
           {!visible.size && (
             <p className="muted">
-              {entries.length ? '검색 결과가 없어요.' : '아직 로어가 없어요.'}
+              {entries.length ? t('native.text_a9a4407910') : t('native.text_7cf50fd556')}
             </p>
           )}
         </div>
         <p className="sr-only" role="status" aria-live="polite">
-          {moveAnnouncement}
+          {moveAnnouncement && t('native.loreMoved', moveAnnouncement)}
         </p>
         <details className="nl-policy">
-          <summary>로어 선택 설정</summary>
+          <summary>{t('native.text_f9dd023998')}</summary>
           {selectionControl}
         </details>
       </aside>
@@ -394,28 +419,28 @@ export function NativeRisuLoreEditor({
                 {folder && <FolderIcon size={20} aria-hidden="true" />} {title}
               </h3>
               <IconButton
-                label={folder ? '폴더 위로' : '로어 위로'}
+                label={folder ? t('native.text_8c30571e79') : t('native.text_f5bff252cf')}
                 icon={UpIcon}
                 disabled={position <= 0}
                 onClick={() => move(-1)}
               />
               <IconButton
-                label={folder ? '폴더 아래로' : '로어 아래로'}
+                label={folder ? t('native.text_77eceb1949') : t('native.text_f76cb3a668')}
                 icon={DownIcon}
                 disabled={position === siblings.length - 1}
                 onClick={() => move(1)}
               />
               <IconButton
-                label={folder ? '폴더 삭제' : '선택한 로어 삭제'}
+                label={folder ? t('native.text_7ef13fb182') : t('native.text_ef1dc8bce2')}
                 icon={DeleteIcon}
                 onClick={() => setDeleting(index)}
               />
             </div>
             <div className="nl-fields">
               <label>
-                {folder ? '폴더 이름' : '항목 이름'}
+                {folder ? t('native.text_0f5007a162') : t('native.text_178782beac')}
                 <input
-                  aria-label={folder ? '폴더 이름' : '로어 이름'}
+                  aria-label={folder ? t('native.text_0f5007a162') : t('native.text_3df0f8d368')}
                   value={loreText(entry.comment ?? entry.name)}
                   onChange={(e) =>
                     edit(
@@ -431,9 +456,9 @@ export function NativeRisuLoreEditor({
               </label>
               {!folder && (
                 <label>
-                  포함 방식
+                  {t('native.text_6d4aac6900')}
                   <select
-                    aria-label="포함 방식"
+                    aria-label={t('native.text_6d4aac6900')}
                     value={
                       entry.enabled === false
                         ? 'none'
@@ -453,17 +478,17 @@ export function NativeRisuLoreEditor({
                       })
                     }
                   >
-                    <option value="none">미포함</option>
-                    <option value="conditional">필요할 때 · 관련성 판단</option>
-                    <option value="always">항상 포함</option>
+                    <option value="none">{t('native.text_5a5e447cb5')}</option>
+                    <option value="conditional">{t('native.text_aaa63e0e3b')}</option>
+                    <option value="always">{t('native.text_e1590afe08')}</option>
                   </select>
                 </label>
               )}
             </div>
             <label>
-              폴더
+              {t('native.text_aa8bd1a3a2')}
               <select
-                aria-label="로어 폴더"
+                aria-label={t('native.text_4a03992923')}
                 value={loreText(entry.folder)}
                 onChange={(e) => {
                   const next = { ...entry };
@@ -472,10 +497,10 @@ export function NativeRisuLoreEditor({
                   onChange(entries.map((item, i) => (i === index ? next : item)));
                 }}
               >
-                <option value="">미분류</option>
+                <option value="">{t('native.text_3c1db0337a')}</option>
                 {!!entry.folder &&
                   !folders.some(({ item }) => loreFolderKey(item) === entry.folder) && (
-                    <option value={loreText(entry.folder)}>원본 폴더 · 찾을 수 없음</option>
+                    <option value={loreText(entry.folder)}>{t('native.text_11a333c615')}</option>
                   )}
                 {folders
                   .filter(({ i }) => canParent(i))
@@ -488,11 +513,10 @@ export function NativeRisuLoreEditor({
             </label>
             {folder ? (
               <div className="nl-folder-content">
-                <p className="muted">
-                  폴더로 로어를 묶어 관리해요. 포함 방식은 각 로어에서 설정해요.
-                </p>
+                <p className="muted">{t('native.text_fe6df44913')}</p>
                 <button type="button" className="secondary" onClick={() => add(false)}>
-                  <AddIcon size={16} />이 폴더에 로어 추가
+                  <AddIcon size={16} />
+                  {t('native.text_caedf4822e')}
                 </button>
                 <div className="nl-folder-children">
                   {entries.map((child, i) =>
@@ -508,44 +532,44 @@ export function NativeRisuLoreEditor({
             ) : (
               <>
                 <label>
-                  로어 본문
+                  {t('native.text_bf0b828e2d')}
                   <textarea
                     className="native-main-text"
-                    aria-label="로어 본문"
+                    aria-label={t('native.text_bf0b828e2d')}
                     rows={16}
                     value={loreText(entry.content)}
                     onChange={(e) => edit({ content: e.target.value })}
                   />
                 </label>
                 <label className="check nl-switch">
-                  사용
+                  {t('native.text_7f3ba385e9')}
                   <Switch
-                    aria-label="로어 사용"
+                    aria-label={t('native.text_4096a642b1')}
                     checked={entry.enabled !== false}
                     onChange={(e) => edit({ enabled: e.target.checked })}
                   />
                 </label>
                 <details className="native-advanced nl-advanced" key={index}>
-                  <summary>조건·배치·원문 설정</summary>
+                  <summary>{t('native.text_bf1eea5b75')}</summary>
                   <label>
-                    키워드
+                    {t('native.text_1922bfdd27')}
                     {moduleLore ? (
                       <input
-                        aria-label="로어 키워드"
+                        aria-label={t('native.text_4fc1889a0b')}
                         value={loreText(entry.key)}
                         onChange={(e) => edit({ key: e.target.value })}
                       />
                     ) : (
                       <Keywords
                         key={index}
-                        label="로어 키워드"
+                        label={t('native.text_4fc1889a0b')}
                         value={entry.keys}
                         onChange={(keys) => edit({ keys })}
                       />
                     )}
                   </label>
                   <label className="check nl-switch">
-                    보조 키워드 사용
+                    {t('native.text_373aa98335')}
                     <Switch
                       checked={entry.selective === true}
                       onChange={(e) =>
@@ -560,17 +584,17 @@ export function NativeRisuLoreEditor({
                   </label>
                   {entry.selective === true && (
                     <label>
-                      보조 키워드
+                      {t('native.text_e45a128fa4')}
                       {moduleLore ? (
                         <input
-                          aria-label="보조 키워드"
+                          aria-label={t('native.text_e45a128fa4')}
                           value={loreText(entry.secondkey)}
                           onChange={(e) => edit({ secondkey: e.target.value })}
                         />
                       ) : (
                         <Keywords
                           key={index}
-                          label="보조 키워드"
+                          label={t('native.text_e45a128fa4')}
                           value={entry.secondary_keys}
                           onChange={(keys) => edit({ secondary_keys: keys })}
                         />
@@ -578,7 +602,7 @@ export function NativeRisuLoreEditor({
                     </label>
                   )}
                   <label className="check nl-switch">
-                    정규식 키워드
+                    {t('native.text_1cbd14b035')}
                     <Switch
                       checked={(moduleLore ? entry.useRegex : entry.use_regex) === true}
                       onChange={(e) =>
@@ -587,9 +611,9 @@ export function NativeRisuLoreEditor({
                     />
                   </label>
                   <label>
-                    삽입 순서
+                    {t('native.text_4abfa77902')}
                     <input
-                      aria-label="로어 삽입 순서"
+                      aria-label={t('native.text_d1e82c6e51')}
                       type="number"
                       value={Number(entry.insertorder ?? entry.insertion_order ?? 100)}
                       onChange={(e) =>
@@ -599,40 +623,44 @@ export function NativeRisuLoreEditor({
                       }
                     />
                   </label>
-                  <p className="muted">CBS 조건과 나머지 원문 필드는 그대로 유지돼요.</p>
+                  <p className="muted">{t('native.text_e2d7fc1a5d')}</p>
                 </details>
               </>
             )}
           </>
         ) : (
           <div className="native-empty">
-            <strong>아직 로어가 없어요.</strong>
-            <p className="muted">첫 로어를 추가하거나 폴더부터 만들어 정리하세요.</p>
+            <strong>{t('native.text_7cf50fd556')}</strong>
+            <p className="muted">{t('native.text_c4a928ce23')}</p>
             <button type="button" onClick={() => add(false)}>
-              로어 추가
+              {t('native.text_08882fa086')}
             </button>
             <button type="button" className="secondary" onClick={() => add(true)}>
-              폴더 추가
+              {t('native.text_5082d1ae8f')}
             </button>
           </div>
         )}
       </div>
       <Dialog
         open={deleting !== null}
-        title={deleting !== null && isLoreFolder(entries[deleting]) ? '폴더 삭제' : '로어 삭제'}
+        title={
+          deleting !== null && isLoreFolder(entries[deleting])
+            ? t('native.text_7ef13fb182')
+            : t('native.text_12a6ec34b8')
+        }
         role="alertdialog"
         className="delete-dialog"
         onClose={() => setDeleting(null)}
       >
         <p>
           {deleting !== null && isLoreFolder(entries[deleting])
-            ? '폴더만 삭제하고 안의 로어는 상위 폴더로 옮겨요.'
-            : '선택한 로어를 삭제할까요?'}
+            ? t('native.text_01d4ca79f9')
+            : t('native.text_a6965f7538')}
         </p>
         <div className="form-actions">
           <button type="button" className="secondary" onClick={() => setDeleting(null)}>
             <CloseIcon size={18} aria-hidden="true" />
-            취소
+            {t('native.text_19b2d19bc1')}
           </button>
           <button
             type="button"
@@ -648,7 +676,9 @@ export function NativeRisuLoreEditor({
               setDeleting(null);
             }}
           >
-            {deleting !== null && isLoreFolder(entries[deleting]) ? '폴더만 삭제' : '로어 삭제'}
+            {deleting !== null && isLoreFolder(entries[deleting])
+              ? t('native.text_238e78a780')
+              : t('native.text_12a6ec34b8')}
           </button>
         </div>
       </Dialog>

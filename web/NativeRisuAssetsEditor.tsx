@@ -1,3 +1,4 @@
+import { useI18n, translateMessage } from './i18n.js';
 import { ImageMetadataFields } from './ImageMetadataFields.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { RisuContent } from '../core/risu-content.js';
@@ -26,6 +27,8 @@ type Props = {
 const pageSize = 30;
 
 export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props) {
+  const { t } = useI18n();
+
   const scope = `${value.id}@${value.revision}`;
   const latest = useRef({ value, onChange, onBusyChange, scope });
   latest.current = { value, onChange, onBusyChange, scope };
@@ -34,8 +37,9 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   const [query, setQuery] = useState(''),
     [selected, setSelected] = useState(''),
     [page, setPage] = useState(0);
+  const [uploadFailures, setUploadFailures] = useState<{ file: string; message: string }[]>([]);
   const [busy, setBusy] = useState(false),
-    [notice, setNotice] = useState(''),
+    [notice, setNotice] = useState<{ key: string; count?: number } | null>(null),
     [error, setError] = useState(''),
     [removing, setRemoving] = useState('');
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revision changes invalidate the ownership of uploads and local selection.
@@ -45,8 +49,9 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
     setSelected('');
     setQuery('');
     setPage(0);
-    setNotice('');
+    setNotice(null);
     setError('');
+    setUploadFailures([]);
     setRemoving('');
     return () => {
       generation.current++;
@@ -71,12 +76,13 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
     upload.current = controller;
     setBusy(true);
     setError('');
-    setNotice('');
+    setUploadFailures([]);
+    setNotice(null);
     latest.current.onBusyChange?.(true);
     const current = () =>
       generation.current === token && latest.current.scope === owner && !controller.signal.aborted;
     let completed = 0;
-    const failures: string[] = [];
+    const failures: { file: string; message: string }[] = [];
     try {
       for (const file of files) {
         if (!current()) return;
@@ -91,18 +97,19 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           completed++;
         } catch (cause) {
           if (!current()) return;
-          failures.push(
-            `${file.name}: ${cause instanceof Error ? cause.message : '업로드하지 못했어요.'}`
-          );
+          failures.push({
+            file: file.name,
+            message: cause instanceof Error ? cause.message : '업로드하지 못했어요.',
+          });
         }
       }
       if (current()) {
         setNotice(
           replacing && completed
-            ? '파일을 교체했어요. 원래 에셋 이름과 연결은 유지해요. 저장하면 적용돼요.'
-            : `${completed}개 이미지를 추가했어요. 저장하면 적용돼요.`
+            ? { key: 'native.text_0efca75d2d' }
+            : { key: 'native.imagesAdded', count: completed }
         );
-        setError(failures.slice(0, 5).join('\n'));
+        setUploadFailures(failures.slice(0, 5));
       }
     } finally {
       if (current()) {
@@ -125,14 +132,14 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
   const names = active ? nativeImageNames(value, active.id) : [],
     missing = unmappedNativeAssetCount(value);
   return (
-    <section className="native-risu-assets" aria-label="Risu 에셋 편집">
+    <section className="native-risu-assets" aria-label={t('native.text_6b1779397e')}>
       <div className="native-assets-toolbar">
         <label className="native-assets-search">
-          에셋 검색
+          {t('native.text_a887a65c92')}
           <input
             type="search"
             value={query}
-            placeholder="에셋 이름으로 검색"
+            placeholder={t('native.text_4671f4390f')}
             onChange={(event) => {
               setQuery(event.target.value);
               setPage(0);
@@ -143,44 +150,50 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           />
         </label>
         <label className="native-assets-upload">
-          이미지 추가
+          {t('native.text_d4d4ce5c0e')}
           <input
             type="file"
             multiple
             accept={PACKAGE_IMAGE_MIMES.join(',')}
             disabled={busy}
-            aria-label="Risu 이미지 추가"
+            aria-label={t('native.text_600611f249')}
             onChange={(event) => {
               const files = Array.from(event.target.files ?? []);
               event.target.value = '';
               void filesChosen(files);
             }}
           />
-          <small>PNG · JPEG · WebP · AVIF · GIF, 최대 64MiB · 자동 WebP 변환</small>
+          <small>{t('native.text_38094bc6f1')}</small>
         </label>
       </div>
       {missing > 0 && (
         <p className="muted native-assets-unavailable">
-          이미지로 읽지 못한 원문 에셋 {missing}개는 보존하고 있어요. 이 화면에서는 편집할 수
-          없으며, 내장 파일이 누락된 자료는 CHARX 내보내기가 제한될 수 있어요.
+          {t('native.imagesMissing', { count: missing })}
         </p>
       )}
-      <p className="muted">{images.length}개 이미지</p>
-      {busy && (
-        <LoadingState
-          presentation="inline"
-          label="이미지를 업로드하고 있어요. 업로드가 끝난 뒤 저장해 주세요."
-        />
+      <p className="muted">{t('native.imageCount', { count: images.length })}</p>
+      {busy && <LoadingState presentation="inline" label={t('native.text_d504143bb7')} />}
+      {notice && (
+        <NoticeBanner>
+          {t(notice.key, notice.count === undefined ? {} : { count: notice.count })}
+        </NoticeBanner>
       )}
-      {notice && <NoticeBanner>{notice}</NoticeBanner>}
-      {error && (
+      {(error || uploadFailures.length > 0) && (
         <NoticeBanner tone="error" className="native-assets-error">
-          {error}
+          {error && translateMessage(error)}
+          {uploadFailures.map((failure, index) => (
+            <p key={index}>
+              {t('native.fileError', {
+                file: failure.file,
+                error: translateMessage(failure.message),
+              })}
+            </p>
+          ))}
         </NoticeBanner>
       )}
       <div className={`native-assets-layout${active ? ' has-selection' : ''}`}>
         <div>
-          <div className="native-assets-grid" aria-label="Risu 이미지 목록">
+          <div className="native-assets-grid" aria-label={t('native.text_3a05fee3d8')}>
             {found.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map((image) => (
               <button
                 type="button"
@@ -191,18 +204,14 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
               >
                 <img src={`/api/package-image-blobs/${image.blobHash}`} alt="" loading="lazy" />
                 <span>{image.title}</span>
-                {image.id === value.portraitImageId && <small>대표 이미지</small>}
+                {image.id === value.portraitImageId && <small>{t('native.text_384374b51a')}</small>}
               </button>
             ))}
           </div>
           {!found.length && (
             <div className="native-assets-empty">
               <ImagesIcon size={28} aria-hidden="true" />
-              <p>
-                {images.length
-                  ? '검색 결과가 없어요.'
-                  : '추가한 이미지를 여기서 확인하고 교체할 수 있어요.'}
-              </p>
+              <p>{images.length ? t('native.text_a9a4407910') : t('native.text_06183c3690')}</p>
             </div>
           )}
           {found.length > pageSize && (
@@ -213,7 +222,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 disabled={!currentPage}
                 onClick={() => setPage(currentPage - 1)}
               >
-                이전
+                {t('native.text_dc03452ea5')}
               </button>
               <span>
                 {currentPage + 1} / {Math.ceil(found.length / pageSize)}
@@ -224,13 +233,13 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 disabled={(currentPage + 1) * pageSize >= found.length}
                 onClick={() => setPage(currentPage + 1)}
               >
-                다음
+                {t('native.text_854c76f3bc')}
               </button>
             </div>
           )}
         </div>
         {active && (
-          <aside className="native-assets-detail" aria-label="선택한 에셋">
+          <aside className="native-assets-detail" aria-label={t('native.text_9c9dbdd18c')}>
             <img
               className="native-assets-preview"
               src={`/api/package-image-blobs/${active.blobHash}`}
@@ -247,22 +256,20 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
               }
             />
             <details>
-              <summary>스크립트 참조 이름</summary>
+              <summary>{t('native.text_24016d85c7')}</summary>
               <code>{names.join(', ') || active.id}</code>
             </details>
             <p className="muted">
-              {names.length
-                ? '에셋 이름은 원문의 연결에 사용돼요. 파일을 교체해도 이름과 연결을 유지해요.'
-                : '대표 이미지 등으로 추가한 이미지예요. CHARX 내보내기에도 포함돼요.'}
+              {names.length ? t('native.text_59d5a7b430') : t('native.text_f87c057551')}
             </p>
             <div className="native-assets-actions">
               <label>
-                파일 교체
+                {t('native.text_597b8746b1')}
                 <input
                   type="file"
                   accept={PACKAGE_IMAGE_MIMES.join(',')}
                   disabled={busy}
-                  aria-label="선택한 Risu 이미지 파일 교체"
+                  aria-label={t('native.text_bf32707568')}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     event.target.value = '';
@@ -271,7 +278,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 />
               </label>
               <IconButton
-                label="선택한 에셋 제거"
+                label={t('native.text_8a2c3b9aec')}
                 icon={DeleteIcon}
                 disabled={busy}
                 onClick={() => setRemoving(active.id)}
@@ -282,7 +289,7 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
       </div>
       <Dialog
         open={!!pending}
-        title="이 에셋을 자료에서 제거할까요?"
+        title={t('native.text_7900d467e4')}
         variant="confirmation"
         className="delete-dialog"
         onClose={() => setRemoving('')}
@@ -290,16 +297,14 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
         role="alertdialog"
       >
         <p>
-          {pending && (nativeImageNames(value, pending.id).join(', ') || pending.title)} 이미지와 이
-          자료의 에셋 연결을 제거해요. 원본 파일은 삭제하지 않아요.
+          {t('native.removeImageDescription', {
+            name: pending ? nativeImageNames(value, pending.id).join(', ') || pending.title : '',
+          })}
         </p>
-        <p className="muted">
-          본문·로어·HTML·스크립트에서 이 에셋을 부르는 이름은 그대로 남아요. 제거하면 해당 이미지가
-          표시되지 않을 수 있어요.
-        </p>
+        <p className="muted">{t('native.text_07afd47e83')}</p>
         <div className="form-actions">
           <button type="button" className="secondary" onClick={() => setRemoving('')}>
-            취소
+            {t('native.text_19b2d19bc1')}
           </button>
           <button
             type="button"
@@ -310,15 +315,16 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
                 change(removeNativeRisuImage(latest.current.value, pending.id));
                 setSelected('');
                 setRemoving('');
-                setNotice('자료에서 제거했어요. 저장하면 적용돼요.');
+                setNotice({ key: 'native.text_00ea313249' });
                 setError('');
+                setUploadFailures([]);
               } catch (cause) {
                 setRemoving('');
                 setError(cause instanceof Error ? cause.message : '제거하지 못했어요.');
               }
             }}
           >
-            에셋 제거
+            {t('native.text_3f51da3e6a')}
           </button>
         </div>
       </Dialog>

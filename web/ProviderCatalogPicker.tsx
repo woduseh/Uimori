@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import { CheckIcon, SearchIcon } from './ui-icons.js';
@@ -19,9 +20,10 @@ export function ProviderCatalogPicker({
   onChoose: (model: CatalogModel) => void;
   onRefresh: (connection: Connection) => void;
 }) {
+  useI18n();
   const [query, setQuery] = useState(''),
     [limit, setLimit] = useState(24);
-  if (!connection) return <p className="muted full">프로바이더를 먼저 선택해 주세요.</p>;
+  if (!connection) return <p className="muted full">{t('providers.m309')}</p>;
   const local: CatalogModel[] = supportedModels(connection.protocol).map((item) => ({
     id: item.id,
     name: item.name,
@@ -36,18 +38,18 @@ export function ProviderCatalogPicker({
       (item) => !needle || `${item.name} ${item.id}`.toLocaleLowerCase().includes(needle)
     );
   return (
-    <section className="provider-catalog full" aria-label="저장된 모델 목록에서 선택">
+    <section className="provider-catalog full" aria-label={t('providers.m310')}>
       <div className="provider-section-heading">
         <div>
-          <h4>모델 목록에서 선택</h4>
+          <h4>{t('providers.m311')}</h4>
           <small>
             {connection.protocol === 'vertex-gemini-v1'
-              ? '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회해요.'
+              ? t('providers.m312')
               : connection.protocol === 'google-gemini-v1'
-                ? '등록한 AI Studio API 키로 Gemini API 모델 목록을 조회해요.'
+                ? t('providers.m313')
                 : connection.protocol === 'codex-app-server-v1'
-                  ? '로그인한 Codex 실행기의 모델 목록을 조회해요.'
-                  : '저장한 프로바이더에서 모델 목록을 조회해요.'}
+                  ? t('providers.m314')
+                  : t('providers.m315')}
           </small>
         </div>
         <button
@@ -56,22 +58,18 @@ export function ProviderCatalogPicker({
           disabled={busy}
           onClick={() => onRefresh(connection)}
         >
-          모델 목록 새로고침
+          {t('providers.m110')}
         </button>
       </div>
-      {connection.catalogError && (
-        <NoticeBanner tone="error">
-          모델 목록 조회에 실패했어요. 마지막 저장 목록은 유지돼요.
-        </NoticeBanner>
-      )}
+      {connection.catalogError && <NoticeBanner tone="error">{t('providers.m316')}</NoticeBanner>}
       {catalog.length > 0 ? (
         <>
           <label className="provider-search">
             <SearchIcon size={16} aria-hidden="true" />
             <input
               type="search"
-              aria-label="모델 목록 검색"
-              placeholder="모델 이름 또는 ID"
+              aria-label={t('providers.m317')}
+              placeholder={t('providers.m318')}
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -99,23 +97,19 @@ export function ProviderCatalogPicker({
               </button>
             ))}
           </div>
-          {!models.length && (
-            <p className="muted">검색 결과가 없어요. 아래에서 모델 ID를 직접 입력할 수 있어요.</p>
-          )}
+          {!models.length && <p className="muted">{t('providers.m319')}</p>}
           {models.length > limit && (
             <button
               type="button"
               className="secondary"
               onClick={() => setLimit((value) => value + 24)}
             >
-              모델 더 보기 · {limit} / {models.length}
+              {t('providers.m574', { value0: limit, value1: models.length })}
             </button>
           )}
         </>
       ) : (
-        <p className="muted">
-          저장된 목록이 없어요. 목록을 새로고침하거나 모델 ID를 직접 입력하세요.
-        </p>
+        <p className="muted">{t('providers.m321')}</p>
       )}
     </section>
   );

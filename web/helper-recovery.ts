@@ -1,3 +1,4 @@
+import { message as uiMessage } from './i18n.js';
 import { deleteRecoveryIfModel, readRecovery, writeRecovery } from './editor-recovery.js';
 
 // Keep the latest text across panel unmounts. The existing editor database owns disk storage.
@@ -16,7 +17,7 @@ export async function loadHelperRecovery(key: string): Promise<string | null> {
   try {
     stored = await readRecovery<string>(diskKey(key));
   } catch {
-    throw new Error('복구 저장소를 읽지 못했어요.');
+    throw new Error(uiMessage('helpers.m206'));
   }
   if (values.has(key)) return values.get(key) ?? null;
   values.set(key, stored?.model ?? null);

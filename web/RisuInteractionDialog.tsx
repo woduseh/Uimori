@@ -1,3 +1,4 @@
+import { useI18n } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
 import { api } from './api.js';
@@ -17,6 +18,8 @@ export function RisuInteractionDialog({
   refreshKey?: number;
   onError: (error: string) => void;
 }) {
+  const { t } = useI18n();
+
   const [item, setItem] = useState<Interaction>();
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
@@ -111,7 +114,7 @@ export function RisuInteractionDialog({
   return (
     <Dialog
       open={!!item}
-      title="카드 입력"
+      title={t('native.text_a27331034f')}
       onClose={() => void answer(item?.kind === 'confirm' ? false : '')}
     >
       <p style={{ whiteSpace: 'pre-wrap' }}>{item?.prompt}</p>
@@ -123,14 +126,14 @@ export function RisuInteractionDialog({
           }}
         >
           <input
-            aria-label="입력 내용"
+            aria-label={t('native.text_19de275e56')}
             value={value}
             onChange={(event) => setValue(event.target.value)}
             maxLength={10000}
             autoFocus
           />
           <button disabled={busy} type="submit">
-            확인
+            {t('native.text_468266d639')}
           </button>
         </form>
       )}
@@ -146,11 +149,11 @@ export function RisuInteractionDialog({
         ))}
       {item?.kind === 'confirm' && (
         <button disabled={busy} onClick={() => void answer(true)}>
-          확인
+          {t('native.text_468266d639')}
         </button>
       )}
       <button disabled={busy} onClick={() => void answer(item?.kind === 'confirm' ? false : '')}>
-        취소
+        {t('native.text_19b2d19bc1')}
       </button>
     </Dialog>
   );

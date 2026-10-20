@@ -1,3 +1,5 @@
+import { t } from './i18n.js';
+
 type AuxiliaryErrorDiagnostic = {
   code: string | null;
   message: string;
@@ -12,40 +14,29 @@ const define = (codes: string[], message: string, action: string) => {
 
 define(
   ['PROMPT_UNKNOWN_SLOT'],
-  '번역 프롬프트를 구성하는 데 필요한 입력 슬롯을 찾지 못했어요.',
-  '모델 전송 전 프롬프트 구성에서 중단됐어요. 작업 상세의 실패 기록에서 블록과 슬롯을 확인하고 프롬프트 또는 앱 버전을 점검해 주세요.'
+  'errors.auxiliary.PROMPT_UNKNOWN_SLOT.message',
+  'errors.auxiliary.PROMPT_UNKNOWN_SLOT.action'
 );
-
-for (const [role, label] of [
-  ['main', '본문'],
-  ['translation', '번역'],
-]) {
-  define(
-    [`MODEL_REQUIRED:${role}`],
-    `${label} 모델이 지정되지 않았어요.`,
-    `전역 모델 설정에서 ${label} 모델을 선택하고 저장한 뒤 새 작업을 요청해 주세요.`
-  );
-}
 
 define(
   ['JEV_CREDENTIAL_REQUIRED', 'JEV_HTTP_401', 'JEV_HTTP_403'],
-  'JEV 판단 연결을 사용할 수 없어요.',
-  '프로바이더·모델의 JEV 판단에서 API 키를 저장하고 연결 테스트를 한 뒤 새 작업을 요청해 주세요.'
+  'errors.auxiliary.JEV_CREDENTIAL_REQUIRED.message',
+  'errors.auxiliary.JEV_CREDENTIAL_REQUIRED.action'
 );
 define(
   ['JEV_INPUT_BUDGET'],
-  'JEV 판단 입력이 허용된 토큰 한도를 초과했어요.',
-  '입력을 자르거나 자동 재호출하지 않았어요. 보존된 출력과 생성 모델의 출력 길이 설정을 확인해 주세요.'
+  'errors.auxiliary.JEV_INPUT_BUDGET.message',
+  'errors.auxiliary.JEV_INPUT_BUDGET.action'
 );
 define(
   ['JEV_RESPONSE_INVALID'],
-  'JEV가 응답했지만 판단 결과 형식이 예상과 달랐어요.',
-  '연결은 완료됐어요. 프로바이더 응답을 임의로 고치거나 자동 재호출하지 않았으므로 필요한 경우 작업을 다시 요청해 주세요.'
+  'errors.auxiliary.JEV_RESPONSE_INVALID.message',
+  'errors.auxiliary.JEV_RESPONSE_INVALID.action'
 );
 define(
   ['JEV_EXECUTION_FAILED', 'JEV_TIMEOUT', 'JEV_HTTP_429'],
-  'JEV 판단을 완료하지 못했어요.',
-  '작업 상세의 호출 상태와 JEV 연결을 확인해 주세요. 다른 모델로 대체하거나 자동 재호출하지 않았어요.'
+  'errors.auxiliary.JEV_EXECUTION_FAILED.message',
+  'errors.auxiliary.JEV_EXECUTION_FAILED.action'
 );
 
 define(
@@ -55,18 +46,18 @@ define(
     'AUXILIARY_PROVIDER_CREDENTIAL_UNAVAILABLE',
     'CONNECTION_NOT_AUTHORIZED',
   ],
-  '모델 연결의 인증 또는 사용 권한을 확인하지 못했어요.',
-  '모델 설정에서 연결 활성화, 인증 정보와 모델 접근 권한을 확인해 주세요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_401.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_401.action'
 );
 define(
   ['AUXILIARY_PROVIDER_HTTP_400', 'AUXILIARY_PROVIDER_HTTP_404', 'AUXILIARY_PROVIDER_HTTP_422'],
-  '프로바이더가 모델 요청을 받아들이지 않았어요.',
-  '연결 주소, 모델 ID와 해당 모델이 지원하는 요청 설정을 확인해 주세요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_400.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_400.action'
 );
 define(
   ['AUXILIARY_PROVIDER_HTTP_429'],
-  '프로바이더의 요청 제한 또는 할당량 제한에 걸렸어요.',
-  '프로바이더의 사용량과 할당량을 확인하고 잠시 후 다시 시도해 주세요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_429.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_429.action'
 );
 define(
   [
@@ -75,8 +66,8 @@ define(
     'AUXILIARY_PROVIDER_HTTP_503',
     'AUXILIARY_PROVIDER_HTTP_504',
   ],
-  '프로바이더 서버에서 요청을 처리하지 못했어요.',
-  '프로바이더 상태를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_500.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_HTTP_500.action'
 );
 define(
   [
@@ -85,18 +76,18 @@ define(
     'AUXILIARY_PROVIDER_UND_ERR_BODY_TIMEOUT',
     'AUXILIARY_PROVIDER_UND_ERR_CONNECT_TIMEOUT',
   ],
-  '제한 시간 안에 모델 응답을 완료하지 못했어요.',
-  '연결 상태와 작업 제한 시간을 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_TIMEOUT.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_TIMEOUT.action'
 );
 define(
   ['AUXILIARY_PROVIDER_INPUT_CONTEXT_LIMIT_EXCEEDED', 'AUXILIARY_PROVIDER_CONTEXT_WINDOW_EXCEEDED'],
-  '요청이 모델의 입력 한도를 초과했어요.',
-  '입력 한도가 더 큰 모델을 선택하거나 요청에 포함할 참고 자료를 줄여 주세요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_INPUT_CONTEXT_LIMIT_EXCEEDED.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_INPUT_CONTEXT_LIMIT_EXCEEDED.action'
 );
 define(
   ['AUXILIARY_PROVIDER_PARTIAL'],
-  '모델 응답을 끝까지 받지 못했어요.',
-  '작업 상세의 호출 기록에서 중단 원인을 확인해 주세요. 응답 제한 시간이나 출력 한도를 초과했을 수 있어요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_PARTIAL.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_PARTIAL.action'
 );
 define(
   [
@@ -104,28 +95,28 @@ define(
     'AUXILIARY_PROVIDER_UND_ERR_SOCKET',
     'AUXILIARY_PROVIDER_UNEXPECTED_EOF',
   ],
-  '모델 응답이 중간에 끝났거나 연결이 끊겼어요.',
-  '연결 상태와 출력 토큰 한도를 확인해 주세요. 요청이 실행되었을 수 있으므로 확인 후 재시도해 주세요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_TRANSPORT_ERROR.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_TRANSPORT_ERROR.action'
 );
 define(
   ['TRANSLATION_REFUSAL_CHECK_FAILED'],
-  '번역 거절 여부를 판정하는 모델 호출을 완료하지 못했어요.',
-  '생성된 응답은 보존했고 번역을 자동으로 다시 호출하지 않았어요. JEV 연결과 설정을 확인해 주세요.'
+  'errors.auxiliary.TRANSLATION_REFUSAL_CHECK_FAILED.message',
+  'errors.auxiliary.TRANSLATION_REFUSAL_CHECK_FAILED.action'
 );
 define(
   ['TRANSLATION_REFUSAL_UNCERTAIN'],
-  '판정 모델이 번역 응답의 거절 여부를 확정하지 못했어요.',
-  '생성된 응답은 보존했고 번역을 자동으로 다시 호출하지 않았어요. 응답과 JEV 판정 기준을 확인해 주세요.'
+  'errors.auxiliary.TRANSLATION_REFUSAL_UNCERTAIN.message',
+  'errors.auxiliary.TRANSLATION_REFUSAL_UNCERTAIN.action'
 );
 define(
   ['TRANSLATION_REFUSAL_RETRIES_EXHAUSTED'],
-  '허용된 자동 재시도 범위에서 번역 거절이 해소되지 않았어요.',
-  '자동 호출을 중단했어요. 번역 모델과 프롬프트, 자동 재시도 횟수를 확인한 뒤 필요한 경우 새 작업을 요청해 주세요.'
+  'errors.auxiliary.TRANSLATION_REFUSAL_RETRIES_EXHAUSTED.message',
+  'errors.auxiliary.TRANSLATION_REFUSAL_RETRIES_EXHAUSTED.action'
 );
 define(
   ['AUXILIARY_PROVIDER_REFUSED'],
-  '모델이 요청을 거절했어요.',
-  '모델이나 프롬프트를 변경한 뒤 수동으로 다시 요청할 수 있어요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_REFUSED.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_REFUSED.action'
 );
 define(
   [
@@ -133,56 +124,78 @@ define(
     'AUXILIARY_PROVIDER_EMPTY_RESPONSE',
     'AUXILIARY_PROVIDER_EMPTY',
   ],
-  '모델이 사용할 수 있는 내용을 반환하지 않았어요.',
-  '해당 작업의 프롬프트와 모델 설정을 확인해 주세요.'
+  'errors.auxiliary.AUXILIARY_PROVIDER_EMPTY_COMPLETION.message',
+  'errors.auxiliary.AUXILIARY_PROVIDER_EMPTY_COMPLETION.action'
 );
 define(
   ['OUTPUT_SCHEMA_INVALID'],
-  '모델 응답이 해당 작업의 출력 형식을 충족하지 못했어요.',
-  '해당 작업의 프롬프트와 모델 설정을 확인한 뒤 다시 시도해 주세요.'
+  'errors.auxiliary.OUTPUT_SCHEMA_INVALID.message',
+  'errors.auxiliary.OUTPUT_SCHEMA_INVALID.action'
 );
 define(
   ['EVALUATION_SUBMISSION_REQUIRED'],
-  '모델이 결과 제출 도구를 호출하지 않아 작업을 완료하지 못했어요.',
-  '평가 도구 설정과 프롬프트의 결과 제출 지침을 확인해 주세요. 자동으로 다시 요청하지 않았어요.'
+  'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.message',
+  'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.action'
 );
 define(
   ['SOURCE_DEPENDENCY_MISMATCH'],
-  '작업 결과가 가리키는 원문과 현재 작업의 원문이 일치하지 않아요.',
-  '최신 원문을 확인한 뒤 새 작업을 요청해 주세요.'
+  'errors.auxiliary.SOURCE_DEPENDENCY_MISMATCH.message',
+  'errors.auxiliary.SOURCE_DEPENDENCY_MISMATCH.action'
 );
 define(
   ['AUXILIARY_CALL_BUDGET_EXHAUSTED'],
-  '작업의 전체 모델 호출 한도에 도달했어요.',
-  '번역과 도구 후속 호출, 거절 판정은 같은 작업 한도를 사용해요. 호출 한도와 도구 사용 지침을 확인해 주세요.'
+  'errors.auxiliary.AUXILIARY_CALL_BUDGET_EXHAUSTED.message',
+  'errors.auxiliary.AUXILIARY_CALL_BUDGET_EXHAUSTED.action'
 );
 define(
   ['TOOL_CONTEXT_BUDGET_EXHAUSTED'],
-  '도구에서 읽은 참고 자료가 작업의 컨텍스트 한도에 도달했어요.',
-  '필요한 참고 자료만 조회하도록 프롬프트의 도구 사용 지침을 확인해 주세요.'
+  'errors.auxiliary.TOOL_CONTEXT_BUDGET_EXHAUSTED.message',
+  'errors.auxiliary.TOOL_CONTEXT_BUDGET_EXHAUSTED.action'
 );
 define(
   ['TOOL_CORRECTION_EXHAUSTED'],
-  '도구 조회 오류가 반복되어 작업을 중단했어요.',
-  '참고 자료와 도구 사용 지침을 확인한 뒤 필요한 경우 새 작업을 요청해 주세요.'
+  'errors.auxiliary.TOOL_CORRECTION_EXHAUSTED.message',
+  'errors.auxiliary.TOOL_CORRECTION_EXHAUSTED.action'
 );
 define(
   ['AUXILIARY_CANCELLED'],
-  '보조 작업이 취소되었어요.',
-  '다시 실행하려면 재시도를 선택해 주세요.'
+  'errors.auxiliary.AUXILIARY_CANCELLED.message',
+  'errors.auxiliary.AUXILIARY_CANCELLED.action'
 );
 define(
   ['AUXILIARY_INCOMPLETE', 'AUXILIARY_EXECUTION_FAILED'],
-  '보조 작업을 완료하지 못했어요.',
-  '작업 상세의 호출 상태와 모델 연결 설정을 확인해 주세요.'
+  'errors.auxiliary.AUXILIARY_INCOMPLETE.message',
+  'errors.auxiliary.AUXILIARY_INCOMPLETE.action'
 );
 
 export function auxiliaryErrorDiagnostic(error: unknown): AuxiliaryErrorDiagnostic {
+  const role =
+    typeof error === 'string' ? /^MODEL_REQUIRED:(main|translation)$/.exec(error)?.[1] : undefined;
+  if (role)
+    return {
+      code: error as string,
+      message: t('errors.auxiliaryModelRequired', { role }),
+      action: t('errors.auxiliaryModelAction', { role }),
+    };
   const diagnostic = typeof error === 'string' ? diagnostics.get(error) : undefined;
-  if (diagnostic) return { code: error as string, ...diagnostic };
+  if (diagnostic)
+    return { code: error as string, message: t(diagnostic.message), action: t(diagnostic.action) };
   return {
     code: null,
-    message: '보조 작업을 완료하지 못했어요.',
-    action: '작업 상세의 호출 상태와 모델 연결 설정을 확인해 주세요.',
+    message: t('errors.auxiliary.AUXILIARY_INCOMPLETE.message'),
+    action: t('errors.auxiliary.AUXILIARY_INCOMPLETE.action'),
   };
+}
+
+/** Complete message for surfaces that show diagnosis and recovery together. */
+export function auxiliaryErrorMessage(error: unknown): string {
+  const role =
+    typeof error === 'string' ? /^MODEL_REQUIRED:(main|translation)$/.exec(error)?.[1] : undefined;
+  if (role) return t('errors.auxiliaryModelDetails', { role });
+  const diagnostic = typeof error === 'string' ? diagnostics.get(error) : undefined;
+  return t(
+    diagnostic
+      ? diagnostic.message.replace(/\.message$/u, '.details')
+      : 'errors.auxiliary.AUXILIARY_INCOMPLETE.details'
+  );
 }

@@ -1,3 +1,4 @@
+import { translateMessage, useI18n } from './i18n.js';
 import type { ComponentPropsWithRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import './ui-controls.css';
@@ -17,13 +18,14 @@ export function IconButton({
   type = 'button',
   ...props
 }: Props) {
+  useI18n();
   return (
     <button
       {...props}
       type={type}
       className={`icon-button ui-icon-button ${className}`}
-      aria-label={label}
-      title={title}
+      aria-label={translateMessage(label)}
+      title={title ? translateMessage(title) : title}
     >
       <Icon size={size} aria-hidden="true" />
     </button>

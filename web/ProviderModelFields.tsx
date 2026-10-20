@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
 import { ToggleRow } from './ToggleRow.js';
 import { ModelPricingEditor } from './ModelPricingEditor.js';
 import { AddIcon, CloseIcon } from './ui-icons.js';
@@ -37,17 +38,35 @@ import {
 } from './provider-model-draft.js';
 
 const geminiSafetyLabels: Record<GeminiSafetyCategory, string> = {
-  HARM_CATEGORY_HARASSMENT: '괴롭힘',
-  HARM_CATEGORY_HATE_SPEECH: '증오 표현',
-  HARM_CATEGORY_SEXUALLY_EXPLICIT: '성적 콘텐츠',
-  HARM_CATEGORY_DANGEROUS_CONTENT: '위험 콘텐츠',
+  get HARM_CATEGORY_HARASSMENT() {
+    return t('providers.m164');
+  },
+  get HARM_CATEGORY_HATE_SPEECH() {
+    return t('providers.m165');
+  },
+  get HARM_CATEGORY_SEXUALLY_EXPLICIT() {
+    return t('providers.m166');
+  },
+  get HARM_CATEGORY_DANGEROUS_CONTENT() {
+    return t('providers.m167');
+  },
 };
 const geminiThresholdLabels: Record<GeminiSafetyThreshold, string> = {
-  OFF: 'OFF · 필터 비활성화',
-  BLOCK_NONE: 'BLOCK_NONE · 차단 없이 평가',
-  BLOCK_ONLY_HIGH: '높음만 차단',
-  BLOCK_MEDIUM_AND_ABOVE: '중간 이상 차단',
-  BLOCK_LOW_AND_ABOVE: '낮음 이상 차단',
+  get OFF() {
+    return t('providers.m168');
+  },
+  get BLOCK_NONE() {
+    return t('providers.m169');
+  },
+  get BLOCK_ONLY_HIGH() {
+    return t('providers.m170');
+  },
+  get BLOCK_MEDIUM_AND_ABOVE() {
+    return t('providers.m171');
+  },
+  get BLOCK_LOW_AND_ABOVE() {
+    return t('providers.m172');
+  },
 };
 const tierLabels: Record<string, string> = {
   flex: 'Flex',
@@ -59,28 +78,52 @@ const tierLabels: Record<string, string> = {
 };
 const tierLabel = (value: string) => tierLabels[value] ?? value;
 const strengthLabels: Record<string, string> = {
-  none: '끄기',
-  minimal: '최소',
-  low: '낮음',
-  medium: '보통',
-  high: '높음',
-  xhigh: '매우 높음',
-  max: '최대',
-  MINIMAL: '최소',
-  LOW: '낮음',
-  MEDIUM: '보통',
-  HIGH: '높음',
+  get none() {
+    return t('providers.m173');
+  },
+  get minimal() {
+    return t('providers.m174');
+  },
+  get low() {
+    return t('providers.m175');
+  },
+  get medium() {
+    return t('providers.m176');
+  },
+  get high() {
+    return t('providers.m177');
+  },
+  get xhigh() {
+    return t('providers.m178');
+  },
+  get max() {
+    return t('providers.m179');
+  },
+  get MINIMAL() {
+    return t('providers.m174');
+  },
+  get LOW() {
+    return t('providers.m175');
+  },
+  get MEDIUM() {
+    return t('providers.m176');
+  },
+  get HIGH() {
+    return t('providers.m177');
+  },
 };
 const strengthLabel = (value: string) =>
   strengthLabels[value] ? `${strengthLabels[value]} · ${value}` : value;
 const modeLabel = (value: string) =>
-  value === 'adaptive' ? '적응형 · adaptive' : value === 'disabled' ? '끄기 · disabled' : value;
-const UNDOCUMENTED = '이 모델의 지원 여부가 확인되지 않은 값이에요.';
+  value === 'adaptive' ? t('providers.m180') : value === 'disabled' ? t('providers.m181') : value;
+const UNDOCUMENTED = () => t('providers.m182');
 const evaluationMetadataLabels: Record<EvaluationMetadataProfile, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   deepmind: 'Google DeepMind',
-  neutral: '중립',
+  get neutral() {
+    return t('providers.m183');
+  },
 };
 
 /**
@@ -95,7 +138,7 @@ function ModelOptionSelect({
   vocabulary,
   onChange,
   format = (item: string) => item,
-  defaultLabel = '모델 기본값',
+  defaultLabel = t('providers.m184'),
   invalidMessage,
   validationError,
   full,
@@ -111,6 +154,7 @@ function ModelOptionSelect({
   validationError?: string;
   full?: boolean;
 }) {
+  useI18n();
   const ref = useRef<HTMLSelectElement>(null);
   const all = vocabulary ?? choices;
   const unsendable = value !== '' && !!vocabulary && !vocabulary.includes(value);
@@ -118,11 +162,10 @@ function ModelOptionSelect({
   const error =
     validationError ||
     (unsendable
-      ? (invalidMessage ??
-        `${label}의 현재 값은 이 프로바이더에서 보낼 수 없어요. ${defaultLabel}이나 목록의 값으로 변경하세요.`)
+      ? (invalidMessage ?? t('providers.m552', { value0: label, value1: defaultLabel }))
       : '');
   useEffect(() => {
-    ref.current?.setCustomValidity(error);
+    ref.current?.setCustomValidity(translateMessage(error));
   }, [error]);
   if (!all?.length && !value) return null;
   const documented = choices ? (all ?? []).filter((item) => choices.includes(item)) : (all ?? []);
@@ -145,22 +188,22 @@ function ModelOptionSelect({
         <option value="">{defaultLabel}</option>
         {unsendable && (
           <option value={value} disabled>
-            {format(value)} · 보낼 수 없음
+            {t('providers.m553', { value0: format(value) })}
           </option>
         )}
         {choices && rest.length > 0 ? (
           <>
-            <optgroup label="문서로 확인한 값">{documented.map(option)}</optgroup>
-            <optgroup label="미확인 값 · 프로바이더가 판정">{rest.map(option)}</optgroup>
+            <optgroup label={t('providers.m186')}>{documented.map(option)}</optgroup>
+            <optgroup label={t('providers.m187')}>{rest.map(option)}</optgroup>
           </>
         ) : (
           documented.map(option)
         )}
       </select>
       {error ? (
-        <small className="error">{error}</small>
+        <small className="error">{translateMessage(error)}</small>
       ) : undocumented ? (
-        <small className="provider-undocumented">{UNDOCUMENTED}</small>
+        <small className="provider-undocumented">{UNDOCUMENTED()}</small>
       ) : null}
     </label>
   );
@@ -182,13 +225,12 @@ function OptionalNumber({
   min: number;
   max: number;
 }) {
+  useI18n();
   const ref = useRef<HTMLInputElement>(null),
     invalid = value !== '' && !sendable;
-  const error = invalid
-    ? `${label}은 이 프로바이더에서 보낼 수 없어요. 값을 비워 모델 기본값을 사용하세요.`
-    : '';
+  const error = invalid ? t('providers.m554', { value0: label }) : '';
   useEffect(() => {
-    ref.current?.setCustomValidity(error);
+    ref.current?.setCustomValidity(translateMessage(error));
   }, [error]);
   if (!sendable && value === '') return null;
   return (
@@ -202,14 +244,14 @@ function OptionalNumber({
         step="any"
         min={min}
         max={max}
-        placeholder="모델 기본값"
+        placeholder={t('providers.m184')}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
       {error ? (
-        <small className="error">{error}</small>
+        <small className="error">{translateMessage(error)}</small>
       ) : documented === false && value !== '' ? (
-        <small className="provider-undocumented">{UNDOCUMENTED}</small>
+        <small className="provider-undocumented">{UNDOCUMENTED()}</small>
       ) : null}
     </label>
   );
@@ -227,33 +269,32 @@ function StopSequence({
   onChange: (value: string) => void;
   onRemove: () => void;
 }) {
+  useI18n();
   const ref = useRef<HTMLTextAreaElement>(null),
-    error = sendable
-      ? ''
-      : '이 프로바이더는 생성 중단 문자열을 보낼 수 없어요. 이 항목을 삭제하세요.';
+    error = sendable ? '' : t('providers.m188');
   useEffect(() => {
-    ref.current?.setCustomValidity(error);
+    ref.current?.setCustomValidity(translateMessage(error));
   }, [error]);
   return (
     <div className="provider-stop-row full">
       <label>
-        생성 중단 문자열 {index + 1}
+        {t('providers.m555', { value0: index + 1 })}
         <textarea
           ref={ref}
-          aria-label={`생성 중단 문자열 ${index + 1}`}
+          aria-label={t('providers.m556', { value0: index + 1 })}
           aria-invalid={!sendable || undefined}
           maxLength={1000}
           required
           value={value}
           onChange={(event) => onChange(event.target.value)}
         />
-        {error && <small className="error">{error}</small>}
+        {error && <small className="error">{translateMessage(error)}</small>}
       </label>
       <button
         type="button"
         className="secondary icon-button"
-        aria-label={`생성 중단 문자열 ${index + 1} 삭제`}
-        title={`생성 중단 문자열 ${index + 1} 삭제`}
+        aria-label={t('providers.m557', { value0: index + 1 })}
+        title={t('providers.m557', { value0: index + 1 })}
         onClick={onRemove}
       >
         <CloseIcon size={18} aria-hidden="true" />
@@ -271,6 +312,7 @@ function ThinkingSelect({
   value: ModelDraft;
   onChange: (next: Partial<ModelDraft>) => void;
 }) {
+  useI18n();
   const thinking = hints.thinking;
   // A value kept from another connection's protocol stays visible so the user can clear it.
   const stale = (['thinkingLevel', 'reasoningEffort', 'outputEffort'] as const).filter(
@@ -280,7 +322,7 @@ function ThinkingSelect({
     <>
       {thinking && (
         <ModelOptionSelect
-          label="사고 강도"
+          label={t('providers.m190')}
           value={value[thinking.field]}
           choices={thinking.known}
           vocabulary={thinking.all}
@@ -292,7 +334,7 @@ function ThinkingSelect({
       {stale.map((field) => (
         <ModelOptionSelect
           key={field}
-          label={`이전 설정의 사고 강도 · ${field}`}
+          label={t('providers.m558', { value0: field })}
           value={value[field]}
           choices={undefined}
           vocabulary={[]}
@@ -317,6 +359,7 @@ export function ProviderModelFields({
   connection: Connection | undefined;
   forcedVertexTier?: VertexRequestTier;
 }) {
+  useI18n();
   const protocol = connection?.protocol;
   const vertex = protocol === 'vertex-gemini-v1',
     fixture = protocol === 'fixture-sse-v1',
@@ -335,7 +378,7 @@ export function ProviderModelFields({
     connection && protocol === 'vercel-chat-v1' ? providerOptionsDraftError(value, connection) : '';
   const providerOptionsRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
-    providerOptionsRef.current?.setCustomValidity(providerOptionsError);
+    providerOptionsRef.current?.setCustomValidity(translateMessage(providerOptionsError));
   }, [providerOptionsError]);
   const modelChoices = connection
     ? [
@@ -348,50 +391,54 @@ export function ProviderModelFields({
       ]
     : [];
   const update = (next: Partial<ModelDraft>) => onChange({ ...value, ...next });
-  const specified: { label: string; text: string; reset: () => void }[] = (
+  const specified: { key: string; label: string; text: string; reset: () => void }[] = (
     [
-      ['tokenizer', '토크나이저'],
-      ['inputTokenLimit', '입력 컨텍스트 한도'],
-      ['timeoutSeconds', '응답 제한 시간 (초)'],
-      ['thinkingMode', '사고 모드'],
+      ['tokenizer', t('providers.m191')],
+      ['inputTokenLimit', t('providers.m192')],
+      ['timeoutSeconds', t('providers.m193')],
+      ['thinkingMode', t('providers.m194')],
       ['verbosity', 'Verbosity'],
       ['reasoningMode', 'Reasoning Mode'],
       ['reasoningContext', 'Reasoning Context'],
       ['temperature', 'Temperature'],
       ['topP', 'Top P'],
-      ['cacheMode', '캐시 방식'],
-      ['cacheTtl', '캐시 유지 시간'],
-      ['providerOptions', '추가 프로바이더 옵션 (JSON)'],
+      ['cacheMode', t('providers.m195')],
+      ['cacheTtl', t('providers.m196')],
+      ['providerOptions', t('providers.m197')],
     ] as const
   )
     .filter(([field]) => value[field] !== '' && !(field === 'timeoutSeconds' && fixture))
     .map(([field, label]) => ({
+      key: field,
       label,
       text:
         field === 'tokenizer'
           ? (TOKENIZER_PROFILES.find((profile) => profile.id === value.tokenizer)?.label ??
             value.tokenizer)
           : field === 'providerOptions'
-            ? 'JSON 직접 지정'
+            ? t('providers.m198')
             : value[field],
       reset: () => update({ [field]: '' }),
     }));
   if (value.structuredOutput !== 'default')
     specified.push({
-      label: '번역 구조화 출력',
-      text: value.structuredOutput === 'on' ? 'JSON Schema 사용' : '지침과 결과 검증만 사용',
+      key: 'structuredOutput',
+      label: t('providers.m199'),
+      text: value.structuredOutput === 'on' ? t('providers.m200') : t('providers.m201'),
       reset: () => update({ structuredOutput: 'default' }),
     });
   if (Object.keys(value.safetySettings).length > 0)
     specified.push({
-      label: 'Gemini 안전 필터',
-      text: `${Object.keys(value.safetySettings).length}개 범주`,
+      key: 'safetySettings',
+      label: t('providers.m202'),
+      text: t('providers.m559', { value0: Object.keys(value.safetySettings).length }),
       reset: () => update({ safetySettings: {} }),
     });
   if (value.stopSequences.length > 0)
     specified.push({
-      label: '생성 중단 문자열',
-      text: `${value.stopSequences.length}개`,
+      key: 'stopSequences',
+      label: t('providers.m189'),
+      text: t('providers.m560', { value0: value.stopSequences.length }),
       reset: () => update({ stopSequences: [] }),
     });
   const evaluation = value.evaluationTools;
@@ -409,9 +456,9 @@ export function ProviderModelFields({
         hidden={section !== 'basic'}
       >
         <label className="full">
-          모델 ID
+          {t('providers.m203')}
           <input
-            aria-label="모델 ID"
+            aria-label={t('providers.m203')}
             list="available-models"
             required
             value={value.modelId}
@@ -427,9 +474,9 @@ export function ProviderModelFields({
         </label>
         {connection && protocol === 'vercel-chat-v1' && (
           <label className="full">
-            모델 계열
+            {t('providers.m204')}
             <select
-              aria-label="모델 계열"
+              aria-label={t('providers.m204')}
               value={value.modelFamily}
               onChange={(event) =>
                 onChange(
@@ -442,30 +489,32 @@ export function ProviderModelFields({
               }
             >
               <option value="">
-                자동 ·{' '}
-                {MODEL_FAMILY_CHOICES.find(
-                  (item) => item.id === effectiveModelFamily(connection.protocol, value.modelId)
-                )?.label ?? '공통 옵션'}
+                {t('providers.m561', {
+                  value0:
+                    MODEL_FAMILY_CHOICES.find(
+                      (item) => item.id === effectiveModelFamily(connection.protocol, value.modelId)
+                    )?.label ?? t('providers.m206'),
+                })}
               </option>
               {MODEL_FAMILY_CHOICES.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.label}
+                  {translateMessage(item.label)}
                 </option>
               ))}
             </select>
           </label>
         )}
         <ToggleRow
-          label="새 모델 선택에 표시"
-          description="끄면 목록에서 숨기고 새 실행을 차단해요."
+          label={t('providers.m207')}
+          description={t('providers.m208')}
           checked={value.enabled}
           onChange={(enabled) => update({ enabled })}
         />
-        <h4 className="provider-field-heading full">생성 설정</h4>
+        <h4 className="provider-field-heading full">{t('providers.m209')}</h4>
         <label>
-          {codex ? '출력 토큰 예산' : '최대 출력 토큰'}
+          {codex ? t('providers.m210') : t('providers.m51')}
           <input
-            aria-label={codex ? '출력 토큰 예산' : '최대 출력 토큰'}
+            aria-label={codex ? t('providers.m210') : t('providers.m51')}
             type="number"
             min={1}
             max={500000}
@@ -474,31 +523,29 @@ export function ProviderModelFields({
             onChange={(event) => update({ maxOutputTokens: event.target.value })}
           />
           {hints?.maxOutputTokens !== undefined && (
-            <small>상한 {hints.maxOutputTokens.toLocaleString()} 토큰</small>
+            <small>{t('providers.m562', { value0: formatNumber(hints.maxOutputTokens) })}</small>
           )}
         </label>
         {hints && <ThinkingSelect hints={hints} value={value} onChange={update} />}
         {protocol === 'anthropic-messages-v1' && (
           <label>
-            실행 방식
+            {t('providers.m213')}
             <select
-              aria-label="실행 방식"
+              aria-label={t('providers.m213')}
               value={value.executionMode}
               onChange={(event) =>
                 update({ executionMode: event.target.value as ModelDraft['executionMode'] })
               }
             >
-              <option value="realtime">실시간</option>
-              <option value="batch">Batch · 비동기 · 50% 할인</option>
+              <option value="realtime">{t('providers.m214')}</option>
+              <option value="batch">{t('providers.m215')}</option>
             </select>
-            <small>
-              본문 생성에 Anthropic Batch를 사용해요. 응답은 완료될 때 한 번에 표시돼요.
-            </small>
+            <small>{t('providers.m216')}</small>
           </label>
         )}
         {protocol && (sends('serviceTier') || value.serviceTier) && (
           <ModelOptionSelect
-            label="서비스 등급"
+            label={t('providers.m217')}
             value={value.serviceTier}
             choices={capability?.serviceTiers ?? protocolServiceTiers(protocol)}
             vocabulary={
@@ -515,22 +562,17 @@ export function ProviderModelFields({
         )}
         {vertex && forcedVertexTier && (
           <p className="muted full">
-            서버에서 서비스 등급을 {tierLabel(forcedVertexTier)}로 제한해요. 모델 기본값도{' '}
-            {tierLabel(forcedVertexTier)}로 실행돼요.
+            {t('providers.m563', {
+              value0: tierLabel(forcedVertexTier),
+              value1: tierLabel(forcedVertexTier),
+            })}
           </p>
         )}
         <details className="provider-setting-help full">
-          <summary>모델 설정 도움말</summary>
-          <p>목록에서 고르거나 모델 ID를 직접 입력할 수 있어요.</p>
-          {protocol === 'vercel-chat-v1' && (
-            <p>새 모델의 옵션이 맞지 않으면 계열을 직접 고르세요. 미지정 옵션은 보내지 않아요.</p>
-          )}
-          {codex && (
-            <p>
-              출력 토큰 수는 모델에 전달하는 참고값이며, 최대 길이를 보장하지 않아요. 원하는 분량은
-              프롬프트에 적어 주세요.
-            </p>
-          )}
+          <summary>{t('providers.m221')}</summary>
+          <p>{t('providers.m222')}</p>
+          {protocol === 'vercel-chat-v1' && <p>{t('providers.m223')}</p>}
+          {codex && <p>{t('providers.m224')}</p>}
         </details>
       </div>
       <div
@@ -540,52 +582,59 @@ export function ProviderModelFields({
       >
         {specified.length > 0 && (
           <details className="provider-specified-settings full">
-            <summary>직접 지정한 설정 · {specified.length}개</summary>
+            <summary>{t('providers.m564', { value0: specified.length })}</summary>
             <ul>
               {specified.map((item) => (
-                <li key={item.label}>
+                <li key={item.key}>
                   <span>
-                    {item.label} · <strong>{item.text}</strong>
+                    {translateMessage(item.label)} ·{' '}
+                    <strong>
+                      {item.key === 'tokenizer' ? translateMessage(item.text) : item.text}
+                    </strong>
                   </span>
                   <button
                     type="button"
                     className="secondary"
-                    aria-label={`${item.label} 지정 해제`}
+                    aria-label={t('providers.m565', { value0: item.label })}
                     onClick={item.reset}
                   >
-                    지정 해제
+                    {t('providers.m227')}
                   </button>
                 </li>
               ))}
             </ul>
           </details>
         )}
-        <h4 className="provider-field-heading full">컨텍스트와 시간 제한</h4>
+        <h4 className="provider-field-heading full">{t('providers.m228')}</h4>
         <label className="full">
-          토크나이저
+          {t('providers.m191')}
           <select
-            aria-label="토크나이저"
+            aria-label={t('providers.m191')}
             value={value.tokenizer}
             onChange={(event) =>
               update({ tokenizer: event.target.value as ModelDraft['tokenizer'] })
             }
           >
             <option value="">
-              자동 ·{' '}
-              {TOKENIZER_PROFILES.find((profile) => profile.id === automaticTokenizer)?.label}
+              {t('providers.m561', {
+                value0: translateMessage(
+                  TOKENIZER_PROFILES.find((profile) => profile.id === automaticTokenizer)?.label ??
+                    ''
+                ),
+              })}
             </option>
             {TOKENIZER_PROFILES.map((profile) => (
               <option key={profile.id} value={profile.id}>
-                {profile.label}
+                {translateMessage(profile.label)}
               </option>
             ))}
           </select>
-          {value.tokenizer && <small>{tokenizer?.description}</small>}
+          {value.tokenizer && <small>{translateMessage(tokenizer?.description ?? '')}</small>}
         </label>
         <label className="full">
-          입력 컨텍스트 한도
+          {t('providers.m192')}
           <input
-            aria-label="입력 컨텍스트 한도"
+            aria-label={t('providers.m192')}
             type="number"
             min={8192}
             max={1000000}
@@ -595,37 +644,34 @@ export function ProviderModelFields({
             onChange={(event) => update({ inputTokenLimit: event.target.value })}
           />
           {hints?.inputTokenLimit !== undefined && (
-            <small>프로바이더 목록 기준 {hints.inputTokenLimit.toLocaleString()}토큰</small>
+            <small>{t('providers.m566', { value0: formatNumber(hints.inputTokenLimit) })}</small>
           )}
         </label>
         {!fixture && (
           <label>
-            응답 제한 시간 (초)
+            {t('providers.m193')}
             <input
-              aria-label="응답 제한 시간 (초)"
+              aria-label={t('providers.m193')}
               type="number"
               step="any"
               min={0.001}
               max={1800}
-              placeholder="앱 기본값"
+              placeholder={t('providers.m230')}
               value={value.timeoutSeconds}
               onChange={(event) => update({ timeoutSeconds: event.target.value })}
             />
           </label>
         )}
         <details className="provider-setting-help full">
-          <summary>컨텍스트와 토큰 계산 도움말</summary>
-          {!value.tokenizer && <p>{tokenizer?.description}</p>}
-          <p>
-            로컬에서만 계산해요. 토큰 계산 API를 호출하지 않으며, 생성 후에는 프로바이더가 보고한
-            사용량을 표시해요.
-          </p>
-          <p>입력 한도를 비우면 272,000토큰을 사용해요. 한도에 가까워지면 앞선 대화를 요약해요.</p>
+          <summary>{t('providers.m231')}</summary>
+          {!value.tokenizer && <p>{translateMessage(tokenizer?.description ?? '')}</p>}
+          <p>{t('providers.m232')}</p>
+          <p>{t('providers.m233')}</p>
         </details>
-        <h4 className="provider-field-heading full">생성 옵션</h4>
+        <h4 className="provider-field-heading full">{t('providers.m234')}</h4>
         {protocol === 'vercel-chat-v1' && (
           <details className="full provider-extra-options" open={!!value.providerOptions}>
-            <summary>추가 프로바이더 옵션 (JSON)</summary>
+            <summary>{t('providers.m197')}</summary>
             <label>
               providerOptions (JSON)
               <textarea
@@ -639,17 +685,14 @@ export function ProviderModelFields({
                 onChange={(event) => update({ providerOptions: event.target.value })}
                 placeholder={'{\n  "gateway": {\n    "only": ["openai"]\n  }\n}'}
               />
-              <small>
-                라우팅이나 추가 옵션을 직접 지정해요. 같은 프로바이더 옵션은 이 JSON의 값이
-                우선해요.
-              </small>
+              <small>{t('providers.m235')}</small>
             </label>
           </details>
         )}
         {/* Options the protocol cannot send stay visible while a value is set, so it can be cleared. */}
         {(hints?.thinkingModes || value.thinkingMode) && (
           <ModelOptionSelect
-            label="사고 모드"
+            label={t('providers.m194')}
             value={value.thinkingMode}
             choices={hints?.thinkingModes?.known}
             vocabulary={hints?.thinkingModes?.all ?? []}
@@ -704,35 +747,35 @@ export function ProviderModelFields({
         />
         {connection && !fixture && !codex && sends('structuredOutput') && (
           <label>
-            번역 구조화 출력
+            {t('providers.m199')}
             <select
-              aria-label="번역 구조화 출력"
+              aria-label={t('providers.m199')}
               value={value.structuredOutput}
               onChange={(event) =>
                 update({ structuredOutput: event.target.value as ModelDraft['structuredOutput'] })
               }
             >
-              <option value="default">프로바이더 기본값</option>
-              <option value="on">JSON Schema 사용</option>
-              <option value="off">지침과 결과 검증만 사용</option>
+              <option value="default">{t('providers.m236')}</option>
+              <option value="on">{t('providers.m200')}</option>
+              <option value="off">{t('providers.m201')}</option>
             </select>
           </label>
         )}
         {protocol && !sends('structuredOutput') && value.structuredOutput !== 'default' && (
           <p className="error full">
-            이 프로바이더는 번역 출력 형식을 직접 지정할 수 없어요.{' '}
+            {t('providers.m237')}
             <button
               type="button"
               className="secondary"
               onClick={() => update({ structuredOutput: 'default' })}
             >
-              번역 출력 형식 기본값 사용
+              {t('providers.m238')}
             </button>
           </p>
         )}
         {(sends('stopSequences') || value.stopSequences.length > 0) && (
           <details className="provider-stop-sequences full" open={value.stopSequences.length > 0}>
-            <summary>생성 중단 문자열</summary>
+            <summary>{t('providers.m189')}</summary>
             <div className="provider-stop-sequences-body">
               {value.stopSequences.map((stop, index) => (
                 <StopSequence
@@ -759,12 +802,14 @@ export function ProviderModelFields({
                   disabled={value.stopSequences.length >= 4}
                   onClick={() => update({ stopSequences: [...value.stopSequences, ''] })}
                 >
-                  <AddIcon size={18} aria-hidden="true" /> 추가
+                  <AddIcon size={18} aria-hidden="true" />
+                  {t('providers.m239')}
                 </button>
               )}
               <small className="full">
-                최대 4개예요. 각 항목의 문자열이 생성되면 응답을 멈춰요. 줄바꿈도 문자열에 포함돼요.
-                {capability?.stopSequences === false && ` ${UNDOCUMENTED}`}
+                {t('providers.m567', {
+                  value0: capability?.stopSequences === false ? ` ${UNDOCUMENTED()}` : '',
+                })}
               </small>
             </div>
           </details>
@@ -775,22 +820,17 @@ export function ProviderModelFields({
             open={Object.keys(value.safetySettings).length > 0}
           >
             <summary>
-              Gemini 안전 필터
-              {Object.keys(value.safetySettings).length > 0 &&
-                ` · ${Object.keys(value.safetySettings).length}개 지정`}
+              {t('providers.m568', { count: Object.keys(value.safetySettings).length })}
             </summary>
             <div className="provider-stop-sequences-body editor-fields">
               {sends('safetySettings') ? (
                 <>
-                  <p className="muted full">
-                    각 범주를 별도로 지정해요. 모델 기본값은 해당 범주를 요청에서 생략하며, OFF는
-                    필터를 끄고 BLOCK_NONE은 차단 없이 안전성 평가를 요청해요.
-                  </p>
+                  <p className="muted full">{t('providers.m241')}</p>
                   {GEMINI_SAFETY_CATEGORIES.map((category) => (
                     <label key={category}>
                       {geminiSafetyLabels[category]}
                       <select
-                        aria-label={`${geminiSafetyLabels[category]} 안전 필터`}
+                        aria-label={t('providers.m569', { value0: geminiSafetyLabels[category] })}
                         value={value.safetySettings[category] ?? ''}
                         onChange={(event) => {
                           const next = { ...value.safetySettings };
@@ -800,7 +840,7 @@ export function ProviderModelFields({
                           update({ safetySettings: next });
                         }}
                       >
-                        <option value="">모델 기본값 · 전송하지 않음</option>
+                        <option value="">{t('providers.m242')}</option>
                         {GEMINI_SAFETY_THRESHOLDS.map((threshold) => (
                           <option key={threshold} value={threshold}>
                             {geminiThresholdLabels[threshold]}
@@ -809,42 +849,36 @@ export function ProviderModelFields({
                       </select>
                     </label>
                   ))}
-                  <small className="full">
-                    적용 가능 여부는 모델과 프로바이더에 따라 달라요. 특히 Vertex의 BLOCK_NONE은
-                    사용 권한이 제한될 수 있어요. 실패 시 다른 값으로 자동 변경하지 않아요.
-                  </small>
+                  <small className="full">{t('providers.m243')}</small>
                 </>
               ) : (
-                <p className="error full">
-                  이 연결에서는 안전 필터 설정을 전달할 수 없어요. 위 직접 지정한 설정에서 해제해
-                  주세요.
-                </p>
+                <p className="error full">{t('providers.m244')}</p>
               )}
             </div>
           </details>
         )}
         {protocol && (sends('cacheMode') || value.cacheMode || value.cacheTtl) && (
           <fieldset className="editor-fields full">
-            <legend>프롬프트 캐시</legend>
+            <legend>{t('providers.m245')}</legend>
             <ModelOptionSelect
-              label="캐시 방식"
+              label={t('providers.m195')}
               value={value.cacheMode}
               choices={capability?.cacheModes}
               vocabulary={sends('cacheMode') ? PROTOCOL_OPTION_VALUES.cacheMode : []}
               onChange={(cacheMode) => update({ cacheMode })}
-              defaultLabel="프롬프트 기준 / 프로바이더 기본값"
+              defaultLabel={t('providers.m246')}
               format={(mode) =>
                 mode === 'disabled'
-                  ? '캐시 끄기'
+                  ? t('providers.m247')
                   : mode === 'explicit'
-                    ? '프롬프트 캐시 기준점만'
+                    ? t('providers.m248')
                     : mode === 'automatic'
-                      ? '자동 캐싱 + 기준점'
+                      ? t('providers.m249')
                       : mode
               }
             />
             <ModelOptionSelect
-              label="캐시 유지 시간"
+              label={t('providers.m196')}
               value={value.cacheTtl}
               choices={
                 cacheTtlAvailable
@@ -855,54 +889,53 @@ export function ProviderModelFields({
                 cacheTtlAvailable && sends('cacheMode') ? protocolCacheTtls(protocol) : []
               }
               onChange={(cacheTtl) => update({ cacheTtl })}
-              defaultLabel="프로바이더 기본값"
+              defaultLabel={t('providers.m236')}
               format={(ttl) =>
-                ttl === '5m' ? '5분' : ttl === '30m' ? '30분' : ttl === '1h' ? '60분' : ttl
+                ttl === '5m'
+                  ? t('providers.m250')
+                  : ttl === '30m'
+                    ? t('providers.m251')
+                    : ttl === '1h'
+                      ? t('providers.m252')
+                      : ttl
               }
-              invalidMessage={
-                !cacheTtlAvailable
-                  ? '유지 시간을 지정하려면 캐시 기준점 또는 자동 캐싱 방식을 선택하세요. 현재 방식은 유지 시간을 프로바이더 기본값으로 되돌려야 해요.'
-                  : undefined
-              }
+              invalidMessage={!cacheTtlAvailable ? t('providers.m253') : undefined}
             />
             {value.cacheMode === 'disabled' && (
-              <small className="full">프롬프트의 캐시 기준점도 적용하지 않아요.</small>
+              <small className="full">{t('providers.m254')}</small>
             )}
-            {value.cacheTtl === '1h' && (
-              <small className="full">Claude의 60분 캐시는 5분보다 캐시 쓰기 비용이 더 커요.</small>
-            )}
+            {value.cacheTtl === '1h' && <small className="full">{t('providers.m255')}</small>}
             {value.cacheMode === 'automatic' && (
               <details className="provider-setting-help full">
-                <summary>자동 캐싱 도움말</summary>
-                <p>
-                  자동 캐싱은 캐시 기준점 한 개를 사용해요. 프롬프트에서 직접 지정하는 기준점은 최대
-                  3개예요.
-                </p>
+                <summary>{t('providers.m256')}</summary>
+                <p>{t('providers.m257')}</p>
               </details>
             )}
           </fieldset>
         )}
-        <h4 className="provider-field-heading full">도구</h4>
+        <h4 className="provider-field-heading full">{t('providers.m258')}</h4>
         <fieldset className="editor-fields full">
-          <legend>평가 도구</legend>
+          <legend>{t('providers.m259')}</legend>
           <ToggleRow
-            label="이 모델 프리셋에 평가 도구 사용"
+            label={t('providers.m260')}
             checked={value.evaluationToolsEnabled}
             onChange={(evaluationToolsEnabled) => update({ evaluationToolsEnabled })}
           />
           {value.evaluationToolsEnabled && (
             <>
               <label className="full">
-                평가 메타데이터
+                {t('providers.m261')}
                 {automaticMetadata ? (
                   <input
-                    aria-label="평가 메타데이터"
+                    aria-label={t('providers.m261')}
                     readOnly
-                    value={`${evaluationMetadataLabels[automaticMetadata]} · 프로바이더 자동 선택`}
+                    value={t('providers.m602', {
+                      value0: evaluationMetadataLabels[automaticMetadata],
+                    })}
                   />
                 ) : (
                   <select
-                    aria-label="평가 메타데이터"
+                    aria-label={t('providers.m261')}
                     value={evaluation.metadataProfile ?? 'neutral'}
                     onChange={(event) =>
                       setEvaluation({
@@ -918,12 +951,12 @@ export function ProviderModelFields({
                     ))}
                   </select>
                 )}
-                <small>평가 컨텍스트·검토자 결과에 사용할 정보를 선택해요.</small>
+                <small>{t('providers.m262')}</small>
               </label>
               <label className="full">
-                평가 컨텍스트 제공
+                {t('providers.m263')}
                 <select
-                  aria-label="평가 컨텍스트 제공"
+                  aria-label={t('providers.m263')}
                   value={evaluation.contextMode}
                   onChange={(event) =>
                     setEvaluation({
@@ -932,24 +965,21 @@ export function ProviderModelFields({
                     })
                   }
                 >
-                  <option value="model-selected">모델이 도구 선택</option>
+                  <option value="model-selected">{t('providers.m264')}</option>
                   <option value="preloaded" disabled={capability?.forcedTools === false}>
-                    컨텍스트·검토자 결과를 먼저 제공
-                    {capability?.forcedTools === false ? ' · 이 모델 미지원' : ''}
+                    {t('providers.m571', {
+                      unsupported: String(capability?.forcedTools === false),
+                    })}
                   </option>
                 </select>
-                {capability?.forcedTools === false && (
-                  <small>
-                    이 모델은 컨텍스트·검토자 결과를 먼저 제공하는 방식을 지원하지 않아요.
-                  </small>
-                )}
-                <small>두 방식 모두 모델이 최종 제출해야 원고가 완성돼요.</small>
+                {capability?.forcedTools === false && <small>{t('providers.m267')}</small>}
+                <small>{t('providers.m268')}</small>
               </label>
               {evaluation.contextMode === 'preloaded' && (
                 <label className="full">
-                  첫 평가 단계의 추론 설정
+                  {t('providers.m269')}
                   <select
-                    aria-label="첫 평가 단계의 추론 설정"
+                    aria-label={t('providers.m269')}
                     value={evaluation.approvalReasoningMode}
                     onChange={(event) =>
                       setEvaluation({
@@ -959,20 +989,17 @@ export function ProviderModelFields({
                       })
                     }
                   >
-                    <option value="configured">프리셋 설정 유지</option>
-                    <option value="economized">출력·추론 설정 낮추기</option>
+                    <option value="configured">{t('providers.m270')}</option>
+                    <option value="economized">{t('providers.m271')}</option>
                   </select>
-                  <small>
-                    낮추기를 선택하면 출력 설정은 기존 값과 8,000토큰 중 작은 값을 사용해요. 설정된
-                    추론·출력 강도는 low로 낮추고, 추론 강도의 none·minimal은 유지해요.
-                  </small>
+                  <small>{t('providers.m272')}</small>
                 </label>
               )}
             </>
           )}
-          <small className="full">평가 과정에서 추가 모델 호출이 발생할 수 있어요.</small>
+          <small className="full">{t('providers.m273')}</small>
         </fieldset>
-        <h4 className="provider-field-heading full">요금</h4>
+        <h4 className="provider-field-heading full">{t('providers.m274')}</h4>
         <ModelPricingEditor
           value={value}
           connection={connection}
@@ -982,7 +1009,7 @@ export function ProviderModelFields({
       </div>
       {optionsError && (
         <p className="error full" role="alert">
-          {optionsError}
+          {translateMessage(optionsError)}
         </p>
       )}
     </>

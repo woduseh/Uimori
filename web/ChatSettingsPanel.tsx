@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -24,50 +25,52 @@ const saveSections = ['story', 'guide', 'profile', 'image', 'reference', 'runtim
 export type Section = ProfileSection | 'story' | 'guide' | 'images' | 'runtime' | 'packages';
 // Two groups: the basics every chat needs, then the advanced automation sections.
 // Reading settings live in their own dialog (chat ⋯ menu), not here.
-const categories = [
-  {
-    id: 'characters',
-    title: '대화 구성',
-    icon: BotIcon,
-    description: '인물과 함께 사용할 자료',
-    group: '기본',
-  },
-  {
-    id: 'prompts',
-    title: '프롬프트·모델',
-    icon: PromptIcon,
-    description: '작문 지침·모델·자동 번역',
-    group: '기본',
-  },
-  {
-    id: 'guide',
-    title: '원작·인물 참고',
-    icon: LoreIcon,
-    description: '집필 전 원작 설정과 인물 참고',
-    group: '기본',
-  },
-  {
-    id: 'story',
-    title: '기억·로어',
-    icon: LoreIcon,
-    description: '장면 기억과 메모 관리',
-    group: '고급',
-  },
-  {
-    id: 'images',
-    title: '이미지',
-    icon: ImagesIcon,
-    description: '이 채팅에 등록한 이미지와 삽화 참조',
-    group: '고급',
-  },
-  {
-    id: 'packages',
-    title: '카드 변수',
-    icon: BehaviorIcon,
-    description: '이 채팅의 카드 변수',
-    group: '고급',
-  },
-] as const;
+function getCategories() {
+  return [
+    {
+      id: 'characters',
+      title: t('chatsettings.m83'),
+      icon: BotIcon,
+      description: t('chatsettings.m84'),
+      group: t('chatsettings.m85'),
+    },
+    {
+      id: 'prompts',
+      title: t('chatsettings.m86'),
+      icon: PromptIcon,
+      description: t('chatsettings.m87'),
+      group: t('chatsettings.m85'),
+    },
+    {
+      id: 'guide',
+      title: t('chatsettings.m88'),
+      icon: LoreIcon,
+      description: t('chatsettings.m89'),
+      group: t('chatsettings.m85'),
+    },
+    {
+      id: 'story',
+      title: t('chatsettings.m90'),
+      icon: LoreIcon,
+      description: t('chatsettings.m91'),
+      group: t('chatsettings.m92'),
+    },
+    {
+      id: 'images',
+      title: t('chatsettings.m93'),
+      icon: ImagesIcon,
+      description: t('chatsettings.m94'),
+      group: t('chatsettings.m92'),
+    },
+    {
+      id: 'packages',
+      title: t('chatsettings.m95'),
+      icon: BehaviorIcon,
+      description: t('chatsettings.m96'),
+      group: t('chatsettings.m92'),
+    },
+  ] as const;
+}
 const isProfile = (section: Section): section is ProfileSection =>
   ['characters', 'prompts', 'models', 'story', 'images'].includes(section);
 
@@ -85,6 +88,8 @@ export function ChatSettingsPanel({
   onGlobalSettings: (section: 'models' | 'prompts') => void;
   onOpenHelper: () => void;
 }) {
+  useI18n();
+  const categories = getCategories();
   const startSection =
     initialSection === 'models' || initialSection === 'runtime'
       ? 'prompts'
@@ -270,21 +275,21 @@ export function ChatSettingsPanel({
   return (
     <Dialog
       open
-      title="채팅 설정"
+      title={t('chatsettings.m97')}
       onClose={() => requestClose()}
       wide
       className="settings-dialog chat-settings-dialog"
       headerTitle={compact && detailOpen ? title : undefined}
       headerLeading={
         compact && detailOpen ? (
-          <IconButton label="채팅 설정 목록으로" icon={BackIcon} onClick={backToList} />
+          <IconButton label={t('chatsettings.m98')} icon={BackIcon} onClick={backToList} />
         ) : undefined
       }
     >
       <section
         className="chat-settings-panel"
         ref={root}
-        aria-label="채팅 설정 내용"
+        aria-label={t('chatsettings.m99')}
         onFocusCapture={(event) => {
           if (event.target instanceof HTMLElement) {
             lastRootFocus.current = event.target;
@@ -293,7 +298,7 @@ export function ChatSettingsPanel({
         }}
       >
         <SectionNavigation
-          label="채팅 설정 분류"
+          label={t('chatsettings.m100')}
           items={visibleCategories.map((item) => ({ ...item, panelId: panelId(item.id) }))}
           value={active}
           onSelect={select}
@@ -344,7 +349,7 @@ export function ChatSettingsPanel({
             )}
             {visited.includes('story') && detail && (
               <div hidden={profileTab !== 'story'} className="chat-settings-memory">
-                <h3>기억과 요약</h3>
+                <h3>{t('chatsettings.m101')}</h3>
                 <StoryPanel
                   chatId={state.selected}
                   refreshKey={state.detail?.reader.cursor ?? 0}
@@ -366,7 +371,10 @@ export function ChatSettingsPanel({
               <div hidden={profileTab !== 'images'} className="chat-settings-images">
                 <details className="chat-settings-image-management">
                   <summary>
-                    이미지 관리 <small>채팅 등록 {(detail.assets ?? []).length}개</small>
+                    {t('chatsettings.m102')}{' '}
+                    <small>
+                      {t('chatsettings.imagesCount', { count: (detail.assets ?? []).length })}
+                    </small>
                   </summary>
                   <AssetEditor
                     chatId={state.selected}
@@ -437,12 +445,12 @@ export function ChatSettingsPanel({
       </section>
       {state.error && (
         <p role="alert" className="error">
-          {state.error}
+          {translateMessage(state.error)}
         </p>
       )}
       <Dialog
         open={discard}
-        title="미저장 채팅 설정 확인"
+        title={t('chatsettings.m105')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
@@ -451,11 +459,11 @@ export function ChatSettingsPanel({
           afterClose.current = null;
         }}
       >
-        <p>저장하지 않은 편집 내용이나 선택한 파일이 있어요. 닫으면 이 초안이 사라져요.</p>
+        <p>{t('chatsettings.m80')}</p>
         <DraftDiscardActions
           open={discard}
           onSavingChange={setSavingClose}
-          saveLabel="저장하고 닫기"
+          saveLabel={t('chatsettings.m81')}
           onSave={async () => {
             if (
               !(await saveGroup.save({
@@ -480,7 +488,7 @@ export function ChatSettingsPanel({
             setDiscard(false);
             closeHistory();
           }}
-          discardLabel="초안 버리고 닫기"
+          discardLabel={t('chatsettings.m82')}
         />
       </Dialog>
     </Dialog>

@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { SourceVersions as Versions } from '../core/source-versions.js';
@@ -16,6 +17,7 @@ export function SourceVersions({
   disabled: boolean;
   onApply: (text: string) => void;
 }) {
+  useI18n();
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<Versions | null>(null);
   const [selected, setSelected] = useState(0);
@@ -39,24 +41,28 @@ export function SourceVersions({
   }, [open, sourceId]);
   const version = versions?.versions.find((item) => item.revision === selected);
   const label = (value: number) =>
-    value === versions?.currentRevision ? '현재 저장본' : value === 0 ? '최초 원문' : '직전 저장본';
+    value === versions?.currentRevision
+      ? t('reader.currentSavedVersion')
+      : value === 0
+        ? t('reader.initialOriginal')
+        : t('reader.previousSavedVersion');
   return (
     <details className="source-versions" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary>저장본 비교</summary>
+      <summary>{t('reader.compareSavedVersions')}</summary>
       {open && (
         <>
           {error && (
             <p role="alert" className="error">
-              {error}
+              {translateMessage(error)}
             </p>
           )}
           {!versions && !error && (
-            <LoadingState presentation="inline" label="저장본을 불러오는 중이에요…" />
+            <LoadingState presentation="inline" label={t('reader.loadingSavedVersions')} />
           )}
           {versions && version && (
             <>
               <label>
-                비교할 저장본
+                {t('reader.versionToCompare')}
                 <select
                   value={selected}
                   onChange={(event) => setSelected(Number(event.target.value))}
@@ -74,7 +80,7 @@ export function SourceVersions({
                   <pre>{version.text}</pre>
                 </div>
                 <div>
-                  <strong>편집 중인 초안</strong>
+                  <strong>{t('reader.draftBeingEdited')}</strong>
                   <pre>{draft}</pre>
                 </div>
               </div>
@@ -90,7 +96,7 @@ export function SourceVersions({
                     onApply(version.text);
                   }}
                 >
-                  선택본을 초안에 불러오기
+                  {t('reader.loadSelectedVersionIntoDraft')}
                 </button>
                 {priorDraft !== null && (
                   <button
@@ -102,13 +108,13 @@ export function SourceVersions({
                       setPriorDraft(null);
                     }}
                   >
-                    불러오기 전 초안으로 돌아가기
+                    {t('reader.returnToDraftBeforeLoading')}
                   </button>
                 )}
               </div>
-              <small>원문 저장을 눌러야 본문에 반영돼요.</small>
+              <small>{t('reader.saveTheOriginalToApplyItToTheText')}</small>
               {versions.currentRevision !== revision && (
-                <p role="alert">저장본이 바뀌었어요. 편집기를 다시 열어 확인해 주세요.</p>
+                <p role="alert">{t('reader.theSavedVersionChangedReopenTheEditorToReview')}</p>
               )}
             </>
           )}

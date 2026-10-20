@@ -1,21 +1,23 @@
+import { t, useI18n } from './i18n.js';
 import { useState } from 'react';
 import type { UsageReport } from '../core/usage-report.js';
 import { bucketLabel, shortDay, usageBuckets, usageUsd } from './usage-display.js';
 
 export function UsageChart({ report }: { report: UsageReport }) {
+  useI18n();
   const { step, buckets } = usageBuckets(report);
   const [selected, setSelected] = useState<number | null>(null);
   const maximum = Math.max(0, ...buckets.map((item) => item.amount));
   const current = selected === null ? undefined : buckets[selected];
   return (
-    <section className="usage-trend" aria-label="비용 추이">
+    <section className="usage-trend" aria-label={t('visuals.m260')}>
       <header className="usage-section-heading">
-        <h3>비용 추이</h3>
-        <small>{step === 1 ? '일별' : `${step}일 단위`} · 한국 시간</small>
+        <h3>{t('visuals.m260')}</h3>
+        <small>{t('visuals.chartPeriod', { step })}</small>
       </header>
       {report.totals.calls === 0 ? (
         <p className="usage-chart-empty" role="status">
-          선택한 기간에 기록이 없어요.
+          {t('visuals.m264')}
         </p>
       ) : (
         <>
@@ -23,7 +25,7 @@ export function UsageChart({ report }: { report: UsageReport }) {
             <span>{usageUsd(maximum)}</span>
             <span>US$0</span>
           </div>
-          <div className="usage-chart" aria-label="기간별 비용">
+          <div className="usage-chart" aria-label={t('visuals.m265')}>
             {buckets.map((item, index) => (
               <button
                 key={item.from}
@@ -62,7 +64,7 @@ export function UsageChart({ report }: { report: UsageReport }) {
             {report.from !== report.to && <span>{shortDay(report.to)}</span>}
           </div>
           <p className="usage-chart-caption" aria-live="polite">
-            {current ? bucketLabel(current) : '막대를 선택하면 상세 내역을 볼 수 있어요.'}
+            {current ? bucketLabel(current) : t('visuals.m266')}
           </p>
         </>
       )}

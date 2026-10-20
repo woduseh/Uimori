@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import type { RequestImage } from '../core/request-images.js';
 import { StoredRequestImages } from './RequestImages.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -24,7 +25,7 @@ export function RequestMessage({
   rewriteDisabled = disabled,
   onConfirm,
   onEditingChange,
-  editHint = '수정한 요청으로 새 채팅에서 생성해요.',
+  editHint = t('reader.generateInANewChatWithTheEditedRequest'),
   maxLength = REQUEST_TEXT_MAX_CHARS,
   compactActions = 'always',
 }: {
@@ -50,6 +51,7 @@ export function RequestMessage({
   onConfirm?: () => Promise<boolean>;
   onEditingChange?: (editing: boolean) => void;
 }) {
+  useI18n();
   const key = `${onSave ? 'request-context-edit' : 'request-edit'}:${runId}`;
   const shownRequest = displayText ?? request;
   const [editing, setEditing] = useState(false);
@@ -156,7 +158,7 @@ export function RequestMessage({
           <StoredRequestImages images={images} />
           <textarea
             ref={input}
-            aria-label="요청 수정 내용"
+            aria-label={t('reader.editedRequestText')}
             rows={5}
             maxLength={maxLength}
             value={draft}
@@ -169,15 +171,17 @@ export function RequestMessage({
           <div className="request-edit-footer">
             <small>
               {onConfirm
-                ? '이전 전송의 수락 여부를 확인해 주세요. 같은 요청으로 확인해요.'
+                ? t('reader.checkWhetherThePreviousSubmissionWasAcceptedCheckUsing')
                 : onSave
-                  ? '이후 생성 문맥에 반영해요. 이미 생성된 장면은 유지돼요.'
+                  ? t('reader.appliesToFutureGenerationContextExistingScenesArePreserved')
                   : editHint}
             </small>
             <div className="request-edit-buttons">
               <IconButton
                 icon={X}
-                label={onConfirm ? '요청 편집 닫기' : '요청 수정 취소'}
+                label={
+                  onConfirm ? t('reader.closeRequestEditor') : t('reader.cancelRequestEditing')
+                }
                 className="secondary"
                 disabled={busy}
                 onClick={close}
@@ -202,19 +206,19 @@ export function RequestMessage({
                     }
                   }}
                 >
-                  수정 후 재생성
+                  {t('reader.editAndRegenerate')}
                 </button>
               )}
               <IconButton
                 icon={onConfirm ? RefreshCw : onSave ? Save : ArrowUp}
                 label={
                   busy
-                    ? '처리 중'
+                    ? t('reader.processing')
                     : onConfirm
-                      ? '이전 요청 확인'
+                      ? t('reader.checkPreviousRequest')
                       : onSave
-                        ? '입력 저장'
-                        : '수정한 요청 보내기'
+                        ? t('reader.saveInput')
+                        : t('reader.sendEditedRequest')
                 }
                 type="submit"
                 disabled={busy || (!onConfirm && (disabled || (!draft.trim() && !images?.length)))}
@@ -238,9 +242,9 @@ export function RequestMessage({
               <details>
                 <summary>
                   <span className="request-preview">
-                    {shownRequest.slice(0, 240)}… <span>전체 보기</span>
+                    {shownRequest.slice(0, 240)}… <span>{t('reader.viewAll')}</span>
                   </span>
-                  <span className="request-collapse">접기</span>
+                  <span className="request-collapse">{t('reader.collapse')}</span>
                 </summary>
                 <p>{shownRequest}</p>
               </details>
@@ -250,10 +254,10 @@ export function RequestMessage({
           </div>
           {originalRequest !== undefined && originalRequest !== request && (
             <details className="request-transform-details">
-              <summary>수정 전 입력 보기</summary>
+              <summary>{t('reader.viewInputBeforeEditing')}</summary>
               <dl>
                 <div>
-                  <dt>장면 생성 당시 입력</dt>
+                  <dt>{t('reader.inputWhenThisSceneWasGenerated')}</dt>
                   <dd>{originalRequest}</dd>
                 </div>
               </dl>
@@ -261,10 +265,10 @@ export function RequestMessage({
           )}
           {shownRequest !== request && (
             <details className="request-transform-details">
-              <summary>표시 변환됨 · 원래 요청 보기</summary>
+              <summary>{t('reader.displayTransformedViewOriginalRequest')}</summary>
               <dl>
                 <div>
-                  <dt>원래 요청 · 편집 기준</dt>
+                  <dt>{t('reader.originalRequestEditingSource')}</dt>
                   <dd>{request}</dd>
                 </div>
               </dl>
@@ -273,18 +277,18 @@ export function RequestMessage({
           <div className="request-message-actions">
             <IconButton
               icon={copyState === 'copied' ? Check : Copy}
-              label={copyState === 'copied' ? '요청 복사됨' : '요청 복사'}
+              label={copyState === 'copied' ? t('reader.requestCopied') : t('reader.copyRequest')}
               className="secondary"
               disabled={copyState === 'copying'}
               onClick={() => void copyRequest()}
             />
             <span className="sr-only" role="status">
-              {copyState === 'copied' ? '요청을 복사했어요.' : ''}
+              {copyState === 'copied' ? t('reader.requestCopied2') : ''}
             </span>
             {onRewrite && (
               <IconButton
                 icon={RefreshCw}
-                label="다시 쓰기"
+                label={t('reader.rewrite')}
                 size={18}
                 className="secondary"
                 disabled={rewriteDisabled}
@@ -295,14 +299,14 @@ export function RequestMessage({
               <IconButton
                 ref={trigger}
                 icon={Pencil}
-                label="요청 편집"
+                label={t('reader.editRequest')}
                 className="secondary"
                 disabled={disabled && !onConfirm}
                 onClick={openEditor}
               />
             )}
             {(onSave || onToggleRequest || onToggleScene) && (
-              <ActionMenu label="요청과 문맥 메뉴" placement="top" viewport>
+              <ActionMenu label={t('reader.requestAndContextMenu')} placement="top" viewport>
                 {(onSubmit || onSave) && (
                   <button
                     ref={trigger}
@@ -316,7 +320,7 @@ export function RequestMessage({
                     }}
                   >
                     <Pencil size={18} aria-hidden="true" />
-                    {onSave ? '문맥용 요청 수정' : '요청 편집'}
+                    {onSave ? t('reader.editContextRequest') : t('reader.editRequest')}
                   </button>
                 )}
                 {onToggleRequest && (
@@ -331,7 +335,9 @@ export function RequestMessage({
                     ) : (
                       <Eye size={18} aria-hidden="true" />
                     )}
-                    {requestEnabled ? '입력을 문맥에서 제외' : '입력을 문맥에 포함'}
+                    {requestEnabled
+                      ? t('reader.excludeInputFromContext')
+                      : t('reader.includeInputInContext')}
                   </button>
                 )}
                 {onToggleScene && (
@@ -346,7 +352,9 @@ export function RequestMessage({
                     ) : (
                       <Eye size={18} aria-hidden="true" />
                     )}
-                    {sceneEnabled ? '장면을 문맥에서 제외' : '장면을 문맥에 포함'}
+                    {sceneEnabled
+                      ? t('reader.excludeSceneFromContext')
+                      : t('reader.includeSceneInContext')}
                   </button>
                 )}
               </ActionMenu>
@@ -354,7 +362,7 @@ export function RequestMessage({
           </div>
           {copyState === 'failed' && (
             <p className="error request-copy-error" role="alert">
-              요청을 복사하지 못했어요. 브라우저의 클립보드 권한을 확인해 주세요.
+              {t('reader.couldNotCopyTheRequestCheckYourBrowsersClipboard')}
             </p>
           )}
         </>

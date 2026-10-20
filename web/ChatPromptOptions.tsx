@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseIcon } from './ui-icons.js';
 import type { Library, PromptWorkspace } from '../core/product.js';
@@ -21,6 +22,7 @@ type Props = {
 
 /** Composer options always belong to the selected chat. Global defaults live in settings. */
 export function ChatPromptOptions(props: Props) {
+  useI18n();
   const [contexts, setContexts] = useState<string[]>([]);
   const [dirtyScopes, setDirtyScopes] = useState<Record<string, boolean>>({});
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
@@ -66,7 +68,7 @@ export function ChatPromptOptions(props: Props) {
       hidden={!props.open}
       role={props.modal ? 'dialog' : 'region'}
       aria-modal={props.modal && props.open ? true : undefined}
-      aria-label="창작 옵션 패널"
+      aria-label={t('chatsettings.m153')}
       onKeyDown={(event) => {
         if (event.target instanceof Element && event.target.closest('dialog[open]')) return;
         if (event.key === 'Escape') {
@@ -93,14 +95,14 @@ export function ChatPromptOptions(props: Props) {
     >
       <header className="chat-options-header">
         <div>
-          <h2>창작 옵션</h2>
-          <small>이 채팅 · 다음 생성부터 적용</small>
+          <h2>{t('chatsettings.m154')}</h2>
+          <small>{t('chatsettings.m155')}</small>
         </div>
         <button
           ref={closeButton}
           type="button"
           className="icon-button"
-          aria-label="창작 옵션 닫기"
+          aria-label={t('chatsettings.m156')}
           onClick={props.onClose}
         >
           <CloseIcon size={20} />
@@ -142,13 +144,14 @@ function ChatScopeEditor({
   onDirtyChange: (key: string, value: boolean) => void;
   onBusyChange: (key: string, value: boolean) => void;
 }) {
+  useI18n();
   const dirty = useCallback(
     (value: boolean) => onDirtyChange(chatId, value),
     [chatId, onDirtyChange]
   );
   const busy = useCallback((value: boolean) => onBusyChange(chatId, value), [chatId, onBusyChange]);
   return (
-    <div className="chat-options-scope-panel" aria-label="이 채팅 옵션" hidden={!visible}>
+    <div className="chat-options-scope-panel" aria-label={t('chatsettings.m157')} hidden={!visible}>
       <ChatOptionSettings
         chatId={chatId}
         active={active}

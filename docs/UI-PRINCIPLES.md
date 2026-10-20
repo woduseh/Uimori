@@ -17,6 +17,8 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 
 Use familiar navigation and consistent names across desktop and mobile. Adapt the layout to available space; avoid stretching prose and long forms across wide screens. Give icon buttons accessible names and make each screen's primary action easy to find. Keep internal implementation terms out of ordinary product copy.
 
+App-owned labels follow the independent [UI language](I18N.md). Allow translated scene badges and representation controls to wrap without overlap; do not reserve a fixed width based on Korean text. Retained notices carry message identity to the shared notice host, which translates at render time without restarting the completion timer. Authored manuscript and card HTML remain content boundaries.
+
 In settings, place section titles above their panels and keep related controls in one group. Use one divider between rows, without extra lines at the start or end of a group. Keep selection cards and status summaries where they communicate a real choice or state. Give image selection its own row and group related effect sliders below it. Reversible settings such as enabling a provider or model apply immediately without a second confirmation step.
 
 Keep settings action groups aligned to the right below their content, and toggle names on the left with switches on the right. Repeated usage meters share the same column boundaries regardless of adjacent text length.

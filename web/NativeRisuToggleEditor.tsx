@@ -1,3 +1,4 @@
+import { useI18n, translateMessage } from './i18n.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useRef, useState, type ReactNode, type ChangeEvent } from 'react';
 import type { PromptValue, RisuPrompt } from '../core/risu-prompt.js';
@@ -47,21 +48,11 @@ import {
 } from './ui-icons.js';
 import './native-risu-toggle-editor.css';
 
-const names: Record<NativeToggleType, string> = {
-  toggle: '켜기 / 끄기',
-  select: '선택형',
-  text: '한 줄 입력',
-  textarea: '여러 줄 입력',
-  divider: '구분선',
-  caption: '설명문',
-  group: '그룹',
-  groupEnd: '그룹 끝',
-};
 const controlTypes: NativeToggleType[] = ['toggle', 'select', 'text', 'textarea'];
 type Snapshot = { toggles: string; variables: string };
 type Confirmation = {
-  title: string;
-  description: string;
+  title: () => string;
+  description: () => string;
   destructive?: boolean;
   action: () => void;
 };
@@ -85,6 +76,24 @@ export function NativeRisuToggleEditor({
   disabled?: boolean;
   prepareSave?: (model: ResourceModel, values: Snapshot) => ResourceModel;
 }) {
+  const { t } = useI18n();
+  const warningMessage = (warning: string) => {
+    const nested = /^(\d+)행: Risu 그룹은 중첩할 수 없어요\.$/.exec(warning);
+    if (nested) return t('native.nestedGroup', { line: Number(nested[1]) });
+    const unmatched = /^(\d+)행: 대응하는 그룹 시작이 없어요\.$/.exec(warning);
+    if (unmatched) return t('native.unmatchedGroup', { line: Number(unmatched[1]) });
+    return translateMessage(warning);
+  };
+  const names: Record<NativeToggleType, string> = {
+    toggle: t('native.text_7019383fa3'),
+    select: t('native.text_a73b2abf4a'),
+    text: t('native.text_c2d407e7e3'),
+    textarea: t('native.text_10b4e6b251'),
+    divider: t('native.text_21aca00635'),
+    caption: t('native.text_d9547c9605'),
+    group: t('native.text_3228056915'),
+    groupEnd: t('native.text_28a0453c5b'),
+  };
   const [raw, setRaw] = useBufferedEditorState(draftPath, value, { syncPristineInitial: true });
   const [rawVariables, setRawVariables] = useBufferedEditorState(
     'prompt.native.defaults',
@@ -269,7 +278,7 @@ export function NativeRisuToggleEditor({
         <div className="nt-form">
           <pre>{item.raw}</pre>
           <button type="button" onClick={() => setMode('raw')}>
-            원문에서 편집
+            {t('native.text_0286f638be')}
           </button>
         </div>
       );
@@ -282,23 +291,26 @@ export function NativeRisuToggleEditor({
       <div className="nt-form">
         <div className="nt-fields">
           <label>
-            {control ? '표시 이름' : '문구'}
-            {field(`${item.index}.label`, '표시 이름', definition.label, (label) =>
+            {control ? t('native.text_7be99394f7') : t('native.text_2ecaf7f57c')}
+            {field(`${item.index}.label`, t('native.text_7be99394f7'), definition.label, (label) =>
               edit({ label })
             )}
           </label>
           {control && (
             <label>
-              변수 키{field(`${item.index}.key`, '변수 키', definition.key, (key) => edit({ key }))}
+              {t('native.text_abf2a98954')}
+              {field(`${item.index}.key`, t('native.text_abf2a98954'), definition.key, (key) =>
+                edit({ key })
+              )}
             </label>
           )}
         </div>
         {control && (
           <>
             <label className="nt-type-field">
-              입력 형식
+              {t('native.text_b410f81d43')}
               <select
-                aria-label="입력 형식"
+                aria-label={t('native.text_b410f81d43')}
                 value={definition.type}
                 disabled={locked}
                 onChange={(event) =>
@@ -311,34 +323,40 @@ export function NativeRisuToggleEditor({
                   </option>
                 ))}
               </select>
-              <small>채팅에 표시할 컨트롤</small>
+              <small>{t('native.text_d2e4ee054a')}</small>
             </label>
             {definition.type === 'select' && (
               <div className="nt-options">
                 <div className="nt-options-heading">
-                  <span>선택지</span>
-                  <small>숫자는 실제 저장값이에요</small>
+                  <span>{t('native.text_2c3f2eb17b')}</span>
+                  <small>{t('native.text_40873a17cd')}</small>
                 </div>
                 {options.map((option, index) => (
                   <div className="nt-option" key={index}>
                     <span>{index}</span>
-                    {field(`${item.index}.option.${index}`, `선택지 ${index}`, option, (next) => {
-                      if (next.includes(','))
-                        throw new Error('선택지 하나에는 쉼표를 넣을 수 없어요.');
-                      return setOptions(options.map((entry, i) => (i === index ? next : entry)));
-                    })}
+                    {field(
+                      `${item.index}.option.${index}`,
+                      t('native.optionNumber', { number: index }),
+                      option,
+                      (next) => {
+                        if (next.includes(','))
+                          throw new Error('선택지 하나에는 쉼표를 넣을 수 없어요.');
+                        return setOptions(options.map((entry, i) => (i === index ? next : entry)));
+                      }
+                    )}
                     <div className="nt-option-actions">
                       {([-1, 1] as const).map((delta) => (
                         <IconButton
                           key={delta}
-                          label={`선택지 ${index} ${delta < 0 ? '위로' : '아래로'} 이동`}
+                          label={t(delta < 0 ? 'native.optionUp' : 'native.optionDown', {
+                            number: index,
+                          })}
                           icon={delta < 0 ? UpIcon : DownIcon}
                           disabled={locked || index + delta < 0 || index + delta >= options.length}
                           onClick={() =>
                             setConfirmation({
-                              title: '선택지 순서 변경',
-                              description:
-                                '기존 채팅은 선택지 번호를 저장해요. 순서를 바꾸면 같은 번호가 다른 선택지를 가리킬 수 있어요.',
+                              title: () => t('native.text_ef58acc694'),
+                              description: () => t('native.text_58d33aab03'),
                               action: () => {
                                 write(() => {
                                   const next = [...options];
@@ -354,14 +372,13 @@ export function NativeRisuToggleEditor({
                         />
                       ))}
                       <IconButton
-                        label={`선택지 ${index} 삭제`}
+                        label={t('native.optionDelete', { number: index })}
                         icon={DeleteIcon}
                         disabled={locked || options.length === 1}
                         onClick={() =>
                           setConfirmation({
-                            title: '선택지 삭제',
-                            description:
-                              '삭제한 선택지 뒤의 저장 번호가 바뀌어요. 기존 채팅의 선택값을 확인해 주세요.',
+                            title: () => t('native.text_369d0b0943'),
+                            description: () => t('native.text_d8d8fcbc87'),
                             action: () => {
                               write(() => setOptions(options.filter((_, i) => i !== index)));
                             },
@@ -378,15 +395,15 @@ export function NativeRisuToggleEditor({
                   onClick={() => write(() => setOptions([...options, '새 선택지']))}
                 >
                   <AddIcon size={15} aria-hidden="true" />
-                  선택지 추가
+                  {t('native.text_bd90c69a8b')}
                 </button>
               </div>
             )}
             <label>
-              설명
+              {t('native.text_841964364c')}
               {field(
                 `${item.index}.caption`,
-                '설명',
+                t('native.text_841964364c'),
                 item.caption,
                 (caption) => editToggleItem(value, item.index, {}, caption),
                 'toggles',
@@ -397,9 +414,9 @@ export function NativeRisuToggleEditor({
         )}
         <div className="nt-form-bottom">
           <label>
-            소속 그룹
+            {t('native.text_8b1b6b1490')}
             <select
-              aria-label="소속 그룹"
+              aria-label={t('native.text_8b1b6b1490')}
               value={parentId}
               disabled={locked}
               onChange={(event) =>
@@ -411,7 +428,7 @@ export function NativeRisuToggleEditor({
             >
               {groups.map((group) => (
                 <option key={group.id} value={group.id}>
-                  {group.name}
+                  {group.id === -1 ? t('native.ungrouped') : group.name}
                 </option>
               ))}
             </select>
@@ -422,11 +439,11 @@ export function NativeRisuToggleEditor({
             disabled={invalidPending}
             onClick={() => setExpanded(null)}
           >
-            접기
+            {t('native.text_0d2c2495e1')}
           </button>
         </div>
         <details className="nt-link-info">
-          <summary>연결 정보</summary>
+          <summary>{t('native.text_d65947b4a0')}</summary>
           <pre>{item.raw}</pre>
           {control && <code>{`{{getglobalvar::toggle_${definition.key}}}`}</code>}
         </details>
@@ -435,7 +452,7 @@ export function NativeRisuToggleEditor({
   }
   function itemRow(item: (typeof current.items)[number], parentId: number) {
     const definition = item.definition;
-    const title = definition?.label || definition?.key || '원문 항목';
+    const title = definition?.label || definition?.key || t('native.text_7c6aebe728');
     const type = definition?.type;
     const open = expanded === item.index;
     const Icon =
@@ -455,7 +472,7 @@ export function NativeRisuToggleEditor({
           <button
             type="button"
             className="nt-row-main"
-            aria-label={`${title} 편집`}
+            aria-label={t('native.editItem', { title })}
             aria-expanded={open}
             disabled={invalidPending}
             onClick={() => setExpanded(open ? null : item.index)}
@@ -478,17 +495,19 @@ export function NativeRisuToggleEditor({
                 </small>
               )}
             </span>
-            {type !== 'divider' && <span className="nt-kind">{type ? names[type] : '원문'}</span>}
+            {type !== 'divider' && (
+              <span className="nt-kind">{type ? names[type] : t('native.text_8ba13a8495')}</span>
+            )}
             <DropdownIcon size={16} className="nt-chevron" aria-hidden="true" />
           </button>
-          <ActionMenu label={`${title} 메뉴`} viewport>
+          <ActionMenu label={t('native.itemMenu', { title })} viewport>
             <button
               type="button"
               disabled={locked}
               onClick={() => structural(() => moveToggleItem(value, item.index, -1))}
             >
               <UpIcon />
-              위로 이동
+              {t('native.text_0de1511afe')}
             </button>
             <button
               type="button"
@@ -496,7 +515,7 @@ export function NativeRisuToggleEditor({
               onClick={() => structural(() => moveToggleItem(value, item.index, 1))}
             >
               <DownIcon />
-              아래로 이동
+              {t('native.text_763e79eea6')}
             </button>
             <button
               type="button"
@@ -504,21 +523,21 @@ export function NativeRisuToggleEditor({
               onClick={() => structural(() => duplicateToggleItem(value, item.index))}
             >
               <CopyIcon />
-              복제
+              {t('native.text_ec3a6b612c')}
             </button>
             <button
               type="button"
               disabled={locked}
               onClick={() =>
                 setConfirmation({
-                  title: '항목 삭제',
-                  description: `‘${title}’ 항목과 연결된 설명문을 삭제해요.`,
+                  title: () => t('native.text_28e82332d9'),
+                  description: () => t('native.deleteItemDescription', { title }),
                   action: () => structural(() => deleteToggleItem(value, item.index)),
                 })
               }
             >
               <DeleteIcon />
-              항목 삭제
+              {t('native.text_28e82332d9')}
             </button>
           </ActionMenu>
         </div>
@@ -531,9 +550,11 @@ export function NativeRisuToggleEditor({
     content = (
       <div className="nt-raw">
         <label>
-          {section === 'toggles' ? '토글 정의 원문' : '채팅 변수 기본값'}
+          {section === 'toggles' ? t('native.text_85cd7d3b63') : t('native.text_fcaba2262e')}
           <textarea
-            aria-label={section === 'toggles' ? '토글 정의 원문' : 'Risu 기본 변수'}
+            aria-label={
+              section === 'toggles' ? t('native.text_85cd7d3b63') : t('native.text_a0b6c93511')
+            }
             rows={20}
             spellCheck={false}
             disabled={disabled || invalidPending}
@@ -546,7 +567,7 @@ export function NativeRisuToggleEditor({
           />
         </label>
         <div className="nt-raw-actions">
-          <small>{sourcePending ? '적용하지 않은 원문이 있어요.' : '한 줄에 한 항목'}</small>
+          <small>{sourcePending ? t('native.text_bd9c1a150a') : t('native.text_72d58851e7')}</small>
           <button
             type="button"
             disabled={
@@ -556,7 +577,7 @@ export function NativeRisuToggleEditor({
             }
             onClick={() => write(() => (section === 'toggles' ? raw : rawVariables), section)}
           >
-            원문 적용
+            {t('native.text_ba1543a09d')}
           </button>
         </div>
       </div>
@@ -566,8 +587,8 @@ export function NativeRisuToggleEditor({
       <div className="nt-variables">
         <div className="nt-heading">
           <div>
-            <h3>기본 변수</h3>
-            <p>새 채팅에서 사용할 변수의 기본값이에요.</p>
+            <h3>{t('native.text_0510e453e9')}</h3>
+            <p>{t('native.text_37c7f984ba')}</p>
           </div>
           <button
             type="button"
@@ -575,12 +596,12 @@ export function NativeRisuToggleEditor({
             onClick={() => write(() => addDefaultVariable(variables), 'variables')}
           >
             <AddIcon size={16} aria-hidden="true" />
-            변수 추가
+            {t('native.text_109713c45b')}
           </button>
         </div>
         <div className="nt-variable-heading">
-          <span>변수 키</span>
-          <span>문자열 값</span>
+          <span>{t('native.text_abf2a98954')}</span>
+          <span>{t('native.text_254142030a')}</span>
           <span />
         </div>
         {parseDefaultVariableLines(variables)
@@ -590,20 +611,20 @@ export function NativeRisuToggleEditor({
               <div className="nt-variable-row" key={line.index}>
                 {field(
                   `variable.${line.index}.key`,
-                  `변수 ${index + 1} 키`,
+                  t('native.variableKey', { number: index + 1 }),
                   line.key,
                   (key) => editDefaultVariable(variables, line.index, { key }),
                   'variables'
                 )}
                 {field(
                   `variable.${line.index}.value`,
-                  `${line.key} 기본값`,
+                  t('native.variableDefault', { key: line.key }),
                   line.value ?? '',
                   (next) => editDefaultVariable(variables, line.index, { value: next }),
                   'variables'
                 )}
                 <IconButton
-                  label={`${line.key} 변수 삭제`}
+                  label={t('native.variableDelete', { key: line.key })}
                   icon={DeleteIcon}
                   disabled={locked}
                   onClick={() =>
@@ -614,11 +635,11 @@ export function NativeRisuToggleEditor({
             ) : (
               <div className="nt-opaque-variable" key={line.index}>
                 <code>{line.raw}</code>
-                <small>원문 보존</small>
+                <small>{t('native.text_c8c2007be6')}</small>
               </div>
             )
           )}
-        {!variables && <p className="muted">변수를 추가하거나 원문을 붙여 넣으세요.</p>}
+        {!variables && <p className="muted">{t('native.text_f97e342c2b')}</p>}
       </div>
     );
   else
@@ -626,23 +647,23 @@ export function NativeRisuToggleEditor({
       <>
         <div className="nt-mobile-groups">
           <label>
-            그룹
+            {t('native.text_3228056915')}
             <select
-              aria-label="토글 그룹 선택"
+              aria-label={t('native.text_0bf2a9eced')}
               value={current.id}
               disabled={invalidPending}
               onChange={(event) => selectGroup(Number(event.target.value))}
             >
               {groups.map((group) => (
                 <option key={group.id} value={group.id}>
-                  {group.name}
+                  {group.id === -1 ? t('native.ungrouped') : group.name}
                 </option>
               ))}
             </select>
           </label>
           {mode === 'edit' && (
             <IconButton
-              label="그룹 추가"
+              label={t('native.text_bc71356fa2')}
               icon={AddIcon}
               disabled={locked}
               onClick={openGroupDialog}
@@ -650,9 +671,9 @@ export function NativeRisuToggleEditor({
           )}
         </div>
         <div className="nt-body">
-          <nav className="nt-groups" aria-label="토글 그룹">
+          <nav className="nt-groups" aria-label={t('native.text_7c0ed41220')}>
             <div className="nt-nav-heading">
-              <span>그룹</span>
+              <span>{t('native.text_3228056915')}</span>
               <span>{groups.length - 1}</span>
             </div>
             {groups.map((group) => (
@@ -664,7 +685,7 @@ export function NativeRisuToggleEditor({
                 onClick={() => selectGroup(group.id)}
               >
                 <FolderIcon size={16} aria-hidden="true" />
-                <span>{group.name}</span>
+                <span>{group.id === -1 ? t('native.ungrouped') : group.name}</span>
                 <small>{count(group)}</small>
               </button>
             ))}
@@ -676,23 +697,39 @@ export function NativeRisuToggleEditor({
                 onClick={openGroupDialog}
               >
                 <AddIcon size={16} aria-hidden="true" />
-                그룹 추가
+                {t('native.text_bc71356fa2')}
               </button>
             )}
           </nav>
           <div className="nt-main">
             <div className="nt-heading">
               <div>
-                <h3>{query && mode === 'edit' ? '검색 결과' : current.name}</h3>
+                <h3>
+                  {query && mode === 'edit'
+                    ? t('native.text_953eefe9dd')
+                    : current.id === -1
+                      ? t('native.ungrouped')
+                      : current.name}
+                </h3>
                 <p>
                   {query && mode === 'edit'
-                    ? '전체 그룹에서 찾아요.'
-                    : `${count(current)}개 설정 · ${current.items.filter((item) => item.definition?.type === 'divider').length}개 구분선`}
+                    ? t('native.text_03517ebd55')
+                    : t('native.groupCounts', {
+                        settings: count(current),
+                        dividers: current.items.filter(
+                          (item) => item.definition?.type === 'divider'
+                        ).length,
+                      })}
                 </p>
               </div>
               {!query && mode === 'edit' && (
                 <div className="nt-heading-actions">
-                  <ActionMenu label="항목 추가" icon={AddIcon} className="nt-add-item" viewport>
+                  <ActionMenu
+                    label={t('native.text_6d5ba8d015')}
+                    icon={AddIcon}
+                    className="nt-add-item"
+                    viewport
+                  >
                     {[...controlTypes, 'divider', 'caption' as const].map((type) => (
                       <button
                         type="button"
@@ -709,7 +746,7 @@ export function NativeRisuToggleEditor({
                     ))}
                   </ActionMenu>
                   {current.id !== -1 && (
-                    <ActionMenu label="그룹 메뉴" viewport>
+                    <ActionMenu label={t('native.text_1b6a9feaef')} viewport>
                       <button
                         type="button"
                         disabled={locked}
@@ -718,43 +755,46 @@ export function NativeRisuToggleEditor({
                           setGroupDialog('rename');
                         }}
                       >
-                        이름 변경
+                        {t('native.text_73e5a894f7')}
                       </button>
                       <button
                         type="button"
                         disabled={locked}
                         onClick={() => structural(() => moveToggleGroup(value, current.id, -1))}
                       >
-                        그룹 위로 이동
+                        {t('native.text_7e814bb8d6')}
                       </button>
                       <button
                         type="button"
                         disabled={locked}
                         onClick={() => structural(() => moveToggleGroup(value, current.id, 1))}
                       >
-                        그룹 아래로 이동
+                        {t('native.text_cec7cb8385')}
                       </button>
                       <button
                         type="button"
                         disabled={locked}
                         onClick={() => structural(() => ungroupToggleGroup(value, current.id), -1)}
                       >
-                        그룹 해제
+                        {t('native.text_71b4663593')}
                       </button>
                       <button
                         type="button"
                         disabled={locked}
                         onClick={() =>
                           setConfirmation({
-                            title: '그룹 삭제',
+                            title: () => t('native.text_a3900e2c94'),
                             destructive: true,
-                            description: `‘${current.name}’ 그룹과 안의 모든 항목을 삭제해요. 항목을 남기려면 그룹 해제를 사용하세요.`,
+                            description: () =>
+                              t('native.deleteGroupDescription', {
+                                name: current.id === -1 ? t('native.ungrouped') : current.name,
+                              }),
                             action: () =>
                               structural(() => deleteToggleGroup(value, current.id), -1),
                           })
                         }
                       >
-                        그룹 삭제
+                        {t('native.text_a3900e2c94')}
                       </button>
                     </ActionMenu>
                   )}
@@ -764,9 +804,9 @@ export function NativeRisuToggleEditor({
             {mode === 'preview' ? (
               <div className="nt-preview">
                 <div className="nt-preview-notice">
-                  <span>미리보기에서 바꾼 값은 저장되지 않아요.</span>
+                  <span>{t('native.text_6120078673')}</span>
                   <button type="button" className="ghost" onClick={() => setPreview({})}>
-                    초기화
+                    {t('native.text_ff75b4ff24')}
                   </button>
                 </div>
                 <PromptControlFields
@@ -792,7 +832,7 @@ export function NativeRisuToggleEditor({
             ) : (
               (query.trim() ? groups : [current]).map((group) => (
                 <div key={group.id}>
-                  {query && <h4>{group.name}</h4>}
+                  {query && <h4>{group.id === -1 ? t('native.ungrouped') : group.name}</h4>}
                   {group.items
                     .filter(
                       (item) =>
@@ -814,23 +854,23 @@ export function NativeRisuToggleEditor({
               ))
             )}
             {!current.items.length && !query && mode === 'edit' && (
-              <p className="muted nt-empty">항목을 추가해 토글을 구성하세요.</p>
+              <p className="muted nt-empty">{t('native.text_0e9ffc660e')}</p>
             )}
           </div>
         </div>
       </>
     );
   return (
-    <section className="native-toggle-editor" aria-label="토글 정의 편집기">
+    <section className="native-toggle-editor" aria-label={t('native.text_13b410eba6')}>
       <div className="nt-toolbar">
-        <div className="nt-sections" aria-label="편집 문서">
+        <div className="nt-sections" aria-label={t('native.text_c94a66e243')}>
           <button
             type="button"
             aria-pressed={section === 'toggles'}
             disabled={invalidPending}
             onClick={() => setSection('toggles')}
           >
-            토글 구성
+            {t('native.text_714249bbbd')}
           </button>
           <button
             type="button"
@@ -841,22 +881,22 @@ export function NativeRisuToggleEditor({
               if (mode === 'preview') setMode('edit');
             }}
           >
-            기본 변수
+            {t('native.text_0510e453e9')}
           </button>
         </div>
         {mode === 'edit' && section === 'toggles' && (
           <label className="nt-search">
             <SearchIcon size={16} aria-hidden="true" />
             <input
-              aria-label="이름, 키, 설명 검색"
-              placeholder="이름, 키, 설명 검색"
+              aria-label={t('native.text_81ca995da3')}
+              placeholder={t('native.text_81ca995da3')}
               value={query}
               disabled={invalidPending}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
         )}
-        <div className="nt-modes" aria-label="편집 보기">
+        <div className="nt-modes" aria-label={t('native.text_3cae8d67d0')}>
           {(['edit', 'preview', 'raw'] as const)
             .filter((item) => item !== 'preview' || section === 'toggles')
             .map((item) => {
@@ -874,7 +914,11 @@ export function NativeRisuToggleEditor({
                   }}
                 >
                   <Icon size={15} aria-hidden="true" />
-                  {item === 'edit' ? '편집' : item === 'preview' ? '미리보기' : '원문'}
+                  {item === 'edit'
+                    ? t('native.text_d482e14b40')
+                    : item === 'preview'
+                      ? t('native.text_2f1c9d7bd8')
+                      : t('native.text_8ba13a8495')}
                 </button>
               );
             })}
@@ -882,7 +926,9 @@ export function NativeRisuToggleEditor({
       </div>
       {(error || invalidPending) && (
         <div className="nt-error">
-          <p role="alert">{error || '아직 적용하지 못한 입력이 있어요. 내용을 확인해 주세요.'}</p>
+          <p role="alert">
+            {(error ? translateMessage(error) : '') || t('native.text_c701c87db3')}
+          </p>
           {invalidPending && (
             <button
               type="button"
@@ -891,29 +937,32 @@ export function NativeRisuToggleEditor({
                 setError('');
               }}
             >
-              잘못된 입력 되돌리기
+              {t('native.text_a69988177e')}
             </button>
           )}
         </div>
       )}
       {sourcePending && mode !== 'raw' && (
-        <p className="nt-notice">적용하지 않은 원문이 있어요. 원문 보기에서 적용해 주세요.</p>
+        <p className="nt-notice">{t('native.text_3a377aba0a')}</p>
       )}
       {content}
       <footer className="nt-footer">
         <span>
-          {groups.length - 1}개 그룹 · {groups.reduce((total, group) => total + count(group), 0)}개
-          설정{unknown > 0 ? ` · 원문 항목 ${unknown}개 보존` : ''}
+          {t('native.toggleCounts', {
+            groups: groups.length - 1,
+            settings: groups.reduce((total, group) => total + count(group), 0),
+            unknown,
+          })}
         </span>
         <div>
           <IconButton
-            label="편집 되돌리기"
+            label={t('native.text_d91f83a968')}
             icon={UndoIcon}
             disabled={locked || !history.length}
             onClick={() => restore(false)}
           />
           <IconButton
-            label="편집 다시 적용"
+            label={t('native.text_e027b3d047')}
             icon={ForwardIcon}
             disabled={locked || !future.length}
             onClick={() => restore(true)}
@@ -922,20 +971,20 @@ export function NativeRisuToggleEditor({
       </footer>
       {doc.warnings.map((warning) => (
         <p key={warning} className="nt-notice">
-          {warning}
+          {warningMessage(warning)}
         </p>
       ))}
       <Dialog
         open={confirmation !== null}
-        title={confirmation?.title ?? '변경 확인'}
+        title={confirmation?.title() ?? t('native.text_8e2a0c41c2')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => setConfirmation(null)}
       >
-        <p>{confirmation?.description}</p>
+        <p>{confirmation?.description()}</p>
         <div className="form-actions">
           <button type="button" onClick={() => setConfirmation(null)}>
-            취소
+            {t('native.text_19b2d19bc1')}
           </button>
           <button
             type="button"
@@ -945,13 +994,13 @@ export function NativeRisuToggleEditor({
               setConfirmation(null);
             }}
           >
-            {confirmation?.title ?? '변경 적용'}
+            {confirmation?.title() ?? t('native.text_3085b34679')}
           </button>
         </div>
       </Dialog>
       <Dialog
         open={groupDialog !== null}
-        title={groupDialog === 'add' ? '그룹 추가' : '그룹 이름 변경'}
+        title={groupDialog === 'add' ? t('native.text_bc71356fa2') : t('native.text_0ea7d6e97e')}
         onClose={() => setGroupDialog(null)}
       >
         <form
@@ -981,23 +1030,23 @@ export function NativeRisuToggleEditor({
           }}
         >
           <label>
-            그룹 이름
+            {t('native.text_ec5476de84')}
             <input
-              aria-label="그룹 이름"
+              aria-label={t('native.text_ec5476de84')}
               value={groupName}
               onChange={(event) => setGroupName(event.target.value)}
             />
           </label>
           <div className="form-actions">
             <button type="button" onClick={() => setGroupDialog(null)}>
-              취소
+              {t('native.text_19b2d19bc1')}
             </button>
             <button
               type="submit"
               className="primary"
               disabled={!groupName.trim() || /[=\r\n]/.test(groupName)}
             >
-              적용
+              {t('native.text_e01dd02f52')}
             </button>
           </div>
         </form>

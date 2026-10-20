@@ -1,8 +1,12 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { api, ApiError } from '../web/api.js';
 import { mainJudgmentError } from '../web/main-judgment-error.js';
+import { setLocale, translateMessage } from '../web/i18n.js';
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  setLocale('ko');
+});
 
 async function rejected(status: number, error: unknown, method = 'POST') {
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -87,4 +91,40 @@ test('generic errors keep provider/internal text hidden and retain deletion conf
   });
   const deletion = '진행 중인 도우미 작업을 취소하거나 완료한 뒤 삭제해 주세요.';
   expect(await rejected(409, deletion, 'DELETE')).toMatchObject({ message: deletion });
+});
+
+test.each(['en', 'ja', 'zh'] as const)(
+  'API errors keep Korean message and stable codes in %s UI',
+  async (locale) => {
+    setLocale(locale);
+    const result = await rejected(409, 'ILLUSTRATION_ACTIVE');
+    expect(result.code).toBe('ILLUSTRATION_ACTIVE');
+    expect(result.message).toContain('아직 생성 중');
+    expect(result.displayMessage).not.toContain('아직 생성 중');
+    expect(translateMessage(result.message)).toBe(result.displayMessage);
+    const required = await rejected(409, 'MODEL_REQUIRED:translation-refusal');
+    expect(required.code).toBe('MODEL_REQUIRED:translation-refusal');
+    expect(required.message).toBe('전역 모델 설정에서 번역 거절 판정 모델을 선택해 주세요.');
+    expect(required.displayMessage).not.toContain('전역 모델 설정');
+  }
+);
+
+test('retained manuscript translation errors retranslate scene labels after locale changes', async () => {
+  setLocale('ko');
+  const result = await rejected(409, 'MANUSCRIPT_TRANSLATION_MISSING:0,2:3');
+  const retained = result.message;
+  expect(result.code).toBe('MANUSCRIPT_TRANSLATION_MISSING');
+  expect(retained).toBe(
+    '저장된 유효 번역이 없는 장면: 첫 메시지, 장면 2 외 1개. 번역을 완료하거나 범위를 바꿔 주세요.'
+  );
+  setLocale('en');
+  expect(translateMessage(retained)).toContain('First message, Scene 2 and 1 more');
+  setLocale('ko');
+  expect(translateMessage(retained)).toBe(retained);
+  setLocale('ja');
+  expect(translateMessage(retained)).toContain('最初のメッセージ, シーン2、ほか1件');
+  setLocale('zh');
+  expect(translateMessage(retained)).toContain('首条消息, 场景2，另有1个');
+  expect(result.message).toBe(retained);
+  expect(result.code).toBe('MANUSCRIPT_TRANSLATION_MISSING');
 });

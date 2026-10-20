@@ -1,29 +1,39 @@
+import { t, formatDate, formatNumber, getLocale } from './i18n.js';
 import type { UsageReport, UsageTotals } from '../core/usage-report.js';
 
-export const usageNumber = (value: number) => value.toLocaleString('ko-KR');
+export const usageNumber = (value: number) => formatNumber(value);
+// Korean keeps the established K/M token notation; other locales use their own compact units.
 export const usageCompact = (value: number) =>
   value < 10_000
     ? usageNumber(value)
-    : new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 }).format(value);
+    : getLocale() === 'ko'
+      ? new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 2 }).format(value)
+      : formatNumber(value, { notation: 'compact', maximumFractionDigits: 2 });
 export const knownCost = (item: UsageTotals) =>
   item.reportedUsd + item.estimatedUsd + item.partialUsd;
 export const usageUsd = (value: number) =>
   value > 0 && value < 0.01
     ? '<US$0.01'
-    : new Intl.NumberFormat('en-US', {
+    : formatNumber(value, {
         style: 'currency',
         currency: 'USD',
         currencyDisplay: 'code',
         maximumFractionDigits: 2,
       })
-        .format(value)
         .replace('USD', 'US$')
         .replace(/\s/u, '');
 export const usageCost = (item: UsageTotals) =>
-  item.calls > 0 && item.calls === item.unknownCostCalls ? '미확인' : usageUsd(knownCost(item));
+  item.calls > 0 && item.calls === item.unknownCostCalls
+    ? t('visuals.m165')
+    : usageUsd(knownCost(item));
 export const exactCost = (item: UsageTotals) =>
-  `프로바이더 보고 US$${item.reportedUsd} · 추정 US$${item.estimatedUsd} · 부분 추정 US$${item.partialUsd}`;
-export const shortDay = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8, 10))}`;
+  t('visuals.m267', {
+    v0: `US$${formatNumber(item.reportedUsd, { maximumFractionDigits: 20 })}`,
+    v1: `US$${formatNumber(item.estimatedUsd, { maximumFractionDigits: 20 })}`,
+    v2: `US$${formatNumber(item.partialUsd, { maximumFractionDigits: 20 })}`,
+  });
+export const shortDay = (day: string) =>
+  formatDate(new Date(`${day}T00:00:00Z`), { timeZone: 'UTC', month: 'numeric', day: 'numeric' });
 const DAY = 86_400_000;
 export const kstToday = () => new Date(Date.now() + 9 * 3_600_000).toISOString().slice(0, 10);
 export function usagePeriod(kind: 'today' | 'week' | 'month' | 'calendar') {
@@ -88,5 +98,15 @@ export function usageBuckets(report: Pick<UsageReport, 'from' | 'to' | 'days'>):
 }
 export function bucketLabel(item: UsageBucket) {
   const date = item.from === item.to ? item.from : `${item.from} – ${item.to}`;
-  return `${date} · ${item.calls ? (item.calls === item.unknown ? '비용 미확인' : usageUsd(item.amount)) : '기록 없음'}${item.calls ? ` · ${usageNumber(item.calls)}회` : ''}${item.unknown ? ` · 미확인 ${item.unknown}회` : ''}${item.partial ? ` · 부분 추정 ${item.partial}회` : ''}`;
+  return t('visuals.bucket', {
+    date,
+    cost: item.calls
+      ? item.calls === item.unknown
+        ? t('visuals.m268')
+        : usageUsd(item.amount)
+      : t('visuals.m269'),
+    calls: item.calls,
+    unknown: item.unknown,
+    partial: item.partial,
+  });
 }

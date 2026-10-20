@@ -1,3 +1,4 @@
+import { translateMessage, useI18n } from './i18n.js';
 import type { ReactNode } from 'react';
 import { Info, TriangleAlert } from 'lucide-react';
 import './notices.css';
@@ -15,12 +16,13 @@ export function NoticeBanner({
   tone?: 'info' | 'error';
   className?: string;
 }) {
+  useI18n();
   const Icon = tone === 'error' ? TriangleAlert : Info;
   return (
     <aside
       className={`notice-banner notice-${tone} ${className}`}
       role={tone === 'error' ? 'alert' : 'status'}
-      aria-label={label}
+      aria-label={label ? translateMessage(label) : label}
     >
       <Icon size={18} className="notice-banner-icon" aria-hidden="true" />
       <div className="notice-banner-message">{children}</div>

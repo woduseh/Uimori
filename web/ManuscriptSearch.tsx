@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ReaderTarget } from '../core/reader-target.js';
 import type {
@@ -13,11 +14,11 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import './manuscript-search.css';
 
-const labels: Record<SearchKind, string> = {
-  original: '원문',
-  translation: '번역',
-  request: '요청',
-};
+const searchLabels = (): Record<SearchKind, string> => ({
+  original: t('transfer.m195'),
+  translation: t('transfer.m209'),
+  request: t('transfer.m210'),
+});
 export function ManuscriptSearchPanel({
   initialScope = 'workspace',
   chatId,
@@ -25,7 +26,7 @@ export function ManuscriptSearchPanel({
   chats = [],
   library,
   folders = [],
-  label = '원고 검색',
+  label = t('transfer.m211'),
   query: suppliedQuery,
   queryComposing = false,
   hideQueryInput = false,
@@ -48,6 +49,8 @@ export function ManuscriptSearchPanel({
   onNavigate: (target: ReaderTarget) => void;
   onChat?: (id: string) => void;
 }) {
+  useI18n();
+  const labels = searchLabels();
   const [localQuery, setQuery] = useState('');
   const query = suppliedQuery ?? localQuery;
   const [titleLimit, setTitleLimit] = useState(30);
@@ -120,7 +123,7 @@ export function ManuscriptSearchPanel({
           .includes(needle))
   );
   return (
-    <section className="manuscript-search" aria-label="원고와 채팅 찾기">
+    <section className="manuscript-search" aria-label={t('transfer.m212')}>
       <form
         id={formId}
         onSubmit={(event) => {
@@ -135,7 +138,7 @@ export function ManuscriptSearchPanel({
               <input
                 type="search"
                 aria-label={label}
-                placeholder="제목·본문·번역·요청으로 찾기"
+                placeholder={t('transfer.m213')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -159,23 +162,23 @@ export function ManuscriptSearchPanel({
             </span>
           )}
           <button type="submit" disabled={composing || busy || !query.trim() || !kinds.length}>
-            검색
+            {t('transfer.m214')}
           </button>
         </div>
         <div className="manuscript-search-filters">
           <label className="manuscript-search-scope">
-            <span className="manuscript-search-filter-label">검색 범위</span>
+            <span className="manuscript-search-filter-label">{t('transfer.m215')}</span>
             <select
               value={scope}
               onChange={(event) => setScope(event.target.value as ManuscriptSearchQuery['scope'])}
             >
-              <option value="workspace">전체 작업실</option>
-              {botId && <option value="bot">이 봇</option>}
-              {chatId && <option value="chat">현재 채팅</option>}
+              <option value="workspace">{t('transfer.m216')}</option>
+              {botId && <option value="bot">{t('transfer.m217')}</option>}
+              {chatId && <option value="chat">{t('transfer.m218')}</option>}
             </select>
           </label>
           <fieldset className="manuscript-search-kinds">
-            <legend>검색 대상</legend>
+            <legend>{t('transfer.m219')}</legend>
             <div className="manuscript-search-kind-options">
               {(['original', 'translation', 'request'] as const).map((kind) => (
                 <button
@@ -200,11 +203,11 @@ export function ManuscriptSearchPanel({
       {onChat && !!titleMatches.length && (
         <details className="manuscript-search-titles" data-searching={!!needle} open>
           <summary>
-            {needle ? '제목 일치' : '채팅 제목'} {titleMatches.length}개
+            {t('transfer.titleCount', { matching: !!needle, count: titleMatches.length })}
           </summary>
           <nav
             className="manuscript-search-title-results"
-            aria-label={needle ? '제목 일치 결과' : '채팅 제목 목록'}
+            aria-label={needle ? t('transfer.m222') : t('transfer.m223')}
           >
             {titleMatches.slice(0, titleLimit).map((chat) => (
               <button
@@ -217,7 +220,8 @@ export function ManuscriptSearchPanel({
                 <strong>{chat.title}</strong>
                 <small>
                   {scope === 'bot'
-                    ? (folders.find((item) => item.id === chat.folderId)?.title ?? '기본 위치')
+                    ? (folders.find((item) => item.id === chat.folderId)?.title ??
+                      t('transfer.m224'))
                     : library?.contents.find((item) => item.id === chat.botId)?.title}
                 </small>
               </button>
@@ -229,41 +233,40 @@ export function ManuscriptSearchPanel({
               type="button"
               onClick={() => setTitleLimit((old) => old + (needle ? 5 : 30))}
             >
-              채팅 제목 더 보기 · {titleMatches.length - titleLimit}개 남음
+              {t('transfer.moreTitles', { count: titleMatches.length - titleLimit })}
             </button>
           )}
         </details>
       )}
       {!kinds.length && (
         <p className="muted" role="status">
-          검색 대상을 하나 이상 선택해 주세요.
+          {t('transfer.m227')}
         </p>
       )}
-      {!needle && kinds.length > 0 && (
-        <p className="muted">저장된 현재 원고를 찾아요. 따옴표로 감싸면 연속 문구를 찾아요.</p>
-      )}
+      {!needle && kinds.length > 0 && <p className="muted">{t('transfer.m228')}</p>}
       {needle && kinds.length > 0 && !result && !busy && !error && (
-        <p className="muted">짧은 이름도 검색할 수 있어요. Enter 또는 검색을 눌러 주세요.</p>
+        <p className="muted">{t('transfer.m229')}</p>
       )}
-      {busy && <LoadingState presentation="inline" label="원고를 찾고 있어요…" />}
+      {busy && <LoadingState presentation="inline" label={t('transfer.m230')} />}
       {error && (
         <NoticeBanner
           tone="error"
           actions={
             <button type="button" className="secondary" onClick={() => void run()}>
-              다시 검색
+              {t('transfer.m231')}
             </button>
           }
         >
-          {error}
+          {translateMessage(error)}
         </NoticeBanner>
       )}
-      {result && <h3 className="manuscript-search-result-heading">본문 검색 결과</h3>}
+      {result && <h3 className="manuscript-search-result-heading">{t('transfer.m232')}</h3>}
       <div className="manuscript-search-results">
         {result?.items.map((item) => (
           <article key={`${item.target.chatId}:${item.target.sourceId}`}>
             <h4>
-              {item.title} · {item.sceneNumber ? `장면 ${item.sceneNumber}` : '첫 메시지'}
+              {item.title} ·{' '}
+              {item.sceneNumber ? t('transfer.d011', { v0: item.sceneNumber }) : t('transfer.m029')}
             </h4>
             {item.matches.map((match) => (
               <div key={match.kind}>
@@ -288,7 +291,7 @@ export function ManuscriptSearchPanel({
                     })
                   }
                 >
-                  {labels[match.kind]} 장면 열기
+                  {t('transfer.openScene', { kind: match.kind })}
                 </button>
               </div>
             ))}
@@ -296,16 +299,14 @@ export function ManuscriptSearchPanel({
         ))}
       </div>
       {result && !result.items.length && !result.nextCursor && (
-        <p role="status">일치하는 원고가 없어요.</p>
+        <p role="status">{t('transfer.m234')}</p>
       )}
       {result?.nextCursor && (
         <button type="button" disabled={busy} onClick={() => void run(result.nextCursor)}>
-          계속 찾기 · 남은 원고 검색
+          {t('transfer.m235')}
         </button>
       )}
-      {result?.coverage === 'building' && (
-        <p className="muted">색인을 준비 중이에요. 최신 저장 본문을 직접 확인한 결과예요.</p>
-      )}
+      {result?.coverage === 'building' && <p className="muted">{t('transfer.m236')}</p>}
     </section>
   );
 }

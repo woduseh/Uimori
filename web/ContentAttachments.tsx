@@ -1,3 +1,11 @@
+import {
+  t,
+  useI18n,
+  translateMessage,
+  formatNumber,
+  message as uiMessage,
+  messageRef,
+} from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
@@ -29,6 +37,7 @@ export function ContentAttachments({
   onError: (message: string) => void;
   onPendingChange?: (pending: boolean) => void;
 }) {
+  useI18n();
   const attachments = profile.packageAttachments ?? [],
     viewKey = requestKey(profile.chatId, attachments);
   const [resolved, setResolved] = useState<{ key: string; value: ResolvedPackages } | null>(null),
@@ -63,7 +72,9 @@ export function ContentAttachments({
       })
       .catch((caught) => {
         if (version.current === request && latest.current.viewKey === viewKey) {
-          const message = `필수 모듈을 확인할 수 없어요. 자료가 누락되었거나 의존 관계가 충돌하는지 확인해 주세요. (${(caught as Error).message})`;
+          const message = uiMessage('library.couldNotVerifyRequiredModulesCheckFor', {
+            v0: messageRef((caught as Error).message),
+          });
           setLoadError(message);
           latest.current.onError(message);
         }
@@ -102,7 +113,9 @@ export function ContentAttachments({
       });
     } catch (caught) {
       if (version.current === request && latest.current.viewKey === initialKey) {
-        const message = `자료 연결을 바꾸지 못했어요. (${(caught as Error).message}) 모듈 연결 문제라면 필요한 모듈이 빠졌거나 모듈끼리 서로를 다시 연결하는지 확인해 주세요.`;
+        const message = t('library.couldNotUpdateAttachmentsCheckForMissing', {
+          v0: messageRef((caught as Error).message),
+        });
         setLoadError(message);
         latest.current.onError(message);
       }
@@ -124,20 +137,23 @@ export function ContentAttachments({
   const shown = current?.attachments ?? attachments,
     required = new Set(current?.required.map(keyOf) ?? []);
   return (
-    <section className="package-attachments" aria-label="장착 패키지">
+    <section className="package-attachments" aria-label={t('library.attachedPackages')}>
       {!!profile.optionAdjustments?.length && (
         <p role="status">
-          현재 옵션과 맞지 않는 이전 선택값은 기본값으로 조정했어요.{' '}
+          {t('library.previousSelectionsThatNoLongerMatchAvailable')}{' '}
           {profile.optionAdjustments.join(' · ')}
         </p>
       )}
       {busy && !loadError && (
-        <LoadingState presentation="inline" label="패키지와 필수 모듈을 불러오는 중이에요…" />
+        <LoadingState
+          presentation="inline"
+          label={t('library.loadingPackagesAndRequiredModules')}
+        />
       )}
       {loadError && (
         <div>
           <p className="error" role="alert">
-            {loadError}
+            {translateMessage(loadError)}
           </p>
           <button
             type="button"
@@ -148,7 +164,7 @@ export function ContentAttachments({
               setReload((value) => value + 1);
             }}
           >
-            패키지 연결 다시 확인
+            {t('library.checkPackageAttachmentsAgain')}
           </button>
         </div>
       )}
@@ -156,10 +172,10 @@ export function ContentAttachments({
         <ContentPicker
           library={library}
           role="persona"
-          label="페르소나"
+          label={t('library.persona')}
           value={persona ? refValue(persona) : ''}
           allowNone
-          noneLabel="선택 안 함"
+          noneLabel={t('library.noSelection')}
           disabled={busy}
           onChange={(reference) => {
             const selectedPersona = library.contents.find((item) => refValue(item) === reference);
@@ -183,7 +199,7 @@ export function ContentAttachments({
         const pkg = current?.packages[index],
           scope = keyOf(ref),
           automatic = required.has(scope),
-          title = pkg?.title ?? '연결한 패키지',
+          title = pkg?.title ?? t('library.attachedPackage'),
           fixedBot = ref.role === 'bot',
           Attachment = 'article';
         return (
@@ -191,7 +207,9 @@ export function ContentAttachments({
             className={`package-attachment chat-composition-row${fixedBot ? ' package-attachment-fixed-bot' : ''}`}
             key={scope}
           >
-            {fixedBot && <small className="chat-composition-role">소속 봇 · 고정</small>}
+            {fixedBot && (
+              <small className="chat-composition-role">{t('library.primaryBotFixed')}</small>
+            )}
             <header>
               <ContentAvatar
                 content={
@@ -215,10 +233,10 @@ export function ContentAttachments({
                 {!fixedBot && (
                   <small>
                     {automatic
-                      ? '필수 모듈 · 자동 연결'
+                      ? t('library.requiredModuleAttachedAutomatically')
                       : ref.role === 'persona'
-                        ? '내 페르소나'
-                        : '추가 모듈'}
+                        ? t('library.myPersona')
+                        : t('library.additionalModule')}
                   </small>
                 )}
                 <h3>{title}</h3>
@@ -232,24 +250,23 @@ export function ContentAttachments({
                     void changeAttachments(attachments.filter((item) => keyOf(item) !== scope))
                   }
                 >
-                  해제
+                  {t('library.detach')}
                 </button>
               )}
             </header>
-            <small>로어 {pkg?.lore.length ?? '…'}개</small>
-            {automatic && (
-              <p className="muted">
-                장착한 자료가 요구하는 모듈이에요. 연결한 자료를 해제하거나 해당 자료의 모듈 참조를
-                수정하면 제외할 수 있어요.
-              </p>
-            )}
+            <small>
+              {t('library.loreCount', { count: pkg ? formatNumber(pkg.lore.length) : '…' })}
+            </small>
+            {automatic && <p className="muted">{t('library.thisModuleIsRequiredByAnAttached')}</p>}
             {pkg && (
               <details>
-                <summary>사용할 로어와 지침 확인</summary>
+                <summary>{t('library.reviewLoreAndInstructions')}</summary>
                 {pkg.lore.map((lore) => (
                   <p key={lore.id}>
                     <strong>{lore.title}</strong> ·{' '}
-                    {lore.loading === 'pinned' ? '항상 포함' : '필요할 때 읽기'}
+                    {lore.loading === 'pinned'
+                      ? t('library.alwaysInclude')
+                      : t('library.readWhenNeeded')}
                   </p>
                 ))}
               </details>
@@ -258,26 +275,23 @@ export function ContentAttachments({
         );
       })}
       <details className="chat-composition-add">
-        <summary>함께 사용하는 모듈 · 자료 추가</summary>
+        <summary>{t('library.addSharedModulesOrResources')}</summary>
         <fieldset className="package-entry" disabled={busy}>
-          <legend>자료 추가</legend>
+          <legend>{t('library.addResource')}</legend>
           <ContentPicker
             library={{
               ...library,
               contents: library.contents.filter((content) => content.package || content.hasPackage),
             }}
             role="module"
-            label="추가할 패키지"
+            label={t('library.packageToAdd')}
             value=""
             onChange={add}
             disabled={busy}
             excludeIds={attachments.filter((ref) => ref.role === 'module').map((ref) => ref.id)}
           />
 
-          <small>
-            같은 자료를 다른 역할로 사용할 수 있어요. 요구하는 모듈도 함께 연결하며 공유 모듈은 한
-            번만 포함해요.
-          </small>
+          <small>{t('library.resourcesCanServeDifferentRolesRequiredModules')}</small>
         </fieldset>
       </details>
     </section>

@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -15,12 +16,12 @@ type ContextJob = Omit<StoredContextJob, 'snapshot'>;
 type SummaryDraft = { text: string; revision: number; headRevision: string | null };
 const id = encodeURIComponent;
 const pending = (job: ContextJob) => job.status === 'queued' || job.status === 'running';
-const origins = {
-  automatic: '자동 압축',
-  manual: '수동 압축',
-  edit: '직접 편집',
-  model: '모델 작성',
-};
+const origins = () => ({
+  automatic: t('settings.m269'),
+  manual: t('settings.m270'),
+  edit: t('settings.m271'),
+  model: t('settings.m272'),
+});
 
 /** Mounted across scope refreshes so a new source or event never discards a local editor. */
 export function ContextPanel({
@@ -50,6 +51,7 @@ export function ContextPanel({
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
+  useI18n();
   const [detail, setDetail] = useState<ContextDetail | null>(null);
   const [draft, setDraft] = useState<SummaryDraft | null>(null);
   const [notesDirty, setNotesDirty] = useState(false);
@@ -95,7 +97,7 @@ export function ContextPanel({
     onDirtyChange(draft !== null || notesDirty || busy);
   }, [draft, notesDirty, busy, onDirtyChange]);
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : '컨텍스트를 불러오지 못했어요.';
+    const text = caught instanceof Error ? caught.message : t('settings.m273');
     setError(text);
     onError(text);
   }
@@ -198,7 +200,7 @@ export function ContextPanel({
         summary: draft.text,
       }),
       'PUT',
-      '요약을 저장했어요. 이후 요청부터 반영해요.',
+      t('settings.m274'),
       true
     );
   }
@@ -210,11 +212,11 @@ export function ContextPanel({
   return (
     <section
       className={`context-panel${mode === 'compact' ? ' context-panel-compact' : ''}`}
-      aria-label="컨텍스트 관리"
+      aria-label={t('settings.m275')}
       data-testid="context-panel"
     >
       <div className="context-heading">
-        <h4>컨텍스트 요약</h4>
+        <h4>{t('settings.m276')}</h4>
         <button
           type="button"
           className="secondary"
@@ -224,18 +226,18 @@ export function ContextPanel({
             void refreshAll();
           }}
         >
-          새로 확인
+          {t('settings.m277')}
         </button>
       </div>
       <div className="context-content">
-        {detail && error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        {detail && error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         <TransientNotice message={message} />
         {!detail ? (
           <LoadingState
             presentation="placeholder"
             loading={!error}
-            error={error}
-            label="컨텍스트를 불러오는 중이에요…"
+            error={translateMessage(error)}
+            label={t('settings.m278')}
             onRetry={() => {
               setError('');
               void refreshAll();
@@ -247,45 +249,39 @@ export function ContextPanel({
               <div className="context-summary">
                 {!detail.usable && (
                   <NoticeBanner>
-                    이전 요약을 보존하고 있어요.{' '}
-                    {detail.invalidReason ?? '현재 요청에는 원문을 사용해요.'}
+                    {t('settings.flow22', { v0: detail.invalidReason ?? t('settings.m280') })}
                   </NoticeBanner>
                 )}
                 <small>
-                  {origins[detail.checkpoint!.origin]} · 요약한 장면{' '}
-                  {detail.checkpoint!.plan.compacted.length}개
+                  {t('settings.flow23', {
+                    v0: origins()[detail.checkpoint!.origin],
+                    v1: detail.checkpoint!.plan.compacted.length,
+                  })}
                 </small>
                 <p className="context-text" data-testid="context-summary-text">
                   {summary}
                 </p>
               </div>
             ) : (
-              <p className="muted">아직 저장된 요약이 없어요. 원문을 그대로 사용해요.</p>
+              <p className="muted">{t('settings.m282')}</p>
             )}
-            {!current && (
-              <LoadingState
-                presentation="inline"
-                label="대상 장면의 최신 컨텍스트를 확인하고 있어요. 작성 중인 초안은 유지해요."
-              />
-            )}
+            {!current && <LoadingState presentation="inline" label={t('settings.m283')} />}
             <details className="context-priorities">
-              <summary>이번 압축에서 우선할 내용 · 선택</summary>
+              <summary>{t('settings.m284')}</summary>
               <label>
-                압축 우선순위
+                {t('settings.m285')}
                 <textarea
                   rows={3}
                   maxLength={4000}
                   value={priorities}
                   disabled={busy || Boolean(working)}
-                  placeholder="예: 인물별로 알고 있는 사실과 아직 풀리지 않은 약속을 자세히 남겨 주세요."
+                  placeholder={t('settings.m286')}
                   onChange={(event) => setPriorities(event.target.value)}
                 />
               </label>
-              <small className="muted">
-                이번 압축에만 사용해요. 새 설정이나 사건을 추가하는 메모는 아니에요.
-              </small>
+              <small className="muted">{t('settings.m287')}</small>
             </details>
-            <p className="muted">정리할 구간이 있으면 컨텍스트 모델을 호출해요.</p>
+            <p className="muted">{t('settings.m288')}</p>
             <div className="form-actions">
               {mode === 'full' && !draft && (
                 <button
@@ -298,7 +294,7 @@ export function ContextPanel({
                     setMessage('');
                   }}
                 >
-                  {summary ? '요약 편집' : '요약 작성'}
+                  {summary ? t('settings.m289') : t('settings.m290')}
                 </button>
               )}
               {!working ? (
@@ -307,15 +303,10 @@ export function ContextPanel({
                   className="secondary"
                   disabled={busy || Boolean(draft) || notesDirty || !current}
                   onClick={() =>
-                    void write(
-                      `${base}/compact`,
-                      keyed(command()),
-                      'POST',
-                      '컨텍스트 압축을 요청했어요.'
-                    )
+                    void write(`${base}/compact`, keyed(command()), 'POST', t('settings.m291'))
                   }
                 >
-                  지금 압축
+                  {t('settings.m292')}
                 </button>
               ) : (
                 <button
@@ -327,11 +318,11 @@ export function ContextPanel({
                       `${base}/jobs/${id(working.id)}/cancel`,
                       {},
                       'POST',
-                      '압축 취소를 요청했어요.'
+                      t('settings.m293')
                     )
                   }
                 >
-                  압축 취소
+                  {t('settings.m294')}
                 </button>
               )}
             </div>
@@ -339,23 +330,25 @@ export function ContextPanel({
               <LoadingState
                 presentation="inline"
                 key={working.id}
-                label={`${working.status === 'queued' ? '컨텍스트 압축을 기다리고 있어요.' : '컨텍스트를 정리하고 있어요.'} 이 화면을 닫아도 작업은 계속돼요.`}
+                label={t('settings.m295', {
+                  v0: working.status === 'queued' ? t('settings.m296') : t('settings.m297'),
+                })}
               />
             ) : (
               latest && (
                 <div className="context-job-result" role="status">
                   {latest.noop
-                    ? '정리할 구간이 없어 원문과 요약을 유지했어요.'
+                    ? t('settings.m298')
                     : latest.status === 'completed'
-                      ? '컨텍스트 압축을 마쳤어요.'
+                      ? t('settings.m299')
                       : latest.status === 'cancelled'
-                        ? '압축을 취소했어요. 마지막 유효한 요약을 유지해요.'
+                        ? t('settings.m300')
                         : latest.status === 'interrupted'
-                          ? '작업이 중단됐어요. 자동으로 다시 실행하지 않아요.'
-                          : '컨텍스트를 정리하지 못했어요. 기존 요약을 유지해요.'}
+                          ? t('settings.m301')
+                          : t('settings.m302')}
                   {latest.error && (
                     <details>
-                      <summary>오류 상세</summary>
+                      <summary>{t('settings.m303')}</summary>
                       <p>{latest.error}</p>
                     </details>
                   )}
@@ -383,16 +376,15 @@ export function ContextPanel({
                           setError('');
                         }}
                       >
-                        최신 요약을 확인했어요 · 내 초안 유지
+                        {t('settings.m304')}
                       </button>
                     }
                   >
-                    저장된 요약이나 대상 장면이 바뀌었어요. 위의 최신 요약과 입력한 내용을 비교해
-                    주세요.
+                    {t('settings.m305')}
                   </NoticeBanner>
                 )}
                 <label>
-                  편집할 컨텍스트 요약
+                  {t('settings.m306')}
                   <textarea
                     rows={8}
                     required
@@ -408,7 +400,7 @@ export function ContextPanel({
                     disabled={busy || conflict || !current || !draft.text.trim()}
                   >
                     <CheckIcon size={18} aria-hidden="true" />
-                    요약 저장{' '}
+                    {t('settings.m307')}{' '}
                   </button>
                   <button
                     type="button"
@@ -420,7 +412,7 @@ export function ContextPanel({
                     }}
                   >
                     <CloseIcon size={18} aria-hidden="true" />
-                    편집 취소
+                    {t('settings.m308')}
                   </button>
                 </div>
               </form>
@@ -428,10 +420,10 @@ export function ContextPanel({
           </>
         )}
         <details className="context-help">
-          <summary>컨텍스트 관리 도움말</summary>
-          <p className="muted">사용할 수 있는 요약과 그 이후의 원문을 다음 요청에 사용해요.</p>
-          <p className="muted">압축해도 원문은 그대로 보존해요.</p>
-          {mode === 'full' && <p className="muted">지속적인 설정 정정은 아래 메모에 남겨요.</p>}
+          <summary>{t('settings.m309')}</summary>
+          <p className="muted">{t('settings.m310')}</p>
+          <p className="muted">{t('settings.m311')}</p>
+          {mode === 'full' && <p className="muted">{t('settings.m312')}</p>}
         </details>
       </div>
       {mode === 'full' && (

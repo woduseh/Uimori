@@ -1,3 +1,4 @@
+import { t, useI18n, message as uiMessage, messageRef } from './i18n.js';
 import { useEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import type { Library } from '../core/product.js';
 import type {
@@ -21,11 +22,11 @@ import {
 } from './ui-icons.js';
 import './library-folders.css';
 
-const categoryLabels: Record<LibraryCategory, string> = {
-  bot: '봇',
-  persona: '페르소나',
-  module: '모듈',
-  prompts: '프롬프트',
+const categoryLabelKeys: Record<LibraryCategory, string> = {
+  bot: 'library.bot',
+  persona: 'library.persona',
+  module: 'library.module',
+  prompts: 'library.prompts',
 };
 export type FolderFilter = 'all' | 'unclassified' | string;
 
@@ -34,6 +35,7 @@ export function useLibraryOrganization(
   reload: () => Promise<void>,
   onError: (error: string) => void
 ) {
+  useI18n();
   const [organization, setOrganization] = useState<LibraryOrganization | null>(
     library?.organization ?? null
   );
@@ -79,7 +81,11 @@ export function useLibraryOrganization(
       try {
         await reload();
       } catch (error) {
-        onError(`변경은 저장됐어요. 목록을 다시 불러오지 못했어요. ${(error as Error).message}`);
+        onError(
+          uiMessage('library.changesWereSavedButTheListCould', {
+            v0: messageRef((error as Error).message),
+          })
+        );
       }
       return true;
     } catch (error) {
@@ -113,6 +119,7 @@ export function LibraryItemMenu({
   className?: string;
   icon?: typeof MoreIcon;
 }) {
+  useI18n();
   return (
     <ActionMenu label={title} className={`library-item-menu ${className}`} icon={icon}>
       {children}
@@ -152,6 +159,7 @@ export function LibraryFolders({
   onFolderDragLeave?: (folderId: string, event: DragEvent<HTMLElement>) => void;
   onFolderDrop?: (folderId: string, event: DragEvent<HTMLElement>) => void;
 }) {
+  useI18n();
   const [edit, setEdit] = useState<{ folder: LibraryFolder | null; revision: number } | null>(null);
   const [title, setTitle] = useState('');
   const draggedFolder = useRef<string | null>(null);
@@ -178,14 +186,14 @@ export function LibraryFolders({
           onClick={() => openEdit(folder)}
         >
           <EditIcon size={18} aria-hidden="true" />
-          이름 변경
+          {t('library.rename')}
         </button>
         <DeleteButton
           path={`/library/folders/${encodeURIComponent(folder.id)}`}
           revision={organization?.revision}
           title={folder.title}
-          label="폴더 삭제"
-          description="폴더 안의 자료는 삭제하지 않고 이 분류의 미분류로 옮겨요."
+          label={t('library.deleteFolder')}
+          description={t('library.resourcesInThisFolderWillMoveTo')}
           disabled={busy}
           onError={(message) => {
             onError(message);
@@ -231,7 +239,7 @@ export function LibraryFolders({
     <aside
       className={presentation === 'cards' ? 'library-folder-grid' : 'library-folders'}
       data-view={presentation === 'cards' ? view : undefined}
-      aria-label={`${categoryLabels[category]} 폴더`}
+      aria-label={t('library.folders2', { v0: t(categoryLabelKeys[category]) })}
     >
       {presentation === 'cards' ? (
         folders.map((folder) => (
@@ -273,42 +281,47 @@ export function LibraryFolders({
             <button
               type="button"
               className="secondary library-folder-open"
-              aria-label={`${folder.title} 폴더 열기`}
+              aria-label={t('library.openFolder', { v0: folder.title })}
               onClick={() => onChange(folder.id)}
             >
               <FolderIcon size={28} aria-hidden="true" />
               <span>
                 <strong title={folder.title}>{folder.title}</strong>
-                <small>{counts[folder.id] ?? 0}개</small>
-                {draggedItemId && dropFolderId === folder.id && <small>여기로 이동</small>}
+                <small>{t('library.itemCount', { count: counts[folder.id] ?? 0 })}</small>
+                {draggedItemId && dropFolderId === folder.id && (
+                  <small>{t('library.moveHere')}</small>
+                )}
               </span>
             </button>
-            <LibraryItemMenu title={`${folder.title} 폴더 메뉴`}>
+            <LibraryItemMenu title={t('library.folderMenu', { v0: folder.title })}>
               {folderActions(folder)}
             </LibraryItemMenu>
           </article>
         ))
       ) : (
         <>
-          <nav className="library-breadcrumb" aria-label="현재 폴더">
+          <nav className="library-breadcrumb" aria-label={t('library.currentFolder')}>
             <button type="button" className="secondary" onClick={() => onChange('all')}>
-              전체
+              {t('library.all')}
             </button>
             {value !== 'all' && (
               <>
                 <span aria-hidden="true">/</span>
-                <span aria-current="page">{selectedFolder?.title ?? '미분류'}</span>
+                <span aria-current="page">
+                  {selectedFolder?.title ?? t('library.uncategorized')}
+                </span>
               </>
             )}
           </nav>
-          <LibraryItemMenu title="폴더 관리">
+          <LibraryItemMenu title={t('library.manageFolders')}>
             <button
               type="button"
               className="secondary"
               disabled={busy || !organization}
               onClick={() => openEdit(null)}
             >
-              <FolderAddIcon size={18} aria-hidden="true" />새 폴더
+              <FolderAddIcon size={18} aria-hidden="true" />
+              {t('library.newFolder')}
             </button>
             {selectedFolder && folderActions(selectedFolder)}
           </LibraryItemMenu>
@@ -316,7 +329,7 @@ export function LibraryFolders({
       )}
       <Dialog
         open={!!edit}
-        title={edit?.folder ? '폴더 이름 변경' : '새 폴더'}
+        title={edit?.folder ? t('library.renameFolder') : t('library.newFolder')}
         onClose={() => {
           if (!busy) setEdit(null);
         }}
@@ -338,9 +351,9 @@ export function LibraryFolders({
           }}
         >
           <label>
-            폴더 이름
+            {t('library.folderName')}
             <input
-              aria-label="폴더 이름"
+              aria-label={t('library.folderName')}
               value={title}
               required
               maxLength={160}
@@ -350,12 +363,14 @@ export function LibraryFolders({
           </label>
           {edit && organization && edit.revision !== organization.revision && (
             <div className="library-folder-review" role="status">
-              <p>다른 변경이 반영됐어요. 최신 폴더 상태를 확인하고 다시 저장해 주세요.</p>
+              <p>{t('library.anotherChangeWasAppliedReviewTheLatest')}</p>
               {edit.folder && (
                 <p>
-                  현재 이름:{' '}
-                  {organization.folders.find((item) => item.id === edit.folder?.id)?.title ??
-                    '삭제된 폴더'}
+                  {t('library.currentFolderName', {
+                    name:
+                      organization.folders.find((item) => item.id === edit.folder?.id)?.title ??
+                      t('library.deletedFolder'),
+                  })}
                 </p>
               )}
               <button
@@ -368,7 +383,7 @@ export function LibraryFolders({
                 }
                 onClick={() => setEdit({ ...edit, revision: organization.revision })}
               >
-                최신 상태 확인
+                {t('library.reviewLatestState')}
               </button>
             </div>
           )}
@@ -380,14 +395,14 @@ export function LibraryFolders({
               onClick={() => setEdit(null)}
             >
               <CloseIcon size={18} aria-hidden="true" />
-              취소
+              {t('library.cancel')}
             </button>
             <button
               className="primary"
               disabled={busy || !title.trim() || edit?.revision !== organization?.revision}
             >
               <CheckIcon size={18} aria-hidden="true" />
-              {edit?.folder ? '이름 저장' : '폴더 만들기'}
+              {edit?.folder ? t('library.saveName') : t('library.createFolder')}
             </button>
           </div>
         </form>
@@ -409,6 +424,7 @@ export function LibraryMoveDialog({
   onClose: () => void;
   onMoved: () => void;
 }) {
+  useI18n();
   const [destination, setDestination] = useState(category);
   const [folderId, setFolderId] = useState('');
   const [revision, setRevision] = useState<number>();
@@ -426,7 +442,7 @@ export function LibraryMoveDialog({
   return (
     <Dialog
       open={!!items}
-      title="자료 이동"
+      title={t('library.moveResources')}
       onClose={() => {
         if (!busy) onClose();
       }}
@@ -447,11 +463,11 @@ export function LibraryMoveDialog({
             onMoved();
         }}
       >
-        <p>{items?.length ?? 0}개 자료를 옮겨요. 기존 채팅과 자료 내용은 유지돼요.</p>
+        <p>{t('library.moveCount', { count: items?.length ?? 0 })}</p>
         <label>
-          분류
+          {t('library.category')}
           <select
-            aria-label="이동할 분류"
+            aria-label={t('library.destinationCategory')}
             value={destination}
             disabled={busy || category === 'prompts'}
             onChange={(event) => {
@@ -464,46 +480,46 @@ export function LibraryMoveDialog({
               : (['bot', 'persona', 'module'] as const)
             ).map((item) => (
               <option value={item} key={item}>
-                {categoryLabels[item]}
+                {t(categoryLabelKeys[item])}
               </option>
             ))}
           </select>
         </label>
         <label>
-          폴더
+          {t('library.folders')}
           <select
-            aria-label="이동할 폴더"
+            aria-label={t('library.destinationFolder')}
             value={folderId}
             disabled={busy}
             onChange={(event) => setFolderId(event.target.value)}
           >
-            <option value="">미분류</option>
+            <option value="">{t('library.uncategorized')}</option>
             {folders.map((folder) => (
               <option key={folder.id} value={folder.id}>
                 {folder.title}
               </option>
             ))}
-            {stale && <option value={folderId}>삭제된 폴더</option>}
+            {stale && <option value={folderId}>{t('library.deletedFolder')}</option>}
           </select>
         </label>
-        {stale && <p role="alert">목적지 폴더가 삭제됐어요. 다른 폴더를 선택해 주세요.</p>}
+        {stale && <p role="alert">{t('library.theDestinationFolderWasDeletedChooseAnother')}</p>}
         {organization && revision !== organization.revision && (
           <div className="library-folder-review" role="status">
-            <p>서재가 변경됐어요. 현재 분류와 목적지 폴더를 확인해 주세요.</p>
+            <p>{t('library.theLibraryChangedReviewTheCurrentCategory')}</p>
             <button
               type="button"
               className="secondary"
               disabled={busy || stale}
               onClick={() => setRevision(organization.revision)}
             >
-              최신 상태 확인
+              {t('library.reviewLatestState')}
             </button>
           </div>
         )}
         <div className="form-actions">
           <button type="button" className="secondary" disabled={busy} onClick={onClose}>
             <CloseIcon size={18} aria-hidden="true" />
-            취소{' '}
+            {t('library.cancel')}{' '}
           </button>
           <button
             disabled={
@@ -511,7 +527,7 @@ export function LibraryMoveDialog({
             }
           >
             <MoveIcon size={18} aria-hidden="true" />
-            이동{' '}
+            {t('library.move')}{' '}
           </button>
         </div>
       </form>

@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import type { ReaderDetail } from '../core/types.js';
 
 export function ReaderPages({
@@ -11,29 +12,33 @@ export function ReaderPages({
   onSelect: (id: string) => void;
   end?: boolean;
 }) {
+  useI18n();
   const page = detail?.reader;
   if (!page || (!page.previous && !page.next)) return null;
   return (
-    <nav className="reader-pages" aria-label={end ? '원고 구간 끝' : '원고 구간'}>
+    <nav
+      className="reader-pages"
+      aria-label={end ? t('reader.endOfManuscriptSection') : t('reader.manuscriptSection')}
+    >
       <button
         className="secondary"
         disabled={!page.previous}
         onClick={() => onSelect(page.previous!)}
       >
-        이전 원고
+        {t('reader.previousManuscript')}
       </button>
       <span>
         {page.start + 1}–{page.start + page.order.length} / {page.total}
       </span>
       <button className="secondary" disabled={!page.next} onClick={() => onSelect(page.next!)}>
-        다음 원고
+        {t('reader.nextManuscript')}
       </button>
       <button
         className="secondary"
         disabled={!page.latest || (!!head && page.order.includes(head))}
         onClick={() => onSelect(page.latest!)}
       >
-        최근 원고
+        {t('reader.latestManuscript')}
       </button>
     </nav>
   );

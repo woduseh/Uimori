@@ -1,52 +1,58 @@
+import { t, useI18n } from './i18n.js';
 import type { ProviderRejection, RejectedOption } from '../core/provider-rejection.js';
 
 /** User-facing names for the option groups a provider can reject. */
 const rejectedOptionLabels: Record<RejectedOption, string> = {
-  thinking: '사고 강도',
+  thinking: 'errors.option.thinking',
   temperature: 'Temperature',
   topP: 'Top-p',
-  maxOutputTokens: '최대 출력 토큰',
-  stopSequences: '생성 중단 문자열',
-  serviceTier: '서비스 등급',
-  cache: '프롬프트 캐시',
-  structuredOutput: '구조화 출력',
+  maxOutputTokens: 'errors.option.maxOutputTokens',
+  stopSequences: 'errors.option.stopSequences',
+  serviceTier: 'errors.option.serviceTier',
+  cache: 'errors.option.cache',
+  structuredOutput: 'errors.option.structuredOutput',
   verbosity: 'Verbosity',
   reasoningMode: 'Reasoning Mode',
   reasoningContext: 'Reasoning Context',
-  model: '모델 ID',
-  tools: '도구 정의',
-  input: '요청 본문',
+  model: 'errors.option.model',
+  tools: 'errors.option.tools',
+  input: 'errors.option.input',
 };
 export function rejectionMessage(rejection: ProviderRejection): string {
   const names = [
-    ...rejection.options.map((option) => rejectedOptionLabels[option]),
+    ...rejection.options.map((option) =>
+      rejectedOptionLabels[option].startsWith('errors.')
+        ? t(rejectedOptionLabels[option])
+        : rejectedOptionLabels[option]
+    ),
     ...(rejection.unmappedFields ?? []),
   ];
   return names.length
-    ? `프로바이더가 ${names.join(', ')} 설정을 받아들이지 않았어요.`
+    ? t('errors.rejectionNamed', { options: names.join(', ') })
     : rejection.message
-      ? '프로바이더가 요청 설정을 받아들이지 않았어요. 자세한 이유는 오류 상세를 확인해 주세요.'
-      : '프로바이더가 요청 설정을 받아들이지 않았어요. 어떤 설정인지는 알려주지 않았어요.';
+      ? t('errors.rejectionDetails')
+      : t('errors.rejectionUnspecified');
 }
 /** The provider's verdict on saved options; the app never rewrites the option on its own. */
 export function ProviderRejectionNotice({ rejection }: { rejection: ProviderRejection }) {
+  useI18n();
   const optionNamed = rejection.options.some((option) => option !== 'input');
   return (
     <div className="provider-rejection" role="status">
       <p>
         {rejectionMessage(rejection)}{' '}
-        {optionNamed
-          ? '모델 프리셋에서 해당 설정을 다른 값이나 모델 기본값으로 바꾼 뒤 다시 시도해 주세요.'
-          : '모델 ID와 프로바이더 주소, 생성 설정을 확인해 주세요.'}
-        {rejection.providerCode && <small> 프로바이더 코드 {rejection.providerCode}</small>}
+        {optionNamed ? t('errors.rejectionAction') : t('errors.rejectionInputAction')}
+        {rejection.providerCode && (
+          <small> {t('errors.providerCode', { code: rejection.providerCode })}</small>
+        )}
       </p>
       {rejection.message && (
         <details>
-          <summary>프로바이더 오류 상세</summary>
+          <summary>{t('errors.providerDetails')}</summary>
           <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
             {rejection.message}
           </pre>
-          <small>입력한 내용이 포함될 수 있으니 공유하기 전에 확인해 주세요.</small>
+          <small>{t('errors.providerPrivacy')}</small>
         </details>
       )}
     </div>

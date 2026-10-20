@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, messageRef, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -39,6 +40,7 @@ const sameValues = (left: Values, right: Values) => {
   );
 };
 export function ChatOptionSettings(props: Props) {
+  useI18n();
   const [base, setBase] = useState<ChatOptionState | null>(null);
   const [latest, setLatest] = useState<ChatOptionState | null>(null);
   const [fixed, setFixed] = useState<Values>({});
@@ -152,9 +154,9 @@ export function ChatOptionSettings(props: Props) {
       setMessage('');
       setCompletion(
         {
-          fixed: '이 채팅의 고정 옵션을 저장했어요.',
-          oneoff: '다음 생성에 한 번 사용할 옵션을 예약했어요.',
-          cancel: '다음 생성의 옵션 예약을 취소했어요.',
+          fixed: uiMessage('chatsettings.m106'),
+          oneoff: uiMessage('chatsettings.m107'),
+          cancel: uiMessage('chatsettings.m108'),
         }[operation.kind]
       );
       dispatchEvent(new Event('chat-options-changed'));
@@ -167,8 +169,8 @@ export function ChatOptionSettings(props: Props) {
       }
       setError(
         known
-          ? `${(caught as Error).message} 입력한 초안은 유지했어요.`
-          : '반영 여부를 확인하지 못했어요. 같은 요청을 다시 확인하면 중복 적용하지 않아요.'
+          ? uiMessage('chatsettings.draftError', { error: messageRef((caught as Error).message) })
+          : uiMessage('chatsettings.m109')
       );
     } finally {
       lock.current = false;
@@ -197,10 +199,10 @@ export function ChatOptionSettings(props: Props) {
         <LoadingState
           presentation="placeholder"
           loading={loading}
-          error={readError}
-          label="채팅 옵션을 불러오는 중이에요…"
+          error={translateMessage(readError)}
+          label={t('chatsettings.m110')}
           onRetry={() => void refresh()}
-          retryLabel="채팅 옵션 다시 불러오기"
+          retryLabel={t('chatsettings.m111')}
         />
       </div>
     );
@@ -215,7 +217,7 @@ export function ChatOptionSettings(props: Props) {
     <>
       <SaveConflictDialog
         open={saveConflict}
-        title="채팅 옵션 저장 내용 확인"
+        title={t('chatsettings.m112')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
           const draft = current.current;
@@ -233,75 +235,80 @@ export function ChatOptionSettings(props: Props) {
             setError('');
             setReadError('');
             setSaveConflict(false);
-            setMessage(keepInput ? '입력을 확인한 뒤 저장하거나 예약해 주세요.' : '');
-            setCompletion(keepInput ? '' : '저장본을 불러왔어요.');
+            setMessage(keepInput ? uiMessage('chatsettings.m113') : '');
+            setCompletion(keepInput ? '' : uiMessage('chatsettings.m114'));
           };
-          return {
-            content: (
-              <>
-                {controls.map((control) => (
-                  <div className="settings-row" key={control.id}>
-                    <span className="settings-row-copy">{control.label}</span>
-                    <span className="settings-row-control">
-                      {optionText(
-                        control,
-                        value.fixedValues[control.id] ?? value.globalValues[control.id]
-                      )}
-                    </span>
-                  </div>
-                ))}
-                {review.discarded.length > 0 && (
-                  <section aria-label="유지할 수 없는 입력">
-                    <h3>유지할 수 없는 입력</h3>
-                    <p>계속 편집하면 아래 입력은 제외해요. 필요한 내용은 먼저 복사해 두세요.</p>
-                    {review.discarded.map((item) => {
-                      const control = (
-                        draft.base!.controls ?? promptControls(draft.base!.program)
-                      ).find((entry) => entry.id === item.id);
-                      return (
-                        <div className="settings-row" key={item.scope + ':' + item.id}>
-                          <span className="settings-row-copy">
-                            {item.scope === 'fixed' ? '고정 옵션' : '1회 옵션'} · {item.label}
-                            <small>{item.reason}</small>
-                          </span>
-                          <span className="settings-row-control">
-                            {item.unset
-                              ? '개별 지정 해제'
-                              : control
-                                ? optionText(control, item.value)
-                                : String(item.value ?? '') || '비어 있음'}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </section>
-                )}
-                <p className="muted">
-                  저장본을 불러오면 작성 중인 고정 옵션과 1회 옵션 입력을 버려요. 이미 예약한 옵션은
-                  취소하지 않아요.
-                </p>
-              </>
-            ),
-            actions: (
-              <>
-                <button type="button" className="secondary" onClick={() => adopt(false)}>
-                  입력 버리고 저장본 불러오기
-                </button>
-                <button type="button" className="primary" onClick={() => adopt(true)}>
-                  입력 유지하고 계속 편집
-                </button>
-              </>
-            ),
+          return () => {
+            const displayReview = reviewChatOptionDraft(
+              draft.base!,
+              draft.fixed,
+              draft.oneoff,
+              value
+            );
+            return {
+              content: (
+                <>
+                  {controls.map((control) => (
+                    <div className="settings-row" key={control.id}>
+                      <span className="settings-row-copy">{control.label}</span>
+                      <span className="settings-row-control">
+                        {optionText(
+                          control,
+                          value.fixedValues[control.id] ?? value.globalValues[control.id]
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                  {displayReview.discarded.length > 0 && (
+                    <section aria-label={t('chatsettings.m115')}>
+                      <h3>{t('chatsettings.m115')}</h3>
+                      <p>{t('chatsettings.m116')}</p>
+                      {displayReview.discarded.map((item) => {
+                        const control = (
+                          draft.base!.controls ?? promptControls(draft.base!.program)
+                        ).find((entry) => entry.id === item.id);
+                        return (
+                          <div className="settings-row" key={item.scope + ':' + item.id}>
+                            <span className="settings-row-copy">
+                              {item.scope === 'fixed'
+                                ? t('chatsettings.m117')
+                                : t('chatsettings.m118')}{' '}
+                              · {item.label}
+                              <small>{translateMessage(item.reason)}</small>
+                            </span>
+                            <span className="settings-row-control">
+                              {item.unset
+                                ? t('chatsettings.m119')
+                                : control
+                                  ? optionText(control, item.value)
+                                  : String(item.value ?? '') || t('chatsettings.m120')}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </section>
+                  )}
+                  <p className="muted">{t('chatsettings.m121')}</p>
+                </>
+              ),
+              actions: (
+                <>
+                  <button type="button" className="secondary" onClick={() => adopt(false)}>
+                    {t('chatsettings.m122')}
+                  </button>
+                  <button type="button" className="primary" onClick={() => adopt(true)}>
+                    {t('chatsettings.m123')}
+                  </button>
+                </>
+              ),
+            };
           };
         }}
       />
       <div className="chat-options-body chat-specific-options">
-        <section aria-label="이 채팅 고정 옵션">
-          <h3>고정 옵션</h3>
-          <p className="muted">
-            개별 지정한 옵션만 이 채팅에 적용해요. 나머지는 이 채팅에서 사용하는 작문 프롬프트의
-            기본 옵션을 따라요.
-          </p>
+        <section aria-label={t('chatsettings.m124')}>
+          <h3>{t('chatsettings.m117')}</h3>
+          <p className="muted">{t('chatsettings.m125')}</p>
           <fieldset className="chat-options-fields" disabled={disabled}>
             <SelectiveValues
               program={base.program}
@@ -318,16 +325,14 @@ export function ChatOptionSettings(props: Props) {
                 disabled={blocked}
                 onClick={() => submit('fixed', 'fixed', { binding: base.binding, values: {} })}
               >
-                고정 옵션 모두 해제
+                {t('chatsettings.m126')}
               </button>
             )}
           </fieldset>
         </section>
         <details className="chat-options-extra">
-          <summary>다음 생성에만 적용</summary>
-          <p className="muted">
-            여기서 지정한 옵션만 현재 채팅의 다음 생성에 한 번 사용하고 해제해요.
-          </p>
+          <summary>{t('chatsettings.m127')}</summary>
+          <p className="muted">{t('chatsettings.m128')}</p>
           <fieldset className="chat-options-fields" disabled={disabled}>
             <SelectiveValues
               program={base.program}
@@ -347,16 +352,16 @@ export function ChatOptionSettings(props: Props) {
                 })
               }
             >
-              1회 옵션 예약
+              {t('chatsettings.m129')}
             </button>
           </fieldset>
         </details>
         {displayState.pending.length > 0 && (
-          <section aria-label="다음 생성 옵션 예약" className="chat-options-pending">
-            <h3>다음 생성 옵션 예약</h3>
+          <section aria-label={t('chatsettings.m130')} className="chat-options-pending">
+            <h3>{t('chatsettings.m130')}</h3>
             {displayState.pending.map((item) => (
               <div key={item.id} className="chat-option-record">
-                <strong>1회 옵션</strong>
+                <strong>{t('chatsettings.m118')}</strong>
                 <OptionValues
                   values={item.values}
                   fieldLabel={fieldLabel}
@@ -367,7 +372,7 @@ export function ChatOptionSettings(props: Props) {
                   disabled={blocked}
                   onClick={() => submit('cancel', `pending/${encodeURIComponent(item.id)}/cancel`)}
                 >
-                  예약 취소
+                  {t('chatsettings.m131')}
                 </button>
               </div>
             ))}
@@ -375,29 +380,24 @@ export function ChatOptionSettings(props: Props) {
         )}
         {displayState.conflicts.map((item) => (
           <NoticeBanner tone="error" key={item}>
-            {item}
+            {translateMessage(item)}
           </NoticeBanner>
         ))}
-        {conflict && (
-          <NoticeBanner tone="error">
-            다른 곳에서 옵션이 바뀌었어요. 입력은 유지했어요. 저장하거나 예약할 때 변경 내용을
-            확인해 주세요.
-          </NoticeBanner>
-        )}
+        {conflict && <NoticeBanner tone="error">{t('chatsettings.m132')}</NoticeBanner>}
         {readError && (
           <NoticeBanner tone="error">
-            {readError}
+            {translateMessage(readError)}
             <button
               type="button"
               disabled={busy || loading || !!uncertain}
               onClick={() => void refresh()}
             >
-              {loading ? '불러오는 중…' : '다시 불러오기'}
+              {loading ? t('chatsettings.m133') : t('chatsettings.m134')}
             </button>
           </NoticeBanner>
         )}
-        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
-        {message && <NoticeBanner>{message}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+        {message && <NoticeBanner>{translateMessage(message)}</NoticeBanner>}
         <TransientNotice message={completion} />
         {uncertain && (
           <button
@@ -405,21 +405,19 @@ export function ChatOptionSettings(props: Props) {
             disabled={busy || props.disabled}
             onClick={() => void execute(uncertain)}
           >
-            같은 요청 다시 확인
+            {t('chatsettings.m135')}
           </button>
         )}
       </div>
       <footer className="chat-options-footer">
-        <small>
-          {dirty ? '저장하지 않은 옵션 초안이 있어요.' : '고정 옵션은 이 채팅에 적용해요.'}
-        </small>
+        <small>{dirty ? t('chatsettings.m136') : t('chatsettings.m137')}</small>
         <div>
           <button
             type="button"
             disabled={!fixedDirty || disabled || loading}
             onClick={() => submit('fixed', 'fixed', { binding: base.binding, values: fixed })}
           >
-            {busy ? '적용 중…' : '채팅 고정 옵션 저장'}
+            {busy ? t('chatsettings.m138') : t('chatsettings.m139')}
           </button>
         </div>
       </footer>
@@ -429,27 +427,30 @@ export function ChatOptionSettings(props: Props) {
 
 /* Reading an inherited value must not look like a broken form, so a row that follows
    the wider setting shows the value as text and offers one explicit switch. */
-const SCOPE_WORDS = {
-  fixed: {
-    set: '개별 지정',
-    unset: '전역 따르기',
-    following: '전역 따름',
-    scoped: '이 채팅 지정',
-  },
-  oneoff: {
-    set: '다음 생성만 지정',
-    unset: '지정 해제',
-    following: '현재 설정 따름',
-    scoped: '다음 생성만 적용',
-  },
-} as const;
+function getScopeWords() {
+  return {
+    fixed: {
+      set: t('chatsettings.m140'),
+      unset: t('chatsettings.m141'),
+      following: t('chatsettings.m142'),
+      scoped: t('chatsettings.m143'),
+    },
+    oneoff: {
+      set: t('chatsettings.m144'),
+      unset: t('chatsettings.m145'),
+      following: t('chatsettings.m146'),
+      scoped: t('chatsettings.m147'),
+    },
+  } as const;
+}
 
 function optionText(control: PromptControl, value: PromptValue | undefined) {
   const effective = value ?? control.default ?? (control.type === 'text' ? '' : '0');
-  if (typeof effective === 'boolean') return effective ? '켬' : '끔';
+  if (typeof effective === 'boolean')
+    return effective ? t('chatsettings.m148') : t('chatsettings.m149');
   const choice = control.options?.find((option) => option.value === effective);
   if (choice) return choice.label;
-  return effective === '' ? '비어 있음' : String(effective);
+  return effective === '' ? t('chatsettings.m120') : String(effective);
 }
 
 function SelectiveValues({
@@ -467,24 +468,21 @@ function SelectiveValues({
   onChange: (values: Values) => void;
   mode: 'fixed' | 'oneoff';
 }) {
+  useI18n();
   const effective = { ...inherited, ...values };
   let reconciledValues: Values;
   try {
     reconciledValues = reconcilePromptValues(definitions, effective).values;
   } catch {
-    return (
-      <NoticeBanner tone="error">
-        옵션 표시 조건을 확인하지 못했어요. 프롬프트 정의를 확인해 주세요.
-      </NoticeBanner>
-    );
+    return <NoticeBanner tone="error">{t('chatsettings.m150')}</NoticeBanner>;
   }
-  if (definitions.length === 0)
-    return <p className="muted">현재 프롬프트에 조정할 옵션이 없어요.</p>;
-  const words = SCOPE_WORDS[mode];
+  if (definitions.length === 0) return <p className="muted">{t('chatsettings.m151')}</p>;
+  const words = getScopeWords()[mode];
   /* Same grouping rule as the prompt editor, so one option means the same thing in
      both places. Long option sets stay navigable instead of becoming one long list. */
   const groups = new Map<string, PromptControl[]>();
   for (const control of definitions) {
+    // This Korean fallback is an existing persisted expansion identity, not displayed copy.
     const group = control.group?.trim() || '기본 설정';
     groups.set(group, [...(groups.get(group) ?? []), control]);
   }
@@ -520,7 +518,10 @@ function SelectiveValues({
             <button
               type="button"
               className="secondary"
-              aria-label={`${control.label} ${selected ? words.unset : words.set}`}
+              aria-label={t('chatsettings.scopeAction', {
+                name: control.label,
+                action: selected ? words.unset : words.set,
+              })}
               onClick={() => {
                 if (selected) {
                   const next = { ...values };
@@ -547,9 +548,13 @@ function SelectiveValues({
             className="chat-option-group"
             summary={
               <>
-                <span className="chat-option-group-name">{group}</span>
+                <span className="chat-option-group-name">
+                  {items[0]?.group?.trim() || t('chatsettings.m152')}
+                </span>
                 <span className="chat-option-group-count">
-                  {scoped > 0 ? `${scoped}개 지정 · 전체 ${items.length}개` : `${items.length}개`}
+                  {scoped > 0
+                    ? t('chatsettings.scopeCount', { count: scoped, total: items.length })
+                    : t('chatsettings.optionCount', { count: items.length })}
                 </span>
               </>
             }
@@ -571,6 +576,7 @@ function OptionValues({
   fieldLabel: (id: string) => string;
   controls: PromptControl[];
 }) {
+  useI18n();
   return (
     <dl className="chat-option-values">
       {Object.entries(values).map(([id, value]) => {
@@ -578,7 +584,9 @@ function OptionValues({
         return (
           <div key={id}>
             <dt>{fieldLabel(id)}</dt>
-            <dd>{control ? optionText(control, value) : String(value ?? '') || '비어 있음'}</dd>
+            <dd>
+              {control ? optionText(control, value) : String(value ?? '') || t('chatsettings.m120')}
+            </dd>
           </div>
         );
       })}

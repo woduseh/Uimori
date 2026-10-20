@@ -1,7 +1,9 @@
+import { t } from './i18n.js';
 import type { HelperActivity, HelperActivityEvent } from '../core/helper-activity.js';
 
 type Stage = {
   id: number;
+  kind: string;
   label: string;
   state: 'running' | 'completed' | 'issue' | 'stopped' | 'recorded';
   events: HelperActivityEvent[];
@@ -19,19 +21,19 @@ const mutationTools = new Set([
   'chat.rename',
   'chat.fork',
 ]);
-function toolLabel(name = '') {
-  if (mutationTools.has(name)) return '자료·설정 변경';
-  if (name === 'context.compact') return '대화 내용 정리';
-  if (name === 'artifact.generate') return '가정 장면 작성';
-  if (/\.(read|list|search|inspect|guide|tools)$/u.test(name)) return '자료 확인';
-  return '도구 실행';
+function toolKind(name = '') {
+  if (mutationTools.has(name)) return 'helpers.m196';
+  if (name === 'context.compact') return 'helpers.m197';
+  if (name === 'artifact.generate') return 'helpers.m198';
+  if (/\.(read|list|search|inspect|guide|tools)$/u.test(name)) return 'helpers.m199';
+  return 'helpers.m200';
 }
-const attemptLabel = (purpose?: string) =>
+const attemptKind = (purpose?: string) =>
   purpose === 'context'
-    ? '대화 내용 정리'
+    ? 'helpers.m197'
     : purpose === 'artifact' || purpose === 'writing'
-      ? '가정 장면 작성'
-      : '요청 처리';
+      ? 'helpers.m198'
+      : 'helpers.m201';
 const finishedAttemptState = (status?: string): Stage['state'] =>
   status === 'completed' || status === 'tool_calls'
     ? 'completed'
@@ -52,16 +54,16 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
         continue;
       }
     }
-    const label =
+    const kind =
       event.kind === 'attempt.started'
-        ? attemptLabel(event.purpose)
+        ? attemptKind(event.purpose)
         : event.kind === 'tool.finished'
-          ? toolLabel(event.name)
+          ? toolKind(event.name)
           : event.kind === 'context.compaction'
-            ? '대화 내용 정리'
+            ? 'helpers.m197'
             : event.kind === 'progress'
-              ? '도우미 진행 메시지'
-              : '실행 기록';
+              ? 'helpers.m202'
+              : 'helpers.m203';
     const state: Stage['state'] =
       event.kind === 'attempt.started'
         ? 'running'
@@ -77,13 +79,13 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
     if (
       event.kind === 'tool.finished' &&
       state === 'completed' &&
-      previous?.label === label &&
+      previous?.kind === kind &&
       previous.state === state &&
       previous.events.every((item) => item.kind === 'tool.finished')
     ) {
       previous.events.push(event);
     } else {
-      const stage: Stage = { id: event.seq, label, state, events: [event] };
+      const stage: Stage = { id: event.seq, kind, label: t(kind), state, events: [event] };
       stages.push(stage);
       if (event.kind === 'attempt.started' && event.attemptId) attempts.set(event.attemptId, stage);
     }
@@ -97,7 +99,12 @@ export function helperActivitySummary(activity?: HelperActivity | null): string 
   if (activity?.status !== 'running') return undefined;
   const current = helperActivityStages(activity).findLast((stage) => stage.state === 'running');
   if (!current) return undefined;
-  return current.label === '요청 처리'
-    ? '도우미가 요청을 처리하고 있어요'
-    : `${current.label} 중이에요`;
+  return t('helpers.m336', {
+    kind:
+      current.kind === 'helpers.m197'
+        ? 'summary'
+        : current.kind === 'helpers.m198'
+          ? 'whatif'
+          : 'request',
+  });
 }

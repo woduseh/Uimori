@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import { CloseIcon, EditIcon, SaveIcon } from './ui-icons.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -22,6 +23,7 @@ export function DraftDiscardActions({
   disabled?: boolean;
   open?: boolean;
 }) {
+  useI18n();
   const continueButton = useRef<HTMLButtonElement>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -41,7 +43,7 @@ export function DraftDiscardActions({
           onClick={onDiscard}
         >
           <CloseIcon size={18} aria-hidden="true" />
-          {discardLabel}
+          {translateMessage(discardLabel)}
         </button>
         <button
           type="button"
@@ -51,7 +53,7 @@ export function DraftDiscardActions({
           onClick={onContinue}
         >
           <EditIcon size={18} aria-hidden="true" />
-          계속 편집
+          {t('shared.continueEditing')}
         </button>
         {onSave && (
           <button
@@ -63,8 +65,7 @@ export function DraftDiscardActions({
               onSavingChange?.(true);
               setError('');
               try {
-                if (!(await onSave()))
-                  setError('저장하지 못했어요. 계속 편집에서 오류나 미적용 입력을 확인해 주세요.');
+                if (!(await onSave())) setError(uiMessage('shared.saveFailure'));
               } catch (caught) {
                 setError((caught as Error).message);
               } finally {
@@ -74,11 +75,11 @@ export function DraftDiscardActions({
             }}
           >
             <SaveIcon size={18} aria-hidden="true" />
-            {saving ? '저장 중…' : saveLabel}
+            {saving ? t('shared.saving') : translateMessage(saveLabel)}
           </button>
         )}
       </div>
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </>
   );
 }

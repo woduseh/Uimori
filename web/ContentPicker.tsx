@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useId, useRef, useState, type KeyboardEvent } from 'react';
 import { CheckIcon, DropdownIcon, SearchIcon } from './ui-icons.js';
 import type { ContentRole } from '../core/risu-content.js';
@@ -7,7 +8,11 @@ import { ContentAvatar } from './ContentAvatar.js';
 import { Dialog } from './Dialog.js';
 import './content-picker.css';
 
-const roleTitles: Record<ContentRole, string> = { bot: '봇', persona: '페르소나', module: '모듈' };
+const roleTitleKeys: Record<ContentRole, string> = {
+  bot: 'library.bot',
+  persona: 'library.persona',
+  module: 'library.module',
+};
 const reference = (content: Content) => `${content.id}@${content.revision}`;
 
 export function ContentPicker({
@@ -18,7 +23,7 @@ export function ContentPicker({
   label,
   disabled = false,
   allowNone = false,
-  noneLabel = '없음',
+  noneLabel = t('library.none'),
   selectedContent,
   excludeIds = [],
 }: {
@@ -33,6 +38,7 @@ export function ContentPicker({
   selectedContent?: Content | null;
   excludeIds?: string[];
 }) {
+  useI18n();
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(''),
     [all, setAll] = useState(false),
@@ -78,10 +84,10 @@ export function ContentPicker({
     setOpen(false);
   };
   const emptyTitle = needle
-    ? '검색 조건에 맞는 자료가 없어요.'
+    ? t('library.noResourcesMatchYourSearch')
     : activeFolder !== 'all'
-      ? '이 폴더에 연결할 자료가 없어요.'
-      : `연결할 ${roleTitles[role]} 자료가 없어요.`;
+      ? t('library.noResourcesInThisFolderCanBe')
+      : t('library.noResourcesAreAvailableToAttach', { v0: t(roleTitleKeys[role]) });
   function moveFocus(event: KeyboardEvent<HTMLElement>) {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     // Search text editing keeps its Home/End behavior; arrows enter the result list.
@@ -122,14 +128,16 @@ export function ContentPicker({
         <strong title={content.title}>{content.title}</strong>
         {content.description && <small>{content.description}</small>}
         <small className="content-picker-meta">
-          {roleTitles[libraryCategory(library, content)]}
-          {pinned ? ` · 현재 선택 v${content.revision}` : ''}
+          {t(roleTitleKeys[libraryCategory(library, content)])}
+          {pinned ? t('library.currentSelectionV', { v0: content.revision }) : ''}
         </small>
       </span>
       {reference(content) === value ? (
         <CheckIcon size={18} aria-hidden="true" />
       ) : (
-        <span className="content-picker-action">{roleTitles[role]}로 사용</span>
+        <span className="content-picker-action">
+          {t('library.useAs', { role: t(roleTitleKeys[role]) })}
+        </span>
       )}
     </button>
   );
@@ -156,7 +164,11 @@ export function ContentPicker({
         {current && <ContentAvatar content={current} />}
         <span className="content-picker-current" title={current?.title}>
           {current?.title ??
-            (value ? '선택한 자료 확인 필요' : allowNone ? noneLabel : '자료 선택')}
+            (value
+              ? t('library.selectedResourceNeedsReview')
+              : allowNone
+                ? noneLabel
+                : t('library.chooseResource'))}
         </span>
         <DropdownIcon size={16} />
       </button>
@@ -167,7 +179,7 @@ export function ContentPicker({
         className="content-picker-dialog"
       >
         <div className="content-picker-filters">
-          <div className="content-picker-scope" aria-label="자료 분류 범위">
+          <div className="content-picker-scope" aria-label={t('library.resourceCategoryScope')}>
             <button
               type="button"
               className="secondary"
@@ -177,7 +189,7 @@ export function ContentPicker({
                 setFolder('all');
               }}
             >
-              {roleTitles[role]}
+              {t(roleTitleKeys[role])}
             </button>
             <button
               type="button"
@@ -188,17 +200,17 @@ export function ContentPicker({
                 setFolder('all');
               }}
             >
-              모든 자료
+              {t('library.allResources')}
             </button>
           </div>
           <label className="content-picker-search">
-            <span className="content-picker-filter-label">검색</span>
+            <span className="content-picker-filter-label">{t('library.search')}</span>
             <span className="content-picker-search-field">
               <SearchIcon size={17} aria-hidden="true" />
               <input
                 type="search"
-                aria-label={`${label} 검색`}
-                placeholder="이름 또는 설명으로 검색"
+                aria-label={t('library.search2', { v0: label })}
+                placeholder={t('library.searchByNameOrDescription2')}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
@@ -217,25 +229,29 @@ export function ContentPicker({
             </span>
           </label>
           <label>
-            <span className="content-picker-filter-label">폴더</span>
+            <span className="content-picker-filter-label">{t('library.folders')}</span>
             <select
-              aria-label={`${label} 폴더`}
+              aria-label={t('library.folders2', { v0: label })}
               value={activeFolder}
               onChange={(event) => setFolder(event.target.value)}
             >
-              <option value="all">전체 폴더</option>
-              <option value="none">미분류</option>
+              <option value="all">{t('library.allFolders')}</option>
+              <option value="none">{t('library.uncategorized')}</option>
               {folders.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {all ? `${roleTitles[item.category as ContentRole]} / ` : ''}
-                  {item.title}
+                  {all
+                    ? t('library.folderInCategory', {
+                        category: t(roleTitleKeys[item.category as ContentRole]),
+                        folder: item.title,
+                      })
+                    : item.title}
                 </option>
               ))}
             </select>
           </label>
         </div>
         <p className="muted content-picker-count" role="status">
-          {candidates.length}개 자료 · {roleTitles[role]}로 사용해요.
+          {t('library.candidateCount', { count: candidates.length, role: t(roleTitleKeys[role]) })}
         </p>
         <div className="content-picker-results" ref={list} onKeyDown={moveFocus}>
           {allowNone && (
@@ -260,8 +276,8 @@ export function ContentPicker({
               <strong>{emptyTitle}</strong>
               <small>
                 {!all
-                  ? '다른 분류까지 넓혀서 찾거나 서재에서 새 자료를 추가해 보세요.'
-                  : '검색어나 폴더를 바꾸거나 서재에서 새 자료를 추가해 보세요.'}
+                  ? t('library.searchOtherCategoriesOrAddAResource')
+                  : t('library.changeTheSearchOrFolderOrAdd')}
               </small>
             </div>
           )}
@@ -272,7 +288,10 @@ export function ContentPicker({
             className="secondary"
             onClick={() => setPage({ key: pageKey, count: visibleCount + 50 })}
           >
-            자료 더 보기 ({Math.min(visibleCount, candidates.length)} / {candidates.length})
+            {t('library.moreResources', {
+              visible: Math.min(visibleCount, candidates.length),
+              total: candidates.length,
+            })}
           </button>
         )}
         {!all || activeFolder !== 'all' ? (
@@ -286,12 +305,12 @@ export function ContentPicker({
                   setFolder('all');
                 }}
               >
-                다른 분류의 자료도 찾기
+                {t('library.searchOtherCategoriesToo')}
               </button>
             )}
             {activeFolder !== 'all' && (
               <button type="button" className="ghost" onClick={() => setFolder('all')}>
-                전체 폴더에서 찾기
+                {t('library.searchAllFolders')}
               </button>
             )}
           </div>

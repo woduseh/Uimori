@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ModelPreset } from '../core/product.js';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
@@ -32,6 +33,7 @@ function pause(signal: AbortSignal): Promise<void> {
 
 /** Results are keyed by the settings token at test start, independent of filtered cards and open forms. */
 export function useProviderModelTests() {
+  useI18n();
   const [records, setRecords] = useState<Record<string, TestDisplay>>({});
   const current = useRef(records),
     controllers = useRef(new Map<string, AbortController>());
@@ -70,9 +72,7 @@ export function useProviderModelTests() {
       while (active()) {
         if (result.modelId !== model.id || result.modelRevision !== model.revision) {
           result = undefined;
-          throw new Error(
-            '응답 테스트 이후 모델 설정이 바뀌었어요. 현재 설정으로 다시 테스트해 주세요.'
-          );
+          throw new Error(uiMessage('providers.m292'));
         }
         save(key, { pending: result.status === 'running', idempotencyKey, result });
         if (result.status !== 'running') return;
@@ -88,7 +88,7 @@ export function useProviderModelTests() {
           pending: false,
           idempotencyKey,
           ...(result ? { result } : {}),
-          error: error instanceof Error ? error.message : '응답 테스트 상태를 확인하지 못했어요.',
+          error: error instanceof Error ? error.message : uiMessage('providers.m293'),
         });
     } finally {
       if (controllers.current.get(key) === controller) controllers.current.delete(key);
@@ -98,13 +98,27 @@ export function useProviderModelTests() {
 }
 
 const statusLabel: Record<ProviderConnectionTest['status'], string> = {
-  running: '응답 확인 중…',
-  completed: '응답에 성공했어요.',
-  refused: '모델이 응답을 거절했어요.',
-  partial: '응답이 끝까지 도착하지 않았어요.',
-  error: '응답에 실패했어요.',
-  cancelled: '테스트가 취소됐어요.',
-  interrupted: '실행 결과를 확인하지 못했어요.',
+  get running() {
+    return t('providers.m294');
+  },
+  get completed() {
+    return t('providers.m295');
+  },
+  get refused() {
+    return t('providers.m296');
+  },
+  get partial() {
+    return t('providers.m297');
+  },
+  get error() {
+    return t('providers.m298');
+  },
+  get cancelled() {
+    return t('providers.m299');
+  },
+  get interrupted() {
+    return t('providers.m300');
+  },
 };
 export function ProviderModelTest({
   model,
@@ -119,33 +133,37 @@ export function ProviderModelTest({
   busy: boolean;
   onStart: (model: ModelPreset) => Promise<void>;
 }) {
+  useI18n();
   const result = record?.result;
   return (
-    <section className="provider-model-test" aria-label={model.title + ' 응답 테스트 결과'}>
+    <section
+      className="provider-model-test"
+      aria-label={t('providers.m572', { value0: model.title })}
+    >
       <div className="provider-actions">
         <button
           type="button"
           className="secondary"
           disabled={!available || busy || record?.pending}
-          aria-label={model.title + ' 응답 테스트'}
+          aria-label={t('providers.m573', { value0: model.title })}
           onClick={() => {
             void onStart(model);
           }}
         >
           {record?.pending
-            ? '응답 확인 중…'
+            ? t('providers.m294')
             : record?.error
-              ? '테스트 상태 다시 확인'
-              : '응답 테스트'}
+              ? t('providers.m303')
+              : t('providers.m304')}
         </button>
       </div>
-      {!available && <small>모델과 프로바이더를 활성화해 주세요.</small>}
+      {!available && <small>{t('providers.m305')}</small>}
       {record?.error ? (
         <div className="provider-test-result" role="alert">
-          <p>실행 결과를 확인하지 못했어요. 상태를 다시 확인해 주세요.</p>
+          <p>{t('providers.m306')}</p>
           <details>
-            <summary>오류 상세</summary>
-            <p>{record.error}</p>
+            <summary>{t('providers.m307')}</summary>
+            <p>{translateMessage(record.error)}</p>
           </details>
         </div>
       ) : (
@@ -157,13 +175,13 @@ export function ProviderModelTest({
                 {result.rejection ? (
                   <p>{rejectionMessage(result.rejection)}</p>
                 ) : result.error === 'ENDPOINT_NOT_APPROVED' ? (
-                  <p>프로바이더 편집에서 요청 주소를 확인해 주세요.</p>
+                  <p>{t('providers.m308')}</p>
                 ) : null}
                 {(result.error || result.rejection) && (
                   <details>
-                    <summary>오류 상세</summary>
+                    <summary>{t('providers.m307')}</summary>
                     {result.rejection && <ProviderRejectionNotice rejection={result.rejection} />}
-                    {result.error && <p className="error">{result.error}</p>}
+                    {result.error && <p className="error">{translateMessage(result.error)}</p>}
                   </details>
                 )}
               </>

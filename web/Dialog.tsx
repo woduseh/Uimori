@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useEffect, useLayoutEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { IconButton } from './IconButton.js';
 import { CloseIcon } from './ui-icons.js';
@@ -30,6 +31,7 @@ export function Dialog({
   headerTitle?: string;
   headerLeading?: ReactNode;
 }) {
+  useI18n();
   const [visited, setVisited] = useState<string | null>(null);
   useEffect(() => {
     if (open) setVisited(scopeKey);
@@ -117,7 +119,7 @@ export function Dialog({
         <h2 id={id}>{headerTitle ?? title}</h2>
         <IconButton
           className="secondary"
-          label={`${title} 닫기`}
+          label={t('shared.close', { title })}
           icon={CloseIcon}
           onClick={onClose}
         />

@@ -1,3 +1,4 @@
+import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
 import { activityChangedEvent, api } from './api.js';
@@ -13,6 +14,7 @@ export const activityViewedEvent = 'uimori-activity-result-visible';
 
 type Viewed = { chatId: string; sourceId: string; representation: 'original' | 'translation' };
 export function useActivityFeed() {
+  useI18n();
   const [feed, setFeed] = useState<ActivityFeed>({ items: [], running: [], helpers: [] });
   const [error, setError] = useState('');
   const latest = useRef(feed);
@@ -48,7 +50,7 @@ export function useActivityFeed() {
       }
     } catch (reason) {
       if (order === seq.current)
-        setError(reason instanceof Error ? reason.message : '활동을 불러오지 못했어요.');
+        setError(reason instanceof Error ? reason.message : uiMessage('helpers.m308'));
     }
   }, []);
   const acknowledge = useCallback(async (items: ActivityFeedItem[]) => {
@@ -79,7 +81,7 @@ export function useActivityFeed() {
       }));
       setError('');
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '확인 상태를 저장하지 못했어요.');
+      setError(reason instanceof Error ? reason.message : uiMessage('helpers.m309'));
     } finally {
       for (const item of eligible) inFlight.current.delete(item.acknowledgementKey);
     }

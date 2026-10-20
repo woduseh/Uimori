@@ -1,13 +1,19 @@
-import { apiErrorDiagnostic } from './api-errors.js';
+import { apiErrorDiagnostic, apiErrorDisplay } from './api-errors.js';
+import { t } from './i18n.js';
 
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
-    readonly code: string | null = null
+    readonly code: string | null = null,
+    private readonly display?: () => string
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+  /** Display follows the current UI language; message remains the legacy error contract. */
+  get displayMessage(): string {
+    return this.display?.() ?? this.message;
   }
 }
 /** A timeout does not establish whether the server admitted a mutation. */
@@ -58,7 +64,10 @@ async function readApiResponse<T>(
   )
     window.dispatchEvent(new Event(maintenanceChangedEvent));
   const diagnostic = apiErrorDiagnostic(payload?.error, response.status, method);
-  throw new ApiError(diagnostic.message, response.status, diagnostic.code);
+  apiErrorDisplay(payload?.error, response.status, method);
+  throw new ApiError(diagnostic.message, response.status, diagnostic.code, () =>
+    apiErrorDisplay(payload?.error, response.status, method)
+  );
 }
 
 export async function api<T>(
@@ -127,15 +136,33 @@ export async function apiBinary<T>(path: string, body: Blob, signal?: AbortSigna
 }
 
 export const labels: Record<string, string> = {
-  queued: '대기',
-  running: '진행 중',
-  completed: '완료',
-  failed: '실패',
-  cancelled: '취소됨',
-  interrupted: '서버 중단 · 자동 재생성 안 함',
-  stale: '이전 자료의 결과',
-  refused: '프로바이더 거절',
-  partial: '부분 결과',
+  get queued() {
+    return t('errors.status.queued');
+  },
+  get running() {
+    return t('errors.status.running');
+  },
+  get completed() {
+    return t('errors.status.completed');
+  },
+  get failed() {
+    return t('errors.status.failed');
+  },
+  get cancelled() {
+    return t('errors.status.cancelled');
+  },
+  get interrupted() {
+    return t('errors.status.interrupted');
+  },
+  get stale() {
+    return t('errors.status.stale');
+  },
+  get refused() {
+    return t('errors.status.refused');
+  },
+  get partial() {
+    return t('errors.status.partial');
+  },
 };
 
 export function saveDownload(name: string, data: unknown, compact = false) {

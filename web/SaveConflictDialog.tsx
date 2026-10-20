@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
@@ -7,6 +8,7 @@ import './settings-layout.css';
 
 export type SavedSettingField = { label: string; value: string };
 type SavedReview = SavedSettingField[] | { content: ReactNode; actions?: ReactNode };
+type SavedReviewSource = SavedReview | (() => SavedReview);
 
 /** Reviewing the saved version never changes the editable draft or its revision. */
 export function SaveConflictDialog({
@@ -19,10 +21,11 @@ export function SaveConflictDialog({
   open: boolean;
   title: string;
   onClose: () => void;
-  readSaved: () => Promise<SavedReview>;
+  readSaved: () => Promise<SavedReviewSource>;
   onAcceptSaved?: () => void;
 }) {
-  const [fields, setFields] = useState<SavedReview | null>(null);
+  useI18n();
+  const [fields, setFields] = useState<SavedReviewSource | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const version = useRef(0);
@@ -45,34 +48,38 @@ export function SaveConflictDialog({
     setError('');
     try {
       const saved = await readSaved();
-      if (request === version.current) setFields(saved);
+      if (request === version.current) setFields(() => saved);
     } catch (caught) {
       if (request === version.current)
-        setError(caught instanceof Error ? caught.message : '저장본을 확인하지 못했어요.');
+        setError(caught instanceof Error ? caught.message : uiMessage('shared.savedFailure'));
     } finally {
       if (request === version.current) setLoading(false);
     }
   }
-  const reviewActions = fields && !Array.isArray(fields) ? fields.actions : null;
+  const savedReview = typeof fields === 'function' ? fields() : fields;
+  const reviewActions = savedReview && !Array.isArray(savedReview) ? savedReview.actions : null;
   const reviewContent = (
     <>
-      <p>현재 입력은 그대로 두고 저장된 내용을 확인할 수 있어요.</p>
-      <p className="muted">저장본을 확인한 뒤 계속 편집할 수 있어요.</p>
-      {fields && (
-        <section aria-label="현재 저장본" className="settings-group-body saved-version-review">
-          <h3>현재 저장본</h3>
-          {Array.isArray(fields)
-            ? fields.map((field) => (
+      <p>{t('shared.reviewPreserves')}</p>
+      <p className="muted">{t('shared.reviewContinue')}</p>
+      {savedReview && (
+        <section
+          aria-label={t('shared.currentSaved')}
+          className="settings-group-body saved-version-review"
+        >
+          <h3>{t('shared.currentSaved')}</h3>
+          {Array.isArray(savedReview)
+            ? savedReview.map((field) => (
                 <div className="settings-row" key={field.label}>
                   <span className="settings-row-copy">{field.label}</span>
-                  <span className="settings-row-control">{field.value || '없음'}</span>
+                  <span className="settings-row-control">{field.value || t('shared.none')}</span>
                 </div>
               ))
-            : fields.content}
+            : savedReview.content}
         </section>
       )}
-      {loading && <LoadingState presentation="placeholder" label="저장본을 확인하고 있어요…" />}
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {loading && <LoadingState presentation="placeholder" label={t('shared.reviewLoading')} />}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </>
   );
   return (
@@ -93,9 +100,9 @@ export function SaveConflictDialog({
           aria-busy={loading}
           onClick={() => void review()}
         >
-          {loading ? '저장본 확인 중…' : '저장본 확인'}
+          {loading ? t('shared.reviewBusy') : t('shared.reviewSaved')}
         </button>
-        {fields && onAcceptSaved && (
+        {savedReview && onAcceptSaved && (
           <button
             type="button"
             className="secondary"
@@ -105,12 +112,12 @@ export function SaveConflictDialog({
               onClose();
             }}
           >
-            저장본 확인 완료
+            {t('shared.reviewDone')}
           </button>
         )}
         {reviewActions ?? (
           <button ref={keepInput} type="button" className="primary" onClick={onClose}>
-            현재 입력 유지
+            {t('shared.keepInput')}
           </button>
         )}
       </div>
