@@ -57,7 +57,7 @@ Copy a group's `nextRead` to descend. Every page returns `version`, `scope`, met
 
 Pages fit 6,000 local tokens, including JSON metadata and continuations. Leaf titles/descriptions/relations use explicit previews and original counts. Very large results can return fewer than the requested limit and resume at the actual end. Plain search, empty-query flat listings and known-ID reads remain available; query cannot be combined with mode=browse. No heading index, LLM indexing, new search provider or persistent index is used. On first browse, a WeakMap-owned view compiles/groups/hashes the frozen Run corpus once per role; descending and paging reuse it. A new Run object has its own view, and garbage collection releases old views without timers, eviction policies or settings. Callers must not mutate the frozen tool corpus in place. This view is not initialized for ordinary search or read calls; model tool-loop inference and its latency are not free.
 
-For a helper, wrap returned main read operations in `app.call({name,arguments})`. The five top-level helper tools are unchanged, including explicit review's read-only gateway. A helper round-budget rejection supplies a smaller retry of the same browse range, not an unrelated library search.
+For a helper, wrap returned main read operations in `app.call({name,arguments})`. The helper exposes `data.exec`, `app.tools` and `app.call` when its Linux runner is configured; explicit review retains only the read-only gateways. A helper round-budget rejection supplies a smaller retry of the same browse range, not an unrelated library search.
 
 ## Mutations
 
