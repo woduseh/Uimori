@@ -463,7 +463,7 @@ export const messages = {
     zh: '选择提供商',
   },
   'providers.m88': {
-    ko: '프로바이더를 선택하세요.',
+    ko: '프로바이더를 선택해 주세요.',
     en: 'Select a provider.',
     ja: 'プロバイダーを選択してください。',
     zh: '请选择提供商。',
@@ -979,7 +979,7 @@ export const messages = {
     zh: '未确认的值 · 由提供商判定',
   },
   'providers.m188': {
-    ko: '이 프로바이더는 생성 중단 문자열을 보낼 수 없어요. 이 항목을 삭제하세요.',
+    ko: '이 프로바이더는 생성 중단 문자열을 보낼 수 없어요. 이 항목을 삭제해 주세요.',
     en: 'This provider cannot accept stop strings. Delete this entry.',
     ja: 'このプロバイダーには生成停止文字列を送信できません。この項目を削除してください。',
     zh: '此提供商不支持发送停止字符串。请删除此项。',
@@ -1309,7 +1309,7 @@ export const messages = {
     zh: '60 分钟',
   },
   'providers.m253': {
-    ko: '유지 시간을 지정하려면 캐시 기준점 또는 자동 캐싱 방식을 선택하세요. 현재 방식은 유지 시간을 프로바이더 기본값으로 되돌려야 해요.',
+    ko: '유지 시간을 지정하려면 캐시 기준점 또는 자동 캐싱 방식을 선택해 주세요. 현재 방식은 유지 시간을 프로바이더 기본값으로 되돌려야 해요.',
     en: 'Choose cache breakpoints or automatic caching to specify retention. For the current mode, reset retention to the provider default.',
     ja: '保持時間を指定するには、キャッシュ基準点または自動キャッシュを選んでください。現在の方式では、保持時間をプロバイダーの既定値に戻す必要があります。',
     zh: '要指定保留时长，请选择缓存断点或自动缓存。当前模式需要将保留时长恢复为提供商默认值。',
@@ -1687,7 +1687,7 @@ export const messages = {
     zh: '没有搜索结果。可以在下方直接输入模型 ID。',
   },
   'providers.m321': {
-    ko: '저장된 목록이 없어요. 목록을 새로고침하거나 모델 ID를 직접 입력하세요.',
+    ko: '저장된 목록이 없어요. 목록을 새로고침하거나 모델 ID를 직접 입력해 주세요.',
     en: 'No saved list. Refresh the list or enter a model ID directly.',
     ja: '保存済みの一覧がありません。一覧を更新するか、モデルIDを直接入力してください。',
     zh: '没有已保存的列表。请刷新列表或直接输入模型 ID。',
@@ -1723,7 +1723,7 @@ export const messages = {
     zh: '请输入最大输出 token 数。',
   },
   'providers.m327': {
-    ko: '이 모델은 컨텍스트를 먼저 제공하는 평가 방식을 지원하지 않아요. 고급에서 평가 컨텍스트를 모델이 도구를 선택하는 방식으로 변경하세요.',
+    ko: '이 모델은 컨텍스트를 먼저 제공하는 평가 방식을 지원하지 않아요. 고급에서 평가 컨텍스트를 모델이 도구를 선택하는 방식으로 변경해 주세요.',
     en: 'This model does not support context-first evaluation. In Advanced, change evaluation context to let the model select tools.',
     ja: 'このモデルはコンテキストを先に提供する評価方式に対応していません。詳細設定で評価コンテキストをモデルがツールを選ぶ方式に変更してください。',
     zh: '此模型不支持先提供上下文的评估方式。请在高级设置中将评估上下文改为由模型选择工具。',
@@ -2737,7 +2737,7 @@ export const messages = {
     zh: '费率确认日期',
   },
   'providers.m511': {
-    ko: '빈칸은 미확인이에요. 무료인 항목만 0을 입력하세요.',
+    ko: '빈칸은 미확인이에요. 무료인 항목만 0을 입력해 주세요.',
     en: 'Blank means unverified. Enter 0 only for free items.',
     ja: '空欄は未確認です。無料の項目にのみ0を入力してください。',
     zh: '留空表示未确认。仅免费项目填写 0。',
@@ -2977,7 +2977,7 @@ export const messages = {
     zh: '{enabled, select, true {停用} other {启用}}模型 {name}',
   },
   'providers.m552': {
-    ko: '{value0}의 현재 값은 이 프로바이더에서 보낼 수 없어요. {value1}이나 목록의 값으로 변경하세요.',
+    ko: '{value0}의 현재 값은 이 프로바이더에서 보낼 수 없어요. {value1}이나 목록의 값으로 변경해 주세요.',
     en: 'This provider cannot send the current value of {value0}. Choose {value1} or a listed value.',
     ja: 'このプロバイダーでは{value0}の現在の値を送信できません。{value1}または一覧の値に変更してください。',
     zh: '此提供商无法发送 {value0} 的当前值。请选择 {value1} 或列表中的值。',
@@ -2989,7 +2989,7 @@ export const messages = {
     zh: '{value0} · 无法发送',
   },
   'providers.m554': {
-    ko: '{value0}은 이 프로바이더에서 보낼 수 없어요. 값을 비워 모델 기본값을 사용하세요.',
+    ko: '{value0}은 이 프로바이더에서 보낼 수 없어요. 값을 비워 모델 기본값을 사용해 주세요.',
     en: 'This provider cannot send {value0}. Clear the value to use the model default.',
     ja: 'このプロバイダーでは{value0}を送信できません。値を空にしてモデルの既定値を使用してください。',
     zh: '此提供商无法发送 {value0}。请清空该值以使用模型默认值。',
@@ -3115,7 +3115,7 @@ export const messages = {
     zh: 'providerOptions 过大。请缩减至 {value0} 个字符以内。',
   },
   'providers.m576': {
-    ko: '서버에서 서비스 등급을 {value0}로 제한해요. 모델 기본값이나 서버와 같은 값을 선택하세요.',
+    ko: '서버에서 서비스 등급을 {value0}로 제한해요. 모델 기본값이나 서버와 같은 값을 선택해 주세요.',
     en: 'The server restricts the service tier to {value0}. Choose the model default or the same tier as the server.',
     ja: 'サーバーはサービスティアを{value0}に制限しています。モデルの既定値かサーバーと同じ値を選択してください。',
     zh: '服务器将服务等级限制为 {value0}。请选择模型默认值或与服务器相同的值。',

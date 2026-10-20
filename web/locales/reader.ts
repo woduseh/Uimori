@@ -414,7 +414,7 @@ export const messages = {
     zh: '当前原文',
   },
   'reader.displaysHeadingsEmphasisListsQuotesLinksAndCodeOnly': {
-    ko: '제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 루비 문자·밑줄· 첨자·하이라이트 등 읽기용 HTML만 표시하고, 나머지 HTML과 허용되지 않은 이미지는 문자로 남겨요.',
+    ko: '제목·강조·목록·인용·링크·코드를 표시해요. 속성 없는 루비 문자·밑줄·첨자·하이라이트 등 읽기용 HTML만 표시하고, 나머지 HTML과 허용되지 않은 이미지는 문자로 남겨요.',
     en: 'Displays headings, emphasis, lists, quotes, links and code. Only reading HTML such as attribute-free ruby, underline, subscript and highlighting is rendered. Other HTML and disallowed images remain as text.',
     ja: '見出し・強調・リスト・引用・リンク・コードを表示します。属性のないルビ・下線・添字・ハイライトなど読書用HTMLのみ描画し、ほかのHTMLや許可されない画像は文字として残します。',
     zh: '显示标题、强调、列表、引用、链接和代码。仅渲染不含属性的注音、下划线、上下标、高亮等阅读用HTML，其他HTML和不允许的图片保留为文字。',

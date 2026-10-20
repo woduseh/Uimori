@@ -768,7 +768,7 @@ export const messages = {
     zh: '在所有文件夹搜索',
   },
   'library.couldNotVerifyRequiredModulesCheckFor': {
-    ko: '필수 모듈을 확인할 수 없어요. 자료가 누락되었거나 의존 관계가 충돌하는지 확인해 주세요. ({v0})',
+    ko: '필수 모듈을 확인할 수 없어요. 자료가 누락됐거나 의존 관계가 충돌하는지 확인해 주세요. ({v0})',
     en: 'Could not verify required modules. Check for missing resources or conflicting dependencies. ({v0})',
     ja: '必須モジュールを確認できませんでした。資料の欠落や依存関係の競合を確認してください。（{v0}）',
     zh: '无法确认必需模块，请检查资料是否缺失或依赖关系是否冲突。（{v0}）',

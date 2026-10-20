@@ -517,7 +517,7 @@ export const messages = {
     zh: 'CBS条件和其他源码字段保持不变。',
   },
   'native.text_c4a928ce23': {
-    ko: '첫 로어를 추가하거나 폴더부터 만들어 정리하세요.',
+    ko: '첫 로어를 추가하거나 폴더부터 만들어 정리해 주세요.',
     en: 'Add your first lore entry or create a folder.',
     ja: '最初のロアを追加するか、フォルダーを作成してください。',
     zh: '添加第一条设定，或先创建文件夹。',
@@ -823,7 +823,7 @@ export const messages = {
     zh: '全局笔记',
   },
   'native.text_f470124b0d': {
-    ko: '목록에서 블록을 추가해 구성을 시작하세요.',
+    ko: '목록에서 블록을 추가해 구성을 시작해 주세요.',
     en: 'Add blocks from the list to start.',
     ja: '一覧からブロックを追加して構成を始めてください。',
     zh: '从列表添加块以开始构建。',
@@ -1453,7 +1453,7 @@ export const messages = {
     zh: '重置',
   },
   'native.text_0e9ffc660e': {
-    ko: '항목을 추가해 토글을 구성하세요.',
+    ko: '항목을 추가해 토글을 구성해 주세요.',
     en: 'Add items to configure toggles.',
     ja: '項目を追加してトグルを構成してください。',
     zh: '添加项目以配置开关。',
@@ -2257,7 +2257,7 @@ export const messages = {
     zh: '{settings, number}项设置 · {dividers, number}条分隔线',
   },
   'native.deleteGroupDescription': {
-    ko: '‘{name}’ 그룹과 안의 모든 항목을 삭제해요. 항목을 남기려면 그룹 해제를 사용하세요.',
+    ko: '‘{name}’ 그룹과 안의 모든 항목을 삭제해요. 항목을 남기려면 그룹 해제를 사용해 주세요.',
     en: 'Delete group “{name}” and all its items. Use Ungroup to keep the items.',
     ja: '「{name}」グループと中の全項目を削除します。項目を残すにはグループ解除を使ってください。',
     zh: '删除“{name}”分组及所有项目。如需保留项目，请取消分组。',

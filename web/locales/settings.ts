@@ -43,7 +43,7 @@ export const messages = {
     zh: '未选择模型',
   },
   'settings.m7': {
-    ko: '선택한 모델 · 삭제되었거나 확인 필요',
+    ko: '선택한 모델 · 삭제됐거나 확인 필요',
     en: 'Selected model · missing or needs review',
     ja: '選択したモデル · 削除済みまたは要確認',
     zh: '所选模型 · 已删除或需要检查',
