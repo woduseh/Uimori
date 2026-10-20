@@ -275,12 +275,25 @@ function inspectCommittedEffects(store: Store, taskId: string, offset: number) {
       AND json_type(data,'$.name')='text' AND json_type(data,'$.callId')='text' ORDER BY seq`)
       .iterate(taskId)) {
       const callId = String(event.callId);
-      const receiptId = `${taskId}:${helperCallOperationId(taskId, callId)}`;
-      const item = pending.get(receiptId);
-      if (!item) continue;
-      item.tool = String(event.tool);
-      item.callId = callId;
-      pending.delete(receiptId);
+      const operationId = helperCallOperationId(taskId, callId);
+      const exactReceiptId = `${taskId}:${operationId}`;
+      // One data.exec call can apply several files. Native receipts extend the same
+      // host-owned call identity with file/revision/content, never with result claims.
+      const shellPrefix = `${taskId}:shell:${operationId}:`;
+      const appPrefix = `${taskId}:shell:${operationId.slice(0, 48)}:app:`;
+      for (const [receiptId, item] of pending) {
+        if (
+          receiptId !== exactReceiptId &&
+          !(
+            event.tool === 'data.exec' &&
+            (receiptId.startsWith(shellPrefix) || receiptId.startsWith(appPrefix))
+          )
+        )
+          continue;
+        item.tool = String(event.tool);
+        item.callId = callId;
+        pending.delete(receiptId);
+      }
       if (!pending.size) break;
     }
   }

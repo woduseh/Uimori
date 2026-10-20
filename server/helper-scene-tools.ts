@@ -135,7 +135,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
 ];
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-function scopedSource(store: Store, chatId: string, id: string) {
+export function helperSceneSource(store: Store, chatId: string, id: string) {
   const chat = store.chat(chatId);
   // Fork ancestry can contain another chat's originals: those are readable through story
   // tools, but direct editing must never mutate the fork's shared parent.
@@ -156,7 +156,7 @@ function snapshot(
   const selected = original
     ? 'original'
     : choice(args.target, ['original', 'translation'], 'scene target');
-  const source = knownOwned ? store.source(id) : scopedSource(store, chatId, id);
+  const source = knownOwned ? store.source(id) : helperSceneSource(store, chatId, id);
   const latest = selected === 'translation' ? latestTranslation(store, id) : null;
   const displayed = latest ? displayTranslationJob(source, latest) : undefined;
   if (selected === 'translation' && typeof displayed?.result?.text !== 'string')

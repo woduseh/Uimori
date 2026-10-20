@@ -1239,14 +1239,14 @@ test('outline source nextRead works in the real data worker across frozen and ed
   f.setSnapshot({ writing });
   const args = { mode: 'detail', nodeId: id, section: 'writings' };
   const frozen = readHelperOutline(f.store, chat.id, args, writing) as any;
-  const frozenRef = frozen.items[0].nextRead.arguments.refs[0];
+  const frozenRef = frozen.items[0].nextRead.arguments.arguments.refs[0];
   expect((await readOne(f, frozenRef)).text).toBe(source.text);
   const changed = editSource(f.store, source.id, {
     expectedRevision: source.editRevision,
     text: '새로 편집된 원문😀',
   });
   const live = readHelperOutline(f.store, chat.id, args, writing) as any;
-  const liveRef = live.items[0].nextRead.arguments.refs[0];
+  const liveRef = live.items[0].nextRead.arguments.arguments.refs[0];
   expect(liveRef.scope).toBe('chats');
   expect((await readOne(f, liveRef)).text).toBe(changed.text);
   expect((await readOne(f, frozenRef)).text).toBe(source.text);

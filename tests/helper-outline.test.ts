@@ -180,18 +180,21 @@ test('writings point at the exact frozen source or explicit live reference and d
     origin: 'reserved-chat-source',
   });
   expect(page.items[0].nextRead).toMatchObject({
-    name: 'data.read',
+    name: 'app.call',
     arguments: {
-      refs: [
-        {
-          scope: 'current',
-          chatId: chat.id,
-          id: source.id,
-          revision: source.hash,
-          field: '/text',
-          hash: source.hash,
-        },
-      ],
+      name: 'data.read',
+      arguments: {
+        refs: [
+          {
+            scope: 'current',
+            chatId: chat.id,
+            id: source.id,
+            revision: source.hash,
+            field: '/text',
+            hash: source.hash,
+          },
+        ],
+      },
     },
   });
   const edited = editSource(store, source.id, {
@@ -208,7 +211,7 @@ test('writings point at the exact frozen source or explicit live reference and d
     origin: 'live-chat-source',
     changedSinceTaskStart: true,
   });
-  expect(live.items[0].nextRead.arguments.refs[0]).toMatchObject({
+  expect(live.items[0].nextRead.arguments.arguments.refs[0]).toMatchObject({
     scope: 'chats',
     revision: sha(edited.text),
     hash: edited.hash,

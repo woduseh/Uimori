@@ -512,13 +512,21 @@ test('helper compaction resumes completed library reads and exact writes within 
       expect(continuation(request)).toBeUndefined();
       return tools(
         tool('saved', 'resource.save', { expectedRevision: 1 }),
-        tool('found', 'data.search', { scope: 'library', query: library.title, patterns: ['0000'] })
+        tool('found', 'app.call', {
+          name: 'data.search',
+          arguments: { scope: 'library', query: library.title, patterns: ['0000'] },
+        })
       );
     }
     if (helperCalls === 2) {
       const found = events(request).find((event) => event.callId === 'found')!.result as any;
       expect(found.items).toHaveLength(1);
-      return tools(tool('read', 'data.read', { refs: [found.items[0].ref], limit: 10_000 }));
+      return tools(
+        tool('read', 'app.call', {
+          name: 'data.read',
+          arguments: { refs: [found.items[0].ref], limit: 10_000 },
+        })
+      );
     }
     expect(request.stable.contract).toContain(CONTEXT_CONTINUATION_GUIDANCE);
     expect(request.stable.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
@@ -531,12 +539,16 @@ test('helper compaction resumes completed library reads and exact writes within 
       reason: 'host-compaction',
       completedReads: [
         {
-          name: 'data.search',
-          args: { scope: 'library', query: library.title, patterns: ['0000'] },
+          name: 'app.call',
+          args: {
+            name: 'data.search',
+            arguments: { scope: 'library', query: library.title, patterns: ['0000'] },
+          },
           returned: { items: [{ ref: { id: library.id, revision: 1 }, title: library.title }] },
         },
         {
-          name: 'data.read',
+          name: 'app.call',
+          args: { name: 'data.read' },
           returned: { items: [{ ref: { id: library.id, revision: 1 } }] },
         },
       ],

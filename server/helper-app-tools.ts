@@ -282,6 +282,7 @@ const chatToolNames = new Set([
 const dataToolNames = new Set(HELPER_DATA_TOOLS.map((tool) => tool.name));
 const writingReadNames = new Set(MAIN_READ_TOOLS.map((tool) => tool.name));
 const readNames = new Set([
+  'data.exec',
   ...dataToolNames,
   ...writingReadNames,
   'settings.read',
@@ -319,13 +320,12 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
       helperResourceOperation(name, args)?.readOnly ||
       readNames.has(name) ||
       ((name === 'chat.lore' || name === 'library.organize') && args.action === 'read'),
-    reviewAllowed:
-      (data && name !== 'data.exec') ||
-      name === 'app.tools' ||
-      name === 'outline.read' ||
-      writingRead,
+    reviewAllowed: data || name === 'app.tools' || name === 'outline.read' || writingRead,
     direct:
-      data || HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name) || name.startsWith('task.'),
+      name === 'data.exec' ||
+      data ||
+      HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name) ||
+      name.startsWith('task.'),
     writingRead,
     writing:
       writingNames.has(name) ||
@@ -333,7 +333,11 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
   };
 }
 
-export const HELPER_APP_TOOLS: ProviderTool[] = [...TOOLS, ...MAIN_READ_TOOLS].map((tool) => {
+export const HELPER_APP_TOOLS: ProviderTool[] = [
+  ...TOOLS,
+  ...MAIN_READ_TOOLS,
+  ...HELPER_DATA_TOOLS,
+].map((tool) => {
   if (!chatToolNames.has(tool.name)) return tool;
   const input = tool.inputSchema as Record<string, Json>;
   return {
@@ -354,7 +358,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.tools',
     description:
-      'Discover app operations for editing resources/themes, saved original or translated scenes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or reading archived independent scenes. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
+      'Discover app operations for exact data search/read, read-only SQL, editing resources/themes, saved original or translated scenes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or reading archived independent scenes. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
     inputSchema: schema(
       {
         names: { type: 'array', maxItems: 4, items: str },

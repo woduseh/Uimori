@@ -1516,13 +1516,7 @@ test('selected outline review allows evidence reads, rejects writes and retains 
   const requests: transport.ProviderRequest[] = [];
   mockSend((request, _options, index): transport.ProviderResult => {
     requests.push(request);
-    expect(request.stable.tools.map((tool) => tool.name)).toEqual([
-      'data.search',
-      'data.read',
-      'db.query',
-      'app.tools',
-      'app.call',
-    ]);
+    expect(request.stable.tools.map((tool) => tool.name)).toEqual(['app.tools', 'app.call']);
     if (index === 0)
       return {
         ...structuredClone(success),
@@ -1531,8 +1525,11 @@ test('selected outline review allows evidence reads, rejects writes and retains 
         toolCalls: [
           {
             id: 'read-evidence',
-            name: 'data.search',
-            arguments: { scope: 'current', ids: [source.id], patterns: ['Mira'] },
+            name: 'app.call',
+            arguments: {
+              name: 'data.search',
+              arguments: { scope: 'current', ids: [source.id], patterns: ['Mira'] },
+            },
           },
           { id: 'discover-outline', name: 'app.tools', arguments: {} },
           {
@@ -1592,7 +1589,7 @@ test('selected outline review allows evidence reads, rejects writes and retains 
   ]);
   expect(input.partial).toBe(false);
   expect(requests[1].input.results).toMatchObject([
-    { name: 'data.search', denied: false },
+    { name: 'app.call', args: { name: 'data.search' }, denied: false },
     { name: 'app.tools', denied: false },
     {
       name: 'app.call',

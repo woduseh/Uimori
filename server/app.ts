@@ -434,25 +434,37 @@ export async function createApp(options: AppOptions): Promise<App> {
           idempotencyKey: key,
         };
         if (name === 'notes.write')
-          return store.story.notes.write(scope.chatId, {
-            ...record(args.body),
-            ...base,
-            author: '사용자 도우미 요청',
-          });
+          return helper.workspace.operation(
+            task.id,
+            `${task.id}:${operationId}`,
+            { name, args },
+            () =>
+              store.story.notes.write(scope.chatId, {
+                ...record(args.body),
+                ...base,
+                author: '사용자 도우미 요청',
+              })
+          );
         const snapshot = await prepareNativeRisuReadOnly(
           helperWritingSnapshot(store, scope.chatId),
           'context'
         );
         hooks.signal.throwIfAborted();
         if (name === 'context.edit')
-          return store.context.edit(
-            scope.chatId,
-            {
-              ...base,
-              expectedRevision: number(args.expectedRevision, 'context revision', 0),
-              summary: text(args.summary, 'summary', SOURCE_TEXT_MAX_CHARS),
-            },
-            snapshot
+          return helper.workspace.operation(
+            task.id,
+            `${task.id}:${operationId}`,
+            { name, args },
+            () =>
+              store.context.edit(
+                scope.chatId,
+                {
+                  ...base,
+                  expectedRevision: number(args.expectedRevision, 'context revision', 0),
+                  summary: text(args.summary, 'summary', SOURCE_TEXT_MAX_CHARS),
+                },
+                snapshot
+              )
           );
         const job = store.context.schedule(
           scope.chatId,
@@ -491,7 +503,16 @@ export async function createApp(options: AppOptions): Promise<App> {
             store.context.previous(input)
           );
           hooks.signal.throwIfAborted();
-          return store.context.finish(job.id, prepared.snapshot);
+          return helper.workspace.operation(
+            task.id,
+            `${task.id}:${operationId}`,
+            { name, args },
+            () => {
+              const saved = store.context.finish(job.id, prepared.snapshot);
+              if (saved.status !== 'completed') throw new HttpError(409, 'CONTEXT_JOB_NOT_RUNNING');
+              return saved;
+            }
+          );
         } catch (error) {
           if (hooks.signal.aborted) store.context.cancel(scope.chatId, job.id);
           else

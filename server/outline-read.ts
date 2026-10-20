@@ -162,7 +162,13 @@ function sourcePages(store: Store, chatId: string, refs: Writing[], writing?: Ru
       ...(available
         ? {
             ref: dataRef,
-            nextRead: { name: 'data.read', arguments: { refs: [dataRef], offset: 0, limit: 4000 } },
+            nextRead: {
+              name: 'app.call',
+              arguments: {
+                name: 'data.read',
+                arguments: { refs: [dataRef], offset: 0, limit: 4000 },
+              },
+            },
           }
         : {}),
     };

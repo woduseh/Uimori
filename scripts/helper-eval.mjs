@@ -483,11 +483,14 @@ function scriptedResponse(caseId, wire, round, turn, bot) {
     }
   } else if (round === 0)
     tools = [
-      call('search', 'data.search', {
-        scope: 'library',
-        ids: [bot.id],
-        patterns: ['Age'],
-        context: 300,
+      call('search', 'app.call', {
+        name: 'data.search',
+        arguments: {
+          scope: 'library',
+          ids: [bot.id],
+          patterns: ['Age'],
+          context: 300,
+        },
       }),
     ];
   else {
