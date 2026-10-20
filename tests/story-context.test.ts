@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { executeStoryRead, STORY_RESULT_MAX_BYTES } from '../core/story-context.js';
-import { sourceHash } from '../core/source-history.js';
+import { countTextTokens } from '../core/text-tokens.js';
+import { readStorySource, searchStorySources, sourceHash } from '../core/source-history.js';
 import { modelAuthorNotes, validateAuthorNote, type AuthorNote } from '../core/notes.js';
 import type { RunSnapshot } from '../core/types.js';
 
@@ -153,5 +154,63 @@ test('mistyped scene and range are correctable while corrupt source history stay
   expect(invoke({ sceneNumber: 1 })).toMatchObject({
     denied: false,
     result: { text: 'revised', source: { hash: sourceHash('revised') } },
+  });
+});
+
+test.each([
+  'Plain English prose. ',
+  '한국어 원문과 범위를 확인해요. ',
+  '日本語の原文を読みます。',
+  '🙂🌸🎉',
+])('token reads preserve original ranges and legacy UTF-16 limits: %s', (phrase) => {
+  const text = phrase.repeat(2000);
+  const fixed = snapshot(text);
+  let offset = 0;
+  let joined = '';
+  while (offset < text.length) {
+    const result = read(fixed, 'story.read', { sceneNumber: 1, offset, maxTokens: 256 });
+    expect(countTextTokens(result.text)).toBeLessThanOrEqual(256);
+    expect(result.text.length).toBeGreaterThan(0);
+    expect(result.text).toBe(text.slice(offset, result.source.end));
+    expect(result.source.hash).toBe(sourceHash(text));
+    expect(result.text.isWellFormed()).toBe(true);
+    joined += result.text;
+    offset = result.source.end;
+  }
+  expect(joined).toBe(text);
+  expect(read(fixed, 'story.read', { sceneNumber: 1, offset: 2, limit: 17 }).text).toBe(
+    text.slice(2, 19)
+  );
+  const source = readStorySource(
+    { chatId: fixed.chatId, history: fixed.history },
+    { revision: 'source', maxTokens: 128 }
+  );
+  expect(source.source.quote).toBe(source.text);
+  expect(source.text).toBe(text.slice(source.source.start, source.source.end));
+  expect(countTextTokens(source.text)).toBeLessThanOrEqual(128);
+});
+
+test('search token excerpts retain literal source offsets and explicit character compatibility', () => {
+  const text = '한국어 문장. '.repeat(100) + 'needle' + ' 後ろの文章🌸'.repeat(100);
+  const scope = { chatId: 'chat', history: [{ revision: 'r', text }] };
+  const tokenResult = searchStorySources(scope, { query: 'needle', excerptTokens: 80 }).results[0];
+  expect(tokenResult.text).toContain('needle');
+  expect(countTextTokens(tokenResult.text)).toBeLessThanOrEqual(80);
+  expect(tokenResult.text).toBe(text.slice(tokenResult.source.start, tokenResult.source.end));
+  const legacy = searchStorySources(scope, { query: 'needle', excerptChars: 40 }).results[0];
+  expect(legacy.source.start).toBe(text.indexOf('needle') - 10);
+  expect(legacy.text).toHaveLength(40);
+});
+
+test('too-small token pages are recoverable rather than returning a stationary continuation', () => {
+  const event = executeStoryRead(snapshot('🌸'.repeat(10)), {
+    callId: 'small',
+    name: 'story.read',
+    args: { sceneNumber: 1, maxTokens: 1 },
+  });
+  expect(event).toMatchObject({
+    denied: true,
+    errorKind: 'recoverable',
+    result: { code: 'INVALID_ARGUMENTS' },
   });
 });

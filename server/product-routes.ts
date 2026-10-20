@@ -1,5 +1,5 @@
 import { updateAssetMetadata } from './asset-metadata.js';
-import { EXECUTION_INPUT_MAX_CHARS } from '../core/content-limits.js';
+import { PROMPT_HTTP_BODY_MAX_BYTES } from '../core/content-limits.js';
 import { processImageUpload } from './image-processing.js';
 import { databaseBackupStream } from './database-backup.js';
 import { nativeRisuPreview } from './risu-native-preview.js';
@@ -213,12 +213,12 @@ export function productRoutes(
     async (request) => product.content(request.body, request.params.id)
   );
   app.post('/api/prompt-combinations', async (request) => product.promptCombination(request.body));
-  app.post('/api/prompt-presets', { bodyLimit: EXECUTION_INPUT_MAX_CHARS }, async (request) =>
+  app.post('/api/prompt-presets', { bodyLimit: PROMPT_HTTP_BODY_MAX_BYTES }, async (request) =>
     product.promptPreset(request.body)
   );
   app.put<{ Params: { id: string } }>(
     '/api/prompt-presets/:id',
-    { bodyLimit: EXECUTION_INPUT_MAX_CHARS },
+    { bodyLimit: PROMPT_HTTP_BODY_MAX_BYTES },
     async (request) => product.promptPreset(request.body, request.params.id)
   );
   app.get<{ Params: { id: string } }>('/api/connections/:id', (request) => {

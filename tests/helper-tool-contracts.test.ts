@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import {
   emptyIllustrationPreset,
   DEFAULT_ILLUSTRATION_PRESET_ID,
@@ -184,7 +185,8 @@ function definition(request: transport.ProviderRequest, name: string) {
 test.each(['resource.read', 'chat.lore'] as const)(
   '%s round-budget recovery uses an exposed tool that can be called unchanged',
   async (name) => {
-    const prose = 'Exact lore text. '.repeat(6000);
+    // Dense multilingual text must exceed the round token budget, not merely a character count.
+    const prose = '한글漢字 설정 記録 경계 '.repeat(6000);
     const f = await fixture('library', prose);
     const attachment = new ChatOverridesStore(f.store).get(f.chat.id).attachments[0];
     const selector = { ...attachment.scope, loreId: attachment.lore[0].id, field: 'text' };
@@ -334,13 +336,16 @@ test('retired artifact writes are unavailable while historical revisions remain 
       return calls(call('first', 'app.call', { name: 'artifact.read', arguments: artifact }));
     }
     if (round === 2) {
-      expect(result(request, 'first')).toMatchObject({
+      const first = result<{ text: string; nextOffset: number }>(request, 'first');
+      expect(first).toMatchObject({
         field: 'text',
-        text: 'A'.repeat(3999),
-        range: { start: 0, end: 3999, unit: 'utf16-code-unit' },
+        range: { start: 0, end: first.nextOffset, unit: 'utf16-code-unit' },
         totalChars: prose.length,
-        nextOffset: 3999,
       });
+      expect(first.nextOffset).toBeGreaterThan(3999);
+      expect(first.text).toBe(prose.slice(0, first.nextOffset));
+      expect(countTextTokens(first.text)).toBeLessThanOrEqual(2000);
+      expect(new TextDecoder().decode(new TextEncoder().encode(first.text))).toBe(first.text);
       return calls(
         call('emoji', 'app.call', {
           name: 'artifact.read',
@@ -707,7 +712,7 @@ test('long chat lore stays paged through helper reads and saves with original fi
     if (round === 0) return calls(call('list', 'chat.lore', { action: 'read', limit: 1 }));
     if (round === 1) {
       const overview = result<HelperLoreRead>(request, 'list');
-      expect(JSON.stringify(overview).length).toBeLessThan(24000);
+      expect(countTextTokens(JSON.stringify(overview))).toBeLessThan(12000);
       expect(overview.items[0]).not.toHaveProperty('text');
       selector = { ...overview.items[0].scope, loreId: overview.items[0].id, field: 'text' };
       return calls(
@@ -721,7 +726,7 @@ test('long chat lore stays paged through helper reads and saves with original fi
     }
     if (round === 2) {
       const read = result<any>(request, 'field');
-      expect(JSON.stringify(read).length).toBeLessThanOrEqual(24000);
+      expect(countTextTokens(JSON.stringify(read))).toBeLessThanOrEqual(12000);
       expect(read.original.text).toBe(
         authored.slice(read.original.offset, read.original.nextOffset)
       );
@@ -805,7 +810,7 @@ test('helper discovers and retires an override after its shared lore was removed
     if (round === 0) return calls(appCall('list', { action: 'read', limit: 1 }));
     if (round === 1) {
       const list = result<any>(request, 'list');
-      expect(JSON.stringify(list).length).toBeLessThanOrEqual(24000);
+      expect(countTextTokens(JSON.stringify(list))).toBeLessThanOrEqual(12000);
       expect(list).toMatchObject({
         total: 1,
         nextOffset: null,
@@ -822,7 +827,7 @@ test('helper discovers and retires an override after its shared lore was removed
     }
     if (round === 2) {
       const read = result<any>(request, 'read');
-      expect(JSON.stringify(read).length).toBeLessThanOrEqual(24000);
+      expect(countTextTokens(JSON.stringify(read))).toBeLessThanOrEqual(12000);
       expect(read).toMatchObject({
         original: null,
         override: {

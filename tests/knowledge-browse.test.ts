@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
 import { nativeContent } from './fixtures/native-content.js';
@@ -204,9 +205,9 @@ test('paging remains bounded and lossless, including oversized authored metadata
   let page = browse(s, { limit: 100 });
   const ids: string[] = [];
   for (;;) {
-    expect(JSON.stringify(page).length).toBeLessThanOrEqual(24000);
+    expect(countTextTokens(JSON.stringify(page))).toBeLessThanOrEqual(6000);
     for (const item of page.items) {
-      expect(item.description.length).toBeLessThanOrEqual(160);
+      expect(countTextTokens(item.description)).toBeLessThanOrEqual(80);
       expect(item.title.isWellFormed()).toBe(true);
       expect(item.relatedIds).not.toContain('outside-scope');
       ids.push(item.id);

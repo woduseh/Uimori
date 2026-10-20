@@ -1,3 +1,4 @@
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
@@ -17,7 +18,7 @@ import { executeJevJudgment, type JevRequest } from './jev-judgment.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import { promptWorkspace } from './prompt-workspace.js';
 
-const RECENT_CONTEXT_CHARS = 16_000;
+const RECENT_CONTEXT_TOKENS = 8000;
 const PREFLIGHT_TIMEOUT_MS = 8_000;
 
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -105,7 +106,9 @@ export async function autoTranslationNeedsConfirmation(
 function currentContext(store: Store, chatId: string): string {
   const chat = store.chat(chatId);
   if (!chat.headRevision) return '';
-  return store.source(chat.headRevision).text.slice(-RECENT_CONTEXT_CHARS);
+  return textTokenExcerpt(store.source(chat.headRevision).text, RECENT_CONTEXT_TOKENS, {
+    side: 'end',
+  }).text;
 }
 
 function mainTarget(
@@ -126,7 +129,9 @@ function mainTarget(
     // from the original run's parent revision. Keep preflight aligned with that behavior.
     model: store.product.snapshot(chatId, 'main').models.main,
     context: run.parentRevision
-      ? store.source(run.parentRevision).text.slice(-RECENT_CONTEXT_CHARS)
+      ? textTokenExcerpt(store.source(run.parentRevision).text, RECENT_CONTEXT_TOKENS, {
+          side: 'end',
+        }).text
       : '',
   };
 }

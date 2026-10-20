@@ -1,3 +1,5 @@
+import { countTextTokens, textTokenExcerpt } from './text-tokens.js';
+import { STORY_READ_DEFAULT_TOKENS, STORY_READ_MAX_TOKENS } from './source-history.js';
 import { STORY_READ_TOOLS } from './story-read-tools.js';
 import {
   readStorySource,
@@ -9,19 +11,26 @@ import type { RunSnapshot, ToolEvent } from './types.js';
 import type { ToolAction } from './provider.js';
 
 export const STORY_READ_NAMES = STORY_READ_TOOLS.map((tool) => tool.name);
-const LIST_PREVIEW_CHARS = 160;
+const LIST_PREVIEW_TOKENS = 80;
+export const STORY_RESULT_MAX_TOKENS = 6000;
 export const STORY_RESULT_MAX_BYTES = 24000;
-const bytes = (value: unknown) => Buffer.byteLength(JSON.stringify(value), 'utf8');
+const fits = (value: unknown) => {
+  const serialized = JSON.stringify(value);
+  return (
+    Buffer.byteLength(serialized, 'utf8') <= STORY_RESULT_MAX_BYTES &&
+    countTextTokens(serialized) <= STORY_RESULT_MAX_TOKENS
+  );
+};
 
 function boundedRead<T>(start: number, desiredEnd: number, build: (end: number) => T): T {
   let result = build(desiredEnd);
-  if (bytes(result) <= STORY_RESULT_MAX_BYTES) return result;
+  if (fits(result)) return result;
   let low = start;
   let high = desiredEnd;
-  if (bytes(build(start)) > STORY_RESULT_MAX_BYTES) throw new Error('RESULT_METADATA_TOO_LARGE');
+  if (!fits(build(start))) throw new Error('RESULT_METADATA_TOO_LARGE');
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
-    if (bytes(build(middle)) <= STORY_RESULT_MAX_BYTES) low = middle;
+    if (fits(build(middle))) low = middle;
     else high = middle - 1;
   }
   if (low === start && desiredEnd > start) throw new Error('RESULT_METADATA_TOO_LARGE');
@@ -40,18 +49,16 @@ function boundedSearch(
     results,
     total,
     nextOffset: offset + results.length < total ? offset + results.length : null,
-    ...(results.length < candidates.length
-      ? { diagnostics: ['RESULT_BYTE_BUDGET_PAGE_LIMIT'] }
-      : {}),
+    ...(results.length < candidates.length ? { diagnostics: ['RESULT_BUDGET_PAGE_LIMIT'] } : {}),
   });
   for (const candidate of candidates) {
     results.push(candidate);
-    if (bytes(result()) > STORY_RESULT_MAX_BYTES) {
+    if (!fits(result())) {
       results.pop();
       break;
     }
   }
-  while (results.length && bytes(result()) > STORY_RESULT_MAX_BYTES) results.pop();
+  while (results.length && !fits(result())) results.pop();
   if (candidates.length && !results.length) throw new Error('RESULT_METADATA_TOO_LARGE');
   return result();
 }
@@ -69,7 +76,7 @@ function listStorySources(snapshot: RunSnapshot, offset: number, limit: number) 
         revision: item.revision,
         hash: item.contentHash ?? sourceHash(item.text),
         chars: text.length,
-        preview: text.replace(/\s+/gu, ' ').trim().slice(0, LIST_PREVIEW_CHARS),
+        preview: textTokenExcerpt(text.replace(/\s+/gu, ' ').trim(), LIST_PREVIEW_TOKENS).text,
         compacted: compacted.has(item.revision),
       },
     ];
@@ -95,11 +102,22 @@ export function executeStoryRead(snapshot: RunSnapshot, action: ToolAction): Too
   };
   const args = action.args;
   const search = action.name === 'story.search';
-  const allowed = search ? ['query', 'offset', 'limit'] : ['sceneNumber', 'offset', 'limit'];
+  const allowed = search
+    ? ['query', 'offset', 'limit']
+    : ['sceneNumber', 'offset', 'limit', 'maxTokens'];
   if (Object.keys(args).some((key) => !allowed.includes(key))) return denied('INVALID_ARGUMENTS');
 
   const offset = args.offset === undefined ? 0 : args.offset;
   const limit = args.limit === undefined ? (search ? 20 : 4096) : args.limit;
+  const maxTokens = args.maxTokens === undefined ? STORY_READ_DEFAULT_TOKENS : args.maxTokens;
+  if (
+    !search &&
+    (typeof maxTokens !== 'number' ||
+      !Number.isSafeInteger(maxTokens) ||
+      maxTokens < 1 ||
+      maxTokens > STORY_READ_MAX_TOKENS)
+  )
+    return denied('INVALID_ARGUMENTS');
   if (
     typeof offset !== 'number' ||
     typeof limit !== 'number' ||
@@ -152,20 +170,40 @@ export function executeStoryRead(snapshot: RunSnapshot, action: ToolAction): Too
       return denied('RESOURCE_UNAVAILABLE', true);
     if (offset > numbered.text.length) return denied('INVALID_ARGUMENTS');
 
-    const page = readStorySource(visibleScope, { revision: numbered.revision, offset, limit });
+    const readBudget =
+      args.limit === undefined
+        ? { maxTokens: maxTokens as number }
+        : { limit, ...(args.maxTokens === undefined ? {} : { maxTokens: maxTokens as number }) };
+    const page = readStorySource(visibleScope, {
+      revision: numbered.revision,
+      offset,
+      ...readBudget,
+    });
+    if (!page.text.length && offset < numbered.text.length) return denied('INVALID_ARGUMENTS');
     const { quote: _quote, ...source } = page.source;
     const sceneScope = sourceSceneScope(scope);
-    const result = boundedRead(offset, page.source.end, (end) => ({
-      sceneNumber: args.sceneNumber,
-      sceneScope,
-      text: page.text.slice(0, end - offset),
-      source: { ...source, end },
-      totalChars: page.totalChars,
-      nextOffset: end < page.totalChars ? end : null,
-    }));
+    const result = boundedRead(offset, page.source.end, (candidateEnd) => {
+      let end = candidateEnd;
+      if (
+        end < page.source.end &&
+        end > offset &&
+        end < numbered.text.length &&
+        /[\uD800-\uDBFF]/u.test(numbered.text[end - 1]) &&
+        /[\uDC00-\uDFFF]/u.test(numbered.text[end])
+      )
+        end--;
+      return {
+        sceneNumber: args.sceneNumber,
+        sceneScope,
+        text: page.text.slice(0, end - offset),
+        source: { ...source, end },
+        totalChars: page.totalChars,
+        nextOffset: end < page.totalChars ? end : null,
+      };
+    });
     return {
       ...action,
-      args: { sceneNumber: args.sceneNumber, offset, limit },
+      args: { sceneNumber: args.sceneNumber, offset, ...readBudget },
       result,
       denied: false,
     };

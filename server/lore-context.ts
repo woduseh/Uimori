@@ -68,11 +68,13 @@ export function verifiedRunLoreReads(store: Store, run: Run): RetainedLore[] {
   for (const event of run.toolEvents) {
     if (event.denied || event.name !== 'knowledge.read') continue;
     try {
-      const actual = executeTool(run.snapshot, {
-        callId: event.callId,
-        name: event.name,
-        args: event.args,
-      });
+      const actual = executeTool(
+        run.snapshot,
+        { callId: event.callId, name: event.name, args: event.args },
+        undefined,
+        'main',
+        event.readBudget ?? event.knowledgeReadChars ?? 6000
+      );
       if (!isDeepStrictEqual(actual, event)) continue;
       for (const data of knowledgeReadResults(actual)) {
         const resource = resources.find((r) => r.id === data.source.id);

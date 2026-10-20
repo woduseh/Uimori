@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import * as transport from '../core/transport.js';
 import { inputTranslationContract, inputTranslationTerms } from '../core/input-translation.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { withTranslationGuide } from '../core/translation-guide.js';
 import { createApp, type App } from '../server/app.js';
@@ -177,7 +178,7 @@ test('explicit input translation uses the selected model and spelling pairs, wit
   expect(task.terms).toEqual([
     { source: 'Mira', target: '미라', note: 'The person; preserve uncertainty.' },
   ]);
-  expect(task.context.excerpt).toHaveLength(3000);
+  expect(countTextTokens(task.context.excerpt)).toBeLessThanOrEqual(1500);
   expect(task.context.truncated).toBe(true);
   expect(task.context.excerpt).toContain('LATEST_SCENE_REFERENCE');
   expect(JSON.stringify(request)).not.toMatch(

@@ -36,7 +36,7 @@ import {
   estimateContextTokens,
   type ContextBudget,
 } from '../core/context-budget.js';
-import { tokenizerInfo } from '../core/text-tokens.js';
+import { tokenizerInfo, countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import {
   CONTEXT_CONTINUATION_GUIDANCE,
   CONTEXT_RETRIEVAL_GUIDANCE,
@@ -76,9 +76,10 @@ import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
-const MAX_HELPER_READ_CHARS = 32_000;
-const MAX_HELPER_ROUND_READ_CHARS = 64_000;
-const MAX_EXACT_HELPER_READ_CHARS = 8_000;
+// Stable local tool budgets; the selected model also admits the complete request.
+const MAX_HELPER_READ_TOKENS = 16_000;
+const MAX_HELPER_ROUND_READ_TOKENS = 32_000;
+const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
 /** Keep complete recent turns; an oversized turn belongs wholly to the summary. */
 function recentHelperHistory(
   history: HelperTask['snapshot']['history'],
@@ -484,7 +485,7 @@ function helperReadMetadata(value: unknown): Json | undefined {
       key === 'nextRead' &&
       item &&
       typeof item === 'object' &&
-      JSON.stringify(item).length <= 2000
+      countTextTokens(JSON.stringify(item)) <= 1000
     ) {
       metadata[key] = asJson(item);
     } else if (
@@ -520,7 +521,7 @@ function retainedSchema(event: ToolEvent) {
     Array.isArray(record(args).names) &&
     event.result !== null &&
     typeof event.result === 'object' &&
-    JSON.stringify(event.result).length <= MAX_EXACT_HELPER_READ_CHARS
+    countTextTokens(JSON.stringify(event.result)) <= MAX_EXACT_HELPER_READ_TOKENS
   );
 }
 function completedReadReferences(previous: HelperReadReference[], events: ToolEvent[]) {
@@ -537,7 +538,7 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
       (name === 'chat.lore' && args.action === 'read' && args.selector !== undefined);
     const returned =
       event.result && typeof event.result === 'object'
-        ? exact && JSON.stringify(event.result).length <= MAX_EXACT_HELPER_READ_CHARS
+        ? exact && countTextTokens(JSON.stringify(event.result)) <= MAX_EXACT_HELPER_READ_TOKENS
           ? asJson(event.result)
           : helperReadMetadata(event.result)
         : undefined;
@@ -1058,7 +1059,7 @@ export class HelperRuntime {
           elapsedMs: Math.round(performance.now() - toolStarted),
         };
       };
-      let roundReadChars = 0;
+      let roundReadTokens = 0;
       const readConcurrency = Math.min(4, availableParallelism());
       for (let index = 0; index < calls.length; ) {
         const group = [calls[index++]];
@@ -1100,10 +1101,13 @@ export class HelperRuntime {
           };
           const originalResultChars = JSON.stringify(event.result).length;
           if (helperRead(event)) {
-            const providedChars = JSON.stringify(event).length;
+            // A shell script is input, not read output; only its result uses the read budget.
+            const providedTokens = countTextTokens(
+              JSON.stringify(call.name === 'data.exec' ? event.result : event)
+            );
             if (
-              providedChars > MAX_HELPER_READ_CHARS ||
-              roundReadChars + providedChars > MAX_HELPER_ROUND_READ_CHARS
+              providedTokens > MAX_HELPER_READ_TOKENS ||
+              roundReadTokens + providedTokens > MAX_HELPER_ROUND_READ_TOKENS
             ) {
               const args = record(call.arguments);
               const nextRead = smallerHelperRead(
@@ -1119,6 +1123,7 @@ export class HelperRuntime {
                 error: 'HELPER_READ_TOO_LARGE',
                 returned: false,
                 originalResultChars,
+                originalResultTokens: providedTokens,
                 guidance:
                   call.name === 'artifact.read'
                     ? 'This artifact page was not supplied to the model or summarizer. Retry the same artifact revision, field and offset with nextRead; it uses a smaller page. If this round already returned several reads, request this page next round.'
@@ -1133,7 +1138,9 @@ export class HelperRuntime {
               event.errorKind = errorKind = 'recoverable';
               output = event.result;
             }
-            roundReadChars += JSON.stringify(event).length;
+            roundReadTokens += countTextTokens(
+              JSON.stringify(call.name === 'data.exec' ? event.result : event)
+            );
           }
           returned.push(event);
           this.workspace.event(task.conversationId, id, 'tool.finished', {
@@ -1899,21 +1906,13 @@ export class HelperRuntime {
         messages: this.store.history(chat.headRevision).map((item) => {
           const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
           if (sceneEnabled) sceneNumber++;
-          const previewEnd = 120;
-          // Avoid cutting a surrogate pair in the optional original preview.
-          const end =
-            item.text.length > previewEnd &&
-            /[\uD800-\uDBFF]/u.test(item.text[previewEnd - 1]!) &&
-            /[\uDC00-\uDFFF]/u.test(item.text[previewEnd]!)
-              ? previewEnd - 1
-              : previewEnd;
           return {
             id: item.revision,
             hash: item.contentHash,
             sceneNumber: sceneEnabled ? sceneNumber : null,
             sceneEnabled,
             originalLength: item.text.length,
-            ...(args.includePreview ? { preview: item.text.slice(0, end) } : {}),
+            ...(args.includePreview ? { preview: textTokenExcerpt(item.text, 60).text } : {}),
           };
         }),
       };
@@ -2002,12 +2001,15 @@ export class HelperRuntime {
         throw new HttpError(400, 'INVALID_ARTIFACT_FIELD');
       const value = artifact[field];
       const offset = number(args.offset ?? 0, 'artifact offset', 0, value.length);
-      const limit = number(args.limit ?? 4000, 'artifact limit', 1, 10000);
       const boundary = (at: number) =>
         at > 0 && /[\uD800-\uDBFF]/u.test(value[at - 1]) && /[\uDC00-\uDFFF]/u.test(value[at] ?? '')
           ? at - 1
           : at;
       const start = boundary(offset);
+      const limit =
+        args.limit === undefined
+          ? textTokenExcerpt(value.slice(start), 2000).text.length
+          : number(args.limit, 'artifact limit', 1, 10000);
       let end = boundary(Math.min(value.length, start + limit));
       if (end === start && start < value.length) end = Math.min(value.length, start + 2);
       const page = () => ({
@@ -2020,8 +2022,8 @@ export class HelperRuntime {
         totalChars: value.length,
         nextOffset: end < value.length ? end : null,
       });
-      // Escaped source characters count toward the result budget too.
-      while (JSON.stringify(page()).length > 24_000)
+      // Include escaped source and metadata in the model-facing token budget.
+      while (countTextTokens(JSON.stringify(page())) > 12_000)
         end = boundary(start + Math.max(2, Math.floor((end - start) / 2)));
       return page();
     }

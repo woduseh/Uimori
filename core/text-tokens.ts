@@ -54,14 +54,14 @@ export function tokenizerInfo(profile?: TokenizerProfileId): TokenizerInfo {
 export function textTokenExcerpt(
   text: string,
   maxTokens: number,
-  options: { side?: 'start' | 'end'; marker?: string } = {}
+  options: { side?: 'start' | 'end'; marker?: string; profile?: TokenizerProfileId } = {}
 ): { text: string; tokens: number; truncated: boolean } {
   if (!Number.isSafeInteger(maxTokens) || maxTokens < 0)
     throw new ProviderContractError('INVALID_CONTEXT_BUDGET');
-  const tokens = countTextTokens(text);
+  const tokens = countTextTokens(text, options.profile);
   if (tokens <= maxTokens) return { text, tokens, truncated: false };
   let marker = options.marker ?? '';
-  if (countTextTokens(marker) > maxTokens) marker = '';
+  if (countTextTokens(marker, options.profile) > maxTokens) marker = '';
   const excerpt = (length: number) => {
     let at = options.side === 'end' ? text.length - length : length;
     if (
@@ -77,9 +77,9 @@ export function textTokenExcerpt(
     high = text.length;
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
-    if (countTextTokens(excerpt(middle)) <= maxTokens) low = middle;
+    if (countTextTokens(excerpt(middle), options.profile) <= maxTokens) low = middle;
     else high = middle - 1;
   }
   const result = excerpt(low);
-  return { text: result, tokens: countTextTokens(result), truncated: true };
+  return { text: result, tokens: countTextTokens(result, options.profile), truncated: true };
 }

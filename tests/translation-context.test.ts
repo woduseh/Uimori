@@ -15,6 +15,7 @@ import { Controls } from '../server/controls.js';
 import { auxiliaryBridge } from '../server/auxiliary-bridge.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { translationReferences } from '../server/translation-context.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { translationReader } from '../core/translation-context.js';
 import { executeTool, knowledgeReadResults } from '../core/provider.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
@@ -333,7 +334,17 @@ test('translation tools support empty memory with disabled indexing, bounded pag
   const refs = translationReferences(store, fixed);
   const read = translationReader(fixed, refs);
   refs[0].text = 'later';
-  expect(read(call('translation.read', { id: refs[0].id })).result).toMatchObject({
+  const firstPage = read(call('translation.read', { id: refs[0].id })).result as any;
+  expect(countTextTokens(firstPage.text)).toBeLessThanOrEqual(2048);
+  expect(firstPage.text.length).toBeGreaterThan(0);
+  expect(firstPage.nextOffset).toBe(firstPage.text.length);
+  const nextPage = read(
+    call('translation.read', { id: refs[0].id, offset: firstPage.nextOffset, maxTokens: 128 })
+  ).result as any;
+  expect(countTextTokens(nextPage.text)).toBeLessThanOrEqual(128);
+  expect(nextPage.range.start).toBe(firstPage.nextOffset);
+  expect(nextPage.range.end).toBe(firstPage.nextOffset + nextPage.text.length);
+  expect(read(call('translation.read', { id: refs[0].id, limit: 4096 })).result).toMatchObject({
     text: '가'.repeat(4096),
     nextOffset: 4096,
   });

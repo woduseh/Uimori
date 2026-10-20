@@ -1,3 +1,4 @@
+import { textTokenExcerpt } from '../core/text-tokens.js';
 import { uncertainAttemptResult } from './usage-accounting.js';
 import { modelRequestFields } from '../core/model-request-fields.js';
 import type { FastifyInstance } from 'fastify';
@@ -9,7 +10,7 @@ import {
   inputTranslationContract,
   inputTranslationLanguage,
   inputTranslationTerms,
-  INPUT_TRANSLATION_CONTEXT_LENGTH,
+  INPUT_TRANSLATION_CONTEXT_TOKENS,
   type InputTranslationResult,
 } from '../core/input-translation.js';
 import {
@@ -48,6 +49,9 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
       const model = store.product.modelSnapshot(selected.id, 'translation');
       const guide = currentBotTranslationGuide(store, chatId);
       const source = chat.headRevision ? store.source(chat.headRevision) : undefined;
+      const excerpt = source
+        ? textTokenExcerpt(source.text, INPUT_TRANSLATION_CONTEXT_TOKENS, { side: 'end' })
+        : undefined;
       const input: ProviderRequest = {
         role: 'translation',
         ...modelRequestFields(model),
@@ -62,8 +66,8 @@ export function inputTranslationRoutes(app: FastifyInstance, store: Store, optio
             context: source
               ? {
                   sourceId: source.id,
-                  excerpt: source.text.slice(-INPUT_TRANSLATION_CONTEXT_LENGTH),
-                  truncated: source.text.length > INPUT_TRANSLATION_CONTEXT_LENGTH,
+                  excerpt: excerpt!.text,
+                  truncated: excerpt!.truncated,
                 }
               : null,
           }),

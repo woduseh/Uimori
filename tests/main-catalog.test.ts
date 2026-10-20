@@ -1,11 +1,12 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { expect, test } from 'vitest';
 import {
   buildMainInput,
-  CATALOG_CHARS,
+  CATALOG_TOKENS,
   CATALOG_READ_GUIDANCE,
-  CATALOG_SUMMARY_CHARS,
+  CATALOG_SUMMARY_TOKENS,
   executeTool,
-  KNOWLEDGE_READ_CHARS,
+  KNOWLEDGE_READ_TOKENS,
 } from '../core/provider.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
 import { defaultProfile, type Connection } from '../core/product.js';
@@ -70,7 +71,7 @@ test('the catalog summarises a discoverable entry and lists a pinned one without
     loreContext: { placement: 'scene', group: 'harbor', order: 2 },
   });
   const [first, second] = buildMainInput(snapshot([discoverable, pinned])).catalog;
-  expect(first.description).toHaveLength(CATALOG_SUMMARY_CHARS);
+  expect(countTextTokens(first.description)).toBeLessThanOrEqual(CATALOG_SUMMARY_TOKENS);
   expect(first.description.endsWith('…')).toBe(true);
   expect(discoverable.description.startsWith(first.description.slice(0, -1))).toBe(true);
   expect(first.relatedIds).toEqual(['lore-2']);
@@ -87,7 +88,7 @@ test('the catalog summarises a discoverable entry and lists a pinned one without
   expect(second).not.toHaveProperty('loreContext');
 });
 
-test('a catalog past the character budget lists a prefix and points at the read tools', () => {
+test('a catalog past the token budget lists a prefix and points at the read tools', () => {
   const many = Array.from({ length: 400 }, (_, index) => lore(index));
   const input = buildMainInput(snapshot(many));
   const page = input.catalogPage!;
@@ -98,7 +99,7 @@ test('a catalog past the character budget lists a prefix and points at the read 
   expect(input.catalog.map((item) => item.id)).toEqual(
     many.slice(0, page.listed).map((item) => item.id)
   );
-  expect(JSON.stringify(input.catalog).length).toBeLessThanOrEqual(CATALOG_CHARS);
+  expect(countTextTokens(JSON.stringify(input.catalog))).toBeLessThanOrEqual(CATALOG_TOKENS);
   const small = buildMainInput(snapshot(many.slice(0, 3)));
   expect(small.catalogPage).toBeUndefined();
   expect(small.catalog).toHaveLength(3);
@@ -136,7 +137,7 @@ test('knowledge search points directly to an exact late body match without chang
   expect(hit).toMatchObject({ title: resource.title, description: resource.description });
   expect(hit.match.text).toBe(original.slice(hit.match.range.start, hit.match.range.end));
   expect(hit.match.text).toContain(phrase);
-  expect(hit.match.text.length).toBeLessThanOrEqual(240);
+  expect(countTextTokens(hit.match.text)).toBeLessThanOrEqual(120);
   expect(hit.match.range.start).toBeGreaterThan(39_000);
   expect(result.items[1]).not.toHaveProperty('match');
   expect(result.items[1]).not.toHaveProperty('nextRead');
@@ -183,7 +184,7 @@ test('knowledge search pages bounded exact excerpts without dropping matches or 
       args: { query: 'needle', offset, limit: 100 },
     });
     expect(event.denied).toBe(false);
-    expect(JSON.stringify(event.result).length).toBeLessThanOrEqual(24_000);
+    expect(countTextTokens(JSON.stringify(event.result))).toBeLessThanOrEqual(6000);
     const page = event.result as any;
     expect(page.total).toBe(resources.length);
     expect(page.items.length).toBeGreaterThan(0);
@@ -227,7 +228,9 @@ test('knowledge read pages preserve item errors, text offsets, and every unread 
       args: { ids: remaining },
     });
     expect(event.denied).toBe(false);
-    expect(JSON.stringify(event.result).length).toBeLessThanOrEqual(KNOWLEDGE_READ_CHARS);
+    expect(countTextTokens(JSON.stringify(event.result))).toBeLessThanOrEqual(
+      KNOWLEDGE_READ_TOKENS
+    );
     const page = event.result as any;
     expect(page.items.length).toBeGreaterThan(0);
     for (const item of page.items) {
@@ -246,7 +249,9 @@ test('knowledge read pages preserve item errors, text offsets, and every unread 
           name: 'knowledge.read',
           args: { ids: [item.id], offset: nextOffset },
         });
-        expect(JSON.stringify(next.result).length).toBeLessThanOrEqual(KNOWLEDGE_READ_CHARS);
+        expect(countTextTokens(JSON.stringify(next.result))).toBeLessThanOrEqual(
+          KNOWLEDGE_READ_TOKENS
+        );
         const read = (next.result as any).items[0].read;
         expect(read.range.start).toBe(nextOffset);
         expect(read.range.end).toBeGreaterThan(nextOffset);
@@ -263,5 +268,7 @@ test('knowledge read pages preserve item errors, text offsets, and every unread 
     name: 'knowledge.read',
     args: { ids: [resources[1].id] },
   });
-  expect((common.result as any).items[0].read.text).toBe(resources[1].text.slice(0, 4096));
+  const read = (common.result as any).items[0].read;
+  expect(read.text).toBe(resources[1].text.slice(0, read.range.end));
+  expect(countTextTokens(JSON.stringify(common.result))).toBeLessThanOrEqual(KNOWLEDGE_READ_TOKENS);
 });

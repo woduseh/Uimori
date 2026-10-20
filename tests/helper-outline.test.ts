@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { illustrationDatabases, chatWithSource } from './fixtures/illustration.js';
@@ -53,7 +54,7 @@ test('large outline pages contain exact tree coverage, not full prose, without f
     content: 'metadata-and-previews',
   });
   for (;;) {
-    expect(JSON.stringify(page).length).toBeLessThanOrEqual(24000);
+    expect(countTextTokens(JSON.stringify(page))).toBeLessThanOrEqual(12_000);
     expect(page.nodes.every((n: any) => !('intent' in n) && !('writings' in n))).toBe(true);
     ids.push(...page.nodes.map((n: any) => n.id));
     if (!page.nextRead) break;
@@ -72,28 +73,34 @@ test('large outline pages contain exact tree coverage, not full prose, without f
   expect(shallow.nextOffset).toBeNull();
 });
 
-test('long escaped Unicode intent round-trips with resumable UTF-16 ranges and no split surrogate', () => {
-  const { store, leaf, read } = fixture();
-  const expected = store.outline.node(leaf).intent;
-  let page = read({ mode: 'detail', nodeId: leaf, limit: 5999 });
-  let joined = '';
-  while (true) {
-    expect(page.range.start).toBe(joined.length);
-    expect(page.range.unit).toBe('utf16-code-unit');
-    expect(page.totalChars).toBe(expected.length);
-    expect(page.coverage).toMatchObject({ content: 'intent-range', wholeField: false });
-    expect(page.coverage).not.toHaveProperty('complete');
-    expect(JSON.stringify(page).length).toBeLessThanOrEqual(24000);
-    expect(page.text.isWellFormed()).toBe(true);
-    joined += page.text;
-    if (!page.nextRead) break;
-    page = read(page.nextRead.arguments.arguments);
+test.each([undefined, 5999])(
+  'long escaped Unicode intent round-trips with resumable UTF-16 ranges (limit %s)',
+  (limit) => {
+    const { store, leaf, read } = fixture();
+    const expected = store.outline.node(leaf).intent;
+    let page = read({ mode: 'detail', nodeId: leaf, ...(limit === undefined ? {} : { limit }) });
+    let joined = '';
+    while (true) {
+      expect(page.range.start).toBe(joined.length);
+      expect(page.range.unit).toBe('utf16-code-unit');
+      expect(page.totalChars).toBe(expected.length);
+      expect(page.coverage).toMatchObject({ content: 'intent-range', wholeField: false });
+      expect(page.coverage).not.toHaveProperty('complete');
+      expect(countTextTokens(JSON.stringify(page))).toBeLessThanOrEqual(12_000);
+      expect(page.text.isWellFormed()).toBe(true);
+      if (limit === undefined) expect(countTextTokens(page.text)).toBeLessThanOrEqual(3000);
+      joined += page.text;
+      if (!page.nextRead) break;
+      page = read(page.nextRead.arguments.arguments);
+    }
+    expect(joined).toBe(expected);
+    expect(page.nextOffset).toBeNull(); // Last page, but not the whole field in this one response.
+    expect(page.coverage.wholeField).toBe(false);
+    expect(read({ mode: 'detail', nodeId: leaf, offset: 10 }).error).toBe(
+      'OUTLINE_VERSION_REQUIRED'
+    );
   }
-  expect(joined).toBe(expected);
-  expect(page.nextOffset).toBeNull(); // Last page, but not the whole field in this one response.
-  expect(page.coverage.wholeField).toBe(false);
-  expect(read({ mode: 'detail', nodeId: leaf, offset: 10 }).error).toBe('OUTLINE_VERSION_REQUIRED');
-});
+);
 
 test('continuations detect changes to their scope without blocking unrelated detail reads', () => {
   const { store, chat, leaf, read } = fixture();

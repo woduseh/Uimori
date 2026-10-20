@@ -57,6 +57,14 @@ export type ToolEvent = {
   result: unknown;
   denied: boolean;
   errorKind?: 'recoverable';
+  /** Host-selected page bound; absent on legacy and ordinary 6,000-character reads. */
+  knowledgeReadChars?: number;
+  /** Host-selected token page budget, persisted to reproduce new read receipts. */
+  readBudget?: {
+    tokens: number;
+    tokenizer: import('./tokenizer-profiles.js').TokenizerProfileId;
+    ranges?: (number | null)[];
+  };
 };
 export type Usage = {
   modelCalls: number;

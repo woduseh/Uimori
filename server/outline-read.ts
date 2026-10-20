@@ -1,3 +1,4 @@
+import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import type { RunSnapshot } from '../core/types.js';
 import type { OutlineLevel } from '../core/outline.js';
@@ -5,7 +6,7 @@ import type { Json } from '../core/transport.js';
 import type { Store } from './store.js';
 import { HttpError, fields, number, text } from './request-validation.js';
 
-const MAX_RESULT_CHARS = 24_000;
+const MAX_RESULT_TOKENS = 12_000;
 const stamp = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 type Node = {
   id: string;
@@ -171,7 +172,7 @@ function sourcePages(store: Store, chatId: string, refs: Writing[], writing?: Ru
 function fitList<T, R>(items: T[], build: () => R): R {
   for (;;) {
     const result = build();
-    if (JSON.stringify(result).length <= MAX_RESULT_CHARS) return result;
+    if (countTextTokens(JSON.stringify(result)) <= MAX_RESULT_TOKENS) return result;
     if (items.length <= 1) throw new HttpError(400, 'OUTLINE_METADATA_TOO_LARGE');
     items.pop();
   }
@@ -273,7 +274,7 @@ export function readHelperOutline(
       ...(nodeId ? { nodeId } : {}),
       ...(section ? { section } : {}),
       ...(depth !== null ? { depth } : {}),
-      limit,
+      ...(args.limit === undefined && section === 'intent' ? {} : { limit }),
     };
     const next = (at: number) =>
       outlineNextRead(chatId, { ...query, expectedVersion: version, offset: at });
@@ -300,7 +301,10 @@ export function readHelperOutline(
       if (offset > value.length) throw new HttpError(400, 'OUTLINE_RANGE_INVALID');
       const split = (at: number) => at > 0 && (value.codePointAt(at - 1) ?? 0) > 0xffff;
       const start = split(offset) ? offset - 1 : offset;
-      let end = Math.min(value.length, start + limit);
+      let end =
+        args.limit === undefined
+          ? start + textTokenExcerpt(value.slice(start), 3_000).text.length
+          : Math.min(value.length, start + limit);
       for (;;) {
         if (split(end)) end--;
         if (end === start && start < value.length)
@@ -316,7 +320,7 @@ export function readHelperOutline(
           nextOffset: end < value.length ? end : null,
           nextRead: end < value.length ? next(end) : null,
         };
-        if (JSON.stringify(result).length <= MAX_RESULT_CHARS) return result;
+        if (countTextTokens(JSON.stringify(result)) <= MAX_RESULT_TOKENS) return result;
         if (end - start <= 2) throw new HttpError(400, 'OUTLINE_METADATA_TOO_LARGE');
         end = start + Math.floor((end - start) / 2);
       }

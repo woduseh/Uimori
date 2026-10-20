@@ -184,13 +184,14 @@ const toolSchemas: ProviderTool[] = [
   {
     name: 'translation.read',
     description:
-      'Read discovered evidence with exact source provenance and range. Follow nextOffset for the next range.',
+      'Read discovered evidence with exact source provenance and range. Default body budget is 2048 local tokens. maxTokens narrows that budget; an explicit legacy limit caps UTF-16 units. Follow nextOffset for the next source range.',
     inputSchema: {
       type: 'object',
       properties: {
         id: { type: 'string' },
         offset: { type: 'integer' },
-        limit: { type: 'integer' },
+        limit: { type: 'integer', minimum: 1, maximum: 4096 },
+        maxTokens: { type: 'integer', minimum: 1, maximum: 2048 },
       },
       required: ['id'],
       additionalProperties: false,

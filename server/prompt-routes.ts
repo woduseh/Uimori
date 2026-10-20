@@ -1,6 +1,6 @@
 import { currentBotTranslationGuide } from './translation-guide.js';
 import { readRunSnapshot } from './run-projections.js';
-import { EXECUTION_INPUT_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { PROMPT_HTTP_BODY_MAX_BYTES, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import type { FastifyInstance } from 'fastify';
 import { defaultProfile } from '../core/product.js';
@@ -40,7 +40,7 @@ export function promptRoutes(app: FastifyInstance, store: Store) {
   });
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/prompt-preview',
-    { bodyLimit: EXECUTION_INPUT_MAX_CHARS },
+    { bodyLimit: PROMPT_HTTP_BODY_MAX_BYTES },
     async (request) => {
       const b = record(request.body);
       fields(b, ['program', 'request', 'values', 'role', 'loreContext', 'loreContextReset']);

@@ -1,3 +1,4 @@
+import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
   editableResource,
@@ -23,7 +24,7 @@ import {
 import pathPolicy from './helper-resource-path-policy.json' with { type: 'json' };
 import protectedFields from './helper-native-protected-fields.json' with { type: 'json' };
 
-const MAX_RESULT = 24_000;
+const MAX_RESULT_TOKENS = 12_000;
 const MAX_PATH = pathPolicy.maxLength;
 const MAX_TEXT = 10_000;
 const FORBIDDEN = new Set(protectedFields);
@@ -93,8 +94,8 @@ function locate(
   }
   return { exists: true, value, parent };
 }
-function bounded(result: unknown, maximum = MAX_RESULT): unknown {
-  if (JSON.stringify(result).length > maximum)
+function bounded(result: unknown, maximum = MAX_RESULT_TOKENS): unknown {
+  if (countTextTokens(JSON.stringify(result)) > maximum)
     throw new HttpError(413, '읽기 결과가 커요. 더 작은 범위로 읽어 주세요.');
   return result;
 }
@@ -190,7 +191,7 @@ export function readHelperResource(
   kind: ResourceKind,
   id: string,
   args: JsonObject,
-  maximum = MAX_RESULT
+  maximum = MAX_RESULT_TOKENS
 ) {
   const paths = args.paths;
   if (args.includeBodies !== undefined && typeof args.includeBodies !== 'boolean')
@@ -245,7 +246,7 @@ export function readHelperResource(
   if (paths === undefined) return read(args);
   const items: unknown[] = [];
   // An individual page must also fit when enclosed by the batch response.
-  const pageMaximum = maximum - JSON.stringify({ items: [], nextIndex: null }).length;
+  const pageMaximum = maximum - countTextTokens(JSON.stringify({ items: [], nextIndex: null }));
   for (const path of paths) {
     let item: unknown;
     try {
@@ -258,7 +259,7 @@ export function readHelperResource(
       items: [...items, item],
       nextIndex: items.length + 1 < paths.length ? items.length + 1 : null,
     };
-    if (JSON.stringify(candidate).length > maximum) break;
+    if (countTextTokens(JSON.stringify(candidate)) > maximum) break;
     items.push(item);
   }
   return bounded({ items, nextIndex: items.length < paths.length ? items.length : null }, maximum);
@@ -286,7 +287,7 @@ function readHelperModel(
   model: ResourceModel,
   args: JsonObject,
   inputOrigin?: string,
-  maximum = MAX_RESULT,
+  maximum = MAX_RESULT_TOKENS,
   previousCurrentRevision?: number
 ) {
   const base = {
@@ -360,10 +361,13 @@ function readHelperModel(
   const head = { ...base, path, exists: true, type: type(value) };
   if (typeof value === 'string') {
     const requested = optionalInt(args.textOffset, 'text offset', value.length, 0);
-    const limit = optionalInt(args.textLimit, 'text limit', MAX_TEXT, 4_000);
-    if (limit === 0) throw new HttpError(400, '읽기 길이는 1 이상이어야 해요.');
     let start = requested;
     if (start > 0 && start < value.length && /[\uDC00-\uDFFF]/u.test(value[start]!)) start--;
+    const limit =
+      args.textLimit === undefined
+        ? textTokenExcerpt(value.slice(start), 2_000).text.length || 1
+        : optionalInt(args.textLimit, 'text limit', MAX_TEXT, 4_000);
+    if (limit === 0) throw new HttpError(400, '읽기 길이는 1 이상이어야 해요.');
     let low = start + 1;
     let high = Math.min(value.length, start + limit);
     let best = start;
@@ -383,7 +387,7 @@ function readHelperModel(
         low = middle + 1;
         continue;
       }
-      if (JSON.stringify(page(end)).length <= maximum) {
+      if (countTextTokens(JSON.stringify(page(end))) <= maximum) {
         best = end;
         low = middle + 1;
       } else high = middle - 1;
@@ -438,7 +442,7 @@ function readHelperModel(
       [Array.isArray(value) ? 'items' : 'fields']: [...entries, next],
       nextOffset: index + 1 < keys.length ? index + 1 : null,
     };
-    if (JSON.stringify(candidate).length > maximum) {
+    if (countTextTokens(JSON.stringify(candidate)) > maximum) {
       if (!withBodies || entries.length) {
         if (entries.length) break;
         throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
@@ -456,7 +460,7 @@ function readHelperModel(
         ...next,
         block: { ...promptBlock(item.value, joined(path, key)), omittedBodyPaths },
       };
-      if (JSON.stringify({ ...candidate, items: [next] }).length > maximum)
+      if (countTextTokens(JSON.stringify({ ...candidate, items: [next] })) > maximum)
         throw new HttpError(413, '읽기 결과가 커요. 더 좁은 경로를 지정해 주세요.');
     }
     entries.push(next);

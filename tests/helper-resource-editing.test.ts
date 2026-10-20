@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
@@ -93,7 +94,7 @@ test('captured unsaved editor uses bounded typed paths while preserving its orig
     model,
   };
   const overview = readHelperEditor(editor, { kind: 'editor' }) as Record<string, any>;
-  expect(JSON.stringify(overview).length).toBeLessThan(24_000);
+  expect(countTextTokens(JSON.stringify(overview))).toBeLessThan(12_000);
   expect(overview).toMatchObject({
     id: content.id,
     revision: content.revision,
@@ -132,7 +133,7 @@ test('small native edit of a 1.36m character card preserves source and refreshes
   const { store, content } = fixture(true);
   const before = content.package.nativeRisu.card.description;
   const overview = call(store, 'resource.read', { kind: 'content', id: content.id });
-  expect(JSON.stringify(overview).length).toBeLessThan(24_000);
+  expect(countTextTokens(JSON.stringify(overview))).toBeLessThan(12_000);
   expect(overview.source).toMatchObject({
     path: '/package/nativeRisu/card',
     lorePath: '/package/nativeRisu/card/character_book/entries',
@@ -303,14 +304,25 @@ test('field and item pages expose typed values, optional paths and exact UTF-16 
     changes: [{ path: escapedPath, op: 'set', value: escaped }],
   });
   const escapedFirst = call(store, 'resource.read', { ...base, path: escapedPath });
-  expect(JSON.stringify(escapedFirst).length).toBeLessThanOrEqual(24_000);
+  expect(countTextTokens(JSON.stringify(escapedFirst))).toBeLessThanOrEqual(12_000);
   expect(escapedFirst.nextOffset).toBeGreaterThan(0);
   const escapedSecond = call(store, 'resource.read', {
     ...base,
     path: escapedPath,
     textOffset: escapedFirst.nextOffset,
   });
-  expect(escapedFirst.text + escapedSecond.text === escaped).toBe(true);
+  let escapedCombined = escapedFirst.text + escapedSecond.text;
+  let escapedPage = escapedSecond;
+  while (escapedPage.nextOffset !== null) {
+    escapedPage = call(store, 'resource.read', {
+      ...base,
+      path: escapedPath,
+      textOffset: escapedPage.nextOffset,
+    });
+    expect(countTextTokens(escapedPage.text)).toBeLessThanOrEqual(2_000);
+    escapedCombined += escapedPage.text;
+  }
+  expect(escapedCombined).toBe(escaped);
   expect(escapedSecond.revision).toBe(escapedEdit.revision);
   expect(
     call(store, 'resource.read', { ...base, path: `${entryPath}/content`, textOffset: big.length })
@@ -407,7 +419,7 @@ test('batched resource reads keep the complete envelope bounded with separate pa
     changes: [{ path: paths[0], op: 'set', value: original }],
   });
   const first = call(store, 'resource.read', { ...base, paths, textLimit: 10_000 });
-  expect(JSON.stringify(first).length).toBeLessThanOrEqual(24_000);
+  expect(countTextTokens(JSON.stringify(first))).toBeLessThanOrEqual(12_000);
   expect(first.nextIndex).toBe(1);
   expect(first.items).toHaveLength(1);
   expect(first.items[0]).toMatchObject({ path: paths[0], revision: edited.revision });
@@ -417,7 +429,7 @@ test('batched resource reads keep the complete envelope bounded with separate pa
     paths: paths.slice(0, 1),
     textLimit: 10_000,
   });
-  expect(JSON.stringify(single).length).toBeLessThanOrEqual(24_000);
+  expect(countTextTokens(JSON.stringify(single))).toBeLessThanOrEqual(12_000);
   expect(single.items).toEqual(first.items);
   expect(single.nextIndex).toBeNull();
   const remaining = call(store, 'resource.read', {
@@ -694,7 +706,7 @@ test('preset overview points to a complete 40-block outline without loading auth
     textLengths: { text: 1500 },
   });
   expect(JSON.stringify(outline)).not.toContain('PRIVATE_BODY_');
-  expect(JSON.stringify(outline).length).toBeLessThanOrEqual(24_000);
+  expect(countTextTokens(JSON.stringify(outline))).toBeLessThanOrEqual(12_000);
   const next = call(store, 'resource.read', {
     ...target,
     path: presetBlocksPath,
@@ -706,7 +718,7 @@ test('preset overview points to a complete 40-block outline without loading auth
 });
 
 test('opt-in preset body pages include full authored fields and mark oversized blocks for follow-up', () => {
-  const huge = 'Long prose 😀'.repeat(3_000);
+  const huge = 'Long prose 😀'.repeat(6_000);
   const { store, target } = presetFixture([
     {
       name: 'Short',
@@ -729,7 +741,7 @@ test('opt-in preset body pages include full authored fields and mark oversized b
       offset,
       limit: 50,
     });
-    expect(JSON.stringify(page).length).toBeLessThanOrEqual(24_000);
+    expect(countTextTokens(JSON.stringify(page))).toBeLessThanOrEqual(12_000);
     collected.push(...page.items);
     if (page.nextOffset === null) break;
     expect(page.nextOffset).toBeGreaterThan(offset);
@@ -824,7 +836,7 @@ test('oversized block metadata stays paged and offers exact field reads without 
     length: longId.length,
     path: `${presetBlocksPath}/0/id`,
   });
-  expect(JSON.stringify(first).length).toBeLessThanOrEqual(24_000);
+  expect(countTextTokens(JSON.stringify(first))).toBeLessThanOrEqual(12_000);
   expect(JSON.stringify(first)).not.toContain('PRIVATE_BODY');
   const next = call(store, 'resource.read', {
     ...target,
@@ -1565,4 +1577,24 @@ test('previous reads expose the current undo slot without changing saved state o
     '직전 저장본을 읽을 수 없어요'
   );
   expect(call(store, 'resource.read', { ...target, path }).text).toBe('Third');
+});
+
+test('default resource text pages use token budgets without changing explicit UTF-16 lengths', () => {
+  const text = 'simple words '.repeat(1500) + '한글😀終'.repeat(1000);
+  const { store, target } = presetFixture([{ name: 'Budget', type: 'plain', text }]);
+  const path = `${presetBlocksPath}/0/text`;
+  let page = call(store, 'resource.read', { ...target, path });
+  expect(page.text.length).toBeGreaterThan(4000);
+  let joined = '';
+  for (;;) {
+    expect(countTextTokens(page.text)).toBeLessThanOrEqual(2000);
+    expect(text.slice(page.textOffset, page.textOffset + page.text.length)).toBe(page.text);
+    joined += page.text;
+    if (page.nextOffset === null) break;
+    page = call(store, 'resource.read', { ...target, path, textOffset: page.nextOffset });
+  }
+  expect(joined).toBe(text);
+  expect(call(store, 'resource.read', { ...target, path, textLimit: 7 }).text).toBe(
+    text.slice(0, 7)
+  );
 });

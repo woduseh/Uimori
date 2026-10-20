@@ -2,6 +2,8 @@
 export const SOURCE_TEXT_MAX_CHARS = 2_000_000;
 /** Allocation guard for an assembled execution input; model fit is measured in tokens. */
 export const EXECUTION_INPUT_MAX_CHARS = 64 * 1024 * 1024;
+/** HTTP JSON body byte budget for prompt authoring and execution previews, independent of model fit. */
+export const PROMPT_HTTP_BODY_MAX_BYTES = 64 * 1024 * 1024;
 /** User requests share the stored prose boundary across entry, editing, and transfer. */
 export const REQUEST_TEXT_MAX_CHARS = SOURCE_TEXT_MAX_CHARS;
 export const TRANSLATION_TEXT_MAX_CHARS = 2_000_000;
