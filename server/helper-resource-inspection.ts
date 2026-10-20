@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import type { PromptPreset } from '../core/product.js';
 import type { ResourceKind } from '../core/resource-editing.js';
 import { diagnoseRisuPreset } from '../core/risu-preset-diagnostics.js';
@@ -6,7 +7,7 @@ import { fields, HttpError, number, record, text } from './request-validation.js
 import { readResource } from './resource-service.js';
 import type { Store } from './store.js';
 
-const MAX_RESULT = 24_000;
+const MAX_RESULT_TOKENS = 12_000;
 const selectionFields = [
   'kind',
   'id',
@@ -38,7 +39,7 @@ export function readHelperResources(store: Store, rawItems: unknown) {
       )
         throw new HttpError(400, '자료 종류를 확인해 주세요.');
       const id = text(selection.id, 'resource ID', 100);
-      item = { requestIndex, result: readHelperResource(store, kind, id, selection, 23_000) };
+      item = { requestIndex, result: readHelperResource(store, kind, id, selection, 11_500) };
     } catch (error) {
       if (!(error instanceof HttpError)) throw error;
       item = { requestIndex, error: error.message, status: error.statusCode };
@@ -47,7 +48,7 @@ export function readHelperResources(store: Store, rawItems: unknown) {
       items: [...items, item],
       nextIndex: requestIndex + 1 < rawItems.length ? requestIndex + 1 : null,
     };
-    if (JSON.stringify(candidate).length > MAX_RESULT) break;
+    if (countTextTokens(JSON.stringify(candidate)) > MAX_RESULT_TOKENS) break;
     items.push(item);
   }
   return { items, nextIndex: items.length < rawItems.length ? items.length : null };
@@ -82,7 +83,7 @@ export function validateHelperPreset(store: Store, args: Record<string, unknown>
       ...diagnostic,
       path: diagnostic.path.startsWith('/values') ? diagnostic.path : `/program${diagnostic.path}`,
     });
-    if (JSON.stringify(page()).length > MAX_RESULT) {
+    if (countTextTokens(JSON.stringify(page())) > MAX_RESULT_TOKENS) {
       diagnostics.pop();
       if (!diagnostics.length)
         throw new HttpError(413, '검사 결과가 커요. 더 작은 범위로 읽어 주세요.');

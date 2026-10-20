@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { nativeContent } from './fixtures/native-content.js';
@@ -18,7 +19,7 @@ import {
 import { performance } from 'node:perf_hooks';
 import { randomUUID } from 'node:crypto';
 import { Store } from '../server/store.js';
-import { buildMainInput, CATALOG_CHARS, executeTool } from '../core/provider.js';
+import { buildMainInput, CATALOG_TOKENS, executeTool } from '../core/provider.js';
 import { sourceHash as memoryHash } from '../core/source-history.js';
 import { resolveAsset, searchAssets } from '../core/asset-manifest.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -370,7 +371,9 @@ function validateOutput(
     expect(result.input.catalogPage).toMatchObject({ total: result.snapshot.resources.length });
     expect(result.input.catalogPage!.listed).toBeGreaterThan(0);
     expect(result.input.catalogPage!.listed).toBeLessThan(result.snapshot.resources.length);
-    expect(JSON.stringify(result.input.catalog).length).toBeLessThanOrEqual(CATALOG_CHARS);
+    expect(countTextTokens(JSON.stringify(result.input.catalog))).toBeLessThanOrEqual(
+      CATALOG_TOKENS
+    );
     expect(
       result.input.catalog.some((item) => item.title === `Synthetic lore ${counts.loreCount - 1}`)
     ).toBe(false);

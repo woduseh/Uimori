@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
@@ -83,7 +84,7 @@ test('multi-resource text pages share a bounded envelope and continue unread sel
     textLimit: 10000,
   }));
   const first = call(store, 'resource.readMany', { items });
-  expect(JSON.stringify(first).length).toBeLessThanOrEqual(24000);
+  expect(countTextTokens(JSON.stringify(first))).toBeLessThanOrEqual(12_000);
   expect(first.nextIndex).toBe(1);
   expect(first.items[0].result).toMatchObject({ id: a.id, textOffset: 0 });
   expect(first.items[0].result.nextOffset).toBeGreaterThan(0);
@@ -91,12 +92,12 @@ test('multi-resource text pages share a bounded envelope and continue unread sel
   const second = call(store, 'resource.readMany', { items: items.slice(first.nextIndex) });
   expect(second.nextIndex).toBeNull();
   expect(second.items[0].result.id).toBe(b.id);
-  expect(JSON.stringify(second).length).toBeLessThanOrEqual(24000);
+  expect(countTextTokens(JSON.stringify(second))).toBeLessThanOrEqual(12_000);
 });
 
 test('multi-resource body pages preserve previous-save identity and oversized-body follow-ups', () => {
   const store = fixture();
-  const original = 'Long original 😀'.repeat(3000);
+  const original = 'Long original 😀'.repeat(6000);
   const a = preset(store, 'RP', original);
   const b = preset(store, 'Novel', 'Complete authored text');
   const path = '/program/nativeRisuPreset/preset/promptTemplate';
@@ -112,7 +113,7 @@ test('multi-resource body pages preserve previous-save identity and oversized-bo
       { kind: 'prompt-preset', id: b.id, path, includeBodies: true },
     ],
   });
-  expect(JSON.stringify(result).length).toBeLessThanOrEqual(24000);
+  expect(countTextTokens(JSON.stringify(result))).toBeLessThanOrEqual(12_000);
   expect(result.nextIndex).toBeNull();
   const previous = result.items[0].result;
   expect(previous).toMatchObject({

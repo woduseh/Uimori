@@ -12,7 +12,7 @@ export const INPUT_TRANSLATION_LANGUAGES = [
 ] as const;
 export type InputTranslationLanguage = (typeof INPUT_TRANSLATION_LANGUAGES)[number]['code'];
 export type InputTranslationResult = { text: string; targetLanguage: InputTranslationLanguage };
-export const INPUT_TRANSLATION_CONTEXT_LENGTH = 3000;
+export const INPUT_TRANSLATION_CONTEXT_TOKENS = 1500;
 
 export function inputTranslationLanguage(value: unknown) {
   return INPUT_TRANSLATION_LANGUAGES.find((language) => language.code === value);

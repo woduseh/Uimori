@@ -12,6 +12,7 @@ import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace
 import { publishHelperContext } from '../server/helper-context.js';
 import { encodeMainPreview } from '../server/main-request.js';
 import { assertContextBudget, estimateContextTokens } from '../core/context-budget.js';
+import { countTextTokens } from '../core/text-tokens.js';
 import { decodeAnthropicMessage, encodeAnthropic } from '../core/anthropic-protocol.js';
 import {
   CONTEXT_CONTINUATION_GUIDANCE,
@@ -902,7 +903,7 @@ test('forced compaction retains large batch identities and continuation without 
     ],
     nextIndex: null,
   };
-  expect(JSON.stringify(f.readValue).length).toBeGreaterThan(8_000);
+  expect(countTextTokens(JSON.stringify(f.readValue))).toBeGreaterThan(2_000);
   let helperCalls = 0;
   const log = script(f, (request) => {
     if (request.role === 'context') return summarized();

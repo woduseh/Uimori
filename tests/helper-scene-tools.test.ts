@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -425,7 +426,7 @@ test('escaped pages stay bounded and continuation never splits Unicode character
   let page = call('scene.read', { sourceId: source.id, target: 'original', limit: 10000 });
   let combined = '';
   while (true) {
-    expect(JSON.stringify(page).length).toBeLessThanOrEqual(24000);
+    expect(countTextTokens(JSON.stringify(page))).toBeLessThanOrEqual(12_000);
     combined += page.text;
     if (!page.nextRead) break;
     expect(page.nextRead).toMatchObject({
@@ -755,4 +756,24 @@ test('many-scene literal search returns bounded matches without rereading ancest
   expect(JSON.stringify(first).length).toBeLessThan(15000);
   expect(history).toHaveBeenCalledTimes(1);
   expect(call('scene.search', first.nextSearch)).toMatchObject({ offset: 10, nextOffset: 20 });
+});
+
+test('default scene pages budget tokens while continuations retain UTF-16 guards', () => {
+  const content = 'simple words '.repeat(4000) + '한글😀終'.repeat(2000);
+  const { call, source } = fixture(content);
+  let page = call('scene.read', { sourceId: source.id, target: 'original' });
+  expect(page.text.length).toBeGreaterThan(6000);
+  let joined = '';
+  for (;;) {
+    expect(countTextTokens(page.text)).toBeLessThanOrEqual(3000);
+    expect(content.slice(page.offset, page.offset + page.text.length)).toBe(page.text);
+    joined += page.text;
+    if (!page.nextRead) break;
+    expect(page.nextRead.arguments.arguments).not.toHaveProperty('limit');
+    page = call('scene.read', page.nextRead);
+  }
+  expect(joined).toBe(content);
+  expect(call('scene.read', { sourceId: source.id, target: 'original', limit: 7 }).text).toBe(
+    content.slice(0, 7)
+  );
 });

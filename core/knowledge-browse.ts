@@ -1,13 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { Resource, ToolEvent } from './types.js';
 
-const MAX_CHARS = 24_000;
+import { countTextTokens, textTokenExcerpt } from './text-tokens.js';
+import type { TokenizerProfileId } from './tokenizer-profiles.js';
+const MAX_TOKENS = 6_000;
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-const excerpt = (value: string, limit: number) => {
-  let end = Math.min(value.length, limit);
-  if (end > 0 && (value.codePointAt(end - 1) ?? 0) > 0xffff) end--;
-  return value.slice(0, end);
-};
 type Group = {
   type: 'package' | 'folder';
   key: string;
@@ -24,7 +21,7 @@ const isGroup = (item: Group | Resource): item is Group => 'children' in item;
 /** Build the small navigation view once; its owning Run snapshot controls the lifetime. */
 export function createKnowledgeBrowser(
   resources: readonly Resource[],
-  context: { chatId: string; role: string }
+  context: { chatId: string; role: string; tokenizer?: TokenizerProfileId }
 ) {
   // Build once for this frozen corpus, without constructing a second full-body JSON copy.
   const contentHashes = new Map(resources.map((resource) => [resource.id, digest(resource.text)]));
@@ -159,7 +156,10 @@ export function createKnowledgeBrowser(
     const candidates = selected ? selected.children : root;
     if (Number(offset) > candidates.length) return fail('INVALID_ARGUMENTS');
     const describe = (item: Group | Resource) => {
-      const title = excerpt(item.title, 200);
+      const title = textTokenExcerpt(item.title, 100, {
+        marker: '',
+        profile: context.tokenizer,
+      }).text;
       if (isGroup(item))
         return {
           type: item.type,
@@ -174,7 +174,10 @@ export function createKnowledgeBrowser(
           resourceCount: item.resourceCount,
           nextRead: next(nodeRef(item), 0),
         };
-      const description = excerpt(item.description, 160);
+      const description = textTokenExcerpt(item.description, 80, {
+        marker: '',
+        profile: context.tokenizer,
+      }).text;
       const related = item.relatedIds?.filter((id) => allowedIds.has(id)) ?? [];
       return {
         type: 'reference',
@@ -200,7 +203,7 @@ export function createKnowledgeBrowser(
           arguments: {
             ...(item.kind === 'skill' ? { id: item.id } : { ids: [item.id] }),
             offset: 0,
-            limit: 4096,
+            tokenLimit: 2000,
           },
         },
       };
@@ -225,7 +228,7 @@ export function createKnowledgeBrowser(
     };
     for (const item of candidates.slice(Number(offset), Number(offset) + Number(limit))) {
       items.push(describe(item));
-      if (JSON.stringify(result()).length > MAX_CHARS) {
+      if (countTextTokens(JSON.stringify(result()), context.tokenizer) > MAX_TOKENS) {
         items.pop();
         if (!items.length) return fail('RESULT_METADATA_TOO_LARGE');
         break;

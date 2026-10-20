@@ -1,3 +1,4 @@
+import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import {
   chatAttachmentKey,
   chatLoreKey,
@@ -8,7 +9,7 @@ import { ChatOverridesStore } from './chat-overrides.js';
 import { HttpError, number } from './request-validation.js';
 import type { Store } from './store.js';
 
-const MAX_RESULT_CHARS = 24_000;
+const MAX_RESULT_TOKENS = 12_000;
 
 function textPage(value: string, offset: number, limit: number) {
   let start = Math.min(offset, value.length);
@@ -50,7 +51,18 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
       0,
       Math.max(original?.length ?? 0, override?.value.length ?? 0)
     );
-    const limit = number(args.textLimit ?? 4000, 'text limit', 1, 10000);
+    const defaultLength = (value: string | null | undefined) => {
+      if (value == null || args.textLimit !== undefined) return 0;
+      let start = Math.min(offset, value.length);
+      if (start && /[\uDC00-\uDFFF]/u.test(value[start] ?? '')) start--;
+      return textTokenExcerpt(value.slice(start), 2_000).text.length;
+    };
+    const originalLimit = defaultLength(original);
+    const overrideLimit = defaultLength(override?.value);
+    const limit =
+      args.textLimit === undefined
+        ? Math.max(1, originalLimit, overrideLimit)
+        : number(args.textLimit, 'text limit', 1, 10000);
     const patchGuards =
       attachment && original !== null
         ? {
@@ -65,12 +77,23 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
       expectedRevision: current.revision,
       expectedHeadRevision: current.headRevision,
       ...patchGuards,
-      original: original === null ? null : textPage(original, offset, length),
+      original:
+        original === null
+          ? null
+          : textPage(
+              original,
+              offset,
+              args.textLimit === undefined ? Math.min(length, originalLimit) : length
+            ),
       override: override
         ? {
             id: override.id,
             revision: override.revision,
-            ...textPage(override.value, offset, length),
+            ...textPage(
+              override.value,
+              offset,
+              args.textLimit === undefined ? Math.min(length, overrideLimit) : length
+            ),
             conflicts: current.conflicts
               .filter((item) => item.overrideId === override.id)
               .map((item) => item.kind),
@@ -82,7 +105,7 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
       best = 0;
     while (low <= high) {
       const middle = Math.floor((low + high) / 2);
-      if (JSON.stringify(page(middle)).length <= MAX_RESULT_CHARS) {
+      if (countTextTokens(JSON.stringify(page(middle))) <= MAX_RESULT_TOKENS) {
         best = middle;
         low = middle + 1;
       } else high = middle - 1;
@@ -161,7 +184,7 @@ export function readHelperChatLore(store: Store, chatId: string, args: Record<st
         ...(overrides.length ? { overrides } : {}),
       });
     }
-    if (JSON.stringify(page()).length > MAX_RESULT_CHARS) {
+    if (countTextTokens(JSON.stringify(page())) > MAX_RESULT_TOKENS) {
       items.pop();
       if (!items.length) throw new HttpError(413, '로어 목록을 더 좁게 읽어 주세요.');
       break;

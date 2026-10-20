@@ -11,7 +11,8 @@ import {
   type ResolvedPackage,
 } from './package-context.js';
 import { DEFAULT_LORE_CONTEXT, measureLoreText, type LorePlacement } from './lore-context.js';
-import { countTextTokens } from './text-tokens.js';
+import { countTextTokens, textTokenExcerpt } from './text-tokens.js';
+import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import { PROMPT_COMPILER_VERSIONS } from './risu-prompt.js';
@@ -20,13 +21,22 @@ import { packageImages } from './package-images.js';
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
 /** Per-entry summary length in the main catalog; the body stays behind the read tools. */
-export const CATALOG_SUMMARY_CHARS = 160;
-/** Serialized length budget for the whole catalog list, which rides in every main request. */
-export const CATALOG_CHARS = 24_000;
-/** One read page stays near the normal single-reference size, even for 16 ids. */
+export const CATALOG_SUMMARY_TOKENS = 80;
+/** Serialized token budget for the whole catalog list, which rides in every main request. */
+export const CATALOG_TOKENS = 6_000;
+/** Legacy bounds retained exclusively for historical receipt verification. */
 export const KNOWLEDGE_READ_CHARS = 6_000;
+export const KNOWLEDGE_READ_MAX_CHARS = 48_000;
+export const KNOWLEDGE_READ_TOKENS = 2_000;
+export const KNOWLEDGE_READ_MAX_TOKENS = 16_000;
+export const KNOWLEDGE_ITEM_TOKENS = 2_000;
+export type ReadBudget = {
+  tokens: number;
+  tokenizer: TokenizerProfileId;
+  ranges?: (number | null)[];
+};
 export const CATALOG_READ_GUIDANCE =
-  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Exact names favor normal search; mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read. Retrieval is optional when the supplied context is sufficient.';
+  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Request independently needed references together; wait for earlier results only when they are needed to choose the next reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Exact names favor normal search; mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read. Retrieval is optional when the supplied context is sufficient.';
 
 const metadata = ({ text: _text, chatId: _chatId, loreFolder: _loreFolder, ...item }: Resource) =>
   item;
@@ -34,13 +44,14 @@ const scopedMetadata = (item: Resource, allowedIds: Set<string>) => ({
   ...metadata(item),
   ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
 });
-const summary = (text: string) =>
-  text.length > CATALOG_SUMMARY_CHARS ? text.slice(0, CATALOG_SUMMARY_CHARS - 1) + '…' : text;
+const summary = (text: string, profile?: TokenizerProfileId) =>
+  textTokenExcerpt(text, CATALOG_SUMMARY_TOKENS, { profile, marker: '…' }).text;
 /** Discovery metadata only: identity, a short summary and the scoped relations. */
 const catalogEntry = (
   item: Resource,
   allowedIds: Set<string>,
-  pinnedBodiesDelivered: boolean
+  pinnedBodiesDelivered: boolean,
+  profile?: TokenizerProfileId
 ): Omit<Resource, 'text' | 'chatId'> => {
   const pinned = item.loading === 'pinned';
   return {
@@ -49,31 +60,34 @@ const catalogEntry = (
     kind: item.kind,
     title: item.title,
     // A pinned body already reaches the request; its summary would only repeat it.
-    description: pinned && pinnedBodiesDelivered ? '' : summary(item.description),
+    description: pinned && pinnedBodiesDelivered ? '' : summary(item.description, profile),
     ...(item.sourceKind ? { sourceKind: item.sourceKind } : {}),
     ...(pinned ? { loading: 'pinned' as const } : {}),
     ...(item.relatedIds ? { relatedIds: item.relatedIds.filter((id) => allowedIds.has(id)) } : {}),
   };
 };
-/** Entries that fit the serialized budget; the first entry is always listed. */
-const budgetedCatalogLength = (catalog: MainInput['catalog']) => {
-  let used = 1, // the enclosing brackets, less the separator the first entry does not need
-    listed = 0;
-  for (const item of catalog) {
-    used += JSON.stringify(item).length + 1;
-    if (listed && used > CATALOG_CHARS) break;
-    listed++;
+/** Entries that fit the complete serialized token budget. */
+const budgetedCatalogLength = (catalog: MainInput['catalog'], profile?: TokenizerProfileId) => {
+  let listed = 0;
+  for (let end = 1; end <= catalog.length; end++) {
+    if (countTextTokens(JSON.stringify(catalog.slice(0, end)), profile) > CATALOG_TOKENS) break;
+    listed = end;
   }
   return listed;
 };
 /** Bounded discovery metadata; callers retain the full resources behind their read tools. */
 export function resourceCatalog(
   resources: readonly Resource[],
-  { pinnedBodiesDelivered = true }: { pinnedBodiesDelivered?: boolean } = {}
+  {
+    pinnedBodiesDelivered = true,
+    tokenizer,
+  }: { pinnedBodiesDelivered?: boolean; tokenizer?: TokenizerProfileId } = {}
 ) {
   const allowedIds = new Set(resources.map((item) => item.id));
-  const entries = resources.map((item) => catalogEntry(item, allowedIds, pinnedBodiesDelivered));
-  const listed = budgetedCatalogLength(entries);
+  const entries = resources.map((item) =>
+    catalogEntry(item, allowedIds, pinnedBodiesDelivered, tokenizer)
+  );
+  const listed = budgetedCatalogLength(entries, tokenizer);
   return {
     catalog: entries.slice(0, listed),
     ...(listed < entries.length
@@ -89,7 +103,7 @@ export function resourceCatalog(
   };
 }
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
-const KNOWLEDGE_SEARCH_CHARS = 24_000;
+const KNOWLEDGE_SEARCH_TOKENS = 6_000;
 // Frozen Run objects own their optional browse view; no persistent cache, timers or invalidation service.
 const knowledgeBrowsers = new WeakMap<
   RunSnapshot,
@@ -283,8 +297,16 @@ export function buildMainInput(
     input.contract += `\n${OUTLINE_CONTRACT}`;
   }
   // The catalog rides uncached in every request, so a large library is listed only up to a
-  // character budget. The rest stays reachable through the read tools.
-  Object.assign(input, resourceCatalog(resources));
+  // token budget. The rest stays reachable through the read tools.
+  Object.assign(
+    input,
+    resourceCatalog(resources, {
+      tokenizer:
+        snapshot.contextPlan && 'tokenizer' in snapshot.contextPlan.budget
+          ? snapshot.contextPlan.budget.tokenizer
+          : undefined,
+    })
+  );
   return input;
 }
 
@@ -355,9 +377,19 @@ export function executeTool(
   snapshot: RunSnapshot,
   action: ToolAction,
   signal?: AbortSignal,
-  role: 'main' | 'translation' | 'image' = 'main'
+  role: 'main' | 'translation' | 'image' = 'main',
+  budget?: number | ReadBudget
 ): ToolEvent {
   checkAbort(signal);
+  const profile =
+    typeof budget === 'object'
+      ? budget.tokenizer
+      : ((snapshot.contextPlan && 'tokenizer' in snapshot.contextPlan.budget
+          ? snapshot.contextPlan.budget.tokenizer
+          : undefined) ?? 'openai-o200k');
+  const legacyChars = typeof budget === 'number' ? budget : undefined;
+  const readBudget: ReadBudget =
+    typeof budget === 'object' ? budget : { tokens: KNOWLEDGE_READ_TOKENS, tokenizer: profile };
   if ((role === 'main' || role === 'translation') && STORY_READ_NAMES.includes(action.name))
     return executeStoryRead(snapshot, action);
   const denied = (code: string): ToolEvent => ({
@@ -366,7 +398,7 @@ export function executeTool(
     args: {},
     result: { code },
     denied: true,
-    ...(['INVALID_ARGUMENTS', 'RESOURCE_UNAVAILABLE'].includes(code)
+    ...(['INVALID_ARGUMENTS', 'RESOURCE_UNAVAILABLE', 'TOKEN_LIMIT_TOO_SMALL'].includes(code)
       ? { errorKind: 'recoverable' as const }
       : {}),
   });
@@ -380,6 +412,7 @@ export function executeTool(
       browse = createKnowledgeBrowser(roleResources(snapshot, role), {
         chatId: snapshot.chatId,
         role,
+        tokenizer: profile,
       });
       browsers.set(role, browse);
     }
@@ -390,7 +423,25 @@ export function executeTool(
 
   if (action.name === 'knowledge.read') {
     if (
-      Object.keys(args).some((key) => !['ids', 'offset', 'limit'].includes(key)) ||
+      legacyChars !== undefined
+        ? !Number.isSafeInteger(legacyChars) ||
+          legacyChars < KNOWLEDGE_READ_CHARS ||
+          legacyChars > KNOWLEDGE_READ_MAX_CHARS
+        : !Number.isSafeInteger(readBudget.tokens) ||
+          readBudget.tokens < KNOWLEDGE_READ_TOKENS ||
+          readBudget.tokens > KNOWLEDGE_READ_MAX_TOKENS ||
+          !isTokenizerProfileId(readBudget.tokenizer)
+    )
+      throw new Error('INVALID_KNOWLEDGE_READ_BUDGET');
+    if (
+      Object.keys(args).some(
+        (key) =>
+          !(
+            legacyChars === undefined
+              ? ['ids', 'offset', 'limit', 'tokenLimit']
+              : ['ids', 'offset', 'limit']
+          ).includes(key)
+      ) ||
       !Array.isArray(args.ids) ||
       args.ids.length < 1 ||
       args.ids.length > 16 ||
@@ -400,10 +451,30 @@ export function executeTool(
       return denied('INVALID_ARGUMENTS');
 
     const offset = pageNumber(args.offset, 0, Number.MAX_SAFE_INTEGER);
-    const limit = pageNumber(args.limit, 4096, 4096);
-    if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
+    const limit =
+      args.limit === undefined && legacyChars === undefined
+        ? undefined
+        : pageNumber(args.limit, 4096, 4096);
+    const tokenLimit = pageNumber(args.tokenLimit, KNOWLEDGE_ITEM_TOKENS, 8000);
+    if (offset === null || limit === null || limit === 0 || tokenLimit === null || tokenLimit === 0)
+      return denied('INVALID_ARGUMENTS');
+    const fits = () =>
+      legacyChars === undefined
+        ? countTextTokens(JSON.stringify(result()), profile) <= readBudget.tokens
+        : JSON.stringify(result()).length <= legacyChars;
 
     const ids = args.ids;
+    // Historical verification uses the delivered boundaries, not a possibly updated tokenizer.
+    // The server compares the rebuilt source/hash/text and the entire receipt before retention.
+    const frozenRanges = readBudget.ranges;
+    if (
+      frozenRanges &&
+      (!Array.isArray(frozenRanges) ||
+        !frozenRanges.length ||
+        frozenRanges.length > ids.length ||
+        frozenRanges.some((end) => end !== null && (!Number.isSafeInteger(end) || end < offset)))
+    )
+      throw new Error('INVALID_KNOWLEDGE_READ_BUDGET');
     const items: unknown[] = [];
     const result = () => ({
       items,
@@ -417,24 +488,94 @@ export function executeTool(
           ? { id, denied: true, error: { code: 'RESOURCE_UNAVAILABLE' } }
           : offset > resource.text.length
             ? { id, denied: true, error: { code: 'INVALID_ARGUMENTS' } }
-            : { id, denied: false, read: readResourceRange(resource, offset, size, role) };
-      items.push(entry(limit));
-      if (JSON.stringify(result()).length <= KNOWLEDGE_READ_CHARS) continue;
+            : {
+                id,
+                denied: false,
+                read: readResourceRange(
+                  resource,
+                  offset,
+                  legacyChars === undefined &&
+                    size > 0 &&
+                    /[\uD800-\uDBFF]/u.test(resource.text[offset + size - 1] ?? '') &&
+                    /[\uDC00-\uDFFF]/u.test(resource.text[offset + size] ?? '')
+                    ? size - 1
+                    : size,
+                  role
+                ),
+              };
+      const frozenEnd = frozenRanges?.[items.length];
+      if (frozenRanges && items.length === frozenRanges.length) break;
+      if (
+        frozenRanges &&
+        resource &&
+        offset <= resource.text.length &&
+        (frozenEnd === null ||
+          frozenEnd === undefined ||
+          frozenEnd > resource.text.length ||
+          (limit !== undefined && frozenEnd > offset + limit))
+      )
+        throw new Error('INVALID_KNOWLEDGE_READ_BUDGET');
+      if (frozenRanges && (!resource || offset > resource.text.length) && frozenEnd !== null)
+        throw new Error('INVALID_KNOWLEDGE_READ_BUDGET');
+      const size = frozenRanges
+        ? (frozenEnd ?? offset) - offset
+        : legacyChars !== undefined
+          ? limit!
+          : resource && offset <= resource.text.length
+            ? textTokenExcerpt(
+                resource.text.slice(offset, limit === undefined ? undefined : offset + limit),
+                tokenLimit,
+                { marker: '', profile }
+              ).text.length
+            : 0;
+      if (
+        !frozenRanges &&
+        legacyChars === undefined &&
+        resource &&
+        offset < resource.text.length &&
+        size === 0
+      )
+        return denied('TOKEN_LIMIT_TOO_SMALL');
+      items.push(entry(size));
+      if (frozenRanges || fits()) continue;
       items.pop();
       if (items.length) break;
       // Unusually escape-heavy text must still make progress within the serialized page bound.
       let low = 1;
-      let high = limit;
+      let high = size;
       while (low < high) {
         const middle = Math.ceil((low + high) / 2);
         items[0] = entry(middle);
-        if (JSON.stringify(result()).length <= KNOWLEDGE_READ_CHARS) low = middle;
+        if (fits()) low = middle;
         else high = middle - 1;
       }
       items[0] = entry(low);
+      if (legacyChars === undefined && !fits()) return denied('RESULT_METADATA_TOO_LARGE');
       break;
     }
-    return { ...action, args: { ids: args.ids, offset, limit }, denied: false, result: result() };
+    return {
+      ...action,
+      args: {
+        ids: args.ids,
+        offset,
+        ...(limit === undefined ? {} : { limit }),
+        ...(legacyChars === undefined ? { tokenLimit } : {}),
+      },
+      denied: false,
+      result: result(),
+      ...(legacyChars === undefined
+        ? {
+            readBudget: {
+              ...readBudget,
+              ranges: items.map(
+                (item) => (item as { read?: KnowledgeReadResult }).read?.range.end ?? null
+              ),
+            },
+          }
+        : legacyChars > KNOWLEDGE_READ_CHARS
+          ? { knowledgeReadChars: legacyChars }
+          : {}),
+    };
   }
 
   if (args.mode !== undefined && (action.name !== 'knowledge.search' || args.mode !== 'search'))
@@ -448,7 +589,7 @@ export function executeTool(
             ? action.name === 'knowledge.search'
               ? ['mode', 'query', 'offset', 'limit']
               : ['query', 'offset', 'limit']
-            : ['id', 'offset', 'limit']
+            : ['id', 'offset', 'limit', 'tokenLimit']
         ).includes(key)
     )
   )
@@ -489,7 +630,7 @@ export function executeTool(
         arguments: {
           ...(item.kind === 'skill' ? { id: item.id } : { ids: [item.id] }),
           offset: 0,
-          limit: 4096,
+          tokenLimit: KNOWLEDGE_ITEM_TOKENS,
         },
       };
       let index = Infinity;
@@ -498,9 +639,14 @@ export function executeTool(
         if (found) index = Math.min(index, found.index);
       }
       if (Number.isFinite(index)) {
-        let start = Math.max(0, index - 60);
+        let start =
+          index -
+          textTokenExcerpt(item.text.slice(0, index), 30, { side: 'end', marker: '', profile }).text
+            .length;
         if (start && /[\uDC00-\uDFFF]/u.test(item.text[start]!)) start--;
-        let end = Math.min(item.text.length, start + 240);
+        let end =
+          start +
+          textTokenExcerpt(item.text.slice(start), 120, { marker: '', profile }).text.length;
         if (end < item.text.length && /[\uDC00-\uDFFF]/u.test(item.text[end]!)) end--;
         entry.match = readResourceRange(item, start, end - start, role);
         nextRead.arguments.offset = start;
@@ -508,10 +654,11 @@ export function executeTool(
       }
       if (
         action.name === 'knowledge.search' &&
-        JSON.stringify({ ...result(), items: [entry] }).length > KNOWLEDGE_SEARCH_CHARS
+        countTextTokens(JSON.stringify({ ...result(), items: [entry] }), profile) >
+          KNOWLEDGE_SEARCH_TOKENS
       ) {
         const relatedIds = (entry.relatedIds ?? []) as string[];
-        entry.description = summary(item.description);
+        entry.description = summary(item.description, profile);
         if (relatedIds.length) entry.relatedIds = relatedIds.slice(0, 20);
         entry.metadataPreview = {
           description: {
@@ -525,7 +672,7 @@ export function executeTool(
       items.push(entry);
       if (
         action.name === 'knowledge.search' &&
-        JSON.stringify(result()).length > KNOWLEDGE_SEARCH_CHARS
+        countTextTokens(JSON.stringify(result()), profile) > KNOWLEDGE_SEARCH_TOKENS
       ) {
         items.pop();
         if (!items.length) return denied('RESULT_METADATA_TOO_LARGE');
@@ -546,12 +693,20 @@ export function executeTool(
   if (!resource) return denied('RESOURCE_UNAVAILABLE');
 
   const offset = pageNumber(args.offset, 0, resource.text.length);
-  const limit = pageNumber(args.limit, 4096, 16384);
-  if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
+  const limit = args.limit === undefined ? undefined : pageNumber(args.limit, 4096, 16384);
+  const tokenLimit = pageNumber(args.tokenLimit, KNOWLEDGE_ITEM_TOKENS, 8000);
+  if (offset === null || limit === null || limit === 0 || tokenLimit === null || tokenLimit === 0)
+    return denied('INVALID_ARGUMENTS');
+  const size = textTokenExcerpt(
+    resource.text.slice(offset, limit === undefined ? undefined : offset + limit),
+    tokenLimit,
+    { marker: '', profile }
+  ).text.length;
+  if (offset < resource.text.length && size === 0) return denied('TOKEN_LIMIT_TOO_SMALL');
   return {
     ...action,
-    args: { id: resource.id, offset, limit },
+    args: { id: resource.id, offset, ...(limit === undefined ? {} : { limit }), tokenLimit },
     denied: false,
-    result: readResourceRange(resource, offset, limit, role),
+    result: readResourceRange(resource, offset, size, role),
   };
 }

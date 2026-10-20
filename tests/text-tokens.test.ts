@@ -55,6 +55,19 @@ describe('offline text token counting', () => {
       });
     }
   );
+  it('uses the selected tokenizer for the excerpt and omission marker', () => {
+    const encoder = get_encoding('cl100k_base');
+    try {
+      const original = '한국어 원문과 日本語 🙂 mixed words '.repeat(30);
+      const result = textTokenExcerpt(original, 35, { profile: 'openai-cl100k', marker: '…' });
+      expect(result.truncated).toBe(true);
+      expect(result.tokens).toBe(encoder.encode(result.text, [], []).length);
+      expect(result.tokens).toBeLessThanOrEqual(35);
+      expect(original.startsWith(result.text.slice(0, -1))).toBe(true);
+    } finally {
+      encoder.free();
+    }
+  });
   it.each([
     '',
     'The harbor is quiet tonight.',

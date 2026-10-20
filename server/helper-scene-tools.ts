@@ -1,3 +1,4 @@
+import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import { createHash } from 'node:crypto';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -59,7 +60,7 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
   {
     name: 'scene.read',
     description:
-      'Read the latest editable stored original or displayed completed translation in this chat ancestry, not rendered HTML. Discover sourceId through chat.read/story tools. Pages use UTF-16 offsets (default limit 6000, max 10000); copy nextRead unchanged for sequential pages. For a nonzero offset or random access, pass all three guards (expectedRevision, expectedSourceHash, expectedTextHash) from the same scene.read result. Read every relevant page before full replacement. editTarget contains current save guards, while displayedTranslation identifies the visible previous success during regeneration. Missing translation is an error. Stale pages require restarting.',
+      'Read the latest editable stored original or displayed completed translation in this chat ancestry, not rendered HTML. Discover sourceId through chat.read/story tools. Pages use UTF-16 offsets. Omit limit for a 3000-token local o200k text budget; an explicit limit is UTF-16 code units (max 10000). Serialized body text stays within 9000 local o200k tokens; copy nextRead unchanged for sequential pages. For a nonzero offset or random access, pass all three guards (expectedRevision, expectedSourceHash, expectedTextHash) from the same scene.read result. Read every relevant page before full replacement. editTarget contains current save guards, while displayedTranslation identifies the visible previous success during regeneration. Missing translation is an error. Stale pages require restarting.',
     inputSchema: schema({ sourceId, target, ...paging }, ['sourceId', 'target']),
   },
   {
@@ -209,7 +210,10 @@ function page(
 ) {
   const offset =
     args.offset === undefined ? 0 : number(args.offset, 'text offset', 0, SOURCE_TEXT_MAX_CHARS);
-  const limit = args.limit === undefined ? 6000 : number(args.limit, 'text limit', 1, 10000);
+  const limit =
+    args.limit === undefined
+      ? textTokenExcerpt(content.slice(offset), 3_000).text.length || 1
+      : number(args.limit, 'text limit', 1, 10000);
   if (
     offset > 0 &&
     (args.expectedRevision === undefined ||
@@ -230,7 +234,7 @@ function page(
   let end = Math.min(offset + limit, content.length);
   if (splitsPair(content, end)) end = end === offset + 1 ? end + 1 : end - 1;
   // Reserve room for guards and provenance; control characters can expand sixfold in JSON.
-  while (JSON.stringify(content.slice(offset, end)).length > 18000) {
+  while (countTextTokens(JSON.stringify(content.slice(offset, end))) > 9_000) {
     end = offset + Math.floor((end - offset) / 2);
     if (splitsPair(content, end)) end--;
   }
@@ -253,7 +257,7 @@ function page(
                 ...editTarget,
                 chatId,
                 offset: nextOffset,
-                limit,
+                ...(args.limit === undefined ? {} : { limit }),
                 expectedTextHash: textHash,
               },
             },

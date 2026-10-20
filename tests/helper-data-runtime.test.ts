@@ -525,7 +525,7 @@ test('independent helper data reads refill a free slot while results, budgets an
       if (index === 4) throw new Error('DATA_QUERY_TIMEOUT: narrow the query');
       return {
         index,
-        text: index < 3 ? 'r'.repeat(24_000) : 'after the write',
+        text: index < 3 ? ' token'.repeat(12_000) : 'after the write',
         folders: f.store.libraryOrganization.snapshot().folders.length,
       };
     } finally {
@@ -533,6 +533,9 @@ test('independent helper data reads refill a free slot while results, budgets an
       inFlight--;
     }
   });
+  // Each read fits 16k tokens, but the third exceeds the shared 32k round budget.
+  expect(countTextTokens(' token'.repeat(12_000))).toBeGreaterThan(11_000);
+  expect(countTextTokens(' token'.repeat(12_000))).toBeLessThan(16_000);
   const revision = f.store.libraryOrganization.snapshot().revision;
   const bodies = provider((wire, round) => {
     if (round === 0)

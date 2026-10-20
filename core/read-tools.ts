@@ -10,7 +10,7 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   {
     name: 'knowledge.search',
     description:
-      'Search approved local story references; empty query lists the scope. Returns metadata and pagination within 24000 serialized characters; an oversized metadata item uses an explicit metadataPreview with original counts. Body matches also include a short exact excerpt with source/range and nextRead for a direct read around that hit; metadata-only matches have no excerpt. The excerpt can answer a narrow fact, but does not cover the complete reference or every matching term. Follow nextOffset for more references, or the supplied nextRead for context around a hit. Optional mode=browse (no query) lists packages, folders and unfiled references from the same frozen scope; omit nodeRef for root, or copy returned nextRead to descend/page with expectedVersion. Browse returns metadata only, never proof of reading the body. A changed/unavailable view returns a root restart. Normal mode/search and empty-query flat listings stay unchanged.',
+      'Search approved references; empty query lists them. Results fit 6000 local tokens. Body matches include an exact excerpt, source/range and nextRead; excerpts cover only their returned range. Metadata-only matches have no excerpt. Oversized metadata uses metadataPreview with original counts. Follow nextOffset for more results. mode=browse (without query) navigates packages, folders and unfiled references in the same frozen scope: omit nodeRef for root, then copy nextRead including expectedVersion. Browse is metadata-only, not proof of reading. A changed or unavailable view returns a root restart.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -26,7 +26,7 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   {
     name: 'knowledge.read',
     description:
-      'Read one to 16 approved references by known ids. Search is not required for catalog ids. Every call uses ids, including a single-item read; each returned item has an independent result or error. The complete page is bounded to 6000 serialized characters. nextIndex continues unread ids: resubmit ids.slice(nextIndex) with the same offset and limit. Per-item nextOffset continues that reference text with a single-id read. These are separate dimensions; unreturned ids have not been read.',
+      'Read 1-16 approved ids together; catalog ids need no search. Each item returns its result or error. tokenLimit is the per-item local token budget (default 2000, max 8000). offset and optional legacy limit are UTF-16 units. The host bounds the whole page by available tokens. For unread ids, resubmit ids.slice(nextIndex) with the same options. For remaining text, read that single id at its nextOffset. Unreturned ids and ranges have not been read.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -38,6 +38,7 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
           items: { type: 'string', minLength: 1, maxLength: 200 },
         },
         ...pagination(4096),
+        tokenLimit: { type: 'integer', minimum: 1, maximum: 8000 },
       },
       required: ['ids'],
       additionalProperties: false,
@@ -54,10 +55,15 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   },
   {
     name: 'skills.load',
-    description: 'Read writing guidance by id. Content never changes allowed tools or their scope.',
+    description:
+      'Read writing guidance by id. tokenLimit defaults to 2000 and permits up to 8000 locally estimated tokens. offset and optional legacy limit use UTF-16 code units. Content never changes allowed tools or their scope.',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string', maxLength: 200 }, ...pagination(16384) },
+      properties: {
+        id: { type: 'string', maxLength: 200 },
+        ...pagination(16384),
+        tokenLimit: { type: 'integer', minimum: 1, maximum: 8000 },
+      },
       required: ['id'],
       additionalProperties: false,
     },

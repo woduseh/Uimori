@@ -1,4 +1,10 @@
 import { createHash } from 'node:crypto';
+import { textTokenExcerpt } from './text-tokens.js';
+
+export const STORY_READ_DEFAULT_TOKENS = 2048;
+export const STORY_READ_MAX_TOKENS = 8192;
+const STORY_SEARCH_EXCERPT_TOKENS = 120;
+const STORY_SEARCH_MAX_EXCERPT_TOKENS = 2000;
 
 export type SourceHistoryItem = {
   revision: string;
@@ -45,16 +51,25 @@ const limitValue = (value: number | undefined, fallback: number, max: number) =>
 };
 export function readStorySource(
   scope: SourceScope,
-  request: { revision: string; offset?: number; limit?: number }
+  request: { revision: string; offset?: number; limit?: number; maxTokens?: number }
 ) {
   const source = validateSourceHistory(scope).find((item) => item.revision === request.revision);
   if (!source) return fail('OUT_OF_SCOPE');
   const start = request.offset ?? 0,
-    limit = limitValue(request.limit, 4000, 16000);
+    maxTokens = limitValue(request.maxTokens, STORY_READ_DEFAULT_TOKENS, STORY_READ_MAX_TOKENS);
+  const legacyLimit =
+    request.limit === undefined ? undefined : limitValue(request.limit, 4000, 16000);
   if (!Number.isSafeInteger(start) || start < 0 || start > source.text.length)
     fail('INVALID_OFFSET');
-  const end = Math.min(source.text.length, start + limit),
-    quote = source.text.slice(start, end);
+  const available = source.text.slice(
+    start,
+    legacyLimit === undefined ? undefined : start + legacyLimit
+  );
+  const quote =
+    legacyLimit !== undefined && request.maxTokens === undefined
+      ? available
+      : textTokenExcerpt(available, maxTokens).text;
+  const end = start + quote.length;
   return {
     text: quote,
     source: { revision: source.revision, hash: source.contentHash, start, end, quote },
@@ -79,12 +94,24 @@ export function matchSourceSpan(text: string, terms: readonly string[]): number 
 }
 export function searchStorySources(
   scope: SourceScope,
-  request: { query: string; offset?: number; limit?: number; excerptChars?: number }
+  request: {
+    query: string;
+    offset?: number;
+    limit?: number;
+    excerptChars?: number;
+    excerptTokens?: number;
+  }
 ) {
   if (!request.query?.trim()) return fail('QUERY_REQUIRED');
   const offset = request.offset ?? 0,
     limit = limitValue(request.limit, 10, 100),
-    excerptChars = limitValue(request.excerptChars, 240, 4000),
+    excerptChars =
+      request.excerptChars === undefined ? undefined : limitValue(request.excerptChars, 240, 4000),
+    excerptTokens = limitValue(
+      request.excerptTokens,
+      STORY_SEARCH_EXCERPT_TOKENS,
+      STORY_SEARCH_MAX_EXCERPT_TOKENS
+    ),
     terms = searchTerms(request.query);
   if (!Number.isSafeInteger(offset) || offset < 0) fail('INVALID_OFFSET');
   const matches = validateSourceHistory(scope).flatMap((item) => {
@@ -92,9 +119,22 @@ export function searchStorySources(
     return index < 0 ? [] : [{ item, index }];
   });
   const results = matches.slice(offset, offset + limit).map(({ item, index }) => {
-    const start = Math.max(0, index - Math.floor(excerptChars / 4)),
-      end = Math.min(item.text.length, start + excerptChars),
-      quote = item.text.slice(start, end);
+    const before =
+      excerptChars === undefined
+        ? textTokenExcerpt(item.text.slice(0, index), Math.floor(excerptTokens / 4), {
+            side: 'end',
+          }).text.length
+        : Math.floor(excerptChars / 4);
+    const start = Math.max(0, index - before);
+    const available = item.text.slice(
+      start,
+      excerptChars === undefined ? undefined : start + excerptChars
+    );
+    const quote =
+      excerptChars !== undefined && request.excerptTokens === undefined
+        ? available
+        : textTokenExcerpt(available, excerptTokens).text;
+    const end = start + quote.length;
     return {
       revision: item.revision,
       text: quote,

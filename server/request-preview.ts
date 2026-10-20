@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { EXECUTION_INPUT_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { PROMPT_HTTP_BODY_MAX_BYTES, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import type { RequestPreview } from '../core/request-preview.js';
@@ -228,7 +228,7 @@ export async function previewNextRequest(
 export function requestPreviewRoutes(app: FastifyInstance, store: Store) {
   app.post<{ Params: { id: string } }>(
     '/api/chats/:id/request-preview',
-    { bodyLimit: EXECUTION_INPUT_MAX_CHARS },
+    { bodyLimit: PROMPT_HTTP_BODY_MAX_BYTES },
     async (request) => {
       const body = record(request.body);
       fields(body, ['request', 'loreContextReset', 'requestImages']);

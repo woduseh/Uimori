@@ -177,7 +177,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'outline.read',
     description:
-      'Read live composition in bounded pages. Default overview returns metadata/intent previews, never full review coverage. subtree needs nodeId; depth=0 includes only that node, 1 direct children, omitted all descendants. detail needs nodeId and section=intent (default), related, or writings (subtree source references). Use offset/limit in every mode: item counts for lists (default 20, capped at 50), UTF-16 units for intent (default 6000, capped at 10000). Versions belong to the selected query; use a new first read when switching modes/sections. Later pages require expectedVersion; copy nextRead unchanged. OUTLINE_CHANGED requires restarting this scope. Intent ranges use UTF-16. coverage.wholeField means this one response includes the entire intent, not cumulative coverage; nextOffset=null means the last page. Overview intentCodePoints uses Unicode code points. Writings return exact data.read refs, not proof that plans were fulfilled.',
+      'Read live composition in bounded pages. Default overview returns metadata/intent previews, never full review coverage. subtree needs nodeId; depth=0 includes only that node, 1 direct children, omitted all descendants. detail needs nodeId and section=intent (default), related, or writings (subtree source references). Use offset/limit in every mode: item counts for lists (default 20, capped at 50), UTF-16 units for explicit intent limit (capped at 10000); omitted intent limit uses 3000 local o200k tokens. Versions belong to the selected query; use a new first read when switching modes/sections. Later pages require expectedVersion; copy nextRead unchanged. OUTLINE_CHANGED requires restarting this scope. Intent ranges use UTF-16. coverage.wholeField means this one response includes the entire intent, not cumulative coverage; nextOffset=null means the last page. Overview intentCodePoints uses Unicode code points. Writings return exact data.read refs, not proof that plans were fulfilled.',
     inputSchema: schema({
       mode: { type: 'string', enum: ['overview', 'subtree', 'detail'] },
       nodeId: itemId,
@@ -248,7 +248,7 @@ const TOOLS: ProviderTool[] = [
   {
     name: 'artifact.read',
     description:
-      'Read an exact artifact revision in UTF-16 pages. field=text (default) reads the hypothetical scene; field=request reads its original generation request. offset defaults to 0 and limit to 4000 (max 10000); follow nextOffset for unread text. A saved reference alone does not mean you read its prose. This artifact is not a played story event.',
+      'Read an exact artifact revision in UTF-16 pages. field=text (default) reads the hypothetical scene; field=request reads its original generation request. offset defaults to 0; omitted limit uses 2000 local o200k tokens, while explicit limit remains a UTF-16 cap (max 10000); follow nextOffset for unread text. A saved reference alone does not mean you read its prose. This artifact is not a played story event.',
     inputSchema: schema(
       {
         id: str,

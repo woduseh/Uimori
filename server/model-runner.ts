@@ -3,9 +3,9 @@ import { ProviderContractError, type ProviderExecutionOptions } from '../core/tr
 import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { toolCorrectionOutcome } from '../core/tool-outcome.js';
-import { estimateContextTokens } from '../core/context-budget.js';
+import { estimateContextTokens, MIN_INPUT_TOKEN_LIMIT } from '../core/context-budget.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
-import { executeTool } from '../core/provider.js';
+import { executeTool, KNOWLEDGE_READ_TOKENS, KNOWLEDGE_READ_MAX_TOKENS } from '../core/provider.js';
 import { executeFixtureMain, type FixtureGeneration } from '../core/fixture-provider.js';
 import { isGeminiProtocol, type Connection } from '../core/product.js';
 import {
@@ -118,6 +118,48 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   );
   let opaqueState: Json | undefined;
   let continuationPrompt: ProviderRequest['prompt'];
+  // Shared by all results from one model response; the other half of measured
+  // headroom remains for model output and protocol wrapping. Admission still owns safety.
+  let readHeadroomTokens = 0;
+  const readTokens = (event: ToolEvent) => estimateContextTokens(event, fixed.contextPlan?.budget);
+  const executeMainTool = (action: Parameters<typeof executeTool>[1], signal?: AbortSignal) => {
+    let event = executeTool(fixed, action, signal);
+    if (
+      !event.denied &&
+      action.name === 'knowledge.read' &&
+      Array.isArray(action.args.ids) &&
+      action.args.ids.length > 1 &&
+      fixed.contextPlan !== undefined &&
+      fixed.contextPlan.budget.inputTokenLimit > MIN_INPUT_TOKEN_LIMIT &&
+      readTokens(event) < readHeadroomTokens
+    ) {
+      const largest = executeTool(fixed, action, signal, 'main', {
+        tokens: KNOWLEDGE_READ_MAX_TOKENS,
+        tokenizer:
+          fixed.contextPlan && 'tokenizer' in fixed.contextPlan.budget
+            ? fixed.contextPlan.budget.tokenizer
+            : 'openai-o200k',
+      });
+      if (readTokens(largest) <= readHeadroomTokens) return largest;
+      let low = KNOWLEDGE_READ_TOKENS;
+      let high = KNOWLEDGE_READ_MAX_TOKENS;
+      while (low < high) {
+        const tokens = Math.ceil((low + high) / 2);
+        const candidate = executeTool(fixed, action, signal, 'main', {
+          tokens,
+          tokenizer:
+            fixed.contextPlan && 'tokenizer' in fixed.contextPlan.budget
+              ? fixed.contextPlan.budget.tokenizer
+              : 'openai-o200k',
+        });
+        if (readTokens(candidate) <= readHeadroomTokens) {
+          low = tokens;
+          event = candidate;
+        } else high = tokens - 1;
+      }
+    }
+    return event;
+  };
   const fail = (
     error: string,
     text = '',
@@ -315,7 +357,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       } else
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
-          : executeTool(fixed, action, signal);
+          : executeMainTool(action, signal);
+      readHeadroomTokens = Math.max(0, readHeadroomTokens - readTokens(event));
       results.push(event);
       if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
         advisorContext.set(event.callId, structuredClone(event));
@@ -487,6 +530,16 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         target.timeoutMs ??
         (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
       onWire: async (wire, resumeAttemptId) => {
+        readHeadroomTokens =
+          !native && !evaluation && request.contextBudget
+            ? Math.max(
+                0,
+                (request.contextBudget.inputTokenLimit * 0.85 -
+                  (wire.requestContext?.estimatedInputTokens ??
+                    estimateContextTokens(wire.body, request.contextBudget))) /
+                  2
+              )
+            : 0;
         attemptId = await hooks.onAttemptStart(
           {
             ...wire,

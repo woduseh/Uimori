@@ -1,3 +1,4 @@
+import { countTextTokens } from '../core/text-tokens.js';
 import { VERTEX_GEMINI_MODEL_ID } from './fixtures/vertex-model.js';
 import { refreshNativeSnapshot } from './fixtures/native-snapshot.js';
 import { prepareNativeRisuRun } from '../server/risu-native-run.js';
@@ -1061,16 +1062,22 @@ describe('host read compaction and provider continuation inside one main run', (
   });
 });
 
-test.each([1, 16])(
-  'an 8192-token writer receives a bounded %i-reference read without immediate summarization',
-  async (count) => {
+test.each([
+  { inputLimit: 8192, count: 1, expanded: false },
+  { inputLimit: 8192, count: 16, expanded: false },
+  { inputLimit: 272000, count: 1, expanded: false },
+  { inputLimit: 272000, count: 10, expanded: true },
+  { inputLimit: 32768, count: 8, expanded: true, batches: 2 },
+])(
+  'a $inputLimit-token writer reads $count references without immediate summarization',
+  async ({ inputLimit, count, expanded, batches = 1 }) => {
     const fixed = await snapshot();
     fixed.history = [];
     fixed.logicalHistory = [];
     fixed.parentRevision = null;
     fixed.settings.maxCalls = 10;
     const target = fixed.profile!.models.main!;
-    target.inputTokenLimit = 8192;
+    target.inputTokenLimit = inputLimit;
     target.connection.protocol = 'openai-chat-v1';
     target.connection.endpoint = `${origin}/v1/chat/completions`;
     fixed.profile!.contextModel = { ...structuredClone(target), modelId: 'synthetic-summary' };
@@ -1084,7 +1091,9 @@ test.each([1, 16])(
       loading: 'discoverable' as const,
       text:
         `EXACT_LORE_${index}: ` +
-        '항구의 종이 울리자 소녀는 젖은 편지를 접고 등대를 바라보았다. '.repeat(200),
+        '항구의 종이 울리자 소녀는 젖은 편지를 접고 등대를 바라보았다. '.repeat(
+          expanded ? 50 : 200
+        ),
     }));
     await refreshNativeSnapshot(fixed);
     const ready = seedContextPlan(fixed);
@@ -1099,20 +1108,20 @@ test.each([1, 16])(
       const delta = first
         ? {
             role: 'assistant',
-            tool_calls: [
-              {
-                index: 0,
-                id: 'bulk-read',
-                type: 'function',
-                function: {
-                  name,
-                  arguments: JSON.stringify({
-                    ids: ready.resources.slice(0, count).map(({ id }) => id),
-                    limit: 4096,
-                  }),
-                },
+            tool_calls: Array.from({ length: batches }, (_, index) => ({
+              index,
+              id: `bulk-read-${index}`,
+              type: 'function',
+              function: {
+                name,
+                arguments: JSON.stringify({
+                  ids: ready.resources
+                    .slice(index * count, (index + 1) * count)
+                    .map(({ id }) => id),
+                  limit: 4096,
+                }),
               },
-            ],
+            })),
           }
         : { role: 'assistant', content: finalText };
       const response = sse(
@@ -1134,11 +1143,49 @@ test.each([1, 16])(
     const result = await runMain(ready, observed.value);
     expect(result.status, JSON.stringify(result)).toBe('completed');
     expect(bodies).toHaveLength(2);
-    expect(bodies.every((body) => estimateContextTokens(body) <= 8192)).toBe(true);
+    expect(bodies.every((body) => estimateContextTokens(body) <= inputLimit)).toBe(true);
     expect(observed.events.some((event) => event.name === 'context.compact')).toBe(false);
-    const read = observed.events.find((event) => event.name === 'knowledge.read')!.result as any;
-    expect(read.items[0].read.text).toBe(ready.resources[0].text.slice(0, 4096));
-    expect(read.nextIndex).toBe(count === 1 ? null : 1);
+    const receipt = observed.events.find((event) => event.name === 'knowledge.read')!;
+    const read = receipt.result as any;
+    expect(read.items[0].read.text.length).toBeGreaterThan(0);
+    expect(read.items[0].read.text).toBe(
+      ready.resources[0].text.slice(0, read.items[0].read.range.end)
+    );
+    expect(
+      countTextTokens(JSON.stringify(read), receipt.readBudget!.tokenizer)
+    ).toBeLessThanOrEqual(receipt.readBudget!.tokens);
+    if (batches > 1) {
+      const reads = observed.events.filter((event) => event.name === 'knowledge.read');
+      expect(reads).toHaveLength(2);
+      const second = reads[1].result as any;
+      expect(countTextTokens(JSON.stringify(read))).toBeGreaterThan(2000);
+      expect(countTextTokens(JSON.stringify(second))).toBeLessThanOrEqual(
+        reads[1].readBudget!.tokens
+      );
+      expect(second.items).toHaveLength(1);
+      expect(second.nextIndex).toBe(1);
+      for (const event of reads) {
+        for (const item of (event.result as any).items) {
+          expect(item.read.text).toBe(
+            ready.resources.find((resource) => resource.id === item.id)!.text
+          );
+          expect(JSON.stringify(bodies[1])).toContain(item.read.text);
+        }
+      }
+    } else if (expanded) {
+      expect(read.nextIndex).toBeNull();
+      expect(read.items.map((item: any) => item.read.text)).toEqual(
+        ready.resources.slice(0, count).map((resource) => resource.text)
+      );
+      expect(countTextTokens(JSON.stringify(read))).toBeGreaterThan(2000);
+      expect(countTextTokens(JSON.stringify(read))).toBeLessThanOrEqual(16000);
+      for (let index = 0; index < count; index++)
+        expect(JSON.stringify(bodies[1])).toContain(`EXACT_LORE_${index}`);
+    } else {
+      expect(read.nextIndex).toBe(count === 1 ? null : 1);
+      expect(countTextTokens(JSON.stringify(read))).toBeLessThanOrEqual(2000);
+      expect(read.items).toHaveLength(1);
+    }
     expect(JSON.stringify(bodies[1])).toContain('EXACT_LORE_0');
   }
 );
@@ -1185,12 +1232,106 @@ test('read compaction keeps bounded knowledge page and per-item continuation met
               id: 'lore-0',
               denied: false,
               source: page.items[1].read.source,
-              range: { start: 0, end: 4096 },
-              nextOffset: 4096,
+              range: page.items[1].read.range,
+              nextOffset: page.items[1].read.nextOffset,
             },
           ],
         },
       },
     ],
   });
+});
+
+test('knowledge token pages preserve multilingual UTF-16 ranges, frozen receipts and legacy limits', async () => {
+  const fixed = await snapshot();
+  fixed.resources = [
+    {
+      id: 'unicode-lore',
+      chatId: fixed.chatId,
+      kind: 'lore',
+      revision: 1,
+      title: 'Unicode',
+      description: '',
+      text: '안녕하세요 😀 hello 世界\n'.repeat(200),
+    },
+  ];
+  const original = fixed.resources[0].text;
+  const chunks: string[] = [];
+  let offset = 0;
+  do {
+    const event = executeTool(fixed, {
+      callId: `read-${offset}`,
+      name: 'knowledge.read',
+      args: { ids: ['unicode-lore'], offset, tokenLimit: 100 },
+    });
+    expect(event.denied).toBe(false);
+    const read = (event.result as any).items[0].read;
+    expect(countTextTokens(read.text)).toBeLessThanOrEqual(100);
+    expect(read.range.start).toBe(offset);
+    expect(read.text).toBe(original.slice(offset, read.range.end));
+    expect(read.text.isWellFormed()).toBe(true);
+    expect(read.range.end).toBeGreaterThan(offset);
+    expect(
+      executeTool(
+        fixed,
+        { callId: event.callId, name: event.name, args: event.args },
+        undefined,
+        'main',
+        event.readBudget
+      )
+    ).toEqual(event);
+    // Frozen ranges remain exact even if the local tokenizer configuration changes later.
+    const rechecked = executeTool(
+      fixed,
+      { callId: event.callId, name: event.name, args: event.args },
+      undefined,
+      'main',
+      { ...event.readBudget!, tokenizer: 'openai-cl100k' }
+    );
+    expect(rechecked.result).toEqual(event.result);
+    chunks.push(read.text);
+    offset = read.nextOffset;
+  } while (offset !== null);
+  expect(chunks.join('')).toBe(original);
+  const legacy = executeTool(
+    fixed,
+    {
+      callId: 'old',
+      name: 'knowledge.read',
+      args: { ids: ['unicode-lore'], offset: 0, limit: 123 },
+    },
+    undefined,
+    'main',
+    6000
+  );
+  expect(legacy).not.toHaveProperty('readBudget');
+  expect((legacy.result as any).items[0].read.text).toBe(original.slice(0, 123));
+});
+
+test('tiny token limits return a recoverable error rather than a non-progressing lore or skill page', async () => {
+  const fixed = await snapshot();
+  fixed.resources = [
+    {
+      id: 'emoji',
+      chatId: fixed.chatId,
+      kind: 'lore',
+      revision: 1,
+      title: 'emoji',
+      description: '',
+      text: '🧬abc',
+    },
+  ];
+  for (const kind of ['lore', 'skill'] as const) {
+    fixed.resources[0].kind = kind;
+    const event = executeTool(fixed, {
+      callId: kind,
+      name: kind === 'lore' ? 'knowledge.read' : 'skills.load',
+      args: { ...(kind === 'lore' ? { ids: ['emoji'] } : { id: 'emoji' }), tokenLimit: 1 },
+    });
+    expect(event).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: { code: 'TOKEN_LIMIT_TOO_SMALL' },
+    });
+  }
 });

@@ -1,3 +1,7 @@
+import { textTokenExcerpt } from './text-tokens.js';
+
+export const TRANSLATION_READ_MAX_TOKENS = 2048;
+
 import type { RunSnapshot, ToolEvent } from './types.js';
 import type { ToolAction } from './provider.js';
 import { sourceHash } from './source-history.js';
@@ -78,8 +82,19 @@ export function translationReader(
     if (!TRANSLATION_READ_NAMES.includes(action.name)) return denied('TOOL_NOT_ALLOWED');
     if (
       Object.keys(args).some(
-        (key) => !(search ? ['query', 'offset', 'limit'] : ['id', 'offset', 'limit']).includes(key)
+        (key) =>
+          !(
+            search ? ['query', 'offset', 'limit'] : ['id', 'offset', 'limit', 'maxTokens']
+          ).includes(key)
       )
+    )
+      return denied('INVALID_ARGUMENTS');
+    const maxTokens = args.maxTokens === undefined ? TRANSLATION_READ_MAX_TOKENS : args.maxTokens;
+    if (
+      !search &&
+      (!Number.isSafeInteger(maxTokens) ||
+        Number(maxTokens) < 1 ||
+        Number(maxTokens) > TRANSLATION_READ_MAX_TOKENS)
     )
       return denied('INVALID_ARGUMENTS');
     const offset = args.offset ?? 0;
@@ -123,13 +138,22 @@ export function translationReader(
     if (typeof args.id !== 'string' || args.id.length > 200) return denied('INVALID_ARGUMENTS');
     const item = scope.find((item) => item.id === args.id);
     if (!item || Number(offset) > item.text.length) return denied('RESOURCE_UNAVAILABLE');
-    const end = Math.min(item.text.length, Number(offset) + Number(limit));
+    const available = item.text.slice(
+      Number(offset),
+      args.limit === undefined ? undefined : Number(offset) + Number(limit)
+    );
+    const excerpt =
+      args.limit !== undefined && args.maxTokens === undefined
+        ? available
+        : textTokenExcerpt(available, Number(maxTokens)).text;
+    if (!excerpt.length && Number(offset) < item.text.length) return denied('INVALID_ARGUMENTS');
+    const end = Number(offset) + excerpt.length;
     return {
       ...action,
       denied: false,
       result: {
         source: metadata(item),
-        text: item.text.slice(Number(offset), end),
+        text: excerpt,
         range: { start: offset, end, unit: 'utf16-code-unit' },
         nextOffset: end < item.text.length ? end : null,
       },
