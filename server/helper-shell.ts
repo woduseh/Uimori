@@ -14,9 +14,31 @@ import type { Content } from '../core/product.js';
 import { readResource } from './resource-service.js';
 import { applyHelperResourceMutation } from './helper-resource-undo.js';
 import { helperSceneSource } from './helper-scene-tools.js';
+import { HELPER_SHELL_GUIDE } from './helper-shell-guide.js';
 import { HttpError, record } from './request-validation.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+
+type SceneMetadata = {
+  sceneNumber: number | null;
+  sceneEnabled: boolean;
+  charCount: number;
+  byteCount: number;
+  preview: string;
+};
+function sceneMetadata(
+  text: string,
+  sceneNumber: number | null,
+  sceneEnabled: boolean
+): SceneMetadata {
+  return {
+    sceneNumber,
+    sceneEnabled,
+    charCount: text.length,
+    byteCount: Buffer.byteLength(text, 'utf8'),
+    preview: Array.from(text.slice(0, 256).replace(/\s+/gu, ' ').trim()).slice(0, 120).join(''),
+  };
+}
 
 type FileTarget =
   | {
@@ -27,7 +49,14 @@ type FileTarget =
       hash: string;
       title: string;
     }
-  | { kind: 'scene'; id: string; chatId: string; revision: number; hash: string };
+  | {
+      kind: 'scene';
+      id: string;
+      chatId: string;
+      revision: number;
+      hash: string;
+      metadata: SceneMetadata;
+    };
 type TaskFiles = { files: Map<string, FileTarget>; task: HelperTask };
 export type HelperShellAppResult = {
   result: unknown;
@@ -244,13 +273,15 @@ export class HelperShell {
     write(join(this.taskDir(taskId), 'library/index.jsonl'), index.join('\n') + '\n');
   }
 
-  private writeSceneIndex(taskId: string, file: string, files: Map<string, FileTarget>) {
-    const chat = /^chats\/([^/]+)\/scenes\/[^/]+\.txt$/u.exec(file)?.[1];
-    if (!chat) return;
+  private sceneIndexEntry(file: string, target: Extract<FileTarget, { kind: 'scene' }>) {
+    return { sourceId: target.id, revision: target.revision, file, ...target.metadata };
+  }
+
+  private writeSceneIndex(taskId: string, chat: string, files: Map<string, FileTarget>) {
     const prefix = `chats/${chat}/scenes/`;
     const scenes = [...files].flatMap(([path, target]) =>
       target.kind === 'scene' && path === `${prefix}${target.id}.txt`
-        ? [{ sourceId: target.id, revision: target.revision, file: path }]
+        ? [this.sceneIndexEntry(path, target)]
         : []
     );
     json(join(this.taskDir(taskId), `chats/${chat}/scenes.json`), scenes);
@@ -286,20 +317,25 @@ export class HelperShell {
         title: chat.title,
         headRevision: chat.headRevision,
       });
-      const scenes: unknown[] = [];
+      let sceneNumber = 0;
+      const scenes: ReturnType<typeof this.sceneIndexEntry>[] = [];
       for (const history of this.store.history(chat.headRevision)) {
         const source = this.store.source(history.revision);
         if (!safeId(source.id)) continue;
         const file = `${dir}/scenes/${source.id}.txt`;
         write(join(base, file), source.text);
-        files.set(file, {
-          kind: 'scene',
+        const sceneEnabled = history.sceneContext?.sceneEnabled !== false;
+        if (sceneEnabled) sceneNumber++;
+        const target = {
+          kind: 'scene' as const,
           id: source.id,
           chatId: chat.id,
           revision: source.editRevision ?? 0,
           hash: sha(source.text),
-        });
-        scenes.push({ sourceId: source.id, revision: source.editRevision, file });
+          metadata: sceneMetadata(source.text, sceneEnabled ? sceneNumber : null, sceneEnabled),
+        };
+        files.set(file, target);
+        scenes.push(this.sceneIndexEntry(file, target));
       }
       json(join(base, dir, 'scenes.json'), scenes);
     }
@@ -319,10 +355,22 @@ export class HelperShell {
         headRevision: writing.parentRevision,
         packages: writing.profile?.packageAttachments,
       });
+      let sceneNumber = 0;
+      const currentScenes = [];
       for (const item of writing.history) {
-        if (safeId(item.revision))
-          write(join(base, `current/scenes/${item.revision}.txt`), item.text);
+        if (!safeId(item.revision)) continue;
+        const file = `current/scenes/${item.revision}.txt`;
+        write(join(base, file), item.text);
+        const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
+        if (sceneEnabled) sceneNumber++;
+        currentScenes.push({
+          sourceId: item.revision,
+          file,
+          contentHash: item.contentHash ?? sha(item.text),
+          ...sceneMetadata(item.text, sceneEnabled ? sceneNumber : null, sceneEnabled),
+        });
       }
+      json(join(base, 'current/scenes.json'), currentScenes);
       for (const pkg of writing.profile?.packages ?? []) {
         if (safeId(pkg.id)) json(join(base, `current/packages/${pkg.id}.json`), pkg);
       }
@@ -336,14 +384,18 @@ export class HelperShell {
       join(base, 'usage/recent.jsonl'),
       attempts.map((a) => JSON.stringify(a)).join('\n') + '\n'
     );
+    write(join(base, 'GUIDE.md'), HELPER_SHELL_GUIDE);
     write(
       join(base, 'INDEX.md'),
       '# Uimori workspace\n\n' +
         'Use rg, jq, grep, find, Python, or Bash freely.\n' +
+        'GUIDE.md explains Uimori content concepts, source authority and how to choose a read path; read relevant sections when unfamiliar.\n' +
         'Use `uimori tools` for app operations and `uimori call <name> --input <file|->` for JSON arguments. `uimori --help` shows syntax.\n' +
         'library/index.jsonl lists saved resources; library/<id>/resource.json is editable.\n' +
         'library/<id>/lorebook.jsonl is a derived search index and cannot be applied.\n' +
-        'chats/index.jsonl lists chats; chats/<id>/scenes/*.txt are editable originals.\n' +
+        'chats/index.jsonl lists chats; chats/<id>/scenes.json has saved scene order, sizes, previews and enabled state; chats/<id>/scenes/*.txt are editable originals.\n' +
+        'current/scenes.json indexes the fixed task-admission scene snapshot in current/scenes/*.txt. current/ and chats/ may differ; do not mix their versions.\n' +
+        'For live summary, notes and story-guide data use uimori call context.read; for chat lore overrides use uimori call chat.lore with action=read. These are live reads, not fixed current/ snapshots.\n' +
         'editor/ and current/ are reserved task snapshots, not live editable resources.\n' +
         'Use `uimori apply library/<id>/resource.json` or `uimori apply chats/<id>/scenes/<source-id>.txt` to commit.\n' +
         'Content title/description/text are derived; edit /package/nativeRisu/card or module instead. See manifest.json.\n' +
@@ -499,8 +551,13 @@ export class HelperShell {
         ...target,
         revision: current.editRevision ?? 0,
         hash: sha(current.text),
+        metadata: sceneMetadata(
+          current.text,
+          target.metadata.sceneNumber,
+          target.metadata.sceneEnabled
+        ),
       });
-      this.writeSceneIndex(taskId, latestPath, task.files);
+      if (latestPath === rel) this.writeSceneIndex(taskId, target.chatId, task.files);
     }
     const latest = task.files.get(latestPath)!;
     return {
@@ -660,9 +717,14 @@ export class HelperShell {
           ...target,
           revision: latest.editRevision ?? 0,
           hash: sha(latest.text),
+          metadata: sceneMetadata(
+            latest.text,
+            target.metadata.sceneNumber,
+            target.metadata.sceneEnabled
+          ),
         });
         this.refreshAfterMutation(taskId, 'scene.patch', { sourceId: target.id }, result, rel);
-        this.writeSceneIndex(taskId, rel, task.files);
+        if (rel.startsWith('chats/')) this.writeSceneIndex(taskId, target.chatId, task.files);
       }
     } catch {
       applied.warning =
@@ -747,8 +809,13 @@ export class HelperShell {
           ...target,
           revision: source.editRevision ?? 0,
           hash: sha(source.text),
+          metadata: sceneMetadata(
+            source.text,
+            target.metadata.sceneNumber,
+            target.metadata.sceneEnabled
+          ),
         });
-        this.writeSceneIndex(taskId, path, task.files);
+        this.writeSceneIndex(taskId, target.chatId, task.files);
       }
     }
   }
