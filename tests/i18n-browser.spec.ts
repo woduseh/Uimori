@@ -8,6 +8,52 @@ import {
   selectSettingsSection,
 } from './ui-navigation.js';
 
+test('I18N11 failed illustration-reference saves keep their error identity across language changes', async ({
+  page,
+  request,
+}, info) => {
+  const { chat } = await createReadingChat(request, '삽화 참조 저장 오류 언어 전환 fixture', 1);
+  let writes = 0;
+  await page.route(`**/api/chats/${chat.id}/illustration-references`, async (route) => {
+    if (route.request().method() === 'GET')
+      return route.fulfill({
+        json: {
+          revision: 1,
+          references: [],
+          candidates: [
+            {
+              ref: 'fixture-reference',
+              title: '원본 이름 / reference 日本語 中文',
+              url: '/icons/app-192.png',
+              mime: 'image/png',
+              role: null,
+            },
+          ],
+        },
+      });
+    writes++;
+    return route.fulfill({ status: 503, json: { error: 'Synthetic save failure' } });
+  });
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByTestId('source')).toBeVisible();
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '이미지');
+  const references = page.getByTestId('illustration-references');
+  const role = references.getByRole('combobox');
+  await role.selectOption('character');
+  await switchFromAnotherTab(page, 'en');
+  await references.getByRole('button').click();
+  const error = page.locator('.chat-settings-dialog').getByRole('alert');
+  await expect(error).toHaveText('The server could not complete the operation. (503)');
+  await switchFromAnotherTab(page, 'ja');
+  await expect(error).toHaveText('サーバーの処理を完了できませんでした。(503)');
+  await expect(role).toHaveValue('character');
+  await page.screenshot({ path: info.outputPath('i18n-retained-action-error.png') });
+  await switchFromAnotherTab(page, 'ko');
+  await expect(error).toHaveText('서버 작업을 완료하지 못했어요. (503)');
+  expect(writes).toBe(1);
+});
+
 test('I18N09 saving an author note keeps completion expiry and saved content across language changes', async ({
   page,
   request,

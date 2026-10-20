@@ -52,7 +52,7 @@ export function IllustrationPlacementButton({
           });
           await refresh();
         } catch (cause) {
-          onError(translateMessage((cause as Error).message));
+          onError((cause as Error).message);
         } finally {
           locked.current = false;
           setBusy(false);
