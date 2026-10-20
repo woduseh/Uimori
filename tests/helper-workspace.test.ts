@@ -1318,6 +1318,21 @@ test('all helper sessions share two execution slots while each session preserves
   ]);
 });
 
+test('new helper conversations default to editable Ui without changing existing choices', () => {
+  const f = fixture();
+  expect(f.conversation.persona).toBe(UI_HELPER_PERSONA);
+  expect(UI_HELPER_PERSONA).toContain('Kozeki Ui ("우이")');
+  expect(UI_HELPER_PERSONA).toContain('**Deliverable Purity:**');
+  const disabled = f.workspace.persona(f.conversation.id, f.conversation.revision, '');
+  expect(disabled.persona).toBe('');
+  const same = f.workspace.open({ kind: 'library', workId: 'test' });
+  expect(same.persona).toBe('');
+  const custom = f.workspace.persona(same.id, same.revision, '나만의 편집 문구');
+  expect(f.workspace.conversation(custom.id).persona).toBe('나만의 편집 문구');
+  const next = f.workspace.create({ kind: 'library', workId: 'test' }, 'next');
+  expect(next.persona).toBe(UI_HELPER_PERSONA);
+});
+
 test('the helper persona is bounded, saved per conversation and reaches only the helper contract', async () => {
   const f = fixture();
   const calls: transport.ProviderRequest[] = [];
@@ -1351,7 +1366,9 @@ test('the helper persona is bounded, saved per conversation and reaches only the
     await app.close();
   }
   const other = f.workspace.open({ kind: 'library', workId: 'other' });
-  expect(other.persona).toBe('');
+  expect(other.persona).toBe(UI_HELPER_PERSONA);
+  const disabled = f.workspace.persona(other.id, other.revision, '');
+  expect(disabled.persona).toBe('');
   f.runtime.enqueue(f.conversation.id, 'with-persona', '이 설정을 설명해줘');
   f.runtime.enqueue(other.id, 'without-persona', '이 설정을 설명해줘');
   await Promise.all(f.work);
