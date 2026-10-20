@@ -517,6 +517,13 @@ test('conditional reads remain distinct from writes and the narrower outline rev
       expect(helperToolTraits(name, { action }).readOnly).toBe(false);
   }
   expect(helperToolTraits('unknown.read').readOnly).toBe(false);
+  const readers = ['data.search', 'data.read', 'db.query'];
+  for (const review of [false, true]) {
+    expect(describeHelperTools({ names: readers }, review).tools.map((tool) => tool.name)).toEqual(
+      readers
+    );
+    expect(() => describeHelperTools({ names: ['data.exec'] }, review)).toThrow('UNKNOWN_APP_TOOL');
+  }
   expect(() => describeHelperTools({ names: ['chat.lore'] }, true)).toThrow('UNKNOWN_APP_TOOL');
   expect(describeHelperTools({ names: ['outline.read', 'story.read'] }, true).tools).toHaveLength(
     2
@@ -1303,14 +1310,7 @@ test('helper app gateway discovers and authors illustration presets without sele
 test('helper gateway follows browse results into an exact reference read without adding native tools or saving', async () => {
   const f = await fixture();
   mockSend((request, round) => {
-    expect(request.stable.tools.map((tool) => tool.name)).toEqual([
-      'data.exec',
-      'data.search',
-      'data.read',
-      'db.query',
-      'app.tools',
-      'app.call',
-    ]);
+    expect(request.stable.tools.map((tool) => tool.name)).toEqual(['app.tools', 'app.call']);
     if (round === 0)
       return calls(
         call('browse-0', 'app.call', { name: 'knowledge.search', arguments: { mode: 'browse' } })

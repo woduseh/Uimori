@@ -32,6 +32,7 @@ afterEach(async () => {
     rmSync(f.path, { recursive: true, force: true });
   }
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
 function fixture(
@@ -93,6 +94,11 @@ function fixture(
   return { store, work, runtime, conversation, run };
 }
 function answer(text: string, tools?: { id: string; name: string; args: unknown }[], body?: any) {
+  tools = tools?.map((tool) =>
+    ['data.search', 'data.read', 'db.query'].includes(tool.name)
+      ? { id: tool.id, name: 'app.call', args: { name: tool.name, arguments: tool.args } }
+      : tool
+  );
   const delta = tools
     ? {
         role: 'assistant',
@@ -691,7 +697,7 @@ test('cancelling helper reads drains active work without starting queued reads o
   }
 });
 
-test('a native two-call fact lookup sends six stable tools, no full editor JSON, and bounded exact evidence', async () => {
+test('a native two-call fact lookup uses the gateway without a runner, full editor JSON, or duplicate read schemas', async () => {
   const f = fixture();
   const body =
     'Name: Harin. Age: 27.\n' + 'Irrelevant native design and visual details. '.repeat(1500);
@@ -704,12 +710,7 @@ test('a native two-call fact lookup sends six stable tools, no full editor JSON,
     model: editableResource('content', bot),
   };
   const bodies = provider((wire, round) => {
-    expect(wire.tools).toHaveLength(6);
     expect(wire.tools.map((t: any) => t.function.name.replace(/^tool_\d+_/, ''))).toEqual([
-      'data_exec',
-      'data_search',
-      'data_read',
-      'db_query',
       'app_tools',
       'app_call',
     ]);
@@ -1000,7 +1001,18 @@ test('document discovery and an exact age excerpt patch a large bot without read
 });
 
 test('gateway read compaction retains an exact completed mutation and resumes with a fresh native continuation', async () => {
+  vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-compaction-shell'));
   const f = fixture(8192);
+  // The shell is stubbed only to isolate compaction; Linux execution has its own integration tests.
+  vi.spyOn(f.runtime.shell, 'exec').mockResolvedValue({
+    exitCode: 0,
+    signal: null,
+    timedOut: false,
+    truncated: false,
+    output: 'SHELL_BODY_CANARY',
+    outputFile: 'scratch/exec-compaction.log',
+    applied: [],
+  });
   const b = f.store.product.content(fixtureBotInput('Before', 'Age: 27.')) as Content;
   const source = Array.from({ length: 2_000 }, (_, index) =>
     index.toString(36).padStart(4, '0')
@@ -1050,6 +1062,7 @@ test('gateway read compaction retains an exact completed mutation and resumes wi
               },
             },
           },
+          { id: 'read-shell', name: 'data.exec', args: { command: 'cat scratch/evidence' } },
         ],
         wire
       );
@@ -1080,6 +1093,18 @@ test('gateway read compaction retains an exact completed mutation and resumes wi
     name: 'app.call',
     args: { name: 'resource.read' },
   });
+  expect(data.source.continuation.completedReads[1]).toEqual({
+    name: 'data.exec',
+    args: { command: 'cat scratch/evidence' },
+    returned: {
+      exitCode: 0,
+      signal: null,
+      timedOut: false,
+      truncated: false,
+      outputFile: 'scratch/exec-compaction.log',
+    },
+  });
+  expect(JSON.stringify(data)).not.toContain('SHELL_BODY_CANARY');
   expect(bodies).toHaveLength(3);
   reportMetrics('completed-save-after-compaction', f, task, bodies);
 });

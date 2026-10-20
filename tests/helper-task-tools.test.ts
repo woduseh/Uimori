@@ -507,6 +507,44 @@ test('helper inspection confirms durable effects even after a lost tool response
   ).toBe(2);
 });
 
+test('one shell call attributes multiple native receipts without guessing orphan effects', () => {
+  const f = fixture(),
+    chat = createFixtureChat(f.store, '시작'),
+    task = receiptTask(f);
+  const receipts = ['native-edit', 'native-edit', 'native-edit-other'].map((callId, index) => {
+    const operationId = createHash('sha256').update(`${task.id}\0${callId}`).digest('hex');
+    const receiptId =
+      index === 1
+        ? `${task.id}:shell:${operationId.slice(0, 48)}:app:10`
+        : `${task.id}:shell:${operationId}:${'a'.repeat(64)}:${index}:${'b'.repeat(64)}`;
+    f.workspace.operation(task.id, receiptId, { path: `native-${index}.json` }, () =>
+      f.store.renameChat(chat.id, `SAVED_TITLE_${index}`, f.store.chat(chat.id).titleRevision ?? 0)
+    );
+    return receiptId;
+  });
+  f.workspace.event(task.conversationId, task.id, 'tool.finished', {
+    name: 'data.exec',
+    callId: 'native-edit',
+    // Payload claims cannot attribute the other call's durable effect.
+    result: { receiptId: receipts[2], outcome: 'committed' },
+  });
+  const expected = {
+    committedEffects: {
+      total: 3,
+      nextOffset: null,
+      items: [
+        { receiptId: receipts[0], committed: true, tool: 'data.exec', callId: 'native-edit' },
+        { receiptId: receipts[1], committed: true, tool: 'data.exec', callId: 'native-edit' },
+        { receiptId: receipts[2], committed: true, tool: null, callId: null },
+      ],
+    },
+  };
+  expect(f.invoke('task.inspect', 'helper', task.id)).toMatchObject(expected);
+  f.workspace.finish(task.id, 'owner', 1, 'completed', '완료', null);
+  expect(f.invoke('task.inspect', 'helper', task.id)).toMatchObject(expected);
+  expect(f.store.chat(chat.id).title).toBe('SAVED_TITLE_2');
+});
+
 test('committed effects stay paged and attributable after normal completed-input cleanup', () => {
   const f = fixture(),
     chat = createFixtureChat(f.store, '시작'),

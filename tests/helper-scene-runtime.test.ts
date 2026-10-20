@@ -13,6 +13,7 @@ import { completedSource } from './fixtures/illustration.js';
 import type { HelperConversation, HelperTask } from '../core/helper.js';
 import type { ToolEvent } from '../core/types.js';
 import * as transport from '../core/transport.js';
+import { countTextTokens } from '../core/text-tokens.js';
 
 const owned: { app: App; path: string }[] = [];
 afterEach(async () => {
@@ -247,10 +248,9 @@ test('library helper targets an explicit chat and edits translation without chan
 
 test('chat.read numbers only visible scenes and returns optional bounded live previews', async () => {
   const f = await fixture();
-  f.store.editSource(f.source.id, {
-    text: `${'a'.repeat(119)}😀z`,
-    expectedRevision: 0,
-  });
+  const original = '한글😀z'.repeat(100);
+  expect(countTextTokens(original)).toBeGreaterThan(60);
+  f.store.editSource(f.source.id, { text: original, expectedRevision: 0 });
   updateSceneContext(f.store, f.source.id, { expectedRevision: 0, sceneEnabled: false });
   const second = completedSource(f.store, f.chat.id, 'Visible second scene.');
   mockSend((request, round) => {
@@ -262,11 +262,17 @@ test('chat.read numbers only visible scenes and returns optional bounded live pr
     const compact = result(request, 'compact').messages as Record<string, unknown>[];
     const previews = result(request, 'previews').messages as Record<string, unknown>[];
     expect(compact).toMatchObject([
-      { id: f.source.id, sceneNumber: null, sceneEnabled: false, originalLength: 122 },
+      { id: f.source.id, sceneNumber: null, sceneEnabled: false, originalLength: 500 },
       { id: second.id, sceneNumber: 1, sceneEnabled: true, originalLength: 21 },
     ]);
     expect(compact.every((message) => !Object.hasOwn(message, 'preview'))).toBe(true);
-    expect(previews[0].preview).toBe('a'.repeat(119));
+    const preview = previews[0].preview as string;
+    expect(countTextTokens(preview)).toBeLessThanOrEqual(60);
+    expect(preview.length).toBeGreaterThan(0);
+    expect(preview.length).toBeLessThan(original.length);
+    expect(original.startsWith(preview)).toBe(true);
+    expect(preview).toContain('😀');
+    expect(preview).not.toMatch(/[\uD800-\uDBFF]$/u);
     expect(previews[1].preview).toBe('Visible second scene.');
     return structuredClone(success);
   });
@@ -486,7 +492,11 @@ test.each(['scene.read', 'scene.versions'] as const)(
   '%s round-budget recovery preserves the selected chat, version and unread range',
   async (name) => {
     const f = await fixture('library');
-    const prose = 'Exact saved scene. '.repeat(6000);
+    const prose = '한글🙂 '.repeat(20000);
+    // Each page fits the 16k token limit; seven pages exceed the shared 32k budget.
+    const pageTokens = countTextTokens(JSON.stringify({ text: prose.slice(37, 10037) }));
+    expect(pageTokens).toBeLessThan(16000);
+    expect(pageTokens * 7).toBeGreaterThan(32000);
     const source = completedSource(f.store, f.chat.id, prose);
     let args: Record<string, unknown>;
     mockSend((request, round) => {
