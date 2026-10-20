@@ -1159,7 +1159,7 @@ export const messages = {
     zh: '确认删除智能体',
   },
   'settings.m193': {
-    ko: '에이전트를 이 프롬프트에서 삭제할까요?',
+    ko: ' 에이전트를 이 프롬프트에서 삭제할까요?',
     en: ' — remove this agent from the prompt?',
     ja: 'をこのプロンプトから削除しますか？',
     zh: '：要从此提示词中删除该智能体吗？',

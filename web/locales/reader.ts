@@ -992,19 +992,19 @@ export const messages = {
   'reader.estimatedInputRelativeToContextLimit': {
     ko: '컨텍스트 한도 대비 추정 입력',
     en: 'Estimated input relative to context limit',
-    ja: '文脈上限に対する推定入力',
+    ja: 'コンテキスト上限に対する推定入力',
     zh: '相对于上下文上限的估算输入',
   },
   'reader.inputRelativeToContextLimit': {
     ko: '컨텍스트 한도 대비 입력',
     en: 'Input relative to context limit',
-    ja: '文脈上限に対する入力',
+    ja: 'コンテキスト上限に対する入力',
     zh: '相对于上下文上限的输入',
   },
   'reader.contextUsageCannotBeShownBecauseThisCallHas': {
     ko: '이 호출의 컨텍스트 기록이 없어 사용 비율을 확인할 수 없어요.',
     en: 'Context usage cannot be shown because this call has no context record.',
-    ja: 'この呼び出しの文脈記録がないため、使用率を確認できません。',
+    ja: 'この呼び出しのコンテキスト記録がないため、使用率を確認できません。',
     zh: '本次调用没有上下文记录，无法显示使用比例。',
   },
   'reader.cacheReadValueWriteValueTokens': {
@@ -1118,13 +1118,13 @@ export const messages = {
   'reader.contextUsageUsesTheInputLimitAtCallTime': {
     ko: '컨텍스트 사용량은 호출 당시 입력 한도 기준이며 모델의 전체 컨텍스트와 다를 수 있어요. 로컬 추정에는 10% 여유를 포함해요.',
     en: 'Context usage uses the input limit at call time and may differ from the model’s full context. Local estimates include a 10% margin.',
-    ja: '文脈使用量は呼び出し時の入力上限を基準とし、モデル全体の文脈とは異なる場合があります。ローカル推定には10%の余裕を含みます。',
+    ja: 'コンテキスト使用量は呼び出し時の入力上限を基準とし、モデル全体のコンテキストとは異なる場合があります。ローカル推定には10%の余裕を含みます。',
     zh: '上下文使用量基于调用时的输入上限，可能与模型的完整上下文不同。本地估算含10%的余量。',
   },
   'reader.codexUsageAccumulatesMultipleInternalCallsContextUsageUses': {
     ko: 'Codex 사용량은 내부 여러 호출의 누적 사용량이에요. 컨텍스트 사용량에는 앱이 전송한 입력 추정치를 사용하며 내부 후속 작업은 포함하지 않아요.',
     en: 'Codex usage accumulates multiple internal calls. Context usage uses the app’s estimated input and excludes internal follow-up tasks.',
-    ja: 'Codex使用量は複数の内部呼び出しの累計です。文脈使用量にはアプリが送信した入力の推定値を使い、内部の後続タスクは含みません。',
+    ja: 'Codex使用量は複数の内部呼び出しの累計です。コンテキスト使用量にはアプリが送信した入力の推定値を使い、内部の後続タスクは含みません。',
     zh: 'Codex使用量是多次内部调用的累计值。上下文使用量采用应用发送内容的估算值，不含内部后续任务。',
   },
   'reader.theSelectedTokenizerCouldNotBeLoadedAGeneral': {
@@ -1538,20 +1538,20 @@ export const messages = {
   'reader.storyMemoryAndContext': {
     ko: '이야기 기억과 컨텍스트',
     en: 'Story memory and context',
-    ja: '物語の記憶と文脈',
+    ja: '物語の記憶とコンテキスト',
     zh: '故事记忆与上下文',
   },
   'reader.memoryAndContext': {
     ko: '기억과 컨텍스트',
     en: 'Memory and context',
-    ja: '記憶と文脈',
+    ja: '記憶とコンテキスト',
     zh: '记忆与上下文',
   },
   'reader.manageStoryEventsWithSummariesAndConditionsForFuture': {
     ko: '이야기에서 일어난 일은 요약으로, 이후 요청에서도 지킬 조건은 메모·정정으로 관리해요. 카드 변수는 봇의 원본 스크립트가 관리해요.',
     en: 'Manage story events with summaries, and conditions for future requests with notes and corrections. Card variables are managed by the bot’s original scripts.',
     ja: '物語で起きた出来事は要約で、今後のリクエストでも守る条件はメモ・訂正で管理します。カード変数はボットの元スクリプトが管理します。',
-    zh: '用摘要管理故事事件，用备注与修正管理后续请求仍需遵守的条件。卡片变量由角色卡的原始脚本管理。',
+    zh: '用摘要管理故事事件，用备注与修正管理后续请求仍需遵守的条件。卡片变量由机器人的原始脚本管理。',
   },
   'reader.enterABookmarkName': {
     ko: '책갈피 이름을 입력해 주세요.',
@@ -1820,7 +1820,7 @@ export const messages = {
   'reader.enterASceneRequestToReviewSettingsAndContext': {
     ko: '장면 요청을 입력하면 다음 생성의 설정과 컨텍스트를 확인할 수 있어요.',
     en: 'Enter a scene request to review settings and context for the next generation.',
-    ja: 'シーンのリクエストを入力すると、次の生成の設定と文脈を確認できます。',
+    ja: 'シーンのリクエストを入力すると、次の生成の設定とコンテキストを確認できます。',
     zh: '输入场景请求后，可查看下次生成的设置与上下文。',
   },
   'reader.finishTheCurrentTaskBeforeCheckingThePreviewAgain': {
@@ -1850,7 +1850,7 @@ export const messages = {
   'reader.contextOrSettingsChangedDuringTheCheckCheckAgain': {
     ko: '확인 중에 컨텍스트나 설정이 바뀌었어요. 다시 확인해 주세요.',
     en: 'Context or settings changed during the check. Check again.',
-    ja: '確認中に文脈や設定が変わりました。再確認してください。',
+    ja: '確認中にコンテキストや設定が変わりました。再確認してください。',
     zh: '检查期间上下文或设置发生变化，请重新确认。',
   },
   'reader.selectATextModelToCalculateInputSize': {
@@ -1928,7 +1928,7 @@ export const messages = {
   'reader.contextSummary': {
     ko: '컨텍스트 요약',
     en: 'Context summary',
-    ja: '文脈の要約',
+    ja: 'コンテキストの要約',
     zh: '上下文摘要',
   },
   'reader.usingValueSceneSummaries': {
@@ -1970,13 +1970,13 @@ export const messages = {
   'reader.estimatedContextRelativeToTheNextRequestsInputLimit': {
     ko: '다음 요청의 입력 한도 대비 추정 컨텍스트',
     en: 'Estimated context relative to the next request’s input limit',
-    ja: '次のリクエストの入力上限に対する推定文脈',
+    ja: '次のリクエストの入力上限に対する推定コンテキスト',
     zh: '相对于下次请求输入上限的估算上下文',
   },
   'reader.contextCleanupIsNeededSoTheActualInputSize': {
     ko: '컨텍스트 정리가 필요해 실제 전송량은 달라질 수 있어요.',
     en: 'Context cleanup is needed, so the actual input size may differ.',
-    ja: '文脈の整理が必要なため、実際の送信量は変わる場合があります。',
+    ja: 'コンテキストの整理が必要なため、実際の送信量は変わる場合があります。',
     zh: '需要整理上下文，实际发送量可能不同。',
   },
   'reader.theSelectedTokenizerCouldNotBeLoadedAGeneral2': {
@@ -2102,13 +2102,13 @@ export const messages = {
   'reader.contextPercent': {
     ko: ' · 컨텍스트 사용량 {estimated, select, true {약 {percent}%} other {{percent}%}}',
     en: ' · Context usage {estimated, select, true {about {percent}%} other {{percent}%}}',
-    ja: ' · 文脈使用量 {estimated, select, true {約{percent}%} other {{percent}%}}',
+    ja: ' · コンテキスト使用量 {estimated, select, true {約{percent}%} other {{percent}%}}',
     zh: ' · 上下文使用量{estimated, select, true {约{percent}%} other {{percent}%}}',
   },
   'reader.contextInput': {
     ko: '입력 {estimated, select, true {약 {input}} other {{input}}} / 컨텍스트 한도 {limit}',
     en: 'Input {estimated, select, true {about {input}} other {{input}}} / Context limit {limit}',
-    ja: '入力 {estimated, select, true {約{input}} other {{input}}} / 文脈上限 {limit}',
+    ja: '入力 {estimated, select, true {約{input}} other {{input}}} / コンテキスト上限 {limit}',
     zh: '输入{estimated, select, true {约{input}} other {{input}}} / 上下文上限{limit}',
   },
   'reader.sentLoreRecord': {
