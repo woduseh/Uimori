@@ -1526,7 +1526,10 @@ export class HelperRuntime {
             ? `\nOptional explanation persona (user-facing explanation only; never in saved drafts, artifacts, lore, notes, summaries, prompts, translations, code or tool arguments, and never a permission): ${task.snapshot.persona}`
             : ''),
         tools: [
-          ...HELPER_DATA_TOOLS,
+          ...HELPER_DATA_TOOLS.filter(
+            (tool) =>
+              task.snapshot.outline?.target.purpose !== 'review' || tool.name !== 'data.exec'
+          ),
           ...helperGatewayTools(task.snapshot.outline?.target.purpose === 'review'),
         ],
       },
