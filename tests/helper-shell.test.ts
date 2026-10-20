@@ -13,6 +13,9 @@ import { editableResource, type ContentEditModel } from '../core/resource-editin
 import { readResource, saveResource } from '../server/resource-service.js';
 import type { Content } from '../core/product.js';
 
+// Linux runner uses Unix sockets, which the Windows CI worker cannot create.
+const linuxTest = process.platform === 'win32' ? test.skip : test;
+
 const owned: { dir: string; store: Store; shell: HelperShell; child: ChildProcess }[] = [];
 afterEach(() => {
   for (const { dir, store, shell, child } of owned.splice(0)) {
@@ -64,20 +67,22 @@ async function fixture() {
   return { store, workspace, shell, task: workspace.task(task.id), resource, root };
 }
 
-test('shell finds resources and applies canonical changes through existing saves', async () => {
-  const f = await fixture();
-  const file = `library/${f.resource.id}/resource.json`;
-  const read = await f.shell.exec(
-    f.task,
-    'read',
-    `grep -n 'Original lore' ${file} | head -2`,
-    5000
-  );
-  expect(read.exitCode).toBe(0);
-  expect(read.output).toContain('Original lore');
-  expect(read.applied).toEqual([]);
+linuxTest(
+  'shell finds resources and applies canonical changes through existing saves',
+  async () => {
+    const f = await fixture();
+    const file = `library/${f.resource.id}/resource.json`;
+    const read = await f.shell.exec(
+      f.task,
+      'read',
+      `grep -n 'Original lore' ${file} | head -2`,
+      5000
+    );
+    expect(read.exitCode).toBe(0);
+    expect(read.output).toContain('Original lore');
+    expect(read.applied).toEqual([]);
 
-  const script = `python3 - <<'PY'
+    const script = `python3 - <<'PY'
 import json
 from pathlib import Path
 p=Path('${file}')
@@ -86,22 +91,24 @@ data['package']['nativeRisu']['card']['creator_notes']='Updated by Linux'
 p.write_text(json.dumps(data,ensure_ascii=False)+'\\n')
 PY
 node ${resolve('runner/uimori.mjs')} apply ${file}`;
-  const updated = await f.shell.exec(f.task, 'write', script, 5000);
-  expect(updated.exitCode).toBe(0);
-  expect(updated.applied).toEqual([expect.objectContaining({ path: file, changed: true })]);
-  expect((readResource(f.store, 'content', f.resource.id) as Content).description).toBe(
-    'Updated by Linux'
-  );
-  expect(
-    f.store.db.prepare('SELECT COUNT(*) n FROM helper_operations WHERE task_id=?').get(f.task.id)?.n
-  ).toBe(1);
-  expect(
-    JSON.parse(readFileSync(join(f.root, 'tasks', f.task.id, file), 'utf8')).package.nativeRisu.card
-      .creator_notes
-  ).toBe('Updated by Linux');
-});
+    const updated = await f.shell.exec(f.task, 'write', script, 5000);
+    expect(updated.exitCode).toBe(0);
+    expect(updated.applied).toEqual([expect.objectContaining({ path: file, changed: true })]);
+    expect((readResource(f.store, 'content', f.resource.id) as Content).description).toBe(
+      'Updated by Linux'
+    );
+    expect(
+      f.store.db.prepare('SELECT COUNT(*) n FROM helper_operations WHERE task_id=?').get(f.task.id)
+        ?.n
+    ).toBe(1);
+    expect(
+      JSON.parse(readFileSync(join(f.root, 'tasks', f.task.id, file), 'utf8')).package.nativeRisu
+        .card.creator_notes
+    ).toBe('Updated by Linux');
+  }
+);
 
-test('external revision change rejects stale shell edits instead of overwriting', async () => {
+linuxTest('external revision change rejects stale shell edits instead of overwriting', async () => {
   const f = await fixture();
   const file = `library/${f.resource.id}/resource.json`;
   await f.shell.exec(f.task, 'read', 'cat INDEX.md | head -3', 5000);
@@ -127,7 +134,7 @@ test('external revision change rejects stale shell edits instead of overwriting'
   );
 });
 
-test('native Linux text edits apply to saved scenes and retain edit revisions', async () => {
+linuxTest('native Linux text edits apply to saved scenes and retain edit revisions', async () => {
   const f = await fixture();
   const chat = createFixtureChat(f.store, 'Shell scene');
   const source = completedSource(f.store, chat.id, 'Initial scene narrative');

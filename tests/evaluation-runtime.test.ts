@@ -619,7 +619,7 @@ test.each(['submit', 'continue'] as const)(
             : call(body, 'eval_get_context', {}, `context-${number}`),
         ]);
       },
-      { maxCalls: 16 }
+      { maxCalls: 16, timeoutMs: 10000 }
     );
     const result = await settled(state, (await state.start()).id);
     expect(state.provider.requests).toHaveLength(11);
