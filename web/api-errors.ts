@@ -1,3 +1,5 @@
+import { t, registerMessage, formatMessage, getLocale } from './i18n.js';
+import { messages as localizedErrors } from './locales/errors.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { requestImageErrors } from './request-image-errors.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
@@ -207,7 +209,7 @@ export function apiErrorDiagnostic(
     if (/^STORY_GUIDE_[A-Z0-9_]{1,100}$/.test(code))
       return { code, message: messages.STORY_GUIDE_FAILED };
     if (/^(?:ILLUSTRATION_|COMFYUI_|CODEX_IMAGE_)[A-Z0-9_]{1,100}$/.test(code))
-      return { code, message: illustrationErrorMessage(code) };
+      return { code, message: illustrationErrorMessage(code, 'ko') };
     const required = /^MODEL_REQUIRED:([a-z-]+)$/.exec(code)?.[1];
     if (required && Object.hasOwn(roles, required))
       return {
@@ -240,4 +242,79 @@ export function apiErrorDiagnostic(
         ? '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요.'
         : '요청을 처리할 수 없어요.';
   return { code: null, message: `${message} (${status})` };
+}
+
+/** Localized presentation only. The wire value, diagnostic code and legacy Korean message stay intact. */
+export function apiErrorDisplay(error: unknown, status: number, method: string): string {
+  const diagnostic = apiErrorDiagnostic(error, status, method);
+  const code = diagnostic.code;
+  const display = (key: string, values?: Record<string, string | number>) => {
+    registerMessage(diagnostic.message, key, values);
+    return t(key, values);
+  };
+  const limits: Record<string, number> = {
+    INPUT_TRANSLATION_TOO_LONG: REQUEST_TEXT_MAX_CHARS,
+    PACKAGE_START_TEXT_TOO_LONG: SOURCE_TEXT_MAX_CHARS,
+    RISU_IMPORT_TOO_LARGE: RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024,
+    UPLOAD_TOO_LARGE: RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024,
+    RISU_IMPORT_IMAGES_TOO_LARGE: RISU_IMPORT_MAX_PREPARED_BYTES / 1024 / 1024,
+  };
+  if (code && Object.hasOwn(localizedErrors, 'errors.' + code))
+    return display(
+      'errors.' + code,
+      Object.hasOwn(limits, code) ? { limit: limits[code] } : undefined
+    );
+  if (code === 'MANUSCRIPT_TRANSLATION_MISSING' && typeof error === 'string') {
+    // apiErrorDiagnostic has already checked the complete grammar, ordering and bounds.
+    const [, sceneNumbers, count] = error.split(':');
+    const scenes = sceneNumbers.split(',').map(Number);
+    const render = () => {
+      const locale = getLocale();
+      return formatMessage('errors.missingTranslations', locale, {
+        scenes: scenes
+          .map((scene) =>
+            scene === 0
+              ? formatMessage('errors.firstMessage', locale)
+              : formatMessage('errors.scene', locale, { scene })
+          )
+          .join(', '),
+        remaining: Number(count) - scenes.length,
+      });
+    };
+    const value = render();
+    registerMessage(diagnostic.message, render);
+    registerMessage(value, render);
+    return value;
+  }
+  const role = code?.startsWith('MODEL_REQUIRED:')
+    ? code.slice('MODEL_REQUIRED:'.length)
+    : undefined;
+  if (role)
+    return display('errors.modelRequired', {
+      role: role === 'translation-refusal' ? 'translationRefusal' : role,
+    });
+  if (code === 'MODEL_UNAVAILABLE:main') return display('errors.mainUnavailable');
+  if (code === 'MODEL_UNAVAILABLE' || code?.startsWith('MODEL_UNAVAILABLE:'))
+    return display('errors.modelUnavailable');
+  if (code === 'REVISION_CONFLICT') return display('errors.revisionConflict');
+  if (code?.startsWith('CHAT_TRANSCRIPT_') && Object.hasOwn(messages, code))
+    return display('errors.transcriptInvalid');
+  if (code && /^(?:ILLUSTRATION_|COMFYUI_|CODEX_IMAGE_)[A-Z0-9_]{1,100}$/u.test(code)) {
+    const render = () => illustrationErrorMessage(code);
+    const value = render();
+    registerMessage(diagnostic.message, render);
+    return value;
+  }
+  if (code) return diagnostic.message;
+  // A local deletion conflict may include authored names and impact details. Preserve those bytes.
+  if (status === 409 && method === 'DELETE' && typeof error === 'string' && error.length <= 4000)
+    return diagnostic.message;
+  return display(
+    status >= 500
+      ? 'errors.serverFailed'
+      : status === 409
+        ? 'errors.conflict'
+        : 'errors.requestFailed',
+    { status }
+  );
 }

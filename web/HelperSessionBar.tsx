@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import type { HelperConversation, HelperConversationDeletion } from '../core/helper.js';
@@ -26,6 +27,7 @@ type Props = {
   onDelete: () => void;
 };
 export function HelperSessionBar(props: Props) {
+  useI18n();
   const [rename, setRename] = useState<HelperConversation | null>(null);
   const [title, setTitle] = useState('');
   const [deleting, setDeleting] = useState<HelperConversation | null>(null);
@@ -49,7 +51,7 @@ export function HelperSessionBar(props: Props) {
         }
       } catch (cause) {
         if (!disposed)
-          setReadError(cause instanceof Error ? cause.message : '삭제 범위를 확인하지 못했어요.');
+          setReadError(cause instanceof Error ? cause.message : uiMessage('helpers.m168'));
       } finally {
         if (!disposed) timer = setTimeout(() => void load(), 1200);
       }
@@ -78,7 +80,7 @@ export function HelperSessionBar(props: Props) {
       const value = await api<HelperConversationDeletion>(
         `/helper/conversations/${encodeURIComponent(deleting.id)}/deletion`
       ).catch((cause) => {
-        setReadError(cause instanceof Error ? cause.message : '삭제 범위를 확인하지 못했어요.');
+        setReadError(cause instanceof Error ? cause.message : uiMessage('helpers.m168'));
         return null;
       });
       if (value) {
@@ -86,7 +88,7 @@ export function HelperSessionBar(props: Props) {
         setReadError('');
       }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '작업을 중지하지 못했어요.');
+      setError(cause instanceof Error ? cause.message : uiMessage('helpers.m169'));
     } finally {
       setWorking(false);
     }
@@ -96,9 +98,9 @@ export function HelperSessionBar(props: Props) {
       <div className="helper-session-block">
         <div className="helper-work-selector">
           <label>
-            <span className="sr-only">도우미 세션</span>
+            <span className="sr-only">{t('helpers.m170')}</span>
             <select
-              aria-label="도우미 세션 선택"
+              aria-label={t('helpers.m171')}
               value={props.currentId ?? ''}
               onChange={(event) => {
                 const session = props.sessions.find((item) => item.id === event.target.value);
@@ -106,17 +108,17 @@ export function HelperSessionBar(props: Props) {
               }}
             >
               <option value="" disabled>
-                세션을 불러오는 중…
+                {t('helpers.m172')}
               </option>
               {props.sessions.map((session) => {
                 return (
                   <option key={session.id} value={session.id}>
                     {props.unread.includes(session.id) ? '● ' : ''}
-                    {session.title || '새 대화'}
+                    {session.title || t('helpers.m173')}
                     {session.activity?.running
-                      ? ' · 진행 중'
+                      ? t('helpers.m174')
                       : session.activity?.queued
-                        ? ` · 대기 ${session.activity.queued}`
+                        ? t('helpers.m175', { v0: formatNumber(session.activity.queued) })
                         : ''}
                   </option>
                 );
@@ -124,12 +126,12 @@ export function HelperSessionBar(props: Props) {
             </select>
           </label>
           <IconButton
-            label="새 도우미 세션"
+            label={t('helpers.m176')}
             icon={Plus}
             disabled={props.creating}
             onClick={props.onCreate}
           />
-          <ActionMenu label="도우미 세션 관리" viewport>
+          <ActionMenu label={t('helpers.m177')} viewport>
             <button
               type="button"
               disabled={!props.conversation || props.busy}
@@ -140,7 +142,7 @@ export function HelperSessionBar(props: Props) {
               }}
             >
               <EditIcon size={18} aria-hidden="true" />
-              세션 이름 변경
+              {t('helpers.m178')}
             </button>
             <button
               type="button"
@@ -154,22 +156,29 @@ export function HelperSessionBar(props: Props) {
               }}
             >
               <DeleteIcon size={18} aria-hidden="true" />
-              세션 삭제
+              {t('helpers.m179')}
             </button>
           </ActionMenu>
         </div>
         <div className="helper-session-meta">
           <span>
-            {props.conversation?.scope.kind === 'chat' ? '이 채팅' : '서재 작업'} · 세션{' '}
-            {props.sessions.length}개
+            {t('helpers.m324', {
+              scope:
+                props.conversation?.scope.kind === 'chat' ? t('helpers.m180') : t('helpers.m043'),
+              count: formatNumber(props.sessions.length),
+            })}
           </span>
-          {props.unread.length > 0 && <strong>새 소식 {props.unread.length}</strong>}
+          {props.unread.length > 0 && (
+            <strong>{t('helpers.m325', { count: formatNumber(props.unread.length) })}</strong>
+          )}
         </div>
       </div>
-      {cleanupFailure && <NoticeBanner tone="error">{cleanupFailure}</NoticeBanner>}
+      {cleanupFailure && (
+        <NoticeBanner tone="error">{translateMessage(cleanupFailure)}</NoticeBanner>
+      )}
       <Dialog
         open={!!rename}
-        title="도우미 세션 이름 변경"
+        title={t('helpers.m183')}
         onClose={() => {
           if (!working) setRename(null);
         }}
@@ -207,7 +216,7 @@ export function HelperSessionBar(props: Props) {
           }}
         >
           <label>
-            세션 이름
+            {t('helpers.m184')}
             <input
               value={title}
               maxLength={200}
@@ -215,7 +224,7 @@ export function HelperSessionBar(props: Props) {
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+          {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
           <div className="form-actions">
             <button
               type="button"
@@ -224,18 +233,18 @@ export function HelperSessionBar(props: Props) {
               onClick={() => setRename(null)}
             >
               <CloseIcon size={18} aria-hidden="true" />
-              취소
+              {t('helpers.m165')}
             </button>
             <button className="primary" disabled={working || !title.trim()}>
               <CheckIcon size={18} aria-hidden="true" />
-              이름 저장
+              {t('helpers.m185')}
             </button>
           </div>
         </form>
       </Dialog>
       <Dialog
         open={!!deleting}
-        title="도우미 세션 삭제"
+        title={t('helpers.m186')}
         variant="confirmation"
         role="alertdialog"
         className="delete-dialog"
@@ -243,27 +252,23 @@ export function HelperSessionBar(props: Props) {
           if (!working) setDeleting(null);
         }}
       >
-        <p>
-          <strong>{deleting?.title || '새 대화'}</strong> 세션을 삭제해요.
-        </p>
+        <p>{t('helpers.m326', { title: deleting?.title || t('helpers.m173') })}</p>
         {impact ? (
-          <p>{impact.description}</p>
+          <p>{t('helpers.m327')}</p>
         ) : (
-          !readError && (
-            <LoadingState
-              presentation="inline"
-              label="삭제할 자료와 진행 중인 작업을 확인하고 있어요…"
-            />
-          )
+          !readError && <LoadingState presentation="inline" label={t('helpers.m188')} />
         )}
         {impact && !impact.canDelete && (
           <p role="status">
-            진행·대기 요청 {impact.activeTasks}개 · 종료를 기다리는 외부 요청{' '}
-            {impact.unsettledAttempts}개{impact.workerActive ? ' · 작업 정리 중' : ''}
+            {t('helpers.m328', {
+              active: formatNumber(impact.activeTasks),
+              unsettled: formatNumber(impact.unsettledAttempts),
+              worker: impact.workerActive,
+            })}
           </p>
         )}
-        {readError && <NoticeBanner tone="error">{readError}</NoticeBanner>}
-        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        {readError && <NoticeBanner tone="error">{translateMessage(readError)}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"
@@ -272,7 +277,7 @@ export function HelperSessionBar(props: Props) {
             onClick={() => setDeleting(null)}
           >
             <CloseIcon size={18} aria-hidden="true" />
-            계속 사용
+            {t('helpers.m192')}
           </button>
           {impact && !impact.canDelete && (
             <button
@@ -282,7 +287,7 @@ export function HelperSessionBar(props: Props) {
               onClick={() => void stop()}
             >
               <StopIcon size={18} aria-hidden="true" />
-              진행·대기 작업 중지
+              {t('helpers.m193')}
             </button>
           )}
           <button
@@ -303,7 +308,7 @@ export function HelperSessionBar(props: Props) {
                   try {
                     await deleteHelperSessionRecovery(deleting.id);
                   } catch {
-                    setCleanupFailure('세션은 삭제됐지만 이 기기의 복구 초안을 지우지 못했어요.');
+                    setCleanupFailure(uiMessage('helpers.m194'));
                   }
                   setDeleting(null);
                   props.onDelete();
@@ -313,7 +318,7 @@ export function HelperSessionBar(props: Props) {
             }}
           >
             <DeleteIcon size={18} aria-hidden="true" />
-            세션 영구 삭제
+            {t('helpers.m195')}
           </button>
         </div>
       </Dialog>

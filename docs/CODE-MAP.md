@@ -2,6 +2,7 @@
 
 | Responsibility | Entry points | Current contract |
 | --- | --- | --- |
+| UI language, retained messages and localized display formats | `web/i18n.ts`, `web/LanguageSelect.tsx`, `web/locales/`, `web/api-errors.ts`, `web/pwa.ts`, `web/public/sw.js` | [UI language](I18N.md) |
 | Composition, writing briefs and source-linked review | `core/outline.ts`, `server/outline-read.ts`, `server/outline-store.ts`, `server/outline-routes.ts`, `web/OutlinePanel.tsx` | [Outline workspace](OUTLINE.md) |
 | Optional automatic original-work reference and helper Q&A context | `core/story-guide.ts`, `server/story-guide-store.ts`, `server/story-guide-runtime.ts`, `server/story-guide-routes.ts`, `server/helper-context.ts`, `web/StoryGuidePanel.tsx` | [Original-work reference](STORY-GUIDE.md) |
 | Resource editing and local recovery | `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `server/resource-service.ts`, `server/resource-routes.ts` | [Editing](EDITING.md) |

@@ -1,3 +1,5 @@
+import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { LanguageSelect } from './LanguageSelect.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -12,6 +14,7 @@ import {
 type Session = { required: boolean; authenticated: boolean; maintenance?: MaintenanceStatus };
 
 export function SessionGate({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [session, setSession] = useState<Session | null>(null);
   const [token, setToken] = useState('');
   const [error, setError] = useState('');
@@ -30,12 +33,12 @@ export function SessionGate({ children }: { children: ReactNode }) {
           setSession(next);
           setError(
             expired && next.required && !next.authenticated
-              ? '접속이 만료됐어요. 토큰을 입력해 다시 연결해 주세요.'
+              ? uiMessage('outside.sessionExpired')
               : ''
           );
         }
       } catch {
-        if (alive && revision.current === expected) setError('서버 연결을 확인해 주세요.');
+        if (alive && revision.current === expected) setError(uiMessage('outside.checkServer'));
       }
     };
     const expired = () => {
@@ -64,14 +67,15 @@ export function SessionGate({ children }: { children: ReactNode }) {
   if (session && (!session.required || session.authenticated)) return <>{children}</>;
   return (
     <main className="login">
+      <LanguageSelect />
       <a className="wordmark" href="/">
         Uimori
       </a>
-      {session?.required && <h1>개인 작업실에 연결</h1>}
+      {session?.required && <h1>{t('outside.connectTitle')}</h1>}
       {!session && !error && (
-        <LoadingState presentation="placeholder" label="작업실 연결을 확인하고 있어요…" />
+        <LoadingState presentation="placeholder" label={t('outside.checkingWorkspace')} />
       )}
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       {session?.required && (
         <form
           className="editor-grid"
@@ -92,8 +96,8 @@ export function SessionGate({ children }: { children: ReactNode }) {
               setToken('');
               setError(
                 error instanceof ApiError && error.status === 429
-                  ? '접속 시도가 많아요. 잠시 후 다시 연결해 주세요.'
-                  : '접속 토큰을 확인해 주세요.'
+                  ? uiMessage('outside.tooManyConnections')
+                  : uiMessage('outside.checkToken')
               );
             } finally {
               signingIn.current = false;
@@ -102,9 +106,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
           }}
         >
           <label className="full">
-            접속 토큰
+            {t('outside.token')}
             <input
-              aria-label="접속 토큰"
+              aria-label={t('outside.token')}
               type="password"
               autoComplete="off"
               required
@@ -112,13 +116,13 @@ export function SessionGate({ children }: { children: ReactNode }) {
               onChange={(event) => setToken(event.target.value)}
             />
           </label>
-          <button disabled={busy}>작업실 연결</button>
-          <small>토큰은 이 입력창에서만 사용하고 브라우저 저장소에 보관하지 않아요.</small>
+          <button disabled={busy}>{t('outside.connect')}</button>
+          <small>{t('outside.tokenPrivacy')}</small>
         </form>
       )}
       {!session && !!error && (
         <button type="button" className="secondary" onClick={() => location.reload()}>
-          다시 연결
+          {t('outside.reconnect')}
         </button>
       )}
     </main>

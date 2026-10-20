@@ -1,3 +1,4 @@
+import { t, message as uiMessage, useI18n, translateMessage } from './i18n.js';
 import { imageInputSupported } from '../core/provider-image-reference.js';
 import { DraftRequestImages } from './RequestImages.js';
 import type { OutlineHelperRequest } from './outline-helper.js';
@@ -110,7 +111,7 @@ function workspaceFallback(title: string, navigation: ReactNode, content: ReactN
       <header className="workspace-header">
         {navigation}
         <div className="header-title">
-          <h1>{title}</h1>
+          <h1>{translateMessage(title)}</h1>
         </div>
       </header>
       <div className="workspace-fallback-body">{content}</div>
@@ -176,6 +177,7 @@ const MIN_CENTER_WIDTH = 768;
 const runFailed = (status: string) =>
   ['failed', 'cancelled', 'interrupted', 'refused', 'partial'].includes(status);
 function App() {
+  useI18n();
   const s = useStory();
   const { setScope: setThemeScope } = useThemes();
   const themeChatId = s.destination === 'story' ? s.selected : undefined;
@@ -478,12 +480,15 @@ function App() {
   // Both the reader and model routes must settle before an absent model is actionable.
   const modelCheckReady = !!s.detail && !!s.library && !!s.promptWorkspace;
   const mainDescription = !modelCheckReady
-    ? '본문 모델을 확인하고 있어요'
+    ? t('main.m008')
     : mainModel
-      ? `${modelLabel(mainModel, s.library)}${mainAvailable ? '' : ' · 사용 불가'}`
+      ? t('main.modelAvailability', {
+          model: modelLabel(mainModel, s.library),
+          available: String(mainAvailable),
+        })
       : mainModelRef
-        ? '선택한 본문 모델 · 확인 필요'
-        : '본문 모델을 선택해 주세요';
+        ? t('main.m009')
+        : t('main.m010');
   const helperModel = s.library?.models.find(
     (item) => item.id === s.promptWorkspace?.helperModel?.id
   );
@@ -492,28 +497,40 @@ function App() {
     !!s.library &&
     isModelSelectable(helperModel, s.library.models, s.library.connections);
   const helperDescription = helperModel
-    ? `${modelLabel(helperModel, s.library)}${helperAvailable ? '' : ' · 사용 불가'}`
+    ? t('main.modelAvailability', {
+        model: modelLabel(helperModel, s.library),
+        available: String(helperAvailable),
+      })
     : s.promptWorkspace?.helperModel
-      ? '선택한 도우미 모델 · 확인 필요'
-      : '도우미 모델을 선택해 주세요';
+      ? t('main.m011')
+      : t('main.m012');
   // The model is a header chip at every width; narrow widths shorten the empty states so the
   // chip leaves room for the title. The accessible name keeps the full description.
   const mainShortDescription = !modelCheckReady
-    ? '모델 확인 중'
+    ? t('main.m013')
     : mainModel
-      ? `${mainModel.title}${mainAvailable ? '' : ' · 사용 불가'}`
+      ? t('main.modelAvailability', { model: mainModel.title, available: String(mainAvailable) })
       : mainModelRef
-        ? '모델 확인 필요'
-        : '모델 선택';
+        ? t('main.m014')
+        : t('main.m015');
   const mainModelChip = (
     <button
       type="button"
       className="model-chip secondary"
-      aria-label={`현재 본문 모델 · ${mainDescription}${pinned?.mainModel ? ' · 이 채팅 고정' : ''}${pinned?.mainPromptPresetId ? ` · 작문 프롬프트 ${promptAvailable ? '이 채팅 고정' : '사용 불가'}` : ''}`}
+      aria-label={t('main.modelAria', {
+        model: mainDescription,
+        pinned: String(!!pinned?.mainModel),
+        prompt: pinned?.mainPromptPresetId ? (promptAvailable ? 'pinned' : 'unavailable') : 'none',
+      })}
       title={
         pinned?.mainModel || pinned?.mainPromptPresetId
-          ? `${mainDescription} · 이 채팅 고정 · ${pinned.mainModel ? '본문 모델' : ''}${pinned.mainModel && pinned.mainPromptPresetId ? ' · ' : ''}${pinned.mainPromptPresetId ? `작문 프롬프트: ${currentPrompt?.title ?? '사용 불가'}` : ''}`
-          : '모든 채팅의 이후 요청에 적용되는 전역 모델 설정'
+          ? t('main.modelPinnedTitle', {
+              model: mainDescription,
+              pinned: String(!!pinned.mainModel),
+              prompt: String(!!pinned.mainPromptPresetId),
+              title: currentPrompt?.title ?? t('main.unavailable'),
+            })
+          : t('main.m019')
       }
       onClick={() => {
         if (pinned?.mainModel || pinned?.mainPromptPresetId) {
@@ -529,25 +546,21 @@ function App() {
         <PinIcon size={12} aria-hidden="true" />
       )}
       <span>
-        {compact ? mainShortDescription : mainDescription}
-        {(pinned?.mainModel || pinned?.mainPromptPresetId) && ' · 고정'}
-        {!promptAvailable && ' · 프롬프트 사용 불가'}
+        {t('main.modelChip', {
+          model: compact ? mainShortDescription : mainDescription,
+          pinned: String(!!(pinned?.mainModel || pinned?.mainPromptPresetId)),
+          prompt: String(promptAvailable),
+        })}
       </span>
     </button>
   );
   const composerStatus = [
-    s.pendingRequest && !s.submitting.includes(s.viewKey)
-      ? '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.'
-      : '',
-    s.cancelling ? '원문 생성 취소 중…' : '',
-    s.imagesDecoding ? '참고 이미지를 준비하고 있어요…' : '',
-    s.draftImages.length && !testMode && imageSupport === false
-      ? '선택한 본문 모델은 이미지 입력을 지원하지 않아요. 모델을 바꾸거나 첨부를 제거해 주세요.'
-      : '',
-    s.draftImages.length && !testMode && imageSupport === null
-      ? '선택한 모델의 이미지 지원 여부는 미확인이에요. 첨부한 상태로 전송할 수 있어요.'
-      : '',
-    s.profileDirty ? '채팅 설정에 미저장 변경' : '',
+    s.pendingRequest && !s.submitting.includes(s.viewKey) ? t('main.m020') : '',
+    s.cancelling ? t('main.m021') : '',
+    s.imagesDecoding ? t('main.m022') : '',
+    s.draftImages.length && !testMode && imageSupport === false ? t('main.m023') : '',
+    s.draftImages.length && !testMode && imageSupport === null ? t('main.m024') : '',
+    s.profileDirty ? t('main.m025') : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -732,7 +745,8 @@ function App() {
       <IconButton
         ref={navigationOpener}
         className="mobile-menu"
-        label="탐색 메뉴"
+        data-navigation-menu
+        label={t('main.m026')}
         icon={Menu}
         onClick={() => setPanel('navigation')}
       />
@@ -741,7 +755,7 @@ function App() {
   const destinationHelperControl = s.destination !== 'story' && !helperOpen && (
     <IconButton
       className="destination-helper"
-      label="도우미 열기"
+      label={t('main.m027')}
       icon={MessageCircle}
       aria-expanded={helperOpen}
       aria-controls="helper-panel"
@@ -753,27 +767,27 @@ function App() {
   function renderReadingSettings(onStartFocus?: () => void) {
     return (
       <div className="settings-stack reading-preferences">
-        <section className="settings-group reading-settings-group" aria-label="기본 보기">
+        <section className="settings-group reading-settings-group" aria-label={t('main.m028')}>
           <header className="settings-group-heading">
-            <h4>기본 보기</h4>
+            <h4>{t('main.m028')}</h4>
           </header>
           <div className="settings-group-body reading-settings-rows">
             <label>
-              본문 글꼴
+              {t('main.m029')}
               <select
-                aria-label="본문 글꼴"
+                aria-label={t('main.m029')}
                 value={font}
                 onChange={(event) => reading.changeLayout(() => setFont(event.target.value))}
               >
-                <option value="sans">기본 고딕</option>
-                <option value="serif">명조</option>
+                <option value="sans">{t('main.m030')}</option>
+                <option value="serif">{t('main.m031')}</option>
               </select>
             </label>
             <label>
-              본문 크기
+              {t('main.m032')}
               <span className="reading-range-control">
                 <input
-                  aria-label="본문 크기"
+                  aria-label={t('main.m032')}
                   type="range"
                   min={9}
                   max={28}
@@ -787,100 +801,91 @@ function App() {
               </span>
             </label>
             <label>
-              본문 폭
+              {t('main.m033')}
               <select
-                aria-label="본문 폭"
+                aria-label={t('main.m033')}
                 value={readingWidth}
                 onChange={(event) =>
                   reading.changeLayout(() => setReadingWidth(Number(event.target.value)))
                 }
               >
-                <option value={760}>좁게</option>
-                <option value={880}>기본</option>
-                <option value={1040}>넓게</option>
+                <option value={760}>{t('main.m034')}</option>
+                <option value={880}>{t('main.m035')}</option>
+                <option value={1040}>{t('main.m036')}</option>
               </select>
             </label>
             <div className="reading-option-toggle">
               <div>
-                <strong>채팅 네비게이터</strong>
-                <small>
-                  장면 눈금과 맨 아래 이동을 표시해요. 제목의 장면 목록은 계속 열 수 있어요.
-                </small>
+                <strong>{t('main.m037')}</strong>
+                <small>{t('main.m038')}</small>
               </div>
               <label className="check">
                 <Switch
-                  aria-label="채팅 네비게이터 표시"
+                  aria-label={t('main.m039')}
                   checked={sceneNavigatorEnabled}
                   onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
                 />
-                표시
+                {t('main.m040')}
               </label>
             </div>
           </div>
         </section>
 
-        <section className="settings-group" aria-label="응답 표시">
+        <section className="settings-group" aria-label={t('main.m041')}>
           <div className="settings-group-body">
             <label className="settings-row">
               <span className="settings-row-copy">
-                <strong>응답 표시 방식</strong>
-                <small>
-                  본문과 도우미 응답에 적용해요. 생성 방식은 그대로이며, 진행 상태와 취소는 계속
-                  사용할 수 있어요.
-                </small>
+                <strong>{t('main.m042')}</strong>
+                <small>{t('main.m043')}</small>
               </span>
               <select
-                aria-label="응답 표시 방식"
+                aria-label={t('main.m042')}
                 value={responseDisplay}
                 onChange={(event) => setResponseDisplay(event.target.value as ResponseDisplayMode)}
               >
-                <option value="stream">실시간 표시</option>
-                <option value="complete">완료 후 한 번에 표시</option>
+                <option value="stream">{t('main.m044')}</option>
+                <option value="complete">{t('main.m045')}</option>
               </select>
             </label>
           </div>
         </section>
 
-        <section className="settings-group" aria-label="번역">
+        <section className="settings-group" aria-label={t('main.m046')}>
           <header className="settings-group-heading">
-            <h4>번역</h4>
+            <h4>{t('main.m046')}</h4>
           </header>
           <div className="settings-group-body">
             <label className="settings-row">
               <span className="settings-row-copy">
-                <strong>새 원고의 기본 보기</strong>
-                <small>
-                  번역이 없으면 원문을 먼저 보여 줘요. 저장된 번역은 다시 호출하지 않아요.
-                </small>
+                <strong>{t('main.m047')}</strong>
+                <small>{t('main.m048')}</small>
               </span>
               <select
-                aria-label="새 원고의 기본 보기"
+                aria-label={t('main.m047')}
                 value={readingLanguage}
                 onChange={(event) => setReadingLanguage(event.target.value)}
               >
-                <option value="translation">한국어 번역</option>
-                <option value="original">원문</option>
+                <option value="translation">{t('main.m049')}</option>
+                <option value="original">{t('main.m050')}</option>
               </select>
             </label>
           </div>
         </section>
 
-        <section className="settings-group" aria-label="삽화 표시">
+        <section className="settings-group" aria-label={t('main.m051')}>
           <div className="settings-group-body">
             <label className="settings-row">
               <span className="settings-row-copy">
-                <strong>삽화 기본 표시</strong>
-                <small>
-                  직접 접거나 펼친 컷의 선택은 유지해요. 그림 생성과 저장에는 영향을 주지 않아요.
-                </small>
+                <strong>{t('main.m052')}</strong>
+                <small>{t('main.m053')}</small>
               </span>
               <select
-                aria-label="삽화 기본 표시"
+                aria-label={t('main.m052')}
                 value={String(illustrationsCollapsed)}
                 onChange={(event) => setIllustrationsCollapsed(event.target.value === 'true')}
               >
-                <option value="false">펼쳐서 읽기</option>
-                <option value="true">접어서 읽기</option>
+                <option value="false">{t('main.m054')}</option>
+                <option value="true">{t('main.m055')}</option>
               </select>
             </label>
           </div>
@@ -888,7 +893,7 @@ function App() {
         <ReadabilitySettings value={reading.settings} onChange={reading.update} />
         {onStartFocus && (
           <button className="secondary reading-focus-start" onClick={onStartFocus}>
-            집중 읽기 시작
+            {t('main.m056')}
           </button>
         )}
       </div>
@@ -910,7 +915,7 @@ function App() {
           }}
         />
       )}
-      <aside id="workspace-sidebar" className="sidebar" aria-label="탐색">
+      <aside id="workspace-sidebar" className="sidebar" aria-label={t('main.m057')}>
         {!compact && panel !== 'navigation' && navigation(true, sidebarHidden)}
       </aside>
       <main className="story-workspace">
@@ -931,7 +936,11 @@ function App() {
                   )}
                   {s.bot?.title && (
                     <span className="header-chat-context">
-                      {`${s.bot.title}${s.persona ? ` · 페르소나 ${s.persona.title}` : ''}`}
+                      {t('main.botPersona', {
+                        bot: s.bot.title,
+                        persona: s.persona?.title ?? '',
+                        hasPersona: String(!!s.persona),
+                      })}
                     </span>
                   )}
                 </small>
@@ -941,8 +950,8 @@ function App() {
                   type="button"
                   ref={sceneListOpener}
                   className="header-title-hit"
-                  aria-label="장면 목록 열기"
-                  title="장면 목록"
+                  aria-label={t('main.m058')}
+                  title={t('main.m059')}
                   onClick={() => setSceneList(true)}
                 />
               )}
@@ -953,7 +962,7 @@ function App() {
                   {mainModelChip}
                   {!compact && !helperOpen && (
                     <IconButton
-                      label="도우미 열기"
+                      label={t('main.m027')}
                       icon={MessageCircle}
                       aria-expanded={false}
                       aria-controls="helper-panel"
@@ -965,8 +974,8 @@ function App() {
                   {focus && (
                     <button
                       className="icon-button"
-                      aria-label="집중 읽기 종료"
-                      title="집중 읽기 종료"
+                      aria-label={t('main.m060')}
+                      title={t('main.m060')}
                       onClick={() => setFocus(false)}
                     >
                       <Minimize size={19} />
@@ -975,32 +984,32 @@ function App() {
                   {!compact && (
                     <button
                       className="icon-button"
-                      aria-label="채팅 설정"
-                      title="채팅 설정"
+                      aria-label={t('main.m003')}
+                      title={t('main.m003')}
                       onClick={() => openChatSettings()}
                     >
                       <SlidersHorizontal size={20} />
                     </button>
                   )}
-                  <ActionMenu label="채팅 메뉴" className="chat-menu">
+                  <ActionMenu label={t('main.m061')} className="chat-menu">
                     {compact && (
                       <>
                         <button
                           type="button"
                           className="secondary"
-                          aria-label="채팅 설정"
+                          aria-label={t('main.m003')}
                           onClick={(event) => {
                             fromChatMenu(event);
                             openChatSettings();
                           }}
                         >
                           <SlidersHorizontal size={18} aria-hidden="true" />
-                          채팅 설정
+                          {t('main.m003')}
                         </button>
                         <button
                           type="button"
                           className="secondary"
-                          aria-label="도우미 열기"
+                          aria-label={t('main.m027')}
                           aria-expanded={helperOpen}
                           aria-controls="helper-panel"
                           onClick={() => {
@@ -1008,7 +1017,7 @@ function App() {
                           }}
                         >
                           <MessageCircle size={18} aria-hidden="true" />
-                          도우미
+                          {t('main.m062')}
                         </button>
                       </>
                     )}
@@ -1021,7 +1030,7 @@ function App() {
                       }}
                     >
                       <BookOpen size={18} aria-hidden="true" />
-                      원작·인물 참고
+                      {t('main.m063')}
                     </button>
                     <button
                       type="button"
@@ -1030,13 +1039,13 @@ function App() {
                       onClick={() => setChatTool({ scope: s.viewKey, kind: 'export' })}
                     >
                       <Download size={18} aria-hidden="true" />
-                      원고 내보내기
+                      {t('main.m064')}
                     </button>
                     <button
                       type="button"
                       className="secondary"
-                      aria-label="채팅 백업 내보내기"
-                      title="원문·자료·이미지·실행 기록을 새 채팅으로 복원할 수 있는 백업을 받아요"
+                      aria-label={t('main.m065')}
+                      title={t('main.m066')}
                       onClick={() => {
                         const chatId = s.selected;
                         const title = s.chats.find((chat) => chat.id === chatId)?.title ?? 'chat';
@@ -1047,13 +1056,13 @@ function App() {
                       }}
                     >
                       <Download size={18} aria-hidden="true" />
-                      채팅 백업 내보내기
+                      {t('main.m065')}
                     </button>
                     <button
                       type="button"
                       className="secondary"
-                      aria-label="채팅 포크"
-                      title="현재 채팅의 마지막 장면까지 복사해서 새 채팅으로 이어가요"
+                      aria-label={t('main.m067')}
+                      title={t('main.m068')}
                       disabled={
                         !s.sources.length ||
                         s.forking.some((key) => key.startsWith(`${s.selected}:`))
@@ -1064,7 +1073,7 @@ function App() {
                       }}
                     >
                       <GitFork size={18} aria-hidden="true" />
-                      여기까지 새 채팅으로 복사
+                      {t('main.m069')}
                     </button>
                     <button
                       type="button"
@@ -1075,12 +1084,12 @@ function App() {
                       }}
                     >
                       <Type size={18} aria-hidden="true" />
-                      읽기 설정
+                      {t('main.m070')}
                     </button>
                     {!focus && (
                       <button type="button" className="secondary" onClick={() => setFocus(true)}>
                         <Maximize size={18} aria-hidden="true" />
-                        집중 읽기
+                        {t('main.m071')}
                       </button>
                     )}
                     {s.detail && (
@@ -1093,7 +1102,7 @@ function App() {
                         }}
                       >
                         <ListTree size={18} aria-hidden="true" />
-                        계층형 구성
+                        {t('main.m007')}
                       </button>
                     )}
                     <button
@@ -1105,15 +1114,15 @@ function App() {
                       }}
                     >
                       <Activity size={18} aria-hidden="true" />
-                      작업 현황
+                      {t('main.m006')}
                     </button>
                     {s.detail && (
                       <DeleteButton
                         path={`/chats/${encodeURIComponent(s.selected)}`}
                         preparePath={`/chats/${encodeURIComponent(s.selected)}/deletion-impact`}
                         title={s.detail.chat.title}
-                        label="채팅 삭제"
-                        description="이 채팅의 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
+                        label={t('main.m072')}
+                        description={t('main.m073')}
                         disabled={!!s.active}
                         onError={s.setError}
                         onDeleted={() => s.loadChats()}
@@ -1127,7 +1136,7 @@ function App() {
         )}
         {pendingNotification && (
           <NoticeBanner
-            label="알림의 장면 이동"
+            label={t('main.m074')}
             actions={
               <>
                 <button
@@ -1138,15 +1147,15 @@ function App() {
                     setPendingNotification(null);
                   }}
                 >
-                  알림으로 이동
+                  {t('main.m075')}
                 </button>
                 <button type="button" onClick={() => setPendingNotification(null)}>
-                  알림 이동 닫기
+                  {t('main.m076')}
                 </button>
               </>
             }
           >
-            편집을 마친 뒤 알림의 장면으로 이동할 수 있어요.
+            {t('main.m077')}
           </NoticeBanner>
         )}
         {s.destination === 'library' ? (
@@ -1180,14 +1189,14 @@ function App() {
                 />
               ) : (
                 workspaceFallback(
-                  '프롬프트',
+                  t('main.m002'),
                   navigationControls,
                   <LoadingState
                     presentation="region"
                     loading={!s.libraryError}
                     error={s.libraryError}
-                    label="프롬프트를 불러오는 중이에요…"
-                    errorLabel="프롬프트 목록을 불러오지 못했어요."
+                    label={t('main.m078')}
+                    errorLabel={t('main.m079')}
                     onRetry={() => void s.retryLibrary().catch(() => {})}
                   />
                 )
@@ -1219,7 +1228,7 @@ function App() {
           <>
             {s.readingSync.other && (
               <NoticeBanner
-                label="읽기 위치 동기화"
+                label={t('main.m080')}
                 actions={
                   <>
                     <button
@@ -1227,10 +1236,10 @@ function App() {
                       aria-label={s.readingSync.resumeLabel}
                       onClick={s.readingSync.resumeOther}
                     >
-                      이어 읽기
+                      {t('main.m081')}
                     </button>
                     <IconButton
-                      label="읽기 위치 안내 닫기"
+                      label={t('main.m082')}
                       icon={CloseIcon}
                       className="secondary"
                       onClick={s.readingSync.dismiss}
@@ -1238,9 +1247,7 @@ function App() {
                   </>
                 }
               >
-                {s.readingSync.resumeLabel.startsWith('다른 기기')
-                  ? '다른 기기에 저장된 읽기 위치가 있어요.'
-                  : '저장된 읽기 위치가 있어요.'}
+                {s.readingSync.resumeOrigin === 'other-device' ? t('main.m083') : t('main.m084')}
               </NoticeBanner>
             )}
             <div
@@ -1258,17 +1265,17 @@ function App() {
               >
                 <section
                   className={`reader${s.selected && !s.detail ? ' reader-awaiting' : ''}`}
-                  aria-label="원고"
+                  aria-label={t('main.m085')}
                   aria-busy={!!s.selected && !s.detail && s.readerLoading}
                 >
                   {!s.selected ? (
                     <div className="empty-state">
                       <BookOpen size={32} />
-                      <h2>어떤 채팅을 시작할까요?</h2>
-                      <p className="muted">서재에서 봇을 고르거나, 원하는 장면으로 시작해요.</p>
-                      <button onClick={() => newStory()}>새 채팅</button>
+                      <h2>{t('main.m086')}</h2>
+                      <p className="muted">{t('main.m087')}</p>
+                      <button onClick={() => newStory()}>{t('main.m004')}</button>
                       <button className="secondary" onClick={() => showLibrary()}>
-                        서재 둘러보기
+                        {t('main.m088')}
                       </button>
                     </div>
                   ) : !s.detail ? (
@@ -1292,7 +1299,7 @@ function App() {
                         >
                           <ReaderPortraitButton
                             url={s.profileAsset?.url ?? contentPortraitUrl(s.bot)}
-                            title={s.bot?.title ?? s.profileAsset?.title ?? '등장인물'}
+                            title={s.bot?.title ?? s.profileAsset?.title ?? t('main.m089')}
                           >
                             {s.profileAsset ? (
                               <img
@@ -1313,7 +1320,7 @@ function App() {
                           ['queued', 'running'].includes(item.status)
                         ) && (
                           <p className="connection-note" role="status">
-                            연결을 다시 확인하는 중이에요.
+                            {t('main.m090')}
                           </p>
                         )}
                       {!s.sources.length && !s.visibleRuns.length && !s.active && (
@@ -1321,10 +1328,8 @@ function App() {
                           {s.bot && (
                             <ContentAvatar content={s.bot} className="first-scene-avatar" />
                           )}
-                          <h2>첫 장면을 들려주세요.</h2>
-                          <p className="muted">
-                            배경과 인물, 일어나길 바라는 일을 아래에 적어주세요.
-                          </p>
+                          <h2>{t('main.m091')}</h2>
+                          <p className="muted">{t('main.m092')}</p>
                         </div>
                       )}
                       <ReaderPages
@@ -1376,7 +1381,7 @@ function App() {
                                     }
                                   : undefined
                               }
-                              onStartChanged={() => s.setNotice('시작문을 바꿨어요.')}
+                              onStartChanged={() => s.setNotice(uiMessage('main.m093'))}
                               hasPackages={
                                 !!s.detail!.runs.find((run) => run.id === source.runId)?.hasPackages
                               }
@@ -1491,7 +1496,7 @@ function App() {
                               request={run.request}
                               images={run.snapshot.requestImages}
                               disabled={s.reuseBlocked || optionsBusy}
-                              editHint="수정한 요청을 현재 설정으로 다시 실행해요."
+                              editHint={t('main.m094')}
                               onSubmit={
                                 s.canReuseRun(run.id)
                                   ? (text) => s.generate(run.id, text)
@@ -1587,7 +1592,7 @@ function App() {
               <div className="composer-dock">
                 {s.pendingProfile && (
                   <NoticeBanner tone="error">
-                    시작 설정 저장이 끝나지 않았어요.
+                    {t('main.m095')}
                     <button
                       className="secondary"
                       onClick={() => {
@@ -1595,12 +1600,12 @@ function App() {
                         setRequestDecision({ scope: s.viewKey, kind: 'profile' });
                       }}
                     >
-                      시작 설정 다시 저장
+                      {t('main.m096')}
                     </button>
                   </NoticeBanner>
                 )}
                 <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
-                {s.error.includes('전역 모델 설정') && (
+                {/^MODEL_(?:REQUIRED|UNAVAILABLE)(?::|$)/u.test(s.errorCode ?? '') && (
                   <button
                     type="button"
                     className="secondary"
@@ -1609,12 +1614,12 @@ function App() {
                       setPanel('settings');
                     }}
                   >
-                    전역 모델 설정
+                    {t('main.m097')}
                   </button>
                 )}
                 {s.forkOrigin && s.forkOrigin.forkId === s.selected && (
                   <p className="composer-status fork-notice" role="status">
-                    <span>「{s.forkOrigin.title}」에서 복사한 새 채팅이에요.</span>
+                    <span>{t('main.forkNotice', { title: s.forkOrigin.title })}</span>
                     <button
                       type="button"
                       className="link-button"
@@ -1624,10 +1629,10 @@ function App() {
                         select(origin);
                       }}
                     >
-                      원본으로 돌아가기
+                      {t('main.m098')}
                     </button>
                     <IconButton
-                      label="알림 닫기"
+                      label={t('main.m099')}
                       icon={X}
                       size={14}
                       className="fork-notice-close"
@@ -1668,13 +1673,13 @@ function App() {
                   !s.promptWorkspace &&
                   s.promptWorkspaceError && (
                     <p className="muted" role="alert">
-                      모델 설정을 확인하지 못했어요.{' '}
+                      {t('main.m100')}{' '}
                       <button
                         type="button"
                         className="secondary"
                         onClick={() => void s.refreshPromptWorkspace()}
                       >
-                        다시 불러오기
+                        {t('main.m101')}
                       </button>
                     </p>
                   )}
@@ -1684,10 +1689,10 @@ function App() {
                   ((!testMode && !mainAvailable) || !promptAvailable) && (
                     <p className="muted" role="status">
                       {!promptAvailable
-                        ? '고정한 작문 프리셋을 사용할 수 없어요. 다시 선택해 주세요.'
+                        ? t('main.m102')
                         : pinned?.mainModel
-                          ? '고정한 본문 모델을 사용할 수 없어요. 다시 선택해 주세요.'
-                          : '사용 가능한 전역 본문 모델을 선택해 주세요.'}{' '}
+                          ? t('main.m103')
+                          : t('main.m104')}{' '}
                       <button
                         type="button"
                         className="secondary"
@@ -1701,17 +1706,15 @@ function App() {
                           }
                         }}
                       >
-                        {pinned?.mainModel || !promptAvailable ? '채팅 설정' : '전역 모델 설정'}
+                        {pinned?.mainModel || !promptAvailable ? t('main.m003') : t('main.m097')}
                       </button>
                     </p>
                   )}
                 {s.draftRecovery && !sourceEditing && (
                   <div className="notice" role="alert">
-                    <p>
-                      최신 텍스트를 보존했어요. 이전에 저장된 참고 이미지를 복구할지 선택해 주세요.
-                    </p>
+                    <p>{t('main.m105')}</p>
                     <details>
-                      <summary>이전 초안 텍스트 보기</summary>
+                      <summary>{t('main.m106')}</summary>
                       <p>{s.draftRecovery.text}</p>
                     </details>
                     <button
@@ -1719,14 +1722,14 @@ function App() {
                       className="secondary"
                       onClick={() => s.resolveDraftRecovery(true)}
                     >
-                      이전 첨부 복구
+                      {t('main.m107')}
                     </button>
                     <button
                       type="button"
                       className="secondary"
                       onClick={() => s.resolveDraftRecovery(false)}
                     >
-                      이전 첨부 버리기
+                      {t('main.m108')}
                     </button>
                   </div>
                 )}
@@ -1749,7 +1752,7 @@ function App() {
                     ref={requestImageInput}
                     type="file"
                     className="sr-only"
-                    aria-label="참고 이미지 파일"
+                    aria-label={t('main.m109')}
                     accept="image/png,image/jpeg,image/webp"
                     multiple
                     disabled={
@@ -1780,7 +1783,7 @@ function App() {
                     onChange={s.editLoreContextReset}
                   />
                   <label className="sr-only" htmlFor="request">
-                    다음 장면 요청
+                    {t('main.m110')}
                   </label>
                   <ComposerInput
                     inputRef={s.input}
@@ -1805,8 +1808,8 @@ function App() {
                     placeholder={
                       // A wrapping placeholder would grow the one-row composer on narrow screens.
                       compact
-                        ? '장면 요청…'
-                        : `다음 장면을 부탁하거나, 채팅을 이어가세요… · ${enterSend ? 'Enter' : 'Ctrl+Enter'} 보내기`
+                        ? t('main.m111')
+                        : t('main.composerPlaceholder', { key: enterSend ? 'Enter' : 'Ctrl+Enter' })
                     }
                   />
                   <div className="quick-controls">
@@ -1831,17 +1834,21 @@ function App() {
                         onClick={() => requestImageInput.current?.click()}
                       >
                         <ImagePlus size={18} aria-hidden="true" />
-                        참고 이미지 첨부
+                        {t('main.m112')}
                       </button>
 
                       {(creativePresets.length > 0 || !!s.library || hasCreativeOptions) && (
-                        <div className="composer-menu-group" role="group" aria-label="창작 설정">
-                          <div className="composer-menu-heading">창작 설정</div>
+                        <div
+                          className="composer-menu-group"
+                          role="group"
+                          aria-label={t('main.m113')}
+                        >
+                          <div className="composer-menu-heading">{t('main.m113')}</div>
                           {creativePresets.length > 0 && (
                             <label className="composer-menu-choice">
-                              <span>옵션 조합</span>
+                              <span>{t('main.m114')}</span>
                               <select
-                                aria-label="빠른 옵션 조합"
+                                aria-label={t('main.m115')}
                                 value=""
                                 disabled={
                                   s.quickBusy ||
@@ -1854,7 +1861,7 @@ function App() {
                                   void s.quickChange('combination', event.target.value);
                                 }}
                               >
-                                <option value="">이 채팅에 적용</option>
+                                <option value="">{t('main.m116')}</option>
                                 {creativePresets.map((item) => (
                                   <option value={refValue(item)} key={refValue(item)}>
                                     {item.title}
@@ -1865,17 +1872,15 @@ function App() {
                           )}
                           {s.library && (
                             <div className="composer-menu-persona">
-                              <span aria-hidden="true">페르소나</span>
+                              <span aria-hidden="true">{t('main.m117')}</span>
                               <ContentPicker
                                 library={s.library}
                                 role="persona"
-                                label="빠른 페르소나"
+                                label={t('main.m118')}
                                 value={s.persona ? refValue(s.persona) : ''}
                                 selectedContent={s.persona}
                                 allowNone
-                                noneLabel={
-                                  s.attachmentsReady ? '페르소나 없음' : '페르소나 확인 중…'
-                                }
+                                noneLabel={s.attachmentsReady ? t('main.m119') : t('main.m120')}
                                 disabled={
                                   s.quickBusy ||
                                   optionsBusy ||
@@ -1895,7 +1900,7 @@ function App() {
                               ref={optionsButton}
                               type="button"
                               className="secondary creative-options-button"
-                              aria-label="창작 옵션"
+                              aria-label={t('main.m121')}
                               aria-expanded={optionsOpen}
                               aria-controls="chat-prompt-options"
                               disabled={!s.detail}
@@ -1906,17 +1911,13 @@ function App() {
                               }}
                             >
                               <SlidersHorizontal size={18} aria-hidden="true" />
-                              창작 옵션{optionsDirty && ' · 미적용'}
+                              {t('main.writingOptions', { dirty: String(optionsDirty) })}
                             </button>
                           )}
                         </div>
                       )}
-                      <div
-                        className="composer-menu-group"
-                        role="group"
-                        aria-label="요청 및 컨텍스트"
-                      >
-                        <div className="composer-menu-heading">요청 및 컨텍스트</div>
+                      <div className="composer-menu-group" role="group" aria-label={t('main.m122')}>
+                        <div className="composer-menu-heading">{t('main.m122')}</div>
                         <button
                           type="button"
                           className="secondary"
@@ -1924,7 +1925,7 @@ function App() {
                           onClick={() => setChatTool({ scope: s.viewKey, kind: 'preview' })}
                         >
                           <Eye size={18} aria-hidden="true" />
-                          다음 요청 미리보기
+                          {t('main.m123')}
                         </button>
                         <button
                           type="button"
@@ -1933,7 +1934,7 @@ function App() {
                           onClick={() => setChatTool({ scope: s.viewKey, kind: 'lore' })}
                         >
                           <BookOpen size={18} aria-hidden="true" />
-                          마지막 장면의 로어
+                          {t('main.m124')}
                         </button>
                         <button
                           type="button"
@@ -1942,7 +1943,7 @@ function App() {
                           onClick={() => setChatTool({ scope: s.viewKey, kind: 'compact' })}
                         >
                           <Minimize size={18} aria-hidden="true" />
-                          수동 컨텍스트 압축
+                          {t('main.m125')}
                         </button>
                       </div>
                     </ComposerMore>
@@ -1958,7 +1959,7 @@ function App() {
                       latestPosition?.scope === s.viewKey &&
                       latestPosition.visible && (
                         <IconButton
-                          label="본문 맨 아래로"
+                          label={t('main.m126')}
                           icon={DownIcon}
                           size={18}
                           className="scene-latest-inline"
@@ -1971,8 +1972,8 @@ function App() {
                       key="cancel"
                       type="button"
                       className="send-button"
-                      aria-label={s.cancelling ? '원문 생성 취소 중' : '원문 생성 취소'}
-                      title={s.cancelling ? '원문 생성 취소 중…' : '원문 생성 중단'}
+                      aria-label={s.cancelling ? t('main.m127') : t('main.m128')}
+                      title={s.cancelling ? t('main.m021') : t('main.m129')}
                       disabled={s.cancelling}
                       aria-busy={s.cancelling}
                       onClick={() => void s.cancelActive()}
@@ -1983,11 +1984,11 @@ function App() {
                     <button
                       key="send"
                       className="send-button"
-                      aria-label={s.pendingRequest ? '이전 요청 확인' : '원문 생성'}
+                      aria-label={s.pendingRequest ? t('main.m130') : t('main.m131')}
                       title={
                         s.pendingRequest
-                          ? '이전 전송의 수락 확인'
-                          : `보내기 · ${enterSend ? 'Enter' : 'Ctrl+Enter'}`
+                          ? t('main.m132')
+                          : t('main.sendShortcut', { key: enterSend ? 'Enter' : 'Ctrl+Enter' })
                       }
                       disabled={
                         optionsBusy ||
@@ -2023,7 +2024,7 @@ function App() {
                     aria-busy={s.cancelling}
                     onClick={() => void s.cancelActive()}
                   >
-                    {s.cancelling ? '원문 생성 취소 중…' : '원문 생성 취소'}
+                    {s.cancelling ? t('main.m021') : t('main.m128')}
                   </button>
                 )}
                 <p className="composer-status" role="status" hidden={sourceEditing}>
@@ -2056,7 +2057,7 @@ function App() {
             onClose={() => {
               setChatTool(null);
               requestAnimationFrame(() =>
-                document.querySelector<HTMLButtonElement>('[aria-label="입력창 더보기"]')?.focus()
+                document.querySelector<HTMLButtonElement>('button[data-composer-more]')?.focus()
               );
             }}
           />
@@ -2071,7 +2072,7 @@ function App() {
             onClose={() => {
               setChatTool(null);
               requestAnimationFrame(() =>
-                document.querySelector<HTMLButtonElement>('[aria-label="입력창 더보기"]')?.focus()
+                document.querySelector<HTMLButtonElement>('button[data-composer-more]')?.focus()
               );
             }}
             onRefresh={() => s.refresh(s.selected)}
@@ -2112,7 +2113,7 @@ function App() {
           requestAnimationFrame(() => {
             const target = optionsButton.current;
             if (target?.checkVisibility()) target.focus();
-            else document.querySelector<HTMLButtonElement>('[aria-label="입력창 더보기"]')?.focus();
+            else document.querySelector<HTMLButtonElement>('button[data-composer-more]')?.focus();
           });
         }}
         onDirtyChange={setOptionsDirty}
@@ -2146,7 +2147,7 @@ function App() {
       <CodexContentWarningDialog gate={s.inputTranslation.codexWarning} />
       <Dialog
         open={!!currentRequestDecision}
-        title={currentRequestDecision === 'profile' ? '시작 설정 저장' : '이전 요청 접수 확인'}
+        title={currentRequestDecision === 'profile' ? t('main.m133') : t('main.m134')}
         variant="confirmation"
         onClose={() => {
           if (!profileSaving) setRequestDecision(null);
@@ -2154,15 +2155,17 @@ function App() {
       >
         {currentRequestDecision === 'profile' ? (
           <>
-            <p>시작 설정 저장이 끝나지 않았어요. 설정을 저장한 뒤 본문을 생성할 수 있어요.</p>
-            {profileSaveError && <NoticeBanner tone="error">{profileSaveError}</NoticeBanner>}
+            <p>{t('main.m135')}</p>
+            {profileSaveError && (
+              <NoticeBanner tone="error">{translateMessage(profileSaveError)}</NoticeBanner>
+            )}
             <div className="form-actions">
               <button
                 className="secondary"
                 disabled={profileSaving}
                 onClick={() => setRequestDecision(null)}
               >
-                닫기
+                {t('main.m136')}
               </button>
               <button
                 disabled={profileSaving}
@@ -2183,19 +2186,16 @@ function App() {
                   })();
                 }}
               >
-                {profileSaving ? '저장 중…' : '시작 설정 다시 저장'}
+                {profileSaving ? t('main.m137') : t('main.m096')}
               </button>
             </div>
           </>
         ) : (
           <>
-            <p>
-              이전 요청의 접수 여부를 확인하지 못했어요. 같은 요청으로 다시 확인해요. 현재 입력한
-              초안은 유지돼요.
-            </p>
+            <p>{t('main.m138')}</p>
             <div className="form-actions">
               <button className="secondary" onClick={() => setRequestDecision(null)}>
-                닫기
+                {t('main.m136')}
               </button>
               <button
                 onClick={() => {
@@ -2203,7 +2203,7 @@ function App() {
                   void s.generate();
                 }}
               >
-                접수 확인
+                {t('main.m139')}
               </button>
             </div>
           </>
@@ -2211,17 +2211,17 @@ function App() {
       </Dialog>
       <Dialog
         open={!!pendingNavigation}
-        title="편집 중인 자료"
+        title={t('main.m140')}
         variant="confirmation"
         onClose={() => {
           if (!discardingNavigation) setPendingNavigation(null);
         }}
       >
-        <p>이동하면 저장하지 않은 편집 내용이 사라져요.</p>
+        <p>{t('main.m141')}</p>
         <ResourceEditorLeaveWarning />
         {navigationDiscardError && (
           <p role="alert" className="error">
-            {navigationDiscardError}
+            {translateMessage(navigationDiscardError)}
           </p>
         )}
         <DraftDiscardActions
@@ -2257,12 +2257,12 @@ function App() {
               setDiscardingNavigation(false);
             }
           }}
-          discardLabel="초안 버리고 이동"
+          discardLabel={t('main.m142')}
         />
       </Dialog>
       <Dialog
         open={searchingChats}
-        title="전체 채팅 검색"
+        title={t('main.m143')}
         onClose={() => setSearchingChats(false)}
         onAfterClose={() => {
           const opener = searchOpener.current;
@@ -2274,7 +2274,7 @@ function App() {
           // A width change may have removed the sidebar that opened this dialog.
           const target = [
             ...document.querySelectorAll<HTMLButtonElement>(
-              'button[aria-label="전체 채팅 검색"], button[aria-label="탐색 메뉴"]'
+              'button[data-global-search], button[data-navigation-menu]'
             ),
           ].find((button) => button.checkVisibility());
           target?.focus();
@@ -2283,7 +2283,8 @@ function App() {
       >
         {searchingChats && (
           <ManuscriptSearchPanel
-            label="전체 채팅 검색"
+            data-global-search
+            label={t('main.m143')}
             chats={s.chats}
             library={s.library}
             onChat={(id) => {
@@ -2299,7 +2300,7 @@ function App() {
       </Dialog>
       <Dialog
         open={panel === 'navigation'}
-        title="탐색"
+        title={t('main.m057')}
         onClose={() => {
           // Lazy destination loading may have replaced the native dialog's opener.
           navigationReturnFocus.current = navigationOpener.current;
@@ -2322,7 +2323,7 @@ function App() {
       </Dialog>
       <Dialog
         open={panel === 'new'}
-        title="새 채팅"
+        title={t('main.m004')}
         onClose={() => setPanel('')}
         className="new-story-dialog"
       >
@@ -2348,13 +2349,13 @@ function App() {
       </Dialog>
       <Dialog
         open={!!moduleToUse}
-        title="모듈 사용"
+        title={t('main.m144')}
         onClose={() => !s.quickBusy && setModuleToUse(null)}
       >
         {moduleToUse && (
           <>
             <ContentAvatar content={moduleToUse} />
-            <p>{moduleToUse.title}을 사용할 채팅을 선택해요.</p>
+            <p>{t('main.moduleChat', { title: moduleToUse.title })}</p>
             {s.detail && (
               <button
                 type="button"
@@ -2369,7 +2370,7 @@ function App() {
                   });
                 }}
               >
-                현재 채팅에 추가 · {s.detail.chat.title}
+                {t('main.addModule', { title: s.detail.chat.title })}
               </button>
             )}
             <button
@@ -2382,7 +2383,7 @@ function App() {
                 newStory(undefined, undefined, undefined, [module]);
               }}
             >
-              이 모듈로 새 채팅
+              {t('main.m145')}
             </button>
             <DismissibleError message={s.error} onDismiss={() => s.setError('')} />
           </>
@@ -2434,7 +2435,7 @@ function App() {
       <Dialog
         scopeKey={s.selected}
         open={panel === 'tasks'}
-        title="작업 현황"
+        title={t('main.m006')}
         onClose={() => setPanel('')}
         wide
       >
@@ -2447,7 +2448,7 @@ function App() {
           />
         )}
       </Dialog>
-      <Dialog open={panel === 'reading'} title="읽기 설정" onClose={() => setPanel('')}>
+      <Dialog open={panel === 'reading'} title={t('main.m070')} onClose={() => setPanel('')}>
         {renderReadingSettings(() => {
           setFocus(true);
           setPanel('');
@@ -2493,11 +2494,13 @@ function App() {
       <ReaderEditingContext value={onSourceEditing}>{workspace}</ReaderEditingContext>
       <Dialog
         open={nativeNotices.length > 0}
-        title="카드 알림"
+        title={t('main.m146')}
         onClose={() => setNativeNotices((notices) => notices.slice(1))}
       >
         <p style={{ whiteSpace: 'pre-wrap' }}>{nativeNotices[0]}</p>
-        <button onClick={() => setNativeNotices((notices) => notices.slice(1))}>확인</button>
+        <button onClick={() => setNativeNotices((notices) => notices.slice(1))}>
+          {t('main.m147')}
+        </button>
       </Dialog>
     </ReadingPreferencesContext>
   );

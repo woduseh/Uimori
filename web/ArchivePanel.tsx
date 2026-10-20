@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { BackupSettings } from './BackupSettings.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BackupFileImport } from './BackupFileImport.js';
@@ -22,6 +23,7 @@ export function ArchivePanel({
   expanded?: boolean;
   active?: boolean;
 }) {
+  useI18n();
   const [busy, setBusy] = useState(false);
   const [importDirty, setImportDirty] = useState(false);
   const [backupDirty, setBackupDirty] = useState(false);
@@ -46,20 +48,18 @@ export function ArchivePanel({
     <Container
       className={expanded ? 'archive-settings' : 'workspace-tools'}
       data-testid="archive-panel"
-      aria-label="백업과 가져오기"
+      aria-label={t('transfer.m178')}
     >
-      {!expanded && <summary>내보내기와 복원</summary>}
-      <section className="settings-group" aria-label="백업과 복원">
+      {!expanded && <summary>{t('transfer.m179')}</summary>}
+      <section className="settings-group" aria-label={t('transfer.m180')}>
         <header className="settings-group-heading archive-card-heading">
-          <h3>백업 · 복원</h3>
+          <h3>{t('transfer.m181')}</h3>
         </header>
         <div className="settings-group-body archive-management-card">
           <div className="archive-action-row settings-row">
             <div className="settings-row-copy">
-              <strong>작업실 전체 백업</strong>
-              <p className="muted">
-                설정·원고·이미지를 저장해요. API 키가 포함된 개인 보관용 파일이에요.
-              </p>
+              <strong>{t('transfer.m182')}</strong>
+              <p className="muted">{t('transfer.m183')}</p>
             </div>
             <button
               type="button"
@@ -71,7 +71,8 @@ export function ArchivePanel({
                 onError('');
                 try {
                   const response = await fetch('/api/backup');
-                  if (!response.ok) throw new Error(`백업을 만들지 못했어요. (${response.status})`);
+                  if (!response.ok)
+                    throw new Error(retainedMessage('transfer.d010', { v0: response.status }));
                   const url = URL.createObjectURL(await response.blob());
                   const link = document.createElement('a');
                   link.href = url;
@@ -86,19 +87,16 @@ export function ArchivePanel({
               }}
             >
               <DownloadIcon size={18} aria-hidden="true" />
-              {busy ? '백업 준비 중…' : '백업 다운로드'}
+              {busy ? t('transfer.m184') : t('transfer.m185')}
             </button>
           </div>
           <details className="archive-restore-details">
-            <summary>전체 복원 방법</summary>
-            <p className="muted">
-              서버를 종료하고 백업 DB를 별도 경로에 둔 뒤 UIMORI_DB에 지정해 다시 시작해요. 복원을
-              확인할 때까지 기존 DB는 보관해 주세요.
-            </p>
+            <summary>{t('transfer.m186')}</summary>
+            <p className="muted">{t('transfer.m187')}</p>
           </details>
           {error && (
             <p role="alert" className="error">
-              {error}
+              {translateMessage(error)}
             </p>
           )}
         </div>

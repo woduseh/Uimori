@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { ReaderActivity } from '../core/types.js';
 import type { RequestActivity } from './useStory.js';
@@ -34,51 +35,53 @@ function reconcileHistory(history: ReaderActivity[], current: ReaderActivity[]) 
   return JSON.stringify(next) === JSON.stringify(history) ? history : next;
 }
 const names: Record<string, string> = {
-  main: '장면을 쓰는 중',
-  translation: '번역하는 중',
-  image: '이미지 만드는 중',
-  illustration: '삽화 만드는 중',
+  main: 'helpers.m212',
+  translation: 'helpers.m213',
+  image: 'helpers.m214',
+  illustration: 'helpers.m215',
 };
 const doneNames: Record<string, string> = {
-  main: '본문',
-  translation: '번역',
-  image: '이미지',
-  status: '이전 보조 작업',
-  illustration: '삽화',
-  request: '요청',
+  main: 'helpers.m216',
+  translation: 'helpers.m217',
+  image: 'helpers.m218',
+  status: 'helpers.m219',
+  illustration: 'helpers.m220',
+  request: 'helpers.m221',
 };
 export function elapsedLabel(start: string, end: number) {
   const timestamp = Date.parse(start);
   if (!Number.isFinite(timestamp) || !Number.isFinite(end)) return '';
   const seconds = Math.max(0, Math.floor((end - timestamp) / 1000));
-  return seconds < 60 ? `${seconds}초` : `${Math.floor(seconds / 60)}분 ${seconds % 60}초`;
+  return seconds < 60
+    ? t('helpers.m222', { v0: seconds })
+    : t('helpers.m223', { v0: Math.floor(seconds / 60), v1: seconds % 60 });
 }
-function message(item: Item) {
-  const name = doneNames[item.kind] ?? '작업';
+export function activityStatusLabel(item: Pick<Item, 'kind' | 'status'>) {
+  const name = t(doneNames[item.kind] ?? 'helpers.m224');
   const status =
     item.status === 'sending'
-      ? '요청을 보내는 중'
+      ? t('helpers.m225')
       : item.status === 'accepted'
-        ? '요청 수락 · 상태 확인 중'
+        ? t('helpers.m226')
         : item.status === 'uncertain'
-          ? '요청 수락 여부 확인 필요'
+          ? t('helpers.m227')
           : item.status === 'queued'
-            ? `${name} 대기 중`
+            ? t('helpers.m228', { v0: name })
             : item.status === 'running'
-              ? (names[item.kind] ?? '작업 중')
+              ? t(names[item.kind] ?? 'helpers.m229')
               : item.status === 'completed'
-                ? `${name} 완료`
+                ? t('helpers.m230', { v0: name })
                 : item.status === 'cancelled'
-                  ? `${name} 중단됨`
+                  ? t('helpers.m231', { v0: name })
                   : item.status === 'refused'
-                    ? `${name} 생성 거절`
+                    ? t('helpers.m232', { v0: name })
                     : item.status === 'interrupted'
-                      ? `${name} 중단 · 확인 필요`
+                      ? t('helpers.m233', { v0: name })
                       : item.status === 'partial'
-                        ? `${name} 부분 결과 · 확인 필요`
+                        ? t('helpers.m234', { v0: name })
                         : item.status === 'stale'
-                          ? `${name} 자료 변경 · 확인 필요`
-                          : `${name} 실패`;
+                          ? t('helpers.m235', { v0: name })
+                          : t('helpers.m236', { v0: name });
   return status;
 }
 
@@ -109,6 +112,7 @@ export function ActivityStatus({
   /** Pending turns whose failure card the reader has scrolled into view. */
   seenRunIds?: string[];
 }) {
+  useI18n();
   const [now, setNow] = useState(Date.now);
   const [hidden, setHidden] = useState<string[]>(() => {
     try {
@@ -319,18 +323,23 @@ export function ActivityStatus({
         ? 'running'
         : 'done';
   const label = connectionIssue
-    ? '연결 확인 중 · 진행 여부를 확인할 수 없어요'
+    ? t('helpers.m237')
     : item
-      ? message(item)
+      ? activityStatusLabel(item)
       : hasIssue
-        ? '확인 필요'
-        : `작업 ${running.length}`;
+        ? t('helpers.m115')
+        : t('helpers.m238', { v0: formatNumber(running.length) });
   const measured =
     item && !connectionIssue
       ? elapsedLabel(item.startedAt, active(item.status) ? now : Date.parse(item.finishedAt ?? ''))
       : '';
   // A finished task that took under a second has no meaningful duration to show.
-  const elapsed = !item || active(item.status) || measured !== '0초' ? measured : '';
+  const elapsed =
+    item &&
+    !active(item.status) &&
+    Date.parse(item.finishedAt ?? '') - Date.parse(item.startedAt) < 1000
+      ? ''
+      : measured;
   function hide() {
     setHidden((old) => [...new Set([...old, ...candidates.map((item) => item.key)])]);
   }
@@ -370,14 +379,10 @@ export function ActivityStatus({
           expanded={issueSelected ? notificationsOpen : !!item}
           collapsed={!item}
           toggleLabel={
-            issueSelected ? '작업 알림 보기' : item ? '작업 상태 숨기기' : '작업 상태 펼치기'
+            issueSelected ? t('helpers.m239') : item ? t('helpers.m098') : t('helpers.m099')
           }
           toggleTitle={
-            issueSelected
-              ? '확인할 작업 알림을 열어요.'
-              : item
-                ? '상태 표시만 숨겨요. 작업은 계속 진행돼요.'
-                : '작업 상태 펼치기'
+            issueSelected ? t('helpers.m240') : item ? t('helpers.m241') : t('helpers.m099')
           }
           onToggle={issueSelected ? () => setNotificationsOpen(true) : item ? hide : expand}
           onDetails={() => setNotificationsOpen(true)}
@@ -392,14 +397,14 @@ export function ActivityStatus({
         persistenceError={persistenceError}
         recoveryRequestId={recoveryRequestId}
         recoveryBusy={recoveryBusy}
-        recoveryError={recoveryError}
+        recoveryError={translateMessage(recoveryError)}
         onRecoverRequest={onRecoverRequest}
         onLater={(notice) => {
           if (notice.kind !== 'request' || notice.status !== 'uncertain') return;
           setHidden((old) => [...new Set([...old, notice.key])]);
           setNotificationsOpen(false);
         }}
-        message={message}
+        message={activityStatusLabel}
         onAcknowledge={acknowledge}
         onHistory={(page) =>
           setHistory((old) => {
@@ -419,6 +424,7 @@ export function ActivityStatus({
 }
 
 export function ActivityDetails({ activities }: { activities: ReaderActivity[] }) {
+  useI18n();
   const [now, setNow] = useState(Date.now);
   const running = activities.filter((item) => item.kind !== 'status' && active(item.status));
   useEffect(() => {
@@ -428,22 +434,12 @@ export function ActivityDetails({ activities }: { activities: ReaderActivity[] }
   }, [running.length]);
   if (!running.length) return null;
   return (
-    <section className="activity-list" aria-label="진행 중인 모든 작업">
-      <h3>진행 중인 작업 {running.length}개</h3>
+    <section className="activity-list" aria-label={t('helpers.m242')}>
+      <h3>{t('helpers.m330', { count: formatNumber(running.length) })}</h3>
       <ul>
         {running.map((item) => (
           <li key={item.id}>
-            <span>
-              {message({
-                key: item.id,
-                acknowledgementKey: activityAcknowledgementKey(item),
-                kind: item.kind,
-                status: item.status,
-                startedAt: item.startedAt,
-                finishedAt: item.finishedAt,
-                runId: item.id,
-              })}
-            </span>
+            <span>{activityStatusLabel(item)}</span>
             <span className="activity-elapsed">{elapsedLabel(item.startedAt, now)}</span>
           </li>
         ))}

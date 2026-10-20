@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { IconButton } from './IconButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
@@ -34,6 +35,7 @@ export function requestResourceConflictReview(session: ResourceEditorSession) {
     window.dispatchEvent(new CustomEvent(conflictReviewEvent, { detail: session }));
 }
 export function ResourceEditorLeaveWarning() {
+  useI18n();
   const subscribe = useCallback((listener: () => void) => {
     window.addEventListener(editorContextChanged, listener);
     return () => window.removeEventListener(editorContextChanged, listener);
@@ -44,8 +46,7 @@ export function ResourceEditorLeaveWarning() {
   });
   return warning ? (
     <p role="alert" className="error">
-      이 기기에 복구용 입력을 보관하지 못했어요. 저장하지 않고 이동하면 현재 입력을 복구할 수
-      없어요.
+      {t('shared.recoveryWarning')}
     </p>
   ) : null;
 }
@@ -164,6 +165,7 @@ export function useResourceEditor<Model extends ResourceModel>(session: Resource
 
 const EditorContextValue = createContext<ResourceEditorValue | null>(null);
 function SavedResourcePreview({ model }: { model: ResourceModel }) {
+  useI18n();
   const promptText = (program: RisuPrompt) => {
     const blocks = program.nativeRisuPreset.preset.promptTemplate;
     return Array.isArray(blocks)
@@ -180,9 +182,12 @@ function SavedResourcePreview({ model }: { model: ResourceModel }) {
       ? [{ title: model.title, text: promptText(model.program) }]
       : 'main' in model && 'translation' in model
         ? [
-            { title: `작문 · ${model.main.title}`, text: promptText(model.main.program) },
             {
-              title: `번역 · ${model.translation.title}`,
+              title: t('shared.writingTitle', { title: model.main.title }),
+              text: promptText(model.main.program),
+            },
+            {
+              title: t('shared.translationTitle', { title: model.translation.title }),
               text: promptText(model.translation.program),
             },
           ]
@@ -197,12 +202,12 @@ function SavedResourcePreview({ model }: { model: ResourceModel }) {
             ]
           : [];
   return (
-    <section aria-label="최신 저장본 내용" className="resource-saved-preview">
-      <p className="muted">제목과 주요 본문을 확인할 수 있어요.</p>
+    <section aria-label={t('shared.savedContents')} className="resource-saved-preview">
+      <p className="muted">{t('shared.previewDescription')}</p>
       {sections.map((section, index) => (
         <section key={index}>
           <h3>{section.title}</h3>
-          <p>{section.text || '저장된 본문이 없어요.'}</p>
+          <p>{section.text || t('shared.emptySavedText')}</p>
         </section>
       ))}
     </section>
@@ -215,6 +220,7 @@ export function ResourceEditorProvider({
   value: ResourceEditorValue;
   children: ReactNode;
 }) {
+  useI18n();
   const [reviewOpen, setReviewOpen] = useState(false);
   useEffect(() => {
     const review = (event: Event) => {
@@ -230,23 +236,20 @@ export function ResourceEditorProvider({
         {children}
         <SaveConflictDialog
           open={reviewOpen}
-          title="변경된 저장본 확인"
+          title={t('shared.reviewChanged')}
           onClose={() => setReviewOpen(false)}
           readSaved={async () => {
             const saved = await value.session.readSaved();
-            return {
+            return () => ({
               content: saved ? (
                 <>
                   <SavedResourcePreview model={saved.model} />
-                  <p className="muted">
-                    입력한 내용을 남기려면 먼저 복사해 두세요. ‘편집 취소’를 누르면 현재 입력을
-                    버리고 최신 저장본을 불러와요.
-                  </p>
+                  <p className="muted">{t('shared.copyBeforeDiscard')}</p>
                 </>
               ) : (
-                <p>저장된 자료가 없어요.</p>
+                <p>{t('shared.noSavedResource')}</p>
               ),
-            };
+            });
           }}
         />
       </div>
@@ -346,6 +349,7 @@ export function ResourceEditorStatus({
   value: ResourceEditorValue;
   hideSyncError?: boolean;
 }) {
+  useI18n();
   const { state, session } = value;
   return (
     <div
@@ -356,37 +360,37 @@ export function ResourceEditorStatus({
           presentation="region"
           loading={!state.error}
           error={state.error}
-          label="자료를 불러오는 중이에요…"
+          label={t('shared.loadingResources')}
           onRetry={() => void session.open().catch(() => {})}
         />
       ) : (
         <span role="status">
           {state.saving
-            ? '저장 중…'
+            ? t('shared.saving')
             : state.dirty
-              ? '미저장 변경'
+              ? t('shared.unsaved')
               : state.document.targetId
-                ? '저장됨'
-                : '등록 전'}
+                ? t('shared.saved')
+                : t('shared.notRegistered')}
         </span>
       )}
-      {state.dirty && state.recovery === 'saved' && <small>이 기기에 복구용 입력 보관됨</small>}
-      {state.recovery === 'failed' && (
-        <small role="alert">복구용 입력을 보관하지 못했어요. 닫기 전에 저장해 주세요.</small>
-      )}
+      {state.dirty && state.recovery === 'saved' && <small>{t('shared.recoverySaved')}</small>}
+      {state.recovery === 'failed' && <small role="alert">{t('shared.recoveryFailure')}</small>}
       {state.conflict && (
         <small role="alert">
-          저장된 자료가 변경됐어요. 현재 입력은 유지돼요.{' '}
+          {t('shared.resourceChanged')}{' '}
           <button
             type="button"
             className="ghost"
             onClick={() => requestResourceConflictReview(session)}
           >
-            저장본 확인
+            {t('shared.reviewSaved')}
           </button>
         </small>
       )}
-      {state.ready && !hideSyncError && state.error && <small role="alert">{state.error}</small>}
+      {state.ready && !hideSyncError && state.error && (
+        <small role="alert">{translateMessage(state.error)}</small>
+      )}
     </div>
   );
 }
@@ -397,6 +401,7 @@ export function ResourceEditorActions({
   value: ResourceEditorValue;
   hideSyncError?: boolean;
 }) {
+  useI18n();
   const [error, setError] = useState('');
   const action = (work: () => Promise<unknown>) => {
     setError('');
@@ -412,19 +417,19 @@ export function ResourceEditorActions({
           disabled={value.state.saving}
           onClick={() => action(() => value.session.discard())}
         >
-          편집 취소
+          {t('shared.cancelEditing')}
         </button>
       )}
       {!value.state.dirty && (value.state.document.baseRevision ?? 0) > 1 && (
         <IconButton
           className="ghost"
-          label="직전 저장 되돌리기"
+          label={t('shared.undoSave')}
           icon={UndoIcon}
           disabled={value.state.saving}
           onClick={() => action(() => value.session.undo())}
         />
       )}
-      {error && <small role="alert">{error}</small>}
+      {error && <small role="alert">{translateMessage(error)}</small>}
     </div>
   );
 }

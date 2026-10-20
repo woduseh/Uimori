@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 import { readerLocation, THEME_BODY_SCROLL_SELECTOR } from './theme-body-scroll.js';
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -239,7 +240,8 @@ export function useReadingSync(options: {
   return {
     remember,
     other: resume,
-    resumeLabel: other ? '다른 기기에서 이어 읽기' : '저장된 위치에서 이어 읽기',
+    resumeOrigin: other ? ('other-device' as const) : ('saved' as const),
+    resumeLabel: other ? t('main.resumeOther') : t('main.resumeSaved'),
     resumeOther: () => {
       if (resume) {
         acknowledge();

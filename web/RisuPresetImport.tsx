@@ -1,3 +1,12 @@
+import { legacyMessage } from './i18n.js';
+import {
+  t,
+  useI18n,
+  translateMessage,
+  formatNumber,
+  message as retainedMessage,
+  messageRef,
+} from './i18n.js';
 import { readImportSource as readSource } from './import-source.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -16,6 +25,34 @@ import { IconButton } from './IconButton.js';
 import { CheckIcon, UploadIcon } from './ui-icons.js';
 import './risu-import.css';
 
+/** Parse only the complete host diagnostic contract; embedded card values remain verbatim. */
+function presetFindingMessage(finding: RisuPresetImportPreview['findings'][number]): string {
+  switch (finding.code) {
+    case 'RISU_PRESET_HOST_MEMORY':
+      return t('transfer.finding.RISU_PRESET_HOST_MEMORY');
+    case 'RISU_PRESET_NATIVE_PROMPT':
+      return t('transfer.finding.RISU_PRESET_NATIVE_PROMPT');
+    case 'RISU_PRESET_UNSUPPORTED_BLOCK': {
+      const match =
+        /^(\d+)번 블록\((.*)\)은 저장되지만 실행되지 않아요\. 실행하려면 지원하는 종류의 프롬프트 블록으로 바꿔 주세요\.$/su.exec(
+          finding.message
+        );
+      if (match)
+        return t('transfer.finding.unsupportedBlock', { index: Number(match[1]), type: match[2] });
+      break;
+    }
+    case 'RISU_PRESET_HOST_SETTING': {
+      const match =
+        /^(utilOverride|customChainOfThought)로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요\. 프리셋의 프롬프트 블록과 Uimori의 작업·모델 설정을 사용해요\.$/u.exec(
+          finding.message
+        );
+      if (match) return t('transfer.finding.hostSetting', { setting: match[1] });
+      break;
+    }
+  }
+  return translateMessage(finding.message);
+}
+
 /** Closing the dialog retains the reviewed file and exact uncertain submission. */
 export function RisuPresetImport({
   showTrigger = true,
@@ -26,6 +63,7 @@ export function RisuPresetImport({
   reload: () => Promise<void>;
   onImported: (preset: PromptPreset) => void;
 }) {
+  useI18n();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const active = useRef(false);
@@ -49,9 +87,9 @@ export function RisuPresetImport({
     setNotice('');
     try {
       if (!/\.(risup|risupreset|json|zip)$/i.test(file.name))
-        throw new Error('.risup, .risupreset, 프리셋 JSON 또는 프로젝트 ZIP을 선택해 주세요.');
-      if (!file.size) throw new Error('빈 파일은 가져올 수 없어요.');
-      if (file.size > RISU_IMPORT_MAX_BYTES) throw new Error('파일은 24 MiB 이하여야 해요.');
+        throw new Error(legacyMessage('transfer.m065'));
+      if (!file.size) throw new Error(legacyMessage('transfer.m008'));
+      if (file.size > RISU_IMPORT_MAX_BYTES) throw new Error(legacyMessage('transfer.m066'));
       const nextSource = await readSource(file);
       const nextPreview = await api<RisuPresetImportPreview>('/risu-preset-imports/prepare', {
         source: nextSource,
@@ -63,7 +101,12 @@ export function RisuPresetImport({
       submission.current = null;
       requestKey.current = null;
     } catch (cause) {
-      setError(`${(cause as Error).message}${preview ? ' 앞서 확인한 파일은 유지했어요.' : ''}`);
+      setError(
+        retainedMessage('transfer.reviewError', {
+          error: messageRef((cause as Error).message),
+          retained: !!preview,
+        })
+      );
     } finally {
       active.current = false;
       setBusy(false);
@@ -90,7 +133,7 @@ export function RisuPresetImport({
       try {
         await reload();
       } catch {
-        setNotice('가져오기는 완료했어요. 목록을 다시 열면 저장한 프롬프트를 확인할 수 있어요.');
+        setNotice(retainedMessage('transfer.m067'));
       }
     } catch (cause) {
       const confirmedFailure =
@@ -112,7 +155,7 @@ export function RisuPresetImport({
     <>
       {showTrigger && (
         <IconButton
-          label="프롬프트 가져오기"
+          label={t('transfer.m068')}
           className="secondary"
           icon={UploadIcon}
           onClick={() => setOpen(true)}
@@ -120,34 +163,27 @@ export function RisuPresetImport({
       )}
       <Dialog
         open={open}
-        title="프롬프트 가져오기"
+        title={t('transfer.m068')}
         onClose={() => setOpen(false)}
         className="risu-import-dialog"
         wide
       >
         <section
           className={`risu-import-body${result ? ' complete' : ''}`}
-          aria-label="Risu 프리셋 검토"
+          aria-label={t('transfer.m069')}
           aria-busy={busy}
         >
           {!preview && (
             <>
-              <p className="muted">
-                Risu 프롬프트·토글·정규식 원본을 새 작문 프롬프트로 저장해요. 원본 파일도 보존해요.
-                가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.
-              </p>
-              <p className="muted">모델 연결과 전역 기본 프롬프트는 바뀌지 않아요.</p>
+              <p className="muted">{t('transfer.m070')}</p>
+              <p className="muted">{t('transfer.m071')}</p>
             </>
           )}
           <label className={`risu-import-file${preview ? ' risu-import-file-ready' : ''}`}>
-            <span>
-              {preview
-                ? source?.name
-                : '.risup · .risupreset · 프리셋 JSON · 프로젝트 ZIP · 최대 24 MiB'}
-            </span>
+            <span>{preview ? source?.name : t('transfer.m072')}</span>
             <input
               type="file"
-              aria-label="Risu 프리셋 파일 선택"
+              aria-label={t('transfer.m073')}
               accept=".risup,.risupreset,.json,.zip,application/json,application/zip"
               disabled={busy || uncertain}
               onChange={(event) => {
@@ -156,54 +192,54 @@ export function RisuPresetImport({
                 if (file) void prepare(file);
               }}
             />
-            {preview && <span className="risu-import-change">파일 변경</span>}
+            {preview && <span className="risu-import-change">{t('transfer.m020')}</span>}
           </label>
           {preview && (
             <>
               <div className="risu-import-summary risu-import-hero">
                 <h3>{preview.title}</h3>
-                <small className="muted">작문 프롬프트</small>
+                <small className="muted">{t('transfer.m074')}</small>
                 <dl className="risu-import-counts">
                   <div>
-                    <dt>블록</dt>
-                    <dd>{preview.summary.blocks}</dd>
+                    <dt>{t('transfer.m075')}</dt>
+                    <dd>{formatNumber(preview.summary.blocks)}</dd>
                   </div>
                   <div>
-                    <dt>옵션</dt>
-                    <dd>{preview.summary.controls}</dd>
+                    <dt>{t('transfer.m076')}</dt>
+                    <dd>{formatNumber(preview.summary.controls)}</dd>
                   </div>
                   <div>
-                    <dt>정규식</dt>
-                    <dd>{preview.summary.regex}</dd>
+                    <dt>{t('transfer.m077')}</dt>
+                    <dd>{formatNumber(preview.summary.regex)}</dd>
                   </div>
                 </dl>
               </div>
               {preview.findings.length > 0 ? (
                 <section
                   className={`risu-import-findings${unsupported ? ' warn' : ''}`}
-                  aria-label="프리셋 가져오기 지원 범위"
+                  aria-label={t('transfer.m078')}
                 >
-                  <h3>{unsupported ? '실행 전에 확인이 필요해요' : '가져오기 안내'}</h3>
+                  <h3>{unsupported ? t('transfer.m032') : t('transfer.m033')}</h3>
                   <ul>
                     {preview.findings.map((finding, index) => (
                       <li key={`${finding.code}:${index}`}>
                         <strong>
-                          {finding.level === 'unsupported' ? '미지원' : '확인 필요'} ·{' '}
+                          {finding.level === 'unsupported'
+                            ? t('transfer.m034')
+                            : t('transfer.m035')}{' '}
+                          ·{' '}
                         </strong>
-                        {finding.message}
+                        {presetFindingMessage(finding)}
                       </li>
                     ))}
                   </ul>
                 </section>
               ) : (
-                <p className="muted">현재 파일에서 보고된 미지원 항목은 없어요.</p>
+                <p className="muted">{t('transfer.m079')}</p>
               )}
               <details className="risu-import-processing">
-                <summary>원본 처리와 확인 사항</summary>
-                <p className="muted">
-                  CBS · 토글 · 변수 · 정규식 원본을 보존해요. 현재 사용 프롬프트와 모델은 바뀌지
-                  않아요.
-                </p>
+                <summary>{t('transfer.m080')}</summary>
+                <p className="muted">{t('transfer.m081')}</p>
               </details>
               {unsupported && (
                 <label className="risu-import-choice risu-import-partial">
@@ -217,21 +253,16 @@ export function RisuPresetImport({
                       setError('');
                     }}
                   />
-                  <span>위의 미지원 항목을 적용하지 않고 가져오는 데 동의해요.</span>
+                  <span>{t('transfer.m043')}</span>
                 </label>
               )}
-              {uncertain && (
-                <NoticeBanner>
-                  서버의 완료 여부를 확인하지 못했어요. 파일과 선택을 유지한 같은 요청으로 다시
-                  확인하면 프롬프트가 중복 생성되지 않아요. 이 창을 닫아도 요청은 유지돼요.
-                </NoticeBanner>
-              )}
+              {uncertain && <NoticeBanner>{t('transfer.m082')}</NoticeBanner>}
               {result ? (
                 <div className="risu-import-result">
                   <CheckIcon size={28} aria-hidden="true" />
-                  <h3>프롬프트를 가져왔어요</h3>
+                  <h3>{t('transfer.m083')}</h3>
                   <p className="muted">{preview.title}</p>
-                  <p role="status">새 작문 프롬프트로 저장했어요.</p>
+                  <p role="status">{t('transfer.m084')}</p>
                   <button
                     type="button"
                     disabled={busy}
@@ -240,21 +271,21 @@ export function RisuPresetImport({
                       onImported(result.preset);
                     }}
                   >
-                    가져온 프롬프트 편집
+                    {t('transfer.m085')}
                   </button>
                 </div>
               ) : (
                 <button type="button" disabled={busy || !ready} onClick={() => void apply()}>
-                  {uncertain ? '같은 요청으로 다시 확인' : '작문 프롬프트로 저장'}
+                  {uncertain ? t('transfer.m058') : t('transfer.m086')}
                 </button>
               )}
             </>
           )}
-          {busy && <LoadingState presentation="inline" label="파일을 처리하고 있어요…" />}
-          {notice && <NoticeBanner>{notice}</NoticeBanner>}
+          {busy && <LoadingState presentation="inline" label={t('transfer.m063')} />}
+          {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
           {error && (
             <NoticeBanner className="error" tone="error">
-              {error}
+              {translateMessage(error)}
             </NoticeBanner>
           )}
         </section>

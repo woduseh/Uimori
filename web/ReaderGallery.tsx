@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { memo, useState, type ReactNode } from 'react';
 import { Sparkles } from 'lucide-react';
 import type { Content } from '../core/product.js';
@@ -6,11 +7,16 @@ import { Dialog } from './Dialog.js';
 import './reader-gallery.css';
 
 function Portrait({ url, title }: { url: string; title: string }) {
+  useI18n();
   const [failed, setFailed] = useState(false);
   return url && !failed ? (
     <img src={url} alt={title} loading="lazy" decoding="async" onError={() => setFailed(true)} />
   ) : (
-    <span className="reader-portrait-empty" role="img" aria-label={`${title} · 대표 이미지 없음`}>
+    <span
+      className="reader-portrait-empty"
+      role="img"
+      aria-label={t('reader.valueNoPortraitImage', { v0: title })}
+    >
       {Array.from(title.trim())[0] ?? '◇'}
     </span>
   );
@@ -27,11 +33,12 @@ function PortraitDialog({
   url: string;
   title: string;
 }) {
+  useI18n();
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      title={`${title} 대표 이미지`}
+      title={t('reader.valuePortraitImage', { v0: title })}
       className="reader-portrait-dialog"
     >
       {open && <Portrait key={url} url={url} title={title} />}
@@ -49,13 +56,14 @@ export function ReaderPortraitButton({
   title: string;
   children: ReactNode;
 }) {
+  useI18n();
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
         type="button"
         className="reader-bot-avatar"
-        aria-label={`${title} 대표 이미지 확대`}
+        aria-label={t('reader.enlargeValuePortraitImage', { v0: title })}
         disabled={!url}
         onClick={() => setOpen(true)}
       >
@@ -78,6 +86,7 @@ export const ReaderGallery = memo(function ReaderGallery({
   bot: Content;
   persona?: Content | null;
 }) {
+  useI18n();
   const [expanded, setExpanded] = useState<'bot' | 'persona' | null>(null);
   const selected = expanded === 'bot' ? bot : expanded === 'persona' ? persona : null;
   const selectedUrl = contentPortraitUrl(selected);
@@ -88,16 +97,16 @@ export const ReaderGallery = memo(function ReaderGallery({
         data-uimori-part={
           requestPersona ? 'request-portrait-group' : scene ? 'portrait-group' : 'gallery'
         }
-        aria-label="등장인물 갤러리"
+        aria-label={t('reader.characterGallery')}
       >
         <div className="reader-gallery-heading" aria-hidden="true">
-          <span>PORTRAITS</span>
+          <span>{t('reader.portraitsHeading')}</span>
           <Sparkles size={13} aria-hidden="true" />
         </div>
         {(
           [
-            ['bot', bot, '봇'],
-            ['persona', persona, '나의 페르소나'],
+            ['bot', bot, t('reader.bot')],
+            ['persona', persona, t('reader.myPersona')],
           ] as const
         ).map(([role, content, label]) => {
           if (!content || (requestPersona && role !== 'persona')) return null;
@@ -111,7 +120,7 @@ export const ReaderGallery = memo(function ReaderGallery({
               <button
                 className="reader-portrait-button"
                 type="button"
-                aria-label={`${content.title} 대표 이미지 확대`}
+                aria-label={t('reader.enlargeValuePortraitImage', { v0: content.title })}
                 disabled={!url}
                 onClick={() => setExpanded(role)}
               >
@@ -124,13 +133,13 @@ export const ReaderGallery = memo(function ReaderGallery({
             </figure>
           );
         })}
-        <p className="reader-gallery-caption">이미지를 눌러 크게 감상해요</p>
+        <p className="reader-gallery-caption">{t('reader.tapAnImageToViewItLarger')}</p>
       </aside>
       <PortraitDialog
         open={!!selected}
         onClose={() => setExpanded(null)}
         url={selectedUrl}
-        title={selected?.title ?? '등장인물'}
+        title={selected?.title ?? t('reader.character')}
       />
     </>
   );

@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { readingScrollport } from './theme-body-scroll.js';
 import { cutsFor, type Cut } from './illustration-progress.js';
@@ -57,6 +58,7 @@ export function useIllustrationLayout({
 }) {
   const [choices, setChoices] = useState<Record<string, boolean>>({});
   const items = illustrations.filter((item) => item.sourceRevision === sourceId);
+  useI18n();
   const cuts = cutsFor(items, sourceHash);
   const collapsed = (id: string) => choices[id] ?? savedCollapse(id) ?? defaultCollapsed;
   const setCollapsed = (id: string, value: boolean, persist = true) => {
@@ -95,13 +97,10 @@ export function useIllustrationLayout({
       !cut.job.display?.translation?.afterAnchor);
   const placementNote = (cut: Cut) => {
     if (cut === hero || after(cut)) return undefined;
-    if (cut.stale) return '원문이 수정되어 생성 당시 위치와 달라졌어요. 그림은 그대로 보관해요.';
-    if (!cut.job.target) return '문단 위치 정보가 없는 기존 삽화예요.';
-    if (needsMapping(cut))
-      return placementActive
-        ? '번역문에 삽화 위치를 연결하고 있어요. 그림은 그대로예요.'
-        : '번역문에서 이 장면의 위치를 찾지 못했어요. 위치만 다시 연결할 수 있어요.';
-    return '이 구간의 표시용 HTML 또는 본문 변환 때문에 문단 위치를 연결하지 못했어요.';
+    if (cut.stale) return t('visuals.m092');
+    if (!cut.job.target) return t('visuals.m093');
+    if (needsMapping(cut)) return placementActive ? t('visuals.m094') : t('visuals.m095');
+    return t('visuals.m096');
   };
   const renderCut = (cut: Cut) => (
     <IllustrationCard
@@ -129,8 +128,8 @@ export function useIllustrationLayout({
     header: items.length ? (
       <>
         {cuts.length > 0 && (
-          <div className="illustration-toolbar" aria-label="이 응답의 삽화">
-            <span>삽화 {cuts.length}컷</span>
+          <div className="illustration-toolbar" aria-label={t('visuals.m097')}>
+            <span>{t('visuals.cutCount', { count: cuts.length })}</span>
             {cuts.length > 1 && (
               <button
                 type="button"
@@ -150,7 +149,7 @@ export function useIllustrationLayout({
                   }
                 }}
               >
-                {allCollapsed ? '모두 펼치기' : '모두 접기'}
+                {allCollapsed ? t('visuals.m100') : t('visuals.m101')}
               </button>
             )}
           </div>
@@ -163,7 +162,7 @@ export function useIllustrationLayout({
             className="illustrations illustration-hero"
             data-testid="illustrations"
             data-placement="hero"
-            aria-label="대표 삽화"
+            aria-label={t('visuals.m102')}
           >
             {renderCut(hero)}
           </section>
@@ -178,7 +177,7 @@ export function useIllustrationLayout({
           data-testid="illustrations"
           data-placement="inline"
           data-after-anchor={anchor}
-          aria-label="이 순간의 삽화"
+          aria-label={t('visuals.m103')}
         >
           {matches.map(renderCut)}
         </section>
@@ -187,12 +186,12 @@ export function useIllustrationLayout({
     footer: fallback.length ? (
       <details className="illustration-supplement" data-testid="illustration-supplement">
         <summary>
-          본문 밖 삽화 {fallback.length}컷
-          {fallback.some((cut) => ['failed', 'interrupted'].includes(cut.job.status))
-            ? ' · 확인할 작업 있음'
-            : ''}
+          {t('visuals.fallbackCount', {
+            count: fallback.length,
+            attention: fallback.some((cut) => ['failed', 'interrupted'].includes(cut.job.status)),
+          })}
         </summary>
-        <p className="muted">본문에 연결하지 못한 삽화예요. 각 그림에 이유를 표시해요.</p>
+        <p className="muted">{t('visuals.m106')}</p>
         {fallback.some(needsMapping) && (
           <IllustrationPlacementButton
             sourceId={sourceId}
@@ -206,7 +205,7 @@ export function useIllustrationLayout({
           className="illustrations"
           data-testid="illustrations"
           data-placement="supplement"
-          aria-label="본문 밖 삽화"
+          aria-label={t('visuals.m104')}
         >
           {fallback.map(renderCut)}
         </section>
@@ -244,6 +243,7 @@ function TaskButtons({
   busy: boolean;
   act: (path: string) => Promise<void>;
 }) {
+  useI18n();
   return (
     <div className="illustration-actions">
       {illustrationActive(job) && (
@@ -253,7 +253,8 @@ function TaskButtons({
           disabled={busy}
           onClick={() => void act(`/illustrations/${job.id}/cancel`)}
         >
-          <CloseIcon size={16} aria-hidden="true" /> 취소
+          <CloseIcon size={16} aria-hidden="true" />
+          {t('visuals.m107')}
         </button>
       )}
       {illustrationReconcilable(job) && (
@@ -262,9 +263,9 @@ function TaskButtons({
           className="secondary"
           disabled={busy}
           onClick={() => void act(`/illustrations/${job.id}/reconcile`)}
-          title="이미 접수된 결과만 읽어요. 새로 그리지 않아요."
+          title={t('visuals.m108')}
         >
-          결과 확인
+          {t('visuals.m109')}
         </button>
       )}
       {job.error === 'ILLUSTRATION_CODEX_CONTENT_BLOCKED' && job.target && (
@@ -274,7 +275,7 @@ function TaskButtons({
           disabled={busy}
           onClick={() => void act(`/illustrations/${job.id}/regenerate`)}
         >
-          현재 프리셋으로 다시 그리기
+          {t('visuals.m110')}
         </button>
       )}
       {illustrationRetryable(job) && (
@@ -283,15 +284,17 @@ function TaskButtons({
           className="secondary"
           disabled={busy}
           onClick={() => void act(`/illustrations/${job.id}/retry`)}
-          title="새 요청이 전송되며 사용량이 추가될 수 있어요."
+          title={t('visuals.m111')}
         >
-          <RefreshIcon size={16} aria-hidden="true" /> 다시 요청
+          <RefreshIcon size={16} aria-hidden="true" />
+          {t('visuals.m112')}
         </button>
       )}
     </div>
   );
 }
 function IllustrationTask({ job, refresh, onError }: Actions & { job: Illustration }) {
+  useI18n();
   const { busy, act } = useIllustrationAction({ refresh, onError });
   const active = illustrationActive(job);
   return (
@@ -304,24 +307,24 @@ function IllustrationTask({ job, refresh, onError }: Actions & { job: Illustrati
       <p role={active ? 'status' : 'alert'}>
         {active && <RunningIcon size={16} aria-hidden="true" className="activity-spinner" />}
         {illustrationSkipped(job)
-          ? `삽화 생략 · ${job.diagnostic?.skipped}`
+          ? t('visuals.m113', { v0: job.diagnostic?.skipped ?? '' })
           : active
             ? job.status === 'queued'
               ? job.task === 'placement'
-                ? '번역 위치 연결을 기다리고 있어요.'
-                : '그릴 장면을 고를 차례를 기다리고 있어요.'
+                ? t('visuals.m114')
+                : t('visuals.m115')
               : job.task === 'placement'
-                ? '번역문 속 삽화 위치를 연결하고 있어요.'
-                : '그릴 장면을 고르고 있어요.'
+                ? t('visuals.m116')
+                : t('visuals.m117')
             : illustrationErrorMessage(job.error)}
       </p>
       <TaskButtons job={job} busy={busy} act={act} />
       {!active && (
         <DeleteButton
           path={`/illustrations/${job.id}`}
-          title="이 삽화 작업 기록"
-          label="작업 기록 삭제"
-          description="이 작업 기록만 삭제해요. 완료된 그림과 본문은 유지돼요."
+          title={t('visuals.m118')}
+          label={t('visuals.m119')}
+          description={t('visuals.m120')}
           iconOnly
           onDeleted={refresh}
           onError={onError}
@@ -331,6 +334,7 @@ function IllustrationTask({ job, refresh, onError }: Actions & { job: Illustrati
   );
 }
 function IllustrationFigure({ image, focus }: { image: IllustrationImage; focus?: string }) {
+  useI18n();
   const [expanded, setExpanded] = useState(false);
   const caption = image.caption || focus;
   return (
@@ -339,13 +343,13 @@ function IllustrationFigure({ image, focus }: { image: IllustrationImage; focus?
         <button
           type="button"
           className="illustration-preview-trigger"
-          title="삽화 크게 보기"
-          aria-label="삽화 크게 보기"
+          title={t('visuals.m121')}
+          aria-label={t('visuals.m121')}
           onClick={() => setExpanded(true)}
         >
           <img
             src={image.url}
-            alt={caption || '장면 삽화'}
+            alt={caption || t('visuals.m122')}
             width={image.width}
             height={image.height}
             loading="lazy"
@@ -356,14 +360,14 @@ function IllustrationFigure({ image, focus }: { image: IllustrationImage; focus?
       <Dialog
         open={expanded}
         onClose={() => setExpanded(false)}
-        title="삽화 크게 보기"
+        title={t('visuals.m121')}
         className="illustration-lightbox"
         wide
       >
         <figure>
           <img
             src={image.url}
-            alt={caption || '장면 삽화'}
+            alt={caption || t('visuals.m122')}
             width={image.width}
             height={image.height}
           />
@@ -388,6 +392,7 @@ function IllustrationCard({
   collapsed: boolean;
   onCollapse: (value: boolean, persist?: boolean) => void;
 }) {
+  useI18n();
   const { job, picture, stale } = cut;
   const active = illustrationActive(job);
   const { busy, act } = useIllustrationAction({ refresh, onError });
@@ -428,7 +433,7 @@ function IllustrationCard({
     };
   }, [detailOpen, job.id, job.status, job.updatedAt]);
   const imagesId = `illustration-images-${cut.key}`;
-  const label = hero ? '대표 삽화' : '삽화';
+  const label = hero ? t('visuals.m102') : t('visuals.m098');
   return (
     <article
       ref={element}
@@ -441,7 +446,7 @@ function IllustrationCard({
       <div className="illustration-head">
         <span className="illustration-title">
           <strong>{label}</strong>
-          {stale && <small>수정 전 원문의 삽화</small>}
+          {stale && <small>{t('visuals.m123')}</small>}
           {collapsed && <span>{job.target?.focus || picture?.images[0]?.caption}</span>}
         </span>
         <div className="illustration-actions">
@@ -452,9 +457,9 @@ function IllustrationCard({
             aria-controls={imagesId}
             onClick={() => onCollapse(!collapsed)}
           >
-            {collapsed ? '펼치기' : '접기'}
+            {collapsed ? t('visuals.m124') : t('visuals.m125')}
           </button>
-          <ActionMenu label="삽화 작업 메뉴" placement="top">
+          <ActionMenu label={t('visuals.m126')} placement="top">
             {!stale && job.target && job.display && (
               <button
                 type="button"
@@ -472,7 +477,7 @@ function IllustrationCard({
                   )
                 }
               >
-                {hero ? '본문 위치로 보내기' : '대표 삽화로 지정'}
+                {hero ? t('visuals.m127') : t('visuals.m128')}
               </button>
             )}
             {!stale && job.target && (
@@ -482,18 +487,18 @@ function IllustrationCard({
                 disabled={busy || active}
                 onClick={() => void act(`/illustrations/${job.id}/regenerate`)}
               >
-                현재 설정으로 다시 그리기
+                {t('visuals.m129')}
               </button>
             )}
             <button type="button" className="secondary" onClick={() => setDetailOpen(true)}>
-              생성 상세
+              {t('visuals.m130')}
             </button>
             {!active && (
               <DeleteButton
                 path={`/illustrations/${job.id}`}
-                title={job.target?.focus || picture?.images[0]?.caption || '이 삽화'}
-                label="삽화 삭제"
-                description="이 컷의 그림과 생성 기록을 삭제해요. 본문과 다른 컷은 유지돼요."
+                title={job.target?.focus || picture?.images[0]?.caption || t('visuals.m131')}
+                label={t('visuals.m132')}
+                description={t('visuals.m133')}
                 disabled={busy}
                 onDeleted={refresh}
                 onError={onError}
@@ -510,27 +515,29 @@ function IllustrationCard({
             role={active ? 'status' : 'alert'}
           >
             {active && <RunningIcon size={16} aria-hidden="true" className="activity-spinner" />}
-            {active
-              ? job.status === 'queued'
-                ? '그릴 차례를 기다리고 있어요.'
-                : job.diagnostic?.stage === 'content-check'
-                  ? 'JEV가 이미지 요청을 확인하고 있어요.'
-                  : job.diagnostic?.stage === 'prompt'
-                    ? '이 순간의 그림 설명을 준비하고 있어요.'
-                    : job.diagnostic?.stage === 'store'
-                      ? '완성된 그림을 저장하고 있어요.'
-                      : job.diagnostic?.stage === 'reconcile'
-                        ? '생성된 결과를 확인하고 있어요.'
-                        : '이 순간을 그리고 있어요.'
-              : illustrationErrorMessage(job.error)}
-            {picture && ' 기존 그림은 유지돼요.'}
+            {t('visuals.renderStatus', {
+              preserved: !!picture,
+              message: active
+                ? job.status === 'queued'
+                  ? t('visuals.m134')
+                  : job.diagnostic?.stage === 'content-check'
+                    ? t('visuals.m135')
+                    : job.diagnostic?.stage === 'prompt'
+                      ? t('visuals.m136')
+                      : job.diagnostic?.stage === 'store'
+                        ? t('visuals.m137')
+                        : job.diagnostic?.stage === 'reconcile'
+                          ? t('visuals.m138')
+                          : t('visuals.m139')
+                : illustrationErrorMessage(job.error),
+            })}
             {!active && job.error && <small> · {job.error}</small>}
           </p>
           <TaskButtons job={job} busy={busy} act={act} />
         </div>
       )}
       {illustrationSkipped(job) && (
-        <p className="muted">삽화를 생략했어요. {job.diagnostic?.skipped}</p>
+        <p className="muted">{t('visuals.m113', { v0: job.diagnostic?.skipped ?? '' })}</p>
       )}
       <div id={imagesId} hidden={collapsed}>
         {picture && ready && (
@@ -540,7 +547,7 @@ function IllustrationCard({
         )}
         {picture && ready && picture.images.length > 1 && (
           <details className="illustration-variations">
-            <summary>같은 순간의 다른 결과 {picture.images.length - 1}장</summary>
+            <summary>{t('visuals.variations', { count: picture.images.length - 1 })}</summary>
             <div className="illustration-images">
               {picture.images.slice(1).map((image) => (
                 <IllustrationFigure key={image.id} image={image} focus={job.target?.focus} />
@@ -552,53 +559,67 @@ function IllustrationCard({
       <Dialog
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        title="삽화 생성 상세"
+        title={t('visuals.m144')}
         className="source-info-dialog"
       >
         {detailError ? (
-          <LoadingState presentation="inline" loading={false} error={detailError} />
+          <LoadingState
+            presentation="inline"
+            loading={false}
+            error={translateMessage(detailError)}
+          />
         ) : detail ? (
           <div className="illustration-diagnostic">
             <p>
-              {illustrationGeneratorLabels[detail.generator] ?? '가져온 삽화'} ·{' '}
-              {detail.origin === 'automatic' ? '자동' : '직접 요청'} · {detail.attempt}번째 시도
+              {t('visuals.generationAttempt', {
+                generator: illustrationGeneratorLabels[detail.generator] ?? t('visuals.m145'),
+                origin: detail.origin,
+                attempt: detail.attempt,
+              })}
             </p>
             {detail.modelTitle && (
               <p>
-                {detail.generator === 'comfyui' ? '프롬프트 모델' : '모델'} · {detail.modelTitle}
+                {detail.generator === 'comfyui' ? t('visuals.m077') : t('visuals.m149')} ·{' '}
+                {detail.modelTitle}
               </p>
             )}
             {detail.usage && (
               <>
                 <IllustrationUsageLine usage={detail.usage} />
-                <small>
-                  이번 생성 작업의 호출 기준이에요. 공통 장면 선택·번역 위치 연결은 장면 작업 현황의
-                  삽화 호출과 토큰에서 확인해요.
-                </small>
+                <small>{t('visuals.m150')}</small>
               </>
             )}
             {detail.preset && (
               <p>
-                프리셋 · {detail.preset.title} · 수정 번호 {detail.preset.revision}
+                {t('visuals.presetRevision', {
+                  title: detail.preset.title,
+                  revision: detail.preset.revision,
+                })}
               </p>
             )}
             {detail.diagnostic?.contentCheck && (
               <p>
-                JEV 사전 판정 ·{' '}
-                {detail.diagnostic.contentCheck.status === 'blocked'
-                  ? '차단 · Codex 이미지 생성 요청 없음'
-                  : detail.diagnostic.contentCheck.status === 'allowed'
-                    ? '통과'
-                    : '미확인 · 프로바이더 판단에 맡겼어요.'}
-                {detail.diagnostic.contentCheck.code && ` (${detail.diagnostic.contentCheck.code})`}
+                {t('visuals.precheck', {
+                  status:
+                    detail.diagnostic.contentCheck.status === 'blocked'
+                      ? t('visuals.m154')
+                      : detail.diagnostic.contentCheck.status === 'allowed'
+                        ? t('visuals.m155')
+                        : t('visuals.m156'),
+                  code: detail.diagnostic.contentCheck.code
+                    ? ` (${detail.diagnostic.contentCheck.code})`
+                    : '',
+                })}
               </p>
             )}
             {detail.diagnostic?.codex?.unavailableReason && (
-              <p>Codex 응답 · {detail.diagnostic.codex.unavailableReason}</p>
+              <p>
+                {t('visuals.codexResponse', { reason: detail.diagnostic.codex.unavailableReason })}
+              </p>
             )}
             {detail.diagnostic?.prompt && (
               <>
-                <h4>그림 설명</h4>
+                <h4>{t('visuals.m158')}</h4>
                 <pre>{detail.diagnostic.prompt.prompt}</pre>
                 {detail.diagnostic.prompt.negativePrompt && (
                   <pre>{detail.diagnostic.prompt.negativePrompt}</pre>
@@ -610,12 +631,12 @@ function IllustrationCard({
               <pre>{JSON.stringify(detail.diagnostic.comfyui, null, 2)}</pre>
             )}
             {!!detail.diagnostic?.retries.length && (
-              <p>자동·수동 재요청 {detail.diagnostic.retries.length}회</p>
+              <p>{t('visuals.retries', { count: detail.diagnostic.retries.length })}</p>
             )}
-            {!detail.diagnostic && <p>저장된 추가 생성 정보가 없어요.</p>}
+            {!detail.diagnostic && <p>{t('visuals.m161')}</p>}
           </div>
         ) : (
-          <LoadingState presentation="inline" label="생성 정보를 불러오는 중이에요…" />
+          <LoadingState presentation="inline" label={t('visuals.m162')} />
         )}
       </Dialog>
     </article>

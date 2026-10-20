@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -33,6 +34,7 @@ export function IllustrationReferencesEditor({
   onSaveHandlerChange?: SettingsSaveRegistration;
   onError: (message: string) => void;
 }) {
+  useI18n();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [roles, setRoles] = useState<Record<string, IllustrationReferenceRole | ''>>({});
   const [dirty, setDirty] = useState(false);
@@ -71,14 +73,14 @@ export function IllustrationReferencesEditor({
   useSettingsSaveHandler(onSaveHandlerChange, async () => (!loaded ? false : save()));
   if (!loaded)
     return (
-      <section className="illustration-references" aria-label="삽화 참조 이미지">
-        <h4>삽화 참조 이미지</h4>
+      <section className="illustration-references" aria-label={t('visuals.m028')}>
+        <h4>{t('visuals.m028')}</h4>
         <LoadingState
           presentation="placeholder"
           loading={!loadError}
-          error={loadError}
-          label="삽화 참조 이미지를 불러오는 중이에요…"
-          errorLabel="삽화 참조 이미지를 불러오지 못했어요."
+          error={translateMessage(loadError)}
+          label={t('visuals.m029')}
+          errorLabel={t('visuals.m030')}
           onRetry={() => void refresh()}
         />
       </section>
@@ -102,7 +104,7 @@ export function IllustrationReferencesEditor({
       setLoaded({ ...loaded, revision: value.revision, references: value.references });
       dirtyDraft.current = false;
       setDirty(false);
-      setMessage('삽화 참조 이미지를 저장했어요. 다음 삽화 요청부터 사용해요.');
+      setMessage(uiMessage('visuals.m031'));
       return true;
     } catch (error) {
       onError((error as Error).message);
@@ -115,14 +117,11 @@ export function IllustrationReferencesEditor({
   return (
     <section
       className="illustration-references"
-      aria-label="삽화 참조 이미지"
+      aria-label={t('visuals.m028')}
       data-testid="illustration-references"
     >
-      <h4>삽화 참조 이미지</h4>
-      <small>
-        Codex 삽화 생성 때 함께 보내는 이미지예요. 캐릭터 디자인은 인물의 외형을, 그림체는 화풍만
-        참고하도록 구분해서 보내요. 8개까지 선택하고, ComfyUI 경로에서는 아직 사용하지 않아요.
-      </small>
+      <h4>{t('visuals.m028')}</h4>
+      <small>{t('visuals.m032')}</small>
       {loadError && (
         <NoticeBanner
           tone="error"
@@ -133,23 +132,22 @@ export function IllustrationReferencesEditor({
               disabled={saving}
               onClick={() => void refresh()}
             >
-              <RefreshIcon size={18} aria-hidden="true" /> 다시 불러오기
+              <RefreshIcon size={18} aria-hidden="true" />
+              {t('visuals.m033')}
             </button>
           }
         >
-          삽화 참조 이미지를 새로 불러오지 못했어요. 기존 선택은 유지했어요. {loadError}
+          {t('visuals.referenceRefreshError', { error: translateMessage(loadError) })}
         </NoticeBanner>
       )}
-      {!loaded.candidates.length && (
-        <p className="muted">이 채팅에 등록한 이미지나 장착한 자료의 이미지가 없어요.</p>
-      )}
+      {!loaded.candidates.length && <p className="muted">{t('visuals.m035')}</p>}
       <div className="asset-grid illustration-reference-options">
         {loaded.candidates.map((item) => (
           <figure key={item.ref}>
             <img src={item.url} alt={item.title} loading="lazy" />
             <figcaption>{item.title}</figcaption>
             <select
-              aria-label={`${item.title} 참조 역할`}
+              aria-label={t('visuals.m036', { v0: item.title })}
               value={roles[item.ref] ?? ''}
               disabled={saving || (!roles[item.ref] && selected.length >= 8)}
               onChange={(event) => {
@@ -162,9 +160,9 @@ export function IllustrationReferencesEditor({
                 setMessage('');
               }}
             >
-              <option value="">사용 안 함</option>
-              <option value="character">캐릭터 디자인</option>
-              <option value="style">그림체</option>
+              <option value="">{t('visuals.m037')}</option>
+              <option value="character">{t('visuals.m038')}</option>
+              <option value="style">{t('visuals.m039')}</option>
             </select>
           </figure>
         ))}
@@ -172,7 +170,7 @@ export function IllustrationReferencesEditor({
       <div className="form-actions settings-save-actions">
         <SaveButton
           type="button"
-          label="삽화 참조 저장"
+          label={t('visuals.m040')}
           aria-busy={saving}
           disabled={!dirty || saving}
           onClick={() => void save()}

@@ -1,3 +1,11 @@
+import {
+  t,
+  useI18n,
+  translateMessage,
+  formatNumber,
+  formatDate,
+  message as uiMessage,
+} from './i18n.js';
 import { RefreshIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
 import { LoadingState } from './LoadingState.js';
@@ -8,13 +16,27 @@ import type { CodexRuntimeStatus } from '../core/agent-runtime.js';
 import { api } from './api.js';
 
 const runtimeErrors: Record<string, string> = {
-  CODEX_DISABLED: '서버에서 Codex 연결 기능을 활성화해 주세요.',
-  CODEX_NOT_INSTALLED: '서버에 공식 Codex 실행기를 설치하고 실행 위치를 설정해 주세요.',
-  CODEX_EXECUTABLE_INVALID: '서버의 Codex 실행기 경로를 확인해 주세요.',
-  CODEX_VERSION_UNSUPPORTED: '서버의 공식 Codex 실행기를 지원하는 버전으로 업데이트해 주세요.',
-  CODEX_LOGIN_FAILED: 'Codex 로그인을 완료하지 못했어요. ChatGPT 로그인을 다시 시작해 주세요.',
-  CODEX_SUBSCRIPTION_REQUIRED: 'API 키 연결을 해제한 뒤 ChatGPT 구독으로 로그인해 주세요.',
-  CODEX_LOGIN_REQUIRED: 'ChatGPT 구독으로 Codex에 로그인해 주세요.',
+  get CODEX_DISABLED() {
+    return t('providers.m407');
+  },
+  get CODEX_NOT_INSTALLED() {
+    return t('providers.m408');
+  },
+  get CODEX_EXECUTABLE_INVALID() {
+    return t('providers.m409');
+  },
+  get CODEX_VERSION_UNSUPPORTED() {
+    return t('providers.m410');
+  },
+  get CODEX_LOGIN_FAILED() {
+    return t('providers.m411');
+  },
+  get CODEX_SUBSCRIPTION_REQUIRED() {
+    return t('providers.m412');
+  },
+  get CODEX_LOGIN_REQUIRED() {
+    return t('providers.m413');
+  },
 };
 
 type CodexLimit = CodexRuntimeStatus['limits'][number];
@@ -31,34 +53,46 @@ const planNames: Record<string, string> = {
 };
 
 function codexPlanLabel(plan: string | null): string {
-  if (!plan) return 'ChatGPT 구독';
+  if (!plan) return t('providers.m414');
   const normalized = plan.trim();
   return `ChatGPT ${planNames[normalized.toLowerCase()] ?? normalized}`;
 }
 
 function codexLimitLabel(limit: CodexLimit): string {
   const minutes = limit.windowDurationMins;
-  if (minutes === 10_080) return '주간 사용량';
-  if (minutes === 1_440) return '일일 사용량';
-  if (minutes && minutes % 1_440 === 0) return `${minutes / 1_440}일 사용량`;
-  if (minutes && minutes % 60 === 0) return `${minutes / 60}시간 사용량`;
-  if (minutes) return `${minutes}분 사용량`;
+  if (minutes === 10_080) return t('providers.m415');
+  if (minutes === 1_440) return t('providers.m416');
+  if (minutes && minutes % 1_440 === 0) return t('providers.m583', { value0: minutes / 1_440 });
+  if (minutes && minutes % 60 === 0) return t('providers.m584', { value0: minutes / 60 });
+  if (minutes) return t('providers.m585', { value0: minutes });
   const name = limit.name.replace(/\s*·\s*(?:primary|secondary)$/iu, '').trim();
-  return name && name.toLowerCase() !== 'codex' ? `${name} 사용량` : 'Codex 사용량';
+  return name && name.toLowerCase() !== 'codex'
+    ? t('providers.m586', { value0: name })
+    : t('providers.m417');
 }
 
 function codexResetLabel(resetsAt: number): { short: string; full: string } {
   const date = new Date(resetsAt * 1000);
   const sameYear = date.getFullYear() === new Date().getFullYear();
-  const short = new Intl.DateTimeFormat('ko-KR', {
+  const short = formatDate(date, {
     ...(sameYear ? {} : { year: 'numeric' }),
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).format(date);
-  return { short, full: date.toLocaleString('ko-KR') };
+  });
+  return {
+    short,
+    full: formatDate(date, {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+    }),
+  };
 }
 
 /** Authentication remains in the server's dedicated official Codex runtime. */
@@ -69,6 +103,7 @@ export function CodexAgentSettings({
   active?: boolean;
   onOpenModels?: () => void;
 }) {
+  useI18n();
   const [status, setStatus] = useState<CodexRuntimeStatus>();
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState(false),
@@ -95,10 +130,9 @@ export function CodexAgentSettings({
           timer = setTimeout(() => {
             void poll();
           }, 3000);
-        else if (result.login) setError('자동 확인을 멈췄어요. 로그인 상태를 다시 확인해 주세요.');
+        else if (result.login) setError(uiMessage('providers.m418'));
       } catch {
-        if (alive && current === version.current)
-          setError('Codex 상태를 확인하지 못했어요. 잠시 후 다시 확인해 주세요.');
+        if (alive && current === version.current) setError(uiMessage('providers.m419'));
       } finally {
         if (alive && current === version.current) setChecking(false);
       }
@@ -120,7 +154,7 @@ export function CodexAgentSettings({
       setStatus(await api<CodexRuntimeStatus>(path, {}, method));
       setRefresh((value) => value + 1);
     } catch {
-      setError('Codex 인증 작업을 완료하지 못했어요. 상태를 다시 확인해 주세요.');
+      setError(uiMessage('providers.m420'));
     } finally {
       locked.current = false;
       setBusy(false);
@@ -145,13 +179,13 @@ export function CodexAgentSettings({
   return (
     <section
       className={`codex-agent-settings${!status ? ' settings-loading-region' : ''}`}
-      aria-label="Codex 에이전트 연결"
+      aria-label={t('providers.m421')}
     >
       <div className="codex-agent-heading">
-        <p className="muted">Uimori 서버에서 사용하는 ChatGPT 구독 연결</p>
+        <p className="muted">{t('providers.m422')}</p>
         <IconButton
           icon={RefreshIcon}
-          label="Codex 상태 다시 확인"
+          label={t('providers.m423')}
           disabled={busy || checking}
           aria-busy={checking}
           className={checking ? 'codex-agent-refreshing' : ''}
@@ -159,88 +193,79 @@ export function CodexAgentSettings({
         />
       </div>
       {!status ? (
-        <LoadingState presentation="region" loading={!error} label="연결 상태를 확인하고 있어요…" />
+        <LoadingState presentation="region" loading={!error} label={t('providers.m424')} />
       ) : (
         <>
           {!(status.authenticated && status.authMode === 'chatgpt') && (
             <p role="status" className="codex-agent-status">
               {!status.available
-                ? '서버 설정 필요'
+                ? t('providers.m425')
                 : status.authMode === 'apikey'
-                  ? '구독 로그인 필요'
+                  ? t('providers.m426')
                   : status.login
-                    ? '로그인 대기 중'
-                    : '로그인 필요'}
+                    ? t('providers.m427')
+                    : t('providers.m428')}
             </p>
           )}
           {!status.available ? (
-            <p>
-              {(status.error && runtimeErrors[status.error]) ||
-                '서버의 Codex 실행 설정을 확인해 주세요.'}
-            </p>
+            <p>{(status.error && runtimeErrors[status.error]) || t('providers.m429')}</p>
           ) : status.authMode === 'apikey' ? (
-            <p>API 키 연결을 해제하고 ChatGPT로 로그인해 주세요.</p>
+            <p>{t('providers.m430')}</p>
           ) : status.error && status.error !== 'CODEX_LOGIN_REQUIRED' ? (
             <p className="error" role="alert">
-              {runtimeErrors[status.error] ?? 'Codex 실행 환경을 확인해 주세요.'}
+              {runtimeErrors[status.error] ?? t('providers.m431')}
             </p>
           ) : null}
           {!(status.authenticated && status.authMode === 'chatgpt') && (
             <details className="codex-connection-guide">
-              <summary>연결 절차</summary>
-              <ol className="codex-connection-steps" aria-label="Codex 연결 단계">
+              <summary>{t('providers.m432')}</summary>
+              <ol className="codex-connection-steps" aria-label={t('providers.m433')}>
                 <li>
-                  <strong>서버 준비</strong>
-                  <p>
-                    {status.available
-                      ? '서버 실행 환경이 준비됐어요.'
-                      : '서버 관리자가 실행 환경을 설정해야 해요. 아래 연결 도움말을 확인해 주세요.'}
-                  </p>
+                  <strong>{t('providers.m434')}</strong>
+                  <p>{status.available ? t('providers.m435') : t('providers.m436')}</p>
                 </li>
                 <li>
-                  <strong>로그인</strong>
+                  <strong>{t('providers.m437')}</strong>
                   <p>
                     {status.login
-                      ? '로그인 페이지에 아래 코드를 입력해 주세요.'
+                      ? t('providers.m438')
                       : status.available
-                        ? '이 서버에서 사용할 ChatGPT 계정으로 로그인해요.'
-                        : '서버가 준비되면 로그인할 수 있어요.'}
+                        ? t('providers.m439')
+                        : t('providers.m440')}
                   </p>
                 </li>
                 <li>
-                  <strong>연결 확인</strong>
-                  <p>로그인 완료 후 연결 상태와 사용량을 확인해요.</p>
+                  <strong>{t('providers.m441')}</strong>
+                  <p>{t('providers.m442')}</p>
                 </li>
               </ol>
             </details>
           )}
           {status.login && (
-            <div className="compact-card" role="region" aria-label="Codex 로그인 코드">
-              <strong>로그인 코드</strong>
+            <div className="compact-card" role="region" aria-label={t('providers.m443')}>
+              <strong>{t('providers.m444')}</strong>
               <code>{status.login.userCode}</code>
               {verificationUrl ? (
                 <a href={verificationUrl} target="_blank" rel="noopener noreferrer">
-                  로그인 페이지 열기
+                  {t('providers.m445')}
                 </a>
               ) : (
-                <p className="error">
-                  공식 로그인 주소를 확인하지 못했어요. 로그인을 취소하고 다시 시도해 주세요.
-                </p>
+                <p className="error">{t('providers.m446')}</p>
               )}
-              <small>페이지에 코드를 입력해 주세요. 로그인 완료를 자동으로 확인해요.</small>
+              <small>{t('providers.m447')}</small>
             </div>
           )}
           {status.authenticated && status.authMode === 'chatgpt' && (
-            <section className="settings-card codex-account-card" aria-label="Codex 구독 상태">
+            <section className="settings-card codex-account-card" aria-label={t('providers.m448')}>
               <header className="codex-account-summary">
                 <span className="codex-connected-status" role="status">
                   <span className="codex-status-dot" aria-hidden="true" />
-                  연결됨
+                  {t('providers.m449')}
                 </span>
                 <span className="codex-plan-badge">{codexPlanLabel(status.planType)}</span>
               </header>
               {status.limits.length > 0 ? (
-                <div className="codex-limit-list" aria-label="Codex 구독 사용량">
+                <div className="codex-limit-list" aria-label={t('providers.m450')}>
                   {status.limits.map((limit, index) => {
                     const usedPercent = Math.round(limit.usedPercent);
                     const remainingPercent = Math.max(0, 100 - usedPercent);
@@ -249,40 +274,44 @@ export function CodexAgentSettings({
                       <div className="codex-limit-row" key={`${limit.name}-${index}`}>
                         <div className="codex-limit-heading">
                           <strong>{codexLimitLabel(limit)}</strong>
-                          <span>{remainingPercent}% 남음</span>
+                          <span>{t('providers.m587', { value0: remainingPercent })}</span>
                         </div>
                         <div className="codex-limit-meter" aria-hidden="true">
                           <span style={{ width: `${remainingPercent}%` }} />
                         </div>
                         <div className="codex-limit-meta">
                           {reset ? (
-                            <small title={reset.full}>{reset.short} 초기화</small>
+                            <small title={reset.full}>
+                              {t('providers.m588', { value0: reset.short })}
+                            </small>
                           ) : (
-                            <small>초기화 시각 미확인</small>
+                            <small>{t('providers.m453')}</small>
                           )}
-                          <small>{usedPercent}% 사용</small>
+                          <small>{t('providers.m589', { value0: usedPercent })}</small>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               ) : (
-                <p className="codex-limit-unavailable muted">
-                  연결은 정상이에요. 현재 사용량 정보는 제공되지 않아요.
-                </p>
+                <p className="codex-limit-unavailable muted">{t('providers.m455')}</p>
               )}
               {status.credits && (
                 <div className="codex-limit-row codex-credit-row">
                   <div className="codex-limit-heading">
-                    <strong>사용 가능한 크레딧</strong>
+                    <strong>{t('providers.m456')}</strong>
                     <span>
                       {status.credits.unlimited
-                        ? '무제한'
+                        ? t('providers.m457')
                         : status.credits.balance !== null
-                          ? `${status.credits.balance.toLocaleString('ko-KR', { maximumFractionDigits: 8 })} 크레딧`
+                          ? t('providers.m590', {
+                              value0: formatNumber(status.credits.balance, {
+                                maximumFractionDigits: 8,
+                              }),
+                            })
                           : status.credits.hasCredits
-                            ? '사용 가능'
-                            : '없음'}
+                            ? t('providers.m458')
+                            : t('providers.m349')}
                     </span>
                   </div>
                 </div>
@@ -295,7 +324,7 @@ export function CodexAgentSettings({
               status.authMode === 'chatgpt' &&
               onOpenModels && (
                 <button type="button" onClick={onOpenModels}>
-                  프로바이더·모델
+                  {t('providers.m459')}
                 </button>
               )}
             {status.available &&
@@ -309,7 +338,7 @@ export function CodexAgentSettings({
                     void action('/agent-runtimes/codex/login');
                   }}
                 >
-                  ChatGPT로 로그인
+                  {t('providers.m460')}
                 </button>
               )}
             {status.login && (
@@ -321,7 +350,7 @@ export function CodexAgentSettings({
                   void action('/agent-runtimes/codex/login/cancel');
                 }}
               >
-                로그인 취소
+                {t('providers.m461')}
               </button>
             )}
             {(status.authenticated || status.authMode === 'apikey') && (
@@ -333,25 +362,19 @@ export function CodexAgentSettings({
                   void action('/agent-runtimes/codex/session', 'DELETE');
                 }}
               >
-                연결 해제
+                {t('providers.m462')}
               </button>
             )}
           </div>
         </>
       )}
       <details className="codex-agent-help">
-        <summary>연결 도움말</summary>
-        <p>
-          서버 관리자가 공식 Codex 실행기와 전용 로그인 환경을 설정해야 해요. 서버 설정 문서의 Codex
-          연결 절차를 확인해 주세요.
-        </p>
-        <p>로그인 후 ‘프로바이더·모델’에서 Codex 프로바이더·모델 프리셋을 저장해요.</p>
-        <p>
-          Codex는 Uimori 서버에서 실행해요. PC와 휴대폰에서 같은 구독 한도를 사용하며, API 키
-          방식으로 자동 전환하지 않아요.
-        </p>
+        <summary>{t('providers.m463')}</summary>
+        <p>{t('providers.m464')}</p>
+        <p>{t('providers.m465')}</p>
+        <p>{t('providers.m466')}</p>
       </details>
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </section>
   );
 }

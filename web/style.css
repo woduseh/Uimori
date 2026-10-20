@@ -648,21 +648,26 @@ input[type="checkbox"] {
   padding-top: 22px;
   border-top: 1px solid var(--line);
 }
-/* Scene header row: number, status glyph and badges on the left; the view toggle sits over
-   the right end of the row so it is never part of the activity summary. */
+/* Keep the view toggle separate from the activity summary. Natural wrapping accommodates
+   translated labels without reserving a fixed Korean-width space over the badges. */
 .scene-header {
-  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
   margin: 0 0 8px;
   color: var(--muted);
 }
 .scene-header > .turn-activity {
+  flex: 1 1 160px;
   margin: 0;
 }
 .scene-header > .turn-activity > summary,
 .scene-header-lead {
-  padding-right: 128px;
+  padding-right: 0;
 }
 .scene-header-lead {
+  flex: 1 1 160px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -671,12 +676,18 @@ input[type="checkbox"] {
   min-width: 0;
 }
 .scene-header-tools {
-  position: absolute;
-  top: 0;
-  right: 0;
-  height: var(--control-h);
+  flex: 0 1 auto;
+  max-width: 100%;
   display: flex;
   align-items: center;
+}
+.scene-header-tools .segmented {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.scene-header-tools .segmented button {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .folio {
   font-size: 13px;
@@ -690,7 +701,9 @@ input[type="checkbox"] {
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--muted);
-  white-space: nowrap;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .segmented {
   display: flex;

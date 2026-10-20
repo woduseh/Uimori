@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { LoadingState } from './LoadingState.js';
 import { RunningIcon } from './ui-icons.js';
@@ -12,6 +13,7 @@ export function ReaderLoadingState({
   error: string;
   onRetry: () => void;
 }) {
+  useI18n();
   const [visible, setVisible] = useState(false);
   const [slow, setSlow] = useState(false);
   useEffect(() => {
@@ -32,16 +34,16 @@ export function ReaderLoadingState({
         {loading && (
           <div className="reader-loading-retry" role="status">
             <RunningIcon size={18} className="activity-spinner" aria-hidden="true" />
-            <span>본문을 다시 불러오는 중이에요…</span>
+            <span>{t('reader.reloadingText')}</span>
           </div>
         )}
         <LoadingState
           presentation="placeholder"
           loading={loading}
           error={error}
-          errorLabel="본문을 불러오지 못했어요."
+          errorLabel={t('reader.couldNotLoadTheText')}
           onRetry={onRetry}
-          retryLabel="본문 다시 불러오기"
+          retryLabel={t('reader.reloadText')}
         />
       </div>
     );
@@ -51,7 +53,7 @@ export function ReaderLoadingState({
     <div className="reader-loading">
       <div className="reader-loading-status" role="status">
         <RunningIcon size={19} className="activity-spinner" aria-hidden="true" />
-        <span>본문을 불러오는 중이에요…</span>
+        <span>{t('reader.loadingText')}</span>
       </div>
       <div className="reader-loading-skeleton" aria-hidden="true">
         <div className="reader-loading-skeleton-title" />
@@ -68,7 +70,7 @@ export function ReaderLoadingState({
       </div>
       {slow && (
         <p className="reader-loading-slow" role="status">
-          평소보다 조금 오래 걸리고 있어요.
+          {t('reader.thisIsTakingALittleLongerThanUsual')}
         </p>
       )}
     </div>

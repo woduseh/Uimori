@@ -1,3 +1,12 @@
+import { legacyMessage } from './i18n.js';
+import {
+  t,
+  useI18n,
+  translateMessage,
+  formatNumber,
+  message as retainedMessage,
+  messageRef,
+} from './i18n.js';
 import { RisuImageHandoffFields } from './RisuImageHandoffFields.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -19,9 +28,59 @@ import { IconButton } from './IconButton.js';
 import { CheckIcon, UploadIcon } from './ui-icons.js';
 import './risu-import.css';
 
+/** Findings are host diagnostics; card text, names, and scripts never pass through this formatter. */
+function importFindingMessage(finding: RisuImportPreview['findings'][number]): string {
+  switch (finding.code) {
+    case 'asset-unavailable':
+      return t('transfer.finding.asset-unavailable');
+    case 'asset-invalid':
+      return t('transfer.finding.asset-invalid');
+    case 'asset-format':
+      return t('transfer.finding.asset-format');
+    case 'asset-role':
+      return t('transfer.finding.asset-role');
+    case 'lore-not-activated':
+      return t('transfer.finding.lore-not-activated');
+    case 'lore-decorator-position':
+      return t('transfer.finding.lore-decorator-position');
+    case 'disabled-lore':
+      return t('transfer.finding.disabled-lore');
+    case 'creator-notes-truncated':
+      return t('transfer.finding.creator-notes-truncated');
+    case 'native-lore-model':
+      return t('transfer.finding.native-lore-model');
+    case 'source-file-not-retained':
+      return t('transfer.finding.source-file-not-retained');
+    case 'native-risu':
+      return t('transfer.finding.native-risu');
+    case 'native-model-calls':
+      return t('transfer.finding.native-model-calls');
+    case 'native-variable-projection':
+      return t('transfer.finding.native-variable-projection');
+  }
+  if (finding.code.startsWith('lore-decorator:')) {
+    const decorator = finding.code.slice('lore-decorator:'.length);
+    return finding.level === 'unsupported'
+      ? t('transfer.finding.decoratorPosition', { decorator })
+      : t('transfer.finding.decoratorActivation', { decorator });
+  }
+  if (finding.code === 'lore-decorator-unknown') {
+    const match =
+      /^Risu가 인식하지 못하는 `@@` 지시문은 가져온 로어 본문에서 제외돼요\. Risu 원문에는 남아요: (.*?)(?: 외 (\d+)개)?$/su.exec(
+        finding.message
+      );
+    if (match)
+      return t('transfer.finding.decoratorUnknown', {
+        names: match[1],
+        more: Number(match[2] ?? 0),
+      });
+  }
+  return translateMessage(finding.message);
+}
+
 /** Always-on lore stays pinned; optional lore is selected by JEV. */
 function loreLoadingLabel(entry: RisuImportPreview['lore'][number]): string {
-  return entry.loading === 'pinned' ? '항상 포함' : 'JEV 관련성 판단 · 필요할 때 추가 조회';
+  return entry.loading === 'pinned' ? t('transfer.m001') : t('transfer.m002');
 }
 
 /** Ordinary close retains the review; explicit discard clears only an unapplied, certain draft. */
@@ -36,6 +95,7 @@ export function RisuImport({
   reload: () => Promise<void>;
   onContinueChat?: (chatId: string) => void;
 }) {
+  useI18n();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const active = useRef(false);
@@ -59,12 +119,12 @@ export function RisuImport({
   const selectedKind = preview?.kind ?? kind;
   const kindLabel =
     selectedKind === 'module'
-      ? '모듈'
+      ? t('transfer.m003')
       : selectedKind === 'persona'
-        ? '페르소나'
+        ? t('transfer.m004')
         : selectedKind === 'bot'
-          ? '봇'
-          : '자동';
+          ? t('transfer.m005')
+          : t('transfer.m006');
 
   function selectionChanged() {
     submission.current = null;
@@ -83,15 +143,17 @@ export function RisuImport({
     setNotice('');
     try {
       if (!/\.(charx|jpe?g|png|risum|json|zip)$/i.test(file.name))
-        throw new Error('v3 CHARX·JPEG·PNG·JSON, .risum 또는 모듈 프로젝트 ZIP을 선택해 주세요.');
-      if (file.size === 0) throw new Error('빈 파일은 가져올 수 없어요.');
+        throw new Error(legacyMessage('transfer.m007'));
+      if (file.size === 0) throw new Error(legacyMessage('transfer.m008'));
       if (file.size > RISU_IMPORT_MAX_UPLOAD_BYTES)
         throw new Error(
-          `파일은 ${Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024)} MiB 이하여야 해요.`
+          retainedMessage('transfer.d001', {
+            v0: Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024),
+          })
         );
       if (file.size > RISU_IMPORT_MAX_BYTES)
         setNotice(
-          `${Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024)} MiB가 넘는 파일이라 먼저 올린 뒤 확인해요. 원본 사본은 앱에 보관하지 않아요.`
+          retainedMessage('transfer.d002', { v0: Math.round(RISU_IMPORT_MAX_BYTES / 1024 / 1024) })
         );
       const nextSource = await readSource(file, controller.signal);
       const nextPreview = await api<RisuImportPreview>(
@@ -115,9 +177,14 @@ export function RisuImport({
       submission.current = null;
       requestKey.current = null;
     } catch (cause) {
-      if (controller.signal.aborted) setNotice('자료 확인을 취소했어요.');
+      if (controller.signal.aborted) setNotice(retainedMessage('transfer.m009'));
       else
-        setError(`${(cause as Error).message}${preview ? ' 앞서 확인한 파일은 유지했어요.' : ''}`);
+        setError(
+          retainedMessage('transfer.reviewError', {
+            error: messageRef((cause as Error).message),
+            retained: !!preview,
+          })
+        );
     } finally {
       preparation.current = null;
       setPreparing(false);
@@ -153,7 +220,7 @@ export function RisuImport({
       setAllowPartial(false);
       selectionChanged();
     } catch (cause) {
-      setError(`${(cause as Error).message} 앞서 확인한 파일과 자료 종류는 유지했어요.`);
+      setError(retainedMessage('transfer.d003', { v0: messageRef((cause as Error).message) }));
     } finally {
       active.current = false;
       setBusy(false);
@@ -168,17 +235,17 @@ export function RisuImport({
         setOpen(false);
         onContinueChat(imported.chat.id);
       } else if (imported.chat) {
-        setNotice('봇과 새 채팅을 만들었어요. 채팅 목록에서 이어갈 수 있어요.');
+        setNotice(retainedMessage('transfer.m011'));
       }
     } catch {
       setNotice(
         preview?.kind === 'module'
-          ? '모듈 등록은 완료했어요. 서재를 새로고침한 뒤 기존 채팅에 장착해 주세요.'
+          ? retainedMessage('transfer.m012')
           : preview?.kind === 'persona'
-            ? '페르소나 등록은 완료했어요. 서재를 새로고침한 뒤 사용할 수 있어요.'
+            ? retainedMessage('transfer.m013')
             : imported.chat
-              ? '가져오기는 완료했어요. 목록을 새로고침한 뒤 채팅을 열어 주세요.'
-              : '봇 등록은 완료했어요. 서재를 새로고침한 뒤 사용할 수 있어요.'
+              ? retainedMessage('transfer.m014')
+              : retainedMessage('transfer.m015')
       );
     }
   }
@@ -262,7 +329,7 @@ export function RisuImport({
     <>
       {showTrigger && (
         <IconButton
-          label="자료 가져오기"
+          label={t('transfer.m016')}
           className="secondary"
           icon={UploadIcon}
           onClick={() => {
@@ -273,30 +340,28 @@ export function RisuImport({
       )}
       <Dialog
         open={open}
-        title="자료 가져오기"
+        title={t('transfer.m016')}
         onClose={() => setOpen(false)}
         className="risu-import-dialog"
         wide
       >
         <section
           className={`risu-import-body${result ? ' complete' : ''}`}
-          aria-label="Risu 파일 검토"
+          aria-label={t('transfer.m017')}
           aria-busy={busy}
         >
-          {!preview && (
-            <p className="muted">
-              파일을 선택하면 내용을 미리 확인할 수 있어요. 원본은 변경하지 않아요.
-            </p>
-          )}
+          {!preview && <p className="muted">{t('transfer.m018')}</p>}
           <label className={`risu-import-file${preview ? ' risu-import-file-ready' : ''}`}>
             <span>
               {preview
                 ? source?.name
-                : `v3 CHARX·JPEG·PNG·JSON · .risum · 모듈 ZIP · 최대 ${Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024)} MiB`}
+                : t('transfer.d004', {
+                    v0: Math.round(RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024),
+                  })}
             </span>
             <input
               type="file"
-              aria-label="Risu 파일 선택"
+              aria-label={t('transfer.m019')}
               accept=".charx,.jpg,.jpeg,.png,.risum,.json,.zip,application/json,application/zip,image/png,image/jpeg"
               disabled={busy || uncertain}
               onChange={(event) => {
@@ -305,38 +370,31 @@ export function RisuImport({
                 if (file) void prepare(file);
               }}
             />
-            {preview && <span className="risu-import-change">파일 변경</span>}
+            {preview && <span className="risu-import-change">{t('transfer.m020')}</span>}
           </label>
           <details className="risu-import-processing">
             <summary>
               {preview
-                ? `${kindLabel}${preview.kind === 'bot' ? '으로' : '로'} 가져오기 · 변경`
-                : `자료 종류 · ${kindLabel}`}
+                ? t('transfer.importTypeChange', { kind: preview.kind })
+                : t('transfer.d005', { v0: kindLabel })}
             </summary>
             <div>
               <label>
-                {preview ? '자료 종류' : '가져올 자료 종류'}
+                {preview ? t('transfer.m023') : t('transfer.m024')}
                 <select
                   value={kind}
                   disabled={locked}
                   onChange={(event) => void changeKind(event.target.value as RisuImportKind | '')}
                 >
-                  <option value="">자동</option>
-                  <option value="bot">봇</option>
-                  <option value="persona">페르소나</option>
-                  <option value="module">모듈</option>
+                  <option value="">{t('transfer.m006')}</option>
+                  <option value="bot">{t('transfer.m005')}</option>
+                  <option value="persona">{t('transfer.m004')}</option>
+                  <option value="module">{t('transfer.m003')}</option>
                 </select>
               </label>
-              <p className="muted">
-                자동은 카드를 봇으로, 모듈 파일을 모듈로 가져와요. 카드를 페르소나로 쓰거나 CharX를
-                모듈로 쓰려면 종류를 바꿔 주세요.
-              </p>
-              {preview && preview.lore.length > 0 && (
-                <p className="muted">사용 중인 로어도 함께 가져와요.</p>
-              )}
-              <p className="muted">
-                원본 파일은 변경하지 않으며, 파일의 코드나 외부 URL을 자동으로 실행하지 않아요.
-              </p>
+              <p className="muted">{t('transfer.m025')}</p>
+              {preview && preview.lore.length > 0 && <p className="muted">{t('transfer.m026')}</p>}
+              <p className="muted">{t('transfer.m027')}</p>
             </div>
           </details>
           {preview && (
@@ -346,37 +404,37 @@ export function RisuImport({
                 {preview.description && <p>{preview.description}</p>}
                 <dl className="risu-import-counts">
                   <div>
-                    <dt>로어</dt>
-                    <dd>{preview.summary.lore}</dd>
+                    <dt>{t('transfer.m028')}</dt>
+                    <dd>{formatNumber(preview.summary.lore)}</dd>
                   </div>
                   <div>
-                    <dt>첫 메시지</dt>
-                    <dd>{preview.summary.starts}</dd>
+                    <dt>{t('transfer.m029')}</dt>
+                    <dd>{formatNumber(preview.summary.starts)}</dd>
                   </div>
                   <div>
-                    <dt>이미지</dt>
-                    <dd>{preview.summary.images}</dd>
+                    <dt>{t('transfer.m030')}</dt>
+                    <dd>{formatNumber(preview.summary.images)}</dd>
                   </div>
                 </dl>
               </div>
               {preview.findings.length > 0 && (
                 <section
                   className={`risu-import-findings${unsupported ? ' warn' : ''}`}
-                  aria-label="가져오기 지원 범위"
+                  aria-label={t('transfer.m031')}
                 >
-                  <h3>{unsupported ? '실행 전에 확인이 필요해요' : '가져오기 안내'}</h3>
+                  <h3>{unsupported ? t('transfer.m032') : t('transfer.m033')}</h3>
                   <ul>
                     {preview.findings.map((finding, index) => (
                       <li key={`${finding.code}:${index}`}>
                         <strong>
                           {finding.level === 'unsupported'
-                            ? '미지원'
+                            ? t('transfer.m034')
                             : finding.level === 'warning'
-                              ? '확인 필요'
-                              : '안내'}
+                              ? t('transfer.m035')
+                              : t('transfer.m036')}
                           {' · '}
                         </strong>
-                        {finding.message}
+                        {importFindingMessage(finding)}
                       </li>
                     ))}
                   </ul>
@@ -395,14 +453,15 @@ export function RisuImport({
               )}
               {preview.lore.length > 0 && (
                 <details className="risu-import-preview" key={preview.digest}>
-                  <summary>로어 미리보기 ({preview.lore.length}개)</summary>
+                  <summary>{t('transfer.lorePreview', { count: preview.lore.length })}</summary>
                   {preview.lore.map((entry) => (
                     <details key={entry.id} className="risu-import-lore-entry">
-                      <summary>{entry.title || '제목 없는 로어'}</summary>
+                      <summary>{entry.title || t('transfer.m039')}</summary>
                       <small className="muted">
-                        {entry.enabled ? '사용 중' : '사용 안 함'} · {loreLoadingLabel(entry)}
+                        {entry.enabled ? t('transfer.m040') : t('transfer.m041')} ·{' '}
+                        {loreLoadingLabel(entry)}
                       </small>
-                      <p className="risu-import-lore-text">{entry.text || '(내용 없음)'}</p>
+                      <p className="risu-import-lore-text">{entry.text || t('transfer.m042')}</p>
                     </details>
                   ))}
                 </details>
@@ -417,7 +476,7 @@ export function RisuImport({
                       selectionChanged();
                     }}
                   />
-                  <span>위의 미지원 항목을 적용하지 않고 가져오는 데 동의해요.</span>
+                  <span>{t('transfer.m043')}</span>
                 </label>
               )}
               {preview.kind === 'bot' && !result && (
@@ -430,54 +489,47 @@ export function RisuImport({
                       selectionChanged();
                     }}
                   />
-                  <span>가져온 뒤 새 채팅도 만들기</span>
+                  <span>{t('transfer.m044')}</span>
                 </label>
               )}
               {uncertain && (
                 <NoticeBanner>
-                  서버의 완료 여부를 확인하지 못했어요. 파일과 선택을 유지한 같은 요청으로 다시
-                  확인하면{' '}
-                  {preview.kind === 'module'
-                    ? '모듈이'
-                    : preview.kind === 'persona'
-                      ? '페르소나가'
-                      : createChat
-                        ? '봇과 채팅이'
-                        : '봇이'}{' '}
-                  중복 생성되지 않아요. 이 창을 닫아도 요청은 유지돼요.
+                  {t('transfer.uncertainResource', {
+                    kind: preview.kind === 'bot' && createChat ? 'chat' : preview.kind,
+                  })}
                 </NoticeBanner>
               )}
               {result ? (
                 <div className="risu-import-result">
                   <CheckIcon size={28} aria-hidden="true" />
-                  <h3>자료를 가져왔어요</h3>
+                  <h3>{t('transfer.m051')}</h3>
                   <p className="muted">{preview.title}</p>
                   <p role="status">
                     {preview.kind === 'module'
-                      ? '모듈을 서재에 등록했어요. 기존 채팅의 봇·페르소나·모듈 설정에서 장착해 주세요.'
+                      ? t('transfer.m052')
                       : preview.kind === 'persona'
-                        ? '페르소나를 서재에 등록했어요. 새 채팅이나 기존 채팅에서 선택할 수 있어요.'
+                        ? t('transfer.m053')
                         : result.chat
-                          ? '봇과 새 채팅을 가져왔어요.'
+                          ? t('transfer.m054')
                           : submission.current?.createChat === false
-                            ? '봇을 서재에 등록했어요. 서재나 왼쪽 봇 목록에서 원할 때 채팅을 시작할 수 있어요.'
-                            : '자료 가져오기는 완료됐어요. 연결된 채팅이 삭제되어 열 수 없어요.'}
+                            ? t('transfer.m055')
+                            : t('transfer.m056')}
                   </p>
                   {result.chat && onContinueChat && (
                     <button type="button" disabled={busy} onClick={() => void openSavedChat()}>
-                      새 채팅 열기
+                      {t('transfer.m057')}
                     </button>
                   )}
                 </div>
               ) : (
                 <button type="button" disabled={busy || !ready} onClick={() => void apply()}>
                   {uncertain
-                    ? '같은 요청으로 다시 확인'
+                    ? t('transfer.m058')
                     : preview.kind !== 'bot'
-                      ? `${preview.kind === 'module' ? '모듈' : '페르소나'} 가져오기`
+                      ? t('transfer.importKind', { kind: preview.kind })
                       : createChat
-                        ? '가져오고 새 채팅 열기'
-                        : '봇 가져오기'}
+                        ? t('transfer.m059')
+                        : t('transfer.m060')}
                 </button>
               )}
               {!result && (
@@ -485,24 +537,24 @@ export function RisuImport({
                   type="button"
                   className="secondary"
                   disabled={busy || uncertain}
-                  title={uncertain ? '가져오기 완료 여부를 먼저 확인해 주세요.' : undefined}
+                  title={uncertain ? t('transfer.m061') : undefined}
                   onClick={discardAndClose}
                 >
-                  가져오지 않고 닫기
+                  {t('transfer.m062')}
                 </button>
               )}
             </>
           )}
-          {busy && <LoadingState presentation="inline" label="파일을 처리하고 있어요…" />}
+          {busy && <LoadingState presentation="inline" label={t('transfer.m063')} />}
           {preparing && (
             <button type="button" onClick={() => preparation.current?.abort()}>
-              자료 확인 취소
+              {t('transfer.m064')}
             </button>
           )}
-          {notice && <NoticeBanner>{notice}</NoticeBanner>}
+          {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
           {error && (
             <NoticeBanner className="error" tone="error">
-              {error}
+              {translateMessage(error)}
             </NoticeBanner>
           )}
         </section>

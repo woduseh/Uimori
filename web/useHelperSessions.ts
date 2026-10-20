@@ -1,3 +1,4 @@
+import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope } from '../core/helper.js';
 import { activityChangedEvent, api, ApiError } from './api.js';
@@ -62,9 +63,7 @@ function pendingHelperCreation(key: string, scope: HelperScope): PendingHelperCr
       // Never send a new request before its retry key has been stored.
     }
   }
-  throw new Error(
-    '브라우저에 대화 생성 요청을 보관하지 못했어요. 저장 공간이나 사이트 저장소 설정을 확인한 뒤 다시 시도해 주세요.'
-  );
+  throw new Error(uiMessage('helpers.m209'));
 }
 function forgetHelperCreation(key: string, pending: PendingHelperCreation | undefined) {
   try {
@@ -87,6 +86,7 @@ export function selectedHelperSession(scope: HelperScope) {
 
 /** Session selection belongs to the chat; drafts and event cursors belong to each session. */
 export function useHelperSessions(open: boolean, scope: HelperScope) {
+  useI18n();
   const group = helperGroupKey(scope);
   const scopeKey = JSON.stringify(scope);
   const [lists, setLists] = useState<Record<string, HelperSession[]>>({});
@@ -186,7 +186,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
         if (!disposed)
           setErrors((old) => ({
             ...old,
-            [group]: cause instanceof Error ? cause.message : '세션을 불러오지 못했어요.',
+            [group]: cause instanceof Error ? cause.message : uiMessage('helpers.m210'),
           }));
       } finally {
         polling = false;
@@ -266,7 +266,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
       if (alive.current)
         setErrors((old) => ({
           ...old,
-          [group]: cause instanceof Error ? cause.message : '세션을 만들지 못했어요.',
+          [group]: cause instanceof Error ? cause.message : uiMessage('helpers.m211'),
         }));
     } finally {
       createLock.current = false;

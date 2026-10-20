@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
@@ -42,13 +43,14 @@ function OpeningPreview({
   opening: PackageStartSnapshot;
   userName?: string;
 }) {
+  useI18n();
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="new-story-opening-preview">
       <details onToggle={(event) => setExpanded(event.currentTarget.open)}>
-        <summary>미리보기</summary>
+        <summary>{t('transfer.m310')}</summary>
         {expanded && (
-          <div className="new-story-opening-full" aria-label="첫 메시지 전체 미리보기">
+          <div className="new-story-opening-full" aria-label={t('transfer.m311')}>
             <RisuStartPreview content={content} startId={opening.startId} userName={userName} />
           </div>
         )}
@@ -74,6 +76,7 @@ export function NewStory({
   onModelSettings: () => void;
   onCreated: (chat: Chat) => Promise<void>;
 }) {
+  useI18n();
   const { workspace, error: workspaceError, refresh: refreshWorkspace } = usePromptWorkspace();
   const [refreshingWorkspace, setRefreshingWorkspace] = useState(false);
   async function reloadWorkspace() {
@@ -126,7 +129,7 @@ export function NewStory({
         const selected = newChatPersona(defaults.persona, initialFolder?.defaultPersona);
         const current = selected && library.contents.find((item) => item.id === selected.id);
         if (selected && !current) {
-          setDefaultsError('기본 페르소나가 삭제됐어요. 시작 페르소나를 직접 선택해 주세요.');
+          setDefaultsError(retainedMessage('transfer.m312'));
           setPersona('');
         } else {
           setPersona(current ? refValue(current) : '');
@@ -358,8 +361,8 @@ export function NewStory({
     }
   }
   const additionalSummary = [
-    modules.length ? `모듈 ${modules.length}개` : '',
-    title.trim() ? '이름 지정됨' : '',
+    modules.length ? t('transfer.d028', { v0: modules.length }) : '',
+    title.trim() ? t('transfer.m321') : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -373,22 +376,20 @@ export function NewStory({
     >
       <div className="new-story-fields">
         {initialBot ? (
-          <div className="new-story-bot" aria-label="채팅의 봇">
+          <div className="new-story-bot" aria-label={t('transfer.m322')}>
             <ContentAvatar content={activeBot ?? initialBot} />
             <strong>{initialBot.title}</strong>
             <p className="muted">
-              {initialFolder
-                ? `${initialFolder.title} 폴더에서 새 채팅을 시작해요.`
-                : '이 봇과 새 채팅을 시작해요.'}
+              {initialFolder ? t('transfer.d029', { v0: initialFolder.title }) : t('transfer.m323')}
             </p>
           </div>
         ) : (
           <>
-            <p className="muted">함께할 봇을 고르면 현재 전역 모델과 프롬프트로 시작해요.</p>
+            <p className="muted">{t('transfer.m324')}</p>
             <ContentPicker
               library={{ ...library, contents }}
               role="bot"
-              label="시작할 봇"
+              label={t('transfer.m325')}
               value={bot}
               selectedContent={activeBot}
               onChange={(value) => {
@@ -403,7 +404,7 @@ export function NewStory({
         <ContentPicker
           library={{ ...library, contents }}
           role="persona"
-          label="시작 페르소나"
+          label={t('transfer.m326')}
           value={persona}
           selectedContent={activePersona}
           onChange={(value) => {
@@ -412,40 +413,40 @@ export function NewStory({
             setPersona(value);
           }}
           allowNone
-          noneLabel="페르소나 없음"
+          noneLabel={t('transfer.m327')}
           disabled={locked}
         />
         {!defaultsReady && !defaultsError && (
-          <LoadingState presentation="inline" label="기본 페르소나를 불러오는 중이에요…" />
+          <LoadingState presentation="inline" label={t('transfer.m328')} />
         )}
         {defaultsError && (
           <p className="error" role="alert">
-            {defaultsError}
+            {translateMessage(defaultsError)}
           </p>
         )}
-        <div className="new-story-main-model" aria-label="새 채팅에 사용할 전역 설정">
+        <div className="new-story-main-model" aria-label={t('transfer.m329')}>
           {!workspace ? (
             <LoadingState
               presentation="inline"
               loading={refreshingWorkspace || !workspaceError}
-              error={refreshingWorkspace ? '' : workspaceError}
-              errorLabel="전역 모델과 프롬프트를 불러오지 못했어요."
-              label="전역 모델과 프롬프트를 불러오는 중이에요…"
+              error={refreshingWorkspace ? '' : translateMessage(workspaceError)}
+              errorLabel={t('transfer.m330')}
+              label={t('transfer.m331')}
               onRetry={() => void reloadWorkspace()}
             />
           ) : (
             <>
               <dl className="new-story-settings-summary">
                 <div>
-                  <dt>본문 모델</dt>
+                  <dt>{t('transfer.m332')}</dt>
                   <dd>
-                    {mainModel?.title ?? '미지정'} <span>· 전역 따름</span>
+                    {mainModel?.title ?? t('transfer.m333')} <span>{t('transfer.m334')}</span>
                   </dd>
                 </div>
                 <div>
-                  <dt>작문 프롬프트</dt>
+                  <dt>{t('transfer.m074')}</dt>
                   <dd>
-                    {workspace.main.title} <span>· 전역 따름</span>
+                    {workspace.main.title} <span>{t('transfer.m334')}</span>
                   </dd>
                 </div>
               </dl>
@@ -458,21 +459,20 @@ export function NewStory({
                       disabled={locked}
                       onClick={onModelSettings}
                     >
-                      전역 모델 설정
+                      {t('transfer.m335')}
                     </button>
                   }
                 >
-                  본문 생성 전에 사용 가능한 전역 본문 모델을 선택해 주세요. 채팅만 먼저 만들 수도
-                  있어요.
+                  {t('transfer.m336')}
                 </NoticeBanner>
               )}
               {mainAvailable && (
                 <button type="button" className="ghost" disabled={locked} onClick={onModelSettings}>
-                  전역 모델 설정
+                  {t('transfer.m335')}
                 </button>
               )}
               {refreshingWorkspace && (
-                <LoadingState presentation="inline" label="전역 설정을 다시 불러오는 중이에요…" />
+                <LoadingState presentation="inline" label={t('transfer.m337')} />
               )}
               {workspaceError && !refreshingWorkspace && (
                 <NoticeBanner
@@ -483,26 +483,23 @@ export function NewStory({
                       className="secondary"
                       onClick={() => void reloadWorkspace()}
                     >
-                      다시 불러오기
+                      {t('transfer.m338')}
                     </button>
                   }
                 >
-                  전역 설정을 새로 확인하지 못했어요. 앞서 불러온 설정을 유지했어요.{' '}
-                  {workspaceError}
+                  {t('transfer.m339')} {translateMessage(workspaceError)}
                 </NoticeBanner>
               )}
             </>
           )}
         </div>
-        {packageLoading && (
-          <LoadingState presentation="inline" label="시작 자료를 불러오는 중이에요…" />
-        )}
+        {packageLoading && <LoadingState presentation="inline" label={t('transfer.m340')} />}
         {!!activeBot?.package?.starts?.length && (
-          <section className="new-story-opening" aria-label="첫 메시지">
+          <section className="new-story-opening" aria-label={t('transfer.m029')}>
             <label>
-              첫 메시지
+              {t('transfer.m029')}
               <select
-                aria-label="첫 메시지 선택"
+                aria-label={t('transfer.m341')}
                 value={start}
                 disabled={locked || packageLoading}
                 onChange={(event) => {
@@ -511,7 +508,7 @@ export function NewStory({
                   setStart(id);
                 }}
               >
-                <option value="">첫 메시지 없이 시작</option>
+                <option value="">{t('transfer.m342')}</option>
                 {activeBot.package.starts.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.title}
@@ -529,35 +526,35 @@ export function NewStory({
             )}
             {openingError && (
               <p className="error" role="alert">
-                {openingError}
+                {translateMessage(openingError)}
               </p>
             )}
           </section>
         )}
         <details className="new-story-options">
           <summary>
-            <span>추가 설정</span>
-            <small>{additionalSummary || '모듈 · 채팅 제목'}</small>
+            <span>{t('transfer.m343')}</span>
+            <small>{additionalSummary || t('transfer.m344')}</small>
           </summary>
           <div className="new-story-options-content">
             <fieldset>
-              <legend>함께 사용할 모듈</legend>
+              <legend>{t('transfer.m345')}</legend>
               {modules.map((key) => {
                 const item = activeModules.find((item) => refValue(item) === key);
                 return (
                   <div className="new-story-module" key={key}>
-                    <ContentAvatar content={item} title="모듈 확인 중" />
-                    <span>{item?.title ?? '모듈 확인 중…'}</span>
+                    <ContentAvatar content={item} title={t('transfer.m346')} />
+                    <span>{item?.title ?? t('transfer.m347')}</span>
                     <button
                       type="button"
                       className="ghost"
                       disabled={locked}
-                      aria-label={`${item?.title ?? '모듈'} 선택 해제`}
+                      aria-label={t('transfer.d030', { v0: item?.title ?? t('transfer.m003') })}
                       onClick={() =>
                         setModules((values) => values.filter((value) => value !== key))
                       }
                     >
-                      해제
+                      {t('transfer.m348')}
                     </button>
                   </div>
                 );
@@ -568,7 +565,7 @@ export function NewStory({
                   contents: contents.filter((item) => item.hasPackage || item.package),
                 }}
                 role="module"
-                label="추가할 시작 모듈"
+                label={t('transfer.m349')}
                 value=""
                 onChange={(value) =>
                   setModules((values) => (values.includes(value) ? values : [...values, value]))
@@ -578,9 +575,10 @@ export function NewStory({
               />
             </fieldset>
             <label>
-              채팅 제목 <small>비워 두면 자동으로 정해요</small>
+              {t('transfer.m221')}
+              <small>{t('transfer.m350')}</small>
               <input
-                aria-label="새 채팅 제목"
+                aria-label={t('transfer.m351')}
                 value={title}
                 maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}
@@ -591,8 +589,8 @@ export function NewStory({
         </details>
         {error && (
           <p className="error" role="alert">
-            {error}
-            {created.current && ' 채팅은 하나만 만들었어요. 설정 저장만 다시 시도해요.'}
+            {translateMessage(error)}
+            {created.current && t('transfer.m352')}
           </p>
         )}
       </div>
@@ -603,7 +601,7 @@ export function NewStory({
             busy || uncertain.current || !bot || !defaultsReady || packageLoading || !!openingError
           }
         >
-          {busy ? '채팅을 준비하는 중…' : created.current ? '설정 저장 다시 시도' : '채팅 만들기'}
+          {busy ? t('transfer.m353') : created.current ? t('transfer.m354') : t('transfer.m355')}
         </button>
       </div>
     </form>

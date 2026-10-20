@@ -1,3 +1,4 @@
+import { message as uiMessage } from './i18n.js';
 export type RecoveryBuffer<T> = {
   /** Unique per write; optional for buffers saved by older app versions. */
   token?: string;
@@ -19,7 +20,7 @@ function open(): Promise<IDBDatabase> {
     };
     request.onblocked = () => {
       database = undefined;
-      reject(new Error('복구 저장소를 열지 못했어요.'));
+      reject(new Error(uiMessage('shared.recoveryOpenFailure')));
     };
   });
   return database;
@@ -43,7 +44,8 @@ export async function writeRecovery<T>(key: string, value?: RecoveryBuffer<T>): 
     else buffers.put(value, key);
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error ?? new Error('복구 저장이 중단됐어요.'));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error(uiMessage('shared.recoveryAborted')));
   });
 }
 
@@ -63,7 +65,7 @@ export async function copyRecoveryPrefix(fromPrefix: string, toPrefix: string): 
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () =>
-      reject(transaction.error ?? new Error('복제한 탭의 초안 복사가 중단됐어요.'));
+      reject(transaction.error ?? new Error(uiMessage('shared.clonedDraftAborted')));
   });
 }
 
@@ -84,7 +86,8 @@ async function deleteRecoveryIf<T>(
     };
     transaction.oncomplete = () => resolve(remaining);
     transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error ?? new Error('복구 정리가 중단됐어요.'));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error(uiMessage('shared.recoveryCleanupAborted')));
   });
 }
 

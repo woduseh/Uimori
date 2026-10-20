@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -15,16 +16,13 @@ type Attempt = { expectedRevision: number; idempotencyKey: string };
 const path = '/provider-management/jev';
 
 function testFailure(code: string | null): string {
-  if (code === 'JEV_HTTP_401' || code === 'JEV_HTTP_403')
-    return 'API 키와 TypeSafe 계정의 사용 권한을 확인해 주세요.';
-  if (code === 'JEV_HTTP_429') return '요청 한도나 계정 잔액을 확인한 뒤 다시 테스트해 주세요.';
-  if (code === 'JEV_CREDENTIAL_REQUIRED') return '먼저 JEV API 키를 저장해 주세요.';
-  if (code === 'JEV_CREDENTIAL_CHANGED')
-    return '연결 정보가 바뀌었어요. 현재 상태를 새로 읽고 다시 테스트해 주세요.';
-  if (code === 'JEV_TIMEOUT') return 'JEV 응답 시간이 초과됐어요. 처리 여부는 확인할 수 없어요.';
-  if (code === 'SERVER_RESTARTED' || code === 'SERVER_STOPPING')
-    return '서버가 중단되어 결과를 확인할 수 없어요. 테스트를 자동으로 다시 보내지 않아요.';
-  return 'JEV의 정상 판단 결과를 확인하지 못했어요. 계정 상태를 확인한 뒤 다시 테스트해 주세요.';
+  if (code === 'JEV_HTTP_401' || code === 'JEV_HTTP_403') return t('providers.m329');
+  if (code === 'JEV_HTTP_429') return t('providers.m330');
+  if (code === 'JEV_CREDENTIAL_REQUIRED') return t('providers.m331');
+  if (code === 'JEV_CREDENTIAL_CHANGED') return t('providers.m332');
+  if (code === 'JEV_TIMEOUT') return t('providers.m333');
+  if (code === 'SERVER_RESTARTED' || code === 'SERVER_STOPPING') return t('providers.m334');
+  return t('providers.m335');
 }
 
 function relevance(test: ProviderConnectionTest): number | null {
@@ -55,6 +53,7 @@ export function JevProviderSettings({
   onBusyChange: (busy: boolean) => void;
   onStatusChange: (status: JevProviderStatus) => void;
 }) {
+  useI18n();
   const [status, setStatus] = useState<JevProviderStatus | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
@@ -118,8 +117,7 @@ export function JevProviderSettings({
         }
       })
       .catch(() => {
-        if (!controller.signal.aborted)
-          setError('JEV 연결 상태를 불러오지 못했어요. 다시 확인해 주세요.');
+        if (!controller.signal.aborted) setError(uiMessage('providers.m336'));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -141,10 +139,7 @@ export function JevProviderSettings({
           if (!controller.signal.aborted) acceptTest(result);
         })
         .catch(() => {
-          if (!controller.signal.aborted)
-            setTestError(
-              '테스트 결과를 불러오지 못했어요. 상태 확인으로 기존 요청을 이어 확인해 주세요.'
-            );
+          if (!controller.signal.aborted) setTestError(uiMessage('providers.m337'));
         });
     }, 1000);
     return () => {
@@ -170,20 +165,16 @@ export function JevProviderSettings({
       setStatus(next);
       setApiKey('');
       setTest(next.latestTest);
-      setMessage(remove ? '저장한 키를 삭제했어요.' : '키를 저장했어요.');
+      setMessage(remove ? uiMessage('providers.m338') : uiMessage('providers.m339'));
       return true;
     } catch (caught) {
       if (!alive.current) return false;
       if (caught instanceof ApiError && caught.status === 409) {
         setConflict(true);
         setSaveConflict(true);
-        setError(
-          '다른 화면에서 연결 정보가 바뀌었어요. 새로고침한 뒤 다시 저장해 주세요. 입력한 키는 유지돼요.'
-        );
+        setError(uiMessage('providers.m340'));
       } else {
-        setError(
-          '연결 정보 변경을 확인하지 못했어요. 새로고침으로 저장 상태를 확인해 주세요. 입력한 키는 유지돼요.'
-        );
+        setError(uiMessage('providers.m341'));
       }
       return false;
     } finally {
@@ -222,15 +213,9 @@ export function JevProviderSettings({
         attemptRef.current = null;
         setAttempt(null);
         if (caught.status === 409) setConflict(true);
-        setError(
-          caught.status === 409
-            ? '연결 정보가 바뀌었어요. 새로고침한 뒤 다시 테스트해 주세요.'
-            : '테스트 요청을 시작하지 못했어요. API 키와 연결 상태를 확인해 주세요.'
-        );
+        setError(caught.status === 409 ? uiMessage('providers.m342') : uiMessage('providers.m343'));
       } else {
-        setTestError(
-          '테스트 결과를 확인하지 못했어요. ‘JEV 테스트 상태 확인’으로 같은 테스트의 결과를 다시 확인해 주세요. 새 테스트는 보내지 않아요.'
-        );
+        setTestError(uiMessage('providers.m344'));
       }
     } finally {
       lock.current = false;
@@ -242,18 +227,21 @@ export function JevProviderSettings({
     <section
       hidden={!active}
       className="jev-provider-settings provider-management-form"
-      aria-label={view === 'connection' ? 'TypeSafe AI 프로바이더 설정' : 'JEV 모델 설정'}
+      aria-label={view === 'connection' ? t('providers.m345') : t('providers.m28')}
     >
       <SaveConflictDialog
         open={saveConflict}
-        title="TypeSafe AI 저장 내용 확인"
+        title={t('providers.m346')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
           const value = await api<JevProviderStatus>(path);
-          return [
-            { label: '연결 키', value: value.configured ? '설정됨' : '없음' },
-            { label: '모델', value: value.modelId },
-            { label: '주소', value: value.endpoint },
+          return () => [
+            {
+              label: t('providers.m347'),
+              value: value.configured ? t('providers.m348') : t('providers.m349'),
+            },
+            { label: t('providers.m50'), value: value.modelId },
+            { label: t('providers.m45'), value: value.endpoint },
           ];
         }}
       />
@@ -269,13 +257,14 @@ export function JevProviderSettings({
           disabled={busy}
           onClick={() => setRefresh((value) => value + 1)}
         >
-          <RefreshIcon size={16} aria-hidden="true" /> 연결 상태 새로고침
+          <RefreshIcon size={16} aria-hidden="true" />
+          {t('providers.m350')}
         </button>
       </div>
       {loading && (
         <LoadingState
           presentation={status ? 'inline' : 'placeholder'}
-          label="연결 상태를 불러오는 중이에요…"
+          label={t('providers.m351')}
         />
       )}
       {status && (
@@ -289,16 +278,16 @@ export function JevProviderSettings({
             }}
           >
             <fieldset className="editor-fields provider-connection-fields full">
-              <legend>접속 정보</legend>
+              <legend>{t('providers.m352')}</legend>
               <label>
-                프로바이더
+                {t('providers.m57')}
                 <input value={JEV_PROVIDER_DEFINITION.label} readOnly />
               </label>
               <label>
-                JEV API 키{status.configured ? ' 교체' : ''}
+                {t('providers.m578', { configured: String(status.configured) })}
                 <input
                   type="password"
-                  aria-label="JEV API 키"
+                  aria-label={t('providers.m353')}
                   autoComplete="new-password"
                   spellCheck={false}
                   value={apiKey}
@@ -310,25 +299,23 @@ export function JevProviderSettings({
                 />
                 <small>
                   <span>
-                    {status.credentialSource === 'saved' ? 'Uimori에 저장한 키' : '등록되지 않음'}
+                    {status.credentialSource === 'saved'
+                      ? t('providers.m355')
+                      : t('providers.m356')}
                   </span>
-                  {' · '}
-                  키는 서버에 저장하며 다시 표시하지 않아요.
+                  {t('providers.m579', { value0: ' · ' })}
                 </small>
               </label>
               <div className="jev-provider-links">
                 <a href="https://console.typesafe.ai" target="_blank" rel="noreferrer">
-                  TypeSafe에서 API 키 발급
+                  {t('providers.m358')}
                 </a>
               </div>
               <details className="provider-auth-settings">
-                <summary>키 보관 및 우선순위</summary>
+                <summary>{t('providers.m359')}</summary>
                 <div className="provider-auth-settings-body">
-                  <p>
-                    저장한 키를 우선 사용해요. 삭제하면 서버의 TYPESAFE_API_KEY가 설정되어 있을 때
-                    그 키를 사용해요.
-                  </p>
-                  <p>연결 상태 새로고침과 관리 탭 전환은 입력한 키를 유지해요.</p>
+                  <p>{t('providers.m360')}</p>
+                  <p>{t('providers.m361')}</p>
                 </div>
               </details>
             </fieldset>
@@ -340,15 +327,15 @@ export function JevProviderSettings({
                   disabled={busy || unresolved || !!apiKey || conflict}
                   onClick={() => void save(true)}
                 >
-                  저장한 JEV 키 삭제
+                  {t('providers.m362')}
                 </button>
               )}
               <small className="provider-save-status">
                 {apiKey
-                  ? '아직 저장하지 않은 키가 있어요.'
+                  ? t('providers.m363')
                   : status.configured
-                    ? '연결 키가 설정되어 있어요.'
-                    : '키를 저장하면 JEV 모델이 등록돼요.'}
+                    ? t('providers.m364')
+                    : t('providers.m365')}
               </small>
               {apiKey && (
                 <button
@@ -357,11 +344,11 @@ export function JevProviderSettings({
                   disabled={busy || unresolved}
                   onClick={() => setApiKey('')}
                 >
-                  입력 지우기
+                  {t('providers.m366')}
                 </button>
               )}
               <SaveButton
-                label="JEV API 키 저장"
+                label={t('providers.m367')}
                 aria-busy={operation === 'save'}
                 disabled={!apiKey.trim() || busy || unresolved || conflict}
               />
@@ -369,13 +356,13 @@ export function JevProviderSettings({
           </form>
           {view === 'model' && (
             <fieldset className="editor-fields provider-connection-fields">
-              <legend>모델 정보</legend>
+              <legend>{t('providers.m368')}</legend>
               <label>
-                프로바이더
+                {t('providers.m57')}
                 <input value={JEV_PROVIDER_DEFINITION.label} readOnly />
               </label>
               <label>
-                모델 ID
+                {t('providers.m203')}
                 <input value={status.modelId} readOnly />
               </label>
               <div className="provider-actions">
@@ -385,14 +372,14 @@ export function JevProviderSettings({
                   disabled={busy}
                   onClick={onConnectionOpen}
                 >
-                  프로바이더 설정
+                  {t('providers.m369')}
                 </button>
                 <a
                   href="https://typesafe.ai/blog/introducing-system-one-models-and-jev"
                   target="_blank"
                   rel="noreferrer"
                 >
-                  JEV 안내
+                  {t('providers.m370')}
                 </a>
               </div>
             </fieldset>
@@ -400,9 +387,9 @@ export function JevProviderSettings({
           <section
             hidden={view !== 'model'}
             className="jev-provider-test provider-model-test"
-            aria-label="JEV 연결 테스트"
+            aria-label={t('providers.m371')}
           >
-            <h4>판단 응답 테스트</h4>
+            <h4>{t('providers.m372')}</h4>
             <div className="provider-actions">
               <button
                 type="button"
@@ -411,56 +398,74 @@ export function JevProviderSettings({
                 onClick={() => void startTest()}
               >
                 {operation || polling
-                  ? 'JEV 응답 확인 중…'
+                  ? t('providers.m373')
                   : unresolved || testError
-                    ? 'JEV 테스트 상태 확인'
-                    : 'JEV 연결 테스트'}
+                    ? t('providers.m374')
+                    : t('providers.m371')}
               </button>
-              <small>짧은 예제의 관련성을 판단해요.</small>
+              <small>{t('providers.m375')}</small>
             </div>
-            {apiKey && <small>입력한 키를 저장하거나 지운 뒤 테스트해 주세요.</small>}
-            {testError && <NoticeBanner tone="error">{testError}</NoticeBanner>}
+            {apiKey && <small>{t('providers.m376')}</small>}
+            {testError && <NoticeBanner tone="error">{translateMessage(testError)}</NoticeBanner>}
             {test && (
               <div role="status" className="jev-test-result provider-test-result">
-                {test.modelRevision !== status.revision && (
-                  <p>이 결과는 이전 연결 정보로 실행한 테스트예요.</p>
-                )}
+                {test.modelRevision !== status.revision && <p>{t('providers.m377')}</p>}
                 <strong>
                   {test.status === 'running'
-                    ? 'JEV 판단을 기다리고 있어요…'
+                    ? t('providers.m378')
                     : test.status === 'completed'
-                      ? 'JEV 판단 응답을 확인했어요.'
-                      : 'JEV 연결 테스트를 완료하지 못했어요.'}
+                      ? t('providers.m379')
+                      : t('providers.m380')}
                 </strong>
                 {test.status !== 'running' && test.status !== 'completed' && (
                   <p>{testFailure(test.error)}</p>
                 )}
                 {test.status === 'completed' && score !== null && (
-                  <p>예제 관련성: {(score * 100).toFixed(1)}%</p>
+                  <p>
+                    {t('providers.m580', {
+                      value0: formatNumber(score * 100, {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1,
+                      }),
+                    })}
+                  </p>
                 )}
                 <dl className="jev-provider-details">
                   {test.latencyMs !== null && (
                     <div>
-                      <dt>응답 시간</dt>
-                      <dd>{(test.latencyMs / 1000).toFixed(2)}초</dd>
+                      <dt>{t('providers.m382')}</dt>
+                      <dd>
+                        {t('providers.m581', {
+                          value0: formatNumber(test.latencyMs / 1000, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }),
+                        })}
+                      </dd>
                     </div>
                   )}
                   {test.usage.inputTokens !== null && (
                     <div>
-                      <dt>입력 토큰</dt>
-                      <dd>{test.usage.inputTokens.toLocaleString()}</dd>
+                      <dt>{t('providers.m384')}</dt>
+                      <dd>{formatNumber(test.usage.inputTokens)}</dd>
                     </div>
                   )}
                   {test.usage.outputTokens !== null && (
                     <div>
-                      <dt>출력 토큰</dt>
-                      <dd>{test.usage.outputTokens.toLocaleString()}</dd>
+                      <dt>{t('providers.m385')}</dt>
+                      <dd>{formatNumber(test.usage.outputTokens)}</dd>
                     </div>
                   )}
                   {test.usage.costUsd !== null && (
                     <div>
-                      <dt>프로바이더 보고 비용</dt>
-                      <dd>${test.usage.costUsd.toFixed(6)}</dd>
+                      <dt>{t('providers.m386')}</dt>
+                      <dd>
+                        $
+                        {formatNumber(test.usage.costUsd, {
+                          minimumFractionDigits: 6,
+                          maximumFractionDigits: 6,
+                        })}
+                      </dd>
                     </div>
                   )}
                 </dl>
@@ -468,24 +473,17 @@ export function JevProviderSettings({
             )}
           </section>
           <details hidden={view !== 'model'} className="provider-auth-settings">
-            <summary>JEV가 맡는 판단</summary>
+            <summary>{t('providers.m387')}</summary>
             <div className="provider-auth-settings-body">
-              <p>
-                본문 서비스 거절 판정: 역할별 모델에서 켜거나 끌 수 있어요. 켜면 전체 본문을
-                검사하며 확신 기준은 역할별 모델의 작업 동작에서 조절해요. 거절 시 출력을 보존하고
-                자동 재생성하지 않아요.
-              </p>
-              <p>
-                번역 서비스 거절 판정: 전체 번역문을 검사해요. 역할별 모델 → 작업 동작 → 거절
-                감지에서 켜거나 끄고 번역 전용 기준과 재시도 한도를 조절해요.
-              </p>
-              <p>로어 관련성 판정: 채팅 설정 → 기억·로어에서 관련성 기준과 예산을 조절해요.</p>
-              <p>이미지 선택: 본문에 사용할 이미지 후보를 선택해요.</p>
+              <p>{t('providers.m388')}</p>
+              <p>{t('providers.m389')}</p>
+              <p>{t('providers.m390')}</p>
+              <p>{t('providers.m391')}</p>
             </div>
           </details>
         </>
       )}
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       <TransientNotice message={message} />
     </section>
   );

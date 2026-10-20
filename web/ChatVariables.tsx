@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -91,6 +92,7 @@ function rememberDraft(key: string, value: Draft | null) {
 /** Chat overrides are an explicit user edit. Background refreshes only update the
  * comparison base; they never adopt, discard, or replay the draft. */
 export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
+  useI18n();
   const storageKey = `uimori:chat-variable-draft:${chatId}`;
   const [view, setView] = useState<VariableView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(() => readDraft(storageKey));
@@ -117,7 +119,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
       }
     } catch (cause) {
       if (alive.current && readEpoch.current === epoch)
-        setError(cause instanceof Error ? cause.message : '공유 변수를 읽지 못했어요.');
+        setError(cause instanceof Error ? cause.message : uiMessage('chatsettings.m158'));
     } finally {
       if (alive.current && readEpoch.current === epoch) setLoading(false);
     }
@@ -146,7 +148,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
     try {
       rememberDraft(storageKey, next);
     } catch {
-      setError('입력한 초안을 브라우저에 보관하지 못했어요. 이 화면을 닫지 말아 주세요.');
+      setError(uiMessage('chatsettings.m159'));
     }
     setNotice('');
   }
@@ -155,7 +157,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
     if (!view || !draft || saving.current) return;
     const parsed = parseValues(draft.text);
     if (!parsed) {
-      setError('키와 문자열 값으로만 이루어진 JSON 객체를 입력해 주세요.');
+      setError(uiMessage('chatsettings.m160'));
       return;
     }
     const conflict = draft.revision !== view.revision || draft.sourceHash !== view.sourceHash;
@@ -179,7 +181,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
     } catch {
       setBusy(false);
       saving.current = false;
-      setError('저장 요청을 보관하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요.');
+      setError(uiMessage('chatsettings.m161'));
       return;
     }
     try {
@@ -193,15 +195,11 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
       } catch {
         /* The committed response is authoritative even when local cleanup is unavailable. */
       }
-      setNotice('공유 변수를 저장했어요. 다음 생성부터 적용해요.');
+      setNotice(uiMessage('chatsettings.m162'));
       onChange?.();
     } catch (cause) {
       if (!alive.current) return;
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : '저장 결과를 확인하지 못했어요. 다시 누르면 같은 요청을 확인해요.'
-      );
+      setError(cause instanceof Error ? cause.message : uiMessage('chatsettings.m163'));
       if (definitelyRejected(cause)) {
         const rejected: Draft = {
           text: pendingDraft.text,
@@ -251,12 +249,15 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
   };
 
   return (
-    <section className="chat-variables" aria-label="카드 변수 편집">
+    <section className="chat-variables" aria-label={t('chatsettings.m164')}>
       <header className="chat-variable-heading">
-        <strong>현재 채팅</strong>
+        <strong>{t('chatsettings.m165')}</strong>
         {view && (
           <small>
-            재정의 {Object.keys(view.values).length}개 · 수정 번호 {view.revision}
+            {t('chatsettings.overrides', {
+              count: Object.keys(view.values).length,
+              revision: view.revision,
+            })}
           </small>
         )}
         <button
@@ -265,30 +266,20 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
           disabled={loading || busy}
           onClick={() => void load()}
         >
-          <RefreshIcon size={16} aria-hidden="true" /> 새로고침
+          <RefreshIcon size={16} aria-hidden="true" /> {t('chatsettings.m168')}
         </button>
       </header>
-      <p className="muted">
-        카드와 스크립트가 이 채팅에서 함께 읽는 문자열 값이에요. 서재 원본은 바꾸지 않아요. 빈
-        문자열도 값으로 저장하며, 키를 지우면 자료의 기본값을 다시 사용해요.
-      </p>
-      {loading && (
-        <LoadingState presentation="placeholder" label="공유 변수를 불러오는 중이에요…" />
-      )}
-      {view?.pending && (
-        <p role="status">
-          원문 생성이나 자료 코드 작업이 현재 값을 사용하고 있어요. 새 편집과 저장은 완료 뒤 할 수
-          있으며 입력한 초안은 유지돼요.
-        </p>
-      )}
+      <p className="muted">{t('chatsettings.m169')}</p>
+      {loading && <LoadingState presentation="placeholder" label={t('chatsettings.m170')} />}
+      {view?.pending && <p role="status">{t('chatsettings.m171')}</p>}
       {view?.variableDefaultsError && (
         <p role="alert" className="error">
-          자료 기본 변수를 적용하지 못했어요: {view.variableDefaultsError}
+          {t('chatsettings.defaultsError', { error: translateMessage(view.variableDefaultsError) })}
         </p>
       )}
       {conflict && !hasUncertainSave && (
         <div className="behavior-action-result" role="alert">
-          <p>변수 저장본이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 유지했어요.</p>
+          <p>{t('chatsettings.m173')}</p>
           <button
             type="button"
             className="secondary"
@@ -301,24 +292,19 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
               try {
                 rememberDraft(storageKey, next);
               } catch {
-                setError('입력한 초안을 브라우저에 보관하지 못했어요. 이 화면을 닫지 말아 주세요.');
+                setError(uiMessage('chatsettings.m159'));
               }
             }}
           >
-            입력값 유지하고 계속 편집
+            {t('chatsettings.m174')}
           </button>
         </div>
       )}
-      {hasUncertainSave && (
-        <p role="status">
-          이전 저장의 응답을 확인하지 못했어요. 값을 바꾸지 않고 다시 누르면 같은 저장 요청의 결과를
-          확인해요.
-        </p>
-      )}
+      {hasUncertainSave && <p role="status">{t('chatsettings.m175')}</p>}
       <TransientNotice message={notice} />
       {error && (
         <p role="alert" className="error">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
       <form
@@ -330,7 +316,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
       >
         <div className="chat-variable-toolbar">
           <label>
-            변수 이름으로 찾기
+            {t('chatsettings.m176')}
             <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
           </label>
           <button
@@ -339,7 +325,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
             disabled={Boolean(draft && !parsed)}
             onClick={() => setRaw(!showJson)}
           >
-            {showJson ? '행 편집' : 'JSON 편집'}
+            {showJson ? t('chatsettings.m177') : t('chatsettings.m178')}
           </button>
         </div>
         <div hidden={showJson}>
@@ -352,11 +338,11 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
                     <span className="chat-variable-identity">
                       <span className="chat-variable-key">{key}</span>
                       <span className="chat-variable-origin">
-                        {overridden ? '이 채팅' : '기본값'}
+                        {overridden ? t('chatsettings.m179') : t('chatsettings.m180')}
                       </span>
                     </span>
                     <input
-                      aria-label={`${key} 문자열 값`}
+                      aria-label={t('chatsettings.variableValue', { key })}
                       value={overridden ? overrides![key] : (view?.defaults[key] ?? '')}
                       disabled={locked}
                       onChange={(event) => changeValue(key, event.target.value)}
@@ -365,9 +351,9 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
                   <button
                     type="button"
                     className="ghost chat-variable-reset"
-                    title={`${key} 재정의 해제`}
+                    title={t('chatsettings.resetVariable', { key })}
                     disabled={locked || !overridden}
-                    aria-label={`${key} 재정의 해제`}
+                    aria-label={t('chatsettings.resetVariable', { key })}
                     onClick={() => removeOverride(key)}
                   >
                     <ResetIcon size={18} aria-hidden="true" />
@@ -377,13 +363,13 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
             })}
           </div>
           {!loading && view && !visibleKeys.length && (
-            <p className="muted">{query ? '일치하는 변수가 없어요.' : '현재 변수가 없어요.'}</p>
+            <p className="muted">{query ? t('chatsettings.m181') : t('chatsettings.m182')}</p>
           )}
           <details className="chat-variable-add">
-            <summary>변수 추가</summary>
+            <summary>{t('chatsettings.m183')}</summary>
             <div className="chat-variable-toolbar">
               <label>
-                새 변수 이름
+                {t('chatsettings.m184')}
                 <input
                   value={newKey}
                   disabled={locked}
@@ -399,16 +385,16 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
                   setNewKey('');
                 }}
               >
-                빈 문자열로 추가
+                {t('chatsettings.m185')}
               </button>
             </div>
           </details>
         </div>
         <div hidden={!showJson}>
           <label>
-            공유 변수 재정의 · JSON
+            {t('chatsettings.m186')}
             <textarea
-              aria-label="공유 변수 재정의 · JSON"
+              aria-label={t('chatsettings.m186')}
               rows={6}
               spellCheck={false}
               value={text}
@@ -421,9 +407,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
             />
           </label>
         </div>
-        {draft && !parsed && (
-          <small className="error">키와 문자열 값으로만 이루어진 JSON 객체여야 해요.</small>
-        )}
+        {draft && !parsed && <small className="error">{t('chatsettings.m187')}</small>}
         <div className="form-actions">
           <button
             type="button"
@@ -438,10 +422,10 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
                 /* The in-memory draft was explicitly reset. */
               }
               setError('');
-              setNotice('서버에 저장된 값으로 되돌렸어요.');
+              setNotice(uiMessage('chatsettings.m188'));
             }}
           >
-            <ResetIcon size={16} aria-hidden="true" /> 서버 값으로 되돌리기
+            <ResetIcon size={16} aria-hidden="true" /> {t('chatsettings.m189')}
           </button>
 
           <button
@@ -455,18 +439,22 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
             }
           >
             <SaveIcon size={16} aria-hidden="true" />
-            {hasUncertainSave ? '저장 결과 확인' : '공유 변수 저장'}
+            {hasUncertainSave ? t('chatsettings.m190') : t('chatsettings.m191')}
           </button>
         </div>
       </form>
       {view && (
         <div className="chat-variable-readbacks">
           <details>
-            <summary>현재 적용값 {Object.keys(view.resolved).length}개</summary>
+            <summary>
+              {t('chatsettings.effectiveCount', { count: Object.keys(view.resolved).length })}
+            </summary>
             <pre>{encodeValues(view.resolved)}</pre>
           </details>
           <details>
-            <summary>자료 기본값 {Object.keys(view.defaults).length}개</summary>
+            <summary>
+              {t('chatsettings.defaultCount', { count: Object.keys(view.defaults).length })}
+            </summary>
             <pre>{encodeValues(view.defaults)}</pre>
           </details>
         </div>

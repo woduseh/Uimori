@@ -1,3 +1,12 @@
+import {
+  t,
+  useI18n,
+  translateMessage,
+  formatDate,
+  formatNumber,
+  messageRef,
+  message as uiMessage,
+} from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import type { OutlineTarget } from '../core/outline.js';
@@ -90,7 +99,9 @@ function taskElapsed(task: HelperTaskView, now: number) {
   if (!task.startedAt) return '';
   const measured = elapsedLabel(task.startedAt, active(task) ? now : Date.parse(task.updatedAt));
   // A finished task that took under a second has no meaningful duration to show.
-  return !active(task) && measured === '0초' ? '' : measured;
+  return !active(task) && Date.parse(task.updatedAt) - Date.parse(task.startedAt) < 1000
+    ? ''
+    : measured;
 }
 function HelperTaskElapsed({
   task,
@@ -101,6 +112,7 @@ function HelperTaskElapsed({
   visible: boolean;
   prefix?: string;
 }) {
+  useI18n();
   const [now, setNow] = useState(Date.now);
   const ticking = active(task);
   useEffect(() => {
@@ -123,12 +135,12 @@ function HelperTaskElapsed({
   return elapsed ? `${prefix}${elapsed}` : null;
 }
 const statusLabel: Record<string, string> = {
-  queued: '요청을 접수했어요 · 앞선 작업을 기다려요',
-  running: '처리 중이에요',
-  completed: '완료했어요',
-  failed: '작업에 실패했어요',
-  cancelled: '작업을 취소했어요',
-  interrupted: '작업이 중단됐어요',
+  queued: 'helpers.m002',
+  running: 'helpers.m003',
+  completed: 'helpers.m004',
+  failed: 'helpers.m005',
+  cancelled: 'helpers.m006',
+  interrupted: 'helpers.m007',
 };
 const activityKey = (task: HelperTaskView) =>
   `helper-task-activity:${task.conversationId}:${task.id}`;
@@ -141,6 +153,7 @@ function savedActivityOpen(task: HelperTaskView) {
 }
 
 function HelperResponseActions({ text }: { text: string }) {
+  useI18n();
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied' | 'failed'>('idle');
 
   useEffect(() => {
@@ -165,19 +178,19 @@ function HelperResponseActions({ text }: { text: string }) {
       <div className="helper-response-actions">
         <IconButton
           icon={copyState === 'copied' ? Check : Copy}
-          label={copyState === 'copied' ? '도우미 응답 복사됨' : '도우미 응답 복사'}
+          label={copyState === 'copied' ? t('helpers.m008') : t('helpers.m009')}
           className="secondary"
           size={18}
           disabled={copyState === 'copying'}
           onClick={() => void copyResponse()}
         />
         <span className="sr-only" role="status">
-          {copyState === 'copied' ? '도우미 응답을 복사했어요.' : ''}
+          {copyState === 'copied' ? t('helpers.m010') : ''}
         </span>
       </div>
       {copyState === 'failed' && (
         <p className="error helper-copy-error" role="alert">
-          응답을 복사하지 못했어요. 브라우저의 클립보드 권한을 확인해 주세요.
+          {t('helpers.m011')}
         </p>
       )}
     </>
@@ -237,6 +250,7 @@ function storedOutline(scope: string): SelectedOutline | null {
 const selectionRequest = '선택한 원문을 검토해 주세요.';
 
 export function HelperPanel(props: Props) {
+  useI18n();
   const sessions = useHelperSessions(props.open && props.ready !== false, props.scope);
   const navigatedTask = useRef<number | null>(null);
   useEffect(() => {
@@ -290,6 +304,7 @@ export function HelperPanel(props: Props) {
   >({});
   const [selections, setSelections] = useState<Record<string, HelperSelection | null>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [modelRequired, setModelRequired] = useState<Record<string, boolean>>({});
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
   const [editor, setEditor] = useState<ActiveEditorContext | null>(null);
   const [settings, setSettings] = useState(false);
@@ -321,7 +336,8 @@ export function HelperPanel(props: Props) {
       ? storedOutline(scopeKey)
       : outlineSelections[scopeKey];
   const busy = busyScopes[scopeKey] ?? false;
-  const error = errors[scopeKey] || data.error || sessions.error;
+  const storedError = errors[scopeKey] || data.error || sessions.error;
+  const error = storedError === 'helper-draft-read-failed' ? t('helpers.m012') : storedError;
   const persona =
     personas[scopeKey] ??
     (conversation
@@ -339,7 +355,10 @@ export function HelperPanel(props: Props) {
     liveActivity.error || !liveActivity.data || !summarized
       ? undefined
       : helperActivitySummary({ ...liveActivity.data, status: summarized.status });
-  const setError = (message: string) => setErrors((old) => ({ ...old, [scopeKey]: message }));
+  const setError = (message: string) => {
+    setModelRequired((old) => ({ ...old, [scopeKey]: false }));
+    setErrors((old) => ({ ...old, [scopeKey]: message }));
+  };
   useEffect(() => {
     if (!scopeKey) return;
     if (recoveryAttempt > 0) setErrors((old) => ({ ...old, [scopeKey]: '' }));
@@ -352,7 +371,7 @@ export function HelperPanel(props: Props) {
         if (!disposed)
           setErrors((old) => ({
             ...old,
-            [scopeKey]: '이 기기의 도우미 초안을 읽지 못했어요. 다시 불러와 주세요.',
+            [scopeKey]: 'helper-draft-read-failed',
           }));
         return;
       }
@@ -373,9 +392,7 @@ export function HelperPanel(props: Props) {
       );
       setHydrated((old) => ({ ...old, [scopeKey]: true }));
       setErrors((old) =>
-        old[scopeKey] === '이 기기의 도우미 초안을 읽지 못했어요. 다시 불러와 주세요.'
-          ? { ...old, [scopeKey]: '' }
-          : old
+        old[scopeKey] === 'helper-draft-read-failed' ? { ...old, [scopeKey]: '' } : old
       );
     };
     void restore();
@@ -407,7 +424,7 @@ export function HelperPanel(props: Props) {
         : await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
       if (disposed || appliedSelections.current.has(selected.key)) return;
       if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
-        throw new Error('구성과 도우미 대화의 채팅이 달라요.');
+        throw new Error(uiMessage('helpers.m013'));
       appliedSelections.current.add(selected.key);
       await loadHelperRecovery(`helper-input:${owner.id}`).catch(() => null);
       if (selected.target) {
@@ -456,7 +473,7 @@ export function HelperPanel(props: Props) {
       }
       if (disposed || appliedSelections.current.has(selected.key)) return;
       if (JSON.stringify(owner.scope) !== JSON.stringify(target))
-        throw new Error('선택한 원문과 도우미 세션의 채팅이 달라요.');
+        throw new Error(uiMessage('helpers.m014'));
       const key = owner.id;
       appliedSelections.current.add(selected.key);
       await loadHelperRecovery(`helper-input:${key}`).catch(() => null);
@@ -581,7 +598,7 @@ export function HelperPanel(props: Props) {
       try {
         captured = captureActiveEditorContext();
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : '편집 초안을 확인하지 못했어요.');
+        setError(cause instanceof Error ? cause.message : uiMessage('helpers.m015'));
         return false;
       }
     }
@@ -592,13 +609,9 @@ export function HelperPanel(props: Props) {
     let pendingRequest: Outbox | undefined;
     try {
       if (text.length > REQUEST_TEXT_MAX_CHARS)
-        throw new Error(
-          `요청은 ${REQUEST_TEXT_MAX_CHARS.toLocaleString()}자까지 보낼 수 있어요. 입력은 그대로 보존했어요.`
-        );
+        throw new Error(uiMessage('helpers.m016', { v0: formatNumber(REQUEST_TEXT_MAX_CHARS) }));
       if (((saved?.selection ?? selection)?.text.length ?? 0) > REQUEST_TEXT_MAX_CHARS)
-        throw new Error(
-          `선택한 원문은 ${REQUEST_TEXT_MAX_CHARS.toLocaleString()}자까지 보낼 수 있어요. 선택과 입력은 그대로 보존했어요.`
-        );
+        throw new Error(uiMessage('helpers.m017', { v0: formatNumber(REQUEST_TEXT_MAX_CHARS) }));
       let request = saved;
       if (!request) {
         request = {
@@ -632,7 +645,7 @@ export function HelperPanel(props: Props) {
           setUnpersisted((old) => ({ ...old, [owner]: false }));
         } catch {
           setUnpersisted((old) => ({ ...old, [owner]: true }));
-          throw new Error('요청을 보관하지 못했어요. 다시 시도하거나 보관 없이 보낼 수 있어요.');
+          throw new Error(uiMessage('helpers.m018'));
         }
       }
       const task = await api<HelperTaskView>(
@@ -684,7 +697,7 @@ export function HelperPanel(props: Props) {
         void data.refresh(conversation).catch((cause) => {
           setErrors((old) => ({
             ...old,
-            [owner]: `요청은 접수됐지만 목록을 새로고침하지 못했어요: ${cause.message}`,
+            [owner]: uiMessage('helpers.m019', { v0: messageRef(cause.message) }),
           }));
         });
       return true;
@@ -697,9 +710,13 @@ export function HelperPanel(props: Props) {
             JSON.stringify(pendingRequest)
           ).catch(() => {});
       }
+      setModelRequired((old) => ({
+        ...old,
+        [owner]: cause instanceof ApiError && cause.code?.startsWith('MODEL_REQUIRED:') === true,
+      }));
       setErrors((old) => ({
         ...old,
-        [owner]: cause instanceof Error ? cause.message : '요청을 보내지 못했어요.',
+        [owner]: cause instanceof Error ? cause.message : uiMessage('helpers.m020'),
       }));
       return false;
     } finally {
@@ -714,7 +731,7 @@ export function HelperPanel(props: Props) {
       );
       if (conversation) await data.refresh(conversation);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '작업을 취소하지 못했어요.');
+      setError(cause instanceof Error ? cause.message : uiMessage('helpers.m021'));
     }
   }
   async function retry(task: HelperTaskView, text = task.request) {
@@ -728,7 +745,7 @@ export function HelperPanel(props: Props) {
     )
       return false;
     if (task.completedEffects?.count) {
-      setError('이미 저장된 변경이 있어요. 결과를 확인한 뒤 남은 작업을 새로 요청해 주세요.');
+      setError(uiMessage('helpers.m022'));
       return false;
     }
     const request: Outbox = {
@@ -746,8 +763,7 @@ export function HelperPanel(props: Props) {
         tone={tone(task)}
         text={
           (task.id === summarized?.id ? activityLabel : undefined) ??
-          statusLabel[task.status] ??
-          task.status
+          t(statusLabel[task.status] ?? task.status)
         }
         elapsed={
           active(task) ? (
@@ -760,13 +776,28 @@ export function HelperPanel(props: Props) {
         onOpenChange={(open) => setOpenTaskActivities((old) => ({ ...old, [task.id]: open }))}
         dataProps={{ 'data-testid': 'helper-task-activity', 'data-task-id': task.id }}
       >
-        <p>모델 · {task.modelTitle}</p>
+        <p>{t('helpers.m310', { model: task.modelTitle ?? t('helpers.m026') })}</p>
         <p>
-          실행 요청 {task.usage.modelCalls}회 · 누적 입력 {task.usage.inputTokens ?? '미확인'} /
-          출력 {task.usage.outputTokens ?? '미확인'} 토큰
+          {t('helpers.m311', {
+            calls: formatNumber(task.usage.modelCalls),
+            input:
+              task.usage.inputTokens == null
+                ? t('helpers.m026')
+                : formatNumber(task.usage.inputTokens),
+            output:
+              task.usage.outputTokens == null
+                ? t('helpers.m026')
+                : formatNumber(task.usage.outputTokens),
+          })}
         </p>
-        {task.error && <p className="error">{task.error}</p>}
-        {task.completedEffects && <p>저장한 작업 · {task.completedEffects.labels.join(' · ')}</p>}
+        {task.error && <p className="error">{translateMessage(task.error ?? '')}</p>}
+        {task.completedEffects && (
+          <p>
+            {t('helpers.m312', {
+              labels: task.completedEffects.labels.map(translateMessage).join(' · '),
+            })}
+          </p>
+        )}
         <HelperActivityDetails
           taskId={task.id}
           status={task.status}
@@ -776,24 +807,14 @@ export function HelperPanel(props: Props) {
         {active(task) && (
           <div className="form-actions">
             <button type="button" className="secondary" onClick={() => void cancel(task)}>
-              {task.status === 'queued' ? '이 대기 요청 취소' : '진행 중인 도우미 작업 취소'}
+              {task.status === 'queued' ? t('helpers.m030') : t('helpers.m031')}
             </button>
           </div>
         )}
       </TurnStatus>
       {task.instructions?.map((instruction) => (
         <div className="helper-instruction" key={instruction.id} data-testid="helper-instruction">
-          <small role="status">
-            추가 지시 ·{' '}
-            {
-              {
-                pending: '전달 대기',
-                delivered: '작업 입력에 반영',
-                unconfirmed: '전달 여부 미확인',
-                'not-delivered': '전달 전에 작업 종료',
-              }[instruction.status]
-            }
-          </small>
+          <small role="status">{t('helpers.m335', { status: instruction.status })}</small>
           <p>{instruction.text}</p>
           {(instruction.status === 'not-delivered' || instruction.status === 'unconfirmed') && (
             <button
@@ -804,7 +825,7 @@ export function HelperPanel(props: Props) {
                 input.current?.focus();
               }}
             >
-              입력창에 가져오기
+              {t('helpers.m037')}
             </button>
           )}
         </div>
@@ -824,13 +845,12 @@ export function HelperPanel(props: Props) {
         <>
           {task.completedEffects && (
             <p role="status" data-testid="helper-completed-effects">
-              변경 {task.completedEffects.count}건은 저장됐지만 응답은 완료되지 않았어요. 저장된
-              결과를 확인한 뒤 남은 작업을 새로 요청해 주세요.
+              {t('helpers.m313', { count: formatNumber(task.completedEffects.count) })}
             </p>
           )}
           <RetryFailure
             status={task.status}
-            error={task.error}
+            error={translateMessage(task.error ?? '')}
             disabled={scopeMismatch || busy || Boolean(outbox)}
             onRetry={task.completedEffects ? undefined : () => void retry(task)}
             onSettings={props.onModelSettings}
@@ -848,7 +868,7 @@ export function HelperPanel(props: Props) {
       hidden={!props.open}
       role={compact ? 'dialog' : undefined}
       aria-modal={compact && props.open ? true : undefined}
-      aria-label="도우미 패널"
+      aria-label={t('helpers.m040')}
       onKeyDown={(event) => {
         if (event.target instanceof Element && event.target.closest('dialog[open]')) return;
         if (event.key === 'Escape') {
@@ -875,11 +895,11 @@ export function HelperPanel(props: Props) {
     >
       <header className="helper-header">
         <div>
-          <h2>도우미</h2>
-          <small>{scope.kind === 'chat' ? '이 채팅의 작품과 설정' : '서재 작업'}</small>
+          <h2>{t('helpers.m041')}</h2>
+          <small>{scope.kind === 'chat' ? t('helpers.m042') : t('helpers.m043')}</small>
         </div>
         <IconButton
-          label="도우미 말투 설정"
+          label={t('helpers.m044')}
           icon={Settings2}
           onClick={() => setSettings((value) => !value)}
         />
@@ -887,7 +907,7 @@ export function HelperPanel(props: Props) {
           ref={closeButton}
           type="button"
           className="icon-button"
-          aria-label="도우미 닫기"
+          aria-label={t('helpers.m045')}
           onClick={() => closePanel.current()}
         >
           <X size={20} />
@@ -902,7 +922,7 @@ export function HelperPanel(props: Props) {
               closePanel.current();
             }}
           >
-            구성으로 돌아가기
+            {t('helpers.m046')}
           </button>
         </div>
       )}
@@ -924,23 +944,21 @@ export function HelperPanel(props: Props) {
         }}
       />
       {scopeMismatch && scope.kind === 'chat' && (
-        <NoticeBanner className="helper-scope-notice">
-          현재 채팅과 다른 도우미 기록이에요. 새 요청과 변경은 현재 채팅의 세션에서 진행해요.
-        </NoticeBanner>
+        <NoticeBanner className="helper-scope-notice">{t('helpers.m047')}</NoticeBanner>
       )}
       {settings && conversation && (
         <div className="helper-settings">
           <div className="helper-settings-body">
             <section className="settings-group">
               <header className="settings-group-heading">
-                <h3>도우미 모델</h3>
+                <h3>{t('helpers.m048')}</h3>
               </header>
               <div className="settings-group-body helper-model">
                 <button
                   type="button"
                   className="model-chip secondary"
-                  aria-label={`현재 도우미 모델 · ${props.modelDescription}`}
-                  title="모든 채팅의 도우미 요청에 적용되는 전역 모델 설정"
+                  aria-label={t('helpers.m049', { v0: props.modelDescription })}
+                  title={t('helpers.m050')}
                   onClick={props.onModelSettings}
                 >
                   <span>{props.modelDescription}</span>
@@ -949,12 +967,12 @@ export function HelperPanel(props: Props) {
             </section>
             <section className="settings-group">
               <header className="settings-group-heading">
-                <h3>도우미 말투</h3>
-                <p>이 도우미 대화에만 적용해요.</p>
+                <h3>{t('helpers.m051')}</h3>
+                <p>{t('helpers.m052')}</p>
               </header>
               <div className="settings-group-body helper-persona">
                 <textarea
-                  aria-label="도우미 말투"
+                  aria-label={t('helpers.m051')}
                   value={persona.text}
                   maxLength={HELPER_PERSONA_MAX_CHARS}
                   onChange={(event) =>
@@ -963,16 +981,14 @@ export function HelperPanel(props: Props) {
                       [scopeKey]: { ...persona, text: event.target.value },
                     }))
                   }
-                  placeholder="비워 두면 담백한 도우미로 응답해요."
+                  placeholder={t('helpers.m053')}
                 />
-                <p className="muted">
-                  저장 후 새로 접수한 요청부터 반영해요. 작품과 저장 자료의 문체는 바꾸지 않아요.
-                </p>
+                <p className="muted">{t('helpers.m054')}</p>
               </div>
             </section>
             {persona.revision !== conversation.revision && (
               <p role="alert">
-                도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.{' '}
+                {t('helpers.m055')}{' '}
                 <button
                   type="button"
                   className="secondary"
@@ -983,12 +999,12 @@ export function HelperPanel(props: Props) {
                     }))
                   }
                 >
-                  최신 설정을 확인했어요
+                  {t('helpers.m056')}
                 </button>
               </p>
             )}
 
-            {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+            {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
           </div>
           <div className="helper-settings-actions">
             <button
@@ -1001,12 +1017,12 @@ export function HelperPanel(props: Props) {
                 }))
               }
             >
-              우이 프리셋 불러오기
+              {t('helpers.m057')}
             </button>
             <button
               type="button"
-              aria-label="도우미 설정 저장"
-              title="도우미 설정 저장"
+              aria-label={t('helpers.m058')}
+              title={t('helpers.m058')}
               disabled={
                 props.ready === false ||
                 scopeMismatch ||
@@ -1050,7 +1066,7 @@ export function HelperPanel(props: Props) {
               }}
             >
               <SaveIcon size={18} aria-hidden="true" />
-              저장
+              {t('helpers.m059')}
             </button>
           </div>
         </div>
@@ -1090,7 +1106,7 @@ export function HelperPanel(props: Props) {
                 void data.earlier('messages');
               }}
             >
-              이전 메시지 불러오기
+              {t('helpers.m060')}
             </button>
           )}
           {data.loading ? (
@@ -1098,12 +1114,10 @@ export function HelperPanel(props: Props) {
               presentation={messages.length ? 'inline' : 'region'}
               loading={!data.error}
               error={data.error}
-              label="대화를 불러오는 중이에요…"
+              label={t('helpers.m061')}
             />
           ) : (
-            messages.length === 0 && (
-              <p className="helper-empty">작품이나 설정에 대해 물어보세요.</p>
-            )
+            messages.length === 0 && <p className="helper-empty">{t('helpers.m062')}</p>
           )}
           {messages.map((message) => {
             const task = taskMap.get(message.taskId);
@@ -1127,7 +1141,7 @@ export function HelperPanel(props: Props) {
                     runId={message.taskId}
                     request={message.text}
                     maxLength={REQUEST_TEXT_MAX_CHARS}
-                    editHint="수정한 요청으로 같은 자리에서 다시 시도해요."
+                    editHint={t('helpers.m063')}
                     disabled={scopeMismatch || busy || Boolean(outbox)}
                     onSubmit={
                       taskMap.get(message.taskId) &&
@@ -1164,16 +1178,16 @@ export function HelperPanel(props: Props) {
       </div>
       <Dialog
         open={!!taskHistory}
-        title="도우미 작업 기록"
+        title={t('helpers.m064')}
         className="helper-task-history"
         scopeKey={taskHistory?.taskId ?? 'all'}
         onClose={() => setTaskHistory(null)}
       >
         <div className="activity-notification-toolbar">
-          <p>대화에는 최신 시도를 표시해요. 이전 시도와 실행 요청 수는 여기에 남아요.</p>
+          <p>{t('helpers.m065')}</p>
           {taskHistory?.taskId && (
             <button type="button" className="secondary" onClick={() => setTaskHistory({})}>
-              전체 작업 보기
+              {t('helpers.m066')}
             </button>
           )}
         </div>
@@ -1182,12 +1196,15 @@ export function HelperPanel(props: Props) {
             <li key={task.id} data-testid="helper-task-record" data-task-id={task.id}>
               <div className="activity-notification-heading">
                 <div>
-                  <strong>{statusLabel[task.status] ?? task.status}</strong>
+                  <strong>{t(statusLabel[task.status] ?? task.status)}</strong>
                   <small>
                     <time dateTime={task.createdAt}>
-                      {new Date(task.createdAt).toLocaleString()}
+                      {formatDate(new Date(task.createdAt), {
+                        dateStyle: 'medium',
+                        timeStyle: 'medium',
+                      })}
                     </time>{' '}
-                    · 실행 요청 {task.usage.modelCalls}회
+                    {t('helpers.m314', { count: formatNumber(task.usage.modelCalls) })}
                     <HelperTaskElapsed
                       task={task}
                       visible={props.open && !!taskHistory}
@@ -1196,13 +1213,15 @@ export function HelperPanel(props: Props) {
                   </small>
                 </div>
               </div>
-              <p>모델 · {task.modelTitle}</p>
+              <p>{t('helpers.m310', { model: task.modelTitle ?? t('helpers.m026') })}</p>
               <p className="task-request">{task.request}</p>
-              {task.error && <p className="error">{task.error}</p>}
+              {task.error && <p className="error">{translateMessage(task.error ?? '')}</p>}
               {task.completedEffects && (
                 <p>
-                  저장한 변경 {task.completedEffects.count}건 ·{' '}
-                  {task.completedEffects.labels.join(' · ')}
+                  {t('helpers.m315', {
+                    count: formatNumber(task.completedEffects.count),
+                    labels: task.completedEffects.labels.map(translateMessage).join(' · '),
+                  })}
                 </p>
               )}
               <HelperActivityDetails
@@ -1214,7 +1233,7 @@ export function HelperPanel(props: Props) {
             </li>
           ))}
         </ul>
-        {!recorded.length && <p role="status">확인할 작업이 없어요.</p>}
+        {!recorded.length && <p role="status">{t('helpers.m071')}</p>}
         {!taskHistory?.taskId && data.current?.hasOlderTasks && (
           <button
             type="button"
@@ -1222,7 +1241,7 @@ export function HelperPanel(props: Props) {
             disabled={data.loadingEarlier}
             onClick={() => void data.earlier('tasks')}
           >
-            이전 작업 더 보기
+            {t('helpers.m072')}
           </button>
         )}
       </Dialog>
@@ -1233,19 +1252,15 @@ export function HelperPanel(props: Props) {
           outboxDecision.scope === scopeKey &&
           outboxDecision.requestKey === outbox?.requestKey
         }
-        title={unpersisted[scopeKey] ? '도우미 요청 보관' : '도우미 요청 확인'}
+        title={unpersisted[scopeKey] ? t('helpers.m073') : t('helpers.m074')}
         variant="confirmation"
         onClose={() => setOutboxDecision(null)}
       >
-        <p>
-          {unpersisted[scopeKey]
-            ? '요청을 이 기기에 보관하지 못해 아직 보내지 않았어요. 다시 보관한 뒤 보내거나, 보관 없이 보낼 수 있어요.'
-            : '이전 요청의 접수 여부를 확인하지 못했어요. 같은 요청으로 확인할까요? 이미 접수됐다면 중복으로 실행하지 않아요.'}
-        </p>
-        <p>새로 작성한 입력은 유지돼요.</p>
+        <p>{unpersisted[scopeKey] ? t('helpers.m075') : t('helpers.m076')}</p>
+        <p>{t('helpers.m077')}</p>
         <div className="form-actions">
           <button type="button" className="secondary" onClick={() => setOutboxDecision(null)}>
-            닫기
+            {t('helpers.m078')}
           </button>
           {unpersisted[scopeKey] && (
             <button
@@ -1258,7 +1273,7 @@ export function HelperPanel(props: Props) {
                 void send(request, true);
               }}
             >
-              보관 없이 보내기
+              {t('helpers.m079')}
             </button>
           )}
           <button
@@ -1270,7 +1285,7 @@ export function HelperPanel(props: Props) {
               void send(request);
             }}
           >
-            {unpersisted[scopeKey] ? '다시 보관하고 보내기' : '접수 확인·다시 시도'}
+            {unpersisted[scopeKey] ? t('helpers.m080') : t('helpers.m081')}
           </button>
         </div>
       </Dialog>
@@ -1286,23 +1301,25 @@ export function HelperPanel(props: Props) {
         )}
         {props.resource && props.scope.kind === 'library' && (
           <div className="helper-editor">
-            <span>참고 자료 · {props.resource.title}</span>
+            <span>{t('helpers.m316', { title: props.resource.title })}</span>
             <button type="button" onClick={props.onClearResource}>
-              대상 해제
+              {t('helpers.m083')}
             </button>
           </div>
         )}
         {editor && !props.resource && (
           <div className="helper-editor">
-            <span>편집 중 · {editor.title || '이름 없는 자료'}</span>
+            <span>{t('helpers.m317', { title: editor.title || t('helpers.m085') })}</span>
           </div>
         )}
         {selectedOutline && (
           <div className="helper-outline-selection">
             <div>
               <strong>
-                {selectedOutline.target.purpose === 'review' ? '원문 점검' : '구성'} ·{' '}
-                {selectedOutline.title}
+                {selectedOutline.target.purpose === 'review'
+                  ? t('helpers.m086')
+                  : t('helpers.m087')}{' '}
+                · {selectedOutline.title}
               </strong>
               <button
                 type="button"
@@ -1313,13 +1330,11 @@ export function HelperPanel(props: Props) {
                   if (draft === selectedOutline.request) editDraft('');
                 }}
               >
-                대상 해제
+                {t('helpers.m083')}
               </button>
             </div>
             <small>
-              {selectedOutline.target.purpose === 'review'
-                ? '읽기 전용 비교예요. 이 요청에서는 계획·원문을 수정하지 않아요.'
-                : '선택한 구성을 이번 요청에만 함께 참고해요.'}
+              {selectedOutline.target.purpose === 'review' ? t('helpers.m088') : t('helpers.m089')}
             </small>
             {draft !== selectedOutline.request && (
               <button
@@ -1333,14 +1348,14 @@ export function HelperPanel(props: Props) {
                   )
                 }
               >
-                준비한 요청 덧붙이기
+                {t('helpers.m090')}
               </button>
             )}
           </div>
         )}
         {selection && (
           <div className="helper-selection">
-            <span>선택한 원문 · {selection.text.length.toLocaleString()}자</span>
+            <span>{t('helpers.m318', { count: formatNumber(selection.text.length) })}</span>
             <button
               type="button"
               onClick={() => {
@@ -1349,17 +1364,13 @@ export function HelperPanel(props: Props) {
                 saveLocal(`uimori:helper-selection:${scopeKey}`, null);
               }}
             >
-              선택 해제
+              {t('helpers.m093')}
             </button>
           </div>
         )}
         {outbox && !busy && (
           <div className="helper-outbox" role="status">
-            <p>
-              {unpersisted[scopeKey]
-                ? '보내지 못한 요청이 있어요.'
-                : '접수 확인이 필요한 요청이 있어요.'}
-            </p>
+            <p>{unpersisted[scopeKey] ? t('helpers.m094') : t('helpers.m095')}</p>
             <button
               type="button"
               className="secondary"
@@ -1372,7 +1383,7 @@ export function HelperPanel(props: Props) {
               }
               onClick={() => setOutboxDecision(outbox)}
             >
-              이전 요청 확인
+              {t('helpers.m096')}
             </button>
           </div>
         )}
@@ -1382,8 +1393,10 @@ export function HelperPanel(props: Props) {
             issue={false}
             label={
               summarized
-                ? (activityLabel ?? statusLabel[summarized.status] ?? summarized.status)
-                : `진행 중인 요청 ${pending.length}개`
+                ? (activityLabel ??
+                  t(statusLabel[summarized.status] ?? summarized.status) ??
+                  summarized.status)
+                : t('helpers.m097', { v0: formatNumber(pending.length) })
             }
             elapsed={
               summarized ? <HelperTaskElapsed task={summarized} visible={props.open} /> : null
@@ -1391,12 +1404,8 @@ export function HelperPanel(props: Props) {
             extra={summarized && pending.length > 1 ? pending.length - 1 : 0}
             expanded={!!summarized}
             collapsed={!summarized}
-            toggleLabel={summarized ? '작업 상태 숨기기' : '작업 상태 펼치기'}
-            toggleTitle={
-              summarized
-                ? '상태 표시만 숨겨요. 작업은 계속 진행되고 입력도 계속할 수 있어요.'
-                : '작업 상태 펼치기'
-            }
+            toggleLabel={summarized ? t('helpers.m098') : t('helpers.m099')}
+            toggleTitle={summarized ? t('helpers.m100') : t('helpers.m099')}
             onToggle={() =>
               setHiddenActivity((old) =>
                 summarized
@@ -1414,14 +1423,14 @@ export function HelperPanel(props: Props) {
             className="helper-notice"
             actions={
               <>
-                {/모델|MODEL_REQUIRED/u.test(error) && (
+                {modelRequired[scopeKey] && (
                   <button
                     type="button"
                     className="secondary helper-notice-lead"
                     onClick={props.onModelSettings}
                   >
                     <SettingsIcon size={18} aria-hidden="true" />
-                    모델 설정{' '}
+                    {t('helpers.m101')}{' '}
                   </button>
                 )}
                 {!hydrated[scopeKey] && (
@@ -1430,7 +1439,7 @@ export function HelperPanel(props: Props) {
                     className="secondary"
                     onClick={() => setRecoveryAttempt((old) => old + 1)}
                   >
-                    초안 다시 불러오기
+                    {t('helpers.m102')}
                   </button>
                 )}
                 <button
@@ -1443,12 +1452,12 @@ export function HelperPanel(props: Props) {
                   }}
                 >
                   <CloseIcon size={18} aria-hidden="true" />
-                  닫기
+                  {t('helpers.m078')}
                 </button>
               </>
             }
           >
-            {error}
+            {translateMessage(error)}
           </NoticeBanner>
         )}
         <ChatComposer
@@ -1461,10 +1470,10 @@ export function HelperPanel(props: Props) {
           <ComposerInput
             inputRef={input}
             enterSend={props.enterSend}
-            aria-label="도우미에게 요청"
+            aria-label={t('helpers.m103')}
             value={draft}
             disabled={props.ready === false || !conversation}
-            placeholder="도우미에게 요청하기"
+            placeholder={t('helpers.m104')}
             maxLength={REQUEST_TEXT_MAX_CHARS}
             onChange={(event) => editDraft(event.target.value)}
             onSend={() => {
@@ -1473,10 +1482,10 @@ export function HelperPanel(props: Props) {
             }}
           />
           <div className="quick-controls">
-            <ActionMenu label="도우미 대화 더보기" placement="top" viewport>
+            <ActionMenu label={t('helpers.m105')} placement="top" viewport>
               <button type="button" onClick={() => setTaskHistory({})}>
                 <History size={18} aria-hidden="true" />
-                작업 기록
+                {t('helpers.m106')}
               </button>
             </ActionMenu>
             {running && draft.trim() && (
@@ -1491,15 +1500,15 @@ export function HelperPanel(props: Props) {
                   data.loading ||
                   Boolean(outbox)
                 }
-                title="현재 작업의 참고 자료를 유지해요. 이미 시작한 작업은 완료될 수 있어요."
+                title={t('helpers.m107')}
                 onClick={() => void send(undefined, false, running.id)}
               >
-                현재 작업에 추가
+                {t('helpers.m108')}
               </button>
             )}
             {running && draft.trim() && (
               <IconButton
-                label="진행 중인 도우미 작업 취소"
+                label={t('helpers.m031')}
                 icon={Square}
                 onClick={() => void cancel(running)}
               />
@@ -1509,7 +1518,7 @@ export function HelperPanel(props: Props) {
             <button
               className="send-button"
               type="button"
-              aria-label="진행 중인 도우미 작업 취소"
+              aria-label={t('helpers.m031')}
               onClick={() => void cancel(running)}
             >
               <Square size={18} />
@@ -1518,10 +1527,8 @@ export function HelperPanel(props: Props) {
             <button
               className="send-button"
               type="submit"
-              aria-label={outbox ? '도우미 이전 요청 확인' : '도우미 요청 보내기'}
-              title={
-                outbox ? '이전 요청 확인' : running ? '다음 요청으로 보내기' : '도우미 요청 보내기'
-              }
+              aria-label={outbox ? t('helpers.m109') : t('helpers.m110')}
+              title={outbox ? t('helpers.m096') : running ? t('helpers.m111') : t('helpers.m110')}
               disabled={
                 props.ready === false ||
                 !hydrated[scopeKey] ||

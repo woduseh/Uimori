@@ -1,3 +1,4 @@
+import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -46,6 +47,7 @@ export function PromptWorkspaceEditor({
   onEditPrompt?: (presetId?: string) => void;
   navigationDisabled?: boolean;
 }) {
+  const { t } = useI18n();
   const [role, setRole] = useState<PromptRole>('main');
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState('');
@@ -88,7 +90,7 @@ export function PromptWorkspaceEditor({
     setApplyError('');
     try {
       await session.save();
-      setMessage('변경사항을 자동 저장했어요.');
+      setMessage(uiMessage('prompts.uiChangesSavedAutomatically'));
       return !session.snapshot().dirty;
     } catch {
       return false;
@@ -130,7 +132,7 @@ export function PromptWorkspaceEditor({
       });
       await session.reloadSaved();
       setSelectedCombo('');
-      setMessage('기본 프롬프트를 선택했어요.');
+      setMessage(uiMessage('prompts.uiBuiltInPromptSelected'));
     } catch (caught) {
       setApplyError((caught as Error).message);
       await session.refresh().catch(() => {});
@@ -143,8 +145,8 @@ export function PromptWorkspaceEditor({
       <LoadingState
         presentation="region"
         loading={!state.error}
-        error={state.error}
-        label="현재 프롬프트를 불러오는 중이에요…"
+        error={translateMessage(state.error)}
+        label={t('prompts.uiLoadingCurrentPrompts')}
         onRetry={() => void session.open().catch(() => {})}
       />
     );
@@ -174,22 +176,22 @@ export function PromptWorkspaceEditor({
   const showRecovery = conflict || !!saveError || (dirty && !state.autosavePending);
   return (
     <ResourceEditorProvider value={shared}>
-      <section aria-label="현재 프롬프트 설정" className="prompt-editor prompt-current-settings">
-        <p className="muted">
-          선택한 프리셋의 최신 저장본을 사용해요. 기본 옵션 변경은 모든 채팅의 다음 요청부터
-          적용해요.
-        </p>
+      <section
+        aria-label={t('prompts.uiCurrentPromptSettings')}
+        className="prompt-editor prompt-current-settings"
+      >
+        <p className="muted">{t('prompts.uiUsesTheLatestSavedPresetDefaultOptionChangesApply')}</p>
         {showRecovery && <ResourceEditorActions value={shared} hideSyncError />}
         <div className="prompt-editor-fields">
           <section className="settings-group">
             <div className="settings-group-heading">
-              <h4>프롬프트 선택</h4>
+              <h4>{t('prompts.uiSelectPrompt')}</h4>
             </div>
             <div className="settings-group-body">
               <label className="settings-row">
-                <span className="settings-row-copy">역할</span>
+                <span className="settings-row-copy">{t('prompts.uiRole')}</span>
                 <select
-                  aria-label="현재 프롬프트 역할"
+                  aria-label={t('prompts.uiCurrentPromptRole')}
                   value={role}
                   disabled={busy || dirty}
                   onChange={(event) => {
@@ -197,14 +199,14 @@ export function PromptWorkspaceEditor({
                     setSelectedCombo('');
                   }}
                 >
-                  <option value="main">작문</option>
-                  <option value="translation">번역</option>
+                  <option value="main">{t('prompts.uiWriting')}</option>
+                  <option value="translation">{t('prompts.uiTranslation')}</option>
                 </select>
               </label>
               <label className="settings-row">
-                <span className="settings-row-copy">프롬프트</span>
+                <span className="settings-row-copy">{t('prompts.uiPrompts')}</span>
                 <select
-                  aria-label="현재 프롬프트 프리셋"
+                  aria-label={t('prompts.uiCurrentPromptPreset')}
                   value={preset?.id ?? ''}
                   disabled={busy || dirty || conflict}
                   onChange={(event) => {
@@ -229,7 +231,8 @@ export function PromptWorkspaceEditor({
                     disabled={busy || dirty || navigationDisabled}
                     onClick={() => onEditPrompt(preset?.id)}
                   >
-                    <ExternalLinkIcon size={16} aria-hidden="true" /> 프롬프트 편집
+                    <ExternalLinkIcon size={16} aria-hidden="true" />
+                    {t('prompts.uiEditPrompt')}
                   </button>
                 )}
               </div>
@@ -238,12 +241,12 @@ export function PromptWorkspaceEditor({
           <details className="pc-composer-fold settings-group">
             <summary className="settings-group-heading">
               <ExpandIcon className="pc-disclosure-icon" size={16} aria-hidden="true" />
-              <strong>창작 옵션</strong>
+              <strong>{t('prompts.uiWritingOptions')}</strong>
               <small>
                 {comboValue === 'default'
-                  ? '기본값'
+                  ? t('prompts.uiDefault')
                   : comboValue === 'custom'
-                    ? '사용자 설정'
+                    ? t('prompts.uiCustom')
                     : selected?.title}
               </small>
             </summary>
@@ -251,9 +254,9 @@ export function PromptWorkspaceEditor({
               <div className="settings-group-body prompt-current-options">
                 <div className="prompt-combination-toolbar">
                   <label>
-                    옵션 조합
+                    {t('prompts.uiOptionCombination')}
                     <select
-                      aria-label="옵션 조합"
+                      aria-label={t('prompts.uiOptionCombination')}
                       value={comboValue}
                       disabled={applying || !!saveError || conflict}
                       onChange={(event) => {
@@ -274,9 +277,9 @@ export function PromptWorkspaceEditor({
                         }));
                       }}
                     >
-                      <option value="default">기본값</option>
+                      <option value="default">{t('prompts.uiDefault')}</option>
                       <option value="custom" disabled>
-                        사용자 설정
+                        {t('prompts.uiCustom')}
                       </option>
                       {combinations.map((item) => (
                         <option key={item.id} value={item.id}>
@@ -285,7 +288,7 @@ export function PromptWorkspaceEditor({
                       ))}
                     </select>
                   </label>
-                  <ActionMenu label="옵션 조합 메뉴">
+                  <ActionMenu label={t('prompts.uiOptionCombinationMenu')}>
                     <button
                       type="button"
                       disabled={dirty || busy || conflict}
@@ -296,10 +299,10 @@ export function PromptWorkspaceEditor({
                       }}
                     >
                       <SaveIcon size={18} aria-hidden="true" />
-                      현재 선택을 새 조합으로 저장
+                      {t('prompts.uiSaveSelectionAsANewCombination')}
                     </button>
                     <button type="button" onClick={() => setManageCombinations(true)}>
-                      조합 관리
+                      {t('prompts.uiManageCombinations2')}
                     </button>
                   </ActionMenu>
                 </div>
@@ -322,15 +325,15 @@ export function PromptWorkspaceEditor({
                 </fieldset>
               </div>
             ) : (
-              <p className="muted">이 프롬프트에는 선택할 옵션이 없어요.</p>
+              <p className="muted">{t('prompts.uiThisPromptHasNoSelectableOptions')}</p>
             )}
           </details>
         </div>
         {(conflict || saveError) && (
           <NoticeBanner tone="error">
             {conflict
-              ? '다른 곳에서 현재 프롬프트가 바뀌었어요. 현재 선택을 보존했어요. 저장본을 확인하거나 편집 취소로 돌아갈 수 있어요.'
-              : saveError}
+              ? t('prompts.uiThePromptChangedElsewhereYourSelectionIsPreservedCheck')
+              : translateMessage(saveError)}
           </NoticeBanner>
         )}
         {(saveError || (dirty && !busy && !state.autosavePending)) && (
@@ -340,13 +343,13 @@ export function PromptWorkspaceEditor({
             disabled={busy || conflict}
             onClick={() => void save()}
           >
-            다시 저장
+            {t('prompts.uiSaveAgain')}
           </button>
         )}
         {conflict && !showRecovery && <ResourceEditorStatus value={shared} hideSyncError />}
         {(busy || (dirty && !showRecovery)) && (
           <p role="status" className="muted">
-            저장 중…
+            {t('prompts.uiSaving')}
           </p>
         )}
         <TransientNotice message={busy || dirty ? '' : message} />
@@ -361,15 +364,15 @@ export function PromptWorkspaceEditor({
         />
         <Dialog
           open={comboOpen}
-          title="옵션 조합 저장"
+          title={t('prompts.uiSaveOptionCombination')}
           onClose={() => {
             if (!savingCombo) setComboOpen(false);
           }}
         >
           <label>
-            조합 이름
+            {t('prompts.uiCombinationName')}
             <input
-              aria-label="조합 이름"
+              aria-label={t('prompts.uiCombinationName')}
               value={comboName}
               maxLength={200}
               disabled={savingCombo}
@@ -385,7 +388,7 @@ export function PromptWorkspaceEditor({
               onClick={() => setComboOpen(false)}
             >
               <CloseIcon size={18} aria-hidden="true" />
-              취소
+              {t('prompts.uiCancel')}
             </button>
             <button
               type="button"
@@ -409,7 +412,7 @@ export function PromptWorkspaceEditor({
                 }
               }}
             >
-              {savingCombo ? '저장 중…' : '저장'}
+              {savingCombo ? t('prompts.uiSaving') : t('prompts.uiSave')}
             </button>
           </div>
         </Dialog>

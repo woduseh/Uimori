@@ -1,3 +1,11 @@
+import {
+  t,
+  useI18n,
+  translateMessage,
+  formatNumber,
+  messageRef,
+  message as uiMessage,
+} from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { ProviderConnectionForm } from './ProviderConnectionForm.js';
@@ -88,6 +96,7 @@ export function ConnectionEditor({
   modelToEdit?: string | null;
   onModelEditHandled?: () => void;
 }) {
+  useI18n();
   const testMode = useTestMode();
   const modelTests = useProviderModelTests();
   const [forcedVertexTier, setForcedVertexTier] = useState<VertexRequestTier>();
@@ -252,7 +261,7 @@ export function ConnectionEditor({
       JEV_PROVIDER_DEFINITION.label,
       JEV_PROVIDER_DEFINITION.modelLabel,
       JEV_PROVIDER_DEFINITION.modelId,
-      '판단'
+      t('providers.m0')
     );
   const connections = library.connections.filter((item) =>
     matches(filter, item.title, item.endpoint, providerDefinition(item.protocol).label)
@@ -291,7 +300,7 @@ export function ConnectionEditor({
     dispatchDraft({ type: 'connection.deleted', id: item.id });
     setError('');
     onError('');
-    setMessage(item.title + ' 프로바이더를 삭제했어요.');
+    setMessage(uiMessage('providers.m532', { value0: item.title }));
     await reload();
   }
   async function deletedModel(item: ModelPreset) {
@@ -300,7 +309,7 @@ export function ConnectionEditor({
     setConflict(null);
     setError('');
     onError('');
-    setMessage(item.title + ' 모델 프리셋을 삭제했어요.');
+    setMessage(uiMessage('providers.m533', { value0: item.title }));
     await reload();
   }
   const deleteConnection = (item: Connection) => (
@@ -308,8 +317,8 @@ export function ConnectionEditor({
       path={`/connections/${encodeURIComponent(item.id)}`}
       revision={item.revision}
       title={item.title}
-      label="프로바이더 삭제"
-      description="이 프로바이더와 소속 모델을 목록에서 제거하고 현재 전역 역할 선택을 해제해요. 이후 호출은 차단되며 서버 인증 파일과 과거 실행 기록은 유지돼요."
+      label={t('providers.m3')}
+      description={t('providers.m4')}
       disabled={busy}
       onDeleted={() => deletedConnection(item)}
       onError={onError}
@@ -320,9 +329,9 @@ export function ConnectionEditor({
       path={`/model-presets/${encodeURIComponent(item.id)}`}
       revision={item.revision}
       title={item.title}
-      label="모델 삭제"
+      label={t('providers.m5')}
       iconOnly={iconOnly}
-      description="삭제하면 현재 전역 역할 선택에서 해제돼요. 해당 모델을 쓰는 작문 보조는 꺼져요. 과거 실행에 저장된 모델 설정은 유지돼요."
+      description={t('providers.m6')}
       disabled={busy}
       onDeleted={() => deletedModel(item)}
       onError={onError}
@@ -347,15 +356,15 @@ export function ConnectionEditor({
       try {
         await reload();
       } catch (caught) {
-        const detail = caught instanceof Error ? caught.message : '목록 조회 실패';
-        const warning = `작업은 완료됐어요. 목록을 다시 불러오지 못했어요. ${detail}`;
+        const detail = caught instanceof Error ? caught.message : uiMessage('providers.m7');
+        const warning = uiMessage('providers.m534', { value0: messageRef(detail) });
         setMessage('');
         setRefreshWarning(warning);
         onError(warning);
       }
       return true;
     } catch (caught) {
-      const detail = caught instanceof Error ? caught.message : '작업을 완료하지 못했어요.';
+      const detail = caught instanceof Error ? caught.message : uiMessage('providers.m8');
       setError(detail);
       onError(detail);
       if (caught instanceof ApiError && caught.status === 409 && scope !== 'status') {
@@ -427,7 +436,9 @@ export function ConnectionEditor({
         replaceDraft('model', () => startModelFor(saved));
       }
     }
-    setMessage(saved.title + (id ? ' 프로바이더 변경 저장됨' : ' 프로바이더 등록됨'));
+    setMessage(
+      uiMessage('providers.m600', { name: saved.title, action: id ? 'updated' : 'created' })
+    );
   }
   async function saveModel(
     body: Record<string, unknown>,
@@ -446,13 +457,14 @@ export function ConnectionEditor({
       setSetup(false);
       if (!leave) navigate('models');
     }
-    setMessage(saved.title + (id ? ' 모델 변경 저장됨' : ' 모델 프리셋 등록됨'));
+    setMessage(
+      uiMessage('providers.m601', { name: saved.title, action: id ? 'updated' : 'created' })
+    );
   }
   async function catalog(item: Connection) {
     const result = await api<Connection>(`/connections/${item.id}/catalog`, {});
-    if (result.catalogError)
-      throw new Error('모델 목록을 확인하지 못했어요. 마지막 저장 목록과 수동 모델 ID를 유지해요.');
-    setMessage('모델 목록 조회 완료');
+    if (result.catalogError) throw new Error(uiMessage('providers.m14'));
+    setMessage(uiMessage('providers.m15'));
   }
   function statusConnection(item: Connection) {
     const body = {
@@ -514,7 +526,7 @@ export function ConnectionEditor({
           expectedOrder: group.map((item) => item.id),
         });
       }
-      setMessage('표시 순서를 저장했어요.');
+      setMessage(uiMessage('providers.m16'));
     });
   }
   function dragAttributes(kind: 'connection' | 'model', id: string) {
@@ -594,7 +606,8 @@ export function ConnectionEditor({
           setMovePosition('before');
         }}
       >
-        <MoveIcon size={18} aria-hidden="true" /> 순서 조정
+        <MoveIcon size={18} aria-hidden="true" />
+        {t('providers.m17')}
       </button>
     );
   }
@@ -619,15 +632,15 @@ export function ConnectionEditor({
   async function latest(kind: 'connection' | 'model') {
     if (kind === 'connection' && editingConnection) {
       const value = await api<Connection>(`/connections/${editingConnection.id}`);
-      if (!value) throw new Error('프로바이더를 찾지 못했어요.');
+      if (!value) throw new Error(uiMessage('providers.m18'));
       showConnection(value, false, true);
     }
     if (kind === 'model' && editingModel) {
       const value = await api<ModelPreset>(`/model-presets/${editingModel.id}`);
-      if (!value) throw new Error('모델을 찾지 못했어요.');
+      if (!value) throw new Error(uiMessage('providers.m19'));
       await showModel(value, false, true);
     }
-    setMessage('최신 저장 내용으로 편집 초안을 교체했어요.');
+    setMessage(uiMessage('providers.m20'));
   }
   function newConnection() {
     setSetup(true);
@@ -752,7 +765,7 @@ export function ConnectionEditor({
     onModelEditHandled?.();
     const target = library.models.find((item) => item.id === modelToEdit);
     if (!target) {
-      setError('선택한 모델 프리셋을 찾을 수 없어요.');
+      setError(uiMessage('providers.m21'));
       return;
     }
     if (editingModel?.id === target.id) navigate('model');
@@ -763,7 +776,7 @@ export function ConnectionEditor({
     <article
       key={JEV_PROVIDER_DEFINITION.id}
       className="provider-saved-item"
-      aria-label="TypeSafe AI 프로바이더"
+      aria-label={t('providers.m22')}
       {...dragAttributes('connection', JEV_PROVIDER_DEFINITION.id)}
     >
       <div className="provider-item-heading">
@@ -771,13 +784,13 @@ export function ConnectionEditor({
           type="button"
           className="provider-item-open secondary"
           disabled={busy}
-          aria-label="TypeSafe AI 프로바이더 수정"
+          aria-label={t('providers.m23')}
           data-provider-id={JEV_PROVIDER_DEFINITION.id}
           onClick={() => openJev('connections')}
         >
           <strong>TypeSafe AI</strong>
         </button>
-        <ActionMenu label="TypeSafe AI 프로바이더 메뉴">
+        <ActionMenu label={t('providers.m24')}>
           {orderMenu('connection', JEV_PROVIDER_DEFINITION.id)}
           <button
             type="button"
@@ -785,7 +798,8 @@ export function ConnectionEditor({
             disabled={busy}
             onClick={() => openJev('connections')}
           >
-            <ConnectionIcon size={18} aria-hidden="true" /> 연결 설정
+            <ConnectionIcon size={18} aria-hidden="true" />
+            {t('providers.m25')}
           </button>
         </ActionMenu>
       </div>
@@ -801,17 +815,17 @@ export function ConnectionEditor({
       <summary {...dragAttributes('connection', JEV_PROVIDER_DEFINITION.id)}>
         <span>
           <strong>{JEV_PROVIDER_DEFINITION.label}</strong>
-          <small>1개 모델</small>
+          <small>{t('providers.m26')}</small>
         </span>
       </summary>
       <div className="provider-model-group-list">
-        <article className="provider-saved-item" aria-label="JEV 모델">
+        <article className="provider-saved-item" aria-label={t('providers.m27')}>
           <div className="provider-item-heading">
             <button
               type="button"
               className="provider-item-open secondary"
               disabled={busy}
-              aria-label="JEV 모델 설정"
+              aria-label={t('providers.m28')}
               data-provider-id={JEV_PROVIDER_DEFINITION.id}
               onClick={() => {
                 setSetup(false);
@@ -821,7 +835,7 @@ export function ConnectionEditor({
               <strong>{JEV_PROVIDER_DEFINITION.modelLabel}</strong>
               <span className="provider-item-subtitle">{JEV_PROVIDER_DEFINITION.modelId}</span>
             </button>
-            <ActionMenu label="JEV 모델 메뉴">
+            <ActionMenu label={t('providers.m29')}>
               {orderMenu('connection', JEV_PROVIDER_DEFINITION.id)}
               <button
                 type="button"
@@ -832,23 +846,24 @@ export function ConnectionEditor({
                   openJev('models');
                 }}
               >
-                <ModelIcon size={18} aria-hidden="true" /> 모델 설정
+                <ModelIcon size={18} aria-hidden="true" />
+                {t('providers.m30')}
               </button>
             </ActionMenu>
           </div>
-          <section className="provider-model-test" aria-label="JEV 응답 테스트 설정">
+          <section className="provider-model-test" aria-label={t('providers.m31')}>
             <div className="provider-actions">
               <button
                 type="button"
                 className="secondary"
                 disabled={busy}
-                aria-label="JEV 응답 테스트 설정 열기"
+                aria-label={t('providers.m32')}
                 onClick={() => {
                   setSetup(false);
                   openJev('models');
                 }}
               >
-                테스트 보기
+                {t('providers.m33')}
               </button>
             </div>
           </section>
@@ -860,14 +875,18 @@ export function ConnectionEditor({
     <section
       className="connection-editor"
       data-testid="connection-editor"
-      aria-label="프로바이더·모델 등록"
+      aria-label={t('providers.m34')}
     >
-      <Dialog open={!!movingDisplay} title="표시 순서 조정" onClose={() => setMovingDisplay(null)}>
+      <Dialog
+        open={!!movingDisplay}
+        title={t('providers.m35')}
+        onClose={() => setMovingDisplay(null)}
+      >
         <div className="control-grid">
           <label className="full">
-            기준 항목
+            {t('providers.m36')}
             <select value={moveTarget} onChange={(event) => setMoveTarget(event.target.value)}>
-              <option value="">항목 선택</option>
+              <option value="">{t('providers.m37')}</option>
               {moveChoices.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.title}
@@ -876,13 +895,13 @@ export function ConnectionEditor({
             </select>
           </label>
           <label className="full">
-            배치 위치
+            {t('providers.m38')}
             <select
               value={movePosition}
               onChange={(event) => setMovePosition(event.target.value as 'before' | 'after')}
             >
-              <option value="before">기준 항목 앞</option>
-              <option value="after">기준 항목 뒤</option>
+              <option value="before">{t('providers.m39')}</option>
+              <option value="after">{t('providers.m40')}</option>
             </select>
           </label>
         </div>
@@ -896,40 +915,52 @@ export function ConnectionEditor({
               setMovingDisplay(null);
             }}
           >
-            옮기기
+            {t('providers.m41')}
           </button>
         </div>
       </Dialog>
       <SaveConflictDialog
         open={saveConflict !== null}
-        title="저장 내용 변경 확인"
+        title={t('providers.m42')}
         onClose={() => setSaveConflict(null)}
         readSaved={async () => {
           if (saveConflict === 'connection' && editingConnection) {
             const value = await api<Connection>(`/connections/${editingConnection.id}`);
-            return [
-              { label: '프로바이더 이름', value: value.title },
-              { label: '종류', value: providerDefinition(value.protocol).label },
-              { label: '주소', value: value.endpoint },
-              { label: '사용', value: value.enabled ? '켜짐' : '꺼짐' },
+            return () => [
+              { label: t('providers.m43'), value: value.title },
+              {
+                label: t('providers.m44'),
+                value: translateMessage(providerDefinition(value.protocol).label),
+              },
+              { label: t('providers.m45'), value: value.endpoint },
+              {
+                label: t('providers.m46'),
+                value: value.enabled ? t('providers.m47') : t('providers.m48'),
+              },
             ];
           }
           if (saveConflict === 'model' && editingModel) {
             const value = await api<ModelPreset>(`/model-presets/${editingModel.id}`);
-            return [
-              { label: '모델 프리셋 이름', value: value.title },
-              { label: '모델', value: value.modelId },
-              { label: '최대 출력 토큰', value: String(value.maxOutputTokens) },
-              { label: '컨텍스트 한도', value: String(value.inputTokenLimit ?? '미지정') },
+            return () => [
+              { label: t('providers.m49'), value: value.title },
+              { label: t('providers.m50'), value: value.modelId },
+              { label: t('providers.m51'), value: formatNumber(value.maxOutputTokens) },
+              {
+                label: t('providers.m52'),
+                value:
+                  value.inputTokenLimit === undefined
+                    ? t('providers.m53')
+                    : formatNumber(value.inputTokenLimit),
+              },
             ];
           }
-          throw new Error('저장본을 찾을 수 없어요. 현재 입력은 유지돼요.');
+          throw new Error(uiMessage('providers.m54'));
         }}
       />
       <Dialog
         open={!!discard}
         role="alertdialog"
-        title="편집 중인 초안 확인"
+        title={t('providers.m55')}
         variant="confirmation"
         onClose={() => {
           if (!discard || busy || operationLock.current) return;
@@ -940,10 +971,8 @@ export function ConnectionEditor({
       >
         {discard && (
           <>
-            <strong>
-              저장하지 않은 {discard.kind === 'connection' ? '프로바이더' : '모델'} 초안이 있어요
-            </strong>
-            <p>다른 항목을 편집하면 현재 초안이 교체돼요.</p>
+            <strong>{t('providers.m536', { kind: discard.kind })}</strong>
+            <p>{t('providers.m59')}</p>
             <DraftDiscardActions
               disabled={busy}
               onSave={async () => {
@@ -967,13 +996,13 @@ export function ConnectionEditor({
                 setDiscard(undefined);
                 action();
               }}
-              discardLabel="초안 버리고 계속"
+              discardLabel={t('providers.m60')}
             />
           </>
         )}
       </Dialog>
       <div className="provider-workspace-heading" ref={heading} tabIndex={-1}>
-        <div className="provider-workspace-navigation" aria-label="프로바이더·모델 등록 화면">
+        <div className="provider-workspace-navigation" aria-label={t('providers.m61')}>
           <button
             type="button"
             className={
@@ -982,7 +1011,7 @@ export function ConnectionEditor({
                 ? 'selected'
                 : 'secondary'
             }
-            aria-label="프로바이더 관리"
+            aria-label={t('providers.m62')}
             aria-pressed={
               ['connections', 'connection', 'providers'].includes(screen) ||
               (screen === 'jev' && jevReturn === 'connections')
@@ -994,7 +1023,7 @@ export function ConnectionEditor({
             }}
           >
             <ConnectionIcon size={18} aria-hidden="true" />
-            프로바이더
+            {t('providers.m57')}
           </button>
           <button
             type="button"
@@ -1005,7 +1034,7 @@ export function ConnectionEditor({
                 ? 'selected'
                 : 'secondary'
             }
-            aria-label="모델 프리셋"
+            aria-label={t('providers.m63')}
             aria-pressed={
               screen === 'models' ||
               screen === 'model' ||
@@ -1018,10 +1047,10 @@ export function ConnectionEditor({
             }}
           >
             <ModelIcon size={18} aria-hidden="true" />
-            모델 프리셋
+            {t('providers.m63')}
           </button>
           <IconButton
-            label="목록 새로고침"
+            label={t('providers.m64')}
             icon={RefreshIcon}
             className="provider-refresh"
             hidden={screen === 'jev'}
@@ -1030,17 +1059,13 @@ export function ConnectionEditor({
               void perform(async () => {
                 await reload();
                 setJevListRefresh((value) => value + 1);
-                setMessage('목록을 새로 읽었어요. 편집 초안은 유지돼요.');
+                setMessage(uiMessage('providers.m65'));
               });
             }}
           />
         </div>
       </div>
-      {jevListError && (
-        <NoticeBanner tone="error">
-          TypeSafe AI 등록 상태를 확인하지 못했어요. 목록을 새로고침해 주세요.
-        </NoticeBanner>
-      )}
+      {jevListError && <NoticeBanner tone="error">{t('providers.m66')}</NoticeBanner>}
       {(screen === 'models' || screen === 'connections') && (
         <>
           {((screen === 'models' ? library.models.length : library.connections.length) > 0 ||
@@ -1050,12 +1075,8 @@ export function ConnectionEditor({
                 <SearchIcon size={18} aria-hidden="true" />
                 <input
                   type="search"
-                  aria-label="프로바이더·모델 검색"
-                  placeholder={
-                    screen === 'models'
-                      ? '프리셋 이름, 모델 ID로 검색'
-                      : '프로바이더 이름, 종류, 주소로 검색'
-                  }
+                  aria-label={t('providers.m67')}
+                  placeholder={screen === 'models' ? t('providers.m68') : t('providers.m69')}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                 />
@@ -1064,12 +1085,12 @@ export function ConnectionEditor({
                 <button
                   type="button"
                   className="primary"
-                  aria-label={screen === 'connections' ? '새 프로바이더 입력' : '새 모델 입력'}
+                  aria-label={screen === 'connections' ? t('providers.m70') : t('providers.m71')}
                   disabled={busy}
                   onClick={() => (screen === 'connections' ? newConnection() : newModel())}
                 >
                   <AddIcon size={18} aria-hidden="true" />
-                  <span>{screen === 'connections' ? '프로바이더 추가' : '모델 추가'}</span>
+                  <span>{screen === 'connections' ? t('providers.m72') : t('providers.m73')}</span>
                 </button>
               </div>
             </div>
@@ -1081,7 +1102,7 @@ export function ConnectionEditor({
               disabled={busy}
               onClick={() => openJev('connections')}
             >
-              TypeSafe AI 편집 이어서
+              {t('providers.m74')}
             </button>
           )}
           {screen === 'connections' && connectionStarted && (
@@ -1091,7 +1112,7 @@ export function ConnectionEditor({
               disabled={busy}
               onClick={() => navigate('connection')}
             >
-              프로바이더 편집 이어서 · {connection.title || '이름 없는 초안'}
+              {t('providers.m537', { value0: connection.title || t('providers.m76') })}
             </button>
           )}
           {screen === 'models' && modelStarted && (
@@ -1101,16 +1122,17 @@ export function ConnectionEditor({
               disabled={busy}
               onClick={() => navigate('model')}
             >
-              모델 편집 이어서 · {model.title || '이름 없는 초안'}
+              {t('providers.m538', { value0: model.title || t('providers.m76') })}
             </button>
           )}
           {!library.connections.length && !hasJev && (
             <div className="provider-welcome">
               <ConnectionIcon size={28} aria-hidden="true" />
-              <h4>첫 프로바이더를 준비해요</h4>
-              <p>프로바이더를 추가한 뒤 사용할 모델을 등록해요.</p>
+              <h4>{t('providers.m78')}</h4>
+              <p>{t('providers.m79')}</p>
               <button type="button" disabled={busy} onClick={newConnection}>
-                프로바이더 추가 <ForwardIcon size={18} aria-hidden="true" />
+                {t('providers.m72')}
+                <ForwardIcon size={18} aria-hidden="true" />
               </button>
             </div>
           )}
@@ -1120,10 +1142,11 @@ export function ConnectionEditor({
             screen === 'models' && (
               <div className="provider-welcome">
                 <ModelIcon size={28} aria-hidden="true" />
-                <h4>사용할 모델을 등록해요</h4>
-                <p>준비된 프로바이더를 선택하고 모델과 생성 설정을 저장해요.</p>
+                <h4>{t('providers.m80')}</h4>
+                <p>{t('providers.m81')}</p>
                 <button type="button" disabled={busy} onClick={() => newModel()}>
-                  <AddIcon size={18} aria-hidden="true" /> 새 모델 입력
+                  <AddIcon size={18} aria-hidden="true" />
+                  {t('providers.m71')}
                 </button>
               </div>
             )}
@@ -1145,24 +1168,26 @@ export function ConnectionEditor({
               }}
             >
               <BackIcon size={16} />
-              목록으로
+              {t('providers.m82')}
             </button>
           )}
           {setup && (
-            <ol className="provider-steps" aria-label="빠른 프로바이더 진행">
-              <li aria-current={screen === 'providers' ? 'step' : undefined}>1. 프로바이더 종류</li>
-              <li aria-current={screen === 'connection' || screen === 'jev' ? 'step' : undefined}>
-                2. 접속 정보
+            <ol className="provider-steps" aria-label={t('providers.m83')}>
+              <li aria-current={screen === 'providers' ? 'step' : undefined}>
+                {t('providers.m84')}
               </li>
-              <li aria-current={screen === 'model' ? 'step' : undefined}>3. 모델</li>
+              <li aria-current={screen === 'connection' || screen === 'jev' ? 'step' : undefined}>
+                {t('providers.m85')}
+              </li>
+              <li aria-current={screen === 'model' ? 'step' : undefined}>{t('providers.m86')}</li>
             </ol>
           )}
         </div>
       )}
       {screen === 'providers' && (
-        <section className="provider-selection" aria-label="프로바이더 선택">
-          <h4>프로바이더를 선택하세요.</h4>
-          <p className="muted">프로바이더를 고르면 기본 접속 정보를 채워요.</p>
+        <section className="provider-selection" aria-label={t('providers.m87')}>
+          <h4>{t('providers.m88')}</h4>
+          <p className="muted">{t('providers.m89')}</p>
           <div className="provider-template-grid">
             {PROVIDER_CHOICES.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
               <button
@@ -1175,19 +1200,19 @@ export function ConnectionEditor({
                 <span className="provider-template-icon">
                   <ConnectionIcon size={20} />
                 </span>
-                <strong>{item.label}</strong>
+                <strong>{translateMessage(item.label)}</strong>
                 <small>
                   {item.kind === 'judgment'
-                    ? '서버 API 키 인증'
+                    ? t('providers.m90')
                     : item.id === 'codex-app-server-v1'
-                      ? '개인 ChatGPT 구독 · 서버 실행'
+                      ? t('providers.m91')
                       : item.id === 'vertex-gemini-v1'
-                        ? 'Gemini · 서비스 계정 인증'
+                        ? t('providers.m92')
                         : item.id === 'google-gemini-v1'
-                          ? 'Gemini · AI Studio API 키 인증'
+                          ? t('providers.m93')
                           : item.id === 'openai-chat-v1'
-                            ? '호환 API 또는 로컬 서버'
-                            : '서버 API 키 인증'}
+                            ? t('providers.m94')
+                            : t('providers.m90')}
                 </small>
                 <ForwardIcon size={16} />
               </button>
@@ -1195,13 +1220,13 @@ export function ConnectionEditor({
           </div>
           {testMode && (
             <details className="provider-test-template">
-              <summary>개발·검사용 프로바이더</summary>
+              <summary>{t('providers.m95')}</summary>
               <button
                 type="button"
                 className="secondary"
                 onClick={() => startProvider('fixture-sse-v1')}
               >
-                로컬 fixture로 설정
+                {t('providers.m96')}
               </button>
             </details>
           )}
@@ -1218,10 +1243,8 @@ export function ConnectionEditor({
         onBusyChange={setJevBusy}
         onStatusChange={setJevStatus}
       />
-      <section hidden={screen !== 'connections'} aria-label="저장한 프로바이더">
-        {providerIds.length > 1 && (
-          <p className="muted">끌어서 순서를 바꿔요. 키보드에서는 Alt + ↑ / ↓를 사용해요.</p>
-        )}
+      <section hidden={screen !== 'connections'} aria-label={t('providers.m97')}>
+        {providerIds.length > 1 && <p className="muted">{t('providers.m98')}</p>}
         <div className="connection-list provider-saved-list settings-group-body">
           {providerIds.map((id) => {
             if (id === JEV_PROVIDER_DEFINITION.id) return jevConnectionRow;
@@ -1231,7 +1254,7 @@ export function ConnectionEditor({
               <article
                 className="provider-saved-item"
                 key={versionRef(item)}
-                aria-label={item.title + ' 프로바이더'}
+                aria-label={t('providers.m539', { value0: item.title })}
                 {...dragAttributes('connection', item.id)}
               >
                 <div className="provider-item-heading">
@@ -1239,7 +1262,7 @@ export function ConnectionEditor({
                     type="button"
                     className="provider-item-open secondary"
                     disabled={busy}
-                    aria-label={item.title + ' 프로바이더 수정'}
+                    aria-label={t('providers.m540', { value0: item.title })}
                     data-provider-id={item.id}
                     onClick={() => showConnection(item)}
                   >
@@ -1248,70 +1271,73 @@ export function ConnectionEditor({
                       <span className="provider-item-subtitle">
                         {[
                           item.title !== providerDefinition(item.protocol).label
-                            ? providerDefinition(item.protocol).label
+                            ? translateMessage(providerDefinition(item.protocol).label)
                             : '',
-                          !item.enabled ? '비활성' : '',
+                          !item.enabled ? t('providers.m101') : '',
                         ]
                           .filter(Boolean)
                           .join(' · ')}
                       </span>
                     )}
                   </button>
-                  <ActionMenu label={item.title + ' 프로바이더 메뉴'}>
+                  <ActionMenu label={t('providers.m541', { value0: item.title })}>
                     {orderMenu('connection', item.id)}
                     {(testMode || item.protocol !== 'fixture-sse-v1') && (
                       <button
                         type="button"
                         className="secondary"
                         disabled={busy}
-                        aria-label={item.title + ' 프로바이더 복제'}
+                        aria-label={t('providers.m542', { value0: item.title })}
                         onClick={() => showConnection(item, true)}
                       >
-                        <CopyIcon size={18} aria-hidden="true" /> 복제
+                        <CopyIcon size={18} aria-hidden="true" />
+                        {t('providers.m104')}
                       </button>
                     )}
                     <button
                       type="button"
                       className="secondary"
                       disabled={busy}
-                      aria-label={
-                        item.title + ' 프로바이더 ' + (item.enabled ? '비활성' : '활성화')
-                      }
+                      aria-label={t('providers.m543', {
+                        name: item.title,
+                        enabled: String(item.enabled),
+                      })}
                       onClick={() => statusConnection(item)}
                     >
                       <PowerIcon size={18} aria-hidden="true" />{' '}
-                      {item.enabled ? '비활성' : '활성화'}
+                      {item.enabled ? t('providers.m101') : t('providers.m106')}
                     </button>
                     <button
                       type="button"
                       className="secondary"
                       disabled={busy}
-                      aria-label={item.title + ' 모델 입력에 사용'}
+                      aria-label={t('providers.m544', { value0: item.title })}
                       onClick={() => {
                         setSetup(false);
                         replaceDraft('model', () => startModelFor(item));
                       }}
                     >
-                      <ModelIcon size={18} aria-hidden="true" /> 모델 입력에 사용
+                      <ModelIcon size={18} aria-hidden="true" />
+                      {t('providers.m108')}
                     </button>
                     <button
                       type="button"
                       className="secondary"
                       disabled={busy}
-                      aria-label={item.title + ' 모델 목록 새로고침'}
+                      aria-label={t('providers.m545', { value0: item.title })}
                       onClick={() => {
                         void perform(() => catalog(item));
                       }}
                     >
                       <RefreshIcon size={18} aria-hidden="true" />
-                      모델 목록 새로고침
+                      {t('providers.m110')}
                     </button>
                     {deleteConnection(item)}
                   </ActionMenu>
                 </div>
                 {item.catalogError && (
                   <NoticeBanner tone="error" className="provider-item-notice">
-                    모델 목록 조회 실패 · 마지막 저장 목록을 유지해요.
+                    {t('providers.m111')}
                   </NoticeBanner>
                 )}
               </article>
@@ -1322,9 +1348,9 @@ export function ConnectionEditor({
             !jevMatches &&
             (library.connections.length > 0 || hasJev) && (
               <div className="provider-empty" role="status">
-                <p>검색 조건에 맞는 프로바이더가 없어요.</p>
+                <p>{t('providers.m112')}</p>
                 <button type="button" className="secondary" onClick={() => setQuery('')}>
-                  검색 지우기
+                  {t('providers.m113')}
                 </button>
               </div>
             )}
@@ -1333,13 +1359,9 @@ export function ConnectionEditor({
       <section
         hidden={screen !== 'models'}
         className="registered-models"
-        aria-label="저장한 모델 프리셋"
+        aria-label={t('providers.m114')}
       >
-        {library.models.length > 1 && (
-          <p className="muted">
-            끌어서 순서를 바꾸면 모델 선택 목록에도 반영돼요. 키보드에서는 Alt + ↑ / ↓를 사용해요.
-          </p>
-        )}
+        {library.models.length > 1 && <p className="muted">{t('providers.m115')}</p>}
         <div className="provider-saved-list settings-group-body">
           {providerIds.map((id) => {
             if (id === JEV_PROVIDER_DEFINITION.id) return jevModelRow;
@@ -1359,8 +1381,8 @@ export function ConnectionEditor({
                   {...(group.connection ? dragAttributes('connection', group.connection.id) : {})}
                 >
                   <span>
-                    <strong>{group.connection?.title ?? '프로바이더 확인 필요'}</strong>
-                    <small>{group.models.length}개 모델</small>
+                    <strong>{group.connection?.title ?? t('providers.m116')}</strong>
+                    <small>{t('providers.m546', { value0: group.models.length })}</small>
                   </span>
                 </summary>
                 <div className="provider-model-group-list">
@@ -1368,7 +1390,7 @@ export function ConnectionEditor({
                     <article
                       className="provider-saved-item"
                       key={versionRef(item)}
-                      aria-label={item.title + ' 모델'}
+                      aria-label={t('providers.m547', { value0: item.title })}
                       {...dragAttributes('model', item.id)}
                     >
                       <div className="provider-item-heading">
@@ -1376,7 +1398,7 @@ export function ConnectionEditor({
                           type="button"
                           className="provider-item-open secondary"
                           disabled={busy}
-                          aria-label={item.title + ' 모델 수정'}
+                          aria-label={t('providers.m548', { value0: item.title })}
                           data-provider-id={item.id}
                           onClick={() => {
                             void perform(() => showModel(item), 'model');
@@ -1386,39 +1408,39 @@ export function ConnectionEditor({
                           <span className="provider-item-subtitle">
                             {item.modelId}
                             {item.enabled === false
-                              ? ' · 비활성'
+                              ? t('providers.m120')
                               : group.connection?.enabled === false
-                                ? ' · 프로바이더 비활성'
+                                ? t('providers.m121')
                                 : ''}
                           </span>
                         </button>
                         <div className="provider-model-row-actions">
-                          <ActionMenu label={item.title + ' 모델 메뉴'}>
+                          <ActionMenu label={t('providers.m549', { value0: item.title })}>
                             {orderMenu('model', item.id)}
                             <button
                               type="button"
                               className="secondary"
                               disabled={busy}
-                              aria-label={item.title + ' 모델 복제'}
+                              aria-label={t('providers.m550', { value0: item.title })}
                               onClick={() => {
                                 void perform(() => showModel(item, true), 'model');
                               }}
                             >
-                              <CopyIcon size={18} aria-hidden="true" /> 복제
+                              <CopyIcon size={18} aria-hidden="true" />
+                              {t('providers.m104')}
                             </button>
                             <button
                               type="button"
                               className="secondary"
                               disabled={busy}
-                              aria-label={
-                                item.title +
-                                ' 모델 ' +
-                                (item.enabled === false ? '활성화' : '비활성')
-                              }
+                              aria-label={t('providers.m551', {
+                                name: item.title,
+                                enabled: String(item.enabled !== false),
+                              })}
                               onClick={() => statusModel(item)}
                             >
                               <PowerIcon size={18} aria-hidden="true" />{' '}
-                              {item.enabled === false ? '활성화' : '비활성'}
+                              {item.enabled === false ? t('providers.m106') : t('providers.m101')}
                             </button>
                             {deleteModel(item)}
                           </ActionMenu>
@@ -1445,9 +1467,9 @@ export function ConnectionEditor({
           })}
           {models.length === 0 && !jevMatches && (library.models.length > 0 || hasJev) && (
             <div className="provider-empty" role="status">
-              <p>검색 조건에 맞는 모델이 없어요.</p>
+              <p>{t('providers.m125')}</p>
               <button type="button" className="secondary" onClick={() => setQuery('')}>
-                검색 지우기
+                {t('providers.m113')}
               </button>
             </div>
           )}
@@ -1494,9 +1516,9 @@ export function ConnectionEditor({
         }}
         deleteAction={editingModel && deleteModel(editingModel, true)}
       />
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       <TransientNotice message={message} />
-      {refreshWarning && <NoticeBanner>{refreshWarning}</NoticeBanner>}
+      {refreshWarning && <NoticeBanner>{translateMessage(refreshWarning)}</NoticeBanner>}
     </section>
   );
 }

@@ -1,3 +1,4 @@
+import { legacyMessage } from './i18n.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { apiBinary } from './api.js';
 
@@ -19,18 +20,18 @@ export function readImportSource(
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     if (signal?.aborted) {
-      reject(new DOMException('파일 읽기가 취소됐어요.', 'AbortError'));
+      reject(new DOMException(legacyMessage('transfer.m189'), 'AbortError'));
       return;
     }
     const abort = () => reader.abort();
     signal?.addEventListener('abort', abort, { once: true });
     reader.onloadend = () => signal?.removeEventListener('abort', abort);
-    reader.onerror = () => reject(new Error('파일을 읽지 못했어요. 다시 선택해 주세요.'));
-    reader.onabort = () => reject(new Error('파일 읽기가 취소됐어요.'));
+    reader.onerror = () => reject(new Error(legacyMessage('transfer.m190')));
+    reader.onabort = () => reject(new Error(legacyMessage('transfer.m189')));
     reader.onload = () => {
       const data = reader.result;
       if (typeof data !== 'string' || !data.includes(',')) {
-        reject(new Error('파일 내용을 읽지 못했어요.'));
+        reject(new Error(legacyMessage('transfer.m191')));
         return;
       }
       resolve({ name: file.name, base64: data.slice(data.indexOf(',') + 1) });

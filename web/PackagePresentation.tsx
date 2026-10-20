@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage, messageRef } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Job, Source } from '../core/types.js';
 import { useWindowViewport } from './window-viewport.js';
@@ -36,6 +37,7 @@ export function usePackagePresentation(
   enabled: boolean,
   refreshKey: string
 ) {
+  useI18n();
   const viewport = useWindowViewport(enabled);
   const sourceIdentity = `${source.chatId}:${source.id}`;
   const identity = `${sourceIdentity}:${source.hash}:${translation?.id ?? ''}:${translation?.revision ?? 0}:${translation?.status ?? ''}`;
@@ -74,15 +76,15 @@ export function usePackagePresentation(
         }
         const data = (await response.json()) as PackagePresentation;
         if (data.sourceRevision !== source.id || data.sourceHash !== source.hash)
-          throw new Error('표시 결과의 원문 저장본이 달라요.');
+          throw new Error(uiMessage('library.theOriginalSnapshotDiffersFromThePresentation'));
         if (!['plain-text', 'risu-html'].includes(data.format))
-          throw new Error('지원하지 않는 표시 형식이에요.');
+          throw new Error(uiMessage('library.unsupportedPresentationFormat'));
         if (
           data.translation &&
           (data.translationId !== translation?.id ||
             data.translationRevision !== (translation?.revision ?? 0))
         )
-          throw new Error('표시 결과의 번역 저장본이 달라요.');
+          throw new Error(uiMessage('library.theTranslationSnapshotDiffersFromThePresentation'));
         if (!controller.signal.aborted && sequence.current === requestId)
           setResult({ key, identity, sourceIdentity, data });
       } catch (error) {
@@ -91,7 +93,9 @@ export function usePackagePresentation(
             key,
             identity,
             sourceIdentity,
-            error: `표시 변환을 적용하지 못해 저장된 본문을 표시해요. ${error instanceof Error ? error.message : ''}`,
+            error: uiMessage('library.couldNotApplyDisplayTransformationsShowingThe', {
+              v0: error instanceof Error ? messageRef(error.message) : '',
+            }),
           });
       }
     })();
@@ -127,16 +131,17 @@ export function usePackagePresentation(
   };
 }
 export function PackagePresentationIssues({ data }: { data?: PackagePresentation }) {
+  useI18n();
   if (!data) return null;
   const messages = [
     ...new Set(
       data.issues.map((issue) =>
         issue === 'native-image-guidance-evaluation'
-          ? '이미지 표시 규칙을 해석하지 못해 일부 선택 이미지를 생략했어요.'
+          ? t('library.someSelectedImagesWereOmittedBecauseImage')
           : issue.startsWith('native-image-tag-evaluation:')
-            ? '카드의 이미지 표시 규칙을 적용하지 못해 일부 선택 이미지를 생략했어요.'
+            ? t('library.someSelectedImagesWereOmittedBecauseThe')
             : issue.startsWith('native-image-tag-unavailable:')
-              ? '선택 이미지를 카드의 이미지 표시 규칙과 연결하지 못해 생략했어요.'
+              ? t('library.selectedImagesWereOmittedBecauseTheyCould')
               : issue
       )
     ),
@@ -144,8 +149,8 @@ export function PackagePresentationIssues({ data }: { data?: PackagePresentation
   return (
     <>
       {messages.map((message) => (
-        <p key={message} role="status" className="muted">
-          {message}
+        <p key={translateMessage(message)} role="status" className="muted">
+          {translateMessage(message)}
         </p>
       ))}
     </>

@@ -1,3 +1,4 @@
+import { getLocale, localeChangedEvent, message as uiMessage } from './i18n.js';
 import { notificationIntent, type NotificationIntent } from '../core/push.js';
 type InstallPrompt = Event & {
   prompt: () => Promise<void>;
@@ -22,15 +23,13 @@ export const installServerSnapshot = () => serverSnapshot;
 
 export function pwaRegistration(): Promise<ServiceWorkerRegistration> {
   if (!isSecureContext || !('serviceWorker' in navigator))
-    return Promise.reject(
-      new Error('이 환경에서는 앱 설치·알림을 준비할 수 없어요. HTTPS 주소로 열어 주세요.')
-    );
+    return Promise.reject(new Error(uiMessage('outside.securePwa')));
   if (!registration)
     registration = navigator.serviceWorker
       .register('/sw.js', { scope: '/', updateViaCache: 'none' })
       .catch(() => {
         registration = null;
-        throw new Error('앱 서비스를 준비하지 못했어요. 연결을 확인하고 다시 시도해 주세요.');
+        throw new Error(uiMessage('outside.pwaFailure'));
       });
   return registration;
 }
@@ -43,7 +42,7 @@ export async function promptInstall() {
     await current.prompt();
     await current.userChoice;
   } catch {
-    publish({ error: '브라우저의 앱 설치 메뉴에서 다시 시도해 주세요.' });
+    publish({ error: uiMessage('outside.installRetry') });
   }
   // The appinstalled event, not a possibly accepted prompt, confirms installation.
 }
@@ -66,7 +65,34 @@ export function subscribeNotificationNavigation(consumer: (intent: NotificationI
   };
 }
 
+/** Presentation only: no subscription, permission request, navigation or task mutation. */
+export function syncPwaLocale(locale = getLocale()) {
+  const manifest = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+  if (manifest)
+    manifest.href =
+      locale === 'ko' ? '/manifest.webmanifest' : '/manifest.' + locale + '.webmanifest';
+  if (!isSecureContext || !('serviceWorker' in navigator)) return;
+  const send = (worker: ServiceWorker | null) =>
+    worker?.postMessage({ type: 'uimori:ui-language', locale: getLocale() });
+  void pwaRegistration()
+    .then((registered) => {
+      send(registered.active);
+      const worker = registered.installing ?? registered.waiting;
+      if (worker) {
+        send(worker);
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'activated') send(worker);
+        });
+      }
+    })
+    .catch(() => {});
+  // The first install may have no active worker yet.
+  void navigator.serviceWorker.ready.then((registered) => send(registered.active)).catch(() => {});
+}
+
 export function startPwa() {
+  syncPwaLocale();
+  window.addEventListener(localeChangedEvent, () => syncPwaLocale());
   if ('serviceWorker' in navigator)
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (!event.source || !('scriptURL' in event.source)) return;

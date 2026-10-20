@@ -1,3 +1,4 @@
+import { legacyMessage } from './i18n.js';
 import { CHAT_BACKUP_FORMAT, CHAT_BACKUP_MAX_BYTES, type ChatBackup } from '../core/chat-backup.js';
 import {
   NATIVE_ARCHIVE_MAX_BYTES,
@@ -11,7 +12,7 @@ export type BackupFileContents =
   | { kind: 'resources'; archive: false; file: NativeTransferFile }
   | { kind: 'chat'; archive: false; backup: ChatBackup };
 const invalid = (): never => {
-  throw new Error('Uimori 자료·채팅 백업이나 전체 작업실 백업 파일을 선택해 주세요.');
+  throw new Error(legacyMessage('transfer.m147'));
 };
 const decoder = new TextDecoder();
 
@@ -19,8 +20,7 @@ const decoder = new TextDecoder();
 export async function inspectBackupFile(file: File): Promise<BackupFileContents> {
   const signature = new Uint8Array(await file.slice(0, 16).arrayBuffer());
   if (decoder.decode(signature) === 'SQLite format 3\0') return { kind: 'database' };
-  if (file.size > NATIVE_ARCHIVE_MAX_BYTES)
-    throw new Error('백업은 512MiB 이하 파일을 사용해 주세요.');
+  if (file.size > NATIVE_ARCHIVE_MAX_BYTES) throw new Error(legacyMessage('transfer.m148'));
   if (signature.length >= 4 && new DataView(signature.buffer).getUint32(0, true) === 0x04034b50) {
     if (file.size < 22) invalid();
     const end = new DataView(await file.slice(file.size - 22).arrayBuffer());
@@ -64,13 +64,12 @@ export async function inspectBackupFile(file: File): Promise<BackupFileContents>
     }
     return invalid();
   }
-  if (file.size > CHAT_BACKUP_MAX_BYTES)
-    throw new Error('JSON 백업은 256MiB 이하 파일을 사용해 주세요.');
+  if (file.size > CHAT_BACKUP_MAX_BYTES) throw new Error(legacyMessage('transfer.m149'));
   let value: unknown;
   try {
     value = JSON.parse(await file.text());
   } catch {
-    throw new Error('백업 파일의 형식을 읽지 못했어요. 원본 파일을 확인해 주세요.');
+    throw new Error(legacyMessage('transfer.m126'));
   }
   if (!value || typeof value !== 'object') return invalid();
   const format = (value as { format?: unknown }).format;

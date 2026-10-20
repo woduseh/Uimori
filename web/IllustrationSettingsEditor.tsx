@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -52,6 +53,7 @@ function IllustrationEnvironmentEditor({
   onSaveHandlerChange?: SettingsSaveRegistration;
   onSavedChange: (settings: IllustrationSettings) => void;
 }) {
+  useI18n();
   const [saved, setSaved] = useState<IllustrationSettings | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -95,8 +97,8 @@ function IllustrationEnvironmentEditor({
       <LoadingState
         presentation="region"
         loading={!loadError}
-        error={loadError}
-        label="삽화 설정을 불러오는 중이에요…"
+        error={translateMessage(loadError)}
+        label={t('visuals.m041')}
         onRetry={() => void load()}
       />
     );
@@ -116,7 +118,7 @@ function IllustrationEnvironmentEditor({
     selected: ModelRef | null,
     models: Library['models'],
     onChange: (ref: ModelRef | null) => void,
-    emptyLabel = '모델 미지정',
+    emptyLabel = t('visuals.m042'),
     description = ''
   ) => {
     const model = library.models.find((item) => item.id === selected?.id);
@@ -134,7 +136,7 @@ function IllustrationEnvironmentEditor({
           >
             <option value="">{emptyLabel}</option>
             {selected && !models.some((item) => item.id === selected.id) && (
-              <option value={selected.id}>선택한 모델 · 삭제되었거나 확인 필요</option>
+              <option value={selected.id}>{t('visuals.m043')}</option>
             )}
             {models
               .filter((item) => canSelect(item) || item.id === selected?.id)
@@ -144,12 +146,12 @@ function IllustrationEnvironmentEditor({
                   {canSelect(item)
                     ? library.connections.find((connection) => connection.id === item.connectionId)
                         ?.title
-                    : '모델 또는 프로바이더 비활성'}
+                    : t('visuals.m044')}
                 </option>
               ))}
           </select>
           {selected && (!model || !canSelect(model)) && (
-            <small role="status">이 모델을 사용할 수 없어 새 삽화 작업을 시작할 수 없어요.</small>
+            <small role="status">{t('visuals.m045')}</small>
           )}
         </span>
       </label>
@@ -217,7 +219,7 @@ function IllustrationEnvironmentEditor({
         setSaved(accepted);
         setDraft(structuredClone(accepted));
         setDirty(false);
-        setMessage('삽화 설정을 저장했어요. 이후 예약하는 삽화 작업부터 적용해요.');
+        setMessage(uiMessage('visuals.m046'));
         return true;
       })
       .catch((caught: Error) => {
@@ -245,7 +247,7 @@ function IllustrationEnvironmentEditor({
       setMessage('');
       setConfirmReload(false);
     } catch {
-      setLoadError('설정을 불러오지 못했어요. 초안은 유지했어요.');
+      setLoadError(uiMessage('visuals.m047'));
     } finally {
       lock.current = false;
       setOperation(null);
@@ -279,26 +281,23 @@ function IllustrationEnvironmentEditor({
   };
   return (
     <section
-      aria-label="삽화 설정"
+      aria-label={t('visuals.m048')}
       className="settings-section settings-group illustration-settings illustration-environment"
     >
       <div className="settings-group-heading">
         <div>
-          <h3>생성 환경·자동 생성</h3>
-          <p>
-            선택한 프리셋이 사용할 생성기를 정해요. 같은 생성기를 쓰는 프리셋은 아래 연결과 모델을
-            함께 사용해요. 변경한 설정은 이후 새로 요청하는 삽화부터 사용해요.
-          </p>
+          <h3>{t('visuals.m049')}</h3>
+          <p>{t('visuals.m050')}</p>
         </div>
       </div>
       <fieldset disabled={busy} className="illustration-environment-fields">
         <div className="settings-group-body illustration-automatic-settings">
           {testMode && (
             <label className="settings-row">
-              <span className="settings-row-copy">테스트 생성기</span>
+              <span className="settings-row-copy">{t('visuals.m051')}</span>
               <span className="settings-row-control">
                 <select
-                  aria-label="테스트 삽화 생성기"
+                  aria-label={t('visuals.m052')}
                   value={draft.generator === 'fixture' ? 'fixture' : ''}
                   onChange={(event) =>
                     change({
@@ -307,30 +306,27 @@ function IllustrationEnvironmentEditor({
                     })
                   }
                 >
-                  <option value="">선택한 프리셋 사용</option>
-                  <option value="fixture">모의 생성기 (테스트 모드)</option>
+                  <option value="">{t('visuals.m053')}</option>
+                  <option value="fixture">{t('visuals.m054')}</option>
                 </select>
               </span>
             </label>
           )}
           <label className="settings-row settings-row-toggle">
             <span className="settings-row-copy">
-              <span>자동 생성</span>
-              <small>
-                서로 다른 순간을 골라 대표 컷과 문단 삽화를 만들어요. 생성 중에도 다음 채팅은 계속할
-                수 있어요.
-              </small>
+              <span>{t('visuals.m055')}</span>
+              <small>{t('visuals.m056')}</small>
             </span>
             <span className="settings-row-control">
               <Switch
-                aria-label="응답 완료 후 자동 삽화 생성"
+                aria-label={t('visuals.m057')}
                 checked={draft.automatic}
                 onChange={(event) => change({ ...draft, automatic: event.target.checked })}
               />
             </span>
           </label>
           {numberField(
-            '장면당 최대 삽화 개수',
+            t('visuals.m058'),
             draft.maxPerSource,
             1,
             8,
@@ -344,24 +340,24 @@ function IllustrationEnvironmentEditor({
                     : draft.automaticMaxTargets,
               }),
             1,
-            '최대 개수는 서로 다른 컷 기준이에요. 자동 생성은 기본 1컷이며, 선택한 수와 응답당 한도 안에서 필요한 만큼만 만들어요.'
+            t('visuals.m059')
           )}
           {draft.automatic &&
             numberField(
-              '자동으로 고를 최대 컷 수',
+              t('visuals.m060'),
               draft.automaticMaxTargets,
               1,
               draft.maxPerSource,
               (value) => change({ ...draft, automaticMaxTargets: value })
             )}
           {numberField(
-            '자동 재요청 횟수',
+            t('visuals.m061'),
             draft.maxAutoRetries,
             0,
             5,
             (value) => change({ ...draft, maxAutoRetries: value }),
             1,
-            '일시적인 오류가 나면 설정한 횟수만큼 다시 시도해요.'
+            t('visuals.m062')
           )}
         </div>
         <details
@@ -369,23 +365,23 @@ function IllustrationEnvironmentEditor({
           open={activeGenerator === 'codex'}
         >
           <summary>
-            Codex 생성 환경
-            {activeGenerator === 'codex' && <small>현재 프리셋에서 사용</small>}
+            {t('visuals.m063')}
+            {activeGenerator === 'codex' && <small>{t('visuals.m064')}</small>}
           </summary>
           <fieldset className="settings-group-body illustration-environment-options">
             {selector(
-              'Codex 삽화 모델',
+              t('visuals.m065'),
               draft.codex.model,
               codexModels,
               (ref) => change({ ...draft, codex: { ...draft.codex, model: ref } }),
-              codexModels.length ? '모델 미지정' : 'Codex 프로바이더의 모델 프리셋이 없어요',
-              'Codex 연결에서 로그인한 모델을 선택해요. 이미지 생성 전 JEV가 노골적인 성적 묘사를 판정하면 해당 컷을 전송하지 않아요. JEV 미설정·판정 오류 시에는 프로바이더 판단에 맡겨요.'
+              codexModels.length ? t('visuals.m042') : t('visuals.m066'),
+              t('visuals.m067')
             )}
             <label className="settings-row settings-row-toggle">
-              <span className="settings-row-copy">채팅의 참조 이미지 사용</span>
+              <span className="settings-row-copy">{t('visuals.m068')}</span>
               <span className="settings-row-control">
                 <Switch
-                  aria-label="채팅의 참조 이미지 사용"
+                  aria-label={t('visuals.m068')}
                   checked={draft.codex.useReferences}
                   onChange={(event) =>
                     change({
@@ -406,15 +402,15 @@ function IllustrationEnvironmentEditor({
           open={activeGenerator === 'comfyui'}
         >
           <summary>
-            ComfyUI 생성 환경
-            {activeGenerator === 'comfyui' && <small>현재 프리셋에서 사용</small>}
+            {t('visuals.m069')}
+            {activeGenerator === 'comfyui' && <small>{t('visuals.m064')}</small>}
           </summary>
           <fieldset className="settings-group-body illustration-environment-options">
             <label className="settings-row">
-              <span className="settings-row-copy">ComfyUI 주소</span>
+              <span className="settings-row-copy">{t('visuals.m070')}</span>
               <span className="settings-row-control">
                 <input
-                  aria-label="ComfyUI 주소"
+                  aria-label={t('visuals.m070')}
                   type="url"
                   placeholder="http://192.168.0.10:8188"
                   value={draft.comfyui.baseUrl}
@@ -432,12 +428,12 @@ function IllustrationEnvironmentEditor({
             </label>
             <label className="settings-row">
               <span className="settings-row-copy">
-                인증 헤더 환경변수 (선택)
-                <small>인증이 필요한 서버에서만 입력해요.</small>
+                {t('visuals.m071')}
+                <small>{t('visuals.m072')}</small>
               </span>
               <span className="settings-row-control">
                 <input
-                  aria-label="ComfyUI 인증 환경변수"
+                  aria-label={t('visuals.m073')}
                   type="text"
                   placeholder="UIMORI_COMFYUI_AUTHORIZATION"
                   value={draft.comfyui.authorizationEnv}
@@ -460,20 +456,22 @@ function IllustrationEnvironmentEditor({
                 disabled={testing || !draft.comfyui.baseUrl.trim()}
                 onClick={() => void runTest()}
               >
-                {testing ? '연결 확인 중…' : 'ComfyUI 연결 확인'}
+                {testing ? t('visuals.m074') : t('visuals.m075')}
               </button>
               {test && (
                 <span className="illustration-test-result" role="status">
                   {test.ok
-                    ? `연결됨 · ComfyUI ${test.system.comfyuiVersion ?? '버전 미확인'} · ${test.system.os ?? ''} · ${test.devices
-                        .map((device) => device.name)
-                        .join(', ')}`
+                    ? t('visuals.m076', {
+                        v0: test.system.comfyuiVersion ?? t('visuals.unknownVersion'),
+                        v1: test.system.os ?? '',
+                        v2: test.devices.map((device) => device.name).join(', '),
+                      })
                     : `${illustrationErrorMessage(test.code)} (${test.code})`}
                 </span>
               )}
             </div>
             {selector(
-              '프롬프트 모델',
+              t('visuals.m077'),
               draft.comfyui.promptModel,
               library.models,
               (ref) =>
@@ -481,11 +479,11 @@ function IllustrationEnvironmentEditor({
                   ...draft,
                   comfyui: { ...draft.comfyui, promptModel: ref },
                 }),
-              '모델 미지정',
-              '장면을 그림 설명으로 바꿀 모델이에요.'
+              t('visuals.m042'),
+              t('visuals.m078')
             )}
             {numberField(
-              '시간 제한 (초)',
+              t('visuals.m079'),
               draft.comfyui.timeoutMs / 1000,
               10,
               1800,
@@ -504,14 +502,14 @@ function IllustrationEnvironmentEditor({
         <div className="form-actions settings-save-actions full">
           <IconButton
             icon={RefreshIcon}
-            label="저장된 설정 다시 불러오기"
+            label={t('visuals.m080')}
             className="secondary"
             aria-busy={busy}
             onClick={() => (dirty ? setConfirmReload(true) : void reload())}
           />
           <SaveButton
             type="button"
-            label="삽화 설정 저장"
+            label={t('visuals.m081')}
             aria-busy={operation === 'save'}
             disabled={!dirty || !valid}
             onClick={save}
@@ -520,46 +518,47 @@ function IllustrationEnvironmentEditor({
       </fieldset>
       <SaveConflictDialog
         open={saveConflict}
-        title="삽화 설정 저장 내용 확인"
+        title={t('visuals.m082')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
           const value = await api<IllustrationSettings>('/illustration-settings');
-          return [
-            { label: '본문당 삽화 수', value: String(value.maxPerSource) },
-            { label: '자동 배치 대상 수', value: String(value.automaticMaxTargets) },
-            { label: '자동 재시도 횟수', value: String(value.maxAutoRetries) },
-            { label: 'ComfyUI 주소', value: value.comfyui.baseUrl },
+          return () => [
+            { label: t('visuals.m083'), value: String(value.maxPerSource) },
+            { label: t('visuals.m084'), value: String(value.automaticMaxTargets) },
+            { label: t('visuals.m085'), value: String(value.maxAutoRetries) },
+            { label: t('visuals.m070'), value: value.comfyui.baseUrl },
           ];
         }}
       />
       <Dialog
         open={confirmReload}
-        title="삽화 설정 다시 불러오기"
+        title={t('visuals.m086')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!busy) setConfirmReload(false);
         }}
       >
-        <p>저장된 설정을 불러오면 현재 초안이 사라져요.</p>
-        {loadError && <NoticeBanner tone="error">{loadError}</NoticeBanner>}
+        <p>{t('visuals.m087')}</p>
+        {loadError && <NoticeBanner tone="error">{translateMessage(loadError)}</NoticeBanner>}
         <DraftDiscardActions
           open={confirmReload}
           disabled={busy}
           onContinue={() => setConfirmReload(false)}
           onDiscard={reload}
-          discardLabel="초안 버리고 불러오기"
+          discardLabel={t('visuals.m088')}
         />
       </Dialog>
-      {conflict && dirty && (
+      {conflict && dirty && <NoticeBanner tone="error">{t('visuals.m089')}</NoticeBanner>}
+      {saveError && (
         <NoticeBanner tone="error">
-          다른 곳에서 삽화 설정이 바뀌었어요. 초안은 유지했어요. 최신 설정을 불러온 뒤 다시 적용해
-          주세요.
+          {t('visuals.draftError', { error: translateMessage(saveError) })}
         </NoticeBanner>
       )}
-      {saveError && <NoticeBanner tone="error">{saveError} 초안은 유지했어요.</NoticeBanner>}
       <TransientNotice message={message} />
-      {loadError && !confirmReload && <NoticeBanner tone="error">{loadError}</NoticeBanner>}
+      {loadError && !confirmReload && (
+        <NoticeBanner tone="error">{translateMessage(loadError)}</NoticeBanner>
+      )}
     </section>
   );
 }
@@ -576,6 +575,7 @@ export function IllustrationSettingsEditor({
   onDirtyChange: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
+  useI18n();
   const [activeGenerator, setActiveGenerator] = useState<IllustrationPresetGenerator>('codex');
   const [environment, setEnvironment] = useState<IllustrationSettings | null>(null);
   const [presetsDirty, setPresetsDirty] = useState(false);
@@ -599,7 +599,7 @@ export function IllustrationSettingsEditor({
         onSaveHandlerChange={group.registrations.presets}
       />
       <details className="illustration-preset-disclosure">
-        <summary>기본 생성 환경·자동 생성 관리</summary>
+        <summary>{t('visuals.m091')}</summary>
         <IllustrationEnvironmentEditor
           library={library}
           onSavedChange={setEnvironment}

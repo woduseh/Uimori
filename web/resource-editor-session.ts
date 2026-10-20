@@ -1,3 +1,4 @@
+import { legacyMessage } from './i18n.js';
 import { api, ApiError, libraryChangedKey } from './api.js';
 import {
   editableResource,
@@ -232,7 +233,7 @@ export class ResourceEditorSession {
   private prepared(model: ResourceModel): ResourceModel {
     for (const prepare of this.preparations.values()) model = prepare(model);
     if (this.state.local.unappliedFields.some((path) => !this.preparations.has(path)))
-      throw new Error('문법 오류가 있는 입력을 확인해 주세요. 입력은 그대로 유지돼요.');
+      throw new Error(legacyMessage('shared.syntaxError'));
     return model;
   }
   /** Capture the exact editable document before the caller's first asynchronous step. */
@@ -302,9 +303,9 @@ export class ResourceEditorSession {
   }
   async save(model?: ResourceModel, options?: { copy?: boolean }): Promise<ResourceSaveResult> {
     await this.open();
-    if (this.state.saving) throw new Error('저장 중이에요.');
+    if (this.state.saving) throw new Error(legacyMessage('shared.alreadySaving'));
     if (this.state.conflict && !options?.copy)
-      throw new Error('저장된 자료가 바뀌었어요. 입력을 복사해 두고 최신 저장본을 불러와 주세요.');
+      throw new Error(legacyMessage('shared.resourceChangedHelp'));
     if (model) this.setModel(model);
     const document = this.state.document;
     const generation = this.generation;
@@ -349,7 +350,7 @@ export class ResourceEditorSession {
   }
   async undo() {
     if (!this.state.document.targetId || this.state.dirty || this.state.saving)
-      throw new Error('미저장 입력을 먼저 저장하거나 취소해 주세요.');
+      throw new Error(legacyMessage('shared.unsavedRequired'));
     const generation = this.generation;
     const load = ++this.loadVersion;
     const result = await api<ResourceSaveResult>(`${this.path()}/undo`, {

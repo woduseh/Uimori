@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Job, ReaderActivity, ReaderRun, Source } from '../core/types.js';
 import { RunTaskDetails } from './RunTaskDetails.js';
@@ -12,10 +13,10 @@ const active = (status: string) => ['queued', 'running'].includes(status);
 const attention = (status: string) =>
   ['failed', 'interrupted', 'partial', 'stale', 'refused'].includes(status);
 const names: Record<string, string> = {
-  translation: '번역',
-  image: '이미지',
-  status: '이전 보조 작업',
-  illustration: '삽화',
+  translation: 'helpers.m217',
+  image: 'helpers.m218',
+  status: 'helpers.m219',
+  illustration: 'helpers.m220',
 };
 
 type Props = {
@@ -36,6 +37,7 @@ type Props = {
 };
 
 export function TurnActivity(props: Props) {
+  useI18n();
   return <TurnActivityContent key={props.run.id} {...props} />;
 }
 
@@ -53,6 +55,7 @@ function TurnActivityContent({
   leading,
   badges,
 }: Props) {
+  useI18n();
   const storageKey = `turn-activity:${run.chatId}:${run.id}`;
   const [open, setOpen] = useState(() => {
     try {
@@ -100,8 +103,8 @@ function TurnActivityContent({
         status: job.status,
         label:
           job.kind === 'image'
-            ? `${job.imageTarget?.mode === 'translation' ? '번역' : '원문'} 이미지 배치`
-            : names[job.kind],
+            ? t('helpers.m337', { mode: job.imageTarget?.mode ?? 'original' })
+            : t(names[job.kind] ?? 'helpers.m224'),
       })),
       ...(progress
         ? [
@@ -124,18 +127,22 @@ function TurnActivityContent({
   const authored = run.packageStart?.mode === 'authored';
   const mainLabel =
     run.packageStart?.mode === 'authored'
-      ? '작성된 도입문'
+      ? t('helpers.m249')
       : run.status === 'running'
         ? run.executionMode === 'batch'
-          ? 'Claude Batch 처리 중…'
-          : '장면을 쓰는 중'
-        : `본문 ${labels[run.status] ?? run.status}`;
+          ? t('helpers.m250')
+          : t('helpers.m212')
+        : t('helpers.m251', { v0: labels[run.status] ?? run.status });
   const important = entries.filter((item) => item.status !== 'completed');
   const summary = [
     ...(authored ? [] : [mainLabel]),
     ...important.map(
       (item) =>
-        item.summary ?? `${item.label ?? names[item.kind]} ${labels[item.status] ?? item.status}`
+        item.summary ??
+        t('helpers.m338', {
+          name: item.label ?? t(names[item.kind] ?? 'helpers.m224'),
+          status: labels[item.status] ?? item.status,
+        })
     ),
   ].join(' · ');
   const timing =
@@ -152,7 +159,7 @@ function TurnActivityContent({
   const tone = uncertain ? 'uncertain' : hasIssue ? 'issue' : running ? 'running' : 'done';
   // A finished response shows only the check; its text stays for assistive technology.
   const quiet = tone === 'done' && !!source;
-  const text = uncertain ? '연결 확인 중 · 진행 상태 미확인' : summary || '후속 작업 완료';
+  const text = uncertain ? t('helpers.m252') : summary || t('helpers.m253');
   if (authored && !entries.length)
     return (
       <div className="scene-header-lead">
@@ -176,14 +183,11 @@ function TurnActivityContent({
       <>
         {!connected && (
           <p className="connection-notice" role="status">
-            연결을 다시 확인하는 중이에요. 아래는 마지막으로 확인한 상태예요.
+            {t('helpers.m254')}
           </p>
         )}
         {!authored && source && source.editRevision && source.editRevision > 0 ? (
-          <p className="muted">
-            본문 생성 기록은 생성 당시 원문 기준이에요. 후속 작업은 현재 수정본에 연결된 항목을
-            보여줘요.
-          </p>
+          <p className="muted">{t('helpers.m255')}</p>
         ) : null}
         <RunTaskDetails
           run={run}

@@ -1,3 +1,11 @@
+import {
+  t,
+  useI18n,
+  translateMessage,
+  getLocale,
+  message as uiMessage,
+  messageRef,
+} from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { DismissibleError } from './DismissibleError.js';
@@ -79,10 +87,10 @@ import {
   type LibrarySort,
 } from './library-list-preferences.js';
 
-const contentLabels: Record<ContentKind, string> = {
-  bot: '봇',
-  persona: '페르소나',
-  module: '모듈',
+const contentLabelKeys: Record<ContentKind, string> = {
+  bot: 'library.bot',
+  persona: 'library.persona',
+  module: 'library.module',
 };
 const freshContent = (kind: ContentKind): Omit<Content, 'id' | 'revision'> => ({
   kind,
@@ -99,23 +107,35 @@ type EditorProps = {
   onError: (error: string) => void;
 };
 type PrimaryLibraryTab = 'bot' | 'persona' | 'module';
-const libraryTabs: { id: PrimaryLibraryTab; title: string; icon: typeof BotIcon }[] = [
-  { id: 'bot', title: '봇', icon: BotIcon },
-  { id: 'persona', title: '페르소나', icon: PersonaIcon },
-  { id: 'module', title: '모듈', icon: ModuleIcon },
+const libraryTabs: { id: PrimaryLibraryTab; titleKey: string; icon: typeof BotIcon }[] = [
+  {
+    id: 'bot',
+    titleKey: 'library.bot',
+    icon: BotIcon,
+  },
+  {
+    id: 'persona',
+    titleKey: 'library.persona',
+    icon: PersonaIcon,
+  },
+  {
+    id: 'module',
+    titleKey: 'library.module',
+    icon: ModuleIcon,
+  },
 ];
-const contentGuidance: Record<PrimaryLibraryTab, { description: string; example: string }> = {
+const contentGuidance: Record<PrimaryLibraryTab, { descriptionKey: string; exampleKey: string }> = {
   bot: {
-    description: '함께 이야기할 상대예요.',
-    example: '성격과 말투를 적어 나만의 대화 상대를 만들어 보세요.',
+    descriptionKey: 'library.yourConversationPartner',
+    exampleKey: 'library.describeTheirPersonalityAndVoiceToCreate',
   },
   persona: {
-    description: '페르소나는 내가 맡을 인물이에요.',
-    example: '이름과 배경, 상대가 나를 어떻게 부를지 적어 보세요.',
+    descriptionKey: 'library.aPersonaIsTheCharacterYouPlay',
+    exampleKey: 'library.describeYourNameBackgroundAndHowOthers',
   },
   module: {
-    description: '모듈은 대화에 더할 설정·지침이에요.',
-    example: '세계관, 문체, 함께 지킬 규칙을 만들어 여러 채팅에 더할 수 있어요.',
+    descriptionKey: 'library.modulesAddSettingsAndInstructionsToConversations',
+    exampleKey: 'library.createWorldsStylesAndSharedRulesFor',
   },
 };
 type ViewMode = 'cards' | 'list';
@@ -223,6 +243,7 @@ export function LibraryPanel({
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
 }) {
+  useI18n();
   const [tab, setTab] = useState(initialTab);
   const [dirty, setDirty] = useState(false);
   const [savingNavigation, setSavingNavigation] = useState(false);
@@ -373,7 +394,7 @@ export function LibraryPanel({
       'POST',
       current.revision
     );
-    if (!placed) throw new Error('폴더 배치를 완료하지 못했어요.');
+    if (!placed) throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));
   }
   async function openContent(
     item: Content,
@@ -412,19 +433,33 @@ export function LibraryPanel({
         try {
           await placeCreated(copy, true);
         } catch (error) {
-          warnings.push(`자료는 복제됐어요. 폴더에 배치하지 못했어요. ${(error as Error).message}`);
+          warnings.push(
+            uiMessage('library.theResourceWasCopiedButCouldNot', {
+              v0: messageRef((error as Error).message),
+            })
+          );
         }
         try {
           await reload();
         } catch (error) {
           warnings.push(
-            `자료는 복제됐어요. 목록을 다시 불러오지 못했어요. ${(error as Error).message}`
+            uiMessage('library.theResourceWasCopiedButTheList', {
+              v0: messageRef((error as Error).message),
+            })
           );
         }
         if (request === opening.current) {
           setDetail(null);
           setEditing({ kind: copy.kind, item: copy });
-          if (warnings.length) onError(warnings.join('\n'));
+          if (warnings.length)
+            onError(
+              warnings.length === 1
+                ? warnings[0]
+                : uiMessage('library.cloneWarnings', {
+                    first: messageRef(warnings[0]),
+                    second: messageRef(warnings[1]),
+                  })
+            );
         }
       } else if (action === 'detail') setDetail(full);
       else if (onUseContent) onUseContent(full, action);
@@ -463,12 +498,13 @@ export function LibraryPanel({
     })
     .sort((a, b) => {
       if (sort !== 'manual')
-        return (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, 'ko');
+        return (sort === 'name-desc' ? -1 : 1) * a.title.localeCompare(b.title, getLocale());
       const aIndex = manualOrder.indexOf(a.id);
       const bIndex = manualOrder.indexOf(b.id);
       return (
         (aIndex < 0 ? Number.MAX_SAFE_INTEGER : aIndex) -
-          (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) || a.title.localeCompare(b.title, 'ko')
+          (bIndex < 0 ? Number.MAX_SAFE_INTEGER : bIndex) ||
+        a.title.localeCompare(b.title, getLocale())
       );
     });
   const folders = organizer.organization?.folders.filter((item) => item.category === tab) ?? [];
@@ -509,7 +545,7 @@ export function LibraryPanel({
       ...manualOrder.filter((id) => ids.has(id)),
       ...categoryItems
         .filter((item) => !manualOrder.includes(item.id))
-        .sort((a, b) => a.title.localeCompare(b.title, 'ko'))
+        .sort((a, b) => a.title.localeCompare(b.title, getLocale()))
         .map((item) => item.id),
     ];
   }
@@ -590,7 +626,7 @@ export function LibraryPanel({
   function itemMenu(item: Content) {
     const manualIndex = filtered.findIndex((entry) => entry.id === item.id);
     return (
-      <LibraryItemMenu title={`${item.title} 메뉴`}>
+      <LibraryItemMenu title={t('library.menu', { v0: item.title })}>
         <button
           type="button"
           className="secondary"
@@ -598,7 +634,7 @@ export function LibraryPanel({
           onClick={() => void openContent(item, 'edit')}
         >
           <EditIcon size={18} aria-hidden="true" />
-          편집
+          {t('library.edit')}
         </button>
         <button
           type="button"
@@ -607,7 +643,7 @@ export function LibraryPanel({
           onClick={() => setMoving([{ kind: 'content', id: item.id }])}
         >
           <MoveIcon size={18} aria-hidden="true" />
-          분류·폴더 이동
+          {t('library.moveCategoryOrFolder')}
         </button>
         {sort === 'manual' && (
           <>
@@ -618,7 +654,7 @@ export function LibraryPanel({
               onClick={() => moveManualByOffset(item, -1)}
             >
               <UpIcon size={18} aria-hidden="true" />
-              위로 이동
+              {t('library.moveUp')}
             </button>
             <button
               type="button"
@@ -627,7 +663,7 @@ export function LibraryPanel({
               onClick={() => moveManualByOffset(item, 1)}
             >
               <DownIcon size={18} aria-hidden="true" />
-              아래로 이동
+              {t('library.moveDown')}
             </button>
           </>
         )}
@@ -638,7 +674,7 @@ export function LibraryPanel({
           onClick={() => void openContent(item, 'clone')}
         >
           <CopyIcon size={18} aria-hidden="true" />
-          복제
+          {t('library.duplicate')}
         </button>
         <DeleteButton
           path={`/content/${encodeURIComponent(item.id)}`}
@@ -671,14 +707,20 @@ export function LibraryPanel({
     : undefined;
   const detailCounts = detail?.package
     ? [
-        ['로어', detail.package.lore.length],
-        ['이미지', detail.package.images?.length ?? 0],
+        [t('library.lore'), detail.package.lore.length],
+        [t('library.images'), detail.package.images?.length ?? 0],
       ]
         .filter(([, count]) => (count as number) > 0)
-        .map(([label, count]) => `${label} ${count}`)
+        .map(([label, count]) =>
+          t('library.labelCount', { label: String(label), count: Number(count) })
+        )
     : [];
   const roleActionLabel = (id: PrimaryLibraryTab, title: string) =>
-    id === 'bot' ? '봇으로 새 채팅' : id === 'persona' ? '페르소나로 사용' : `${title}로 추가`;
+    id === 'bot'
+      ? t('library.newChatAsBot')
+      : id === 'persona'
+        ? t('library.useAsPersona')
+        : t('library.addAs', { v0: title });
   const roleActionIcon = (id: PrimaryLibraryTab) =>
     id === 'bot' ? NewChatIcon : id === 'persona' ? PersonaIcon : ModuleIcon;
   return (
@@ -686,23 +728,23 @@ export function LibraryPanel({
       ref={panelRef}
       className={`library-page${editing ? ' library-page-editing' : ''}${!library ? ' library-page-loading' : ''}`}
       data-testid="library-panel"
-      aria-label="서재"
+      aria-label={t('library.library')}
     >
       <header className="library-heading" hidden={!!editing}>
         {headerLeading}
-        <h1>서재</h1>
+        <h1>{t('library.library')}</h1>
         {headerTrailing}
       </header>
       <Dialog
         open={!!pendingNavigation}
-        title="미저장 자료 확인"
+        title={t('library.reviewUnsavedResource')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!savingNavigation) continueEditing();
         }}
       >
-        <p>이동하면 저장하지 않은 편집 내용이 사라져요.</p>
+        <p>{t('library.leavingWillDiscardUnsavedEdits')}</p>
         <ResourceEditorLeaveWarning />
         <DraftDiscardActions
           open={!!pendingNavigation}
@@ -725,7 +767,7 @@ export function LibraryPanel({
               onError((error as Error).message);
             }
           }}
-          discardLabel="초안 버리고 이동"
+          discardLabel={t('library.discardDraftAndLeave')}
         />
       </Dialog>
       <LibraryMoveDialog
@@ -739,14 +781,16 @@ export function LibraryPanel({
           setSelecting(false);
         }}
       />
-      {loading && <LoadingState presentation="inline" label="자료 본문을 불러오는 중이에요…" />}
+      {loading && (
+        <LoadingState presentation="inline" label={t('library.loadingResourceContent')} />
+      )}
       {!library ? (
         <LoadingState
           presentation="region"
           loading={!libraryError}
           error={libraryError}
-          label="서재를 불러오는 중이에요…"
-          errorLabel="서재를 불러오지 못했어요."
+          label={t('library.loadingLibrary')}
+          errorLabel={t('library.couldNotLoadTheLibrary')}
           onRetry={() => void reload().catch(() => {})}
         />
       ) : editing ? (
@@ -766,11 +810,14 @@ export function LibraryPanel({
           headerTrailing={headerTrailing}
         />
       ) : detail ? (
-        <section className="library-detail library-preview" aria-label="자료 상세">
+        <section
+          className="library-detail library-preview"
+          aria-label={t('library.resourceDetails')}
+        >
           <div className="library-detail-heading">
             <IconButton
               className="secondary"
-              label="서재 목록"
+              label={t('library.libraryList')}
               icon={BackIcon}
               onClick={() => navigate(tab, true)}
             />
@@ -778,8 +825,8 @@ export function LibraryPanel({
               <h2>{detail.title}</h2>
               <small>
                 {organizedLibrary
-                  ? contentLabels[libraryCategory(organizedLibrary, detail)]
-                  : contentLabels[detail.kind]}
+                  ? t(contentLabelKeys[libraryCategory(organizedLibrary, detail)])
+                  : t(contentLabelKeys[detail.kind])}
                 {detailFolder ? ` · ${detailFolder}` : ''}
               </small>
             </div>
@@ -791,17 +838,17 @@ export function LibraryPanel({
                 onClick={() => void openContent(detail, 'edit')}
               >
                 <EditIcon size={18} aria-hidden="true" />
-                편집
+                {t('library.edit')}
               </button>
-              <LibraryItemMenu title={`${detail.title} 메뉴`}>
+              <LibraryItemMenu title={t('library.menu', { v0: detail.title })}>
                 {libraryTabs
                   .filter(({ id }) => id !== detailRole)
-                  .map(({ id, title }) => (
+                  .map(({ id, titleKey }) => (
                     <button
                       type="button"
                       className="secondary"
                       key={id}
-                      aria-label={roleActionLabel(id, title)}
+                      aria-label={roleActionLabel(id, t(titleKey))}
                       disabled={
                         loading || (id === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
                       }
@@ -811,7 +858,7 @@ export function LibraryPanel({
                         const Icon = roleActionIcon(id);
                         return <Icon size={18} aria-hidden="true" />;
                       })()}
-                      {roleActionLabel(id, title)}
+                      {roleActionLabel(id, t(titleKey))}
                     </button>
                   ))}
                 <button
@@ -821,7 +868,7 @@ export function LibraryPanel({
                   onClick={() => void openContent(detail, 'clone')}
                 >
                   <CopyIcon size={18} aria-hidden="true" />
-                  복제
+                  {t('library.duplicate')}
                 </button>
                 <button
                   type="button"
@@ -830,7 +877,7 @@ export function LibraryPanel({
                   onClick={() => setMoving([{ kind: 'content', id: detail.id }])}
                 >
                   <MoveIcon size={18} aria-hidden="true" />
-                  분류·폴더 이동
+                  {t('library.moveCategoryOrFolder')}
                 </button>
                 <DeleteButton
                   path={`/content/${encodeURIComponent(detail.id)}`}
@@ -850,13 +897,13 @@ export function LibraryPanel({
             <ContentAvatar content={detail} className="library-preview-avatar" />
             <div>
               <h2>{detail.title}</h2>
-              <p>{detail.description || '아직 소개가 없어요.'}</p>
+              <p>{detail.description || t('library.noIntroductionYet')}</p>
             </div>
           </div>
           <div className="library-use-actions">
             <button
               type="button"
-              aria-label={roleActionLabel(detailRole, contentLabels[detailRole])}
+              aria-label={roleActionLabel(detailRole, t(contentLabelKeys[detailRole]))}
               disabled={
                 loading || (detailRole === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
               }
@@ -864,8 +911,8 @@ export function LibraryPanel({
             >
               <NewChatIcon size={18} aria-hidden="true" />
               {detailRole === 'bot'
-                ? '새 채팅'
-                : roleActionLabel(detailRole, contentLabels[detailRole])}
+                ? t('library.newChat')
+                : roleActionLabel(detailRole, t(contentLabelKeys[detailRole]))}
             </button>
             {recentChatByContent?.[detail.id] && onContinueChat && (
               <button
@@ -873,7 +920,7 @@ export function LibraryPanel({
                 className="secondary"
                 onClick={() => onContinueChat(recentChatByContent[detail.id])}
               >
-                최근 채팅 이어가기
+                {t('library.continueRecentChat')}
               </button>
             )}
           </div>
@@ -887,7 +934,7 @@ export function LibraryPanel({
           <div
             className="library-tabs"
             role="tablist"
-            aria-label="서재 분류"
+            aria-label={t('library.libraryCategories')}
             onKeyDown={(event) => {
               if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
               event.preventDefault();
@@ -916,7 +963,7 @@ export function LibraryPanel({
                 onClick={() => navigate(item.id)}
               >
                 <item.icon size={18} aria-hidden="true" />
-                {item.title}
+                {t(item.titleKey)}
               </button>
             ))}
           </div>
@@ -936,25 +983,31 @@ export function LibraryPanel({
                   />
                 )}
                 {selecting ? (
-                  <div className="library-bulk-toolbar" role="group" aria-label="자료 선택 작업">
-                    <span role="status">{selectedIds.length}개 선택</span>
+                  <div
+                    className="library-bulk-toolbar"
+                    role="group"
+                    aria-label={t('library.resourceSelectionActions')}
+                  >
+                    <span role="status">
+                      {t('library.selectedCount', { count: selectedIds.length })}
+                    </span>
                     <button
                       type="button"
                       className="secondary"
-                      aria-label="표시된 자료 전체 선택"
+                      aria-label={t('library.selectAllVisibleResources')}
                       onClick={() => setSelectedIds(filtered.map((item) => item.id))}
                     >
                       <SelectIcon size={18} aria-hidden="true" />
-                      <span>전체 선택</span>
+                      <span>{t('library.selectAll')}</span>
                     </button>
                     <button
                       type="button"
-                      aria-label="선택한 자료 이동"
+                      aria-label={t('library.moveSelectedResources')}
                       disabled={!selectedIds.length || organizer.busy}
                       onClick={() => setMoving(selectedIds.map((id) => ({ kind: 'content', id })))}
                     >
                       <MoveIcon size={18} aria-hidden="true" />
-                      <span>이동</span>
+                      <span>{t('library.move')}</span>
                     </button>
                     <button
                       type="button"
@@ -965,7 +1018,7 @@ export function LibraryPanel({
                         setSelecting(false);
                       }}
                     >
-                      완료
+                      {t('library.done')}
                     </button>
                   </div>
                 ) : (
@@ -974,21 +1027,25 @@ export function LibraryPanel({
                       <>
                         <label className="library-search-field">
                           <SearchIcon size={20} aria-hidden="true" />
-                          <span className="sr-only">서재 검색</span>
+                          <span className="sr-only">{t('library.searchLibrary')}</span>
                           <input
                             type="search"
-                            aria-label="서재 검색"
-                            placeholder="이름이나 설명으로 찾기"
+                            aria-label={t('library.searchLibrary')}
+                            placeholder={t('library.searchByNameOrDescription')}
                             value={query}
                             onChange={(event) => setQuery(event.target.value)}
                           />
                         </label>
-                        <div className="library-view-buttons" role="group" aria-label="자료 보기">
+                        <div
+                          className="library-view-buttons"
+                          role="group"
+                          aria-label={t('library.resourceView')}
+                        >
                           <IconButton
                             icon={CardsIcon}
                             size={18}
-                            label="카드"
-                            title="카드 보기"
+                            label={t('library.cards')}
+                            title={t('library.cardView')}
                             className="secondary"
                             aria-pressed={views[tab] === 'cards'}
                             onClick={() => setView('cards')}
@@ -996,45 +1053,45 @@ export function LibraryPanel({
                           <IconButton
                             icon={ListIcon}
                             size={18}
-                            label="목록"
-                            title="목록 보기"
+                            label={t('library.list')}
+                            title={t('library.listView')}
                             className="secondary"
                             aria-pressed={views[tab] === 'list'}
                             onClick={() => setView('list')}
                           />
                         </div>
                         <LibraryItemMenu
-                          title="목록 관리"
+                          title={t('library.manageList')}
                           className="library-list-options"
                           icon={OptionsIcon}
                         >
                           <div className="library-list-options-body">
                             <label>
-                              정렬
+                              {t('library.sort')}
                               <select
-                                aria-label="자료 정렬"
+                                aria-label={t('library.resourceSortOrder')}
                                 value={sort}
                                 onChange={(event) => setSort(event.target.value as SortMode)}
                               >
-                                <option value="name">이름순</option>
-                                <option value="name-desc">이름 역순</option>
-                                <option value="manual">수동 정렬</option>
+                                <option value="name">{t('library.nameAscending')}</option>
+                                <option value="name-desc">{t('library.nameDescending')}</option>
+                                <option value="manual">{t('library.manualOrder')}</option>
                               </select>
                             </label>
                             {views[tab] === 'cards' && (
                               <div className="library-card-ratio">
-                                <span>카드 비율</span>
+                                <span>{t('library.cardAspectRatio')}</span>
                                 <div
                                   className="library-ratio-buttons"
                                   role="group"
-                                  aria-label="카드 비율"
+                                  aria-label={t('library.cardAspectRatio')}
                                 >
                                   {cardRatios.map((ratio) => (
                                     <button
                                       type="button"
                                       className="secondary"
                                       key={ratio}
-                                      aria-label={`${ratio} 카드 비율`}
+                                      aria-label={t('library.cardAspectRatio2', { v0: ratio })}
                                       aria-pressed={cardRatioByTab[tab] === ratio}
                                       onClick={() => setCardRatio(ratio)}
                                     >
@@ -1053,7 +1110,7 @@ export function LibraryPanel({
                               }}
                             >
                               <SelectIcon size={18} aria-hidden="true" />
-                              선택
+                              {t('library.select')}
                             </button>
                           </div>
                         </LibraryItemMenu>
@@ -1070,8 +1127,8 @@ export function LibraryPanel({
                   <button
                     type="button"
                     className="library-create primary ui-icon-button"
-                    aria-label={`${contentLabels[tab]} 만들기`}
-                    title={`${contentLabels[tab]} 만들기`}
+                    aria-label={t('library.create', { v0: t(contentLabelKeys[tab]) })}
+                    title={t('library.create', { v0: t(contentLabelKeys[tab]) })}
                     onClick={openNew}
                     disabled={!library}
                   >
@@ -1081,12 +1138,12 @@ export function LibraryPanel({
               </div>
               {!!query && !selecting && (
                 <p className="library-result-count muted" role="status">
-                  검색 결과 {filtered.length}개
+                  {t('library.resultCount', { count: filtered.length })}
                 </p>
               )}
               {showFolders && folders.length > 0 && (
-                <section className="library-folder-section" aria-label="폴더 목록">
-                  <h2>폴더</h2>
+                <section className="library-folder-section" aria-label={t('library.folderList')}>
+                  <h2>{t('library.folders')}</h2>
                   <LibraryFolders
                     presentation="cards"
                     view={views[tab]}
@@ -1106,7 +1163,9 @@ export function LibraryPanel({
                 </section>
               )}
               {folder === 'all' && !query.trim() && folders.length > 0 && filtered.length > 0 && (
-                <h2 className="library-section-title">미분류 {contentLabels[tab]}</h2>
+                <h2 className="library-section-title">
+                  {t('library.uncategorizedRole', { role: t(contentLabelKeys[tab]) })}
+                </h2>
               )}
               <div
                 id="library-results"
@@ -1143,9 +1202,9 @@ export function LibraryPanel({
                   >
                     {selecting && (
                       <label className="library-select-check">
-                        <span className="sr-only">{item.title} 선택</span>
+                        <span className="sr-only">{t('library.select2', { v0: item.title })}</span>
                         <SelectionCheckbox
-                          aria-label={`${item.title} 선택`}
+                          aria-label={t('library.select2', { v0: item.title })}
                           checked={selectedIds.includes(item.id)}
                           onChange={(event) =>
                             setSelectedIds((current) =>
@@ -1160,7 +1219,10 @@ export function LibraryPanel({
                     <button
                       type="button"
                       className="library-open-content"
-                      aria-label={`${item.title} ${selecting ? '선택' : '상세 보기'}`}
+                      aria-label={t('library.detailAction', {
+                        title: item.title,
+                        action: selecting ? 'select' : 'detail',
+                      })}
                       aria-pressed={selecting ? selectedIds.includes(item.id) : undefined}
                       onClick={() =>
                         selecting ? toggleSelection(item.id) : void openContent(item)
@@ -1170,14 +1232,14 @@ export function LibraryPanel({
                       <ContentAvatar content={item} className="library-item-avatar" />
                       <span className="library-item-copy">
                         <strong title={item.title}>{item.title}</strong>
-                        <span>{item.description || '아직 소개가 없어요.'}</span>
+                        <span>{item.description || t('library.noIntroductionYet')}</span>
                         {!!query.trim() && folder === 'all' && (
                           <small className="library-result-folder">
                             {folders.find(
                               (entry) =>
                                 entry.id ===
                                 libraryFolderOf(organizedLibrary!, { kind: 'content', id: item.id })
-                            )?.title ?? '미분류'}
+                            )?.title ?? t('library.uncategorized')}
                           </small>
                         )}
                       </span>
@@ -1187,11 +1249,11 @@ export function LibraryPanel({
                         type="button"
                         className="secondary library-start-chat"
                         disabled={loading}
-                        aria-label={`${item.title} 새 채팅`}
+                        aria-label={t('library.newChatWith', { v0: item.title })}
                         onClick={() => void openContent(item, 'bot')}
                       >
                         <NewChatIcon size={20} aria-hidden="true" />
-                        <span>새 채팅</span>
+                        <span>{t('library.newChat')}</span>
                       </button>
                     )}
                     {!selecting && itemMenu(item)}
@@ -1206,27 +1268,29 @@ export function LibraryPanel({
                     <div className="library-empty">
                       <h2>
                         {query
-                          ? '찾는 자료가 없어요'
+                          ? t('library.noMatchingResources')
                           : folder !== 'all'
-                            ? '이 폴더는 비어 있어요'
+                            ? t('library.thisFolderIsEmpty')
                             : folders.length > 0
-                              ? '미분류 자료가 없어요'
-                              : `새 ${contentLabels[tab]} 만들기`}
+                              ? t('library.noUncategorizedResources')
+                              : t('library.createANew', { v0: t(contentLabelKeys[tab]) })}
                       </h2>
                       {!query && (
-                        <p className="library-role-guide">{contentGuidance[tab].description}</p>
+                        <p className="library-role-guide">
+                          {t(contentGuidance[tab].descriptionKey)}
+                        </p>
                       )}
                       <p>
                         {query
-                          ? '다른 이름이나 설명으로 찾아보세요.'
+                          ? t('library.tryAnotherNameOrDescription')
                           : folder !== 'all'
-                            ? '자료를 만들거나 다른 폴더의 자료를 옮겨 보세요.'
-                            : contentGuidance[tab].example}
+                            ? t('library.createAResourceOrMoveOneFrom')
+                            : t(contentGuidance[tab].exampleKey)}
                       </p>
                       <div className="library-empty-actions">
                         {query && (
                           <button type="button" className="secondary" onClick={() => setQuery('')}>
-                            검색 지우기
+                            {t('library.clearSearch')}
                           </button>
                         )}
                         {folder !== 'all' && (
@@ -1235,13 +1299,13 @@ export function LibraryPanel({
                             className="secondary"
                             onClick={() => changeFolder('all')}
                           >
-                            전체 보기
+                            {t('library.showAll')}
                           </button>
                         )}
                         {!query && (
                           <button type="button" onClick={openNew}>
                             <AddIcon size={20} aria-hidden="true" />
-                            {contentLabels[tab]} 만들기
+                            {t('library.create', { v0: t(contentLabelKeys[tab]) })}
                           </button>
                         )}
                       </div>
@@ -1278,6 +1342,7 @@ function ContentEditor({
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
 }) {
+  useI18n();
   const formId = useId();
   const [session] = useState(
     () =>
@@ -1347,7 +1412,7 @@ function ContentEditor({
         package: pkg,
       };
       const item = (await session.save(model, { copy: copying })).saved as Content;
-      setSaved(item.title + ' 자료를 저장했어요. 다음 실행부터 사용해요.');
+      setSaved(uiMessage('library.savedResource', { title: item.title }));
       if (!selected || copying) {
         setPlacing(true);
         try {
@@ -1355,7 +1420,7 @@ function ContentEditor({
         } catch {
           setSaveWarnings((warnings) => [
             ...warnings,
-            item.title + ' 저장됨 · 서재의 분류 반영을 확인해 주세요.',
+            uiMessage('library.savedPlacementWarning', { title: item.title }),
           ]);
         }
       }
@@ -1367,7 +1432,7 @@ function ContentEditor({
           if (saveVersion.current === version)
             setSaveWarnings((warnings) => [
               ...warnings,
-              item.title + ' 저장됨 · 서재 목록을 갱신하지 못했어요.',
+              uiMessage('library.savedRefreshWarning', { title: item.title }),
             ]);
         });
       return !session.snapshot().dirty;
@@ -1387,19 +1452,19 @@ function ContentEditor({
     <ResourceEditorProvider value={shared}>
       <section
         className="library-detail library-content-editor"
-        aria-label="자료 상세"
+        aria-label={t('library.resourceDetails')}
         aria-busy={editorUnavailable}
       >
         <div ref={editorHeading} className="library-detail-heading">
           {headerLeading}
           <IconButton
             className="secondary"
-            label="서재 목록"
+            label={t('library.libraryList')}
             icon={BackIcon}
             disabled={editorUnavailable}
             onClick={onClose}
           />
-          <h2>{selected ? selected.title : `새 ${contentLabels[kind]}`}</h2>
+          <h2>{selected ? selected.title : t('library.new', { v0: t(contentLabelKeys[kind]) })}</h2>
           <div className="library-detail-actions">
             <ResourceEditorActions value={shared} hideSyncError />
             <button
@@ -1409,9 +1474,15 @@ function ContentEditor({
               disabled={editorUnavailable || !value.title.trim() || portraitBusy}
             >
               <SaveIcon size={18} aria-hidden="true" />
-              <span>{busy ? '저장 중…' : selected ? '변경사항 저장' : '자료 등록'}</span>
+              <span>
+                {busy
+                  ? t('library.saving')
+                  : selected
+                    ? t('library.saveChanges')
+                    : t('library.registerResource')}
+              </span>
             </button>
-            <LibraryItemMenu title="자료 메뉴">
+            <LibraryItemMenu title={t('library.resourceMenu')}>
               {(['bot', 'persona', 'module'] as const)
                 .filter((role) => role !== value.kind)
                 .map((role) => (
@@ -1424,7 +1495,7 @@ function ContentEditor({
                     onClick={() => void saveContent(role)}
                   >
                     <CopyIcon size={18} aria-hidden="true" />
-                    {contentLabels[role]}로 사본 만들기
+                    {t('library.copyAs', { role: t(contentLabelKeys[role]) })}
                   </button>
                 ))}
               {selected && (
@@ -1448,9 +1519,9 @@ function ContentEditor({
                     path={`/content/${encodeURIComponent(selected.id)}`}
                     revision={selected.revision}
                     title={selected.title}
-                    label="자료 삭제"
+                    label={t('library.deleteResource')}
                     disabled={editorUnavailable}
-                    description="이 자료를 목록에서 삭제하고 현재 편집 초안을 닫아요. 과거 채팅과 실행이 사용하는 내용은 유지돼요."
+                    description={t('library.removeThisResourceFromTheListAnd')}
                     onError={onError}
                     onDeleted={async () => {
                       onDeleted();
@@ -1483,11 +1554,11 @@ function ContentEditor({
           </fieldset>
           {error && (
             <p className="error full" role="alert">
-              {error} 입력한 내용은 유지했어요.
+              {t('library.errorInputRetained', { error: translateMessage(error) })}
             </p>
           )}
           {nativeDraftDirty && (
-            <p className="full muted">원문 편집 중이에요. 저장할 때 함께 확인하고 반영해요.</p>
+            <p className="full muted">{t('library.editingTheOriginalChangesWillBeChecked')}</p>
           )}
           <div className="library-savebar form-actions full">
             {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
@@ -1496,15 +1567,17 @@ function ContentEditor({
                 disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
                 onClick={() => onStartStory(selected)}
               >
-                {selected.kind === 'bot' ? '채팅 시작' : '이 자료를 봇으로 시작'}
+                {selected.kind === 'bot'
+                  ? t('library.startChat')
+                  : t('library.startWithThisResourceAsBot')}
               </button>
             )}
           </div>
           <TransientNotice message={saved} />
           {!!saveWarnings.length && (
-            <NoticeBanner className="full" label="저장 후 확인할 사항">
+            <NoticeBanner className="full" label={t('library.reviewAfterSaving')}>
               {saveWarnings.map((warning) => (
-                <p key={warning}>{warning}</p>
+                <p key={translateMessage(warning)}>{translateMessage(warning)}</p>
               ))}
             </NoticeBanner>
           )}

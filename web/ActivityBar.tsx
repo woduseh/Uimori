@@ -1,3 +1,4 @@
+import { t, useI18n, formatNumber } from './i18n.js';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { statusGlyph, type StatusTone } from './TurnStatus.js';
@@ -38,6 +39,7 @@ export function ActivityBar({
   onDetails,
   testId,
 }: Props) {
+  useI18n();
   const Glyph = statusGlyph[tone];
   return (
     <div className={`activity-status ${issue ? 'activity-issue' : ''}`} data-testid={testId}>
@@ -63,7 +65,11 @@ export function ActivityBar({
             {elapsed}
           </span>
         )}
-        {extra > 0 && <span className="activity-count">외 {extra}개</span>}
+        {extra > 0 && (
+          <span className="activity-count">
+            {t('helpers.m329', { count: formatNumber(extra) })}
+          </span>
+        )}
         {collapsed ? (
           <ChevronUp size={14} aria-hidden="true" />
         ) : (
@@ -74,9 +80,9 @@ export function ActivityBar({
         type="button"
         className="activity-details"
         onClick={onDetails}
-        aria-label="작업 상세 보기"
+        aria-label={t('helpers.m245')}
       >
-        상세
+        {t('helpers.m246')}
       </button>
     </div>
   );

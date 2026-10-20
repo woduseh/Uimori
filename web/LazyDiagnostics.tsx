@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -19,6 +20,7 @@ export function LazyDiagnostics<T>({
   actions?: ReactNode;
   children: (value: T) => ReactNode;
 }) {
+  useI18n();
   const [open, setOpen] = useState(initiallyOpen);
   const [value, setValue] = useState<T | null>(null);
   const [error, setError] = useState('');
@@ -60,7 +62,7 @@ export function LazyDiagnostics<T>({
             presentation="inline"
             loading={!error}
             error={error}
-            label="상세를 불러오는 중이에요…"
+            label={t('shared.loadingDetails')}
             onRetry={() => setRetry((value) => value + 1)}
           />
         ) : (
