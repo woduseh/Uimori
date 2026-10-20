@@ -107,7 +107,7 @@ export function IllustrationReferencesEditor({
       setMessage(uiMessage('visuals.m031'));
       return true;
     } catch (error) {
-      onError(translateMessage((error as Error).message));
+      onError((error as Error).message);
       return false;
     } finally {
       lock.current = false;

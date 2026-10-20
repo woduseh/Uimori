@@ -225,7 +225,7 @@ function useIllustrationAction({ refresh, onError }: Actions) {
       await api(path, body, method);
       await refresh();
     } catch (cause) {
-      onError(translateMessage((cause as Error).message));
+      onError((cause as Error).message);
       await refresh().catch(() => undefined);
     } finally {
       locked.current = false;

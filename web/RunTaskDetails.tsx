@@ -129,7 +129,7 @@ export function RunTaskDetails({
                     await api(`/runs/${run.id}/cancel`, {});
                     await refresh();
                   } catch (error) {
-                    onError(translateMessage((error as Error).message));
+                    onError((error as Error).message);
                   } finally {
                     setCancelling(false);
                   }
