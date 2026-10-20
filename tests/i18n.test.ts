@@ -201,6 +201,61 @@ describe('UI locale presentation boundary', () => {
       expect(rendered).not.toContain('\u001fui:');
     }
   });
+
+  test('refined copy preserves terminology and semantic distinctions across ko, en, ja and zh', async () => {
+    const { formatMessage } = await import('../web/i18n.js');
+    // Assistant / resource / asset / source vs original manuscript terminology
+    expect(formatMessage('main.m012', 'en')).toBe('Select an assistant model');
+    expect(formatMessage('reader.askTheHelper', 'en')).toBe('Ask the assistant');
+    expect(formatMessage('errors.modelRequired', 'en', { role: 'helper' })).toContain(
+      'assistant model'
+    );
+    expect(formatMessage('errors.RISU_IMPORT_PREPARED_NOT_FOUND', 'en')).toContain(
+      'reviewed resource expired'
+    );
+    expect(formatMessage('native.text_6b1779397e', 'ja')).toContain('アセット');
+    expect(formatMessage('library.editingTheOriginalChangesWillBeChecked', 'en')).toContain(
+      'source'
+    );
+    expect(formatMessage('library.editingTheOriginalChangesWillBeChecked', 'ja')).toContain(
+      'ソース'
+    );
+    expect(formatMessage('library.editingTheOriginalChangesWillBeChecked', 'zh')).toContain('源码');
+    expect(formatMessage('prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown', 'ja')).toContain(
+      'ソース入力'
+    );
+    expect(formatMessage('prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown', 'zh')).toContain(
+      '源码输入'
+    );
+    expect(formatMessage('helpers.m043', 'ja')).toContain('ライブラリ');
+    expect(formatMessage('helpers.m043', 'zh')).toContain('资料库');
+    expect(formatMessage('helpers.m056', 'en')).toBe('Confirm latest settings');
+    expect(formatMessage('shared.reviewDone', 'en')).toBe('Finish reviewing saved version');
+    expect(formatMessage('shared.reviewDone', 'ja')).toBe('保存済み内容の確認完了');
+    expect(formatMessage('shared.reviewDone', 'zh')).toBe('已确认保存版本');
+
+    // Realistic variable values across all 4 locales
+    for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
+      const aria = formatMessage('main.modelAria', locale, {
+        model: 'Claude Sonnet',
+        pinned: 'true',
+        prompt: 'pinned',
+      });
+      expect(aria).toContain('Claude Sonnet');
+      const persona = formatMessage('main.botPersona', locale, {
+        bot: 'Alice',
+        hasPersona: 'true',
+        persona: ' Traveler',
+      });
+      expect(persona).toContain('Alice');
+      const tokens = formatMessage('reader.tokenTotals', locale, {
+        input: '1,240',
+        output: '580',
+      });
+      expect(tokens).toContain('1,240');
+      expect(tokens).toContain('580');
+    }
+  });
 });
 
 test('static candidate scan sees attribute names, templates, status text and module constants', async () => {

@@ -265,9 +265,9 @@ export const messages = {
   },
   'outside.prefMain': {
     ko: '요청 완료 (자동 번역은 번역까지 완료 후)',
-    en: 'Request completed (after translation when automatic translation is enabled)',
-    ja: 'リクエスト完了（自動翻訳時は翻訳完了後）',
-    zh: '请求完成（启用自动翻译时，在翻译完成后）',
+    en: 'Request completed (after translation when automatic translation is on)',
+    ja: 'リクエスト完了（自動翻訳オン時は翻訳完了後）',
+    zh: '请求完成（开启自动翻译时，在翻译完成后通知）',
   },
   'outside.prefFailure': {
     ko: '확인이 필요한 작업 실패',
@@ -325,9 +325,9 @@ export const messages = {
   },
   'outside.unsubscribeFailure': {
     ko: '서버 알림은 껐어요. 브라우저 연결 해제는 다음 접속 때 다시 확인해 주세요.',
-    en: 'Server notifications are off. Check browser disconnection again next time you connect.',
-    ja: 'サーバー通知は無効です。ブラウザー側の接続解除は次回接続時に再確認してください。',
-    zh: '服务器通知已关闭。请在下次连接时重新检查浏览器是否已断开。',
+    en: 'Server notifications are off. Recheck browser unsubscription next time you connect.',
+    ja: 'サーバー側の通知は無効にしました。ブラウザーの登録解除は次回接続時に再確認してください。',
+    zh: '服务器通知已关闭。下次连接时请重新确认浏览器端是否已解除订阅。',
   },
   'outside.testQueued': {
     ko: '테스트 알림을 발송 대기열에 넣었어요. 기기에서 수신되는지 확인해 주세요.',
@@ -342,7 +342,7 @@ export const messages = {
     zh: '任务完成通知',
   },
   'outside.pushDescription': {
-    ko: '작업이 끝나면 이 기기로 알려드려요.',
+    ko: '작업이 끝나면 이 기기로 알림을 보내요.',
     en: 'Get notified on this device when work finishes.',
     ja: '作業が終わるとこの端末に通知します。',
     zh: '任务完成后会在此设备上通知你。',

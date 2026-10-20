@@ -158,7 +158,7 @@ export const messages = {
   'visuals.m029': {
     ko: '삽화 참조 이미지를 불러오는 중이에요…',
     en: 'Loading illustration references…',
-    ja: '挿絵の参照画像を読み込んでいます…',
+    ja: '挿絵の参照画像を読み込み中…',
     zh: '正在加载插图参考图片…',
   },
   'visuals.m030': {
@@ -224,7 +224,7 @@ export const messages = {
   'visuals.m041': {
     ko: '삽화 설정을 불러오는 중이에요…',
     en: 'Loading illustration settings…',
-    ja: '挿絵設定を読み込んでいます…',
+    ja: '挿絵設定を読み込み中…',
     zh: '正在加载插图设置…',
   },
   'visuals.m042': {
@@ -422,7 +422,7 @@ export const messages = {
   'visuals.m074': {
     ko: '연결 확인 중…',
     en: 'Checking connection…',
-    ja: '接続を確認しています…',
+    ja: '接続を確認中…',
     zh: '正在检查连接…',
   },
   'visuals.m075': {
@@ -854,7 +854,7 @@ export const messages = {
   'visuals.m162': {
     ko: '생성 정보를 불러오는 중이에요…',
     en: 'Loading generation details…',
-    ja: '生成情報を読み込んでいます…',
+    ja: '生成情報を読み込み中…',
     zh: '正在加载生成信息…',
   },
   'visuals.m165': {
@@ -1425,19 +1425,19 @@ export const messages = {
     ko: '로어 선별 결과',
     en: 'Lore selection results',
     ja: 'ロア選別結果',
-    zh: '世界书筛选结果',
+    zh: '设定筛选结果',
   },
   'visuals.m274': {
     ko: '로어 선별을 건너뛰었어요 ({v0})',
     en: 'Lore selection skipped ({v0})',
     ja: 'ロア選別を省略（{v0}）',
-    zh: '已跳过世界书筛选（{v0}）',
+    zh: '已跳过设定筛选（{v0}）',
   },
   'visuals.m275': {
     ko: '로어 선별 · {v0}개 선택 · 문자 {v1} / 예산 {v2} · 제외 {v3}',
     en: 'Lore selection · {v0} selected · Characters {v1} / Budget {v2} · {v3} omitted',
     ja: 'ロア選別 · {v0}件選択 · 文字数{v1} / 予算{v2} · 除外{v3}',
-    zh: '世界书筛选 · 已选{v0}项 · 字符{v1} / 预算{v2} · 排除{v3}项',
+    zh: '设定筛选 · 已选{v0}项 · 字符{v1} / 预算{v2} · 排除{v3}项',
   },
   'visuals.m276': {
     ko: '원문 {v0}',
@@ -1533,7 +1533,7 @@ export const messages = {
     ko: '모델 요청 {calls}회 · 입력 {input} / 출력 {output} 토큰',
     en: 'Model requests {calls} · Input {input} / Output {output} tokens',
     ja: 'モデルリクエスト{calls}回 · 入力{input} / 出力{output}トークン',
-    zh: '模型请求{calls}次 · 输入{input} / 输出{output}词元',
+    zh: '模型请求{calls}次 · 输入{input} / 输出{output} token',
   },
   'visuals.cutCount': {
     ko: '삽화 {count}컷',
@@ -1605,7 +1605,7 @@ export const messages = {
     ko: 'Run {id} · 실행 요청 {calls}회 · 입력 {input} / 출력 {output} 토큰 · 비용 {cost}',
     en: 'Run {id} · Requests {calls} · Input {input} / Output {output} tokens · Cost {cost}',
     ja: 'Run {id} · 実行リクエスト{calls}回 · 入力{input} / 出力{output}トークン · 費用{cost}',
-    zh: 'Run {id} · 运行请求{calls}次 · 输入{input} / 输出{output}词元 · 费用{cost}',
+    zh: 'Run {id} · 运行请求{calls}次 · 输入{input} / 输出{output} token · 费用{cost}',
   },
   'visuals.translation': {
     ko: '번역',

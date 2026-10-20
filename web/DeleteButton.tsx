@@ -25,7 +25,7 @@ export function DeleteButton({
   revision,
   title,
   label = '삭제',
-  description = '목록에서 삭제해요. 과거 채팅과 실행이 사용하는 내용은 유지돼요.',
+  description = '목록에서 삭제해요. 과거 채팅과 실행에서 사용한 내용은 유지돼요.',
   disabled,
   iconOnly = false,
   preparePath,

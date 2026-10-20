@@ -30,10 +30,10 @@ export const messages = {
     zh: '删除',
   },
   'shared.deleteDescription': {
-    ko: '목록에서 삭제해요. 과거 채팅과 실행이 사용하는 내용은 유지돼요.',
-    en: 'Deletes from the list. Content used by past chats and runs is retained.',
-    ja: '一覧から削除します。過去のチャットや実行で使用した内容は保持します。',
-    zh: '从列表中删除。过去聊天和运行使用的内容会保留。',
+    ko: '목록에서 삭제해요. 과거 채팅과 실행에서 사용한 내용은 유지돼요.',
+    en: 'Removes it from the list. Content used in past chats and runs is retained.',
+    ja: '一覧から削除します。過去のチャットや実行で使われた内容は保持します。',
+    zh: '从列表中删除。过往聊天和运行中使用的内容会保留。',
   },
   'shared.deleteConfirm': {
     ko: '삭제 확인',
@@ -91,9 +91,9 @@ export const messages = {
   },
   'shared.saveFailure': {
     ko: '저장하지 못했어요. 계속 편집에서 오류나 미적용 입력을 확인해 주세요.',
-    en: 'Could not save. Continue editing to check errors or unapplied input.',
-    ja: '保存できませんでした。編集を続けて、エラーや未適用の入力を確認してください。',
-    zh: '无法保存。请继续编辑以检查错误或未应用的输入。',
+    en: 'Could not save. Choose Continue editing to check errors or unapplied input.',
+    ja: '保存できませんでした。「編集を続ける」からエラーや未適用の入力を確認してください。',
+    zh: '无法保存。请选择“继续编辑”，检查错误或未应用的输入。',
   },
   'shared.saving': {
     ko: '저장 중…',
@@ -121,14 +121,14 @@ export const messages = {
   },
   'shared.reviewPreserves': {
     ko: '현재 입력은 그대로 두고 저장된 내용을 확인할 수 있어요.',
-    en: 'You can review saved content while keeping your current input.',
-    ja: '現在の入力をそのままに、保存済みの内容を確認できます。',
-    zh: '可以保留当前输入并查看已保存的内容。',
+    en: 'Review the saved version while keeping your current input.',
+    ja: '現在の入力を保ったまま、保存済み内容を確認できます。',
+    zh: '可在保留当前输入的同时查看已保存内容。',
   },
   'shared.reviewContinue': {
     ko: '저장본을 확인한 뒤 계속 편집할 수 있어요.',
-    en: 'You can continue editing after reviewing the saved version.',
-    ja: '保存済みの内容を確認してから編集を続けられます。',
+    en: 'Review the saved version, then continue editing.',
+    ja: '保存済み内容を確認してから編集を続けられます。',
     zh: '查看已保存版本后可继续编辑。',
   },
   'shared.currentSaved': {
@@ -145,13 +145,13 @@ export const messages = {
   },
   'shared.reviewLoading': {
     ko: '저장본을 확인하고 있어요…',
-    en: 'Reviewing the saved version…',
-    ja: '保存済みの内容を確認中…',
+    en: 'Loading saved version…',
+    ja: '保存済み内容を確認中…',
     zh: '正在查看已保存版本…',
   },
   'shared.reviewBusy': {
     ko: '저장본 확인 중…',
-    en: 'Reviewing saved version…',
+    en: 'Loading saved version…',
     ja: '保存済み内容を確認中…',
     zh: '正在查看已保存版本…',
   },
@@ -165,7 +165,7 @@ export const messages = {
     ko: '저장본 확인 완료',
     en: 'Finish reviewing saved version',
     ja: '保存済み内容の確認完了',
-    zh: '完成已保存版本查看',
+    zh: '已确认保存版本',
   },
   'shared.keepInput': {
     ko: '현재 입력 유지',
@@ -231,19 +231,19 @@ export const messages = {
     ko: '본문은 생성됐지만 판정을 완료하지 못했어요. 보존된 본문을 다시 판정할 수 있어요.',
     en: 'The manuscript was generated, but evaluation did not finish. You can evaluate the preserved manuscript again.',
     ja: '本文は生成されましたが、判定が完了しませんでした。保持された本文を再判定できます。',
-    zh: '正文已生成，但评估未完成。可重新评估保留的正文。',
+    zh: '正文已生成，但判定未完成。可对已保留的正文重新判定。',
   },
   'shared.rejudgeHelp': {
     ko: '보존된 본문을 다시 판정해요. 본문 생성은 반복하지 않아요.',
     en: 'Evaluates the preserved manuscript again without repeating generation.',
     ja: '保持された本文を再判定します。本文の生成は繰り返しません。',
-    zh: '重新评估保留的正文，不会重复生成正文。',
+    zh: '仅重新判定保留的正文，不会重复生成正文。',
   },
   'shared.rejudge': {
     ko: '판정만 다시 시도',
     en: 'Retry evaluation only',
     ja: '判定のみ再試行',
-    zh: '仅重试评估',
+    zh: '仅重试判定',
   },
   'shared.retryHelp': {
     ko: '같은 요청을 현재 설정으로 다시 실행해요',
@@ -423,7 +423,7 @@ export const messages = {
     ko: '복제한 탭의 초안 복사가 중단됐어요.',
     en: 'Copying the draft for the duplicated tab was interrupted.',
     ja: '複製したタブの下書きコピーが中断されました。',
-    zh: '复制标签页的草稿复制已中断。',
+    zh: '新标签页的草稿复制已中断。',
   },
   'shared.recoveryCleanupAborted': {
     ko: '복구 정리가 중단됐어요.',
@@ -477,7 +477,7 @@ export const messages = {
   'shared.errorCode': {
     ko: '오류 코드: {code}',
     en: 'Error code: {code}',
-    ja: 'エラーコード: {code}',
+    ja: 'エラーコード：{code}',
     zh: '错误代码：{code}',
   },
 };
