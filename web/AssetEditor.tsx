@@ -1,3 +1,4 @@
+import { t, useI18n, message as uiMessage, messageRef } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { AssetMetadataEditor } from './AssetMetadataEditor.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
@@ -18,10 +19,10 @@ const emptyFields = {
   location: '',
   allowedUse: 'both' as Asset['allowedUse'],
 };
-const imageUseLabels: Record<Asset['allowedUse'], string> = {
-  both: '프로필과 본문',
-  profile: '프로필',
-  inline: '본문',
+const imageUseLabelKeys: Record<Asset['allowedUse'], string> = {
+  both: 'library.profileAndStory',
+  profile: 'library.profile',
+  inline: 'library.story',
 };
 
 export function AssetEditor({
@@ -41,6 +42,7 @@ export function AssetEditor({
   onSaveHandlerChange?: SettingsSaveRegistration;
   expanded?: boolean;
 }) {
+  useI18n();
   const [value, setValue] = useState({ ...emptyFields });
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -66,7 +68,7 @@ export function AssetEditor({
   async function save() {
     if (uploadLock.current) return false;
     if (!file || !value.title.trim()) {
-      onError('이미지 파일과 이미지 이름을 확인해 주세요.');
+      onError(uiMessage('library.checkTheImageFileAndName'));
       return false;
     }
     uploadLock.current = true;
@@ -78,22 +80,26 @@ export function AssetEditor({
         !PACKAGE_IMAGE_MIMES.includes(file.type as (typeof PACKAGE_IMAGE_MIMES)[number]) ||
         file.size > 64 * 1024 * 1024
       )
-        throw new Error('64MiB 이하 이미지 파일을 선택해 주세요. 저장할 때 WebP로 변환해요.');
+        throw new Error(uiMessage('library.chooseAnImageUpTo64Mib'));
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result).split(',')[1]);
-        reader.onerror = () => reject(new Error('이미지 파일을 읽지 못했어요.'));
+        reader.onerror = () => reject(new Error(uiMessage('library.couldNotReadTheImageFile')));
         reader.readAsDataURL(file);
       });
       await api(`/chats/${chatId}/assets`, { ...value, mime: file.type, base64 });
       setFile(null);
       setValue({ ...emptyFields });
       if (fileInput.current) fileInput.current.value = '';
-      setMessage('이미지를 등록했어요.');
+      setMessage(uiMessage('library.imageRegistered'));
       try {
         await refresh();
       } catch (error) {
-        onError(`이미지는 등록했지만 목록을 새로 불러오지 못했어요. ${(error as Error).message}`);
+        onError(
+          uiMessage('library.theImageWasRegisteredButTheList', {
+            v0: messageRef((error as Error).message),
+          })
+        );
       }
       return true;
     } catch (error) {
@@ -121,7 +127,12 @@ export function AssetEditor({
                 {!asset.packageOwner && <AssetMetadataEditor asset={asset} onSaved={refresh} />}
                 {asset.title}
                 <small>
-                  {[asset.actor, asset.outfit, asset.location, imageUseLabels[asset.allowedUse]]
+                  {[
+                    asset.actor,
+                    asset.outfit,
+                    asset.location,
+                    t(imageUseLabelKeys[asset.allowedUse]),
+                  ]
                     .filter(Boolean)
                     .join(' · ')}
                 </small>
@@ -129,11 +140,11 @@ export function AssetEditor({
                   <DeleteButton
                     path={`/chats/${encodeURIComponent(chatId)}/assets/${encodeURIComponent(asset.id)}`}
                     title={asset.title}
-                    label="이미지 삭제"
-                    description="업로드 이미지 목록에서 삭제해요. 과거 채팅과 실행에 필요한 이미지 파일은 유지돼요."
+                    label={t('library.deleteImage')}
+                    description={t('library.removeFromTheUploadedImageListFiles')}
                     disabled={busy}
                     onDeleted={async () => {
-                      setMessage(asset.title + ' 이미지를 삭제했어요.');
+                      setMessage(uiMessage('library.imageDeleted', { title: asset.title }));
                       await refresh();
                     }}
                     onError={onError}
@@ -144,13 +155,13 @@ export function AssetEditor({
           ))}
       </div>
       {visible && assets.length > pageSize && (
-        <nav aria-label="이미지 목록 구간" className="reader-pages">
+        <nav aria-label={t('library.imageListPages')} className="reader-pages">
           <button
             className="secondary"
             disabled={start === 0}
             onClick={() => setPage(Math.max(0, page - 1))}
           >
-            이전 이미지
+            {t('library.previousImages')}
           </button>
           <span>
             {start + 1}–{Math.min(start + pageSize, assets.length)} / {assets.length}
@@ -160,7 +171,7 @@ export function AssetEditor({
             disabled={start + pageSize >= assets.length}
             onClick={() => setPage(page + 1)}
           >
-            다음 이미지
+            {t('library.nextImages')}
           </button>
         </nav>
       )}
@@ -172,10 +183,10 @@ export function AssetEditor({
       >
         <fieldset className="editor-fields editor-grid" disabled={busy}>
           <label className="full">
-            PNG 또는 JPEG 이미지
+            {t('library.pngOrJpegImage')}
             <input
               ref={fileInput}
-              aria-label="PNG 또는 JPEG 이미지"
+              aria-label={t('library.pngOrJpegImage')}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/avif,image/gif"
               required
@@ -183,9 +194,9 @@ export function AssetEditor({
             />
           </label>
           <label>
-            이미지 이름
+            {t('library.imageName')}
             <input
-              aria-label="이미지 이름"
+              aria-label={t('library.imageName')}
               required
               maxLength={200}
               value={value.title}
@@ -193,9 +204,9 @@ export function AssetEditor({
             />
           </label>
           <label>
-            이미지 설명
+            {t('library.imageDescription')}
             <input
-              aria-label="이미지 설명"
+              aria-label={t('library.imageDescription')}
               required
               maxLength={2000}
               value={value.description}
@@ -203,49 +214,49 @@ export function AssetEditor({
             />
           </label>
           <label>
-            이미지 인물
+            {t('library.imageCharacter')}
             <input
-              aria-label="이미지 인물"
+              aria-label={t('library.imageCharacter')}
               value={value.actor}
               onChange={(event) => setValue({ ...value, actor: event.target.value })}
             />
           </label>
           <label>
-            이미지 의상
+            {t('library.imageOutfit')}
             <input
-              aria-label="이미지 의상"
+              aria-label={t('library.imageOutfit')}
               value={value.outfit}
               onChange={(event) => setValue({ ...value, outfit: event.target.value })}
             />
           </label>
           <label>
-            이미지 장소
+            {t('library.imageLocation')}
             <input
-              aria-label="이미지 장소"
+              aria-label={t('library.imageLocation')}
               value={value.location}
               onChange={(event) => setValue({ ...value, location: event.target.value })}
             />
           </label>
           <label>
-            이미지 용도
+            {t('library.imageUse')}
             <select
-              aria-label="이미지 용도"
+              aria-label={t('library.imageUse')}
               value={value.allowedUse}
               onChange={(event) =>
                 setValue({ ...value, allowedUse: event.target.value as Asset['allowedUse'] })
               }
             >
-              <option value="both">{imageUseLabels.both}</option>
-              <option value="profile">{imageUseLabels.profile}</option>
-              <option value="inline">{imageUseLabels.inline}</option>
+              <option value="both">{t(imageUseLabelKeys.both)}</option>
+              <option value="profile">{t(imageUseLabelKeys.profile)}</option>
+              <option value="inline">{t(imageUseLabelKeys.inline)}</option>
             </select>
           </label>
           <div className="form-actions full settings-save-actions">
             <TransientNotice message={message} />
             <SaveButton
               icon={ImageAddIcon}
-              label="이미지 등록"
-              text="등록"
+              label={t('library.registerImage')}
+              text={t('library.register')}
               disabled={busy || !file}
               aria-busy={busy}
             />
@@ -255,18 +266,16 @@ export function AssetEditor({
     </>
   );
   return expanded ? (
-    <section className="workspace-tools" aria-label="이 이야기의 이미지">
-      <p className="muted">채팅에 등록한 이미지 {assets.length}개</p>
-      <p className="muted">
-        봇·페르소나·모듈에 등록한 본문용 이미지는 각 자료에서 편집해요. 자동 이미지 배치에 이
-        이미지들도 사용할 수 있어요.
-      </p>
+    <section className="workspace-tools" aria-label={t('library.imagesForThisStory')}>
+      <p className="muted">{t('library.chatImageCount', { count: assets.length })}</p>
+      <p className="muted">{t('library.editStoryImagesAttachedToBotsPersonas')}</p>
       {content}
     </section>
   ) : (
     <details className="workspace-tools" onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary>
-        이 이야기의 이미지 <small>{assets.length}개</small>
+        {t('library.imagesForThisStory')}
+        <small>{t('library.itemCount', { count: assets.length })}</small>
       </summary>
       {content}
     </details>

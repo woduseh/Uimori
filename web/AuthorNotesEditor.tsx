@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { AddIcon, BackIcon, CloseIcon, EditIcon, PowerIcon } from './ui-icons.js';
@@ -49,6 +50,7 @@ export function AuthorNotesEditor({
   onSaveHandlerChange?: SettingsSaveRegistration;
   disabled?: boolean;
 }) {
+  useI18n();
   const [draft, setDraft] = useState<NoteDraft | null>(null);
   const [retiring, setRetiring] = useState<NoteDraft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -100,7 +102,7 @@ export function AuthorNotesEditor({
       await onRefresh();
     } catch {
       if (!alive.current) return;
-      const text = '메모 목록을 새로 불러오지 못했어요. 입력한 내용과 저장 결과는 유지했어요.';
+      const text = uiMessage('library.couldNotRefreshNotesYourInputAnd');
       setError(text);
       onError(text);
     }
@@ -143,14 +145,14 @@ export function AuthorNotesEditor({
       commandKey.current = { fingerprint: '', key: crypto.randomUUID() };
       setMessage(
         retired
-          ? '이 채팅의 이후 요청에서 이 메모를 사용하지 않아요.'
-          : '메모를 저장했어요. 이후 요청부터 반영해요.'
+          ? uiMessage('library.thisNoteWillNoLongerBeUsed')
+          : uiMessage('library.noteSavedItAppliesToFutureRequests')
       );
       await refresh();
       return true;
     } catch (caught) {
       if (!alive.current) return false;
-      const text = caught instanceof Error ? caught.message : '메모를 저장하지 못했어요.';
+      const text = caught instanceof Error ? caught.message : t('library.couldNotSaveTheNote');
       setError(text);
       onError(text);
       if (caught instanceof ApiError && caught.status === 409) {
@@ -164,26 +166,26 @@ export function AuthorNotesEditor({
     }
   }
   useSettingsSaveHandler(onSaveHandlerChange, async () => {
-    if (retiring) throw new Error('메모 사용 중단은 계속 편집에서 확인해 주세요.');
+    if (retiring) throw new Error(uiMessage('library.confirmRetiringThisNoteInContinueEditing'));
     if (locked.current || busy) return false;
     return draft ? save(draft) : true;
   });
   return (
     <details className="context-notes" data-testid="context-notes">
       <summary>
-        사용자 메모·정정
-        {notes.some((note) => note.kind === 'imported-memory') ? '·가져온 기억' : ''} {notes.length}
-        개
+        {t('library.notesSummary', {
+          count: notes.length,
+          imported: notes.some((note) => note.kind === 'imported-memory') ? 'yes' : 'no',
+        })}
       </summary>
       <p className="muted">
-        이후 요청에서도 지킬 설정·지시나 정정을 남겨요. Risu 프롬프트 안의 배치용 작가 노트와는
-        별개예요. 원문과 요약은 별도로 보존해요.
-        {notes.some((note) => note.kind === 'imported-memory') &&
-          ' 가져온 기억은 외부 자료의 기록으로 구분해요.'}
+        {t('library.notesHint', {
+          imported: notes.some((note) => note.kind === 'imported-memory') ? 'yes' : 'no',
+        })}
       </p>
       {error && (
         <p className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
       <TransientNotice message={message} />
@@ -193,25 +195,28 @@ export function AuthorNotesEditor({
             <li key={note.id}>
               <p>{note.text}</p>
               <small>
-                {note.kind === 'imported-memory' && <>가져온 기억: {note.origin.title} · </>}
-                작성자: {note.declaration.author} ·{' '}
-                {note.atRevision ? '원문에 연결된 메모' : '첫 장면 전 메모'}
+                {t('library.noteAttribution', {
+                  imported: note.kind === 'imported-memory' ? 'yes' : 'no',
+                  origin: note.origin?.title ?? '',
+                  author: note.declaration.author,
+                  linked: note.atRevision ? 'yes' : 'no',
+                })}
               </small>
               <div className="form-actions">
                 <button
                   type="button"
                   className="secondary"
-                  aria-label={`메모 수정: ${note.text.slice(0, 60)}`}
+                  aria-label={t('library.editNote', { v0: note.text.slice(0, 60) })}
                   disabled={busy || disabled || editing !== null}
                   onClick={() => begin(note)}
                 >
                   <EditIcon size={18} aria-hidden="true" />
-                  수정
+                  {t('library.edit2')}
                 </button>
                 <button
                   type="button"
                   className="secondary"
-                  aria-label={`메모 사용 중단: ${note.text.slice(0, 60)}`}
+                  aria-label={t('library.retireNote', { v0: note.text.slice(0, 60) })}
                   disabled={busy || disabled || editing !== null}
                   onClick={() => {
                     setRetiring(fromNote(note));
@@ -220,34 +225,31 @@ export function AuthorNotesEditor({
                   }}
                 >
                   <PowerIcon size={18} aria-hidden="true" />
-                  사용 중단
+                  {t('library.retire')}
                 </button>
               </div>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="muted">아직 직접 남긴 메모가 없어요.</p>
+        <p className="muted">{t('library.noPersonalNotesYet')}</p>
       )}
       {!editing && (
         <button type="button" className="secondary" disabled={disabled} onClick={() => begin()}>
           <AddIcon size={18} aria-hidden="true" />
-          메모 추가
+          {t('library.addNote')}
         </button>
       )}
       {conflict && (
         <div className="context-conflict" role="alert">
-          <p>
-            저장된 메모나 대상 장면이 바뀌었어요. 입력한 내용은 유지했어요. 위의 최신 메모를 확인해
-            주세요.
-          </p>
+          <p>{t('library.theSavedNoteOrTargetSceneChanged')}</p>
           <button
             type="button"
             className="secondary"
             disabled={busy || disabled}
             onClick={() => setConflictOpen(true)}
           >
-            저장 충돌 확인
+            {t('library.reviewSaveConflict')}
           </button>
         </div>
       )}
@@ -260,7 +262,7 @@ export function AuthorNotesEditor({
           }}
         >
           <label>
-            메모 작성자
+            {t('library.noteAuthor')}
             <input
               required
               maxLength={200}
@@ -270,7 +272,7 @@ export function AuthorNotesEditor({
             />
           </label>
           <label className="full">
-            메모·정정 내용
+            {t('library.noteOrCorrection')}
             <textarea
               required
               maxLength={32000}
@@ -285,7 +287,7 @@ export function AuthorNotesEditor({
               className="primary"
               disabled={busy || disabled || !draft.text.trim() || !draft.author.trim()}
             >
-              {draft.originalId ? '메모 수정 저장' : '새 메모 저장'}
+              {draft.originalId ? t('library.saveEditedNote') : t('library.saveNewNote')}
             </button>
             <button
               type="button"
@@ -297,31 +299,31 @@ export function AuthorNotesEditor({
               }}
             >
               <CloseIcon size={18} aria-hidden="true" />
-              편집 취소
+              {t('library.cancelEditing')}
             </button>
           </div>
         </form>
       )}
       <SaveConflictDialog
         open={conflictOpen}
-        title="메모 저장 충돌"
+        title={t('library.noteSaveConflict')}
         onClose={() => {
           setConflictOpen(false);
           reviewed.current = null;
         }}
         readSaved={async () => {
           reviewed.current = { revision, headRevision, originalExists };
-          return {
+          return () => ({
             content: (
               <>
                 {notes.length ? (
                   notes.map((note) => <blockquote key={note.id}>{note.text}</blockquote>)
                 ) : (
-                  <p>저장된 메모가 없어요.</p>
+                  <p>{t('library.noSavedNotes')}</p>
                 )}
               </>
             ),
-          };
+          });
         }}
         onAcceptSaved={
           draft || originalExists
@@ -345,8 +347,8 @@ export function AuthorNotesEditor({
         }
       />
       {retiring && (
-        <div role="group" aria-label="메모 사용 중단 확인">
-          <p>이 채팅의 이후 요청에서 이 메모를 제외해요. 이전 실행과 메모 이력은 보존해요.</p>
+        <div role="group" aria-label={t('library.confirmNoteRetirement')}>
+          <p>{t('library.excludeThisNoteFromFutureRequestsFor')}</p>
           <blockquote>{retiring.text}</blockquote>
           <div className="form-actions">
             <button
@@ -355,7 +357,7 @@ export function AuthorNotesEditor({
               disabled={busy || disabled}
               onClick={() => void save(retiring, true)}
             >
-              확인했어요 · 사용 중단
+              {t('library.confirmedRetire')}
             </button>
             <button
               type="button"
@@ -367,7 +369,7 @@ export function AuthorNotesEditor({
               }}
             >
               <BackIcon size={18} aria-hidden="true" />
-              돌아가기
+              {t('library.back')}
             </button>
           </div>
         </div>

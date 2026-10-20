@@ -1,3 +1,4 @@
+import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   HelperConversation,
@@ -31,6 +32,7 @@ export function useHelperConversation(
   conversationId: string | null,
   latestEventSeq?: number
 ) {
+  useI18n();
   const scopeKey = conversationId ?? '';
   const selectedScope = useRef(scopeKey);
   selectedScope.current = scopeKey;
@@ -132,7 +134,7 @@ export function useHelperConversation(
       requested = false;
     const report = (cause: unknown) => {
       if (!disposed && selectedScope.current === scopeKey)
-        setError(cause instanceof Error ? cause.message : '도우미 대화를 불러오지 못했어요.');
+        setError(cause instanceof Error ? cause.message : uiMessage('helpers.m207'));
     };
     const events = async () => {
       let cursor = cursors.current.get(conversationId) ?? 0;
@@ -278,7 +280,7 @@ export function useHelperConversation(
       }
     } catch (cause) {
       if (selectedScope.current === scopeKey)
-        setError(cause instanceof Error ? cause.message : '이전 기록을 불러오지 못했어요.');
+        setError(cause instanceof Error ? cause.message : uiMessage('helpers.m208'));
     } finally {
       earlierLock.current = false;
       if (alive.current) setLoadingEarlier(false);

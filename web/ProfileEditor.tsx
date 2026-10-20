@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
@@ -16,11 +17,23 @@ import './library.css';
 import './settings-actions.css';
 
 export type ProfileSection = 'characters' | 'prompts' | 'models' | 'story' | 'images';
-const sections: { id: ProfileSection; title: string }[] = [
-  { id: 'characters', title: '대화 구성' },
-  { id: 'prompts', title: '프롬프트·모델' },
-  { id: 'story', title: '기억·로어' },
-  { id: 'images', title: '이미지' },
+const sections: { id: ProfileSection; titleKey: string }[] = [
+  {
+    id: 'characters',
+    titleKey: 'library.conversationSetup',
+  },
+  {
+    id: 'prompts',
+    titleKey: 'library.promptsAndModels',
+  },
+  {
+    id: 'story',
+    titleKey: 'library.memoryAndLore',
+  },
+  {
+    id: 'images',
+    titleKey: 'library.images',
+  },
 ];
 
 export function ProfileEditor({
@@ -50,6 +63,7 @@ export function ProfileEditor({
   nextRequest?: string;
   loreContextReset?: boolean;
 }) {
+  useI18n();
   const [value, setValue] = useState(profile);
   const [dirty, setDirty] = useState(false);
   const { workspace } = usePromptWorkspace();
@@ -104,9 +118,9 @@ export function ProfileEditor({
     setDirty(true);
     setStatus('');
   };
-  async function save(work: () => Promise<ChatProfile>, message = '채팅 설정을 저장했어요.') {
+  async function save(work: () => Promise<ChatProfile>, message = t('library.chatSettingsSaved')) {
     if (lorePending) {
-      setError('로어 설정에 입력한 숫자를 확인한 뒤 저장해 주세요.');
+      setError(uiMessage('library.checkTheNumbersInLoreSettingsBefore'));
       return false;
     }
     setSaving(true);
@@ -154,15 +168,21 @@ export function ProfileEditor({
     isModelSelectable(item, library.models, library.connections)
   );
   return (
-    <section className="profile-editor" data-testid="profile-editor" aria-label="채팅 설정">
+    <section
+      className="profile-editor"
+      data-testid="profile-editor"
+      aria-label={t('library.chatSettings')}
+    >
       {!hideNavigation && (
-        <p className="muted profile-intro">이 채팅에서 사용할 인물과 창작 방식을 정해요.</p>
+        <p className="muted profile-intro">
+          {t('library.chooseTheCharactersAndWritingApproachFor')}
+        </p>
       )}
       <div
         hidden={hideNavigation}
         className="profile-tabs"
         role="tablist"
-        aria-label="채팅 설정 분류"
+        aria-label={t('library.chatSettingsCategories')}
         onKeyDown={(event) => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
           event.preventDefault();
@@ -190,11 +210,11 @@ export function ProfileEditor({
             className="secondary"
             onClick={() => setTab(item.id)}
           >
-            {item.title}
+            {t(item.titleKey)}
           </button>
         ))}
       </div>
-      <p className="muted">이 채팅에만 적용돼요.</p>
+      <p className="muted">{t('library.appliesOnlyToThisChat')}</p>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -210,7 +230,7 @@ export function ProfileEditor({
         >
           <fieldset className="profile-fields" disabled={saving}>
             <div hidden={tab !== 'characters'} className="settings-group">
-              <h3 className="settings-group-heading">대화 자료</h3>
+              <h3 className="settings-group-heading">{t('library.conversationResources')}</h3>
               <ContentAttachments
                 profile={value}
                 library={library}
@@ -220,25 +240,22 @@ export function ProfileEditor({
               />
             </div>
             <div hidden={tab !== 'images'} className="chat-profile-image-options settings-group">
-              <h3 className="settings-group-heading">사용 가능한 이미지 배치</h3>
+              <h3 className="settings-group-heading">{t('library.availableImagePlacement')}</h3>
               <div className="settings-group-body">
                 <label className="settings-row">
                   <span className="settings-row-copy">
-                    <strong>이미지 배치 담당</strong>
-                    <small>
-                      작문 모델은 글과 함께 이미지 태그를 넣고, JEV는 완성된 글에서 이미지를 골라요.
-                      원문과 번역에 같은 방식을 사용해요.
-                    </small>
+                    <strong>{t('library.imagePlacementOwner')}</strong>
+                    <small>{t('library.theWriterInsertsImageTagsWhileWriting')}</small>
                   </span>
                   <span className="settings-row-control">
                     <select
-                      aria-label="이미지 배치 담당"
+                      aria-label={t('library.imagePlacementOwner')}
                       value={value.image ? 'jev' : 'writer'}
                       onChange={(event) =>
                         change({ ...value, image: event.target.value === 'jev' })
                       }
                     >
-                      <option value="writer">작문 모델</option>
+                      <option value="writer">{t('library.writingModel')}</option>
                       <option value="jev">JEV</option>
                     </select>
                   </span>
@@ -250,20 +267,20 @@ export function ProfileEditor({
                 (loreDefaultsError ? (
                   <div>
                     <p className="error" role="alert">
-                      전역 로어 기본값을 불러오지 못했어요. 현재 채팅 설정은 계속 편집할 수 있어요.
+                      {t('library.couldNotLoadGlobalLoreDefaultsYou')}
                     </p>
                     <button
                       type="button"
                       className="secondary"
                       onClick={() => setLoreDefaultsRequest((current) => current + 1)}
                     >
-                      전역 기본값 다시 불러오기
+                      {t('library.reloadGlobalDefaults')}
                     </button>
                   </div>
                 ) : (
                   <LoadingState
                     presentation="inline"
-                    label="전역 로어 기본값을 불러오는 중이에요…"
+                    label={t('library.loadingGlobalLoreDefaults')}
                   />
                 ))}
               <LoreContextPolicyEditor
@@ -279,12 +296,12 @@ export function ProfileEditor({
               />
             </div>
             <div hidden={tab !== 'prompts'} className="chat-profile-model-options settings-group">
-              <h3 className="settings-group-heading">본문 모델</h3>
+              <h3 className="settings-group-heading">{t('library.storyModel')}</h3>
               <div className="settings-group-body">
                 <label className="settings-row">
-                  <span>이 채팅의 본문 모델</span>
+                  <span>{t('library.storyModelForThisChat')}</span>
                   <select
-                    aria-label="이 채팅의 본문 모델"
+                    aria-label={t('library.storyModelForThisChat')}
                     value={modelId ?? ''}
                     onChange={(event) =>
                       change({
@@ -297,12 +314,16 @@ export function ProfileEditor({
                     }
                   >
                     <option value="">
-                      전역 따르기 ·{' '}
-                      {library.models.find((item) => item.id === workspace?.modelRoutes.main?.id)
-                        ?.title ?? '미지정 또는 확인 필요'}
+                      {t('library.globalValue', {
+                        value:
+                          library.models.find((item) => item.id === workspace?.modelRoutes.main?.id)
+                            ?.title ?? t('library.notSetOrNeedsReview'),
+                      })}
                     </option>
                     {modelId && !modelChoices.some((item) => item.id === modelId) && (
-                      <option value={modelId}>사용 불가 · {selectedModel?.title ?? modelId}</option>
+                      <option value={modelId}>
+                        {t('library.unavailableValue', { value: selectedModel?.title ?? modelId })}
+                      </option>
                     )}
                     {modelChoices.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -315,8 +336,8 @@ export function ProfileEditor({
               {!modelAvailable && workspace && (
                 <p className="error" role="alert">
                   {!selectedModelId
-                    ? '본문 모델이 지정되지 않았어요. 저장된 원고는 읽을 수 있지만 새 생성은 시작할 수 없어요.'
-                    : '선택한 본문 모델을 사용할 수 없어 새 원문을 생성할 수 없어요. 사용 가능한 모델을 고르거나 전체 설정을 확인해 주세요.'}
+                    ? t('library.noStoryModelIsSelectedSavedManuscripts')
+                    : t('library.theSelectedStoryModelIsUnavailableChoose')}
                 </p>
               )}
               <div className="form-actions">
@@ -326,24 +347,20 @@ export function ProfileEditor({
                   onClick={() => onGlobalSettings('models')}
                 >
                   <SettingsIcon size={18} aria-hidden="true" />
-                  전역 모델 설정
+                  {t('library.globalModelSettings')}
                 </button>
               </div>
             </div>
             <div hidden={tab !== 'prompts'} className="chat-profile-prompt-options settings-group">
-              <h3 className="settings-group-heading">작문 프롬프트</h3>
+              <h3 className="settings-group-heading">{t('library.writingPrompt')}</h3>
               <div className="settings-group-body">
                 <label className="settings-row">
                   <span className="settings-row-copy">
-                    <strong>이 채팅의 작문 프롬프트</strong>
-                    <small>
-                      직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요.
-                      모델·프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 과거·진행 중인 작업은
-                      바뀌지 않고, 창작 옵션은 선택한 프롬프트를 따라요.
-                    </small>
+                    <strong>{t('library.writingPromptForThisChat')}</strong>
+                    <small>{t('library.chooseAPromptToPinItTo')}</small>
                   </span>
                   <select
-                    aria-label="이 채팅의 작문 프롬프트"
+                    aria-label={t('library.writingPromptForThisChat')}
                     value={promptId ?? ''}
                     onChange={(event) =>
                       change({
@@ -356,10 +373,14 @@ export function ProfileEditor({
                     }
                   >
                     <option value="">
-                      전역 따르기 · {workspace?.main.title ?? '불러오는 중…'}
+                      {t('library.globalValue', {
+                        value: workspace?.main.title ?? t('library.loading'),
+                      })}
                     </option>
                     {promptId && !pinnedPrompt && (
-                      <option value={promptId}>사용 불가 · {promptId}</option>
+                      <option value={promptId}>
+                        {t('library.unavailableValue', { value: promptId })}
+                      </option>
                     )}
                     {promptChoices.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -370,20 +391,16 @@ export function ProfileEditor({
                 </label>
                 {promptId && !pinnedPrompt && (
                   <p className="error" role="alert">
-                    이 채팅에 지정한 작문 프롬프트를 사용할 수 없어 새 원문을 생성할 수 없어요. 다른
-                    프롬프트를 고르거나 ‘전역 따르기’로 바꿔 저장해 주세요.
+                    {t('library.thisChatSWritingPromptIsUnavailable')}
                   </p>
                 )}
                 <label className="settings-row">
                   <span className="settings-row-copy">
-                    <strong>Risu 작가 노트</strong>
-                    <small>
-                      Risu 프롬프트의 작가 노트 위치에 넣어요. 일반적인 지속 조건은 기억·로어의
-                      메모·정정에 적어요. 비워 두면 프롬프트에 저장된 기본값을 사용해요.
-                    </small>
+                    <strong>{t('library.risuAuthorNote')}</strong>
+                    <small>{t('library.insertedAtTheAuthorNotePositionIn')}</small>
                   </span>
                   <textarea
-                    aria-label="Risu 작가 노트"
+                    aria-label={t('library.risuAuthorNote')}
                     rows={5}
                     maxLength={32000}
                     value={value.authorNote ?? ''}
@@ -393,33 +410,37 @@ export function ProfileEditor({
               </div>
             </div>
             <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
-              <h4 className="settings-group-heading">전체 채팅 설정에서 사용하는 모델</h4>
+              <h4 className="settings-group-heading">
+                {t('library.modelsUsedByGlobalChatSettings')}
+              </h4>
               <dl className="settings-group-body">
                 <div>
-                  <dt>번역</dt>
+                  <dt>{t('library.translation')}</dt>
                   <dd>
                     {library.models.find(
                       (item) => item.id === workspace?.modelRoutes.translation?.id
                     )?.title ??
                       (workspace
                         ? workspace.modelRoutes.translation?.id
-                          ? '사용 불가 · 등록된 모델을 찾을 수 없어요'
-                          : '사용할 모델 미지정'
-                        : '불러오는 중…')}
+                          ? t('library.unavailableRegisteredModelNotFound')
+                          : t('library.noModelSelected')
+                        : t('library.loading'))}
                   </dd>
                 </div>
                 <div>
-                  <dt>로어·번역 거절·이미지 배치 판단</dt>
+                  <dt>{t('library.loreTranslationRefusalAndImagePlacementDecisions')}</dt>
                   <dd>JEV</dd>
                 </div>
               </dl>
             </div>
             <div hidden={tab !== 'prompts'} className="settings-inherited settings-group">
-              <h4 className="settings-group-heading">전체 채팅 설정에서 사용하는 프롬프트</h4>
+              <h4 className="settings-group-heading">
+                {t('library.promptsUsedByGlobalChatSettings')}
+              </h4>
               <dl className="settings-group-body">
                 <div>
-                  <dt>번역</dt>
-                  <dd>{workspace?.translation.title ?? '불러오는 중…'}</dd>
+                  <dt>{t('library.translation')}</dt>
+                  <dd>{workspace?.translation.title ?? t('library.loading')}</dd>
                 </div>
               </dl>
               <div className="form-actions">
@@ -429,7 +450,7 @@ export function ProfileEditor({
                   onClick={() => onGlobalSettings('prompts')}
                 >
                   <SettingsIcon size={18} aria-hidden="true" />
-                  전역 프롬프트 설정
+                  {t('library.globalPromptSettings')}
                 </button>
               </div>
             </div>
@@ -437,13 +458,12 @@ export function ProfileEditor({
         </div>
         {profile.revision > value.revision && dirty && (
           <p className="error" role="alert">
-            다른 요청에서 채팅 설정이 바뀌었어요. 입력은 유지했어요. 최신 설정을 확인한 뒤 다시
-            저장해 주세요.
+            {t('library.chatSettingsChangedInAnotherRequestYour')}
           </p>
         )}
         {error && (
           <p className="error" role="alert">
-            {error} 입력한 내용은 유지했어요.
+            {t('library.errorInputRetained', { error: translateMessage(error) })}
           </p>
         )}
         <div
@@ -461,21 +481,23 @@ export function ProfileEditor({
                 setLorePending(false);
                 setLoreResetVersion((version) => version + 1);
                 setError('');
-                setStatus('최신 설정을 불러왔어요.');
+                setStatus(uiMessage('library.latestSettingsLoaded'));
                 onError('');
               }}
             >
-              장착 설정 다시 불러오기
+              {t('library.reloadAttachmentSettings')}
             </button>
           )}
           {(saving || dirty || lorePending) && (
-            <span role="status">{saving ? '저장 중…' : '저장하지 않은 변경이 있어요.'}</span>
+            <span role="status">
+              {saving ? t('library.saving') : t('library.youHaveUnsavedChanges')}
+            </span>
           )}
           {(dirty || lorePending) && (
-            <small>대화 구성·프롬프트·모델·로어 정책·자동 배치의 변경을 함께 저장해요.</small>
+            <small>{t('library.saveChangesToConversationSetupPromptsModels')}</small>
           )}
           <SaveButton
-            label="채팅 설정 저장"
+            label={t('library.saveChatSettings')}
             disabled={saving || !dirty || lorePending}
             aria-busy={saving}
           />

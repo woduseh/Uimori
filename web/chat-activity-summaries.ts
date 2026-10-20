@@ -1,13 +1,14 @@
+import { t, formatNumber } from './i18n.js';
 import type { ChatActivityCount } from '../core/chat-activity.js';
 
 export type ChatActivitySummary = { count: number; label: string };
 
 const kindLabels: Record<ChatActivityCount['kind'], string> = {
-  main: '원문 생성',
-  translation: '번역',
-  status: '상태 표현',
-  image: '이미지',
-  illustration: '삽화',
+  main: 'helpers.m305',
+  translation: 'helpers.m217',
+  status: 'helpers.m306',
+  image: 'helpers.m218',
+  illustration: 'helpers.m220',
 };
 
 /** The inbox already queries running jobs; reuse its snapshot for the bot tree and rail. */
@@ -19,7 +20,10 @@ export function chatActivitySummaries(
     const previous = result[row.chatId];
     result[row.chatId] = {
       count: (previous?.count ?? 0) + row.count,
-      label: [previous?.label, `${kindLabels[row.kind]} ${row.count}개`]
+      label: [
+        previous?.label,
+        t('helpers.m307', { v0: t(kindLabels[row.kind]), v1: formatNumber(row.count) }),
+      ]
         .filter(Boolean)
         .join(' · '),
     };

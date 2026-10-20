@@ -1,3 +1,4 @@
+import { useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { api, knownMaintenance, maintenanceChangedEvent, type MaintenanceStatus } from './api.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -6,6 +7,7 @@ type Maintenance = MaintenanceStatus & { activeWork?: number };
 
 /** Says plainly that writes are paused, so a rejected save never looks like a lost draft. */
 export function MaintenanceBanner() {
+  const { t } = useI18n();
   const [state, setState] = useState<Maintenance | null>(knownMaintenance);
   useEffect(() => {
     let alive = true;
@@ -38,14 +40,13 @@ export function MaintenanceBanner() {
   }, []);
   if (!state || state.status !== 'closed') return null;
   return (
-    <NoticeBanner label="유지보수 안내" className="maintenance-banner">
-      <strong>유지보수 중이에요.</strong> 새 저장과 생성을 잠시 받지 않아요.
+    <NoticeBanner label={t('outside.maintenanceLabel')} className="maintenance-banner">
+      <strong>{t('outside.maintenanceTitle')}</strong> {t('outside.maintenancePaused')}
       <details>
-        <summary>자세히</summary>
+        <summary>{t('outside.details')}</summary>
         <p>
-          읽기와 진행 중인 작업의 취소는 사용할 수 있어요. 작성 중인 내용은 유지해요. 가져오기도
-          잠시 중단해요.
-          {!!state.activeWork && ` 진행 중인 작업이 ${state.activeWork}개 있어요.`}
+          {t('outside.maintenanceBody')}
+          {!!state.activeWork && t('outside.activeWork', { count: state.activeWork })}
         </p>
       </details>
     </NoticeBanner>

@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useState, type ReactNode } from 'react';
 import { DoneIcon, IssueIcon, RunningIcon, UncertainIcon } from './ui-icons.js';
 import './turn-activity.css';
@@ -48,6 +49,7 @@ export function TurnStatus({
   children,
   dataProps,
 }: Props) {
+  useI18n();
   const [open, setOpen] = useState(() => {
     try {
       return !!storageKey && sessionStorage.getItem(storageKey) === 'open';
@@ -65,7 +67,7 @@ export function TurnStatus({
         <Glyph size={15} className={tone === 'running' ? 'activity-spinner' : undefined} />
       </span>
       <span className={quiet ? 'sr-only' : 'turn-activity-text'}>
-        {quiet ? `작업 현황 · ${text}` : text}
+        {quiet ? t('helpers.m247', { v0: text }) : text}
       </span>
       {elapsed && <small>{elapsed}</small>}
       {badges}

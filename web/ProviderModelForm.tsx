@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import type { ReactNode, RefObject, Dispatch, SetStateAction } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import type { Connection, ModelPreset, VertexRequestTier } from '../core/product.js';
@@ -48,6 +49,7 @@ export function ProviderModelForm({
   onCatalog,
   deleteAction,
 }: Props) {
+  useI18n();
   const { value: model, editing: editingModel, copy: modelCopy, baseline: modelBaseline } = draft;
   const chosen = modelConnections.find((connection) => connection.id === model.connectionRef);
   return (
@@ -55,7 +57,7 @@ export function ProviderModelForm({
       hidden={hidden}
       ref={formRef}
       className="editor-grid provider-management-form"
-      aria-label="모델 편집 양식"
+      aria-label={t('providers.m275')}
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
@@ -63,11 +65,7 @@ export function ProviderModelForm({
       }}
     >
       <h3 className="full">
-        {editingModel
-          ? '모델 프리셋 수정'
-          : modelCopy
-            ? '모델 프리셋 복제 검토'
-            : '모델 프리셋 등록'}
+        {editingModel ? t('providers.m276') : modelCopy ? t('providers.m277') : t('providers.m278')}
       </h3>
       {editingModel &&
         (conflict ||
@@ -75,9 +73,7 @@ export function ProviderModelForm({
             editingModel.revision) && (
           <div className="provider-draft-note full">
             {models.find((item) => item.id === editingModel.id)?.revision !==
-              editingModel.revision && (
-              <p>다른 곳에서 모델이 변경됐어요. 입력한 초안은 유지했어요.</p>
-            )}
+              editingModel.revision && <p>{t('providers.m279')}</p>}
             <button
               type="button"
               className="secondary"
@@ -86,19 +82,17 @@ export function ProviderModelForm({
                 onReload();
               }}
             >
-              최신 모델 설정 불러오기
+              {t('providers.m280')}
             </button>
           </div>
         )}
-      {modelCopy && (
-        <p className="provider-draft-note full">설정을 검토한 뒤 새 프리셋으로 저장해요.</p>
-      )}
+      {modelCopy && <p className="provider-draft-note full">{t('providers.m281')}</p>}
       {conflict && (
         <NoticeBanner tone="error" className="full">
-          다른 곳에서 모델이 변경됐어요. 초안은 유지했어요. 최신 설정을 불러와 주세요.
+          {t('providers.m282')}
         </NoticeBanner>
       )}
-      <div className="provider-model-tabs full" aria-label="모델 편집 항목">
+      <div className="provider-model-tabs full" aria-label={t('providers.m283')}>
         {(['basic', 'advanced'] as const).map((section, index) => (
           <button
             type="button"
@@ -107,17 +101,17 @@ export function ProviderModelForm({
             key={section}
             onClick={() => onSectionChange(section)}
           >
-            {['기본', '고급'][index]}
+            {[t('providers.m284'), t('providers.m285')][index]}
           </button>
         ))}
       </div>
       <fieldset className="editor-fields full" disabled={busy}>
         <div className="provider-model-section full" hidden={modelSection !== 'basic'}>
-          <h4 className="provider-field-heading full">모델 선택</h4>
+          <h4 className="provider-field-heading full">{t('providers.m286')}</h4>
           <label className="full">
-            모델 프리셋 이름
+            {t('providers.m49')}
             <input
-              aria-label="모델 프리셋 이름"
+              aria-label={t('providers.m49')}
               required
               maxLength={160}
               value={model.title}
@@ -125,9 +119,9 @@ export function ProviderModelForm({
             />
           </label>
           <label className="full">
-            프로바이더
+            {t('providers.m57')}
             <select
-              aria-label="프로바이더"
+              aria-label={t('providers.m57')}
               required
               value={model.connectionRef}
               onChange={(event) => {
@@ -136,25 +130,22 @@ export function ProviderModelForm({
                 else onChange({ ...model, connectionRef: '' });
               }}
             >
-              <option value="">프로바이더 선택</option>
+              <option value="">{t('providers.m87')}</option>
               {model.connectionRef && !chosen && (
                 <option value={model.connectionRef} disabled>
-                  프로바이더 확인 필요
+                  {t('providers.m116')}
                 </option>
               )}
               {modelConnections.map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.title}
-                  {item.enabled ? '' : ' · 비활성'}
+                  {item.enabled ? '' : t('providers.m120')}
                 </option>
               ))}
             </select>
           </label>
           {chosen && !chosen.enabled && (
-            <p className="provider-draft-note full">
-              비활성 프로바이더를 사용하는 모델은 새로 실행할 수 없어요. 프로바이더를 활성화하면
-              다시 사용할 수 있어요.
-            </p>
+            <p className="provider-draft-note full">{t('providers.m287')}</p>
           )}
           <ProviderCatalogPicker
             key={chosen?.id}
@@ -200,21 +191,21 @@ export function ProviderModelForm({
         <small className="provider-save-status">
           {editingModel
             ? JSON.stringify(model) === modelBaseline
-              ? '저장한 모델 프리셋이에요.'
-              : '아직 저장하지 않은 변경이 있어요.'
-            : '아직 저장하지 않은 모델 프리셋이에요.'}
+              ? t('providers.m288')
+              : t('providers.m160')
+            : t('providers.m289')}
         </small>
         <IconButton
           icon={CloseIcon}
-          label="모델 편집 끝내기"
+          label={t('providers.m290')}
           disabled={busy}
           onClick={() => onDone()}
         />
         {editingModel ? (
-          <SaveButton label="모델 변경 저장" disabled={busy || !chosen} aria-busy={saving} />
+          <SaveButton label={t('providers.m291')} disabled={busy || !chosen} aria-busy={saving} />
         ) : (
           <button className="primary" disabled={busy || !chosen}>
-            모델 프리셋 등록
+            {t('providers.m278')}
           </button>
         )}
       </div>

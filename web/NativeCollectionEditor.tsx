@@ -1,3 +1,4 @@
+import { useI18n, formatNumber } from './i18n.js';
 import { useState, type DragEvent, type ReactNode } from 'react';
 import { IconButton } from './IconButton.js';
 import { AddIcon, UpIcon, DownIcon, DeleteIcon, DragHandleIcon } from './ui-icons.js';
@@ -19,6 +20,8 @@ export function NativeCollectionEditor({
   onRemove?: (index: number) => void;
   children: (index: number) => ReactNode;
 }) {
+  const { t } = useI18n();
+
   const [selected, setSelected] = useState(0);
   const [query, setQuery] = useState('');
   const [dragged, setDragged] = useState<number | null>(null);
@@ -26,7 +29,10 @@ export function NativeCollectionEditor({
     index: number;
     position: 'before' | 'after';
   } | null>(null);
-  const [moveAnnouncement, setMoveAnnouncement] = useState('');
+  const [moveAnnouncement, setMoveAnnouncement] = useState<{
+    title: string;
+    position: number;
+  } | null>(null);
   const index = Math.min(selected, Math.max(0, items.length - 1));
   const add = () => {
     onAdd();
@@ -57,23 +63,23 @@ export function NativeCollectionEditor({
     if (from === to) return;
     onReorder(from, to);
     setSelected(to);
-    setMoveAnnouncement(`${items[from].title} 항목을 ${to + 1}번째로 이동했어요.`);
+    setMoveAnnouncement({ title: items[from].title, position: to + 1 });
   };
   return (
     <div className="native-editor-split">
-      <aside className="native-item-list" aria-label={label + ' 목록'}>
+      <aside className="native-item-list" aria-label={t('native.collectionList', { label })}>
         <input
           type="search"
-          aria-label={label + ' 찾기'}
-          placeholder={label + ' 찾기'}
+          aria-label={t('native.collectionFind', { label })}
+          placeholder={t('native.collectionFind', { label })}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <div className="native-list-heading">
           <strong>
-            {label} · {items.length}
+            {label} · {formatNumber(items.length)}
           </strong>
-          <IconButton label={label + ' 추가'} icon={AddIcon} onClick={add} />
+          <IconButton label={t('native.collectionAdd', { label })} icon={AddIcon} onClick={add} />
         </div>
         {items
           .map((item, i) => ({ item, i }))
@@ -86,7 +92,7 @@ export function NativeCollectionEditor({
               data-dragging={dragged === i ? 'true' : undefined}
               data-drop-position={dropTarget?.index === i ? dropTarget.position : undefined}
               draggable={!!onReorder}
-              title={onReorder ? '끌어서 순서 변경' : undefined}
+              title={onReorder ? t('native.text_52df394c6c') : undefined}
               onClick={() => setSelected(i)}
               onDragStart={(event) => {
                 if (!onReorder) return;
@@ -120,17 +126,17 @@ export function NativeCollectionEditor({
             </button>
           ))}
         <p className="sr-only" role="status" aria-live="polite">
-          {moveAnnouncement}
+          {moveAnnouncement && t('native.collectionMoved', moveAnnouncement)}
         </p>
       </aside>
       <div className="native-item-detail">
         {items.length > 0 && (
           <div className="native-mobile-picker">
             <button type="button" disabled={index === 0} onClick={() => setSelected(index - 1)}>
-              이전
+              {t('native.text_dc03452ea5')}
             </button>
             <select
-              aria-label={'현재 ' + label}
+              aria-label={t('native.collectionCurrent', { label })}
               value={index}
               onChange={(e) => setSelected(Number(e.target.value))}
             >
@@ -145,9 +151,9 @@ export function NativeCollectionEditor({
               disabled={index >= items.length - 1}
               onClick={() => setSelected(index + 1)}
             >
-              다음
+              {t('native.text_854c76f3bc')}
             </button>
-            <IconButton label={label + ' 추가'} icon={AddIcon} onClick={add} />
+            <IconButton label={t('native.collectionAdd', { label })} icon={AddIcon} onClick={add} />
           </div>
         )}
         {items[index] ? (
@@ -157,7 +163,7 @@ export function NativeCollectionEditor({
               {onMove && (
                 <>
                   <IconButton
-                    label={label + ' 위로'}
+                    label={t('native.collectionUp', { label })}
                     icon={UpIcon}
                     disabled={index === 0}
                     onClick={() => {
@@ -166,7 +172,7 @@ export function NativeCollectionEditor({
                     }}
                   />
                   <IconButton
-                    label={label + ' 아래로'}
+                    label={t('native.collectionDown', { label })}
                     icon={DownIcon}
                     disabled={index === items.length - 1}
                     onClick={() => {
@@ -178,7 +184,7 @@ export function NativeCollectionEditor({
               )}
               {onRemove && (
                 <IconButton
-                  label={'선택한 ' + label + ' 삭제'}
+                  label={t('native.collectionDelete', { label })}
                   icon={DeleteIcon}
                   onClick={() => {
                     onRemove(index);
@@ -191,9 +197,9 @@ export function NativeCollectionEditor({
           </>
         ) : (
           <div className="native-empty">
-            <strong>아직 {label} 항목이 없어요.</strong>
+            <strong>{t('native.collectionEmpty', { label })}</strong>
             <button type="button" onClick={add}>
-              {label} 추가
+              {t('native.collectionAdd', { label })}
             </button>
           </div>
         )}

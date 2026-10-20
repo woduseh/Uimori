@@ -1,3 +1,4 @@
+import { useI18n, translateMessage } from './i18n.js';
 import { useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
@@ -27,6 +28,7 @@ export function RisuMessageSurface({
   illustrations?: { anchor: string; content: ReactNode }[];
   onIllustrationAnchors?: (anchors: string[]) => void;
 }) {
+  useI18n();
   const inheritedReading = useContext(ReadingPreferencesContext);
   const settings = reading ?? inheritedReading;
   const prepared = useMemo(() => prepareRisuMessage(html, css), [html, css]);
@@ -73,7 +75,7 @@ export function RisuMessageSurface({
   );
   return (
     <div className="risu-message" aria-busy={state.busy}>
-      {state.issue && <p role="alert">{state.issue}</p>}
+      {state.issue && <p role="alert">{translateMessage(state.issue)}</p>}
       <div ref={host} className="risu-message-surface">
         {illustrations.map(({ anchor, content }) => (
           <div key={anchor} slot={`illustration-${anchor}`} className="illustration-slot">

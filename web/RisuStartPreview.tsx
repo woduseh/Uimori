@@ -1,3 +1,4 @@
+import { useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { Content } from '../core/product.js';
@@ -14,6 +15,8 @@ export function RisuStartPreview({
   startId: string;
   userName?: string;
 }) {
+  const { t } = useI18n();
+
   const viewport = useWindowViewport();
   const identity = `${content.id}:${content.revision}:${startId}:${userName ?? ''}`;
   const [preview, setPreview] = useState<{
@@ -55,9 +58,9 @@ export function RisuStartPreview({
       <LoadingState
         presentation="placeholder"
         loading={!error}
-        error={error}
-        errorLabel="시작 화면을 미리 볼 수 없어요."
-        label="시작 화면을 불러오는 중이에요…"
+        error={translateMessage(error)}
+        errorLabel={t('native.text_78102a76b6')}
+        label={t('native.text_f7b0125b0b')}
       />
     );
   return (
@@ -71,11 +74,11 @@ export function RisuStartPreview({
       />
       {preview.issues.length > 0 && (
         <details>
-          <summary>미리보기에서 확인이 필요한 항목 ({preview.issues.length})</summary>
-          <p>{preview.issues.join(', ')}</p>
+          <summary>{t('native.previewIssues', { count: preview.issues.length })}</summary>
+          <p>{preview.issues.map((issue) => translateMessage(issue)).join(', ')}</p>
         </details>
       )}
-      <p className="muted">미리보기에서는 화면 안의 선택 버튼이 동작하지 않아요.</p>
+      <p className="muted">{t('native.text_9947febe83')}</p>
     </>
   );
 }

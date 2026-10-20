@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n, messageRef, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { Dialog } from './Dialog.js';
@@ -25,6 +26,7 @@ export function SettingsEditor({
   onSaveHandlerChange?: SettingsSaveRegistration;
   hideHeading?: boolean;
 }) {
+  useI18n();
   const [value, setValue] = useState<Settings>(chat.settings);
   const [revision, setRevision] = useState(chat.settingsRevision);
   const [dirty, setDirty] = useState(false);
@@ -66,7 +68,7 @@ export function SettingsEditor({
     if (saving) return false;
     if (!dirty) return true;
     if (!Number.isInteger(value.maxCalls) || value.maxCalls < 1 || value.maxCalls > 32) {
-      setLocalError('작업당 모델 호출 한도는 1~32 사이의 정수로 입력해 주세요.');
+      setLocalError(uiMessage('settings.m78'));
       return false;
     }
     setSaving(true);
@@ -80,16 +82,14 @@ export function SettingsEditor({
       setValue(saved.settings);
       setRevision(saved.settingsRevision);
       setDirty(false);
-      setMessage('실행 설정을 저장했어요.');
+      setMessage(uiMessage('settings.m79'));
       onError('');
       // Persisted; the refresh below is not an unsaved draft.
       setSaving(false);
       try {
         await onSaved();
       } catch (error) {
-        setLocalError(
-          `실행 설정은 저장했어요. 화면을 다시 불러오지 못했어요. ${(error as Error).message}`
-        );
+        setLocalError(uiMessage('settings.m80', { v0: messageRef((error as Error).message) }));
       }
       return true;
     } catch (error) {
@@ -101,9 +101,9 @@ export function SettingsEditor({
     }
   }
   return (
-    <section className="settings" aria-label="생성 설정">
-      {!hideHeading && <h3>자동 번역과 호출 한도</h3>}
-      <small>저장한 설정은 다음 실행부터 적용해요.</small>
+    <section className="settings" aria-label={t('settings.m81')}>
+      {!hideHeading && <h3>{t('settings.m82')}</h3>}
+      <small>{t('settings.m83')}</small>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -112,22 +112,22 @@ export function SettingsEditor({
       >
         <fieldset className="editor-fields full chat-runtime-fields" disabled={saving}>
           <div className="settings-group full">
-            <h4 className="settings-group-heading">본문 번역</h4>
+            <h4 className="settings-group-heading">{t('settings.m84')}</h4>
             <div className="settings-group-body">
               <label className="settings-row">
                 <span className="settings-row-copy">
-                  <strong>본문 생성 후 자동 번역</strong>
-                  <small>
-                    본문을 저장하면 현재 번역 모델로 자동 번역해요. 원문은 먼저 읽을 수 있고, 번역
-                    실패 시 원문은 그대로 유지돼요. Codex에서 콘텐츠 확인이 필요한 경우 직접 번역을
-                    시작해야 해요.
-                  </small>
+                  <strong>{t('settings.m85')}</strong>
+                  <small>{t('settings.m86')}</small>
                   {globalAutoTranslate !== null && (
-                    <small>현재 전체 기본값: {globalAutoTranslate ? '켜짐' : '꺼짐'}</small>
+                    <small>
+                      {t('settings.flow2', {
+                        v0: globalAutoTranslate ? t('settings.m73') : t('settings.m74'),
+                      })}
+                    </small>
                   )}
                 </span>
                 <select
-                  aria-label="본문 생성 후 자동 번역"
+                  aria-label={t('settings.m85')}
                   value={
                     value.autoTranslate === undefined
                       ? 'inherit'
@@ -142,27 +142,24 @@ export function SettingsEditor({
                     )
                   }
                 >
-                  <option value="inherit">전체 기본값 따르기</option>
-                  <option value="on">이 채팅에서 켜기</option>
-                  <option value="off">이 채팅에서 끄기</option>
+                  <option value="inherit">{t('settings.m88')}</option>
+                  <option value="on">{t('settings.m89')}</option>
+                  <option value="off">{t('settings.m90')}</option>
                 </select>
               </label>
             </div>
           </div>
           <details className="settings-group full">
-            <summary>고급 실행 설정</summary>
+            <summary>{t('settings.m91')}</summary>
             <div className="settings-group-body">
               <label className="settings-row">
                 <span className="settings-row-copy">
-                  <strong>작업당 모델 호출 한도</strong>
-                  <small>
-                    1~32회. 본문의 조회 후속 호출과 컨텍스트 요약을 함께 세어요. 번역·도우미는 각
-                    기능의 별도 호출 한도를 사용해요.
-                  </small>
+                  <strong>{t('settings.m92')}</strong>
+                  <small>{t('settings.m93')}</small>
                 </span>
                 <input
                   type="number"
-                  aria-label="작업당 모델 호출 한도"
+                  aria-label={t('settings.m92')}
                   min={1}
                   max={32}
                   step={1}
@@ -177,29 +174,29 @@ export function SettingsEditor({
             {dirty && (
               <button type="button" className="secondary" onClick={() => setConfirmReload(true)}>
                 <RefreshIcon size={18} aria-hidden="true" />
-                변경 취소
+                {t('settings.m94')}
               </button>
             )}
-            <SaveButton label="설정 저장" disabled={!dirty || saving} aria-busy={saving} />
+            <SaveButton label={t('settings.m95')} disabled={!dirty || saving} aria-busy={saving} />
           </div>
         </fieldset>
         <TransientNotice message={message} />
         {localError && (
           <NoticeBanner tone="error" className="full">
-            {localError}
+            {translateMessage(localError)}
           </NoticeBanner>
         )}
       </form>
       <Dialog
         open={confirmReload}
-        title="생성 설정 변경 취소"
+        title={t('settings.m96')}
         variant="confirmation"
         role="alertdialog"
         onClose={() => {
           if (!saving) setConfirmReload(false);
         }}
       >
-        <p>저장하지 않은 자동 번역·호출 한도 변경을 버릴까요?</p>
+        <p>{t('settings.m97')}</p>
         <DraftDiscardActions
           open={confirmReload}
           disabled={saving}
@@ -213,7 +210,7 @@ export function SettingsEditor({
             onError('');
             setConfirmReload(false);
           }}
-          discardLabel="변경 버리기"
+          discardLabel={t('settings.m98')}
         />
       </Dialog>
     </section>

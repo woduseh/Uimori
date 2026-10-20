@@ -1,3 +1,4 @@
+import { useI18n, translateMessage, formatDate, message as uiMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { StoryDetail } from '../core/story.js';
 import {
@@ -51,6 +52,7 @@ function StoryGuideEditor({
   onDirtyChange,
   onSaveHandlerChange,
 }: Props) {
+  const { t } = useI18n();
   const [loaded, setLoaded] = useState<StoryGuideDetail | null>(null);
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [draft, setDraft] = useState(defaultStoryGuideConfig);
@@ -85,7 +87,10 @@ function StoryGuideEditor({
   }, [dirty, notesDirty, saving, onDirtyChange]);
 
   function report(caught: unknown) {
-    const text = caught instanceof Error ? caught.message : '원작·인물 참고를 불러오지 못했어요.';
+    const text =
+      caught instanceof Error
+        ? caught.message
+        : uiMessage('prompts.uiUnableToLoadCanonAndCharacterReferences');
     setError(text);
     onError(text);
   }
@@ -148,7 +153,7 @@ function StoryGuideEditor({
       loadSequence.current++;
       setLoaded(value);
       acceptSaved(value);
-      setMessage('원작·인물 참고를 저장했어요. 다음 집필부터 반영해요.');
+      setMessage(uiMessage('prompts.uiCanonAndCharacterReferencesSavedTheyApplyFromThe'));
       onError('');
       onChanged();
       return true;
@@ -172,9 +177,9 @@ function StoryGuideEditor({
       <LoadingState
         presentation="region"
         loading={!error}
-        error={error}
-        label="원작·인물 참고를 불러오는 중이에요…"
-        errorLabel="원작·인물 참고를 불러오지 못했어요."
+        error={translateMessage(error)}
+        label={t('prompts.uiLoadingCanonAndCharacterReferences')}
+        errorLabel={t('prompts.uiUnableToLoadCanonAndCharacterReferences')}
         onRetry={() => {
           setError('');
           void load();
@@ -183,11 +188,8 @@ function StoryGuideEditor({
     );
   const busy = saving;
   return (
-    <section className="story-guide" aria-label="원작·인물 참고 내용">
-      <p className="muted">
-        모델이 원작 설정과 인물 성격을 참고해 집필 참고문을 만들어요. 현재 이야기의 선택과 관계도
-        함께 고려하도록 요청해요.
-      </p>
+    <section className="story-guide" aria-label={t('prompts.uiCanonAndCharacterReferenceContent')}>
+      <p className="muted">{t('prompts.uiTheModelCreatesAWritingBriefFromCanonSettings')}</p>
       <form
         className="settings-group"
         onSubmit={(event) => {
@@ -198,12 +200,12 @@ function StoryGuideEditor({
         <fieldset disabled={busy} className="story-guide-config">
           <label className="settings-row settings-row-toggle">
             <span className="settings-row-copy">
-              <strong>집필 전에 원작·인물 참고</strong>
-              <small>선택 사항이에요. 참고문 생성에 모델 호출과 비용이 추가될 수 있어요.</small>
+              <strong>{t('prompts.uiConsultCanonAndCharactersBeforeWriting')}</strong>
+              <small>{t('prompts.uiOptionalGeneratingABriefMayAddAModelCall')}</small>
             </span>
             <span className="settings-row-control">
               <Switch
-                aria-label="집필 전에 원작·인물 참고"
+                aria-label={t('prompts.uiConsultCanonAndCharactersBeforeWriting')}
                 checked={draft.enabled}
                 onChange={(event) => update('enabled', event.target.checked)}
               />
@@ -215,26 +217,26 @@ function StoryGuideEditor({
             onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
           >
             <summary>
-              참고 설정
-              {!settingsOpen && <small>{draft.work || '작품·참고 범위'}</small>}
+              {t('prompts.uiReferenceSettings')}
+              {!settingsOpen && <small>{draft.work || t('prompts.uiWorkAndReferenceScope')}</small>}
             </summary>
             <div className="story-guide-fields">
               <label>
-                작품·판본·세계관
+                {t('prompts.uiWorkEditionOrSetting')}
                 <input
                   value={draft.work}
                   maxLength={STORY_GUIDE_LIMITS.work}
-                  placeholder="작품 이름·판본, 또는 참고할 세계관"
+                  placeholder={t('prompts.uiWorkTitleEditionOrSettingToReference')}
                   onChange={(event) => update('work', event.target.value)}
                 />
               </label>
               <label>
-                기준 시점·스포일러 범위
+                {t('prompts.uiReferencePointAndSpoilerLimits')}
                 <textarea
                   value={draft.position}
                   maxLength={STORY_GUIDE_LIMITS.position}
                   rows={2}
-                  placeholder="예: 2권 마지막까지. 이후 사건과 인물의 정체는 밝히지 않기"
+                  placeholder={t('prompts.uiExampleThroughVolume2DoNotRevealLaterEvents')}
                   onChange={(event) => update('position', event.target.value)}
                 />
               </label>
@@ -243,15 +245,15 @@ function StoryGuideEditor({
                   checked={draft.followCanon}
                   onChange={(event) => update('followCanon', event.target.checked)}
                 />
-                <span>원작의 사건 전개도 참고</span>
+                <span>{t('prompts.uiAlsoConsultCanonPlotEvents')}</span>
               </label>
               <details className="story-guide-reference">
-                <summary>추가 참고 자료</summary>
+                <summary>{t('prompts.uiAdditionalReferences')}</summary>
                 <p className="muted">
-                  기존 카드와 로어도 함께 참고해요. 더 필요한 자료만 덧붙여요.
+                  {t('prompts.uiExistingCardsAndLoreAreAlsoConsultedAddOnly')}
                 </p>
                 <label>
-                  추가 참고 텍스트
+                  {t('prompts.uiAdditionalReferenceText')}
                   <textarea
                     value={draft.reference}
                     maxLength={STORY_GUIDE_LIMITS.reference}
@@ -265,43 +267,46 @@ function StoryGuideEditor({
         </fieldset>
         {dirty && (
           <div className="form-actions">
-            <SaveButton label="원작·인물 참고 저장" aria-busy={saving} disabled={busy} />
-            <small className="muted">저장하면 다음 요청부터 반영해요.</small>
+            <SaveButton
+              label={t('prompts.uiSaveCanonAndCharacterReferences')}
+              aria-busy={saving}
+              disabled={busy}
+            />
+            <small className="muted">{t('prompts.uiSavedChangesApplyFromTheNextRequest')}</small>
           </div>
         )}
       </form>
       {error && (
         <p className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
       <TransientNotice message={message} />
-      <section className="story-guide-section" aria-label="마지막 집필 참고문">
+      <section className="story-guide-section" aria-label={t('prompts.uiLastWritingBrief')}>
         {loaded.brief ? (
           <details className="story-guide-last-brief">
-            <summary>마지막 집필 참고문</summary>
+            <summary>{t('prompts.uiLastWritingBrief')}</summary>
             <p className="muted">
-              {new Date(loaded.brief.createdAt).toLocaleString()} · {loaded.brief.modelTitle}
-              {loaded.brief.configRevision !== loaded.revision && ' · 이전 설정으로 만든 참고문'}
+              {formatDate(loaded.brief.createdAt)} · {loaded.brief.modelTitle}
+              {loaded.brief.configRevision !== loaded.revision &&
+                t('prompts.uiBriefCreatedWithPreviousSettings')}
             </p>
-            <div className="story-guide-result" aria-label="마지막 집필 참고문 내용">
+            <div className="story-guide-result" aria-label={t('prompts.uiLastWritingBriefContent')}>
               <Prose text={loaded.brief.text} />
             </div>
           </details>
         ) : (
-          <p className="muted">아직 집필에 사용한 참고문이 없어요.</p>
+          <p className="muted">{t('prompts.uiNoWritingBriefHasBeenUsedYet')}</p>
         )}
         {loaded.latestRun?.error && (
-          <p className="muted">
-            최근 집필은 참고문 없이 진행했어요. 모델 연결과 호출 한도를 확인해 주세요.
-          </p>
+          <p className="muted">{t('prompts.uiTheLatestWritingProceededWithoutABriefCheckThe')}</p>
         )}
       </section>
       <div className="form-actions">
-        <p className="muted">원작이나 인물에 관한 질문은 이 채팅의 도우미에서 이어가요.</p>
+        <p className="muted">{t('prompts.uiAskMoreAboutCanonOrCharactersInThisChat')}</p>
         {onOpenHelper && (
           <button type="button" className="secondary" onClick={onOpenHelper}>
-            도우미에게 질문
+            {t('prompts.uiAskHelper2')}
           </button>
         )}
       </div>
@@ -326,7 +331,7 @@ function StoryGuideEditor({
       )}
       <SaveConflictDialog
         open={conflictOpen}
-        title="원작·인물 참고 저장 충돌"
+        title={t('prompts.uiReferenceSaveConflict')}
         onClose={() => {
           setConflictOpen(false);
           reviewed.current = null;
@@ -334,12 +339,18 @@ function StoryGuideEditor({
         readSaved={async () => {
           const value = await api<StoryGuideDetail>(`${base}/story-guide`);
           reviewed.current = value;
-          return [
-            { label: '집필에 사용', value: value.config.enabled ? '켜짐' : '꺼짐' },
-            { label: '작품·판본·세계관', value: value.config.work },
-            { label: '기준 시점·스포일러 범위', value: value.config.position },
-            { label: '원작의 사건 전개도 참고', value: value.config.followCanon ? '예' : '아니요' },
-            { label: '추가 참고 자료', value: value.config.reference },
+          return () => [
+            {
+              label: t('prompts.uiUseForWriting'),
+              value: value.config.enabled ? t('prompts.uiOn') : t('prompts.uiOff'),
+            },
+            { label: t('prompts.uiWorkEditionOrSetting'), value: value.config.work },
+            { label: t('prompts.uiReferencePointAndSpoilerLimits'), value: value.config.position },
+            {
+              label: t('prompts.uiAlsoConsultCanonPlotEvents'),
+              value: value.config.followCanon ? t('prompts.uiYes') : t('prompts.uiNo'),
+            },
+            { label: t('prompts.uiAdditionalReferences'), value: value.config.reference },
           ];
         }}
         onAcceptSaved={() => {

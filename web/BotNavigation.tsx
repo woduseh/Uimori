@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
@@ -71,6 +72,7 @@ export function BotBranch(
     activities: ReturnType<typeof chatActivitySummaries>;
   }
 ) {
+  useI18n();
   const {
     library,
     chats,
@@ -199,7 +201,7 @@ export function BotBranch(
         if (owner === currentBot.current && version === epoch.current) setFolders(value);
       }
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : '변경 내용을 저장하지 못했어요.';
+      const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m237');
       onError(message);
       if (owner === currentBot.current) setError(message);
       // Refresh revisions after a conflict, retaining the user's editable form values.
@@ -225,7 +227,7 @@ export function BotBranch(
       const full = await api<Content>(`/content/${encodeURIComponent(bot.id)}`);
       if (owner === currentBot.current && version === epoch.current) onNew(full, folder);
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : '봇을 불러오지 못했어요.';
+      const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m238');
       setError(message);
       onError(message);
     } finally {
@@ -289,7 +291,7 @@ export function BotBranch(
     return (
       activities[chat.id] ??
       (chat.id === selected && tasks > 0
-        ? { count: tasks, label: `작업 ${tasks}개 진행 중` }
+        ? { count: tasks, label: t('transfer.d012', { v0: tasks }) }
         : undefined)
     );
   }
@@ -365,25 +367,25 @@ export function BotBranch(
                 onClick={() => onSelect(chat.id)}
               >
                 <strong>{chat.title}</strong>
-                {pinned && <small className="bot-chat-current-label">현재 채팅</small>}
+                {pinned && <small className="bot-chat-current-label">{t('transfer.m218')}</small>}
               </button>
               {status(activity(chat)?.label)}
               <div className="bot-row-actions">
-                <ActionMenu label={`${chat.title} 채팅 메뉴`} viewport>
+                <ActionMenu label={t('transfer.d013', { v0: chat.title })} viewport>
                   <button
                     type="button"
                     onClick={(event) => openFromMenu(event, () => setMenuId(chat.id))}
                   >
                     <EditIcon size={18} aria-hidden="true" />
-                    제목 변경
+                    {t('transfer.m239')}
                   </button>
                   <DeleteButton
                     path={`/chats/${encodeURIComponent(chat.id)}`}
                     preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
                     title={chat.title}
-                    label="채팅 삭제"
+                    label={t('transfer.m240')}
                     disabled={busy}
-                    description="이 채팅의 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요."
+                    description={t('transfer.m241')}
                     onError={onError}
                     onDeleted={onChatsChanged}
                   />
@@ -404,14 +406,14 @@ export function BotBranch(
             }
           >
             <ExpandIcon size={13} aria-hidden="true" />
-            {Math.min(20, items.length - limit)}개 더 보기
+            {t('transfer.moreChats', { count: Math.min(20, items.length - limit) })}
           </button>
         )}
         {dropTarget?.folderId === folderId && dropTarget.beforeId === null && (
           <div className="bot-drop-end" aria-hidden="true" />
         )}
         {!items.length && (folderId !== null || folders.length === 0 || dragId) && (
-          <p className="bot-empty-folder">{dragId ? '여기로 이동' : '채팅이 없어요.'}</p>
+          <p className="bot-empty-folder">{dragId ? t('transfer.m243') : t('transfer.m244')}</p>
         )}
       </div>
     );
@@ -430,7 +432,7 @@ export function BotBranch(
   }
   function folderSection(folder: ChatFolder | null) {
     const id = folder?.id ?? null,
-      title = folder?.title ?? '미분류';
+      title = folder?.title ?? t('transfer.m245');
     const key = `${botId}:${id ?? ''}`;
     const expanded = !collapsed[key];
     const count = scoped
@@ -471,7 +473,7 @@ export function BotBranch(
         <div className="bot-folder-heading">
           <button
             className="bot-folder-toggle"
-            aria-label={`${title} 폴더`}
+            aria-label={t('transfer.d014', { v0: title })}
             aria-expanded={expanded}
             onClick={() => setCollapsed((value) => ({ ...value, [key]: expanded }))}
           >
@@ -479,13 +481,13 @@ export function BotBranch(
             <FolderIcon size={15} />
             <span>{title}</span>
           </button>
-          {!expanded && status(count ? `폴더 안에서 작업 ${count}개 진행 중` : undefined)}
+          {!expanded && status(count ? t('transfer.d015', { v0: count }) : undefined)}
           <div className="bot-row-actions">
             {bot && (
               <button
                 className="icon-button"
-                aria-label={`${title}에서 새 채팅`}
-                title="새 채팅"
+                aria-label={t('transfer.d016', { v0: title })}
+                title={t('transfer.m246')}
                 disabled={busy}
                 onClick={() => void start(folder ?? undefined)}
               >
@@ -495,8 +497,8 @@ export function BotBranch(
             {folder && (
               <button
                 className="icon-button"
-                aria-label={`${title} 폴더 설정`}
-                title="폴더 설정"
+                aria-label={t('transfer.d017', { v0: title })}
+                title={t('transfer.m247')}
                 onClick={() => setSettingsId(folder.id)}
               >
                 <MoreIcon size={16} />
@@ -528,17 +530,17 @@ export function BotBranch(
       <div {...headingDrag} className={`bot-branch-heading ${headingDrag?.className ?? ''}`}>
         <button
           className="bot-branch-toggle"
-          aria-label={`${bot?.title ?? '봇'} 채팅 목록`}
+          aria-label={t('transfer.d018', { v0: bot?.title ?? t('transfer.m005') })}
           aria-expanded={expanded}
           onClick={onToggle}
           title={bot?.title}
         >
           <ExpandIcon size={12} className={expanded ? 'expanded' : ''} />
           {bot && <ContentAvatar content={bot} className="bot-choice-avatar" />}
-          <strong>{bot?.title ?? '봇'}</strong>
+          <strong>{bot?.title ?? t('transfer.m005')}</strong>
         </button>
         <div className="bot-branch-actions">
-          <ActionMenu label={`${bot?.title ?? '봇'} 관리`} viewport>
+          <ActionMenu label={t('transfer.d019', { v0: bot?.title ?? t('transfer.m005') })} viewport>
             <button
               type="button"
               onClick={(event) => {
@@ -548,7 +550,7 @@ export function BotBranch(
               }}
             >
               <SearchIcon size={18} aria-hidden="true" />
-              채팅 검색
+              {t('transfer.m248')}
             </button>
             <button
               type="button"
@@ -562,7 +564,8 @@ export function BotBranch(
                 setCreating(true);
               }}
             >
-              <FolderAddIcon size={18} aria-hidden="true" />새 폴더
+              <FolderAddIcon size={18} aria-hidden="true" />
+              {t('transfer.m249')}
             </button>
             <button
               type="button"
@@ -573,7 +576,7 @@ export function BotBranch(
               }}
             >
               <LibraryIcon size={18} aria-hidden="true" />
-              서재에서 관리
+              {t('transfer.m250')}
             </button>
             {bot && library && (
               <button
@@ -581,7 +584,7 @@ export function BotBranch(
                 onClick={(event) => openFromMenu(event, () => setEditingDefaults(true))}
               >
                 <EditIcon size={18} aria-hidden="true" />
-                기본 페르소나
+                {t('transfer.m251')}
               </button>
             )}
             {bot && props.onImportChat && (
@@ -589,12 +592,13 @@ export function BotBranch(
                 type="button"
                 onClick={(event) => openFromMenu(event, () => props.onImportChat?.(bot))}
               >
-                <LibraryIcon size={18} aria-hidden="true" />이 봇으로 본문 가져오기
+                <LibraryIcon size={18} aria-hidden="true" />
+                {t('transfer.m106')}
               </button>
             )}
           </ActionMenu>
           <IconButton
-            label={`${bot?.title ?? '봇'} 새 채팅`}
+            label={t('transfer.d020', { v0: bot?.title ?? t('transfer.m005') })}
             icon={AddIcon}
             disabled={busy}
             onClick={() => void start()}
@@ -604,9 +608,9 @@ export function BotBranch(
       {expanded && (
         <div className="bot-branch-chats">
           {loading ? (
-            <LoadingState presentation="inline" label="폴더를 불러오는 중이에요…" />
+            <LoadingState presentation="inline" label={t('transfer.m252')} />
           ) : (
-            <nav aria-label={`${bot?.title ?? '봇'}의 채팅 목록`}>
+            <nav aria-label={t('transfer.d021', { v0: bot?.title ?? t('transfer.m005') })}>
               {folderSection(null)}
               {folders.map((folder) => folderSection(folder))}
             </nav>
@@ -615,7 +619,7 @@ export function BotBranch(
       )}
       {error && (
         <p className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
       {editingDefaults && bot && library && (
@@ -623,7 +627,7 @@ export function BotBranch(
       )}
       <Dialog
         open={searching}
-        title="이 봇의 채팅 검색"
+        title={t('transfer.m253')}
         onClose={() => setSearching(false)}
         className="manuscript-search-dialog"
       >
@@ -634,7 +638,7 @@ export function BotBranch(
             chats={chats}
             folders={folders}
             library={library}
-            label="채팅 검색"
+            label={t('transfer.m248')}
             onChat={(id) => {
               setSearching(false);
               onSelect(id);
@@ -648,7 +652,7 @@ export function BotBranch(
       </Dialog>
       <Dialog
         open={creating}
-        title="폴더 만들기"
+        title={t('transfer.m254')}
         onClose={() => setCreating(false)}
         className="bot-organize-dialog"
       >
@@ -668,21 +672,21 @@ export function BotBranch(
           }}
         >
           <label>
-            새 폴더 이름
+            {t('transfer.m255')}
             <input
-              aria-label="새 폴더 이름"
+              aria-label={t('transfer.m255')}
               required
               maxLength={200}
               value={newTitle}
               onChange={(event) => setNewTitle(event.target.value)}
             />
           </label>
-          <button disabled={busy || !newTitle.trim()}>폴더 추가</button>
+          <button disabled={busy || !newTitle.trim()}>{t('transfer.m256')}</button>
         </form>
       </Dialog>
       <Dialog
         open={!!settingsFolder}
-        title="폴더 설정"
+        title={t('transfer.m247')}
         onClose={() => setSettingsId(null)}
         className="bot-organize-dialog"
       >
@@ -717,7 +721,7 @@ export function BotBranch(
       </Dialog>
       <Dialog
         open={!!menuChat}
-        title="채팅 제목 변경"
+        title={t('transfer.m257')}
         onClose={() => setMenuId(null)}
         className="bot-organize-dialog"
       >
@@ -748,6 +752,7 @@ function ChatTitleEditor({
   onChatsChanged: () => Promise<void>;
   onClose: () => void;
 }) {
+  useI18n();
   const [draft, setDraft] = useState(chat.title);
   const [baseTitle, setBaseTitle] = useState(chat.title);
   const [baseTitleRevision, setBaseTitleRevision] = useState(chat.titleRevision ?? 0);
@@ -784,7 +789,7 @@ function ChatTitleEditor({
       await onChatsChanged();
       onClose();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '채팅 제목을 저장하지 못했어요.');
+      setError(reason instanceof Error ? reason.message : retainedMessage('transfer.m258'));
     } finally {
       lock.current = false;
       setSaving(false);
@@ -799,9 +804,9 @@ function ChatTitleEditor({
       }}
     >
       <label>
-        채팅 제목
+        {t('transfer.m221')}
         <input
-          aria-label="채팅 제목"
+          aria-label={t('transfer.m221')}
           value={draft}
           maxLength={200}
           required
@@ -823,21 +828,19 @@ function ChatTitleEditor({
           }}
         >
           <CloseIcon size={18} aria-hidden="true" />
-          취소
+          {t('transfer.m206')}
         </button>
         <button disabled={disabled || saving || !dirty || !draft.trim()}>
           <CheckIcon size={18} aria-hidden="true" />
-          {saving ? '저장 중…' : '제목 저장'}
+          {saving ? t('transfer.m259') : t('transfer.m260')}
         </button>
       </div>
       {dirty && (chat.titleRevision ?? 0) !== baseTitleRevision && (
-        <small>
-          제목이 다른 곳에서 변경됐어요. 입력한 내용은 유지돼요. 취소하면 최신 제목을 불러와요.
-        </small>
+        <small>{t('transfer.m261')}</small>
       )}
       {error && (
         <p className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </p>
       )}
     </form>
@@ -861,6 +864,7 @@ function FolderSettings({
   }) => Promise<ChatFolder | null>;
   onRemove: () => Promise<void>;
 }) {
+  useI18n();
   const [title, setTitle] = useState(folder.title);
   const [persona, setPersona] = useState(
     folder.defaultPersona ? reference(folder.defaultPersona) : ''
@@ -913,8 +917,8 @@ function FolderSettings({
   const savedPersonaTitle = folder.defaultPersona
     ? (library?.contents.find((content) => content.id === folder.defaultPersona?.id)?.title ??
       (selectedContent?.id === folder.defaultPersona.id ? selectedContent.title : null) ??
-      '선택한 자료 확인 필요')
-    : '지정 안 함';
+      t('transfer.m262'))
+    : t('transfer.m263');
   return (
     <div className="bot-folder-settings">
       <form
@@ -945,9 +949,9 @@ function FolderSettings({
         }}
       >
         <label>
-          폴더 이름
+          {t('transfer.m264')}
           <input
-            aria-label={`${folder.title} 폴더 이름`}
+            aria-label={t('transfer.d022', { v0: folder.title })}
             value={title}
             maxLength={200}
             required
@@ -962,7 +966,7 @@ function FolderSettings({
           <ContentPicker
             library={library}
             role="persona"
-            label={`${folder.title} 기본 페르소나`}
+            label={t('transfer.d023', { v0: folder.title })}
             value={persona}
             onChange={(value) => {
               setPersona(value);
@@ -972,21 +976,18 @@ function FolderSettings({
               }));
             }}
             allowNone
-            noneLabel="지정 안 함"
+            noneLabel={t('transfer.m263')}
             selectedContent={selectedContent}
             disabled={busy}
           />
         )}
         {conflicted && (
           <NoticeBanner tone="error">
-            <p>
-              폴더 설정이 다른 곳에서 바뀌었어요. 작성한 내용은 유지했어요. 최신 저장된 설정을
-              확인한 뒤 불러와 주세요.
-            </p>
+            <p>{t('transfer.m265')}</p>
             <details>
-              <summary>현재 저장된 설정 보기</summary>
-              <p>폴더 이름 · {folder.title}</p>
-              <p>기본 페르소나 · {savedPersonaTitle}</p>
+              <summary>{t('transfer.m266')}</summary>
+              <p>{t('transfer.folderNameValue', { name: folder.title })}</p>
+              <p>{t('transfer.personaValue', { name: savedPersonaTitle })}</p>
             </details>
             <button
               type="button"
@@ -997,13 +998,13 @@ function FolderSettings({
                 else loadLatest();
               }}
             >
-              최신 설정 불러오기
+              {t('transfer.m269')}
             </button>
           </NoticeBanner>
         )}
-        <small>앞으로 이 폴더에서 시작하는 채팅에 적용돼요.</small>
+        <small>{t('transfer.m270')}</small>
         <button className="secondary" disabled={busy || conflicted || !title.trim()}>
-          설정 저장
+          {t('transfer.m271')}
         </button>
       </form>
       <button
@@ -1014,21 +1015,21 @@ function FolderSettings({
           void onRemove();
         }}
       >
-        폴더 해제 · 채팅 유지
+        {t('transfer.m272')}
       </button>
       <Dialog
         open={discarding}
-        title="최신 폴더 설정 불러오기"
+        title={t('transfer.m273')}
         variant="confirmation"
         onClose={() => setDiscarding(false)}
       >
-        <p>작성 중인 폴더 설정을 버리고 최신 설정을 불러올까요?</p>
+        <p>{t('transfer.m274')}</p>
         <DraftDiscardActions
           open={discarding}
           disabled={busy}
           onContinue={() => setDiscarding(false)}
           onDiscard={loadLatest}
-          discardLabel="초안 버리고 최신 설정 불러오기"
+          discardLabel={t('transfer.m275')}
         />
       </Dialog>
     </div>

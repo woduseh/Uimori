@@ -1,3 +1,4 @@
+import { useI18n, translateMessage } from './i18n.js';
 import { useState } from 'react';
 import type { CurrentPrompt, PromptRole, SavedPromptCombination } from '../core/product.js';
 import {
@@ -30,6 +31,7 @@ export function PromptCombinationManager({
   combinations: SavedPromptCombination[];
   reload?: () => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [editing, setEditing] = useState<{
     item: SavedPromptCombination;
     sourceRevision: number;
@@ -44,7 +46,7 @@ export function PromptCombinationManager({
   return (
     <Dialog
       open={open}
-      title="옵션 조합 관리"
+      title={t('prompts.uiManageCombinations')}
       onClose={() => {
         if (!busy) {
           setEditing(null);
@@ -56,9 +58,9 @@ export function PromptCombinationManager({
       {editing ? (
         <>
           <label>
-            조합 이름
+            {t('prompts.uiCombinationName')}
             <input
-              aria-label="조합 이름"
+              aria-label={t('prompts.uiCombinationName')}
               value={title}
               disabled={busy}
               maxLength={200}
@@ -66,7 +68,7 @@ export function PromptCombinationManager({
             />
           </label>
           <p className="muted">
-            유지할 수 있는 값은 보존했어요. 현재 옵션을 확인한 뒤 저장해 주세요.
+            {t('prompts.uiCompatibleValuesWerePreservedCheckTheOptionsBeforeSaving')}
           </p>
           <fieldset disabled={busy}>
             <PromptControlFields
@@ -85,7 +87,7 @@ export function PromptCombinationManager({
                 setError('');
               }}
             >
-              취소
+              {t('prompts.uiCancel')}
             </button>
             <button
               type="button"
@@ -114,7 +116,7 @@ export function PromptCombinationManager({
                 }
               }}
             >
-              {busy ? '저장 중…' : '조합 저장'}
+              {busy ? t('prompts.uiSaving') : t('prompts.uiSaveCombination')}
             </button>
           </div>
         </>
@@ -130,7 +132,7 @@ export function PromptCombinationManager({
             <div key={item.id} className="prompt-combination-toolbar">
               <span>
                 {item.title}
-                {!compatible && <small> · 적용 불가</small>}
+                {!compatible && <small>{t('prompts.uiUnavailable')}</small>}
               </span>
               <button
                 type="button"
@@ -145,7 +147,7 @@ export function PromptCombinationManager({
                   });
                 }}
               >
-                {compatible ? '수정' : '옵션 수정'}
+                {compatible ? t('prompts.uiEdit') : t('prompts.uiEditOptions')}
               </button>
               <DeleteButton
                 path={`/prompt-combinations/${item.id}`}
@@ -159,9 +161,9 @@ export function PromptCombinationManager({
           );
         })
       ) : (
-        <p>저장한 조합이 없어요.</p>
+        <p>{t('prompts.uiNoSavedCombinations')}</p>
       )}
-      {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </Dialog>
   );
 }

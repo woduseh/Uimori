@@ -1,3 +1,4 @@
+import { useI18n } from './i18n.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 import { REQUEST_IMAGE_MAX_COUNT, type RequestImageUpload } from '../core/request-images.js';
 import {
@@ -150,6 +151,7 @@ function clearCommand(key: string, id: string) {
 
 type Position = ReadingPosition;
 export function useStory() {
+  useI18n();
   const {
     workspace: promptWorkspace,
     error: promptWorkspaceError,
@@ -175,7 +177,24 @@ export function useStory() {
   const [draftReady, setDraftReady] = useState(false);
   const [imagesDecoding, setImagesDecoding] = useState(false);
   const decoding = useRef<symbol | null>(null);
-  const [error, setError] = useState('');
+  const [errorState, updateError] = useState<{ message: string; code: string | null }>({
+    message: '',
+    code: null,
+  });
+  const error = errorState.message;
+  const errorCode = errorState.code;
+  const setError = useCallback((value: string | Error | ((current: string) => string)) => {
+    updateError((old) => {
+      if (typeof value === 'function') {
+        const message = value(old.message);
+        return { message, code: message ? old.code : null };
+      }
+      return {
+        message: value instanceof Error ? value.message : value,
+        code: value instanceof ApiError ? value.code : null,
+      };
+    });
+  }, []);
   const [notice, setNotice] = useState('');
   const [readerTarget, setReaderTarget] = useState<ReaderTarget | null>(() =>
     semanticReaderTarget(location.search)
@@ -439,10 +458,10 @@ export function useStory() {
   const retryLibrary = useCallback(() => {
     setError((current) => (current === libraryError ? '' : current));
     return loadLibrary();
-  }, [libraryError, loadLibrary]);
+  }, [libraryError, loadLibrary, setError]);
   useEffect(() => {
     const refreshLibrary = () => {
-      void loadLibrary().catch((caught) => setError(caught.message));
+      void loadLibrary().catch((caught) => setError(caught));
     };
     const onStorage = (event: StorageEvent) => {
       if (event.key === libraryChangedKey) refreshLibrary();
@@ -456,10 +475,10 @@ export function useStory() {
       removeEventListener('uimori-helper-updated', refreshLibrary);
       libraryRequest.current++;
     };
-  }, [loadLibrary]);
+  }, [loadLibrary, setError]);
   useEffect(() => {
-    void Promise.all([loadChats(), loadLibrary()]).catch((e) => setError(e.message));
-  }, [loadChats, loadLibrary]);
+    void Promise.all([loadChats(), loadLibrary()]).catch((e) => setError(e));
+  }, [loadChats, loadLibrary, setError]);
   useEffect(() => {
     readerCache.current = null;
     setDetail(null);
@@ -477,7 +496,7 @@ export function useStory() {
         // A missing page owns its centered error; background refresh failures keep
         // the visible manuscript and use the ordinary error outlet.
         if (readerCache.current?.key === readerQuery.current.key)
-          setError(error instanceof Error ? error.message : String(error));
+          setError(error instanceof Error ? error : String(error));
       },
       active: navigation.current.destination === 'story' && !document.hidden,
     });
@@ -507,7 +526,7 @@ export function useStory() {
         if (message.kind === 'chat.deleted') {
           stream.close();
           void loadChats().catch((e) => {
-            if (alive) setError(e.message);
+            if (alive) setError(e);
           });
           return;
         }
@@ -515,7 +534,7 @@ export function useStory() {
           dispatchEvent(new Event('prompt-workspace-changed'));
         if (message.kind === 'profile.updated' || message.kind === 'prompt-workspace.updated')
           void loadLibrary().catch((e) => {
-            if (alive) setError(e.message);
+            if (alive) setError(e);
           });
         // Initial/reconnected streams carry a current cursor, not the entire event log.
         // Refresh after subscribing so writes between the initial HTTP read and SSE cannot be missed.
@@ -545,7 +564,7 @@ export function useStory() {
       removeEventListener('offline', offline);
       removeEventListener('online', online);
     };
-  }, [selected, refresh, loadChats, loadLibrary]);
+  }, [selected, refresh, loadChats, loadLibrary, setError]);
   useEffect(() => {
     readerSync.current?.setActive(destination === 'story' && !document.hidden);
   }, [destination]);
@@ -567,7 +586,7 @@ export function useStory() {
           navigation.current.epoch === epoch &&
           readerCache.current?.key === readerQuery.current.key
         )
-          setError(e.message);
+          setError(e);
       });
     }
     return () => {
@@ -587,7 +606,7 @@ export function useStory() {
         if (alive) setArchivedContents(items);
       })
       .catch((e) => {
-        if (alive) setError(e.message);
+        if (alive) setError(e);
       });
     return () => {
       alive = false;
@@ -729,7 +748,7 @@ export function useStory() {
       alive = false;
       cancelAnimationFrame(frame);
     };
-  }, [draftKey]);
+  }, [draftKey, setError]);
   useEffect(() => {
     const before = () => savePosition();
     const scroll = (event: Event) => {
@@ -1293,7 +1312,7 @@ export function useStory() {
       )
         clearCommand(commandKey, idempotencyKey);
       if (currentView.current === sentView)
-        setError(error instanceof Error ? error.message : '요청의 수락 여부를 확인하지 못했어요.');
+        setError(error instanceof Error ? error : '요청의 수락 여부를 확인하지 못했어요.');
     }
     // Failure to refresh an accepted run must not turn it into a pending command.
     try {
@@ -1368,13 +1387,13 @@ export function useStory() {
       .catch((cause) => {
         if (!cancelled) {
           setLoadedPin(null);
-          setError((cause as Error).message);
+          setError(cause as Error);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [pinId, pinRevision]);
+  }, [pinId, pinRevision, setError]);
   const pinnedPrompt =
     loadedPin?.id === pinnedPromptId && loadedPin?.revision === pinnedMetadata?.revision
       ? loadedPin
@@ -1499,7 +1518,7 @@ export function useStory() {
       return true;
     } catch (error) {
       if (navigation.current.chat === chatId)
-        setError(error instanceof Error ? error.message : '설정을 저장하지 못했어요.');
+        setError(error instanceof Error ? error : '설정을 저장하지 못했어요.');
       await refresh(chatId).catch(() => undefined);
       return false;
     } finally {
@@ -1521,7 +1540,7 @@ export function useStory() {
     } catch (caught) {
       // Cancellation belongs to the initiating reader, even after A → B → A navigation.
       if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
-        setError(caught instanceof Error ? caught.message : '원문 생성을 취소하지 못했어요.');
+        setError(caught instanceof Error ? caught : '원문 생성을 취소하지 못했어요.');
     } finally {
       cancelLocks.current.delete(runId);
       setCancelling([...cancelLocks.current]);
@@ -1610,6 +1629,7 @@ export function useStory() {
     inputTranslation,
     codexWarning,
     error,
+    errorCode,
     notice,
     connected,
     nativeInteractionRevision,

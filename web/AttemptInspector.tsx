@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber, formatDate } from './i18n.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { useState } from 'react';
 import type { Attempt } from '../core/product.js';
@@ -21,12 +22,13 @@ const roleLabels: Record<string, string> = {
 };
 type AttemptSummary = Omit<Attempt, 'request' | 'response' | 'rawUsage'>;
 const tokens = (value: number | null) =>
-  value === null ? '미확인' : `${value.toLocaleString('ko-KR')}토큰`;
+  value === null ? t('visualpanels.unknown') : t('visualpanels.vPluralOneOther', { v0: value });
 function AttemptRaw({ attempt }: { attempt: Attempt }) {
+  useI18n();
   const [open, setOpen] = useState(false);
   return (
     <details className="attempt-raw" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary>원시 요청·응답 보기</summary>
+      <summary>{t('visualpanels.viewRawRequestAndResponse')}</summary>
       {open && (
         <pre>
           {JSON.stringify(
@@ -57,7 +59,7 @@ const total = (attempts: AttemptSummary[], field: 'inputTokens' | 'outputTokens'
     : attempts.reduce((sum, attempt) => sum + (attempt[field] ?? 0), 0);
 
 function estimatedTotal(attempts: AttemptSummary[]): string {
-  if (!attempts.length) return '미확인';
+  if (!attempts.length) return t('visualpanels.unknown');
   const complete = attempts.every(
     (attempt) => attempt.estimatedCost?.status === 'estimated' && attempt.estimatedCost.usd !== null
   );
@@ -66,44 +68,47 @@ function estimatedTotal(attempts: AttemptSummary[]): string {
   const known = attempts.filter((attempt) =>
     attempt.estimatedCost?.lines.some((line) => line.usd !== null)
   );
-  if (!known.length) return '미확인';
+  if (!known.length) return t('visualpanels.unknown');
   const subtotal = known.reduce((sum, attempt) => sum + attempt.estimatedCost!.subtotalUsd, 0);
   const incomplete = attempts.filter(
     (attempt) => attempt.estimatedCost?.status !== 'estimated' || attempt.estimatedCost.usd === null
   ).length;
-  return `확인분 부분합 ${formatUsd(subtotal)} · ${incomplete}회 미확인 항목 포함`;
+  return t('visualpanels.knownSubtotalIncludesUnknownItemsInCalls', {
+    v0: formatUsd(subtotal),
+    v1: incomplete,
+  });
 }
 
 function AttemptPricing({ attempt }: { attempt: Attempt }) {
+  useI18n();
   const estimate = attempt.estimatedCost;
   return (
-    <section className="attempt-pricing" aria-label="호출 추정 비용">
-      <p>프로바이더 보고 비용: {formatUsd(attempt.costUsd)}</p>
+    <section className="attempt-pricing" aria-label={t('visualpanels.estimatedCallCost')}>
+      <p>{t('visualpanels.providerReportedCost', { v0: formatUsd(attempt.costUsd) })}</p>
       <p>
-        <strong>추정 비용: {estimatedTotal([attempt])}</strong>
+        <strong>{t('visualpanels.estimatedCost', { v0: estimatedTotal([attempt]) })}</strong>
       </p>
-      <p className="muted">
-        호출 후 프로바이더가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며
-        실제 청구액과 다를 수 있어요.
-      </p>
+      <p className="muted">{t('visualpanels.calculatedFromProviderReportedTokensAndThe')}</p>
       {attempt.pricingSnapshot ? (
         <>
           <p>
-            호출에 고정된 등급: {attempt.pricingSnapshot.serviceTier} · 요금 기준일:{' '}
-            {attempt.pricingSnapshot.checkedAt.slice(0, 10)}
+            {t('visualpanels.fixedServiceTierPriceChecked', {
+              v0: attempt.pricingSnapshot.serviceTier,
+              v1: formatDate(new Date(attempt.pricingSnapshot.checkedAt), { timeZone: 'UTC' }),
+            })}
           </p>
           <p>
             {attempt.pricingSnapshot.source === 'manual'
-              ? '직접 입력 요금'
+              ? t('visualpanels.manuallyEnteredPrice')
               : attempt.pricingSnapshot.source === 'catalog'
-                ? '프로바이더 목록 요금'
-                : '공식 요금'}
+                ? t('visualpanels.providerCatalogPrice')
+                : t('visualpanels.officialPrice')}
             {attempt.pricingSnapshot.sourceUrl && (
               <>
                 {' '}
                 ·{' '}
                 <a href={attempt.pricingSnapshot.sourceUrl} target="_blank" rel="noreferrer">
-                  요금 출처
+                  {t('visualpanels.priceSource')}
                 </a>
               </>
             )}
@@ -117,26 +122,37 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
           )}
         </>
       ) : (
-        <p className="muted">이 호출에 고정된 요금이 없어 추정 비용을 확인할 수 없어요.</p>
+        <p className="muted">{t('visualpanels.noPriceWasFixedForThisCall')}</p>
       )}
-      {attempt.pricingStartedAt && <small>호출 기준 시각: {attempt.pricingStartedAt}</small>}
+      {attempt.pricingStartedAt && (
+        <small>
+          {t('visualpanels.callReferenceTime', {
+            v0: formatDate(new Date(attempt.pricingStartedAt), {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+            }),
+          })}
+        </small>
+      )}
       {estimate && (
         <>
           <div className="table-scroll">
-            <table aria-label="호출 추정 비용 계산 내역">
+            <table aria-label={t('visualpanels.callCostEstimateBreakdown')}>
               <thead>
                 <tr>
-                  <th>항목</th>
-                  <th>프로바이더 토큰</th>
-                  <th>USD / 100만 토큰</th>
-                  <th>추정 비용</th>
+                  <th>{t('visualpanels.item')}</th>
+                  <th>{t('visualpanels.providerTokens')}</th>
+                  <th>{t('visualpanels.usdMillionTokens')}</th>
+                  <th>{t('visualpanels.estimatedCost2')}</th>
                 </tr>
               </thead>
               <tbody>
                 {estimate.lines.map((line) => (
                   <tr key={line.kind}>
-                    <th>{pricingRateLabels[line.kind]}</th>
-                    <td>{line.tokens === null ? '미확인' : line.tokens.toLocaleString('ko-KR')}</td>
+                    <th>{translateMessage(pricingRateLabels[line.kind])}</th>
+                    <td>
+                      {line.tokens === null ? t('visualpanels.unknown') : formatNumber(line.tokens)}
+                    </td>
                     <td>{formatUsd(line.rate)}</td>
                     <td>{formatUsd(line.usd)}</td>
                   </tr>
@@ -158,23 +174,34 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
 }
 
 function CacheUsage({ attempt }: { attempt: Attempt }) {
+  useI18n();
   const request = attempt.request as { protocol?: unknown } | null;
   const usage = providerCacheUsage(request?.protocol, attempt.rawUsage);
   if (!usage) return null;
   return (
     <p className="muted">
-      프로바이더 보고 캐시 토큰 · 읽기 {usage.readTokens ?? '미확인'} / 쓰기{' '}
-      {usage.writeTokens ?? '미확인'}
+      {t('visualpanels.cacheTokens', {
+        read:
+          usage.readTokens === null ? t('visualpanels.unknown') : formatNumber(usage.readTokens),
+        write:
+          usage.writeTokens === null ? t('visualpanels.unknown') : formatNumber(usage.writeTokens),
+      })}
       {usage.write5mTokens !== undefined && (
-        <>
+        <span>
           {' '}
-          · 5분 쓰기 {usage.write5mTokens ?? '미확인'} / 60분 쓰기 {usage.write1hTokens ?? '미확인'}
-        </>
+          {t('visualpanels.cacheWrites', {
+            short:
+              usage.write5mTokens === null
+                ? t('visualpanels.unknown')
+                : formatNumber(usage.write5mTokens),
+            long:
+              usage.write1hTokens == null
+                ? t('visualpanels.unknown')
+                : formatNumber(usage.write1hTokens),
+          })}
+        </span>
       )}
-      <small>
-        캐시를 재사용했는지는 프로바이더가 보고한 캐시 읽기 토큰으로 확인해요. 캐시 설정만으로
-        재사용 여부나 절감액을 추정하지 않아요.
-      </small>
+      <small>{t('visualpanels.cacheReuseIsConfirmedByProviderReported')}</small>
     </p>
   );
 }
@@ -191,6 +218,7 @@ const loreDelivery = {
   unverified: '포함 여부 미확인',
 };
 export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
+  useI18n();
   const confirmed = lore?.entries.filter((entry) => entry.delivery !== 'unverified') ?? [];
   const uncertain = lore?.entries.filter((entry) => entry.delivery === 'unverified') ?? [];
   const entries = (items: RequestLore['entries']) => (
@@ -199,50 +227,55 @@ export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
         <li key={`${entry.id}:${entry.via}:${index}`}>
           <strong>{entry.title || entry.id}</strong>
           <span>
-            {loreVia[entry.via]}
-            {entry.delivery !== 'full' && <> · {loreDelivery[entry.delivery]}</>}
+            {translateMessage(loreVia[entry.via])}
+            {entry.delivery !== 'full' && <> · {translateMessage(loreDelivery[entry.delivery])}</>}
           </span>
-          {entry.source && <small>출처: {entry.source.sourceName || entry.source.contentId}</small>}
+          {entry.source && (
+            <small>
+              {t('visualpanels.source', { v0: entry.source.sourceName || entry.source.contentId })}
+            </small>
+          )}
           <small>{entry.id}</small>
         </li>
       ))}
     </ul>
   );
   return (
-    <section className="lore-context-result attempt-lore" aria-label="요청에 포함된 로어">
-      <h4>포함된 로어{lore && confirmed.length > 0 ? ` · ${confirmed.length}건` : ''}</h4>
+    <section
+      className="lore-context-result attempt-lore"
+      aria-label={t('visualpanels.loreIncludedInRequest')}
+    >
+      <h4>{t('visualpanels.includedLore', { count: confirmed.length })}</h4>
       {!lore ? (
-        <p className="muted">
-          이 요청에는 로어 포함 기록이 없어요. 로어를 보내지 않았다는 뜻은 아니에요.
-        </p>
+        <p className="muted">{t('visualpanels.thereIsNoLoreInclusionRecordFor')}</p>
       ) : (
         <>
           {confirmed.length ? (
             <details open={confirmed.length <= 6}>
-              <summary>로어 목록 · {confirmed.length}건</summary>
+              <summary>
+                {t('visualpanels.loreListVPluralOneOther', { v0: confirmed.length })}
+              </summary>
               {entries(confirmed)}
             </details>
           ) : (
             <p className="muted">
               {lore.status === 'complete'
-                ? '이 요청에 추가로 첨부한 로어가 없어요.'
-                : '포함을 확인한 로어가 없어요.'}
+                ? t('visualpanels.noAdditionalLoreWasAttachedToThis')
+                : t('visualpanels.noLoreInclusionHasBeenConfirmed')}
             </p>
           )}
           {lore.status === 'partial' && (
-            <p className="muted">
-              프롬프트에서 가공된 자료 등은 포함 여부를 확정하지 못할 수 있어요.
-            </p>
+            <p className="muted">{t('visualpanels.inclusionMayBeUncertainForMaterialProcessed')}</p>
           )}
           {uncertain.length > 0 && (
             <details>
-              <summary>포함 여부 미확인 · {uncertain.length}건</summary>
+              <summary>
+                {t('visualpanels.inclusionUnconfirmedVPluralOneOther', { v0: uncertain.length })}
+              </summary>
               {entries(uncertain)}
             </details>
           )}
-          <small className="muted">
-            앱이 첨부한 자료 기준이에요. 목록에 이름만 있는 로어는 제외해요.
-          </small>
+          <small className="muted">{t('visualpanels.basedOnMaterialsAttachedByTheApp')}</small>
         </>
       )}
     </section>
@@ -258,6 +291,7 @@ export function AttemptInspector({
   revision: number;
   runs: Pick<Run, 'status'>[];
 }) {
+  useI18n();
   return (
     <div className="usage-inspector" data-testid="usage-inspector">
       <LazyDiagnostics<AttemptSummary[]>
@@ -265,7 +299,8 @@ export function AttemptInspector({
         revision={revision}
         title={
           <>
-            전체 역할의 호출과 비용 <small>후보 · 보조 작업 · 재시도 포함</small>
+            {t('visualpanels.callsAndCostsAcrossAllRoles')}{' '}
+            <small>{t('visualpanels.includesCandidatesAuxiliaryTasksAndRetries')}</small>
           </>
         }
       >
@@ -284,6 +319,7 @@ function AttemptTable({
   runs: Pick<Run, 'status'>[];
   revision: number;
 }) {
+  useI18n();
   const totals = {
     input: total(attempts, 'inputTokens'),
     output: total(attempts, 'outputTokens'),
@@ -292,31 +328,28 @@ function AttemptTable({
   return (
     <div>
       <p>
-        전송 시도 {attempts.length}회 · 입력 {totals.input ?? '미확인'} / 출력{' '}
-        {totals.output ?? '미확인'} 토큰 · 프로바이더 보고 비용{' '}
-        {totals.cost === null ? '미확인' : `$${totals.cost}`}
+        {t('visualpanels.sendAttemptsInputOutputTokensProviderReported', {
+          v0: attempts.length,
+          v1: totals.input === null ? t('visualpanels.unknown') : formatNumber(totals.input),
+          v2: totals.output === null ? t('visualpanels.unknown') : formatNumber(totals.output),
+          v3: totals.cost === null ? t('visualpanels.unknown') : `$${totals.cost}`,
+        })}
       </p>
       <p>
-        <strong>추정 비용: {estimatedTotal(attempts)}</strong>
+        <strong>{t('visualpanels.estimatedCost', { v0: estimatedTotal(attempts) })}</strong>
       </p>
-      <p className="muted">
-        호출 후 프로바이더가 보고한 토큰으로 계산해요. 참고용 추정 금액이며 실제 청구액과 다를 수
-        있어요.
-      </p>
-      <p className="muted">
-        비용이나 토큰 기록이 없는 호출은 0으로 계산하지 않아요. 외부로 요청을 보내지 않은 모의
-        생성은 아래 본문 생성 기록에서 확인할 수 있어요.
-      </p>
+      <p className="muted">{t('visualpanels.calculatedFromTokensReportedByTheProvider')}</p>
+      <p className="muted">{t('visualpanels.callsWithMissingCostOrTokenRecords')}</p>
       <div className="table-scroll">
         <table>
           <thead>
             <tr>
-              <th>역할</th>
-              <th>전송 시도</th>
-              <th>입력 토큰</th>
-              <th>출력 토큰</th>
-              <th>프로바이더 보고 비용</th>
-              <th>추정 비용</th>
+              <th>{t('visualpanels.role')}</th>
+              <th>{t('visualpanels.sendAttempts')}</th>
+              <th>{t('visualpanels.inputTokens')}</th>
+              <th>{t('visualpanels.outputTokens')}</th>
+              <th>{t('visualpanels.providerReportedCost2')}</th>
+              <th>{t('visualpanels.estimatedCost2')}</th>
             </tr>
           </thead>
           <tbody>
@@ -330,11 +363,19 @@ function AttemptTable({
                 const cost = total(selected, 'costUsd');
                 return (
                   <tr key={role}>
-                    <th>{roleLabels[role]}</th>
-                    <td>{selected.length}</td>
-                    <td>{total(selected, 'inputTokens') ?? '미확인'}</td>
-                    <td>{total(selected, 'outputTokens') ?? '미확인'}</td>
-                    <td>{cost === null ? '미확인' : `$${cost}`}</td>
+                    <th>{translateMessage(roleLabels[role])}</th>
+                    <td>{formatNumber(selected.length)}</td>
+                    <td>
+                      {total(selected, 'inputTokens') === null
+                        ? t('visualpanels.unknown')
+                        : formatNumber(total(selected, 'inputTokens')!)}
+                    </td>
+                    <td>
+                      {total(selected, 'outputTokens') === null
+                        ? t('visualpanels.unknown')
+                        : formatNumber(total(selected, 'outputTokens')!)}
+                    </td>
+                    <td>{cost === null ? t('visualpanels.unknown') : `$${cost}`}</td>
                     <td>{estimatedTotal(selected)}</td>
                   </tr>
                 );
@@ -343,10 +384,12 @@ function AttemptTable({
         </table>
       </div>
       <p className="muted">
-        보관된 본문 생성 기록 {runs.length}개 · 완료{' '}
-        {runs.filter((run) => run.status === 'completed').length}개 · 거절{' '}
-        {runs.filter((run) => run.status === 'refused').length}개 · 부분 생성{' '}
-        {runs.filter((run) => run.status === 'partial').length}개
+        {t('visualpanels.retainedGenerationsCompletedRefusedPartial', {
+          v0: runs.length,
+          v1: runs.filter((run) => run.status === 'completed').length,
+          v2: runs.filter((run) => run.status === 'refused').length,
+          v3: runs.filter((run) => run.status === 'partial').length,
+        })}
       </p>
       {attempts.map((summary) => (
         <LazyDiagnostics<Attempt>
@@ -355,30 +398,38 @@ function AttemptTable({
           revision={revision}
           title={
             <>
-              {roleLabels[summary.role]} · {summary.modelId} · {summary.status}
+              {translateMessage(roleLabels[summary.role])} · {summary.modelId} · {summary.status}
               <small className="attempt-token-summary">
-                입력 {tokens(summary.inputTokens)} · 출력 {tokens(summary.outputTokens)}
+                {t('visualpanels.inputOutput', {
+                  v0: tokens(summary.inputTokens),
+                  v1: tokens(summary.outputTokens),
+                })}
               </small>
             </>
           }
         >
           {(attempt) => (
             <>
-              <dl className="model-pricing-rates attempt-usage" aria-label="호출 토큰 사용량">
+              <dl
+                className="model-pricing-rates attempt-usage"
+                aria-label={t('visualpanels.callTokenUsage')}
+              >
                 <div>
-                  <dt>입력 토큰</dt>
+                  <dt>{t('visualpanels.inputTokens')}</dt>
                   <dd>{tokens(attempt.inputTokens)}</dd>
                 </div>
                 <div>
-                  <dt>출력 토큰</dt>
+                  <dt>{t('visualpanels.outputTokens')}</dt>
                   <dd>{tokens(attempt.outputTokens)}</dd>
                 </div>
               </dl>
               <p>
-                {attempt.runId
-                  ? `Run ${attempt.runId}`
-                  : `Job ${attempt.storyJobId ?? attempt.jobId}`}{' '}
-                · 비용 기준 {attempt.priceRevision ?? '미확인'}
+                {t('visualpanels.priceRevision', {
+                  v0: attempt.runId
+                    ? `Run ${attempt.runId}`
+                    : `Job ${attempt.storyJobId ?? attempt.jobId}`,
+                  v1: attempt.priceRevision ?? t('visualpanels.unknown'),
+                })}
               </p>
               <CacheUsage attempt={attempt} />
               <RequestLoreView

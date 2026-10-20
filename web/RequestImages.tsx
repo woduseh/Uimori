@@ -1,3 +1,4 @@
+import { useI18n } from './i18n.js';
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import type { RequestImage } from '../core/request-images.js';
@@ -15,13 +16,14 @@ function Thumbnail({
   remove?: () => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   return (
     <div className="request-image">
       <button
         type="button"
         className="request-image-open secondary"
-        aria-label={`${image.name} 확대`}
+        aria-label={t('prompts.zoomNamed', { name: image.name })}
         onClick={() => setOpen(true)}
       >
         <img src={image.url} alt={image.name} loading="lazy" />
@@ -29,7 +31,7 @@ function Thumbnail({
       {remove && (
         <IconButton
           icon={X}
-          label={`${image.name} 제거`}
+          label={t('prompts.removeNamed', { name: image.name })}
           className="request-image-remove secondary"
           disabled={disabled}
           onClick={remove}
@@ -68,8 +70,9 @@ function DraftThumbnail({
 }
 
 export function StoredRequestImages({ images }: { images?: RequestImage[] }) {
+  const { t } = useI18n();
   return images?.length ? (
-    <div className="request-images" aria-label="요청 참고 이미지">
+    <div className="request-images" aria-label={t('prompts.uiRequestReferenceImages')}>
       {images.map((image, i) => (
         <Thumbnail
           key={`${image.hash}:${i}`}
@@ -89,8 +92,12 @@ export function DraftRequestImages({
   remove: (id: string) => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
   return images.length ? (
-    <div className="request-images draft-request-images" aria-label="첨부한 참고 이미지">
+    <div
+      className="request-images draft-request-images"
+      aria-label={t('prompts.uiAttachedReferenceImages')}
+    >
       {images.map((image) => (
         <DraftThumbnail
           key={image.id}

@@ -1,3 +1,14 @@
+import {
+  t,
+  translateMessage,
+  useI18n,
+  getLocale,
+  formatMessage,
+  registerMessage,
+  type MessageValues,
+  messageRef,
+  message as uiMessage,
+} from './i18n.js';
 import { Switch } from './BooleanControls.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { RotateCcw, RefreshCw } from 'lucide-react';
@@ -15,29 +26,33 @@ import './lore-context.css';
 import './settings-layout.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
 
-const tokenFields = [
-  {
-    key: 'maxRetainedTokens',
-    label: '조회 로어 토큰 한도',
-    min: 0,
-    max: 200_000,
-    unit: '추정 토큰',
-  },
-  {
-    key: 'maxRetainedEntries',
-    label: '조회 로어 구간 한도',
-    min: 0,
-    max: 256,
-    unit: '구간',
-  },
-  {
-    key: 'maxPinnedTokens',
-    label: '고정 자료 토큰 한도',
-    min: 1,
-    max: 1_000_000,
-    unit: '추정 토큰',
-  },
-] as const;
+const tokenFields = (locale = getLocale()) =>
+  [
+    {
+      key: 'maxRetainedTokens',
+      labelKey: 'settings.m204',
+      label: formatMessage('settings.m204', locale),
+      min: 0,
+      max: 200_000,
+      unit: t('settings.m205'),
+    },
+    {
+      key: 'maxRetainedEntries',
+      labelKey: 'settings.m206',
+      label: formatMessage('settings.m206', locale),
+      min: 0,
+      max: 256,
+      unit: t('settings.m207'),
+    },
+    {
+      key: 'maxPinnedTokens',
+      labelKey: 'settings.m208',
+      label: formatMessage('settings.m208', locale),
+      min: 1,
+      max: 1_000_000,
+      unit: t('settings.m205'),
+    },
+  ] as const;
 type PolicyDraft = {
   enabled: boolean;
   maxRetainedTokens: string;
@@ -58,29 +73,59 @@ const draftOf = (policy: LoreContextPolicy): PolicyDraft => ({
   ),
   maxInputTokens: String(policy.judgment?.maxInputTokens ?? DEFAULT_JEV_JUDGMENT.maxInputTokens),
 });
+function policyError(
+  key: string,
+  values?: MessageValues,
+  displayValues?: () => MessageValues
+): Error {
+  const raw = formatMessage(key, 'ko', values);
+  registerMessage(raw, () => formatMessage(key, getLocale(), displayValues?.() ?? values));
+  return new Error(raw);
+}
+
 export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
-  for (const field of tokenFields) {
+  for (const field of tokenFields('ko')) {
     const raw = draft[field.key];
     const number = Number(raw);
     if (!raw.trim() || !Number.isSafeInteger(number) || number < field.min || number > field.max)
-      throw new Error(
-        `${field.label}는 ${field.min.toLocaleString()}–${field.max.toLocaleString()} 사이 정수로 입력해 주세요.`
+      throw policyError(
+        'settings.m209',
+        {
+          v0: field.label,
+          v1: field.min.toLocaleString('ko-KR'),
+          v2: field.max.toLocaleString('ko-KR'),
+        },
+        () => ({
+          v0: formatMessage(field.labelKey, getLocale()),
+          v1: field.min.toLocaleString(getLocale()),
+          v2: field.max.toLocaleString(getLocale()),
+        })
       );
   }
   if (!draft.threshold?.trim() || !draft.maxSelectedTokens?.trim() || !draft.maxInputTokens?.trim())
-    throw new Error('Jev 관련성 기준과 토큰 한도를 입력해 주세요.');
+    throw policyError('settings.m210');
   {
     const threshold = Number(draft.threshold);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1)
-      throw new Error('Jev 관련성 기준은 0–1 사이로 입력해 주세요.');
+      throw policyError('settings.m211');
     for (const [key, label, min, max] of [
-      ['maxSelectedTokens', 'Jev 선택 로어 토큰 한도', 0, 100000],
-      ['maxInputTokens', 'Jev 판단 입력 토큰 한도', 1000, 30000],
+      ['maxSelectedTokens', 'settings.m212', 0, 100000],
+      ['maxInputTokens', 'settings.m213', 1000, 30000],
     ] as const) {
       const value = Number(draft[key]);
       if (!Number.isSafeInteger(value) || value < min || value > max)
-        throw new Error(
-          `${label}는 ${min.toLocaleString()}–${max.toLocaleString()} 사이 정수로 입력해 주세요.`
+        throw policyError(
+          'settings.m209',
+          {
+            v0: formatMessage(label, 'ko'),
+            v1: min.toLocaleString('ko-KR'),
+            v2: max.toLocaleString('ko-KR'),
+          },
+          () => ({
+            v0: formatMessage(label, getLocale()),
+            v1: min.toLocaleString(getLocale()),
+            v2: max.toLocaleString(getLocale()),
+          })
         );
     }
   }
@@ -113,7 +158,7 @@ export function LoreContextPolicyEditor({
   request = '',
   reset = false,
   defaults = DEFAULT_LORE_CONTEXT,
-  resetLabel = '전역 기본값 적용',
+  resetLabel = t('settings.m214'),
   footerAction,
 }: {
   value?: LoreContextPolicy;
@@ -127,6 +172,7 @@ export function LoreContextPolicyEditor({
   resetLabel?: string;
   footerAction?: ReactNode;
 }) {
+  useI18n();
   const effective = value ?? DEFAULT_LORE_CONTEXT,
     serialized = JSON.stringify(effective);
   const [draft, setDraft] = useState(() => draftOf(effective)),
@@ -206,35 +252,33 @@ export function LoreContextPolicyEditor({
         setPreview({ value: result, fingerprint: source });
     } catch (caught) {
       if (sequence.current === version && latest.current === source)
-        setError(
-          `미리보기를 구성하지 못했어요. 고정 자료 예산과 저장된 자료·프롬프트를 확인해 주세요. (${(caught as Error).message})`
-        );
+        setError(uiMessage('settings.m216', { v0: messageRef((caught as Error).message) }));
     } finally {
       if (sequence.current === version) setBusy(false);
     }
   }
   return (
-    <section className="lore-context-panel settings-group full" aria-label="로어 컨텍스트 정책">
-      <h3 className="settings-group-heading">로어 사용</h3>
+    <section className="lore-context-panel settings-group full" aria-label={t('settings.m217')}>
+      <h3 className="settings-group-heading">{t('settings.m218')}</h3>
       <div className="settings-group-body">
         <div className="lore-context-heading settings-row settings-row-toggle">
           <div className="settings-row-copy">
-            <span>조회 로어 유지</span>
-            <p className="muted">조회한 로어를 다음 생성에서도 유지해요.</p>
+            <span>{t('settings.m219')}</span>
+            <p className="muted">{t('settings.m220')}</p>
           </div>
           <div className="settings-row-control">
             <Switch
-              aria-label="조회한 로어를 다음 생성에 유지"
+              aria-label={t('settings.m221')}
               checked={draft.enabled}
               onChange={(event) => change({ ...draft, enabled: event.target.checked })}
             />
           </div>
         </div>
         <details className="lore-context-advanced">
-          <summary>선별 기준과 용량</summary>
-          <h4>컨텍스트 유지 한도</h4>
+          <summary>{t('settings.m222')}</summary>
+          <h4>{t('settings.m223')}</h4>
           <div className="lore-context-policy-grid">
-            {tokenFields.map((field) => (
+            {tokenFields().map((field) => (
               <label key={field.key}>
                 {field.label}
                 <input
@@ -247,12 +291,12 @@ export function LoreContextPolicyEditor({
               </label>
             ))}
           </div>
-          <h4>관련성 판단</h4>
+          <h4>{t('settings.m224')}</h4>
           <div className="lore-context-policy-grid">
             <label>
-              관련성 기준
+              {t('settings.m225')}
               <input
-                aria-label="Jev 관련성 기준"
+                aria-label={t('settings.m226')}
                 type="number"
                 min="0"
                 max="1"
@@ -260,12 +304,12 @@ export function LoreContextPolicyEditor({
                 value={draft.threshold}
                 onChange={(event) => change({ ...draft, threshold: event.target.value })}
               />
-              <small>0–1, 높일수록 관련성이 높은 로어만 포함해요.</small>
+              <small>{t('settings.m227')}</small>
             </label>
             <label>
-              선택 로어 토큰 한도
+              {t('settings.m228')}
               <input
-                aria-label="Jev 선택 로어 토큰 한도"
+                aria-label={t('settings.m212')}
                 type="number"
                 min="0"
                 max="100000"
@@ -274,9 +318,9 @@ export function LoreContextPolicyEditor({
               />
             </label>
             <label>
-              판단 입력 토큰 한도
+              {t('settings.m229')}
               <input
-                aria-label="Jev 판단 입력 토큰 한도"
+                aria-label={t('settings.m213')}
                 type="number"
                 min="1000"
                 max="30000"
@@ -286,30 +330,25 @@ export function LoreContextPolicyEditor({
             </label>
           </div>
           <details className="lore-context-units">
-            <summary>단위와 예산 설명</summary>
-            <p className="muted">로어를 유지할 최대 크기를 정해요.</p>
+            <summary>{t('settings.m230')}</summary>
+            <p className="muted">{t('settings.m231')}</p>
             <ul>
-              {tokenFields.map((field) => (
+              {tokenFields().map((field) => (
                 <li key={field.key}>
-                  {field.label}: {field.min.toLocaleString()}–{field.max.toLocaleString()}{' '}
-                  {field.unit}
+                  {field.label}: {field.min.toLocaleString(getLocale())}–
+                  {field.max.toLocaleString(getLocale())} {field.unit}
                 </li>
               ))}
             </ul>
-            <p className="muted">토큰은 로컬 추정값으로, 모델의 실제 사용량과 다를 수 있어요.</p>
-            <p className="muted">
-              조회 로어가 한도를 넘으면 일부 구간을 다음 입력에서 제외해요. 고정 자료가 한도를
-              넘으면 자르지 않고 오류를 알려요.
-            </p>
-            <p className="muted">
-              관련성 판단은 JEV를 사용해요. 전체 입력 한도와 프롬프트 배치는 별도예요.
-            </p>
+            <p className="muted">{t('settings.m232')}</p>
+            <p className="muted">{t('settings.m233')}</p>
+            <p className="muted">{t('settings.m234')}</p>
           </details>
         </details>
       </div>
       {validation && (
         <p className="error" role="alert">
-          선별 기준과 용량의 입력을 확인해 주세요. {validation}
+          {t('settings.flow12', { v0: translateMessage(validation) })}
         </p>
       )}
       <div className="lore-context-actions settings-form-footer">
@@ -325,23 +364,19 @@ export function LoreContextPolicyEditor({
         </button>
         {validation && (
           <button type="button" className="ghost" onClick={() => change(draftOf(effective))}>
-            <RotateCcw size={16} aria-hidden="true" /> 마지막 유효값으로 되돌리기
+            <RotateCcw size={16} aria-hidden="true" />
+            {t('settings.m236')}
           </button>
         )}
         {footerAction}
       </div>
       {chatId && (
         <details className="lore-context-preview">
-          <summary>다음 생성의 로어 미리보기</summary>
-          <p className="muted">
-            저장된 자료·프롬프트와 위 정책 초안을 사용해요. 모델을 호출하거나 조회 기록을 바꾸지
-            않아요. 다른 채팅 설정의 초안은 먼저 저장해 주세요.
-          </p>
+          <summary>{t('settings.m237')}</summary>
+          <p className="muted">{t('settings.m238')}</p>
           <p>
-            {reset
-              ? '새 장면 · 조회 로어 정리 선택을 포함해요.'
-              : '현재 조회 로어를 이어 사용하는 요청이에요.'}
-            {!request.trim() && ' 입력이 비어 있어 확인용 요청을 사용해요.'}
+            {reset ? t('settings.m239') : t('settings.m240')}
+            {!request.trim() && t('settings.m241')}
           </p>
           <button
             type="button"
@@ -350,23 +385,23 @@ export function LoreContextPolicyEditor({
             onClick={() => void showPreview()}
           >
             <RefreshCw size={16} aria-hidden="true" />{' '}
-            {busy ? '로어 미리보기 구성 중…' : '로어 미리보기 갱신'}
+            {busy ? t('settings.m242') : t('settings.m243')}
           </button>
           {preview && (
             <div className="lore-context-preview-result">
               {preview.fingerprint !== fingerprint && (
                 <p className="muted" role="status">
-                  정책이나 다음 요청이 바뀌었어요. 아래는 이전 미리보기예요.
+                  {t('settings.m244')}
                 </p>
               )}
               <LoreContextDiagnostics
                 snapshot={preview.value.loreContext}
                 reset={JSON.parse(preview.fingerprint).reset === true}
-                label="미리보기의 조회 로어"
+                label={t('settings.m245')}
               />
               <details>
                 <summary>
-                  프롬프트 안의 실제 배치 · {preview.value.compilation.messages.length}메시지
+                  {t('settings.flow13', { v0: preview.value.compilation.messages.length })}
                 </summary>
                 <ol className="lore-context-messages">
                   {preview.value.compilation.messages.map((message, index) => (
@@ -388,14 +423,14 @@ export function LoreContextPolicyEditor({
               </details>
               {preview.value.error && (
                 <p className="error" role="alert">
-                  {preview.value.error}
+                  {translateMessage(preview.value.error)}
                 </p>
               )}
             </div>
           )}
           {error && (
             <p className="error" role="alert">
-              {error}
+              {translateMessage(error)}
             </p>
           )}
         </details>

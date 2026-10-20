@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { RisuContent } from '../core/risu-content.js';
 import { PACKAGE_IMAGE_MIMES } from '../core/package-images.js';
@@ -19,6 +20,7 @@ export function PackagePortraitEditor({
   onDirtyChange?: (dirty: boolean) => void;
   disabled?: boolean;
 }) {
+  useI18n();
   const scope = `${value.id}@${value.revision}`;
   const latest = useRef({ value, onChange, onDirtyChange, scope });
   latest.current = { value, onChange, onDirtyChange, scope };
@@ -69,14 +71,14 @@ export function PackagePortraitEditor({
     setError('');
     setNotice(
       selected.allowedUse === 'inline'
-        ? '본문용 이미지의 사용 위치를 대표 이미지와 본문으로 바꿨어요. 자료를 저장하면 적용돼요.'
-        : '대표 이미지를 선택했어요. 자료를 저장하면 적용돼요.'
+        ? uiMessage('library.changedTheStoryImageToPortraitAnd')
+        : uiMessage('library.portraitSelectedSaveTheResourceToApply')
     );
   }
   async function addFile(file: File) {
     if (disabled || upload.current) return;
     if ((latest.current.value.images?.length ?? 0) >= maxPackageImages) {
-      setError('자료 하나에 이미지를 2,000개까지 등록할 수 있어요.');
+      setError(uiMessage('library.aResourceCanContainUpTo2'));
       return;
     }
     const token = ++generation.current,
@@ -95,15 +97,16 @@ export function PackagePortraitEditor({
       const image = await uploadPackageImage(file, controller.signal, 'profile');
       if (!current()) return;
       if ((latest.current.value.images?.length ?? 0) >= maxPackageImages)
-        throw new Error('자료 하나에 이미지를 2,000개까지 등록할 수 있어요.');
+        throw new Error(uiMessage('library.aResourceCanContainUpTo2'));
       update({
         ...latest.current.value,
         images: [...(latest.current.value.images ?? []), image],
         portraitImageId: image.id,
       });
-      setNotice('대표 이미지 전용으로 추가했어요. 자료를 저장하면 적용돼요.');
+      setNotice(uiMessage('library.addedForPortraitUseOnlySaveThe'));
     } catch (cause) {
-      if (current()) setError(cause instanceof Error ? cause.message : '업로드하지 못했어요.');
+      if (current())
+        setError(cause instanceof Error ? cause.message : uiMessage('library.couldNotUpload'));
     } finally {
       if (current()) {
         upload.current = null;
@@ -119,7 +122,7 @@ export function PackagePortraitEditor({
   );
   const portrait = images.find((image) => image.id === value.portraitImageId);
   return (
-    <section className="package-portrait-editor" aria-label="대표 이미지 설정">
+    <section className="package-portrait-editor" aria-label={t('library.portraitSettings')}>
       <ContentAvatar
         className="package-portrait-avatar"
         content={{
@@ -135,17 +138,17 @@ export function PackagePortraitEditor({
         }}
       />
       <div className="package-portrait-controls">
-        <strong>대표 이미지</strong>
-        <small>{portrait?.title ?? '목록과 자료 선택 화면에 표시할 이미지를 골라요.'}</small>
+        <strong>{t('library.portrait')}</strong>
+        <small>{portrait?.title ?? t('library.chooseAnImageForListsAndResource')}</small>
         <div className="package-portrait-actions">
           <label
             className={`secondary package-portrait-upload${disabled || busy ? ' is-disabled' : ''}`}
           >
-            이미지 업로드
+            {t('library.uploadImage')}
             <input
               type="file"
               accept={PACKAGE_IMAGE_MIMES.join(',')}
-              aria-label="대표 이미지 업로드"
+              aria-label={t('library.uploadPortrait')}
               disabled={disabled || busy}
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -164,7 +167,7 @@ export function PackagePortraitEditor({
               setOpen(true);
             }}
           >
-            기존 이미지에서 선택
+            {t('library.chooseAnExistingImage')}
           </button>
           <button
             type="button"
@@ -175,16 +178,16 @@ export function PackagePortraitEditor({
               delete next.portraitImageId;
               update(next);
               setError('');
-              setNotice('대표 지정을 해제했어요. 이미지 파일은 자료에 남아요. 저장하면 적용돼요.');
+              setNotice(uiMessage('library.portraitDesignationRemovedTheImageRemainsIn'));
             }}
           >
-            대표 이미지 해제
+            {t('library.removePortraitDesignation')}
           </button>
         </div>
-        <small>PNG · JPEG · WebP · AVIF · GIF, 최대 64MiB · 자동 WebP 변환</small>
+        <small>{t('library.pngJpegWebpAvifGifUpTo')}</small>
         {busy && (
           <div className="package-portrait-actions">
-            <LoadingState presentation="inline" label="대표 이미지를 업로드하고 있어요…" />
+            <LoadingState presentation="inline" label={t('library.uploadingPortrait')} />
             <button
               type="button"
               className="ghost"
@@ -194,22 +197,27 @@ export function PackagePortraitEditor({
                 upload.current = null;
                 setBusy(false);
                 latest.current.onDirtyChange?.(false);
-                setNotice('이미지 업로드를 취소했어요.');
+                setNotice(uiMessage('library.imageUploadCanceled'));
               }}
             >
-              업로드 취소
+              {t('library.cancelUpload')}
             </button>
           </div>
         )}
-        {notice && <NoticeBanner>{notice}</NoticeBanner>}
-        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
+        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       </div>
-      <Dialog open={open} title="대표 이미지 선택" onClose={() => setOpen(false)} scopeKey={scope}>
+      <Dialog
+        open={open}
+        title={t('library.choosePortrait')}
+        onClose={() => setOpen(false)}
+        scopeKey={scope}
+      >
         <label>
-          이미지 검색
+          {t('library.searchImages')}
           <input
             type="search"
-            aria-label="대표 이미지 검색"
+            aria-label={t('library.searchPortraits')}
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -218,7 +226,7 @@ export function PackagePortraitEditor({
             onKeyDown={(event) => {
               if (event.key === 'Enter') event.preventDefault();
             }}
-            placeholder="이름 또는 설명"
+            placeholder={t('library.nameOrDescription')}
           />
         </label>
         <div className="package-portrait-choices">
@@ -238,15 +246,15 @@ export function PackagePortraitEditor({
                 <strong>{image.title}</strong>
                 <small>
                   {image.allowedUse === 'inline'
-                    ? '선택하면 대표 이미지와 본문에 사용해요.'
+                    ? t('library.selectingThisImageAllowsPortraitAndStory')
                     : image.allowedUse === 'profile'
-                      ? '대표 이미지 전용'
-                      : '대표 이미지와 본문'}
+                      ? t('library.portraitOnly')
+                      : t('library.portraitAndStory')}
                 </small>
               </span>
             </button>
           ))}
-          {!found.length && <p className="muted">검색 결과가 없어요.</p>}
+          {!found.length && <p className="muted">{t('library.noSearchResults')}</p>}
         </div>
         {found.length > visibleCount && (
           <button
@@ -254,7 +262,7 @@ export function PackagePortraitEditor({
             className="secondary"
             onClick={() => setVisibleCount((count) => count + 50)}
           >
-            이미지 더 보기 ({visibleCount} / {found.length})
+            {t('library.moreImages', { visible: visibleCount, total: found.length })}
           </button>
         )}
       </Dialog>

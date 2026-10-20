@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage, formatNumber } from './i18n.js';
 import { useRef, useState } from 'react';
 import type { Usage } from '../core/types.js';
 import type { Illustration, IllustrationUsageReport } from '../core/illustration.js';
@@ -7,10 +8,14 @@ import { illustrationProgress, illustrationTaskNames } from './illustration-prog
 import './illustrations.css';
 
 export function IllustrationUsageLine({ usage }: { usage: Usage }) {
+  useI18n();
   return (
     <p className="illustration-usage">
-      모델 요청 {usage.modelCalls}회 · 입력 {usage.inputTokens?.toLocaleString() ?? '미확인'} / 출력{' '}
-      {usage.outputTokens?.toLocaleString() ?? '미확인'} 토큰
+      {t('visuals.usageLine', {
+        calls: formatNumber(usage.modelCalls),
+        input: usage.inputTokens == null ? t('visuals.m165') : formatNumber(usage.inputTokens),
+        output: usage.outputTokens == null ? t('visuals.m165') : formatNumber(usage.outputTokens),
+      })}
     </p>
   );
 }
@@ -28,6 +33,7 @@ export function IllustrationPlacementButton({
   refresh: () => Promise<void>;
   onError: (message: string) => void;
 }) {
+  useI18n();
   const locked = useRef(false);
   const [busy, setBusy] = useState(false);
   return (
@@ -35,7 +41,7 @@ export function IllustrationPlacementButton({
       type="button"
       className="secondary"
       disabled={pending || busy}
-      title="그림은 그대로 두고 번역문 위치만 다시 계산해요."
+      title={t('visuals.m168')}
       onClick={async () => {
         if (locked.current) return;
         locked.current = true;
@@ -46,14 +52,14 @@ export function IllustrationPlacementButton({
           });
           await refresh();
         } catch (cause) {
-          onError((cause as Error).message);
+          onError(translateMessage((cause as Error).message));
         } finally {
           locked.current = false;
           setBusy(false);
         }
       }}
     >
-      {pending || busy ? '번역 위치 연결 중…' : '번역 위치 다시 연결'}
+      {pending || busy ? t('visuals.m169') : t('visuals.m170')}
     </button>
   );
 }
@@ -71,17 +77,18 @@ export function IllustrationActivity({
   refresh: () => Promise<void>;
   onError: (message: string) => void;
 }) {
+  useI18n();
   if (!items.length) return null;
   const progress = illustrationProgress(items);
   const revision = items.map((item) => `${item.id}:${item.status}:${item.updatedAt}`).join('|');
   return (
-    <section className="job illustration-job" aria-label="이 응답의 삽화 작업">
+    <section className="job illustration-job" aria-label={t('visuals.m171')}>
       <h3>
-        삽화{' '}
+        {t('visuals.m098')}{' '}
         <small>
           {progress.status === 'partial'
-            ? '위치 확인 필요'
-            : (labels[progress.status] ?? progress.status)}
+            ? t('visuals.m172')
+            : translateMessage(labels[progress.status] ?? progress.status)}
         </small>
       </h3>
       <dl className="illustration-phases">
@@ -90,8 +97,8 @@ export function IllustrationActivity({
             <dt>{illustrationTaskNames[phase.task]}</dt>
             <dd>
               {phase.task === 'placement' && phase.status === 'completed' && progress.unresolved
-                ? '일부 미지정'
-                : (labels[phase.status] ?? phase.status)}
+                ? t('visuals.m173')
+                : translateMessage(labels[phase.status] ?? phase.status)}
               {phase.detail && ` · ${phase.detail}`}
             </dd>
           </div>
@@ -111,7 +118,7 @@ export function IllustrationActivity({
       <LazyDiagnostics<IllustrationUsageReport>
         path={`/sources/${sourceId}/illustration-usage`}
         revision={revision}
-        title="삽화 호출과 토큰"
+        title={t('visuals.m174')}
       >
         {(report) => (
           <>
@@ -126,12 +133,7 @@ export function IllustrationActivity({
                 </div>
               ))}
             </dl>
-            <small>
-              이 원문의 삽화 작업에서 누적한 사용량이에요. 다시 그리기와 위치 재연결을 포함해요. JEV
-              사전 판정을 사용했다면 그 사용량도 포함해요. 요청 수는 Uimori가 집계하며 Codex 내부
-              모델 호출 수는 알 수 없어요. 프로바이더가 토큰 수를 보고하지 않으면 미확인으로
-              표시해요. ComfyUI의 그림 생성은 모델 토큰에 포함하지 않아요.
-            </small>
+            <small>{t('visuals.m175')}</small>
           </>
         )}
       </LazyDiagnostics>

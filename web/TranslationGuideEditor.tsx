@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { Plus, Trash2, Languages } from 'lucide-react';
 import { TRANSLATION_GUIDE_LIMITS, type TranslationGuide } from '../core/translation-guide.js';
 import './translation-guide.css';
@@ -9,29 +10,30 @@ export function TranslationGuideEditor({
   value: TranslationGuide;
   onChange: (value: TranslationGuide) => void;
 }) {
+  useI18n();
   const term = (index: number, change: Partial<TranslationGuide['terms'][number]>) =>
     onChange({
       ...value,
       terms: value.terms.map((item, i) => (i === index ? { ...item, ...change } : item)),
     });
   return (
-    <section className="translation-guide-editor" aria-label="봇 번역 지침 편집기">
+    <section
+      className="translation-guide-editor"
+      aria-label={t('library.botTranslationGuideEditor')}
+    >
       <div className="translation-guide-intro">
         <Languages size={22} aria-hidden="true" />
         <div>
-          <h3>봇으로 사용할 때의 번역 지침</h3>
-          <p>
-            번역 프리셋의 공통 원칙에 이 작품의 표기와 말투를 더해요. 이 자료를 봇으로 사용하는
-            채팅의 다음 번역·재번역부터 사용해요. 페르소나·모듈 역할로 장착하면 적용하지 않아요.
-          </p>
+          <h3>{t('library.translationGuideWhenUsedAsABot')}</h3>
+          <p>{t('library.addThisWorkSTerminologyAndVoice')}</p>
         </div>
       </div>
       <label>
-        말투·호칭·문체 지침
+        {t('library.voiceAddressAndStyleInstructions')}
         <textarea
-          aria-label="봇 번역 지침"
+          aria-label={t('library.botTranslationGuide')}
           rows={6}
-          placeholder="예: 미라는 평소 담담하게 말하고 로언에게는 존댓말을 사용해요. 원문에서 의도적으로 말투가 바뀌면 그 변화를 보존해 주세요."
+          placeholder={t('library.exampleMiraUsuallySpeaksCalmlyAndAddresses')}
           value={value.instructions}
           maxLength={TRANSLATION_GUIDE_LIMITS.instructions}
           onChange={(e) => onChange({ ...value, instructions: e.target.value })}
@@ -39,10 +41,8 @@ export function TranslationGuideEditor({
       </label>
       <div className="translation-guide-terms-heading">
         <div>
-          <h3>이름·용어 표기</h3>
-          <p className="muted">
-            번역 모델이 표기와 조건을 문맥에 맞춰 참고해요. 번역문의 단어를 일괄 치환하지는 않아요.
-          </p>
+          <h3>{t('library.namesAndTerminology')}</h3>
+          <p className="muted">{t('library.theTranslationModelUsesTerminologyAndConditions')}</p>
         </div>
         <button
           type="button"
@@ -52,22 +52,21 @@ export function TranslationGuideEditor({
             onChange({ ...value, terms: [...value.terms, { source: '', target: '' }] })
           }
         >
-          <Plus size={16} aria-hidden="true" /> 표기 추가
+          <Plus size={16} aria-hidden="true" />
+          {t('library.addTerm')}
         </button>
       </div>
       {!value.terms.length && (
-        <p className="translation-guide-empty">
-          아직 지정한 표기가 없어요. 인명이나 조직 이름처럼 일관되게 번역할 표현을 추가해 보세요.
-        </p>
+        <p className="translation-guide-empty">{t('library.noTermsYetAddNamesOrOrganizations')}</p>
       )}
       <div className="translation-guide-terms">
         {value.terms.map((item, index) => (
           <fieldset className="translation-guide-term" key={index}>
-            <legend>표기 {index + 1}</legend>
+            <legend>{t('library.termNumber', { number: index + 1 })}</legend>
             <label>
-              원문 표기
+              {t('library.originalTerm')}
               <input
-                aria-label={`표기 ${index + 1} 원문`}
+                aria-label={t('library.termOriginal', { v0: index + 1 })}
                 value={item.source}
                 maxLength={TRANSLATION_GUIDE_LIMITS.term}
                 placeholder="Mira"
@@ -75,53 +74,51 @@ export function TranslationGuideEditor({
               />
             </label>
             <label>
-              사용할 표기
+              {t('library.preferredTerm')}
               <input
-                aria-label={`표기 ${index + 1} 번역`}
+                aria-label={t('library.termTranslation', { v0: index + 1 })}
                 value={item.target}
                 maxLength={TRANSLATION_GUIDE_LIMITS.term}
-                placeholder="미라"
+                placeholder={t('library.mira')}
                 onChange={(e) => term(index, { target: e.target.value })}
               />
             </label>
             <label className="translation-guide-term-note">
               <span>
-                조건·설명 <span className="muted">선택</span>
+                {t('library.conditionsOrDescription')}{' '}
+                <span className="muted">{t('library.optional')}</span>
               </span>
               <input
-                aria-label={`표기 ${index + 1} 조건·설명`}
+                aria-label={t('library.termConditionsOrDescription', { v0: index + 1 })}
                 value={item.note ?? ''}
                 maxLength={TRANSLATION_GUIDE_LIMITS.note}
-                placeholder="인물 이름일 때만 적용"
+                placeholder={t('library.applyOnlyWhenUsedAsAPerson')}
                 onChange={(e) => term(index, { note: e.target.value })}
               />
             </label>
             <button
               type="button"
               className="ghost translation-guide-term-delete"
-              aria-label={`표기 ${index + 1} 삭제`}
+              aria-label={t('library.deleteTerm', { v0: index + 1 })}
               onClick={() =>
                 onChange({ ...value, terms: value.terms.filter((_, i) => i !== index) })
               }
             >
-              <Trash2 size={16} aria-hidden="true" /> 삭제
+              <Trash2 size={16} aria-hidden="true" />
+              {t('library.delete')}
             </button>
           </fieldset>
         ))}
       </div>
       <details className="translation-guide-preview">
-        <summary>번역에 전달할 지침 미리보기</summary>
-        <p className="muted">
-          현재 편집 내용이에요. ‘변경사항 저장’ 후 다음 번역 요청에 전달하며, 미리보기는 모델을
-          호출하지 않아요. 기존 봇·페르소나·로어는 별도 참고 자료로 계속 사용해요.
-        </p>
+        <summary>{t('library.previewInstructionsSentToTranslation')}</summary>
+        <p className="muted">{t('library.thisPreviewsCurrentEditsSaveChangesTo')}</p>
         <pre>{JSON.stringify(value, null, 2)}</pre>
       </details>
       <details className="translation-guide-preview">
-        <summary>작성 도움말</summary>
+        <summary>{t('library.writingTips')}</summary>
         <p className="muted translation-guide-help">
-          도우미에게 ‘이 봇의 설명과 로어를 참고해 번역 지침 초안을 만들어줘’라고 요청할 수 있어요.
-          지침은 요청했을 때만 작성·저장하며, 새 용어를 자동으로 누적하지 않아요.
+          {t('library.askTheAssistantToDraftTranslationInstructions')}
         </p>
       </details>
     </section>

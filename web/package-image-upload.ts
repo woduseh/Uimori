@@ -1,3 +1,4 @@
+import { legacyMessage } from './i18n.js';
 import { RISU_ASSET_MAX } from '../core/risu-limits.js';
 import { PACKAGE_IMAGE_MIMES, type PackageImage } from '../core/package-images.js';
 import { sessionRequiredEvent } from './api.js';
@@ -15,7 +16,7 @@ export async function uploadPackageImage(
     file.size > 64 * 1024 * 1024 ||
     file.size === 0
   )
-    throw new Error('64MiB 이하 PNG, JPEG, WebP, AVIF 또는 GIF가 필요해요.');
+    throw new Error(legacyMessage('library.aPngJpegWebpAvifOrGif'));
   signal.throwIfAborted();
   const bytes = new Uint8Array(await file.arrayBuffer());
   signal.throwIfAborted();
@@ -30,11 +31,12 @@ export async function uploadPackageImage(
   });
   signal.throwIfAborted();
   if (response.status === 401) window.dispatchEvent(new Event(sessionRequiredEvent));
-  if (!response.ok) throw new Error(`이미지를 업로드하지 못했어요. (${response.status})`);
+  if (!response.ok)
+    throw new Error(legacyMessage('library.couldNotUploadTheImage', { v0: response.status }));
   const result: { hash: string; mime: PackageImage['mime'] } = await response.json();
   signal.throwIfAborted();
   if (!/^[a-f0-9]{64}$/u.test(result.hash) || result.mime !== 'image/webp')
-    throw new Error('이미지 응답을 확인할 수 없어요.');
+    throw new Error(legacyMessage('library.couldNotValidateTheImageResponse'));
   return {
     id: crypto.randomUUID(),
     title:

@@ -1,3 +1,4 @@
+import { t, translateMessage, useI18n } from './i18n.js';
 import { useRef, useState } from 'react';
 import { CloseIcon, DeleteIcon } from './ui-icons.js';
 import { api } from './api.js';
@@ -32,6 +33,7 @@ export function DeleteButton({
   onDeleted,
   onError,
 }: Props) {
+  useI18n();
   const [target, setTarget] = useState<{
     path: string;
     title: string;
@@ -82,23 +84,23 @@ export function DeleteButton({
       <button
         type="button"
         className={`secondary delete-button ${iconOnly ? 'icon-only' : ''}`}
-        aria-label={`${title} ${label}`}
+        aria-label={t('shared.deleteAccessible', { title, action: translateMessage(label) })}
         aria-haspopup="dialog"
-        title={iconOnly ? label : undefined}
+        title={iconOnly ? translateMessage(label) : undefined}
         disabled={disabled || busy}
         onClick={() => void open()}
       >
         <DeleteIcon size={iconOnly ? 14 : 18} aria-hidden="true" />
-        {!iconOnly && <span>{label}</span>}
+        {!iconOnly && <span>{translateMessage(label)}</span>}
       </button>
       {!target && error && (
         <span className="error" role="alert">
-          {error}
+          {translateMessage(error)}
         </span>
       )}
       <Dialog
         open={!!target}
-        title="삭제 확인"
+        title={t('shared.deleteConfirm')}
         variant="confirmation"
         role="alertdialog"
         className="delete-dialog"
@@ -106,11 +108,9 @@ export function DeleteButton({
           if (!lock.current) setTarget(null);
         }}
       >
-        <p>
-          <strong>{target?.title}</strong> 항목을 삭제할까요?
-        </p>
-        <p className="muted">{description}</p>
-        {error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        <p>{t('shared.deleteQuestion', { title: target?.title ?? '' })}</p>
+        <p className="muted">{translateMessage(description)}</p>
+        {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         <div className="form-actions">
           <button
             type="button"
@@ -119,7 +119,7 @@ export function DeleteButton({
             onClick={() => setTarget(null)}
           >
             <CloseIcon size={18} aria-hidden="true" />
-            취소
+            {t('shared.cancel')}
           </button>
           <button
             type="button"
@@ -127,7 +127,7 @@ export function DeleteButton({
             disabled={busy}
             onClick={() => void remove()}
           >
-            {busy ? '삭제 중…' : '영구 삭제'}
+            {busy ? t('shared.deleting') : t('shared.deletePermanently')}
           </button>
         </div>
       </Dialog>

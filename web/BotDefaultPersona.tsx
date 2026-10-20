@@ -1,3 +1,4 @@
+import { t, useI18n, translateMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { useEffect, useRef, useState } from 'react';
@@ -17,6 +18,7 @@ export function BotDefaultPersona({
   library: Library;
   onClose: () => void;
 }) {
+  useI18n();
   const [saved, setSaved] = useState<BotDefaults | null>(null);
   const [mode, setMode] = useState<BotPersonaDefault['mode']>('inherit');
   const [personaId, setPersonaId] = useState('');
@@ -72,7 +74,7 @@ export function BotDefaultPersona({
   return (
     <Dialog
       open
-      title="봇 기본 페르소나"
+      title={t('library.botDefaultPersona')}
       className="bot-organize-dialog"
       onClose={() => {
         if (!busy) onClose();
@@ -85,28 +87,28 @@ export function BotDefaultPersona({
           void save();
         }}
       >
-        <p>{bot.title}의 새 채팅을 시작할 때 사용할 페르소나예요. 기존 채팅은 바뀌지 않아요.</p>
+        <p>{t('library.botPersonaHint', { title: bot.title })}</p>
         {!saved && (
           <LoadingState
             presentation="placeholder"
             loading={!error}
-            error={error}
-            errorLabel="기본 페르소나를 불러오지 못했어요."
-            label="기본 설정을 불러오는 중이에요…"
+            error={translateMessage(error)}
+            errorLabel={t('library.couldNotLoadTheDefaultPersona')}
+            label={t('library.loadingDefaults')}
             onRetry={() => setLoadAttempt((attempt) => attempt + 1)}
           />
         )}
         <label>
-          기본 페르소나
+          {t('library.defaultPersona')}
           <select
-            aria-label="봇 기본 페르소나 방식"
+            aria-label={t('library.botDefaultPersonaMode')}
             disabled={!saved || busy}
             value={mode}
             onChange={(event) => setMode(event.target.value as BotPersonaDefault['mode'])}
           >
-            <option value="inherit">기본 페르소나 미지정</option>
-            <option value="none">페르소나 없음</option>
-            <option value="persona">페르소나 지정</option>
+            <option value="inherit">{t('library.defaultPersonaNotSet')}</option>
+            <option value="none">{t('library.noPersona')}</option>
+            <option value="persona">{t('library.choosePersona')}</option>
           </select>
         </label>
         {mode === 'persona' && (
@@ -114,24 +116,21 @@ export function BotDefaultPersona({
             <ContentPicker
               library={library}
               role="persona"
-              label="봇의 기본 페르소나 선택"
+              label={t('library.chooseBotSDefaultPersona')}
               value={selected ? refValue(selected) : ''}
               selectedContent={selected}
               disabled={!saved || busy}
               onChange={(value) => setPersonaId(value.slice(0, value.lastIndexOf('@')))}
             />
             {personaId && !selected && (
-              <p role="status">저장된 페르소나가 삭제됐어요. 다른 페르소나를 선택해 주세요.</p>
+              <p role="status">{t('library.theSavedPersonaWasDeletedChooseAnother')}</p>
             )}
           </>
         )}
-        <p className="muted">
-          새 채팅에서 직접 고른 값(페르소나 없음 포함), 폴더 기본값, 봇 기본값 순서로 사용해요.
-          폴더에서 지정하지 않으면 이 설정을 사용해요.
-        </p>
-        {saved && error && <NoticeBanner tone="error">{error}</NoticeBanner>}
+        <p className="muted">{t('library.newChatsUseYourExplicitChoiceIncluding')}</p>
+        {saved && error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         <button disabled={!saved || busy || (mode === 'persona' && !selected)}>
-          {busy ? '저장하는 중…' : '기본 페르소나 저장'}
+          {busy ? t('library.saving2') : t('library.saveDefaultPersona')}
         </button>
       </form>
     </Dialog>

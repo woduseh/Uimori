@@ -1,3 +1,4 @@
+import { useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -27,8 +28,6 @@ import { Prose } from './Prose.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import {
   OUTLINE_LEVELS,
-  OUTLINE_LEVEL_LABELS,
-  OUTLINE_GUIDANCE,
   OUTLINE_INTENT_MAX,
   OUTLINE_TITLE_MAX,
   outlineParentAllowed,
@@ -112,6 +111,7 @@ export function OutlinePanel({
   helperVisible: boolean;
   onToggleHelper: () => void;
 }) {
+  const { t } = useI18n();
   const chatId = state.detail?.chat.id ?? '';
   const prefix = `outline-workspace:${chatId}`;
   const pendingKey = `outline-pending:${chatId}`;
@@ -203,7 +203,7 @@ export function OutlinePanel({
     try {
       retain(draftKey, next);
     } catch {
-      setError('초안은 이 화면에 유지돼요. 브라우저 저장 공간을 확인해 주세요.');
+      setError(uiMessage('prompts.uiYourDraftStaysOnThisScreenCheckBrowserStorage'));
     }
   }
   function edit() {
@@ -409,7 +409,7 @@ export function OutlinePanel({
                     <button
                       type="button"
                       className="outline-fold"
-                      aria-label={`${node.title} ${collapsed ? '펼치기' : '접기'}`}
+                      aria-label={t('prompts.outlineToggle', { name: node.title, collapsed })}
                       aria-expanded={!collapsed}
                       onClick={() => {
                         const next = collapsed
@@ -434,11 +434,13 @@ export function OutlinePanel({
                     aria-current={selectedId === node.id ? 'true' : undefined}
                     onClick={() => choose(node.id)}
                   >
-                    <span className="outline-node-kind">{OUTLINE_LEVEL_LABELS[node.level]}</span>
+                    <span className="outline-node-kind">{t(`prompts.level.${node.level}`)}</span>
                     <span className="outline-title">{node.title}</span>
                     <span className="outline-node-mark">
-                      {node.fixed && <Pin size={12} aria-label="유지할 조건" />}
-                      {!!node.writings?.length && <FileText size={12} aria-label="원문 있음" />}
+                      {node.fixed && <Pin size={12} aria-label={t('prompts.uiKeepCondition')} />}
+                      {!!node.writings?.length && (
+                        <FileText size={12} aria-label={t('prompts.uiHasSourceText')} />
+                      )}
                     </span>
                   </button>
                 </div>
@@ -461,13 +463,13 @@ export function OutlinePanel({
     ).values(),
   ];
   return (
-    <section className="outline-panel" aria-label="계층형 구성">
+    <section className="outline-panel" aria-label={t('prompts.uiHierarchicalOutline')}>
       <header className="outline-workspace-header">
         <div className="outline-workspace-title">
           <ListTree size={21} />
           <div>
             <h2 ref={heading} tabIndex={-1}>
-              구성·집필
+              {t('prompts.uiOutlineAndWrite')}
             </h2>
             <p>{state.detail?.chat.title}</p>
           </div>
@@ -479,17 +481,19 @@ export function OutlinePanel({
             onClick={onToggleHelper}
           >
             <Sparkles size={16} />
-            도우미
+            {t('prompts.uiHelper')}
           </button>
-          <IconButton label="계층형 구성 닫기" icon={X} onClick={onClose} />
+          <IconButton label={t('prompts.uiCloseHierarchicalOutline')} icon={X} onClick={onClose} />
         </div>
       </header>
-      {outline && <DismissibleError message={error} onDismiss={() => setError('')} />}
+      {outline && (
+        <DismissibleError message={translateMessage(error)} onDismiss={() => setError('')} />
+      )}
       {pending && !busy && (
         <div className="outline-pending" role="status">
-          <p>접수 결과를 아직 확인하지 못했어요. 입력은 보관했어요.</p>
+          <p>{t('prompts.uiTheSubmissionResultIsStillUnknownYourInputIs')}</p>
           <button type="button" onClick={() => void send(pending)}>
-            요청 결과 확인
+            {t('prompts.uiCheckRequestResult')}
           </button>
         </div>
       )}
@@ -497,8 +501,8 @@ export function OutlinePanel({
         <LoadingState
           presentation="region"
           loading={!error}
-          error={error}
-          label="구성을 불러오는 중이에요…"
+          error={translateMessage(error)}
+          label={t('prompts.uiLoadingOutline')}
           onRetry={() => void load()}
         />
       )}
@@ -507,62 +511,63 @@ export function OutlinePanel({
           <div className="outline-welcome-symbol">
             <GitBranch size={32} />
           </div>
-          <p className="outline-eyebrow">아직 구성이 없어요.</p>
+          <p className="outline-eyebrow">{t('prompts.uiNoOutlineYet')}</p>
           <p>
-            작품 전체를 설계하거나, 이번 회차만 가볍게 정해요.
+            {t('prompts.uiPlanTheWholeStoryOrSketchJustThisEpisode')}
             <br />
-            구성은 계획으로 남고, 선택한 단위만 집필해요.
+            {t('prompts.uiTheOutlineRemainsAPlanOnlyTheSelectedUnit')}
           </p>
           <div className="outline-welcome-actions">
             <button type="button" onClick={() => help('compose', null)}>
               <Sparkles size={18} />
-              도우미와 구성 시작
+              {t('prompts.uiStartOutliningWithHelper')}
             </button>
             <button type="button" className="secondary" onClick={() => add()}>
               <Plus size={18} />
-              직접 추가
+              {t('prompts.uiAddManually')}
             </button>
           </div>
           <div className="outline-example">
-            <span>예를 들면</span>
-            <p>“전체 12화의 역할을 정하고, 1화만 작은 사건까지 상세하게 구성해줘.”</p>
+            <span>{t('prompts.uiForExample')}</span>
+            <p>{t('prompts.uiPlanTheRoleOfAll12EpisodesAndOutline')}</p>
           </div>
         </div>
       ) : (
         outline && (
           <div className="outline-workspace-body">
-            <nav className="outline-navigation" aria-label="구성 목록">
+            <nav className="outline-navigation" aria-label={t('prompts.uiOutlineList')}>
               <div className="outline-navigation-head">
                 <span>
-                  이야기 구성 <small>{nodes.length}</small>
+                  {t('prompts.uiStoryOutline')}
+                  <small>{formatNumber(nodes.length)}</small>
                 </span>
                 <IconButton
-                  label="구성 추가"
+                  label={t('prompts.uiAddOutline')}
                   icon={Plus}
                   disabled={disabled}
                   onClick={() => add()}
                 />
               </div>
               <div className="outline-tree-scroll">{tree(null)}</div>
-              <p className="outline-navigation-foot">단계는 필요한 만큼만 사용해요.</p>
+              <p className="outline-navigation-foot">{t('prompts.uiUseOnlyTheLevelsYouNeed')}</p>
             </nav>
             <div className="outline-detail" ref={detailScroll}>
               <div className="outline-mobile-select">
                 <label>
-                  현재 구성
+                  {t('prompts.uiCurrentOutline')}
                   <select value={selectedId ?? ''} onChange={(event) => choose(event.target.value)}>
                     <option value="" disabled>
-                      구성 선택
+                      {t('prompts.uiSelectOutline')}
                     </option>
                     {nodes.map((node) => (
                       <option key={node.id} value={node.id}>
-                        {OUTLINE_LEVEL_LABELS[node.level]} · {node.title}
+                        {t(`prompts.level.${node.level}`)} · {node.title}
                       </option>
                     ))}
                   </select>
                 </label>
                 <IconButton
-                  label="구성 추가"
+                  label={t('prompts.uiAddOutline')}
                   icon={Plus}
                   disabled={disabled}
                   onClick={() => add()}
@@ -597,13 +602,15 @@ export function OutlinePanel({
                   }}
                 >
                   <div className="outline-section-heading">
-                    <span className="outline-eyebrow">{adding ? '새로운 구성' : '구성 편집'}</span>
-                    <h3>{adding ? '어디에서 시작할까요?' : selected?.title}</h3>
+                    <span className="outline-eyebrow">
+                      {adding ? t('prompts.uiNewOutline') : t('prompts.uiEditOutline')}
+                    </span>
+                    <h3>{adding ? t('prompts.uiWhereWouldYouLikeToStart') : selected?.title}</h3>
                   </div>
                   {adding && (
                     <div className="outline-form-pair">
                       <label>
-                        수준
+                        {t('prompts.uiLevel')}
                         <select
                           disabled={disabled}
                           value={draft.level}
@@ -618,13 +625,13 @@ export function OutlinePanel({
                             )
                           ).map((level) => (
                             <option key={level} value={level}>
-                              {OUTLINE_LEVEL_LABELS[level]}
+                              {t(`prompts.level.${level}`)}
                             </option>
                           ))}
                         </select>
                       </label>
                       <label>
-                        상위 구성
+                        {t('prompts.uiParentOutline')}
                         <select
                           disabled={disabled}
                           value={draft.parentId ?? ''}
@@ -639,7 +646,7 @@ export function OutlinePanel({
                             });
                           }}
                         >
-                          <option value="">없음 · 독립 구성</option>
+                          <option value="">{t('prompts.uiNoneIndependentOutline')}</option>
                           {nodes
                             .filter((node) => node.level !== 'beat')
                             .map((node) => (
@@ -652,7 +659,7 @@ export function OutlinePanel({
                     </div>
                   )}
                   <label>
-                    이름
+                    {t('prompts.uiName')}
                     <input
                       autoComplete="off"
                       required
@@ -663,7 +670,7 @@ export function OutlinePanel({
                     />
                   </label>
                   <label>
-                    구성 내용
+                    {t('prompts.uiOutlineContent')}
                     <textarea
                       rows={9}
                       maxLength={OUTLINE_INTENT_MAX}
@@ -672,15 +679,14 @@ export function OutlinePanel({
                       onChange={(event) => changeDraft({ ...draft, intent: event.target.value })}
                     />
                   </label>
-                  <p className="muted outline-field-help">
-                    {OUTLINE_GUIDANCE[draft.level]} 모두 채울 필요는 없어요.
-                  </p>
+                  <p className="muted outline-field-help">{t(`prompts.guidance.${draft.level}`)}</p>
                   <details className="outline-reference-picker">
                     <summary>
                       <Link2 size={15} />
-                      고급 · 함께 참고할 구성 <small>{draft.relatedIds.length}</small>
+                      {t('prompts.uiAdvancedRelatedOutlines')}
+                      <small>{formatNumber(draft.relatedIds.length)}</small>
                     </summary>
-                    <p>다른 회차의 준비·회수 등 관련된 계획만 연결해요.</p>
+                    <p>{t('prompts.uiLinkOnlyRelatedPlansSuchAsSetupAndPayoff')}</p>
                     {nodes
                       .filter((node) => node.id !== selectedId || adding)
                       .map((node) => (
@@ -700,7 +706,7 @@ export function OutlinePanel({
                           />
                           <span>
                             {node.title}
-                            <small>{OUTLINE_LEVEL_LABELS[node.level]}</small>
+                            <small>{t(`prompts.level.${node.level}`)}</small>
                           </span>
                         </label>
                       ))}
@@ -714,19 +720,16 @@ export function OutlinePanel({
                         onChange={(event) => changeDraft({ ...draft, fixed: event.target.checked })}
                       />
                       <span>
-                        유지할 조건
-                        <small>
-                          구성을 자세히 만들 때 이 조건을 지키도록 도우미에게 요청해요. 조건을
-                          바꾸려면 직접 고치거나 도우미에게 변경을 요청해 주세요.
-                        </small>
+                        {t('prompts.uiKeepCondition')}
+                        <small>{t('prompts.uiTheHelperIsAskedToPreserveThisConditionWhile')}</small>
                       </span>
                     </label>
                   )}
                   {editing && selected && draft.revision !== selected.revision && (
                     <div className="outline-conflict" role="status">
-                      <p>다른 곳에서 구성이 변경됐어요. 내 초안은 그대로 보관했어요.</p>
+                      <p>{t('prompts.uiTheOutlineChangedElsewhereYourDraftIsPreserved')}</p>
                       <details>
-                        <summary>현재 저장된 구성 보기</summary>
+                        <summary>{t('prompts.uiViewSavedOutline')}</summary>
                         <p>{selected.intent}</p>
                       </details>
                       <button
@@ -734,7 +737,7 @@ export function OutlinePanel({
                         className="secondary"
                         onClick={() => changeDraft(fromNode(selected))}
                       >
-                        최신 내용 불러오기
+                        {t('prompts.uiLoadLatestVersion')}
                       </button>
                     </div>
                   )}
@@ -749,11 +752,11 @@ export function OutlinePanel({
                         setDraft(null);
                       }}
                     >
-                      닫기 · 초안 보관
+                      {t('prompts.uiCloseKeepDraft')}
                     </button>
                     <button type="submit" disabled={disabled || !draft.title.trim()}>
                       {' '}
-                      {adding ? '추가' : '저장'}
+                      {adding ? t('prompts.uiAdd') : t('prompts.uiSave')}
                     </button>
                   </div>
                 </form>
@@ -762,19 +765,19 @@ export function OutlinePanel({
                   <div className="outline-detail-heading">
                     <div>
                       <span className="outline-eyebrow">
-                        {OUTLINE_LEVEL_LABELS[selected.level]}
+                        {t(`prompts.level.${selected.level}`)}
                       </span>
                       <h3>{selected.title}</h3>
                     </div>
-                    <ActionMenu label="구성 관리">
+                    <ActionMenu label={t('prompts.uiManageOutline')}>
                       <button type="button" disabled={disabled} onClick={edit}>
                         <PenLine size={16} />
-                        구성 수정
+                        {t('prompts.uiEditOutline2')}
                       </button>
                       {selected.level !== 'beat' && (
                         <button type="button" disabled={disabled} onClick={() => add(selected)}>
                           <Plus size={16} />
-                          하위 구성 추가
+                          {t('prompts.uiAddChildOutline')}
                         </button>
                       )}
                       <button
@@ -792,15 +795,17 @@ export function OutlinePanel({
                         }
                       >
                         <Pin size={16} />
-                        {selected.fixed ? '유지 조건 해제' : '유지할 조건으로 지정'}
+                        {selected.fixed
+                          ? t('prompts.uiRemoveKeepCondition')
+                          : t('prompts.uiMarkAsKeepCondition')}
                       </button>
                       <button type="button" disabled={disabled} onClick={() => moveSelected(-1)}>
                         <ArrowUp size={16} />
-                        위로 이동
+                        {t('prompts.uiMoveUp')}
                       </button>
                       <button type="button" disabled={disabled} onClick={() => moveSelected(1)}>
                         <ArrowDown size={16} />
-                        아래로 이동
+                        {t('prompts.uiMoveDown')}
                       </button>
                       <button
                         type="button"
@@ -812,7 +817,7 @@ export function OutlinePanel({
                         }
                       >
                         <Trash2 size={16} />
-                        구성 삭제
+                        {t('prompts.uiDeleteOutline')}
                       </button>
                     </ActionMenu>
                   </div>
@@ -820,23 +825,25 @@ export function OutlinePanel({
                     {selected.fixed && (
                       <span>
                         <Pin size={13} />
-                        유지할 조건
+                        {t('prompts.uiKeepCondition')}
                       </span>
                     )}
                     <span>
                       <FileText size={13} />
                       {ownSources.length
-                        ? `원문 ${ownSources.length}개 연결`
+                        ? t('prompts.sourceCount', { count: ownSources.length })
                         : selected.progress.state === 'writing'
-                          ? '집필 중'
+                          ? t('prompts.uiWriting2')
                           : selected.progress.state === 'scheduled'
-                            ? '집필 예약'
-                            : '아직 원문이 없어요'}
+                            ? t('prompts.uiWritingScheduled')
+                            : t('prompts.uiNoSourceTextYet')}
                     </span>
                     {lower.length > 0 && (
                       <span>
-                        하위 {lower.length}개 중{' '}
-                        {lower.filter((node) => node.writings?.length).length}개에 원문 연결
+                        {t('prompts.childSources', {
+                          total: formatNumber(lower.length),
+                          count: formatNumber(lower.filter((node) => node.writings?.length).length),
+                        })}
                       </span>
                     )}
                   </div>
@@ -848,7 +855,7 @@ export function OutlinePanel({
                       onClick={() => help('compose')}
                     >
                       <Sparkles size={17} />
-                      상세화
+                      {t('prompts.uiElaborate')}
                     </button>
                     {outlineWritable(selected.level) && (
                       <button
@@ -857,7 +864,9 @@ export function OutlinePanel({
                         onClick={() => void prepareWriting()}
                       >
                         <PenLine size={17} />
-                        {sources.length ? '이어 쓰기' : '이 단위 집필'}
+                        {sources.length
+                          ? t('prompts.uiContinueWriting')
+                          : t('prompts.uiWriteThisUnit')}
                       </button>
                     )}
                     <button
@@ -867,26 +876,26 @@ export function OutlinePanel({
                       onClick={() => help('review')}
                     >
                       <ScanText size={17} />
-                      원문과 점검
+                      {t('prompts.uiCheckAgainstSource')}
                     </button>
                   </div>
                   <article className="outline-intent-card">
                     <div className="outline-card-heading">
-                      <span>구성 내용</span>
+                      <span>{t('prompts.uiOutlineContent')}</span>
                       <button
                         type="button"
                         className="text-button"
                         disabled={disabled}
                         onClick={edit}
                       >
-                        편집
+                        {t('prompts.uiEdit2')}
                       </button>
                     </div>
                     {selected.intent ? (
                       <Prose text={selected.intent} />
                     ) : (
                       <p className="muted">
-                        아직 비어 있어요. 도우미에게 상세화를 요청하거나 직접 적어 보세요.
+                        {t('prompts.uiNothingHereYetAskTheHelperToElaborateOr')}
                       </p>
                     )}
                   </article>
@@ -894,7 +903,7 @@ export function OutlinePanel({
                     <details className="outline-related-list">
                       <summary>
                         <Link2 size={15} />
-                        고급 · 함께 참고할 구성
+                        {t('prompts.uiAdvancedRelatedOutlines')}
                       </summary>
                       {selected.relatedIds.map((id) => {
                         const node = nodes.find((item) => item.id === id);
@@ -923,29 +932,36 @@ export function OutlinePanel({
                       <div className="outline-card-heading">
                         <strong>
                           <PenLine size={16} />
-                          이번 집필
+                          {t('prompts.uiThisWritingRequest')}
                         </strong>
                         <IconButton
-                          label="집필 준비 닫기"
+                          label={t('prompts.uiCloseWritingPreparation')}
                           icon={X}
                           onClick={() => setWriting(false)}
                         />
                       </div>
                       <p>
-                        대상 · {selected.title}
-                        {sources.length ? ' · 기존 원문 뒤에 이어 써요.' : ''}
+                        {t('prompts.writingTarget', {
+                          name: selected.title,
+                          continuing: sources.length > 0,
+                        })}
                       </p>
-                      <section aria-label="현재 구성" className="outline-writing-plan">
-                        <h4>현재 구성 · 읽기 전용</h4>
+                      <section
+                        aria-label={t('prompts.uiCurrentOutline')}
+                        className="outline-writing-plan"
+                      >
+                        <h4>{t('prompts.uiCurrentOutlineReadOnly')}</h4>
                         <Prose
-                          text={brief.outline.path.at(-1)?.intent || '아직 구성 내용이 없어요.'}
+                          text={
+                            brief.outline.path.at(-1)?.intent || t('prompts.uiNoOutlineContentYet')
+                          }
                         />
                         <p className="muted">
-                          저장된 구성과 아래 추가 지시를 집필 접수 때 함께 고정해요.
+                          {t('prompts.uiSavedOutlinesAndTheInstructionsBelowAreFixedTogether')}
                         </p>
                       </section>
                       <label>
-                        이번 추가 지시와 멈출 지점 (선택)
+                        {t('prompts.uiAdditionalInstructionsAndStoppingPointOptional')}
                         <textarea
                           rows={5}
                           maxLength={OUTLINE_INTENT_MAX}
@@ -962,12 +978,12 @@ export function OutlinePanel({
                       </label>
                       {previousRequest && (
                         <details className="outline-reference-picker">
-                          <summary>이전 집필 요청 초안 · 읽기·복사</summary>
+                          <summary>{t('prompts.uiPreviousWritingRequestDraftReadAndCopy')}</summary>
                           <p>
-                            이전 초안은 그대로 보관해요. 필요한 추가 지시만 위 입력에 옮겨 주세요.
+                            {t('prompts.uiThePreviousDraftIsPreservedMoveOnlyNeededInstructions')}
                           </p>
                           <label>
-                            이전 집필 요청 초안
+                            {t('prompts.uiPreviousWritingRequestDraft')}
                             <textarea rows={5} value={previousRequest} readOnly />
                           </label>
                           <button
@@ -978,12 +994,12 @@ export function OutlinePanel({
                                 await navigator.clipboard.writeText(previousRequest);
                               } catch {
                                 setError(
-                                  '초안을 복사하지 못했어요. 초안 내용을 선택해 복사해 주세요.'
+                                  uiMessage('prompts.uiUnableToCopyTheDraftSelectTheDraftText')
                                 );
                               }
                             }}
                           >
-                            이전 초안 복사
+                            {t('prompts.uiCopyPreviousDraft')}
                           </button>
                         </details>
                       )}
@@ -993,10 +1009,10 @@ export function OutlinePanel({
                           className="secondary"
                           onClick={() => setPreviewing(!previewing)}
                         >
-                          입력 컨텍스트 {previewing ? '접기' : '미리보기'}
+                          {t('prompts.contextToggle', { expanded: previewing })}
                         </button>
                         <button type="submit" disabled={disabled || !!state.active}>
-                          집필 시작
+                          {t('prompts.uiStartWriting')}
                         </button>
                       </div>
                     </form>
@@ -1008,17 +1024,17 @@ export function OutlinePanel({
                       onClick={() => void prepareWriting(true)}
                     >
                       <BookOpen size={15} />
-                      이번 구성의 입력 컨텍스트 보기
+                      {t('prompts.uiViewOutlineInputContext')}
                     </button>
                   )}
                   {previewing && brief && (
                     <section className="outline-brief">
-                      <h4>이번 집필에 함께 들어가는 구성</h4>
-                      <p>이번 집필에 사용할 저장된 구성을 모아 보여줘요. 모델은 호출하지 않아요.</p>
+                      <h4>{t('prompts.uiOutlinesIncludedInThisRequest')}</h4>
+                      <p>{t('prompts.uiShowsSavedOutlinesForThisWritingRequestNoModel')}</p>
                       {[
-                        ['상위 방향과 선택 단위', brief.outline.path],
-                        ['하위 사건', brief.outline.children],
-                        ['관련 계획', brief.outline.related ?? []],
+                        [t('prompts.uiParentDirectionAndSelectedUnit'), brief.outline.path],
+                        [t('prompts.uiChildEvents'), brief.outline.children],
+                        [t('prompts.uiRelatedPlans'), brief.outline.related ?? []],
                       ].map(([title, items]) => (
                         <div key={title as string}>
                           <h5>{title as string}</h5>
@@ -1026,16 +1042,17 @@ export function OutlinePanel({
                             <details key={node.id}>
                               <summary>
                                 {node.title}
-                                {node.fixed ? ' · 유지 조건' : ''}
+                                {node.fixed ? t('prompts.uiKeepCondition2') : ''}
                               </summary>
-                              <p>{node.intent || '아직 내용이 없어요.'}</p>
+                              <p>{node.intent || t('prompts.uiNoContentYet')}</p>
                             </details>
                           ))}
                         </div>
                       ))}
                       <p>
-                        연결된 실제 원문 {brief.outline.sources?.length ?? 0}개 · 계획은 이미 일어난
-                        사실이 아니에요.
+                        {t('prompts.actualSources', {
+                          count: formatNumber(brief.outline.sources?.length ?? 0),
+                        })}
                       </p>
                     </section>
                   )}
@@ -1043,9 +1060,10 @@ export function OutlinePanel({
                     <section className="outline-source-list">
                       <div className="outline-card-heading">
                         <h4>
-                          연결된 원문 <small>{sources.length}</small>
+                          {t('prompts.uiLinkedSourceText')}
+                          <small>{formatNumber(sources.length)}</small>
                         </h4>
-                        <span>원문이 연결돼 있어도 구성 내용을 모두 쓴 것은 아닐 수 있어요.</span>
+                        <span>{t('prompts.uiLinkedSourceTextMayNotCoverEveryPartOf')}</span>
                       </div>
                       {sources.map((source, index) => (
                         <button
@@ -1070,7 +1088,7 @@ export function OutlinePanel({
                   )}
                 </>
               ) : (
-                <p className="muted">구성을 선택하거나 새 항목을 추가해 주세요.</p>
+                <p className="muted">{t('prompts.uiSelectAnOutlineOrAddANewItem')}</p>
               )}
             </div>
           </div>
@@ -1079,7 +1097,7 @@ export function OutlinePanel({
       <footer className="outline-workspace-footer">
         <button type="button" className="text-button" onClick={() => void load()}>
           <RefreshCw size={13} />
-          새로고침
+          {t('prompts.uiRefresh')}
         </button>
       </footer>
     </section>

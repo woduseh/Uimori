@@ -36,6 +36,15 @@ Modified MIT를 따라요. 각 원저작권과 라이선스 고지를 함께 배
 설치된 패키지의 라이선스를 보존하고, 모델 가중치나 Python 런타임은 포함하지 않아요.
 토크나이저 데이터는 실행 중 다운로드하지 않으며 선택한 계열만 로컬에서 읽어요.
 
+## UI message formatting
+
+The browser uses `intl-messageformat` 12.1.4 from [FormatJS](https://github.com/formatjs/formatjs)
+under BSD-3-Clause, without modifying its source. Its copyright and license are preserved in
+[intl-messageformat-LICENSE.md](third_party/formatjs/intl-messageformat-LICENSE.md).
+Its `@formatjs/fast-memoize`, `@formatjs/icu-messageformat-parser`, and
+`@formatjs/icu-skeleton-parser` dependencies use the identical FormatJS MIT notice preserved in
+[formatjs-MIT-LICENSE.md](third_party/formatjs/formatjs-MIT-LICENSE.md).
+
 ## 배포와 소스 제공
 
 프로젝트 소스 저장소는 [woduseh/Uimori](https://github.com/woduseh/Uimori)예요. 배포자는 실행·배포한 빌드와 일치하는 대응 소스, 로컬 수정 사항, 빌드·설치에 필요한 파일과 라이선스 고지를 제공해야 해요. 네트워크 이용자에게도 해당 소스를 받을 수 있는 안내를 쉽게 찾을 수 있게 제공해요. 다른 revision이나 미공개 변경을 포함하지 않은 저장소 링크만으로 배포본의 대응 소스가 제공됐다고 보지 않아요. 실제 절차는 [개인 서버 안내](docs/SELF-HOST.md#라이선스와-대응-소스)를 따라요.

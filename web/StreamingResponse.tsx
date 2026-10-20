@@ -1,3 +1,4 @@
+import { t, useI18n } from './i18n.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ResponseDisplayMode } from './presentation-settings.js';
 import type {
@@ -13,10 +14,11 @@ const active = (status?: string) => status === undefined || ['queued', 'running'
 
 /** Mount the reader only after an explicit request to inspect an incomplete answer. */
 export function PartialResponse({ children }: { children: ReactNode }) {
+  useI18n();
   const [open, setOpen] = useState(false);
   return (
     <details className="partial-response" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary>일부 응답 보기</summary>
+      <summary>{t('reader.viewPartialResponse')}</summary>
       {open && children}
     </details>
   );
@@ -31,11 +33,12 @@ type ResponseProps = {
 
 /** Final answers belong to Source/helper messages, never to a completed transport stream. */
 export function ResponseDisplay({ mode, ...props }: ResponseProps & { mode: ResponseDisplayMode }) {
+  useI18n();
   if (mode === 'stream') return <StreamingResponse {...props} />;
   if (active(props.taskStatus))
-    return <LoadingState presentation="placeholder" label="응답을 기다리고 있어요…" />;
+    return <LoadingState presentation="placeholder" label={t('reader.waitingForAResponse')} />;
   if (props.taskStatus === 'completed')
-    return <LoadingState presentation="placeholder" label="결과 불러오는 중…" />;
+    return <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />;
   return (
     <PartialResponse key={props.taskId}>
       <StreamingResponse {...props} settled />
@@ -51,6 +54,7 @@ export function StreamingResponse({
   visible = true,
   settled = false,
 }: ResponseProps & { settled?: boolean }) {
+  useI18n();
   const [chunks, setChunks] = useState<ResponseChunk[]>([]);
   const [status, setStatus] = useState('running');
   const [disconnected, setDisconnected] = useState(false);
@@ -205,8 +209,8 @@ export function StreamingResponse({
       return (
         <small role="status">
           {settled
-            ? '일부 응답을 불러오지 못했어요. 연결을 확인해 주세요.'
-            : '응답을 불러오지 못했어요. 연결을 확인해 주세요.'}
+            ? t('reader.couldNotLoadThePartialResponseCheckYourConnection')
+            : t('reader.couldNotLoadTheResponseCheckYourConnection')}
         </small>
       );
     if (!loaded)
@@ -215,16 +219,16 @@ export function StreamingResponse({
           presentation="placeholder"
           label={
             settled || (!active(taskStatus) && taskStatus !== 'completed')
-              ? '일부 응답을 불러오는 중…'
+              ? t('reader.loadingPartialResponse')
               : taskStatus === 'completed'
-                ? '결과 불러오는 중…'
-                : '응답을 기다리고 있어요…'
+                ? t('reader.loadingResult')
+                : t('reader.waitingForAResponse')
           }
         />
       );
     if (!settled && status === 'completed')
-      return <LoadingState presentation="placeholder" label="결과 불러오는 중…" />;
-    return settled ? <small role="status">표시할 일부 응답이 없어요.</small> : null;
+      return <LoadingState presentation="placeholder" label={t('reader.loadingResult')} />;
+    return settled ? <small role="status">{t('reader.noPartialResponseToShow')}</small> : null;
   }
   const parts = new Map<string, string>();
   for (const chunk of chunks) {
@@ -234,19 +238,19 @@ export function StreamingResponse({
   return (
     <div
       className="streaming-response"
-      aria-label={settled ? '일부 응답' : '생성 중인 응답'}
+      aria-label={settled ? t('reader.partialResponse') : t('reader.responseBeingGenerated')}
       data-status={status}
     >
       <small>
         {disconnected
-          ? '연결을 확인하고 있어요 · 받은 내용은 유지해요'
+          ? t('reader.checkingConnectionReceivedTextIsPreserved')
           : settled
-            ? '받은 응답 일부'
+            ? t('reader.partialResponseReceived')
             : status === 'running'
-              ? '작성 중…'
+              ? t('reader.writing')
               : status === 'completed'
-                ? '받은 응답'
-                : '받은 응답 일부'}
+                ? t('reader.receivedResponse')
+                : t('reader.partialResponseReceived')}
       </small>
       {[...parts].map(([key, value]) => (
         <div className="streaming-text" key={key}>
