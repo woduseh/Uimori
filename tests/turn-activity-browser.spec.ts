@@ -212,8 +212,8 @@ for (const width of [320, MOBILE_WIDTH, 1440]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );
-    if (width === MOBILE_WIDTH)
-      await page.screenshot({ path: info.outputPath('expanded-scene-activity-mobile.png') });
+    if (width === MOBILE_WIDTH || width === 320)
+      await page.screenshot({ path: info.outputPath(`expanded-scene-activity-${width}.png`) });
     await summary.click();
     await expect(activity).not.toHaveAttribute('open');
     expect(state.writes).toEqual([]);
