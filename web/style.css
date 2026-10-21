@@ -657,10 +657,16 @@ input[type="checkbox"] {
   gap: 8px;
   margin: 0 0 8px;
   color: var(--muted);
+  container-type: inline-size;
 }
 .scene-header > .turn-activity {
   flex: 1 1 160px;
   margin: 0;
+}
+/* Keep the narrow status summary beside the view toggle while expanded diagnostics
+   occupy the full scene width, not just their flex item's width. */
+.scene-header > .turn-activity > .turn-activity-body {
+  width: 100cqw;
 }
 .scene-header > .turn-activity > summary,
 .scene-header-lead {
