@@ -181,6 +181,45 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   expect((await detail(request, seeded.chat.id)).runs).toEqual(seeded.runs);
 });
 
+for (const width of [320, MOBILE_WIDTH, 1440]) {
+  test(`TURNUI06 expanded scene activity fills the available header width at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const seeded = await seed(request);
+    await page.setViewportSize({ width, height: 900 });
+    const state = await harness(page, seeded.chat.id);
+    const scene = page.getByTestId('source').first();
+    const header = scene.locator('.scene-header');
+    const activity = header.getByTestId('turn-activity');
+    const summary = activity.locator(':scope > summary');
+    const tools = header.locator('.scene-header-tools');
+    await expect(activity).not.toHaveAttribute('open');
+    await expect(tools).toBeVisible();
+    await summary.click();
+    await expect(activity).toHaveAttribute('open', '');
+    const body = activity.locator(':scope > .turn-activity-body');
+    await expect(body).toBeVisible();
+    const headerBox = (await header.boundingBox())!;
+    const summaryBox = (await summary.boundingBox())!;
+    const bodyBox = (await body.boundingBox())!;
+    const toolsBox = (await tools.boundingBox())!;
+    expect(Math.abs(bodyBox.x - headerBox.x)).toBeLessThanOrEqual(2);
+    expect(Math.abs(bodyBox.width - headerBox.width)).toBeLessThanOrEqual(2);
+    expect(bodyBox.y).toBeGreaterThanOrEqual(summaryBox.y + summaryBox.height);
+    expect(toolsBox.x).toBeGreaterThanOrEqual(headerBox.x);
+    expect(toolsBox.x + toolsBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width + 2);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    if (width === MOBILE_WIDTH)
+      await page.screenshot({ path: info.outputPath('expanded-scene-activity-mobile.png') });
+    await summary.click();
+    await expect(activity).not.toHaveAttribute('open');
+    expect(state.writes).toEqual([]);
+  });
+}
+
 for (const width of [MOBILE_WIDTH, 1440]) {
   test(`TURNUI05 completed task history keeps adjacent lazy diagnostics and visible recovery states at ${width}px`, async ({
     page,
