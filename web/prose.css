@@ -55,3 +55,17 @@
   color: inherit;
   background: color-mix(in srgb, var(--accent) 24%, transparent);
 }
+
+/* Geometry markers preserve canonical anchors without breaking Markdown containers. */
+.reading-markdown {
+  position: relative;
+}
+.reading-block-anchor {
+  position: absolute;
+  inset-inline: 0;
+  pointer-events: none;
+  user-select: none;
+}
+.reading-markdown-content {
+  display: flow-root;
+}

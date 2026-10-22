@@ -6,6 +6,7 @@ await runBrowserVerification({
   files: [
     'tests/ui-browser.spec.ts',
     'tests/reading-browser.spec.ts',
+    'tests/reading-markdown-browser.spec.ts',
     'tests/motion-browser.spec.ts',
     'tests/settings-dialog-consistency-browser.spec.ts',
   ],

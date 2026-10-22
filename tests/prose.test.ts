@@ -8,7 +8,16 @@ import { splitSource } from '../core/auxiliary.js';
 import { webCitationLinks } from '../core/helper-web-search.js';
 import type { Job, Source } from '../core/types.js';
 
-const render = (text: string) => renderToStaticMarkup(createElement(Prose, { text }));
+// Compare semantic HTML independently of app-owned provenance/geometry and host wrappers.
+const render = (text: string) =>
+  renderToStaticMarkup(createElement(Prose, { text }))
+    .replace(
+      /^<div class="reading-markdown"><div class="reading-markdown-content">|<\/div><\/div>$/gu,
+      ''
+    )
+    .replace(/ data-(?:prose-start|prose-end|uimori-prose)="[^"]*"/gu, '')
+    .replace(/<span(?: data-reading-literal)?(?:="")?>|<\/span>/gu, '')
+    .replace(/>\n(?=<(?:li|\/ul|\/ol))/gu, '>');
 
 describe('safe prose rendering', () => {
   test('renders provider search citations as safe clickable links, including URL parentheses', () => {
@@ -46,7 +55,7 @@ describe('safe prose rendering', () => {
     expect(html).toContain('<h1>실제 원고 제목</h1>');
     expect(html).toContain('<strong>강조</strong>');
     expect(html).toContain('<em>기울임</em>');
-    expect(html).toContain('<br/>');
+    expect(html).toContain('<br>');
     expect(html).toContain('<blockquote>');
     expect(html).toContain('<ul><li>하나</li><li>둘</li></ul>');
     expect(html).toContain('<ol start="3"><li>셋</li><li>넷</li></ol>');
@@ -115,7 +124,7 @@ describe('safe prose rendering', () => {
       '<s>obsolete</s>',
     ])
       expect(html).toContain(fragment);
-    expect(html).toContain('<br/>next<br/>line');
+    expect(html).toContain('<br>next<br>line');
     const unsafe = render(
       '<mark onclick="alert(1)">unsafe</mark> ' +
         '<ruby style="color:red">危険<rt>きけん</rt></ruby> ' +
@@ -135,7 +144,7 @@ describe('safe prose rendering', () => {
       '```json\n{"assetRef":"harbor_01","mode":"READY"}\n\n<script>literal</script>\n```\n\n`**literal**` {{**user**}} [[p_ab12_1]] asset:harbor_01 SOME_ENUM'
     );
     expect(html).toContain(
-      '<pre><code>{&quot;assetRef&quot;:&quot;harbor_01&quot;,&quot;mode&quot;:&quot;READY&quot;}\n\n&lt;script&gt;literal&lt;/script&gt;</code></pre>'
+      '<pre><code>{&quot;assetRef&quot;:&quot;harbor_01&quot;,&quot;mode&quot;:&quot;READY&quot;}\n\n&lt;script&gt;literal&lt;/script&gt;\n</code></pre>'
     );
     expect(html).toContain('<code>**literal**</code>');
     expect(html).toContain('{{**user**}} [[p_ab12_1]] asset:harbor_01 SOME_ENUM');
@@ -145,7 +154,7 @@ describe('safe prose rendering', () => {
   test('preserves long unfinished templates after a completed token without swallowing later Markdown', () => {
     const unfinished = '{{'.repeat(40_000);
     expect(render(`{{**user**}} ${unfinished} **서술** [[p_ab12_1]]`)).toBe(
-      `<p>{{**user**}} ${unfinished} <strong>서술</strong> [[p_ab12_1]]</p>\n\n`
+      `<p>{{**user**}} ${unfinished} <strong>서술</strong> [[p_ab12_1]]</p>\n`
     );
   });
 
@@ -161,11 +170,11 @@ describe('safe prose rendering', () => {
   test('preserves pathological unfinished code and tags without repeated suffix searches', () => {
     const ticks = '`'.repeat(40_000);
     expect(render(`prefix ${ticks} **next**`)).toBe(
-      `<p>prefix ${ticks} <strong>next</strong></p>\n\n`
+      `<p>prefix ${ticks} <strong>next</strong></p>\n`
     );
     const tags = '<script'.repeat(20_000);
     expect(render(`${tags} **next**`)).toBe(
-      `<p>${tags.replaceAll('<', '&lt;')} <strong>next</strong></p>\n\n`
+      `<p>${tags.replaceAll('<', '&lt;')} <strong>next</strong></p>\n`
     );
   });
 
@@ -251,7 +260,7 @@ test('reader defaults to whole Korean translation without inferred anchors or co
   );
   expect(html).toContain('data-testid="translation-text"');
   expect(html).not.toContain('data-block-anchor=');
-  expect(html).toContain('<h2>한국어 번역</h2>');
+  expect(html).toMatch(/<h2\b[^>]*>한국어 번역<\/h2>/u);
   expect(html).toContain('요청 원문');
   expect(html).not.toContain('data-testid="job-translation"');
   expect(source).toEqual(original);

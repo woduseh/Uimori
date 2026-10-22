@@ -26,6 +26,7 @@
 | Composer translation and request copying | `core/input-translation.ts`, `server/input-translation.ts`, `web/useInputTranslation.ts`, `web/InputTranslation.tsx`, `web/RequestMessage.tsx` | [Input translation](INPUT-TRANSLATION.md) |
 | Composer reference images and their lifetime | `core/request-images.ts`, `core/provider-image-reference.ts`, `core/provider-images.ts`, `server/request-images.ts`, `web/request-image-draft.ts`, `web/RequestImages.tsx` | [Usage](USAGE.md), [Execution](EXECUTION.md), [Chat backup](CHAT-BACKUP.md) |
 | Reader and application, delayed loading and retry | `web/useStory.ts`, `web/SourceReader.tsx`, `web/ReaderLoadingState.tsx`, `server/reader.ts`, `server/app.ts` | [Reading](READING.md), [UI principles](UI-PRINCIPLES.md) |
+| Completed Markdown, reading decoration and canonical display anchors | `core/reading-markdown.ts`, `web/Prose.tsx`, `web/PlainProse.tsx`, `web/reading-dom.ts`, `server/risu-reading-markdown.ts` | [Reading](READING.md) |
 | Shared save conflicts and recovery decisions | `web/SaveConflictDialog.tsx`, `web/resource-editor-session.ts`, `web/resource-editor.tsx`, `web/main.tsx` | [Editing](EDITING.md), [Usage](USAGE.md) |
 | All-chat activity inbox and receipts | `server/activity-feed.ts`, `web/useActivityFeed.ts`, `web/ActivityNavigation.tsx`, `web/BotTreeNavigation.tsx`, `web/ActivityStatus.tsx` | [PWA and activity notifications](PWA.md) |
 | Notices and execution feedback | `web/NoticeBanner.tsx`, `web/TransientNotice.tsx`, `web/DismissibleError.tsx` | [UI principles](UI-PRINCIPLES.md) |
