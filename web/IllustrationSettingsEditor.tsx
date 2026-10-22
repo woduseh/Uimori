@@ -287,7 +287,7 @@ function IllustrationEnvironmentEditor({
       <div className="settings-group-heading">
         <div>
           <h3>{t('visuals.m049')}</h3>
-          <p>{t('visuals.m050')}</p>
+          <p>{t('settings.sharedIllustrationEnvironment')}</p>
         </div>
       </div>
       <fieldset disabled={busy} className="illustration-environment-fields">

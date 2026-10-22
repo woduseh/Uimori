@@ -127,18 +127,14 @@ export function ContentPicker({
       <span className="content-picker-copy">
         <strong title={content.title}>{content.title}</strong>
         {content.description && <small>{content.description}</small>}
-        <small className="content-picker-meta">
-          {t(roleTitleKeys[libraryCategory(library, content)])}
-          {pinned ? t('library.currentSelectionV', { v0: content.revision }) : ''}
-        </small>
+        {(all || pinned) && (
+          <small className="content-picker-meta">
+            {all && t(roleTitleKeys[libraryCategory(library, content)])}
+            {pinned ? t('library.currentSelectionV', { v0: content.revision }) : ''}
+          </small>
+        )}
       </span>
-      {reference(content) === value ? (
-        <CheckIcon size={18} aria-hidden="true" />
-      ) : (
-        <span className="content-picker-action">
-          {t('library.useAs', { role: t(roleTitleKeys[role]) })}
-        </span>
-      )}
+      {reference(content) === value ? <CheckIcon size={18} aria-hidden="true" /> : null}
     </button>
   );
   return (
@@ -251,7 +247,7 @@ export function ContentPicker({
           </label>
         </div>
         <p className="muted content-picker-count" role="status">
-          {t('library.candidateCount', { count: candidates.length, role: t(roleTitleKeys[role]) })}
+          {t('library.candidateCount', { count: candidates.length })}
         </p>
         <div className="content-picker-results" ref={list} onKeyDown={moveFocus}>
           {allowNone && (

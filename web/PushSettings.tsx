@@ -192,7 +192,6 @@ export function PushSettings() {
       <div className="settings-service-row">
         <div className="settings-service-copy">
           <h4>{t('outside.pushTitle')}</h4>
-          <p className="muted">{t('outside.pushDescription')}</p>
           {available && (
             <small role="status">{enabled ? t('outside.deviceOn') : t('outside.deviceOff')}</small>
           )}

@@ -224,7 +224,7 @@ export async function captureGallery({
     try {
       const page = await context.newPage();
       await page.goto(baseUrl, { waitUntil: 'load' });
-      await page.locator('header.workspace-header').first().waitFor({ timeout: 10_000 });
+      await page.getByTestId('library-panel').waitFor({ timeout: 10_000 });
       for (const result of await styleInventory(page))
         metrics.push({
           screen: '*',

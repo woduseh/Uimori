@@ -393,7 +393,6 @@ export function AgentCollaborationEditor({
                     <small className="muted">{t('settings.m173')}</small>
                   )}
                 </div>
-                <small className="muted">{t('settings.m174')}</small>
               </section>
               <details className="ac-limits">
                 <summary>
@@ -485,7 +484,6 @@ export function AgentCollaborationEditor({
             <div className="ac-control-picker-heading">
               <div>
                 <h3>{t('settings.m169')}</h3>
-                <p className="muted">{t('settings.m185')}</p>
               </div>
               <span>{t('settings.flow10', { v0: collaboration.sharedControls.length })}</span>
             </div>
@@ -509,11 +507,7 @@ export function AgentCollaborationEditor({
                   onChange={(event) => setSharedControl(control.id, event.target.checked)}
                 />
                 <strong>{control.label}</strong>
-                <small>
-                  {collaboration.sharedControls.includes(control.id)
-                    ? t('settings.m189')
-                    : control.description || ''}
-                </small>
+                {control.description && <small>{control.description}</small>}
               </label>
             ))}
             {!visibleControls.length &&

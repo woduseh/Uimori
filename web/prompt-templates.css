@@ -20,9 +20,6 @@
 .app-dialog.prompt-templates-dialog {
   --dialog-size: 640px;
 }
-.prompt-templates-description {
-  margin-top: 0;
-}
 .prompt-template-list {
   list-style: none;
   padding: 0;

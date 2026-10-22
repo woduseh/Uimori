@@ -302,14 +302,13 @@ function StoryGuideEditor({
           <p className="muted">{t('prompts.uiTheLatestWritingProceededWithoutABriefCheckThe')}</p>
         )}
       </section>
-      <div className="form-actions">
-        <p className="muted">{t('prompts.uiAskMoreAboutCanonOrCharactersInThisChat')}</p>
-        {onOpenHelper && (
+      {onOpenHelper && (
+        <div className="form-actions">
           <button type="button" className="secondary" onClick={onOpenHelper}>
             {t('prompts.uiAskHelper2')}
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {story && (
         <AuthorNotesEditor
           headRevision={headRevision}

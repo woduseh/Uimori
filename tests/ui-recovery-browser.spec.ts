@@ -423,7 +423,7 @@ for (const viewport of viewports) {
       await expect(variableKey).toHaveValue('');
       await variableKey.fill('short');
       await expect(save).toBeEnabled();
-      await definitions.getByLabel('입력 형식', { exact: true }).selectOption('textarea');
+      await definitions.getByLabel('채팅 입력 형식', { exact: true }).selectOption('textarea');
       await definitions.getByLabel('설명', { exact: true }).fill('이름을 여러 줄로 작성해요.');
       await definitions
         .getByLabel('소속 그룹', { exact: true })
@@ -569,10 +569,17 @@ for (const viewport of viewports) {
 
       await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
       const advancedNav = editor.getByRole('group', { name: '고급 설정 영역', exact: true });
-      for (const label of ['지침', '기본 변수·토글', '표시', '스크립트', '연결 모듈', '원문'])
+      for (const label of [
+        '추가 지침',
+        '변수 초기값·토글',
+        '배경 HTML·CSS',
+        'Lua · 트리거 · 정규식',
+        '연결 모듈',
+        '원문 JSON',
+      ])
         await expect(advancedNav.getByRole('button', { name: label, exact: true })).toBeVisible();
 
-      await advancedNav.getByRole('button', { name: '표시', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '배경 HTML·CSS', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-display-${viewport.name}.png`) });
 
@@ -623,7 +630,7 @@ for (const viewport of viewports) {
       page.off('pageerror', recordPageError);
       expect(moduleDialogErrors).toEqual([]);
 
-      await advancedNav.getByRole('button', { name: '스크립트', exact: true }).click();
+      await advancedNav.getByRole('button', { name: 'Lua · 트리거 · 정규식', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-scripts-${viewport.name}.png`) });
       await editor.getByLabel('트리거 이름', { exact: true }).fill('Edited arrival trigger');
@@ -637,9 +644,9 @@ for (const viewport of viewports) {
       expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
         bot.revision
       );
-      await advancedNav.getByRole('button', { name: '표시', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '배경 HTML·CSS', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
-      await advancedNav.getByRole('button', { name: '스크립트', exact: true }).click();
+      await advancedNav.getByRole('button', { name: 'Lua · 트리거 · 정규식', exact: true }).click();
       await expect(triggerRaw).toHaveValue(pendingTriggerRaw);
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
       await editor.getByText('정규식 스크립트', { exact: true }).click();
@@ -653,7 +660,7 @@ for (const viewport of viewports) {
       await page.screenshot({ path: info.outputPath(`bot-advanced-regex-${viewport.name}.png`) });
 
       // An unapplied source document remains byte-for-byte intact while visiting other advanced panes.
-      await advancedNav.getByRole('button', { name: '원문', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '원문 JSON', exact: true }).click();
       const raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
       const pendingRaw = '{"unfinished":';
       await raw.fill(pendingRaw);
@@ -662,9 +669,9 @@ for (const viewport of viewports) {
       expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
         bot.revision
       );
-      await advancedNav.getByRole('button', { name: '표시', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '배경 HTML·CSS', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
-      await advancedNav.getByRole('button', { name: '원문', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '원문 JSON', exact: true }).click();
       await expect(raw).toHaveValue(pendingRaw);
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
       await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();

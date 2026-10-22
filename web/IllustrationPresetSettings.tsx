@@ -363,7 +363,6 @@ export function IllustrationPresetSettings({
         <div className="illustration-preset-heading">
           <div>
             <h3>{t('visualpanels.illustrationPresets')}</h3>
-            <p>{t('visualpanels.chooseAGeneratorAndIllustrationInstructionsTogether')}</p>
           </div>
           <div className="illustration-preset-list-actions">
             <button
@@ -661,13 +660,15 @@ export function IllustrationPresetSettings({
                     {t('visualpanels.comfyuiSettings')}{' '}
                     <small>
                       {draft.model.comfyui.workflow.trim()
-                        ? t('visualpanels.workflowPresent')
+                        ? t('settings.workflowEntered')
                         : t('visualpanels.noWorkflow')}
                     </small>
                   </summary>
                   <fieldset className="control-grid">
                     <small className="full">
-                      {t('visualpanels.codexDoesNotUseTheseSettingsWorkflow')}
+                      {draft.model.generator === 'comfyui'
+                        ? t('settings.workflowCompatibility')
+                        : t('visualpanels.codexDoesNotUseTheseSettingsWorkflow')}
                     </small>
                     <label className="full">
                       {t('visualpanels.additionalNegativeGuidance')}{' '}

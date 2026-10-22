@@ -821,15 +821,6 @@ export function LibraryPanel({
               icon={BackIcon}
               onClick={() => navigate(tab, true)}
             />
-            <div className="library-detail-title">
-              <h2>{detail.title}</h2>
-              <small>
-                {organizedLibrary
-                  ? t(contentLabelKeys[libraryCategory(organizedLibrary, detail)])
-                  : t(contentLabelKeys[detail.kind])}
-                {detailFolder ? ` · ${detailFolder}` : ''}
-              </small>
-            </div>
             <div className="library-detail-actions">
               <button
                 type="button"
@@ -897,7 +888,13 @@ export function LibraryPanel({
             <ContentAvatar content={detail} className="library-preview-avatar" />
             <div>
               <h2>{detail.title}</h2>
-              <p>{detail.description || t('library.noIntroductionYet')}</p>
+              <small>
+                {organizedLibrary
+                  ? t(contentLabelKeys[libraryCategory(organizedLibrary, detail)])
+                  : t(contentLabelKeys[detail.kind])}
+                {detailFolder ? ` · ${detailFolder}` : ''}
+              </small>
+              {detail.description && <p>{detail.description}</p>}
             </div>
           </div>
           <div className="library-use-actions">
@@ -1232,7 +1229,7 @@ export function LibraryPanel({
                       <ContentAvatar content={item} className="library-item-avatar" />
                       <span className="library-item-copy">
                         <strong title={item.title}>{item.title}</strong>
-                        <span>{item.description || t('library.noIntroductionYet')}</span>
+                        {item.description && <span>{item.description}</span>}
                         {!!query.trim() && folder === 'all' && (
                           <small className="library-result-folder">
                             {folders.find(
@@ -1275,18 +1272,11 @@ export function LibraryPanel({
                               ? t('library.noUncategorizedResources')
                               : t('library.createANew', { v0: t(contentLabelKeys[tab]) })}
                       </h2>
-                      {!query && (
+                      {!query && categoryItems.length === 0 && (
                         <p className="library-role-guide">
                           {t(contentGuidance[tab].descriptionKey)}
                         </p>
                       )}
-                      <p>
-                        {query
-                          ? t('library.tryAnotherNameOrDescription')
-                          : folder !== 'all'
-                            ? t('library.createAResourceOrMoveOneFrom')
-                            : t(contentGuidance[tab].exampleKey)}
-                      </p>
                       <div className="library-empty-actions">
                         {query && (
                           <button type="button" className="secondary" onClick={() => setQuery('')}>

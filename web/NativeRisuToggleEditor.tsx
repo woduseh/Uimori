@@ -147,6 +147,19 @@ export function NativeRisuToggleEditor({
     ...doc.groups.filter((group) => group.id === -1),
   ];
   const current = groups.find((group) => group.id === groupId) ?? groups[0]!;
+  const matchesSearch = (item: (typeof current.items)[number]) =>
+    !!item.raw.trim() &&
+    (!query.trim() ||
+      [
+        item.definition?.label,
+        item.definition?.key,
+        item.definition?.options,
+        item.caption,
+        item.raw,
+      ]
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(query.trim().toLocaleLowerCase()));
   const firstInvalid = Object.keys(invalid)[0];
   useEffect(() => {
     if (!firstInvalid) return;
@@ -323,13 +336,11 @@ export function NativeRisuToggleEditor({
                   </option>
                 ))}
               </select>
-              <small>{t('native.text_d2e4ee054a')}</small>
             </label>
             {definition.type === 'select' && (
               <div className="nt-options">
                 <div className="nt-options-heading">
-                  <span>{t('native.text_2c3f2eb17b')}</span>
-                  <small>{t('native.text_40873a17cd')}</small>
+                  <span>{t('native.storedValueAndOption')}</span>
                 </div>
                 {options.map((option, index) => (
                   <div className="nt-option" key={index}>
@@ -587,8 +598,7 @@ export function NativeRisuToggleEditor({
       <div className="nt-variables">
         <div className="nt-heading">
           <div>
-            <h3>{t('native.text_0510e453e9')}</h3>
-            <p>{t('native.text_37c7f984ba')}</p>
+            <h3>{t('native.newChatDefaultVariables')}</h3>
           </div>
           <button
             type="button"
@@ -713,7 +723,12 @@ export function NativeRisuToggleEditor({
                 </h3>
                 <p>
                   {query && mode === 'edit'
-                    ? t('native.text_03517ebd55')
+                    ? t('native.searchResultCount', {
+                        count: groups.reduce(
+                          (total, group) => total + group.items.filter(matchesSearch).length,
+                          0
+                        ),
+                      })
                     : t('native.groupCounts', {
                         settings: count(current),
                         dividers: current.items.filter(
@@ -833,23 +848,7 @@ export function NativeRisuToggleEditor({
               (query.trim() ? groups : [current]).map((group) => (
                 <div key={group.id}>
                   {query && <h4>{group.id === -1 ? t('native.ungrouped') : group.name}</h4>}
-                  {group.items
-                    .filter(
-                      (item) =>
-                        item.raw.trim() &&
-                        (!query.trim() ||
-                          [
-                            item.definition?.label,
-                            item.definition?.key,
-                            item.definition?.options,
-                            item.caption,
-                            item.raw,
-                          ]
-                            .join(' ')
-                            .toLocaleLowerCase()
-                            .includes(query.trim().toLocaleLowerCase()))
-                    )
-                    .map((item) => itemRow(item, group.id))}
+                  {group.items.filter(matchesSearch).map((item) => itemRow(item, group.id))}
                 </div>
               ))
             )}

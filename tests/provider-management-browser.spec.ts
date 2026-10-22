@@ -1623,7 +1623,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(subscription).toContainText('ChatGPT Plus');
   await expect(subscription).toContainText('5시간 사용량');
   await expect(subscription).toContainText('75% 남음');
-  await expect(subscription).toContainText('25% 사용');
+  await expect(subscription).toContainText('초기화');
   await expect(subscription).toContainText('61,842 크레딧');
   await expect(panel.getByRole('list', { name: 'Codex 연결 단계' })).toHaveCount(0);
   if (visualReview)

@@ -190,13 +190,6 @@
   gap: 4px;
   color: var(--accent);
 }
-.outline-navigation-foot {
-  margin: 0;
-  padding: 12px 18px;
-  font-size: 11px;
-  color: var(--muted);
-  border-top: 1px solid var(--line);
-}
 .outline-detail {
   min-width: 0;
   overflow: auto;
@@ -379,9 +372,17 @@
   gap: 12px;
 }
 .outline-field-help {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.7;
-  margin-top: -12px;
+  color: var(--muted);
+}
+.outline-field-help > summary {
+  min-height: var(--control-h);
+  padding-block: 10px;
+  cursor: pointer;
+}
+.outline-field-help > p {
+  margin: 0 0 12px;
 }
 .outline-form-actions {
   display: flex;
@@ -422,8 +423,7 @@
   margin: 3px 0 0;
   flex-shrink: 0;
 }
-.outline-reference-picker small,
-.outline-keep small {
+.outline-reference-picker small {
   display: block;
   font-size: 11px;
   color: var(--muted);
@@ -534,23 +534,6 @@
   justify-content: center;
   gap: 9px;
   margin: 25px 0;
-}
-.outline-example {
-  margin-top: 14px;
-  max-width: 420px;
-  text-align: left;
-  border-left: 2px solid var(--line);
-  padding: 3px 0 3px 16px;
-  color: var(--muted);
-}
-.outline-example span {
-  font-size: 12px;
-  letter-spacing: 0.04em;
-}
-.outline-example p {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.8;
 }
 .outline-workspace-footer {
   display: flex;

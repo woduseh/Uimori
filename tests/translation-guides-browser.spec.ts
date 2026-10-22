@@ -83,7 +83,7 @@ for (const width of [1440, 412]) {
     await expect(page.getByLabel('표기 2 원문', { exact: true })).toHaveCount(0);
     // Raw source edits and GUI edits use exactly the same canonical field.
     await selectPackageSection(page, '고급 설정');
-    await page.getByRole('button', { name: '원문', exact: true }).click();
+    await page.getByRole('button', { name: '원문 JSON', exact: true }).click();
     await page.getByLabel('Risu 원문 편집 대상', { exact: true }).selectOption('card');
     const raw = page.getByLabel('Risu 원문 JSON', { exact: true });
     const card = JSON.parse(await raw.inputValue());

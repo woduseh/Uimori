@@ -364,8 +364,8 @@ test('SPUI02 lore reset is an unsaved form action and incomplete backup input ne
   await selectSettingsSection(page, '데이터 관리');
   const backup = page.getByRole('region', { name: '자동 백업', exact: true });
   const initial = await (await request.get('/api/backups')).json();
-  await backup.getByRole('switch', { name: '매일 자동 백업' }).check();
-  await expect(backup.getByLabel('백업 시간', { exact: true })).toBeVisible();
+  await backup.getByRole('switch', { name: '서버 자동 백업' }).check();
+  await expect(backup.getByLabel('백업 시각 · 한국 시간', { exact: true })).toBeVisible();
   await backup.getByLabel('성공본 보관 개수').fill('');
   await expect(backup.getByRole('button', { name: '백업 설정 저장' })).toBeDisabled();
   expect((await (await request.get('/api/backups')).json()).settings).toEqual(initial.settings);

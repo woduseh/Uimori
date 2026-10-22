@@ -279,16 +279,12 @@
   gap: 6px;
   justify-content: stretch;
   flex: none;
-  min-height: 60px;
+  min-height: var(--control-h);
   padding: 10px 14px;
   text-align: left;
   border: 0;
   background: transparent;
   white-space: normal;
-}
-.native-advanced-tabs > button small {
-  font-size: 12px;
-  color: var(--muted);
 }
 .native-advanced-tabs > button[aria-pressed="true"] {
   background: var(--accent-soft);
@@ -374,9 +370,6 @@
     border-bottom: 1px solid var(--line);
     padding: 12px 0;
     scrollbar-width: thin;
-  }
-  .native-advanced-workspace > .native-advanced-tabs > button small {
-    display: none;
   }
   .native-advanced-workspace > .native-advanced-tabs > button {
     justify-content: center;

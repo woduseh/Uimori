@@ -21,6 +21,10 @@ App-owned labels follow the independent [UI language](I18N.md). Allow translated
 
 In settings, place section titles above their panels and keep related controls in one group. Use one divider between rows, without extra lines at the start or end of a group. Keep selection cards and status summaries where they communicate a real choice or state. Give image selection its own row and group related effect sliders below it. Reversible settings such as enabling a provider or model apply immediately without a second confirmation step.
 
+Let titles, values and nearby actions explain the layout. Omit navigation subtitles that repeat a title, repeated scope lines, missing-description filler and empty-state instructions that repeat visible actions. Keep a single identity area in resource details. Search-empty states offer search recovery; first-use guidance belongs only to genuinely empty collections. Preserve authored descriptions, accessible names, application timing, cost, data preservation and recovery meaning. Place desktop-only panel settings together, and name a setting's actual effect rather than compensating for an ambiguous name with a paragraph.
+
+Creative options use one editor with a next-generation-only scope switch. Changing scope preserves edits and makes no write; saved one-off reservations remain visible with their own cancellation action. Saving fixed values and reserving one-off values stay distinct, including during conflicts or an uncertain response.
+
 Keep settings action groups aligned to the right below their content, and toggle names on the left with switches on the right. Repeated usage meters share the same column boundaries regardless of adjacent text length.
 
 Apply the same grouping to chat settings and helper settings. Picker dialogs own their filter layout; compact controls in the surrounding composer must not shrink or restyle the dialog's search and folder fields.

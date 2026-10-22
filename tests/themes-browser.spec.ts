@@ -41,7 +41,7 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   await expect(page.locator('.theme-advanced')).not.toHaveAttribute('open', '');
   const layout = page.getByRole('region', { name: '레이아웃', exact: true });
   const palette = page.getByRole('region', { name: '색상 팔레트', exact: true });
-  const background = page.getByRole('region', { name: '배경 이미지', exact: true });
+  const background = page.getByRole('region', { name: '본문 바깥 배경', exact: true });
   await expect(layout).toBeHidden();
   await expect(background).toBeHidden();
   await page.screenshot({ path: info.outputPath('theme-primary-mobile.png') });

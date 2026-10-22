@@ -1,4 +1,10 @@
 export const messages = {
+  'library.listPortrait': {
+    ko: '목록 대표 이미지',
+    en: 'Library portrait',
+    ja: '一覧の代表画像',
+    zh: '列表封面',
+  },
   'library.cloneWarnings': {
     ko: '{first}\n{second}',
     en: '{first}\n{second}',
@@ -1974,10 +1980,10 @@ export const messages = {
     zh: '添加用词',
   },
   'library.noTermsYetAddNamesOrOrganizations': {
-    ko: '아직 지정한 표기가 없어요. 인명이나 조직 이름처럼 일관되게 번역할 표현을 추가해 보세요.',
-    en: 'No terms yet. Add names or organizations that should be translated consistently.',
-    ja: '表記はまだありません。人名や組織名など、一貫して翻訳する表現を追加してください。',
-    zh: '尚无指定用词，请添加人名、组织名等需要一致翻译的表达。',
+    ko: '지정한 표기가 없어요.',
+    en: 'No terms yet.',
+    ja: '指定した表記はありません。',
+    zh: '尚无指定用词。',
   },
   'library.originalTerm': {
     ko: '원문 표기',
@@ -2190,10 +2196,10 @@ export const messages = {
     zh: '用作{role}',
   },
   'library.candidateCount': {
-    ko: '{count, number}개 자료 · {role}로 사용해요.',
-    en: '{count, plural, one {# resource} other {# resources}} · Use as {role}.',
-    ja: '{count, number}件の資料・{role}として使用します。',
-    zh: '{count, number}项资料 · 用作{role}。',
+    ko: '{count, number}개 자료',
+    en: '{count, plural, one {# resource} other {# resources}}',
+    ja: '{count, number}件の資料',
+    zh: '{count, number}项资料',
   },
   'library.moreResources': {
     ko: '자료 더 보기 ({visible, number} / {total, number})',
@@ -2226,10 +2232,10 @@ export const messages = {
     zh: '已删除图片{title}。',
   },
   'library.chatImageCount': {
-    ko: '채팅에 등록한 이미지 {count, number}개',
-    en: '{count, plural, one {# image registered in this chat} other {# images registered in this chat}}',
-    ja: 'チャットに登録した画像{count, number}件',
-    zh: '聊天中已添加{count, number}张图片',
+    ko: '이 채팅의 이미지 · {count, number}개',
+    en: 'Images in this chat · {count, number}',
+    ja: 'このチャットの画像 · {count, number}件',
+    zh: '此聊天的图片 · {count, number}张',
   },
   'library.imageMetadataHint': {
     ko: '이름과 설명은 JEV의 이미지 선택에 사용돼요. 본문이 포함된 용도는 자동 이미지 배치 후보가 돼요.{portrait, select, yes { 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.} other {}}',
@@ -2268,10 +2274,10 @@ export const messages = {
     zh: '用户备注与更正{imported, select, yes {·导入的记忆} other {}} {count, number}项',
   },
   'library.notesHint': {
-    ko: '이후 요청에서도 지킬 설정·지시나 정정을 남겨요. Risu 프롬프트 안의 배치용 작가 노트와는 별개예요. 원문과 요약은 별도로 보존해요.{imported, select, yes { 가져온 기억은 외부 자료의 기록으로 구분해요.} other {}}',
-    en: 'Record settings, instructions, or corrections for future requests. These are separate from author notes placed in Risu prompts. Originals and summaries are preserved separately.{imported, select, yes { Imported memories are identified as external records.} other {}}',
-    ja: '今後も守る設定・指示・訂正を残します。Risuプロンプト内の配置用作家ノートとは別です。原文と要約は別々に保持します。{imported, select, yes {インポートした記憶は外部資料の記録として区別します。} other {}}',
-    zh: '记录后续请求需要遵守的设定、指令或更正，与Risu提示词中的作者备注分开。原文与摘要分别保留。{imported, select, yes {导入的记忆会标记为外部资料记录。} other {}}',
+    ko: '이후 요청에 지시·정정으로 참고해요. 원문·요약, Risu 프롬프트의 배치용 작가 노트와는 별도로 보존돼요.',
+    en: 'Used as instructions or corrections in future requests. Kept separately from originals, summaries, and author notes placed in Risu prompts.',
+    ja: '今後のリクエストで指示・訂正として参照します。原文・要約やRisuプロンプト内の配置用作家ノートとは別に保持します。',
+    zh: '在后续请求中作为指令或更正参考，与原文、摘要及Risu提示词中的作者备注分别保留。',
   },
   'library.noteAttribution': {
     ko: '{imported, select, yes {가져온 기억: {origin} · } other {}}작성자: {author} · {linked, select, yes {원문에 연결된 메모} other {첫 장면 전 메모}}',

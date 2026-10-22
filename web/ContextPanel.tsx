@@ -216,7 +216,7 @@ export function ContextPanel({
       data-testid="context-panel"
     >
       <div className="context-heading">
-        <h4>{t('settings.m276')}</h4>
+        <h4>{t('reader.storySummary')}</h4>
         <button
           type="button"
           className="secondary"

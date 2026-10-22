@@ -789,7 +789,9 @@ export function PromptLibrary({
                     </span>
                     <span className="library-item-copy">
                       <strong>{item.title}</strong>
-                      <span>{t('prompts.rolePrompt', { role: item.role })}</span>
+                      <span>
+                        {item.role === 'main' ? t('prompts.uiWriting') : t('prompts.uiTranslation')}
+                      </span>
                     </span>
                   </button>
                   <LibraryItemMenu title={t('prompts.menuNamed', { name: item.title })}>
@@ -859,21 +861,27 @@ export function PromptLibrary({
             {!filtered.length && (
               <div className="library-empty">
                 <h2>{query ? t('prompts.uiNoMatchingPrompts') : t('prompts.uiNoPromptsYet')}</h2>
-                <p>{t('prompts.uiCreateInstructionsForWritingAndTranslation')}</p>
+                {query.trim() && (
+                  <button type="button" className="secondary" onClick={() => setQuery('')}>
+                    {t('prompts.clearSearch')}
+                  </button>
+                )}
                 {folder !== 'all' && (
                   <button type="button" className="secondary" onClick={() => setFolder('all')}>
                     {t('prompts.uiSearchAll')}
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="library-create"
-                  onClick={() =>
-                    changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
-                  }
-                >
-                  {t('prompts.uiNewPrompt')}
-                </button>
+                {!query.trim() && (
+                  <button
+                    type="button"
+                    className="library-create"
+                    onClick={() =>
+                      changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
+                    }
+                  >
+                    {t('prompts.uiNewPrompt')}
+                  </button>
+                )}
               </div>
             )}
           </div>

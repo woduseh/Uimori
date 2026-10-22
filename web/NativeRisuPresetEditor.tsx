@@ -262,40 +262,42 @@ export function NativeRisuPresetEditor({
                   {i + 1}. {text(block.name) || blockTypes[text(block.type)] || text(block.type)}
                 </strong>
                 <small>
-                  {blockRole(block)} · {blockTypes[text(block.type)] ?? text(block.type)}
+                  {blockRole(block)}
+                  {text(block.name) && ` · ${blockTypes[text(block.type)] ?? text(block.type)}`}
                 </small>
                 <span className="native-row-drag-handle" aria-hidden="true">
                   <DragHandleIcon size={16} />
                 </span>
               </button>
             ))}
-          {!items.length && <p className="muted">{t('native.text_df1793f88e')}</p>}
         </aside>
         <div className="native-item-detail">
-          <div className="native-mobile-picker">
-            <button type="button" disabled={index === 0} onClick={() => setSelected(index - 1)}>
-              {t('native.text_dc03452ea5')}
-            </button>
-            <select
-              aria-label={t('native.text_429c4628a8')}
-              value={index}
-              onChange={(e) => setSelected(Number(e.target.value))}
-            >
-              {items.map((block, i) => (
-                <option key={i} value={i}>
-                  {i + 1}. {text(block.name) || blockTypes[text(block.type)] || text(block.type)}
-                </option>
-              ))}
-            </select>
-            <button
-              type="button"
-              disabled={index >= items.length - 1}
-              onClick={() => setSelected(index + 1)}
-            >
-              {t('native.text_854c76f3bc')}
-            </button>
-            <IconButton label={t('native.text_454e043199')} icon={AddIcon} onClick={add} />
-          </div>
+          {!!items.length && (
+            <div className="native-mobile-picker">
+              <button type="button" disabled={index === 0} onClick={() => setSelected(index - 1)}>
+                {t('native.text_dc03452ea5')}
+              </button>
+              <select
+                aria-label={t('native.text_429c4628a8')}
+                value={index}
+                onChange={(e) => setSelected(Number(e.target.value))}
+              >
+                {items.map((block, i) => (
+                  <option key={i} value={i}>
+                    {i + 1}. {text(block.name) || blockTypes[text(block.type)] || text(block.type)}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={index >= items.length - 1}
+                onClick={() => setSelected(index + 1)}
+              >
+                {t('native.text_854c76f3bc')}
+              </button>
+              <IconButton label={t('native.text_454e043199')} icon={AddIcon} onClick={add} />
+            </div>
+          )}
           {entry ? (
             <>
               <div className="native-detail-heading">
@@ -488,7 +490,13 @@ export function NativeRisuPresetEditor({
               </details>
             </>
           ) : (
-            <p className="muted">{t('native.text_f470124b0d')}</p>
+            <div className="native-empty">
+              <strong>{t('native.noBlocks')}</strong>
+              <button type="button" onClick={add}>
+                <AddIcon size={18} aria-hidden="true" />
+                {t('native.text_454e043199')}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -503,7 +511,12 @@ export function NativeRisuPresetEditor({
             onChange={(key, value) => onValuesChange({ ...values, [key]: value })}
           />
         ) : (
-          <p className="muted">{t('native.text_b5607fffbc')}</p>
+          <div className="native-form-stack">
+            <p className="muted">{t('native.noToggles')}</p>
+            <button type="button" className="secondary" onClick={() => setSection('variables')}>
+              {t('native.openVariablesAndToggles')}
+            </button>
+          </div>
         )}
       </div>
       <div {...panel('variables')} className="native-section-body native-toggle-panel">

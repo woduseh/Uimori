@@ -264,11 +264,10 @@ export function LoreContextPolicyEditor({
         <div className="lore-context-heading settings-row settings-row-toggle">
           <div className="settings-row-copy">
             <span>{t('settings.m219')}</span>
-            <p className="muted">{t('settings.m220')}</p>
           </div>
           <div className="settings-row-control">
             <Switch
-              aria-label={t('settings.m221')}
+              aria-label={t('settings.m219')}
               checked={draft.enabled}
               onChange={(event) => change({ ...draft, enabled: event.target.checked })}
             />
@@ -331,7 +330,6 @@ export function LoreContextPolicyEditor({
           </div>
           <details className="lore-context-units">
             <summary>{t('settings.m230')}</summary>
-            <p className="muted">{t('settings.m231')}</p>
             <ul>
               {tokenFields().map((field) => (
                 <li key={field.key}>

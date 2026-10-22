@@ -2671,10 +2671,10 @@ export const messages = {
     zh: '费率和估算费用',
   },
   'providers.m500': {
-    ko: '호출 후 프로바이더가 보고한 토큰에 이 요금을 적용해 추정 비용을 계산해요. 단위는 USD / 100만 토큰이에요.',
-    en: 'After each call, estimated costs are calculated by applying these rates to provider-reported token usage. Rates are in USD per million tokens.',
-    ja: '呼び出し後、プロバイダー報告のトークン数にこの料金を適用して費用を推定します。単位はUSD / 100万トークンです。',
-    zh: '调用后，将此费率应用于提供商报告的 token 用量以估算费用。单位为 USD / 百万 token。',
+    ko: '호출 후 프로바이더가 보고한 토큰에 이 단가를 적용해 추정 비용을 계산해요.',
+    en: 'After each call, estimated costs are calculated by applying these rates to provider-reported token usage.',
+    ja: '呼び出し後、プロバイダー報告のトークン数にこの単価を適用して費用を推定します。',
+    zh: '调用后，将此费率应用于提供商报告的 token 用量以估算费用。',
   },
   'providers.m501': {
     ko: '참고용 추정 금액이며 실제 청구액과 다를 수 있어요. 내장 요금표는 제공하지 않으며, 연결한 프로바이더의 모델 목록에 요금이 없으면 직접 입력해요.',

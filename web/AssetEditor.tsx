@@ -267,7 +267,7 @@ export function AssetEditor({
   );
   return expanded ? (
     <section className="workspace-tools" aria-label={t('library.imagesForThisStory')}>
-      <p className="muted">{t('library.chatImageCount', { count: assets.length })}</p>
+      <h3>{t('library.chatImageCount', { count: assets.length })}</h3>
       <p className="muted">{t('library.editStoryImagesAttachedToBotsPersonas')}</p>
       {content}
     </section>

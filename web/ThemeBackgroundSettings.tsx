@@ -126,8 +126,10 @@ export function ThemeBackgroundSettings({
     <section className="theme-dimension" aria-labelledby="theme-background-heading">
       <div className="theme-dimension-heading">
         <div>
-          <h3 id="theme-background-heading">{t('visuals.m002')}</h3>
-          <p>{t('visuals.m003')}</p>
+          <h3 id="theme-background-heading">{t('settings.outerBackground')}</h3>
+          <small role="status">
+            {dirty ? t('settings.backgroundDraft') : t('settings.backgroundSaved')}
+          </small>
         </div>
         {scope !== 'global' && (
           <button
@@ -146,11 +148,11 @@ export function ThemeBackgroundSettings({
           style={backgroundStyle(draft)}
         />
       )}
+      {!draft.imageHash && <p className="theme-inherited">{t('settings.noBackground')}</p>}
       <fieldset className="theme-background-controls" disabled={disabled || busy || state.loading}>
         <label className="settings-row theme-background-file">
           <span className="settings-row-copy">
             <strong>{t('visuals.m007')}</strong>
-            {!draft.imageHash && <small>{t('visuals.m008')}</small>}
           </span>
           <input
             type="file"

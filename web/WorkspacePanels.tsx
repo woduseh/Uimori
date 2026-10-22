@@ -10,7 +10,6 @@ import { ChartNoAxesColumn, Palette, type LucideIcon } from 'lucide-react';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
 import type { ReactNode } from 'react';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
-import { Switch } from './BooleanControls.js';
 import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
 import { PromptWorkspaceEditor } from './PromptWorkspaceEditor.js';
 import { discardActiveEditor, ResourceEditorLeaveWarning } from './resource-editor.js';
@@ -651,25 +650,31 @@ export function AppSettingsPanel({
                             <option value="light">{t('chatsettings.m63')}</option>
                           </select>
                         </label>
-                        <label className="settings-row settings-row-toggle">
+                        <label className="settings-row">
                           <span className="settings-row-copy">
-                            <strong>{t('chatsettings.m64')}</strong>
+                            <strong>{t('settings.sendKey')}</strong>
                             <small>
-                              {enterSend ? t('chatsettings.m65') : t('chatsettings.m66')}
+                              {t('settings.newlineKey')}{' '}
+                              <kbd>{enterSend ? 'Shift + Enter' : 'Enter'}</kbd>
                             </small>
                           </span>
                           <span className="settings-row-control">
-                            <Switch
-                              aria-label={t('chatsettings.m64')}
-                              checked={enterSend}
-                              onChange={(event) => setEnterSend(event.target.checked)}
-                            />
+                            <select
+                              aria-label={t('settings.sendKey')}
+                              value={enterSend ? 'enter' : 'modifier'}
+                              onChange={(event) => setEnterSend(event.target.value === 'enter')}
+                            >
+                              <option value="enter">Enter</option>
+                              <option value="modifier">Ctrl / Cmd + Enter</option>
+                            </select>
                           </span>
                         </label>
+                      </div>
+                      <h4>{t('settings.desktopPanels')}</h4>
+                      <div className="settings-group-body">
                         <label className="settings-row">
                           <span className="settings-row-copy">
                             <strong>{t('chatsettings.m67')}</strong>
-                            <small>{t('chatsettings.m68')}</small>
                           </span>
                           <select
                             aria-label={t('chatsettings.m67')}
@@ -683,11 +688,11 @@ export function AppSettingsPanel({
                         </label>
                         <label className="settings-row">
                           <span className="settings-row-copy">
-                            <strong>{t('chatsettings.m72')}</strong>
-                            <small>{t('chatsettings.m73')}</small>
+                            <strong>{t('settings.utilityPanelWidth')}</strong>
+                            <small>{t('settings.panelOverlap')}</small>
                           </span>
                           <select
-                            aria-label={t('chatsettings.m72')}
+                            aria-label={t('settings.utilityPanelWidth')}
                             value={panelWidth}
                             onChange={(event) => setPanelWidth(Number(event.target.value))}
                           >

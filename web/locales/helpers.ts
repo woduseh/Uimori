@@ -1,4 +1,22 @@
 export const messages = {
+  'helpers.chatTitle': {
+    ko: '이 채팅 도우미',
+    en: 'Chat helper',
+    ja: 'このチャットのヘルパー',
+    zh: '此聊天助手',
+  },
+  'helpers.libraryTitle': {
+    ko: '서재 도우미',
+    en: 'Library helper',
+    ja: 'ライブラリのヘルパー',
+    zh: '资料库助手',
+  },
+  'helpers.sessionVoice': {
+    ko: '이 대화의 도우미 말투',
+    en: 'Helper voice for this conversation',
+    ja: 'この会話のヘルパーの話し方',
+    zh: '此会话的助手语气',
+  },
   'helpers.m002': {
     ko: '요청을 접수했어요 · 앞선 작업을 기다려요',
     en: 'Request received · Waiting for earlier tasks',

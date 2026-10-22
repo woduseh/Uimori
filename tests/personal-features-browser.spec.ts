@@ -182,7 +182,7 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '데이터 관리');
   const panel = page.getByRole('region', { name: '자동 백업', exact: true });
-  await expect(panel.getByLabel('매일 자동 백업')).not.toBeChecked();
+  await expect(panel.getByLabel('서버 자동 백업')).not.toBeChecked();
   const initial = (await (await request.get('/api/backups')).json()).settings;
   expect(
     (

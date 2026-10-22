@@ -2125,10 +2125,10 @@ export const messages = {
     zh: '{v0, number} 个模块',
   },
   'transfer.d029': {
-    ko: '{v0} 폴더에서 새 채팅을 시작해요.',
-    en: 'Start a new chat in the {v0} folder.',
-    ja: '{v0}フォルダーで新しいチャットを始めます。',
-    zh: '在 {v0} 文件夹中开始新聊天。',
+    ko: '채팅 폴더 · {v0}',
+    en: 'Chat folder · {v0}',
+    ja: 'チャットフォルダー · {v0}',
+    zh: '聊天文件夹 · {v0}',
   },
   'transfer.d030': {
     ko: '{v0} 선택 해제',

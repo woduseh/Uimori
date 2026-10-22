@@ -1130,6 +1130,10 @@ export function ConnectionEditor({
               <ConnectionIcon size={28} aria-hidden="true" />
               <h4>{t('providers.m78')}</h4>
               <p>{t('providers.m79')}</p>
+              <ol className="provider-steps" aria-label={t('providers.m83')}>
+                <li>{t('providers.m85')}</li>
+                <li>{t('providers.m86')}</li>
+              </ol>
               <button type="button" disabled={busy} onClick={newConnection}>
                 {t('providers.m72')}
                 <ForwardIcon size={18} aria-hidden="true" />
@@ -1187,7 +1191,6 @@ export function ConnectionEditor({
       {screen === 'providers' && (
         <section className="provider-selection" aria-label={t('providers.m87')}>
           <h4>{t('providers.m88')}</h4>
-          <p className="muted">{t('providers.m89')}</p>
           <div className="provider-template-grid">
             {PROVIDER_CHOICES.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
               <button

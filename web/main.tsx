@@ -825,7 +825,6 @@ function App() {
                   checked={sceneNavigatorEnabled}
                   onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
                 />
-                {t('main.m040')}
               </label>
             </div>
           </div>
@@ -1272,7 +1271,6 @@ function App() {
                     <div className="empty-state">
                       <BookOpen size={32} />
                       <h2>{t('main.m086')}</h2>
-                      <p className="muted">{t('main.m087')}</p>
                       <button onClick={() => newStory()}>{t('main.m004')}</button>
                       <button className="secondary" onClick={() => showLibrary()}>
                         {t('main.m088')}
