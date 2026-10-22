@@ -9,6 +9,7 @@ import {
 import type { RequestImage } from '../core/request-images.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { imageOwnerDisplayText } from '../core/image-placement.js';
+import { compileReadingMarkdown, projectReadingText } from '../core/reading-markdown.js';
 import { themeBodyScroll, readerLocation } from './theme-body-scroll.js';
 import { BookmarkButton } from './Bookmarks.js';
 import { captureReaderLocation } from './useReadingSync.js';
@@ -441,9 +442,13 @@ function SourceReaderContent({
     displayTranslation.result.sourceHash === source.hash
       ? displayTranslation.result
       : null;
-  const blocks = source.blocks?.length
-    ? source.blocks
-    : [{ anchor: 'full', index: 0, text: source.text, start: 0, end: source.text.length }];
+  const blocks = useMemo(
+    () =>
+      source.blocks?.length
+        ? source.blocks
+        : [{ anchor: 'full', index: 0, text: source.text, start: 0, end: source.text.length }],
+    [source.blocks, source.text]
+  );
   const imageTarget: ImageTarget | undefined =
     mode === 'original'
       ? { mode: 'original', textHash: source.hash }
@@ -503,7 +508,45 @@ function SourceReaderContent({
             .map((asset) => asset.url),
     [assets, imageOwner, source.chatId]
   );
-  const translationBlocks = displayTranslation?.translationLayout?.blocks ?? [];
+  const translationBlocks = useMemo(
+    () => displayTranslation?.translationLayout?.blocks ?? [],
+    [displayTranslation?.translationLayout?.blocks]
+  );
+  const nativeDisplay =
+    projected?.format === 'risu-html' &&
+    (mode === 'original' || (!!validTranslation && projected.translation?.html !== undefined));
+  const plainBlockDisplay =
+    !nativeDisplay &&
+    !(mode === 'original' ? projected?.original.changed : projected?.translation?.changed);
+  const plainProjection = useMemo(
+    () =>
+      !plainBlockDisplay
+        ? { text: '', blocks: [] }
+        : projectReadingText(
+            mode === 'original' ? source.text : translationText,
+            mode === 'original' ? blocks : translationBlocks,
+            (text) =>
+              imageOwnerDisplayText(text, { image: imageOwner, chatId: source.chatId }, assets)
+          ),
+    [
+      plainBlockDisplay,
+      mode,
+      source.text,
+      source.chatId,
+      translationText,
+      blocks,
+      translationBlocks,
+      imageOwner,
+      assets,
+    ]
+  );
+  const plainDocument = useMemo(
+    () =>
+      !plainBlockDisplay
+        ? { html: '', inlineAnchors: [] }
+        : compileReadingMarkdown(plainProjection.text, plainProjection.blocks, allowedImageUrls),
+    [plainBlockDisplay, plainProjection, allowedImageUrls]
+  );
   const displayedNative = mode === 'original' ? projected?.original : projected?.translation;
   const [nativeAnchors, setNativeAnchors] = useState<{ html?: string; anchors: string[] }>({
     anchors: [],
@@ -523,14 +566,13 @@ function SourceReaderContent({
       mode === 'translation' ? displayTranslation?.translationLayout?.textHash : undefined,
     anchors: (mode === 'original' ? blocks : translationBlocks).map((block) => block.anchor),
     canInline:
-      projected?.format === 'risu-html' ||
+      nativeDisplay ||
       !(mode === 'original' ? projected?.original.changed : projected?.translation?.changed),
-    inlineAnchors:
-      projected?.format === 'risu-html'
-        ? nativeAnchors.html === displayedNative?.html
-          ? nativeAnchors.anchors
-          : []
-        : undefined,
+    inlineAnchors: nativeDisplay
+      ? nativeAnchors.html === displayedNative?.html
+        ? nativeAnchors.anchors
+        : []
+      : plainDocument.inlineAnchors,
     defaultCollapsed: illustrationsCollapsed,
     refresh,
     onError: setActionError,
@@ -817,9 +859,7 @@ function SourceReaderContent({
             )}
             {hasPackages && !presentation ? (
               <LoadingState presentation="placeholder" label={t('reader.preparingTheBotView')} />
-            ) : projected?.format === 'risu-html' &&
-              (mode === 'original' ||
-                (validTranslation && projected.translation?.html !== undefined)) ? (
+            ) : nativeDisplay ? (
               <div
                 data-testid={mode === 'original' ? 'source-text' : 'translation-text'}
                 data-block-anchor={(mode === 'original' ? blocks : translationBlocks)
@@ -875,61 +915,44 @@ function SourceReaderContent({
               </div>
             ) : mode === 'original' ? (
               <div className="prose" data-testid="source-text">
-                {displayText(source.text.slice(0, blocks[0].start))}
-                {blocks.map((block, position) => (
-                  <Fragment key={block.anchor}>
-                    <div
-                      className="source-block"
-                      data-block-anchor={block.anchor}
-                      id={`block-${source.id}-${block.anchor}`}
-                    >
-                      <Prose
-                        allowedImageUrls={allowedImageUrls}
-                        text={displayText(
-                          source.text.slice(
-                            block.start,
-                            blocks[position + 1]?.start ?? source.text.length
-                          )
-                        )}
-                      />
-                    </div>
-                    {inline(block.anchor)}
-                    {illustrationLayout.inline(block.anchor)}
-                  </Fragment>
-                ))}
+                <Prose
+                  text={plainProjection.text}
+                  blocks={plainProjection.blocks}
+                  compiled={plainDocument}
+                  sourceId={source.id}
+                  allowedImageUrls={allowedImageUrls}
+                  afterBlock={(anchor) => (
+                    <>
+                      {inline(anchor)}
+                      {illustrationLayout.inline(anchor)}
+                    </>
+                  )}
+                />
+                {blocks
+                  .filter((block) => !plainDocument.inlineAnchors.includes(block.anchor))
+                  .map((block) => (
+                    <Fragment key={block.anchor}>{inline(block.anchor)}</Fragment>
+                  ))}
               </div>
             ) : validTranslation ? (
               <div className="prose translated" data-testid="translation-text">
-                {translationBlocks.length ? (
-                  <>
-                    {displayText(translationText.slice(0, translationBlocks[0].start))}
-                    {translationBlocks.map((block, position) => (
-                      <Fragment key={block.anchor}>
-                        <div className="source-block" data-block-anchor={block.anchor}>
-                          <Prose
-                            allowedImageUrls={allowedImageUrls}
-                            text={displayText(
-                              block.text +
-                                translationText.slice(
-                                  block.end,
-                                  translationBlocks[position + 1]?.start ?? translationText.length
-                                )
-                            )}
-                          />
-                        </div>
-                        {inline(block.anchor)}
-                        {illustrationLayout.inline(block.anchor)}
-                      </Fragment>
-                    ))}
-                  </>
-                ) : (
-                  <div className="source-block">
-                    <Prose
-                      text={displayText(translationText)}
-                      allowedImageUrls={allowedImageUrls}
-                    />
-                  </div>
-                )}
+                <Prose
+                  text={plainProjection.text}
+                  blocks={plainProjection.blocks}
+                  compiled={plainDocument}
+                  allowedImageUrls={allowedImageUrls}
+                  afterBlock={(anchor) => (
+                    <>
+                      {inline(anchor)}
+                      {illustrationLayout.inline(anchor)}
+                    </>
+                  )}
+                />
+                {translationBlocks
+                  .filter((block) => !plainDocument.inlineAnchors.includes(block.anchor))
+                  .map((block) => (
+                    <Fragment key={block.anchor}>{inline(block.anchor)}</Fragment>
+                  ))}
               </div>
             ) : (
               <div

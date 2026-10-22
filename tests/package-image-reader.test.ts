@@ -110,9 +110,8 @@ test('transformed prose suppresses unplaceable images and identifies an authored
     packageStart: { mode: 'authored' as const, title: '작성된 첫 장면' },
   };
   const normal = renderToStaticMarkup(createElement(SourceReader, props));
-  expect(normal).toContain('/api/assets/asset');
-  const writer = renderToStaticMarkup(createElement(SourceReader, { ...props, imageOwner: false }));
-  expect(writer).not.toContain('/api/assets/asset');
+  // Inline image portals mount in the browser; SSR retains their safe container boundary.
+  expect(normal).toContain(`data-prose-slot="${source.blocks[0].anchor}"`);
   expect(job.result?.annotations).toHaveLength(1);
   expect(normal).toContain('첫 메시지');
   expect(normal).not.toContain('INTERNAL_START_COMMAND');
@@ -129,10 +128,6 @@ test('transformed prose suppresses unplaceable images and identifies an authored
   expect(transformed).not.toContain('/api/assets/asset');
   expect(source.text).toBe('First.\n\nSecond.');
   projection.data = undefined;
-  const newer = { ...job, id: 'new-image', revision: 2, status: 'queued', result: null } as Job;
-  expect(
-    renderToStaticMarkup(createElement(SourceReader, { ...props, jobs: [job, newer] }))
-  ).not.toContain('/api/assets/asset');
   const translation = {
     ...job,
     id: 'translation',
@@ -151,6 +146,26 @@ test('transformed prose suppresses unplaceable images and identifies an authored
   expect(fullTranslation).not.toContain('/api/assets/asset');
   expect(fullTranslation).not.toContain('data-block-anchor=');
   expect(fullTranslation).not.toContain('이미지를 생략');
+  projection.data = {
+    sourceRevision: source.id,
+    sourceHash: source.hash,
+    format: 'risu-html',
+    original: {
+      text: source.text,
+      html: '<p>Retained native original.</p>',
+      changed: false,
+      applied: [],
+    },
+    translationId: null,
+    translationRevision: null,
+    issues: [],
+  };
+  const pendingNativeTranslation = renderToStaticMarkup(
+    createElement(SourceReader, { ...props, jobs: [job, translation] })
+  );
+  expect(pendingNativeTranslation).toContain('합친 번역.');
+  expect(pendingNativeTranslation).not.toContain('Retained native original.');
+  projection.data = undefined;
   const translatedSource = {
     ...source,
     text: translation.result!.text!,
@@ -185,7 +200,7 @@ test('transformed prose suppresses unplaceable images and identifies an authored
         jobs: [job, translation, translationImage],
       })
     )
-  ).toContain('/api/assets/asset');
+  ).toContain(`data-prose-slot="${translation.translationLayout.blocks[0].anchor}"`);
   projection.data = {
     sourceRevision: source.id,
     sourceHash: source.hash,

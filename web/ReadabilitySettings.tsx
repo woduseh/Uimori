@@ -1,6 +1,6 @@
 import { t, useI18n, translateMessage } from './i18n.js';
 import { Switch } from './BooleanControls.js';
-import { RisuMessageSurface } from './RisuMessageSurface.js';
+import { Prose } from './Prose.js';
 import {
   DEFAULT_READABILITY,
   QUOTE_PAIRS,
@@ -11,14 +11,7 @@ import './reading.css';
 import './settings-layout.css';
 
 const previewText =
-  '그녀는 문 앞에서 돌아섰다. “정말 같이 갈 거야?” 나는 고개를 끄덕였다. ‘이번에는 도망치지 않겠어.’\n\n「그럼 출발하자.」 그녀는 『별의 기록』을 가방에 넣었다.';
-const previewHtml = `<div class="risu-chat-text">${previewText
-  .split('\n\n')
-  .map(
-    (text) =>
-      `<p data-uimori-prose>${text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')}</p>`
-  )
-  .join('')}</div>`;
+  '그녀는 문 앞에서 돌아섰다. “<ruby>별빛<rt>星明かり</rt></ruby>을 따라 **같이** 갈 거야?” 나는 고개를 끄덕였다. ‘이번에는 도망치지 않겠어.’\n\n「그럼 출발하자.」 그녀는 『별의 기록』을 가방에 넣었다.';
 const preset = (name: string): ReadingStyle => ({
   ...DEFAULT_READABILITY,
   ...(name === 'dialogue' ? { emphasis: 'subtle', dialogueBreaks: true } : {}),
@@ -199,12 +192,7 @@ export function ReadabilitySettings({
         </header>
         <div className="reading-preview" aria-label={t('reader.readingStylePreview')}>
           <div className="prose" data-testid="reading-preview">
-            <RisuMessageSurface
-              html={previewHtml}
-              reading={value}
-              disabled
-              onAction={async () => {}}
-            />
+            <Prose text={previewText} reading={value} />
           </div>
         </div>
       </section>

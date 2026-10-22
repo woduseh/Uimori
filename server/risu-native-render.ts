@@ -1,5 +1,4 @@
-import MarkdownIt from 'markdown-it';
-import { markRisuReadingProse } from './risu-reading-markdown.js';
+import { createReadingMarkdown } from '../core/reading-markdown.js';
 import {
   nativeRisuAssetNames,
   nativeRisuBackground,
@@ -283,10 +282,7 @@ export function renderNativeRisuMessageInWorker(
       return replacement;
     }
   );
-  const md = new MarkdownIt({ html: true, breaks: true, linkify: false, typographer: false });
-  // Risu/PocketRisu allow indented authored HTML; only fenced blocks are Markdown code.
-  md.disable(['code']);
-  markRisuReadingProse(md);
+  const md = createReadingMarkdown('native');
   const environment = {};
   const tokens = md.parse(text, environment);
   if (beforeStyles === input.text && input.illustrationBlocks?.length) {

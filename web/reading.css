@@ -18,7 +18,7 @@
   background: var(--surface-raised);
   border: 1px solid var(--line);
 }
-.reading-preview .prose > p:last-of-type {
+.reading-preview .reading-markdown-content > p:last-of-type {
   margin-bottom: 0;
 }
 .reading-spacing {

@@ -807,11 +807,10 @@ input[type="checkbox"] {
 .prose rt {
   font-size: 0.6em;
 }
-.source-block {
-  display: block;
+.reading-block-anchor {
   scroll-margin-top: 24px;
 }
-.prose > .source-block:first-child > h1:first-child {
+.prose > .reading-markdown > .reading-markdown-content > h1:first-child {
   margin-top: 0;
 }
 .translation-placeholder {

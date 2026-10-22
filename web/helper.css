@@ -444,10 +444,12 @@
 }
 
 /* The docked helper reads as one conversation surface instead of stacked boxes. */
-.helper-prose > :first-child {
+.helper-prose > :first-child,
+.helper-prose > .reading-markdown > .reading-markdown-content > :first-child {
   margin-top: 0;
 }
-.helper-prose > :last-child {
+.helper-prose > :last-child,
+.helper-prose > .reading-markdown > .reading-markdown-content > :last-child {
   margin-bottom: 0;
 }
 .helper-prose p,

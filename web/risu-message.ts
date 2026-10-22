@@ -47,7 +47,10 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
   // Only the known Markdown containers between a marker and the message root are admitted.
   for (const node of template.content.querySelectorAll('[data-uimori-prose]')) {
     let parent = node.parentElement;
-    while (parent && ['BLOCKQUOTE', 'UL', 'OL', 'LI'].includes(parent.tagName))
+    while (
+      parent &&
+      ['BLOCKQUOTE', 'UL', 'OL', 'LI', 'TABLE', 'THEAD', 'TBODY', 'TR'].includes(parent.tagName)
+    )
       parent = parent.parentElement;
     if (!parent?.classList.contains('risu-chat-text')) node.removeAttribute('data-uimori-prose');
   }

@@ -3,8 +3,8 @@ import type { ReadabilitySettings } from './reading-preferences.js';
 
 const protectedElements =
   'a, code, pre, ruby, rt, rp, button, input, select, textarea, label, summary, ' +
-  'style, script, svg, math, [contenteditable], [risu-trigger], [risu-btn]';
-type TextPart = { node: Text; start: number; end: number };
+  'style, script, svg, math, [contenteditable], [risu-trigger], [risu-btn], [data-reading-literal]';
+type TextPart = { node: Text | Element; start: number; end: number };
 
 function paragraphText(paragraph: Element): { text: string; parts: TextPart[] } {
   const parts: TextPart[] = [];
@@ -20,16 +20,30 @@ function paragraphText(paragraph: Element): { text: string; parts: TextPart[] } 
           : value;
       parts.push({ node: node as Text, start, end: text.length });
     } else if (node instanceof Element) {
-      if (node.matches(protectedElements)) text += '\u0000';
+      if (
+        node.tagName === 'RUBY' &&
+        !node.attributes.length &&
+        [...node.querySelectorAll('*')].every(
+          (child) => ['RB', 'RT', 'RP'].includes(child.tagName) && !child.attributes.length
+        )
+      ) {
+        const start = text.length;
+        text += '\u0000';
+        parts.push({ node, start, end: text.length });
+      } else if (node.matches(protectedElements)) text += '\u0000';
       else if (node.tagName === 'BR') text += '\n';
       else for (const child of node.childNodes) visit(child);
     }
   };
   for (const child of paragraph.childNodes) visit(child);
   // Preserve offsets while keeping unresolved CBS, anchors and literal URLs out of pairing.
+  const mask = (value: string) => '\u0000'.repeat(value.length);
+  const templateEnd = text.lastIndexOf('}}') + 2;
+  if (templateEnd > 1)
+    text = text.slice(0, templateEnd).replace(/\{\{[\s\S]*?\}\}/gu, mask) + text.slice(templateEnd);
   text = text.replace(
-    /\{\{[\s\S]*?\}\}|\[\[p_[a-f0-9]+_\d+\]\]|(?:https?:\/\/|mailto:|www\.)[^\s<>“”‘’「」『』"]+/gu,
-    (value) => '\u0000'.repeat(value.length)
+    /\[\[p_[a-f0-9]+_\d+\]\]|(?:https?:\/\/|mailto:|www\.)[^\s<>“”‘’「」『』"]+/gu,
+    mask
   );
   return { text, parts };
 }
@@ -73,7 +87,11 @@ export function createReadingDecorator(content: HTMLElement) {
             const result = document.createDocumentFragment();
             const appendText = (from: number, to: number) => {
               if (to > from)
-                result.append(part.node.data.slice(from - part.start, to - part.start));
+                result.append(
+                  part.node instanceof Element
+                    ? part.node
+                    : part.node.data.slice(from - part.start, to - part.start)
+                );
             };
             let low = 0;
             let high = ranges.length;
@@ -111,8 +129,15 @@ export function createReadingDecorator(content: HTMLElement) {
             appendText(offset, end);
             return result;
           };
+          const placeholder = document.createTextNode('');
+          if (part.node instanceof Element) part.node.before(placeholder);
           const fragment = render(part.start, part.end, quotes);
-          if (changed) part.node.replaceWith(fragment);
+          if (changed) {
+            if (part.node instanceof Element) {
+              // The ruby was moved into the fragment. Put its wrapper at the old location.
+              placeholder.replaceWith(fragment);
+            } else part.node.replaceWith(fragment);
+          } else if (part.node instanceof Element) placeholder.replaceWith(fragment);
         }
       }
     },

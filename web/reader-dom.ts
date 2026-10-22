@@ -28,9 +28,12 @@ export function readingPositionElements(container: HTMLElement): HTMLElement[] {
   for (const block of container.querySelectorAll<HTMLElement>(
     '[data-block-anchor], .helper-message'
   )) {
-    const paragraphs = [...block.querySelectorAll('.risu-message-surface')].flatMap((host) => [
-      ...(host.shadowRoot?.querySelectorAll<HTMLElement>('[data-uimori-prose]') ?? []),
-    ]);
+    const paragraphs = [
+      ...block.querySelectorAll<HTMLElement>('.reading-markdown-content [data-uimori-prose]'),
+      ...[...block.querySelectorAll('.risu-message-surface')].flatMap((host) => [
+        ...(host.shadowRoot?.querySelectorAll<HTMLElement>('[data-uimori-prose]') ?? []),
+      ]),
+    ];
     elements.push(...(paragraphs.length ? paragraphs : [block]));
   }
   return elements;

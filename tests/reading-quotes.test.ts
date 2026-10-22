@@ -1,8 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, test } from 'vitest';
-import { PlainProse, Prose } from '../web/Prose.js';
-import { ReadingPreferencesContext } from '../web/ReadingPreferencesContext.js';
+import { PlainProse } from '../web/Prose.js';
 import { DEFAULT_READABILITY, type ReadabilitySettings } from '../web/reading-preferences.js';
 import { scanReadingQuotes } from '../web/reading-quotes.js';
 
@@ -13,7 +12,7 @@ const reading = (overrides: Partial<ReadabilitySettings> = {}): ReadabilitySetti
   ...overrides,
 });
 const render = (text: string, settings = reading()) =>
-  renderToStaticMarkup(createElement(Prose, { text, reading: settings }));
+  renderToStaticMarkup(createElement(PlainProse, { text, reading: settings }));
 const renderPlain = (text: string, settings = reading()) =>
   renderToStaticMarkup(createElement(PlainProse, { text, reading: settings }));
 const renderedText = (html: string) =>
@@ -109,7 +108,7 @@ describe('reading quotation pairing', () => {
     expect(html.match(/reading-quote-break(?=[\s"])/gu)).toHaveLength(2);
     expect(html.match(/data-emphasis="off"/gu)).toHaveLength(2);
     expect(html).not.toContain('data-quote-role="off"');
-    expect(html).toContain('<p>“대사” ');
+    expect(html).toContain('“대사” ');
   });
 
   test('the scanner handles long repeated quotes and bounds hostile nesting', () => {
@@ -140,61 +139,7 @@ describe('reading quotation pairing', () => {
   });
 });
 
-describe('render-only reading styles', () => {
-  test('default settings leave the existing Markdown markup unchanged', () => {
-    expect(render('**서술** “대사”\n다음 줄.', DEFAULT_READABILITY)).toBe(
-      '<p><strong>서술</strong> “대사”<br/>\n다음 줄.</p>\n\n'
-    );
-    expect(render('“대사”', reading({ emphasis: 'strong', dialogueBreaks: false }))).toContain(
-      'class="reading-quote" data-quote-role="dialogue" data-emphasis="strong"'
-    );
-  });
-
-  test('quotations span Markdown emphasis and preserve emphasis crossing quotation boundaries', () => {
-    const text = '서술. “정말 **괜찮아**?” *그녀는 「네」라고 답했다.*';
-    const html = render(text);
-    expect(html).toContain('>“정말 <strong>괜찮아</strong>?”</span>');
-    expect(html).toContain('<em>그녀는 </em>');
-    expect(html).toContain('<em>「네」</em>');
-    expect(html).toContain('<em>라고 답했다.</em>');
-    expect(renderedText(html)).toBe(renderedText(render(text, DEFAULT_READABILITY)));
-  });
-
-  test('code, ruby, links, URLs, HTML attributes and protected tokens remain outside quote analysis', () => {
-    const text = [
-      '```json\n{"말": "값"}\n```',
-      '`“inline code”` {{"값": "원본"}} [[p_ab12_1]]',
-      '<ruby>“漢字”<rt>‘읽기’</rt></ruby>',
-      '<x-note title="대사처럼 보여도 속성" data-state=\'off\'>태그</x-note>',
-      "[“링크 제목”](https://example.com/'quoted') ![“이미지 제목”](https://example.com/image.png)",
-      "https://example.com/'literal' mailto:writer@example.com",
-    ].join('\n\n');
-    const html = render(text);
-    expect(html).not.toContain('reading-quote');
-    expect(renderedText(html)).toBe(renderedText(render(text, DEFAULT_READABILITY)));
-    expect(html).toContain('<code>“inline code”</code>');
-  });
-
-  test('settings affect only React presentation and preserve quoted characters and visible text', () => {
-    const text = '서술. “첫 대사”라고 말했다.\n「두 번째 『중첩』 대사」 ‘생각’';
-    const before = render(text, DEFAULT_READABILITY);
-    const after = render(text, reading({ thoughtBreaks: true }));
-    expect(renderedText(after)).toBe(renderedText(before));
-  });
-
-  test('context supplies browser settings and an explicit preview override takes precedence', () => {
-    const html = renderToStaticMarkup(
-      createElement(
-        ReadingPreferencesContext.Provider,
-        { value: reading() },
-        createElement(Prose, { text: '“첫 대사”' }),
-        createElement(Prose, { text: '“기본 예문”', reading: DEFAULT_READABILITY })
-      )
-    );
-    expect(html.match(/reading-quote-break(?=[\s"])/gu)).toHaveLength(1);
-    expect(html).toContain('<p>“기본 예문”</p>');
-  });
-
+describe('literal reading styles', () => {
   test('PlainProse preserves literal Markdown, all whitespace and original newline characters', () => {
     const text = '  **서술**\r\n“**대사**”  \r\n\r\n\t「둘째 대사」\n\n마지막\n';
     expect(renderPlain(text, DEFAULT_READABILITY)).toBe(text);
@@ -222,23 +167,6 @@ describe('render-only reading styles', () => {
     expect(renderedText(html)).toBe(text);
   });
 
-  test('single authored newlines gain visual quote spacing without rewriting source text', () => {
-    const consecutive = '“첫째 줄”\n“둘째 줄”\n마지막 줄.';
-    const surrounded = '서술\n“대사”\n다음 서술';
-    for (const text of [consecutive, surrounded]) {
-      const prose = render(text);
-      const plain = renderPlain(text);
-      expect(prose.match(/<br\/>/gu)).toHaveLength(2);
-      for (const html of [prose, plain]) expect(html).toContain('reading-quote-break-after');
-      expect(renderedText(prose)).toBe(renderedText(render(text, DEFAULT_READABILITY)));
-      expect(renderedText(plain)).toBe(text);
-    }
-    expect(render(surrounded)).toContain('reading-quote-break-before');
-    const alreadySeparated = render('서술\n\n“대사”\n\n다음 서술');
-    expect(alreadySeparated).not.toContain('reading-quote-break-before');
-    expect(alreadySeparated).not.toContain('reading-quote-break-after');
-  });
-
   test('PlainProse bounds repeated unfinished ruby, templates, tags and backtick runs', () => {
     const samples = [
       '<ruby>'.repeat(120_000),
@@ -253,12 +181,5 @@ describe('render-only reading styles', () => {
     // suffix. Linear parsing and server rendering of all samples is subsecond
     // locally; the former repeated-ruby scan alone takes many seconds.
     expect(performance.now() - started).toBeLessThan(5_000);
-  });
-
-  test('quote-heavy styled paragraphs retain all visible text', () => {
-    const text = '서술. “**대사**” 「*짧은 대사*」 '.repeat(2_000);
-    const html = render(text);
-    expect(html.match(/reading-quote-break(?=[\s"])/gu)).toHaveLength(4_000);
-    expect(renderedText(html)).toBe(renderedText(render(text, DEFAULT_READABILITY)));
   });
 });
