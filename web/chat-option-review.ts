@@ -7,7 +7,8 @@ export function reviewChatOptionDraft(
   base: ChatOptionState,
   fixed: OptionValues,
   oneoff: OptionValues,
-  saved: ChatOptionState
+  saved: ChatOptionState,
+  fixedEditIds?: string[]
 ) {
   const oldControls = base.controls ?? promptControls(base.program);
   const controls = saved.controls ?? promptControls(saved.program);
@@ -44,8 +45,10 @@ export function reviewChatOptionDraft(
       target[id] = reconcilePromptValues([control!], { [id]: value }).values[id]!;
     }
   }
-  for (const id of new Set([...Object.keys(base.fixedValues), ...Object.keys(fixed)])) {
+  for (const id of fixedEditIds ??
+    new Set([...Object.keys(base.fixedValues), ...Object.keys(fixed)])) {
     if (
+      !fixedEditIds &&
       sameBinding &&
       Object.hasOwn(fixed, id) === Object.hasOwn(base.fixedValues, id) &&
       fixed[id] === base.fixedValues[id]
@@ -55,7 +58,7 @@ export function reviewChatOptionDraft(
       const previous = oldControls.find((control) => control.id === id);
       const control = controls.find((entry) => entry.id === id);
       if (sameOwner && previous && control && previous.type === control.type) delete nextFixed[id];
-      else if (Object.hasOwn(saved.fixedValues, id))
+      else if (fixedEditIds || Object.hasOwn(saved.fixedValues, id))
         discarded.push({
           scope: 'fixed',
           id,

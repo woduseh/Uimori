@@ -14,8 +14,16 @@ import type { ChatOptionState } from '../core/chat-options.js';
 import { api, ApiError } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { PromptOptionGroup } from './PromptOptionGroup.js';
+import { ToggleRow } from './ToggleRow.js';
+import { SaveButton } from './SaveButton.js';
+import {
+  editOptionDraft,
+  optionDraftValues,
+  reviewOptionDraft,
+  type OptionDraft,
+  type OptionScope,
+} from './chat-option-draft.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
-import { reviewChatOptionDraft } from './chat-option-review.js';
 
 type Values = Record<string, PromptValue>;
 type Props = {
@@ -43,8 +51,9 @@ export function ChatOptionSettings(props: Props) {
   useI18n();
   const [base, setBase] = useState<ChatOptionState | null>(null);
   const [latest, setLatest] = useState<ChatOptionState | null>(null);
-  const [fixed, setFixed] = useState<Values>({});
-  const [oneoff, setOneoff] = useState<Values>({});
+  const [draft, setDraft] = useState<OptionDraft>({});
+  const [scope, setScope] = useState<OptionScope>('fixed');
+  const { fixed, oneoff } = base ? optionDraftValues(base, draft) : { fixed: {}, oneoff: {} };
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -58,9 +67,11 @@ export function ChatOptionSettings(props: Props) {
     requestVersion = useRef(0),
     loadedPromptRevision = useRef(props.promptRevision);
   const fixedDirty = !!base && !sameValues(fixed, base.fixedValues);
-  const dirty = fixedDirty || Object.keys(oneoff).length > 0 || !!uncertain;
-  const current = useRef({ base, fixed, oneoff, dirty });
-  current.current = { base, fixed, oneoff, dirty };
+  const scopedDirty = scope === 'fixed' ? fixedDirty : Object.keys(oneoff).length > 0;
+  // An explicit one-off can equal the saved fixed value and still need preservation in fixed scope.
+  const dirty = Object.keys(draft).length > 0 || !!uncertain;
+  const current = useRef({ base, draft, dirty });
+  current.current = { base, draft, dirty };
   const path = `/chats/${encodeURIComponent(props.chatId)}/options`;
   const refresh = useCallback(async () => {
     if (lock.current) return;
@@ -74,7 +85,7 @@ export function ChatOptionSettings(props: Props) {
       setReadError('');
       if (!draft.base || !draft.dirty) {
         setBase(state);
-        setFixed(state.fixedValues);
+        setDraft({});
         setConflict(false);
       } else if (
         state.revision !== draft.base.revision ||
@@ -147,8 +158,7 @@ export function ChatOptionSettings(props: Props) {
       const accepted = await api<ChatOptionState>(operation.path, operation.body);
       setBase(accepted);
       setLatest(accepted);
-      if (operation.kind === 'fixed') setFixed(accepted.fixedValues);
-      if (operation.kind === 'oneoff') setOneoff({});
+      if (operation.kind !== 'cancel') setDraft({});
       setConflict(false);
       setUncertain(null);
       setMessage('');
@@ -220,17 +230,16 @@ export function ChatOptionSettings(props: Props) {
         title={t('chatsettings.m112')}
         onClose={() => setSaveConflict(false)}
         readSaved={async () => {
-          const draft = current.current;
+          const input = current.current;
           const value = await api<ChatOptionState>(path);
           const controls = value.controls ?? promptControls(value.program);
-          const review = reviewChatOptionDraft(draft.base!, draft.fixed, draft.oneoff, value);
+          const review = reviewOptionDraft(input.base!, input.draft, value);
           const adopt = (keepInput: boolean) => {
             requestVersion.current++;
             setLoading(false);
             setBase(value);
             setLatest(value);
-            setFixed(keepInput ? review.fixed : value.fixedValues);
-            setOneoff(keepInput ? review.oneoff : {});
+            setDraft(keepInput ? review.draft : {});
             setConflict(false);
             setError('');
             setReadError('');
@@ -239,12 +248,7 @@ export function ChatOptionSettings(props: Props) {
             setCompletion(keepInput ? '' : uiMessage('chatsettings.m114'));
           };
           return () => {
-            const displayReview = reviewChatOptionDraft(
-              draft.base!,
-              draft.fixed,
-              draft.oneoff,
-              value
-            );
+            const displayReview = reviewOptionDraft(input.base!, input.draft, value);
             return {
               content: (
                 <>
@@ -265,15 +269,12 @@ export function ChatOptionSettings(props: Props) {
                       <p>{t('chatsettings.m116')}</p>
                       {displayReview.discarded.map((item) => {
                         const control = (
-                          draft.base!.controls ?? promptControls(draft.base!.program)
+                          input.base!.controls ?? promptControls(input.base!.program)
                         ).find((entry) => entry.id === item.id);
                         return (
                           <div className="settings-row" key={item.scope + ':' + item.id}>
                             <span className="settings-row-copy">
-                              {item.scope === 'fixed'
-                                ? t('chatsettings.m117')
-                                : t('chatsettings.m118')}{' '}
-                              · {item.label}
+                              {item.label}
                               <small>{translateMessage(item.reason)}</small>
                             </span>
                             <span className="settings-row-control">
@@ -306,56 +307,44 @@ export function ChatOptionSettings(props: Props) {
         }}
       />
       <div className="chat-options-body chat-specific-options">
-        <section aria-label={t('chatsettings.m124')}>
-          <h3>{t('chatsettings.m117')}</h3>
-          <p className="muted">{t('chatsettings.m125')}</p>
-          <fieldset className="chat-options-fields" disabled={disabled}>
+        <fieldset className="chat-options-fields" disabled={disabled}>
+          <ToggleRow
+            label={t('chatsettings.m127')}
+            description={t(
+              scope === 'oneoff' ? 'chatsettings.oneoffScopeHelp' : 'chatsettings.fixedScopeHelp'
+            )}
+            checked={scope === 'oneoff'}
+            onChange={(checked) => setScope(checked ? 'oneoff' : 'fixed')}
+          />
+          <section aria-label={t('chatsettings.optionValues')}>
             <SelectiveValues
               program={base.program}
               definitions={base.controls}
-              inherited={base.globalValues}
-              values={fixed}
-              onChange={setFixed}
-              mode="fixed"
+              inherited={
+                scope === 'oneoff'
+                  ? { ...base.globalValues, ...base.fixedValues }
+                  : base.globalValues
+              }
+              values={scope === 'oneoff' ? oneoff : fixed}
+              fixedValues={base.fixedValues}
+              onChange={(values) =>
+                setDraft((previous) => editOptionDraft(base, previous, scope, values))
+              }
+              mode={scope}
             />
-            {(Object.keys(base.fixedValues).length > 0 || displayState.conflicts.length > 0) && (
+          </section>
+          {scope === 'fixed' &&
+            (Object.keys(base.fixedValues).length > 0 || displayState.conflicts.length > 0) && (
               <button
                 type="button"
-                className="secondary"
+                className="secondary chat-options-reset"
                 disabled={blocked}
                 onClick={() => submit('fixed', 'fixed', { binding: base.binding, values: {} })}
               >
                 {t('chatsettings.m126')}
               </button>
             )}
-          </fieldset>
-        </section>
-        <details className="chat-options-extra">
-          <summary>{t('chatsettings.m127')}</summary>
-          <p className="muted">{t('chatsettings.m128')}</p>
-          <fieldset className="chat-options-fields" disabled={disabled}>
-            <SelectiveValues
-              program={base.program}
-              definitions={base.controls}
-              inherited={{ ...base.globalValues, ...base.fixedValues }}
-              values={oneoff}
-              onChange={setOneoff}
-              mode="oneoff"
-            />
-            <button
-              type="button"
-              disabled={blocked || Object.keys(oneoff).length === 0}
-              onClick={() =>
-                submit('oneoff', 'oneoff', {
-                  binding: base.binding,
-                  values: oneoff,
-                })
-              }
-            >
-              {t('chatsettings.m129')}
-            </button>
-          </fieldset>
-        </details>
+        </fieldset>
         {displayState.pending.length > 0 && (
           <section aria-label={t('chatsettings.m130')} className="chat-options-pending">
             <h3>{t('chatsettings.m130')}</h3>
@@ -410,15 +399,22 @@ export function ChatOptionSettings(props: Props) {
         )}
       </div>
       <footer className="chat-options-footer">
-        <small>{dirty ? t('chatsettings.m136') : t('chatsettings.m137')}</small>
+        {dirty && <small>{t('chatsettings.m136')}</small>}
         <div>
-          <button
+          <SaveButton
             type="button"
-            disabled={!fixedDirty || disabled || loading}
-            onClick={() => submit('fixed', 'fixed', { binding: base.binding, values: fixed })}
-          >
-            {busy ? t('chatsettings.m138') : t('chatsettings.m139')}
-          </button>
+            className="primary"
+            label={t(scope === 'oneoff' ? 'chatsettings.m129' : 'chatsettings.m139')}
+            text={t(scope === 'oneoff' ? 'chatsettings.reserve' : 'shared.save')}
+            aria-busy={busy}
+            disabled={!scopedDirty || blocked}
+            onClick={() =>
+              submit(scope, scope, {
+                binding: base.binding,
+                values: scope === 'oneoff' ? oneoff : fixed,
+              })
+            }
+          />
         </div>
       </footer>
     </>
@@ -432,13 +428,11 @@ function getScopeWords() {
     fixed: {
       set: t('chatsettings.m140'),
       unset: t('chatsettings.m141'),
-      following: t('chatsettings.m142'),
       scoped: t('chatsettings.m143'),
     },
     oneoff: {
       set: t('chatsettings.m144'),
       unset: t('chatsettings.m145'),
-      following: t('chatsettings.m146'),
       scoped: t('chatsettings.m147'),
     },
   } as const;
@@ -458,6 +452,7 @@ function SelectiveValues({
   definitions = promptControls(program),
   inherited,
   values,
+  fixedValues,
   onChange,
   mode,
 }: {
@@ -465,6 +460,7 @@ function SelectiveValues({
   definitions?: PromptControl[];
   inherited: Values;
   values: Values;
+  fixedValues: Values;
   onChange: (values: Values) => void;
   mode: 'fixed' | 'oneoff';
 }) {
@@ -513,7 +509,13 @@ function SelectiveValues({
           </div>
         )}
         <div className="chat-option-scope" data-actionable={String(selected || !live)}>
-          <span className="chat-option-origin">{selected ? words.scoped : words.following}</span>
+          <span className="chat-option-origin">
+            {selected
+              ? words.scoped
+              : mode === 'oneoff' && Object.hasOwn(fixedValues, control.id)
+                ? t('chatsettings.m117')
+                : t('chatsettings.m142')}
+          </span>
           {(selected || !live) && (
             <button
               type="button"
@@ -544,7 +546,7 @@ function SelectiveValues({
         return (
           <PromptOptionGroup
             key={group}
-            identity={`chat:${mode}:${group}`}
+            identity={`chat:fixed:${group}`}
             className="chat-option-group"
             summary={
               <>

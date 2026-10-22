@@ -396,7 +396,7 @@ test('DECISION settings chat prompt option conflict review preserves local value
   await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
   const panel = page.locator('#chat-prompt-options');
   await panel
-    .locator('section[aria-label="이 채팅 고정 옵션"] .chat-option-group > summary')
+    .locator('section[aria-label="창작 옵션 값"] .chat-option-group > summary')
     .first()
     .click();
   await panel.getByRole('button', { name: '합성 문체 개별 지정', exact: true }).click();

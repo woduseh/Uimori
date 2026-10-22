@@ -64,9 +64,7 @@
 .chat-options-scope-panel[hidden] {
   display: none;
 }
-.chat-specific-options > section + details,
-.chat-specific-options > details + section,
-.chat-specific-options > details + details,
+.chat-specific-options > fieldset + section,
 .chat-specific-options > section + section {
   margin-top: 22px;
 }
@@ -83,13 +81,6 @@
 }
 .chat-specific-options button {
   white-space: normal;
-}
-.chat-options-extra {
-  border-top: 1px solid var(--line);
-  padding-top: 4px;
-}
-.chat-options-extra > summary {
-  font-weight: 600;
 }
 .chat-selective-values {
   display: grid;
@@ -221,6 +212,9 @@
   display: grid;
   gap: 18px;
 }
+.chat-options-reset {
+  justify-self: start;
+}
 .prompt-option-groups {
   display: grid;
   gap: 12px;
@@ -261,11 +255,10 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .chat-options-footer button {
-  flex: 1;
-  padding: 9px 7px;
-  font-size: 12px;
+  min-width: 110px;
 }
 @media (max-width: 760px) {
   .app-shell.options-open {
