@@ -59,7 +59,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:selfhost` | Independent HTTPS/authentication, cross-device SSE, and re-entry/session-revocation scenarios. Accepts `--grep` for diagnosis; a filtered run is not the full suite. |
 | `npm run verify:visual` | Full browser suite with extra viewport and layout checks; use `--grep` to focus it. |
 | `npm run verify:gallery` | Screen and journey captures; see [UI-GALLERY](UI-GALLERY.md). |
-| `npm run verify:copy` | Warning-only scan of static UI explanations; see [UI-GALLERY](UI-GALLERY.md#copy-review-warnings). No browser, provider calls, or build required. |
+| `npm run verify:copy` | Warning-only scan and JSON review inventory of literal i18n and JSX explanations; see [UI-GALLERY](UI-GALLERY.md#copy-review-warnings). No browser, provider calls, or build required. |
 | `npm run check:i18n` | ICU syntax, locale keys/arguments and missing translations; `-- --candidates` also lists static Korean and dynamic-call review candidates. See [UI language](I18N.md). |
 | `npm run verify:i18n` | Four UI languages, re-entry, reader recovery, retained editor state and model inputs, mobile/pseudo text, accessible names, manifest and restarted-worker synthetic push. Requires a matching build. |
 | `npm run benchmark:story` | Repeated long-story performance measurements. |

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { scanSource } from './check-ui-copy.mjs';
+import { scanDirectory, scanSource } from './check-ui-copy.mjs';
 
 const help = '입력한 설정은 다음 작업부터 적용하며 기존 기록은 바꾸지 않아요.';
 const long = '가'.repeat(98) + '😀나';
@@ -79,7 +79,6 @@ test('closed disclosures, user prose, status and control text are outside the co
     `<div dangerouslySetInnerHTML={{__html: manuscript}}>${paragraph}</div>`,
     `<div contentEditable>${paragraph}</div>`,
     `<div hidden>${paragraph}</div>`,
-    `<div hidden={hidden}>${paragraph}</div>`,
     `<div aria-hidden="true">${paragraph}</div>`,
     `<div className="sr-only">${paragraph}</div>`,
     `<div className="validation-message">${paragraph}</div>`,
@@ -188,6 +187,145 @@ test('CLI recursively reports SOURCE warnings with exit zero and syntax errors a
     assert.equal(failed.warnings.length, 1);
     assert.equal(failed.errors.length, 1);
     assert.equal(failed.errors[0].file, 'web/broken.tsx');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('resolved i18n explanations detect long, duplicate and repeated help, including small text inside labels', () => {
+  const messages = {
+    'screen.long': '설정의 적용 범위와 보존 정책을 안내합니다. '.repeat(7),
+    'screen.duplicate': help,
+    'screen.repeated': '모든 카드에 반복되는 설명이에요.',
+  };
+  const warnings = scanSource(
+    `const view = <main>
+    <section><p>{t('screen.duplicate')}</p><small>{t('screen.duplicate')}</small></section>
+    <p>{t('screen.long')}</p>
+    {rows.map(row => <label><strong>{row.title}</strong><small>{t('screen.repeated')}</small></label>)}
+  </main>;`,
+    'web/localized.tsx',
+    messages
+  );
+  assert.deepEqual(
+    warnings.map(({ line, rule, messageKeys, relatedLine }) => ({
+      line,
+      rule,
+      messageKeys,
+      relatedLine,
+    })),
+    [
+      { line: 2, rule: 'duplicate-help', messageKeys: ['screen.duplicate'], relatedLine: 2 },
+      { line: 3, rule: 'long-help', messageKeys: ['screen.long'], relatedLine: undefined },
+      {
+        line: 4,
+        rule: 'repeated-item-help',
+        messageKeys: ['screen.repeated'],
+        relatedLine: undefined,
+      },
+    ]
+  );
+});
+
+test('i18n placeholder comparisons work without evaluating runtime values', () => {
+  const messages = { 'screen.guide': help };
+  const warnings = scanSource(
+    `const view = <section>
+    <input placeholder={t('screen.guide')} />
+    <p>{t('screen.guide')} 세부 내용</p>
+  </section>;`,
+    'web/localized.tsx',
+    messages
+  );
+  assert.deepEqual(
+    warnings.map(({ rule, line, relatedLine }) => ({ rule, line, relatedLine })),
+    [{ rule: 'placeholder-help', line: 3, relatedLine: 2 }]
+  );
+});
+
+test('dynamic translations, ICU values and protected controls do not produce invented matches', () => {
+  const messages = {
+    'screen.long': long,
+    'screen.withArg': '{subject}에 적용해요. ' + '가'.repeat(100),
+  };
+  const text = `const view = <>
+    <p>{t(\`screen.level.\${level}\`)}</p>
+    <p>{t('screen.unknown')}</p>
+    <button><small>{t('screen.long')}</small></button>
+    <div role="status"><p>{t('screen.long')}</p></div>
+    <details><p>{t('screen.long')}</p></details>
+    <label><span>짧은 레이블</span><small>{t('screen.withArg', {subject: item.name})}</small></label>
+  </>;`;
+  assert.deepEqual(scanSource(text, 'web/sample.tsx', messages), []);
+});
+
+test('directory scan resolves actual locale dictionaries and reports review inventory', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-i18n-copy-'));
+  try {
+    mkdirSync(join(directory, 'web', 'locales'), { recursive: true });
+    writeFileSync(
+      join(directory, 'web', 'sample.tsx'),
+      "const view = <section><p>{t('sample.copy')}</p><small>{t('sample.copy')}</small></section>;"
+    );
+    writeFileSync(
+      join(directory, 'web', 'locales', 'sample.ts'),
+      `export const messages = { 'sample.copy': { ko: '${help}', en: '${help}', ja: '例', zh: '例' } };`
+    );
+    const result = scanDirectory(directory);
+    assert.equal(result.status, 'complete');
+    assert.equal(result.files, 1);
+    assert.equal(result.warnings.length, 1);
+    assert.equal(result.warnings[0].rule, 'duplicate-help');
+    assert.deepEqual(result.warnings[0].messageKeys, ['sample.copy']);
+    assert.equal(result.review.length, 2);
+    assert.equal(result.review[0].text, help);
+    writeFileSync(
+      join(directory, 'web', 'locales', 'sample.ts'),
+      "export const messages = { 'broken': "
+    );
+    const broken = scanDirectory(directory);
+    assert.equal(broken.status, 'incomplete');
+    assert.equal(broken.errors[0].file, 'web/locales/sample.ts');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('conditional tab panels are inspected while definitely hidden regions stay excluded', () => {
+  const warnings = scanSource(`const view = <>
+    <section hidden={active !== 'general'}><p>${long}</p></section>
+    <section hidden><p>${long}</p></section>
+    <section aria-hidden={minimized}><p>${long}</p></section>
+  </>;`);
+  assert.deepEqual(
+    warnings.map(({ line, rule }) => ({ line, rule })),
+    [
+      { line: 2, rule: 'long-help' },
+      { line: 4, rule: 'long-help' },
+    ]
+  );
+});
+
+test('conditional i18n variants appear in review but cannot be mistaken for duplicates', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-copy-variants-'));
+  try {
+    mkdirSync(join(directory, 'web', 'locales'), { recursive: true });
+    writeFileSync(
+      join(directory, 'web', 'example.tsx'),
+      "const view = <section hidden={selected !== 'general'}><label><small>{enabled ? t('copy.on') : t('copy.off')}</small></label></section>;"
+    );
+    writeFileSync(
+      join(directory, 'web', 'locales', 'messages.ts'),
+      "export const messages = { 'copy.on': {ko:'활성화하면 이후 요청에 적용돼요.'}, 'copy.off': {ko:'끄면 새 요청부터 비활성화돼요.'} } as const;"
+    );
+    const report = scanDirectory(directory);
+    assert.equal(report.status, 'complete');
+    assert.deepEqual(report.warnings, []);
+    assert.deepEqual(
+      report.review.map((copy) => copy.messageKeys),
+      [['copy.on'], ['copy.off']]
+    );
+    assert.ok(report.review.every((copy) => copy.conditional && !copy.static));
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
