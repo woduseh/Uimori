@@ -8,6 +8,8 @@ Use this path for source installations; see [SELF-HOST](SELF-HOST.md#저장과-�
 
 Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재-버전) before updating. Finish active generation and edits. Download the app's consistent SQLite snapshot, record the running app/image version, and preserve external Codex login files separately. Stop the server before switching code or restoring data. Do not use `reset:dev` or `docker compose down -v` to update an existing workspace.
 
+**v0.11.10 keeps SQLite schema 15.** It unifies completed Markdown reading semantics for original text, saved translations and helper messages while retaining native Risu scripts, card HTML/CSS, buttons and reader position. It also reduces duplicate UI guidance and consolidates chat option editing into an explicit fixed/one-off scope switch. No database conversion is required. Verify long-form reading, saved translation view and chat option overrides after updating.
+
 **v0.11.8 keeps schema 15 and adds a helper scene index, task-local data guide, and the editable Ui persona as the initial setting of new helper conversations. Existing helper conversation personas—including intentional blank values—stay unchanged.**
 
 **v0.11.5 keeps the same schema 15 used by v0.11.4 and earlier schema-15 releases since v0.4.0.** A workspace already on schema 15 can update in place after taking the normal backup. The v0.3.1 release used schema 12 and there is still no direct conversion from that format. Keep older databases with their matching application version. Do not change the schema number manually or substitute an empty database to get past a compatibility error.
@@ -16,13 +18,13 @@ The v0.11.5 patch adds a limited safe HTML typography subset for completed prose
 
 Finish queued or running evaluation Batch work under its original runtime before updating. Both retained evaluation modes now require a valid final submission, and the retired `source-bound` mode is disabled for new execution. The new runtime does not emulate the previous evaluation protocol.
 
-Use the published `v0.11.8` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
+Use the published `v0.11.10` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
 
 From a clean source checkout, with the existing server stopped:
 
 ```sh
 git fetch origin --tags
-git switch --detach v0.11.8
+git switch --detach v0.11.10
 npm ci
 npm run dev
 ```

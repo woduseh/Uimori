@@ -88,6 +88,8 @@ test('nested tight-list geometry includes the parent text before its child list'
 test('mounted SourceReader places approved original and translation images only for the current owner and target', async ({
   page,
 }) => {
+  // Six isolated mounts include Vite module transforms and asset loading.
+  test.setTimeout(90_000);
   const text = 'First.\n\nSecond.';
   const value = {
     id: 'image-source',
