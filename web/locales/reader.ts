@@ -1,4 +1,58 @@
 export const messages = {
+  'reader.storySummary': {
+    ko: '이야기 요약',
+    en: 'Story summary',
+    ja: '物語の要約',
+    zh: '故事摘要',
+  },
+  'reader.outlineContent.theme': {
+    ko: '작품의 정서와 방향',
+    en: 'Story tone and direction',
+    ja: '作品の情緒と方向性',
+    zh: '作品情绪与方向',
+  },
+  'reader.outlineContent.mainStory': {
+    ko: '이야기 전체의 흐름',
+    en: 'Overall story progression',
+    ja: '物語全体の流れ',
+    zh: '故事整体走向',
+  },
+  'reader.outlineContent.arc': {
+    ko: '주요 전환과 결과',
+    en: 'Major turns and consequences',
+    ja: '主な転換と結果',
+    zh: '主要转折与结果',
+  },
+  'reader.outlineContent.episode': {
+    ko: '이번 회차의 사건과 목적',
+    en: 'Episode events and goals',
+    ja: '今回の話の出来事と目的',
+    zh: '本章事件与目标',
+  },
+  'reader.outlineContent.beat': {
+    ko: '이어질 행동과 반응',
+    en: 'Next actions and reactions',
+    ja: '続く行動と反応',
+    zh: '接下来的行动与反应',
+  },
+  'reader.outlineWritingHelp': {
+    ko: '작성 도움말',
+    en: 'Writing guidance',
+    ja: '記入のヒント',
+    zh: '编写提示',
+  },
+  'reader.requestKeepOutlineCondition': {
+    ko: '상세화할 때 유지하도록 요청',
+    en: 'Ask the helper to preserve this when elaborating',
+    ja: '詳細化の際に維持するよう依頼',
+    zh: '请求在细化时保留',
+  },
+  'reader.noModelCall': {
+    ko: '모델 호출 없음',
+    en: 'No model call',
+    ja: 'モデル呼び出しなし',
+    zh: '不调用模型',
+  },
   'reader.koreanTranslation': {
     ko: '한국어 번역',
     en: 'Korean translation',
@@ -1434,16 +1488,16 @@ export const messages = {
     zh: '宽',
   },
   'reader.readingAids': {
-    ko: '보조 표시',
-    en: 'Reading aids',
-    ja: '補助表示',
-    zh: '辅助显示',
+    ko: '대사와 생각',
+    en: 'Dialogue and thoughts',
+    ja: '台詞と心の声',
+    zh: '对话与内心独白',
   },
   'reader.addParagraphSpacingAroundDialogueAndThoughtsTheOriginal': {
-    ko: '대사·생각 앞뒤에 문단 여백을 넣어요. 원문은 바뀌지 않아요.',
-    en: 'Add paragraph spacing around dialogue and thoughts. The original is unchanged.',
-    ja: '台詞や心の声の前後に段落余白を入れます。原文は変わりません。',
-    zh: '在对话和内心独白前后添加段落间距。原文不会改变。',
+    ko: '표시만 바뀌며 원문은 그대로예요.',
+    en: 'Only the display changes; the original stays unchanged.',
+    ja: '表示だけが変わり、原文はそのままです。',
+    zh: '仅改变显示，原文保持不变。',
   },
   'reader.dialogueLineBreaks': {
     ko: '대사 줄바꿈',

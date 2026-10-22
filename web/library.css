@@ -765,23 +765,6 @@
   border-radius: 14px;
   font-size: 28px;
 }
-.library-detail-title {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-.library-detail-title h2 {
-  font-size: 16px;
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.library-detail-title small {
-  color: var(--muted);
-  font-size: 12px;
-}
 .library-preview-counts {
   font-size: 13px;
   margin: 0 0 8px;

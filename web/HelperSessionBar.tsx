@@ -160,18 +160,11 @@ export function HelperSessionBar(props: Props) {
             </button>
           </ActionMenu>
         </div>
-        <div className="helper-session-meta">
-          <span>
-            {t('helpers.m324', {
-              scope:
-                props.conversation?.scope.kind === 'chat' ? t('helpers.m180') : t('helpers.m043'),
-              count: formatNumber(props.sessions.length),
-            })}
-          </span>
-          {props.unread.length > 0 && (
+        {props.unread.length > 0 && (
+          <div className="helper-session-meta">
             <strong>{t('helpers.m325', { count: formatNumber(props.unread.length) })}</strong>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       {cleanupFailure && (
         <NoticeBanner tone="error">{translateMessage(cleanupFailure)}</NoticeBanner>

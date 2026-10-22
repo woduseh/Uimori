@@ -181,7 +181,7 @@ for (const viewport of viewports) {
         await editor.getByRole('tab', { name: '고급 설정', exact: true }).click();
         await editor
           .getByRole('group', { name: '고급 설정 영역', exact: true })
-          .getByRole('button', { name: '원문', exact: true })
+          .getByRole('button', { name: '원문 JSON', exact: true })
           .click();
         raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
       }

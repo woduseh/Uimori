@@ -1,5 +1,65 @@
 // App-owned editor messages. Imported content and stored defaults remain unchanged.
 export const messages = {
+  'native.searchResultCount': {
+    ko: '{count, number}개 항목',
+    en: '{count, plural, one {# item} other {# items}}',
+    ja: '{count, number}件の項目',
+    zh: '{count, number}个项目',
+  },
+  'native.openVariablesAndToggles': {
+    ko: '변수·토글 열기',
+    en: 'Open variables and toggles',
+    ja: '変数・トグルを開く',
+    zh: '打开变量与开关',
+  },
+  'native.noToggles': {
+    ko: '토글이 없어요.',
+    en: 'No toggles.',
+    ja: 'トグルはありません。',
+    zh: '暂无开关。',
+  },
+  'native.noBlocks': {
+    ko: '블록이 없어요.',
+    en: 'No blocks.',
+    ja: 'ブロックはありません。',
+    zh: '暂无块。',
+  },
+  'native.sourceJson': {
+    ko: '원문 JSON',
+    en: 'Source JSON',
+    ja: 'ソースJSON',
+    zh: '原始 JSON',
+  },
+  'native.backgroundHtmlCss': {
+    ko: '배경 HTML·CSS',
+    en: 'Background HTML / CSS',
+    ja: '背景HTML・CSS',
+    zh: '背景 HTML / CSS',
+  },
+  'native.imageInstructions': {
+    ko: '이미지 지침',
+    en: 'Image instructions',
+    ja: '画像の指示',
+    zh: '图片指令',
+  },
+  'native.initialVariablesAndToggles': {
+    ko: '변수 초기값·토글',
+    en: 'Initial variables and toggles',
+    ja: '変数の初期値・トグル',
+    zh: '变量初始值与开关',
+  },
+  'native.newChatDefaultVariables': {
+    ko: '새 채팅의 기본 변수',
+    en: 'Default variables for new chats',
+    ja: '新しいチャットの既定変数',
+    zh: '新聊天的默认变量',
+  },
+  'native.storedValueAndOption': {
+    ko: '저장값 / 선택지',
+    en: 'Stored value / Option',
+    ja: '保存値 / 選択肢',
+    zh: '存储值 / 选项',
+  },
   'native.text_b6071ac7eb': {
     ko: '목록',
     en: 'List',
@@ -145,10 +205,10 @@ export const messages = {
     zh: '未找到结果。',
   },
   'native.text_06183c3690': {
-    ko: '추가한 이미지를 여기서 확인하고 교체할 수 있어요.',
-    en: 'Review and replace added images here.',
-    ja: '追加した画像をここで確認・置換できます。',
-    zh: '可在此查看和替换已添加的图片。',
+    ko: '등록한 이미지가 없어요.',
+    en: 'No images added.',
+    ja: '登録した画像はありません。',
+    zh: '尚未添加图片。',
   },
   'native.text_9c9dbdd18c': {
     ko: '선택한 에셋',
@@ -1183,10 +1243,10 @@ export const messages = {
     zh: '变量键',
   },
   'native.text_b410f81d43': {
-    ko: '입력 형식',
-    en: 'Input type',
-    ja: '入力形式',
-    zh: '输入类型',
+    ko: '채팅 입력 형식',
+    en: 'Chat input type',
+    ja: 'チャットの入力形式',
+    zh: '聊天输入类型',
   },
   'native.text_d2e4ee054a': {
     ko: '채팅에 표시할 컨트롤',
@@ -1363,10 +1423,10 @@ export const messages = {
     zh: '源码已保留',
   },
   'native.text_f97e342c2b': {
-    ko: '변수를 추가하거나 원문을 붙여 넣으세요.',
-    en: 'Add a variable or paste source.',
-    ja: '変数を追加するかソースを貼り付けてください。',
-    zh: '请添加变量或粘贴源码。',
+    ko: '변수가 없어요.',
+    en: 'No variables.',
+    ja: '変数はありません。',
+    zh: '暂无变量。',
   },
   'native.text_0bf2a9eced': {
     ko: '토글 그룹 선택',
@@ -1387,10 +1447,10 @@ export const messages = {
     zh: '开关分组',
   },
   'native.text_953eefe9dd': {
-    ko: '검색 결과',
-    en: 'Search results',
-    ja: '検索結果',
-    zh: '搜索结果',
+    ko: '전체 그룹 검색 결과',
+    en: 'Search results across all groups',
+    ja: '全グループの検索結果',
+    zh: '所有分组的搜索结果',
   },
   'native.text_03517ebd55': {
     ko: '전체 그룹에서 찾아요.',
@@ -1453,10 +1513,10 @@ export const messages = {
     zh: '重置',
   },
   'native.text_0e9ffc660e': {
-    ko: '항목을 추가해 토글을 구성해 주세요.',
-    en: 'Add items to configure toggles.',
-    ja: '項目を追加してトグルを構成してください。',
-    zh: '添加项目以配置开关。',
+    ko: '이 그룹에 항목이 없어요.',
+    en: 'No items in this group.',
+    ja: 'このグループに項目はありません。',
+    zh: '此分组暂无项目。',
   },
   'native.text_13b410eba6': {
     ko: '토글 정의 편집기',

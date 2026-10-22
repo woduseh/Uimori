@@ -67,6 +67,7 @@ function PricingSummary({
           </>
         )}
       </small>
+      <strong className="model-pricing-unit">{t('settings.priceUnit')}</strong>
       <dl
         className="model-pricing-rates"
         aria-label={context === 'attempt' ? t('providers.m483') : t('providers.m484')}
@@ -265,7 +266,6 @@ export function ModelPricingEditor({
               <>
                 <ToggleRow
                   label={t('providers.m507')}
-                  description={t('providers.m508')}
                   checked={draft.batchEnabled}
                   onChange={(batchEnabled) => onChange({ ...draft, batchEnabled })}
                 />

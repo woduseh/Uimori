@@ -38,6 +38,7 @@ export function PromptCombinationManager({
   } | null>(null);
   const [title, setTitle] = useState('');
   const [values, setValues] = useState<Record<string, PromptValue>>({});
+  const [repaired, setRepaired] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const items = combinations.filter((item) =>
@@ -67,9 +68,11 @@ export function PromptCombinationManager({
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          <p className="muted">
-            {t('prompts.uiCompatibleValuesWerePreservedCheckTheOptionsBeforeSaving')}
-          </p>
+          {repaired && (
+            <p className="muted">
+              {t('prompts.uiCompatibleValuesWerePreservedCheckTheOptionsBeforeSaving')}
+            </p>
+          )}
           <fieldset disabled={busy}>
             <PromptControlFields
               program={current.program}
@@ -141,9 +144,13 @@ export function PromptCombinationManager({
                   setEditing({ item, sourceRevision: current.presetRevision ?? workspaceRevision });
                   setTitle(item.title);
                   setError('');
+                  const repairedValues = repairPromptCombinationValues(item, current.program);
+                  setRepaired(
+                    Object.entries(item.values).some(([id, value]) => repairedValues[id] !== value)
+                  );
                   setValues({
                     ...resolvePromptValues(current.program, current.defaultValues ?? {}),
-                    ...repairPromptCombinationValues(item, current.program),
+                    ...repairedValues,
                   });
                 }}
               >

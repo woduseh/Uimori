@@ -379,13 +379,12 @@ export function NewStory({
           <div className="new-story-bot" aria-label={t('transfer.m322')}>
             <ContentAvatar content={activeBot ?? initialBot} />
             <strong>{initialBot.title}</strong>
-            <p className="muted">
-              {initialFolder ? t('transfer.d029', { v0: initialFolder.title }) : t('transfer.m323')}
-            </p>
+            {initialFolder && (
+              <small className="muted">{t('transfer.d029', { v0: initialFolder.title })}</small>
+            )}
           </div>
         ) : (
           <>
-            <p className="muted">{t('transfer.m324')}</p>
             <ContentPicker
               library={{ ...library, contents }}
               role="bot"

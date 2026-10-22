@@ -70,9 +70,10 @@ test('LCOM05 opening a bot from a scrolled mobile list starts its detail at the 
   expect(await scrollport.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
   await open.click();
   const detail = panel.getByRole('region', { name: '자료 상세', exact: true });
-  await expect(detail.locator('.library-detail-title > h2')).toHaveText(last.title);
+  const title = detail.getByRole('heading', { name: last.title, exact: true });
+  await expect(title).toHaveCount(1);
   expect(await scrollport.evaluate((node) => node.scrollTop)).toBe(0);
-  await expect(detail.locator('.library-detail-title')).toBeInViewport();
+  await expect(title).toBeInViewport();
 });
 
 test('LCOM01 compact library keeps row actions aligned across mobile and desktop widths', async ({

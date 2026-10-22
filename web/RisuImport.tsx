@@ -350,7 +350,6 @@ export function RisuImport({
           aria-label={t('transfer.m017')}
           aria-busy={busy}
         >
-          {!preview && <p className="muted">{t('transfer.m018')}</p>}
           <label className={`risu-import-file${preview ? ' risu-import-file-ready' : ''}`}>
             <span>
               {preview
@@ -393,10 +392,9 @@ export function RisuImport({
                 </select>
               </label>
               <p className="muted">{t('transfer.m025')}</p>
-              {preview && preview.lore.length > 0 && <p className="muted">{t('transfer.m026')}</p>}
-              <p className="muted">{t('transfer.m027')}</p>
             </div>
           </details>
+          <p className="muted">{t('transfer.m027')}</p>
           {preview && (
             <>
               <div className="risu-import-summary risu-import-hero">

@@ -45,7 +45,6 @@ function getCategories() {
       id: 'guide',
       title: t('chatsettings.m88'),
       icon: LoreIcon,
-      description: t('chatsettings.m89'),
       group: t('chatsettings.m85'),
     },
     {
@@ -66,7 +65,6 @@ function getCategories() {
       id: 'packages',
       title: t('chatsettings.m95'),
       icon: BehaviorIcon,
-      description: t('chatsettings.m96'),
       group: t('chatsettings.m92'),
     },
   ] as const;

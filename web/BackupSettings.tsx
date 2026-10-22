@@ -145,12 +145,11 @@ export function BackupSettings({
       <div className="settings-group-body archive-management-card">
         <div className="backup-heading settings-row settings-row-toggle">
           <div className="settings-row-copy">
-            <strong>{t('transfer.m152')}</strong>
-            <p className="muted">{t('transfer.m153')}</p>
+            <strong>{t('settings.serverAutoBackup')}</strong>
           </div>
           {draft && (
             <Switch
-              aria-label={t('transfer.m152')}
+              aria-label={t('settings.serverAutoBackup')}
               checked={draft.enabled}
               disabled={busy}
               onChange={(event) => change({ enabled: event.target.checked })}
@@ -162,13 +161,10 @@ export function BackupSettings({
             <div className="backup-fields">
               {draft.enabled && (
                 <label>
-                  <span>
-                    {t('transfer.m154')}
-                    <small>{t('transfer.m155')}</small>
-                  </span>
+                  <span>{t('settings.backupTime')}</span>
                   <input
                     type="time"
-                    aria-label={t('transfer.m154')}
+                    aria-label={t('settings.backupTime')}
                     required
                     value={
                       Number.isFinite(draft.hour + draft.minute)
@@ -186,8 +182,7 @@ export function BackupSettings({
               )}
               <label>
                 <span>
-                  {t('transfer.m156')}
-                  <small>{t('transfer.m157')}</small>
+                  {t('settings.backupRetention')} <small>{t('transfer.m157')}</small>
                 </span>
                 <input
                   type="number"

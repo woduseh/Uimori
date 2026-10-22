@@ -56,9 +56,27 @@ export function RisuNativeFields({
 
   const native = value.nativeRisu;
   const standalone = !Object.keys(native.card).length && !!native.module;
+  const advancedTabs: { id: Advanced; title: string }[] = [
+    ...(!standalone ? [{ id: 'instructions' as const, title: t('native.text_22a2af3f54') }] : []),
+    { id: 'variables', title: t('native.initialVariablesAndToggles') },
+    ...(!standalone || value.imageHandoff
+      ? [
+          {
+            id: 'display' as const,
+            title: standalone ? t('native.imageInstructions') : t('native.backgroundHtmlCss'),
+          },
+        ]
+      : []),
+    { id: 'scripts', title: t('native.text_f31813202f') },
+    { id: 'modules', title: t('native.text_ae90c98d27') },
+    { id: 'source', title: t('native.sourceJson') },
+  ];
   const id = useId();
   const [section, setSection] = useState<Section>('basic');
   const [advanced, setAdvanced] = useState<Advanced>('instructions');
+  const activeAdvanced = advancedTabs.some((tab) => tab.id === advanced)
+    ? advanced
+    : advancedTabs[0]!.id;
   const [part, setPart] = useState<SourcePart>('lore');
   const [draft, setDraft] = useBufferedEditorState<{ part: SourcePart; text: string } | null>(
     'package.native.source',
@@ -219,7 +237,7 @@ export function RisuNativeFields({
     'aria-labelledby': id + '-' + key + '-tab',
     hidden: section !== key,
   });
-  const rawEditor = section === 'advanced' && advanced === 'source' && (
+  const rawEditor = section === 'advanced' && activeAdvanced === 'source' && (
     <div className="native-source-editor">
       <p className="muted">
         {t('native.resourceCounts', {
@@ -452,39 +470,29 @@ export function RisuNativeFields({
       </fieldset>
       <div {...panel('advanced')} className="native-section-body native-advanced-workspace">
         <div className="native-advanced-tabs" role="group" aria-label={t('native.text_2c737ca1dd')}>
-          {(
-            [
-              ['instructions', t('native.text_af10d9b29e'), t('native.text_83fca869e0')],
-              ['variables', t('native.text_dc0ebb4fd3'), t('native.text_bdf1722abc')],
-              ['display', t('native.text_a61d568e9d'), t('native.text_ea790c9853')],
-              ['scripts', t('native.text_8b330f374f'), t('native.text_f31813202f')],
-              ['modules', t('native.text_ae90c98d27'), t('native.text_c8d1c0b8c0')],
-              ['source', t('native.text_8ba13a8495'), t('native.text_086d9f609b')],
-            ] as const
-          ).map(([key, title, subtitle]) => (
+          {advancedTabs.map(({ id: key, title }) => (
             <button
               type="button"
               key={key}
               aria-label={title}
-              aria-pressed={advanced === key}
+              aria-pressed={activeAdvanced === key}
               onClick={() => {
                 setAdvanced(key);
                 if (key === 'scripts' && !draft) setPart('triggers');
               }}
             >
               <strong>{title}</strong>
-              <small>{subtitle}</small>
             </button>
           ))}
         </div>
         <fieldset
           className="native-panel-fields native-advanced-detail"
-          hidden={advanced === 'scripts' || advanced === 'source'}
+          hidden={activeAdvanced === 'scripts' || activeAdvanced === 'source'}
           disabled={!!draft}
         >
-          <div hidden={advanced !== 'instructions'} className="native-form-stack">
+          <div hidden={activeAdvanced !== 'instructions'} className="native-form-stack">
             <h3>{t('native.text_22a2af3f54')}</h3>
-            {!standalone ? (
+            {!standalone && (
               <>
                 <label>
                   {t('native.text_2d2a2c8204')}
@@ -504,11 +512,9 @@ export function RisuNativeFields({
                   />
                 </label>
               </>
-            ) : (
-              <p className="muted">{t('native.text_078e60fbef')}</p>
             )}
           </div>
-          <div hidden={advanced !== 'variables'} className="native-form-stack">
+          <div hidden={activeAdvanced !== 'variables'} className="native-form-stack">
             <h3>{t('native.text_dc0ebb4fd3')}</h3>
             <label>
               {t('native.text_0510e453e9')}
@@ -543,8 +549,8 @@ export function RisuNativeFields({
               />
             </label>
           </div>
-          <div hidden={advanced !== 'display'} className="native-form-stack">
-            <h3>{t('native.text_98a6884c74')}</h3>
+          <div hidden={activeAdvanced !== 'display'} className="native-form-stack">
+            <h3>{standalone ? t('native.imageInstructions') : t('native.text_98a6884c74')}</h3>
             {!standalone && (
               <label>
                 {t('native.text_50262c6215')}
@@ -557,7 +563,6 @@ export function RisuNativeFields({
                 />
               </label>
             )}
-            {standalone && <p className="muted">{t('native.text_a2c215763f')}</p>}
             {value.imageHandoff && (
               <RisuImageHandoffFields
                 policy={value.imageHandoff}
@@ -579,7 +584,7 @@ export function RisuNativeFields({
               />
             )}
           </div>
-          <div hidden={advanced !== 'modules'}>
+          <div hidden={activeAdvanced !== 'modules'}>
             <PackageFeaturesEditor
               value={value}
               onChange={onChange}
@@ -588,7 +593,7 @@ export function RisuNativeFields({
           </div>
         </fieldset>
         <div
-          hidden={advanced !== 'scripts'}
+          hidden={activeAdvanced !== 'scripts'}
           className="native-advanced-detail native-script-editor"
         >
           <NativeRisuTriggerEditor
@@ -611,7 +616,7 @@ export function RisuNativeFields({
             />
           </details>
         </div>
-        {advanced === 'source' && (
+        {activeAdvanced === 'source' && (
           <fieldset
             className="native-panel-fields native-advanced-detail"
             disabled={regexDirty || triggersDirty}

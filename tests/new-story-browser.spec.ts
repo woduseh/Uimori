@@ -341,6 +341,12 @@ for (const [viewportName, viewport] of [
     const personaChoice = picker
       .getByRole('button')
       .filter({ has: page.getByText(personaTitle, { exact: true }) });
+    await expect(picker.getByRole('button', { name: '페르소나', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expect(personaChoice.locator('.content-picker-meta')).toHaveCount(0);
+    await picker.getByRole('button', { name: '모든 자료', exact: true }).click();
     await expect(personaChoice.locator('.content-picker-meta')).toHaveText('페르소나');
     await personaChoice.click();
     await dialog.getByText('미리보기', { exact: true }).click();
@@ -598,7 +604,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await library.getByRole('tab', { name: '첫 메시지', exact: true }).click();
   await library.getByLabel('기본 시작문', { exact: true }).fill('<selector> Edited');
   await library.getByRole('tab', { name: '고급 설정', exact: true }).click();
-  await library.getByRole('button', { name: '원문', exact: true }).click();
+  await library.getByRole('button', { name: '원문 JSON', exact: true }).click();
   await library.getByLabel('Risu 원문 JSON').fill('[{"unfinished":');
   const save = library.getByRole('button', { name: '변경사항 저장', exact: true });
   await expect(save).toBeEnabled();

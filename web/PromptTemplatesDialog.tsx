@@ -87,9 +87,6 @@ export function PromptTemplatesDialog({
       className="prompt-templates-dialog"
       onClose={onClose}
     >
-      <p className="muted prompt-templates-description">
-        {t('prompts.uiAddAsAPresetToEditFreelyThenLoad')}
-      </p>
       {loadError || templates === null ? (
         <LoadingState
           presentation="placeholder"
@@ -120,7 +117,7 @@ export function PromptTemplatesDialog({
                 onClick={() => void add(template)}
               >
                 <AddIcon size={18} aria-hidden="true" />
-                {t('prompts.uiAdd')}
+                {t('prompts.addToMyPrompts')}
               </button>
             </li>
           ))}

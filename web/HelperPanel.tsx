@@ -895,8 +895,7 @@ export function HelperPanel(props: Props) {
     >
       <header className="helper-header">
         <div>
-          <h2>{t('helpers.m041')}</h2>
-          <small>{scope.kind === 'chat' ? t('helpers.m042') : t('helpers.m043')}</small>
+          <h2>{scope.kind === 'chat' ? t('helpers.chatTitle') : t('helpers.libraryTitle')}</h2>
         </div>
         <IconButton
           label={t('helpers.m044')}
@@ -967,8 +966,7 @@ export function HelperPanel(props: Props) {
             </section>
             <section className="settings-group">
               <header className="settings-group-heading">
-                <h3>{t('helpers.m051')}</h3>
-                <p>{t('helpers.m052')}</p>
+                <h3>{t('helpers.sessionVoice')}</h3>
               </header>
               <div className="settings-group-body helper-persona">
                 <textarea

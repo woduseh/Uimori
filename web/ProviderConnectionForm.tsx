@@ -7,6 +7,10 @@ import { Switch } from './BooleanControls.js';
 import { VertexCredentialUpload } from './VertexCredentialUpload.js';
 import type { ProviderEditorState, ConnectionDraft } from './provider-editor-state.js';
 
+function vertexEndpoint(projectId: string): string {
+  return `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models`;
+}
+
 type Props = {
   hidden: boolean;
   testMode: boolean;
@@ -48,6 +52,8 @@ export function ProviderConnectionForm({
   } = draft;
   const codex = connection.protocol === 'codex-app-server-v1';
   const vertex = connection.protocol === 'vertex-gemini-v1';
+  const vertexProjectId =
+    connection.endpoint.match(/\/projects\/([^/]+)\/locations\/global\//)?.[1] ?? '';
   const definition = providerDefinition(connection.protocol);
   const endpointLabel = codex
     ? t('providers.m126')
@@ -73,24 +79,32 @@ export function ProviderConnectionForm({
           : connectionCopy
             ? t('providers.m132')
             : t('providers.m133')}
+        {(!editingConnection || JSON.stringify(connection) !== connectionBaseline) && (
+          <small className="provider-heading-status">
+            {editingConnection ? t('settings.unsavedItem') : t('settings.newItem')}
+          </small>
+        )}
       </h3>
-      {editingConnection && (
-        <div className="provider-draft-note full">
-          <p>{t('providers.m134')}</p>
-          {connections.find((item) => item.id === editingConnection.id)?.revision !==
-            editingConnection.revision && <p>{t('providers.m135')}</p>}
-          <button
-            type="button"
-            className="secondary"
-            disabled={busy}
-            onClick={() => {
-              onReload();
-            }}
-          >
-            {t('providers.m136')}
-          </button>
-        </div>
-      )}
+      {editingConnection && <p className="provider-draft-note full">{t('providers.m134')}</p>}
+      {editingConnection &&
+        (conflict ||
+          connections.find((item) => item.id === editingConnection.id)?.revision !==
+            editingConnection.revision) && (
+          <div className="provider-draft-note full">
+            {connections.find((item) => item.id === editingConnection.id)?.revision !==
+              editingConnection.revision && <p>{t('providers.m135')}</p>}
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy}
+              onClick={() => {
+                onReload();
+              }}
+            >
+              {t('providers.m136')}
+            </button>
+          </div>
+        )}
       {connectionCopy && <p className="provider-draft-note full">{t('providers.m137')}</p>}
       {conflict && (
         <NoticeBanner tone="error" className="full">
@@ -143,7 +157,7 @@ export function ProviderConnectionForm({
               onChange((current) => ({
                 ...current,
                 credentialRef: value.credentialRef,
-                endpoint: `https://aiplatform.googleapis.com/v1/projects/${value.projectId}/locations/global/publishers/google/models`,
+                endpoint: vertexEndpoint(value.projectId),
               }))
             }
           />
@@ -154,19 +168,16 @@ export function ProviderConnectionForm({
             <input
               aria-label={t('providers.m141')}
               placeholder="my-project"
-              value={
-                connection.endpoint.match(/\/projects\/([^/]+)\/locations\/global\//)?.[1] ?? ''
-              }
+              value={vertexProjectId}
               onChange={(event) =>
                 onChange({
                   ...connection,
                   endpoint: event.target.value.trim()
-                    ? `https://aiplatform.googleapis.com/v1/projects/${event.target.value.trim()}/locations/global/publishers/google/models`
+                    ? vertexEndpoint(event.target.value.trim())
                     : '',
                 })
               }
             />
-            <small>{t('providers.m142')}</small>
           </label>
         )}
         <label className="full">
@@ -186,6 +197,9 @@ export function ProviderConnectionForm({
             value={connection.endpoint}
             onChange={(event) => onChange({ ...connection, endpoint: event.target.value })}
           />
+          {vertex && vertexProjectId && connection.endpoint === vertexEndpoint(vertexProjectId) && (
+            <small>{t('settings.vertexEndpoint')}</small>
+          )}
         </label>
         {!codex && !vertex && (
           <label className="full">
@@ -243,13 +257,6 @@ export function ProviderConnectionForm({
       </fieldset>
       <div className="provider-actions full provider-save-actions">
         {editingConnection && deleteAction}
-        <small className="provider-save-status">
-          {editingConnection
-            ? JSON.stringify(connection) === connectionBaseline
-              ? t('providers.m159')
-              : t('providers.m160')
-            : t('providers.m161')}
-        </small>
         <button type="button" className="secondary" disabled={busy} onClick={() => onDone()}>
           {t('providers.m162')}
         </button>

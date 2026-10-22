@@ -347,7 +347,8 @@ test('LIMG02 persona folder picker supports keyboard selection and nested Escape
   const moduleChoice = picker
     .locator('[data-content-choice]')
     .filter({ has: page.getByText(module.title, { exact: true }) });
-  await expect(moduleChoice).toContainText('페르소나로 사용');
+  await expect(picker.getByRole('heading', { name: '시작 페르소나', exact: true })).toBeVisible();
+  await expect(moduleChoice.locator('.content-picker-meta')).toHaveText('모듈');
   await moduleChoice.click();
   await expect(trigger).toContainText(module.title);
   expect((await (await request.get(`/api/content/${module.id}`)).json()).kind).toBe('module');

@@ -397,10 +397,8 @@ export function NativeRisuLoreEditor({
               {t('native.text_d484012528')}
             </div>
           )}
-          {!visible.size && (
-            <p className="muted">
-              {entries.length ? t('native.text_a9a4407910') : t('native.text_7cf50fd556')}
-            </p>
+          {!visible.size && entries.length > 0 && (
+            <p className="muted">{t('native.text_a9a4407910')}</p>
           )}
         </div>
         <p className="sr-only" role="status" aria-live="polite">
@@ -513,7 +511,6 @@ export function NativeRisuLoreEditor({
             </label>
             {folder ? (
               <div className="nl-folder-content">
-                <p className="muted">{t('native.text_fe6df44913')}</p>
                 <button type="button" className="secondary" onClick={() => add(false)}>
                   <AddIcon size={16} />
                   {t('native.text_caedf4822e')}
@@ -631,7 +628,6 @@ export function NativeRisuLoreEditor({
         ) : (
           <div className="native-empty">
             <strong>{t('native.text_7cf50fd556')}</strong>
-            <p className="muted">{t('native.text_c4a928ce23')}</p>
             <button type="button" onClick={() => add(false)}>
               {t('native.text_08882fa086')}
             </button>

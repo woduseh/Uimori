@@ -340,7 +340,7 @@ for (const width of [412, 1440]) {
         const advanced = page.locator('.theme-advanced:not([open]) > summary');
         if (await advanced.isVisible()) await advanced.click();
       }
-      const background = page.getByRole('region', { name: '배경 이미지', exact: true });
+      const background = page.getByRole('region', { name: '본문 바깥 배경', exact: true });
       const effects = background.getByRole('group', { name: '배경 효과', exact: true });
       await expect(effects.getByRole('slider')).toHaveCount(3);
       const fileBox = (await background.getByLabel('배경 이미지 선택').boundingBox())!;

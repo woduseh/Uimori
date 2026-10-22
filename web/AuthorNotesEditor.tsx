@@ -178,18 +178,14 @@ export function AuthorNotesEditor({
           imported: notes.some((note) => note.kind === 'imported-memory') ? 'yes' : 'no',
         })}
       </summary>
-      <p className="muted">
-        {t('library.notesHint', {
-          imported: notes.some((note) => note.kind === 'imported-memory') ? 'yes' : 'no',
-        })}
-      </p>
+      <p className="muted">{t('library.notesHint')}</p>
       {error && (
         <p className="error" role="alert">
           {translateMessage(error)}
         </p>
       )}
       <TransientNotice message={message} />
-      {notes.length > 0 ? (
+      {notes.length > 0 && (
         <ul className="story-records">
           {notes.map((note) => (
             <li key={note.id}>
@@ -231,8 +227,6 @@ export function AuthorNotesEditor({
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="muted">{t('library.noPersonalNotesYet')}</p>
       )}
       {!editing && (
         <button type="button" className="secondary" disabled={disabled} onClick={() => begin()}>

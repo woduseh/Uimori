@@ -85,7 +85,7 @@
 .new-story-bot > .content-avatar {
   grid-row: 1 / span 2;
 }
-.new-story-bot > p {
+.new-story-bot > small {
   grid-column: 2;
   font-size: 13px;
 }

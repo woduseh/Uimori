@@ -105,7 +105,6 @@ function StoryPanelEditor({
   return (
     <section className="story-panel" aria-label={t('reader.storyMemoryAndContext')}>
       {!hideHeading && <h3>{t('reader.memoryAndContext')}</h3>}
-      <p className="muted">{t('reader.manageStoryEventsWithSummariesAndConditionsForFuture')}</p>
       {error && (
         <p className="error" role="alert">
           {translateMessage(error)}

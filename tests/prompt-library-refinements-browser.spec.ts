@@ -209,4 +209,20 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
   );
   if (visualReview)
     await page.screenshot({ path: info.outputPath('prompt-library-refinements-mobile.png') });
+
+  await editor.getByRole('button', { name: '프롬프트 목록', exact: true }).click();
+  const library = page.getByTestId('prompt-library');
+  const search = library.getByLabel('프롬프트 검색', { exact: true });
+  await search.fill(`no matching prompt ${crypto.randomUUID()}`);
+  await expect(
+    library.getByRole('heading', { name: '찾는 프롬프트가 없어요', exact: true })
+  ).toBeVisible();
+  await expect(
+    library.locator('.library-empty').getByRole('button', { name: '새 프롬프트', exact: true })
+  ).toHaveCount(0);
+  await library.getByRole('button', { name: '검색 지우기', exact: true }).click();
+  await expect(search).toHaveValue('');
+  await expect(
+    library.getByRole('button', { name: `${restoredTitle} 프롬프트 편집`, exact: true })
+  ).toBeVisible();
 });

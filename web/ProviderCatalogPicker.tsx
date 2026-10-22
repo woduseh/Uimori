@@ -91,7 +91,7 @@ export function ProviderCatalogPicker({
                 onClick={() => onChoose(item)}
               >
                 <strong>{item.name}</strong>
-                <small>{item.id}</small>
+                {item.name !== item.id && <small>{item.id}</small>}
 
                 {selectedId === item.id && <CheckIcon size={16} aria-hidden="true" />}
               </button>

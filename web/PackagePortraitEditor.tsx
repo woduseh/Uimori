@@ -138,8 +138,8 @@ export function PackagePortraitEditor({
         }}
       />
       <div className="package-portrait-controls">
-        <strong>{t('library.portrait')}</strong>
-        <small>{portrait?.title ?? t('library.chooseAnImageForListsAndResource')}</small>
+        <strong>{t('library.listPortrait')}</strong>
+        {portrait && <small>{portrait.title}</small>}
         <div className="package-portrait-actions">
           <label
             className={`secondary package-portrait-upload${disabled || busy ? ' is-disabled' : ''}`}

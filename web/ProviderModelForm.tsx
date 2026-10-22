@@ -66,6 +66,11 @@ export function ProviderModelForm({
     >
       <h3 className="full">
         {editingModel ? t('providers.m276') : modelCopy ? t('providers.m277') : t('providers.m278')}
+        {(!editingModel || JSON.stringify(model) !== modelBaseline) && (
+          <small className="provider-heading-status">
+            {editingModel ? t('settings.unsavedItem') : t('settings.newItem')}
+          </small>
+        )}
       </h3>
       {editingModel &&
         (conflict ||
@@ -188,13 +193,6 @@ export function ProviderModelForm({
       </fieldset>
       <div className="provider-actions full provider-save-actions provider-model-save-actions">
         {editingModel && deleteAction}
-        <small className="provider-save-status">
-          {editingModel
-            ? JSON.stringify(model) === modelBaseline
-              ? t('providers.m288')
-              : t('providers.m160')
-            : t('providers.m289')}
-        </small>
         <IconButton
           icon={CloseIcon}
           label={t('providers.m290')}

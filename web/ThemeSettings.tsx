@@ -23,6 +23,7 @@ import {
   getBuiltinTheme,
   parseThemeFile,
   resolvePaletteId,
+  resolveTheme,
   themeFile,
   themeDefinition,
   validateTheme,
@@ -129,14 +130,32 @@ export function ThemeSettings({
       : scope === 'bot'
         ? p.botPalettes?.[state.scope.botId ?? '']
         : p.chatPalettes?.[state.scope.chatId ?? ''];
+  const editingScope =
+    scope === 'global' ? {} : scope === 'bot' ? { botId: state.scope.botId } : state.scope;
   const activePaletteId = resolvePaletteId(state.catalog, state.scope);
   const activePaletteTitle =
     translateMessage(
       BUILTIN_PALETTES.find((palette) => palette.id === activePaletteId)?.title ?? ''
     ) || t('visualpanels.originalLayoutColors');
+  const resolvedLayout = resolveTheme(state.catalog, editingScope);
+  const editedPaletteId = resolvePaletteId(state.catalog, editingScope);
+  const editedPaletteTitle =
+    translateMessage(
+      BUILTIN_PALETTES.find((palette) => palette.id === editedPaletteId)?.title ?? ''
+    ) || t('visualpanels.originalLayoutColors');
   const activeLayout =
-    state.catalog.themes.find((theme) => theme.id === state.active.id) ??
-    getBuiltinTheme(state.active.id);
+    state.catalog.themes.find((theme) => theme.id === resolvedLayout.id) ??
+    getBuiltinTheme(resolvedLayout.id);
+  const layoutSource = selectedId
+    ? null
+    : scope === 'chat' && p.botThemes[state.scope.botId ?? '']
+      ? t('visualpanels.currentBotDefault')
+      : t('visualpanels.workspaceDefault');
+  const paletteSource = selectedPaletteId
+    ? null
+    : scope === 'chat' && p.botPalettes?.[state.scope.botId ?? '']
+      ? t('visualpanels.currentBotDefault')
+      : t('visualpanels.workspaceDefault');
   const originalColors = activeLayout?.colors;
   const defaultLegacyLayout = getBuiltinTheme(p.defaultThemeId);
   const globalLayouts =
@@ -152,7 +171,7 @@ export function ThemeSettings({
     {
       id: THEME_PALETTE_ID,
       title: t('visualpanels.originalLayoutColors'),
-      description: t('visualpanels.useTheColorsSavedInTheSelected'),
+      description: '',
       colors: originalColors ?? { light: {}, dark: {} },
     },
     ...BUILTIN_PALETTES,
@@ -369,9 +388,6 @@ export function ThemeSettings({
       <TransientNotice message={notice} />
       <details className="theme-advanced">
         <summary>{t('visualpanels.advancedAppearanceAndThemeCreation')}</summary>
-        <p className="theme-intro">
-          {t('visualpanels.combineLayoutsPalettesAndBackgroundsByScope')}
-        </p>
         <div className="settings-card theme-toolbar theme-control-bar">
           <label>
             {t('visualpanels.scope')}{' '}
@@ -404,6 +420,14 @@ export function ThemeSettings({
           <div className="theme-dimension-heading">
             <div>
               <h3 id="theme-layout-heading">{t('visualpanels.layout')}</h3>
+              <small>
+                {t(layoutSource ? 'settings.inheritedThemeSelection' : 'settings.themeSelection', {
+                  title: activeLayout?.id.startsWith('builtin:')
+                    ? translateMessage(activeLayout.title)
+                    : (activeLayout?.title ?? ''),
+                  source: layoutSource ?? t('settings.thisScope'),
+                })}
+              </small>
             </div>
             {scope !== 'global' && (
               <button
@@ -414,9 +438,6 @@ export function ThemeSettings({
               </button>
             )}
           </div>
-          {scope !== 'global' && !selectedId && (
-            <p className="theme-inherited">{t('visualpanels.thisScopeInheritsItsLayout')}</p>
-          )}
           <div className="theme-grid" aria-label={t('visualpanels.savedLayouts')}>
             {layouts.map((theme) => (
               <article
@@ -466,11 +487,13 @@ export function ThemeSettings({
                       selected: selectedId === theme.id,
                     })}
                   </strong>
-                  <small>
-                    {(theme.id.startsWith('builtin:')
-                      ? translateMessage(theme.description)
-                      : theme.description) || t('visualpanels.customTheme')}
-                  </small>
+                  {theme.description && (
+                    <small>
+                      {theme.id.startsWith('builtin:')
+                        ? translateMessage(theme.description)
+                        : theme.description}
+                    </small>
+                  )}
                 </button>
                 <div className="theme-card-actions">
                   <button
@@ -549,11 +572,18 @@ export function ThemeSettings({
               </article>
             ))}
           </div>
+          <p className="theme-help">{t('settings.themeExportScope')}</p>
         </section>
         <section className="theme-dimension" aria-labelledby="theme-palette-heading">
           <div className="theme-dimension-heading">
             <div>
               <h3 id="theme-palette-heading">{t('visualpanels.colorPalette')}</h3>
+              <small>
+                {t(paletteSource ? 'settings.inheritedThemeSelection' : 'settings.themeSelection', {
+                  title: editedPaletteTitle,
+                  source: paletteSource ?? t('settings.thisScope'),
+                })}
+              </small>
             </div>
             <button
               disabled={
@@ -569,9 +599,6 @@ export function ThemeSettings({
                 : t('visualpanels.inheritPalette')}
             </button>
           </div>
-          {scope !== 'global' && !selectedPaletteId && (
-            <p className="theme-inherited">{t('visualpanels.thisScopeInheritsItsPalette')}</p>
-          )}
           <div className="theme-palette-grid" aria-label={t('visualpanels.selectColorPalette')}>
             {palettes.map((palette) => {
               const colors = { ...baselineThemeColors[mode], ...palette.colors[mode] };
@@ -597,7 +624,7 @@ export function ThemeSettings({
                       selected: selectedPaletteId === palette.id,
                     })}
                   </strong>
-                  <small>{translateMessage(palette.description)}</small>
+                  {palette.description && <small>{translateMessage(palette.description)}</small>}
                 </button>
               );
             })}
@@ -616,7 +643,6 @@ export function ThemeSettings({
         <section className="theme-library-tools" aria-label={t('visualpanels.manageThemes')}>
           <div className="theme-library-copy">
             <h4>{t('visualpanels.manageThemes')}</h4>
-            <p>{t('visualpanels.createACustomThemeOrImportOne')}</p>
           </div>
           <div className="theme-library-actions">
             <button className="primary" disabled={busy || backgroundDirty} onClick={() => edit()}>
@@ -669,6 +695,17 @@ export function ThemeSettings({
                   onChange={(e) => patch({ description: e.target.value })}
                 />
               </label>
+              <label className="theme-color-mode">
+                {t('settings.editColors')}
+                <select
+                  aria-label={t('settings.editColors')}
+                  value={mode}
+                  onChange={(event) => setMode(event.target.value as typeof mode)}
+                >
+                  <option value="light">{t('visualpanels.lightColors')}</option>
+                  <option value="dark">{t('visualpanels.darkColors')}</option>
+                </select>
+              </label>
               <div className="theme-colors">
                 {THEME_COLOR_KEYS.map((key) => (
                   <label key={key}>
@@ -718,7 +755,7 @@ export function ThemeSettings({
                   </label>
                 ))}
               </div>
-              <p className="muted">{t('visualpanels.editLightAndDarkColorsSeparatelyUsing')}</p>
+              <p className="muted">{t('settings.layoutColorStorage')}</p>
               <details className="theme-code">
                 <summary>{t('visualpanels.editCssAndHtmlDirectly')}</summary>
                 <p>{t('visualpanels.appCssAppliesToTheWorkspaceBody')}</p>

@@ -1,4 +1,16 @@
 export const messages = {
+  'prompts.clearSearch': {
+    ko: '검색 지우기',
+    en: 'Clear search',
+    ja: '検索をクリア',
+    zh: '清除搜索',
+  },
+  'prompts.addToMyPrompts': {
+    ko: '내 프롬프트로 추가',
+    en: 'Add to my prompts',
+    ja: '自分のプロンプトに追加',
+    zh: '添加到我的提示词',
+  },
   'prompts.uiManageCombinations': {
     ko: '옵션 조합 관리',
     en: 'Manage combinations',

@@ -109,7 +109,7 @@ for (const width of WIDTHS) {
     const form = panel.locator('.outline-form');
     await form.getByRole('combobox', { name: '수준', exact: true }).selectOption('episode');
     await form.getByRole('textbox', { name: '이름', exact: true }).fill('한 회차에서 시작');
-    const intent = form.getByRole('textbox', { name: '구성 내용', exact: true });
+    const intent = form.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
     await intent.pressSequentially('대화를 길게 나누되 관계를 급하게 진전시키지 않아요.');
     await expect(intent).toBeFocused();
     await form.getByRole('button', { name: '닫기 · 초안 보관' }).click();
@@ -231,7 +231,7 @@ for (const width of WIDTHS) {
         .getByRole('button', { name: '편집', exact: true })
         .click();
       await panel
-        .getByRole('textbox', { name: '구성 내용', exact: true })
+        .getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true })
         .fill('응답이 유실되어도 이 초안을 지켜요.');
       await panel
         .locator('.outline-form')

@@ -141,11 +141,11 @@ for (const colorScheme of ['light', 'dark'] as const) {
           await expect(pane.getByLabel('앱 화면 테마')).toBeVisible();
           await expect(pane.getByRole('button', { name: '접속 해제', exact: true })).toBeVisible();
           await expect(dialog.getByRole('tab', { name: '접근 보안', exact: true })).toHaveCount(0);
-          const toggle = pane.getByLabel('Enter로 보내기', { exact: true });
-          const toggleBox = (await toggle.boundingBox())!;
-          const rowBox = (await toggle.locator('xpath=ancestor::label').boundingBox())!;
+          const sendKey = pane.getByRole('combobox', { name: '보내기 키', exact: true });
+          const controlBox = (await sendKey.boundingBox())!;
+          const rowBox = (await sendKey.locator('xpath=ancestor::label').boundingBox())!;
           expect(
-            Math.abs(rowBox.x + rowBox.width - toggleBox.x - toggleBox.width)
+            Math.abs(rowBox.x + rowBox.width - controlBox.x - controlBox.width)
           ).toBeLessThanOrEqual(1);
         } else if (section === '테마·색상') {
           const controls = pane.locator('.theme-control-bar select');
@@ -158,7 +158,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           ).toBeVisible();
         } else if (section === '로어 컨텍스트') {
           await expect(pane.getByRole('heading', { name: '로어 사용', exact: true })).toBeVisible();
-          await expect(pane.getByLabel('조회한 로어를 다음 생성에 유지')).toBeVisible();
+          await expect(pane.getByLabel('조회 로어를 다음 생성에도 유지')).toBeVisible();
         } else if (section === '데이터 관리') {
           await expect(
             pane.getByRole('heading', { name: '백업 · 복원', exact: true })

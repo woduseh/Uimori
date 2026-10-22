@@ -287,7 +287,6 @@ export function CodexAgentSettings({
                           ) : (
                             <small>{t('providers.m453')}</small>
                           )}
-                          <small>{t('providers.m589', { value0: usedPercent })}</small>
                         </div>
                       </div>
                     );

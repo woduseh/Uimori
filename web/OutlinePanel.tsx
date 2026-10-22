@@ -512,11 +512,7 @@ export function OutlinePanel({
             <GitBranch size={32} />
           </div>
           <p className="outline-eyebrow">{t('prompts.uiNoOutlineYet')}</p>
-          <p>
-            {t('prompts.uiPlanTheWholeStoryOrSketchJustThisEpisode')}
-            <br />
-            {t('prompts.uiTheOutlineRemainsAPlanOnlyTheSelectedUnit')}
-          </p>
+          <p>{t('prompts.uiTheOutlineRemainsAPlanOnlyTheSelectedUnit')}</p>
           <div className="outline-welcome-actions">
             <button type="button" onClick={() => help('compose', null)}>
               <Sparkles size={18} />
@@ -526,10 +522,6 @@ export function OutlinePanel({
               <Plus size={18} />
               {t('prompts.uiAddManually')}
             </button>
-          </div>
-          <div className="outline-example">
-            <span>{t('prompts.uiForExample')}</span>
-            <p>{t('prompts.uiPlanTheRoleOfAll12EpisodesAndOutline')}</p>
           </div>
         </div>
       ) : (
@@ -549,7 +541,6 @@ export function OutlinePanel({
                 />
               </div>
               <div className="outline-tree-scroll">{tree(null)}</div>
-              <p className="outline-navigation-foot">{t('prompts.uiUseOnlyTheLevelsYouNeed')}</p>
             </nav>
             <div className="outline-detail" ref={detailScroll}>
               <div className="outline-mobile-select">
@@ -670,7 +661,7 @@ export function OutlinePanel({
                     />
                   </label>
                   <label>
-                    {t('prompts.uiOutlineContent')}
+                    {t(`reader.outlineContent.${draft.level}`)}
                     <textarea
                       rows={9}
                       maxLength={OUTLINE_INTENT_MAX}
@@ -679,7 +670,10 @@ export function OutlinePanel({
                       onChange={(event) => changeDraft({ ...draft, intent: event.target.value })}
                     />
                   </label>
-                  <p className="muted outline-field-help">{t(`prompts.guidance.${draft.level}`)}</p>
+                  <details className="outline-field-help">
+                    <summary>{t('reader.outlineWritingHelp')}</summary>
+                    <p>{t(`prompts.guidance.${draft.level}`)}</p>
+                  </details>
                   <details className="outline-reference-picker">
                     <summary>
                       <Link2 size={15} />
@@ -719,10 +713,7 @@ export function OutlinePanel({
                         disabled={disabled}
                         onChange={(event) => changeDraft({ ...draft, fixed: event.target.checked })}
                       />
-                      <span>
-                        {t('prompts.uiKeepCondition')}
-                        <small>{t('prompts.uiTheHelperIsAskedToPreserveThisConditionWhile')}</small>
-                      </span>
+                      <span>{t('reader.requestKeepOutlineCondition')}</span>
                     </label>
                   )}
                   {editing && selected && draft.revision !== selected.revision && (
@@ -894,9 +885,7 @@ export function OutlinePanel({
                     {selected.intent ? (
                       <Prose text={selected.intent} />
                     ) : (
-                      <p className="muted">
-                        {t('prompts.uiNothingHereYetAskTheHelperToElaborateOr')}
-                      </p>
+                      <p className="muted">{t('prompts.uiNoContentYet')}</p>
                     )}
                   </article>
                   {!!selected.relatedIds?.length && (
@@ -1030,7 +1019,7 @@ export function OutlinePanel({
                   {previewing && brief && (
                     <section className="outline-brief">
                       <h4>{t('prompts.uiOutlinesIncludedInThisRequest')}</h4>
-                      <p>{t('prompts.uiShowsSavedOutlinesForThisWritingRequestNoModel')}</p>
+                      <p className="muted">{t('reader.noModelCall')}</p>
                       {[
                         [t('prompts.uiParentDirectionAndSelectedUnit'), brief.outline.path],
                         [t('prompts.uiChildEvents'), brief.outline.children],

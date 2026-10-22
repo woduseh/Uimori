@@ -740,9 +740,7 @@ for (const width of DEFAULT_WIDTHS) {
       const setup = roles.getByRole('button', { name: '프로바이더·모델 설정', exact: true });
       await expect(roles.getByLabel('원문 모델', { exact: true })).toBeInViewport();
       await expect(setup).toBeInViewport();
-      await expect(
-        roles.getByText('사용할 수 있는 모델이 없어요.', { exact: false })
-      ).toBeVisible();
+      await expect(roles.getByText('사용 가능한 모델 없음', { exact: true })).toBeVisible();
       await expect(
         roles.getByRole('button', { name: '모델 프리셋·프로바이더 관리', exact: true })
       ).toHaveCount(0);
