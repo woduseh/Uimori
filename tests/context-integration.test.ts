@@ -22,8 +22,7 @@ import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js'
 import type { Connection, ModelPreset } from '../core/product.js';
 import type { Run, RunSnapshot, Source } from '../core/types.js';
 
-const endpoint = 'http://127.0.0.1:44997/turn',
-  _origin = 'http://127.0.0.1:44997';
+const endpoint = 'http://127.0.0.1:44997/turn';
 const credential = 'SYNTHETIC_CONTEXT_TEST_CREDENTIAL';
 const secret = 'synthetic-context-credential-never-persist';
 const summary =

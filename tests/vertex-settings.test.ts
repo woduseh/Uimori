@@ -89,7 +89,6 @@ const modelBody = (connection: Connection, changes: Record<string, unknown> = {}
   temperature: null,
   ...changes,
 });
-const _ref = ({ id }: { id: string }) => ({ id });
 
 describe('Vertex connection and model settings with file SQLite', () => {
   test('accepts ADC and app-entered Bearer keys, normalizes the global base path and rejects unsupported authority', async () => {

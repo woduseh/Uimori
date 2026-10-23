@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest';
 import MarkdownIt from 'markdown-it';
-import { markRisuReadingProse } from '../server/risu-reading-markdown.js';
+import { markReadingProse } from '../core/reading-markdown.js';
 
 function render(text: string) {
   const md = new MarkdownIt({ html: true, breaks: true, linkify: false, typographer: false });
   md.disable(['code']);
-  markRisuReadingProse(md);
+  markReadingProse(md);
   return md.render(text);
 }
 describe('Risu reading provenance markers', () => {

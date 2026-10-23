@@ -16,14 +16,6 @@ export const outlineLevelIndex = (level: OutlineLevel) => OUTLINE_LEVELS.indexOf
 export const outlineParentAllowed = (parent: OutlineLevel | null, child: OutlineLevel) =>
   parent === null || outlineLevelIndex(parent) < outlineLevelIndex(child);
 
-export const OUTLINE_GUIDANCE: Record<OutlineLevel, string> = {
-  theme: '원하는 정서, 관계의 속도, 중심 질문이나 결말 방향을 자유롭게 적어요.',
-  mainStory: '누구의 이야기인지, 어떤 과정을 거쳐 무엇이 달라질지 적어요.',
-  arc: '중요한 전환과 그 전환이 남길 결과를 적어요. 회차 수는 정하지 않아도 돼요.',
-  episode: '이번 화의 역할, 인물의 목적, 준비할 요소와 멈출 지점을 적어요.',
-  beat: '시도·반응·발견·선택을 적어요. 조용한 대화나 변화 없는 일상도 괜찮아요.',
-};
-
 export const outlineWritable = (level: OutlineLevel) => OUTLINE_WRITABLE_LEVELS.includes(level);
 
 export const OUTLINE_TITLE_MAX = 200;
