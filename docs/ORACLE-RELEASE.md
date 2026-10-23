@@ -4,9 +4,9 @@ Oracle 운영 진입점은 `npm run release:oracle` 하나예요. 소스 검증�
 
 ## 준비
 
-컨트롤러에는 Node 24.x, Git, 로그인된 GitHub CLI(`gh`, 저장소 Actions 읽기 권한), SSH/SCP가 필요해요. CI의 Node 기준은 `.nvmrc`, Oracle 이미지의 Node 기준은 Dockerfile에 명시돼 있어요. 로컬 Docker·Playwright·미리 만든 `dist`·운영 접속 토큰 사본은 배포 조건이 아니에요.
+컨트롤러에는 Node `>=24.14.0 <25`, Git, 로그인된 GitHub CLI(`gh`, 저장소 Actions 읽기 권한), SSH/SCP가 필요해요. CI의 Node 기준은 `.nvmrc`, Oracle 이미지의 Node 기준은 Dockerfile에 명시돼 있어요. 로컬 Docker·Playwright·미리 만든 `dist`·운영 접속 토큰 사본은 배포 조건이 아니에요.
 
-Oracle에는 기존 Uimori 앱, Docker/Compose, Python 3, Git, Tailscale 경로가 있어야 해요. 운영 앱은 healthy이고 checkout은 clean이어야 해요. 진행 중인 생성이나 기존 maintenance가 있으면 먼저 정상 종료·해제하고 배포해요. 배포 도구는 사용자 작업을 강제로 취소하지 않아요.
+Oracle에는 기존 Uimori 앱, Docker/Compose, Python 3, Git, Tailscale 경로가 있어야 해요. SSH 사용자는 `sudo -n docker`와 `sudo -n tailscale`을 비대화식으로 실행할 수 있어야 해요. 운영 앱은 healthy이고 checkout은 clean이어야 해요. 진행 중인 생성이나 기존 maintenance가 있으면 먼저 정상 종료·해제하고 배포해요. 배포 도구는 사용자 작업을 강제로 취소하지 않아요.
 
 [예시 설정](../deploy/oracle-release.example.json)을 ignored `.local/oracle-release.json`에 복사해요.
 
@@ -56,7 +56,9 @@ CI 관문이 막히면 선택한 실행의 링크·ID·attempt·status·conclusi
 | `--status --run-id <id>` | 지정한 실행 기록과 실제 운영 상태를 나란히 읽어요. 없는 실행은 `release: null`로 표시해요. |
 | `--fresh` | 명시적 초기화예요. 새 데이터 볼륨을 만들고 외부 로그인 파일만 복사해요. 기존 DB·설정·앱 API 키는 새 앱에 이어지지 않아요. |
 
-기본 경로는 Oracle에서 정확한 SHA를 한 번 빌드해요. 이후 모든 probe와 전환은 같은 immutable image ID를 사용해요. `UIMORI_CODEX_VERSION=latest`이면 배포 시 npm의 stable dist-tag를 조회하고 실제 버전 번호로 고정해 빌드해요. 요청값과 해석된 버전을 배포 기록에 함께 남기므로 다음 배포는 새 stable을 따라가면서 현재 이미지와 롤백 대상은 immutable하게 유지돼요. 외부 `--image`를 명시하면 이미 검증된 이미지의 exact Codex label을 사용하며 다시 최신판으로 바꾸지 않아요. 이미지에는 `io.uimori.managed=true`, `org.opencontainers.image.revision=<전체 SHA>`, `io.uimori.codex-version=<실제 버전>` label이 있어야 해요. 새 registry나 멀티아키텍처 배포 체계를 만들지는 않아요. 외부 이미지도 이 label과 현재 Codex 빌드 설정이 일치해야 하며 실제 ARM64 부팅 검사를 통과해야 해요.
+`--check-only --fresh`를 함께 사용하면 빈 DB 후보만 검증하고 운영 DB 복제본 검사는 생략해요. 이 조합은 새 운영 데이터 볼륨을 만들거나 전환하지 않아요. 일반 업데이트의 기존 DB 호환성을 확인하려면 `--fresh` 없이 `--check-only`를 실행해요.
+
+기본 경로는 Oracle에서 정확한 SHA를 한 번 빌드해요. 이후 모든 probe와 전환은 같은 immutable image ID를 사용해요. `UIMORI_CODEX_VERSION=latest`이면 배포 시 npm의 stable dist-tag를 조회하고 실제 버전 번호로 고정해 빌드해요. 요청값과 해석된 버전을 배포 기록에 함께 남기므로 다음 배포는 새 stable을 따라가면서 현재 이미지와 롤백 대상은 immutable하게 유지돼요. 외부 `--image`를 명시하면 이미 검증된 이미지의 exact Codex label을 사용하며 다시 최신판으로 바꾸지 않아요. 이미지에는 `io.uimori.managed=true`, `org.opencontainers.image.revision=<전체 SHA>`, `io.uimori.codex-version=<실제 버전>` label이 있어야 해요. 새 registry나 멀티아키텍처 배포 체계를 만들지는 않아요. 외부 이미지도 이 label과 현재 Codex 빌드 설정이 일치해야 하며 Oracle 호스트의 실제 부팅 검사를 통과해야 해요.
 
 로컬 `dist`를 다시 만들어 원격 빌드와 비교하지 않아요. 컨트롤러는 소스 build fingerprint를 계산하고, 실제 이미지에서 해당 fingerprint와 이미지 내부 manifest·artifact hash를 검증해요. Node와 최종 dist hash는 서버 기록에 남아요.
 

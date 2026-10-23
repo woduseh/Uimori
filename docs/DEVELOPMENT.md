@@ -53,12 +53,12 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:translation-guides` | Bot guide forms, native JSON, draft recovery, validation and mobile layout. |
 | `npm run verify:personal` | Ordinary resource saves, local recovery, image metadata, provider keys and portable chat restoration. |
 | `npm run verify:browser-smoke` | Small browser suite for chat and global prompt settings. |
-| `npm run verify:ui` | Reader layout, editing, reading preferences and shared-control motion; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
+| `npm run verify:ui` | Reader layout, editing, Markdown rendering, reading preferences and shared-control motion; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
 | Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
 | `npm run verify:browser` | Full local synthetic browser regression. |
 | `npm run verify:selfhost` | Independent HTTPS/authentication, cross-device SSE, and re-entry/session-revocation scenarios. Accepts `--grep` for diagnosis; a filtered run is not the full suite. |
 | `npm run verify:visual` | Full browser suite with extra viewport and layout checks; use `--grep` to focus it. |
-| `npm run verify:gallery` | Screen and journey captures; see [UI-GALLERY](UI-GALLERY.md). |
+| `npm run verify:gallery` | Screen and journey captures against a matching build; accepts no arguments. See [UI-GALLERY](UI-GALLERY.md). |
 | `npm run verify:copy` | Warning-only scan and JSON review inventory of literal i18n and JSX explanations; see [UI-GALLERY](UI-GALLERY.md#copy-review-warnings). No browser, provider calls, or build required. |
 | `npm run check:i18n` | ICU syntax, locale keys/arguments and missing translations; `-- --candidates` also lists static Korean and dynamic-call review candidates. See [UI language](I18N.md). |
 | `npm run verify:i18n` | Four UI languages, re-entry, reader recovery, retained editor state and model inputs, mobile/pseudo text, accessible names, manifest and restarted-worker synthetic push. Requires a matching build. |
@@ -100,7 +100,7 @@ Actual local Risu materials are excluded from ordinary browser discovery. Set `U
 
 ## Release checks
 
-`npm run release:check -- --area <verify:*>` runs `quality`, a matching `build`, and the selected browser area. The default is `verify:browser-smoke`; `--full` selects `quality:full` and replaces that default with `verify:browser`. Explicit areas remain selected alongside the full suite. Deployment-tooling changes normally select `verify:selfhost`. Local receipt matching and reuse remain developer conveniences. Oracle deployment independently requires the exact SHA’s full GitHub CI result and runs image/DB/HTTPS checks on the host; see [ORACLE-RELEASE](ORACLE-RELEASE.md).
+`npm run release:check -- --area <verify:*>` runs `quality`, a matching `build`, and one selected local feature check. The default is `verify:browser-smoke`; `--full` selects `quality:full` and replaces that default with `verify:browser`. An explicit feature area remains selected alongside the full suite. `--area` rejects the full browser, gallery and visual runners; use `--full` for the complete regression. Deployment-tooling changes normally select `verify:selfhost`. Local receipt matching and reuse remain developer conveniences. Oracle deployment independently requires the exact SHA’s full GitHub CI result and runs image/DB/HTTPS checks on the host; see [ORACLE-RELEASE](ORACLE-RELEASE.md).
 
 After a matching build, `node scripts/test-tooling.mjs --files scripts/oracle-host-control.test.mjs scripts/oracle-smoke.test.mjs scripts/oracle-runner.test.mjs` checks temporary session cleanup, preserved maintenance outcomes and release diagnostics with disposable app/database and runner fixtures. These checks do not operate Oracle or establish production HTTPS behavior.
 
@@ -142,9 +142,9 @@ Local fixtures, browser emulation, live providers, and physical devices establis
 
 ## Reset and cleanup
 
-`npm run cleanup -- --run <run-id>` removes one explicitly selected inactive browser run, including diagnostic artifacts. It never stops unrelated processes. Successful browser runs remove temporary databases; failed runs retain a copy under `evidence-db`.
+`npm run cleanup` lists owned browser runs; `npm run cleanup -- --run <run-id>` removes one explicitly selected inactive run, including diagnostic artifacts. It never stops unrelated processes. The shared browser and self-host runners remove temporary databases on success and retain a copy under `evidence-db` on failure. The gallery retains its seeded database under `evidence-db` after either outcome.
 
-Browser/self-host and tooling runners perform bounded local artifact retention after their own run finishes. For each owned output family, the newest three successes and five failures are retained, in addition to the current run, any active/alive-owner process, uncertain cleanup, unowned output and artifacts referenced by the current source's successful local release checks. `npm run cleanup -- --retention` previews candidates; add `--apply` for explicit cleanup. It never sends termination signals or removes arbitrary user data. Cleanup warnings are recorded independently and cannot turn a successful verification into a failed app test. CI uploads retain seven days of reports; browser fixtures use synthetic credentials, never production tokens.
+The shared browser harness, self-host runner and tooling runner perform bounded local artifact retention after their own run finishes; the gallery does not invoke retention itself. For each owned output family, the newest three successes and five failures are retained, in addition to the current run, any active/alive-owner process, uncertain cleanup, unowned output and artifacts referenced by the current source's successful local release checks. `npm run cleanup -- --retention` previews candidates; add `--apply` for explicit cleanup. It never sends termination signals or removes arbitrary user data. Retention warnings are recorded independently and cannot turn a successful verification into a failed app test. CI uploads retain seven days of reports; browser fixtures use synthetic credentials, never production tokens.
 
 `npm run reset:dev` deletes only this checkout's default `.local/uimori.sqlite` and its SQLite sidecars. Existing backups and older database files remain untouched. Stop the server first. The command rejects an in-use database or unsafe paths and does not reset an arbitrary `UIMORI_DB`.
 

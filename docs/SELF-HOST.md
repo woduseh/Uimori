@@ -4,13 +4,13 @@
 
 > 현재 개발 버전의 Linux/Docker 실행 안내예요. 기존 설치의 수동 업데이트와 복구 절차는 [업데이트 안내](UPDATES.md)를 확인해요.
 
-한 사람이 PC와 휴대폰에서 같은 작업실을 사용하는 구성이에요. Linux 서버의 Docker Compose가 **Nginx HTTPS → Uimori 한 프로세스 → 영구 SQLite**를 실행해요. 접속 토큰을 아는 기기는 같은 자료·채팅에 접근해요. 사용자별 계정·권한 분리는 없어요.
+한 사람이 PC와 휴대폰에서 같은 작업실을 사용하는 구성이에요. Linux 서버의 Docker Compose가 **Nginx HTTPS → Uimori 한 프로세스 → 영구 SQLite**와 도우미용 `shell-runner`를 실행해요. 접속 토큰을 아는 기기는 같은 자료·채팅에 접근해요. 사용자별 계정·권한 분리는 없어요.
 
 호스트에 Tailscale이 있다면 [Tailscale 배포 안내](TAILSCALE-DEPLOY.md)의 별도 Compose로 Serve 또는 Funnel을 사용할 수도 있어요. Funnel은 휴대폰의 Tailscale 연결 없이 접속할 수 있는 공개 HTTPS 경로예요.
 
 ## 준비와 실행
 
-서버에 Docker Engine과 Compose 플러그인, 이 저장소의 코드가 필요해요. 설치는 사용 중인 배포판의 [Docker 공식 안내](https://docs.docker.com/engine/install/)를 따르세요. 호스트에 Node.js를 따로 설치할 필요는 없어요. 이미지는 Debian 기반 `node:24-bookworm-slim`을 사용하고 Node `>=24.14.0 <25`를 검사해요. 빌드 단계에서 `npm ci`와 빌드를 수행하고 실행 이미지에는 production 의존성과 `dist`를 복사해요. [Node 공식 이미지](https://github.com/nodejs/docker-node/blob/main/README.md), [Docker 다단계 빌드](https://docs.docker.com/build/building/multi-stage/)
+서버에 Docker Engine과 Compose 플러그인, 이 저장소의 코드가 필요해요. 설치는 사용 중인 배포판의 [Docker 공식 안내](https://docs.docker.com/engine/install/)를 따르세요. 호스트에 Node.js를 따로 설치할 필요는 없어요. [Dockerfile](../Dockerfile)은 Debian 기반 `node:24.21.0-bookworm-slim`을 사용하고 Node `>=24.14.0 <25`를 검사해요. 빌드 단계에서 `npm ci`와 빌드를 수행하고 실행 이미지에는 production 의존성, `dist`, 도우미 runner와 필요한 런타임 도구를 복사·설치해요. [Node 공식 이미지](https://github.com/nodejs/docker-node/blob/main/README.md), [Docker 다단계 빌드](https://docs.docker.com/build/building/multi-stage/)
 
 1. 사용할 호스트 이름이 서버를 가리키도록 DNS를 설정하고, 그 이름에 유효하며 PC·휴대폰이 신뢰하는 TLS 인증서를 준비해요. 예시는 `story.example.com`이에요. 서버 방화벽·공유기에서는 HTTPS 포트만 열어요. 기본 번들은 HTTP 80 포트를 열거나 인증서를 발급하지 않아요.
 2. 서버의 전용 디렉터리에 `fullchain.pem`, `privkey.pem`을 둬요. 예시는 `/srv/uimori/tls`예요. Nginx가 이 디렉터리를 읽기 전용으로 마운트해요. 파일이 바깥 경로를 가리키는 심볼릭 링크이면 컨테이너에서 읽지 못하므로 두 파일과 링크 대상이 마운트 안에 있어야 해요. 인증서는 접속할 도메인과 일치해야 해요. [Nginx TLS 설정](https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_certificate)
@@ -54,6 +54,8 @@ API 키는 앱의 프로바이더 설정에서 직접 입력해요. JEV와 서�
 
 DB는 Compose의 `data` named volume 안의 `/data/uimori.sqlite`에 저장돼요. 큰 자료를 가져오는 동안에는 같은 볼륨의 `/data/uploads`에 임시 파일을 두고 등록이 끝나면 지워요. 실제 볼륨 이름은 `.env.self-host`의 `UIMORI_DATA_VOLUME`이며 기본값은 기존 `uimori_data`예요. 초기 volume은 이미지에서 준비한 UID 1000 소유 디렉터리를 사용해요. 프로그램 이미지를 다시 빌드하거나 컨테이너를 교체해도 volume은 유지돼요. 같은 DB를 여러 앱 프로세스에 연결하거나 `app`을 복제하지 마세요. [Docker volume의 수명과 초기 복사](https://docs.docker.com/engine/storage/volumes/)
 
+자동 백업은 `backups` volume, 도우미 작업 파일은 `helper_workspaces` volume에 저장돼요. `shell-runner`는 앱과 같은 이미지를 사용하고 도우미 작업 volume만 공유하며, 네트워크와 앱 DB에 직접 접근하지 않아요. 수동 업데이트 때도 앱과 runner를 같은 이미지로 교체해요.
+
 실행 중 작업을 마치고 앱의 일관된 DB 스냅샷과 기존 이미지 정보를 보관한 뒤 진행해요. 코드는 원하는 릴리스 태그로 선택하고, `UIMORI_IMAGE`를 지정했다면 이전 이미지를 덮어쓰지 않는 새 참조를 사용해요. 실제 설치의 Compose 파일·프로젝트·환경 파일·데이터 볼륨은 계속 동일하게 사용해요.
 
 ```sh
@@ -72,11 +74,13 @@ docker compose --env-file .env.self-host restart proxy
 
 데이터를 유지하려면 `down`에 `-v`를 붙이지 마세요. Compose 프로젝트 이름은 기본 `uimori`로 고정돼요. 이미지 태그와 호환되는 `UIMORI_DATA_VOLUME`을 함께 지정해요. 현재 앱은 **빈 DB와 스키마 15만 열며 구형 DB는 변경 없이 거절**해요. 이전 릴리스에서 업데이트하기 전 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 스키마 15의 기존 자료는 같은 volume에서 유지하고, 의도적으로 처음부터 시작할 때만 별도의 빈 volume을 지정해요. 업데이트 전 백업과 실행 이미지 정보를 함께 보관해요. 앱 안의 Update 버튼과 무인 자동 업데이트는 제공하지 않아요. [수동 업데이트와 복구](UPDATES.md#manual-release-update)에서 앱과 DB를 함께 되돌리는 절차를 확인해요. Oracle 운영에는 [전용 배포 절차](ORACLE-RELEASE.md)를 사용해요.
 
-프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
+프로그램과 Docker 서비스가 정상적으로 재시작되면 `restart: unless-stopped`가 앱·프록시·shell runner를 다시 시작해요. 서버 중지로 끊긴 모델 작업은 자동 재호출하지 않아요. 브라우저만 닫았다면 서버의 생성 작업은 계속 진행되고, 다시 로그인해 저장된 진행 상태와 결과를 볼 수 있어요.
 
 ### 유지보수 모드
 
-업데이트 전후로 **새 저장·생성·가져오기만 잠시 멈추는** 유지보수 모드를 앱이 직접 제공해요. 설정의 **내보내기와 복원 → 유지보수 모드**에서 현재 상태를 보고 시작·재개할 수 있어요. 상태 조회는 `GET /api/maintenance`, 전환은 `POST /api/maintenance`의 `{"status":"closed","reason":"update"}`·`{"status":"open"}`이에요. 접속 토큰이 필요한 다른 API와 같은 인증을 사용해요.
+업데이트 전후로 **새 저장·생성·가져오기만 잠시 멈추는** 유지보수 모드를 앱이 직접 제공해요. 상태 조회는 `GET /api/maintenance`, 전환은 `POST /api/maintenance`의 `{"status":"closed","reason":"update"}`·`{"status":"open"}`이에요. Oracle에서는 배포 runner가 제어하고, 수동 운영에서는 로그인한 세션으로 API를 사용해요. 앱 화면은 유지보수 안내를 표시하며 시작·재개 버튼은 제공하지 않아요.
+
+아래 `$COOKIE`는 `/api/session` 로그인 응답으로 받은 `uimori_session=...` 쿠키 문자열이에요.
 
 ```sh
 curl -sS -X POST https://story.example.com/api/maintenance \
@@ -84,11 +88,11 @@ curl -sS -X POST https://story.example.com/api/maintenance \
   -b "$COOKIE" -d '{"status":"closed","reason":"update"}'
 ```
 
-닫힌 상태에서는 읽기와 진행 중인 작업의 **취소·건너뛰기**만 받고, 새 요청은 `503 MAINTENANCE_CLOSED`로 거절해 브라우저 화면에 유지보수 안내를 표시해요. 이미 승인된 실행은 계속 끝나고 결과를 저장하며, 그 결과가 만든 후속 작업은 큐에 남고 새 외부 호출로 시작하지 않아요. 닫힌 상태는 DB에 남으므로 재시작해도 유지돼요. `activeWork`로 아직 정리 중인 작업 수를 확인한 뒤 앱을 정지해요.
+닫힌 상태에서는 읽기·로그인·검색·유지보수 제어와 진행 중인 작업의 **취소·건너뛰기**를 허용하고, 새로운 일반 쓰기는 `503 MAINTENANCE_CLOSED`로 거절해요. 이미 승인된 실행은 계속 끝나고 결과를 저장하며, 그 결과가 만든 후속 작업은 큐에 남고 새 외부 호출로 시작하지 않아요. 닫힌 상태는 DB에 남으므로 재시작해도 유지돼요. `activeWork`로 아직 정리 중인 작업 수를 확인한 뒤 앱을 정지해요.
 
 `UIMORI_MAINTENANCE=1`로 시작하면 **후보 검증 부팅**이에요. 현재 DB 형식의 호환성을 검사하고 읽기를 제공하되 작업 복구·worker를 시작하지 않으며, 이 모드는 API로 열 수 없어요(`409 MAINTENANCE_BOOT`). 빈 DB 초기화 등은 가능하므로 읽기 전용 모드가 아니며, 반드시 복사한 data로 검사해요.
 
-앱의 **내보내기와 복원 → SQLite 백업 다운로드**로 일관된 백업을 받아 별도로 보관할 수 있어요. 복원할 백업의 형식이 사용할 앱에서 지원되는지 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 구버전 앱으로 돌아갈 때는 갱신된 DB가 아니라 그 앱에 맞는 업데이트 전 백업을 사용해요. 백업·컨테이너 전환은 [수동 업데이트와 복구](UPDATES.md#manual-release-update)를 봐요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
+앱의 **설정 → 데이터 관리**에서 SQLite 백업을 다운로드해 별도로 보관할 수 있어요. 복원할 백업의 형식이 사용할 앱에서 지원되는지 [데이터 형식](DATA-MIGRATIONS.md#현재-버전)을 확인해요. 구버전 앱으로 돌아갈 때는 갱신된 DB가 아니라 그 앱에 맞는 업데이트 전 백업을 사용해요. 백업·컨테이너 전환은 [수동 업데이트와 복구](UPDATES.md#manual-release-update)를 봐요. 실행 중 DB 파일 하나만 복사하면 WAL의 변경분을 놓칠 수 있어요.
 
 ## 프록시와 접속 조건
 
@@ -97,7 +101,7 @@ curl -sS -X POST https://story.example.com/api/maintenance \
 
 [Nginx 설정](../deploy/nginx.conf)은 요청의 원래 `Host`와 `Origin`을 그대로 전달해 앱이 `UIMORI_PUBLIC_ORIGIN`과 비교하게 해요. 임의 Host를 허용된 Host로 덮어쓰면 이 검사가 약해져요. SSE용 응답 버퍼링·캐시는 끄고 응답 읽기 간격 제한을 3600초로 설정했어요. Docker DNS를 다시 조회하므로 앱 컨테이너 교체 후 새 주소를 사용해요. [Nginx Host 전달·버퍼링·timeout](https://nginx.org/en/docs/http/ngx_http_proxy_module.html), [DNS resolver](https://nginx.org/en/docs/http/ngx_http_core_module.html#resolver)
 
-프록시 요청 본문 한도는 native transfer·archive import의 256 MiB 파일에 요청 wrapper 여유를 더한 257 MiB예요. 서버는 RISU 본문 검사 24 MiB, 원문·번역 직접 저장 8 MiB 등 더 작은 route별 한도를 계속 적용해요. 원본 CHARX staged 업로드와 채팅 백업도 각각 256 MiB까지 받아요. [Nginx 본문 크기 제한](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
+프록시 요청 본문 한도는 513 MiB예요. staged 업로드와 이미지 포함 `.uimori` archive는 512 MiB, native transfer JSON과 채팅 백업 JSON은 256 MiB까지 받아요. 서버는 base64 방식 Risu 파일의 24 MiB 제한, 원문·번역 직접 저장의 HTTP 본문 8 MiB 제한 등 route별 검사를 계속 적용해요. 프록시 한도를 높여도 이 제한은 바뀌지 않아요. [Nginx 본문 크기 제한](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
 
 다른 리버스 프록시를 사용한다면 동일한 조건을 유지해요. 호스트에서 앱을 직접 실행할 때는 Node `>=24.14.0 <25`, 빌드 산출물, 영구 `UIMORI_DB` 경로를 준비하고 `UIMORI_HOST=127.0.0.1`로 프록시만 접근하게 할 수 있어요. `/uimori` 같은 하위 경로 배포는 지원하지 않아요.
 

@@ -25,6 +25,6 @@ Vercel 목록은 단가·두 단계 컨텍스트 구간·명시된 서비스 등
 - 실제 서비스 tier가 고정 가격과 다르면 금액을 추정하지 않아요. Anthropic의 `standard_only`는 응답의 `standard`와 같은 기준이에요. 새 Anthropic Batch 예약은 명시적으로 입력한 Batch 단가를 고정하고 추가 할인하지 않아요. 업데이트 전에 예약된 Batch의 기존 가격 snapshot에는 당시의 50% 할인 계산을 유지해요. 기존 미확인 호출은 최신 요금으로 소급 계산하지 않아요.
 - 본문에는 작문과 작문 보조의 추정 비용을 표시해요. 번역·제목 등 후속 작업은 작업 현황에서 별도로 확인해요. 상세에는 프로바이더 보고 비용과 추정 비용을 분리해 표시해요.
 - 과거 도우미 가정 장면 생성의 사용량은 `helper-artifact`, 당시 컨텍스트 요약 호출은 `summary`로 보존해요. 가정 장면 생성 기능이 종료돼도 이 기록은 유지해요.
-- JSON 보관은 가격 snapshot과 추정 결과를 보존하며 형식·모델 귀속·계산 일치를 검증해요. 가격은 실행 허가나 누적 금액 차단 조건이 아니에요. 취소·중복·불확실 실행·원문 귀속 계약은 유지해요.
+- 전체 SQLite 백업은 저장된 가격 snapshot과 추정 결과를 보존해요. 개별 자료·채팅의 휴대용 백업은 프로바이더·모델 설정과 호출 기록을 옮기지 않아요. 가격은 실행 허가나 누적 금액 차단 조건이 아니에요. 취소·중복·불확실 실행·원문 귀속 계약은 유지해요.
 
 검증은 `tests/model-pricing.test.ts`, `tests/pricing-estimate.test.ts`, `tests/pricing-store.test.ts`, `tests/pricing-transport.test.ts`, `tests/model-pricing-browser.spec.ts`에서 수행해요. 합성 검사는 실제 프로바이더 청구액 일치나 실제 휴대폰 검증을 의미하지 않아요.

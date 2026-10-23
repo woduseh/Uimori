@@ -4,7 +4,7 @@
 
 [개인 서버 안내](SELF-HOST.md)의 인증·프로바이더·저장 조건을 유지하고, 호스트의 Tailscale이 HTTPS를 처리하는 배포 방법이에요. Docker와 Tailscale이 설치되고 같은 tailnet에 연결된 Linux 서버를 전제로 해요.
 
-`compose.tailscale.yaml`은 기본 `compose.yaml`과 합치지 않고 단독으로 사용해요. 앱은 호스트의 `127.0.0.1:4310`에서만 접근할 수 있고 DB는 고정 프로젝트 `uimori`의 `data` named volume에 보관해요. Nginx나 별도 TLS 파일은 필요하지 않아요. 기존 서비스가 443을 사용하면 다른 허용 포트인 8443으로 구분할 수 있어요.
+`compose.tailscale.yaml`은 기본 `compose.yaml`과 합치지 않고 단독으로 사용해요. 앱은 호스트의 `127.0.0.1:4310`에서만 접근할 수 있고 DB는 고정 프로젝트 `uimori`의 `data` named volume에 보관해요. 자동 백업과 도우미 작업 파일은 별도의 `backups`·`helper_workspaces` volume을 사용하며, `shell-runner`도 함께 실행돼요. Nginx나 별도 TLS 파일은 필요하지 않아요. 기존 서비스가 443을 사용하면 다른 허용 포트인 8443으로 구분할 수 있어요.
 
 ## 앱 시작
 
@@ -65,7 +65,7 @@ Tailscale 기기 이름은 `sudo tailscale set --hostname=<새이름>`으로 바
 - 인증서 경고 없이 HTTPS로 열리고, 로그인 전 `/api/library`와 `/api/export`가 401인지 확인해요.
 - 허용하지 않은 Host·Origin이 거절되고, 로그인·저장·실시간 갱신이 작동하는지 확인해요. 앱은 원래 공개 Host·Origin을 검사하므로 프록시에서 이 값을 임의로 바꾸지 않아요.
 - `4310`이 loopback에서만 수신하는지, 기존 다른 서비스의 접속 설정이 유지되는지 확인해요.
-- 재시작 후 다시 로그인해 저장 내용이 유지되는지 확인하고 SQLite 백업은 별도로 보관해요.
+- 재시작 후 접속과 저장 내용이 유지되는지 확인하고 SQLite 백업은 별도로 보관해요. 서버 재시작만으로 기존 로그인 세션이 해제되지는 않아요.
 - 업데이트는 같은 Compose 파일과 프로젝트 이름을 사용하고, 데이터를 유지하려면 `down -v`를 실행하지 않아요. 구형 DB 자동 이관은 제공하지 않아요.
 
 기본 `compose.yaml`과 이 파일을 같은 프로젝트에서 동시에 실행하지 마세요. 기존 Nginx 구성에서 전환하는 경우에는 해당 프로젝트의 서비스와 데이터 volume을 먼저 확인해요.

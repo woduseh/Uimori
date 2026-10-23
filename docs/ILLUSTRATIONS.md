@@ -168,10 +168,12 @@ JEV 키 미설정·응답 오류·8초 시간 초과·입력 예산 초과는 `u
 | `GET /api/resources/illustration-preset/:id`, `POST /api/resources/illustration-preset/:id/undo` | 읽기·직전 저장 되돌리기. |
 | `POST /api/illustration-presets/selection` | `{scope: global/bot/chat, targetId?, presetId: string/null, expectedRevision}`. 선택 수정 번호는 자료 수정 번호와 별개예요. |
 | `GET /api/illustration-presets/:id/export`, `DELETE /api/illustration-presets/:id` | 파일 내보내기·삭제. 삭제에는 `expectedRevision`이 필요해요. |
-| `POST /api/illustration-settings/comfyui/test` | `{baseUrl, authorizationEnv}`로 `system_stats` 확인. 실패는 502에 `{code, comfyui}` JSON. |
+| `POST /api/illustration-settings/comfyui/test` | `{baseUrl, authorizationEnv}`로 `system_stats` 확인. 주소 검증 실패는 400, 연결·응답 실패는 502이며 `{code, comfyui}` 진단을 반환해요. |
 | `GET/PUT /api/chats/:id/illustration-references` | 채팅별 참조 역할. 후보는 채팅 이미지와 장착 자료 이미지. |
 | `POST /api/sources/:id/illustrations` | 수동 계획 예약. `expectedSourceHash?`, `maxTargets?`(기본 1), `idempotencyKey?`. 반환은 이미지가 아닌 `task: plan` 작업이며 이후 렌더 작업이 추가돼요. 테스트 모드에서만 `fixture`. |
 | `PATCH /api/sources/:id/illustration-presentation` | `{expectedSourceHash, expectedRevision, heroTargetId: string/null}`. 대표 선택만 변경. |
+| `GET /api/sources/:id/illustration-usage` | 현재 원문의 삽화 호출·토큰을 단계별로 조회. 새 작업은 예약하지 않아요. |
+| `POST /api/sources/:id/illustration-placement` | `{expectedSourceHash}`로 현재 타깃의 번역 위치 연결을 명시적으로 다시 요청. 그림은 새로 만들지 않아요. |
 | `POST /api/illustrations/:id/regenerate` | 같은 타깃을 최신 설정으로 다시 그리는 새 작업. 성공 전까지 기존 그림 유지. |
 | `GET /api/chats/:id/illustrations`, `GET /api/illustrations/:id` | 목록과 고정 입력을 포함한 상세. |
 | `POST /api/illustrations/:id/retry`, `/cancel`, `DELETE /api/illustrations/:id` | 실패 작업의 고정 입력 재시도·해당 작업 취소. 새 컷의 삭제는 그 타깃의 그림/생성 기록만 삭제하고, 계획 기록 삭제는 생성된 컷을 지우지 않아요. |

@@ -42,7 +42,7 @@ npm run dev
 | --- | --- |
 | [사용 안내](docs/USAGE.md) | 봇별 채팅·폴더, 설정 검색, 프롬프트·창작 프리셋, 번역·독립 채팅 복사, 백업 |
 | [구성·집필 작업실](docs/OUTLINE.md) | 계층형 구성, 관련 계획 연결, 선택한 단위 집필과 원문 점검 |
-| [이야기 가이드](docs/STORY-GUIDE.md) | 원작·현재 이야기 분석, 집필 참고문, 원작 질문과 직접 정정 |
+| [원작·인물 참고](docs/STORY-GUIDE.md) | 선택형 집필 참고문, 도우미를 통한 원작 질문, 메모·정정 |
 | [도우미 도구](docs/HELPER-TOOLS.md) · [Codex 연결](docs/CODEX.md) | 부분 조회·편집, 설정·작업 제어와 네이티브 실행 |
 | [서재와 프롬프트](docs/LIBRARY.md) · [항목 삭제](docs/DELETION.md) | 자료 분류·폴더·대표 이미지, 삭제 위치와 참조 보호 |
 | [Risu 원본 가져오기](docs/RISU-IMPORT.md) | `.charx` 카드·모듈·`.risup` 프롬프트 원본, CBS·Lua·정규식·CSS 실행과 지원 범위 |
@@ -52,7 +52,7 @@ npm run dev
 | [읽기 위치·책갈피](docs/READING-STATE.md) | 기기별 이어 읽기, 책갈피와 개인 백업 |
 | [원고 검색](docs/MANUSCRIPT-SEARCH.md) | 원문·번역·요청의 본문 검색과 장면 이동 |
 | [자동 백업](docs/AUTOMATIC-BACKUPS.md) | 한국 시간 일일 스냅샷, 검증·보관·다운로드 |
-| [문제 보고용 진단](docs/DIAGNOSTICS.md) | 원문·키를 제외한 보고서 미리보기와 다운로드 |
+| [문제 확인과 실행 상세](docs/DIAGNOSTICS.md) | 작업 상태·오류·남아 있는 실행 입력과 복구 동작 확인 |
 | [장면 삽화](docs/ILLUSTRATIONS.md) | Codex 이미지 생성·원격 ComfyUI로 응답별 삽화 생성, 자동 생성·재요청·개수 한도 |
 | [프로바이더](docs/PROVIDERS.md) | Vertex·Google AI Studio Gemini, Responses·Chat 호환, Anthropic 실시간·Batch, Vercel, Codex 프로바이더와 선택형 평가 도구·합성 시험 |
 | [개발과 검증](docs/DEVELOPMENT.md) | 검사·정리 명령, 격리 실행, 코드 구조와 증거 보관 |

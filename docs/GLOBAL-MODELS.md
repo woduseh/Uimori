@@ -14,7 +14,7 @@
 
 ## 저장과 실행 경계
 
-`GET /api/model-workspace`는 `{revision, routes, translationPolicy, titleModel, helperModel, contextModel, scriptModel}`을 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. 선택 기능 모델과 `scriptModel`은 `{id}` 참조 또는 `null`이며 PUT에서 생략하면 기존 값을 유지해요. 프롬프트 선택과 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 작문·번역 프롬프트는 프리셋 ID와 명시적인 전역 옵션만 저장하고, 본문과 기본 옵션은 원본의 최신 저장본에서 읽어요. 과거 실행은 접수 당시 스냅샷을 유지해요.
+`GET /api/model-workspace`는 `{revision, routes, translationPolicy, summaryLength, mainJudgmentEnabled, mainJudgmentThreshold, titleModel, helperModel, contextModel, scriptModel}`을 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. 선택 기능 모델과 `scriptModel`은 `{id}` 참조 또는 `null`이며 PUT에서 생략하면 기존 값을 유지해요. `summaryLength`는 본문·도우미의 [요약 길이](CONTEXT-LIMITS.md#공통-요약-지침과-출력-여유)를 정해요. 프롬프트 선택과 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 작문·번역 프롬프트는 프리셋 ID와 명시적인 전역 옵션만 저장하고, 본문과 기본 옵션은 원본의 최신 저장본에서 읽어요. 과거 실행은 접수 당시 스냅샷을 유지해요.
 
 DB·archive의 버전과 지원 이관은 [migration](DATA-MIGRATIONS.md)을 봐요. 새 DB의 역할 모델은 미지정으로 시작하고 채팅 body의 모델 값을 전역 기본값으로 채택하지 않아요. API의 채팅 `profile.routes`는 고정 본문 모델을 포함한 현재 적용 설정의 읽기 전용 projection이에요. 채팅별 선택은 `profile.pinned.mainPromptPresetId`와 `profile.pinned.mainModel`에 ID로 저장해요. 프로필 수정에서 `pinned` 생략은 유지, `{}`는 전체 고정 해제이며 `expectedRevision`으로 충돌을 보호해요. 보관된 Run의 `snapshot.profile.routes/models`는 과거 실행의 고정 정보예요. 지원하지 않는 과거 DB/archive를 임의로 변환하지 않아요.
 
@@ -27,12 +27,11 @@ DB·archive의 버전과 지원 이관은 [migration](DATA-MIGRATIONS.md)을 봐
 | 새 도우미 작업 | 작업 예약 시 현재 `helperModel`과 컨텍스트 모델을 고정 |
 | 자동·수동 컨텍스트 정리 | 상위 Run 또는 독립 context job 예약 시 `contextModel`을 고정 |
 | 진행 중 작업 | 예약 때 고정한 값 유지. 설정 변경으로 교체하지 않음 |
-| 본문 ‘현재 설정으로 재시도’ | 원래 요청 직전 위치까지 복사한 독립 채팅에서 현재 설정으로 새 Run 생성 |
+| 본문 다시 쓰기·재시도 | 현재 설정과 해당 응답 직전 대화로 새 Run 생성. 중간 장면은 독립 채팅 사본을 사용하고, 마지막 응답은 성공 후 교체도 가능 |
 | 번역 job 재시도 | 기존 계약대로 현재 모델·번역 프롬프트·정책으로 새 번역 job 예약 |
 | 이미지 job 재시도 | 원래 job의 고정 입력·모델·snapshot 유지 |
 | 카드 Lua의 모델 호출 | 원본 `LLM`·`simpleLLM`은 고정 본문 모델, `axLLM`은 고정 `scriptModel` 또는 본문 모델을 사용. Run 전체 `maxCalls`를 공유하고 본문 호출에 필요한 예산을 남김 |
-| 같은 입력 후보 실험 | 원래 고정 snapshot 계약 유지 |
-| 채팅 포크 | 복사된 과거 원문·Run·결과 snapshot과 채팅 고정 선택 보존. 이후 새 작업은 현재 고정 선택 또는 전역 기본값 사용 |
+| 독립 채팅 복사 | 선택 지점까지의 원문·메모·변수·채팅 고정 선택을 새 ID로 연결. 전체 실행 입력·호출 영수증은 복사하지 않으며 이후 새 작업은 현재 고정 선택 또는 전역 기본값 사용 |
 
 source/hash·revision/CAS·idempotency·worker 소유권·취소·중복 방지 계약은 유지해요. 번역 응답을 JEV로 거절 판정하고 명확한 거절만 제한된 자동 재요청을 해요. 번역·조회·판정은 같은 전체 호출 한도를 사용해요. HTTP 오류나 불확실한 프로바이더 실행은 자동 재생하지 않아요.
 
