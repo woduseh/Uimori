@@ -106,13 +106,6 @@
   font-size: 13px;
   color: var(--muted);
 }
-.bot-navigation .story-search {
-  margin: 0;
-}
-.bot-navigation .story-search input {
-  width: 100%;
-  font-size: 12px;
-}
 .bot-folder {
   padding: 2px 0;
 }
@@ -361,24 +354,6 @@
 .bot-chat-title-editor small {
   color: var(--muted);
   line-height: 1.5;
-}
-.bot-chat-menu-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-.bot-chat-menu-actions > .delete-control {
-  margin-left: auto;
-}
-.bot-chat-menu-actions > .delete-control > .delete-button {
-  display: grid;
-  place-items: center;
-  width: var(--control-h);
-  min-width: var(--control-h);
-  min-height: var(--control-h);
-  padding: 0;
 }
 .bot-chat-menu > button {
   display: inline-flex;

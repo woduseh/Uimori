@@ -255,9 +255,7 @@ details[open] > summary::before {
 .action-menu > summary::before,
 .library-item-menu > summary::before,
 .turn-activity > summary::before,
-.pc-block > summary::before,
-.pc-composer-fold > summary::before,
-.prompt-composer summary:has(> .pc-disclosure-icon)::before {
+.pc-composer-fold > summary::before {
   content: none;
 }
 fieldset {
@@ -353,23 +351,6 @@ input[type="checkbox"] {
   text-align: left;
   width: 100%;
   padding: 9px 12px;
-}
-.story-search {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  margin: 10px 0 3px;
-  padding: 0 10px;
-  color: var(--muted);
-}
-.story-search input {
-  padding: 8px 0;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  font-size: 13px;
-  outline-offset: 0;
 }
 .nav-button {
   color: var(--text);
@@ -1698,32 +1679,6 @@ input[type="checkbox"] {
     padding-bottom: 12px;
   }
 }
-.archive-backup-options {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
-  gap: 12px;
-  margin-bottom: 28px;
-}
-.archive-backup-option {
-  display: grid;
-  align-content: start;
-  gap: 8px;
-  min-width: 0;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.archive-backup-option button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 8px;
-  min-height: var(--control-h);
-  text-align: left;
-}
-.archive-backup-option p {
-  margin: 0;
-}
 .archive-file-field {
   display: flex;
   align-items: center;
@@ -1736,20 +1691,6 @@ input[type="checkbox"] {
 .archive-file-field > label {
   flex: 1;
   min-width: 0;
-}
-.archive-import-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.archive-import-status > p {
-  flex: 1;
-  margin: 0;
-  min-width: 0;
-}
-.archive-import-status > button {
-  flex-shrink: 0;
 }
 .archive-file-field input {
   flex: 1;

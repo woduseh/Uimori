@@ -5,7 +5,6 @@ import {
 import { buildMainInput, pinnedSlotSources } from '../core/provider.js';
 import { compiledPackages, type ResolvedPackage } from '../core/package-context.js';
 import type { RunSnapshot } from '../core/types.js';
-import { modelAuthorNotes } from '../core/notes.js';
 import { packageIdentityFromProfile } from '../core/package-identity.js';
 import { nativeExampleMessages } from '../core/risu-native-messages.js';
 import { nativeRisuFieldKey } from '../core/risu-native-execution.js';
@@ -47,37 +46,14 @@ export function nativeCharacterExamples(
 /** The same fixed host slots determine both CBS evaluation and message composition. */
 export function nativePromptSlots(snapshot: RunSnapshot): Record<string, string> {
   const input = buildMainInput(snapshot);
-  const packages = compiledPackages(snapshot, 'main');
   const body = (slot: string) =>
     pinnedSlotSources(input, slot).map(serializeRisuContextSource).filter(Boolean).join('\n\n');
-  const bot = packages.find((entry) => entry.attachment.role === 'bot')?.package;
   const slots: Record<string, string> = {
-    char: bot?.identity?.name ?? bot?.title ?? 'Character',
-    bot: body('bot'),
     description: body('bot'),
     persona: body('persona'),
-    lore: serializeRisuLoreSources(pinnedSlotSources(input, 'lore')),
     lorebook: serializeRisuLoreSources(pinnedSlotSources(input, 'lore')),
-    notes: input.notes ? JSON.stringify(modelAuthorNotes(input.notes)) : '',
-    outline: input.outline ? JSON.stringify(input.outline) : '',
-    globalNote: '',
     authorNote: snapshot.profile?.authorNote ?? '',
-    authornote: snapshot.profile?.authorNote ?? '',
     postEverything: '',
-    slot: '',
-    backgroundLore: pinnedSlotSources(input, 'backgroundLore')
-      .map((item) => JSON.stringify(item))
-      .join('\n'),
-    sceneLore: pinnedSlotSources(input, 'sceneLore')
-      .map((item) => JSON.stringify(item))
-      .join('\n'),
-    references: JSON.stringify(
-      input.pinnedSources?.length
-        ? { pinnedSources: pinnedSlotSources(input, 'references') }
-        : { facts: input.facts }
-    ),
-    catalog: JSON.stringify(input.catalog),
-    source: '',
   };
   return slots;
 }

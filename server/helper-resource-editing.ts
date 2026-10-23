@@ -7,9 +7,11 @@ import {
   type ResourceModel,
 } from '../core/resource-editing.js';
 import {
+  promptControls,
   reconcilePromptValues,
-  resolvePromptValues,
+  resolveControlValues,
   validateEditableRisuPrompt,
+  type PromptControl,
 } from '../core/risu-prompt.js';
 import type { Content } from '../core/product.js';
 import { RisuContentError } from '../core/risu-content.js';
@@ -834,17 +836,21 @@ export function patchHelperResource(
     const programChanged = changes.some((change) =>
       (change.target ?? change.path).startsWith('/program/')
     );
+    let controls: PromptControl[] | undefined;
     if (programChanged) {
       try {
         validateEditableRisuPrompt(preset.program);
-        resolvePromptValues(preset.program);
+        controls = promptControls(preset.program);
+        resolveControlValues(controls);
       } catch (error) {
         validationFailure(error);
       }
     }
     for (const [key, changeIndex] of explicitValues) {
       try {
-        resolvePromptValues(preset.program, { [key]: values[key]! });
+        resolveControlValues((controls ??= promptControls(preset.program)), {
+          [key]: values[key]!,
+        });
       } catch (error) {
         patchFailure(changeIndex, changes[changeIndex], error, 'invalid_value');
       }
@@ -858,7 +864,10 @@ export function patchHelperResource(
       const inherited = Object.fromEntries(
         Object.entries(values).filter(([key]) => !explicitValues.has(key))
       );
-      const reconciled = reconcilePromptValues(preset.program, inherited);
+      const reconciled = reconcilePromptValues(
+        (controls ??= promptControls(preset.program)),
+        inherited
+      );
       // Keep the existing combined report while also distinguishing removed values.
       resetKeys.push(...reconciled.resetKeys);
       const removedKeys = reconciled.resetKeys.filter(

@@ -180,16 +180,15 @@ test('CHARX-shaped bot, persona, and native module retain provenance through res
     expect(input.pinnedSources?.find((item) => item.text === `${role} lore`)?.risuSource).toEqual(
       expected
     );
-    expect(slots.lore).toContain(`source_role="${role}"`);
-    expect(slots.lore).toContain(`content_id="${pkg.id}"`);
-    expect(slots.lore.split(`${role} lore`)).toHaveLength(2);
+    expect(slots.lorebook).toContain(`source_role="${role}"`);
+    expect(slots.lorebook).toContain(`content_id="${pkg.id}"`);
+    expect(slots.lorebook.split(`${role} lore`)).toHaveLength(2);
   }
   expect(slots.description).toContain('source_role="bot"');
   expect(slots.persona).toContain('source_role="persona"');
   expect(slots.persona).toContain('persona description');
-  expect(slots.lorebook).toBe(slots.lore);
   expect(nativePromptSlots(snapshot)).toEqual(slots);
-  expect(slots.lore).not.toContain('MODULE_POSITIONED');
+  expect(slots.lorebook).not.toContain('MODULE_POSITIONED');
   const compiled = compileSnapshotPrompt(snapshot).promptCompilation!;
   const positioned = compiled.messages.filter((message) =>
     message.content.some((part) =>

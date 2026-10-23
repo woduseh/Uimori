@@ -1045,6 +1045,66 @@ test('invalid explicit value writes are rejected rather than silently reconciled
   }
 });
 
+test.each([
+  ['mode', 'invalid', 'PROMPT_INVALID_CONTROL_VALUE'],
+  ['unknown', '1', 'PROMPT_UNKNOWN_CONTROL'],
+] as const)(
+  'a later invalid explicit %s value preserves the preset and retained undo',
+  (key, value, error) => {
+    const { store, preset, target } = presetFixture([]);
+    const initial = call(store, 'resource.patch', {
+      ...target,
+      expectedRevision: preset.revision,
+      changes: [{ op: 'set', path: '/values/tone', value: 'saved baseline' }],
+    });
+    const saved = store.product.get<PromptPreset>('prompt-preset', preset.id);
+    const undo = store.db
+      .prepare('SELECT * FROM resource_undo WHERE kind=? AND id=?')
+      .get(target.kind, target.id);
+    let caught: unknown;
+    try {
+      call(store, 'resource.patch', {
+        ...target,
+        expectedRevision: initial.revision,
+        changes: [
+          { op: 'set', path: presetTogglePath, value: 'tone=Tone=text\nmode=Mode' },
+          { op: 'set', path: '/values/tone', value: null },
+          { op: 'set', path: `/values/${key}`, value },
+        ],
+      });
+    } catch (failure) {
+      caught = failure;
+    }
+    expect(caught).toMatchObject({
+      message: expect.stringContaining(error),
+      details: { changeIndex: 2, path: `/values/${key}`, op: 'set', reason: 'invalid_value' },
+    });
+    expect(store.product.get<PromptPreset>('prompt-preset', preset.id)).toEqual(saved);
+    expect(
+      store.db
+        .prepare('SELECT * FROM resource_undo WHERE kind=? AND id=?')
+        .get(target.kind, target.id)
+    ).toEqual(undo);
+  }
+);
+
+test('multiple explicit values use final declarations and null resolves to the control default', () => {
+  const { store, preset, target } = presetFixture([]);
+  call(store, 'resource.patch', {
+    ...target,
+    expectedRevision: preset.revision,
+    changes: [
+      { op: 'set', path: '/values/tone', value: null },
+      { op: 'set', path: '/values/mode', value: '1' },
+      { op: 'set', path: presetTogglePath, value: 'tone=Tone=text\nmode=Mode' },
+    ],
+  });
+  expect(store.product.get<PromptPreset>('prompt-preset', preset.id).values).toEqual({
+    tone: '',
+    mode: '1',
+  });
+});
+
 test('removing a control still referenced by enabled collaboration is rejected', () => {
   const { store, preset: base } = presetFixture([]);
   const collaboration = {

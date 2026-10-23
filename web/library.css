@@ -376,22 +376,6 @@
   }
 }
 
-.library-import-preview {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-.library-import-preview {
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--accent-soft);
-}
-.library-import-preview > p {
-  flex-basis: 100%;
-  overflow-wrap: anywhere;
-}
 .library-detail .library-loading {
   border-top: 1px solid var(--line);
   padding-top: 20px;
@@ -422,31 +406,11 @@
 .library-content-editor > .library-detail-heading h2 {
   font-size: 20px;
 }
-.library-content-editor .library-draft-state {
-  color: var(--muted);
-  font-size: 12px;
-}
 .library-content-editor .library-detail-actions {
   flex-wrap: wrap;
 }
 .library-content-editor > .editor-grid {
   padding-top: 8px;
-}
-.library-basic-fields {
-  display: grid;
-  gap: 24px;
-  max-width: var(--form-w);
-  min-width: 0;
-}
-.library-content-editor .library-basic-fields label {
-  font-size: 14px;
-}
-.library-basic-fields > label > textarea {
-  min-height: 270px;
-}
-.library-package-expand {
-  justify-self: start;
-  align-self: start;
 }
 @media (max-width: 760px) {
   .library-content-editor > .library-detail-heading {
@@ -457,9 +421,6 @@
   .library-content-editor .library-detail-actions {
     order: initial;
     flex-basis: auto;
-  }
-  .library-content-editor .library-draft-state {
-    display: none;
   }
 }
 @media (max-width: 600px) {
@@ -872,8 +833,7 @@
   }
 }
 
-.library-role-guide,
-.library-editor-guide {
+.library-role-guide {
   margin: 12px 0;
   font-size: 14px;
   line-height: 1.7;
@@ -914,29 +874,6 @@
 .library-list-options-body button {
   font-size: 14px;
   min-height: var(--control-h);
-}
-.library-editor-extra {
-  min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.library-editor-extra > summary {
-  cursor: pointer;
-  padding: 13px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.5;
-}
-.library-editor-extra-body {
-  display: grid;
-  gap: 16px;
-  padding: 0 16px 16px;
-  min-width: 0;
-}
-.library-editor-extra-body > p {
-  margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
 }
 .library-savebar {
   align-items: center;
@@ -1017,9 +954,6 @@
   }
   .library-page .library-empty {
     padding: 28px 12px;
-  }
-  .library-page .library-editor-guide {
-    font-size: 13px;
   }
   .library-page .library-detail input,
   .library-page .library-detail textarea,
