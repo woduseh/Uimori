@@ -184,6 +184,97 @@ test('SQLite scopes prior wording to frozen ancestry/hash and excludes future, s
   ).toMatchObject({ text: first.text, source: { hash: first.hash } });
 });
 
+test('SQLite wording references keep the latest edited source and completed wording without changing retained execution inputs', () => {
+  const store = database();
+  const chat = createFixtureChat(store, 'edited wording');
+  const original = source(store, chat.id);
+  const edited = store.editSource(original.id, {
+    text: 'Mira asked Captain Arlen to stay.',
+    expectedRevision: 0,
+  });
+  const previous = store.editTranslation(edited.id, {
+    text: '앨런 선장, 머물러 줘.',
+    expectedRevision: 0,
+    expectedSourceHash: edited.hash,
+  });
+  const wording = store.editTranslation(edited.id, {
+    text: '앨런 선장, 여기 있어 줘.',
+    expectedRevision: previous.revision!,
+    expectedSourceHash: edited.hash,
+  });
+  const retainedInput = {
+    translationGuide: {
+      botId: 'synthetic-bot',
+      botTitle: 'Synthetic bot',
+      botRevision: 1,
+      instructions: 'Preserve relationships. '.repeat(800),
+      terms: Array.from({ length: 50 }, (_, index) => ({
+        source: `Name ${index}`,
+        target: `이름 ${index}`,
+        note: 'Use only for this character. '.repeat(50),
+      })),
+    },
+  };
+  const storedInput = JSON.stringify(retainedInput);
+  store.db.prepare('UPDATE jobs SET input=? WHERE id=?').run(storedInput, wording.id);
+  const target = source(store, chat.id);
+  const snapshot = readRunSnapshot(store, target.runId);
+  const beforeChanges = store.db.prepare('SELECT total_changes() AS count').get();
+
+  expect(translationReferences(store, snapshot)).toEqual([
+    {
+      id: wording.id,
+      revision: wording.revision,
+      sourceRevision: edited.id,
+      sourceHash: edited.hash,
+      text: '앨런 선장, 여기 있어 줘.',
+      manual: true,
+    },
+  ]);
+  expect(store.db.prepare('SELECT total_changes() AS count').get()).toEqual(beforeChanges);
+  expect(store.db.prepare('SELECT input FROM jobs WHERE id=?').get(wording.id)?.input).toBe(
+    storedInput
+  );
+  expect(store.job(wording.id).input).toEqual(retainedInput);
+});
+
+test('SQLite wording references exclude mismatched results and foreign sources even when listed in captured history', () => {
+  const store = database();
+  const chat = createFixtureChat(store, 'valid wording');
+  const invalid = source(store, chat.id);
+  const invalidWording = store.editTranslation(invalid.id, {
+    text: 'INVALID RESULT',
+    expectedRevision: 0,
+    expectedSourceHash: invalid.hash,
+  });
+  store.db
+    .prepare("UPDATE job_results SET result=json_set(result,'$.sourceHash',?) WHERE job_id=?")
+    .run('0'.repeat(64), invalidWording.id);
+  const valid = source(store, chat.id);
+  const validWording = store.editTranslation(valid.id, {
+    text: '유효한 참고 번역.',
+    expectedRevision: 0,
+    expectedSourceHash: valid.hash,
+  });
+  const foreign = source(store, createFixtureChat(store, 'foreign wording').id);
+  store.editTranslation(foreign.id, {
+    text: 'FOREIGN RESULT',
+    expectedRevision: 0,
+    expectedSourceHash: foreign.hash,
+  });
+  const target = source(store, chat.id);
+  const snapshot = readRunSnapshot(store, target.runId);
+  snapshot.history.push({
+    revision: foreign.id,
+    contentHash: foreign.hash,
+    text: foreign.text,
+  });
+
+  expect(translationReferences(store, snapshot).map(({ id, text }) => ({ id, text }))).toEqual([
+    { id: validWording.id, text: '유효한 참고 번역.' },
+  ]);
+});
+
 test('HTTP retrieval reaches older sources and previous wording while authored notes arrive directly in source-time context', async () => {
   const store = database();
   const chat = createFixtureChat(store, 'synthetic');

@@ -9,13 +9,15 @@ export function translationReferences(store: Store, snapshot: RunSnapshot): Tran
   const references: TranslationReference[] = [];
   for (const item of snapshot.history) {
     try {
-      const source = store.source(item.revision);
+      // Wording references need current identity and result text, not original Reader
+      // blocks or the historical job's frozen execution input.
+      const source = store.sourceMetadata(item.revision);
       if (
         source.chatId !== snapshot.chatId ||
         source.hash !== (item.contentHash ?? sourceHash(item.text))
       )
         continue;
-      const job = successfulTranslation(store, source);
+      const job = successfulTranslation(store, source, 'reader');
       if (!job || job.status !== 'completed' || job.chatId !== snapshot.chatId) continue;
       validateTranslationArtifact(job, source);
       references.push({
