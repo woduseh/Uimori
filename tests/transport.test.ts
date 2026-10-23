@@ -732,7 +732,6 @@ describe('fixture HTTP transport (no live provider compatibility claim)', () => 
   });
 
   test('stored connection settings reach the transport only through the narrowing helper', () => {
-    const _origins = ['http://127.0.0.1:9'];
     const stored: Connection = {
       id: 'local-fixture',
       revision: 3,
