@@ -273,7 +273,6 @@ export function ActivityStatus({
     (notice) =>
       (notice.item.status === 'uncertain' ||
         (Date.parse(notice.item.startedAt) || 0) >= latestMainStart) &&
-      (notice.expiresAt === null || notice.expiresAt > now) &&
       !acknowledged.includes(notice.item.acknowledgementKey) &&
       // Postponing this warning does not change the recoverable request.
       !(

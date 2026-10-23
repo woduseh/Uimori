@@ -11,7 +11,6 @@ export {
   BotMessageSquare as AgentIcon,
   Settings as SettingsIcon,
   Database as DataIcon,
-  Shield as SecurityIcon,
   ArrowLeft as BackIcon,
   X as CloseIcon,
   Search as SearchIcon,

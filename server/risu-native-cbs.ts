@@ -26,8 +26,6 @@ export type NativeRisuCbsContext = {
   viewport?: { width: number; height: number };
   modelName?: string;
   maxContext?: number;
-  mainPrompt?: string;
-  jailbreak?: string;
   templateDefaultVariables?: string;
   globalNote?: string;
   authorNote?: string;

@@ -837,7 +837,7 @@ describe('hierarchical composition', () => {
     const time = '2026-01-01T00:00:00.000Z';
     const review = (nodeId: string, status = 'completed', partial = false) => {
       const taskId = randomUUID();
-      const sources = store.outline.unitSources(nodeId).map((item) => ({
+      const sources = store.outline.preview(nodeId).outline.sources!.map((item) => ({
         id: item.sourceRevision,
         hash: item.sourceHash,
         start: 0,
@@ -912,7 +912,7 @@ describe('hierarchical composition', () => {
     const current = changed.nodes.find((node) => node.id === episode.id)!;
     expect(current.writings?.[0].sourceHash).toBe(edited.hash);
     expect(current).not.toHaveProperty('latestReview');
-    expect(store.outline.unitSources(episode.id, changed.nodes)).toHaveLength(1);
+    expect(store.outline.preview(episode.id).outline.sources).toHaveLength(1);
     expect(
       store.db.prepare('SELECT * FROM outline_reviews WHERE task_id=?').get(latestTask)
     ).toEqual(archivedReview);

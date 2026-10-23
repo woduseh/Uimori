@@ -814,7 +814,6 @@ export function AppSettingsPanel({
                     <>
                       <ArchivePanel
                         expanded
-                        active={active === 'data' && showingDetail}
                         onImported={async () => {
                           await Promise.all([state.loadChats(), state.loadLibrary()]);
                           if (state.selected) await state.refresh(state.selected);

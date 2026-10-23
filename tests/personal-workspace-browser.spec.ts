@@ -9,6 +9,7 @@ import {
   navigationAction,
   openChatSettings,
   selectChatSettingsSection,
+  selectPackageSection,
   selectSettingsSection,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -37,13 +38,6 @@ async function openEditor(page: Page, title: string) {
   await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
   await page.getByRole('button', { name: '편집', exact: true }).click();
   await expect(page.getByLabel('Risu 자료 이름', { exact: true })).toBeVisible();
-}
-async function selectPackageSection(page: Page, name: string) {
-  const navigation = page.getByLabel('자료 편집 영역', { exact: true });
-  await navigation
-    .getByRole('tab', { name, exact: true })
-    .or(navigation.getByRole('button', { name, exact: true }))
-    .click();
 }
 async function save(page: Page): Promise<Content> {
   const response = page.waitForResponse(

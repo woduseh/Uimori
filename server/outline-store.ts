@@ -374,11 +374,6 @@ export class OutlineStore {
       .prepare(`${WRITINGS_SELECT} WHERE w.node_id=? ORDER BY w.created_at,w.id`)
       .all(nodeId) as OutlineWriting[];
   }
-  unitSources(id: string, nodes?: OutlineNode[]): OutlineWriting[] {
-    const node = nodes?.find((item) => item.id === id) ?? this.node(id);
-    const index = outlineIndex(nodes ?? this.nodes(node.chatId));
-    return outlineSources([node, ...index.descendants(id)]);
-  }
   private setRelated(id: string, ids: string[]) {
     const node = this.node(id);
     for (const relatedId of ids) {

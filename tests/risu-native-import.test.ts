@@ -95,8 +95,6 @@ test('retired native fields are stripped from current saves and cannot execute t
   const cbs = createNativeRisuCbs({
     native,
     variables,
-    mainPrompt: obsolete,
-    jailbreak: obsolete,
   });
   expect(cbs.parse('{{personality}}|{{scenario}}|{{mainprompt}}|{{jb}}')).toBe('|||');
   expect(variables).toEqual({});

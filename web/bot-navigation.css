@@ -69,32 +69,6 @@
   justify-content: space-between;
   gap: 6px;
 }
-.bot-choice {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border-color: transparent;
-  color: var(--text);
-  padding: 10px 6px;
-  margin: 3px 0;
-}
-@media (hover: hover) {
-  .bot-choice:hover {
-    background: var(--hover);
-  }
-}
-.bot-choice > span:last-child {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.bot-choice strong {
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
 .bot-choice-avatar {
   display: grid;
   place-items: center;

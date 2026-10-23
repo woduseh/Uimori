@@ -229,7 +229,6 @@ test('browse references bind the effective frozen corpus and role, including ren
   const key = nativeRisuFieldKey(changed.profile!.packageAttachments![0]);
   changed.nativeRisuExecution = {
     version: 2,
-    inputHash: 'rendered',
     beforeVariableRevision: 0,
     variables: {},
     fields: { [key]: { 'lore:rule': '새 실행의 유효 원문' } },

@@ -1,7 +1,7 @@
 import { t, useI18n } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseIcon } from './ui-icons.js';
-import type { Library, PromptWorkspace } from '../core/product.js';
+import type { PromptWorkspace } from '../core/product.js';
 import { ChatOptionSettings } from './ChatOptionSettings.js';
 import './chat-prompt-options.css';
 
@@ -9,10 +9,7 @@ type Props = {
   open: boolean;
   modal?: boolean;
   workspace: PromptWorkspace | null;
-  workspaceError?: string;
-  onRetryWorkspace?: () => void;
   promptRevision?: string;
-  library: Library | null;
   disabled: boolean;
   chatId?: string;
   onClose: () => void;
