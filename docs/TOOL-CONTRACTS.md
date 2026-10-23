@@ -9,13 +9,13 @@ The main writer and translation role use the shared definitions in `core/read-to
 | Tool | Contract |
 | --- | --- |
 | `knowledge.search {mode?, query?, nodeRef?, expectedVersion?, offset?, limit?}` | Default/search lists or searches approved local references; browse follows the existing package/folder structure. Body matches include a bounded original excerpt and a ready-to-use read request at the matching location. |
-| `knowledge.read {ids, offset?, limit?}` | Read one to sixteen references. A single read still uses a one-item `ids` array. Each returned item succeeds or fails independently and returns `nextOffset`; batch `nextIndex` identifies unreturned IDs. |
+| `knowledge.read {ids, offset?, limit?, tokenLimit?}` | Read one to sixteen references. A single read still uses a one-item `ids` array. Each returned item succeeds or fails independently and returns `nextOffset`; batch `nextIndex` identifies unreturned IDs. |
 | `skills.list {query?, offset?, limit?}` | Browse/search available writing guidance. |
-| `skills.load {id, offset?, limit?}` | Read one guidance resource. |
+| `skills.load {id, offset?, limit?, tokenLimit?}` | Read one guidance resource. |
 | `story.search {query?, offset?, limit?}` | With no query, browse frozen story ancestry in order; with a query, search it. Results expose stable 1-based `sceneNumber` values. |
-| `story.read {sceneNumber, offset?, limit?}` | Read one frozen story source by scene number. Internal revision IDs remain returned provenance, not an alternate selector. |
+| `story.read {sceneNumber, offset?, limit?, maxTokens?}` | Read one frozen story source by scene number within its returned `sceneScope`. Internal revision IDs remain returned provenance, not an alternate selector. |
 
-Explicit user notes are already pinned to the Run and delivered through the `notes` prompt slot or host context. There is no separate `notes.list/read` model API.
+Explicit user notes are already pinned to the Run and delivered through host context. There is no separate `notes.list/read` model API.
 
 The helper exposes `data.exec`, `app.tools`, and `app.call` with the configured Linux runner; without it, or during a read-only outline review, only the two gateways are exposed. `data.search`, `data.read`, and `db.query` are discovered app operations callable through `app.call` or the `uimori call` CLI, not additional native tools. Codex registers the same configured set as dynamic tools within one turn. `data.read` always accepts `refs`, including a one-item array. See [Helper tools](HELPER-TOOLS.md) for CLI and file refresh behavior.
 
