@@ -66,14 +66,6 @@
 .illustration .error {
   margin: 0;
 }
-.illustration-skipped {
-  padding: 8px 14px;
-  gap: 4px;
-}
-.illustration-skip-note {
-  margin: 0;
-  font-size: 13px;
-}
 .illustration-actions {
   display: flex;
   flex-wrap: wrap;

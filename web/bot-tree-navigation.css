@@ -49,9 +49,6 @@
 .navigation-dialog > .dialog-header > .navigation-quick-actions > .nav-button > span {
   display: none;
 }
-.navigation-quick-actions .story-search {
-  margin: 0;
-}
 .bot-tree-section-heading,
 .bot-tree-folder-heading {
   display: flex;
