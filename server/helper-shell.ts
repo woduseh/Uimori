@@ -319,20 +319,28 @@ export class HelperShell {
       });
       let sceneNumber = 0;
       const scenes: ReturnType<typeof this.sceneIndexEntry>[] = [];
-      for (const history of this.store.history(chat.headRevision)) {
-        const source = this.store.source(history.revision);
-        if (!safeId(source.id)) continue;
-        const file = `${dir}/scenes/${source.id}.txt`;
-        write(join(base, file), source.text);
-        const sceneEnabled = history.sceneContext?.sceneEnabled !== false;
+      const history = this.store.history(chat.headRevision);
+      const edits = this.store.db
+        .prepare(`SELECT source_id AS sourceId,MAX(revision) AS revision FROM source_edits
+          WHERE source_id IN (SELECT value FROM json_each(?)) GROUP BY source_id`)
+        .all(JSON.stringify(history.map((item) => item.revision))) as {
+        sourceId: string;
+        revision: number;
+      }[];
+      const editRevisions = new Map(edits.map((edit) => [edit.sourceId, edit.revision]));
+      for (const item of history) {
+        if (!safeId(item.revision)) continue;
+        const file = `${dir}/scenes/${item.revision}.txt`;
+        write(join(base, file), item.text);
+        const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
         if (sceneEnabled) sceneNumber++;
         const target = {
           kind: 'scene' as const,
-          id: source.id,
+          id: item.revision,
           chatId: chat.id,
-          revision: source.editRevision ?? 0,
-          hash: sha(source.text),
-          metadata: sceneMetadata(source.text, sceneEnabled ? sceneNumber : null, sceneEnabled),
+          revision: editRevisions.get(item.revision) ?? 0,
+          hash: sha(item.text),
+          metadata: sceneMetadata(item.text, sceneEnabled ? sceneNumber : null, sceneEnabled),
         };
         files.set(file, target);
         scenes.push(this.sceneIndexEntry(file, target));

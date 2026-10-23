@@ -39,18 +39,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-async function fixture() {
+function workspaceFixture() {
   const dir = mkdtempSync(join(tmpdir(), 'uimori-shell-'));
   const root = join(dir, 'shared');
   vi.stubEnv('UIMORI_SHELL_ROOT', root);
-  const child = spawn(process.execPath, [resolve('runner/runner.mjs')], {
-    env: { ...process.env, UIMORI_SHELL_ROOT: root },
-    stdio: 'ignore',
-  });
   const store = new Store(join(dir, 'test.sqlite'));
   const workspace = new HelperWorkspace(store);
   const shell = new HelperShell(store, workspace);
-  owned.push({ dir, store, shell, child });
   const resource = store.product.content(fixtureBotInput('Runner fixture', 'Original lore'));
   const connection = store.product.connection({
     title: 'Local test',
@@ -74,10 +69,87 @@ async function fixture() {
     limits: { helperCalls: 12, totalCalls: 24 },
   });
   workspace.start(task.id, 'shell-fixture');
-  for (let i = 0; i < 80 && !existsSync(join(root, '.exec.sock')); i++) await delay(50);
-  if (!existsSync(join(root, '.exec.sock'))) throw new Error('Runner socket not ready');
-  return { store, workspace, shell, child, task: workspace.task(task.id), resource, root };
+  return { dir, store, workspace, shell, task: workspace.task(task.id), resource, root };
 }
+
+async function fixture() {
+  const f = workspaceFixture();
+  const child = spawn(process.execPath, [resolve('runner/runner.mjs')], {
+    env: { ...process.env, UIMORI_SHELL_ROOT: f.root },
+    stdio: 'ignore',
+  });
+  owned.push({ dir: f.dir, store: f.store, shell: f.shell, child });
+  for (let i = 0; i < 80 && !existsSync(join(f.root, '.exec.sock')); i++) await delay(50);
+  if (!existsSync(join(f.root, '.exec.sock'))) throw new Error('Runner socket not ready');
+  return { ...f, child };
+}
+
+test('an unavailable runner still exports current saved scene revisions and the frozen snapshot', async () => {
+  const f = workspaceFixture();
+  try {
+    const chat = createFixtureChat(f.store, 'Exported story');
+    const first = completedSource(f.store, chat.id, '첫 원문🙂');
+    const second = completedSource(f.store, chat.id, '숨긴 장면');
+    const third = completedSource(f.store, chat.id, '마지막 장면');
+    updateSceneContext(f.store, second.id, { expectedRevision: 0, sceneEnabled: false });
+    const conversation = f.workspace.open({ kind: 'chat', chatId: chat.id });
+    const task = f.workspace.enqueue(conversation.id, 'export-snapshot', 'Review scenes', {
+      ...f.task.snapshot,
+      scope: conversation.scope,
+      writing: helperWritingSnapshot(f.store, chat.id),
+    });
+    f.workspace.start(task.id, 'shell-fixture');
+    f.store.editSource(first.id, { text: '중간 수정', expectedRevision: 0 });
+    f.store.editSource(first.id, { text: '최신 원문🙂\n다음 줄', expectedRevision: 1 });
+    await expect(f.shell.exec(f.workspace.task(task.id), 'export', 'true', 1000)).rejects.toThrow();
+
+    const base = join(f.root, 'tasks', task.id);
+    const saved = JSON.parse(readFileSync(join(base, `chats/${chat.id}/scenes.json`), 'utf8'));
+    expect(saved).toEqual([
+      expect.objectContaining({
+        sourceId: first.id,
+        revision: 2,
+        sceneNumber: 1,
+        sceneEnabled: true,
+      }),
+      expect.objectContaining({
+        sourceId: second.id,
+        revision: 0,
+        sceneNumber: null,
+        sceneEnabled: false,
+      }),
+      expect.objectContaining({
+        sourceId: third.id,
+        revision: 0,
+        sceneNumber: 2,
+        sceneEnabled: true,
+      }),
+    ]);
+    expect(readFileSync(join(base, saved[0].file), 'utf8')).toBe('최신 원문🙂\n다음 줄');
+    expect(saved[0]).toMatchObject({
+      charCount: '최신 원문🙂\n다음 줄'.length,
+      byteCount: Buffer.byteLength('최신 원문🙂\n다음 줄'),
+      preview: '최신 원문🙂 다음 줄',
+    });
+    expect(readFileSync(join(base, `current/scenes/${first.id}.txt`), 'utf8')).toBe('첫 원문🙂');
+    expect(
+      f.store.editSource(first.id, {
+        text: '내보낸 revision으로 저장',
+        expectedRevision: saved[0].revision,
+      }).editRevision
+    ).toBe(3);
+    expect(() =>
+      f.store.editSource(first.id, {
+        text: '오래된 원문',
+        expectedRevision: saved[0].revision,
+      })
+    ).toThrow('Source revision conflict');
+  } finally {
+    f.shell.close();
+    f.store.close();
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
 
 linuxTest(
   'shell finds resources and applies canonical changes through existing saves',
