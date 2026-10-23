@@ -167,15 +167,16 @@ export function pinnedSlotSources(
 /** Fixed contract, provenance-bearing pinned content, catalog and observed reads stay separate. */
 export function buildMainInput(
   snapshot: RunSnapshot,
-  results: readonly ToolEvent[] = []
+  results: readonly ToolEvent[] = [],
+  packages?: readonly ResolvedPackage[]
 ): MainInput {
   if (
     snapshot.promptCompilation &&
     !PROMPT_COMPILER_VERSIONS.has(snapshot.promptCompilation.compilerVersion)
   )
     throw new Error('PROMPT_INVALID_COMPILED');
-  const packages = compiledPackages(snapshot, 'main'),
-    resources = collectRoleResources(snapshot, packages);
+  packages ??= compiledPackages(snapshot, 'main');
+  const resources = collectRoleResources(snapshot, packages);
   const input: MainInput = {
     role: 'main',
     contract: '',
