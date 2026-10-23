@@ -336,6 +336,68 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);
 });
 
+for (const destination of ['new-draft', 'list'] as const) {
+  test(`PROMPTOPEN late preset read preserves ${destination} navigation`, async ({
+    page,
+    request,
+  }) => {
+    const title = `PROMPTOPEN ${destination} ${Date.now()}`;
+    const response = await request.post('/api/prompt-presets', {
+      data: {
+        title,
+        role: 'main',
+        program: createDefaultRisuPrompt('Synthetic delayed preset', 'main'),
+      },
+    });
+    expect(response.ok()).toBe(true);
+    const preset = (await response.json()) as PromptPreset;
+    await page.goto('/');
+    await navigationAction(page, '프롬프트');
+    const panel = page.getByTestId('prompt-library');
+    await panel.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let requested!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      requested = resolve;
+    });
+    const path = `**/api/prompt-presets/${preset.id}`;
+    await page.route(path, async (route) => {
+      const saved = await route.fetch();
+      requested();
+      await held;
+      await route.fulfill({ response: saved });
+    });
+    try {
+      await panel.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+      await reading;
+      if (destination === 'new-draft') {
+        await panel.getByRole('button', { name: '새 프롬프트', exact: true }).first().click();
+        await panel.getByRole('tab', { name: '기본 옵션', exact: true }).click();
+        await panel.getByLabel('프롬프트 이름', { exact: true }).fill(`${title} 새 초안`);
+      } else await navigationAction(page, '프롬프트');
+      release();
+      await page.waitForLoadState('networkidle');
+      if (destination === 'new-draft') {
+        await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(
+          `${title} 새 초안`
+        );
+        await expect(page.getByRole('alertdialog', { name: '미저장 프롬프트 확인' })).toHaveCount(
+          0
+        );
+      } else {
+        await expect(panel.getByLabel('프롬프트 검색', { exact: true })).toBeVisible();
+        await expect(page.getByTestId('prompt-editor')).toHaveCount(0);
+      }
+    } finally {
+      release();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+  });
+}
+
 test('SAVEACK prompt navigation preserves an accepted save when placement and summary refresh fail', async ({
   page,
   request,

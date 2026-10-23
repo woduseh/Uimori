@@ -116,33 +116,28 @@ export function PromptLibrary({
     if (editing) onEditorOpened();
   }, [editing, onEditorOpened]);
   const handledPreset = useRef<string | null>(null);
+  const opening = useRef<AbortController | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The requested preset identity owns this read; editor transitions invalidate it independently.
   useEffect(() => {
     if (!initialPresetId) {
+      if (handledPreset.current) cancelOpening();
       handledPreset.current = null;
       return;
     }
     if (!library || handledPreset.current === initialPresetId) return;
     handledPreset.current = initialPresetId;
     const preset = library.promptPresets?.find((item) => item.id === initialPresetId);
-    if (preset)
-      void api<PromptPreset>(`/prompt-presets/${encodeURIComponent(preset.id)}`)
-        .then((full) => {
-          if (handledPreset.current === initialPresetId) {
-            setEditing({ preset: full, role: full.role });
-            onInitialPresetHandled?.();
-          }
-        })
-        .catch((cause) => {
-          onError((cause as Error).message);
-          onInitialPresetHandled?.();
-        });
+    if (preset) void editPreset(preset, onInitialPresetHandled);
     else {
+      cancelOpening();
       onError(uiMessage('prompts.uiSelectedPromptNotFound'));
       onInitialPresetHandled?.();
     }
   }, [initialPresetId, library, onError, onInitialPresetHandled]);
 
   const [dirty, setDirty] = useState(false);
+  const currentDirty = useRef(dirty);
+  currentDirty.current = dirty;
   const [discard, setDiscard] = useState(false);
   const [savingNavigation, setSavingNavigation] = useState(false);
   const externalList = useRef(listRequest);
@@ -151,7 +146,9 @@ export function PromptLibrary({
   const [selection, setSelection] = useState<string[]>([]);
   const organizer = useLibraryOrganization(library, reload, onError);
   const mutation = useRef(false);
-  const [busy, setBusy] = useState(false);
+  const [mutating, setMutating] = useState(false);
+  const [readingPreset, setReadingPreset] = useState(false);
+  const busy = mutating || readingPreset;
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const createdPresetFocus = useRef<string | null>(null);
   const editorHeading = useRef<HTMLHeadingElement>(null);
@@ -162,6 +159,13 @@ export function PromptLibrary({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+  useEffect(
+    () => () => {
+      opening.current?.abort();
+      opening.current = null;
+    },
+    []
+  );
   useEffect(() => {
     if (!editing?.preset || createdPresetFocus.current !== editing.preset.id) return;
     createdPresetFocus.current = null;
@@ -306,23 +310,43 @@ export function PromptLibrary({
       folderId,
     });
   }
-  async function editPreset(item: PromptPresetSummary) {
-    if (mutation.current) return;
-    mutation.current = true;
-    setBusy(true);
+  function cancelOpening() {
+    if (!opening.current) return;
+    opening.current.abort();
+    opening.current = null;
+    setReadingPreset(false);
+  }
+  async function editPreset(item: PromptPresetSummary, onHandled?: () => void) {
+    cancelOpening();
+    const controller = new AbortController();
+    opening.current = controller;
+    setReadingPreset(true);
     try {
-      const preset = await api<PromptPreset>(`/prompt-presets/${encodeURIComponent(item.id)}`);
+      const preset = await api<PromptPreset>(
+        `/prompt-presets/${encodeURIComponent(item.id)}`,
+        undefined,
+        'GET',
+        controller.signal
+      );
+      if (opening.current !== controller) return;
       changeEditing({ preset, role: preset.role });
+      onHandled?.();
     } catch (cause) {
-      onError((cause as Error).message);
+      if (opening.current === controller) {
+        onError((cause as Error).message);
+        onHandled?.();
+      }
     } finally {
-      mutation.current = false;
-      setBusy(false);
+      if (opening.current === controller) {
+        opening.current = null;
+        setReadingPreset(false);
+      }
     }
   }
   function changeEditing(next: typeof editing) {
+    cancelOpening();
     pendingEditing.current = next;
-    if (dirty) setDiscard(true);
+    if (currentDirty.current) setDiscard(true);
     else setEditing(next);
   }
   function close() {
@@ -332,6 +356,7 @@ export function PromptLibrary({
   useEffect(() => {
     if (externalList.current === listRequest) return;
     externalList.current = listRequest;
+    cancelOpening();
     // `changeEditing` keeps the existing unsaved-draft confirmation.
     if (editing) close();
   }, [listRequest]);
@@ -349,7 +374,7 @@ export function PromptLibrary({
   async function clone(item: PromptPresetSummary) {
     if (mutation.current) return;
     mutation.current = true;
-    setBusy(true);
+    setMutating(true);
     try {
       const result = await api<ResourceSaveResult>('/resources/clone', {
         kind: 'prompt-preset',
@@ -393,13 +418,13 @@ export function PromptLibrary({
       onError((error as Error).message);
     } finally {
       mutation.current = false;
-      setBusy(false);
+      setMutating(false);
     }
   }
   async function addTemplate(id: string): Promise<PromptPreset | null> {
     if (mutation.current) return null;
     mutation.current = true;
-    setBusy(true);
+    setMutating(true);
     try {
       const template = await api<PromptTemplate>(`/prompt-templates/${encodeURIComponent(id)}`);
       const created = await api<PromptPreset>('/prompt-presets', {
@@ -440,7 +465,7 @@ export function PromptLibrary({
       return created;
     } finally {
       mutation.current = false;
-      setBusy(false);
+      setMutating(false);
     }
   }
   return (
@@ -782,6 +807,7 @@ export function PromptLibrary({
                     type="button"
                     className="library-open-content"
                     aria-label={t('prompts.editNamed', { name: item.title })}
+                    disabled={busy}
                     onClick={() => void editPreset(item)}
                   >
                     <span className="library-prompt-icon" aria-hidden="true">
@@ -798,6 +824,7 @@ export function PromptLibrary({
                     <button
                       type="button"
                       className="secondary"
+                      disabled={busy}
                       onClick={() => void editPreset(item)}
                     >
                       <EditIcon size={18} aria-hidden="true" />
