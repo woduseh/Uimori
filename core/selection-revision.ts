@@ -1,11 +1,3 @@
-export type SelectionRevisionInput = {
-  draft: string;
-  start: number;
-  end: number;
-  instruction: string;
-  expectedSourceHash: string;
-  expectedRevision: number;
-};
 export type SelectionRevisionResult = { text: string };
 
 /** Textareas use UTF-16 offsets. A range must not split a Unicode surrogate pair. */
