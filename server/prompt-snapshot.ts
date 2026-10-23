@@ -5,7 +5,7 @@ import { loreHistory } from '../core/lore-context.js';
 import { placeNativeRisuLore } from '../core/risu-native-lore.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { attachMainHostContext } from './main-host-context.js';
-import { buildMainInput } from '../core/provider.js';
+import { buildMainInput, type MainInput } from '../core/provider.js';
 import {
   compileRisuPrompt,
   type PromptCompilerVersion,
@@ -193,9 +193,12 @@ export function captureLogicalHistory(store: Store, snapshot: RunSnapshot): Prom
     return [message];
   });
 }
-function contextFromPackages(snapshot: RunSnapshot, packages: readonly ResolvedPackage[]) {
-  const input = buildMainInput(snapshot);
-  const slots = nativePromptSlots(snapshot);
+function contextFromPackages(
+  snapshot: RunSnapshot,
+  packages: readonly ResolvedPackage[],
+  input: MainInput
+) {
+  const slots = nativePromptSlots(snapshot, input);
   const inputHistoryIds = new Set(input.history.map((entry) => entry.revision));
   const logical = (
     snapshot.nativeRisuExecution?.history ??
@@ -247,7 +250,9 @@ export function compileSnapshotPrompt(
     createDefaultRisuPrompt(DEFAULT_MAIN_PROMPT);
   const selected = projectNativeRisuPresetProgram(snapshot, authored);
   const packages = compiledPackages(snapshot, 'main');
-  const context = contextFromPackages(snapshot, packages);
+  // Reuse only within this synchronous compilation; later requests and tool results rebuild it.
+  const input = buildMainInput(snapshot, [], packages);
+  const context = contextFromPackages(snapshot, packages, input);
   const promptCompilation = compileRisuPrompt(selected, {
     ...context,
     ...(snapshot.profile ? { controls: effectiveRisuControls(snapshot.profile, selected) } : {}),
@@ -261,12 +266,9 @@ export function compileSnapshotPrompt(
     'TEMPLATE_VARIABLE_DEFAULTS_LIMIT'
   )
     promptCompilation.warnings.push('TEMPLATE_VARIABLE_DEFAULTS_LIMIT');
-  const hosted = attachMainHostContext({ ...snapshot, promptCompilation });
+  const hosted = attachMainHostContext({ ...snapshot, promptCompilation }, input);
   return {
     ...hosted,
-    promptCompilation: placeNativeRisuLore(
-      hosted.promptCompilation!,
-      buildMainInput(snapshot).pinnedSources ?? []
-    ),
+    promptCompilation: placeNativeRisuLore(hosted.promptCompilation!, input.pinnedSources ?? []),
   };
 }

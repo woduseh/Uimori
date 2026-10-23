@@ -5,7 +5,7 @@
 import { RISU_SOURCE_GUIDANCE } from '../core/risu-context-source.js';
 import { buildMainInput, pinnedSlotSources, type MainInput } from '../core/provider.js';
 import type { RunSnapshot } from '../core/types.js';
-import { validateProviderPrompt } from '../core/risu-prompt.js';
+import { PROMPT_COMPILER_VERSIONS, validateProviderPrompt } from '../core/risu-prompt.js';
 import { nativeHostContextText, NATIVE_HOST_CONTEXT_ID } from '../core/provider-messages.js';
 import { ProviderContractError, type ProviderRequest, type Json } from '../core/transport.js';
 import { agentSharedOptions } from './agent-shared-options.js';
@@ -70,10 +70,12 @@ export function requestInput(snapshot: RunSnapshot, input: MainInput): ProviderR
   };
 }
 /** Explicit dynamic data boundary. Existing user-authored roles, order and cache IDs stay unchanged. */
-export function attachMainHostContext(snapshot: RunSnapshot): RunSnapshot {
+export function attachMainHostContext(snapshot: RunSnapshot, input?: MainInput): RunSnapshot {
   if (!snapshot.promptCompilation) return snapshot;
-  const input = buildMainInput(snapshot),
-    text = nativeHostContextText({ input: requestInput(snapshot, input) });
+  if (!PROMPT_COMPILER_VERSIONS.has(snapshot.promptCompilation.compilerVersion))
+    throw new Error('PROMPT_INVALID_COMPILED');
+  input ??= buildMainInput(snapshot);
+  const text = nativeHostContextText({ input: requestInput(snapshot, input) });
   const compilation = structuredClone(snapshot.promptCompilation),
     existing = compilation.messages.find((message) => message.id === NATIVE_HOST_CONTEXT_ID);
   if (existing) {
