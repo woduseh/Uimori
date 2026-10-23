@@ -56,7 +56,6 @@ type Props = {
   reload?: () => Promise<void>;
   onError: (message: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
-  chatId?: string;
 };
 function createSession(role: PromptRole, preset?: PromptPreset | PromptPresetSummary | null) {
   return new ResourceEditorSession({

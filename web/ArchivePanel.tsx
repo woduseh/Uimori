@@ -21,7 +21,6 @@ export function ArchivePanel({
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   expanded?: boolean;
-  active?: boolean;
 }) {
   useI18n();
   const [busy, setBusy] = useState(false);

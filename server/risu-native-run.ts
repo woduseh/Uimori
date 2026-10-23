@@ -85,27 +85,6 @@ export const nativeRisuPending = (snapshot: RunSnapshot) =>
     !!snapshot.profile?.promptPresets?.main?.program.nativeRisuPreset) &&
   !snapshot.nativeRisuExecution;
 
-export function nativeRisuInputHash(snapshot: RunSnapshot): string {
-  return createHash('sha256')
-    .update(
-      JSON.stringify({
-        packages: nativeRisuPackages(snapshot).map(({ attachment, pkg }) => [attachment, pkg]),
-        variables: snapshot.profile?.variableState,
-        identity: snapshot.profile ? packageIdentityFromProfile(snapshot.profile) : null,
-        image: snapshot.profile?.image,
-        authorNote: snapshot.profile?.authorNote,
-        preset: snapshot.profile?.promptPresets?.main,
-        promptControls: snapshot.profile?.promptControls,
-        historyRevision: snapshot.nativeRisuHistoryRevision,
-        request: snapshot.request,
-        requestImages: snapshot.requestImages,
-        history: snapshot.logicalHistory ?? snapshot.history,
-        clock: snapshot.executionClock,
-      })
-    )
-    .digest('hex');
-}
-
 /** Async authored code runs once outside storage transactions. Compilers consume this receipt. */
 export async function prepareNativeRisuRun(
   snapshot: RunSnapshot,
@@ -193,11 +172,15 @@ export async function prepareNativeRisuRun(
     });
   }
   validateChatVariableValues(variables);
+  const historyRevision = nativeHistoryRevision(
+    context.messages,
+    messages,
+    snapshot.nativeRisuHistoryRevision
+  );
   const prepared = {
     ...snapshot,
     nativeRisuExecution: {
       version: 2 as const,
-      inputHash: nativeRisuInputHash(snapshot),
       beforeVariableRevision: snapshot.profile?.variableState?.revision ?? 0,
       variables,
       fields,
@@ -206,29 +189,14 @@ export async function prepareNativeRisuRun(
       history,
       messages,
       issues: [...new Set(issues)],
-      historyRevision: nativeHistoryRevision(
-        context.messages,
-        messages,
-        snapshot.nativeRisuHistoryRevision
-      ),
-      inputHistoryRevision: nativeHistoryRevision(
-        context.messages,
-        messages,
-        snapshot.nativeRisuHistoryRevision
-      ),
+      historyRevision,
+      inputHistoryRevision: historyRevision,
     },
   };
   delete prepared.promptCompilation;
   const result = await prepareNativeRisuPreset(prepared);
   if (result.nativeRisuPresetProgram)
     result.nativeRisuExecution!.variables = result.nativeRisuPresetProgram.variables;
-  result.nativeRisuExecution!.preRequest = structuredClone({
-    variables: result.nativeRisuExecution!.variables,
-    messages: result.nativeRisuExecution!.messages,
-    ...(result.nativeRisuExecution!.historyRevision
-      ? { historyRevision: result.nativeRisuExecution!.historyRevision }
-      : {}),
-  });
   return result;
 }
 

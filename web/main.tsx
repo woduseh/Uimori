@@ -2094,10 +2094,7 @@ function App() {
         chatId={s.selected || undefined}
         open={optionsOpen && s.destination === 'story' && !!s.selected}
         workspace={s.promptWorkspace}
-        workspaceError={s.promptWorkspaceError}
-        onRetryWorkspace={() => void s.refreshPromptWorkspace()}
         promptRevision={`${s.detail?.profile?.revision ?? 0}:${s.pinnedPromptRevision ?? 0}`}
-        library={s.library}
         disabled={
           optionsBusy ||
           s.profileDirty ||

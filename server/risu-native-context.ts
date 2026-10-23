@@ -123,7 +123,6 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
   return {
     native,
     effectiveTriggers,
-    background: natives.map(nativeRisuBackground).filter(Boolean).join('\n'),
     ...nativeRisuPromptContext(snapshot),
     globalVariables: nativeToggleVariables(
       controls,

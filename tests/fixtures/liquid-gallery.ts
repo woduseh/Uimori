@@ -1,6 +1,6 @@
-import type { ThemeDefinition } from './themes.js';
+import type { ThemeDefinition } from '../../core/themes.js';
 
-/** Portable CSS/slot presentation. Portrait data and interaction remain owned by the reader. */
+/** Retired built-in theme retained to verify imported user-theme compatibility. */
 export const liquidGallery: ThemeDefinition = {
   title: 'Liquid Gallery',
   description:

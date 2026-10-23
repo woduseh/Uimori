@@ -14,7 +14,7 @@ import {
   type NativeRisuPreset,
 } from './risu-native-preset.js';
 import { nativeChatMlMessages, type NativePromptMessage } from './risu-native-messages.js';
-import { PromptBudget, jsonStringSize } from './prompt-values.js';
+import { jsonStringSize } from './prompt-values.js';
 export type PromptValue = string | number | boolean | null;
 export type PromptRoleName = 'system' | 'user' | 'assistant';
 /** A UI projection of the preset's native toggle declarations, never an authored AST. */
@@ -133,21 +133,14 @@ function primitive(value: unknown): asserts value is PromptValue {
     fail('PROMPT_INVALID_VALUE');
 }
 /** Check serialized bounds before JSON.stringify/structuredClone can allocate an oversized AST. */
-function inspectPromptData(
-  value: unknown,
-  limit = EXECUTION_INPUT_MAX_CHARS,
-  budget?: PromptBudget
-): void {
+function inspectPromptData(value: unknown, limit = EXECUTION_INPUT_MAX_CHARS): void {
   const pending: { value: unknown; leave?: boolean }[] = [{ value }],
     active = new Set<object>();
   let size = 0,
     nodes = 0;
   const started = performance.now();
-  const deterministic = budget?.timing === 'deterministic' ? budget : undefined;
   while (pending.length) {
-    deterministic?.step();
-    if (++nodes % 128 === 0 && !deterministic && performance.now() - started > 1000)
-      fail('PROMPT_TIME_LIMIT');
+    if (++nodes % 128 === 0 && performance.now() - started > 1000) fail('PROMPT_TIME_LIMIT');
     if (nodes > 500_000) fail('PROMPT_PROGRAM_LIMIT');
     const item = pending.pop()!,
       v = item.value;
@@ -159,7 +152,7 @@ function inspectPromptData(
     if (v === null) size += 4;
     else if (typeof v === 'string') {
       if (v.length > limit) fail('PROMPT_PROGRAM_LIMIT');
-      size += jsonStringSize(v, deterministic);
+      size += jsonStringSize(v);
     } else if (typeof v === 'number') {
       if (!Number.isFinite(v)) fail('PROMPT_INVALID_VALUE');
       size += String(v).length;
@@ -185,7 +178,7 @@ function inspectPromptData(
         if (entries++) size++;
         if (!array) {
           if (key.length > limit) fail('PROMPT_PROGRAM_LIMIT');
-          size += jsonStringSize(key, deterministic) + 1;
+          size += jsonStringSize(key) + 1;
         }
         pending.push({ value: d.value });
       }
@@ -420,18 +413,13 @@ export function compileRisuPrompt(
   const text = (v: unknown) => (typeof v === 'string' ? v : '');
   const role = (v: unknown): PromptRoleName =>
     v === 'user' ? 'user' : v === 'assistant' || v === 'bot' ? 'assistant' : 'system';
-  const add = (
-    id: string,
-    content: string,
-    messageRole: PromptRoleName,
-    completion: 'complete' | 'prefill' = 'complete'
-  ) => {
+  const add = (id: string, content: string, messageRole: PromptRoleName) => {
     if (content)
       messages.push({
         id,
         role: messageRole,
         content: [{ type: 'text', text: content }],
-        completion,
+        completion: 'complete',
         provenance: { blockId: id, origin: 'prompt' },
       });
   };
@@ -532,8 +520,6 @@ export function compileRisuPrompt(
     } else fail('RISU_NATIVE_PRESET_BLOCK', type);
     trace.push({ blockId: id, included: true, messageIds: messages.slice(start).map((m) => m.id) });
   }
-  if (messages.some((m, i) => m.completion === 'prefill' && i !== messages.length - 1))
-    fail('PROMPT_PREFILL_MUST_BE_LAST');
   inspectPromptData(messages);
   return {
     usedSlots: [...usedSlots],

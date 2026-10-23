@@ -222,7 +222,6 @@ test('preset CBS sees messages after pre-turn scripts and the current input', as
   const input = snapshot(preset('{{lastmessage}}'));
   input.nativeRisuExecution = {
     version: 2,
-    inputHash: 'test',
     beforeVariableRevision: 0,
     variables: {},
     fields: {},

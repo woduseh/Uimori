@@ -36,23 +36,6 @@
   display: block;
   line-height: 18px;
 }
-.chat-options-scope {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  padding: 8px 18px;
-  border-bottom: 1px solid var(--line);
-  flex-shrink: 0;
-}
-.chat-options-scope button {
-  min-height: var(--control-h);
-  background: transparent;
-  color: var(--muted);
-}
-.chat-options-scope button[aria-selected="true"] {
-  background: var(--accent-soft);
-  color: var(--text);
-}
 .chat-options-scope-panel {
   display: flex;
   flex-direction: column;

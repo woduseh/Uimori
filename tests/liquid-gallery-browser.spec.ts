@@ -1,4 +1,4 @@
-import { liquidGallery } from '../core/liquid-gallery.js';
+import { liquidGallery } from './fixtures/liquid-gallery.js';
 import { test, expect, type APIRequestContext, type Locator } from '@playwright/test';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';

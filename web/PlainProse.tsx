@@ -1,12 +1,4 @@
-import {
-  Fragment,
-  cloneElement,
-  isValidElement,
-  memo,
-  useContext,
-  type ReactElement,
-  type ReactNode,
-} from 'react';
+import { Fragment, memo, useContext, type ReactNode } from 'react';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
 import type { ReadabilitySettings } from './reading-preferences.js';
 import { hasReadingQuotes, scanReadingQuotes, type ReadingQuote } from './reading-quotes.js';
@@ -16,22 +8,15 @@ import './prose.css';
 function backtickSpans(text: string) {
   const runs = [...text.matchAll(/`+/gu)];
   const next = new Map<number, number>();
-  const spans = new Map<number, { contentStart: number; contentEnd: number; end: number }>();
-  const addSpan = (start: number, length: number) => {
-    const contentStart = start + length;
-    const contentEnd = next.get(length) ?? contentStart;
-    spans.set(start, {
-      contentStart,
-      contentEnd,
-      end: contentEnd === contentStart ? contentStart : contentEnd + length,
-    });
-  };
+  const spans = new Map<number, number>();
   for (let index = runs.length - 1; index >= 0; index--) {
     const run = runs[index];
-    addSpan(run.index, run[0].length);
-    // Inline escaping can consume just the first tick; literal rendering consumes the whole run.
-    if (run[0].length > 1) addSpan(run.index + 1, run[0].length - 1);
-    next.set(run[0].length, run.index);
+    const start = run.index;
+    const length = run[0].length;
+    const contentStart = start + length;
+    const contentEnd = next.get(length) ?? contentStart;
+    spans.set(start, contentEnd === contentStart ? contentStart : contentEnd + length);
+    next.set(length, start);
   }
   return spans;
 }
@@ -40,41 +25,24 @@ type IndexedInline = {
   start: number;
   end: number;
   node: ReactNode;
-  children?: IndexedInline[];
 };
 
-/** Index visible text across emphasis nodes while treating other nodes atomically. */
+/** Index literal text while keeping protected spans atomic. */
 function indexInline(nodes: ReactNode[]): { nodes: IndexedInline[]; text: string } {
   const parts: string[] = [];
   let offset = 0;
-  const visit = (items: ReactNode[]): IndexedInline[] =>
-    items.map((node) => {
-      const start = offset;
-      let children: IndexedInline[] | undefined;
-      if (typeof node === 'string') {
-        parts.push(node);
-        offset += node.length;
-      } else if (
-        isValidElement<{ children: ReactNode[] }>(node) &&
-        (node.type === 'strong' || node.type === 'em' || node.type === 'del')
-      ) {
-        children = visit(node.props.children);
-      } else {
-        const children = isValidElement<{ children?: ReactNode[] }>(node)
-          ? node.props.children
-          : undefined;
-        const isLineBreak =
-          Array.isArray(children) &&
-          children.length === 2 &&
-          isValidElement(children[0]) &&
-          children[0].type === 'br' &&
-          children[1] === '\n';
-        parts.push(isLineBreak ? '\n' : '\u0000');
-        offset++;
-      }
-      return { start, end: offset, node, children };
-    });
-  return { nodes: visit(nodes), text: parts.join('') };
+  const indexed = nodes.map((node) => {
+    const start = offset;
+    if (typeof node === 'string') {
+      parts.push(node);
+      offset += node.length;
+    } else {
+      parts.push('\u0000');
+      offset++;
+    }
+    return { start, end: offset, node };
+  });
+  return { nodes: indexed, text: parts.join('') };
 }
 
 function sliceInline(nodes: IndexedInline[], start: number, end: number): ReactNode[] {
@@ -92,14 +60,6 @@ function sliceInline(nodes: IndexedInline[], start: number, end: number): ReactN
     const item = nodes[index];
     if (typeof item.node === 'string') {
       result.push(item.node.slice(Math.max(start - item.start, 0), end - item.start));
-    } else if (item.children) {
-      result.push(
-        cloneElement(
-          item.node as ReactElement<{ children: ReactNode }>,
-          { key: `${item.start}:${start}:${end}` },
-          sliceInline(item.children, start, end)
-        )
-      );
     } else result.push(item.node);
   }
   return result;
@@ -178,7 +138,7 @@ function literalNodes(text: string): ReactNode[] {
   let offset = 0;
   while (offset < text.length) {
     const rest = text.slice(offset);
-    const codeEnd = codeSpans.get(offset)?.end;
+    const codeEnd = codeSpans.get(offset);
     const ruby =
       offset < lastRubyClose && rest.startsWith('<ruby>')
         ? text.slice(offset, text.indexOf('</ruby>', offset + 6) + 7)

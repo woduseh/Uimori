@@ -303,7 +303,6 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
     };
     value.nativeRisuExecution = {
       version: 2,
-      inputHash: 'b'.repeat(64),
       beforeVariableRevision: 0,
       variables: {},
       fields: { 'bot@1:bot': { 'lore:harbor': '', 'lore:mountain': 'Evaluated mountain.' } },
