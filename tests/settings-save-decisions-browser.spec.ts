@@ -296,7 +296,7 @@ for (const width of [360, 412]) {
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '데이터 관리');
-    const panel = page.getByRole('region', { name: '자동 백업', exact: true });
+    const panel = page.getByRole('region', { name: '서버 자동 백업', exact: true });
     const retain = panel.getByLabel('성공본 보관 개수', { exact: true });
     const save = panel.getByRole('button', { name: '백업 설정 저장', exact: true });
     await expect(save).toHaveText('저장');

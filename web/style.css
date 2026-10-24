@@ -510,7 +510,7 @@ input[type="checkbox"] {
   border-radius: var(--radius-control);
 }
 @media (hover: hover) {
-  .header-title-hit:hover {
+  .header-title-hit:hover:not(:disabled) {
     background: transparent;
   }
   .header-title:has(.header-title-hit:hover) {

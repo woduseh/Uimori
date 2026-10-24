@@ -568,7 +568,8 @@ for (const mainId of [null, 'missing-model']) {
     );
     const repair = dialog.getByRole('button', { name: '전역 모델 설정', exact: true });
     // Model controls follow automatic translation in this scrollable settings section.
-    await repair.scrollIntoViewIfNeeded();
+    // Center the control rather than leaving its border clipped at the scrollport edge.
+    await repair.evaluate((node) => node.scrollIntoView({ block: 'center' }));
     await expect(repair).toBeInViewport({ ratio: 1 });
     const alertBox = await alert.boundingBox();
     const repairBox = await repair.boundingBox();

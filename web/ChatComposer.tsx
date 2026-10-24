@@ -44,10 +44,12 @@ export function ComposerInput({ inputRef, enterSend, onSend, value, ...props }: 
       if (wasGrown) form?.classList.remove('grown');
       node.style.height = 'auto';
       const style = getComputedStyle(node);
-      const single =
+      const single = Math.max(
+        Number.parseFloat(style.minHeight),
         Number.parseFloat(style.lineHeight) +
-        Number.parseFloat(style.paddingTop) +
-        Number.parseFloat(style.paddingBottom);
+          Number.parseFloat(style.paddingTop) +
+          Number.parseFloat(style.paddingBottom)
+      );
       const grown = !!value && (String(value).includes('\n') || node.scrollHeight > single + 1);
       // Restore React's current class synchronously, before paint or observer delivery.
       if (wasGrown) form?.classList.add('grown');
