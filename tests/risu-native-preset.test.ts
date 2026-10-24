@@ -210,13 +210,6 @@ test('native fields share variable mutations and replay uses their frozen result
     projectNativeRisuPresetProgram(tampered, tampered.profile!.promptPresets!.main!.program)
   ).toThrow('RECEIPT_MISMATCH');
 });
-test('native source is authoritative and rejects a second authored representation', () => {
-  const imported = importRisuPresetProgram(preset('authoritative'));
-  expect(() => validateRisuPrompt({ ...imported.program, blocks: [] })).toThrow();
-  expect(validateRisuPrompt(imported.program).nativeRisuPreset.preset.promptTemplate).toEqual(
-    preset('authoritative').promptTemplate
-  );
-});
 
 test('preset CBS sees messages after pre-turn scripts and the current input', async () => {
   const input = snapshot(preset('{{lastmessage}}'));

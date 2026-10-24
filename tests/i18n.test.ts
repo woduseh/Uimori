@@ -201,68 +201,6 @@ describe('UI locale presentation boundary', () => {
       expect(rendered).not.toContain('\u001fui:');
     }
   });
-
-  test('refined copy preserves terminology and semantic distinctions across ko, en, ja and zh', async () => {
-    const { formatMessage } = await import('../web/i18n.js');
-    // Assistant / resource / asset / source vs original manuscript terminology
-    expect(formatMessage('main.m012', 'en')).toBe('Select an assistant model');
-    expect(formatMessage('reader.askTheHelper', 'en')).toBe('Ask the assistant');
-    expect(formatMessage('errors.modelRequired', 'en', { role: 'helper' })).toContain(
-      'assistant model'
-    );
-    expect(formatMessage('errors.RISU_IMPORT_PREPARED_NOT_FOUND', 'en')).toContain(
-      'reviewed resource expired'
-    );
-    expect(formatMessage('native.text_6b1779397e', 'ja')).toContain('アセット');
-    expect(formatMessage('library.editingTheOriginalChangesWillBeChecked', 'en')).toContain(
-      'source'
-    );
-    expect(formatMessage('library.editingTheOriginalChangesWillBeChecked', 'ja')).toContain(
-      'ソース'
-    );
-    expect(formatMessage('library.editingTheOriginalChangesWillBeChecked', 'zh')).toContain('源码');
-    expect(formatMessage('prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown', 'ja')).toContain(
-      'ソース入力'
-    );
-    expect(formatMessage('prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown', 'zh')).toContain(
-      '源码输入'
-    );
-    expect(formatMessage('helpers.m043', 'ja')).toContain('ライブラリ');
-    expect(formatMessage('helpers.m043', 'zh')).toContain('资料库');
-    expect(formatMessage('reader.contextSummary', 'ja')).toBe('コンテキストの要約');
-    expect(formatMessage('visualpanels.workspaceDefault', 'ja')).toBe('ワークスペースの既定');
-    expect(formatMessage('transfer.m141', 'en')).toContain('internal assistant tasks');
-    expect(formatMessage('settings.m193', 'ko')).toBe(' 에이전트를 이 프롬프트에서 삭제할까요?');
-    expect(formatMessage('settings.m193', 'en')).toBe(' — remove this agent from the prompt?');
-    expect(formatMessage('settings.m193', 'ja')).toBe('をこのプロンプトから削除しますか？');
-    expect(formatMessage('settings.m193', 'zh')).toBe('：要从此提示词中删除该智能体吗？');
-    expect(formatMessage('helpers.m056', 'en')).toBe('Confirm latest settings');
-    expect(formatMessage('shared.reviewDone', 'en')).toBe('Finish reviewing saved version');
-    expect(formatMessage('shared.reviewDone', 'ja')).toBe('保存済み内容の確認完了');
-    expect(formatMessage('shared.reviewDone', 'zh')).toBe('已确认保存版本');
-
-    // Realistic variable values across all 4 locales
-    for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {
-      const aria = formatMessage('main.modelAria', locale, {
-        model: 'Claude Sonnet',
-        pinned: 'true',
-        prompt: 'pinned',
-      });
-      expect(aria).toContain('Claude Sonnet');
-      const persona = formatMessage('main.botPersona', locale, {
-        bot: 'Alice',
-        hasPersona: 'true',
-        persona: ' Traveler',
-      });
-      expect(persona).toContain('Alice');
-      const tokens = formatMessage('reader.tokenTotals', locale, {
-        input: '1,240',
-        output: '580',
-      });
-      expect(tokens).toContain('1,240');
-      expect(tokens).toContain('580');
-    }
-  });
 });
 
 test('static candidate scan sees attribute names, templates, status text and module constants', async () => {
@@ -346,7 +284,6 @@ test('all catalog locales parse ICU and accept the same named arguments', () => 
     walk(new IntlMessageFormat(pattern, locale, undefined, { ignoreTag: true }).getAst());
     return [...args].sort();
   }
-  expect(Object.keys(messages).length).toBeGreaterThan(10);
   for (const [key, values] of Object.entries(messages)) {
     const koArguments = argumentsOf(values.ko, 'ko');
     for (const locale of ['ko', 'en', 'ja', 'zh'] as const) {

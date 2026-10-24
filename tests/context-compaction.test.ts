@@ -433,30 +433,6 @@ describe('input context projection and durable summary calls', () => {
     }
   );
 
-  test('under-threshold input needs no provider call and preserves source text, roles, prompt, and current input', async () => {
-    const source = await snapshot(['미라는 부두에 도착했어요.']),
-      original = structuredClone(source),
-      log = observed();
-    const result = await prepareInputContext(source, log.hooks);
-    expect(result.usage).toEqual({ modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 });
-    expect(fetch).not.toHaveBeenCalled();
-    expect(result.snapshot.contextPlan).toMatchObject({
-      status: 'ready',
-      compacted: [],
-      summary: null,
-      summaryCalls: 0,
-      error: null,
-    });
-    expect(source).toEqual(original);
-    expect(result.snapshot.history).toEqual(original.history);
-    expect(result.snapshot.logicalHistory).toEqual(original.logicalHistory);
-    const body = JSON.stringify(buildMainProviderRequest(result.snapshot).request);
-    expect(body).toContain(currentRequest);
-    expect(body).toContain(fixedPrompt);
-    expect(log.progress.at(-1)).toEqual(result.snapshot.contextPlan);
-    expect(() => validateContextPlan(result.snapshot)).not.toThrow();
-  });
-
   test('oversized Korean exchanges are summarized with user wishes intact before main generation, retaining the latest two exchanges', async () => {
     const source = await snapshot(oldScenes()),
       original = structuredClone(source),

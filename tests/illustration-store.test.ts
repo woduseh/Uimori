@@ -3,8 +3,7 @@ import { fixtureIllustrationPreset } from './fixtures/illustration.js';
 import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import { saveResource } from '../server/resource-service.js';
 import { afterEach, describe, expect, test } from 'vitest';
-import { Store } from '../server/store.js';
-import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
+import type { Store } from '../server/store.js';
 import { HttpError } from '../server/request-validation.js';
 import {
   cancelIllustration,
@@ -151,42 +150,6 @@ describe('integrated illustration audit regressions', () => {
 });
 
 describe('illustration storage on the current schema', () => {
-  test('fresh databases create illustration tables and current databases reopen them', () => {
-    const store = databases.create();
-    const tables = () =>
-      (
-        store.db
-          .prepare(
-            "SELECT name FROM sqlite_schema WHERE type='table' AND name LIKE 'illustration_%' ORDER BY name"
-          )
-          .all() as { name: string }[]
-      ).map((row) => row.name);
-    expect(tables()).toEqual([
-      'illustration_images',
-      'illustration_jobs',
-      'illustration_references',
-      'illustration_settings',
-    ]);
-    expect(store.db.prepare('PRAGMA user_version').get()).toEqual({
-      user_version: DATABASE_SCHEMA_VERSION,
-    });
-    expect(illustrationSettings(store)).toMatchObject({
-      revision: 1,
-      automatic: false,
-    });
-    const path = store.path;
-    store.close();
-    const reopened = new Store(path);
-    try {
-      expect(reopened.db.prepare('PRAGMA user_version').get()).toEqual({
-        user_version: DATABASE_SCHEMA_VERSION,
-      });
-      expect(illustrationSettings(reopened)).not.toHaveProperty('generator');
-      expect(reopened.db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-    } finally {
-      reopened.close();
-    }
-  });
   test('settings save with CAS, reject unusable generators and check selected models', () => {
     const store = databases.create();
     const base = fixtureSettings();

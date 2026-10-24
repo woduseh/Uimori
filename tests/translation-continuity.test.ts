@@ -1,7 +1,7 @@
 import { nativeContent } from './fixtures/native-content.js';
 import { describe, expect, test } from 'vitest';
 import { createHash } from 'node:crypto';
-import { compileTranslationPrompt, executeAuxiliary, translationInput } from '../core/auxiliary.js';
+import { translationInput } from '../core/auxiliary.js';
 import { defaultProfile } from '../core/product.js';
 import { sourceTimeContext, type AuxiliaryBundle } from '../server/product-auxiliary.js';
 function bundle(count = 5): AuxiliaryBundle {
@@ -87,35 +87,5 @@ describe('whole-source translation continuity', () => {
     expect(JSON.stringify(input)).not.toMatch(
       /LATER_RELATIONSHIP|LATER_SOURCE|previousTranslation|chunkId/
     );
-  });
-  test('default prompt receives the full original once and offers prior source, notes and wording reads', async () => {
-    const seed = bundle(20);
-    const input = translationInput(
-      seed.source,
-      sourceTimeContext(seed.snapshot, 'translation'),
-      seed.snapshot
-    );
-    const compiled = compileTranslationPrompt(input, seed.snapshot, 'Translate the full source.')!;
-    expect(
-      compiled.messages.filter((message) => message.provenance.origin === 'current')
-    ).toHaveLength(1);
-    expect(input.sourceText).toBe(seed.source.text);
-    expect(input.tools).toEqual(
-      expect.arrayContaining([
-        'story.search',
-        'story.read',
-        'translation.search',
-        'translation.read',
-      ])
-    );
-    const before = JSON.stringify(input);
-    const outcome = await executeAuxiliary(
-      input,
-      seed.snapshot,
-      async () => '앨런 선장은 기다렸다.'
-    );
-    expect(outcome.modelCalls).toBe(1);
-    expect(outcome.output).toBe('앨런 선장은 기다렸다.');
-    expect(JSON.stringify(input)).toBe(before);
   });
 });

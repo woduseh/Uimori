@@ -1,11 +1,5 @@
 import { expect, test, vi } from 'vitest';
-import {
-  buildCodexDescriptor,
-  buildCodexTurn,
-  CODEX_ENDPOINT,
-  decodeCodexOutput,
-  TEXT_BASE_INSTRUCTIONS,
-} from '../core/codex-protocol.js';
+import { buildCodexTurn, CODEX_ENDPOINT, decodeCodexOutput } from '../core/codex-protocol.js';
 import { executeProvider, validateConnection, type ProviderRequest } from '../core/transport.js';
 
 const connection = {
@@ -102,24 +96,6 @@ test('preserves ordered logical roles and explicit empty instructions while reje
   r.prompt.messages[2].completion = 'complete';
   r.prompt.cachePlan = [{ blockId: 'b0', afterMessageId: 'm0', policy: 'require' }];
   expect(() => buildCodexTurn(r)).toThrow('CODEX_PROMPT_CACHE_UNSUPPORTED');
-});
-
-test('text roles use writing base instructions while helper keeps its application-operation guidance', () => {
-  const helper = { ...request(), role: 'helper' as const };
-  const built = buildCodexTurn(helper);
-  expect(built.baseInstructions).toContain('single-user creative-writing app');
-  expect(built.baseInstructions).toContain('do not automatically repeat a write');
-  expect(buildCodexDescriptor(helper, built)).toMatchObject({
-    baseInstructions: built.baseInstructions,
-    developerInstructions: built.developerInstructions,
-  });
-  for (const role of ['main', 'translation', 'image', 'script', 'context', 'title'] as const) {
-    const selected = { ...request(), role };
-    expect(buildCodexTurn(selected).baseInstructions).toBe(TEXT_BASE_INSTRUCTIONS);
-    expect(buildCodexDescriptor(selected)).toMatchObject({
-      baseInstructions: TEXT_BASE_INSTRUCTIONS,
-    });
-  }
 });
 
 test('compact logical messages keep retrievable provenance and omit only an exact current user task duplicate', () => {

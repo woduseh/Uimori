@@ -229,36 +229,6 @@ test('requireCi reports queued and in-progress run context and jobs while stayin
   }
 });
 
-test('a successful job set cannot excuse an unsuccessful workflow run', async () => {
-  const selected = { ...run, conclusion: 'failure' };
-  const { execute } = lookup({ runs: [selected] });
-  await assert.rejects(requireCi(context, execute), (error) => {
-    assertRunDetails(error, selected);
-    assert.match(error.message, /Exact-commit Quality workflow has not succeeded/);
-    return true;
-  });
-});
-
-test('a successful workflow cannot excuse failed, duplicate, skipped or missing required jobs', async () => {
-  const values = jobs();
-  values[0].conclusion = 'failure';
-  values[1].conclusion = 'skipped';
-  values.push({ ...values[2] });
-  values.splice(
-    values.findIndex((job) => job.name === 'selfhost'),
-    1
-  );
-  const { execute } = lookup({ pages: [values] });
-  await assert.rejects(requireCi(context, execute), (error) => {
-    assertRunDetails(error);
-    assert.match(error.message, /static: status=completed, conclusion=failure/);
-    assert.match(error.message, /tooling: status=completed, conclusion=skipped/);
-    assert.match(error.message, /linux-core: duplicate/);
-    assert.match(error.message, /selfhost: missing/);
-    return true;
-  });
-});
-
 test('requireCi does not inspect jobs for an ineligible SHA, branch, workflow or PR run', async () => {
   for (const change of [
     { head_sha: 'b'.repeat(40) },

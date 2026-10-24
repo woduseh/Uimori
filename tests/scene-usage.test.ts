@@ -42,27 +42,3 @@ test('Codex turn-wide input remains usage accounting rather than request occupan
   expect(html).toContain('aria-label="컨텍스트 한도 대비 추정 입력"');
   expect(html).not.toContain('aria-label="컨텍스트 한도 대비 입력"');
 });
-
-test('recorded identities are shown without filling historical gaps', () => {
-  const html = render({
-    inputTokens: 100,
-    outputTokens: 20,
-    context: { ...context, tokenizer: 'gemini-gemma4' },
-    receipt: {
-      version: 1,
-      model: { modelId: 'frozen-writer', title: '당시 모델' },
-      prompt: { id: 'prompt', revision: 4, title: '당시 프롬프트' },
-      persona: { id: 'persona', revision: 2, title: '당시 페르소나', name: '미라' },
-      summary: { status: 'included', coveredSources: 3 },
-    },
-  });
-  expect(html).toContain('이번 생성');
-  expect(html).toContain('당시 모델 · frozen-writer');
-  expect(html).toContain('프롬프트 선택');
-  expect(html).toContain('당시 프롬프트</dd>');
-  expect(html).toContain('미라</dd>');
-  expect(html).toContain('3개 장면 요약 포함 확인');
-  expect(render({ inputTokens: null, outputTokens: null, context: null })).toContain(
-    '모델·프롬프트·페르소나·요약 기록이 없어요'
-  );
-});

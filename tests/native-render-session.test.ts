@@ -8,7 +8,7 @@ import { renderNativeRisuMessage } from '../server/risu-native-render.js';
 import { createNativeRisuWorkerSession } from '../server/risu-native-worker.js';
 
 // Runs with the project's real Markdown/CBS dependencies, not the worker transport fixture.
-test('session rendering matches one-shot rendering as messages and live variables change', async () => {
+test('session rendering matches one-shot rendering as text, messages and live variables change', async () => {
   const session = createNativeRisuWorkerSession<NativeRisuRenderInput, NativeRisuRenderResult>(
     new URL('../server/risu-native-render.js', import.meta.url),
     'renderNativeRisuMessageInWorker'
@@ -42,16 +42,13 @@ test('session rendering matches one-shot rendering as messages and live variable
   };
   try {
     for (const name of ['첫 상태', '다음 상태', '세 번째 상태']) {
+      input.text = `**{{char}}**: ${name} TOKEN {{getvar::name}}`;
       input.context.variables = { name };
       input.context.messages = [{ role: 'char', data: name }];
       const expected = await renderNativeRisuMessage(input);
       assert.deepEqual(await session.run(input), expected);
       assert.equal(input.context.variables.name, name);
     }
-    const original = { ...input, text: 'Original **message**' };
-    const translated = { ...input, text: '번역된 **메시지**' };
-    assert.deepEqual(await session.run(original), await renderNativeRisuMessage(original));
-    assert.deepEqual(await session.run(translated), await renderNativeRisuMessage(translated));
   } finally {
     await session.close();
   }

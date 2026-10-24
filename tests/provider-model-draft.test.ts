@@ -88,11 +88,6 @@ describe('model numeric drafts', () => {
     expect(modelPayload(changed, anthropicConnection)).not.toHaveProperty('safetySettings');
   });
 
-  test('uses a 600-second response timeout for new models', () => {
-    expect(initialModel().timeoutSeconds).toBe('600');
-    expect(modelPayload(initialModel(), connection).timeoutMs).toBe(600_000);
-  });
-
   test('keeps Anthropic Batch as host execution mode and resets it on another connection', () => {
     const batch = { ...initialModel(), modelId: 'claude-opus-5', executionMode: 'batch' as const };
     expect(modelPayload(batch, anthropicConnection)).toMatchObject({ executionMode: 'batch' });

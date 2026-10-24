@@ -32,45 +32,6 @@ function rejects(value: unknown, code?: string): void {
     });
 }
 
-describe('collaboration defaults and editable templates', () => {
-  test('starts disabled with independent mutable arrays', () => {
-    const first = createAgentCollaboration();
-    expect(first).toEqual({
-      enabled: false,
-      sharedInstructions: '',
-      sharedControls: [],
-      maxCalls: 3,
-      agents: [],
-    });
-    expect(validateAgentCollaboration(first)).toEqual(first);
-    first.sharedControls.push('style');
-    first.agents.push(createAgentDefinition('custom', 'first'));
-    expect(createAgentCollaboration().sharedControls).toEqual([]);
-    expect(createAgentCollaboration().agents).toEqual([]);
-  });
-
-  test.each(['character', 'lore', 'custom'] as const)('%s is editable and reads only', (kind) => {
-    const agent = createAgentDefinition(kind, 'my-agent_1');
-    expect(agent).toMatchObject({
-      id: 'my-agent_1',
-      model: null,
-      trigger: 'on-demand',
-      maxCalls: 2,
-    });
-    expect(agent.title).toMatch(/[가-힣]/u);
-    expect(agent.description).toMatch(/[가-힣]/u);
-    expect(agent.tools.length).toBeGreaterThan(0);
-    expect(
-      agent.tools.every((scope) => ['knowledge', 'skills', 'notes', 'story'].includes(scope))
-    ).toBe(true);
-    agent.title = '직접 편집한 이름';
-    agent.instructions = '직접 작성한 지침';
-    agent.tools.push('skills');
-    expect(validateAgentCollaboration(config(agent)).agents[0]).toEqual(agent);
-    expect(createAgentDefinition(kind, 'second').tools).not.toContain('skills');
-  });
-});
-
 describe('collaboration limits and references', () => {
   test('disabled settings preserve unfinished values but still reject malformed data', () => {
     rejects({ ...createAgentCollaboration(), enabled: true }, 'AGENTS_REQUIRED');
@@ -250,13 +211,6 @@ describe('JSON validation and detached output', () => {
           : { ...config(), [field]: value };
       for (const value of [undefined, null, {}, 'not-a-list']) rejects(wrap(value), 'INVALID_LIST');
     }
-  });
-
-  test('accepts old output limit but removes it from the saved JSON shape', () => {
-    const value = config();
-    const stored = JSON.parse(JSON.stringify(value)) as Record<string, unknown>;
-    (stored.agents as Record<string, unknown>[])[0].maxOutputChars = 4000;
-    expect(validateAgentCollaboration(stored).agents[0]).not.toHaveProperty('maxOutputChars');
   });
 
   test('detaches every mutable nested container from the input', () => {

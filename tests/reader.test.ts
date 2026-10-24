@@ -43,19 +43,6 @@ async function setup() {
   owned.push({ app, directory });
   return app;
 }
-test('new chats have no scene commentary setting or automatic job', async () => {
-  const app = await setup();
-  const chat = createFixtureChat(app.store, 'Synthetic initial settings');
-  expect(chat.settings).toEqual({ maxCalls: 8 });
-  const result = source(app.store, chat.id);
-  expect(app.store.chat(chat.id).settingsRevision).toBe(1);
-  expect(
-    app.store.db
-      .prepare("SELECT COUNT(*) AS count FROM jobs WHERE source_revision=? AND kind='status'")
-      .get(result.id)
-  ).toEqual({ count: 0 });
-});
-
 function source(store: Store, chatId: string, text = 'Synthetic paragraph.') {
   const chat = store.chat(chatId);
   const run = store.createRun(

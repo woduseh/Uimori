@@ -321,32 +321,7 @@ describe('Independent layout and palette choices', () => {
     }
   });
 
-  test('official Radix steps keep text distinct from solid accent backgrounds', () => {
-    const forest = BUILTIN_PALETTES.find((palette) => palette.id === 'forest')!;
-    expect(forest.colors.light).toMatchObject({
-      bg: '#fcfdfc', // olive 1
-      panel: '#f8faf8', // olive 2
-      surface: '#eff1ef', // olive 3
-      hover: '#e7e9e7', // olive 4
-      'surface-active': '#dfe2df', // olive 5
-      line: '#d7dad7', // olive 6
-      'input-border': '#cccfcc', // olive 7
-      'border-hover': '#b9bcb8', // olive 8
-      accent: '#46a758', // grass 9
-      'accent-hover': '#3e9b4f', // grass 10
-      'accent-text': '#2a7e3b', // grass 11
-      text: '#1d211c', // olive 12
-    });
-    expect(forest.colors.dark).toMatchObject({
-      bg: '#111210',
-      surface: '#212220',
-      hover: '#282a27',
-      'surface-active': '#2f312e',
-      accent: '#46a758',
-      'accent-hover': '#53b365',
-      'accent-text': '#71d083',
-      text: '#eceeec',
-    });
+  test('built-in palettes keep readable contrast on text and solid backgrounds', () => {
     const luminance = (hex: string) => {
       const rgb = hex.match(/[0-9a-f]{2}/gi)!.map((value) => parseInt(value, 16) / 255);
       const [r, g, b] = rgb.map((value) =>

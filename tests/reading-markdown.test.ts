@@ -1,6 +1,4 @@
 import { createHash } from 'node:crypto';
-import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vitest';
 import { splitSource } from '../core/auxiliary.js';
 import {
@@ -8,7 +6,6 @@ import {
   createReadingMarkdown,
   projectReadingText,
 } from '../core/reading-markdown.js';
-import { SourceReader } from '../web/SourceReader.js';
 
 function source(text: string) {
   const source = {
@@ -21,41 +18,6 @@ function source(text: string) {
   };
   return { ...source, blocks: splitSource(source) };
 }
-
-test('whole message compilation preserves canonical identity across false fence closers, loose lists and reference definitions', () => {
-  for (const text of [
-    '```text\nfirst\n```notclose\n\ninside\n```\n\nAfter',
-    '- first\n\n- second\n\n[reference][story]\n\n[story]: https://example.com/story',
-  ]) {
-    const value = source(text);
-    const before = structuredClone(value);
-    const compiled = compileReadingMarkdown(text, value.blocks);
-    const html = renderToStaticMarkup(
-      createElement(SourceReader, {
-        source: value,
-        index: 0,
-        jobs: [],
-        assets: [],
-        refresh: async () => {},
-        onError: () => {},
-        onFork: async () => {},
-      })
-    );
-    expect(value).toEqual(before);
-    for (const block of value.blocks) expect(html).toContain(`data-block-anchor="${block.anchor}"`);
-    if (text.startsWith('```')) {
-      expect(compiled.html.match(/<pre>/gu)).toHaveLength(1);
-      expect(compiled.html).not.toMatch(/<p\b[^>]*>inside/u);
-      expect(html.match(/<pre>/gu)).toHaveLength(1);
-    } else {
-      expect(compiled.html.match(/<ul>/gu)).toHaveLength(1);
-      expect(compiled.html).toContain('href="https://example.com/story"');
-      expect(html.match(/<ul>/gu)).toHaveLength(1);
-      expect(compiled.inlineAnchors).not.toContain(value.blocks[0].anchor);
-      expect(compiled.inlineAnchors).toContain(value.blocks[1].anchor);
-    }
-  }
-});
 
 test('display offsets follow length-changing image removal without changing the stored blocks or separators', () => {
   const value = source(

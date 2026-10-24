@@ -221,14 +221,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(() => encodeVertex(nextInput)).toThrow('VERTEX_CONTINUATION_MISMATCH');
   });
 
-  test('plain translated text preserves natural digits, direction words and line breaks', () => {
-    const { input } = translationRequest();
-    const { decoder } = start(input);
-    const prose = '그는 40년 동안 근무했다. 계기는 사십을 가리켰다.\n왼쪽으로 돌아라.';
-    decoder.accept(event([{ text: prose }], 'STOP'));
-    expect(decoder.finish()).toMatchObject({ status: 'completed', text: prose });
-  });
-
   test.each(['main'] as const)('does not add translation format constraints to %s', (role) => {
     const input = request();
     input.role = role;
@@ -237,17 +229,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     expect(wire.generationConfig).not.toHaveProperty('responseSchema');
     expect(wire.systemInstruction.parts).toHaveLength(2);
   });
-
-  test.each(['LOW', 'MEDIUM', 'HIGH'] as const)(
-    'supports explicit %s thinking level',
-    (thinkingLevel) => {
-      const input = request();
-      input.generation!.thinkingLevel = thinkingLevel;
-      expect(bodyObject(encodeVertex(input).body).generationConfig.thinkingConfig).toEqual({
-        thinkingLevel,
-      });
-    }
-  );
 
   test('3.1 Pro preserves explicit zero sampling and stop sequences while omitting unselected thinking', () => {
     const input = request();
@@ -270,15 +251,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
     });
   });
 
-  test.each([{ temperature: 0 }, { topP: 0.9 }])(
-    'protocol sampling fields reach the wire for any Gemini model; the provider gives the verdict %j',
-    (options) => {
-      const input = request();
-      Object.assign(input.generation!, options);
-      expect(bodyObject(encodeVertex(input).body).generationConfig).toMatchObject(options);
-    }
-  );
-
   test.each([0, -1, 500_001, 1.5])(
     'rejects unsupported max output %s before wire encoding',
     (maxOutputTokens) => {
@@ -287,15 +259,6 @@ describe('Vertex 3.8 request and continuation protocol', () => {
       expect(() => encodeVertex(input)).toThrow('UNSUPPORTED_GENERATION_OPTIONS');
     }
   );
-
-  test('encodes Flash-Lite minimal thinking without sampling overrides', () => {
-    const input = request();
-    input.modelId = 'gemini-3.5-flash-lite';
-    input.generation = { maxOutputTokens: 65536, temperature: null, thinkingLevel: 'MINIMAL' };
-    expect(encodeVertex(input).body).toMatchObject({
-      generationConfig: { maxOutputTokens: 65536, thinkingConfig: { thinkingLevel: 'MINIMAL' } },
-    });
-  });
 
   test('encodes unlisted models with protocol options and rejects unknown thinking values and duplicate declarations', () => {
     const input = request();

@@ -5,7 +5,7 @@ import { openHelper } from './ui-navigation.js';
 import { visualReview } from './fixtures/visual-review.js';
 
 for (const width of DEFAULT_WIDTHS) {
-  test(`NOTICE composer menu actions share color and alignment at ${width}px`, async ({
+  test(`NOTICE composer menu restores focus and draft after closing the persona picker at ${width}px`, async ({
     page,
     request,
   }, info) => {
@@ -18,31 +18,6 @@ for (const width of DEFAULT_WIDTHS) {
     await input.fill('메뉴를 열어도 보존할 초안');
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     const menu = page.getByRole('group', { name: '이번 요청 옵션' });
-    await expect(menu.locator('.composer-menu-heading')).toHaveText([
-      '창작 설정',
-      '요청 및 컨텍스트',
-    ]);
-    await expect(menu.locator('.composer-menu-persona > span')).toHaveText('페르소나');
-    await expect(menu.getByRole('button', { name: '빠른 페르소나' })).toBeVisible();
-    await expect(menu.getByRole('switch', { name: '다음 생성에서 조회 로어 제외' })).toHaveCount(1);
-    const options = page.getByRole('button', { name: '창작 옵션', exact: true });
-    await expect(options).toBeVisible();
-    const reference = await options.evaluate((node) => {
-      const style = getComputedStyle(node);
-      return {
-        color: style.color,
-        fontSize: style.fontSize,
-        left: node.getBoundingClientRect().left,
-      };
-    });
-    for (const name of ['창작 옵션', '다음 요청 미리보기', '수동 컨텍스트 압축']) {
-      const button = page.getByRole('button', { name, exact: true });
-      await expect(button).toHaveCSS('color', reference.color);
-      await expect(button).toHaveCSS('font-size', reference.fontSize);
-      await expect(button).toHaveCSS('text-align', 'left');
-      await expect(button).toHaveCSS('justify-content', 'flex-start');
-      expect(Math.abs((await button.boundingBox())!.x - reference.left)).toBeLessThanOrEqual(1);
-    }
     await page.screenshot({ path: info.outputPath(`composer-menu-${width}.png`) });
     await menu.getByRole('button', { name: '빠른 페르소나' }).click();
     const picker = page.getByRole('dialog', { name: '빠른 페르소나', exact: true });

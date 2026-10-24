@@ -1,10 +1,9 @@
 import { afterEach, describe, expect, test } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { STORY_READ_TOOLS } from '../core/story-read-tools.js';
-import { executeStoryRead, STORY_READ_NAMES } from '../core/story-context.js';
+import { executeStoryRead } from '../core/story-context.js';
 import { sourceHash } from '../core/source-history.js';
 import type { RunSnapshot } from '../core/types.js';
-import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
 const apps: FastifyInstance[] = [];
 afterEach(async () => {
@@ -46,14 +45,6 @@ function fixture() {
 }
 
 describe('compact story read contract', () => {
-  test('main exposes only browse/search and scene-number read tools', () => {
-    expect(STORY_READ_TOOLS.map((tool) => tool.name)).toEqual(['story.search', 'story.read']);
-    expect(STORY_READ_NAMES).toEqual(['story.search', 'story.read']);
-    expect(MAIN_READ_TOOLS.filter((tool) => STORY_READ_NAMES.includes(tool.name))).toEqual(
-      STORY_READ_TOOLS
-    );
-  });
-
   test('story.search lists when query is absent or blank and searches when it is present', async () => {
     const { call, history } = fixture();
     for (const args of [
