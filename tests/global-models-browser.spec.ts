@@ -77,7 +77,8 @@ for (const width of DEFAULT_WIDTHS) {
     ).toBe(true);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${existing.id}`);
-    await page.getByRole('button', { name: /^현재 본문 모델:/ }).click();
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '역할별 모델');
     const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(editor).toContainText('변경한 설정은 이후 작업부터 적용돼요.');
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
@@ -163,7 +164,8 @@ for (const width of DEFAULT_WIDTHS) {
       maxCalls: 12,
     });
     await page.reload();
-    await page.getByRole('button', { name: /^현재 본문 모델:/ }).click();
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '역할별 모델');
     await expect(mainThreshold).toBeHidden();
     await behaviorSummary.click();
     await expect(mainToggle).not.toBeChecked();

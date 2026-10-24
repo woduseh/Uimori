@@ -28,6 +28,7 @@ import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { InputTranslationControls, InputTranslationFeedback } from './InputTranslation.js';
 import { ComposerMore, LoreResetChip } from './ComposerMore.js';
 import { ChatContextDialog } from './ChatContextDialog.js';
+import { ChatModelPicker } from './ChatModelPicker.js';
 import { RequestPreviewDialog } from './RequestPreviewDialog.js';
 import { ManuscriptExportDialog } from './ManuscriptExportDialog.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
@@ -165,7 +166,16 @@ const OutlinePanel = deferredPanel('계층형 구성', async () => ({
   default: (await import('./OutlinePanel.js')).OutlinePanel,
 }));
 
-type Panel = '' | 'navigation' | 'new' | 'story' | 'tasks' | 'settings' | 'reading' | 'outline';
+type Panel =
+  | ''
+  | 'navigation'
+  | 'new'
+  | 'story'
+  | 'tasks'
+  | 'settings'
+  | 'reading'
+  | 'outline'
+  | 'model';
 /* Device layout preferences share the same optional browser storage. */
 const READING_WIDTHS = [760, 880, 1040];
 const PANEL_WIDTHS = [360, 384, 480];
@@ -237,7 +247,7 @@ function App() {
     menuReturn.current =
       event.currentTarget.closest('.chat-menu')?.querySelector<HTMLElement>('summary') ?? null;
   };
-  const [settingsTab, setSettingsTab] = useState('general');
+  const [settingsTab, setSettingsTab] = useState<string | undefined>();
   const [promptToEdit, setPromptToEdit] = useState<string | null>(null);
   const [helperResource, setHelperResource] = useState<HelperResourceRef | null>(null);
   const clearHelperResource = useCallback(() => setHelperResource(null), []);
@@ -326,7 +336,8 @@ function App() {
   const [initialBot, setInitialBot] = useState<Content>();
   const [initialFolder, setInitialFolder] = useState<ChatFolder>();
   const [initialPersona, setInitialPersona] = useState<Content>();
-  const [initialModules, setInitialModules] = useState<Content[]>([]);
+  const [initialModules, setInitialModules] = useState<Content[] | undefined>();
+  const [quickStartNew, setQuickStartNew] = useState(false);
   const [moduleToUse, setModuleToUse] = useState<Content | null>(null);
   const [libraryTab, setLibraryTab] = useState<'bot' | 'persona' | 'module' | 'prompts'>('bot');
   useEffect(() => {
@@ -342,6 +353,10 @@ function App() {
     }
   }, [errorScope, s.setError]);
   const [newKey, setNewKey] = useState(0);
+  const newStoryView = useRef({ key: newKey, active: panel === 'new' });
+  newStoryView.current = { key: newKey, active: panel === 'new' };
+  const modelPickerScope = useRef<string | null>(null);
+  modelPickerScope.current = panel === 'model' ? s.viewKey : null;
   const settingsReturnToNew = useRef(false);
   const [focus, setFocus] = useState(false);
   const [sceneNavigatorEnabled, setSceneNavigatorEnabled] = useState(
@@ -517,6 +532,17 @@ function App() {
     <button
       type="button"
       className="model-chip secondary"
+      aria-haspopup="dialog"
+      aria-expanded={panel === 'model'}
+      disabled={
+        !s.detail?.profile ||
+        !s.library ||
+        s.profileDirty ||
+        optionsDirty ||
+        optionsBusy ||
+        s.pendingProfile ||
+        !!s.pendingRequest
+      }
       aria-label={t('main.modelAria', {
         model: mainDescription,
         pinned: String(!!pinned?.mainModel),
@@ -533,13 +559,8 @@ function App() {
           : t('main.m019')
       }
       onClick={() => {
-        if (pinned?.mainModel || pinned?.mainPromptPresetId) {
-          setSettingsSection(pinned.mainModel ? 'models' : 'prompts');
-          setPanel('story');
-        } else {
-          setSettingsTab('models');
-          setPanel('settings');
-        }
+        s.setError('');
+        setPanel('model');
       }}
     >
       {(pinned?.mainModel || pinned?.mainPromptPresetId) && (
@@ -616,15 +637,20 @@ function App() {
     bot?: Content,
     folder?: ChatFolder,
     persona?: Content,
-    modules: Content[] = []
+    modules?: Content[],
+    quickStart = !!bot && !persona && modules === undefined
   ) {
     settingsReturnToNew.current = false;
     setInitialBot(bot);
     setInitialFolder(folder);
     setInitialPersona(persona);
     setInitialModules(modules);
+    setQuickStartNew(quickStart);
     setNewKey((old) => old + 1);
     setPanel('new');
+  }
+  function configureNewStory(bot: Content, folder?: ChatFolder) {
+    newStory(bot, folder, undefined, undefined, false);
   }
   const [pendingNotification, setPendingNotification] = useState<NotificationIntent | null>(null);
   const notificationBlocked = sourceEditing || optionsDirty || libraryDirty || panel === 'settings';
@@ -723,6 +749,7 @@ function App() {
       libraryTab={libraryTab}
       onSelect={select}
       onNew={newStory}
+      onConfigureNew={configureNewStory}
       onImportChat={(bot) => {
         setPanel('');
         setImportBot(bot);
@@ -732,7 +759,7 @@ function App() {
       onLibraryChanged={s.retryLibrary}
       onError={s.setError}
       onSettings={() => {
-        setSettingsTab('general');
+        setSettingsTab(undefined);
         setPanel('settings');
       }}
       onTasks={() => inspect('')}
@@ -1209,6 +1236,7 @@ function App() {
                 libraryError={s.libraryError}
                 onError={s.setError}
                 onStartStory={newStory}
+                onConfigureStartStory={configureNewStory}
                 onUseContent={useContent}
                 recentChatByContent={recentChatByContent}
                 onContinueChat={select}
@@ -2330,14 +2358,18 @@ function App() {
             initialFolder={initialFolder}
             initialPersona={initialPersona}
             initialModules={initialModules}
+            quickStart={quickStartNew && panel === 'new'}
             onModelSettings={() => {
+              setQuickStartNew(false);
               settingsReturnToNew.current = true;
               setSettingsTab('models');
               setPanel('settings');
             }}
             onCreated={async (chat) => {
               await s.loadChats();
-              select(chat.id);
+              // Completing an admitted creation must not pull the user out of another task.
+              if (newStoryView.current.key === newKey && newStoryView.current.active)
+                select(chat.id);
             }}
           />
         )}
@@ -2393,6 +2425,32 @@ function App() {
           initialSection={settingsSection}
           onGlobalSettings={(section) => {
             setSettingsTab(section);
+            setPanel('settings');
+          }}
+        />
+      )}
+      {panel === 'model' && s.library && s.detail?.profile && (
+        <ChatModelPicker
+          key={s.viewKey}
+          open
+          scopeKey={s.viewKey}
+          library={s.library}
+          selectedModelId={pinned?.mainModel?.id}
+          defaultModelId={s.promptWorkspace?.modelRoutes.main?.id}
+          disabled={
+            s.profileDirty || optionsDirty || optionsBusy || s.pendingProfile || !!s.pendingRequest
+          }
+          pending={s.quickBusy}
+          error={translateMessage(s.error)}
+          onSelect={(modelId) => {
+            const scope = s.viewKey;
+            void s.quickChange('model', modelId ?? '').then((saved) => {
+              if (saved && modelPickerScope.current === scope) setPanel('');
+            });
+          }}
+          onClose={() => setPanel('')}
+          onManage={() => {
+            setSettingsTab('connections');
             setPanel('settings');
           }}
         />

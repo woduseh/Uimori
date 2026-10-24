@@ -42,6 +42,7 @@ export type Props = {
   destination: 'story' | 'library';
   onSelect: (id: string, target?: ReaderTarget) => void;
   onNew: (bot: Content, folder?: ChatFolder) => void;
+  onConfigureNew?: (bot: Content, folder?: ChatFolder) => void;
   onImportChat?: (bot: Content) => void;
   onLibrary: (tab: LibraryDestination) => void;
   onChatsChanged: () => Promise<void>;
@@ -217,7 +218,7 @@ export function BotBranch(
       setBusy(false);
     }
   }
-  async function start(folder?: ChatFolder) {
+  async function start(folder?: ChatFolder, configure = false) {
     if (!bot || operation.current) return;
     operation.current = true;
     setBusy(true);
@@ -225,7 +226,10 @@ export function BotBranch(
     const version = epoch.current;
     try {
       const full = await api<Content>(`/content/${encodeURIComponent(bot.id)}`);
-      if (owner === currentBot.current && version === epoch.current) onNew(full, folder);
+      if (owner === currentBot.current && version === epoch.current) {
+        if (configure) props.onConfigureNew?.(full, folder);
+        else onNew(full, folder);
+      }
     } catch (reason) {
       const message = reason instanceof Error ? reason.message : retainedMessage('transfer.m238');
       setError(message);
@@ -541,6 +545,16 @@ export function BotBranch(
         </button>
         <div className="bot-branch-actions">
           <ActionMenu label={t('transfer.d019', { v0: bot?.title ?? t('transfer.m005') })} viewport>
+            {bot && props.onConfigureNew && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={(event) => openFromMenu(event, () => void start(undefined, true))}
+              >
+                <AddIcon size={18} aria-hidden="true" />
+                {t('transfer.configureNewChat')}
+              </button>
+            )}
             <button
               type="button"
               onClick={(event) => {
@@ -717,6 +731,21 @@ export function BotBranch(
               )
             }
           />
+        )}
+        {settingsFolder && props.onConfigureNew && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => {
+              const folder = settingsFolder;
+              setSettingsId(null);
+              void start(folder, true);
+            }}
+          >
+            <AddIcon size={18} aria-hidden="true" />
+            {t('transfer.configureNewChat')}
+          </button>
         )}
       </Dialog>
       <Dialog

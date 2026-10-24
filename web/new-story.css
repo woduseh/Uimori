@@ -25,6 +25,13 @@
   min-height: 0;
   overscroll-behavior: contain;
 }
+.new-story-dialog .new-story-quick {
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  min-height: 160px;
+}
 .new-story-fields > p {
   margin: 0;
 }

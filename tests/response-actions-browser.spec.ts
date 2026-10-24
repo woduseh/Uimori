@@ -2,6 +2,7 @@ import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-
 import { reviewWidths, visualReview } from './fixtures/visual-review.js';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
+import type { Bookmark } from '../core/reading-state.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, openSourceActions } from './ui-navigation.js';
 
@@ -277,6 +278,230 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
   expect(after.attempts).toEqual(before.attempts);
   expect(after.jobs).toEqual(before.jobs);
   expect(pageErrors).toEqual([]);
+});
+
+test('RACOM05 earlier scenes keep bookmark and menu visible while copy, editing and saved representations remain available', async ({
+  page,
+  request,
+}, info) => {
+  test.setTimeout(90_000);
+  const before = await seed(request, '지난 장면 작업 합성 채팅', [
+    '등대지기가 편지를 펼치는 첫 장면이에요.',
+    '최신 장면에서는 다음 항해를 준비해요.',
+  ]);
+  const source = before.sources[0];
+  let translatedText = '바닷바람이 편지의 모서리를 흔들었다. 등대지기는 조용히 답장을 준비했다.';
+  const translated = await request.put(`/api/sources/${source.id}/translation`, {
+    data: {
+      text: translatedText,
+      expectedRevision: source.translationRevision ?? 0,
+      expectedSourceHash: source.hash,
+    },
+  });
+  expect(translated.ok(), await translated.text()).toBe(true);
+  const copied: string[] = [];
+  await page.exposeFunction('recordSceneClipboard', (value: string) => copied.push(value));
+  await page.addInitScript(() => {
+    if (window !== window.top) return;
+    localStorage.setItem('uimori:reading-language', 'original');
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: (value: string) =>
+          (
+            window as unknown as { recordSceneClipboard: (value: string) => Promise<void> }
+          ).recordSceneClipboard(value),
+      },
+    });
+  });
+  const generationRequests: string[] = [];
+  page.on('request', (event) => {
+    if (event.method() === 'POST' && /\/(?:translation|retranslate)$/.test(event.url()))
+      generationRequests.push(event.url());
+  });
+  for (const width of [360, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto(`/?chat=${before.chat.id}`);
+    const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+    const latest = page.locator(
+      `[data-testid="source"][data-source-id="${before.sources.at(-1)!.id}"]`
+    );
+    await expect(latest.locator('.source-actions > button')).toHaveCount(3);
+    await expect(latest.getByRole('button', { name: '원문 수정', exact: true })).toBeVisible();
+    await expect(latest.getByRole('button', { name: '번역 생성', exact: true })).toBeVisible();
+    await expect(scene.locator('.scene-header button')).toHaveCount(0);
+    await expect(scene.getByTestId('scene-representation')).toHaveText('원문');
+    const footer = scene.locator('.source-actions');
+    await expect(footer.locator(':scope > button')).toHaveCount(1);
+    await expect(footer.getByRole('button', { name: '책갈피 추가', exact: true })).toBeVisible();
+    await expect(scene.getByRole('button', { name: '본문 복사', exact: true })).toBeHidden();
+    const opener = await openSourceActions(scene);
+    const menu = opener.locator('..');
+    await expect(scene.getByRole('button', { name: '원문 보기', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await scene.getByRole('button', { name: '본문 복사', exact: true }).click();
+    await expect.poll(() => copied.at(-1)).toBe(source.text);
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+    const original = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
+    await expect(original).toBeFocused();
+    await expect(original).toHaveValue(source.text);
+    await original.fill('취소할 원문 수정');
+    await page.keyboard.press('Escape');
+    await expect(original).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    await openSourceActions(scene);
+    const translationChoice = scene.getByRole('button', { name: '번역 보기', exact: true });
+    await translationChoice.click();
+    await expect(scene.getByTestId('translation-text')).toContainText(translatedText);
+    await expect(scene.getByTestId('scene-representation')).toHaveText('번역');
+    await expect(translationChoice).toHaveAttribute('aria-pressed', 'true');
+    await expect(translationChoice.locator('svg')).toHaveClass(/lucide-check/);
+    await page.screenshot({ path: info.outputPath(`past-scene-menu-${width}.png`) });
+    await page.keyboard.press('Escape');
+    await expect(opener).toBeFocused();
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '본문 복사', exact: true }).click();
+    await expect.poll(() => copied.at(-1)).toBe(translatedText);
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '번역 수정', exact: true }).click();
+    const translationField = scene.getByRole('textbox', { name: '번역 수정 내용', exact: true });
+    await expect(translationField).toBeFocused();
+    await expect(translationField).toHaveValue(translatedText);
+    translatedText = `${translatedText}\n\n${width} 화면에서 다듬은 번역이에요.`;
+    await translationField.fill(translatedText);
+    await scene.getByRole('button', { name: '번역 저장', exact: true }).click();
+    await expect(translationField).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    await expect(scene.getByTestId('translation-text')).toContainText(
+      `${width} 화면에서 다듬은 번역`
+    );
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '원문 보기', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveJSProperty('open', false);
+    await page.screenshot({ path: info.outputPath(`past-scene-actions-${width}.png`) });
+    await noHorizontalOverflow(page, scene);
+    await page.reload();
+    await expect(scene.getByTestId('scene-representation')).toHaveText('원문');
+  }
+  const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+  // The standing bookmark still captures the selected original passage and scene identity.
+  const bookmark = scene.getByRole('button', { name: '책갈피 추가', exact: true });
+  await bookmark.scrollIntoViewIfNeeded();
+  const quote = await scene
+    .getByTestId('source-text')
+    .locator('.risu-message-content')
+    .evaluate((node) => {
+      const paragraph = node.querySelector('[data-uimori-prose]') ?? node;
+      const range = document.createRange();
+      range.selectNodeContents(paragraph);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return selection.toString().trim().slice(0, 300);
+    });
+  expect(quote.length).toBeGreaterThan(0);
+  await bookmark.click();
+  await expect(
+    scene.getByRole('button', { name: '책갈피 추가됨, 메모 편집', exact: true })
+  ).toBeVisible();
+  const bookmarks = (await (
+    await request.get(`/api/chats/${before.chat.id}/bookmarks`)
+  ).json()) as Bookmark[];
+  expect(bookmarks.at(-1)).toMatchObject({
+    quote,
+    target: { sourceId: source.id, representation: 'original' },
+  });
+  const after = await detail(request, before.chat.id);
+  expect(after.sources).toEqual(
+    before.sources.map((item) =>
+      item.id === source.id
+        ? { ...item, translationRevision: (source.translationRevision ?? 0) + 3 }
+        : item
+    )
+  );
+  expect(after.runs).toEqual(before.runs);
+  expect(after.attempts).toEqual(before.attempts);
+  expect(
+    after.jobs
+      .filter((job) => job.kind === 'translation')
+      .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0]?.result?.text
+  ).toBe(translatedText);
+  expect(generationRequests).toEqual([]);
+});
+
+test('RACOM06 earlier-scene translation generation stays explicit and pending or failed work keeps visible recovery', async ({
+  page,
+  request,
+}, info) => {
+  const before = await seed(request, '지난 장면 번역 복구 합성 채팅', [
+    '편지를 읽어요.',
+    '답장을 써요.',
+  ]);
+  const source = before.sources[0];
+  await page.setViewportSize({ width: 360, height: 1000 });
+  const fail = await request.post('/api/test/control', {
+    data: { action: 'fail-next', point: 'translation' },
+  });
+  expect(fail.ok()).toBe(true);
+  let submissions = 0;
+  let release = () => {};
+  let admission = Promise.resolve();
+  await page.route(`**/api/sources/${source.id}/translation`, async (route) => {
+    submissions++;
+    await admission;
+    await route.fulfill({ response: await route.fetch() });
+  });
+  try {
+    await page.goto(`/?chat=${before.chat.id}`);
+    const scene = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
+    const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+    await draft.fill('지난 장면의 번역이 실패해도 남길 초안');
+    await expect(scene.getByRole('button', { name: '번역 생성', exact: true })).toBeHidden();
+    const opener = await openSourceActions(scene);
+    const generate = scene.getByRole('button', { name: '번역 생성', exact: true });
+    await expect(generate).toBeVisible();
+    await expect(scene.getByRole('button', { name: '번역 보기', exact: true })).toHaveCount(0);
+    expect(submissions).toBe(0);
+    await generate.click();
+    const retry = scene.locator('.scene-header').getByRole('button', {
+      name: '번역 다시 시도',
+      exact: true,
+    });
+    await expect(retry).toBeVisible();
+    await expect(scene.locator('.translation-placeholder')).toContainText('원문은 보존돼요.');
+    expect(submissions).toBe(1);
+    await page.screenshot({ path: info.outputPath('past-scene-translation-failed.png') });
+    admission = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await retry.click();
+    await expect(retry).toBeDisabled();
+    await expect(scene.locator('.translation-placeholder .loading-state')).toBeVisible();
+    await retry.dispatchEvent('click');
+    expect(submissions).toBe(2);
+    release();
+    await expect(scene.getByTestId('translation-text')).toBeVisible();
+    await expect(scene.getByTestId('scene-representation')).toHaveText('번역');
+    await expect(retry).toHaveCount(0);
+    await openSourceActions(scene);
+    await scene.getByRole('button', { name: '원문 보기', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(opener).toBeFocused();
+    await expect(scene.getByTestId('source-text')).toBeVisible();
+    await expect(draft).toHaveValue('지난 장면의 번역이 실패해도 남길 초안');
+    expect(submissions).toBe(2);
+    const after = await detail(request, before.chat.id);
+    expect(after.sources[0]).toEqual({ ...source, translationRevision: 2 });
+    expect(after.sources[1]).toEqual(before.sources[1]);
+    expect(after.runs).toEqual(before.runs);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
 });
 
 test('TSKUI01 task overview screenshots wait for real run, job and attempt data on mobile and desktop', async ({

@@ -8,7 +8,7 @@ import { setCurrentModels } from './ui-navigation.js';
 import { preservePromptWorkspace } from './fixtures/prompt-workspace.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { test, expect } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, ReaderDetail } from '../core/types.js';
 import type { Connection, Content, ModelPreset } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
@@ -57,7 +57,8 @@ test('NSUI08 bot default persona is saved from its menu and explicit none wins w
     persona: { mode: 'persona', persona: { id: persona.id } },
   });
   await branch.hover();
-  await branch.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
+  await branch.getByLabel(`${bot.title} 관리`, { exact: true }).click();
+  await branch.getByRole('button', { name: '설정 후 새 채팅', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toContainText(
     persona.title
@@ -110,7 +111,7 @@ test('NSUI09 a deleted default discovered after library refresh requires an expl
     ).ok()
   ).toBe(true);
   await page.goto('/');
-  await navigationAction(page, '새 채팅', bot.title);
+  await navigationAction(page, '설정 후 새 채팅', bot.title);
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   const submit = dialog.getByRole('button', { name: '채팅 만들기', exact: true });
   await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toContainText(
@@ -259,7 +260,7 @@ for (const [viewportName, viewport] of [
         executionRequests.push(item.url());
     });
     await page.goto('/');
-    await navigationAction(page, '새 채팅', bot.title);
+    await navigationAction(page, '설정 후 새 채팅', bot.title);
     const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
     await expect(dialog.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
     await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeInViewport({
@@ -334,7 +335,7 @@ for (const [viewportName, viewport] of [
     expect(detail.profile!.routes.main).toEqual({ id: model.id });
     expect(detail.runs).toHaveLength(0);
     expect(detail.attempts).toHaveLength(0);
-    await navigationAction(page, '새 채팅', bot.title);
+    await navigationAction(page, '설정 후 새 채팅', bot.title);
     await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
     const picker = page.getByRole('dialog', { name: '시작 페르소나', exact: true });
     await picker.getByRole('searchbox').fill(personaTitle);
@@ -398,6 +399,312 @@ for (const [viewportName, viewport] of [
 }
 
 preservePromptWorkspace();
+
+async function quickChatFixture(request: APIRequestContext, greetings: number) {
+  const title = `바로 시작 ${greetings} ${crypto.randomUUID()}`;
+  const botResponse = await request.post('/api/content', {
+    data: {
+      kind: 'bot',
+      title,
+      description: '',
+      text: '',
+      loading: 'pinned',
+      relatedIds: [],
+      package: nativeContent({
+        name: title,
+        first_mes: greetings ? '안녕하세요 {{user}}.' : '',
+        alternate_greetings: greetings > 1 ? ['다른 시작이에요.'] : [],
+      }),
+    },
+  });
+  expect(botResponse.ok()).toBe(true);
+  const bot = (await botResponse.json()) as Content;
+  const personaResponse = await request.post('/api/content', {
+    data: {
+      kind: 'persona',
+      title: `방문자 ${crypto.randomUUID()}`,
+      description: '',
+      text: 'Synthetic persona',
+      loading: 'pinned',
+      relatedIds: [],
+    },
+  });
+  expect(personaResponse.ok()).toBe(true);
+  const persona = (await personaResponse.json()) as Content;
+  expect(
+    (
+      await request.patch(`/api/bots/${bot.id}/defaults`, {
+        data: {
+          expectedRevision: 1,
+          persona: { mode: 'persona', persona: { id: persona.id, revision: persona.revision } },
+        },
+      })
+    ).ok()
+  ).toBe(true);
+  const connectionResponse = await request.post('/api/connections', {
+    data: {
+      title: `직접 시작 검증 ${crypto.randomUUID()}`,
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9/no-provider',
+      enabled: true,
+    },
+  });
+  expect(connectionResponse.ok()).toBe(true);
+  const connection = (await connectionResponse.json()) as Connection;
+  const modelResponse = await request.post('/api/model-presets', {
+    data: {
+      title: '합성 바로 시작 모델',
+      connectionId: connection.id,
+      modelId: 'synthetic-quick-start',
+      maxOutputTokens: 1000,
+      temperature: null,
+    },
+  });
+  expect(modelResponse.ok()).toBe(true);
+  const model = (await modelResponse.json()) as ModelPreset;
+  await setCurrentModels(request, { main: { id: model.id }, translation: null });
+  return { bot, persona, model };
+}
+
+async function openQuickChat(page: Page, bot: Content) {
+  await navigationAction(page, '서재');
+  const library = page.getByTestId('library-panel');
+  await library.getByRole('tab', { name: '봇', exact: true }).click();
+  await library.getByLabel('서재 검색', { exact: true }).fill(bot.title);
+  await library.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
+}
+
+for (const greetings of [0, 1]) {
+  test(`NSQ01 quick chat opens with ${greetings} authored greetings and saved defaults without generation`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize(
+      greetings
+        ? { width: MOBILE_WIDTH, height: MOBILE_HEIGHT }
+        : { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT }
+    );
+    const { bot, persona, model } = await quickChatFixture(request, greetings);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**/api/bots/${bot.id}/defaults`, async (route) => {
+      await held;
+      await route.continue();
+    });
+    const admissions: string[] = [],
+      executions: string[] = [];
+    page.on('request', (item) => {
+      if (item.method() !== 'POST') return;
+      if (/\/api\/chats$/.test(item.url())) admissions.push(item.url());
+      if (/\/(?:runs|candidate|translation)$/.test(item.url())) executions.push(item.url());
+    });
+    try {
+      await page.goto('/');
+      await openQuickChat(page, bot);
+      const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+      await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toHaveCount(
+        0
+      );
+      await expect(dialog.getByText('새 채팅을 여는 중이에요…', { exact: true })).toBeVisible();
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`quick-chat-loading-${greetings}.png`) });
+      const admitted = page.waitForResponse(
+        (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
+      );
+      release();
+      const response = await admitted;
+      expect(response.ok()).toBe(true);
+      const chat = (await response.json()) as Chat;
+      await expect(dialog).toBeHidden();
+      const detail = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+      expect(detail.profile!.packageAttachments).toEqual([
+        { id: bot.id, revision: bot.revision, role: 'bot' },
+        { id: persona.id, revision: persona.revision, role: 'persona' },
+      ]);
+      expect(detail.profile!.routes.main).toEqual({ id: model.id });
+      if (greetings)
+        await expect(page.getByTestId('source-text')).toContainText(`안녕하세요 ${persona.title}.`);
+      else {
+        expect(detail.runs).toHaveLength(0);
+        expect(detail.attempts).toHaveLength(0);
+      }
+      expect(admissions).toHaveLength(1);
+      expect(executions).toEqual([]);
+      if (visualReview)
+        await page.screenshot({ path: info.outputPath(`quick-chat-open-${greetings}.png`) });
+    } finally {
+      release();
+    }
+  });
+}
+
+test('NSQ02 multiple greetings require a choice and missing models retain the recoverable form', async ({
+  page,
+  request,
+}) => {
+  const { bot } = await quickChatFixture(request, 2);
+  const admissions: string[] = [];
+  page.on('request', (item) => {
+    if (item.method() === 'POST' && /\/api\/chats$/.test(item.url())) admissions.push(item.url());
+  });
+  await page.goto('/');
+  await openQuickChat(page, bot);
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await expect(dialog.getByLabel('첫 메시지 선택')).toBeEnabled();
+  await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeEnabled();
+  expect(admissions).toEqual([]);
+  await page.keyboard.press('Escape');
+  await setCurrentModels(request, { main: null, translation: null });
+  const single = await quickChatFixture(request, 1);
+  await setCurrentModels(request, { main: null, translation: null });
+  await page.reload();
+  await openQuickChat(page, single.bot);
+  await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeEnabled();
+  expect(admissions).toEqual([]);
+});
+
+test('NSQ03 closing while defaults load cancels unstarted admission; failed defaults retry through the form', async ({
+  page,
+  request,
+}) => {
+  const { bot } = await quickChatFixture(request, 1);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let first = true;
+  await page.route(`**/api/bots/${bot.id}/defaults`, async (route) => {
+    if (first) {
+      first = false;
+      await held;
+      return route.fulfill({ status: 503, json: { error: 'QUICK_DEFAULTS_READ_FAILED' } });
+    }
+    return route.continue();
+  });
+  const admissions: string[] = [];
+  page.on('request', (item) => {
+    if (item.method() === 'POST' && /\/api\/chats$/.test(item.url())) admissions.push(item.url());
+  });
+  try {
+    await page.goto('/');
+    await openQuickChat(page, bot);
+    const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+    await expect(dialog.getByText('새 채팅을 여는 중이에요…', { exact: true })).toBeVisible();
+    const failed = page.waitForResponse(
+      (response) => response.url().endsWith(`/bots/${bot.id}/defaults`) && response.status() === 503
+    );
+    await dialog.getByRole('button', { name: '새 채팅 닫기', exact: true }).click();
+    release();
+    await failed;
+    await expect(dialog).toBeHidden();
+    expect(admissions).toEqual([]);
+    // A new failed read exposes the editable form; successful retry never resumes admission itself.
+    await page.route(`**/api/bots/${bot.id}/defaults`, (route) =>
+      route.fulfill({ status: 503, json: { error: 'QUICK_DEFAULTS_READ_FAILED' } })
+    );
+    await openQuickChat(page, bot);
+    await expect(dialog.getByRole('alert')).toContainText('503');
+    await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toBeVisible();
+    await page.unroute(`**/api/bots/${bot.id}/defaults`);
+    await dialog.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeEnabled();
+    expect(admissions).toEqual([]);
+  } finally {
+    release();
+  }
+});
+
+test('NSQ04 failed package reads recover before creation and failed profile saves keep the admitted chat and original intent', async ({
+  page,
+  request,
+}) => {
+  const { bot, persona } = await quickChatFixture(request, 1);
+  await page.route(`**/api/content/${persona.id}`, (route) =>
+    route.fulfill({ status: 503, json: { error: 'QUICK_PACKAGE_READ_FAILED' } })
+  );
+  const admissions: string[] = [];
+  page.on('request', (item) => {
+    if (item.method() === 'POST' && /\/api\/chats$/.test(item.url())) admissions.push(item.url());
+  });
+  await page.goto('/');
+  await openQuickChat(page, bot);
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await expect(dialog.getByRole('alert')).toContainText('503');
+  await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeDisabled();
+  expect(admissions).toEqual([]);
+  await page.unroute(`**/api/content/${persona.id}`);
+  await dialog.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeEnabled();
+  expect(admissions).toEqual([]);
+  await page.keyboard.press('Escape');
+  let rejectProfile = true;
+  await page.route('**/api/chats/*/profile', (route) => {
+    if (rejectProfile && route.request().method() === 'PUT') {
+      rejectProfile = false;
+      return route.fulfill({ status: 503, json: { error: 'QUICK_PROFILE_SAVE_FAILED' } });
+    }
+    return route.continue();
+  });
+  const admitted = page.waitForResponse(
+    (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
+  );
+  await openQuickChat(page, bot);
+  const chat = (await (await admitted).json()) as Chat;
+  await expect(dialog.getByRole('alert')).toContainText('채팅은 하나만 만들었어요');
+  const pending = await page.evaluate(
+    (id) => JSON.parse(sessionStorage.getItem(`pending-profile:${id}`)!),
+    chat.id
+  );
+  expect(pending.packageAttachments).toEqual([
+    { id: bot.id, revision: bot.revision, role: 'bot' },
+    { id: persona.id, revision: persona.revision, role: 'persona' },
+  ]);
+  await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toBeDisabled();
+  const refreshed = page.waitForResponse((response) =>
+    /\/api\/library(?:\?|$)/.test(response.url())
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await refreshed;
+  const retry = dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true });
+  await expect(retry).toBeEnabled();
+  await retry.click();
+  await expect(dialog).toBeHidden();
+  expect(admissions).toHaveLength(1);
+  expect(
+    await page.evaluate((id) => sessionStorage.getItem(`pending-profile:${id}`), chat.id)
+  ).toBeNull();
+  await expect(page.getByTestId('source-text')).toContainText(`안녕하세요 ${persona.title}.`);
+});
+
+test('NSQ05 an uncertain chat admission stops automatic and manual resubmission', async ({
+  page,
+  request,
+}) => {
+  const { bot } = await quickChatFixture(request, 1);
+  let admissions = 0;
+  await page.route('**/api/chats', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    admissions++;
+    // The server admitted this chat, but its success response never reached the caller.
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    await route.abort('failed');
+  });
+  await page.goto('/');
+  await openQuickChat(page, bot);
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await expect(dialog.getByRole('alert')).toContainText('채팅 생성 응답을 확인하지 못했어요');
+  await expect(dialog.getByRole('alert')).toContainText(
+    '중복 생성을 막기 위해 자동 재전송하지 않아요'
+  );
+  await expect(dialog.getByRole('button', { name: '채팅 만들기', exact: true })).toBeDisabled();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(dialog.getByRole('button', { name: '시작 페르소나', exact: true })).toBeDisabled();
+  expect(admissions).toBe(1);
+});
 
 for (const width of [412, 1440]) {
   test(`AUDIT2 bot default persona recovers an initial read and retains a rejected save ${width}`, async ({
@@ -498,7 +805,7 @@ for (const width of [412, 1440]) {
     });
     try {
       await page.goto('/');
-      await navigationAction(page, '새 채팅', bot.title);
+      await navigationAction(page, '설정 후 새 채팅', bot.title);
       const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
       await reading;
       await dialog.getByRole('button', { name: '시작 페르소나', exact: true }).click();
@@ -685,7 +992,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
       mainRequests.push(item.url());
   });
   await page.goto('/');
-  await navigationAction(page, '새 채팅', bot.title);
+  await navigationAction(page, '설정 후 새 채팅', bot.title);
   const create = page.getByRole('dialog', { name: '새 채팅', exact: true });
   const started = page.waitForResponse(
     (response) => /\/package-start$/.test(response.url()) && response.request().method() === 'POST'

@@ -21,19 +21,24 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
     return;
   }
   const nav = await visibleNavigation(page);
-  if (name === '새 채팅' || name === '새 이야기') {
+  if (name === '새 채팅' || name === '새 이야기' || name === '설정 후 새 채팅') {
     // Bots without chats intentionally live only in the library. Use that shared entry point.
     await navigationAction(page, '서재');
     const library = page.getByTestId('library-panel');
     await library.getByRole('tab', { name: '봇', exact: true }).click();
     if (botTitle) await library.getByLabel('서재 검색', { exact: true }).fill(botTitle);
-    const start = botTitle
-      ? library.getByRole('button', { name: `${botTitle} 새 채팅`, exact: true })
-      : library
-          .locator('.library-list-item, .library-card')
-          .getByRole('button', { name: / 새 채팅$/ })
-          .first();
-    await start.click();
+    const item = library
+      .locator('.library-list-item, .library-card')
+      .filter({
+        has: page.getByRole('button', {
+          name: botTitle ? `${botTitle} 새 채팅` : / 새 채팅$/,
+          exact: true,
+        }),
+      })
+      .first();
+    // Form-oriented tests explicitly configure the chat; the main action may start immediately.
+    await item.getByLabel(/ 메뉴$/).click();
+    await item.getByRole('button', { name: '설정 후 새 채팅', exact: true }).click();
     return;
   }
   const libraryTab = ['봇', '페르소나', '모듈'].includes(name);
@@ -44,9 +49,13 @@ export async function navigationAction(page: Page, name: string, botTitle?: stri
 export async function selectSettingsSection(page: Page, name: string) {
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   await expect(dialog).toBeVisible();
-  const back = dialog.getByRole('button', { name: '설정 목록으로', exact: true });
-  if (await back.isVisible()) await back.click();
+  const selector = dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true });
   const navigation = dialog.locator('.settings-navigation').filter({ visible: true });
+  await expect(selector.or(navigation).filter({ visible: true }).first()).toBeVisible();
+  if (await selector.isVisible()) {
+    await selector.selectOption({ label: name });
+    return;
+  }
   await expect(navigation).toBeVisible();
   const tab = navigation.getByRole('tab', { name, exact: true });
   if (await tab.isVisible()) await tab.click();
@@ -56,9 +65,13 @@ export async function selectChatSettingsSection(page: Page, name: string) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator('.chat-settings-panel')).toBeVisible();
-  const back = dialog.getByRole('button', { name: '채팅 설정 목록으로', exact: true });
-  if (await back.isVisible()) await back.click();
+  const selector = dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true });
   const navigation = dialog.locator('.section-navigation').filter({ visible: true });
+  await expect(selector.or(navigation).filter({ visible: true }).first()).toBeVisible();
+  if (await selector.isVisible()) {
+    await selector.selectOption({ label: name });
+    return;
+  }
   await expect(navigation).toBeVisible();
   const tab = navigation.getByRole('tab', { name, exact: true });
   if (await tab.isVisible()) await tab.click();
@@ -83,6 +96,12 @@ export async function openSourceActions(source: Locator) {
   if (!(await menu.evaluate((node) => (node.parentElement as HTMLDetailsElement).open)))
     await menu.click();
   return menu;
+}
+/** Earlier scenes keep representation choices in their menu; the latest scene keeps its toolbar. */
+export async function sourceAction(source: Locator, name: string) {
+  const button = source.getByRole('button', { name, exact: true });
+  if (!(await button.isVisible())) await openSourceActions(source);
+  await button.click();
 }
 export async function openPromptActions(editor: Locator) {
   const menu = editor.getByLabel('프롬프트 관리', { exact: true });

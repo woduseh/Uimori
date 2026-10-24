@@ -64,12 +64,8 @@ const sample =
 export function ThemeSettings({
   onDirtyChange,
   onSaveHandlerChange,
-  appearanceMode,
-  onAppearanceModeChange,
   active = true,
 }: {
-  appearanceMode: 'system' | 'light' | 'dark';
-  onAppearanceModeChange: (value: 'system' | 'light' | 'dark') => void;
   onDirtyChange?: (value: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   active?: boolean;
@@ -344,18 +340,6 @@ export function ThemeSettings({
                 {theme.id.startsWith('builtin:') ? translateMessage(theme.title) : theme.title}
               </option>
             ))}
-          </select>
-        </label>
-        <label>
-          {t('visualpanels.displayMode')}{' '}
-          <select
-            aria-label={t('visualpanels.themeDisplayMode')}
-            value={appearanceMode}
-            onChange={(e) => onAppearanceModeChange(e.target.value as typeof appearanceMode)}
-          >
-            <option value="system">{t('visualpanels.followDeviceSettings')}</option>
-            <option value="light">{t('visualpanels.light')}</option>
-            <option value="dark">{t('visualpanels.dark')}</option>
           </select>
         </label>
         <span className="theme-current">

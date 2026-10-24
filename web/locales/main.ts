@@ -1,4 +1,88 @@
 export const messages = {
+  'main.modelPickerTitle': {
+    ko: '이 채팅의 본문 모델',
+    en: 'Writing model for this chat',
+    ja: 'このチャットの本文モデル',
+    zh: '此聊天的正文模型',
+  },
+  'main.modelPickerScope': {
+    ko: '선택하면 이 채팅의 다음 요청부터 적용돼요.',
+    en: 'Your selection applies from the next request in this chat.',
+    ja: '選択すると、このチャットの次のリクエストから適用されます。',
+    zh: '选择后将从此聊天的下次请求开始应用。',
+  },
+  'main.modelPickerSearch': {
+    ko: '모델 검색',
+    en: 'Search models',
+    ja: 'モデルを検索',
+    zh: '搜索模型',
+  },
+  'main.modelPickerDefault': {
+    ko: '기본값 사용',
+    en: 'Use default',
+    ja: '既定値を使用',
+    zh: '使用默认值',
+  },
+  'main.modelPickerNoDefault': {
+    ko: '기본 본문 모델이 없어요',
+    en: 'No default writing model',
+    ja: '既定の本文モデルがありません',
+    zh: '未设置默认正文模型',
+  },
+  'main.modelPickerNoResults': {
+    ko: '검색 결과가 없어요.',
+    en: 'No matching models.',
+    ja: '該当するモデルがありません。',
+    zh: '没有匹配的模型。',
+  },
+  'main.modelPickerClearSearch': {
+    ko: '검색 지우기',
+    en: 'Clear search',
+    ja: '検索をクリア',
+    zh: '清除搜索',
+  },
+  'main.modelPickerNoModels': {
+    ko: '선택할 수 있는 모델이 없어요.',
+    en: 'No models are available to select.',
+    ja: '選択できるモデルがありません。',
+    zh: '没有可选择的模型。',
+  },
+  'main.modelPickerUnavailable': {
+    ko: '현재 모델 {model}을 사용할 수 없어요. 다른 모델을 선택하거나 프로바이더와 모델을 확인해 주세요.',
+    en: 'The current model {model} is unavailable. Select another model or review providers and models.',
+    ja: '現在のモデル {model} は利用できません。別のモデルを選ぶか、プロバイダーとモデルを確認してください。',
+    zh: '当前模型 {model} 不可用。请选择其他模型，或检查提供商和模型。',
+  },
+  'main.modelPickerSaving': {
+    ko: '모델을 적용하고 있어요…',
+    en: 'Applying model…',
+    ja: 'モデルを適用中…',
+    zh: '正在应用模型…',
+  },
+  'main.modelPickerManage': {
+    ko: '프로바이더와 모델 관리',
+    en: 'Manage providers and models',
+    ja: 'プロバイダーとモデルの管理',
+    zh: '管理提供商和模型',
+  },
+  'main.modelPickerInvalid': {
+    ko: '선택한 모델을 사용할 수 없어요. 프로바이더와 모델을 확인해 주세요.',
+    en: 'The selected model is unavailable. Review providers and models.',
+    ja: '選択したモデルは利用できません。プロバイダーとモデルを確認してください。',
+    zh: '所选模型不可用。请检查提供商和模型。',
+  },
+  'main.modelPickerRefreshFailed': {
+    ko: '모델은 저장했지만 채팅을 다시 읽지 못했어요. 채팅을 다시 열어 확인해 주세요.',
+    en: 'The model was saved, but the chat could not be refreshed. Reopen the chat to review it.',
+    ja: 'モデルは保存しましたが、チャットを再読み込みできませんでした。チャットを開き直して確認してください。',
+    zh: '模型已保存，但无法刷新聊天。请重新打开聊天以查看。',
+  },
+  'main.modelPickerUnknown': {
+    ko: '모델 저장 응답을 받지 못했어요. 현재 선택을 확인한 뒤 다시 선택해 주세요.',
+    en: 'No model save response was received. Review the current selection before selecting again.',
+    ja: 'モデル保存の応答を受信できませんでした。現在の選択を確認してから選び直してください。',
+    zh: '未收到模型保存响应。请先确认当前选择，再重新选择。',
+  },
   'main.m001': {
     ko: '서재',
     en: 'Library',
@@ -108,10 +192,10 @@ export const messages = {
     zh: '正文模型',
   },
   'main.m019': {
-    ko: '모든 채팅의 이후 요청에 적용되는 전역 모델 설정',
-    en: 'Global model settings for future requests in all chats',
-    ja: 'すべてのチャットの今後のリクエストに適用する共通モデル設定',
-    zh: '应用于所有聊天后续请求的全局模型设置',
+    ko: '이 채팅의 본문 모델 선택',
+    en: 'Select the writing model for this chat',
+    ja: 'このチャットの本文モデルを選択',
+    zh: '选择此聊天的正文模型',
   },
   'main.m020': {
     ko: '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.',
@@ -888,10 +972,10 @@ export const messages = {
     zh: '当前正文模型，{model}{pinned, select, true {，固定到此聊天} other {}}{prompt, select, pinned {，写作提示词固定到此聊天} unavailable {，写作提示词不可用} other {}}',
   },
   'main.modelPinnedTitle': {
-    ko: '{model}, 이 채팅 고정{pinned, select, true {, 본문 모델} other {}}{prompt, select, true {, 작문 프롬프트: {title}} other {}}',
-    en: '{model}, pinned to this chat{pinned, select, true {, writing model} other {}}{prompt, select, true {, writing prompt: {title}} other {}}',
-    ja: '{model}、このチャットに固定{pinned, select, true {、本文モデル} other {}}{prompt, select, true {、執筆プロンプト: {title}} other {}}',
-    zh: '{model}，固定到此聊天{pinned, select, true {，正文模型} other {}}{prompt, select, true {，写作提示词：{title}} other {}}',
+    ko: '{model}{pinned, select, true {, 본문 모델 이 채팅 고정} other {}}{prompt, select, true {, 작문 프롬프트 이 채팅 고정: {title}} other {}}. 본문 모델 선택',
+    en: '{model}{pinned, select, true {, writing model pinned to this chat} other {}}{prompt, select, true {, writing prompt pinned to this chat: {title}} other {}}. Select writing model',
+    ja: '{model}{pinned, select, true {、本文モデルをこのチャットに固定} other {}}{prompt, select, true {、執筆プロンプトをこのチャットに固定: {title}} other {}}。本文モデルを選択',
+    zh: '{model}{pinned, select, true {，正文模型固定到此聊天} other {}}{prompt, select, true {，写作提示词固定到此聊天：{title}} other {}}。选择正文模型',
   },
   'main.unavailable': {
     ko: '사용 불가',

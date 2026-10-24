@@ -8,6 +8,7 @@ import { UsagePanel } from './UsagePanel.js';
 import { ThemeSettings } from './ThemeSettings.js';
 import { ChartNoAxesColumn, Palette, type LucideIcon } from 'lucide-react';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
+import { readSettingsLocation, rememberSettingsLocation } from './settings-location.js';
 import type { ReactNode } from 'react';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { ModelWorkspaceEditor } from './ModelWorkspaceEditor.js';
@@ -346,7 +347,7 @@ function matchesSearch(value: string, query: string) {
 }
 
 export function AppSettingsPanel({
-  initialTab = 'general',
+  initialTab,
   state,
   theme,
   setTheme,
@@ -378,12 +379,20 @@ export function AppSettingsPanel({
   const settingsCategories = getSettingsCategories();
   const librarySettingsSubjects = getLibrarySettingsSubjects();
   const [signingOut, setSigningOut] = useState(false);
-  const [active, setActive] = useState(initialTab);
-  const [visited, setVisited] = useState([initialTab]);
+  const startTab =
+    initialTab && settingsCategories.some((item) => item.key === initialTab)
+      ? initialTab
+      : readSettingsLocation(
+          'uimori:app-settings-section',
+          settingsCategories.map((item) => item.key),
+          'general'
+        );
+  const [active, setActive] = useState(startTab);
+  const [visited, setVisited] = useState([startTab]);
   const [modelToEdit, setModelToEdit] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const compact = useCompactLayout();
-  const [detail, setDetail] = useState(initialTab !== 'general');
+  const [detail, setDetail] = useState(true);
   const [connectionDirty, setConnectionDirty] = useState(false);
   const [modelDirty, setModelDirty] = useState(false);
   const [promptDirty, setPromptDirty] = useState(false);
@@ -406,6 +415,13 @@ export function AppSettingsPanel({
     themeDirty;
   const root = useRef<HTMLElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
+  const positions = useRef(
+    new Map<
+      string,
+      { scroll: number; element: HTMLElement | null; start: number | null; end: number | null }
+    >()
+  );
+  const lastFocused = useRef<HTMLElement | null>(null);
   const wasCompact = useRef(compact);
   const id = useId();
   const query = searchText(search).replace(/[\/·-]/g, '');
@@ -428,7 +444,11 @@ export function AppSettingsPanel({
   const title =
     settingsCategories.find((item) => item.key === active)?.label ?? t('chatsettings.m15');
   const showingDetail = !compact || detail;
+  useEffect(() => {
+    rememberSettingsLocation('uimori:app-settings-section', active);
+  }, [active]);
   function backToList() {
+    rememberPosition();
     setDetail(false);
     requestAnimationFrame(() => {
       if (query) searchInput.current?.focus();
@@ -479,14 +499,42 @@ export function AppSettingsPanel({
     addEventListener('beforeunload', guard);
     return () => removeEventListener('beforeunload', guard);
   }, [dirty]);
+  function rememberPosition() {
+    const pane = document.getElementById(`${id}-${active}-panel`);
+    if (!pane?.checkVisibility()) return;
+    const element =
+      lastFocused.current && pane.contains(lastFocused.current) ? lastFocused.current : null;
+    const input =
+      element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? element
+        : null;
+    positions.current.set(active, {
+      scroll: pane.scrollTop,
+      element,
+      start: input?.selectionStart ?? null,
+      end: input?.selectionEnd ?? null,
+    });
+  }
   function select(key: string, target?: string) {
+    rememberPosition();
     setActive(key);
     setDetail(true);
     setVisited((previous) => (previous.includes(key) ? previous : [...previous, key]));
     if (compact || target)
       requestAnimationFrame(() => {
         const destination = document.getElementById(`${id}-${key}-${target ?? 'panel'}`);
-        destination?.focus({ preventScroll: true });
+        const position = positions.current.get(key);
+        if (destination && !target) destination.scrollTop = position?.scroll ?? 0;
+        if (!target && position?.element?.isConnected && position.element.checkVisibility()) {
+          position.element.focus({ preventScroll: true });
+          if (
+            position.start !== null &&
+            position.end !== null &&
+            (position.element instanceof HTMLInputElement ||
+              position.element instanceof HTMLTextAreaElement)
+          )
+            position.element.setSelectionRange(position.start, position.end);
+        } else destination?.focus({ preventScroll: true });
         if (target && target !== 'panel') destination?.scrollIntoView({ block: 'start' });
       });
   }
@@ -503,8 +551,32 @@ export function AppSettingsPanel({
           <IconButton label={t('chatsettings.m51')} icon={BackIcon} onClick={backToList} />
         ) : undefined
       }
+      headerActions={
+        compact && detail ? (
+          <select
+            className="settings-section-select"
+            aria-label={t('chatsettings.sectionSelector')}
+            value={active}
+            onChange={(event) => select(event.target.value)}
+          >
+            {settingsCategories.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        ) : undefined
+      }
     >
-      <section ref={root} className="app-settings-panel" aria-label={t('chatsettings.m52')}>
+      <section
+        ref={root}
+        className="app-settings-panel"
+        aria-label={t('chatsettings.m52')}
+        onFocusCapture={(event) => {
+          if (event.target instanceof HTMLElement && event.target.closest('.settings-page'))
+            lastFocused.current = event.target;
+        }}
+      >
         <div
           className="settings-navigation"
           hidden={compact && detail}
@@ -604,8 +676,6 @@ export function AppSettingsPanel({
                   {!compact && <h3 className="settings-page-title">{label}</h3>}
                   {key === 'themes' && (
                     <ThemeSettings
-                      appearanceMode={theme}
-                      onAppearanceModeChange={setTheme}
                       active={active === 'themes' && showingDetail}
                       onDirtyChange={setThemeDirty}
                       onSaveHandlerChange={saveGroup.registrations.themes}

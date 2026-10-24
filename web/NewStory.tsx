@@ -65,6 +65,7 @@ export function NewStory({
   initialFolder,
   initialPersona,
   initialModules,
+  quickStart = false,
   onModelSettings,
   onCreated,
 }: {
@@ -73,6 +74,7 @@ export function NewStory({
   initialFolder?: ChatFolder;
   initialPersona?: Content;
   initialModules?: Content[];
+  quickStart?: boolean;
   onModelSettings: () => void;
   onCreated: (chat: Chat) => Promise<void>;
 }) {
@@ -96,10 +98,21 @@ export function NewStory({
   const [modules, setModules] = useState(() => (initialModules ?? []).map(refValue));
   const [personaChosen, setPersonaChosen] = useState(initialPersona !== undefined);
   const [defaultsBotId, setDefaultsBotId] = useState('');
+  const [defaultsLibrary, setDefaultsLibrary] = useState<Library | null>(null);
   const [defaultsError, setDefaultsError] = useState('');
+  const [defaultsRetry, setDefaultsRetry] = useState(0);
   const [title, setTitle] = useState('');
   const [loadedContents, setLoadedContents] = useState<Record<string, Content>>({});
-  const [packageLoading, setPackageLoading] = useState(false);
+  const [packageLoading, setPackageLoading] = useState(true);
+  const [packageError, setPackageError] = useState('');
+  const [packageRetry, setPackageRetry] = useState(0);
+  const [resolvedPackages, setResolvedPackages] = useState<{
+    selection: string;
+    library: Library;
+  } | null>(null);
+  const [configure, setConfigure] = useState(
+    !quickStart || !initialBot || initialPersona !== undefined || initialModules !== undefined
+  );
   const [start, setStart] = useState(
     initialBot?.package?.nativeRisu &&
       initialBot.package.starts?.some((item) => item.id === 'start-0')
@@ -118,6 +131,7 @@ export function NewStory({
     if (initialBot && !submitted.current) setBot(refValue(initialBot));
   }, [initialBot]);
   const botId = bot ? selectedId(bot) : '';
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit retry repeats the same defaults read.
   useEffect(() => {
     if (!botId || personaChosen || submitted.current) return;
     let alive = true;
@@ -133,7 +147,8 @@ export function NewStory({
           setPersona('');
         } else {
           setPersona(current ? refValue(current) : '');
-          setDefaultsBotId(botId);
+          setDefaultsBotId(bot);
+          setDefaultsLibrary(library);
         }
       })
       .catch((cause) => {
@@ -142,14 +157,23 @@ export function NewStory({
     return () => {
       alive = false;
     };
-  }, [botId, personaChosen, initialFolder?.defaultPersona, library.contents]);
-  const defaultsReady = personaChosen || defaultsBotId === botId;
+  }, [botId, bot, personaChosen, initialFolder?.defaultPersona, library, defaultsRetry]);
+  const defaultsReady =
+    !!submitted.current || personaChosen || (defaultsBotId === bot && defaultsLibrary === library);
+  const packageSelection = JSON.stringify([bot, persona, ...modules]);
+  const packagesReady =
+    !!submitted.current ||
+    (!packageLoading &&
+      !packageError &&
+      resolvedPackages?.selection === packageSelection &&
+      resolvedPackages.library === library);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Selections and library updates refresh current content; writing the cache must not restart its own load.
   useEffect(() => {
     if (submitted.current) return;
     let current = true;
     const selected = [...new Set([bot, persona, ...modules].filter(Boolean))];
     setPackageLoading(true);
+    setPackageError('');
     void Promise.all(
       selected.map(async (key) => {
         const item = [initialBot, initialPersona, ...(initialModules ?? []), ...library.contents]
@@ -186,10 +210,11 @@ export function NewStory({
             const next = previous.map(currentKey);
             return next.some((key, index) => key !== previous[index]) ? next : previous;
           });
+          setResolvedPackages({ selection: packageSelection, library });
         }
       })
       .catch((caught) => {
-        if (current) setError((caught as Error).message);
+        if (current) setPackageError((caught as Error).message);
       })
       .finally(() => {
         if (current) setPackageLoading(false);
@@ -197,10 +222,20 @@ export function NewStory({
     return () => {
       current = false;
     };
-  }, [bot, persona, modules, library, initialBot, initialPersona, initialModules]);
+  }, [
+    bot,
+    persona,
+    modules,
+    library,
+    initialBot,
+    initialPersona,
+    initialModules,
+    packageRetry,
+    packageSelection,
+  ]);
   function captureSelection(): StorySelection {
     if (!defaultsReady) throw new Error('기본 페르소나를 확인한 뒤 시작해 주세요.');
-    if (packageLoading) throw new Error('선택한 자료를 불러온 뒤 시작해 주세요.');
+    if (!packagesReady) throw new Error('선택한 자료를 불러온 뒤 시작해 주세요.');
     const selectedBot = bot
       ? (loadedContents[bot] ??
         [initialBot, ...library.contents].find((item) => item && refValue(item) === bot))
@@ -308,7 +343,12 @@ export function NewStory({
       }
       await onCreated(chat);
     } catch (err) {
-      setError((err as Error).message);
+      setConfigure(true);
+      setError(
+        uncertain.current && !created.current
+          ? retainedMessage('transfer.m320')
+          : (err as Error).message
+      );
     } finally {
       creating.current = false;
       setBusy(false);
@@ -335,12 +375,14 @@ export function NewStory({
     if (!activeBot?.package || initializedStart.current === activeStartKey) return;
     initializedStart.current = activeStartKey;
     setStart(
-      activeBot.package.nativeRisu &&
-        activeBot.package.starts?.some((item) => item.id === 'start-0')
-        ? 'start-0'
-        : ''
+      !configure && activeBot.package.starts?.length === 1
+        ? activeBot.package.starts[0].id
+        : activeBot.package.nativeRisu &&
+            activeBot.package.starts?.some((item) => item.id === 'start-0')
+          ? 'start-0'
+          : ''
     );
-  }, [activeStartKey, activeBot]);
+  }, [activeStartKey, activeBot, configure]);
   const activePersona = frozen
     ? frozen.persona
     : persona
@@ -366,6 +408,60 @@ export function NewStory({
   ]
     .filter(Boolean)
     .join(', ');
+  const multipleStarts = (activeBot?.package?.starts?.length ?? 0) > 1;
+  const showForm =
+    configure ||
+    !quickStart ||
+    initialPersona !== undefined ||
+    initialModules !== undefined ||
+    multipleStarts ||
+    !!defaultsError ||
+    !!packageError ||
+    !!workspaceError ||
+    (!!workspace && !mainAvailable) ||
+    !!openingError;
+  // Switching to configuration or recovering a failed read always requires an explicit create.
+  useEffect(() => {
+    if (showForm) setConfigure(true);
+  }, [showForm]);
+  const startReady =
+    !activeBot?.package ||
+    (initializedStart.current === activeStartKey &&
+      (activeBot.package.starts?.length !== 1 || start === activeBot.package.starts[0].id));
+  useEffect(() => {
+    if (
+      showForm ||
+      !quickStart ||
+      !initialBot ||
+      botId !== initialBot.id ||
+      !activeBot ||
+      activeBot.revision < initialBot.revision ||
+      !workspace ||
+      !mainAvailable ||
+      !defaultsReady ||
+      !packagesReady ||
+      !startReady ||
+      refreshingWorkspace ||
+      busy ||
+      submitted.current
+    )
+      return;
+    // Defer admission until mount/selection effects have settled. Cleanup cancels an
+    // unstarted create on close, changed selection, or StrictMode's effect replay.
+    const timer = window.setTimeout(() => void create(), 0);
+    return () => window.clearTimeout(timer);
+  });
+  if (!showForm)
+    return (
+      <div className="new-story new-story-quick">
+        <LoadingState presentation="inline" label={t('transfer.quickStartLoading')} />
+        {!busy && (
+          <button type="button" className="ghost" onClick={() => setConfigure(true)}>
+            {t('transfer.configureNewChat')}
+          </button>
+        )}
+      </div>
+    );
   return (
     <form
       className="new-story"
@@ -419,9 +515,21 @@ export function NewStory({
           <LoadingState presentation="inline" label={t('transfer.m328')} />
         )}
         {defaultsError && (
-          <p className="error" role="alert">
+          <NoticeBanner
+            tone="error"
+            actions={
+              <button
+                type="button"
+                className="secondary"
+                disabled={locked}
+                onClick={() => setDefaultsRetry((value) => value + 1)}
+              >
+                {t('transfer.m338')}
+              </button>
+            }
+          >
             {translateMessage(defaultsError)}
-          </p>
+          </NoticeBanner>
         )}
         <div className="new-story-main-model" aria-label={t('transfer.m329')}>
           {!workspace ? (
@@ -492,7 +600,26 @@ export function NewStory({
             </>
           )}
         </div>
-        {packageLoading && <LoadingState presentation="inline" label={t('transfer.m340')} />}
+        {!packagesReady && !packageError && (
+          <LoadingState presentation="inline" label={t('transfer.m340')} />
+        )}
+        {packageError && (
+          <NoticeBanner
+            tone="error"
+            actions={
+              <button
+                type="button"
+                className="secondary"
+                disabled={locked}
+                onClick={() => setPackageRetry((value) => value + 1)}
+              >
+                {t('transfer.m338')}
+              </button>
+            }
+          >
+            {translateMessage(packageError)}
+          </NoticeBanner>
+        )}
         {!!activeBot?.package?.starts?.length && (
           <section className="new-story-opening" aria-label={t('transfer.m029')}>
             <label>
@@ -500,7 +627,7 @@ export function NewStory({
               <select
                 aria-label={t('transfer.m341')}
                 value={start}
-                disabled={locked || packageLoading}
+                disabled={locked || !packagesReady}
                 onChange={(event) => {
                   const id = event.target.value;
                   if (id === start) return;
@@ -597,7 +724,7 @@ export function NewStory({
         <button
           className="primary"
           disabled={
-            busy || uncertain.current || !bot || !defaultsReady || packageLoading || !!openingError
+            busy || uncertain.current || !bot || !defaultsReady || !packagesReady || !!openingError
           }
         >
           {busy ? t('transfer.m353') : created.current ? t('transfer.m354') : t('transfer.m355')}

@@ -17,6 +17,7 @@ export function Dialog({
   role = 'dialog',
   headerTitle,
   headerLeading,
+  headerActions,
 }: {
   open: boolean;
   title: string;
@@ -30,6 +31,7 @@ export function Dialog({
   role?: 'dialog' | 'alertdialog';
   headerTitle?: string;
   headerLeading?: ReactNode;
+  headerActions?: ReactNode;
 }) {
   useI18n();
   const [visited, setVisited] = useState<string | null>(null);
@@ -117,6 +119,7 @@ export function Dialog({
       <header className="dialog-header">
         {headerLeading}
         <h2 id={id}>{headerTitle ?? title}</h2>
+        {headerActions}
         <IconButton
           className="secondary"
           label={t('shared.close', { title })}

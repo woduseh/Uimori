@@ -60,7 +60,10 @@ const chatSettings = (section, title) => ({
     { menu: 'chat', when: 'compact' },
     { click: { role: 'button', name: '채팅 설정', within: inMenu }, when: 'compact' },
     { click: { label: '채팅 설정' }, when: 'wide' },
-    { click: { role: 'button', name: chatLabels[section], within: chatDialog }, when: 'compact' },
+    {
+      select: { label: '설정 영역 선택', option: chatLabels[section], within: chatDialog },
+      when: 'compact',
+    },
     { click: { role: 'tab', name: chatLabels[section], within: chatDialog }, when: 'wide' },
   ],
   ready: { role: 'dialog', name: '채팅 설정' },
@@ -73,7 +76,10 @@ const appSettings = (section, title) => ({
     { click: { label: '탐색 메뉴' }, when: 'compact' },
     { click: { role: 'button', name: '설정', within: drawer }, when: 'compact' },
     { click: { role: 'button', name: '설정', within: { testid: 'bot-navigation' } }, when: 'wide' },
-    { click: { role: 'button', name: appLabels[section], within: appDialog }, when: 'compact' },
+    {
+      select: { label: '설정 영역 선택', option: appLabels[section], within: appDialog },
+      when: 'compact',
+    },
     { click: { role: 'tab', name: appLabels[section], within: appDialog }, when: 'wide' },
   ],
   ready: { role: 'dialog', name: '설정' },
@@ -206,7 +212,11 @@ export const screens = [
     id: 'new-chat',
     title: '새 채팅',
     url: {},
-    enter: [...openLibrary, { click: { role: 'button', name: '$bot.main.title 새 채팅' } }],
+    enter: [
+      ...openLibrary,
+      { menu: '$bot.main.title 메뉴' },
+      { click: { role: 'button', name: '설정 후 새 채팅', within: inMenu } },
+    ],
     ready: { role: 'dialog', name: '새 채팅' },
   },
   {
