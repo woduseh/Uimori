@@ -4,7 +4,7 @@ Use [CODE-MAP](CODE-MAP.md) to find feature contracts and entry points. This pag
 
 ## Environment and setup
 
-Use Node 24.x, at least 24.14.0, as specified by [package.json](../package.json) and [.nvmrc](../.nvmrc). Windows PowerShell is the primary development environment; the browser helpers also discover Chrome and Edge on macOS and Linux.
+Use Node 24.x, at least 24.22.1, as specified by [package.json](../package.json) and [.nvmrc](../.nvmrc). Windows PowerShell is the primary development environment; the browser helpers also discover Chrome and Edge on macOS and Linux.
 
 ```powershell
 npm ci --no-audit --no-fund

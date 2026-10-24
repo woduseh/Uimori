@@ -4,7 +4,7 @@ Oracle 운영 진입점은 `npm run release:oracle` 하나예요. 소스 검증�
 
 ## 준비
 
-컨트롤러에는 Node `>=24.14.0 <25`, Git, 로그인된 GitHub CLI(`gh`, 저장소 Actions 읽기 권한), SSH/SCP가 필요해요. CI의 Node 기준은 `.nvmrc`, Oracle 이미지의 Node 기준은 Dockerfile에 명시돼 있어요. 로컬 Docker·Playwright·미리 만든 `dist`·운영 접속 토큰 사본은 배포 조건이 아니에요.
+컨트롤러에는 Node `>=24.22.1 <25`, Git, 로그인된 GitHub CLI(`gh`, 저장소 Actions 읽기 권한), SSH/SCP가 필요해요. CI의 Node 기준은 `.nvmrc`, Oracle 이미지의 Node 기준은 Dockerfile에 명시돼 있어요. 로컬 Docker·Playwright·미리 만든 `dist`·운영 접속 토큰 사본은 배포 조건이 아니에요.
 
 Oracle에는 기존 Uimori 앱, Docker/Compose, Python 3, Git, Tailscale 경로가 있어야 해요. SSH 사용자는 `sudo -n docker`와 `sudo -n tailscale`을 비대화식으로 실행할 수 있어야 해요. 운영 앱은 healthy이고 checkout은 clean이어야 해요. 진행 중인 생성이나 기존 maintenance가 있으면 먼저 정상 종료·해제하고 배포해요. 배포 도구는 사용자 작업을 강제로 취소하지 않아요.
 
