@@ -16,7 +16,7 @@
 }
 .brand-name > svg {
   flex: none;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .sidebar-quick-actions .navigation-quick-actions {
   display: grid;
@@ -55,7 +55,7 @@
   align-items: center;
   min-width: 0;
   gap: 2px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .bot-tree-section-heading > .bot-folder-toggle,
 .bot-tree-folder-heading > .bot-folder-toggle {
@@ -77,22 +77,22 @@
 }
 .tree-drop-target {
   background: var(--nav-item-selected);
-  outline: 1px solid var(--accent);
+  outline: var(--hairline) solid var(--accent);
   outline-offset: -1px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .tree-drop-before {
-  box-shadow: 0 -2px 0 var(--accent);
+  box-shadow: 0 calc(-1 * var(--hairline)) 0 var(--accent);
 }
 .tree-drop-after {
-  box-shadow: 0 2px 0 var(--accent);
+  box-shadow: 0 var(--hairline) 0 var(--accent);
 }
 .bot-tree-unfiled-drop {
   padding: 12px;
   margin: 6px 0;
   color: var(--muted);
-  border: 1px dashed var(--border);
-  border-radius: 8px;
+  border: var(--hairline) dashed var(--border);
+  border-radius: var(--radius-control);
 }
 .bot-tree-navigation .action-menu-body select {
   width: 100%;

@@ -20,7 +20,7 @@ async function expectPalette(page: Page, id: string, mode: 'light' | 'dark' = 'l
 async function openThemes(page: Page, url = '/') {
   await page.goto(url);
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '테마·색상');
+  await selectSettingsSection(page, '테마와 색상');
   {
     const advanced = page.locator('.theme-advanced:not([open]) > summary');
     if (await advanced.isVisible()) await advanced.click();
@@ -35,7 +35,7 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   const before = await (await request.get('/api/themes')).json();
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '테마·색상');
+  await selectSettingsSection(page, '테마와 색상');
   await expect(page.getByLabel('기본 외관', { exact: true })).toBeInViewport({ ratio: 1 });
   await expect(page.getByLabel('테마 화면 모드', { exact: true })).toBeInViewport({ ratio: 1 });
   await expect(page.locator('.theme-advanced')).not.toHaveAttribute('open', '');
@@ -45,7 +45,7 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   await expect(layout).toBeHidden();
   await expect(background).toBeHidden();
   await page.screenshot({ path: info.outputPath('theme-primary-mobile.png') });
-  await page.getByText('고급 외관·테마 제작', { exact: true }).click();
+  await page.getByText('고급 테마 설정', { exact: true }).click();
   await expect(layout).toBeVisible();
   const layoutBox = await layout.boundingBox();
   const paletteBox = await palette.boundingBox();
@@ -95,14 +95,14 @@ for (const width of [1440, 412]) {
       .poll(() =>
         page.locator('html').evaluate((e) => getComputedStyle(e).getPropertyValue('--bg').trim())
       )
-      .toBe('#131923');
+      .toBe('#111113');
     await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('light');
     const name = `Theme ${width} ${randomUUID().slice(0, 8)}`;
     await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
     await page.getByLabel('테마 이름', { exact: true }).fill(name);
     await page.getByLabel('테마 설명', { exact: true }).fill('Synthetic portable theme');
     await page.getByLabel('light accent 색상', { exact: true }).fill('#663399');
-    await page.getByText('CSS·HTML 직접 편집', { exact: true }).click();
+    await page.getByText('CSS와 HTML 직접 편집', { exact: true }).click();
     await page
       .getByLabel('레이아웃 HTML', { exact: true })
       .fill(
@@ -380,7 +380,7 @@ test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard
   await other.close();
   await tabs.getByRole('tab', { name: '일반', exact: true }).click();
   await page.keyboard.press('ArrowDown');
-  await expect(tabs.getByRole('tab', { name: '테마·색상', exact: true })).toBeFocused();
+  await expect(tabs.getByRole('tab', { name: '테마와 색상', exact: true })).toBeFocused();
 });
 
 for (const width of [1440, 412]) {

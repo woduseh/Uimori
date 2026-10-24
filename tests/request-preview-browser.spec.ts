@@ -74,7 +74,7 @@ test('REQUESTPREVIEW current composer settings are estimated without generation 
       await expect(preview).toContainText(model.title);
       await expect(dialog.getByRole('button', { name: '다시 확인', exact: true })).toHaveCount(0);
       await expect(preview).toContainText('65,536');
-      await expect(preview).toContainText('OpenAI · o200k_base');
+      await expect(preview).toContainText('OpenAI o200k_base');
       await expect(preview.getByRole('meter')).toHaveCount(1);
       expect(requests.at(-1)?.request).toBe(draft);
       await page.screenshot({ path: info.outputPath(`request-preview-${width}.png`) });

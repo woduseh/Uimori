@@ -5,7 +5,7 @@ import type { LibraryOrganization } from '../core/library-organization.js';
 import type { PromptPreset } from '../core/product.js';
 import { navigationAction } from './ui-navigation.js';
 
-const titles = ['Phēmē · RP', 'Phēmē · 소설', 'Hermēneía'];
+const titles = ['Phēmē RP', 'Phēmē 소설', 'Hermēneía'];
 
 test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DESKTOP_WIDTH}px and preserve existing work`, async ({
   page,
@@ -48,7 +48,7 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
   const panel = page.getByTestId('prompt-library');
   await panel.getByRole('button', { name: `${folder.title} 폴더 열기`, exact: true }).click();
   for (const [width, id, title, role] of [
-    [MOBILE_WIDTH, 'pheme-novel', 'Phēmē · 소설', 'main'],
+    [MOBILE_WIDTH, 'pheme-novel', 'Phēmē 소설', 'main'],
     [DESKTOP_WIDTH, 'hermeneia', 'Hermēneía', 'translation'],
   ] as const) {
     await page.setViewportSize({ width, height: 1000 });
@@ -246,7 +246,7 @@ test('BPTUI02 template retry, dialog focus and duplicate clicks preserve a singl
     await expect(dialog).toBeHidden();
     await expect(opener).toBeFocused();
     await opener.click();
-    await dialog.getByRole('button', { name: 'Phēmē · RP 추가', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Phēmē RP 추가', exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText('프롬프트를 추가하지 못했어요');
     expect(writes).toBe(0);
     const acceptedResponse = page.waitForResponse(
@@ -256,15 +256,13 @@ test('BPTUI02 template retry, dialog focus and duplicate clicks preserve a singl
     );
     // Dispatch both clicks before React can disable the button, exercising the synchronous lock.
     await dialog
-      .getByRole('button', { name: 'Phēmē · RP 다시 추가', exact: true })
+      .getByRole('button', { name: 'Phēmē RP 다시 추가', exact: true })
       .evaluate((node) => {
         (node as HTMLButtonElement).click();
         (node as HTMLButtonElement).click();
       });
     await expect.poll(() => writes).toBe(1);
-    await expect(
-      dialog.getByRole('button', { name: 'Phēmē · RP 추가', exact: true })
-    ).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Phēmē RP 추가', exact: true })).toBeDisabled();
     await page.route('**/api/library?view=summary', (route) =>
       route.fulfill({
         status: 503,
@@ -279,7 +277,7 @@ test('BPTUI02 template retry, dialog focus and duplicate clicks preserve a singl
     await expect(dialog).toBeHidden();
     await expect(
       page.getByTestId('prompt-editor').getByLabel('프롬프트 이름', { exact: true })
-    ).toHaveValue('Phēmē · RP');
+    ).toHaveValue('Phēmē RP');
     expect(writes).toBe(1);
     expect(detailAttempts).toBe(2);
     expect(await (await request.get(`/api/prompt-presets/${saved.id}`)).json()).toEqual(saved);

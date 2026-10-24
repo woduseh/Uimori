@@ -101,7 +101,7 @@ test('LOADUI08 task history loads on demand and preserves off-page reading, insp
   await expect(panel.getByTestId('run')).toHaveCount(8);
   await panel.locator('summary').filter({ hasText: '전체 역할의 호출과 비용' }).click();
   await expect(
-    panel.getByText('보관된 본문 생성 기록 8개 · 완료 8개 · 거절 0개 · 부분 생성 0개')
+    panel.getByText('보관된 본문 생성 기록 8개, 완료 8개, 거절 0개, 부분 생성 0개')
   ).toBeVisible();
   const task = panel.locator(`[data-testid="run"][data-run-id="${target.runId}"]`);
   await task.getByRole('button', { name: '원고 읽기', exact: true }).click();
@@ -172,15 +172,15 @@ test('LOADUI06 scene navigator respects focus and visibility settings across des
   await expect(navigator).toBeVisible();
   await expect(navigator).toContainText('1 / 12');
   await navigator.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
-  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(12);
-  await list.getByRole('button', { name: /^8번째 장면 · Synthetic page 8\./ }).click();
+  await expect(list.getByRole('button', { name: /번째 장면,/ })).toHaveCount(12);
+  await list.getByRole('button', { name: /^8번째 장면, Synthetic page 8\./ }).click();
   await expect(list).toHaveCount(0);
   await expect(articles(page)).toHaveCount(5);
   await expect(article(page, ids[7])).toBeVisible();
   await expect(article(page, ids[0])).toHaveCount(0);
   await expect(navigator).toContainText('8 / 12');
   await expect(page).toHaveURL(new RegExp(`source=${ids[7]}`));
-  const currentMark = navigator.getByRole('button', { name: /^8번째 장면 ·/ });
+  const currentMark = navigator.getByRole('button', { name: /^8번째 장면,/ });
   await expect(currentMark).toBeVisible();
   await expect(currentMark).toHaveAttribute('aria-current', 'location');
   await currentMark.hover();
@@ -242,7 +242,7 @@ test('LOADUI06 scene navigator respects focus and visibility settings across des
   await expect(navigator).toHaveCount(0);
   await expect(opener).toBeVisible();
   await opener.click();
-  const choice = list.getByRole('button', { name: /^3번째 장면 · Synthetic page 3\./ });
+  const choice = list.getByRole('button', { name: /^3번째 장면, Synthetic page 3\./ });
   await expect(choice).toBeVisible();
   for (const control of [list, choice]) {
     const bounds = await control.boundingBox();
@@ -796,7 +796,7 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   await page.reload();
   const activity = await openActivity(article(page, source.id));
   const ready = article(page, source.id).getByTestId('context-summary');
-  await expect(ready).toHaveText('앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회');
+  await expect(ready).toHaveText('앞선 12개 원문 요약, 입력 약 248,600 / 272,000 토큰, 요약 2회');
   await ready.scrollIntoViewIfNeeded();
   const bounds = await ready.boundingBox();
   expect(bounds).not.toBeNull();
@@ -808,7 +808,7 @@ test('LOADUI05 context summary status fits mobile reader and run details without
   expect(await ready.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   if (visualReview) await page.screenshot({ path: info.outputPath('context-summary-mobile.png') });
   await expect(activity.locator('.run-task-details').getByTestId('context-summary')).toHaveText(
-    '앞선 12개 원문 요약 · 입력 약 248,600 / 272,000 토큰 · 요약 2회'
+    '앞선 12개 원문 요약, 입력 약 248,600 / 272,000 토큰, 요약 2회'
   );
 
   stage = 'failed';
@@ -874,33 +874,33 @@ test('LOADUI07 synthetic navigation metadata covers long-list paging, search and
   const list = page.getByRole('dialog', { name: '장면 목록', exact: true });
   await expect(navigator).toContainText('1 / 65');
   await navigator.getByRole('button', { name: '장면 목록 열기', exact: true }).click();
-  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(60);
+  await expect(list.getByRole('button', { name: /번째 장면,/ })).toHaveCount(60);
   await list.getByRole('button', { name: '다음 목록', exact: true }).click();
   const nextFirst = list.getByRole('button', {
-    name: '61번째 장면 · Synthetic navigator 61',
+    name: '61번째 장면, Synthetic navigator 61',
     exact: true,
   });
   await expect(nextFirst).toBeFocused();
   await expect(nextFirst).toBeInViewport();
-  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(5);
+  await expect(list.getByRole('button', { name: /번째 장면,/ })).toHaveCount(5);
   await expect(list.getByRole('button', { name: '다음 목록', exact: true })).toBeDisabled();
   await list.getByRole('button', { name: '이전 목록', exact: true }).click();
-  await expect(list.getByRole('button', { name: /^1번째 장면 ·/ })).toBeFocused();
+  await expect(list.getByRole('button', { name: /^1번째 장면,/ })).toBeFocused();
   const search = list.getByRole('searchbox', { name: '장면 검색어' });
   await search.fill('65');
-  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(1);
+  await expect(list.getByRole('button', { name: /번째 장면,/ })).toHaveCount(1);
   await expect(
-    list.getByRole('button', { name: '65번째 장면 · Synthetic navigator 65', exact: true })
+    list.getByRole('button', { name: '65번째 장면, Synthetic navigator 65', exact: true })
   ).toBeVisible();
   await search.fill('Synthetic page 2.');
-  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(1);
-  await list.getByRole('button', { name: /^2번째 장면 · Synthetic page 2\./ }).click();
+  await expect(list.getByRole('button', { name: /번째 장면,/ })).toHaveCount(1);
+  await list.getByRole('button', { name: /^2번째 장면, Synthetic page 2\./ }).click();
   await expect(navigator).toContainText('2 / 65');
-  await expect(navigator.getByRole('button', { name: /^2번째 장면 ·/ })).toHaveAttribute(
+  await expect(navigator.getByRole('button', { name: /^2번째 장면,/ })).toHaveAttribute(
     'aria-current',
     'location'
   );
-  await navigator.getByRole('button', { name: /^1번째 장면 ·/ }).click();
+  await navigator.getByRole('button', { name: /^1번째 장면,/ }).click();
   await settledNativeSources(page, ids);
   await expect(navigator).toContainText('1 / 65');
   await article(page, ids[1]).evaluate((element) => {
@@ -909,7 +909,7 @@ test('LOADUI07 synthetic navigation metadata covers long-list paging, search and
       element.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
   });
   await expect(navigator).toContainText('2 / 65');
-  await expect(navigator.getByRole('button', { name: /^2번째 장면 ·/ })).toHaveAttribute(
+  await expect(navigator.getByRole('button', { name: /^2번째 장면,/ })).toHaveAttribute(
     'aria-current',
     'location'
   );
@@ -992,9 +992,9 @@ test('LOADUI11 mobile long-story navigation reads persisted off-page bodies with
   );
 
   await opener.click();
-  await expect(list.getByRole('button', { name: /번째 장면 ·/ })).toHaveCount(60);
+  await expect(list.getByRole('button', { name: /번째 장면,/ })).toHaveCount(60);
   await list.getByRole('button', { name: '다음 목록', exact: true }).click();
-  await list.getByRole('button', { name: '67번째 장면 · 긴 원고 67번 장면', exact: true }).click();
+  await list.getByRole('button', { name: '67번째 장면, 긴 원고 67번 장면', exact: true }).click();
   await expect(list).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`source=${ids[66]}`));
   await expect(articles(page)).toHaveCount(5);
@@ -1014,7 +1014,7 @@ test('LOADUI11 mobile long-story navigation reads persisted off-page bodies with
 
   await opener.click();
   await expect(
-    list.getByRole('button', { name: '67번째 장면 · 긴 원고 67번 장면', exact: true })
+    list.getByRole('button', { name: '67번째 장면, 긴 원고 67번 장면', exact: true })
   ).toHaveAttribute('aria-current', 'location');
   await page.keyboard.press('Escape');
   await expect(list).toHaveCount(0);

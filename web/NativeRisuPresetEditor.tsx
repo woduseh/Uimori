@@ -261,9 +261,11 @@ export function NativeRisuPresetEditor({
                 <strong>
                   {i + 1}. {text(block.name) || blockTypes[text(block.type)] || text(block.type)}
                 </strong>
-                <small>
-                  {blockRole(block)}
-                  {text(block.name) && ` · ${blockTypes[text(block.type)] ?? text(block.type)}`}
+                <small className="ui-meta-row">
+                  <span>{blockRole(block)}</span>
+                  {text(block.name) && (
+                    <span>{blockTypes[text(block.type)] ?? text(block.type)}</span>
+                  )}
                 </small>
                 <span className="native-row-drag-handle" aria-hidden="true">
                   <DragHandleIcon size={16} />

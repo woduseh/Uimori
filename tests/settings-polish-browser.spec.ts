@@ -279,8 +279,8 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
   await expect(panel.getByRole('region', { name: '비용 추이', exact: true })).toHaveCount(0);
   await expect(panel.getByRole('region', { name: '모델별 비용', exact: true })).toHaveCount(0);
   await expect(panel.locator('summary').filter({ hasText: '모델별 상세' })).toHaveCount(0);
-  await expect(panel.locator('summary').filter({ hasText: '일별·용도별 상세' })).toHaveCount(0);
-  await expect(panel).toContainText('시각 미확인 3회 · US$0.03는 기간 합계에서 제외했어요.');
+  await expect(panel.locator('summary').filter({ hasText: '일별 및 용도별 상세' })).toHaveCount(0);
+  await expect(panel).toContainText('시각 미확인 3회, US$0.03는 기간 합계에서 제외했어요.');
   await panel.getByText('집계 기준', { exact: true }).click();
   await expect(panel.locator('.usage-help')).toContainText('상세 집계 시작: 2026. 4. 1.');
   await panel.getByText('집계 기준', { exact: true }).click();
@@ -346,7 +346,7 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
     }
     if (next === 'unconfirmed') {
       await expect(panel.getByRole('region', { name: '사용 비용', exact: true })).toContainText(
-        '미확인 1 · 부분 추정 1회'
+        '미확인 1, 부분 추정 1회'
       );
       await expect(panel.locator('.usage-chart-caption')).toContainText('부분 추정 1회');
       await expect(panel.locator('.usage-chart-caption')).toContainText('미확인 1회');
@@ -377,7 +377,7 @@ test('SPUI02 lore reset is an unsaved form action and incomplete backup input ne
   const backup = page.getByRole('region', { name: '자동 백업', exact: true });
   const initial = await (await request.get('/api/backups')).json();
   await backup.getByRole('switch', { name: '서버 자동 백업' }).check();
-  await expect(backup.getByLabel('백업 시각 · 한국 시간', { exact: true })).toBeVisible();
+  await expect(backup.getByLabel('백업 시각 (한국 시간)', { exact: true })).toBeVisible();
   await backup.getByLabel('성공본 보관 개수').fill('');
   await expect(backup.getByRole('button', { name: '백업 설정 저장' })).toBeDisabled();
   expect((await (await request.get('/api/backups')).json()).settings).toEqual(initial.settings);

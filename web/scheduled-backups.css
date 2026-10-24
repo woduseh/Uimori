@@ -22,7 +22,7 @@
   align-items: center;
   gap: 16px;
   padding-block: 14px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .backup-fields label:first-child {
   border-top: 0;
@@ -41,7 +41,7 @@
   gap: 10px;
   margin: 0;
   padding-block: 4px;
-  font-size: 0.875rem;
+  font-size: var(--font-body);
 }
 .backup-status > div {
   display: grid;
@@ -73,7 +73,7 @@
 }
 .backup-list,
 .backup-empty {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 14px;
 }
 .backup-list summary > span {
@@ -93,7 +93,7 @@
   display: flex;
   justify-content: space-between;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--font-body);
 }
 @media (max-width: 480px) {
   .backup-fields label {

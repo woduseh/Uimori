@@ -73,8 +73,8 @@ async function edit(page: Page, content: Content) {
   await library.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(content.title);
   await library.getByRole('button', { name: `${content.title} 상세 보기`, exact: true }).click();
   await library
-    .locator('.library-detail-actions > button')
-    .filter({ hasText: /^편집$/ })
+    .locator('.library-detail-actions')
+    .getByRole('button', { name: '편집', exact: true })
     .click();
   await revealLibraryEditor(page);
   return library;
@@ -204,8 +204,8 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
   );
   await card.click();
   await library
-    .locator('.library-detail-actions > button')
-    .filter({ hasText: /^편집$/ })
+    .locator('.library-detail-actions')
+    .getByRole('button', { name: '편집', exact: true })
     .click();
   await revealLibraryEditor(page);
   await portrait.getByRole('button', { name: '대표 이미지 해제', exact: true }).click();

@@ -39,13 +39,13 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
   min-width: 0;
 }
 .theme-card.selected {
-  outline: 2px solid var(--accent);
+  outline: var(--hairline) solid var(--accent);
   outline-offset: 2px;
 }
 .theme-card-apply {
@@ -54,7 +54,7 @@
   width: 100%;
   text-align: left;
   border: 0;
-  border-radius: 14px 14px 0 0;
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
   padding: 12px;
   display: grid;
   gap: 6px;
@@ -63,7 +63,7 @@
 .theme-card-apply small {
   color: var(--muted);
   min-height: 2.8em;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .theme-choice-title {
   display: flex;
@@ -81,10 +81,10 @@
   height: 100px;
   display: flex;
   gap: 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   overflow: hidden;
   margin-bottom: 6px;
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
 }
 .theme-swatch-nav {
   width: 22%;
@@ -97,7 +97,7 @@
 }
 .theme-swatch-page > span {
   font:
-    24px Georgia,
+    var(--font-heading) Georgia,
     serif;
 }
 .theme-swatch-page i {
@@ -114,7 +114,7 @@
   width: 24px;
   height: 6px;
   margin-top: 3px;
-  border-radius: 4px;
+  border-radius: var(--radius-small);
 }
 .theme-card-actions {
   display: flex;
@@ -139,7 +139,7 @@
 }
 .theme-card-menu > summary {
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
 }
 .theme-editor-actions {
   justify-content: flex-end;
@@ -162,8 +162,8 @@
   color: var(--muted);
 }
 .theme-editor {
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   padding: clamp(14px, 3vw, 24px);
   display: grid;
   gap: 18px;
@@ -195,7 +195,7 @@
 }
 .theme-colors label {
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--font-small);
   display: grid;
   gap: 4px;
 }
@@ -212,7 +212,7 @@
   padding: 8px;
 }
 .theme-code {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 14px;
 }
 .theme-code summary,
@@ -227,7 +227,7 @@
 .theme-code textarea {
   width: 100%;
   font-family: ui-monospace, monospace;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .theme-sample {
   border: 0;
@@ -237,7 +237,7 @@
   padding-block: 12px;
 }
 .theme-help {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.8;
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -245,7 +245,7 @@
 .theme-recovery {
   background: var(--accent-soft);
   padding: 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 @media (max-width: 600px) {
   .theme-grid {
@@ -293,7 +293,7 @@
 .theme-library-copy p {
   margin-top: 5px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .theme-library-actions {
   display: flex;
@@ -336,7 +336,7 @@
 .theme-dimension-heading p,
 .theme-inherited {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.6;
   margin: 0;
 }
@@ -379,23 +379,23 @@
   padding: 14px;
   text-align: left;
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
 }
 .theme-palette-card.selected {
-  outline: 2px solid var(--accent);
+  outline: var(--hairline) solid var(--accent);
   outline-offset: 2px;
 }
 .theme-palette-card small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.6;
 }
 .theme-palette-swatches {
   display: flex;
   height: 32px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   overflow: hidden;
   margin-bottom: 2px;
 }
@@ -406,18 +406,18 @@
   width: 12%;
 }
 .theme-swatch[data-layout="builtin:cinematic"] .theme-swatch-page {
-  border-inline: 1px solid currentColor;
+  border-inline: var(--hairline) solid currentColor;
   padding-inline: 10px;
   margin-block: 10px;
 }
 .theme-swatch[data-layout="builtin:letter"] .theme-swatch-page {
-  border-bottom: 1px solid currentColor;
+  border-bottom: var(--hairline) solid currentColor;
   margin-block: 10px;
   padding-bottom: 5px;
   font-family: Georgia, serif;
 }
 .theme-swatch[data-layout="builtin:scrapbook"] .theme-swatch-page {
-  border: 1px dashed currentColor;
+  border: var(--hairline) dashed currentColor;
   transform: rotate(-3deg);
   margin-block: 10px;
   padding-inline: 10px;

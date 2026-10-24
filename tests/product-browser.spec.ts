@@ -90,7 +90,7 @@ async function openDetails(page: Page, testId: string) {
     return page.getByTestId(testId);
   }
   await storySettings(page);
-  await selectChatSettingsSection(page, '인물·자료');
+  await selectChatSettingsSection(page, '사용 자료');
   return profileInfo(page);
 }
 
@@ -139,15 +139,9 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .locator('.section-navigation')
       .filter({ visible: true })
       .locator('button .section-navigation-title')
-  ).toHaveText([
-    '인물·자료',
-    '프롬프트·모델·번역',
-    '원작·인물 참고',
-    '기억·메모·로어',
-    '이미지·삽화 참조',
-  ]);
-  await selectChatSettingsSection(page, '인물·자료');
-  await page.getByText('함께 사용하는 모듈 · 자료 추가', { exact: true }).click();
+  ).toHaveText(['사용 자료', '생성 설정', '원작 참고', '기억과 메모', '이미지']);
+  await selectChatSettingsSection(page, '사용 자료');
+  await page.getByText('함께 사용하는 모듈', { exact: true }).click();
   await selectContent(page, '추가할 패키지', added.title);
   await expect(
     profile
@@ -238,10 +232,10 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   const unique = `P04-${Date.now()}`;
   const chat = await createChat(page, `합성 ${unique}`);
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   const library = page.getByTestId('connection-editor');
   await startProviderConnection(page);
-  await library.getByText('개발·검사용 프로바이더', { exact: true }).click();
+  await library.getByText('개발 및 검사용 프로바이더', { exact: true }).click();
   await library.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
   await page.getByLabel('프로바이더 이름', { exact: true }).fill(`격리 연결 ${unique}`);
   await page.getByLabel('로컬 요청 주소').fill('http://127.0.0.1:9/turn');
@@ -298,7 +292,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     translation: null,
   });
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await library.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   const enabledResponse = page.waitForResponse(
     (response) =>

@@ -28,7 +28,7 @@ test('AUDIT2 acknowledged runtime save remains successful when the reader refres
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   const runtime = dialog.getByRole('region', { name: '생성 설정', exact: true });
   await runtime
@@ -123,7 +123,7 @@ for (const width of [360, 412]) {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`/?chat=${chat.id}`);
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '프롬프트·모델·번역');
+    await selectChatSettingsSection(page, '생성 설정');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     const runtime = dialog.getByRole('region', { name: '생성 설정', exact: true });
     await runtime

@@ -97,16 +97,16 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
               v1: formatDate(new Date(attempt.pricingSnapshot.checkedAt), { timeZone: 'UTC' }),
             })}
           </p>
-          <p>
-            {attempt.pricingSnapshot.source === 'manual'
-              ? t('visualpanels.manuallyEnteredPrice')
-              : attempt.pricingSnapshot.source === 'catalog'
-                ? t('visualpanels.providerCatalogPrice')
-                : t('visualpanels.officialPrice')}
+          <p className="ui-meta-row">
+            <span>
+              {attempt.pricingSnapshot.source === 'manual'
+                ? t('visualpanels.manuallyEnteredPrice')
+                : attempt.pricingSnapshot.source === 'catalog'
+                  ? t('visualpanels.providerCatalogPrice')
+                  : t('visualpanels.officialPrice')}
+            </span>
             {attempt.pricingSnapshot.sourceUrl && (
               <>
-                {' '}
-                ·{' '}
                 <a href={attempt.pricingSnapshot.sourceUrl} target="_blank" rel="noreferrer">
                   {t('visualpanels.priceSource')}
                 </a>
@@ -226,9 +226,11 @@ export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
       {items.map((entry, index) => (
         <li key={`${entry.id}:${entry.via}:${index}`}>
           <strong>{entry.title || entry.id}</strong>
-          <span>
-            {translateMessage(loreVia[entry.via])}
-            {entry.delivery !== 'full' && <> · {translateMessage(loreDelivery[entry.delivery])}</>}
+          <span className="ui-meta-row">
+            <span>{translateMessage(loreVia[entry.via])}</span>
+            {entry.delivery !== 'full' && (
+              <span>{translateMessage(loreDelivery[entry.delivery])}</span>
+            )}
           </span>
           {entry.source && (
             <small>
@@ -398,7 +400,11 @@ function AttemptTable({
           revision={revision}
           title={
             <>
-              {translateMessage(roleLabels[summary.role])} · {summary.modelId} · {summary.status}
+              <span className="ui-meta-row">
+                <span>{translateMessage(roleLabels[summary.role])}</span>
+                <span>{summary.modelId}</span>
+                <span>{summary.status}</span>
+              </span>
               <small className="attempt-token-summary">
                 {t('visualpanels.inputOutput', {
                   v0: tokens(summary.inputTokens),

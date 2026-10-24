@@ -12,7 +12,7 @@ async function settings(page: Page) {
   if (!(await button.isVisible()))
     await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
   await button.click();
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
 }
 
 async function library(request: APIRequestContext): Promise<Library> {
@@ -94,7 +94,7 @@ for (const width of DEFAULT_WIDTHS) {
         },
       });
     await settings(page);
-    await page.getByLabel('프로바이더·모델 검색').fill(title);
+    await page.getByLabel('프로바이더와 모델 검색').fill(title);
     await page.getByRole('button', { name: title + ' 모델 수정', exact: true }).click();
     await form.getByRole('button', { name: '고급', exact: true }).click();
     await pricing.locator('summary').first().click();
@@ -276,7 +276,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     await openSourceActions(source);
     await source.getByRole('button', { name: '본문 추정 비용', exact: true }).click();
     const sourceCost = page.getByRole('dialog', { name: '본문 추정 비용', exact: true });
-    await expect(sourceCost).toContainText('확인분 부분합 $0.004995 · 미확인 1회 포함');
+    await expect(sourceCost).toContainText('확인분 부분합 $0.004995, 미확인 1회 포함');
     await expect(sourceCost).toContainText('실제 청구액과 다를 수 있어요');
     await expect(sourceCost).toContainText('전체 추정 비용은 아직 미확인');
     await sourceCost.screenshot({ path: info.outputPath(`estimate-cost-source-${width}.png`) });
@@ -286,18 +286,21 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     const usage = dialog.getByTestId('usage-inspector');
     await usage.locator(':scope > details > summary').click();
     await expect(usage).toContainText('전송 시도 2회');
-    await expect(usage).toContainText('확인분 부분합 $0.004995 · 1회 미확인 항목 포함');
+    await expect(usage).toContainText('확인분 부분합 $0.004995, 1회 미확인 항목 포함');
     await expect(
       usage
         .getByRole('row')
         .filter({ has: page.getByRole('rowheader', { name: '원문', exact: true }) })
     ).toContainText('미확인');
-    await usage.locator('summary').filter({ hasText: '원문 · priced-fixture · completed' }).click();
+    await usage
+      .locator('summary')
+      .filter({ hasText: /원문\s*priced-fixture\s*completed/ })
+      .click();
     const tokenUsage = usage.getByRole('definition');
     await expect(tokenUsage.filter({ hasText: /^1,500토큰$/ })).toBeVisible();
     await expect(tokenUsage.filter({ hasText: /^100토큰$/ })).toBeVisible();
     const lore = usage.getByRole('region', { name: '요청에 포함된 로어' });
-    await expect(lore).toContainText('포함된 로어 · 4건');
+    await expect(lore).toContainText('포함된 로어, 4건');
     await expect(lore).toContainText('항구의 지도와 오래된 등대');
     await expect(lore).toContainText('출처: 항구 이야기');
     await expect(
@@ -307,23 +310,23 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
       '자동 선택'
     );
     await expect(lore).not.toContainText('전체 본문');
-    await expect(lore).toContainText('이전 요청 포함 · 읽은 구간');
+    await expect(lore).toContainText(/이전 요청 포함\s*읽은 구간/);
     await expect(lore).toContainText('읽은 구간');
     await expect(lore).toContainText('요약만');
     await expect(lore.getByText('프롬프트에서 가공한 로어', { exact: true })).toBeHidden();
-    await lore.getByText('포함 여부 미확인 · 1건', { exact: true }).click();
+    await lore.getByText('포함 여부 미확인: 1건', { exact: true }).click();
     await expect(lore.getByText('프롬프트에서 가공한 로어', { exact: true })).toBeVisible();
     await lore.screenshot({ path: info.outputPath(`request-lore-${width}.png`) });
     const raw = usage
       .locator('details')
-      .filter({ has: page.getByText('원시 요청·응답 보기', { exact: true }) })
+      .filter({ has: page.getByText('원시 요청과 응답 보기', { exact: true }) })
       .last();
     await expect(raw).not.toHaveAttribute('open');
     await expect(raw.locator('pre')).toHaveCount(0);
-    await raw.getByText('원시 요청·응답 보기', { exact: true }).click();
+    await raw.getByText('원시 요청과 응답 보기', { exact: true }).click();
     await expect(raw.locator('pre')).toContainText('"inputTokens": 1500');
     await expect(raw.locator('pre')).toContainText('"id": "pricecost-known"');
-    await raw.getByText('원시 요청·응답 보기', { exact: true }).click();
+    await raw.getByText('원시 요청과 응답 보기', { exact: true }).click();
     await expect(raw.locator('pre')).toHaveCount(0);
     const pricing = usage.getByRole('region', { name: '호출 추정 비용' });
     await expect(pricing).toContainText('프로바이더 보고 비용: $0.125');
@@ -337,13 +340,13 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     ]);
     await expect(table.getByRole('row').filter({ hasText: '캐시 읽기' })).toContainText('400');
     await expect(table.getByRole('row').filter({ hasText: '캐시 쓰기' })).toContainText('100');
-    await expect(usage).toContainText('프로바이더 보고 캐시 토큰 · 읽기 400 / 쓰기 100');
+    await expect(usage).toContainText('프로바이더 보고 캐시 토큰, 읽기 400 / 쓰기 100');
     await expect(pricing).toContainText('실제 청구액과 다를 수 있어요');
     expect(await dialog.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
     await pricing.screenshot({ path: info.outputPath(`estimate-cost-${width}.png`) });
     await usage
       .locator('summary')
-      .filter({ hasText: '원문 · unpriced-fixture · completed' })
+      .filter({ hasText: /원문\s*unpriced-fixture\s*completed/ })
       .click();
     const unavailable = usage.getByRole('region', { name: '호출 추정 비용' }).last();
     const unknownTokens = usage.getByLabel('호출 토큰 사용량').last();

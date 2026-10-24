@@ -822,15 +822,12 @@ export function LibraryPanel({
               onClick={() => navigate(tab, true)}
             />
             <div className="library-detail-actions">
-              <button
-                type="button"
-                className="secondary"
+              <IconButton
+                icon={EditIcon}
+                label={t('library.edit')}
                 disabled={loading}
                 onClick={() => void openContent(detail, 'edit')}
-              >
-                <EditIcon size={18} aria-hidden="true" />
-                {t('library.edit')}
-              </button>
+              />
               <LibraryItemMenu title={t('library.menu', { v0: detail.title })}>
                 {libraryTabs
                   .filter(({ id }) => id !== detailRole)
@@ -888,11 +885,13 @@ export function LibraryPanel({
             <ContentAvatar content={detail} className="library-preview-avatar" />
             <div>
               <h2>{detail.title}</h2>
-              <small>
-                {organizedLibrary
-                  ? t(contentLabelKeys[libraryCategory(organizedLibrary, detail)])
-                  : t(contentLabelKeys[detail.kind])}
-                {detailFolder ? ` · ${detailFolder}` : ''}
+              <small className="ui-meta-row">
+                <span>
+                  {organizedLibrary
+                    ? t(contentLabelKeys[libraryCategory(organizedLibrary, detail)])
+                    : t(contentLabelKeys[detail.kind])}
+                </span>
+                {detailFolder && <span>{detailFolder}</span>}
               </small>
               {detail.description && <p>{detail.description}</p>}
             </div>
@@ -922,7 +921,11 @@ export function LibraryPanel({
             )}
           </div>
           {detail.package && detailCounts.length > 0 && (
-            <p className="library-preview-counts muted">{detailCounts.join(' · ')}</p>
+            <p className="library-preview-counts muted ui-meta-row">
+              {detailCounts.map((count, index) => (
+                <span key={index}>{count}</span>
+              ))}
+            </p>
           )}
           {detail.text && <div className="library-preview-body">{detail.text}</div>}
         </section>

@@ -69,9 +69,10 @@ export function SceneUsage({
         {compact ? (
           t('reader.thisGeneration')
         ) : (
-          <>
-            {t('reader.thisGeneration')} · {totals}
-          </>
+          <span className="ui-meta-row">
+            <span>{t('reader.thisGeneration')}</span>
+            <span>{totals}</span>
+          </span>
         )}
       </summary>
       <div className="scene-usage-body">
@@ -79,8 +80,9 @@ export function SceneUsage({
         {receipt ? (
           <dl className="scene-receipt">
             <dt>{t('reader.model')}</dt>
-            <dd>
-              {receipt.model.title} · {receipt.model.modelId}
+            <dd className="ui-meta-row">
+              <span>{receipt.model.title}</span>
+              <span>{receipt.model.modelId}</span>
             </dd>
             <dt>{t('reader.promptSelection')}</dt>
             <dd>{receipt.prompt?.title ?? t('reader.noSelectionRecord')}</dd>
@@ -164,20 +166,20 @@ export function SceneUsage({
               {!!recordedDetail.lore?.entries.length && (
                 <ul className="scene-receipt-lore">
                   {recordedDetail.lore.entries.map((entry, index) => (
-                    <li key={`${entry.id}:${entry.via}:${index}`}>
-                      {entry.title} ·{' '}
-                      {
+                    <li key={`${entry.id}:${entry.via}:${index}`} className="ui-meta-row">
+                      <span>{entry.title}</span>
+                      <span>
                         {
-                          pinned: t('reader.pinnedMaterial'),
-                          selected: t('reader.automaticallySelected'),
-                          retained: t('reader.includedInPreviousRequest'),
-                          'tool-result': t('reader.toolLookup'),
-                        }[entry.via]
-                      }
+                          {
+                            pinned: t('reader.pinnedMaterial'),
+                            selected: t('reader.automaticallySelected'),
+                            retained: t('reader.includedInPreviousRequest'),
+                            'tool-result': t('reader.toolLookup'),
+                          }[entry.via]
+                        }
+                      </span>
                       {entry.delivery !== 'full' && (
-                        <>
-                          {' '}
-                          ·{' '}
+                        <span>
                           {
                             {
                               excerpt: t('reader.readPassage'),
@@ -185,7 +187,7 @@ export function SceneUsage({
                               unverified: t('reader.inclusionUnknown'),
                             }[entry.delivery]
                           }
-                        </>
+                        </span>
                       )}
                     </li>
                   ))}

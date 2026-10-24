@@ -12,11 +12,11 @@
   width: 312px;
   max-width: calc(100vw - 32px);
   padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
   color: var(--text);
-  box-shadow: 0 8px 24px #0003;
+  box-shadow: 0 2px 8px var(--shade);
   z-index: 20;
   max-height: min(540px, calc(var(--app-height, 100dvh) - 112px));
   overflow-y: auto;
@@ -29,17 +29,17 @@
   min-width: 0;
   margin-top: 7px;
   padding-top: 7px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .composer-menu-heading {
   padding: 3px 10px 5px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-small);
   font-weight: 600;
 }
 .quick-controls .composer-extra-settings select,
 .quick-controls .composer-extra-settings button {
-  font-size: 13px;
+  font-size: var(--font-body);
   min-height: var(--control-h);
 }
 .quick-controls .composer-extra-settings > button,
@@ -51,7 +51,7 @@
   width: 100%;
   padding: 10px 12px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-small);
   background: transparent;
   color: var(--text);
   text-align: left;
@@ -83,15 +83,15 @@
 .quick-controls .composer-menu-choice > span,
 .quick-controls .composer-menu-persona > span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .quick-controls .composer-menu-choice select {
   width: 100%;
   min-width: 0;
   min-height: var(--control-h);
   padding: 5px 28px 5px 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   background-color: var(--surface);
   color: var(--text);
 }
@@ -102,8 +102,8 @@
 .quick-controls .composer-menu-persona .content-picker-trigger {
   min-width: 0;
   padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 .quick-controls .composer-lore-toggle {
@@ -120,7 +120,7 @@
 }
 .composer-lore-copy {
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.5;
 }
 .composer[hidden] {
@@ -139,9 +139,9 @@
   gap: 8px;
   min-height: 32px;
   padding: 4px 10px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-small);
 }

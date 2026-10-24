@@ -563,7 +563,7 @@ function App() {
     s.profileDirty ? t('main.m025') : '',
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(' ');
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {

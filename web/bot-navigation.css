@@ -1,7 +1,7 @@
 .bot-navigation {
   /* Local navigation tones follow the active theme without changing its public palette. */
-  --nav-item-hover: color-mix(in srgb, var(--hover) 55%, var(--nav));
-  --nav-item-selected: color-mix(in srgb, var(--accent-soft) 80%, var(--nav));
+  --nav-item-hover: var(--hover);
+  --nav-item-selected: var(--surface-active);
   --nav-indent: 16px;
   display: flex;
   flex-direction: column;
@@ -25,7 +25,7 @@
 }
 .bot-navigation .nav-button {
   gap: 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .bot-navigation .nav-button > svg {
   width: 20px;
@@ -61,7 +61,7 @@
 .bot-navigation .nav-bottom {
   margin-top: 0;
   padding-top: 8px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .bot-folder-heading {
   display: flex;
@@ -74,10 +74,10 @@
   place-items: center;
   width: 34px;
   height: 38px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--surface);
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
   color: var(--muted);
 }
 .bot-folder {
@@ -85,7 +85,7 @@
 }
 .bot-folder-heading {
   min-height: 32px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   gap: 2px;
 }
 @media (hover: hover) {
@@ -107,7 +107,7 @@
   border-color: transparent;
   color: var(--muted);
   text-align: left;
-  font-size: 12px;
+  font-size: var(--font-small);
   min-height: 32px;
 }
 .bot-folder-toggle span {
@@ -118,9 +118,11 @@
 .bot-folder-toggle svg {
   flex-shrink: 0;
 }
-.bot-folder-toggle > svg,
-.bot-branch-toggle > svg {
-  transition: transform var(--motion-fast) ease;
+@media (prefers-reduced-motion: no-preference) {
+  .bot-folder-toggle > svg,
+  .bot-branch-toggle > svg {
+    transition: transform var(--motion-fast) var(--motion-ease-out);
+  }
 }
 .bot-folder-toggle .expanded {
   transform: rotate(90deg);
@@ -159,7 +161,7 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  border-radius: 4px;
+  border-radius: var(--radius-small);
 }
 @media (hover: hover) {
   .bot-navigation .bot-row-actions > button:hover {
@@ -177,8 +179,8 @@
   padding-left: 0;
 }
 .bot-folder-unfiled.drop-folder {
-  outline: 1px solid var(--accent);
-  border-radius: 6px;
+  outline: var(--hairline) solid var(--accent);
+  border-radius: var(--radius-control);
 }
 .bot-chat-item {
   position: relative;
@@ -187,7 +189,7 @@
   min-width: 0;
   height: 34px;
   padding: 0 3px 0 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   gap: 2px;
 }
 @media (hover: hover) {
@@ -201,7 +203,7 @@
 /* A current-chat shortcut outside the first page is not a sortable list row. */
 .bot-chat-item.pinned {
   margin-bottom: 6px;
-  box-shadow: 0 1px 0 var(--line);
+  box-shadow: 0 var(--hairline) 0 var(--line);
 }
 .bot-chat-item .chat-link {
   display: flex;
@@ -220,7 +222,7 @@
 }
 .bot-chat-item .chat-link strong {
   display: block;
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 400;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -259,20 +261,20 @@
   top: -1px;
   left: 0;
   right: 0;
-  height: 2px;
+  height: var(--hairline);
   background: var(--accent);
   pointer-events: none;
 }
 .bot-drop-end {
-  height: 2px;
+  height: var(--hairline);
   background: var(--accent);
 }
 .bot-folder.drop-folder > .bot-folder-heading {
   background: var(--hover);
-  outline: 1px solid var(--accent);
+  outline: var(--hairline) solid var(--accent);
 }
 .bot-empty-folder {
-  font-size: 11px;
+  font-size: var(--font-small);
   color: var(--faint);
   margin: 7px 5px;
 }
@@ -290,7 +292,7 @@
 .bot-chat-menu label {
   display: grid;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .bot-folder-settings input,
 .bot-folder-settings select,
@@ -299,12 +301,12 @@
 .bot-chat-menu select {
   width: 100%;
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
   min-height: 40px;
   padding: 8px;
 }
 .bot-folder-settings small {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.5;
 }
 .bot-folder-settings .notice-banner {
@@ -358,11 +360,11 @@
 }
 .bot-navigation-empty {
   padding: 16px 4px;
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
 }
 .bot-navigation .error {
-  font-size: 12px;
+  font-size: var(--font-small);
   overflow-wrap: anywhere;
 }
 .navigation-dialog .bot-navigation {
@@ -392,24 +394,6 @@
 .bot-branch {
   min-width: 0;
 }
-/* A revealed subtree fades in. Collapsed rows stay unmounted so their folders are
-   still fetched lazily. The rows must not move: a transform here shifts drag and drop
-   targets while the list is being reordered. */
-.bot-branch-chats,
-.bot-chat-list {
-  animation: bot-tree-reveal var(--motion-panel) ease;
-}
-@keyframes bot-tree-reveal {
-  from {
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .bot-branch-chats,
-  .bot-chat-list {
-    animation: none;
-  }
-}
 .bot-branch-heading,
 .bot-branch-actions {
   display: flex;
@@ -418,7 +402,7 @@
 }
 .bot-branch-heading {
   min-height: var(--control-h);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   gap: 2px;
 }
 .bot-branch-toggle {
@@ -437,7 +421,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .bot-branch-toggle svg {
   flex-shrink: 0;
@@ -448,7 +432,7 @@
 .bot-branch-toggle .bot-choice-avatar {
   width: 24px;
   height: 28px;
-  border-radius: 5px;
+  border-radius: var(--radius-control);
 }
 /* The bot name gets the row. Its actions appear on hover, focus or an open menu; touch and
    compact widths keep them visible through the rule below. */
@@ -539,9 +523,9 @@
   justify-content: center;
   gap: 5px;
   padding: 7px 8px;
-  font-size: 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  font-size: var(--font-small);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--muted);
 }
@@ -558,6 +542,6 @@
   white-space: nowrap;
   margin-left: 6px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-small);
   font-weight: normal;
 }

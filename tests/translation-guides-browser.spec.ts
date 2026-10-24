@@ -51,7 +51,9 @@ for (const width of [1440, 412]) {
     await page.getByRole('button', { name: '표기 추가', exact: true }).click();
     await page.getByLabel('표기 1 원문', { exact: true }).fill('Rose');
     await page.getByLabel('표기 1 번역', { exact: true }).fill('로즈');
-    await page.getByLabel('표기 1 조건·설명', { exact: true }).fill('인물 이름일 때만. 꽃은 장미.');
+    await page
+      .getByLabel('표기 1 조건과 설명', { exact: true })
+      .fill('인물 이름일 때만. 꽃은 장미.');
     await page.getByText('번역에 전달할 지침 미리보기', { exact: true }).click();
     const preview = page.locator('.translation-guide-preview pre');
     await expect(preview).toContainText('{{char}}');

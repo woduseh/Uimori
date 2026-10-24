@@ -22,10 +22,10 @@
   border: 0;
   background: transparent;
   text-align: left;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 7px 9px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .activity-nav-heading strong {
   font-weight: 650;
@@ -51,11 +51,11 @@
   width: calc(100% - 18px);
   margin: 7px 9px 1px;
   padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .activity-nav-more:hover {
   background: var(--nav-item-selected);
@@ -63,7 +63,7 @@
 }
 .activity-nav-entry {
   min-width: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
 }
 .activity-nav-link {
   background: transparent;
@@ -76,7 +76,7 @@
   gap: 9px;
   padding: 9px;
   text-align: left;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
 }
 .activity-nav-link:hover,
 .activity-nav-link.selected {
@@ -87,10 +87,10 @@
   color: var(--muted);
 }
 .activity-nav-link > .activity-nav-warning {
-  color: var(--danger, #c87863);
+  color: var(--error);
 }
 .activity-nav-link > .activity-nav-success {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .activity-nav-copy {
   flex: 1;
@@ -105,13 +105,13 @@
   text-overflow: ellipsis;
 }
 .activity-nav-copy strong {
-  font-size: 13px;
+  font-size: var(--font-body);
   font-weight: 600;
 }
 .activity-nav-copy small,
 .activity-nav-link time {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-small);
 }
 .activity-nav-link time {
   flex: none;
@@ -125,8 +125,8 @@
   border: 0;
   background: transparent;
   color: var(--muted);
-  border-radius: 6px;
-  font-size: 11px;
+  border-radius: var(--radius-control);
+  font-size: var(--font-small);
 }
 .activity-nav-confirm:hover {
   color: var(--text);
@@ -134,16 +134,16 @@
 }
 .activity-nav-empty {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   margin: 5px 9px 8px;
 }
 .activity-nav-error {
   padding: 8px;
-  font-size: 12px;
-  color: var(--danger, #c87863);
+  font-size: var(--font-small);
+  color: var(--error);
 }
 .activity-nav-error button {
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .bot-navigation-modes {
   display: flex;
@@ -157,7 +157,7 @@
   display: grid;
   place-items: center;
   min-height: 35px;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -179,9 +179,9 @@
   min-width: 15px;
   height: 15px;
   line-height: 15px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: white;
-  font-size: 10px;
+  font-size: var(--font-small);
   text-align: center;
 }

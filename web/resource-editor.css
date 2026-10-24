@@ -14,13 +14,13 @@
   flex-wrap: wrap;
   gap: 0.35rem 0.7rem;
   align-items: center;
-  font-size: 0.85rem;
+  font-size: var(--font-body);
 }
 .resource-editor-status small {
   color: var(--muted);
 }
 .resource-editor-status [role="alert"] {
-  color: var(--error, #c54545);
+  color: var(--error);
 }
 .resource-editor-actions {
   display: flex;

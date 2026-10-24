@@ -56,7 +56,7 @@
 .manuscript-search-filter-label,
 .manuscript-search-kinds legend {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
   min-height: 22px;
 }
 .manuscript-search-scope > select {
@@ -64,10 +64,10 @@
   min-width: 0;
   min-height: var(--control-h);
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   padding: 10px 32px 10px 12px;
-  font-size: 14px;
+  font-size: var(--font-body);
   color: var(--text);
 }
 .manuscript-search-kinds {
@@ -93,8 +93,8 @@
   gap: 6px;
   min-height: var(--control-h);
   padding: 7px 11px;
-  border-radius: 18px;
-  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  border: var(--hairline) solid var(--line);
   background: transparent;
   color: var(--muted);
   width: auto;
@@ -108,13 +108,13 @@
   visibility: hidden;
 }
 .manuscript-search .manuscript-search-kind[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
   color: var(--text);
 }
 .manuscript-search-titles > summary {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .manuscript-search-title-results,
 .manuscript-search-results {
@@ -152,7 +152,7 @@
 }
 .manuscript-search-result-heading {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .manuscript-search-results {
   gap: 12px;
@@ -162,8 +162,8 @@
 }
 .manuscript-search-results article {
   padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--surface);
   min-width: 0;
 }
@@ -178,15 +178,15 @@
 .manuscript-search-results article > div + div {
   margin-top: 16px;
   padding-top: 16px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .manuscript-search-results mark {
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft);
   color: inherit;
 }
 .manuscript-search > p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 @media (max-width: 520px) {
   .manuscript-search-dialog > .dialog-body {

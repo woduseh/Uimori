@@ -18,9 +18,9 @@
 .recovery-settings-brand > svg {
   box-sizing: content-box;
   padding: 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
   flex: none;
 }
 .recovery-settings-brand h3,
@@ -31,14 +31,14 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.65;
   padding: 16px;
   background: var(--surface-raised);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .recovery-settings-disclosure {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-block: 10px;
 }
 .recovery-settings-disclosure > summary {
@@ -55,7 +55,7 @@
 }
 .codex-connection-steps > li {
   padding: 16px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   counter-increment: connection-step;
 }
 .codex-connection-steps > li:last-child {
@@ -106,7 +106,7 @@
   flex: none;
 }
 .archive-restore-details {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 10px;
 }
 .archive-restore-details > summary {
@@ -148,7 +148,7 @@
   min-width: 0;
 }
 .settings-service + .settings-service {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .settings-service-row {
   display: flex;
@@ -166,7 +166,7 @@
 }
 .settings-service p {
   margin-top: 6px;
-  font-size: 0.875rem;
+  font-size: var(--font-body);
 }
 .settings-service small {
   display: block;

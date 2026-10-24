@@ -50,7 +50,7 @@ export function thinkingWireField(protocol: ProviderProtocol): string | undefine
     case 'vercel-chat-v1':
       return 'reasoning_effort';
     case 'deepseek-chat-v1':
-      return 'thinking.type · reasoning_effort';
+      return 'thinking.type, reasoning_effort';
     case 'anthropic-messages-v1':
       return 'output_config.effort';
     case 'vertex-gemini-v1':

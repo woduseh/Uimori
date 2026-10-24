@@ -59,3 +59,31 @@ Public License 2.0 (MPL-2.0)**, without modifying that package's source. Its
 license and notices remain in the installed package. HTTP delivery uses the runtime's standard fetch; Uimori no longer directly
 depends on an IP-address parsing library for this feature. These dependencies do
 not change Uimori's own license or the rights to user-created manuscripts.
+
+## Radix Colors
+
+- 출처: [Radix Colors](https://github.com/radix-ui/colors/tree/dbdb85470547c7d34b9001f48fddb08ded335979), revision `dbdb85470547c7d34b9001f48fddb08ded335979`.
+- 포함: 선택한 밝은색과 어두운색 sRGB 척도의 원래 값을 `core/radix-colors.ts`에 보존했어요. 팔레트별 용도 연결은 Uimori 코드에서 관리해요.
+- 적용 조건: MIT. 아래 원저작권과 허가 고지를 보존해요.
+
+```text
+MIT License
+
+Copyright (c) 2021-2022 Modulz
+Copyright (c) 2022-Present WorkOS
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

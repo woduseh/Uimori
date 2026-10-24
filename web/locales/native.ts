@@ -7,9 +7,9 @@ export const messages = {
     zh: '{count, number}个项目',
   },
   'native.openVariablesAndToggles': {
-    ko: '변수·토글 열기',
+    ko: '변수와 토글 열기',
     en: 'Open variables and toggles',
-    ja: '変数・トグルを開く',
+    ja: '変数とトグルを開く',
     zh: '打开变量与开关',
   },
   'native.noToggles': {
@@ -31,9 +31,9 @@ export const messages = {
     zh: '原始 JSON',
   },
   'native.backgroundHtmlCss': {
-    ko: '배경 HTML·CSS',
+    ko: '배경 HTML과 CSS',
     en: 'Background HTML / CSS',
-    ja: '背景HTML・CSS',
+    ja: '背景HTMLとCSS',
     zh: '背景 HTML / CSS',
   },
   'native.imageInstructions': {
@@ -43,9 +43,9 @@ export const messages = {
     zh: '图片指令',
   },
   'native.initialVariablesAndToggles': {
-    ko: '변수 초기값·토글',
+    ko: '변수와 토글 초기값',
     en: 'Initial variables and toggles',
-    ja: '変数の初期値・トグル',
+    ja: '変数の初期値、トグル',
     zh: '变量初始值与开关',
   },
   'native.newChatDefaultVariables': {
@@ -175,10 +175,10 @@ export const messages = {
     zh: '添加Risu图片',
   },
   'native.text_38094bc6f1': {
-    ko: 'PNG · JPEG · WebP · AVIF · GIF, 최대 64MiB · 자동 WebP 변환',
-    en: 'PNG · JPEG · WebP · AVIF · GIF, up to 64MiB · automatic WebP conversion',
-    ja: 'PNG · JPEG · WebP · AVIF · GIF、最大64MiB · WebPに自動変換',
-    zh: 'PNG · JPEG · WebP · AVIF · GIF，最大64MiB · 自动转换为WebP',
+    ko: 'PNG, JPEG, WebP, AVIF, GIF, 최대 64MiB, 자동 WebP 변환',
+    en: 'PNG, JPEG, WebP, AVIF, GIF, up to 64MiB, automatic WebP conversion',
+    ja: 'PNG、JPEG、WebP、AVIF、GIF、最大64MiB、WebPに自動変換',
+    zh: 'PNG，JPEG，WebP，AVIF，GIF，最大64MiB，自动转换为WebP',
   },
   'native.text_d504143bb7': {
     ko: '이미지를 업로드하고 있어요. 업로드가 끝난 뒤 저장해 주세요.',
@@ -259,9 +259,9 @@ export const messages = {
     zh: '要从资料中移除此资源吗？',
   },
   'native.text_07afd47e83': {
-    ko: '본문·로어·HTML·스크립트에서 이 에셋을 부르는 이름은 그대로 남아요. 제거하면 해당 이미지가 표시되지 않을 수 있어요.',
+    ko: '본문, 로어, HTML, 스크립트에서 이 에셋을 부르는 이름은 그대로 남아요. 제거하면 해당 이미지가 표시되지 않을 수 있어요.',
     en: 'References in text, lore, HTML and scripts remain. The image may stop appearing.',
-    ja: '本文・ロア・HTML・スクリプト内の参照名は残ります。画像が表示されなくなる場合があります。',
+    ja: '本文、ロア、HTML、スクリプト内の参照名は残ります。画像が表示されなくなる場合があります。',
     zh: '正文、设定、HTML和脚本中的引用名称会保留，图片可能无法显示。',
   },
   'native.text_19b2d19bc1': {
@@ -361,9 +361,9 @@ export const messages = {
     zh: '查找设定',
   },
   'native.text_ad125c2109': {
-    ko: '이름·본문으로 찾기',
+    ko: '이름이나 본문으로 찾기',
     en: 'Search names and text',
-    ja: '名前・本文で検索',
+    ja: '名前、本文で検索',
     zh: '搜索名称和正文',
   },
   'native.text_5082d1ae8f': {
@@ -463,10 +463,10 @@ export const messages = {
     zh: '不包含',
   },
   'native.text_aaa63e0e3b': {
-    ko: '필요할 때 · 관련성 판단',
-    en: 'When relevant',
-    ja: '必要なとき · 関連性を判断',
-    zh: '相关时包含',
+    ko: '필요할 때 (관련성 판단)',
+    en: 'When needed (relevance check)',
+    ja: '必要なとき（関連性を判断）',
+    zh: '需要时（判断相关性）',
   },
   'native.text_aa8bd1a3a2': {
     ko: '폴더',
@@ -487,10 +487,10 @@ export const messages = {
     zh: '未分类',
   },
   'native.text_11a333c615': {
-    ko: '원본 폴더 · 찾을 수 없음',
-    en: 'Original folder · not found',
-    ja: '元のフォルダー · 見つかりません',
-    zh: '原文件夹 · 未找到',
+    ko: '원본 폴더 (찾을 수 없음)',
+    en: 'Original folder (not found)',
+    ja: '元フォルダー（見つかりません）',
+    zh: '原始文件夹（未找到）',
   },
   'native.text_fe6df44913': {
     ko: '폴더로 로어를 묶어 관리해요. 포함 방식은 각 로어에서 설정해요.',
@@ -523,10 +523,10 @@ export const messages = {
     zh: '启用设定',
   },
   'native.text_bf1eea5b75': {
-    ko: '조건·배치·원문 설정',
-    en: 'Conditions, placement and source',
-    ja: '条件・配置・ソース設定',
-    zh: '条件、位置与源码设置',
+    ko: '조건, 배치, 원문 설정',
+    en: 'Conditions, placement and source settings',
+    ja: '条件、配置、ソース設定',
+    zh: '条件、位置与源文设置',
   },
   'native.text_1922bfdd27': {
     ko: '키워드',
@@ -673,9 +673,9 @@ export const messages = {
     zh: '默认选项',
   },
   'native.text_0a13d19d88': {
-    ko: '변수·토글',
+    ko: '변수와 토글',
     en: 'Variables and toggles',
-    ja: '変数・トグル',
+    ja: '変数とトグル',
     zh: '变量与开关',
   },
   'native.text_fc7e4f6228': {
@@ -787,10 +787,10 @@ export const messages = {
     zh: '所有角色',
   },
   'native.text_d7e4bc7b33': {
-    ko: '본문 · Risu CBS',
-    en: 'Text · Risu CBS',
-    ja: '本文 · Risu CBS',
-    zh: '正文 · Risu CBS',
+    ko: '본문 (Risu CBS)',
+    en: 'Text (Risu CBS)',
+    ja: '本文（Risu CBS）',
+    zh: '正文（Risu CBS）',
   },
   'native.text_d955c69f94': {
     ko: '작가 노트 기본값',
@@ -847,9 +847,9 @@ export const messages = {
     zh: '对话结束位置',
   },
   'native.text_ed60b1eb22': {
-    ko: '이 블록은 실행하지 않아요. 기억은 채팅의 기억·로어 설정에서 관리해요.',
+    ko: '이 블록은 실행하지 않아요. 기억은 채팅의 기억과 메모 설정에서 관리해요.',
     en: 'This block does not run. Manage memory in chat memory and lore settings.',
-    ja: 'このブロックは実行されません。記憶はチャットの記憶・ロア設定で管理します。',
+    ja: 'このブロックは実行されません。記憶はチャットの記憶とメモ設定で管理します。',
     zh: '此块不会执行，记忆请在聊天的记忆与设定设置中管理。',
   },
   'native.text_29efb69b57': {
@@ -895,9 +895,9 @@ export const messages = {
     zh: '预设默认选项',
   },
   'native.text_b5607fffbc': {
-    ko: '정의된 토글이 없어요. 변수·토글에서 추가할 수 있어요.',
+    ko: '정의된 토글이 없어요. 변수와 토글에서 추가할 수 있어요.',
     en: 'No toggles defined. Add them in Variables and toggles.',
-    ja: 'トグルがありません。変数・トグルで追加できます。',
+    ja: 'トグルがありません。変数とトグルで追加できます。',
     zh: '尚未定义开关，可在变量与开关中添加。',
   },
   'native.text_0ae9cde486': {
@@ -925,10 +925,10 @@ export const messages = {
     zh: '修改显示',
   },
   'native.text_57eaefa3f9': {
-    ko: '번역문 수정 · 실행 미지원',
-    en: 'Edit translation · unsupported',
-    ja: '翻訳文を編集 · 実行未対応',
-    zh: '修改译文 · 不支持执行',
+    ko: '번역문 수정 (실행 미지원)',
+    en: 'Translation edit (execution unsupported)',
+    ja: '訳文の修正（実行未対応）',
+    zh: '修改译文（不支持执行）',
   },
   'native.text_fae2014b52': {
     ko: '비활성',
@@ -945,7 +945,7 @@ export const messages = {
   'native.text_0c871722d6': {
     ko: '대소문자 무시',
     en: 'Ignore case',
-    ja: '大文字・小文字を区別しない',
+    ja: '大文字と小文字を区別しない',
     zh: '忽略大小写',
   },
   'native.text_c272face5d': {
@@ -1051,10 +1051,10 @@ export const messages = {
     zh: '未指定',
   },
   'native.text_6b5f44ef65': {
-    ko: '찾을 표현식 · IN',
-    en: 'Find pattern · IN',
-    ja: '検索式 · IN',
-    zh: '查找表达式 · IN',
+    ko: '찾을 표현식 (IN)',
+    en: 'Find expression (IN)',
+    ja: '検索する式（IN）',
+    zh: '查找表达式（IN）',
   },
   'native.text_605efd02b3': {
     ko: '정규식 찾을 표현식',
@@ -1063,10 +1063,10 @@ export const messages = {
     zh: '正则查找表达式',
   },
   'native.text_dce02ee0f0': {
-    ko: '바꿀 내용 · OUT',
-    en: 'Replacement · OUT',
-    ja: '置換内容 · OUT',
-    zh: '替换内容 · OUT',
+    ko: '바꿀 내용 (OUT)',
+    en: 'Replacement (OUT)',
+    ja: '置換内容（OUT）',
+    zh: '替换内容（OUT）',
   },
   'native.text_0ed674a38e': {
     ko: '정규식 바꿀 내용',
@@ -1093,10 +1093,10 @@ export const messages = {
     zh: '高级标志',
   },
   'native.text_e5b51f4933': {
-    ko: '실행 우선순위 · 큰 값부터',
-    en: 'Priority · highest first',
-    ja: '実行優先度 · 大きい値から',
-    zh: '执行优先级 · 从大到小',
+    ko: '실행 우선순위 (큰 값부터)',
+    en: 'Execution priority (highest first)',
+    ja: '実行優先度（大きい順）',
+    zh: '执行优先级（从大到小）',
   },
   'native.text_18fec02cf1': {
     ko: '정규식 실행 우선순위',
@@ -1213,9 +1213,9 @@ export const messages = {
     zh: '请检查无效的开关或变量值。',
   },
   'native.text_5d82dab127': {
-    ko: '변수·토글 원문을 폼에 반영해 주세요.',
+    ko: '변수와 토글 원문을 폼에 반영해 주세요.',
     en: 'Apply variable and toggle source to the form.',
-    ja: '変数・トグルのソースをフォームに反映してください。',
+    ja: '変数とトグルのソースをフォームに反映してください。',
     zh: '请将变量和开关源码应用到表单。',
   },
   'native.text_0286f638be': {
@@ -1539,7 +1539,7 @@ export const messages = {
   'native.text_81ca995da3': {
     ko: '이름, 키, 설명 검색',
     en: 'Search names, keys and descriptions',
-    ja: '名前・キー・説明を検索',
+    ja: '名前、キー、説明を検索',
     zh: '搜索名称、键和描述',
   },
   'native.text_3cae8d67d0': {
@@ -1663,15 +1663,15 @@ export const messages = {
     zh: '请检查JSON。',
   },
   'native.text_7895dc3794': {
-    ko: 'Lua · 트리거 편집기',
+    ko: 'Lua와 트리거 편집기',
     en: 'Lua and trigger editor',
-    ja: 'Lua・トリガー編集',
+    ja: 'Luaとトリガーの編集',
     zh: 'Lua与触发器编辑器',
   },
   'native.text_7ff77a77f6': {
-    ko: 'Lua · 트리거',
+    ko: 'Lua와 트리거',
     en: 'Lua and triggers',
-    ja: 'Lua・トリガー',
+    ja: 'Luaとトリガー',
     zh: 'Lua与触发器',
   },
   'native.text_33506f6f0f': {
@@ -1699,16 +1699,16 @@ export const messages = {
     zh: 'Lua源码',
   },
   'native.text_a21e47d201': {
-    ko: '실행 조건과 순서 · 원문 편집',
-    en: 'Conditions and order · edit source',
-    ja: '実行条件と順序 · ソース編集',
-    zh: '执行条件和顺序 · 编辑源码',
+    ko: '실행 조건과 순서 (원문 편집)',
+    en: 'Conditions and order (source editor)',
+    ja: '実行条件と順序（ソース編集）',
+    zh: '执行条件与顺序（源文编辑）',
   },
   'native.text_8898368573': {
-    ko: '등록된 Lua · 트리거가 없어요.',
+    ko: '등록된 Lua나 트리거가 없어요.',
     en: 'No Lua or triggers registered.',
-    ja: 'Lua・トリガーは登録されていません。',
-    zh: '尚无已注册的Lua或触发器。',
+    ja: 'Luaやトリガーは登録されていません。',
+    zh: '尚未注册Lua或触发器。',
   },
   'native.text_139e9c1c9b': {
     ko: '콘텐츠 원문을 확인해 주세요.',
@@ -1903,22 +1903,22 @@ export const messages = {
     zh: '指令',
   },
   'native.text_83fca869e0': {
-    ko: '글로벌 노트 · 예시 대화',
-    en: 'Global note · example dialogue',
-    ja: 'グローバルノート · 会話例',
-    zh: '全局笔记 · 示例对话',
+    ko: '글로벌 노트와 예시 대화',
+    en: 'Global note, example dialogue',
+    ja: 'グローバルノート、会話例',
+    zh: '全局笔记，示例对话',
   },
   'native.text_dc0ebb4fd3': {
-    ko: '기본 변수·토글',
+    ko: '기본 변수와 토글',
     en: 'Default variables and toggles',
-    ja: '既定の変数・トグル',
+    ja: '既定の変数とトグル',
     zh: '默认变量与开关',
   },
   'native.text_bdf1722abc': {
-    ko: '초기값 · 토글 정의',
-    en: 'Initial values · toggle definitions',
-    ja: '初期値 · トグル定義',
-    zh: '初始值 · 开关定义',
+    ko: '초기값과 토글 정의',
+    en: 'Initial values, toggle definitions',
+    ja: '初期値、トグル定義',
+    zh: '初始值，开关定义',
   },
   'native.text_a61d568e9d': {
     ko: '표시',
@@ -1939,10 +1939,10 @@ export const messages = {
     zh: '脚本',
   },
   'native.text_f31813202f': {
-    ko: 'Lua · 트리거 · 정규식',
-    en: 'Lua · triggers · regex',
-    ja: 'Lua · トリガー · 正規表現',
-    zh: 'Lua · 触发器 · 正则表达式',
+    ko: 'Lua, 트리거, 정규식',
+    en: 'Lua, triggers and regex',
+    ja: 'Lua、トリガー、正規表現',
+    zh: 'Lua、触发器与正则表达式',
   },
   'native.text_ae90c98d27': {
     ko: '연결 모듈',
@@ -1981,9 +1981,9 @@ export const messages = {
     zh: '开关定义',
   },
   'native.text_98a6884c74': {
-    ko: '배경 HTML·CSS와 이미지 설정',
-    en: 'Background HTML, CSS and images',
-    ja: '背景HTML・CSSと画像設定',
+    ko: '배경 HTML, CSS, 이미지 설정',
+    en: 'Background HTML, CSS and image settings',
+    ja: '背景HTML、CSS、画像の設定',
     zh: '背景HTML、CSS与图片设置',
   },
   'native.text_50262c6215': {
@@ -2011,16 +2011,16 @@ export const messages = {
     zh: '找到了图片标签，但未找到可与其他指令分离的图片指令区间。',
   },
   'native.text_baf852faae': {
-    ko: '· 직접 확인이 필요한 후보',
-    en: '· candidate requiring review',
-    ja: '· 確認が必要な候補',
-    zh: '· 需要检查的候选项',
+    ko: ', 직접 확인이 필요한 후보',
+    en: ', candidate requiring review',
+    ja: '、確認が必要な候補',
+    zh: '，需要检查的候选项',
   },
   'native.text_7069bd6597': {
-    ko: '· 구분된 이미지 지시',
-    en: '· separate image instructions',
-    ja: '· 分離された画像指示',
-    zh: '· 已分离的图片指令',
+    ko: ', 구분된 이미지 지시',
+    en: ', separate image instructions',
+    ja: '、分離された画像指示',
+    zh: '，已分离的图片指令',
   },
   'native.text_01aca5a6d5': {
     ko: '이 범위를 이미지 선택에 사용',
@@ -2161,10 +2161,10 @@ export const messages = {
     zh: '{count, number}条设定',
   },
   'native.loreHeading': {
-    ko: '로어북 · {count, number}',
-    en: 'Lorebook · {count, number}',
-    ja: 'ロアブック · {count, number}',
-    zh: '设定集 · {count, number}',
+    ko: '로어북: {count, number}',
+    en: 'Lorebook: {count, number}',
+    ja: 'ロアブック：{count, number}',
+    zh: '设定集：{count, number}',
   },
   'native.expandLore': {
     ko: '{title} 펼치기',
@@ -2179,10 +2179,10 @@ export const messages = {
     zh: '折叠{title}',
   },
   'native.inputPreserved': {
-    ko: '{error} · 입력은 유지했어요.',
-    en: '{error} · Your input is preserved.',
-    ja: '{error} · 入力は保持されています。',
-    zh: '{error} · 输入已保留。',
+    ko: '{error}, 입력은 유지했어요.',
+    en: '{error}, Your input is preserved.',
+    ja: '{error}、入力は保持されています。',
+    zh: '{error}，输入已保留。',
   },
   'native.blockName': {
     ko: '{number, number}번 블록 이름',
@@ -2215,22 +2215,22 @@ export const messages = {
     zh: '第{number, number}块类型',
   },
   'native.wrapperLabel': {
-    ko: '감싸는 문구 · {slot}',
-    en: 'Wrapper · {slot}',
-    ja: '囲む文言 · {slot}',
-    zh: '包装文字 · {slot}',
+    ko: '감싸는 문구: {slot}',
+    en: 'Wrapper: {slot}',
+    ja: '囲む文言、{slot}',
+    zh: '包装文字，{slot}',
   },
   'native.blockTypeLabel': {
-    ko: '블록 종류 · {type}',
-    en: 'Block type · {type}',
-    ja: 'ブロックの種類 · {type}',
-    zh: '块类型 · {type}',
+    ko: '블록 종류: {type}',
+    en: 'Block type: {type}',
+    ja: 'ブロックの種類：{type}',
+    zh: '块类型，{type}',
   },
   'native.unsupportedType': {
-    ko: '{type} · 실행 미지원',
-    en: '{type} · unsupported',
-    ja: '{type} · 実行未対応',
-    zh: '{type} · 不支持执行',
+    ko: '{type}, 실행 미지원',
+    en: '{type}, unsupported',
+    ja: '{type}、実行未対応',
+    zh: '{type}，不支持执行',
   },
   'native.regexNumber': {
     ko: '정규식 {number, number}',
@@ -2311,10 +2311,10 @@ export const messages = {
     zh: '删除变量{key}',
   },
   'native.groupCounts': {
-    ko: '{settings, number}개 설정 · {dividers, number}개 구분선',
-    en: '{settings, plural, one {# setting} other {# settings}} · {dividers, plural, one {# divider} other {# dividers}}',
-    ja: '設定{settings, number}件 · 区切り線{dividers, number}本',
-    zh: '{settings, number}项设置 · {dividers, number}条分隔线',
+    ko: '{settings, number}개 설정, {dividers, number}개 구분선',
+    en: '{settings, plural, one {# setting} other {# settings}}, {dividers, plural, one {# divider} other {# dividers}}',
+    ja: '設定{settings, number}件、区切り線{dividers, number}本',
+    zh: '{settings, number}项设置，{dividers, number}条分隔线',
   },
   'native.deleteGroupDescription': {
     ko: '‘{name}’ 그룹과 안의 모든 항목을 삭제해요. 항목을 남기려면 그룹 해제를 사용해 주세요.',
@@ -2323,10 +2323,10 @@ export const messages = {
     zh: '删除“{name}”分组及所有项目。如需保留项目，请取消分组。',
   },
   'native.toggleCounts': {
-    ko: '{groups, number}개 그룹 · {settings, number}개 설정{unknown, plural, =0 {} other { · 원문 항목 #개 보존}}',
-    en: '{groups, plural, one {# group} other {# groups}} · {settings, plural, one {# setting} other {# settings}}{unknown, plural, =0 {} one { · # source item preserved} other { · # source items preserved}}',
-    ja: 'グループ{groups, number}件 · 設定{settings, number}件{unknown, plural, =0 {} other { · ソース項目#件を保持}}',
-    zh: '{groups, number}个分组 · {settings, number}项设置{unknown, plural, =0 {} other { · 已保留#个源码项目}}',
+    ko: '{groups, number}개 그룹, {settings, number}개 설정{unknown, plural, =0 {} other {, 원문 항목 #개 보존}}',
+    en: '{groups, plural, one {# group} other {# groups}}, {settings, plural, one {# setting} other {# settings}}{unknown, plural, =0 {} one {, # source item preserved} other {, # source items preserved}}',
+    ja: 'グループ{groups, number}件、設定{settings, number}件{unknown, plural, =0 {} other {、ソース項目#件を保持}}',
+    zh: '{groups, number}个分组，{settings, number}项设置{unknown, plural, =0 {} other {，已保留#个源码项目}}',
   },
   'native.triggerNumber': {
     ko: '트리거 {number, number}',
@@ -2341,10 +2341,10 @@ export const messages = {
     zh: 'Lua源码{number, number}',
   },
   'native.resourceCounts': {
-    ko: '로어 {lore, number}개 · 정규식 {regex, number}개 · 트리거 {triggers, number}개',
-    en: 'Lore: {lore, number} · Regex: {regex, number} · Triggers: {triggers, number}',
-    ja: 'ロア{lore, number}件 · 正規表現{regex, number}件 · トリガー{triggers, number}件',
-    zh: '{lore, number}条设定 · {regex, number}条正则表达式 · {triggers, number}个触发器',
+    ko: '로어 {lore, number}개, 정규식 {regex, number}개, 트리거 {triggers, number}개',
+    en: 'Lore: {lore, number}, Regex: {regex, number}, Triggers: {triggers, number}',
+    ja: 'ロア{lore, number}件、正規表現{regex, number}件、トリガー{triggers, number}件',
+    zh: '{lore, number}条设定，{regex, number}条正则表达式，{triggers, number}个触发器',
   },
   'native.alternateMessage': {
     ko: '대체 메시지 {number, number}',
@@ -2353,9 +2353,9 @@ export const messages = {
     zh: '备选消息{number, number}',
   },
   'native.handoffSummary': {
-    ko: '이미지 선택·삽입을 Uimori에 맡기기 ({count, number}개 범위)',
+    ko: '이미지 선택과 삽입을 Uimori에 맡기기 ({count, number}개 범위)',
     en: 'Let Uimori select and insert images ({count, plural, one {# range} other {# ranges}})',
-    ja: '画像の選択・挿入をUimoriに任せる（{count, number}範囲）',
+    ja: '画像の選択と挿入をUimoriに任せる（{count, number}範囲）',
     zh: '由Uimori选择和插入图片（{count, number}个区间）',
   },
   'native.handoffDescription': {

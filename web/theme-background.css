@@ -38,15 +38,15 @@ html[data-theme="dark"] .theme-background-preview::after {
 }
 .reader-stage:has(> .theme-background) .story-context {
   background: var(--panel);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 8px;
 }
 .theme-background-preview {
   position: relative;
   overflow: hidden;
   height: 120px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--bg);
 }
 .theme-background-controls {
@@ -95,7 +95,7 @@ html[data-theme="dark"] .theme-background-preview::after {
 .reader-stage:has(> .theme-background)
   [data-uimori-part="scene"]:not(:has([data-uimori-body-scroll])) {
   background: var(--panel);
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
   padding: 16px;
 }
 
@@ -110,8 +110,8 @@ fieldset.theme-background-controls {
 .theme-background-controls input[type="file"]::file-selector-button {
   padding: 7px 10px;
   margin-right: 10px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   background: var(--surface);
   color: var(--text);
   font: inherit;

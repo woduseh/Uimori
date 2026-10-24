@@ -14,7 +14,7 @@
   min-height: var(--header-h);
   margin: 0 -24px 16px;
   padding: 6px 24px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   background: var(--bg);
   position: sticky;
   top: 0;
@@ -52,7 +52,7 @@
   min-height: 0;
 }
 .library-heading h1 {
-  font-size: 24px;
+  font-size: var(--font-heading);
   letter-spacing: -0.04em;
   margin: 0;
   min-width: 0;
@@ -63,7 +63,7 @@
   min-width: 0;
 }
 .library-heading p {
-  font-size: 14px;
+  font-size: var(--font-body);
   margin: 0;
 }
 .library-heading > button {
@@ -89,7 +89,7 @@
   gap: 8px;
 }
 .library-create {
-  font-size: 14px;
+  font-size: var(--font-body);
   flex: none;
   margin-inline-start: auto;
   white-space: nowrap;
@@ -98,7 +98,7 @@
 .profile-tabs {
   display: flex;
   gap: 5px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
   padding-bottom: 12px;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -107,11 +107,11 @@
 .profile-tabs > button {
   flex-shrink: 0;
   white-space: nowrap;
-  border: 1px solid transparent;
+  border: var(--hairline) solid transparent;
   background: transparent;
   color: var(--muted);
   padding: 9px 13px;
-  font-size: 13px;
+  font-size: var(--font-body);
   min-height: var(--control-h);
 }
 .library-tabs > button[aria-selected="true"],
@@ -133,12 +133,12 @@
   gap: 8px;
   padding: 8px 4px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: var(--hairline) solid transparent;
   border-radius: 0;
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .library-page .library-tabs > button[aria-selected="true"] {
-  color: var(--accent);
+  color: var(--accent-text);
   background: transparent;
   border-bottom-color: var(--accent);
 }
@@ -155,20 +155,20 @@
   align-items: flex-start;
   min-width: 0;
   padding: 20px 18px 18px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-panel);
   background: var(--surface-raised);
   gap: 12px;
 }
 .library-card h2 {
-  font-size: 17px;
+  font-size: var(--font-heading);
   line-height: 1.45;
   letter-spacing: -0.025em;
   margin: 2px 0 0;
   overflow-wrap: anywhere;
 }
 .library-card > p {
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.7;
   color: var(--muted);
   margin: 0;
@@ -180,12 +180,12 @@
   min-height: 66px;
 }
 .library-card > small {
-  font-size: 11px;
+  font-size: var(--font-small);
 }
 .library-card > button {
   width: 100%;
   margin-top: auto;
-  font-size: 12px;
+  font-size: var(--font-small);
   min-height: var(--control-h);
 }
 .library-empty {
@@ -194,11 +194,11 @@
   text-align: center;
 }
 .library-empty h2 {
-  font-size: 21px;
+  font-size: var(--font-heading);
   letter-spacing: -0.035em;
 }
 .library-empty p {
-  font-size: 14px;
+  font-size: var(--font-body);
   color: var(--muted);
   margin: 12px 0 22px;
 }
@@ -215,13 +215,13 @@
   margin: 0 0 22px;
 }
 .library-detail-heading h2 {
-  font-size: 21px;
+  font-size: var(--font-heading);
   overflow-wrap: anywhere;
   flex: 1;
   margin: 0;
 }
 .library-detail-heading button {
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .library-detail-actions {
   display: flex;
@@ -257,7 +257,7 @@
   margin-top: 0;
 }
 .library-detail .editor-fields label {
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .library-detail input,
 .library-detail textarea,
@@ -275,7 +275,7 @@
   min-width: 0;
 }
 .profile-intro {
-  font-size: 13px;
+  font-size: var(--font-body);
   margin-bottom: 16px;
 }
 .profile-tabs {
@@ -291,7 +291,7 @@
   margin-top: 0;
 }
 .profile-fields > p {
-  font-size: 12px;
+  font-size: var(--font-small);
   margin: 6px 0 0;
 }
 .profile-fields .control-grid {
@@ -299,20 +299,20 @@
   background: transparent;
 }
 .profile-fields .control-grid legend {
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .profile-savebar {
-  border-top: 1px solid var(--border);
+  border-top: var(--hairline) solid var(--border);
   padding: 18px 0 4px;
   margin-top: 24px;
 }
 .profile-savebar > button {
-  font-size: 12px;
+  font-size: var(--font-small);
   min-height: var(--control-h);
 }
 .profile-savebar > span {
   width: 100%;
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
 }
 @media (max-width: 600px) {
@@ -321,13 +321,13 @@
     margin-bottom: 12px;
   }
   .library-heading h1 {
-    font-size: 20px;
+    font-size: var(--font-heading);
   }
   .library-heading p {
-    font-size: 12px;
+    font-size: var(--font-small);
   }
   .library-heading > button:not(.ui-icon-button) {
-    font-size: 14px;
+    font-size: var(--font-body);
     padding: 9px 12px;
   }
   .library-tabs {
@@ -352,7 +352,7 @@
   .library-detail-heading h2 {
     width: 100%;
     flex-basis: 100%;
-    font-size: 20px;
+    font-size: var(--font-heading);
     order: 2;
   }
   .library-detail .editor-fields,
@@ -369,7 +369,7 @@
   }
   .profile-tabs > button {
     padding: 8px 9px;
-    font-size: 12px;
+    font-size: var(--font-small);
   }
   .profile-savebar {
     gap: 9px;
@@ -377,13 +377,13 @@
 }
 
 .library-detail .library-loading {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 20px;
   margin-top: 4px;
   gap: 10px;
 }
 .library-savebar {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 18px;
   gap: 12px;
 }
@@ -401,10 +401,10 @@
   margin: 0;
   padding: 8px 0;
   background: var(--bg);
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .library-content-editor > .library-detail-heading h2 {
-  font-size: 20px;
+  font-size: var(--font-heading);
 }
 .library-content-editor .library-detail-actions {
   flex-wrap: wrap;
@@ -494,7 +494,7 @@
 }
 .library-toolbar button,
 .library-toolbar select {
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .library-view-buttons {
   display: flex;
@@ -509,7 +509,7 @@
 .library-card-ratio {
   display: grid;
   gap: 6px;
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .library-ratio-buttons {
   display: grid;
@@ -522,7 +522,7 @@
 }
 .library-result-count {
   margin: 14px 0;
-  font-size: 12px;
+  font-size: var(--font-small);
   overflow-wrap: anywhere;
 }
 .library-list {
@@ -539,7 +539,7 @@
   padding: 12px 0;
   gap: 8px;
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   border-radius: 0;
   background: transparent;
 }
@@ -566,8 +566,8 @@
   gap: 10px;
   min-height: 64px;
   padding: 8px 8px 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-panel);
   background: var(--surface-raised);
   min-width: 0;
 }
@@ -575,7 +575,6 @@
 .library-list-item > .library-start-chat,
 .library-list-item > .library-item-menu {
   opacity: 0.45;
-  transition: opacity 0.12s;
 }
 .library-list-item:focus-within > .library-start-chat,
 .library-list-item:focus-within > .library-item-menu {
@@ -616,13 +615,13 @@
   min-width: 0;
 }
 .library-item-copy strong {
-  font-size: 15px;
+  font-size: var(--font-heading);
   overflow-wrap: anywhere;
   line-height: 1.45;
 }
 .library-item-copy > span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.65;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -635,7 +634,7 @@
 }
 .library-list-item .library-start-chat {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .library-select-check {
   flex-shrink: 0;
@@ -674,7 +673,7 @@
 }
 .library-portrait-card[data-drop-target="true"],
 .library-list-item[data-drop-target="true"] {
-  outline: 2px solid var(--accent);
+  outline: var(--hairline) solid var(--accent);
   outline-offset: 3px;
 }
 .library-portrait-card .library-open-content {
@@ -687,8 +686,8 @@
   width: 100%;
   height: auto;
   aspect-ratio: var(--library-card-aspect-ratio);
-  font-size: 48px;
-  border-radius: 8px;
+  font-size: var(--font-heading);
+  border-radius: var(--radius-control);
 }
 .library-portrait-card .library-item-copy {
   padding: 0 2px;
@@ -701,14 +700,14 @@
   top: 16px;
   right: 16px;
   background: var(--surface-raised);
-  border-radius: 9px;
+  border-radius: var(--radius-control);
 }
 .library-portrait-card > .library-select-check {
   position: absolute;
   top: 16px;
   left: 16px;
   padding: 0 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--surface-raised);
   z-index: 1;
 }
@@ -723,18 +722,18 @@
 }
 .library-preview-avatar {
   --content-avatar-size: 200px;
-  border-radius: 14px;
-  font-size: 28px;
+  border-radius: var(--radius-panel);
+  font-size: var(--font-heading);
 }
 .library-preview-counts {
-  font-size: 13px;
+  font-size: var(--font-body);
   margin: 0 0 8px;
 }
 .library-preview-heading > div {
   min-width: 0;
 }
 .library-preview-heading h2 {
-  font-size: 26px;
+  font-size: var(--font-heading);
   line-height: 1.4;
   margin: 6px 0 10px;
   overflow-wrap: anywhere;
@@ -745,7 +744,7 @@
 .library-preview-heading p {
   margin: 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.8;
   overflow-wrap: anywhere;
 }
@@ -762,15 +761,15 @@
   gap: 8px;
 }
 .library-preview > .muted {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.7;
 }
 .library-preview-body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.8;
-  font-size: 14px;
-  border-top: 1px solid var(--border);
+  font-size: var(--font-body);
+  border-top: var(--hairline) solid var(--border);
   padding-top: 24px;
   margin-top: 24px;
 }
@@ -781,8 +780,8 @@
   height: 42px;
   flex-shrink: 0;
   background: var(--accent-soft);
-  border-radius: 10px;
-  color: var(--accent);
+  border-radius: var(--radius-panel);
+  color: var(--accent-text);
 }
 .library-empty > button + button {
   margin-left: 8px;
@@ -807,7 +806,7 @@
     padding: 9px;
   }
   .library-item-copy strong {
-    font-size: 14px;
+    font-size: var(--font-body);
   }
   .library-preview-heading {
     gap: 16px;
@@ -815,13 +814,13 @@
   }
   .library-preview-avatar {
     --content-avatar-size: 86px;
-    font-size: 32px;
+    font-size: var(--font-heading);
   }
   .library-preview-heading h2 {
-    font-size: 21px;
+    font-size: var(--font-heading);
   }
   .library-preview-heading p {
-    font-size: 12px;
+    font-size: var(--font-small);
   }
   .library-use-actions > button {
     flex: 1 1 130px;
@@ -835,7 +834,7 @@
 
 .library-role-guide {
   margin: 12px 0;
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.7;
   color: var(--muted);
 }
@@ -852,7 +851,7 @@
   cursor: pointer;
   padding: 10px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   width: var(--control-h);
   min-height: var(--control-h);
 }
@@ -872,7 +871,7 @@
 }
 .library-list-options-body select,
 .library-list-options-body button {
-  font-size: 14px;
+  font-size: var(--font-body);
   min-height: var(--control-h);
 }
 .library-savebar {
@@ -881,7 +880,7 @@
 .library-savebar > span {
   flex-basis: 100%;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 @media (max-width: 760px) {
   .library-page {
@@ -934,7 +933,7 @@
     gap: 10px;
   }
   .library-page .library-search-field input {
-    font-size: 16px;
+    font-size: var(--font-heading);
     line-height: 1.5;
     padding-block: 8px;
   }
@@ -947,7 +946,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .library-page .library-item-copy strong {
-    font-size: 15px;
+    font-size: var(--font-heading);
   }
   .library-page .library-result-count {
     margin: 8px 0 0;
@@ -958,7 +957,7 @@
   .library-page .library-detail input,
   .library-page .library-detail textarea,
   .library-page .library-detail select {
-    font-size: 16px;
+    font-size: var(--font-heading);
   }
   .library-page .library-savebar > button {
     flex: 1 1 130px;
@@ -1016,7 +1015,7 @@
 }
 .library-folder-section h2,
 .library-section-title {
-  font-size: 15px;
+  font-size: var(--font-heading);
   margin: 16px 0 12px;
 }
 .library-folder-grid {
@@ -1038,14 +1037,14 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   padding: 8px;
   min-width: 0;
   background: var(--panel);
 }
 .library-folder-card[data-drop-target="true"] {
-  outline: 2px solid var(--accent);
+  outline: var(--hairline) solid var(--accent);
   outline-offset: 3px;
   background: var(--accent-soft);
 }
@@ -1091,15 +1090,15 @@
   gap: 8px;
   padding: 8px;
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
 }
 .library-page .library-bulk-toolbar > span {
   margin-right: auto;
 }
 .library-page [data-selected="true"] {
   border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  box-shadow: inset 0 0 0 var(--hairline) var(--accent);
 }
 .library-page .library-portrait-card[data-selecting="true"] {
   padding-top: 44px;
@@ -1130,7 +1129,7 @@
     width: var(--content-avatar-size);
     height: var(--content-avatar-size);
     aspect-ratio: auto;
-    font-size: 18px;
+    font-size: var(--font-heading);
   }
   .library-page .library-portrait-card[data-has-portrait="false"] .library-item-copy {
     padding: 0;

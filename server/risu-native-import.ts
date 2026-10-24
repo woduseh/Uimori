@@ -31,7 +31,7 @@ export function analyzeNativeRisuImport(
   const notes = string(card.creator_notes);
   const description =
     notes ||
-    (input.kind !== 'module' ? `Risu 캐릭터 카드에서 가져온 자료 · ${input.source.name}` : '');
+    (input.kind !== 'module' ? `Risu 캐릭터 카드에서 가져온 자료: ${input.source.name}` : '');
   if (description.length > 4000)
     findings.add(
       'creator-notes-truncated',
@@ -89,12 +89,12 @@ export function analyzeNativeRisuImport(
     findings.add(
       'source-file-not-retained',
       'info',
-      '카드·모듈 원문과 지원 이미지는 자료에 보존해요. 원본 파일 자체가 필요하면 직접 보관해 주세요.'
+      '카드와 모듈의 원문, 지원 이미지는 자료에 보존해요. 원본 파일 자체가 필요하면 직접 보관해 주세요.'
     );
   findings.add(
     'native-risu',
     'info',
-    '카드·모듈과 CBS·정규식·트리거 코드는 Risu 원문으로 보존해요. 본문·시작문·로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.'
+    '카드, 모듈, CBS, 정규식, 트리거 코드는 Risu 원문으로 보존해요. 본문, 시작문, 로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.'
   );
   if (
     nativeRisuTriggers(native).some(

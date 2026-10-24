@@ -281,7 +281,7 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
   await expect(
     panel.getByLabel('요청 완료 (자동 번역은 번역까지 완료 후)', { exact: true })
   ).toBeChecked();
-  await expect(panel.getByLabel('개별 번역 완료·실패', { exact: true })).not.toBeChecked();
+  await expect(panel.getByLabel('개별 번역 결과', { exact: true })).not.toBeChecked();
   const title = panel.getByLabel('채팅 제목 표시 (잠금 화면에도 표시될 수 있어요)', {
     exact: true,
   });
@@ -367,7 +367,7 @@ test('PWUI07 a worker notification focuses a semantic scene without reloading; a
   );
   const markedScene = page.locator(`[data-source-id="${next.detail.sources[1].id}"]`);
   await markedScene.getByRole('button', { name: '책갈피 추가', exact: true }).click();
-  await markedScene.getByRole('button', { name: '책갈피 추가됨 · 메모 편집', exact: true }).click();
+  await markedScene.getByRole('button', { name: '책갈피 추가됨, 메모 편집', exact: true }).click();
   const bookmarkEditor = page.getByRole('dialog', { name: '책갈피 편집', exact: true });
   await bookmarkEditor.getByLabel('책갈피 메모').fill('알림으로 이동해도 남아야 하는 메모');
   const bookmarkUrl = page.url();

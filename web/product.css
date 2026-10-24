@@ -1,8 +1,8 @@
 .workspace-tools {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding: 10px 0;
   margin: 20px 0 0;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .workspace-tools > summary {
   font-weight: 600;
@@ -45,8 +45,8 @@
 .control-grid {
   min-width: 0;
   padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
 }
 .settings-card {
   background: var(--panel);
@@ -69,7 +69,7 @@
 .control-grid legend {
   padding: 0 6px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .form-actions {
   display: flex;
@@ -87,13 +87,13 @@
 /* Destructive confirmations read as destructive. */
 .danger {
   color: var(--error);
-  border-color: var(--error);
+  border-color: var(--error-line);
   background: var(--error-bg);
 }
 .form-actions [role="status"] {
   margin-right: auto;
-  font-size: 12px;
-  color: var(--accent);
+  font-size: var(--font-small);
+  color: var(--accent-text);
 }
 .check {
   flex-direction: row;
@@ -106,15 +106,15 @@
 }
 .connection-notice {
   padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-control);
   background: var(--surface-raised);
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .connection-notice p {
   color: var(--muted);
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.75;
 }
 .connection-list {
@@ -123,21 +123,21 @@
   margin: 20px 0;
 }
 .compact-card {
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   padding: 16px;
   display: grid;
   gap: 8px;
 }
 .compact-card code {
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .compact-card button {
   justify-self: start;
 }
 .connection-editor form + form {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 20px;
 }
 .connection-editor h3 {
@@ -154,7 +154,7 @@
   margin: 0;
   padding: 8px;
   background: var(--panel);
-  border-radius: 9px;
+  border-radius: var(--radius-control);
 }
 .asset-grid img {
   display: block;
@@ -164,7 +164,7 @@
   margin: auto;
 }
 .asset-grid figcaption {
-  font-size: 12px;
+  font-size: var(--font-small);
   margin-top: 8px;
   overflow-wrap: anywhere;
 }
@@ -190,9 +190,9 @@
   min-width: 0;
 }
 .settings {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 10px;
-  font-size: 13px;
+  font-size: var(--font-body);
   margin-top: 24px;
 }
 .settings summary small {
@@ -207,7 +207,7 @@
 .settings-section {
   padding-bottom: 24px;
   margin-bottom: 24px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   display: grid;
   gap: 14px;
 }
@@ -228,7 +228,7 @@
   gap: 10px;
 }
 .task-request {
-  font-size: 13px;
+  font-size: var(--font-body);
   white-space: pre-wrap;
   margin: 12px 0;
   color: var(--muted);
@@ -238,16 +238,16 @@
   gap: 20px;
 }
 .run {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 20px;
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .run .form-actions {
   margin-bottom: 12px;
 }
 .run button {
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .derived {
   display: grid;
@@ -255,13 +255,13 @@
 }
 .job {
   background: var(--panel);
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
   padding: 14px 16px;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   margin: 14px 0;
 }
 .job h3 {
-  font-size: 13px;
+  font-size: var(--font-body);
   margin: 0 0 8px;
 }
 .job h3 small {
@@ -270,7 +270,7 @@
 }
 .job p {
   white-space: pre-wrap;
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.8;
   margin-bottom: 8px;
 }
@@ -279,10 +279,10 @@
   margin-top: 10px;
 }
 .job button {
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .inspector {
-  font-size: 11px;
+  font-size: var(--font-small);
   color: var(--muted);
   margin-top: 12px;
 }
@@ -293,11 +293,11 @@
   overflow-wrap: anywhere;
   background: var(--nav);
   padding: 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--muted);
 }
 .inspector dl {
-  font-size: 11px;
+  font-size: var(--font-small);
 }
 .inspector dd {
   margin-left: 0;
@@ -310,7 +310,7 @@
 .partial-result {
   padding: 12px;
   background: var(--error-bg);
-  border-radius: 9px;
+  border-radius: var(--radius-control);
 }
 .partial-result pre {
   white-space: pre-wrap;
@@ -322,17 +322,17 @@
 .usage-inspector table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .usage-inspector th,
 .usage-inspector td {
   text-align: left;
   white-space: nowrap;
   padding: 8px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .usage-inspector p {
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .panel-intro {
   margin-bottom: 20px;
@@ -355,7 +355,7 @@
     margin: 3px 0 0;
   }
   .form-actions button {
-    font-size: 12px;
+    font-size: var(--font-small);
   }
   .job {
     padding: 12px;
@@ -371,9 +371,9 @@
 .scope-badge {
   margin-left: 8px;
   padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-small);
+  font-size: var(--font-small);
   font-weight: 400;
   color: var(--muted);
   vertical-align: middle;

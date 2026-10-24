@@ -179,7 +179,7 @@ test('CHATREC03 compact scene list follows source IDs and keeps the opening outs
   await expect(page.getByRole('button', { name: '다음 장면', exact: true })).toHaveCount(0);
   await expect(list).toHaveText('첫 메시지');
   await list.click();
-  await dialog.getByRole('button', { name: '1번째 장면 · Scene one', exact: true }).click();
+  await dialog.getByRole('button', { name: '1번째 장면, Scene one', exact: true }).click();
   await expect(selected).toHaveText('source:nonsequential:a');
   await expect(list).toHaveText('1 / 2');
   await expect(latest).toBeVisible();
@@ -224,7 +224,7 @@ test('scene search keeps one query when switching between scene list and manuscr
   const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
   const query = dialog.getByRole('searchbox', { name: '장면 검색어', exact: true });
   await query.fill('Scene');
-  await expect(dialog.getByRole('button', { name: /번째 장면 · Scene/ })).toHaveCount(2);
+  await expect(dialog.getByRole('button', { name: /번째 장면, Scene/ })).toHaveCount(2);
   await dialog.getByRole('button', { name: '본문', exact: true }).click();
   await expect(query).toHaveValue('Scene');
   await expect(dialog.getByRole('searchbox')).toHaveCount(1);

@@ -103,7 +103,7 @@ export function restoreChatAuthoring(
       typeof node.intent !== 'string' ||
       !Number.isSafeInteger(node.position)
     )
-      throw new HttpError(400, '구성의 수준·상위 관계가 올바르지 않아요.');
+      throw new HttpError(400, '구성의 수준과 상위 관계가 올바르지 않아요.');
     const links = node.relatedIds ?? [];
     if (
       !Array.isArray(links) ||

@@ -1,7 +1,7 @@
 .helper-resource-undo {
   padding: 0 0 8px;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--font-body);
 }
 .helper-resource-undo > div {
   display: flex;

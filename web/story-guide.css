@@ -34,7 +34,7 @@
 .story-guide-section {
   min-width: 0;
   padding-top: 20px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .story-guide-reference > summary,
 .story-guide-settings > summary,
@@ -63,9 +63,9 @@
 .story-guide-result {
   margin-top: 12px;
   padding: 14px 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.7;
 }

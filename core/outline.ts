@@ -4,7 +4,7 @@ import { REQUEST_TEXT_MAX_CHARS } from './content-limits.js';
 export const OUTLINE_LEVELS = ['theme', 'mainStory', 'arc', 'episode', 'beat'] as const;
 export type OutlineLevel = (typeof OUTLINE_LEVELS)[number];
 export const OUTLINE_LEVEL_LABELS: Record<OutlineLevel, string> = {
-  theme: '작품 방향·주제',
+  theme: '작품 방향과 주제',
   mainStory: '메인 스토리',
   arc: '큰 사건',
   episode: '회차',

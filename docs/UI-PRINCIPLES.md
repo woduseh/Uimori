@@ -17,6 +17,10 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 
 Use familiar navigation and consistent names across desktop and mobile. Adapt the layout to available space; avoid stretching prose and long forms across wide screens. Give icon buttons accessible names and make each screen's primary action easy to find. Keep internal implementation terms out of ordinary product copy.
 
+App chrome uses three font sizes: 12px for metadata, 14px for controls and body copy, and 16px for headings. Use weight and spacing for further hierarchy. Reading preferences and authored Markdown/Risu content keep their independent typography. Use the shared 0.5px hairline for borders, dividers and focus outlines; a high-contrast focus color and offset keep keyboard focus visible. Icon strokes and checkbox glyphs retain their legible symbol geometry. Prefer flat groups over nested cards, reserve shadows for floating surfaces, and use the shared 4px, 6px and 10px corner tokens with inner radii reduced by their padding.
+
+Built-in colors use the official Radix scales through semantic theme tokens: steps 1–2 for page backgrounds, 3–5 for control states, 6–8 for boundaries, 9–10 for solid actions, and 11–12 for text. Use `accent-text` for text and `accent` with its matching ink for solid controls; hover uses both hover background and hover ink. Preserve user-authored theme colors. Menus and dialogs appear immediately. Necessary state transitions use 250ms ease-out and become immediate with reduced motion; activity indicators retain their separate purpose.
+
 App-owned labels follow the independent [UI language](I18N.md). Allow translated scene badges and representation controls to wrap without overlap; do not reserve a fixed width based on Korean text. Retained notices carry message identity to the shared notice host, which translates at render time without restarting the completion timer. Authored manuscript and card HTML remain content boundaries.
 
 In settings, place section titles above their panels and keep related controls in one group. Use one divider between rows, without extra lines at the start or end of a group. Keep selection cards and status summaries where they communicate a real choice or state. Give image selection its own row and group related effect sliders below it. Reversible settings such as enabling a provider or model apply immediately without a second confirmation step.
@@ -70,6 +74,8 @@ Chat option editing refreshes automatically when idle and preserves drafts when 
 Use the same terms in visible copy, accessible names and user documentation.
 
 Write guidance in plain Korean 해요체 and use short action labels for controls. Name the affected object, observable result and next action; remove decorative encouragement and explanations that repeat a nearby label or button. Keep familiar domain terms such as 봇, 페르소나 and 로어, but explain internal execution terms in ordinary controls. Technical identifiers can remain in diagnostics where they help interpretation.
+
+Write for an experienced individual using a personal workspace: concise, neutral labels without chatter or invented terminology. Do not use middle dots as text separators. Arrange related metadata as separate aligned items, and use ordinary punctuation only where a single string is required. Familiar secondary actions may use Lucide icons with accessible names; keep primary actions and unfamiliar destinations named. Do not alter authored text or old saved names to enforce copy conventions.
 
 Avoid permanent refresh controls when an ordinary view already refreshes on entry or relevant changes; offer retry beside failed or stale reads. Resolve option-save conflicts through the shared review dialog, preserving drafts and save revisions until an explicit decision. Keep developer-only setup in the existing test mode, and hide mode-inapplicable fields without clearing their saved values.
 

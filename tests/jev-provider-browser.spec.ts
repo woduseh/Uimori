@@ -40,7 +40,7 @@ async function removeKey(request: APIRequestContext) {
 async function openJev(page: Page) {
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await page
     .getByRole('button', { name: '새 프로바이더 입력', exact: true })

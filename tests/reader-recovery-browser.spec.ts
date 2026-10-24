@@ -131,14 +131,14 @@ test('READERREC missing model warning waits for reader and model lookup to finis
     await page.goto(`/?chat=${chat.id}`);
     await expect(page.getByTestId('source')).toHaveCount(1);
     await expect(
-      page.getByRole('button', { name: /현재 본문 모델 · 본문 모델을 확인하고 있어요/ })
+      page.getByRole('button', { name: /현재 본문 모델: 본문 모델을 확인하고 있어요/ })
     ).toBeVisible();
     await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
     releaseLibrary();
     await expect(page.getByText('사용 가능한 전역 본문 모델을 선택해 주세요.')).toBeVisible();
     await expect(
-      page.getByRole('button', { name: '현재 본문 모델 · 본문 모델을 선택해 주세요' })
+      page.getByRole('button', { name: '현재 본문 모델: 본문 모델을 선택해 주세요' })
     ).toBeVisible();
   } finally {
     releaseLibrary();
@@ -213,7 +213,7 @@ test('READERREC a failed refocus lookup does not suspend an already healthy read
     .click();
   await page
     .getByRole('dialog', { name: '장면 목록', exact: true })
-    .getByRole('button', { name: /^2번째 장면 ·/ })
+    .getByRole('button', { name: /^2번째 장면,/ })
     .click();
   const clientId = await page.evaluate(() => localStorage.getItem('uimori:reading-client'));
   const path = `/api/chats/${chat.id}/reading-position?${new URLSearchParams({ clientId: clientId! })}`;

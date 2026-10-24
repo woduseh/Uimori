@@ -194,7 +194,7 @@ test('automatic translation replaces a real completed-run notice instead of dupl
   expect(combined.items[0]).toMatchObject({
     kind: 'translation',
     status: 'failed',
-    label: '자동 번역 실패 · 원문 확인 가능',
+    label: '자동 번역 실패 (원문 확인 가능)',
   });
 });
 

@@ -13,16 +13,15 @@ type ApiErrorDiagnostic = { code: string | null; message: string };
 const messages: Record<string, string> = {
   ...requestImageErrors,
   STORY_GUIDE_STALE: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
-  STORY_GUIDE_CANCELLED: '원작·인물 참고가 중단됐어요.',
-  STORY_GUIDE_TIMEOUT: '원작·인물 참고가 제한 시간 안에 끝나지 않았어요. 다시 집필해 주세요.',
-  STORY_GUIDE_FAILED: '원작·인물 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
-  STORY_GUIDE_REFUSED: '모델이 원작·인물 참고 요청을 거절했어요.',
-  STORY_GUIDE_CALL_BUDGET_EXHAUSTED: '원작·인물 참고에 사용할 모델 호출 횟수가 부족해요.',
+  STORY_GUIDE_CANCELLED: '원작 참고가 중단됐어요.',
+  STORY_GUIDE_TIMEOUT: '원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 집필해 주세요.',
+  STORY_GUIDE_FAILED: '원작 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
+  STORY_GUIDE_REFUSED: '모델이 원작 참고 요청을 거절했어요.',
+  STORY_GUIDE_CALL_BUDGET_EXHAUSTED: '원작 참고에 사용할 모델 호출 횟수가 부족해요.',
   STORY_GUIDE_OUTPUT_TOO_LARGE: '참고 분석이 너무 길어요. 참고 범위를 좁혀 주세요.',
   STORY_GUIDE_READ_CALL_LIMIT:
     '추가 자료를 더 읽어야 해서 분석을 마치지 못했어요. 참고 범위를 좁혀 주세요.',
-  STORY_GUIDE_PROVIDER_FAILED:
-    '원작·인물 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
+  STORY_GUIDE_PROVIDER_FAILED: '원작 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
   MANUSCRIPT_RANGE_CHANGED: '원고 범위가 바뀌었어요. 내보내기를 다시 열어 범위를 확인해 주세요.',
   MANUSCRIPT_EMPTY: '내보낼 원고가 아직 없어요.',
   MANUSCRIPT_RANGE_INVALID: '내보낼 장면 범위를 확인해 주세요.',
@@ -47,14 +46,14 @@ const messages: Record<string, string> = {
   INPUT_TRANSLATION_FAILED: '입력 번역을 완료하지 못했어요. 번역 모델 설정과 연결을 확인해 주세요.',
   INPUT_TRANSLATION_TOO_LONG: `번역문이 저장 한도인 ${REQUEST_TEXT_MAX_CHARS.toLocaleString('en-US')}자를 넘었어요. 초안을 나누어 번역해 주세요.`,
   MAINTENANCE_CLOSED:
-    '업데이트 유지보수 중이라 새 저장·생성을 잠시 받지 않아요. 작성한 내용은 그대로 두고 유지보수가 끝난 뒤 다시 보내 주세요.',
+    '업데이트 유지보수 중이라 새 저장과 생성을 잠시 받지 않아요. 작성한 내용은 그대로 두고 유지보수가 끝난 뒤 다시 보내 주세요.',
   RISU_PRESET_INVALID_FILE:
-    '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json·manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
+    '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json, manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
   RISU_PRESET_INVALID: '프리셋의 프롬프트 구성과 옵션 형식을 확인해 주세요.',
   RISU_PRESET_VERSION_UNSUPPORTED:
     '이 프리셋 바이너리 버전은 아직 지원하지 않아요. RisuToki에서 프로젝트로 추출한 ZIP도 가져올 수 있어요.',
   RISU_IMPORT_INVALID_FILE:
-    'v3 CHARX·JPEG·PNG·JSON 또는 Risu 모듈 파일인지, 파일 구조와 처리 한도가 맞는지 확인해 주세요.',
+    'v3 CHARX, JPEG, PNG, JSON 또는 Risu 모듈 파일인지, 파일 구조와 처리 한도가 맞는지 확인해 주세요.',
   RISU_IMPORT_TOO_LARGE: `캐릭터 카드 파일은 ${RISU_IMPORT_MAX_UPLOAD_BYTES / 1024 / 1024} MiB 이하여야 해요.`,
   RISU_IMPORT_IMAGES_TOO_LARGE: `저장할 이미지 합계가 ${RISU_IMPORT_MAX_PREPARED_BYTES / 1024 / 1024} MiB를 넘어요. 첨부 이미지를 줄인 파일을 선택해 주세요.`,
   PACKAGE_START_CONVERSATION_STARTED:
@@ -72,7 +71,7 @@ const messages: Record<string, string> = {
     '올려 둔 파일을 찾을 수 없어요. 검토 시간이 길어져 정리됐을 수 있으니 파일을 다시 선택해 주세요.',
   UPLOAD_CONTENT_TYPE: '파일 업로드 형식이 올바르지 않아요.',
   RISU_IMPORT_KIND:
-    '가져올 자료 종류를 확인해 주세요. 모듈 JSON·프로젝트 ZIP은 모듈로만 가져올 수 있어요.',
+    '가져올 자료 종류를 확인해 주세요. 모듈 JSON과 프로젝트 ZIP은 모듈로만 가져올 수 있어요.',
   RISU_IMPORT_DRAFT_CHANGED: '확인한 파일이 달라졌어요. 파일을 다시 선택해 주세요.',
   RISU_IMPORT_PARTIAL_REQUIRED:
     '자동 이식할 수 없는 부분을 확인하고 부분 가져오기에 동의해 주세요.',
@@ -111,7 +110,7 @@ const messages: Record<string, string> = {
   CHAT_TRANSCRIPT_INVALID_TEXT: '본문 파일에 비어 있거나 허용 길이를 넘은 응답이 있어요.',
   CHAT_TRANSCRIPT_INVALID_TRANSLATION: '본문 파일의 번역 형식이나 길이를 확인해 주세요.',
   CONTEXT_FIXED_INPUT_TOO_LARGE:
-    '고정된 입력만으로 모델의 컨텍스트 한도를 넘었어요. 프롬프트·첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
+    '고정된 입력만으로 모델의 컨텍스트 한도를 넘었어요. 프롬프트와 첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
 };
 for (const suffix of [
   'INVALID',
@@ -166,7 +165,7 @@ const roles: Record<string, string> = {
   illustration: '삽화',
 };
 const unavailable =
-  '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.';
+  '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델과 프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.';
 
 /** Preserve recognized local codes, never an arbitrary server/provider error or code suffix. */
 export function apiErrorDiagnostic(
@@ -222,7 +221,7 @@ export function apiErrorDiagnostic(
         code: `MODEL_UNAVAILABLE:${unavailableRole}`,
         message:
           unavailableRole === 'main'
-            ? '본문 모델 또는 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델과 전역 모델 설정, 모델·프로바이더의 활성 상태와 인증을 확인해 주세요.'
+            ? '본문 모델 또는 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델과 전역 모델 설정, 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.'
             : unavailable,
       };
     if (settingErrors.has(code)) return { code: 'MODEL_UNAVAILABLE', message: unavailable };

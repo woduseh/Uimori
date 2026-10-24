@@ -102,8 +102,9 @@ export function HelperResourceUndo({
   return (
     <section className="helper-resource-undo" aria-label={t('helpers.m156')}>
       <div>
-        <span role={undone ? 'status' : undefined}>
-          {undone ? t('helpers.m157') : t('helpers.m158')} · {title}
+        <span role={undone ? 'status' : undefined} className="ui-meta-row">
+          <span>{undone ? t('helpers.m157') : t('helpers.m158')}</span>
+          <span>{title}</span>
         </span>
         {!undone && (
           <IconButton

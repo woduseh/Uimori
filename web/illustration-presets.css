@@ -33,7 +33,7 @@
 }
 .illustration-preset-heading p {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .illustration-preset-grid {
   display: grid;
@@ -44,8 +44,8 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
   overflow: hidden;
 }
@@ -72,7 +72,7 @@
 }
 .illustration-preset-apply small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .illustration-preset-card .illustration-preset-actions {
   padding: 0 12px 12px;
@@ -112,7 +112,7 @@
 .illustration-preset-current {
   overflow-wrap: anywhere;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--font-body);
 }
 .illustration-preset-current strong {
   color: var(--text);
@@ -132,13 +132,13 @@
   align-items: center;
   gap: 4px;
   flex: none;
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 500;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .illustration-preset-card.selected {
   border-color: var(--line);
-  background: color-mix(in srgb, var(--accent-soft) 35%, var(--panel));
+  background: var(--accent-soft);
 }
 .illustration-preset-card .illustration-preset-actions {
   justify-content: flex-end;
@@ -168,12 +168,12 @@
 .illustration-preset-editor .illustration-style-guidance {
   min-height: 200px;
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.6;
 }
 .illustration-preset-disclosure {
   min-width: 0;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .illustration-preset-disclosure > summary {
   display: flex;
@@ -185,20 +185,20 @@
 .illustration-preset-disclosure > summary small {
   margin-left: auto;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 400;
 }
 .illustration-preset-help {
   display: grid;
   gap: 12px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.6;
 }
 .illustration-preset-help pre {
   margin: 0;
   padding-left: 12px;
-  border-left: 2px solid var(--line);
+  border-left: var(--hairline) solid var(--line);
   color: var(--text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

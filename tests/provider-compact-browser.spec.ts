@@ -51,7 +51,7 @@ async function projectLibrary(
 async function openProviders(page: Page) {
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
 
@@ -66,7 +66,7 @@ test('PCUI01 empty connections and empty models each expose one relevant startin
   const observed = await projectLibrary(page, value);
   await openProviders(page);
   const editor = page.getByTestId('connection-editor');
-  await expect(editor.getByRole('searchbox', { name: '프로바이더·모델 검색' })).toHaveCount(0);
+  await expect(editor.getByRole('searchbox', { name: '프로바이더와 모델 검색' })).toHaveCount(0);
   await expect(editor.getByRole('button', { name: '프로바이더 추가', exact: true })).toHaveCount(1);
   await expect(editor.getByRole('button', { name: '새 모델 입력', exact: true })).toHaveCount(0);
   const start = await editor
@@ -85,7 +85,7 @@ test('PCUI01 empty connections and empty models each expose one relevant startin
   await editor.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await expect(editor.getByRole('button', { name: '새 모델 입력', exact: true })).toHaveCount(1);
   await expect(editor.getByRole('button', { name: '프로바이더 추가', exact: true })).toHaveCount(0);
-  await expect(editor.getByRole('searchbox', { name: '프로바이더·모델 검색' })).toHaveCount(0);
+  await expect(editor.getByRole('searchbox', { name: '프로바이더와 모델 검색' })).toHaveCount(0);
   await editor.getByRole('button', { name: '새 모델 입력', exact: true }).click();
   await expect(
     editor.getByRole('form', { name: '모델 편집 양식' }).getByLabel('프로바이더', { exact: true })
@@ -104,7 +104,7 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   });
   await openProviders(page);
   const editor = page.getByTestId('connection-editor');
-  const search = editor.getByRole('searchbox', { name: '프로바이더·모델 검색' });
+  const search = editor.getByRole('searchbox', { name: '프로바이더와 모델 검색' });
   await revealProviderModel(page, model.title);
   const item = editor.getByRole('article', { name: model.title + ' 모델', exact: true });
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {

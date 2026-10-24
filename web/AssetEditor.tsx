@@ -126,7 +126,7 @@ export function AssetEditor({
               <figcaption>
                 {!asset.packageOwner && <AssetMetadataEditor asset={asset} onSaved={refresh} />}
                 {asset.title}
-                <small>
+                <small className="ui-meta-row">
                   {[
                     asset.actor,
                     asset.outfit,
@@ -134,7 +134,9 @@ export function AssetEditor({
                     t(imageUseLabelKeys[asset.allowedUse]),
                   ]
                     .filter(Boolean)
-                    .join(' · ')}
+                    .map((value, index) => (
+                      <span key={index}>{value}</span>
+                    ))}
                 </small>
                 {!asset.packageOwner && asset.url === `/api/assets/${asset.id}` && (
                   <DeleteButton

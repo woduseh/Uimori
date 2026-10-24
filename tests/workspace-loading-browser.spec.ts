@@ -57,7 +57,7 @@ for (const width of [412, 1440]) {
           await nav.getByRole('button', { name: '다시 불러오기', exact: true }).click();
         } else if (width === 1440 && destination === '프롬프트') {
           await navigationAction(page, '설정');
-          await selectSettingsSection(page, '프로바이더·모델');
+          await selectSettingsSection(page, '프로바이더와 모델');
           const settings = page.getByRole('dialog', { name: '설정', exact: true });
           await settings.getByRole('button', { name: '다시 불러오기', exact: true }).click();
           await expect(settings.getByTestId('connection-editor')).toBeVisible();
@@ -104,7 +104,7 @@ test('WORKLOAD every library-dependent settings page shows the same read failure
     ['역할별 모델', '역할별 모델 설정을 불러오지 못했어요.'],
     ['현재 프롬프트', '현재 프롬프트를 불러오지 못했어요.'],
     ['삽화', '삽화 설정을 불러오지 못했어요.'],
-    ['프로바이더·모델', '프로바이더 목록을 불러오지 못했어요.'],
+    ['프로바이더와 모델', '프로바이더 목록을 불러오지 못했어요.'],
   ]) {
     await selectSettingsSection(page, section);
     await expect(settings.getByRole('alert').filter({ hasText: errorLabel })).toBeVisible();

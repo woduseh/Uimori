@@ -14,13 +14,13 @@ import simulation from './builtin-prompts/simulation.json' with { type: 'json' }
 const templates = [
   {
     id: 'pheme',
-    title: 'Phēmē · RP',
+    title: 'Phēmē RP',
     role: 'main',
     description: 'v5.4.1. 인물과 대화하며 이야기를 이어 가요.',
   },
   {
     id: 'pheme-novel',
-    title: 'Phēmē · 소설',
+    title: 'Phēmē 소설',
     role: 'main',
     description: 'v5.4.1. 요청한 장면이나 회차를 소설 원고로 써요.',
   },

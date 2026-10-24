@@ -70,7 +70,7 @@ test('ORG01 mobile navigation groups by owner and preserves chats when a folder 
   await expect(branchA.getByText('채팅이 없어요.', { exact: true })).toHaveCount(0);
   await nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true }).hover();
   await nav.getByRole('button', { name: `${folder.title} 폴더 설정`, exact: true }).click();
-  await page.getByRole('button', { name: '폴더 해제 · 채팅 유지', exact: true }).click();
+  await page.getByRole('button', { name: '채팅을 유지하고 폴더 삭제', exact: true }).click();
   await expect(nav.getByRole('button', { name: `${folder.title} 폴더`, exact: true })).toHaveCount(
     0
   );

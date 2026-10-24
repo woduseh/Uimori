@@ -9,7 +9,7 @@
   display: flex;
   gap: 24px;
   overflow-x: auto;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   padding: 0;
   margin: 0;
   position: sticky;
@@ -23,7 +23,7 @@
   min-height: 54px;
   padding: 12px 2px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-bottom: var(--hairline) solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--muted);
@@ -43,7 +43,7 @@
 .native-item-list {
   min-width: 0;
   padding: 20px 14px 28px 0;
-  border-right: 1px solid var(--line);
+  border-right: var(--hairline) solid var(--line);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -74,7 +74,7 @@
 }
 .native-detail-heading > h3 {
   margin: 0;
-  font-size: 19px;
+  font-size: var(--font-heading);
   overflow-wrap: anywhere;
 }
 .native-item-list > button {
@@ -89,7 +89,7 @@
   align-content: start;
   line-height: 1.5;
   min-height: var(--native-row-min-h);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .native-item-list > button[draggable="true"] {
   cursor: grab;
@@ -104,8 +104,8 @@
   content: "";
   position: absolute;
   inset-inline: 8px;
-  height: 3px;
-  border-radius: 2px;
+  height: var(--hairline);
+  border-radius: var(--radius-small);
   background: var(--accent);
   pointer-events: none;
 }
@@ -135,7 +135,6 @@
   color: var(--muted);
   opacity: 0;
   transform: translateY(-50%);
-  transition: opacity 120ms ease;
 }
 .native-item-list > button:hover .native-row-drag-handle,
 .native-item-list > button:focus-visible .native-row-drag-handle,
@@ -144,7 +143,7 @@
 }
 .native-item-list > button small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .native-item-detail,
 .native-section-body {
@@ -163,8 +162,8 @@
   min-height: 280px;
   padding: 32px;
   box-sizing: border-box;
-  border: 1px dashed var(--line);
-  border-radius: 12px;
+  border: var(--hairline) dashed var(--line);
+  border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
 .native-empty p {
@@ -181,7 +180,7 @@
   gap: 9px;
   min-width: 0;
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .native-editor input:not([type="checkbox"]):not([type="radio"]),
 .native-editor select,
@@ -192,7 +191,7 @@
 }
 .native-editor textarea {
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.65;
   height: auto;
   min-height: 100px;
@@ -211,7 +210,7 @@
   gap: 20px;
 }
 .native-advanced {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 16px;
 }
 .native-advanced > summary {
@@ -241,7 +240,7 @@
 }
 .native-editor .native-section-body > h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--font-heading);
 }
 .native-panel-fields {
   margin: 0;
@@ -272,7 +271,7 @@
   align-items: stretch;
   gap: 4px;
   padding: 20px 14px 28px 0;
-  border-right: 1px solid var(--line);
+  border-right: var(--hairline) solid var(--line);
 }
 .native-advanced-workspace > .native-advanced-tabs > button {
   display: grid;
@@ -299,7 +298,7 @@
 }
 .native-advanced-detail h3 {
   margin: 0;
-  font-size: 19px;
+  font-size: var(--font-heading);
 }
 .native-advanced-workspace .native-form-stack,
 .native-advanced-workspace .native-form-stack > label,
@@ -367,7 +366,7 @@
     overflow-x: auto;
     flex-wrap: nowrap;
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: var(--hairline) solid var(--line);
     padding: 12px 0;
     scrollbar-width: thin;
   }
@@ -409,7 +408,7 @@
   .native-editor input,
   .native-editor select,
   .native-editor textarea {
-    font-size: 16px;
+    font-size: var(--font-heading);
   }
   .native-editor .native-main-text {
     height: 45dvh;
@@ -440,7 +439,7 @@
   width: min(100%, var(--editor-workspace-w));
   margin: 0 auto;
   padding: 12px 24px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   background: var(--bg);
 }
 .library-page-editing .prompt-editor-heading:has(> .dismissible-error),
@@ -460,7 +459,7 @@
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 20px;
+  font-size: var(--font-heading);
   line-height: 1.4;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -500,7 +499,7 @@
   }
   .prompt-editor-heading > h2,
   .library-page-editing .library-content-editor > .library-detail-heading > h2 {
-    font-size: 17px;
+    font-size: var(--font-heading);
   }
   .prompt-editor-heading .prompt-save-buttons > button {
     flex: none;
@@ -526,7 +525,7 @@
 /* Editor defaults remain prose-friendly; raw JSON opts in to monospace. */
 .prompt-editor .native-editor textarea {
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.65;
 }
 .prompt-editor .native-editor textarea[spellcheck="false"] {
@@ -537,7 +536,7 @@
 }
 @media (max-width: 760px) {
   .prompt-editor .native-editor textarea {
-    font-size: 16px;
+    font-size: var(--font-heading);
   }
 }
 .native-editor-save {

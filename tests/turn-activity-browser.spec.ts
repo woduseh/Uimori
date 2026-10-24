@@ -306,7 +306,7 @@ for (const width of [MOBILE_WIDTH, 1440]) {
     await expect(executionSummary).toHaveText('실행과 실제 입력 확인');
     await expect(usage).not.toHaveAttribute('open');
     await expect(execution).not.toHaveAttribute('open');
-    await expect(task.getByText(/요청 1,234 · 응답 87 토큰/)).not.toBeVisible();
+    await expect(task.getByText(/요청 1,234, 응답 87 토큰/)).not.toBeVisible();
     await expect(task.getByTestId('context-summary')).not.toBeVisible();
     expect(sceneReads).toEqual([]);
     expect(state.runReads).toEqual([]);
@@ -319,7 +319,7 @@ for (const width of [MOBILE_WIDTH, 1440]) {
     await page.screenshot({ path: info.outputPath(`task-history-compact-${width}.png`) });
 
     await usageSummary.click();
-    await expect(usage.getByText(/요청 1,234 · 응답 87 토큰/)).toBeVisible();
+    await expect(usage.getByText(/요청 1,234, 응답 87 토큰/)).toBeVisible();
     await expect(usage.getByText(/컨텍스트 사용량 1.9%/)).toBeVisible();
     await expect(
       usage.getByText('입력 1,234 / 컨텍스트 한도 65,536', { exact: true })
@@ -334,7 +334,7 @@ for (const width of [MOBILE_WIDTH, 1440]) {
     await executionSummary.click();
     await expect(execution.locator('pre').last()).toContainText('snapshot');
     await expect(execution.getByTestId('context-summary')).toHaveText(
-      '앞선 3개 원문 요약 · 입력 약 1,200 / 65,536 토큰 · 요약 1회'
+      '앞선 3개 원문 요약, 입력 약 1,200 / 65,536 토큰, 요약 1회'
     );
     expect(state.runReads).toHaveLength(1);
     const executionBounds = await execution.boundingBox();
@@ -347,7 +347,7 @@ for (const width of [MOBILE_WIDTH, 1440]) {
     for (const status of ['failed', 'partial', 'cancelled', 'refused', 'running']) {
       const other = panel.locator(`[data-testid="run"][data-run-id="${run.id}-${status}"]`);
       await expect(other.getByTestId('scene-usage').locator(':scope > summary')).toContainText(
-        '이번 생성 · 요청 1,234 · 응답 87 토큰'
+        /이번 생성\s*요청 1,234, 응답 87 토큰/
       );
       await expect(other.locator('.run-diagnostics-compact')).toHaveCount(0);
     }

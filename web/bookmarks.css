@@ -9,11 +9,11 @@
 }
 .bookmark-dialog blockquote,
 .bookmark-list blockquote {
-  font-size: 0.9em;
+  font-size: var(--font-body);
   opacity: 0.8;
   margin: 10px 0;
   padding-inline-start: 12px;
-  border-inline-start: 2px solid currentColor;
+  border-inline-start: var(--hairline) solid currentColor;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -22,7 +22,7 @@
   gap: 12px;
 }
 .bookmark-list article {
-  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-bottom: var(--hairline) solid var(--line);
   padding-bottom: 12px;
 }
 .bookmark-list p {

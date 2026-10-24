@@ -22,7 +22,7 @@
   min-height: var(--control-h);
   padding: 0;
   list-style: none;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   color: var(--text);
 }
 .action-menu > summary::-webkit-details-marker {
@@ -52,11 +52,10 @@
   min-width: 184px;
   max-width: min(300px, calc(100vw - 32px));
   padding: 6px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
-  box-shadow: 0 12px 28px #0003;
-  transform-origin: top right;
+  box-shadow: 0 2px 8px var(--shade);
 }
 .action-menu-body > button,
 .action-menu-body > .resource-export-action > button,
@@ -69,10 +68,10 @@
   min-height: var(--control-h);
   padding: 10px 12px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-small);
   background: transparent;
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--font-body);
   text-align: left;
 }
 @media (hover: hover) {
@@ -93,7 +92,6 @@
 .action-menu-up > .action-menu-body {
   top: auto;
   bottom: calc(100% + 4px);
-  transform-origin: bottom right;
 }
 /* Bottom sheet below 600px (SHEET_MEDIA in ActionMenu.tsx): a scrim behind and rows sized for
    thumbs. The doubled class outranks per-screen popover overrides such as `.source-actions >
@@ -117,45 +115,13 @@
     max-width: none;
     max-height: calc(100dvh - 72px);
     overflow-y: auto;
-    border-radius: 14px;
+    border-radius: var(--radius-panel);
     padding: 6px;
-    box-shadow: 0 -6px 24px var(--shade);
+    box-shadow: 0 2px 8px var(--shade);
   }
   .action-menu[open] > .action-menu-body.action-menu-body > button,
   .action-menu[open] > .action-menu-body.action-menu-body > .resource-export-action > button,
   .action-menu[open] > .action-menu-body.action-menu-body > .delete-control > button {
     min-height: 48px;
-  }
-}
-/* Follow native details state. Do not retain a transform after the entrance. */
-@media (prefers-reduced-motion: no-preference) {
-  .action-menu[open] > .action-menu-body {
-    animation: action-menu-enter var(--motion-fast) var(--motion-ease-out);
-  }
-}
-@media (prefers-reduced-motion: no-preference) and (max-width: 600px) {
-  .action-menu[open] > .action-menu-body {
-    animation-name: action-sheet-enter;
-    animation-duration: var(--motion-panel);
-  }
-}
-@keyframes action-menu-enter {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-@keyframes action-sheet-enter {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
   }
 }

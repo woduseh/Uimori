@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { describe } from 'vitest';
 import { DATABASE_SCHEMA_VERSION } from '../server/database-schema.js';
 import { afterEach, expect, test } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../server/store.js';
@@ -21,7 +21,11 @@ import {
   themeFile,
   validateTheme,
 } from '../core/themes.js';
-import { BUILTIN_PALETTES, THEME_PALETTE_ID } from '../core/theme-palettes.js';
+import {
+  BUILTIN_PALETTES,
+  DEFAULT_PALETTE_COLORS,
+  THEME_PALETTE_ID,
+} from '../core/theme-palettes.js';
 import {
   themeCatalog,
   themePreferences,
@@ -304,6 +308,74 @@ describe('Independent layout and palette choices', () => {
     }
   });
 
+  test('startup CSS matches the built-in default palette before React applies theme colors', () => {
+    const css = readFileSync(new URL('../web/style.css', import.meta.url), 'utf8');
+    for (const mode of ['light', 'dark'] as const) {
+      const selector = mode === 'light' ? ':root' : ':root[data-theme="dark"]';
+      const body = css.slice(css.indexOf(`${selector} {`) + selector.length + 2).split('}')[0];
+      const declarations = Object.fromEntries(
+        [...body.matchAll(/--([a-z-]+):\s*([^;]+);/g)].map((match) => [match[1], match[2].trim()])
+      );
+      for (const [key, value] of Object.entries(DEFAULT_PALETTE_COLORS[mode]))
+        expect(declarations[key], `${mode} --${key}`).toBe(value);
+    }
+  });
+
+  test('official Radix steps keep text distinct from solid accent backgrounds', () => {
+    const forest = BUILTIN_PALETTES.find((palette) => palette.id === 'forest')!;
+    expect(forest.colors.light).toMatchObject({
+      bg: '#fcfdfc', // olive 1
+      panel: '#f8faf8', // olive 2
+      surface: '#eff1ef', // olive 3
+      hover: '#e7e9e7', // olive 4
+      'surface-active': '#dfe2df', // olive 5
+      line: '#d7dad7', // olive 6
+      'input-border': '#cccfcc', // olive 7
+      'border-hover': '#b9bcb8', // olive 8
+      accent: '#46a758', // grass 9
+      'accent-hover': '#3e9b4f', // grass 10
+      'accent-text': '#2a7e3b', // grass 11
+      text: '#1d211c', // olive 12
+    });
+    expect(forest.colors.dark).toMatchObject({
+      bg: '#111210',
+      surface: '#212220',
+      hover: '#282a27',
+      'surface-active': '#2f312e',
+      accent: '#46a758',
+      'accent-hover': '#53b365',
+      'accent-text': '#71d083',
+      text: '#eceeec',
+    });
+    const luminance = (hex: string) => {
+      const rgb = hex.match(/[0-9a-f]{2}/gi)!.map((value) => parseInt(value, 16) / 255);
+      const [r, g, b] = rgb.map((value) =>
+        value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+      );
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    for (const palette of BUILTIN_PALETTES) {
+      for (const mode of ['light', 'dark'] as const) {
+        const colors = palette.colors[mode];
+        for (const [background, foreground] of [
+          ['panel', 'text'],
+          ['panel', 'muted'],
+          ['panel', 'accent-text'],
+          ['accent', 'accent-ink'],
+          ['accent-hover', 'accent-hover-ink'],
+          ['error-solid', 'error-ink'],
+          ['error-hover', 'error-ink'],
+        ] as const) {
+          const values = [luminance(colors[background]), luminance(colors[foreground])];
+          expect(
+            (Math.max(...values) + 0.05) / (Math.min(...values) + 0.05),
+            `${palette.id} ${mode} ${foreground}/${background}`
+          ).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
   test('palette and layout scope inheritance are independent, including explicit theme colors', () => {
     const store = database();
     const bot = store.product.content(fixtureBotInput('Palette bot'));
@@ -470,15 +542,15 @@ describe('Independent layout and palette choices', () => {
       store.db.prepare('SELECT value FROM app_metadata WHERE key=?').get('theme-preferences')?.value
     ).toBe(raw);
     expect(resolveTheme(themeCatalog(store), { chatId: 'custom' })).toEqual(beforeCustom);
-    expect(resolveTheme(themeCatalog(store), {}).colors.light.accent).toBe('#305d9e');
+    expect(resolveTheme(themeCatalog(store), {}).colors.light.accent).toBe('#3e63dd');
     expect(resolveTheme(themeCatalog(store), { botId: 'rose' }).colors.light.accent).toBe(
-      '#934a6c'
+      '#e93d82'
     );
     expect(resolveTheme(themeCatalog(store), { botId: 'paper' }).templateHtml).toContain(
       'class="paper"'
     );
     expect(readTheme(store, 'builtin:liquid-gallery').id).toBe('builtin:cinematic');
-    expect(readTheme(store, 'builtin:midnight').colors.light.accent).toBe('#305d9e');
+    expect(readTheme(store, 'builtin:midnight').colors.light.accent).toBe('#3e63dd');
     expect(readTheme(store, custom.id)).toEqual(beforeCustom);
     expect(BUILTIN_THEMES.map((theme) => theme.id)).toEqual([
       DEFAULT_THEME_ID,

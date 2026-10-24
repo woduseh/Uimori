@@ -18,9 +18,9 @@
   overflow-wrap: anywhere;
 }
 .delete-button:not(.secondary) {
-  background: var(--error);
+  background: var(--error-solid);
   color: var(--error-ink);
-  border-color: var(--error);
+  border-color: var(--error-solid);
 }
 
 .delete-button > svg {

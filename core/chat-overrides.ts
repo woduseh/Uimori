@@ -263,7 +263,7 @@ export function projectChatPackageCompilation(
                       },
                     }
                   : {}),
-                title: `${resource.title} · ${projection.scope.role}/${projection.scope.modulePath.join('/') || projection.scope.id}`,
+                title: `${resource.title} (${projection.scope.role}/${projection.scope.modulePath.join('/') || projection.scope.id})`,
               }
             : {}),
         }));

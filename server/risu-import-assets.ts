@@ -107,7 +107,7 @@ export function importRisuAssets({
         findings.add(
           'asset-format',
           'unsupported',
-          'PNG·JPEG·WebP·AVIF·GIF 이외의 첨부 자료는 아직 사용할 수 없어요.'
+          'PNG, JPEG, WebP, AVIF, GIF 이외의 첨부 자료는 아직 사용할 수 없어요.'
         );
         continue;
       }
@@ -163,7 +163,7 @@ export function importRisuAssets({
     findings.add(
       'asset-role',
       'info',
-      '감정·배경으로 표시된 첨부는 역할 없이 일반 이미지로 가져와요. 이름은 그대로 두지만 어떤 감정이나 배경인지는 자료에 남기지 않아요.'
+      '감정이나 배경으로 표시된 첨부는 역할 없이 일반 이미지로 가져와요. 이름은 그대로 두지만 어떤 감정이나 배경인지는 자료에 남기지 않아요.'
     );
   return { images, packageImages, assetUrls, ...(portraitImageId ? { portraitImageId } : {}) };
 }

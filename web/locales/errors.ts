@@ -6,34 +6,34 @@ export const messages = {
     zh: '参考设置或故事已更改。请根据最新内容重新创作。',
   },
   'errors.STORY_GUIDE_CANCELLED': {
-    ko: '원작·인물 참고가 중단됐어요.',
-    en: 'Story and character reference stopped.',
-    ja: '原作・人物の参照が中断されました。',
-    zh: '原作与角色参考已中止。',
+    ko: '원작 참고가 중단됐어요.',
+    en: 'Canon reference stopped.',
+    ja: '原作参照が中断されました。',
+    zh: '原作参考已中止。',
   },
   'errors.STORY_GUIDE_TIMEOUT': {
-    ko: '원작·인물 참고가 제한 시간 안에 끝나지 않았어요. 다시 집필해 주세요.',
-    en: 'Story and character reference timed out. Please write again.',
-    ja: '原作・人物の参照が時間内に完了しませんでした。執筆し直してください。',
-    zh: '原作与角色参考超时。请重新创作。',
+    ko: '원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 집필해 주세요.',
+    en: 'Canon reference timed out. Please write again.',
+    ja: '原作参照が時間内に完了しませんでした。執筆し直してください。',
+    zh: '原作参考超时。请重新创作。',
   },
   'errors.STORY_GUIDE_FAILED': {
-    ko: '원작·인물 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
-    en: 'Could not prepare story and character references. Check the writing model and connection.',
-    ja: '原作・人物の参照を準備できませんでした。執筆モデルと接続を確認してください。',
-    zh: '未能准备原作与角色参考。请检查写作模型和连接。',
+    ko: '원작 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
+    en: 'Could not prepare canon references. Check the writing model and connection.',
+    ja: '原作参照を準備できませんでした。執筆モデルと接続を確認してください。',
+    zh: '未能准备原作参考。请检查写作模型和连接。',
   },
   'errors.STORY_GUIDE_REFUSED': {
-    ko: '모델이 원작·인물 참고 요청을 거절했어요.',
-    en: 'The model refused the story and character reference request.',
-    ja: 'モデルが原作・人物の参照を拒否しました。',
-    zh: '模型拒绝了原作与角色参考请求。',
+    ko: '모델이 원작 참고 요청을 거절했어요.',
+    en: 'The model refused the canon reference request.',
+    ja: 'モデルが原作参照を拒否しました。',
+    zh: '模型拒绝了原作参考请求。',
   },
   'errors.STORY_GUIDE_CALL_BUDGET_EXHAUSTED': {
-    ko: '원작·인물 참고에 사용할 모델 호출 횟수가 부족해요.',
-    en: 'Not enough model calls remain for story and character reference.',
-    ja: '原作・人物の参照に使えるモデル呼び出し回数が不足しています。',
-    zh: '原作与角色参考所需的模型调用次数不足。',
+    ko: '원작 참고에 사용할 모델 호출 횟수가 부족해요.',
+    en: 'Not enough model calls remain for canon reference.',
+    ja: '原作参照に使えるモデル呼び出し回数が不足しています。',
+    zh: '原作参考所需的模型调用次数不足。',
   },
   'errors.STORY_GUIDE_OUTPUT_TOO_LARGE': {
     ko: '참고 분석이 너무 길어요. 참고 범위를 좁혀 주세요.',
@@ -48,10 +48,10 @@ export const messages = {
     zh: '需要读取更多资料才能完成分析。请缩小参考范围。',
   },
   'errors.STORY_GUIDE_PROVIDER_FAILED': {
-    ko: '원작·인물 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
-    en: 'Could not prepare story and character references. Check the writing model and connection.',
-    ja: '原作・人物の参照を準備できませんでした。執筆モデルと接続を確認してください。',
-    zh: '未能准备原作与角色参考。请检查写作模型和连接。',
+    ko: '원작 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
+    en: 'Could not prepare canon references. Check the writing model and connection.',
+    ja: '原作参照を準備できませんでした。執筆モデルと接続を確認してください。',
+    zh: '未能准备原作参考。请检查写作模型和连接。',
   },
   'errors.MANUSCRIPT_RANGE_CHANGED': {
     ko: '원고 범위가 바뀌었어요. 내보내기를 다시 열어 범위를 확인해 주세요.',
@@ -168,15 +168,15 @@ export const messages = {
     zh: '译文超出{limit, number}字符的存储上限。请拆分草稿后翻译。',
   },
   'errors.MAINTENANCE_CLOSED': {
-    ko: '업데이트 유지보수 중이라 새 저장·생성을 잠시 받지 않아요. 작성한 내용은 그대로 두고 유지보수가 끝난 뒤 다시 보내 주세요.',
+    ko: '업데이트 유지보수 중이라 새 저장과 생성을 잠시 받지 않아요. 작성한 내용은 그대로 두고 유지보수가 끝난 뒤 다시 보내 주세요.',
     en: 'New saves and generation are paused for maintenance. Keep your writing and submit again after maintenance ends.',
     ja: '更新作業中のため、新規保存と生成を一時停止しています。入力内容を保持したまま、作業終了後に再度送信してください。',
     zh: '更新维护期间暂停接受新的保存和生成请求。请保留已写内容，维护结束后重新提交。',
   },
   'errors.RISU_PRESET_INVALID_FILE': {
-    ko: '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json·manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
+    ko: '지원하는 Risu 프리셋 파일인지 확인해 주세요. 프로젝트 ZIP에는 preset.json, manifest.json과 분리된 텍스트 파일이 함께 있어야 해요.',
     en: 'Check that this is a supported Risu preset. A project ZIP must contain preset.json, manifest.json and separate text files.',
-    ja: '対応するRisuプリセットファイルか確認してください。プロジェクトZIPにはpreset.json・manifest.jsonと分離したテキストファイルが必要です。',
+    ja: '対応するRisuプリセットファイルか確認してください。プロジェクトZIPにはpreset.json、manifest.jsonと分離したテキストファイルが必要です。',
     zh: '请确认这是受支持的Risu预设。项目ZIP须包含preset.json、manifest.json及独立文本文件。',
   },
   'errors.RISU_PRESET_INVALID': {
@@ -192,9 +192,9 @@ export const messages = {
     zh: '暂不支持此预设二进制版本。也可导入由RisuToki导出的项目ZIP。',
   },
   'errors.RISU_IMPORT_INVALID_FILE': {
-    ko: 'v3 CHARX·JPEG·PNG·JSON 또는 Risu 모듈 파일인지, 파일 구조와 처리 한도가 맞는지 확인해 주세요.',
+    ko: 'v3 CHARX, JPEG, PNG, JSON 또는 Risu 모듈 파일인지, 파일 구조와 처리 한도가 맞는지 확인해 주세요.',
     en: 'Check for a v3 CHARX, JPEG, PNG, JSON or Risu module file with a supported structure and size.',
-    ja: 'v3のCHARX・JPEG・PNG・JSONまたはRisuモジュールで、構造と処理上限に問題がないか確認してください。',
+    ja: 'v3のCHARX、JPEG、PNG、JSONまたはRisuモジュールで、構造と処理上限に問題がないか確認してください。',
     zh: '请确认是v3 CHARX、JPEG、PNG、JSON或Risu模块文件，且结构和大小符合要求。',
   },
   'errors.RISU_IMPORT_TOO_LARGE': {
@@ -282,9 +282,9 @@ export const messages = {
     zh: '文件上传格式无效。',
   },
   'errors.RISU_IMPORT_KIND': {
-    ko: '가져올 자료 종류를 확인해 주세요. 모듈 JSON·프로젝트 ZIP은 모듈로만 가져올 수 있어요.',
+    ko: '가져올 자료 종류를 확인해 주세요. 모듈 JSON과 프로젝트 ZIP은 모듈로만 가져올 수 있어요.',
     en: 'Check the resource type. Module JSON and project ZIP files can only be imported as modules.',
-    ja: '取り込む資料の種類を確認してください。モジュールJSON・プロジェクトZIPはモジュールとしてのみ取り込めます。',
+    ja: '取り込む資料の種類を確認してください。モジュールJSON、プロジェクトZIPはモジュールとしてのみ取り込めます。',
     zh: '请检查资料类型。模块JSON和项目ZIP只能作为模块导入。',
   },
   'errors.RISU_IMPORT_DRAFT_CHANGED': {
@@ -426,7 +426,7 @@ export const messages = {
     zh: '请检查正文文件中译文的格式和长度。',
   },
   'errors.CONTEXT_FIXED_INPUT_TOO_LARGE': {
-    ko: '고정된 입력만으로 모델의 컨텍스트 한도를 넘었어요. 프롬프트·첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
+    ko: '고정된 입력만으로 모델의 컨텍스트 한도를 넘었어요. 프롬프트와 첨부 자료를 줄이거나 입력 한도가 더 큰 모델을 선택해 주세요.',
     en: 'Fixed input alone exceeds the model context limit. Reduce prompts and attachments or select a model with a larger input limit.',
     ja: '固定入力だけでモデルのコンテキスト上限を超えています。プロンプトや添付資料を減らすか、入力上限が大きいモデルを選んでください。',
     zh: '固定输入已超出模型上下文上限。请减少提示词和附件，或选择输入上限更大的模型。',
@@ -458,7 +458,7 @@ export const messages = {
   'errors.REQUEST_IMAGE_FORMAT_INVALID': {
     ko: 'PNG, JPEG 또는 정지 WebP 이미지를 첨부해 주세요.',
     en: 'Attach a PNG, JPEG or still WebP image.',
-    ja: 'PNG・JPEGまたは静止WebP画像を添付してください。',
+    ja: 'PNG、JPEGまたは静止WebP画像を添付してください。',
     zh: '请附加PNG、JPEG或静态WebP图片。',
   },
   'errors.REQUEST_IMAGE_DIMENSIONS_INVALID': {
@@ -528,15 +528,15 @@ export const messages = {
     zh: '正文文件格式无效。请检查文件内容。',
   },
   'errors.mainUnavailable': {
-    ko: '본문 모델 또는 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델과 전역 모델 설정, 모델·프로바이더의 활성 상태와 인증을 확인해 주세요.',
+    ko: '본문 모델 또는 프로바이더를 사용할 수 없어요. 채팅 설정의 고정 모델과 전역 모델 설정, 모델과 프로바이더의 활성 상태와 인증을 확인해 주세요.',
     en: 'The main model or provider is unavailable. Check the pinned chat model, global model settings, activation and credentials.',
     ja: '本文モデルまたはプロバイダーを使用できません。チャットの固定モデル、全体モデル設定、有効状態、認証を確認してください。',
     zh: '正文模型或提供商不可用。请检查聊天固定模型、全局模型设置、启用状态和身份凭据。',
   },
   'errors.modelUnavailable': {
-    ko: '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델 프리셋·프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
+    ko: '선택한 모델 또는 프로바이더를 사용할 수 없어요. 전역 모델 설정에서 역할별 모델을 확인하고 모델과 프로바이더 관리에서 활성 상태, 인증과 지원 모델 설정을 확인해 주세요.',
     en: 'The selected model or provider is unavailable. Check role models in global settings, then activation, credentials and supported settings in model presets and provider management.',
-    ja: '選択したモデルまたはプロバイダーを使用できません。全体設定の役割別モデルと、モデルプリセット・プロバイダー管理の有効状態、認証、対応設定を確認してください。',
+    ja: '選択したモデルまたはプロバイダーを使用できません。全体設定の役割別モデルと、モデルとプロバイダーの管理の有効状態、認証、対応設定を確認してください。',
     zh: '所选模型或提供商不可用。请检查全局设置中的各角色模型，以及模型预设和提供商管理中的启用状态、身份凭据和受支持设置。',
   },
   'errors.revisionConflict': {
@@ -750,10 +750,10 @@ export const messages = {
     zh: '已取消',
   },
   'errors.status.interrupted': {
-    ko: '서버 중단 · 자동 재생성 안 함',
-    en: 'Server interruption · no automatic regeneration',
-    ja: 'サーバー中断・自動再生成なし',
-    zh: '服务器中断 · 未自动重新生成',
+    ko: '서버 중단 (자동 재생성 안 함)',
+    en: 'Server interruption, no automatic regeneration',
+    ja: 'サーバー中断（自動再生成なし）',
+    zh: '服务器中断，未自动重新生成',
   },
   'errors.status.stale': {
     ko: '이전 자료의 결과',
@@ -780,9 +780,9 @@ export const messages = {
     zh: '找不到构建翻译提示词所需的输入槽。提示词构建在发送给模型前已中止。请在任务失败记录中检查区块和输入槽，并检查提示词或应用版本。',
   },
   'errors.auxiliary.JEV_CREDENTIAL_REQUIRED.details': {
-    ko: 'JEV 판단 연결을 사용할 수 없어요. 프로바이더·모델의 JEV 판단에서 API 키를 저장하고 연결 테스트를 한 뒤 새 작업을 요청해 주세요.',
+    ko: 'JEV 판단 연결을 사용할 수 없어요. 프로바이더와 모델의 JEV 판단에서 API 키를 저장하고 연결 테스트를 한 뒤 새 작업을 요청해 주세요.',
     en: 'The JEV judgment connection is unavailable. Save the API key and test the JEV judgment connection in provider and model settings, then request a new task.',
-    ja: 'JEV判定の接続を使用できません。プロバイダー・モデル設定のJEV判定でAPIキーを保存し、接続テスト後に新しい作業を依頼してください。',
+    ja: 'JEV判定の接続を使用できません。プロバイダーとモデル設定のJEV判定でAPIキーを保存し、接続テスト後に新しい作業を依頼してください。',
     zh: 'JEV判定连接不可用。请在提供商与模型的JEV判定设置中保存API密钥并测试连接，再发起新任务。',
   },
   'errors.auxiliary.JEV_INPUT_BUDGET.details': {
@@ -948,9 +948,9 @@ export const messages = {
     zh: 'JEV判定连接不可用。',
   },
   'errors.auxiliary.JEV_CREDENTIAL_REQUIRED.action': {
-    ko: '프로바이더·모델의 JEV 판단에서 API 키를 저장하고 연결 테스트를 한 뒤 새 작업을 요청해 주세요.',
+    ko: '프로바이더와 모델의 JEV 판단에서 API 키를 저장하고 연결 테스트를 한 뒤 새 작업을 요청해 주세요.',
     en: 'Save the API key and test the JEV judgment connection in provider and model settings, then request a new task.',
-    ja: 'プロバイダー・モデル設定のJEV判定でAPIキーを保存し、接続テスト後に新しい作業を依頼してください。',
+    ja: 'プロバイダーとモデル設定のJEV判定でAPIキーを保存し、接続テスト後に新しい作業を依頼してください。',
     zh: '请在提供商与模型的JEV判定设置中保存API密钥并测试连接，再发起新任务。',
   },
   'errors.auxiliary.JEV_INPUT_BUDGET.message': {
@@ -1189,7 +1189,7 @@ export const messages = {
   },
   'errors.auxiliary.AUXILIARY_CALL_BUDGET_EXHAUSTED.action': {
     ko: '번역과 도구 후속 호출, 거절 판정은 같은 작업 한도를 사용해요. 호출 한도와 도구 사용 지침을 확인해 주세요.',
-    en: 'Translation, tool follow-up calls and refusal judgment share the same task limit. Check the call limit and tool instructions.',
+    en: 'Translation: tool follow-up calls and refusal judgment share the same task limit. Check the call limit and tool instructions.',
     ja: '翻訳、ツールの後続呼び出し、拒否判定は同じ作業上限を使います。呼び出し上限とツール使用指示を確認してください。',
     zh: '翻译、工具后续调用和拒绝判定共用同一任务上限。请检查调用上限和工具使用说明。',
   },

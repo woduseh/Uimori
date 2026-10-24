@@ -142,11 +142,12 @@ function IllustrationEnvironmentEditor({
               .filter((item) => canSelect(item) || item.id === selected?.id)
               .map((item) => (
                 <option key={item.id} value={item.id} disabled={!canSelect(item)}>
-                  {item.title} ·{' '}
+                  {item.title} (
                   {canSelect(item)
                     ? library.connections.find((connection) => connection.id === item.connectionId)
                         ?.title
                     : t('visuals.m044')}
+                  )
                 </option>
               ))}
           </select>

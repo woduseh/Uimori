@@ -15,13 +15,7 @@ import {
 } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
-const sections = [
-  '인물·자료',
-  '프롬프트·모델·번역',
-  '원작·인물 참고',
-  '기억·메모·로어',
-  '이미지·삽화 참조',
-];
+const sections = ['사용 자료', '생성 설정', '원작 참고', '기억과 메모', '이미지'];
 
 async function prepare(
   page: Page,
@@ -176,7 +170,7 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
         );
       }
       await expectNoOverflow(page, dialog);
-      if (name === '이미지·삽화 참조') {
+      if (name === '이미지') {
         const owner = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
         await expect(owner).toBeVisible();
         await expect(owner).not.toHaveAttribute('multiple');
@@ -184,7 +178,7 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
         await expect(dialog.getByLabel('원문 이미지 자동 배치', { exact: true })).toHaveCount(0);
         await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toHaveCount(0);
       }
-      if (name === '프롬프트·모델·번역') {
+      if (name === '생성 설정') {
         await expect(dialog.getByLabel('원문 모델', { exact: true })).toHaveCount(0);
         await expect(dialog.getByLabel('Risu 작가 노트', { exact: true })).toBeVisible();
         await expect(
@@ -195,7 +189,7 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
           dialog.getByRole('button', { name: '전역 모델 설정', exact: true })
         ).toBeVisible();
       }
-      if (name === '프롬프트·모델·번역') {
+      if (name === '생성 설정') {
         await expect(
           dialog.getByRole('region', { name: '현재 프롬프트 설정', exact: true })
         ).toHaveCount(0);
@@ -203,7 +197,7 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
           dialog.getByRole('button', { name: '전역 프롬프트 설정', exact: true })
         ).toBeVisible();
       }
-      if (name === '프롬프트·모델·번역' && (width === MOBILE_WIDTH || width === DESKTOP_WIDTH))
+      if (name === '생성 설정' && (width === MOBILE_WIDTH || width === DESKTOP_WIDTH))
         if (visualReview)
           await page.screenshot({
             path: info.outputPath(
@@ -232,19 +226,19 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   const dialog = await openSettings(page);
   const nav = dialog.locator('.chat-settings-panel > .section-navigation');
   const confirm = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
+  await selectChatSettingsSection(page, '이미지');
   await expect(
     dialog.getByRole('checkbox', { name: '본문에서 페르소나 참조', exact: true })
   ).toHaveCount(0);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   await expect(dialog.getByRole('button', { name: '전역 모델 설정', exact: true })).toBeVisible();
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
+  await selectChatSettingsSection(page, '이미지');
   const image = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
   await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toHaveCount(0);
   const originalImage = await image.inputValue();
   const draftImage = originalImage === 'jev' ? 'writer' : 'jev';
   await image.selectOption(draftImage);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   await expect(dialog.getByLabel('장면 해설 자동 생성', { exact: true })).toHaveCount(0);
   const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
   await expect(calls).toBeHidden();
@@ -260,17 +254,17 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await expect(confirm).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`chat=${chat.id}`));
   await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
+  await selectChatSettingsSection(page, '이미지');
+  await selectChatSettingsSection(page, '이미지');
   await expect(image).toHaveValue(draftImage);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   await expect(calls).toHaveValue(draftCalls);
   await calls.focus();
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await expect(calls).toBeFocused();
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
+  await selectChatSettingsSection(page, '이미지');
   await expect(image).toHaveValue(draftImage);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   await expect(calls).toHaveValue(draftCalls);
   await calls.focus();
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
@@ -290,10 +284,10 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   await expect(composer).toHaveValue('채팅 설정을 닫아도 유지할 미전송 요청');
   await expect(page).toHaveURL(new RegExp(`chat=${chat.id}`));
   await openSettings(page);
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
+  await selectChatSettingsSection(page, '이미지');
+  await selectChatSettingsSection(page, '이미지');
   await expect(image).toHaveValue(originalImage);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   await expect(calls).toBeHidden();
   await dialog.getByText('고급 실행 설정', { exact: true }).click();
   await expect(calls).toHaveValue(originalCalls);
@@ -517,7 +511,7 @@ for (const mainId of [null, 'missing-model']) {
     const composer = page.getByLabel('다음 장면 요청', { exact: true });
     await composer.fill('모델 설정으로 이동해도 남길 요청 초안');
     const dialog = await openSettings(page);
-    await selectChatSettingsSection(page, '프롬프트·모델·번역');
+    await selectChatSettingsSection(page, '생성 설정');
     const alert = dialog.getByRole('alert');
     await expect(alert).toContainText(
       mainId ? '선택한 본문 모델을 사용할 수 없어' : '본문 모델이 지정되지 않았어요'
@@ -532,20 +526,20 @@ for (const mainId of [null, 'missing-model']) {
     expect(repairBox!.y - (alertBox!.y + alertBox!.height)).toBeLessThanOrEqual(32);
     await page.screenshot({ path: info.outputPath('model-resolution.png') });
 
-    await selectChatSettingsSection(page, '이미지·삽화 참조');
+    await selectChatSettingsSection(page, '이미지');
     const image = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
     const original = await image.inputValue();
     const draft = original === 'jev' ? 'writer' : 'jev';
     await image.selectOption(draft);
-    await selectChatSettingsSection(page, '프롬프트·모델·번역');
+    await selectChatSettingsSection(page, '생성 설정');
     await repair.click();
     const guard = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
     await expect(guard).toBeVisible();
     await guard.getByRole('button', { name: '계속 편집', exact: true }).click();
     await expect(repair).toBeFocused();
-    await selectChatSettingsSection(page, '이미지·삽화 참조');
+    await selectChatSettingsSection(page, '이미지');
     await expect(image).toHaveValue(draft);
-    await selectChatSettingsSection(page, '프롬프트·모델·번역');
+    await selectChatSettingsSection(page, '생성 설정');
     await repair.click();
     await guard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -569,7 +563,7 @@ test('CSUI07 chat author note saves with prompt settings and can be cleared', as
   const read = async () =>
     (await (await request.get('/api/chats/' + chat.id)).json()) as ChatDetail;
   let dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   let note = dialog.getByLabel('Risu 작가 노트', { exact: true });
   await expect(note).toHaveValue('');
   const value = '채팅별 작가 노트 ' + Date.now();
@@ -579,7 +573,7 @@ test('CSUI07 chat author note saves with prompt settings and can be cleared', as
 
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   note = dialog.getByLabel('Risu 작가 노트', { exact: true });
   await expect(note).toHaveValue(value);
   await note.fill('');
@@ -609,13 +603,13 @@ test('CSUI05 save and close persists a valid user note and keeps an invalid note
   });
 
   let dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '기억·메모·로어');
+  await selectChatSettingsSection(page, '기억과 메모');
   let notes = dialog.getByTestId('context-notes');
   await expect(notes).toBeVisible();
   await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
   await notes.getByLabel('메모 작성자', { exact: true }).fill('합성 사용자');
-  await notes.getByLabel('메모·정정 내용', { exact: true }).fill(noteText);
+  await notes.getByLabel('메모와 정정 내용', { exact: true }).fill(noteText);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
@@ -626,13 +620,13 @@ test('CSUI05 save and close persists a valid user note and keeps an invalid note
     .toEqual([noteText]);
 
   dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '기억·메모·로어');
+  await selectChatSettingsSection(page, '기억과 메모');
   notes = dialog.getByTestId('context-notes');
   await expect(notes).toBeVisible();
   await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
   await notes.getByLabel('메모 작성자', { exact: true }).fill('');
-  await notes.getByLabel('메모·정정 내용', { exact: true }).fill('작성자가 없는 메모 초안');
+  await notes.getByLabel('메모와 정정 내용', { exact: true }).fill('작성자가 없는 메모 초안');
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
@@ -640,7 +634,7 @@ test('CSUI05 save and close persists a valid user note and keeps an invalid note
   await expect(confirm).toBeVisible();
   expect((await readStory()).notes.map((note) => note.text)).toEqual([noteText]);
   await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: '메모·정정 내용', exact: true })).toHaveValue(
+  await expect(page.getByRole('textbox', { name: '메모와 정정 내용', exact: true })).toHaveValue(
     '작성자가 없는 메모 초안'
   );
   await notes.getByRole('button', { name: '편집 취소', exact: true }).click();
@@ -656,7 +650,7 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   test.setTimeout(60000);
   const { chat, errors } = await prepare(page, request, 'CSUI08 ' + Date.now());
   let dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   const globalDefault = (await (await request.get('/api/auto-translation-defaults')).json()) as {
     autoTranslate: boolean;
   };
@@ -672,7 +666,7 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(true);
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   dialog = await openSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
   await expect(choice).toHaveValue('on');
   await choice.selectOption('off');
@@ -754,17 +748,17 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   });
   await page.getByLabel('다음 장면 요청', { exact: true }).fill('두 사람이 다시 만나는 장면');
   const menu = await openChatMenu(page);
-  await menu.getByRole('button', { name: '원작·인물 참고', exact: true }).click();
+  await menu.getByRole('button', { name: '원작 참고', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await expect(dialog.getByRole('heading', { name: '원작·인물 참고', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('switch', { name: '집필 전에 원작·인물 참고' })).not.toBeChecked();
+  await expect(dialog.getByRole('heading', { name: '원작 참고', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('switch', { name: '집필 전에 원작 참고' })).not.toBeChecked();
   await expect(dialog.locator('.story-guide-settings')).toHaveAttribute('open', '');
-  await dialog.getByRole('switch', { name: '집필 전에 원작·인물 참고' }).check();
-  await dialog.getByLabel('작품·판본·세계관', { exact: true }).fill('가상의 항구 이야기');
-  await dialog.getByLabel('기준 시점·스포일러 범위', { exact: true }).fill('2권 끝까지');
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
-  await selectChatSettingsSection(page, '원작·인물 참고');
-  await expect(dialog.getByLabel('작품·판본·세계관', { exact: true })).toHaveValue(
+  await dialog.getByRole('switch', { name: '집필 전에 원작 참고' }).check();
+  await dialog.getByLabel('작품, 판본, 세계관', { exact: true }).fill('가상의 항구 이야기');
+  await dialog.getByLabel('기준 시점과 스포일러 범위', { exact: true }).fill('2권 끝까지');
+  await selectChatSettingsSection(page, '이미지');
+  await selectChatSettingsSection(page, '원작 참고');
+  await expect(dialog.getByLabel('작품, 판본, 세계관', { exact: true })).toHaveValue(
     '가상의 항구 이야기'
   );
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
@@ -780,11 +774,9 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     followCanon: false,
   });
 
-  await (await openChatMenu(page))
-    .getByRole('button', { name: '원작·인물 참고', exact: true })
-    .click();
+  await (await openChatMenu(page)).getByRole('button', { name: '원작 참고', exact: true }).click();
   await expect(dialog.locator('.story-guide-settings')).not.toHaveAttribute('open');
-  await expect(dialog.getByLabel('작품·판본·세계관', { exact: true })).toBeHidden();
+  await expect(dialog.getByLabel('작품, 판본, 세계관', { exact: true })).toBeHidden();
   await expect(dialog.getByRole('button', { name: '미리보기 만들기', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('textbox', { name: '원작·인물 질문', exact: true })).toHaveCount(0);
   await dialog.locator('.story-guide-last-brief > summary').click();
@@ -796,7 +788,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
   await notes
-    .getByLabel('메모·정정 내용', { exact: true })
+    .getByLabel('메모와 정정 내용', { exact: true })
     .fill('이 이야기에서는 두 사람이 화해했다.');
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   await discard.getByRole('button', { name: '저장하고 닫기', exact: true }).click();
@@ -807,9 +799,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     kind: 'author-note',
     text: '이 이야기에서는 두 사람이 화해했다.',
   });
-  await (await openChatMenu(page))
-    .getByRole('button', { name: '원작·인물 참고', exact: true })
-    .click();
+  await (await openChatMenu(page)).getByRole('button', { name: '원작 참고', exact: true }).click();
   await expect(dialog.getByLabel('가이드 미리보기', { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('원작 질문 답변', { exact: true })).toHaveCount(0);
   await expectNoOverflow(page, dialog);

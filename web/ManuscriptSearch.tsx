@@ -261,9 +261,13 @@ export function ManuscriptSearchPanel({
       <div className="manuscript-search-results">
         {result?.items.map((item) => (
           <article key={`${item.target.chatId}:${item.target.sourceId}`}>
-            <h4>
-              {item.title} ·{' '}
-              {item.sceneNumber ? t('transfer.d011', { v0: item.sceneNumber }) : t('transfer.m029')}
+            <h4 className="ui-meta-row">
+              <span>{item.title}</span>
+              <span>
+                {item.sceneNumber
+                  ? t('transfer.d011', { v0: item.sceneNumber })
+                  : t('transfer.m029')}
+              </span>
             </h4>
             {item.matches.map((match) => (
               <div key={match.kind}>

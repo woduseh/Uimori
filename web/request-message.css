@@ -25,7 +25,7 @@
 }
 .request-copy-error {
   margin: 4px 0;
-  font-size: 12px;
+  font-size: var(--font-small);
   text-align: right;
 }
 .request-message-actions {

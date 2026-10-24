@@ -4,7 +4,7 @@
   min-width: 0;
 }
 .jev-provider-settings .provider-section-heading h3 {
-  font-size: 16px;
+  font-size: var(--font-heading);
 }
 .jev-provider-settings p,
 .jev-provider-settings h4 {
@@ -18,7 +18,7 @@
   display: flex;
   gap: 12px 20px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .jev-provider-details {
   display: flex;
@@ -27,7 +27,7 @@
   margin: 0;
 }
 .jev-provider-details dt {
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
 }
 .jev-provider-details dd {
@@ -45,12 +45,12 @@
 }
 .jev-provider-settings .jev-provider-test {
   margin: 0;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 16px;
 }
 .jev-provider-test h4 {
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .jev-provider-settings .jev-provider-details dd {
-  font-size: 13px;
+  font-size: var(--font-body);
 }

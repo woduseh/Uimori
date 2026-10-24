@@ -57,7 +57,7 @@ const responsesOptions = [
 export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze([
   definition({
     id: 'codex-app-server-v1',
-    label: 'Codex · ChatGPT 구독',
+    label: 'Codex, ChatGPT 구독',
     endpointDefault: 'codex://local',
     credentialRefDefault: '',
     auth: 'codex-login',
@@ -73,7 +73,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
   }),
   definition({
     id: 'fixture-sse-v1',
-    label: '로컬 fixture · 검사용',
+    label: '로컬 fixture (검사용)',
     endpointDefault: '',
     credentialRefDefault: '',
     auth: 'none',
@@ -105,7 +105,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     ],
     reference: 'core/vertex.ts#executeGeminiProvider',
     limitations: [
-      'Gemini 모델 연결 · Gemini Enterprise Agent Platform의 global 프로젝트 endpoint를 사용해요.',
+      'Gemini 모델 연결, Gemini Enterprise Agent Platform의 global 프로젝트 endpoint를 사용해요.',
       '등록한 Vertex 인증으로 Google Model Garden의 Gemini 목록을 조회할 수 있어요. 목록과 실제 모델 사용 권한은 Google Cloud 설정을 따라요.',
       'ADC는 서버의 GOOGLE_APPLICATION_CREDENTIALS 파일을 사용해요. Flex는 모델의 Service Tier에서 선택해요. 실제 청구액은 미확인이에요.',
     ],
@@ -113,7 +113,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
   definition({
     id: 'google-gemini-v1',
     checkedAt: '2026-10-08',
-    label: 'Google AI Studio · Gemini',
+    label: 'Google AI Studio Gemini',
     endpointDefault: 'https://generativelanguage.googleapis.com/v1beta',
     credentialRefDefault: 'GEMINI_API_KEY',
     auth: 'api-key',
@@ -137,7 +137,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
   }),
   definition({
     id: 'openai-responses-v1',
-    label: 'OpenAI · Responses',
+    label: 'OpenAI Responses',
     endpointDefault: 'https://api.openai.com/v1',
     credentialRefDefault: 'OPENAI_API_KEY',
     auth: 'bearer',
@@ -154,13 +154,13 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/openai-protocol.ts#encodeResponses',
     limitations: [
       '서버에서 허용한 HTTPS 주소나 이 컴퓨터의 로컬 HTTP 주소를 사용할 수 있어요.',
-      'Responses API 호환 여부와 개별 모델의 옵션·도구 지원은 프로바이더에서 확인해야 해요. 실제 외부 호환성은 확인하지 않았어요.',
+      'Responses API 호환 여부와 개별 모델의 옵션과 도구 지원은 프로바이더에서 확인해야 해요. 실제 외부 호환성은 확인하지 않았어요.',
       '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 Responses API의 text.format으로 지정하며, 기본값은 일반 텍스트예요.',
     ],
   }),
   definition({
     id: 'anthropic-messages-v1',
-    label: 'Anthropic · Messages',
+    label: 'Anthropic Messages',
     endpointDefault: 'https://api.anthropic.com/v1',
     credentialRefDefault: 'ANTHROPIC_API_KEY',
     auth: 'api-key',
@@ -204,13 +204,13 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
     reference: 'core/openai-chat-protocol.ts#encodeChat',
     limitations: [
       'Vercel의 공식 API 기본 주소에서 Chat Completions 형식을 사용해요.',
-      '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 response_format으로 지정하며, 기본값은 일반 텍스트예요. 모델별 옵션·도구 지원은 미확인이에요.',
-      '모델 계열을 선택하면 OpenAI·Anthropic·Google·DeepSeek·xAI 계열의 생성 옵션을 같은 게이트웨이에서 사용할 수 있어요. providerOptions는 추가 라우팅이나 새 프로바이더 옵션용이에요.',
+      '번역 구조화 출력을 켜면 원문 식별 정보와 번역문을 담는 JSON 형식을 요청해요. 형식은 response_format으로 지정하며, 기본값은 일반 텍스트예요. 모델별 옵션과 도구 지원은 미확인이에요.',
+      '모델 계열을 선택하면 OpenAI, Anthropic, Google, DeepSeek, xAI 계열의 생성 옵션을 같은 게이트웨이에서 사용할 수 있어요. providerOptions는 추가 라우팅이나 새 프로바이더 옵션용이에요.',
     ],
   }),
   definition({
     id: 'deepseek-chat-v1',
-    label: 'DeepSeek · OpenAI 호환',
+    label: 'DeepSeek, OpenAI 호환',
     endpointDefault: 'https://api.deepseek.com/v1',
     credentialRefDefault: 'DEEPSEEK_API_KEY',
     auth: 'bearer',
@@ -225,7 +225,7 @@ export const PROVIDER_DEFINITIONS: readonly ProviderDefinition[] = Object.freeze
   }),
   definition({
     id: 'openai-chat-v1',
-    label: 'OpenAI 호환 · 별도 프로바이더',
+    label: 'OpenAI 호환, 별도 프로바이더',
     endpointDefault: '',
     credentialRefDefault: 'PROVIDER_API_KEY',
     auth: 'bearer',

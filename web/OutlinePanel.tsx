@@ -552,7 +552,7 @@ export function OutlinePanel({
                     </option>
                     {nodes.map((node) => (
                       <option key={node.id} value={node.id}>
-                        {t(`prompts.level.${node.level}`)} · {node.title}
+                        {t(`prompts.level.${node.level}`)}: {node.title}
                       </option>
                     ))}
                   </select>

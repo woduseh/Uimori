@@ -11,7 +11,7 @@
     display: flow-root;
     min-width: 0;
     overflow-wrap: anywhere;
-    color: var(--text, #24242b);
+    color: var(--text, #1d211c);
     font:
       var(--reading, 18px) / var(--reading-line-height, 1.9)
       var(--reading-font-family, system-ui, sans-serif);

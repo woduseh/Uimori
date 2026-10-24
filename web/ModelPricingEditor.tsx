@@ -29,38 +29,42 @@ function PricingSummary({
   ];
   return (
     <div className="model-pricing-summary">
-      <p>
-        {context === 'attempt' ? t('providers.m475') : t('providers.m476')}:{' '}
-        <strong>{snapshot.serviceTier}</strong> ·{' '}
-        {snapshot.source === 'manual'
-          ? t('providers.m477')
-          : snapshot.source === 'catalog'
-            ? t('providers.m478')
-            : t('providers.m479')}
+      <p className="ui-meta-row">
+        <span>
+          {context === 'attempt' ? t('providers.m475') : t('providers.m476')}:{' '}
+          <strong>{snapshot.serviceTier}</strong>
+        </span>
+        <span>
+          {snapshot.source === 'manual'
+            ? t('providers.m477')
+            : snapshot.source === 'catalog'
+              ? t('providers.m478')
+              : t('providers.m479')}
+        </span>
       </p>
-      <small>
-        {snapshot.source === 'manual' && context === 'current'
-          ? t('providers.m591', {
-              value0: formatDate(snapshot.checkedAt, {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                timeZone: 'UTC',
-              }),
-            })
-          : t('providers.m592', {
-              value0: snapshot.source === 'manual' ? t('providers.m480') : t('providers.m481'),
-              value1: formatDate(snapshot.checkedAt, {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                timeZone: 'UTC',
-              }),
-            })}
+      <small className="ui-meta-row">
+        <span>
+          {snapshot.source === 'manual' && context === 'current'
+            ? t('providers.m591', {
+                value0: formatDate(snapshot.checkedAt, {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  timeZone: 'UTC',
+                }),
+              })
+            : t('providers.m592', {
+                value0: snapshot.source === 'manual' ? t('providers.m480') : t('providers.m481'),
+                value1: formatDate(snapshot.checkedAt, {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  timeZone: 'UTC',
+                }),
+              })}
+        </span>
         {snapshot.sourceUrl && (
           <>
-            {' '}
-            ·{' '}
             <a href={snapshot.sourceUrl} target="_blank" rel="noreferrer">
               {t('providers.m482')}
             </a>

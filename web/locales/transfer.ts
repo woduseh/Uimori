@@ -7,10 +7,10 @@ export const messages = {
     zh: '始终包含',
   },
   'transfer.m002': {
-    ko: 'JEV 관련성 판단 · 필요할 때 추가 조회',
-    en: 'JEV relevance check · look up when needed',
-    ja: 'JEVで関連性を判断・必要時に追加参照',
-    zh: 'JEV 判断相关性 · 按需检索',
+    ko: 'JEV 관련성 판단, 필요할 때 추가 조회',
+    en: 'JEV relevance check, look up when needed',
+    ja: 'JEVで関連性を判断、必要時に追加参照',
+    zh: 'JEV 判断相关性，按需检索',
   },
   'transfer.m003': {
     ko: '모듈',
@@ -37,9 +37,9 @@ export const messages = {
     zh: '自动',
   },
   'transfer.m007': {
-    ko: 'v3 CHARX·JPEG·PNG·JSON, .risum 또는 모듈 프로젝트 ZIP을 선택해 주세요.',
+    ko: 'v3 CHARX, JPEG, PNG, JSON, .risum 또는 모듈 프로젝트 ZIP을 선택해 주세요.',
     en: 'Choose a v3 CHARX, JPEG, PNG, JSON, .risum, or module project ZIP file.',
-    ja: 'v3 CHARX・JPEG・PNG・JSON、.risum、またはモジュールプロジェクトZIPを選んでください。',
+    ja: 'v3 CHARX、JPEG、PNG、JSON、.risum、またはモジュールプロジェクトZIPを選んでください。',
     zh: '请选择 v3 CHARX、JPEG、PNG、JSON、.risum 或模块项目 ZIP 文件。',
   },
   'transfer.m008': {
@@ -247,9 +247,9 @@ export const messages = {
     zh: '资料已导入',
   },
   'transfer.m052': {
-    ko: '모듈을 서재에 등록했어요. 기존 채팅의 봇·페르소나·모듈 설정에서 장착해 주세요.',
+    ko: '모듈을 서재에 등록했어요. 기존 채팅의 봇, 페르소나, 모듈 설정에서 장착해 주세요.',
     en: 'The module was added to the library. Attach it from the bot, persona, and module settings of an existing chat.',
-    ja: 'ライブラリにモジュールを登録しました。既存チャットのボット・ペルソナ・モジュール設定から装着してください。',
+    ja: 'ライブラリにモジュールを登録しました。既存チャットのボット、ペルソナ、モジュール設定から装着してください。',
     zh: '模块已添加到资料库，请在现有聊天的机器人、角色和模块设置中附加。',
   },
   'transfer.m053': {
@@ -355,9 +355,9 @@ export const messages = {
     zh: '检查 Risu 预设',
   },
   'transfer.m070': {
-    ko: 'Risu 프롬프트·토글·정규식 원본을 새 작문 프롬프트로 저장해요. 원본 파일도 보존해요. 가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.',
+    ko: 'Risu 프롬프트, 토글, 정규식 원본을 새 작문 프롬프트로 저장해요. 원본 파일도 보존해요. 가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.',
     en: 'Save the original Risu prompts, toggles, and regular expressions as a new writing prompt. The original file is also preserved. After importing, select it as the writing prompt for the current chat.',
-    ja: 'Risuのプロンプト・トグル・正規表現の原本を新しい作家プロンプトとして保存します。元ファイルも保持します。取り込み後、現在のチャットの作家プロンプトとして選べます。',
+    ja: 'Risuのプロンプト、トグル、正規表現の原本を新しい作家プロンプトとして保存します。元ファイルも保持します。取り込み後、現在のチャットの作家プロンプトとして選べます。',
     zh: '将原始 Risu 提示词、开关和正则表达式保存为新的写作提示词，同时保留原始文件。导入后可将其选为当前聊天的写作提示词。',
   },
   'transfer.m071': {
@@ -367,10 +367,10 @@ export const messages = {
     zh: '模型连接和全局默认提示词保持不变。',
   },
   'transfer.m072': {
-    ko: '.risup · .risupreset · 프리셋 JSON · 프로젝트 ZIP · 최대 24 MiB',
-    en: '.risup · .risupreset · preset JSON · project ZIP · up to 24 MiB',
-    ja: '.risup・.risupreset・プリセットJSON・プロジェクトZIP・最大24 MiB',
-    zh: '.risup · .risupreset · 预设 JSON · 项目 ZIP · 最大 24 MiB',
+    ko: '.risup, .risupreset, 프리셋 JSON, 프로젝트 ZIP, 최대 24 MiB',
+    en: '.risup, .risupreset, preset JSON, project ZIP, up to 24 MiB',
+    ja: '.risup、.risupreset、プリセットJSON、プロジェクトZIP、最大24 MiB',
+    zh: '.risup，.risupreset，预设 JSON，项目 ZIP，最大 24 MiB',
   },
   'transfer.m073': {
     ko: 'Risu 프리셋 파일 선택',
@@ -421,9 +421,9 @@ export const messages = {
     zh: '原始内容处理及注意事项',
   },
   'transfer.m081': {
-    ko: 'CBS · 토글 · 변수 · 정규식 원본을 보존해요. 현재 사용 프롬프트와 모델은 바뀌지 않아요.',
+    ko: 'CBS, 토글, 변수, 정규식 원본을 보존해요. 현재 사용 프롬프트와 모델은 바뀌지 않아요.',
     en: 'Original CBS, toggles, variables, and regular expressions are preserved. Your active prompt and model stay unchanged.',
-    ja: 'CBS・トグル・変数・正規表現の原本を保持します。現在のプロンプトとモデルは変わりません。',
+    ja: 'CBS、トグル、変数、正規表現の原本を保持します。現在のプロンプトとモデルは変わりません。',
     zh: '保留原始 CBS、开关、变量和正则表达式，当前提示词和模型保持不变。',
   },
   'transfer.m082': {
@@ -571,9 +571,9 @@ export const messages = {
     zh: '导入正文',
   },
   'transfer.m109': {
-    ko: '원문·요청·번역·메모를 새 채팅으로 가져와요.',
+    ko: '원문, 요청, 번역, 메모를 새 채팅으로 가져와요.',
     en: 'Import original text, requests, translations, and notes into a new chat.',
-    ja: '原文・リクエスト・翻訳・メモを新しいチャットに取り込みます。',
+    ja: '原文、リクエスト、翻訳、メモを新しいチャットに取り込みます。',
     zh: '将原文、请求、翻译和笔记导入为新聊天。',
   },
   'transfer.m110': {
@@ -697,7 +697,7 @@ export const messages = {
     zh: '导入的顾问模型设置将改为跟随主模型。',
   },
   'transfer.m141': {
-    ko: '전역 프롬프트·역할 모델은 현재 작업실 설정을 사용하며 실행 기록과 도우미 내부 작업은 가져오지 않아요.',
+    ko: '전역 프롬프트와 역할 모델은 현재 작업실 설정을 사용하며 실행 기록과 도우미 내부 작업은 가져오지 않아요.',
     en: 'Global prompts and role models use the current workspace settings. Execution history and internal assistant tasks are excluded.',
     ja: '全体のプロンプトと役割モデルは現在のワークスペースの設定を使い、実行記録とアシスタント内部の作業は取り込みません。',
     zh: '全局提示词和角色模型使用当前工作室设置，不导入执行记录和助手内部任务。',
@@ -733,9 +733,9 @@ export const messages = {
     zh: '无法确认服务器是否完成，已保留所选文件和请求，请重新检查同一请求。',
   },
   'transfer.m147': {
-    ko: 'Uimori 자료·채팅 백업이나 전체 작업실 백업 파일을 선택해 주세요.',
+    ko: 'Uimori 자료 백업, 채팅 백업 또는 전체 작업실 백업 파일을 선택해 주세요.',
     en: 'Choose a Uimori resource, chat, or full workspace backup file.',
-    ja: 'Uimoriの資料・チャット、またはワークスペース全体のバックアップを選んでください。',
+    ja: 'Uimoriの資料、チャット、またはワークスペース全体のバックアップを選んでください。',
     zh: '请选择 Uimori 资料、聊天或完整工作室备份文件。',
   },
   'transfer.m148': {
@@ -817,9 +817,9 @@ export const messages = {
     zh: '最近备份',
   },
   'transfer.m162': {
-    ko: '생성·검증 중…',
+    ko: '생성 및 검증 중…',
     en: 'Creating and verifying…',
-    ja: '作成・検証中…',
+    ja: '作成と検証中…',
     zh: '正在创建并验证…',
   },
   'transfer.m163': {
@@ -931,10 +931,10 @@ export const messages = {
     zh: '备份与恢复',
   },
   'transfer.m181': {
-    ko: '백업 · 복원',
-    en: 'Backup · Restore',
-    ja: 'バックアップ・復元',
-    zh: '备份 · 恢复',
+    ko: '백업과 복원',
+    en: 'Backup and restore',
+    ja: 'バックアップと復元',
+    zh: '备份与恢复',
   },
   'transfer.m182': {
     ko: '작업실 전체 백업',
@@ -943,9 +943,9 @@ export const messages = {
     zh: '完整工作室备份',
   },
   'transfer.m183': {
-    ko: '설정·원고·이미지를 저장해요. API 키가 포함된 개인 보관용 파일이에요.',
+    ko: '설정, 원고, 이미지를 저장해요. API 키가 포함된 개인 보관용 파일이에요.',
     en: 'Save settings, manuscripts, and images. This personal backup file includes API keys.',
-    ja: '設定・原稿・画像を保存します。APIキーを含む個人保管用のファイルです。',
+    ja: '設定、原稿、画像を保存します。APIキーを含む個人保管用のファイルです。',
     zh: '保存设置、原稿和图片。这是包含 API 密钥的个人备份文件。',
   },
   'transfer.m184': {
@@ -1003,9 +1003,9 @@ export const messages = {
     zh: '导出原稿',
   },
   'transfer.m193': {
-    ko: '요청·작업 기록·메모를 제외한 본문만 Markdown 파일로 저장해요.',
+    ko: '요청, 작업 기록, 메모를 제외한 본문만 Markdown 파일로 저장해요.',
     en: 'Save only the manuscript as Markdown, excluding requests, task history, and notes.',
-    ja: 'リクエスト・作業記録・メモを除いた本文のみをMarkdownで保存します。',
+    ja: 'リクエスト、作業記録、メモを除いた本文のみをMarkdownで保存します。',
     zh: '仅将正文保存为 Markdown，不包含请求、任务记录和笔记。',
   },
   'transfer.m194': {
@@ -1057,9 +1057,9 @@ export const messages = {
     zh: '结束场景',
   },
   'transfer.m202': {
-    ko: 'HTML·Risu 상태창 표기는 그대로 담아요. 이미지·EPUB는 포함하지 않아요.',
+    ko: 'HTML과 Risu 상태창 표기는 그대로 담아요. 이미지와 EPUB는 포함하지 않아요.',
     en: 'HTML and Risu status markup is preserved. Images and EPUB are excluded.',
-    ja: 'HTML・Risuのステータス表示はそのまま含めます。画像・EPUBは含めません。',
+    ja: 'HTML、Risuのステータス表示はそのまま含めます。画像、EPUBは含めません。',
     zh: '保留 HTML 和 Risu 状态栏标记，不包含图片和 EPUB。',
   },
   'transfer.m203': {
@@ -1123,9 +1123,9 @@ export const messages = {
     zh: '查找原稿和聊天',
   },
   'transfer.m213': {
-    ko: '제목·본문·번역·요청으로 찾기',
+    ko: '제목, 본문, 번역, 요청으로 찾기',
     en: 'Search titles, text, translations, and requests',
-    ja: 'タイトル・本文・翻訳・リクエストで検索',
+    ja: 'タイトル、本文、翻訳、リクエストで検索',
     zh: '搜索标题、正文、翻译和请求',
   },
   'transfer.m214': {
@@ -1237,10 +1237,10 @@ export const messages = {
     zh: '没有匹配的原稿。',
   },
   'transfer.m235': {
-    ko: '계속 찾기 · 남은 원고 검색',
-    en: 'Continue searching remaining manuscripts',
-    ja: '残りの原稿を続けて検索',
-    zh: '继续搜索剩余原稿',
+    ko: '남은 원고 검색',
+    en: 'Search remaining manuscript',
+    ja: '残りの原稿を検索',
+    zh: '搜索剩余原稿',
   },
   'transfer.m236': {
     ko: '색인을 준비 중이에요. 최신 저장 본문을 직접 확인한 결과예요.',
@@ -1275,7 +1275,7 @@ export const messages = {
   'transfer.m241': {
     ko: '이 채팅의 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요.',
     en: 'Permanently delete this chat’s original text, translations, images, and execution history. Cancel or finish running tasks first.',
-    ja: 'このチャットの原文・翻訳・画像・実行記録を完全に削除します。実行中の作業を先にキャンセルするか完了してください。',
+    ja: 'このチャットの原文、翻訳、画像、実行記録を完全に削除します。実行中の作業を先にキャンセルするか完了してください。',
     zh: '永久删除此聊天的原文、翻译、图片和执行记录。请先取消或完成正在运行的任务。',
   },
   'transfer.m243': {
@@ -1441,10 +1441,10 @@ export const messages = {
     zh: '保存设置',
   },
   'transfer.m272': {
-    ko: '폴더 해제 · 채팅 유지',
-    en: 'Remove folder · Keep chats',
-    ja: 'フォルダーを解除・チャットは保持',
-    zh: '移除文件夹 · 保留聊天',
+    ko: '채팅을 유지하고 폴더 삭제',
+    en: 'Delete folder and keep chats',
+    ja: 'チャットを保持してフォルダーを削除',
+    zh: '删除文件夹并保留聊天',
   },
   'transfer.m273': {
     ko: '최신 폴더 설정 불러오기',
@@ -1603,10 +1603,10 @@ export const messages = {
     zh: '重命名文件夹',
   },
   'transfer.m300': {
-    ko: '폴더 해제 · 봇 유지',
-    en: 'Remove folder · Keep bots',
-    ja: 'フォルダーを解除・ボットは保持',
-    zh: '移除文件夹 · 保留机器人',
+    ko: '봇을 유지하고 폴더 삭제',
+    en: 'Delete folder and keep bots',
+    ja: 'ボットを保持してフォルダーを削除',
+    zh: '删除文件夹并保留机器人',
   },
   'transfer.m301': {
     ko: '미분류로 이동',
@@ -1795,10 +1795,10 @@ export const messages = {
     zh: '未指定',
   },
   'transfer.m334': {
-    ko: '· 전역 따름',
-    en: '· Follow global settings',
-    ja: '・全体設定に従う',
-    zh: '· 跟随全局设置',
+    ko: ', 전역 따름',
+    en: ', Follow global settings',
+    ja: '、全体設定に従う',
+    zh: '，跟随全局设置',
   },
   'transfer.m335': {
     ko: '전역 모델 설정',
@@ -1849,10 +1849,10 @@ export const messages = {
     zh: '不使用首条消息开始',
   },
   'transfer.m344': {
-    ko: '모듈 · 채팅 제목',
-    en: 'Modules · Chat title',
-    ja: 'モジュール・チャットのタイトル',
-    zh: '模块 · 聊天标题',
+    ko: '모듈 또는 채팅 제목',
+    en: 'Modules, Chat title',
+    ja: 'モジュール、チャットのタイトル',
+    zh: '模块，聊天标题',
   },
   'transfer.m345': {
     ko: '함께 사용할 모듈',
@@ -1957,16 +1957,16 @@ export const messages = {
     zh: '{v0} 已保留之前检查的文件和资料类型。',
   },
   'transfer.d004': {
-    ko: 'v3 CHARX·JPEG·PNG·JSON · .risum · 모듈 ZIP · 최대 {v0, number} MiB',
-    en: 'v3 CHARX · JPEG · PNG · JSON · .risum · module ZIP · up to {v0, number} MiB',
-    ja: 'v3 CHARX・JPEG・PNG・JSON・.risum・モジュールZIP・最大{v0, number} MiB',
-    zh: 'v3 CHARX · JPEG · PNG · JSON · .risum · 模块 ZIP · 最大 {v0, number} MiB',
+    ko: 'v3 CHARX, JPEG, PNG, JSON, .risum, 모듈 ZIP, 최대 {v0, number} MiB',
+    en: 'v3 CHARX, JPEG, PNG, JSON, .risum, module ZIP, up to {v0, number} MiB',
+    ja: 'v3 CHARX、JPEG、PNG、JSON、.risum、モジュールZIP、最大{v0, number} MiB',
+    zh: 'v3 CHARX，JPEG，PNG，JSON，.risum，模块 ZIP，最大 {v0, number} MiB',
   },
   'transfer.d005': {
-    ko: '자료 종류 · {v0}',
-    en: 'Resource type · {v0}',
-    ja: '資料の種類・{v0}',
-    zh: '资料类型 · {v0}',
+    ko: '자료 종류: {v0}',
+    en: 'Resource type: {v0}',
+    ja: '資料の種類：{v0}',
+    zh: '资料类型，{v0}',
   },
   'transfer.d006': {
     ko: '{v0, number}개 자료를 추가했어요.',
@@ -1981,10 +1981,10 @@ export const messages = {
     zh: '已将“{v0}”导入为新聊天，恢复了 {v1, number} 个聊天和 {v2, number} 条正文。',
   },
   'transfer.d008': {
-    ko: '{v0} · 성공',
-    en: '{v0} · Successful',
-    ja: '{v0}・成功',
-    zh: '{v0} · 成功',
+    ko: '{v0}, 성공',
+    en: '{v0}, Successful',
+    ja: '{v0}、成功',
+    zh: '{v0}，成功',
   },
   'transfer.d009': {
     ko: '{v0} 백업 다운로드',
@@ -2077,16 +2077,16 @@ export const messages = {
     zh: '{v0} 默认角色',
   },
   'transfer.d024': {
-    ko: '활동 · 미확인 채팅 {v0, number}개',
-    en: 'Activity · {v0, plural, one {# unread chat} other {# unread chats}}',
-    ja: 'アクティビティ・未確認チャット{v0, number}件',
-    zh: '动态 · {v0, number} 个未读聊天',
+    ko: '활동, 미확인 채팅 {v0, number}개',
+    en: 'Activity, {v0, plural, one {# unread chat} other {# unread chats}}',
+    ja: 'アクティビティ、未確認チャット{v0, number}件',
+    zh: '动态，{v0, number} 个未读聊天',
   },
   'transfer.d025': {
-    ko: '작업 현황 · 전체 채팅에서 진행 중 {v0, number}개',
-    en: 'Task status · {v0, plural, one {# running across all chats} other {# running across all chats}}',
-    ja: '作業状況・すべてのチャットで{v0, number}件実行中',
-    zh: '任务状态 · 全部聊天中有 {v0, number} 个正在运行',
+    ko: '작업 현황: 전체 채팅에서 진행 중 {v0, number}개',
+    en: 'Task status: {v0, plural, one {# running across all chats} other {# running across all chats}}',
+    ja: '作業状況：すべてのチャットで{v0, number}件実行中',
+    zh: '任务状态：全部聊天中有 {v0, number} 个正在运行',
   },
   'transfer.d026': {
     ko: '{v0} 봇 폴더',
@@ -2107,10 +2107,10 @@ export const messages = {
     zh: '{v0, number} 个模块',
   },
   'transfer.d029': {
-    ko: '채팅 폴더 · {v0}',
-    en: 'Chat folder · {v0}',
-    ja: 'チャットフォルダー · {v0}',
-    zh: '聊天文件夹 · {v0}',
+    ko: '채팅 폴더: {v0}',
+    en: 'Chat folder: {v0}',
+    ja: 'チャットフォルダー、{v0}',
+    zh: '聊天文件夹，{v0}',
   },
   'transfer.d030': {
     ko: '{v0} 선택 해제',
@@ -2125,10 +2125,10 @@ export const messages = {
     zh: '{error}{retained, select, true { 已保留之前检查的文件。} other {}}',
   },
   'transfer.importTypeChange': {
-    ko: '{kind, select, bot {봇으로} module {모듈로} persona {페르소나로} other {자료로}} 가져오기 · 변경',
-    en: 'Import as {kind, select, bot {bot} module {module} persona {persona} other {resource}} · Change',
-    ja: '{kind, select, bot {ボット} module {モジュール} persona {ペルソナ} other {資料}}として取り込む・変更',
-    zh: '导入为{kind, select, bot {机器人} module {模块} persona {角色} other {资料}} · 更改',
+    ko: '{kind, select, bot {봇으로} module {모듈로} persona {페르소나로} other {자료로}} 가져오기, 변경',
+    en: 'Import as {kind, select, bot {bot} module {module} persona {persona} other {resource}}, Change',
+    ja: '{kind, select, bot {ボット} module {モジュール} persona {ペルソナ} other {資料}}として取り込む、変更',
+    zh: '导入为{kind, select, bot {机器人} module {模块} persona {角色} other {资料}}，更改',
   },
   'transfer.importKind': {
     ko: '{kind, select, module {모듈} persona {페르소나} other {봇}} 가져오기',
@@ -2167,10 +2167,10 @@ export const messages = {
     zh: '已将“{title}”导入为新聊天。{skipped, plural, =0 {} other {已排除 # 项找不到的关联资料。}}',
   },
   'transfer.transcriptSummary': {
-    ko: '{name} · 본문 {entries, number}개 · 메모 {notes, number}개',
-    en: '{name} · {entries, plural, one {# text entry} other {# text entries}} · {notes, plural, one {# note} other {# notes}}',
-    ja: '{name}・本文{entries, number}件・メモ{notes, number}件',
-    zh: '{name} · {entries, number} 条正文 · {notes, number} 条笔记',
+    ko: '{name}, 본문 {entries, number}개, 메모 {notes, number}개',
+    en: '{name}, {entries, plural, one {# text entry} other {# text entries}}, {notes, plural, one {# note} other {# notes}}',
+    ja: '{name}、本文{entries, number}件、メモ{notes, number}件',
+    zh: '{name}，{entries, number} 条正文，{notes, number} 条笔记',
   },
   'transfer.transcriptTarget': {
     ko: '“{title}”의 새 채팅으로 가져와요.',
@@ -2179,16 +2179,16 @@ export const messages = {
     zh: '导入为“{title}”的新聊天。',
   },
   'transfer.resourcesSummary': {
-    ko: '자료 백업 · {contents, number}개 자료 · {prompts, number}개 프리셋 · {images, number}개 이미지',
-    en: 'Resource backup · {contents, plural, one {# resource} other {# resources}} · {prompts, plural, one {# preset} other {# presets}} · {images, plural, one {# image} other {# images}}',
-    ja: '資料バックアップ・資料{contents, number}件・プリセット{prompts, number}件・画像{images, number}件',
-    zh: '资料备份 · {contents, number} 项资料 · {prompts, number} 个预设 · {images, number} 张图片',
+    ko: '자료 백업, {contents, number}개 자료, {prompts, number}개 프리셋, {images, number}개 이미지',
+    en: 'Resource backup, {contents, plural, one {# resource} other {# resources}}, {prompts, plural, one {# preset} other {# presets}}, {images, plural, one {# image} other {# images}}',
+    ja: '資料バックアップ、資料{contents, number}件、プリセット{prompts, number}件、画像{images, number}件',
+    zh: '资料备份，{contents, number} 项资料，{prompts, number} 个预设，{images, number} 张图片',
   },
   'transfer.chatSummary': {
-    ko: '채팅 백업 · {title} · 채팅 {chats, number}개 · 본문 {sources, number}개',
-    en: 'Chat backup · {title} · {chats, plural, one {# chat} other {# chats}} · {sources, plural, one {# text entry} other {# text entries}}',
-    ja: 'チャットバックアップ・{title}・チャット{chats, number}件・本文{sources, number}件',
-    zh: '聊天备份 · {title} · {chats, number} 个聊天 · {sources, number} 条正文',
+    ko: '채팅 백업, {title}, 채팅 {chats, number}개, 본문 {sources, number}개',
+    en: 'Chat backup, {title}, {chats, plural, one {# chat} other {# chats}}, {sources, plural, one {# text entry} other {# text entries}}',
+    ja: 'チャットバックアップ、{title}、チャット{chats, number}件、本文{sources, number}件',
+    zh: '聊天备份，{title}，{chats, number} 个聊天，{sources, number} 条正文',
   },
   'transfer.count': {
     ko: '{count, number}개',
@@ -2198,15 +2198,15 @@ export const messages = {
   },
   'transfer.titleCount': {
     ko: '{matching, select, true {제목 일치} other {채팅 제목}} {count, number}개',
-    en: '{matching, select, true {Matching titles} other {Chat titles}} · {count, number}',
+    en: '{matching, select, true {Matching titles} other {Chat titles}}, {count, number}',
     ja: '{matching, select, true {タイトル一致} other {チャットのタイトル}} {count, number}件',
     zh: '{matching, select, true {匹配标题} other {聊天标题}} {count, number} 个',
   },
   'transfer.moreTitles': {
-    ko: '채팅 제목 더 보기 · {count, number}개 남음',
-    en: 'Show more chat titles · {count, number} remaining',
-    ja: 'チャットのタイトルをもっと見る・残り{count, number}件',
-    zh: '查看更多聊天标题 · 剩余 {count, number} 个',
+    ko: '채팅 제목 더 보기 ({count, number}개 남음)',
+    en: 'More chat titles ({count, number} remaining)',
+    ja: 'チャットのタイトルをもっと見る（残り{count, number}件）',
+    zh: '更多聊天标题（剩余{count, number}个）',
   },
   'transfer.openScene': {
     ko: '{kind, select, original {원문} translation {번역} other {요청}} 장면 열기',
@@ -2221,16 +2221,16 @@ export const messages = {
     zh: '再显示 {count, number} 个',
   },
   'transfer.folderNameValue': {
-    ko: '폴더 이름 · {name}',
-    en: 'Folder name · {name}',
-    ja: 'フォルダー名・{name}',
-    zh: '文件夹名称 · {name}',
+    ko: '폴더 이름: {name}',
+    en: 'Folder name: {name}',
+    ja: 'フォルダー名：{name}',
+    zh: '文件夹名称，{name}',
   },
   'transfer.personaValue': {
-    ko: '기본 페르소나 · {name}',
-    en: 'Default persona · {name}',
-    ja: '初期ペルソナ・{name}',
-    zh: '默认角色 · {name}',
+    ko: '기본 페르소나: {name}',
+    en: 'Default persona: {name}',
+    ja: '初期ペルソナ：{name}',
+    zh: '默认角色，{name}',
   },
   'transfer.runningCount': {
     ko: '진행 중 {count, number}',
@@ -2239,10 +2239,10 @@ export const messages = {
     zh: '{count, number} 个正在运行',
   },
   'transfer.backupSize': {
-    ko: '{size} MiB · DB {schema}',
-    en: '{size} MiB · DB {schema}',
-    ja: '{size} MiB・DB {schema}',
-    zh: '{size} MiB · DB {schema}',
+    ko: '{size} MiB, DB {schema}',
+    en: '{size} MiB, DB {schema}',
+    ja: '{size} MiB、DB {schema}',
+    zh: '{size} MiB，DB {schema}',
   },
   'transfer.finding.asset-unavailable': {
     ko: '파일 밖의 이미지나 찾을 수 없는 첨부 자료는 가져오지 않아요. 원본 파일에는 보존해요.',
@@ -2257,15 +2257,15 @@ export const messages = {
     zh: '将排除无法读取或超出处理范围的图片。',
   },
   'transfer.finding.asset-format': {
-    ko: 'PNG·JPEG·WebP·AVIF·GIF 이외의 첨부 자료는 아직 사용할 수 없어요.',
+    ko: 'PNG, JPEG, WebP, AVIF, GIF 이외의 첨부 자료는 아직 사용할 수 없어요.',
     en: 'Attachments other than PNG, JPEG, WebP, AVIF, and GIF cannot be used yet.',
-    ja: 'PNG・JPEG・WebP・AVIF・GIF以外の添付資料はまだ使えません。',
+    ja: 'PNG、JPEG、WebP、AVIF、GIF以外の添付資料はまだ使えません。',
     zh: '暂不支持 PNG、JPEG、WebP、AVIF、GIF 以外的附件。',
   },
   'transfer.finding.asset-role': {
-    ko: '감정·배경으로 표시된 첨부는 역할 없이 일반 이미지로 가져와요. 이름은 그대로 두지만 어떤 감정이나 배경인지는 자료에 남기지 않아요.',
+    ko: '감정이나 배경으로 표시된 첨부는 역할 없이 일반 이미지로 가져와요. 이름은 그대로 두지만 어떤 감정이나 배경인지는 자료에 남기지 않아요.',
     en: 'Emotion and background attachments are imported as ordinary images without roles. Names are kept, but emotion and background roles are not stored in the resource.',
-    ja: '感情・背景の添付資料は役割を持たない通常の画像として取り込みます。名前は保持しますが、感情や背景の役割は資料に保存しません。',
+    ja: '感情、背景の添付資料は役割を持たない通常の画像として取り込みます。名前は保持しますが、感情や背景の役割は資料に保存しません。',
     zh: '情绪和背景附件将作为无角色的普通图片导入，保留名称，但不保存其情绪或背景角色。',
   },
   'transfer.finding.lore-not-activated': {
@@ -2299,15 +2299,15 @@ export const messages = {
     zh: '保留设定源码和规则，由 JEV 判断可选设定的相关性，写作模型也可查询未选中的设定。',
   },
   'transfer.finding.source-file-not-retained': {
-    ko: '카드·모듈 원문과 지원 이미지는 자료에 보존해요. 원본 파일 자체가 필요하면 직접 보관해 주세요.',
+    ko: '카드와 모듈의 원문, 지원 이미지는 자료에 보존해요. 원본 파일 자체가 필요하면 직접 보관해 주세요.',
     en: 'Card and module source and supported images are kept in the resource. Keep the original file yourself if you need it.',
-    ja: 'カード・モジュールのソースと対応画像は資料に保持します。元ファイル自体が必要な場合はご自身で保管してください。',
+    ja: 'カード、モジュールのソースと対応画像は資料に保持します。元ファイル自体が必要な場合はご自身で保管してください。',
     zh: '卡片、模块源码和支持的图片将保留在资料中。如需原始文件本身，请自行保存。',
   },
   'transfer.finding.native-risu': {
-    ko: '카드·모듈과 CBS·정규식·트리거 코드는 Risu 원문으로 보존해요. 본문·시작문·로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.',
+    ko: '카드, 모듈, CBS, 정규식, 트리거 코드는 Risu 원문으로 보존해요. 본문, 시작문, 로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.',
     en: 'Cards, modules, and CBS, regex, and trigger code are preserved as Risu source. Text, openings, and lore are read from it for display. Preserving the source does not mean every script can run.',
-    ja: 'カード・モジュールとCBS・正規表現・トリガーコードはRisuソースとして保持します。本文・開始文・ロアはソースから読み込んで表示します。ソースを保持してもすべてのスクリプトが実行できるわけではありません。',
+    ja: 'カード、モジュールとCBS、正規表現、トリガーコードはRisuソースとして保持します。本文、開始文、ロアはソースから読み込んで表示します。ソースを保持してもすべてのスクリプトが実行できるわけではありません。',
     zh: '卡片、模块以及 CBS、正则表达式和触发器代码将作为 Risu 源码保留。正文、开场和设定从中读取并显示。保留源码并不表示所有脚本均可执行。',
   },
   'transfer.finding.native-model-calls': {
@@ -2329,15 +2329,15 @@ export const messages = {
     zh: '不应用 memory 区块指定的位置和前后文本。向模型发送摘要和记忆时，使用 Uimori 的上下文处理方式。',
   },
   'transfer.finding.RISU_PRESET_NATIVE_PROMPT': {
-    ko: '프롬프트 구성·CBS·토글·기본 변수·정규식을 원래 형식으로 사용해요. 모델·연결·생성 설정은 Uimori의 선택을 유지해요.',
+    ko: '프롬프트 구성, CBS, 토글, 기본 변수, 정규식을 원래 형식으로 사용해요. 모델, 연결, 생성 설정은 Uimori의 선택을 유지해요.',
     en: 'Prompt structure, CBS, toggles, default variables, and regular expressions use their original format. Uimori’s selected model, connection, and generation settings stay in effect.',
-    ja: 'プロンプト構成・CBS・トグル・既定変数・正規表現は元の形式で使います。モデル・接続・生成設定はUimoriでの選択を保持します。',
+    ja: 'プロンプト構成、CBS、トグル、既定変数、正規表現は元の形式で使います。モデル、接続、生成設定はUimoriでの選択を保持します。',
     zh: '以原始格式使用提示词结构、CBS、开关、默认变量和正则表达式，保留 Uimori 中选择的模型、连接和生成设置。',
   },
   'transfer.finding.decoratorPosition': {
-    ko: '로어의 `@@{decorator}` 위치·삽입 지시문은 원본에 보존하지만 현재 컨텍스트 배치에는 적용하지 않아요.',
+    ko: '로어의 `@@{decorator}` 위치 및 삽입 지시문은 원본에 보존하지만 현재 컨텍스트 배치에는 적용하지 않아요.',
     en: 'The lore position or insertion instruction `@@{decorator}` is preserved in the source but is not applied to the current context layout.',
-    ja: 'ロアの位置・挿入指示 `@@{decorator}` はソースに保持しますが、現在のコンテキスト配置には適用しません。',
+    ja: 'ロアの位置、挿入指示 `@@{decorator}` はソースに保持しますが、現在のコンテキスト配置には適用しません。',
     zh: '设定的位置或插入指令 `@@{decorator}` 将保留在源码中，但不应用于当前上下文排布。',
   },
   'transfer.finding.decoratorActivation': {
@@ -2359,9 +2359,9 @@ export const messages = {
     zh: '第 {index, number} 个区块（{type}）会保存，但不会执行。如需执行，请改为支持的提示词区块类型。',
   },
   'transfer.finding.hostSetting': {
-    ko: '{setting}로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요. 프리셋의 프롬프트 블록과 Uimori의 작업·모델 설정을 사용해요.',
+    ko: '{setting}로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요. 프리셋의 프롬프트 블록과 Uimori의 작업과 모델 설정을 사용해요.',
     en: 'The Risu built-in prompt setting specified by {setting} is not applied. The preset prompt blocks and Uimori task and model settings are used.',
-    ja: '{setting}で指定されたRisu内蔵プロンプト設定は適用しません。プリセットのプロンプトブロックとUimoriの作業・モデル設定を使います。',
+    ja: '{setting}で指定されたRisu内蔵プロンプト設定は適用しません。プリセットのプロンプトブロックとUimoriの作業、モデル設定を使います。',
     zh: '不应用 {setting} 指定的 Risu 内置提示词设置。使用预设的提示词区块和 Uimori 的任务、模型设置。',
   },
   'transfer.taskChatPickerTitle': {

@@ -531,7 +531,7 @@ function IllustrationCard({
                           : t('visuals.m139')
                 : illustrationErrorMessage(job.error),
             })}
-            {!active && job.error && <small> · {job.error}</small>}
+            {!active && job.error && <small> {job.error}</small>}
           </p>
           <TaskButtons job={job} busy={busy} act={act} />
         </div>
@@ -578,9 +578,11 @@ function IllustrationCard({
               })}
             </p>
             {detail.modelTitle && (
-              <p>
-                {detail.generator === 'comfyui' ? t('visuals.m077') : t('visuals.m149')} ·{' '}
-                {detail.modelTitle}
+              <p className="ui-meta-row">
+                <span>
+                  {detail.generator === 'comfyui' ? t('visuals.m077') : t('visuals.m149')}
+                </span>
+                <span>{detail.modelTitle}</span>
               </p>
             )}
             {detail.usage && (

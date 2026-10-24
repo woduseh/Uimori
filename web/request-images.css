@@ -13,7 +13,7 @@
   height: 72px;
   padding: 0;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
 }
 .request-image-open img {
   width: 100%;
@@ -31,7 +31,7 @@
   min-height: 26px;
   padding: 4px;
   background: var(--panel);
-  border: 1px solid var(--input-border);
+  border: var(--hairline) solid var(--input-border);
   border-radius: 50%;
 }
 .request-image-dialog {

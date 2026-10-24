@@ -23,7 +23,7 @@
   width: 88px;
   max-width: 88px;
   padding: 5px 18px 5px 4px;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .input-translation-language-mobile {
   display: none;
@@ -37,10 +37,10 @@
   min-height: var(--control-h);
   padding: 0 6px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   list-style: none;
@@ -61,28 +61,28 @@
   display: grid;
   min-width: 132px;
   padding: 6px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
-  box-shadow: 0 8px 24px var(--shade);
+  box-shadow: 0 2px 8px var(--shade);
 }
 .input-translation-language-menu > button {
-  min-height: 38px;
+  min-height: var(--control-h);
   padding: 7px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-small);
   background: transparent;
   color: var(--text);
   text-align: left;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .input-translation-language-menu > button[aria-pressed="true"] {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .input-translation-feedback {
   margin: 6px 6px 0;
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
   overflow-wrap: anywhere;
 }

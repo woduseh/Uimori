@@ -34,7 +34,7 @@
   gap: 12px;
   min-height: 76px;
   padding: 14px 28px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   background: var(--panel);
 }
 .outline-workspace-title {
@@ -44,12 +44,12 @@
   min-width: 0;
 }
 .outline-workspace-title > svg {
-  color: var(--accent);
+  color: var(--accent-text);
   flex-shrink: 0;
 }
 .outline-workspace-title h2 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--font-heading);
   letter-spacing: -0.025em;
 }
 .outline-workspace-title h2:focus {
@@ -58,7 +58,7 @@
 .outline-workspace-title p {
   margin: 2px 0 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -90,7 +90,7 @@
   flex-direction: column;
   min-height: 0;
   background: var(--surface-raised);
-  border-right: 1px solid var(--line);
+  border-right: var(--hairline) solid var(--line);
 }
 .outline-navigation-head {
   display: flex;
@@ -98,7 +98,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 16px 12px 10px 18px;
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 600;
   color: var(--muted);
 }
@@ -130,11 +130,11 @@
   display: flex;
   align-items: center;
   min-width: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
 }
 .outline-entry.is-selected > .outline-row {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .outline-panel .outline-fold {
   flex: 0 0 24px;
@@ -162,7 +162,7 @@
   min-width: 0;
   min-height: 54px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   padding: 9px 8px;
   background: transparent;
   color: inherit;
@@ -171,12 +171,12 @@
   background: var(--hover);
 }
 .outline-node-kind {
-  font-size: 10px;
+  font-size: var(--font-small);
   letter-spacing: 0.02em;
   color: var(--muted);
 }
 .outline-title {
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 550;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -188,7 +188,7 @@
   right: 7px;
   display: flex;
   gap: 4px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .outline-detail {
   min-width: 0;
@@ -216,17 +216,17 @@
 }
 .outline-detail-heading h3,
 .outline-section-heading h3 {
-  font-size: 25px;
+  font-size: var(--font-heading);
   letter-spacing: -0.035em;
   line-height: 1.35;
   margin: 7px 0 0;
   overflow-wrap: anywhere;
 }
 .outline-eyebrow {
-  font-size: 11px;
+  font-size: var(--font-small);
   font-weight: 600;
   letter-spacing: 0.065em;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .outline-status-line {
   display: flex;
@@ -234,7 +234,7 @@
   flex-wrap: wrap;
   gap: 6px 14px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-small);
   margin-bottom: 24px;
 }
 .outline-status-line > span {
@@ -257,22 +257,22 @@
 }
 .outline-primary-actions button {
   padding: 9px 14px;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
 }
 .outline-intent-card,
 .outline-writing-card,
 .outline-brief,
 .outline-conflict {
   padding: 20px 22px;
-  border: 1px solid var(--line);
-  border-radius: 13px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
   margin-bottom: 20px;
   min-width: 0;
 }
 .outline-intent-card .prose,
 .outline-intent-card {
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.85;
   overflow-wrap: anywhere;
 }
@@ -284,14 +284,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 12px;
+  font-size: var(--font-small);
   margin-bottom: 12px;
   color: var(--muted);
 }
 .outline-card-heading h4 {
   margin: 0;
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .outline-panel .text-button {
   background: transparent;
@@ -301,7 +301,7 @@
   min-height: 32px;
 }
 .outline-panel .text-button:hover {
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--hover);
 }
 .outline-panel .outline-preview-link {
@@ -312,7 +312,7 @@
   background: transparent;
   color: var(--muted);
   padding: 7px 0;
-  font-size: 12px;
+  font-size: var(--font-small);
   margin-bottom: 20px;
 }
 .outline-related-list {
@@ -321,7 +321,7 @@
 .outline-related-list > summary {
   cursor: pointer;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .outline-related-list > summary svg {
   vertical-align: middle;
@@ -332,7 +332,7 @@
   display: inline-flex;
   gap: 6px;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--font-small);
   max-width: 100%;
   overflow-wrap: anywhere;
 }
@@ -346,7 +346,7 @@
   display: grid;
   gap: 7px;
   min-width: 0;
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 550;
 }
 .outline-form input:not([type="checkbox"]),
@@ -356,7 +356,7 @@
   width: 100%;
   min-width: 0;
   background: var(--panel);
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   font-weight: 400;
 }
 .outline-form textarea,
@@ -364,7 +364,7 @@
   resize: vertical;
   line-height: 1.8;
   padding: 12px 14px;
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .outline-form-pair {
   display: grid;
@@ -372,7 +372,7 @@
   gap: 12px;
 }
 .outline-field-help {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.7;
   color: var(--muted);
 }
@@ -392,13 +392,13 @@
   margin-top: 10px;
 }
 .outline-reference-picker {
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
   padding: 12px 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
   background: var(--surface-raised);
 }
 .outline-reference-picker summary {
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 550;
   cursor: pointer;
 }
@@ -408,7 +408,7 @@
 }
 .outline-reference-picker > p {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-small);
 }
 .outline-reference-picker label,
 .outline-form .outline-keep {
@@ -425,7 +425,7 @@
 }
 .outline-reference-picker small {
   display: block;
-  font-size: 11px;
+  font-size: var(--font-small);
   color: var(--muted);
   font-weight: 400;
   margin-top: 3px;
@@ -436,23 +436,23 @@
 }
 .outline-writing-card > p,
 .outline-brief > p {
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
   line-height: 1.7;
 }
 .outline-brief h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .outline-brief h5 {
   margin: 18px 0 8px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-small);
 }
 .outline-brief details {
   padding: 8px 0;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
+  border-top: var(--hairline) solid var(--line);
+  font-size: var(--font-small);
 }
 .outline-brief summary {
   cursor: pointer;
@@ -468,7 +468,7 @@
 }
 .outline-source-list .outline-card-heading {
   flex-wrap: wrap;
-  font-size: 10px;
+  font-size: var(--font-small);
 }
 .outline-panel .outline-source {
   display: flex;
@@ -478,7 +478,7 @@
   color: var(--text);
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   border-radius: 0;
   padding: 13px 4px;
   text-align: left;
@@ -486,7 +486,7 @@
 .outline-source span {
   flex: 1;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .outline-source:hover {
   background: var(--hover);
@@ -507,9 +507,9 @@
   place-items: center;
   width: 68px;
   height: 68px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  color: var(--accent);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
+  color: var(--accent-text);
   background: var(--surface-raised);
   margin-bottom: 18px;
 }
@@ -517,14 +517,14 @@
   margin: 0 0 10px;
 }
 .outline-welcome h3 {
-  font-size: clamp(22px, 2.3vw, 30px);
+  font-size: var(--font-heading);
   line-height: 1.35;
   letter-spacing: -0.04em;
   margin: 0 0 16px;
 }
 .outline-welcome > p:not(.outline-eyebrow) {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.85;
   margin: 0;
 }
@@ -540,11 +540,11 @@
   gap: 12px;
   justify-content: space-between;
   align-items: center;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   min-height: 38px;
   padding: 4px 22px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .outline-workspace-footer > span {
   min-width: 0;
@@ -562,18 +562,18 @@
   display: flex;
   gap: 12px;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .outline-panel > .dismissible-error {
   margin: 10px 20px;
 }
 .helper-outline-selection {
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--surface-raised);
   margin-bottom: 9px;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .helper-outline-selection > div {
   display: flex;
@@ -589,18 +589,18 @@
 .helper-outline-selection small {
   display: block;
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--font-small);
   margin-top: 4px;
 }
 .helper-outline-selection button {
-  font-size: 11px;
+  font-size: var(--font-small);
 }
 .outline-helper-return {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   background: var(--surface-raised);
 }
 @media (max-width: 1150px) {
@@ -641,7 +641,7 @@
   }
   .outline-detail-heading h3,
   .outline-section-heading h3 {
-    font-size: 23px;
+    font-size: var(--font-heading);
   }
   .outline-mobile-select {
     display: flex;
@@ -655,12 +655,12 @@
     min-width: 0;
     flex: 1;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--font-small);
   }
   .outline-mobile-select select {
     width: 100%;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--font-small);
   }
   .outline-primary-actions {
     gap: 6px;
@@ -669,7 +669,7 @@
     flex: 1 1 auto;
     justify-content: center;
     padding: 9px 10px;
-    font-size: 12px;
+    font-size: var(--font-small);
   }
   .outline-intent-card,
   .outline-writing-card,
@@ -677,7 +677,7 @@
     padding: 17px;
   }
   .outline-status-line {
-    font-size: 10px;
+    font-size: var(--font-small);
     margin-bottom: 20px;
   }
   .outline-workspace-footer {
@@ -722,7 +722,7 @@
 }
 
 .outline-intent-card :is(h1, h2, h3, h4) {
-  font-size: 16px;
+  font-size: var(--font-heading);
   line-height: 1.5;
   margin: 18px 0 7px;
   letter-spacing: -0.02em;
@@ -743,6 +743,6 @@
   margin-bottom: 18px;
 }
 .outline-writing-plan .prose {
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.85;
 }

@@ -125,7 +125,7 @@ export function NativeRisuToggleEditor({
   useEditorSavePreparation(draftPath, (model) => {
     if (invalidPending) throw new Error('잘못 입력된 토글 또는 변수 값을 확인해 주세요.');
     if (!sourcePending) return model;
-    if (!prepareSave) throw new Error('변수·토글 원문을 폼에 반영해 주세요.');
+    if (!prepareSave) throw new Error('변수와 토글 원문을 폼에 반영해 주세요.');
     return prepareSave(model, { toggles: raw, variables: rawVariables });
   });
   useEffect(() => {
@@ -500,7 +500,7 @@ export function NativeRisuToggleEditor({
                   {open
                     ? definition?.key
                     : item.caption ||
-                      definition?.options.split(',').join(' · ') ||
+                      definition?.options.split(',').join(', ') ||
                       definition?.key ||
                       item.raw}
                 </small>

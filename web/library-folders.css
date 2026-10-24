@@ -13,10 +13,10 @@
   min-width: 0;
 }
 .library-folder-review {
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-control);
   padding: 12px;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .library-item-menu {
   position: relative;
@@ -30,8 +30,8 @@
   min-width: var(--control-h);
   min-height: var(--control-h);
   cursor: pointer;
-  border-radius: 8px;
-  font-size: 20px;
+  border-radius: var(--radius-control);
+  font-size: var(--font-heading);
 }
 .library-item-menu > summary::-webkit-details-marker {
   display: none;
@@ -54,9 +54,9 @@
   gap: 4px;
   padding: 6px;
   background: var(--surface-raised);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 12px 28px #0005;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: 0 2px 8px var(--shade);
 }
 .library-item-menu > div > button,
 .library-item-menu .delete-button {
@@ -67,7 +67,7 @@
   text-align: left;
   padding: 9px 12px;
   border: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
   min-height: var(--control-h);
 }
 .library-folder-form {
@@ -85,8 +85,8 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 3px;
-  border-radius: 2px;
+  width: var(--hairline);
+  border-radius: var(--radius-small);
   background: var(--accent);
 }
 .library-folder-card[data-drop-position="before"]::after {
@@ -99,7 +99,7 @@
   left: 0;
   right: 0;
   width: auto;
-  height: 3px;
+  height: var(--hairline);
   bottom: auto;
 }
 .library-folder-grid[data-view="list"] .library-folder-card[data-drop-position="before"]::after {
@@ -119,14 +119,14 @@
   flex-wrap: wrap;
   gap: 8px;
   padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-panel);
   background: var(--accent-soft);
   margin-bottom: 16px;
 }
 .library-bulk-toolbar > span {
   margin-right: auto;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 @media (max-width: 760px) {
   .library-workspace {

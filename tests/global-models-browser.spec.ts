@@ -77,7 +77,7 @@ for (const width of DEFAULT_WIDTHS) {
     ).toBe(true);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/?chat=${existing.id}`);
-    await page.getByRole('button', { name: /^현재 본문 모델 ·/ }).click();
+    await page.getByRole('button', { name: /^현재 본문 모델:/ }).click();
     const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(editor).toContainText('변경한 설정은 이후 작업부터 적용돼요.');
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
@@ -95,7 +95,7 @@ for (const width of DEFAULT_WIDTHS) {
     });
     const mainThreshold = editor.getByLabel('본문 거절 확신 기준', { exact: true });
     await expect(behaviorSummary).toBeVisible();
-    await expect(behaviorSummary).toContainText('번역 16회 · 거절 감지 2/2');
+    await expect(behaviorSummary).toContainText('번역 16회, 거절 감지 2/2');
     await expect(mainThreshold).toBeHidden();
     await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toBeHidden();
     for (const colorScheme of ['light', 'dark'] as const) {
@@ -163,7 +163,7 @@ for (const width of DEFAULT_WIDTHS) {
       maxCalls: 12,
     });
     await page.reload();
-    await page.getByRole('button', { name: /^현재 본문 모델 ·/ }).click();
+    await page.getByRole('button', { name: /^현재 본문 모델:/ }).click();
     await expect(mainThreshold).toBeHidden();
     await behaviorSummary.click();
     await expect(mainToggle).not.toBeChecked();
@@ -247,7 +247,7 @@ for (const width of DEFAULT_WIDTHS) {
         ).ok()
       ).toBe(true);
       // A raw API update represents another device: no localStorage or same-page save event.
-      await expect(page.getByRole('button', { name: /^현재 본문 모델 ·/ })).toContainText(
+      await expect(page.getByRole('button', { name: /^현재 본문 모델:/ })).toContainText(
         `GMUI ${width} B`
       );
       for (const run of reserved) {
@@ -385,7 +385,7 @@ for (const width of DEFAULT_WIDTHS) {
     await composer.fill('고정 설정을 바꿔도 보존할 요청');
     await openChatSettings(page);
     const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await selectChatSettingsSection(page, '프롬프트·모델·번역');
+    await selectChatSettingsSection(page, '생성 설정');
     const promptSelect = settings.getByRole('combobox', {
       name: '이 채팅의 작문 프롬프트',
       exact: true,
@@ -421,7 +421,7 @@ for (const width of DEFAULT_WIDTHS) {
     await settings.getByRole('button', { name: '장착 설정 다시 불러오기', exact: true }).click();
     await expect(promptSelect).toHaveValue('');
     await promptSelect.selectOption(preset.id);
-    await selectChatSettingsSection(page, '프롬프트·모델·번역');
+    await selectChatSettingsSection(page, '생성 설정');
     const modelSelect = settings.getByRole('combobox', {
       name: '이 채팅의 본문 모델',
       exact: true,
@@ -439,7 +439,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(modelSelect.locator('option:checked')).toContainText(pinnedModel.title);
     await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
-    const chip = page.getByRole('button', { name: /^현재 본문 모델 ·/ });
+    const chip = page.getByRole('button', { name: /^현재 본문 모델:/ });
     await expect(chip).toContainText(pinnedModel.title);
     await expect(chip).toHaveAccessibleName(/이 채팅 고정/);
     await expect(chip.locator('svg')).toBeVisible();
@@ -622,7 +622,7 @@ for (const width of DEFAULT_WIDTHS) {
     await selectSettingsSection(page, '역할별 모델');
     const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(
-      roles.getByRole('button', { name: '프로바이더·모델 설정', exact: true })
+      roles.getByRole('button', { name: '프로바이더와 모델 설정', exact: true })
     ).toHaveCount(0);
     const main = roles.getByLabel('원문 모델', { exact: true });
     const translation = roles.getByLabel('번역 모델', { exact: true });
@@ -737,12 +737,12 @@ for (const width of DEFAULT_WIDTHS) {
       await navigationAction(page, '설정');
       await selectSettingsSection(page, '역할별 모델');
       const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
-      const setup = roles.getByRole('button', { name: '프로바이더·모델 설정', exact: true });
+      const setup = roles.getByRole('button', { name: '프로바이더와 모델 설정', exact: true });
       await expect(roles.getByLabel('원문 모델', { exact: true })).toBeInViewport();
       await expect(setup).toBeInViewport();
       await expect(roles.getByText('사용 가능한 모델 없음', { exact: true })).toBeVisible();
       await expect(
-        roles.getByRole('button', { name: '모델 프리셋·프로바이더 관리', exact: true })
+        roles.getByRole('button', { name: '모델과 프로바이더 관리', exact: true })
       ).toHaveCount(0);
       if (visualReview) {
         for (const colorScheme of ['light', 'dark'] as const) {

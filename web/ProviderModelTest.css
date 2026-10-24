@@ -6,7 +6,7 @@
 }
 .provider-model-test > small,
 .provider-model-test .provider-actions small {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.6;
   color: var(--muted);
 }
@@ -17,7 +17,7 @@
   display: grid;
   gap: 6px;
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.6;
   overflow-wrap: anywhere;
 }

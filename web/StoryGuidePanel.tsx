@@ -286,8 +286,9 @@ function StoryGuideEditor({
         {loaded.brief ? (
           <details className="story-guide-last-brief">
             <summary>{t('prompts.uiLastWritingBrief')}</summary>
-            <p className="muted">
-              {formatDate(loaded.brief.createdAt)} · {loaded.brief.modelTitle}
+            <p className="muted ui-meta-row">
+              <span>{formatDate(loaded.brief.createdAt)}</span>
+              <span>{loaded.brief.modelTitle}</span>
               {loaded.brief.configRevision !== loaded.revision &&
                 t('prompts.uiBriefCreatedWithPreviousSettings')}
             </p>

@@ -42,10 +42,10 @@ for (const viewport of [
     }, info) => {
       const chat = await fixture(request);
       const dialog = await open(page, chat.id);
-      await selectChatSettingsSection(page, '인물·자료');
+      await selectChatSettingsSection(page, '사용 자료');
       await expect(dialog.getByLabel('이미지 배치 담당', { exact: true })).toBeHidden();
       await expect(dialog.getByRole('region', { name: '로어 컨텍스트 정책' })).toBeHidden();
-      await selectChatSettingsSection(page, '기억·메모·로어');
+      await selectChatSettingsSection(page, '기억과 메모');
       await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toBeHidden();
       await dialog.getByText('선별 기준과 용량', { exact: true }).click();
       await dialog.getByLabel('Jev 관련성 기준', { exact: true }).fill('0.7');
@@ -62,7 +62,7 @@ for (const viewport of [
         expect(Math.abs(thresholdBox!.x - budgetBox!.x)).toBeLessThanOrEqual(1);
 
       await dialog.getByLabel('조회 로어 토큰 한도', { exact: true }).fill('');
-      await selectChatSettingsSection(page, '이미지·삽화 참조');
+      await selectChatSettingsSection(page, '이미지');
       const manager = dialog.locator('.chat-settings-image-management');
       await expect(manager).not.toHaveAttribute('open');
       await expect(dialog.getByLabel('이미지 이름', { exact: true })).toBeHidden();
@@ -91,7 +91,7 @@ for (const viewport of [
       await expect(
         dialog.getByRole('button', { name: '채팅 설정 저장', exact: true })
       ).toBeDisabled();
-      await selectChatSettingsSection(page, '프롬프트·모델·번역');
+      await selectChatSettingsSection(page, '생성 설정');
       await expect(
         dialog.getByRole('combobox', { name: '이 채팅의 본문 모델', exact: true })
       ).toBeVisible();
@@ -106,13 +106,13 @@ for (const viewport of [
         exact: true,
       });
       await expect(prompt.locator('option').first()).toHaveText(
-        `전역 따르기 · ${workspace.main.title}`
+        `전역 따르기: ${workspace.main.title}`
       );
       const inherited = dialog
         .locator('.settings-inherited')
         .filter({ hasText: '전체 채팅 설정에서 사용하는 프롬프트' });
       await expect(inherited.locator('dd')).toHaveText(workspace.translation.title);
-      await selectChatSettingsSection(page, '기억·메모·로어');
+      await selectChatSettingsSection(page, '기억과 메모');
       await expect(dialog.getByLabel('조회 로어 토큰 한도', { exact: true })).toHaveValue('');
       await expect(dialog.getByLabel('Jev 관련성 기준', { exact: true })).toHaveValue('0.7');
       await dialog.getByLabel('조회 로어 토큰 한도', { exact: true }).fill('12000');
@@ -134,7 +134,7 @@ for (const viewport of [
       const detail = await (await request.get(`/api/chats/${chat.id}`)).json();
       expect(detail.profile.loreContext.judgment.threshold).toBe(0.7);
       expect(detail.profile.image).toBe(draftImage === 'jev');
-      await selectChatSettingsSection(page, '이미지·삽화 참조');
+      await selectChatSettingsSection(page, '이미지');
       await expect(image).toHaveValue(draftImage);
       expect(detail.runs).toHaveLength(0);
       expect(
@@ -161,10 +161,10 @@ for (const viewport of [
       await dialog.getByLabel('location 재정의 해제', { exact: true }).click();
       await expect(value('location')).toHaveValue('reading_room');
       await dialog.getByRole('button', { name: 'JSON 편집', exact: true }).click();
-      const raw = dialog.getByLabel('공유 변수 재정의 · JSON', { exact: true });
+      const raw = dialog.getByLabel('공유 변수 재정의 (JSON)', { exact: true });
       expect(JSON.parse(await raw.inputValue())).toEqual({ trust: '' });
       await raw.fill('{"trust":');
-      await selectChatSettingsSection(page, '기억·메모·로어');
+      await selectChatSettingsSection(page, '기억과 메모');
       await selectChatSettingsSection(page, '카드 변수');
       await expect(raw).toHaveValue('{"trust":');
       await expect(dialog.getByRole('button', { name: '행 편집', exact: true })).toBeDisabled();

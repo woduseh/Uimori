@@ -4,7 +4,7 @@
   margin: 8px 0 20px;
 }
 .prompt-editor > p {
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.7;
 }
 .prompt-editor-fields {
@@ -20,7 +20,7 @@
   display: grid;
   gap: 7px;
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .prompt-editor input:not([type="file"]):not([type="checkbox"]):not([type="radio"]),
 .prompt-editor select,
@@ -51,7 +51,7 @@
 }
 .prompt-save-buttons > button {
   min-height: var(--control-h);
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .prompt-editor textarea {
   min-height: 220px;
@@ -60,7 +60,7 @@
   resize: vertical;
   line-height: 1.6;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 13px;
+  font-size: var(--font-body);
   overflow: auto;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -86,7 +86,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .prompt-editor textarea {
-    font-size: 16px;
+    font-size: var(--font-heading);
     min-height: 240px;
     height: 45dvh;
   }
@@ -106,7 +106,7 @@
   z-index: 7;
   background: var(--bg);
   padding-block: 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .prompt-editor .prompt-composer {
   margin-bottom: 0;
@@ -138,7 +138,7 @@
     top: auto;
     bottom: 0;
     padding-bottom: max(12px, env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line);
+    border-top: var(--hairline) solid var(--line);
     border-bottom: 0;
   }
   .prompt-save-buttons {
@@ -159,7 +159,7 @@
 }
 .prompt-current-settings .prompt-current-links {
   padding-block: 12px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .prompt-current-settings .prompt-current-links:empty {
   display: none;

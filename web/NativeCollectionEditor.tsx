@@ -76,8 +76,9 @@ export function NativeCollectionEditor({
           onChange={(e) => setQuery(e.target.value)}
         />
         <div className="native-list-heading">
-          <strong>
-            {label} · {formatNumber(items.length)}
+          <strong className="ui-meta-row">
+            <span>{label}</span>
+            <span>{formatNumber(items.length)}</span>
           </strong>
           <IconButton label={t('native.collectionAdd', { label })} icon={AddIcon} onClick={add} />
         </div>

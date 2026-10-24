@@ -10,7 +10,7 @@
   display: flex;
   flex-direction: column;
   background: var(--bg);
-  border-left: 1px solid var(--line);
+  border-left: var(--hairline) solid var(--line);
   height: 100%;
   overflow: hidden;
 }
@@ -23,12 +23,12 @@
   justify-content: space-between;
   min-height: var(--header-h);
   padding: 6px 18px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   gap: 12px;
   flex-shrink: 0;
 }
 .chat-options-header h2 {
-  font-size: 17px;
+  font-size: var(--font-heading);
   line-height: 24px;
   margin: 0;
 }
@@ -67,7 +67,7 @@
 }
 .chat-option-choice {
   min-width: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   padding-bottom: 10px;
 }
 .chat-option-value {
@@ -89,7 +89,7 @@
 /* Option rows: the name and the value read as a sentence, and one control switches
    between following the wider setting and setting a value for this chat. */
 .chat-option-group {
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .chat-option-group > summary {
   display: flex;
@@ -105,7 +105,7 @@
 }
 .chat-option-group-count {
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 400;
   color: var(--muted);
   white-space: nowrap;
@@ -143,7 +143,7 @@
   padding-bottom: 6px;
 }
 .chat-option-origin {
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -155,7 +155,7 @@
   display: grid;
   gap: 6px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   overflow-wrap: anywhere;
 }
 .chat-option-record p,
@@ -199,8 +199,8 @@
   gap: 12px;
 }
 .prompt-option-group {
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   padding: 0 12px;
 }
 .prompt-option-group summary {
@@ -225,7 +225,7 @@
 .chat-options-footer {
   flex-shrink: 0;
   padding: 14px 18px max(14px, env(safe-area-inset-bottom));
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   background: var(--panel);
   display: grid;
   gap: 10px;
@@ -274,7 +274,7 @@
   width: var(--panel-w);
   height: min(var(--app-height, 100dvh), 100dvh);
   z-index: 32;
-  box-shadow: -8px 0 30px var(--shade);
+  box-shadow: none;
 }
 @media (max-width: 767px) {
   .app-shell.panel-overlay.options-open {

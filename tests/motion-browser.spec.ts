@@ -6,13 +6,30 @@ import { openChatMenu } from './ui-navigation.js';
 test.use({ video: 'on' });
 
 async function settled(surface: Locator) {
+  await expect(surface).toHaveCSS('animation-name', 'none');
   await expect.poll(() => surface.evaluate((node) => node.getAnimations().length)).toBe(0);
   await expect(surface).toHaveCSS('opacity', '1');
   await expect(surface).toHaveCSS('transform', 'none');
 }
 
-// Risks: silent CSS failure, visible reduced motion, clipped sheets, lingering transforms,
-// delayed close, lost focus/drafts and failure to replay an entrance after immediate re-open.
+async function expectHairline(surface: Locator) {
+  const border = await surface.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      token: style.getPropertyValue('--hairline').trim(),
+      width: Number.parseFloat(style.borderTopWidth),
+      style: style.borderTopStyle,
+    };
+  });
+  expect(Number.parseFloat(border.token)).toBe(0.5);
+  expect(border.style).toBe('solid');
+  // Chromium rounds a half CSS pixel to a device pixel at DPR 1.
+  expect(border.width).toBeGreaterThanOrEqual(0.5);
+  expect(border.width).toBeLessThanOrEqual(1);
+}
+
+// Risks: decorative motion returning, clipped sheets, lingering transforms,
+// delayed close and lost focus/drafts after immediate re-open.
 for (const width of [412, 1440]) {
   for (const motion of ['no-preference', 'reduce'] as const) {
     test(`MOTION ${width} ${motion} menus, native dialogs and switches preserve interaction`, async ({
@@ -41,9 +58,13 @@ for (const width of [412, 1440]) {
       const trigger = page.locator('.chat-menu > summary');
       const menu = await openChatMenu(page);
       await expect(menu).toBeVisible();
-      if (motion === 'no-preference') await expect(menu).toHaveAttribute('data-motion-starts', '1');
-      else await expect(menu).toHaveCSS('animation-name', 'none');
       await settled(menu);
+      await expect(menu).not.toHaveAttribute('data-motion-starts');
+      await expectHairline(menu);
+      await expect(menu.getByRole('button', { name: '읽기 설정', exact: true })).toHaveCSS(
+        'font-size',
+        '14px'
+      );
       const box = (await menu.boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width);
@@ -62,41 +83,53 @@ for (const width of [412, 1440]) {
       await openReading();
       const dialog = page.getByRole('dialog', { name: '읽기 설정', exact: true });
       await expect(dialog).toBeVisible();
-      if (motion === 'no-preference')
-        await expect(dialog).toHaveAttribute('data-motion-starts', '1');
-      else await expect(dialog).toHaveCSS('animation-name', 'none');
       await settled(dialog);
+      await expect(dialog).not.toHaveAttribute('data-motion-starts');
+      await expectHairline(dialog);
+      await expect(dialog.getByRole('heading', { name: '읽기 설정', exact: true })).toHaveCSS(
+        'font-size',
+        '16px'
+      );
+      await expect(dialog.locator('.reading-settings-footer small')).toHaveCSS('font-size', '12px');
       const toggle = dialog.getByRole('switch', { name: '대사 줄바꿈', exact: true });
       await toggle.scrollIntoViewIfNeeded();
-      const durations = await toggle.evaluate((node) =>
-        getComputedStyle(node, '::before').transitionDuration.split(',').map(Number.parseFloat)
-      );
-      expect(durations.some((value) => value > 0)).toBe(motion === 'no-preference');
+      const transition = await toggle.evaluate((node) => {
+        const style = getComputedStyle(node, '::before');
+        return {
+          durations: style.transitionDuration.split(',').map(Number.parseFloat),
+          easing: style.transitionTimingFunction.split(',').map((value) => value.trim()),
+        };
+      });
+      expect(
+        transition.durations.every((value) => value === (motion === 'reduce' ? 0 : 0.25))
+      ).toBe(true);
+      if (motion === 'no-preference')
+        expect(transition.easing.every((value) => value === 'ease-out')).toBe(true);
       const original = await toggle.isChecked();
       await toggle.focus();
       await page.keyboard.press('Space');
       await expect(toggle).toBeChecked({ checked: !original });
+      await expect(toggle).toHaveCSS('outline-style', 'solid');
+      const focusWidth = await toggle.evaluate((node) =>
+        Number.parseFloat(getComputedStyle(node).outlineWidth)
+      );
+      expect(focusWidth).toBeGreaterThanOrEqual(0.5);
+      expect(focusWidth).toBeLessThanOrEqual(1);
       await page.screenshot({ path: info.outputPath('reading-switch.png') });
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
       await expect(trigger).toBeFocused();
 
-      // Close the reopened native modal while its entrance can still be running.
+      // Immediate dismissal and re-entry must preserve the setting and opener focus.
       await openReading();
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
       await expect(trigger).toBeFocused();
       await openReading();
       await expect(toggle).toBeChecked({ checked: !original });
-      if (motion === 'no-preference')
-        await expect
-          .poll(async () => Number(await dialog.getAttribute('data-motion-starts')))
-          .toBeGreaterThan(1);
-      else {
-        await expect(dialog).not.toHaveAttribute('data-motion-starts');
-        await expect(menu).not.toHaveAttribute('data-motion-starts');
-      }
       await settled(dialog);
+      await expect(dialog).not.toHaveAttribute('data-motion-starts');
+      await expect(menu).not.toHaveAttribute('data-motion-starts');
       await toggle.setChecked(original);
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();

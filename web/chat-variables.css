@@ -34,7 +34,7 @@
   align-items: center;
   gap: 12px;
   min-height: 64px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   padding: 8px 0;
 }
 .chat-variable-row > label {
@@ -52,7 +52,7 @@
 }
 .chat-variable-origin {
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--font-small);
   line-height: 1.4;
   font-weight: normal;
 }
@@ -80,7 +80,7 @@
   position: static;
   padding-block: 14px;
   background: transparent;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   justify-content: flex-end;
 }
 @media (max-width: 760px) {

@@ -794,7 +794,7 @@ export function HelperPanel(props: Props) {
         {task.completedEffects && (
           <p>
             {t('helpers.m312', {
-              labels: task.completedEffects.labels.map(translateMessage).join(' · '),
+              labels: task.completedEffects.labels.map(translateMessage).join(', '),
             })}
           </p>
         )}
@@ -1199,19 +1199,15 @@ export function HelperPanel(props: Props) {
               <div className="activity-notification-heading">
                 <div>
                   <strong>{t(statusLabel[task.status] ?? task.status)}</strong>
-                  <small>
+                  <small className="ui-meta-row">
                     <time dateTime={task.createdAt}>
                       {formatDate(new Date(task.createdAt), {
                         dateStyle: 'medium',
                         timeStyle: 'medium',
                       })}
-                    </time>{' '}
-                    {t('helpers.m314', { count: formatNumber(task.usage.modelCalls) })}
-                    <HelperTaskElapsed
-                      task={task}
-                      visible={props.open && !!taskHistory}
-                      prefix=" · "
-                    />
+                    </time>
+                    <span>{t('helpers.m314', { count: formatNumber(task.usage.modelCalls) })}</span>
+                    <HelperTaskElapsed task={task} visible={props.open && !!taskHistory} />
                   </small>
                 </div>
               </div>
@@ -1222,7 +1218,7 @@ export function HelperPanel(props: Props) {
                 <p>
                   {t('helpers.m315', {
                     count: formatNumber(task.completedEffects.count),
-                    labels: task.completedEffects.labels.map(translateMessage).join(' · '),
+                    labels: task.completedEffects.labels.map(translateMessage).join(', '),
                   })}
                 </p>
               )}
@@ -1317,11 +1313,13 @@ export function HelperPanel(props: Props) {
         {selectedOutline && (
           <div className="helper-outline-selection">
             <div>
-              <strong>
-                {selectedOutline.target.purpose === 'review'
-                  ? t('helpers.m086')
-                  : t('helpers.m087')}{' '}
-                · {selectedOutline.title}
+              <strong className="ui-meta-row">
+                <span>
+                  {selectedOutline.target.purpose === 'review'
+                    ? t('helpers.m086')
+                    : t('helpers.m087')}
+                </span>
+                <span>{selectedOutline.title}</span>
               </strong>
               <button
                 type="button"

@@ -40,7 +40,7 @@ export function chatDeletionImpact(store: Store, chatId: string) {
   return {
     request: {},
     description:
-      '이 채팅의 원문·번역·메모·도우미와 작업 기록을 삭제해요. 독립 사본과 공통 자료는 유지돼요. 사용량 합계는 원문·요청 내용 없이 유지해요.',
+      '이 채팅의 원문, 번역, 메모, 도우미와 작업 기록을 삭제해요. 독립 사본과 공통 자료는 유지돼요. 사용량 합계는 원문이나 요청 내용 없이 유지해요.',
   };
 }
 

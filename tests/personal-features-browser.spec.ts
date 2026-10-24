@@ -8,7 +8,7 @@ test.setTimeout(60000);
 
 async function finishShortSearch(dialog: Locator, match?: Locator) {
   const search = dialog.getByRole('button', { name: '검색', exact: true });
-  const more = dialog.getByRole('button', { name: '계속 찾기 · 남은 원고 검색', exact: true });
+  const more = dialog.getByRole('button', { name: '남은 원고 검색', exact: true });
   await expect(search).toBeEnabled();
   // Workspace fixtures can exceed one short-query scan. An empty page is not a final miss.
   while ((await more.isVisible()) && (!match || !(await match.isVisible()))) {
@@ -233,7 +233,7 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
   await panel.getByRole('button', { name: '백업 설정 저장', exact: true }).click();
   await expect(panel.getByRole('button', { name: '백업 설정 저장', exact: true })).toBeDisabled();
   await panel.getByRole('button', { name: '지금 백업', exact: true }).click();
-  await expect(panel.locator('.backup-status')).toContainText('· 성공', { timeout: 30000 });
+  await expect(panel.locator('.backup-status')).toContainText(', 성공', { timeout: 30000 });
   const response = await request.get('/api/backups');
   const status = await response.json();
   expect(status.backups.length).toBeGreaterThan(0);
@@ -266,7 +266,7 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
     .click();
   await page
     .getByRole('dialog', { name: '장면 목록', exact: true })
-    .getByRole('button', { name: /^6번째 장면 ·/ })
+    .getByRole('button', { name: /^6번째 장면,/ })
     .click();
   await expect
     .poll(() => new URL(page.url()).searchParams.get('source'))
@@ -354,7 +354,7 @@ test('PWUI03 real scene navigation syncs to another device without gating its ma
   await expect
     .poll(async () => (await (await request.get(`/api/chats/${chat.id}/bookmarks`)).json()).length)
     .toBe(1);
-  await scene.getByRole('button', { name: '책갈피 추가됨 · 메모 편집', exact: true }).click();
+  await scene.getByRole('button', { name: '책갈피 추가됨, 메모 편집', exact: true }).click();
   const edit = page.getByRole('dialog', { name: '책갈피 편집', exact: true });
   await edit.getByLabel('책갈피 이름').fill('비 오는 장면');
   await edit.getByLabel('책갈피 메모').fill('이 대목에서 다시 이어 쓸 것');
@@ -449,7 +449,7 @@ test('PWUI04 real loopback usage receipts appear in period, model and purpose ta
     await expect(row).toContainText('1,000');
     await expect(row).toContainText('0.25');
     await expect(row).toContainText('미확인');
-    await panel.locator('summary').filter({ hasText: '일별·용도별 상세' }).click();
+    await panel.locator('summary').filter({ hasText: '일별 및 용도별 상세' }).click();
     await expect(panel.getByRole('row').filter({ hasText: '연결 테스트' })).toBeVisible();
     await panel.locator('summary[aria-label="CSV 내보내기"]').click();
     const csvPath = await panel
@@ -585,7 +585,7 @@ test('PWUI08 title matches report all saved chats and the next page remains sele
   await expect(dialog.locator('[data-chat-id]')).toHaveCount(5);
   for (let remaining = 30; remaining > 0; remaining -= 5) {
     await dialog
-      .getByRole('button', { name: `채팅 제목 더 보기 · ${remaining}개 남음`, exact: true })
+      .getByRole('button', { name: `채팅 제목 더 보기 (${remaining}개 남음)`, exact: true })
       .click();
   }
   await expect(dialog.locator('[data-chat-id]')).toHaveCount(35);

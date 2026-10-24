@@ -8,7 +8,7 @@
   flex: 0 0 var(--editor-list-w);
   padding: 16px 10px;
   overflow: auto;
-  border-right: 1px solid var(--line);
+  border-right: var(--hairline) solid var(--line);
   background: var(--nav);
 }
 .chat-settings-panel .profile-editor {
@@ -42,9 +42,9 @@
   }
   .chat-settings-panel > .section-navigation > button {
     min-height: 68px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: var(--hairline) solid var(--line);
     border-radius: 0;
-    font-size: 16px;
+    font-size: var(--font-heading);
   }
 }
 
@@ -53,11 +53,11 @@
 .settings-inherited {
   margin-top: 24px;
   padding-top: 18px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .settings-inherited > h4 {
   margin: 0 0 10px;
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 550;
   letter-spacing: 0.04em;
   color: var(--faint);
@@ -71,7 +71,7 @@
   display: flex;
   gap: 10px;
   align-items: baseline;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .settings-inherited > dl dt {
   flex: 0 0 88px;
@@ -95,7 +95,7 @@
   align-items: center;
   gap: 20px;
   padding-block: 16px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .chat-profile-prompt-options {
   margin-top: 24px;
@@ -104,7 +104,7 @@
   justify-content: space-between;
   gap: 24px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .chat-settings-panel .settings-inherited > dl dt {
   flex: 1;
@@ -121,14 +121,14 @@
 }
 .chat-settings-memory,
 .chat-settings-images {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 20px;
   margin-top: 20px;
 }
 .chat-settings-panel .chat-composition-row {
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   border-radius: 0;
   padding: 18px 0;
   margin: 0;
@@ -211,12 +211,12 @@
 }
 .chat-settings-panel .chat-composition-row h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--font-heading);
   overflow-wrap: anywhere;
 }
 .chat-settings-panel .chat-composition-row > small:not(.chat-composition-role) {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .chat-settings-panel .chat-composition-row > .chat-composition-role,
 .chat-settings-panel .chat-composition-row > details,
@@ -264,7 +264,7 @@
 }
 .chat-settings-panel .settings-group-heading {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--font-heading);
   color: var(--text);
   letter-spacing: normal;
 }
@@ -297,14 +297,14 @@
   padding-block: 16px;
 }
 .chat-settings-panel .settings-inherited > dl > div + div {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .chat-settings-panel .package-attachments,
 .chat-settings-panel .context-content,
 .chat-settings-panel .illustration-reference-options:not(:empty),
 .chat-settings-panel .workspace-tools > form {
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
   padding: 0 16px;
   min-width: 0;
@@ -314,12 +314,12 @@
 }
 .chat-settings-panel .chat-composition-row:not(.package-attachment-fixed-bot),
 .chat-settings-panel .chat-composition-add {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .chat-settings-panel .chat-composition-persona {
   margin-block: 0;
   padding-block: 16px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .chat-settings-panel .chat-composition-add {
   margin-top: 0;
@@ -350,7 +350,7 @@
 .chat-settings-panel .context-content > details,
 .chat-settings-panel .context-notes,
 .chat-settings-panel .story-panel > details {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 12px;
 }
 .chat-settings-panel .chat-settings-image-management {
@@ -375,7 +375,7 @@
   padding-block: 16px;
 }
 .chat-settings-panel .chat-variable-row + .chat-variable-row {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .chat-settings-panel .chat-variable-rows:empty {
   display: none;

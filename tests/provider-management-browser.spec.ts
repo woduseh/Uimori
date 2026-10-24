@@ -60,7 +60,7 @@ const connectionBody = (item: Connection, changes: Record<string, unknown> = {})
 async function settings(page: Page) {
   await page.goto('/');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(page.getByTestId('connection-editor')).toBeVisible();
 }
 function observe(page: Page) {
@@ -96,10 +96,10 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   const form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
     modelForm = page.getByRole('form', { name: '모델 편집 양식' });
   await startProviderConnection(page);
-  await expect(page.getByText('개발·검사용 프로바이더', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('개발 및 검사용 프로바이더', { exact: true })).toHaveCount(0);
   await page
     .getByRole('region', { name: '프로바이더 선택', exact: true })
-    .getByRole('button', { name: /OpenAI · Responses/ })
+    .getByRole('button', { name: /OpenAI Responses/ })
     .click();
   await expect(
     form.getByLabel('프로바이더 프로토콜').locator('option[value="fixture-sse-v1"]')
@@ -229,7 +229,7 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   await form.getByLabel('모델 계열', { exact: true }).selectOption('anthropic');
   await expect(
     form.getByLabel('모델 계열', { exact: true }).locator('option[value=""]')
-  ).toHaveText('자동 · 공통 옵션');
+  ).toHaveText('자동, 공통 옵션');
   await form.getByLabel('사고 강도', { exact: true }).selectOption('max');
   await form.getByRole('button', { name: '고급', exact: true }).click();
   const providerOptions = form.getByLabel('providerOptions (JSON)', { exact: true });
@@ -345,7 +345,7 @@ test('PMUI Google AI Studio registers an API key and preserves model settings on
   );
   await expect(connectionForm.getByLabel('API 키', { exact: true })).toHaveAttribute(
     'placeholder',
-    '등록됨 · 변경할 때 입력'
+    '등록됨 (변경할 때 입력)'
   );
   await expect(
     connectionForm.getByRole('button', { name: '등록한 키 삭제', exact: true })
@@ -432,7 +432,7 @@ for (const testMode of [false, true]) {
     });
     await settings(page);
     await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
-    await page.getByLabel('프로바이더·모델 검색').fill(title);
+    await page.getByLabel('프로바이더와 모델 검색').fill(title);
     await openProviderMenu(page, '프로바이더', title);
     const clone = page.getByRole('button', { name: title + ' 프로바이더 복제', exact: true });
     const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
@@ -488,7 +488,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   await settings(page);
   const form = page.getByRole('form', { name: '프로바이더 편집 양식' });
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
-  await page.getByLabel('프로바이더·모델 검색').fill(title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
   await openProviderMenu(page, '프로바이더', title);
   await page.getByRole('button', { name: title + ' 프로바이더 복제', exact: true }).click();
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 복사');
@@ -582,7 +582,7 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
     'PUT'
   );
   await settings(page);
-  await page.getByLabel('프로바이더·모델 검색').fill(title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
   await openProviderModel(page, original.title);
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await expect(form.getByLabel('프로바이더', { exact: true })).toHaveValue(`${connection.id}`);
@@ -677,10 +677,10 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(`${original.id}`);
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
-  ).toContainText(changed.title + ' · 모델 또는 프로바이더 비활성');
+  ).toContainText(changed.title + ' (모델 또는 프로바이더 비활성)');
   await expect(
     page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
-  ).not.toContainText(' · v');
+  ).not.toContainText(' v');
   if (visualReview)
     await page.screenshot({ path: info.outputPath('provider-management-current-model.png') });
   const after = await api<ChatDetail>(request, `/chats/${chat.id}`);
@@ -744,7 +744,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await expect(page.getByRole('list', { name: '빠른 프로바이더 진행' })).toContainText(
       '1. 프로바이더 종류'
     );
-    await page.getByText('개발·검사용 프로바이더', { exact: true }).click();
+    await page.getByText('개발 및 검사용 프로바이더', { exact: true }).click();
     await page.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
     await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
     await form.getByLabel('로컬 요청 주소').fill('http://127.0.0.1:9/turn');
@@ -752,7 +752,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await expect(form).not.toBeVisible();
     await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
     await page
-      .getByRole('button', { name: '프로바이더 편집 이어서 · ' + title, exact: true })
+      .getByRole('button', { name: '프로바이더 편집 이어서: ' + title, exact: true })
       .click();
     await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
     await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
@@ -803,7 +803,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
     await expect(modelForm).not.toBeVisible();
     await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
     await page
-      .getByRole('button', { name: '모델 편집 이어서 · ' + title + ' Beta', exact: true })
+      .getByRole('button', { name: '모델 편집 이어서: ' + title + ' Beta', exact: true })
       .click();
     await expect(modelForm.getByLabel('최대 출력 토큰')).toHaveValue('1024');
     await expect(modelForm.getByLabel('모델 ID', { exact: true })).toHaveValue(
@@ -939,7 +939,7 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     .toMatchObject({ credentialRef, endpoint });
   expect(JSON.stringify(await library(request))).not.toContain('BEGIN PRIVATE KEY');
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
-  await page.getByLabel('프로바이더·모델 검색').fill(title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
   await page.getByRole('button', { name: title + ' 프로바이더 수정', exact: true }).click();
   await expect(form.getByRole('region', { name: 'Google 서비스 계정 JSON' })).toBeVisible();
   expect(
@@ -1170,10 +1170,10 @@ for (const [index, item] of providerOptionCases.entries()) {
       // Fable documents adaptive thinking only; disabling stays selectable as an unverified value.
       const mode = form.getByLabel('사고 모드', { exact: true });
       await expect(mode.locator('optgroup[label="문서로 확인한 값"] option')).toHaveText([
-        '적응형 · adaptive',
+        '적응형, adaptive',
       ]);
       await expect(
-        mode.locator('optgroup[label="미확인 값 · 프로바이더가 판정"] option[value="disabled"]')
+        mode.locator('optgroup[label="미확인 값, 프로바이더가 판정"] option[value="disabled"]')
       ).toHaveCount(1);
       await form.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
       await expect(
@@ -1248,7 +1248,7 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('프로바이더', { exact: true }).selectOption(`${anthropic.id}`);
   await expect(
-    form.getByLabel('이전 설정의 사고 강도 · reasoningEffort', { exact: true })
+    form.getByLabel('이전 설정의 사고 강도: reasoningEffort', { exact: true })
   ).toHaveCount(0);
   await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue('');
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(title);
@@ -1279,7 +1279,7 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toHaveValue('30m');
   await form.getByLabel('Temperature', { exact: true }).fill('0');
   await form.locator('.provider-specified-settings > summary').click();
-  await expect(form.locator('.provider-specified-settings')).toContainText('Temperature · 0');
+  await expect(form.locator('.provider-specified-settings')).toContainText(/Temperature\s*0/);
   await form.getByRole('button', { name: 'Temperature 지정 해제', exact: true }).click();
   await expect(form.getByLabel('Temperature', { exact: true })).toHaveValue('');
   await expect(strength).toHaveValue('none');
@@ -1366,7 +1366,7 @@ test('PMUI13 response tests are explicit and late results stay with the original
     });
   });
   await settings(page);
-  await page.getByLabel('프로바이더·모델 검색').fill(title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
   expect(posts).toEqual([]);
   await revealProviderDiagnostics(page, a.title);
   const button = page.getByRole('button', { name: a.title + ' 응답 테스트', exact: true });
@@ -1376,19 +1376,19 @@ test('PMUI13 response tests are explicit and late results stay with the original
   expect(posts).toHaveLength(1);
   expect(posts[0]).toMatchObject({ expectedRevision: a.revision });
   expect(posts[0].idempotencyKey).toMatch(/^[0-9a-f-]{36}$/i);
-  await page.getByLabel('프로바이더·모델 검색').fill(b.title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(b.title);
   await openProviderModel(page, b.title);
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(b.title);
   release();
   await expect(form).not.toContainText('A_ONLY_OK');
   await page.getByRole('button', { name: '모델 프리셋', exact: true }).click();
-  await page.getByLabel('프로바이더·모델 검색').fill(a.title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(a.title);
   const result = page.getByRole('region', { name: a.title + ' 응답 테스트 결과', exact: true });
   await expect(result).toContainText('응답에 성공했어요.');
   await expect(result).not.toContainText('A_ONLY_OK');
   await expect(result).not.toContainText('124 ms');
-  await expect(result).not.toContainText('입력 7 · 출력 2');
+  await expect(result).not.toContainText('입력 7, 출력 2');
   await expect(result).not.toContainText('미확인');
   if (visualReview)
     await result.screenshot({ path: info.outputPath('provider-response-test-mobile.png') });
@@ -1432,7 +1432,7 @@ test('PMUI14 an uncertain response test reuses its key until an explicit new tes
         });
   });
   await settings(page);
-  await page.getByLabel('프로바이더·모델 검색').fill(title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
   await revealProviderDiagnostics(page, title);
   const button = page.getByRole('button', { name: title + ' 응답 테스트', exact: true }),
     result = page.getByRole('region', { name: title + ' 응답 테스트 결과', exact: true });
@@ -1488,7 +1488,7 @@ test('PMUI15 a forced Google service tier is shown and conflicting saved choices
       writes++;
   });
   await settings(page);
-  await page.getByLabel('프로바이더·모델 검색').fill(title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(title);
   await openProviderModel(page, title);
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await expect(form.getByRole('button', { name: '기본', exact: true })).toHaveAttribute(
@@ -1628,7 +1628,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await expect(panel.getByRole('list', { name: 'Codex 연결 단계' })).toHaveCount(0);
   if (visualReview)
     await page.screenshot({ path: info.outputPath('codex-subscription-settings-mobile.png') });
-  await panel.getByRole('button', { name: '프로바이더·모델', exact: true }).click();
+  await panel.getByRole('button', { name: '프로바이더와 모델', exact: true }).click();
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(
     '보존할 Codex 초안'
   );
@@ -2030,11 +2030,11 @@ test('PMUI model presets group by provider, start collapsed and persist manual o
   await expect(
     firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
   ).toBeHidden();
-  await page.getByLabel('프로바이더·모델 검색').fill(beta.title);
+  await page.getByLabel('프로바이더와 모델 검색').fill(beta.title);
   await expect(
     firstGroup.getByRole('button', { name: `${beta.title} 모델 수정`, exact: true })
   ).toBeVisible();
-  await page.getByLabel('프로바이더·모델 검색').fill('');
+  await page.getByLabel('프로바이더와 모델 검색').fill('');
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   const providers = page.getByRole('region', { name: '저장한 프로바이더', exact: true });
   const sourceProvider = providers.getByRole('article', {

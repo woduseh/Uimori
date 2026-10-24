@@ -51,13 +51,13 @@ function description(row: OutcomeRow): string {
   ];
   if (row.kind === 'translation' && row.autoRunId)
     return success(row.status)
-      ? '원문 · 번역 완료'
-      : `자동 번역 ${row.status === 'interrupted' ? '중단' : '실패'} · 원문 확인 가능`;
+      ? '원문과 번역 완료'
+      : `자동 번역 ${row.status === 'interrupted' ? '중단' : '실패'} (원문 확인 가능)`;
   if (success(row.status)) return `${name} 완료`;
   if (row.status === 'refused') return `${name} 생성 거절`;
-  if (row.status === 'partial') return `${name} 부분 결과 · 확인 필요`;
-  if (row.status === 'interrupted') return `${name} 중단 · 상태 확인 필요`;
-  return `${name} 실패 · 확인 필요`;
+  if (row.status === 'partial') return `${name} 부분 결과 (확인 필요)`;
+  if (row.status === 'interrupted') return `${name} 중단 (상태 확인 필요)`;
+  return `${name} 실패 (확인 필요)`;
 }
 
 /** Startup marker: past successful work stays read, even if the app is opened later. */

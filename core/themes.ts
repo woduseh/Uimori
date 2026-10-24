@@ -5,7 +5,12 @@ import {
   scrapbookTheme,
   classicFrameTheme,
 } from './narrative-themes.js';
-import { BUILTIN_PALETTES, THEME_PALETTE_ID, isPaletteId } from './theme-palettes.js';
+import {
+  BUILTIN_PALETTES,
+  DEFAULT_PALETTE_COLORS,
+  THEME_PALETTE_ID,
+  isPaletteId,
+} from './theme-palettes.js';
 
 /** Presentation resources only. Never include these in a model request or story snapshot. */
 export const THEME_COLOR_KEYS = [
@@ -14,19 +19,38 @@ export const THEME_COLOR_KEYS = [
   'panel',
   'surface',
   'surface-raised',
+  'surface-active',
   'hover',
   'line',
   'input-border',
+  'border-hover',
+  'focus-ring',
   'text',
   'muted',
   'faint',
   'accent',
   'accent-ink',
+  'accent-hover',
+  'accent-hover-ink',
+  'accent-text',
+  'accent-line',
   'accent-soft',
   'user',
   'error',
   'error-ink',
   'error-bg',
+  'error-line',
+  'error-solid',
+  'error-hover',
+  'success',
+  'success-bg',
+  'success-line',
+  'warning',
+  'warning-bg',
+  'warning-line',
+  'info',
+  'info-bg',
+  'info-line',
   'shade',
 ] as const;
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
@@ -83,135 +107,38 @@ export function defaultThemePreferences(): ThemePreferences {
     chatPalettes: {},
   };
 }
-function palette(
-  bg: string,
-  nav: string,
-  panel: string,
-  surface: string,
-  line: string,
-  text: string,
-  muted: string,
-  accent: string,
-  ink: string
-): ThemeColors {
-  return {
-    bg,
-    nav,
-    panel,
-    surface,
-    'surface-raised': panel,
-    hover: surface,
-    line,
-    'input-border': muted,
-    text,
-    muted,
-    faint: muted,
-    accent,
-    'accent-ink': ink,
-    'accent-soft': surface,
-    user: surface,
-  };
-}
 const originalBuiltinThemes: Theme[] = [
   {
     ...emptyTheme('숲'),
     id: DEFAULT_THEME_ID,
     revision: 1,
     description: '익숙한 Uimori의 차분한 초록빛',
+    colors: DEFAULT_PALETTE_COLORS,
   },
   {
     ...emptyTheme('서재'),
     id: 'builtin:library',
     revision: 1,
     description: '따뜻한 종이와 잉크의 온기',
-    colors: {
-      light: palette(
-        '#f6f1e7',
-        '#eee5d5',
-        '#fffaf1',
-        '#eadecc',
-        '#d2c3ad',
-        '#382e24',
-        '#736453',
-        '#785137',
-        '#ffffff'
-      ),
-      dark: palette(
-        '#211d19',
-        '#191613',
-        '#2b2520',
-        '#393026',
-        '#524638',
-        '#ede1cf',
-        '#bdae98',
-        '#dcb98b',
-        '#2b2015'
-      ),
-    },
+    colors: BUILTIN_PALETTES.find((item) => item.id === 'cream')!.colors,
     templateHtml:
       '<slot name="request"></slot><section class="paper"><header><slot name="heading"></slot></header><slot name="body"></slot><footer><slot name="actions"></slot></footer></section>',
     templateCss:
-      '.paper { border: 1px solid var(--line); border-radius: 14px; padding: clamp(14px, 3vw, 30px); background: var(--panel); } header { border-bottom: 1px solid var(--line); margin-bottom: 20px; } footer { margin-top: 16px; }',
+      '.paper { border: var(--hairline) solid var(--line); border-radius: var(--radius-panel); padding: clamp(14px, 3vw, 30px); background: var(--panel); } header { border-bottom: var(--hairline) solid var(--line); margin-bottom: 20px; } footer { margin-top: 16px; }',
   },
   {
     ...emptyTheme('미드나이트'),
     id: 'builtin:midnight',
     revision: 1,
     description: '청회색 바탕과 선명한 푸른 포인트',
-    colors: {
-      light: palette(
-        '#f3f6fb',
-        '#e8edf6',
-        '#ffffff',
-        '#e3eaf6',
-        '#c6d2e6',
-        '#22314b',
-        '#556a88',
-        '#305d9e',
-        '#ffffff'
-      ),
-      dark: palette(
-        '#131923',
-        '#0e131c',
-        '#1b2433',
-        '#26344a',
-        '#35455f',
-        '#e7eefb',
-        '#a6b7d0',
-        '#a5c6ff',
-        '#172940'
-      ),
-    },
+    colors: BUILTIN_PALETTES.find((item) => item.id === 'midnight')!.colors,
   },
   {
     ...emptyTheme('벚꽃'),
     id: 'builtin:blossom',
     revision: 1,
     description: '절제된 분홍빛과 부드러운 대비',
-    colors: {
-      light: palette(
-        '#fcf5f7',
-        '#f3e7ed',
-        '#fffafd',
-        '#f1dfe7',
-        '#dbc4cf',
-        '#422d39',
-        '#826373',
-        '#934a6c',
-        '#ffffff'
-      ),
-      dark: palette(
-        '#241b22',
-        '#1c151b',
-        '#30242d',
-        '#42303e',
-        '#5b4152',
-        '#f3e3ee',
-        '#c1a5b6',
-        '#e7b0cc',
-        '#3a1c2f'
-      ),
-    },
+    colors: BUILTIN_PALETTES.find((item) => item.id === 'rose')!.colors,
   },
 ];
 /**
@@ -223,7 +150,7 @@ export const BUILTIN_THEMES: Theme[] = [
   {
     ...originalBuiltinThemes[0],
     title: '기본',
-    revision: 2,
+    revision: 4,
     description: '군더더기 없는 기본 읽기 레이아웃',
     templateHtml:
       '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><slot name="heading"></slot><slot name="body"></slot><slot name="actions"></slot>',
@@ -234,21 +161,21 @@ export const BUILTIN_THEMES: Theme[] = [
 .reader .reader-bot-avatar, .request-portraits .reader-portrait-button { width:72px; height:72px; border-radius:50%; flex-shrink:0; }
 .reader .reader-bot-avatar .profile-asset, .reader .reader-bot-avatar .content-avatar, .request-portraits .reader-portrait-button img { width:100%; height:100%; border-radius:50%; object-fit:cover; object-position:center 20%; --content-avatar-size:72px; }
 .reader .reader-bot-avatar img { object-position:center 20%; }
-.reader .story-context > strong { display:block; font-size:14px; color:var(--text); font-weight:500; }
+.reader .story-context > strong { display:block; font-size:var(--font-body); color:var(--text); font-weight:500; }
 .request-portraits { display:block; width:auto; max-width:200px; }
 .request-portraits .reader-gallery-heading, .request-portraits .reader-gallery-caption, .request-portraits figcaption small { display:none; }
 .request-portraits [data-uimori-part="persona-portrait"] { display:flex; align-items:center; gap:12px; }
-.request-portraits .reader-portrait-empty { min-height:72px; font-size:24px; }
-.request-portraits figcaption { font-size:14px; color:var(--text); padding:0; text-align:left; overflow-wrap:anywhere; }
+.request-portraits .reader-portrait-empty { min-height:72px; font-size:var(--font-heading); }
+.request-portraits figcaption { font-size:var(--font-body); color:var(--text); padding:0; text-align:left; overflow-wrap:anywhere; }
 .request-portraits figcaption strong { font-weight:500; }
 @media(max-width:760px) { .reader .reader-bot-avatar, .request-portraits .reader-portrait-button { width:60px; height:60px; } .reader .reader-bot-avatar .content-avatar { --content-avatar-size:60px; } .request-portraits .reader-portrait-empty { min-height:60px; } }
 
 `,
   },
-  { ...cinematicTheme, id: 'builtin:cinematic', revision: 2 },
-  { ...letterTheme, id: 'builtin:letter', revision: 2 },
-  { ...scrapbookTheme, id: 'builtin:scrapbook', revision: 2 },
-  { ...classicFrameTheme, id: 'builtin:classic-frame', revision: 1 },
+  { ...cinematicTheme, id: 'builtin:cinematic', revision: 4 },
+  { ...letterTheme, id: 'builtin:letter', revision: 4 },
+  { ...scrapbookTheme, id: 'builtin:scrapbook', revision: 4 },
+  { ...classicFrameTheme, id: 'builtin:classic-frame', revision: 3 },
 ];
 export function getBuiltinTheme(id: string): Theme | undefined {
   const currentId = id === 'builtin:liquid-gallery' ? 'builtin:cinematic' : id;

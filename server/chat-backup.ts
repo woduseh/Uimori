@@ -79,7 +79,7 @@ export function exportChatBackupArchive(store: Store, chatId: string) {
     chats: [copy],
     notices: [
       '모델 연결과 API 키는 가져오지 않아요. 대상 작업실의 모델을 사용해요.',
-      '실행 기록·도우미 내부 작업·자동 요약 체크포인트·일회성 옵션은 복원하지 않아요. 원문과 메모로 다시 이어가요.',
+      '실행 기록, 도우미 내부 작업, 자동 요약 체크포인트, 일회성 옵션은 복원하지 않아요. 원문과 메모로 다시 이어가요.',
     ],
   });
 }

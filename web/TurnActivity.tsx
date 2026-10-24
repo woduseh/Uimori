@@ -144,7 +144,7 @@ function TurnActivityContent({
           status: labels[item.status] ?? item.status,
         })
     ),
-  ].join(' · ');
+  ].join(', ');
   const timing =
     related.find((item) => item.kind === 'main' && active(item.status)) ??
     related.find(

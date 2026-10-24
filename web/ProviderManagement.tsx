@@ -1269,7 +1269,7 @@ export function ConnectionEditor({
                   >
                     <strong>{item.title}</strong>
                     {(item.title !== providerDefinition(item.protocol).label || !item.enabled) && (
-                      <span className="provider-item-subtitle">
+                      <span className="provider-item-subtitle ui-meta-row">
                         {[
                           item.title !== providerDefinition(item.protocol).label
                             ? translateMessage(providerDefinition(item.protocol).label)
@@ -1277,7 +1277,9 @@ export function ConnectionEditor({
                           !item.enabled ? t('providers.m101') : '',
                         ]
                           .filter(Boolean)
-                          .join(' · ')}
+                          .map((value, index) => (
+                            <span key={index}>{value}</span>
+                          ))}
                       </span>
                     )}
                   </button>
@@ -1409,7 +1411,7 @@ export function ConnectionEditor({
                           {(item.title !== item.modelId ||
                             item.enabled === false ||
                             group.connection?.enabled === false) && (
-                            <span className="provider-item-subtitle">
+                            <span className="provider-item-subtitle ui-meta-row">
                               {[
                                 item.title !== item.modelId ? item.modelId : '',
                                 item.enabled === false
@@ -1419,7 +1421,9 @@ export function ConnectionEditor({
                                     : '',
                               ]
                                 .filter(Boolean)
-                                .join(' · ')}
+                                .map((value, index) => (
+                                  <span key={index}>{value}</span>
+                                ))}
                             </span>
                           )}
                         </button>

@@ -3,12 +3,12 @@
   display: inline-block;
   position: relative;
   flex: 0 0 44px;
-  width: var(--control-h);
+  width: 44px;
   height: 26px;
   min-height: 26px;
   margin: 0;
-  padding: 3px;
-  border: 1px solid var(--muted);
+  padding: 3.5px;
+  border: var(--hairline) solid var(--muted);
   border-radius: 20px;
   background: var(--surface);
   cursor: pointer;
@@ -39,8 +39,8 @@
   min-height: 18px;
   margin: 0;
   padding: 0;
-  border: 1px solid var(--muted);
-  border-radius: 4px;
+  border: var(--hairline) solid var(--muted);
+  border-radius: var(--radius-small);
   background: var(--surface);
   vertical-align: middle;
   cursor: pointer;
@@ -58,6 +58,7 @@
   left: 5px;
   top: 1px;
   border: solid var(--accent-ink);
+  /* This draws the check glyph, whose stroke follows the icon rather than rule scale. */
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
@@ -71,7 +72,7 @@
 }
 :root input.ui-switch:focus-visible,
 :root input.ui-selection-checkbox:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--hairline) solid var(--focus-ring);
   outline-offset: 3px;
 }
 :root input.ui-switch:disabled,

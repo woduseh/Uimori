@@ -11,7 +11,7 @@
   margin: 0;
 }
 .risu-import-body h3 {
-  font-size: 16px;
+  font-size: var(--font-heading);
 }
 .risu-import-body p,
 .risu-import-body label,
@@ -29,7 +29,7 @@
   gap: 12px;
   min-height: 52px;
   padding: 8px 0 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .risu-import-file-ready > span:first-child {
   min-width: 0;
@@ -50,8 +50,8 @@
   display: inline-flex;
   align-items: center;
   padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-control);
   font-weight: 500;
   cursor: pointer;
 }
@@ -62,7 +62,7 @@
   padding: 10px 0 4px;
 }
 .risu-import-hero h3 {
-  font-size: 20px;
+  font-size: var(--font-heading);
 }
 .risu-import-counts {
   display: flex;
@@ -75,21 +75,22 @@
 }
 .risu-import-counts dt {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   order: 2;
 }
 .risu-import-counts dd {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--font-heading);
   font-weight: 700;
 }
 .risu-import-findings {
   padding: 12px 14px;
-  border-left: 3px solid var(--border);
+  border-radius: var(--radius-control);
   background: var(--panel);
 }
 .risu-import-findings.warn {
-  border-left-color: var(--warning, #9a6b24);
+  color: var(--warning);
+  background: var(--warning-bg);
 }
 .risu-import-findings ul {
   margin: 8px 0 0;
@@ -107,7 +108,7 @@
   color: var(--muted);
 }
 .risu-import-lore-entry + .risu-import-lore-entry {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 10px;
 }
 .risu-import-lore-entry summary {
@@ -123,7 +124,7 @@
   white-space: pre-wrap;
   max-height: 260px;
   overflow-y: auto;
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.6;
 }
 .risu-import-choice {
@@ -139,14 +140,14 @@
   margin-top: 2px;
 }
 .risu-import-partial {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .risu-import-summary > p {
   white-space: pre-wrap;
 }
 .risu-import-processing {
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .risu-import-processing > summary {
   cursor: pointer;
@@ -169,7 +170,7 @@
 }
 .risu-import-result {
   padding: 16px;
-  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-control);
   background: var(--accent-soft);
 }
 .risu-import-body.complete
@@ -177,7 +178,7 @@
   display: none;
 }
 .risu-import-result > svg {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 @media (max-width: 600px) {
   .risu-import-counts {

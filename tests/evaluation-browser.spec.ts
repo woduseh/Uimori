@@ -23,11 +23,11 @@ async function library(request: APIRequestContext): Promise<Library> {
 }
 async function settings(page: Page) {
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await startProviderConnection(page);
   await page
     .getByRole('region', { name: '프로바이더 선택', exact: true })
-    .getByRole('button', { name: /OpenAI · Responses/ })
+    .getByRole('button', { name: /OpenAI Responses/ })
     .click();
   await expect(page.getByLabel('프로바이더 프로토콜')).toBeVisible();
   await page.getByLabel('프로바이더 프로토콜').selectOption('openai-responses-v1');
@@ -114,7 +114,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await expect(page.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
   await page.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
   await expect(page.getByLabel('명확한 거절 제출은 한 번 재요청')).toHaveCount(0);
-  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI · 프로바이더 자동 선택');
+  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI, 프로바이더 자동 선택');
   await expect(page.getByLabel('평가 메타데이터')).not.toBeEditable();
   expect(
     await page
@@ -228,7 +228,7 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   await page.getByRole('button', { name: '기본', exact: true }).click();
   await page.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
   await page.getByRole('button', { name: '고급', exact: true }).click();
-  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI · 프로바이더 자동 선택');
+  await expect(page.getByLabel('평가 메타데이터')).toHaveValue('OpenAI, 프로바이더 자동 선택');
   await expect(page.getByLabel('평가 메타데이터')).not.toBeEditable();
   await page.getByRole('button', { name: '기본', exact: true }).click();
   await page.getByLabel('프로바이더', { exact: true }).selectOption(manualConnection.id);
@@ -309,7 +309,7 @@ test(`EVALUI02 mobile ${MOBILE_WIDTH}px evaluation controls save only for opted-
   });
   await page.reload();
   await navigation(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await revealProviderModel(page, model.title);
   await expect(page.getByText(model.title, { exact: true })).toBeVisible();
   expect((await library(request)).models.find((item) => item.id === model.id)).toEqual(model);

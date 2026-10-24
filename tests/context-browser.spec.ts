@@ -69,7 +69,7 @@ async function create(page: Page, title: string) {
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '기억·메모·로어');
+  await selectChatSettingsSection(page, '기억과 메모');
   const panel = page.getByTestId('context-panel');
   await expect(panel.getByRole('button', { name: '요약 작성', exact: true })).toBeEnabled();
   return { chat, panel };
@@ -129,7 +129,7 @@ test('CTXUI01 summary authoring without a Run, edits replace the current summary
   }
   await page.reload();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '기억·메모·로어');
+  await selectChatSettingsSection(page, '기억과 메모');
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
     '두 번째 요약: 배가 출발했다.'
   );
@@ -148,14 +148,14 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   await expect(panel.getByLabel('편집할 컨텍스트 요약')).toHaveValue('내 요약 초안');
   await expect(panel.getByRole('button', { name: '요약 저장', exact: true })).toBeDisabled();
   await panel
-    .getByRole('button', { name: '최신 요약을 확인했어요 · 내 초안 유지', exact: true })
+    .getByRole('button', { name: '최신 요약을 확인하고 내 초안 유지', exact: true })
     .click();
   await panel.getByRole('button', { name: '요약 저장', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText('내 요약 초안');
   const notes = panel.getByTestId('context-notes');
   await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
-  await notes.getByLabel('메모·정정 내용').fill('내 메모 초안');
+  await notes.getByLabel('메모와 정정 내용').fill('내 메모 초안');
   const before = await read<StoryDetail>(request, `/chats/${chat.id}/story`);
   const added = await request.post(`/api/chats/${chat.id}/notes`, {
     data: {
@@ -169,18 +169,18 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   expect(added.ok(), await added.text()).toBe(true);
   await panel.getByRole('button', { name: '새로 확인', exact: true }).click();
   await expect(notes.getByText('다른 창의 메모', { exact: true })).toBeVisible();
-  await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
+  await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
   await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeEnabled();
   // A mobile section-back changes visibility only, preserving text and its conflict state.
   await page.getByRole('button', { name: '채팅 설정 목록으로', exact: true }).click();
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
-  await selectChatSettingsSection(page, '기억·메모·로어');
-  await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
+  await selectChatSettingsSection(page, '생성 설정');
+  await selectChatSettingsSection(page, '기억과 메모');
+  await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
   await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
   const noteConflict = page.getByRole('alertdialog', { name: '메모 저장 충돌', exact: true });
   await expect(noteConflict).toBeVisible();
   await noteConflict.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
-  await expect(notes.getByLabel('메모·정정 내용')).toHaveValue('내 메모 초안');
+  await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
   await notes.getByRole('button', { name: '저장 충돌 확인', exact: true }).click();
   await noteConflict.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(noteConflict.getByText('다른 창의 메모', { exact: true })).toBeVisible();
@@ -267,7 +267,7 @@ for (const width of [1440, 412]) {
     await page.getByRole('button', { name: '수동 컨텍스트 압축', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '수동 컨텍스트 압축', exact: true });
     await expect(dialog).toBeVisible();
-    await dialog.getByText('이번 압축에서 우선할 내용 · 선택', { exact: true }).click();
+    await dialog.getByText('이번 요약에서 우선할 내용 (선택)', { exact: true }).click();
     const priorities = dialog.getByLabel('압축 우선순위', { exact: true });
     await priorities.fill('미라가 아직 모르는 사실과 인물 호칭을 유지해요.');
     const accepted = page.waitForResponse(

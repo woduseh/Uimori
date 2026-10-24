@@ -189,7 +189,7 @@ for (const viewport of viewports) {
       await expect(editor.getByLabel('48번 프롬프트 본문', { exact: true })).toHaveValue(
         'Instruction 48'
       );
-      await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+      await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
       await editorFits(page, editor, save, 1200);
       await page.screenshot({ path: info.outputPath(`centered-variables-${viewport.name}.png`) });
     });
@@ -303,7 +303,7 @@ for (const viewport of viewports) {
       await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       const editor = page.getByTestId('prompt-editor');
       const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
-      await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+      await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
       const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
       const editView = definitions.getByRole('button', { name: '편집', exact: true });
       const previewView = definitions.getByRole('button', { name: '미리보기', exact: true });
@@ -418,7 +418,7 @@ for (const viewport of viewports) {
           .filter({ hasText: '잘못 입력된 토글 또는 변수 값을 확인해 주세요.' })
       ).toBeVisible();
       await editor.getByRole('tab', { name: '구성', exact: true }).click();
-      await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+      await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
       variableKey = definitions.getByLabel('변수 키', { exact: true });
       await expect(variableKey).toHaveValue('');
       await variableKey.fill('short');
@@ -457,7 +457,7 @@ for (const viewport of viewports) {
       await raw.fill(withPendingSource);
       await expect(save).toBeEnabled();
       await editor.getByRole('tab', { name: '구성', exact: true }).click();
-      await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+      await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
       await rawView.click();
       raw = definitions.getByLabel('토글 정의 원문', { exact: true });
       await expect(raw).toHaveValue(withPendingSource);
@@ -571,15 +571,15 @@ for (const viewport of viewports) {
       const advancedNav = editor.getByRole('group', { name: '고급 설정 영역', exact: true });
       for (const label of [
         '추가 지침',
-        '변수 초기값·토글',
-        '배경 HTML·CSS',
-        'Lua · 트리거 · 정규식',
+        '변수와 토글 초기값',
+        '배경 HTML과 CSS',
+        'Lua, 트리거, 정규식',
         '연결 모듈',
         '원문 JSON',
       ])
         await expect(advancedNav.getByRole('button', { name: label, exact: true })).toBeVisible();
 
-      await advancedNav.getByRole('button', { name: '배경 HTML·CSS', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '배경 HTML과 CSS', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-display-${viewport.name}.png`) });
 
@@ -630,12 +630,12 @@ for (const viewport of viewports) {
       page.off('pageerror', recordPageError);
       expect(moduleDialogErrors).toEqual([]);
 
-      await advancedNav.getByRole('button', { name: 'Lua · 트리거 · 정규식', exact: true }).click();
+      await advancedNav.getByRole('button', { name: 'Lua, 트리거, 정규식', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-scripts-${viewport.name}.png`) });
       await editor.getByLabel('트리거 이름', { exact: true }).fill('Edited arrival trigger');
       await editor.getByLabel('Lua 원문', { exact: true }).fill('return "edited"');
-      await editor.getByText('실행 조건과 순서 · 원문 편집', { exact: true }).click();
+      await editor.getByText('실행 조건과 순서 (원문 편집)', { exact: true }).click();
       const triggerRaw = editor.getByLabel('트리거 원문 JSON', { exact: true });
       const pendingTriggerRaw = '{"unfinished":';
       await triggerRaw.fill(pendingTriggerRaw);
@@ -644,9 +644,9 @@ for (const viewport of viewports) {
       expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
         bot.revision
       );
-      await advancedNav.getByRole('button', { name: '배경 HTML·CSS', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '배경 HTML과 CSS', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
-      await advancedNav.getByRole('button', { name: 'Lua · 트리거 · 정규식', exact: true }).click();
+      await advancedNav.getByRole('button', { name: 'Lua, 트리거, 정규식', exact: true }).click();
       await expect(triggerRaw).toHaveValue(pendingTriggerRaw);
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
       await editor.getByText('정규식 스크립트', { exact: true }).click();
@@ -669,7 +669,7 @@ for (const viewport of viewports) {
       expect((await (await request.get(`/api/content/${bot.id}`)).json()).revision).toBe(
         bot.revision
       );
-      await advancedNav.getByRole('button', { name: '배경 HTML·CSS', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '배경 HTML과 CSS', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
       await advancedNav.getByRole('button', { name: '원문 JSON', exact: true }).click();
       await expect(raw).toHaveValue(pendingRaw);
