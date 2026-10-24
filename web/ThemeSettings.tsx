@@ -326,7 +326,7 @@ export function ThemeSettings({
           ];
         }}
       />
-      <div className="settings-card theme-toolbar theme-control-bar">
+      <div className="theme-toolbar theme-control-bar theme-default-control">
         <label>
           {t('visualpanels.defaultAppearance')}{' '}
           <select
@@ -375,7 +375,7 @@ export function ThemeSettings({
       <TransientNotice message={notice} />
       <details className="theme-advanced">
         <summary>{t('visualpanels.advancedAppearanceAndThemeCreation')}</summary>
-        <div className="settings-card theme-toolbar theme-control-bar">
+        <div className="theme-toolbar theme-control-bar">
           <label>
             {t('visualpanels.scope')}{' '}
             <select
@@ -637,9 +637,6 @@ export function ThemeSettings({
           onSaveHandlerChange={registerBackgroundSave}
         />
         <section className="theme-library-tools" aria-label={t('visualpanels.manageThemes')}>
-          <div className="theme-library-copy">
-            <h4>{t('visualpanels.manageThemes')}</h4>
-          </div>
           <div className="theme-library-actions">
             <button className="primary" disabled={busy || backgroundDirty} onClick={() => edit()}>
               <AddIcon size={16} aria-hidden="true" /> {t('visualpanels.newCustomTheme')}{' '}

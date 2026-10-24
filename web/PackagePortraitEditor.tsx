@@ -7,7 +7,7 @@ import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { maxPackageImages, uploadPackageImage } from './package-image-upload.js';
-import { SearchIcon } from './ui-icons.js';
+import { CheckIcon, SearchIcon } from './ui-icons.js';
 import './content-picker.css';
 
 /** Edits the current authoring draft; representative image changes are saved by the parent. */
@@ -159,32 +159,36 @@ export function PackagePortraitEditor({
               }}
             />
           </label>
-          <button
-            type="button"
-            className="secondary"
-            disabled={disabled || busy || !images.length}
-            onClick={() => {
-              setQuery('');
-              setVisibleCount(50);
-              setOpen(true);
-            }}
-          >
-            {t('library.chooseAnExistingImage')}
-          </button>
-          <button
-            type="button"
-            className="ghost"
-            disabled={disabled || busy || !value.portraitImageId}
-            onClick={() => {
-              const next = { ...latest.current.value };
-              delete next.portraitImageId;
-              update(next);
-              setError('');
-              setNotice(uiMessage('library.portraitDesignationRemovedTheImageRemainsIn'));
-            }}
-          >
-            {t('library.removePortraitDesignation')}
-          </button>
+          {images.length > 0 && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={disabled || busy || !images.length}
+              onClick={() => {
+                setQuery('');
+                setVisibleCount(50);
+                setOpen(true);
+              }}
+            >
+              {t('library.chooseAnExistingImage')}
+            </button>
+          )}
+          {value.portraitImageId && (
+            <button
+              type="button"
+              className="ghost"
+              disabled={disabled || busy || !value.portraitImageId}
+              onClick={() => {
+                const next = { ...latest.current.value };
+                delete next.portraitImageId;
+                update(next);
+                setError('');
+                setNotice(uiMessage('library.portraitDesignationRemovedTheImageRemainsIn'));
+              }}
+            >
+              {t('library.removePortraitDesignation')}
+            </button>
+          )}
         </div>
         <small>{t('library.pngJpegWebpAvifGifUpTo')}</small>
         {busy && (
@@ -257,6 +261,7 @@ export function PackagePortraitEditor({
                       : t('library.portraitAndStory')}
                 </small>
               </span>
+              {value.portraitImageId === image.id && <CheckIcon size={18} aria-hidden="true" />}
             </button>
           ))}
           {!found.length && <p className="muted">{t('library.noSearchResults')}</p>}

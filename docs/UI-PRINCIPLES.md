@@ -15,6 +15,10 @@ Uimori is a writing and reading workspace. Keep the manuscript and composer prom
 
 ## Layout and state contracts
 
+Avoid a menu or disclosure around a single action or around a dialog's only content. Helper history opens directly from its icon; the last-scene lore dialog shows its records directly. Request preview waits for text or a prepared image at its originating control. Keep recovery states and retry beside the content they load.
+
+Fieldsets provide semantic grouping without browser-default borders or padding; add a boundary only when the owning layout needs one. On compact screens, native switches have a 44px hit area around their 26px visual track. Keep keyboard focus and the actual checked state on the native input.
+
 Use familiar navigation and consistent names across desktop and mobile. Adapt the layout to available space; avoid stretching prose and long forms across wide screens. Give icon buttons accessible names and make each screen's primary action easy to find. Keep internal implementation terms out of ordinary product copy.
 
 App chrome uses three font sizes: 12px for metadata, 14px for controls and body copy, and 16px for headings. Use weight and spacing for further hierarchy. Reading preferences and authored Markdown/Risu content keep their independent typography. Use the shared 0.5px hairline for borders, dividers and focus outlines; a high-contrast focus color and offset keep keyboard focus visible. Icon strokes and checkbox glyphs retain their legible symbol geometry. Prefer flat groups over nested cards, reserve shadows for floating surfaces, and use the shared 4px, 6px and 10px corner tokens with inner radii reduced by their padding.
@@ -38,6 +42,8 @@ In settings, place section titles above flat groups of related controls. Use one
 Let titles, values and nearby actions explain the layout. Omit navigation subtitles that repeat a title, repeated scope lines, missing-description filler and empty-state instructions that repeat visible actions. Keep a single identity area in resource details. Name navigation destinations for their actual contents instead of adding subtitles. Search fields may use a search icon and a concise placeholder while retaining an accessible name. Show selection with a check mark or another shape as well as color; preserve nonvisual descriptions of color choices. Search-empty states offer search recovery; first-use guidance belongs only to genuinely empty collections. Preserve authored descriptions, accessible names, application timing, cost, data preservation and recovery meaning. Place desktop-only panel settings together, and name a setting's actual effect rather than compensating for an ambiguous name with a paragraph.
 
 Creative options use one editor with a next-generation-only scope switch. Changing scope preserves edits and makes no write; saved one-off reservations remain visible with their own cancellation action. Saving fixed values and reserving one-off values stay distinct, including during conflicts or an uncertain response.
+
+The card-variable editor keeps an uncertain save's exact request available for explicit result confirmation during background refreshes. Acknowledgement ends the superseded read's loading state; a late read cannot replace the saved result or a newer draft.
 
 Keep settings action groups aligned to the right below their content, and toggle names on the left with switches on the right. Repeated usage meters share the same column boundaries regardless of adjacent text length.
 

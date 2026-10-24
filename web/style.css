@@ -327,6 +327,9 @@ details[open] > summary::before {
 }
 fieldset {
   min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 /* An icon beside a label belongs on the label's centre line. Without this the button
    stays an inline box and the SVG drops onto the baseline. */

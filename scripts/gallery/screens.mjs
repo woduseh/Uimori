@@ -191,13 +191,10 @@ export const screens = [
   },
   {
     id: 'composer-request-preview-empty',
-    title: '다음 요청 미리보기: 빈 요청',
+    title: '빈 요청의 미리보기 비활성 상태',
     url: chat,
-    enter: [
-      { click: { label: '입력창 더보기' } },
-      { click: { role: 'button', name: '다음 요청 미리보기' } },
-    ],
-    ready: { role: 'dialog', name: '다음 요청 미리보기' },
+    enter: [{ click: { label: '입력창 더보기' } }],
+    ready: { role: 'group', name: '이번 요청 옵션' },
   },
   chatSettings('characters', '사용 자료'),
   chatSettings('prompts', '생성 설정'),

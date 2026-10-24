@@ -1369,7 +1369,6 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   });
   await panel.getByRole('button', { name: '이전 메시지 불러오기' }).click();
   await expect(panel.getByText('합성 요청 1', { exact: true }).first()).toBeVisible();
-  await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
   await panel.getByRole('button', { name: '이전 작업 더 보기' }).click();
   await expect(panel.locator('.helper-task-history h2')).toHaveText('도우미 작업 기록');
@@ -1411,7 +1410,6 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   await panel.getByLabel('도우미에게 요청').fill('새 작업의 초안');
   await panel.getByLabel('도우미 세션 선택').selectOption(view.conversation.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
-  await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(55);
   await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
@@ -1612,7 +1610,6 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await expect(panel.locator('[data-testid="source-request"]')).toHaveCount(1);
   await expect(panel.getByText('고친 요청', { exact: true })).toBeVisible();
   await expect(panel.getByRole('group', { name: '실패한 요청' })).toHaveCount(0);
-  await panel.locator('summary[aria-label="도우미 대화 더보기"]').click();
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(2);
   await expect(

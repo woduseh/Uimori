@@ -189,7 +189,6 @@ function StoryGuideEditor({
   const busy = saving;
   return (
     <section className="story-guide" aria-label={t('prompts.uiCanonAndCharacterReferenceContent')}>
-      <p className="muted">{t('prompts.uiTheModelCreatesAWritingBriefFromCanonSettings')}</p>
       <form
         className="settings-group"
         onSubmit={(event) => {
@@ -218,7 +217,7 @@ function StoryGuideEditor({
           >
             <summary>
               {t('prompts.uiReferenceSettings')}
-              {!settingsOpen && <small>{draft.work || t('prompts.uiWorkAndReferenceScope')}</small>}
+              {!settingsOpen && draft.work && <small>{draft.work}</small>}
             </summary>
             <div className="story-guide-fields">
               <label>

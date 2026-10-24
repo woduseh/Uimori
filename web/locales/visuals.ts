@@ -516,10 +516,10 @@ export const messages = {
     zh: '插图设置已在别处更改。已保留草稿，请加载最新设置后重新应用。',
   },
   'visuals.m091': {
-    ko: '기본 생성 환경과 자동 생성 관리',
-    en: 'Manage default generation environment and automation',
-    ja: '既定の生成環境、自動生成を管理',
-    zh: '管理默认生成环境和自动生成',
+    ko: '생성 환경',
+    en: 'Generation environment',
+    ja: '生成環境',
+    zh: '生成环境',
   },
   'visuals.m092': {
     ko: '원문이 수정되어 생성 당시 위치와 달라졌어요. 그림은 그대로 보관해요.',

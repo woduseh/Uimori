@@ -365,9 +365,6 @@ export function IllustrationPresetSettings({
       <details className="illustration-preset-disclosure">
         <summary>{t('visualpanels.managePresetsAndScopes')}</summary>
         <div className="illustration-preset-heading">
-          <div>
-            <h3>{t('visualpanels.illustrationPresets')}</h3>
-          </div>
           <div className="illustration-preset-list-actions">
             <button
               className="primary"
@@ -453,11 +450,13 @@ export function IllustrationPresetSettings({
                     </span>
                   )}
                 </div>
-                <span>
-                  {preset.id.startsWith('builtin:')
-                    ? t('visualpanels.drawsAccordingToTheSceneAndCharacters')
-                    : preset.description || t('visualpanels.customIllustrationPreset')}
-                </span>
+                {(preset.id.startsWith('builtin:') || preset.description) && (
+                  <span>
+                    {preset.id.startsWith('builtin:')
+                      ? t('visualpanels.drawsAccordingToTheSceneAndCharacters')
+                      : preset.description}
+                  </span>
+                )}
                 <small>
                   {preset.generator === 'codex'
                     ? t('visualpanels.codexSharedIllustrationModel')
@@ -577,7 +576,7 @@ export function IllustrationPresetSettings({
           >
             <div className="illustration-preset-heading">
               <h4>{draft.id ? t('visualpanels.editPreset') : t('visualpanels.createPreset')}</h4>
-              <small>{dirty ? t('visualpanels.unsavedChanges') : t('visualpanels.saved')}</small>
+              {dirty && <small>{t('visualpanels.unsavedChanges')}</small>}
             </div>
             {(conflict || deleted) && (
               <NoticeBanner tone="error">

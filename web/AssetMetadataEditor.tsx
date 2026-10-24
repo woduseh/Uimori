@@ -2,7 +2,7 @@ import { t, useI18n, translateMessage } from './i18n.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Asset } from '../core/product.js';
 import { api } from './api.js';
-import { LoadingState } from './LoadingState.js';
+import { SaveButton } from './SaveButton.js';
 import { NoticeBanner } from './NoticeBanner.js';
 
 /** Small local form: changing metadata never uploads or recompresses an image. */
@@ -55,9 +55,12 @@ export function AssetMetadataEditor({
         />
       </label>
       <small>{t('library.savedChangesApplyToTheNextAutomatic')}</small>
-      <button
+      <SaveButton
         type="button"
         className="primary"
+        label={t('library.saveImageInformation')}
+        text={t('shared.save')}
+        aria-busy={busy}
         disabled={busy || !draft.title.trim()}
         onClick={async () => {
           setBusy(true);
@@ -81,10 +84,7 @@ export function AssetMetadataEditor({
             setBusy(false);
           }
         }}
-      >
-        {t('library.saveImageInformation')}
-      </button>
-      {busy && <LoadingState presentation="inline" label={t('library.savingImageInformation')} />}
+      />
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </details>
   );

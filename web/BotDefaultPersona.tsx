@@ -8,6 +8,7 @@ import { api } from './api.js';
 import { ContentPicker } from './ContentPicker.js';
 import { Dialog } from './Dialog.js';
 import { refValue } from './content-ref.js';
+import { SaveButton } from './SaveButton.js';
 
 export function BotDefaultPersona({
   bot,
@@ -129,9 +130,12 @@ export function BotDefaultPersona({
         )}
         <p className="muted">{t('library.newChatsUseYourExplicitChoiceIncluding')}</p>
         {saved && error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-        <button disabled={!saved || busy || (mode === 'persona' && !selected)}>
-          {busy ? t('library.saving2') : t('library.saveDefaultPersona')}
-        </button>
+        <SaveButton
+          disabled={!saved || busy || (mode === 'persona' && !selected)}
+          label={t('library.saveDefaultPersona')}
+          text={t('shared.save')}
+          aria-busy={busy}
+        />
       </form>
     </Dialog>
   );

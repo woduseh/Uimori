@@ -1420,7 +1420,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
   await openChatSettings(page);
   await selectChatSettingsSection(page, '생성 설정');
   await expect(
-    page.getByText('저장한 설정은 다음 실행부터 적용해요.', { exact: true })
+    page.getByText('이 채팅에 저장하며, 다음 실행부터 적용돼요.', { exact: true })
   ).toBeVisible();
   await close(page);
   expect(posts).toEqual([]);

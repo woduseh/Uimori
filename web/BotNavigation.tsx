@@ -10,6 +10,7 @@ import type { chatActivitySummaries } from './chat-activity-summaries.js';
 import type { DragEvent, MouseEvent, HTMLAttributes } from 'react';
 import { DeleteButton } from './DeleteButton.js';
 import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import { useEffect, useRef, useState } from 'react';
 import {
   AddIcon,
@@ -17,7 +18,6 @@ import {
   ExpandIcon,
   FolderAddIcon,
   FolderIcon,
-  CheckIcon,
   CloseIcon,
   LibraryIcon,
   MoreIcon,
@@ -859,10 +859,11 @@ function ChatTitleEditor({
           <CloseIcon size={18} aria-hidden="true" />
           {t('transfer.m206')}
         </button>
-        <button disabled={disabled || saving || !dirty || !draft.trim()}>
-          <CheckIcon size={18} aria-hidden="true" />
-          {saving ? t('transfer.m259') : t('transfer.m260')}
-        </button>
+        <SaveButton
+          label={t('transfer.m260')}
+          disabled={disabled || !dirty || !draft.trim()}
+          aria-busy={saving}
+        />
       </div>
       {dirty && (chat.titleRevision ?? 0) !== baseTitleRevision && (
         <small>{t('transfer.m261')}</small>
@@ -1032,9 +1033,12 @@ function FolderSettings({
           </NoticeBanner>
         )}
         <small>{t('transfer.m270')}</small>
-        <button className="secondary" disabled={busy || conflicted || !title.trim()}>
-          {t('transfer.m271')}
-        </button>
+        <SaveButton
+          label={t('transfer.m271')}
+          className="secondary"
+          disabled={conflicted || !title.trim()}
+          aria-busy={busy}
+        />
       </form>
       <button
         type="button"

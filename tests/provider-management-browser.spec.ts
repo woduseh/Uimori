@@ -129,6 +129,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
     })
   );
   await modelForm.getByLabel('모델 ID', { exact: true }).fill('synthetic/manual-id');
+  await modelForm.getByText('모델 목록에서 선택', { exact: true }).click();
   await modelForm.getByRole('button', { name: '모델 목록 새로고침', exact: true }).click();
   await expect(page.getByTestId('connection-editor').getByRole('alert')).toContainText(
     '모델 목록을 확인하지 못했어요'
@@ -707,6 +708,8 @@ test('PMUI04 selecting a provider does not refresh its model catalog until reque
   await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
   const form = page.getByRole('form', { name: '모델 편집 양식' });
   await form.getByLabel('프로바이더', { exact: true }).selectOption(connection.id);
+  await expect(form.getByLabel('모델 ID', { exact: true })).toBeVisible();
+  await form.getByText('모델 목록에서 선택', { exact: true }).click();
   const refresh = form.getByRole('button', { name: '모델 목록 새로고침', exact: true });
   await expect(refresh).toBeVisible();
   expect(catalogRequests).toBe(0);
@@ -740,9 +743,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
       form = page.getByRole('form', { name: '프로바이더 편집 양식' }),
       modelForm = page.getByRole('form', { name: '모델 편집 양식' });
     await startProviderConnection(page);
-    await expect(page.getByRole('list', { name: '빠른 프로바이더 진행' })).toContainText(
-      '1. 프로바이더 종류'
-    );
+    await expect(page.getByRole('region', { name: '프로바이더 선택', exact: true })).toBeVisible();
     await page.getByText('개발 및 검사용 프로바이더', { exact: true }).click();
     await page.getByRole('button', { name: '로컬 fixture로 설정', exact: true }).click();
     await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
@@ -788,6 +789,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
         body: JSON.stringify({ ...connection, ...snapshot }),
       });
     });
+    await modelForm.getByText('모델 목록에서 선택', { exact: true }).click();
     await modelForm.getByRole('button', { name: '모델 목록 새로고침', exact: true }).click();
     await modelForm.getByLabel('모델 목록 검색').fill('catalog-beta');
     const picker = modelForm.getByRole('region', { name: '저장된 모델 목록에서 선택' });
@@ -1786,6 +1788,7 @@ for (const [index, item] of [
     await page.getByRole('button', { name: '새 모델 입력', exact: true }).click();
     const form = page.getByRole('form', { name: '모델 편집 양식' });
     await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
+    await form.getByText('모델 목록에서 선택', { exact: true }).click();
     await form.getByLabel('모델 목록 검색').fill(item.modelId);
     const picker = form.getByRole('region', { name: '저장된 모델 목록에서 선택' });
     await expect(picker).toContainText('모델 목록에서 선택');

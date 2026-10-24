@@ -26,6 +26,11 @@
   gap: 8px 24px;
   margin: 0;
 }
+.jev-provider-model {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
 .jev-provider-details dt {
   font-size: var(--font-small);
   color: var(--muted);

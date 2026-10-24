@@ -1,5 +1,6 @@
 import { t, useI18n } from './i18n.js';
 import { Plus, Trash2, Languages } from 'lucide-react';
+import { IconButton } from './IconButton.js';
 import { TRANSLATION_GUIDE_LIMITS, type TranslationGuide } from '../core/translation-guide.js';
 import './translation-guide.css';
 
@@ -56,9 +57,6 @@ export function TranslationGuideEditor({
           {t('library.addTerm')}
         </button>
       </div>
-      {!value.terms.length && (
-        <p className="translation-guide-empty">{t('library.noTermsYetAddNamesOrOrganizations')}</p>
-      )}
       <div className="translation-guide-terms">
         {value.terms.map((item, index) => (
           <fieldset className="translation-guide-term" key={index}>
@@ -96,17 +94,16 @@ export function TranslationGuideEditor({
                 onChange={(e) => term(index, { note: e.target.value })}
               />
             </label>
-            <button
+            <IconButton
               type="button"
               className="ghost translation-guide-term-delete"
-              aria-label={t('library.deleteTerm', { v0: index + 1 })}
+              icon={Trash2}
+              size={16}
+              label={t('library.deleteTerm', { v0: index + 1 })}
               onClick={() =>
                 onChange({ ...value, terms: value.terms.filter((_, i) => i !== index) })
               }
-            >
-              <Trash2 size={16} aria-hidden="true" />
-              {t('library.delete')}
-            </button>
+            />
           </fieldset>
         ))}
       </div>
@@ -114,12 +111,6 @@ export function TranslationGuideEditor({
         <summary>{t('library.previewInstructionsSentToTranslation')}</summary>
         <p className="muted">{t('library.thisPreviewsCurrentEditsSaveChangesTo')}</p>
         <pre>{JSON.stringify(value, null, 2)}</pre>
-      </details>
-      <details className="translation-guide-preview">
-        <summary>{t('library.writingTips')}</summary>
-        <p className="muted translation-guide-help">
-          {t('library.askTheAssistantToDraftTranslationInstructions')}
-        </p>
       </details>
     </section>
   );

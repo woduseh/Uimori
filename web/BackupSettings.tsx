@@ -296,12 +296,7 @@ export function BackupSettings({
                   </div>
                 ))}
               </details>
-            ) : (
-              <div className="backup-empty">
-                <span>{t('transfer.m169')}</span>
-                <span>{t('transfer.count', { count: 0 })}</span>
-              </div>
-            )}
+            ) : null}
             <small className="muted">{t('transfer.m172')}</small>
           </>
         )}

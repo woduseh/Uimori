@@ -71,8 +71,7 @@
   background: var(--accent);
   color: var(--accent-ink);
 }
-.backup-list,
-.backup-empty {
+.backup-list {
   border-top: var(--hairline) solid var(--line);
   padding-top: 14px;
 }
@@ -88,12 +87,6 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-}
-.backup-empty {
-  display: flex;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: var(--font-body);
 }
 @media (max-width: 480px) {
   .backup-fields label {

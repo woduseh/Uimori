@@ -63,12 +63,17 @@ for (const width of [360, 1440]) {
     await expect(thumbnails(page)).toHaveCount(1);
     await composer(page).fill('');
     await expect(send(page)).toBeEnabled();
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: '다음 요청 미리보기', exact: true })
+    ).toBeEnabled();
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     const removeBounds = await page
       .getByRole('button', { name: 'reference.png 제거', exact: true })
       .boundingBox();
     expect(removeBounds).not.toBeNull();
-    expect(removeBounds!.width).toBe(26);
-    expect(removeBounds!.height).toBe(26);
+    expect(removeBounds!.width).toBe(width <= 600 ? 44 : 26);
+    expect(removeBounds!.height).toBe(width <= 600 ? 44 : 26);
     const formBounds = await page.locator('form.composer:visible').boundingBox();
     expect(formBounds!.x).toBeGreaterThanOrEqual(0);
     expect(formBounds!.x + formBounds!.width).toBeLessThanOrEqual(width);

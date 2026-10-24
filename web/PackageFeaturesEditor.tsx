@@ -7,8 +7,9 @@ import type { Content, Library } from '../core/product.js';
 import type { PackageModuleRef } from '../core/package-features.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
+import { IconButton } from './IconButton.js';
 import { api, libraryChangedKey } from './api.js';
-import { RefreshIcon } from './ui-icons.js';
+import { CloseIcon, RefreshIcon } from './ui-icons.js';
 import './package-authoring.css';
 
 const referenceKey = (ref: PackageModuleRef | null | undefined) =>
@@ -178,38 +179,36 @@ export function PackageFeaturesEditor({
   );
   return (
     <div
-      className="package-stack package-authoring-editor"
+      className="package-authoring-editor"
       aria-label={t('library.editPackageModulesAndFeatures')}
     >
-      <section className="package-stack package-module-section">
-        <header className="package-module-heading">
-          <h3>{t('library.sharedModules')}</h3>
-          <p className="muted">{t('library.attachingThisResourceAlsoUsesTheModules')}</p>
-        </header>
+      <section className="package-module-section">
+        <p className="muted">{t('library.attachingThisResourceAlsoUsesTheModules')}</p>
         {(value.modules ?? []).map((ref) => {
           const status = statuses[referenceKey(ref)];
           return (
-            <fieldset className="package-entry" key={ref.id}>
-              <legend>{status?.content?.title ?? ref.id}</legend>
-              <ContentAvatar content={status?.content} title={status?.content?.title ?? ref.id} />
+            <div className="package-module-row" key={ref.id}>
+              <div className="package-module-identity">
+                <ContentAvatar content={status?.content} title={status?.content?.title ?? ref.id} />
+                <strong>{status?.content?.title ?? ref.id}</strong>
+                <IconButton
+                  className="ghost"
+                  label={t('library.detachNamedModule', {
+                    title: status?.content?.title ?? ref.id,
+                  })}
+                  icon={CloseIcon}
+                  disabled={busy}
+                  onClick={() => {
+                    update({ modules: value.modules?.filter((item) => item.id !== ref.id) });
+                  }}
+                />
+              </div>
               {status?.error && (
                 <NoticeBanner tone="error" actions={retryRead}>
                   {t('library.moduleError', { error: translateMessage(status.error) })}
                 </NoticeBanner>
               )}
-              <div className="package-role-actions">
-                <button
-                  type="button"
-                  className="ghost"
-                  disabled={busy}
-                  onClick={() => {
-                    update({ modules: value.modules?.filter((item) => item.id !== ref.id) });
-                  }}
-                >
-                  {t('library.detachModule')}
-                </button>
-              </div>
-            </fieldset>
+            </div>
           );
         })}
         <div className="package-module-connect">

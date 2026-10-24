@@ -181,11 +181,6 @@ export function ProfileEditor({
       data-testid="profile-editor"
       aria-label={t('library.chatSettings')}
     >
-      {!hideNavigation && (
-        <p className="muted profile-intro">
-          {t('library.chooseTheCharactersAndWritingApproachFor')}
-        </p>
-      )}
       <div
         hidden={hideNavigation}
         className="profile-tabs"
@@ -222,7 +217,9 @@ export function ProfileEditor({
           </button>
         ))}
       </div>
-      <p className="muted">{t('library.appliesOnlyToThisChat')}</p>
+      {(!hideNavigation || tab !== 'prompts') && (
+        <p className="muted">{t('library.appliesOnlyToThisChat')}</p>
+      )}
       <form
         ref={form}
         onSubmit={(event) => {

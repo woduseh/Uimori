@@ -798,10 +798,10 @@ export const messages = {
     zh: '正在检查',
   },
   'visualpanels.managePresetsAndScopes': {
-    ko: '프리셋과 적용 범위 관리',
-    en: 'Manage presets and scopes',
-    ja: 'プリセット、適用範囲の管理',
-    zh: '管理预设与应用范围',
+    ko: '프리셋',
+    en: 'Presets',
+    ja: 'プリセット',
+    zh: '预设',
   },
   'visualpanels.chooseAGeneratorAndIllustrationInstructionsTogether': {
     ko: '생성기와 그림 지침을 함께 선택해요. 연결과 모델은 아래 공용 환경을 사용해요.',

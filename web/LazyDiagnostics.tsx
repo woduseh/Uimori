@@ -9,6 +9,7 @@ export function LazyDiagnostics<T>({
   revision,
   title,
   initiallyOpen = false,
+  disclosure = true,
   actions,
   children,
 }: {
@@ -16,6 +17,7 @@ export function LazyDiagnostics<T>({
   revision: number | string;
   title: ReactNode;
   initiallyOpen?: boolean;
+  disclosure?: boolean;
   /** Kept mounted during reloads so an action's open dialog retains its state. */
   actions?: ReactNode;
   children: (value: T) => ReactNode;
@@ -25,12 +27,13 @@ export function LazyDiagnostics<T>({
   const [value, setValue] = useState<T | null>(null);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const expanded = !disclosure || open;
   useEffect(() => {
     setOpen(initiallyOpen);
   }, [initiallyOpen]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Revision updates and explicit retries reload diagnostics at the same path.
   useEffect(() => {
-    if (!open) {
+    if (!expanded) {
       setValue(null);
       return;
     }
@@ -47,16 +50,11 @@ export function LazyDiagnostics<T>({
     return () => {
       active = false;
     };
-  }, [path, revision, open, retry]);
-  return (
-    <details
-      className="inspector"
-      open={open}
-      onToggle={(event) => setOpen(event.currentTarget.open)}
-    >
-      <summary>{title}</summary>
+  }, [path, revision, expanded, retry]);
+  const content = (
+    <>
       {actions && <div className="form-actions">{actions}</div>}
-      {open &&
+      {expanded &&
         (error || value === null ? (
           <LoadingState
             presentation="inline"
@@ -68,6 +66,18 @@ export function LazyDiagnostics<T>({
         ) : (
           children(value)
         ))}
+    </>
+  );
+  return disclosure ? (
+    <details
+      className="inspector"
+      open={open}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
+    >
+      <summary>{title}</summary>
+      {content}
     </details>
+  ) : (
+    <div className="inspector">{content}</div>
   );
 }

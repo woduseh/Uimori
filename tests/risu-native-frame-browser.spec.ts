@@ -246,6 +246,10 @@ test('RSURFACE viewport projections retain local controls and action locks until
   const resizeGate = new Promise<void>((resolve) => {
     releaseResize = resolve;
   });
+  let releasePreviewRetry!: () => void;
+  const previewRetryGate = new Promise<void>((resolve) => {
+    releasePreviewRetry = resolve;
+  });
   const dimensions = (url: string) => {
     const query = new URL(url).searchParams;
     return {
@@ -293,6 +297,11 @@ test('RSURFACE viewport projections retain local controls and action locks until
   await page.route('**/api/content/bot/risu-preview?*', async (route) => {
     const viewport = dimensions(route.request().url());
     previews.push(viewport);
+    if (previews.length === 1) {
+      await route.fulfill({ status: 503, json: { error: 'Synthetic preview read failure' } });
+      return;
+    }
+    await previewRetryGate;
     await route.fulfill({
       json: { html: `<p>Preview ${viewport.width}</p>`, css: '', issues: [] },
     });
@@ -400,10 +409,18 @@ test('RSURFACE viewport projections retain local controls and action locks until
   await expect(page.getByLabel('Action calls')).toHaveText('2');
 
   await page.getByRole('button', { name: 'Toggle preview', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Preview', exact: true })).toContainText(
-    `Preview ${MOBILE_WIDTH + 1}`
-  );
-  expect(previews).toEqual([{ width: MOBILE_WIDTH + 1, height: MOBILE_HEIGHT }]);
+  const preview = page.getByRole('region', { name: 'Preview', exact: true });
+  await expect(preview.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
+  const retryPreview = preview.getByRole('button', { name: '다시 불러오기', exact: true });
+  await retryPreview.click();
+  await expect(retryPreview).toBeDisabled();
+  await expect(preview.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
+  releasePreviewRetry();
+  await expect(preview).toContainText(`Preview ${MOBILE_WIDTH + 1}`);
+  expect(previews).toEqual([
+    { width: MOBILE_WIDTH + 1, height: MOBILE_HEIGHT },
+    { width: MOBILE_WIDTH + 1, height: MOBILE_HEIGHT },
+  ]);
   await page.getByRole('button', { name: 'Toggle preview', exact: true }).click();
   await page.getByRole('button', { name: 'Toggle presentation', exact: true }).click();
   await expect(presentation).toHaveText('Saved original');
@@ -411,7 +428,7 @@ test('RSURFACE viewport projections retain local controls and action locks until
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
   await page.clock.fastForward(1000);
   expect(requests).toHaveLength(requestCount);
-  expect(previews).toHaveLength(1);
+  expect(previews).toHaveLength(2);
 });
 
 test('native preset editor keeps raw CBS, toggle values, and invalid regex drafts', async ({
@@ -508,6 +525,20 @@ test('native collection rows share drag ordering and selection feedback', async 
   await expect.poll(value).toEqual(['Second rule', 'Future rule', 'First rule']);
   await expect(page.getByLabel('정규식 이름', { exact: true })).toHaveValue('First rule');
   await expect(list.getByRole('status')).toContainText('3번째');
+  const name = page.getByLabel('정규식 이름', { exact: true });
+  await name.fill('Edited selected rule');
+  await list.getByRole('searchbox', { name: '정규식 찾기', exact: true }).fill('No matching rule');
+  await expect(list.getByRole('status').filter({ hasText: '검색 결과가 없어요.' })).toBeVisible();
+  await expect(rows).toHaveCount(0);
+  await expect(name).toHaveValue('Edited selected rule');
+  await list.getByRole('button', { name: '검색 지우기', exact: true }).click();
+  await expect(rows).toHaveCount(3);
+  await expect(rows.filter({ hasText: 'Edited selected rule' })).toHaveAttribute(
+    'aria-current',
+    'true'
+  );
+  await expect(name).toHaveValue('Edited selected rule');
+  await expect.poll(value).toEqual(['Second rule', 'Future rule', 'Edited selected rule']);
 });
 
 test('native regex synced buffers follow parent JSON changes while local and remote drafts survive', async ({

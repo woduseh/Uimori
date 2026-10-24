@@ -6,6 +6,7 @@ import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSett
 import { promptControls } from '../core/risu-prompt.js';
 import { ExpandIcon, EditIcon, SaveIcon, CloseIcon } from './ui-icons.js';
 import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import { useCallback, useEffect, useId, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceEditModel } from '../core/resource-editing.js';
@@ -390,9 +391,11 @@ export function PromptWorkspaceEditor({
               <CloseIcon size={18} aria-hidden="true" />
               {t('prompts.uiCancel')}
             </button>
-            <button
+            <SaveButton
               type="button"
               className="primary"
+              label={t('prompts.uiSaveOptionCombination')}
+              aria-busy={savingCombo}
               disabled={!comboName.trim() || savingCombo}
               onClick={async () => {
                 setSavingCombo(true);
@@ -411,9 +414,7 @@ export function PromptWorkspaceEditor({
                   setSavingCombo(false);
                 }
               }}
-            >
-              {savingCombo ? t('prompts.uiSaving') : t('prompts.uiSave')}
-            </button>
+            />
           </div>
         </Dialog>
       </section>

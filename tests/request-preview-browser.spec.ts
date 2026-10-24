@@ -65,6 +65,15 @@ test('REQUESTPREVIEW current composer settings are estimated without generation 
     const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
     for (const width of DEFAULT_WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
+      await composer.fill('');
+      await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+      await expect(
+        page.getByRole('button', { name: '다음 요청 미리보기', exact: true })
+      ).toBeDisabled();
+      await expect(
+        page.getByRole('dialog', { name: '다음 요청 미리보기', exact: true })
+      ).toBeHidden();
+      await page.keyboard.press('Escape');
       const draft = `미라는 등대의 불빛을 보고 어떤 약속을 떠올렸을까? ${width}`;
       await composer.fill(draft);
       await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();

@@ -56,6 +56,17 @@
 .native-item-list > * {
   flex-shrink: 0;
 }
+.native-list-empty {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding-block: 12px;
+  color: var(--muted);
+  font-size: var(--font-body);
+}
+.native-list-empty p {
+  margin: 0;
+}
 .native-list-heading,
 .native-detail-heading {
   display: flex;
@@ -160,11 +171,8 @@
   gap: 12px;
   width: min(100%, 440px);
   min-height: 280px;
-  padding: 32px;
+  padding: 24px 0;
   box-sizing: border-box;
-  border: var(--hairline) dashed var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--surface-raised);
 }
 .native-empty p {
   margin: 0;

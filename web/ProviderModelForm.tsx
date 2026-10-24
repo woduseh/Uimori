@@ -198,13 +198,11 @@ export function ProviderModelForm({
           disabled={busy}
           onClick={() => onDone()}
         />
-        {editingModel ? (
-          <SaveButton label={t('providers.m291')} disabled={busy || !chosen} aria-busy={saving} />
-        ) : (
-          <button className="primary" disabled={busy || !chosen}>
-            {t('providers.m278')}
-          </button>
-        )}
+        <SaveButton
+          label={editingModel ? t('providers.m291') : t('providers.m278')}
+          disabled={busy || !chosen}
+          aria-busy={saving}
+        />
       </div>
     </form>
   );

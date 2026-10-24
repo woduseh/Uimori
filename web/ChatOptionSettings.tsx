@@ -16,6 +16,8 @@ import { PromptControlFields } from './PromptControlFields.js';
 import { PromptOptionGroup } from './PromptOptionGroup.js';
 import { ToggleRow } from './ToggleRow.js';
 import { SaveButton } from './SaveButton.js';
+import { IconButton } from './IconButton.js';
+import { EditIcon, ResetIcon } from './ui-icons.js';
 import {
   editOptionDraft,
   optionDraftValues,
@@ -508,7 +510,7 @@ function SelectiveValues({
             <span className="chat-option-current">{optionText(control, current)}</span>
           </div>
         )}
-        <div className="chat-option-scope" data-actionable={String(selected || !live)}>
+        <div className="chat-option-scope">
           <span className="chat-option-origin">
             {selected
               ? words.scoped
@@ -517,10 +519,11 @@ function SelectiveValues({
                 : t('chatsettings.m142')}
           </span>
           {(selected || !live) && (
-            <button
+            <IconButton
               type="button"
-              className="secondary"
-              aria-label={t('chatsettings.scopeAction', {
+              className="ghost"
+              icon={selected ? ResetIcon : EditIcon}
+              label={t('chatsettings.scopeAction', {
                 name: control.label,
                 action: selected ? words.unset : words.set,
               })}
@@ -531,9 +534,7 @@ function SelectiveValues({
                   onChange(next);
                 } else onChange({ ...values, [control.id]: current });
               }}
-            >
-              {selected ? words.unset : words.set}
-            </button>
+            />
           )}
         </div>
       </div>

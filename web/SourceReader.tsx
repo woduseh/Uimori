@@ -1514,7 +1514,6 @@ function SourceReaderContent({
                     <summary>{t('reader.currentOriginal')}</summary>
                     <pre data-testid="source-raw">{source.text}</pre>
                   </details>
-                  <p>{t('reader.displaysHeadingsEmphasisListsQuotesLinksAndCodeOnly')}</p>
                 </div>
               </>
             )}

@@ -66,11 +66,6 @@
   overflow-wrap: anywhere;
   tab-size: 2;
 }
-.prompt-status {
-  min-height: 1.6em;
-  margin: 8px 0 0;
-  color: var(--muted);
-}
 .library-prompt-editor {
   display: block;
 }

@@ -414,22 +414,23 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
     (response) =>
       response.url().endsWith(`/assets/${asset.id}`) && response.request().method() === 'PATCH'
   );
+  const readyBounds = (await submit.boundingBox())!;
   try {
     await submit.click();
     await expect(title).toBeDisabled();
     await expect(description).toBeDisabled();
     await expect(submit).toBeDisabled();
-    const pending = page
-      .getByRole('status')
-      .filter({ hasText: '이미지 정보를 저장하는 중이에요…' });
-    await expect(pending).toBeVisible();
-    const indicator = (await pending.locator('svg').boundingBox())!;
-    const label = (await pending.locator('p').boundingBox())!;
+    await expect(submit).toHaveAttribute('aria-busy', 'true');
+    await expect(submit).toContainText('저장 중');
+    const indicator = (await submit.locator('svg').boundingBox())!;
+    const label = (await submit.locator('.settings-save-label > span').boundingBox())!;
     expect(indicator.x + indicator.width).toBeLessThan(label.x);
     expect(Math.abs(indicator.y + indicator.height / 2 - label.y - label.height / 2)).toBeLessThan(
       2
     );
-    expect((await pending.boundingBox())!.height).toBeLessThan(40);
+    const pendingBounds = (await submit.boundingBox())!;
+    expect(pendingBounds.height).toBe(readyBounds.height);
+    expect(pendingBounds.width).toBe(readyBounds.width);
     await page.screenshot({
       path: info.outputPath('personal-metadata-pending-disabled.png'),
       fullPage: true,

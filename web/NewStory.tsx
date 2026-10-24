@@ -544,18 +544,15 @@ export function NewStory({
             />
           ) : (
             <>
+              <p className="new-story-settings-scope">{t('transfer.followGlobalSettings')}</p>
               <dl className="new-story-settings-summary">
                 <div>
                   <dt>{t('transfer.m332')}</dt>
-                  <dd>
-                    {mainModel?.title ?? t('transfer.m333')} <span>{t('transfer.m334')}</span>
-                  </dd>
+                  <dd>{mainModel?.title ?? t('transfer.m333')}</dd>
                 </div>
                 <div>
                   <dt>{t('transfer.m074')}</dt>
-                  <dd>
-                    {workspace.main.title} <span>{t('transfer.m334')}</span>
-                  </dd>
+                  <dd>{workspace.main.title}</dd>
                 </div>
               </dl>
               {!mainAvailable && (

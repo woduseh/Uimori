@@ -50,7 +50,6 @@ export function AppAbout() {
         <div className="settings-row">
           <div className="settings-row-copy">
             <strong>{t('outside.buildId')}</strong>
-            <p className="muted">{t('outside.buildDescription')}</p>
           </div>
           <code className="muted app-about-build-id" data-testid="app-build-id">
             {build?.buildId ?? (error ? t('outside.checkFailed') : t('outside.checking'))}

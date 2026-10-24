@@ -30,24 +30,24 @@
 .profile-savebar.settings-save-actions > [role="status"] {
   width: auto;
 }
-.provider-model-save-actions {
+.provider-save-actions {
   justify-content: flex-end;
 }
-.provider-model-save-actions > .delete-control {
+.provider-save-actions > .delete-control {
   margin-right: auto;
 }
-.provider-model-save-actions > .ui-icon-button,
-.provider-model-save-actions > .delete-control > .icon-only {
+.provider-save-actions > .ui-icon-button,
+.provider-save-actions > .delete-control > .icon-only {
   flex: none;
   width: var(--control-h);
   height: var(--control-h);
   padding: 0;
 }
-.provider-model-save-actions > .settings-save-button {
+.provider-save-actions > .settings-save-button {
   background: var(--accent);
   color: var(--accent-ink);
 }
-.provider-model-save-actions > .delete-control > .icon-only > svg {
+.provider-save-actions > .delete-control > .icon-only > svg {
   width: 20px;
   height: 20px;
   stroke-width: 1.7;
@@ -84,10 +84,7 @@
   align-items: center;
   gap: 8px;
   min-height: 48px;
-  padding: 10px 14px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--panel);
+  padding-block: 10px;
   font-weight: 500;
   cursor: pointer;
 }
@@ -99,13 +96,6 @@
 }
 .model-secondary-settings[open] {
   gap: 0;
-}
-.model-secondary-settings[open] > summary {
-  border-bottom: 0;
-  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
-}
-.model-secondary-settings > .settings-group-body {
-  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
 }
 @media (hover: hover) {
   .model-secondary-settings > summary:hover {

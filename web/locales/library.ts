@@ -1536,10 +1536,10 @@ export const messages = {
     zh: '共用模块',
   },
   'library.attachingThisResourceAlsoUsesTheModules': {
-    ko: '이 자료를 장착하면 아래 모듈을 함께 사용해요. 여러 자료가 같은 모듈을 요구해도 한 번만 포함해요.',
-    en: 'Attaching this resource also uses the modules below. Shared requirements are included only once.',
-    ja: 'この資料を装着すると、以下のモジュールも使います。複数の資料が同じモジュールを要求しても一度だけ含めます。',
-    zh: '关联此资料时也会使用以下模块，多个资料需要同一模块时仅包含一次。',
+    ko: '이 자료와 함께 사용해요. 같은 모듈은 한 번만 포함해요.',
+    en: 'Used with this resource. Each module is included only once.',
+    ja: 'この資料と一緒に使います。同じモジュールは一度だけ含めます。',
+    zh: '与此资料一起使用。同一模块仅包含一次。',
   },
   'library.detachModule': {
     ko: '모듈 연결 해제',
@@ -1908,16 +1908,16 @@ export const messages = {
     zh: '机器人翻译指引编辑器',
   },
   'library.translationGuideWhenUsedAsABot': {
-    ko: '봇으로 사용할 때의 번역 지침',
-    en: 'Translation guide when used as a bot',
-    ja: 'ボットとして使うときの翻訳指示',
-    zh: '用作机器人时的翻译指引',
+    ko: '봇 번역 지침',
+    en: 'Bot translation guide',
+    ja: 'ボットの翻訳指示',
+    zh: '机器人翻译指引',
   },
   'library.addThisWorkSTerminologyAndVoice': {
-    ko: '번역 프리셋의 공통 원칙에 이 작품의 표기와 말투를 더해요. 이 자료를 봇으로 사용하는 채팅의 다음 번역과 재번역부터 사용해요. 페르소나나 모듈 역할로 장착하면 적용하지 않아요.',
-    en: "Add this work's terminology and voice to the translation preset's shared principles. Applies from the next translation or retranslation in chats using this resource as a bot. Does not apply in persona or module roles.",
-    ja: '翻訳プリセットの共通原則に、この作品の表記や話し方を加えます。この資料をボットとして使うチャットで、次の翻訳、再翻訳から使います。ペルソナやモジュールとして装着した場合は適用しません。',
-    zh: '在翻译预设的通用原则上添加本作品的用词与语气。从以此资料为机器人的聊天的下次翻译或重新翻译起生效，用作角色或模块时不适用。',
+    ko: '이 자료를 봇으로 쓰는 채팅의 다음 번역과 재번역에 적용해요. 페르소나와 모듈에는 적용하지 않아요.',
+    en: 'Applies from the next translation or retranslation when this resource is the bot. Persona and module roles are excluded.',
+    ja: 'この資料をボットとして使うチャットの次の翻訳、再翻訳から適用します。ペルソナやモジュールには適用しません。',
+    zh: '从以此资料为机器人的聊天的下次翻译或重新翻译起生效，用作用户角色或模块时不适用。',
   },
   'library.voiceAddressAndStyleInstructions': {
     ko: '말투와 문체 지침',
@@ -1944,10 +1944,10 @@ export const messages = {
     zh: '姓名与术语用词',
   },
   'library.theTranslationModelUsesTerminologyAndConditions': {
-    ko: '번역 모델이 표기와 조건을 문맥에 맞춰 참고해요. 번역문의 단어를 일괄 치환하지는 않아요.',
-    en: 'The translation model uses terminology and conditions in context. Words in the translation are not replaced in bulk.',
-    ja: '翻訳モデルが表記や条件を文脈に合わせて参照します。訳文の単語を一括置換するものではありません。',
-    zh: '翻译模型会结合上下文参考用词与条件，不会批量替换译文词语。',
+    ko: '문맥에 맞게 참고하며, 단어를 일괄 치환하지 않아요.',
+    en: 'Used in context, without replacing words in bulk.',
+    ja: '文脈に合わせて参照し、単語の一括置換はしません。',
+    zh: '结合上下文参考，不会批量替换词语。',
   },
   'library.addTerm': {
     ko: '표기 추가',
@@ -2250,10 +2250,10 @@ export const messages = {
     zh: '用户备注与更正{imported, select, yes {，导入的记忆} other {}} {count, number}项',
   },
   'library.notesHint': {
-    ko: '이후 요청에 지시와 정정으로 참고해요. 원문, 요약, Risu 프롬프트의 배치용 작가 노트와는 별도로 보존돼요.',
-    en: 'Used as instructions or corrections in future requests. Kept separately from originals, summaries, and author notes placed in Risu prompts.',
-    ja: '今後のリクエストで指示、訂正として参照します。原文、要約やRisuプロンプト内の配置用作家ノートとは別に保持します。',
-    zh: '在后续请求中作为指令或更正参考，与原文、摘要及Risu提示词中的作者备注分别保留。',
+    ko: '이후 요청에 지시와 정정으로 사용해요. 원문, 요약, Risu 프롬프트의 작가 노트와 별도로 보존해요.',
+    en: 'Instructions and corrections for future requests. Kept separately from originals, summaries, and Risu prompt author notes.',
+    ja: '今後のリクエストへの指示、訂正です。原文、要約、Risuプロンプトの作家ノートとは別に保持します。',
+    zh: '用于后续请求的指令和更正，与原文、摘要及Risu提示词中的作者备注分别保留。',
   },
   'library.noteAttribution': {
     ko: '{imported, select, yes {가져온 기억: {origin}, } other {}}작성자: {author}, {linked, select, yes {원문에 연결된 메모} other {첫 장면 전 메모}}',
@@ -2296,5 +2296,11 @@ export const messages = {
     en: 'Add new resources in the library.',
     ja: '新しい資料はライブラリで追加できます。',
     zh: '可在资料库中添加新资料。',
+  },
+  'library.detachNamedModule': {
+    ko: '{title} 연결 해제',
+    en: 'Detach {title}',
+    ja: '{title}の接続を解除',
+    zh: '解除与{title}的关联',
   },
 };

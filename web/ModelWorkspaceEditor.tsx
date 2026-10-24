@@ -234,7 +234,7 @@ export function ModelWorkspaceEditor({
       <p className="model-workspace-intro">{t('settings.m14')}</p>
       <fieldset disabled={busy} className="control-grid model-workspace-controls">
         <fieldset className="settings-group full model-primary-settings">
-          <legend className="settings-group-heading">{t('settings.m15')}</legend>
+          <legend className="sr-only">{t('settings.m15')}</legend>
           <div className="settings-group-body">
             {selector('main', t('settings.m4'), draft.routes.main, (ref) =>
               change({ ...draft, routes: { ...draft.routes, main: ref } })
@@ -260,7 +260,14 @@ export function ModelWorkspaceEditor({
         <details className="settings-group full model-secondary-settings">
           <summary className="settings-group-heading">
             {t('settings.m19')}
-            <small>{configuredSummary([draft.helperModel, draft.contextModel])}</small>
+            <small>
+              {configuredSummary([
+                draft.helperModel,
+                draft.contextModel,
+                draft.titleModel,
+                draft.scriptModel,
+              ])}
+            </small>
           </summary>
           <div className="settings-group-body">
             {selector(
@@ -317,25 +324,9 @@ export function ModelWorkspaceEditor({
               );
             })}
             <p className="model-summary-note">{t('settings.m28')}</p>
-          </div>
-        </details>
-        <details className="settings-group full model-secondary-settings">
-          <summary className="settings-group-heading">
-            {t('settings.m29')}
-            <small>{configuredSummary([draft.titleModel])}</small>
-          </summary>
-          <div className="settings-group-body">
             {selector('title', t('settings.m30'), draft.titleModel ?? null, (ref) =>
               change({ ...draft, titleModel: ref })
             )}
-          </div>
-        </details>
-        <details className="settings-group full model-secondary-settings">
-          <summary className="settings-group-heading">
-            {t('settings.m31')}
-            <small>{draft.scriptModel ? t('settings.m32') : t('settings.m33')}</small>
-          </summary>
-          <div className="settings-group-body">
             {selector(
               'script',
               t('settings.m34'),

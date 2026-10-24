@@ -28,6 +28,20 @@
 .chat-variable-toolbar > button {
   flex: none;
 }
+.chat-variable-toolbar > .chat-variable-search {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.chat-variable-search > svg {
+  flex: none;
+  color: var(--muted);
+}
+.chat-variable-search > input {
+  min-width: 0;
+  width: 100%;
+}
 .chat-variable-row {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr) 44px;

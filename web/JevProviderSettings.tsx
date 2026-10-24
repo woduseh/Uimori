@@ -278,11 +278,6 @@ export function JevProviderSettings({
             }}
           >
             <fieldset className="editor-fields provider-connection-fields full">
-              <legend>{t('providers.m352')}</legend>
-              <label>
-                {t('providers.m57')}
-                <input value={JEV_PROVIDER_DEFINITION.label} readOnly />
-              </label>
               <label>
                 {t('providers.m578', { configured: String(status.configured) })}
                 <input
@@ -355,16 +350,17 @@ export function JevProviderSettings({
             </div>
           </form>
           {view === 'model' && (
-            <fieldset className="editor-fields provider-connection-fields">
-              <legend>{t('providers.m368')}</legend>
-              <label>
-                {t('providers.m57')}
-                <input value={JEV_PROVIDER_DEFINITION.label} readOnly />
-              </label>
-              <label>
-                {t('providers.m203')}
-                <input value={status.modelId} readOnly />
-              </label>
+            <div className="jev-provider-model">
+              <dl className="jev-provider-details">
+                <div>
+                  <dt>{t('providers.m57')}</dt>
+                  <dd>{JEV_PROVIDER_DEFINITION.label}</dd>
+                </div>
+                <div>
+                  <dt>{t('providers.m203')}</dt>
+                  <dd>{status.modelId}</dd>
+                </div>
+              </dl>
               <div className="provider-actions">
                 <button
                   type="button"
@@ -382,7 +378,7 @@ export function JevProviderSettings({
                   {t('providers.m370')}
                 </a>
               </div>
-            </fieldset>
+            </div>
           )}
           <section
             hidden={view !== 'model'}

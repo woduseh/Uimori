@@ -468,7 +468,9 @@ test('LIMG04 shared module references show current names and portraits while kee
   await selectPackageSection(page, '고급 설정');
   await library.getByRole('button', { name: /연결 모듈/, exact: false }).click();
   const features = library.getByLabel('패키지 모듈과 기능 편집', { exact: true });
-  const current = features.getByRole('group', { name: `${child.title} 새 이름`, exact: true });
+  const current = features.locator('.package-module-row').filter({
+    has: page.getByRole('button', { name: `${child.title} 새 이름 연결 해제`, exact: true }),
+  });
   await expect(current).toBeVisible();
   await expect(current.locator('img')).toHaveAttribute(
     'src',

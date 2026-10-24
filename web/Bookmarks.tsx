@@ -8,6 +8,7 @@ import { Dialog } from './Dialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import { api } from './api.js';
 import './bookmarks.css';
 
@@ -123,9 +124,11 @@ function BookmarkEditor({
                 onChange={(event) => setNote(event.target.value)}
               />
             </label>
-            <button type="submit" disabled={!title.trim() || !dirty}>
-              {busy ? t('reader.saving') : t('reader.saveBookmarkChanges')}
-            </button>
+            <SaveButton
+              label={t('reader.saveBookmarkChanges')}
+              disabled={!title.trim() || !dirty}
+              aria-busy={busy}
+            />
           </fieldset>
           {error && (
             <p role="alert" className="error">

@@ -234,10 +234,14 @@
   cursor: pointer;
 }
 .chat-settings-image-management > summary::before {
-  content: "▸";
+  content: none;
 }
-.chat-settings-image-management[open] > summary::before {
-  content: "▾";
+.chat-settings-image-management > summary > svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.chat-settings-image-management[open] > summary > svg {
+  transform: rotate(90deg);
 }
 .chat-settings-image-management > summary small {
   margin-left: auto;

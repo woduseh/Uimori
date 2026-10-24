@@ -111,6 +111,10 @@
   margin: 0;
   font-size: var(--font-body);
 }
+.new-story-main-model > .new-story-settings-scope {
+  color: var(--muted);
+  font-size: var(--font-small);
+}
 .new-story-settings-summary {
   display: grid;
   gap: 12px;
@@ -131,9 +135,6 @@
   margin: 0;
   text-align: right;
   overflow-wrap: anywhere;
-}
-.new-story-settings-summary dd > span {
-  white-space: nowrap;
 }
 .new-story-main-model > button {
   justify-self: end;

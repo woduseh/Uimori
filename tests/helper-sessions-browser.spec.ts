@@ -131,7 +131,7 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
   const panel = page.locator('#helper-panel');
   const input = panel.getByLabel('도우미에게 요청');
   await expect(input).toBeEnabled();
-  await expect(panel.getByRole('heading', { name: '이 채팅 도우미', exact: true })).toBeVisible();
+  await expect(panel.getByRole('heading', { name: '채팅 도우미', exact: true })).toBeVisible();
   const picker = panel.getByLabel('도우미 세션 선택');
   const first = await picker.inputValue();
   await input.fill('첫 세션에 남겨 둘 초안');

@@ -25,10 +25,14 @@ export function RisuStartPreview({
     css: string;
     issues: string[];
   } | null>(null);
-  const [error, setError] = useState('');
+  const [failure, setFailure] = useState<{ identity: string; message: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [readAttempt, setReadAttempt] = useState(0);
+  const error = failure?.identity === identity ? failure.message : '';
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit retry repeats the same selected opening read.
   useEffect(() => {
     const controller = new AbortController();
-    setError('');
+    setLoading(true);
     const query = new URLSearchParams({
       revision: String(content.revision),
       startId,
@@ -44,23 +48,33 @@ export function RisuStartPreview({
       controller.signal
     )
       .then((value) => {
-        if (!controller.signal.aborted) setPreview({ identity, ...value });
+        if (!controller.signal.aborted) {
+          setPreview({ identity, ...value });
+          setFailure(null);
+        }
       })
       .catch((caught: Error) => {
-        if (!controller.signal.aborted) setError(caught.message);
+        if (!controller.signal.aborted) setFailure({ identity, message: caught.message });
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
       });
     return () => {
       controller.abort();
     };
-  }, [content.id, content.revision, startId, userName, identity, viewport]);
+  }, [content.id, content.revision, startId, userName, identity, viewport, readAttempt]);
   if (!preview || preview.identity !== identity || error)
     return (
       <LoadingState
         presentation="placeholder"
-        loading={!error}
+        loading={loading}
         error={translateMessage(error)}
         errorLabel={t('native.text_78102a76b6')}
         label={t('native.text_f7b0125b0b')}
+        onRetry={() => {
+          setLoading(true);
+          setReadAttempt((attempt) => attempt + 1);
+        }}
       />
     );
   return (

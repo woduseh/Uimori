@@ -6,7 +6,7 @@ Build the current app with `npm run build` before capturing. The gallery accepts
 
 Use it for a broad visual review when useful. Gallery success means capture, journey execution, and cleanup succeeded; it does not mean every layout metric passed or that the product works on a physical device.
 
-The screen list includes all global settings categories, the chat settings categories present in the fixture, and the composer lore, manual-compaction, empty-request preview, and manuscript-export dialogs. The dialogs are opened without invoking compression, generation, or downloads. Conditional card variables, populated editors, provider failures, and other recovery states still need their feature-specific browser checks; the gallery is not an inventory of every possible UI state.
+The screen list includes all global settings categories, the chat settings categories present in the fixture, the composer lore, manual-compaction and manuscript-export dialogs, and the disabled preview control for an empty request. The dialogs are opened without invoking compression, generation, or downloads. Conditional card variables, populated editors, provider failures, and other recovery states still need their feature-specific browser checks; the gallery is not an inventory of every possible UI state.
 
 ## Output and configuration
 

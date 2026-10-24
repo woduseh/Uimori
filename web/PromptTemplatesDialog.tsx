@@ -6,6 +6,7 @@ import type { PromptPreset, PromptRole } from '../core/product.js';
 import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { AddIcon } from './ui-icons.js';
+import { IconButton } from './IconButton.js';
 import './prompt-templates.css';
 
 type PromptTemplateSummary = {
@@ -109,16 +110,14 @@ export function PromptTemplatesDialog({
                 </span>
                 <p>{translateMessage(template.description)}</p>
               </div>
-              <button
+              <IconButton
                 type="button"
                 className="secondary"
-                aria-label={t('prompts.addNamed', { name: template.title })}
+                icon={AddIcon}
+                label={t('prompts.addNamed', { name: template.title })}
                 disabled={pending}
                 onClick={() => void add(template)}
-              >
-                <AddIcon size={18} aria-hidden="true" />
-                {t('prompts.addToMyPrompts')}
-              </button>
+              />
             </li>
           ))}
         </ul>

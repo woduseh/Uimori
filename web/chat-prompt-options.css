@@ -69,11 +69,19 @@
   gap: 14px;
 }
 .chat-option-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--control-h);
+  align-items: center;
+  gap: 4px 8px;
   min-width: 0;
   border-bottom: var(--hairline) solid var(--line);
-  padding-bottom: 10px;
+  padding-block: 12px;
+}
+.chat-option-choice:last-child {
+  border-bottom: 0;
 }
 .chat-option-value {
+  grid-column: 1;
   border: 0;
   padding: 0;
   margin: 0;
@@ -117,11 +125,11 @@
   padding-bottom: 8px;
 }
 .chat-option-inherited {
+  grid-column: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 12px;
-  padding: 8px 0 2px;
   min-width: 0;
 }
 .chat-option-name {
@@ -133,26 +141,19 @@
   overflow-wrap: anywhere;
 }
 .chat-option-scope {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.chat-option-scope[data-actionable="true"] {
-  min-height: var(--control-h);
-}
-/* A switch that follows the wider setting needs only the origin line under it. */
-.chat-option-scope[data-actionable="false"] {
-  padding-bottom: 6px;
+  display: contents;
 }
 .chat-option-origin {
+  grid-column: 1;
+  grid-row: 2;
   font-size: var(--font-small);
   color: var(--muted);
   white-space: nowrap;
 }
 .chat-option-scope > button {
-  margin-left: auto;
-  flex-shrink: 0;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
 }
 .chat-option-record {
   display: grid;
@@ -202,9 +203,10 @@
   gap: 12px;
 }
 .prompt-option-group {
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-panel);
-  padding: 0 12px;
+  border: 0;
+  border-bottom: var(--hairline) solid var(--line);
+  border-radius: 0;
+  padding: 0;
 }
 .prompt-option-group summary {
   font-weight: 600;

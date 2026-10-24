@@ -131,7 +131,6 @@ export function ConnectionEditor({
   const [screen, setScreen] = useState<
     'models' | 'connections' | 'providers' | 'connection' | 'model' | 'jev'
   >('models');
-  const [setup, setSetup] = useState(false);
   const [modelSection, setModelSection] = useState<'basic' | 'advanced'>('basic');
   const [expandedModelGroups, setExpandedModelGroups] = useState<Set<string>>(() => new Set());
   const heading = useRef<HTMLDivElement>(null);
@@ -221,7 +220,9 @@ export function ConnectionEditor({
   }
   const [jevDirty, setJevDirty] = useState(false);
   const [jevBusy, setJevBusy] = useState(false);
-  const [operation, setOperation] = useState<'model-save' | 'other' | null>(null),
+  const [operation, setOperation] = useState<'connection-save' | 'model-save' | 'other' | null>(
+      null
+    ),
     [message, setMessage] = useState(''),
     [refreshWarning, setRefreshWarning] = useState(''),
     [error, setError] = useState('');
@@ -345,7 +346,7 @@ export function ConnectionEditor({
   ) {
     if (operationLock.current) return false;
     operationLock.current = true;
-    setOperation(saveAttempt && scope === 'model' ? 'model-save' : 'other');
+    setOperation(saveAttempt && scope !== 'status' ? `${scope}-save` : 'other');
     setError('');
     onError('');
     setMessage('');
@@ -391,7 +392,6 @@ export function ConnectionEditor({
     setError('');
     onError('');
     returnItem.current = { screen: 'connections', id: item.id };
-    setSetup(false);
     navigate('connection');
   }
   async function showModel(item: ModelPreset, copy = false, approved = false) {
@@ -454,7 +454,6 @@ export function ConnectionEditor({
     if (fromForm) {
       dispatchDraft({ type: 'model.open', value: modelDraft(saved), editing: saved });
       returnItem.current = { screen: 'models', id: saved.id };
-      setSetup(false);
       if (!leave) navigate('models');
     }
     setMessage(
@@ -643,7 +642,6 @@ export function ConnectionEditor({
     setMessage(uiMessage('providers.m20'));
   }
   function newConnection() {
-    setSetup(true);
     navigate('providers');
   }
   function startProvider(protocol: ProviderProtocol, approved = false) {
@@ -675,7 +673,6 @@ export function ConnectionEditor({
     const next = linked ? selectModelConnection(initialModel(), linked) : initialModel();
     dispatchDraft({ type: 'model.open', value: next });
     setError('');
-    setSetup(false);
     setModelSection('basic');
     navigate('model');
   }
@@ -828,7 +825,6 @@ export function ConnectionEditor({
               aria-label={t('providers.m28')}
               data-provider-id={JEV_PROVIDER_DEFINITION.id}
               onClick={() => {
-                setSetup(false);
                 openJev('models');
               }}
             >
@@ -842,7 +838,6 @@ export function ConnectionEditor({
                 className="secondary"
                 disabled={busy}
                 onClick={() => {
-                  setSetup(false);
                   openJev('models');
                 }}
               >
@@ -859,7 +854,6 @@ export function ConnectionEditor({
                 disabled={busy}
                 aria-label={t('providers.m32')}
                 onClick={() => {
-                  setSetup(false);
                   openJev('models');
                 }}
               >
@@ -1018,7 +1012,6 @@ export function ConnectionEditor({
             }
             disabled={busy}
             onClick={() => {
-              setSetup(false);
               navigate('connections');
             }}
           >
@@ -1042,7 +1035,6 @@ export function ConnectionEditor({
             }
             disabled={busy}
             onClick={() => {
-              setSetup(false);
               navigate('models');
             }}
           >
@@ -1150,36 +1142,17 @@ export function ConnectionEditor({
             )}
         </>
       )}
-      {(screen === 'connection' ||
-        screen === 'model' ||
-        screen === 'providers' ||
-        screen === 'jev') && (
+      {(screen === 'providers' || screen === 'jev') && (
         <div className="provider-editor-heading">
-          {(screen === 'providers' || screen === 'jev') && (
-            <button
-              type="button"
-              className="secondary"
-              disabled={busy}
-              onClick={() => {
-                setSetup(false);
-                navigate(screen === 'jev' ? jevReturn : 'connections');
-              }}
-            >
-              <BackIcon size={16} />
-              {t('providers.m82')}
-            </button>
-          )}
-          {setup && (
-            <ol className="provider-steps" aria-label={t('providers.m83')}>
-              <li aria-current={screen === 'providers' ? 'step' : undefined}>
-                {t('providers.m84')}
-              </li>
-              <li aria-current={screen === 'connection' || screen === 'jev' ? 'step' : undefined}>
-                {t('providers.m85')}
-              </li>
-              <li aria-current={screen === 'model' ? 'step' : undefined}>{t('providers.m86')}</li>
-            </ol>
-          )}
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => navigate(screen === 'jev' ? jevReturn : 'connections')}
+          >
+            <BackIcon size={16} />
+            {t('providers.m82')}
+          </button>
         </div>
       )}
       {screen === 'providers' && (
@@ -1312,7 +1285,6 @@ export function ConnectionEditor({
                       disabled={busy}
                       aria-label={t('providers.m544', { value0: item.title })}
                       onClick={() => {
-                        setSetup(false);
                         replaceDraft('model', () => startModelFor(item));
                       }}
                     >
@@ -1491,6 +1463,7 @@ export function ConnectionEditor({
         connections={library.connections}
         conflict={conflict === 'connection'}
         busy={busy}
+        saving={operation === 'connection-save'}
         operationBusy={operationBusy}
         formRef={connectionForm}
         onChange={setConnection}

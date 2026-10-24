@@ -167,7 +167,7 @@ export function ManuscriptSearchPanel({
         </div>
         <div className="manuscript-search-filters">
           <label className="manuscript-search-scope">
-            <span className="manuscript-search-filter-label">{t('transfer.m215')}</span>
+            <span className="sr-only">{t('transfer.m215')}</span>
             <select
               value={scope}
               onChange={(event) => setScope(event.target.value as ManuscriptSearchQuery['scope'])}
@@ -178,7 +178,7 @@ export function ManuscriptSearchPanel({
             </select>
           </label>
           <fieldset className="manuscript-search-kinds">
-            <legend>{t('transfer.m219')}</legend>
+            <legend className="sr-only">{t('transfer.m219')}</legend>
             <div className="manuscript-search-kind-options">
               {(['original', 'translation', 'request'] as const).map((kind) => (
                 <button

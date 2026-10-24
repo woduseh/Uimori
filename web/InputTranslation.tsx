@@ -1,5 +1,5 @@
 import { useI18n, translateMessage } from './i18n.js';
-import { Languages, Square, Undo2 } from 'lucide-react';
+import { Check, Languages, Square, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { INPUT_TRANSLATION_LANGUAGES } from '../core/input-translation.js';
 import type { InputTranslationState } from './useInputTranslation.js';
@@ -116,6 +116,7 @@ export function InputTranslationControls({
               }}
             >
               {t(`prompts.language.${language.code}`)}
+              {translation.language === language.code && <Check size={16} aria-hidden="true" />}
             </button>
           ))}
         </div>

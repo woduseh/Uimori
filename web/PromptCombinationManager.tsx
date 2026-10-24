@@ -12,6 +12,7 @@ import { api } from './api.js';
 import { DeleteButton } from './DeleteButton.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { SaveButton } from './SaveButton.js';
 import { PromptControlFields } from './PromptControlFields.js';
 
 export function PromptCombinationManager({
@@ -92,9 +93,11 @@ export function PromptCombinationManager({
             >
               {t('prompts.uiCancel')}
             </button>
-            <button
+            <SaveButton
               type="button"
               className="primary"
+              label={t('prompts.uiSaveCombination')}
+              aria-busy={busy}
               disabled={busy || !title.trim()}
               onClick={async () => {
                 setBusy(true);
@@ -118,9 +121,7 @@ export function PromptCombinationManager({
                   setBusy(false);
                 }
               }}
-            >
-              {busy ? t('prompts.uiSaving') : t('prompts.uiSaveCombination')}
-            </button>
+            />
           </div>
         </>
       ) : items.length ? (

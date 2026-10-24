@@ -55,3 +55,13 @@
 .composer.grown:has(.draft-request-images) {
   grid-template-areas: "images images images" "chips chips chips" "text text text" "more . send";
 }
+@media (max-width: 600px) {
+  .request-image .request-image-remove {
+    top: -8px;
+    right: -8px;
+    width: var(--control-h);
+    min-width: var(--control-h);
+    height: var(--control-h);
+    min-height: var(--control-h);
+  }
+}

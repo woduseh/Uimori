@@ -3,7 +3,10 @@ import type { ReactNode, RefObject, Dispatch, SetStateAction } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import type { Connection, ProviderProtocol } from '../core/product.js';
 import { PROVIDER_DEFINITIONS, providerDefinition } from '../core/provider-definitions.js';
-import { Switch } from './BooleanControls.js';
+import { ToggleRow } from './ToggleRow.js';
+import { SaveButton } from './SaveButton.js';
+import { IconButton } from './IconButton.js';
+import { CloseIcon } from './ui-icons.js';
 import { VertexCredentialUpload } from './VertexCredentialUpload.js';
 import type { ProviderEditorState, ConnectionDraft } from './provider-editor-state.js';
 
@@ -18,6 +21,7 @@ type Props = {
   connections: Connection[];
   conflict: boolean;
   busy: boolean;
+  saving: boolean;
   operationBusy: boolean;
   formRef: RefObject<HTMLFormElement | null>;
   onChange: Dispatch<SetStateAction<ConnectionDraft>>;
@@ -34,6 +38,7 @@ export function ProviderConnectionForm({
   connections,
   conflict,
   busy,
+  saving,
   operationBusy,
   formRef,
   onChange,
@@ -229,13 +234,11 @@ export function ProviderConnectionForm({
             )}
           </label>
         )}
-        <label className="check">
-          <Switch
-            checked={connection.enabled}
-            onChange={(event) => onChange({ ...connection, enabled: event.target.checked })}
-          />
-          {t('providers.m149')}
-        </label>
+        <ToggleRow
+          label={t('providers.m149')}
+          checked={connection.enabled}
+          onChange={(enabled) => onChange({ ...connection, enabled })}
+        />
         <small className="full">
           {codex ? t('providers.m150') : vertex ? t('providers.m151') : t('providers.m152')}
         </small>
@@ -257,12 +260,17 @@ export function ProviderConnectionForm({
       </fieldset>
       <div className="provider-actions full provider-save-actions">
         {editingConnection && deleteAction}
-        <button type="button" className="secondary" disabled={busy} onClick={() => onDone()}>
-          {t('providers.m162')}
-        </button>
-        <button className="primary" disabled={busy}>
-          {editingConnection ? t('providers.m163') : t('providers.m133')}
-        </button>
+        <IconButton
+          icon={CloseIcon}
+          label={t('providers.m162')}
+          disabled={busy}
+          onClick={() => onDone()}
+        />
+        <SaveButton
+          label={editingConnection ? t('providers.m163') : t('providers.m133')}
+          disabled={busy}
+          aria-busy={saving}
+        />
       </div>
     </form>
   );

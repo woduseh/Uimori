@@ -12,7 +12,8 @@ import { DismissibleError } from './DismissibleError.js';
 import { DeleteButton } from './DeleteButton.js';
 import { ActionMenu } from './ActionMenu.js';
 import { useEditorHeadingHeight } from './useEditorHeadingHeight.js';
-import { CopyIcon, SaveIcon } from './ui-icons.js';
+import { CopyIcon } from './ui-icons.js';
+import { SaveButton } from './SaveButton.js';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { NativeRisuPresetEditor } from './NativeRisuPresetEditor.js';
 import { RisuExportButton } from './RisuExportButton.js';
@@ -248,16 +249,16 @@ export function PromptEditor({
   const saveActions = (
     <div className="prompt-save-actions">
       <div className="prompt-save-buttons">
-        <button
+        <SaveButton
           type="button"
+          label={t('prompts.uiSavePreset')}
+          aria-busy={busy}
           disabled={
             busy || !!collaborationIssue || !draft.title.trim() || (!!draft.base && !draft.dirty)
           }
           className="primary native-editor-save"
           onClick={() => void save(!!draft.base)}
-        >
-          <SaveIcon size={18} aria-hidden="true" /> <span>{t('prompts.uiSavePreset')}</span>
-        </button>
+        />
         {draft.base && (
           <ActionMenu label={t('prompts.uiManagePrompts')} className="prompt-management-menu">
             <RisuExportButton
@@ -391,9 +392,6 @@ export function PromptEditor({
             onDismiss={() => setExportError('')}
           />
         </div>
-        {initialPreset === undefined && (
-          <p className="muted">{t('prompts.uiSaveTextMessageStructureAndOptionsAsASeparate')}</p>
-        )}
         <fieldset className="prompt-editor-fields" disabled={busy}>
           <label className="prompt-title-field">
             {t('prompts.uiPromptNameRequired')}
@@ -440,11 +438,6 @@ export function PromptEditor({
             />
           </fieldset>
         </fieldset>
-        {busy && (
-          <p role="status" className="prompt-status">
-            {t('prompts.uiProcessing')}
-          </p>
-        )}
         <TransientNotice message={busy ? '' : status} />
         {pendingTemplate && (
           <p className="muted">{t('prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown')}</p>

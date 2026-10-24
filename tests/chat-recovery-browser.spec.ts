@@ -204,37 +204,74 @@ for (const viewport of [
       await dialog.getByRole('button', { name: '입력값 유지하고 계속 편집', exact: true }).click();
       const bodies: unknown[] = [];
       let loseResponse = true;
-      await page.route(`**${endpoint}`, async (route) => {
-        if (route.request().method() !== 'PUT') return route.continue();
-        bodies.push(route.request().postDataJSON());
-        if (!loseResponse) return route.continue();
-        loseResponse = false;
-        const persisted = await route.fetch();
-        expect(persisted.ok()).toBe(true);
-        await route.fulfill({
-          status: 503,
-          json: { error: 'Synthetic lost response after commit' },
-        });
+      let holdReads = false;
+      let releaseRead!: () => void;
+      const readGate = new Promise<void>((resolve) => {
+        releaseRead = resolve;
       });
-      await dialog.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
-      await expect(
-        dialog.getByRole('button', { name: '저장 결과 확인', exact: true })
-      ).toBeEnabled();
-      await expect(value('trust')).toBeDisabled();
-      await dialog.getByRole('button', { name: '저장 결과 확인', exact: true }).click();
-      await expect(
-        page
-          .getByRole('status')
-          .filter({ hasText: '공유 변수를 저장했어요. 다음 생성부터 적용해요.' })
-      ).toBeVisible();
-      expect(bodies).toHaveLength(2);
-      expect(bodies[1]).toEqual(bodies[0]);
-      const final = await (await request.get(endpoint)).json();
-      expect(final.values).toEqual({ trust: '' });
-      expect(final.resolved.location).toBe('reading_room');
-      expect(
-        await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
-      ).toBeLessThanOrEqual(1);
+      let readStarted = false;
+      try {
+        await page.route(`**${endpoint}`, async (route) => {
+          if (route.request().method() === 'GET' && holdReads) {
+            const observed = await route.fetch();
+            readStarted = true;
+            await readGate;
+            return route.fulfill({ response: observed });
+          }
+          if (route.request().method() !== 'PUT') return route.continue();
+          bodies.push(route.request().postDataJSON());
+          if (!loseResponse) return route.continue();
+          loseResponse = false;
+          const persisted = await route.fetch();
+          expect(persisted.ok()).toBe(true);
+          await route.fulfill({
+            status: 503,
+            json: { error: 'Synthetic lost response after commit' },
+          });
+        });
+        await dialog.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
+        const confirm = dialog.getByRole('button', { name: '저장 결과 확인', exact: true });
+        await expect(confirm).toBeEnabled();
+        await expect(value('trust')).toBeDisabled();
+        const refresh = dialog.getByRole('button', { name: '새로고침', exact: true });
+        await expect(refresh).toBeEnabled();
+        holdReads = true;
+        await refresh.click();
+        await expect.poll(() => readStarted).toBe(true);
+        // A delayed read must not block replaying the already-preserved operation.
+        await expect(refresh).toBeDisabled();
+        await expect(confirm).toBeEnabled();
+        await confirm.click();
+        await expect(
+          page
+            .getByRole('status')
+            .filter({ hasText: '공유 변수를 저장했어요. 다음 생성부터 적용해요.' })
+        ).toBeVisible();
+        expect(bodies).toHaveLength(2);
+        expect(bodies[1]).toEqual(bodies[0]);
+        const final = await (await request.get(endpoint)).json();
+        expect(final.values).toEqual({ trust: '' });
+        expect(final.resolved.location).toBe('reading_room');
+        // The acknowledged save also ends loading owned by its now-obsolete read.
+        await expect(value('trust')).toBeEnabled();
+        await value('trust').fill('확인 뒤 새 초안');
+        const lateRead = page.waitForResponse(
+          (response) => response.url().endsWith(endpoint) && response.request().method() === 'GET'
+        );
+        holdReads = false;
+        releaseRead();
+        await (await lateRead).finished();
+        await expect(value('trust')).toHaveValue('확인 뒤 새 초안');
+        await expect(
+          dialog.getByRole('button', { name: '공유 변수 저장', exact: true })
+        ).toBeEnabled();
+        expect((await (await request.get(endpoint)).json()).values).toEqual({ trust: '' });
+        expect(
+          await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)
+        ).toBeLessThanOrEqual(1);
+      } finally {
+        releaseRead();
+      }
     });
   });
 }

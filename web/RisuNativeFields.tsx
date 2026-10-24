@@ -491,7 +491,6 @@ export function RisuNativeFields({
           disabled={!!draft}
         >
           <div hidden={activeAdvanced !== 'instructions'} className="native-form-stack">
-            <h3>{t('native.text_22a2af3f54')}</h3>
             {!standalone && (
               <>
                 <label>
@@ -515,7 +514,6 @@ export function RisuNativeFields({
             )}
           </div>
           <div hidden={activeAdvanced !== 'variables'} className="native-form-stack">
-            <h3>{t('native.text_dc0ebb4fd3')}</h3>
             <label>
               {t('native.text_0510e453e9')}
               <textarea
@@ -550,7 +548,6 @@ export function RisuNativeFields({
             </label>
           </div>
           <div hidden={activeAdvanced !== 'display'} className="native-form-stack">
-            <h3>{standalone ? t('native.imageInstructions') : t('native.text_98a6884c74')}</h3>
             {!standalone && (
               <label>
                 {t('native.text_50262c6215')}
