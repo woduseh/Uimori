@@ -63,7 +63,7 @@ test('AUDIT2 push settings initial read shows centered loading and recovers from
     const panel = page.getByRole('region', { name: '작업 완료 알림', exact: true });
     const loading = panel.locator('.loading-state-placeholder');
     await expect(loading.getByRole('status')).toContainText('알림 설정을 불러오는 중이에요…');
-    await expect(panel.getByRole('button', { name: '알림 켜기', exact: true })).toBeHidden();
+    await expect(panel.getByRole('switch', { name: '작업 완료 알림', exact: true })).toBeHidden();
     for (const width of [360, 412]) {
       await page.setViewportSize({ width, height: 915 });
       await loading.scrollIntoViewIfNeeded();
@@ -89,8 +89,10 @@ test('AUDIT2 push settings initial read shows centered loading and recovers from
     const beforeRetry = reads;
     phase = 'recovered';
     await retry.click();
-    await expect(panel.getByRole('status')).toContainText('이 기기의 알림 꺼짐');
-    await expect(panel.getByRole('button', { name: '알림 켜기', exact: true })).toBeVisible();
+    const enabled = panel.getByRole('switch', { name: '작업 완료 알림', exact: true });
+    await expect(enabled).toBeVisible();
+    await expect(enabled).not.toBeChecked();
+    await expect(enabled).toBeEnabled();
     await expect(failure).toBeHidden();
     await expect(loading).toBeHidden();
     expect(reads).toBeGreaterThan(beforeRetry);
@@ -101,6 +103,55 @@ test('AUDIT2 push settings initial read shows centered loading and recovers from
   } finally {
     release();
   }
+});
+
+test('push denied permission keeps the switch off and rechecks without requesting permission or subscribing', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(Notification, 'permission', {
+      configurable: true,
+      get: () => 'denied',
+    });
+    Reflect.set(window, 'permissionRequests', 0);
+    Reflect.set(window, 'subscribeCalls', 0);
+    Notification.requestPermission = async () => {
+      Reflect.set(
+        window,
+        'permissionRequests',
+        Number(Reflect.get(window, 'permissionRequests')) + 1
+      );
+      return 'denied';
+    };
+    PushManager.prototype.subscribe = async () => {
+      Reflect.set(window, 'subscribeCalls', Number(Reflect.get(window, 'subscribeCalls')) + 1);
+      throw new Error('Denied permission must not subscribe');
+    };
+  });
+  let reads = 0;
+  const writes: string[] = [];
+  await page.route('**/api/push**', async (route) => {
+    const request = route.request();
+    if (request.method() === 'GET') reads++;
+    else writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
+    await route.fulfill({
+      json: { available: true, reason: null, publicKey: null, device: null },
+    });
+  });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
+  const panel = page.getByRole('region', { name: '작업 완료 알림', exact: true });
+  const enabled = panel.getByRole('switch', { name: '작업 완료 알림', exact: true });
+  await expect(enabled).not.toBeChecked();
+  await expect(enabled).toBeDisabled();
+  const before = reads;
+  await panel.getByRole('button', { name: '권한 다시 확인', exact: true }).click();
+  await expect.poll(() => reads).toBeGreaterThan(before);
+  await expect(enabled).toBeDisabled();
+  expect(writes).toEqual([]);
+  expect(await page.evaluate(() => Reflect.get(window, 'permissionRequests'))).toBe(0);
+  expect(await page.evaluate(() => Reflect.get(window, 'subscribeCalls'))).toBe(0);
 });
 
 test('PWUI06 push consent is explicit, preferences are acknowledged before changing, and server opt-out survives browser unsubscribe failure', async ({
@@ -215,11 +266,13 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
   const panel = page.getByRole('region', { name: '작업 완료 알림', exact: true });
-  await expect(panel).toContainText('이 기기의 알림 꺼짐');
+  const enabled = panel.getByRole('switch', { name: '작업 완료 알림', exact: true });
+  await expect(enabled).not.toBeChecked();
   expect(await page.evaluate(() => Reflect.get(window, 'pushPermissionCalls'))).toBe(0);
   expect(prepareCalls).toBe(0);
-  await panel.getByRole('button', { name: '알림 켜기', exact: true }).click();
-  await expect(panel).toContainText('이 기기의 알림 켜짐');
+  // Consent changes only after the subscription is acknowledged by the server.
+  await enabled.click();
+  await expect(enabled).toBeChecked();
   expect(await page.evaluate(() => Reflect.get(window, 'pushPermissionCalls'))).toBe(1);
   expect(await page.evaluate(() => Reflect.get(window, 'pushSubscribeCalls'))).toBe(1);
   expect(prepareCalls).toBe(1);
@@ -248,14 +301,14 @@ test('PWUI06 push consent is explicit, preferences are acknowledged before chang
     );
     await page.screenshot({ path: info.outputPath(`push-settings-${width}.png`) });
   }
-  await panel.getByRole('button', { name: '알림 끄기', exact: true }).click();
-  await expect(panel).toContainText('이 기기의 알림 꺼짐');
+  await enabled.click();
+  await expect(enabled).not.toBeChecked();
   await expect(panel).toContainText('서버 알림은 껐어요.');
   expect(disabled).toBe(true);
   await page.reload();
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '일반');
-  await expect(panel).toContainText('이 기기의 알림 꺼짐');
+  await expect(enabled).not.toBeChecked();
   expect(subscribeCalls).toBe(1);
 });
 

@@ -91,7 +91,6 @@ export function ProviderModelForm({
             </button>
           </div>
         )}
-      {modelCopy && <p className="provider-draft-note full">{t('providers.m281')}</p>}
       {conflict && (
         <NoticeBanner tone="error" className="full">
           {t('providers.m282')}

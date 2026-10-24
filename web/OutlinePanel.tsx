@@ -593,10 +593,10 @@ export function OutlinePanel({
                   }}
                 >
                   <div className="outline-section-heading">
-                    <span className="outline-eyebrow">
-                      {adding ? t('prompts.uiNewOutline') : t('prompts.uiEditOutline')}
-                    </span>
-                    <h3>{adding ? t('prompts.uiWhereWouldYouLikeToStart') : selected?.title}</h3>
+                    {!adding && (
+                      <span className="outline-eyebrow">{t('prompts.uiEditOutline')}</span>
+                    )}
+                    <h3>{adding ? t('prompts.uiNewOutline') : selected?.title}</h3>
                   </div>
                   {adding && (
                     <div className="outline-form-pair">
@@ -1076,9 +1076,7 @@ export function OutlinePanel({
                     </section>
                   )}
                 </>
-              ) : (
-                <p className="muted">{t('prompts.uiSelectAnOutlineOrAddANewItem')}</p>
-              )}
+              ) : null}
             </div>
           </div>
         )

@@ -91,10 +91,7 @@ export function ChatPromptOptions(props: Props) {
       }}
     >
       <header className="chat-options-header">
-        <div>
-          <h2>{t('chatsettings.m154')}</h2>
-          <small>{t('chatsettings.m155')}</small>
-        </div>
+        <h2>{t('chatsettings.m154')}</h2>
         <button
           ref={closeButton}
           type="button"

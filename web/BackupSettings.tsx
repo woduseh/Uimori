@@ -10,7 +10,7 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import './scheduled-backups.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { DatabaseBackup, Download, RefreshCw } from 'lucide-react';
 import type { BackupSettings as Settings, BackupStatus } from '../core/backups.js';
 import { api } from './api.js';
@@ -36,6 +36,7 @@ export function BackupSettings({
   onSaveHandlerChange?: SettingsSaveRegistration;
 }) {
   useI18n();
+  const id = useId();
   const [status, setStatus] = useState<BackupStatus | null>(null);
   const [draft, setDraft] = useState<Settings | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -138,24 +139,25 @@ export function BackupSettings({
     }
   }
   return (
-    <section className="settings-group scheduled-backups" aria-label={t('transfer.m151')}>
+    <section
+      className="settings-group scheduled-backups"
+      aria-label={t('settings.serverAutoBackup')}
+    >
       <header className="settings-group-heading">
-        <h3>{t('transfer.m151')}</h3>
+        <h3>
+          <label htmlFor={`${id}-enabled`}>{t('settings.serverAutoBackup')}</label>
+        </h3>
+        {draft && (
+          <Switch
+            id={`${id}-enabled`}
+            aria-label={t('settings.serverAutoBackup')}
+            checked={draft.enabled}
+            disabled={busy}
+            onChange={(event) => change({ enabled: event.target.checked })}
+          />
+        )}
       </header>
       <div className="settings-group-body archive-management-card">
-        <div className="backup-heading settings-row settings-row-toggle">
-          <div className="settings-row-copy">
-            <strong>{t('settings.serverAutoBackup')}</strong>
-          </div>
-          {draft && (
-            <Switch
-              aria-label={t('settings.serverAutoBackup')}
-              checked={draft.enabled}
-              disabled={busy}
-              onChange={(event) => change({ enabled: event.target.checked })}
-            />
-          )}
-        </div>
         {draft && (
           <fieldset disabled={busy}>
             <div className="backup-fields">

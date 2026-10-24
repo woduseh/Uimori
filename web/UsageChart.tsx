@@ -6,9 +6,13 @@ import { bucketLabel, shortDay, usageBuckets, usageUsd } from './usage-display.j
 export function UsageChart({ report }: { report: UsageReport }) {
   useI18n();
   const { step, buckets } = usageBuckets(report);
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selected, setSelected] = useState<{ range: string; from: string } | null>(null);
+  const range = `${report.from}/${report.to}`;
   const maximum = Math.max(0, ...buckets.map((item) => item.amount));
-  const current = selected === null ? undefined : buckets[selected];
+  const current =
+    buckets.find((item) => selected?.range === range && item.from === selected.from) ??
+    buckets.findLast((item) => item.calls > 0) ??
+    buckets.at(-1);
   return (
     <section className="usage-trend" aria-label={t('visuals.m260')}>
       <header className="usage-section-heading">
@@ -26,17 +30,17 @@ export function UsageChart({ report }: { report: UsageReport }) {
             <span>US$0</span>
           </div>
           <div className="usage-chart" aria-label={t('visuals.m265')}>
-            {buckets.map((item, index) => (
+            {buckets.map((item) => (
               <button
                 key={item.from}
                 type="button"
                 className={`usage-chart-column${item.unknown || item.partial ? ' incomplete' : ''}`}
                 aria-label={bucketLabel(item)}
-                aria-pressed={selected === index}
+                aria-pressed={current === item}
                 title={bucketLabel(item)}
-                onPointerEnter={() => setSelected(index)}
-                onFocus={() => setSelected(index)}
-                onClick={() => setSelected(index)}
+                onPointerEnter={() => setSelected({ range, from: item.from })}
+                onFocus={() => setSelected({ range, from: item.from })}
+                onClick={() => setSelected({ range, from: item.from })}
                 onKeyDown={(event) => {
                   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
                   event.preventDefault();
@@ -63,9 +67,11 @@ export function UsageChart({ report }: { report: UsageReport }) {
             <span>{shortDay(report.from)}</span>
             {report.from !== report.to && <span>{shortDay(report.to)}</span>}
           </div>
-          <p className="usage-chart-caption" aria-live="polite">
-            {current ? bucketLabel(current) : t('visuals.m266')}
-          </p>
+          {current && (
+            <p className="usage-chart-caption" aria-live="polite">
+              {bucketLabel(current)}
+            </p>
+          )}
         </>
       )}
     </section>

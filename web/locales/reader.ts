@@ -785,12 +785,6 @@ export const messages = {
     ja: '自分のペルソナ',
     zh: '我的角色',
   },
-  'reader.tapAnImageToViewItLarger': {
-    ko: '이미지를 눌러 크게 감상해요',
-    en: 'Tap an image to view it larger',
-    ja: '画像を押すと拡大できます',
-    zh: '点击图片可放大欣赏',
-  },
   'reader.character': {
     ko: '등장인물',
     en: 'Character',
@@ -838,12 +832,6 @@ export const messages = {
     en: 'Text',
     ja: '本文',
     zh: '正文',
-  },
-  'reader.sceneListResults': {
-    ko: '장면 목록 결과',
-    en: 'Scene list results',
-    ja: 'シーン一覧の結果',
-    zh: '场景列表结果',
   },
   'reader.sceneValueValue': {
     ko: '{v0}번째 장면 · {v1}',
@@ -2224,12 +2212,6 @@ export const messages = {
     en: '『Double corner brackets』',
     ja: '『二重かぎ括弧』',
     zh: '『双直角引号』',
-  },
-  'reader.portraitsHeading': {
-    ko: 'PORTRAITS',
-    en: 'PORTRAITS',
-    ja: 'ポートレート',
-    zh: '肖像',
   },
   'reader.imagePositionUnavailable': {
     ko: '표시 변환 후 이미지 위치를 확인할 수 없어 이 보기에서는 이미지를 생략했어요.',

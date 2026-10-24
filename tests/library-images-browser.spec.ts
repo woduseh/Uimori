@@ -137,6 +137,11 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
       );
     };
     await checkCandidates();
+    const search = picker.getByRole('searchbox', { name: '대표 이미지 검색', exact: true });
+    await search.fill('다른 본문 그림');
+    await expect(first).toHaveCount(0);
+    await expect(second).toBeVisible();
+    await search.fill('');
     await expect(first).toHaveAttribute('aria-pressed', 'true');
     await second.click();
     await expect(picker).not.toBeVisible();

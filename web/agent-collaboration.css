@@ -250,12 +250,9 @@
 .ac-control-picker-heading {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   margin-bottom: 12px;
-}
-.ac-control-picker-heading h3 {
-  margin: 0 0 4px;
 }
 .ac-control-picker-heading > span {
   flex: 0 0 auto;

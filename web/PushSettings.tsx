@@ -2,9 +2,11 @@ import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { LoadingState } from './LoadingState.js';
+import { Switch } from './BooleanControls.js';
+import { RunningIcon } from './ui-icons.js';
 import './push-settings.css';
-import { useEffect, useState } from 'react';
-import { Bell, BellOff, RefreshCw, Send } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { RefreshCw, Send } from 'lucide-react';
 import { DEFAULT_PUSH_PREFERENCES, type PushInfo, type PushPreferences } from '../core/push.js';
 import { api } from './api.js';
 import { pwaRegistration } from './pwa.js';
@@ -26,6 +28,7 @@ const labels: [keyof PushPreferences, string][] = [
 ];
 export function PushSettings() {
   const { t } = useI18n();
+  const id = useId();
   const [clientId] = useState(browserClientId);
   const [info, setInfo] = useState<PushInfo | null>(null);
   const [busy, setBusy] = useState(false);
@@ -191,26 +194,28 @@ export function PushSettings() {
     <section className="settings-service push-settings" aria-label={t('outside.pushTitle')}>
       <div className="settings-service-row">
         <div className="settings-service-copy">
-          <h4>{t('outside.pushTitle')}</h4>
-          {available && (
-            <small role="status">{enabled ? t('outside.deviceOn') : t('outside.deviceOff')}</small>
-          )}
+          <h4>
+            <label htmlFor={`${id}-enabled`}>{t('outside.pushTitle')}</label>
+          </h4>
         </div>
-        {available &&
-          (enabled ? (
-            <button type="button" disabled={busy} onClick={() => void disable()}>
-              <BellOff size={16} aria-hidden="true" /> {t('outside.disablePush')}
-            </button>
-          ) : permission === 'denied' ? (
-            <button type="button" disabled={busy} onClick={recheck}>
-              <RefreshCw size={16} aria-hidden="true" /> {t('outside.checkPermission')}
-            </button>
-          ) : (
-            <button type="button" disabled={busy} onClick={() => void enable()}>
-              <Bell size={16} aria-hidden="true" />{' '}
-              {busy ? t('outside.connecting') : t('outside.enablePush')}
-            </button>
-          ))}
+        {available && (
+          <div className="push-toggle-controls">
+            {busy && <RunningIcon size={18} className="activity-spinner" aria-hidden="true" />}
+            <Switch
+              id={`${id}-enabled`}
+              aria-label={t('outside.pushTitle')}
+              aria-busy={busy}
+              checked={enabled}
+              disabled={busy || (!enabled && permission === 'denied')}
+              onChange={(event) => void (event.target.checked ? enable() : disable())}
+            />
+            {!enabled && permission === 'denied' && (
+              <button type="button" disabled={busy} onClick={recheck}>
+                <RefreshCw size={16} aria-hidden="true" /> {t('outside.checkPermission')}
+              </button>
+            )}
+          </div>
+        )}
       </div>
       {supported && !info && !error && (
         <LoadingState presentation="placeholder" label={t('outside.loadingPush')} />

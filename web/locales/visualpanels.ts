@@ -1967,12 +1967,6 @@ export const messages = {
     ja: '· 5分書き込み {short} / 60分書き込み {long}',
     zh: '· 5分钟写入{short} / 60分钟写入{long}',
   },
-  'visualpanels.selectedTitle': {
-    ko: '{title}{selected, select, true { · 선택됨} other {}}',
-    en: '{title}{selected, select, true { · Selected} other {}}',
-    ja: '{title}{selected, select, true { · 選択中} other {}}',
-    zh: '{title}{selected, select, true { · 已选择} other {}}',
-  },
   'visualpanels.usageWriting': {
     ko: '본문 작성',
     en: 'Writing',

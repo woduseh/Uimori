@@ -224,7 +224,6 @@ test('scene search keeps one query when switching between scene list and manuscr
   const dialog = page.getByRole('dialog', { name: '장면 목록', exact: true });
   const query = dialog.getByRole('searchbox', { name: '장면 검색어', exact: true });
   await query.fill('Scene');
-  await expect(dialog.getByRole('heading', { name: '장면 목록 결과' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: /번째 장면 · Scene/ })).toHaveCount(2);
   await dialog.getByRole('button', { name: '본문', exact: true }).click();
   await expect(query).toHaveValue('Scene');

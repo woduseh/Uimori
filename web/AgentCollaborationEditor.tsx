@@ -334,7 +334,6 @@ export function AgentCollaborationEditor({
                 </button>
                 {showTemplates && (
                   <div className="ac-template-picker">
-                    <p className="muted">{t('settings.m165')}</p>
                     <div className="ac-templates">
                       {templates().map((template) => (
                         <button
@@ -482,9 +481,6 @@ export function AgentCollaborationEditor({
           </aside>
           <section aria-label={t('settings.m184')}>
             <div className="ac-control-picker-heading">
-              <div>
-                <h3>{t('settings.m169')}</h3>
-              </div>
               <span>{t('settings.flow10', { v0: collaboration.sharedControls.length })}</span>
             </div>
             {(controlGroup === 'selected' || controlGroup === 'all') &&

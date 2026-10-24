@@ -238,7 +238,7 @@ for (const width of [412, 1440]) {
     await openChatSettings(page);
     const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     await expectShell(page, settings, 1160);
-    await selectChatSettingsSection(page, '대화 구성');
+    await selectChatSettingsSection(page, '인물·자료');
     const pickerTrigger = page.getByRole('button', { name: '페르소나', exact: true });
     await pickerTrigger.click();
     const picker = page.getByRole('dialog', { name: '페르소나', exact: true });
@@ -248,7 +248,7 @@ for (const width of [412, 1440]) {
     await expect(picker).toBeHidden();
     await expect(pickerTrigger).toBeFocused();
 
-    await selectChatSettingsSection(page, '이미지');
+    await selectChatSettingsSection(page, '이미지·삽화 참조');
     await page.locator('.chat-settings-image-management > summary').click();
     await expect(
       settings.locator('.asset-grid figure').first().locator('figcaption')
@@ -281,7 +281,7 @@ for (const width of [412, 1440]) {
     await expect(remove).toBeHidden();
     await expect(imageTrigger).toBeFocused();
 
-    await selectChatSettingsSection(page, '프롬프트·모델');
+    await selectChatSettingsSection(page, '프롬프트·모델·번역');
     await page.getByText('고급 실행 설정', { exact: true }).click();
     const limit = page.getByLabel('작업당 모델 호출 한도', { exact: true });
     const original = await limit.inputValue();
@@ -300,10 +300,10 @@ for (const width of [412, 1440]) {
     await confirmation.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '프롬프트·모델');
+    await selectChatSettingsSection(page, '프롬프트·모델·번역');
     await page.getByText('고급 실행 설정', { exact: true }).click();
     await expect(limit).toHaveValue(original);
-    await selectChatSettingsSection(page, '이미지');
+    await selectChatSettingsSection(page, '이미지·삽화 참조');
     await page.locator('.chat-settings-image-management > summary').click();
     await page.getByText('이름·설명 편집', { exact: true }).click();
     await expect(page.getByLabel('업로드 이미지 이름', { exact: true })).toHaveValue(
@@ -429,7 +429,7 @@ for (const width of [412, 1440]) {
     const chat = await created.json();
     await page.goto(`/?chat=${chat.id}`);
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '기억·로어');
+    await selectChatSettingsSection(page, '기억·메모·로어');
     const panel = page.getByTestId('context-panel');
     await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
     const summary = panel.getByLabel('편집할 컨텍스트 요약', { exact: true });
@@ -495,7 +495,7 @@ for (const width of [412, 1440]) {
     await expect(notes.getByText('Updated synthetic note', { exact: true })).toBeVisible();
     await page.reload();
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '기억·로어');
+    await selectChatSettingsSection(page, '기억·메모·로어');
     await expect(panel.getByTestId('context-summary-text')).toHaveText('Saved synthetic summary');
     await notes.locator(':scope > summary').click();
     await expect(notes.getByText('Updated synthetic note', { exact: true })).toBeVisible();

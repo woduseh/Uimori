@@ -779,12 +779,6 @@ export const messages = {
     ja: '構成を編集',
     zh: '编辑大纲',
   },
-  'prompts.uiWhereWouldYouLikeToStart': {
-    ko: '어디에서 시작할까요?',
-    en: 'Where would you like to start?',
-    ja: 'どこから始めますか？',
-    zh: '想从哪里开始？',
-  },
   'prompts.uiLevel': {
     ko: '수준',
     en: 'Level',
@@ -1072,12 +1066,6 @@ export const messages = {
     en: 'Linked source text may not cover every part of the outline.',
     ja: '原文が関連づけられていても構成内容をすべて書いたとは限りません。',
     zh: '已关联原文也可能尚未写完全部大纲内容。',
-  },
-  'prompts.uiSelectAnOutlineOrAddANewItem': {
-    ko: '구성을 선택하거나 새 항목을 추가해 주세요.',
-    en: 'Select an outline or add a new item.',
-    ja: '構成を選択するか新しい項目を追加してください。',
-    zh: '请选择大纲或添加新条目。',
   },
   'prompts.uiRefresh': {
     ko: '새로고침',
@@ -1420,12 +1408,6 @@ export const messages = {
     en: 'Exclude retrieved lore from next generation',
     ja: '次の生成で参照ロアを除外',
     zh: '下次生成时排除查询设定',
-  },
-  'prompts.uiAppliesOnlyToThisRequest': {
-    ko: '이번 요청에만 적용',
-    en: 'Applies only to this request',
-    ja: '今回のリクエストにのみ適用',
-    zh: '仅用于本次请求',
   },
   'prompts.selectedCount': {
     ko: '{count, plural, other {#개 선택}}',

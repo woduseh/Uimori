@@ -143,7 +143,7 @@ for (const width of [360, 412]) {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`/?chat=${chat.id}`);
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '이미지');
+    await selectChatSettingsSection(page, '이미지·삽화 참조');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     const references = dialog.getByRole('region', { name: '삽화 참조 이미지', exact: true });
     const personRole = references.getByLabel('인물 기준 이미지 참조 역할', { exact: true });

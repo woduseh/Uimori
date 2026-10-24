@@ -202,11 +202,11 @@ function SavedResourcePreview({ model }: { model: ResourceModel }) {
             ]
           : [];
   return (
-    <section aria-label={t('shared.savedContents')} className="resource-saved-preview">
-      <p className="muted">{t('shared.previewDescription')}</p>
+    <section aria-label={t('shared.savedTextPreview')} className="resource-saved-preview">
+      <h3>{t('shared.savedTextPreview')}</h3>
       {sections.map((section, index) => (
         <section key={index}>
-          <h3>{section.title}</h3>
+          <h4>{section.title}</h4>
           <p>{section.text || t('shared.emptySavedText')}</p>
         </section>
       ))}

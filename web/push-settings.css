@@ -1,3 +1,16 @@
+.push-settings h4 > label {
+  display: inline;
+  font: inherit;
+}
+
+.push-toggle-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .push-preferences {
   display: grid;
   gap: 12px;

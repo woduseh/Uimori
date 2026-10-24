@@ -409,7 +409,13 @@ for (const width of [1440, 412]) {
     await page.getByLabel('테마 이름', { exact: true }).fill('Unchanged local palette draft');
     await page.getByLabel('light accent 색상', { exact: true }).fill('#663399');
     for (const palette of BUILTIN_PALETTES) {
-      await page.getByRole('button', { name: `${palette.title} 팔레트 적용`, exact: true }).click();
+      const choice = page.getByRole('button', {
+        name: `${palette.title} 팔레트 적용`,
+        exact: true,
+      });
+      await expect(choice).toHaveAccessibleDescription(palette.description);
+      await choice.click();
+      await expect(choice).toHaveAttribute('aria-pressed', 'true');
       await expectPalette(page, palette.id);
       await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:letter');
       await expect(memo).toHaveValue('palette keeps this node');

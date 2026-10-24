@@ -1397,12 +1397,6 @@ export const messages = {
     ja: '期間別の費用',
     zh: '分时段费用',
   },
-  'visuals.m266': {
-    ko: '막대를 선택하면 상세 내역을 볼 수 있어요.',
-    en: 'Select a bar to see details.',
-    ja: '棒を選ぶと詳細を表示します。',
-    zh: '选择柱状条可查看详情。',
-  },
   'visuals.m267': {
     ko: '프로바이더 보고 {v0} · 추정 {v1} · 부분 추정 {v2}',
     en: 'Provider reported {v0} · Estimated {v1} · Partially estimated {v2}',

@@ -1,6 +1,5 @@
 import { t, useI18n } from './i18n.js';
 import { memo, useState, type ReactNode } from 'react';
-import { Sparkles } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import { contentPortraitUrl } from './content-portrait.js';
 import { Dialog } from './Dialog.js';
@@ -99,10 +98,6 @@ export const ReaderGallery = memo(function ReaderGallery({
         }
         aria-label={t('reader.characterGallery')}
       >
-        <div className="reader-gallery-heading" aria-hidden="true">
-          <span>{t('reader.portraitsHeading')}</span>
-          <Sparkles size={13} aria-hidden="true" />
-        </div>
         {(
           [
             ['bot', bot, t('reader.bot')],
@@ -133,7 +128,6 @@ export const ReaderGallery = memo(function ReaderGallery({
             </figure>
           );
         })}
-        <p className="reader-gallery-caption">{t('reader.tapAnImageToViewItLarger')}</p>
       </aside>
       <PortraitDialog
         open={!!selected}

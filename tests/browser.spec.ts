@@ -52,7 +52,7 @@ async function expectSourceRaw(page: Page, text: string) {
 async function storySettings(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible())) await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델');
+  await selectChatSettingsSection(page, '프롬프트·모델·번역');
   await page.getByText('고급 실행 설정', { exact: true }).click();
 }
 async function openWork(page: Page) {

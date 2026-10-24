@@ -277,7 +277,7 @@ export function ContentAttachments({
       <details className="chat-composition-add">
         <summary>{t('library.addSharedModulesOrResources')}</summary>
         <fieldset className="package-entry" disabled={busy}>
-          <legend>{t('library.addResource')}</legend>
+          <legend className="sr-only">{t('library.addResource')}</legend>
           <ContentPicker
             library={{
               ...library,

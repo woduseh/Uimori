@@ -200,7 +200,7 @@ export function ContentPicker({
             </button>
           </div>
           <label className="content-picker-search">
-            <span className="content-picker-filter-label">{t('library.search')}</span>
+            <span className="sr-only">{t('library.search')}</span>
             <span className="content-picker-search-field">
               <SearchIcon size={17} aria-hidden="true" />
               <input
@@ -270,11 +270,7 @@ export function ContentPicker({
           {!candidates.length && (
             <div className="content-picker-empty">
               <strong>{emptyTitle}</strong>
-              <small>
-                {!all
-                  ? t('library.searchOtherCategoriesOrAddAResource')
-                  : t('library.changeTheSearchOrFolderOrAdd')}
-              </small>
+              <small>{t('library.addNewResourcesInLibrary')}</small>
             </div>
           )}
         </div>
@@ -290,8 +286,13 @@ export function ContentPicker({
             })}
           </button>
         )}
-        {!all || activeFolder !== 'all' ? (
+        {!all || activeFolder !== 'all' || (!candidates.length && !!needle) ? (
           <div className="content-picker-footer">
+            {!candidates.length && !!needle && (
+              <button type="button" className="ghost" onClick={() => setQuery('')}>
+                {t('library.clearSearch')}
+              </button>
+            )}
             {!all && (
               <button
                 type="button"

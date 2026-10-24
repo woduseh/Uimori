@@ -127,6 +127,12 @@ test('PERSONAL images retain native alias while display metadata and WebP persis
   await page
     .getByLabel('Risu 이미지 추가', { exact: true })
     .setInputFiles({ name: 'script_alias.png', mimeType: 'image/png', buffer: image });
+  const search = page.getByRole('searchbox', { name: '에셋 검색', exact: true });
+  await search.fill('없는 에셋');
+  await expect(
+    page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button')
+  ).toHaveCount(0);
+  await search.fill('script_alias');
   await page.getByLabel('Risu 이미지 목록', { exact: true }).getByRole('button').first().click();
   await page.getByLabel('이미지 이름', { exact: true }).fill('우산을 든 유나');
   await page.getByLabel('이미지 설명', { exact: true }).fill('비 오는 하굣길, 투명 우산과 미소');
@@ -370,7 +376,7 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '이미지');
+  await selectChatSettingsSection(page, '이미지·삽화 참조');
   await page.locator('.chat-settings-image-management > summary').click();
   await page.getByText('이름·설명 편집', { exact: true }).click();
   const title = page.getByLabel('업로드 이미지 이름', { exact: true });

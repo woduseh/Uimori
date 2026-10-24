@@ -462,10 +462,10 @@ export const messages = {
     zh: '当前浏览器',
   },
   'chatsettings.m78': {
-    ko: '현재 브라우저의 접속 세션을 해제해요. 서버에서 진행 중인 생성은 취소되지 않아요.',
-    en: 'Signs out this browser. Server generation continues.',
-    ja: '現在のブラウザーの接続を解除します。サーバーで進行中の生成は続きます。',
-    zh: '退出当前浏览器的会话。服务器正在进行的生成仍会继续。',
+    ko: '서버에서 진행 중인 생성은 취소되지 않아요.',
+    en: 'Generation running on the server will not be canceled.',
+    ja: 'サーバーで進行中の生成はキャンセルされません。',
+    zh: '服务器上正在进行的生成不会被取消。',
   },
   'chatsettings.m79': {
     ko: '미저장 설정 확인',
@@ -491,35 +491,11 @@ export const messages = {
     ja: '下書きを破棄して閉じる',
     zh: '丢弃草稿并关闭',
   },
-  'chatsettings.m83': {
-    ko: '대화 구성',
-    en: 'Conversation setup',
-    ja: '会話の構成',
-    zh: '对话配置',
-  },
-  'chatsettings.m84': {
-    ko: '인물과 함께 사용할 자료',
-    en: 'Characters and supporting resources',
-    ja: '登場人物と一緒に使う資料',
-    zh: '角色与配套资料',
-  },
   'chatsettings.m85': {
     ko: '기본',
     en: 'Basic',
     ja: '基本',
     zh: '基本',
-  },
-  'chatsettings.m86': {
-    ko: '프롬프트·모델',
-    en: 'Prompts and models',
-    ja: 'プロンプト・モデル',
-    zh: '提示词与模型',
-  },
-  'chatsettings.m87': {
-    ko: '작문 지침·모델·자동 번역',
-    en: 'Writing instructions, models, auto translation',
-    ja: '執筆指示・モデル・自動翻訳',
-    zh: '写作指令、模型、自动翻译',
   },
   'chatsettings.m88': {
     ko: '원작·인물 참고',
@@ -533,18 +509,6 @@ export const messages = {
     ja: '執筆前の原作設定と人物参考',
     zh: '写作前的原作设定与角色参考',
   },
-  'chatsettings.m90': {
-    ko: '기억·로어',
-    en: 'Memory and lore',
-    ja: '記憶・ロア',
-    zh: '记忆与设定',
-  },
-  'chatsettings.m91': {
-    ko: '장면 기억과 메모 관리',
-    en: 'Manage scene memories and notes',
-    ja: 'シーンの記憶とメモを管理',
-    zh: '管理场景记忆与笔记',
-  },
   'chatsettings.m92': {
     ko: '고급',
     en: 'Advanced',
@@ -556,12 +520,6 @@ export const messages = {
     en: 'Images',
     ja: '画像',
     zh: '图片',
-  },
-  'chatsettings.m94': {
-    ko: '이 채팅에 등록한 이미지와 삽화 참조',
-    en: 'Images and illustration references in this chat',
-    ja: 'このチャットの画像と挿絵の参照',
-    zh: '此聊天中的图片与插图参考',
   },
   'chatsettings.m95': {
     ko: '카드 변수',
@@ -598,12 +556,6 @@ export const messages = {
     en: 'Chat settings categories',
     ja: 'チャット設定の分類',
     zh: '聊天设置分类',
-  },
-  'chatsettings.m101': {
-    ko: '기억과 요약',
-    en: 'Memory and summaries',
-    ja: '記憶と要約',
-    zh: '记忆与摘要',
   },
   'chatsettings.m102': {
     ko: '이미지 관리',
@@ -910,12 +862,6 @@ export const messages = {
     en: 'Writing options',
     ja: '創作オプション',
     zh: '创作选项',
-  },
-  'chatsettings.m155': {
-    ko: '이 채팅 · 다음 생성부터 적용',
-    en: 'This chat · Applies from next generation',
-    ja: 'このチャット · 次の生成から適用',
-    zh: '此聊天 · 从下次生成起应用',
   },
   'chatsettings.m156': {
     ko: '창작 옵션 닫기',
@@ -1258,5 +1204,29 @@ export const messages = {
     en: 'Could not load illustration settings.',
     ja: '挿絵設定を読み込めませんでした。',
     zh: '无法加载插图设置。',
+  },
+  'chatsettings.peopleAndMaterials': {
+    ko: '인물·자료',
+    en: 'Characters & materials',
+    ja: '人物・資料',
+    zh: '人物与资料',
+  },
+  'chatsettings.promptsModelsAndTranslation': {
+    ko: '프롬프트·모델·번역',
+    en: 'Prompts, models & translation',
+    ja: 'プロンプト・モデル・翻訳',
+    zh: '提示词、模型与翻译',
+  },
+  'chatsettings.memoryNotesAndLore': {
+    ko: '기억·메모·로어',
+    en: 'Memory, notes & lore',
+    ja: '記憶・メモ・ロア',
+    zh: '记忆、笔记与知识',
+  },
+  'chatsettings.imagesAndReferences': {
+    ko: '이미지·삽화 참조',
+    en: 'Images & illustration references',
+    ja: '画像・挿絵の参照',
+    zh: '图片与插图参考',
   },
 };

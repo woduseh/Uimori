@@ -14,6 +14,7 @@
 }
 .native-assets-search {
   flex: 1 1 180px;
+  align-self: center;
 }
 .native-assets-upload {
   flex: 1 1 240px;

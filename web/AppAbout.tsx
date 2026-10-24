@@ -36,14 +36,12 @@ export function AppAbout() {
         <LibraryIcon size={28} aria-hidden="true" />
         <div>
           <h3>Uimori</h3>
-          <p className="muted">{t('outside.about')}</p>
         </div>
       </div>
       <div className="settings-group-body app-about-details">
         <div className="settings-row">
           <div className="settings-row-copy">
             <strong>{t('outside.version')}</strong>
-            <p className="muted">{t('outside.serverVersion')}</p>
           </div>
           <code data-testid="app-version">
             {build ? `v${build.version}` : error ? t('outside.checkFailed') : t('outside.checking')}
@@ -86,7 +84,6 @@ export function AppAbout() {
         <div className="settings-row">
           <div className="settings-row-copy">
             <strong>{t('outside.sourceRepo')}</strong>
-            <p className="muted">{t('outside.sourceDescription')}</p>
           </div>
           <a href="https://github.com/woduseh/Uimori" target="_blank" rel="noreferrer">
             <ExternalLinkIcon size={16} aria-hidden="true" /> {t('outside.viewSource')}

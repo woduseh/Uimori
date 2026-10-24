@@ -35,6 +35,7 @@
 }
 .section-navigation-title {
   font-weight: 550;
+  word-break: keep-all;
 }
 /* The list gap is 4px, so a group label needs a clear break above and almost none below;
    otherwise it floats between two items instead of heading the ones under it. */
