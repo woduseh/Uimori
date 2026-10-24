@@ -10,6 +10,8 @@ import {
   DEFAULT_PALETTE_COLORS,
   THEME_PALETTE_ID,
   isPaletteId,
+  type Palette,
+  type ThemePalette,
 } from './theme-palettes.js';
 
 /** Presentation resources only. Never include these in a model request or story snapshot. */
@@ -78,7 +80,11 @@ export type ThemePreferences = {
   botBackgrounds?: Record<string, ThemeBackground>;
   chatBackgrounds?: Record<string, ThemeBackground>;
 };
-export type ThemeCatalog = { themes: Theme[]; preferences: ThemePreferences };
+export type ThemeCatalog = {
+  themes: Theme[];
+  palettes?: (Palette | ThemePalette)[];
+  preferences: ThemePreferences;
+};
 export type ThemeScope = { botId?: string; chatId?: string };
 export const DEFAULT_THEME_ID = 'builtin:forest';
 export const THEME_FILE_FORMAT = 'uimori-theme';
@@ -233,7 +239,11 @@ export function resolvePaletteId(catalog: ThemeCatalog, scope: ThemeScope): stri
     scope.botId && p.botPalettes?.[scope.botId],
     p.defaultPaletteId,
   ]) {
-    if (isPaletteId(id)) return id;
+    if (
+      isPaletteId(id) ||
+      (typeof id === 'string' && catalog.palettes?.some((palette) => palette.id === id))
+    )
+      return id;
   }
   return THEME_PALETTE_ID;
 }
@@ -253,7 +263,9 @@ export function resolveTheme(catalog: ThemeCatalog, scope: ThemeScope): Theme {
       break;
     }
   }
-  const palette = BUILTIN_PALETTES.find((item) => item.id === resolvePaletteId(catalog, scope));
+  const palette = (catalog.palettes ?? BUILTIN_PALETTES).find(
+    (item) => item.id === resolvePaletteId(catalog, scope)
+  );
   return palette
     ? {
         ...selected,

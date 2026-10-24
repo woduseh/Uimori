@@ -39,6 +39,7 @@
 | Bot translation guides | `core/translation-guide.ts`, `server/translation-guide.ts`, `web/TranslationGuideEditor.tsx` | [Translation guides](TRANSLATION-GUIDES.md) |
 
 Theme resources and selection: `core/themes.ts`, `server/themes.ts`, `web/ThemeContext.tsx`, `web/ThemeSettings.tsx`, `web/ThemeFrame.tsx`. [Authoring and usage](THEME-AUTHORING.md).
+Standalone palettes and uploaded fonts: `core/theme-palettes.ts`, `core/fonts.ts`, `server/fonts.ts`, `web/PaletteSettings.tsx`, `web/FontContext.tsx`, `web/FontSettings.tsx`. Helper registration and selection: `server/helper-presentation-tools.ts`.
 
 Operational failures remain in task status, provider error details and execution inputs; there is no separate anonymous diagnostic-report generator. See [Troubleshooting](DIAGNOSTICS.md).
 

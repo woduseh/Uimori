@@ -5,6 +5,7 @@ await runBrowserVerification({
     'Themes, color modes, custom HTML/CSS, portable theme files, author state preservation and recovery',
   files: [
     'tests/themes-browser.spec.ts',
+    'tests/appearance-customization-browser.spec.ts',
     'tests/color-system-browser.spec.ts',
     'tests/risu-message-surface-browser.spec.ts',
   ],

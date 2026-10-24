@@ -1,3 +1,9 @@
+import {
+  HELPER_PRESENTATION_TOOLS,
+  presentationReadOnly,
+  preparePresentationTool,
+  invokePresentationTool,
+} from './helper-presentation-tools.js';
 import { readHelperOutline } from './outline-read.js';
 import { OUTLINE_PLANNING_GUIDANCE, OUTLINE_REVIEW_GUIDANCE } from '../core/outline-guidance.js';
 import type { OutlineTarget } from '../core/outline.js';
@@ -1900,6 +1906,26 @@ export class HelperRuntime {
     this.workspace.assertRunning(task.id);
     if (name === 'app.tools')
       return describeHelperTools(args, task.snapshot.outline?.target.purpose === 'review');
+    if (HELPER_PRESENTATION_TOOLS.some((tool) => tool.name === name)) {
+      if (presentationReadOnly(name)) return invokePresentationTool(this.store, name, args);
+      const receiptId = `${task.id}:${operationId}`;
+      const input = { name, args };
+      const previous = this.workspace.operationResult(task.id, receiptId, input);
+      if (previous !== undefined) return previous;
+      const bytes = await preparePresentationTool(name, args, hooks.signal);
+      hooks.signal.throwIfAborted();
+      this.workspace.assertRunning(task.id);
+      const result = this.workspace.operation(task.id, receiptId, input, () =>
+        invokePresentationTool(this.store, name, args, bytes)
+      );
+      this.workspace.event(
+        task.conversationId,
+        task.id,
+        name.startsWith('font.') ? 'font.updated' : 'theme.updated',
+        { presentation: true }
+      );
+      return result;
+    }
     if (HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name)) {
       if (name.startsWith('model.pricing.') && args.chatId !== undefined)
         throw new HttpError(400, 'Model pricing does not accept a chat ID');

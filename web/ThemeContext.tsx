@@ -84,15 +84,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             const old = known.get(theme.id);
             return old?.revision === theme.revision ? old : theme;
           });
+          const palettes = next.palettes;
+          const palettesUnchanged = JSON.stringify(previous.palettes) === JSON.stringify(palettes);
           const preferences =
             previous.preferences.revision === next.preferences.revision
               ? previous.preferences
               : next.preferences;
-          return preferences === previous.preferences &&
+          return palettesUnchanged &&
+            preferences === previous.preferences &&
             themes.length === previous.themes.length &&
             themes.every((theme, i) => theme === previous.themes[i])
             ? previous
-            : { themes, preferences };
+            : { themes, preferences, palettes: palettesUnchanged ? previous.palettes : palettes };
         });
         setError('');
       }

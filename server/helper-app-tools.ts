@@ -1,3 +1,4 @@
+import { HELPER_PRESENTATION_TOOLS, presentationReadOnly } from './helper-presentation-tools.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { RESOURCE_TOOLS, helperResourceOperation } from './helper-resource-tools.js';
@@ -40,6 +41,7 @@ const loreSelector = schema(
 );
 const TOOLS: ProviderTool[] = [
   ...RESOURCE_TOOLS,
+  ...HELPER_PRESENTATION_TOOLS,
   ...HELPER_SETTINGS_TOOLS,
   ...HELPER_TASK_TOOLS,
   ...HELPER_SCENE_TOOLS,
@@ -319,10 +321,12 @@ export function helperToolTraits(name: string, args: Record<string, unknown> = {
     readOnly:
       helperResourceOperation(name, args)?.readOnly ||
       readNames.has(name) ||
+      presentationReadOnly(name) ||
       ((name === 'chat.lore' || name === 'library.organize') && args.action === 'read'),
     reviewAllowed: data || name === 'app.tools' || name === 'outline.read' || writingRead,
     direct:
       name === 'data.exec' ||
+      HELPER_PRESENTATION_TOOLS.some((tool) => tool.name === name) ||
       data ||
       HELPER_SETTINGS_TOOLS.some((tool) => tool.name === name) ||
       name.startsWith('task.'),

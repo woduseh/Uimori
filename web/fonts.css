@@ -1,0 +1,66 @@
+.font-settings {
+  display: grid;
+  gap: 12px;
+}
+.font-settings h3,
+.font-settings p {
+  margin: 0;
+}
+.font-settings label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.font-settings-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.font-upload {
+  display: grid;
+  gap: 12px;
+  padding-block: 16px;
+  border-block: var(--hairline) solid var(--line);
+}
+.font-settings input,
+.font-settings select {
+  width: 100%;
+  min-width: 0;
+}
+.font-preview {
+  padding: 12px;
+  background: var(--surface);
+  border-radius: var(--radius-control);
+  font-size: 18px;
+  line-height: 1.9;
+  overflow-wrap: anywhere;
+}
+.font-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.font-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding-block: 12px;
+}
+.font-list li + li {
+  border-top: var(--hairline) solid var(--line);
+}
+.font-list li > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.font-list small {
+  color: var(--muted);
+}
+@media (max-width: 600px) {
+  .font-settings-choices {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

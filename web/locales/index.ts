@@ -14,6 +14,8 @@ import { messages as chatsettings } from './chatsettings.js';
 import { messages as visualpanels } from './visualpanels.js';
 import { messages as shared } from './shared.js';
 import { messages as main } from './main.js';
+import { messages as fonts } from './fonts.js';
+import { messages as palettes } from './palettes.js';
 export const messages: Record<string, { ko: string; en: string; ja: string; zh: string }> = {
   ...common,
   ...errors,
@@ -31,4 +33,6 @@ export const messages: Record<string, { ko: string; en: string; ja: string; zh: 
   ...visualpanels,
   ...shared,
   ...main,
+  ...fonts,
+  ...palettes,
 };

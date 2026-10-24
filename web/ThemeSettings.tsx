@@ -3,6 +3,8 @@ import { TransientNotice } from './TransientNotice.js';
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
+import { PaletteSettings } from './PaletteSettings.js';
+import { FontSettings } from './FontSettings.js';
 import { ThemeBackgroundSettings } from './ThemeBackgroundSettings.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
@@ -59,6 +61,13 @@ const labels: Partial<Record<ThemeColorKey, string>> = {
   line: '구분선',
   user: '요청 배경',
 };
+function paletteTitle(palette?: { title: string; revision?: number }) {
+  return palette
+    ? palette.revision === undefined
+      ? translateMessage(palette.title)
+      : palette.title
+    : '';
+}
 const sample =
   '<div class="risu-chat-text"><p data-uimori-prose>책장을 넘기자 오래된 종이 냄새가 은은하게 퍼졌다.</p><p data-uimori-prose>“오늘은 어떤 이야기를 함께 읽을까요?”</p></div><details><summary>봇이 만든 상태창</summary><label>메모 <input aria-label="테마 예문 메모" placeholder="테마를 바꿔도 유지돼요" /></label></details>';
 export function ThemeSettings({
@@ -92,7 +101,17 @@ export function ThemeSettings({
   }, [deleting]);
   const input = useRef<HTMLInputElement>(null);
   const locked = useRef(false);
+  const [paletteDirty, setPaletteDirty] = useState(false);
+  const paletteSave = useRef<(() => Promise<boolean>) | null>(null);
+  const registerPaletteSave = useCallback((handler: (() => Promise<boolean>) | null) => {
+    paletteSave.current = handler;
+  }, []);
   const [backgroundDirty, setBackgroundDirty] = useState(false);
+  const [fontDirty, setFontDirty] = useState(false);
+  const fontSave = useRef<(() => Promise<boolean>) | null>(null);
+  const registerFontSave = useCallback((handler: (() => Promise<boolean>) | null) => {
+    fontSave.current = handler;
+  }, []);
   const backgroundSave = useRef<(() => Promise<boolean>) | null>(null);
   const registerBackgroundSave = useCallback((handler: (() => Promise<boolean>) | null) => {
     backgroundSave.current = handler;
@@ -100,8 +119,8 @@ export function ThemeSettings({
   const dirty = !!draft && JSON.stringify(draft.model) !== baseline;
   const { setPreview } = state;
   useEffect(() => {
-    onDirtyChange?.(dirty || backgroundDirty);
-  }, [dirty, backgroundDirty, onDirtyChange]);
+    onDirtyChange?.(dirty || backgroundDirty || paletteDirty || fontDirty);
+  }, [dirty, backgroundDirty, paletteDirty, fontDirty, onDirtyChange]);
   useEffect(
     () => () => {
       setPreview(null);
@@ -133,14 +152,14 @@ export function ThemeSettings({
     scope === 'global' ? {} : scope === 'bot' ? { botId: state.scope.botId } : state.scope;
   const activePaletteId = resolvePaletteId(state.catalog, state.scope);
   const activePaletteTitle =
-    translateMessage(
-      BUILTIN_PALETTES.find((palette) => palette.id === activePaletteId)?.title ?? ''
+    paletteTitle(
+      (state.catalog.palettes ?? BUILTIN_PALETTES).find((palette) => palette.id === activePaletteId)
     ) || t('visualpanels.originalLayoutColors');
   const resolvedLayout = resolveTheme(state.catalog, editingScope);
   const editedPaletteId = resolvePaletteId(state.catalog, editingScope);
   const editedPaletteTitle =
-    translateMessage(
-      BUILTIN_PALETTES.find((palette) => palette.id === editedPaletteId)?.title ?? ''
+    paletteTitle(
+      (state.catalog.palettes ?? BUILTIN_PALETTES).find((palette) => palette.id === editedPaletteId)
     ) || t('visualpanels.originalLayoutColors');
   const activeLayout =
     state.catalog.themes.find((theme) => theme.id === resolvedLayout.id) ??
@@ -173,7 +192,7 @@ export function ThemeSettings({
       description: '',
       colors: originalColors ?? { light: {}, dark: {} },
     },
-    ...BUILTIN_PALETTES,
+    ...(state.catalog.palettes ?? BUILTIN_PALETTES),
   ];
   async function action(work: () => Promise<void>, saveAttempt = false) {
     if (locked.current) return;
@@ -218,6 +237,8 @@ export function ThemeSettings({
     setDraft((d) => (d ? { ...d, model: { ...d.model, ...next } } : d));
   }
   async function save(): Promise<boolean> {
+    if (fontDirty && !(await fontSave.current?.())) return false;
+    if (paletteDirty && !(await paletteSave.current?.())) return false;
     if (backgroundDirty && !(await backgroundSave.current?.())) return false;
     if (!draft || locked.current) return !draft;
     let saved = false;
@@ -332,7 +353,7 @@ export function ThemeSettings({
           <select
             aria-label={t('visualpanels.defaultAppearance')}
             value={p.defaultThemeId}
-            disabled={busy || backgroundDirty || state.loading}
+            disabled={busy || backgroundDirty || paletteDirty || state.loading}
             onChange={(event) => choose(event.target.value, 'global')}
           >
             {globalLayouts.map((theme) => (
@@ -381,7 +402,7 @@ export function ThemeSettings({
             <select
               aria-label={t('visualpanels.themeScope')}
               value={scope}
-              disabled={busy || backgroundDirty}
+              disabled={busy || backgroundDirty || paletteDirty}
               onChange={(e) => setScope(e.target.value as typeof scope)}
             >
               <option value="global">{t('visualpanels.workspaceDefault')}</option>
@@ -420,7 +441,7 @@ export function ThemeSettings({
             </div>
             {scope !== 'global' && (
               <button
-                disabled={busy || backgroundDirty || state.loading || !selectedId}
+                disabled={busy || backgroundDirty || paletteDirty || state.loading || !selectedId}
                 onClick={() => choose(null)}
               >
                 {t('visualpanels.inheritLayout')}
@@ -441,7 +462,7 @@ export function ThemeSettings({
                       : theme.title,
                   })}
                   aria-pressed={selectedId === theme.id}
-                  disabled={busy || backgroundDirty || state.loading}
+                  disabled={busy || backgroundDirty || paletteDirty || state.loading}
                   onClick={() => choose(theme.id)}
                 >
                   <span
@@ -498,7 +519,7 @@ export function ThemeSettings({
                         ? t('visualpanels.duplicateAndCustomize')
                         : t('visualpanels.edit')
                     }
-                    disabled={busy || backgroundDirty}
+                    disabled={busy || backgroundDirty || paletteDirty}
                     onClick={() => edit(theme)}
                   >
                     {theme.id.startsWith('builtin:')
@@ -536,7 +557,7 @@ export function ThemeSettings({
                           ? translateMessage(theme.title)
                           : theme.title,
                       })}
-                      disabled={busy || backgroundDirty}
+                      disabled={busy || backgroundDirty || paletteDirty}
                       onClick={() => edit(theme, true)}
                     >
                       <CopyIcon size={18} aria-hidden="true" /> {t(
@@ -582,6 +603,7 @@ export function ThemeSettings({
               disabled={
                 busy ||
                 backgroundDirty ||
+                paletteDirty ||
                 state.loading ||
                 (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
               }
@@ -600,11 +622,11 @@ export function ThemeSettings({
                   key={palette.id}
                   className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
                   aria-label={t('visualpanels.applyPalette', {
-                    v0: translateMessage(palette.title),
+                    v0: paletteTitle(palette),
                   })}
                   aria-describedby={palette.description ? `${id}-palette-${palette.id}` : undefined}
                   aria-pressed={selectedPaletteId === palette.id}
-                  disabled={busy || backgroundDirty || state.loading}
+                  disabled={busy || backgroundDirty || paletteDirty || state.loading}
                   onClick={() => choosePalette(palette.id)}
                 >
                   <span className="theme-palette-swatches" aria-hidden="true">
@@ -613,12 +635,14 @@ export function ThemeSettings({
                     ))}
                   </span>
                   <strong className="theme-choice-title">
-                    <span>{translateMessage(palette.title)}</span>
+                    <span>{paletteTitle(palette)}</span>
                     {selectedPaletteId === palette.id && <Check size={18} aria-hidden="true" />}
                   </strong>
                   {palette.description && (
                     <span id={`${id}-palette-${palette.id}`} className="sr-only">
-                      {translateMessage(palette.description)}
+                      {'revision' in palette
+                        ? palette.description
+                        : translateMessage(palette.description)}
                     </span>
                   )}
                 </button>
@@ -626,10 +650,17 @@ export function ThemeSettings({
             })}
           </div>
         </section>
+        <PaletteSettings
+          active={active}
+          disabled={busy || backgroundDirty || dirty}
+          onDirtyChange={setPaletteDirty}
+          onSaveHandlerChange={registerPaletteSave}
+        />
+        <FontSettings onDirtyChange={setFontDirty} onSaveHandlerChange={registerFontSave} />
         <ThemeBackgroundSettings
           key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
           scope={scope}
-          disabled={busy}
+          disabled={busy || paletteDirty}
           targetId={
             scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
           }
@@ -638,12 +669,16 @@ export function ThemeSettings({
         />
         <section className="theme-library-tools" aria-label={t('visualpanels.manageThemes')}>
           <div className="theme-library-actions">
-            <button className="primary" disabled={busy || backgroundDirty} onClick={() => edit()}>
+            <button
+              className="primary"
+              disabled={busy || backgroundDirty || paletteDirty}
+              onClick={() => edit()}
+            >
               <AddIcon size={16} aria-hidden="true" /> {t('visualpanels.newCustomTheme')}{' '}
             </button>
             <button
               className="secondary"
-              disabled={busy || backgroundDirty}
+              disabled={busy || backgroundDirty || paletteDirty}
               onClick={() => input.current?.click()}
             >
               <UploadIcon size={16} aria-hidden="true" /> {t('visualpanels.importTheme')}{' '}
@@ -670,7 +705,7 @@ export function ThemeSettings({
                 {dirty ? t('visualpanels.unsavedChanges') : t('visualpanels.saved')}
               </span>
             </div>
-            <fieldset disabled={busy || backgroundDirty}>
+            <fieldset disabled={busy || backgroundDirty || paletteDirty}>
               <label>
                 {t('visualpanels.themeName')}{' '}
                 <input
@@ -784,7 +819,7 @@ export function ThemeSettings({
                 onClick={() => void save()}
               />
               <button
-                disabled={busy || backgroundDirty}
+                disabled={busy || backgroundDirty || paletteDirty}
                 onClick={() => {
                   try {
                     const t = validateTheme(draft.model);
@@ -809,7 +844,7 @@ export function ThemeSettings({
               <IconButton
                 label={t('visualpanels.cancelEditing')}
                 icon={CloseIcon}
-                disabled={busy || backgroundDirty}
+                disabled={busy || backgroundDirty || paletteDirty}
                 onClick={() => {
                   setDraft(null);
                   setPreview(null);
@@ -871,7 +906,7 @@ export function ThemeSettings({
           <button
             type="button"
             className="delete-button"
-            disabled={busy || backgroundDirty}
+            disabled={busy || backgroundDirty || paletteDirty}
             onClick={() => {
               if (!deleting) return;
               void action(async () => {

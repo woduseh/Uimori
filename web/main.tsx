@@ -8,6 +8,7 @@ import type { NotificationIntent } from '../core/push.js';
 import { startPwa, subscribeNotificationNavigation } from './pwa.js';
 import type { ReaderTarget } from '../core/reader-target.js';
 import { ThemeProvider, useThemes } from './ThemeContext.js';
+import { FontProvider, useFonts } from './FontContext.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
@@ -445,7 +446,8 @@ function App() {
   const [responseDisplay, setResponseDisplay] = useState<ResponseDisplayMode>(() =>
     readPresentationChoice('uimori:response-display', ['stream', 'complete'] as const, 'stream')
   );
-  const reading = useReadingPreferences(font, fontSize, readingWidth);
+  const fonts = useFonts();
+  const reading = useReadingPreferences(font, fontSize, readingWidth, fonts);
 
   const [libraryDirty, setLibraryDirty] = useState(false);
   const [importBot, setImportBot] = useState<Content | null>(null);
@@ -2575,9 +2577,11 @@ createRoot(document.getElementById('root')!).render(
   <SessionGate>
     <MaintenanceBanner />
     <ThemeProvider>
-      <TransientNoticeProvider>
-        <App />
-      </TransientNoticeProvider>
+      <FontProvider>
+        <TransientNoticeProvider>
+          <App />
+        </TransientNoticeProvider>
+      </FontProvider>
     </ThemeProvider>
   </SessionGate>
 );

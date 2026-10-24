@@ -43,6 +43,55 @@ async function readOptions(request: APIRequestContext, chat: Chat) {
   return (await response.json()) as ChatOptionState;
 }
 
+for (const width of [412, 627, 1440]) {
+  test(`OPTIONALIGN values and scope actions share a vertical center at ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    const before = (await (await request.get('/api/prompt-workspace')).json()) as PromptWorkspace;
+    const response = await request.put('/api/prompt-workspace', {
+      data: {
+        expectedRevision: before.revision,
+        main: {
+          title: '창작 옵션 정렬',
+          program: nativePrompt('', {
+            customPromptTemplateToggle: 'tone=문체=text\nactive=활성 옵션',
+          }),
+          values: { tone: '차분한 문체', active: '0' },
+        },
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    const created = await postFixtureChat(request, { data: { title: '창작 옵션 정렬' } });
+    expect(created.ok(), await created.text()).toBe(true);
+    const panel = await openOptions(page, (await created.json()) as Chat, width);
+    await panel.locator('.chat-option-group > summary').first().click();
+    const tone = panel.locator('.chat-option-choice').filter({ hasText: '문체' }).first();
+    const active = panel.locator('.chat-option-choice').filter({ hasText: '활성 옵션' });
+    const center = async (row: typeof tone, selector: string) =>
+      row.locator(selector).evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        return box.y + box.height / 2;
+      });
+    expect(
+      Math.abs((await center(tone, '.chat-option-current')) - (await center(tone, 'button')))
+    ).toBeLessThanOrEqual(1);
+    await active.getByRole('button').click();
+    const toggle = active.getByRole('switch', { name: '활성 옵션', exact: true });
+    await toggle.check();
+    expect(
+      Math.abs((await center(active, '[role="switch"]')) - (await center(active, 'button')))
+    ).toBeLessThanOrEqual(1);
+    const right = async (row: typeof tone) =>
+      row.getByRole('button').evaluate((node) => node.getBoundingClientRect().right);
+    expect(Math.abs((await right(tone)) - (await right(active)))).toBeLessThanOrEqual(1);
+    await expect(toggle).toBeChecked();
+    await page.screenshot({ path: info.outputPath(`chat-option-alignment-${width}.png`) });
+    await active.getByRole('button').click();
+    await expect(active.locator('.chat-option-current')).toHaveText('끔');
+  });
+}
+
 async function externalFixed(request: APIRequestContext, chat: Chat, note: string) {
   const current = await readOptions(request, chat);
   const response = await request.post(`/api/chats/${chat.id}/options/fixed`, {
