@@ -24,7 +24,7 @@ import {
 } from './provider-messages.js';
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
-import { webCitationLinks } from './helper-web-search.js';
+import { webCitationLinks, webSearchAllowed, webSearchSources } from './helper-web-search.js';
 
 export class AnthropicProtocolError extends Error {
   constructor(
@@ -127,7 +127,7 @@ export function encodeAnthropic(request: ProviderRequest): {
   messageMetadata?: NativeMessageMetadata;
 } {
   const continuationInput = continuationInputText(request);
-  if (request.webSearch !== undefined && (request.webSearch !== true || request.role !== 'helper'))
+  if (request.webSearch !== undefined && (request.webSearch !== true || !webSearchAllowed(request)))
     reject('INVALID_WEB_SEARCH');
   if (
     !nonempty(request.modelId) ||
@@ -909,6 +909,17 @@ export class AnthropicDecoder {
           { role: 'assistant', content: this.blocks.map((block) => block.content) },
         ]
       : this.context.messages;
+    const searchBlocks = messages.flatMap((message) =>
+      object(message) && message.role === 'assistant' && Array.isArray(message.content)
+        ? message.content.filter(object)
+        : []
+    );
+    const searchResults = searchBlocks.filter(
+      (block) => block.type === 'web_search_tool_result' && Array.isArray(block.content)
+    );
+    const citations = searchBlocks.flatMap((block) =>
+      Array.isArray(block.citations) ? block.citations : []
+    );
     if (
       this.searchError &&
       this.stopped &&
@@ -920,6 +931,25 @@ export class AnthropicDecoder {
     }
     const { stateHash: _stateHash, ...base } = this.context;
     return structuredClone({
+      ...(this.context.webSearch
+        ? {
+            webSearch: {
+              performed: searchResults.length > 0,
+              sources: webSearchSources([
+                ...citations,
+                ...searchResults.flatMap((block) => block.content as Json[]),
+              ]),
+              queries: searchBlocks.flatMap((block) =>
+                block.type === 'server_tool_use' &&
+                block.name === 'web_search' &&
+                object(block.input) &&
+                typeof block.input.query === 'string'
+                  ? [block.input.query]
+                  : []
+              ),
+            },
+          }
+        : {}),
       ...(searchPaused ? { continuation: 'web-search-pause' } : {}),
       status,
       text,

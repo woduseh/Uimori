@@ -839,6 +839,11 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
           parentRevision: null,
           configRevision: 0,
           modelTitle: '이전 집필 모델',
+          webSearch: {
+            performed: true,
+            sources: [{ url: 'https://example.com/canon', title: '원작 공식 자료' }],
+            searchEntryPoint: '<a href="https://example.com/search">검색 제안</a>',
+          },
         },
       },
     });
@@ -851,6 +856,9 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   await expect(dialog.getByRole('switch', { name: '집필 전에 원작 참고' })).not.toBeChecked();
   await expect(dialog.locator('.story-guide-settings')).toHaveAttribute('open', '');
   await dialog.getByRole('switch', { name: '집필 전에 원작 참고' }).check();
+  const search = dialog.getByRole('checkbox', { name: '원작 정보를 웹에서 확인' });
+  await expect(search).not.toBeChecked();
+  await search.check();
   await dialog.getByLabel('작품, 판본, 세계관', { exact: true }).fill('가상의 항구 이야기');
   await dialog.getByLabel('기준 시점과 스포일러 범위', { exact: true }).fill('2권 끝까지');
   await selectChatSettingsSection(page, '이미지');
@@ -858,6 +866,13 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   await expect(dialog.getByLabel('작품, 판본, 세계관', { exact: true })).toHaveValue(
     '가상의 항구 이야기'
   );
+  await expect(search).toBeChecked();
+  await expectNoOverflow(page, dialog);
+  await page.screenshot({ path: info.outputPath('story-guide-search-mobile.png') });
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await expectNoOverflow(page, dialog);
+  await page.screenshot({ path: info.outputPath('story-guide-search-desktop.png') });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
   const discard = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
   await expect(discard).toBeVisible();
@@ -869,6 +884,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     work: '가상의 항구 이야기',
     position: '2권 끝까지',
     followCanon: false,
+    webSearch: true,
   });
 
   await (await openChatMenu(page)).getByRole('button', { name: '원작 참고', exact: true }).click();
@@ -881,6 +897,14 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     lastBrief
   );
   await expect(dialog.getByText(/이전 설정으로 만든 참고문/)).toBeVisible();
+  await expect(dialog.getByRole('link', { name: '원작 공식 자료' })).toHaveAttribute(
+    'href',
+    'https://example.com/canon'
+  );
+  await expect(dialog.getByTitle('Google 검색 제안')).toHaveAttribute(
+    'sandbox',
+    'allow-popups allow-popups-to-escape-sandbox'
+  );
   const notes = dialog.getByTestId('context-notes');
   await notes.locator(':scope > summary').click();
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();

@@ -32,8 +32,8 @@ export const HELPER_PRESENTATION_TOOLS: ProviderTool[] = [
   ),
   tool(
     'font.register',
-    'Download and register a font from a public HTTPS font-file URL. Verify source/license and supply license when available. Registration does not apply it. A preview alone is not a creation request.',
-    { title: string, url: string, license: string },
+    'Download and register a web-embeddable font from a public HTTPS font-file URL. The URL is used for download only, not saved as font metadata. Registration does not apply it. A preview alone is not a creation request.',
+    { title: string, url: string },
     ['title', 'url']
   ),
   tool(
@@ -89,9 +89,8 @@ export async function preparePresentationTool(
 ): Promise<Uint8Array | undefined> {
   if (name !== 'font.register') return undefined;
   const args = record(value);
-  fields(args, ['title', 'url', 'license']);
+  fields(args, ['title', 'url']);
   text(args.title, 'font title', 200);
-  if (args.license !== undefined) text(args.license, 'license', 2000, true);
   return downloadFont(
     text(args.url, 'font URL', 4000),
     AbortSignal.any([signal, AbortSignal.timeout(15_000)])
@@ -113,13 +112,12 @@ export function invokePresentationTool(
     return { palettes: paletteCatalog(store), preferences: themePreferences(store) };
   }
   if (name === 'font.register') {
-    fields(args, ['title', 'url', 'license']);
+    fields(args, ['title', 'url']);
     if (!bytes) throw new HttpError(400, 'FONT_DOWNLOAD_REQUIRED');
+    text(args.url, 'font URL', 4000);
     return registerFont(store, {
       title: text(args.title, 'font title', 200),
       bytes,
-      sourceUrl: text(args.url, 'font URL', 4000),
-      ...(args.license === undefined ? {} : { license: text(args.license, 'license', 2000, true) }),
     });
   }
   if (name === 'font.select') {

@@ -1,4 +1,10 @@
 export const messages = {
+  'errors.SCENE_DELETED_RETRY_UNAVAILABLE': {
+    ko: '삭제된 장면을 포함한 작업은 다시 실행할 수 없어요. 현재 이야기에서 새 요청을 보내 주세요.',
+    en: 'A task containing deleted scenes cannot be retried. Start a new request from the current story.',
+    ja: '削除したシーンを含む作業は再実行できません。現在の物語から新しいリクエストを送信してください。',
+    zh: '包含已删除场景的任务无法重试。请基于当前故事发起新请求。',
+  },
   'errors.STORY_GUIDE_STALE': {
     ko: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
     en: 'Reference settings or the story changed. Write again using the latest information.',

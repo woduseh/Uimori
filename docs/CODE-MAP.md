@@ -44,5 +44,6 @@ Standalone palettes and uploaded fonts: `core/theme-palettes.ts`, `core/fonts.ts
 Operational failures remain in task status, provider error details and execution inputs; there is no separate anonymous diagnostic-report generator. See [Troubleshooting](DIAGNOSTICS.md).
 
 Saved-text lifetime is implemented in `server/text-retention.ts`; pending image reclamation uses `server/unused-data.ts`. Import retry receipts are shared in `server/import-operations.ts`. See [DATA-MIGRATIONS](DATA-MIGRATIONS.md) for the current storage contract, not historical execution-replay assumptions.
+Scene deletion and manual orphan-memory review: `server/scene-deletion.ts`, `server/orphan-memory.ts`, `web/SceneDeleteAction.tsx`, `web/OrphanMemoryPanel.tsx`. See [deletion](DELETION.md).
 
 Provider editing keeps independent in-memory drafts in `web/provider-editor-state.ts`; `web/ProviderManagement.tsx` coordinates lists and navigation, while `web/ProviderConnectionForm.tsx` and `web/ProviderModelForm.tsx` own the mounted forms.

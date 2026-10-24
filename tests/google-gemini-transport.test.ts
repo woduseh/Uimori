@@ -74,6 +74,77 @@ async function localProvider(handler: Parameters<typeof loopbackProvider>[0]) {
 }
 const options = () => ({ signal: new AbortController().signal, resolveCredential: () => key });
 
+test.each(['google-gemini-v1', 'vertex-gemini-v1'] as const)(
+  '%s publishes grounded guide prose once with source evidence through the native transport',
+  async (protocol) => {
+    const input = request();
+    input.webSearch = true;
+    input.input.controls.purpose = 'story-guide';
+    input.stable.tools = [];
+    const selected: ProviderConnection =
+      protocol === 'google-gemini-v1'
+        ? connection
+        : {
+            ...connection,
+            protocol,
+            endpoint:
+              'https://aiplatform.googleapis.com/v1/projects/synthetic-project/locations/global/publishers/google/models',
+          };
+    const local = await loopbackProvider(async (_captured, response) =>
+      writeSse(response, [
+        { candidates: [{ content: { parts: [{ text: '그는 등대를 지켰다.' }] } }] },
+        {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              groundingMetadata: {
+                webSearchQueries: ['등대 원작'],
+                groundingChunks: [{ web: { uri: 'https://source.example/canon', title: '원작' } }],
+                groundingSupports: [
+                  { segment: { text: '그는 등대를 지켰다.' }, groundingChunkIndices: [0] },
+                ],
+              },
+            },
+          ],
+          usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 4, totalTokenCount: 24 },
+        },
+      ])
+    );
+    callbacks.push(local.close);
+    const nativeFetch = globalThis.fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(url)).toMatch(
+          /^https:\/\/(generativelanguage|aiplatform)\.googleapis\.com\//u
+        );
+        return nativeFetch(local.endpoint, init);
+      })
+    );
+    const progress: { text: string; offset: number }[] = [];
+    const output = await executeProvider(selected, input, {
+      ...options(),
+      onProgress: (delta) => {
+        progress.push(delta);
+      },
+    });
+    expect(output).toMatchObject({
+      status: 'completed',
+      text: '그는 등대를 지켰다. [원작](<https://source.example/canon>)',
+      webSearch: {
+        performed: true,
+        sources: [{ url: 'https://source.example/canon', title: '원작' }],
+      },
+      usage: { inputTokens: 20, outputTokens: 4 },
+    });
+    expect(progress).toEqual([{ text: output.text, offset: output.text.length }]);
+    expect(local.requests).toHaveLength(1);
+    const body = JSON.parse(local.requests[0].body);
+    expect(body.tools).toEqual([{ googleSearch: {} }]);
+    expect(body).not.toHaveProperty('toolConfig');
+  }
+);
+
 test.each(['standard', 'flex', 'priority'])(
   'Studio %s uses API-key auth and its native body tier, ignoring Cloud overrides',
   async (serviceTier) => {

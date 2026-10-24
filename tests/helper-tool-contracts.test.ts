@@ -1392,7 +1392,6 @@ test('helper registers a downloaded font before explicit selection and records b
           arguments: {
             title: 'Licensed test font',
             url: 'https://example.org/font.woff2',
-            license: 'Synthetic fixture only',
           },
         })
       );
@@ -1411,9 +1410,10 @@ test('helper registers a downloaded font before explicit selection and records b
   });
   const task = await submit(f, 'Register this licensed font and use it for reading');
   expect(download).toHaveBeenCalledWith('https://example.org/font.woff2', expect.any(AbortSignal));
-  expect(fonts.fontCatalog(f.store).fonts).toContainEqual(
-    expect.objectContaining({ id: fontId, license: 'Synthetic fixture only' })
-  );
+  const font = fonts.fontCatalog(f.store).fonts.find((font) => font.id === fontId);
+  expect(font).toMatchObject({ id: fontId, title: 'Licensed test font' });
+  expect(font).not.toHaveProperty('license');
+  expect(font).not.toHaveProperty('sourceUrl');
   expect(
     Number(
       f.store.db

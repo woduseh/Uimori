@@ -5,7 +5,12 @@ import {
   encodeAnthropic,
   decodeAnthropicMessage,
 } from '../core/anthropic-protocol.js';
-import { helperWebSearchCapability, webCitationLinks } from '../core/helper-web-search.js';
+import {
+  boundedWebSearch,
+  helperWebSearchCapability,
+  storyGuideWebSearchCapability,
+  webCitationLinks,
+} from '../core/helper-web-search.js';
 import { buildCodexDescriptor, prepareCodexNative } from '../core/codex-protocol.js';
 import { createPublicTextProgress } from '../core/provider-progress.js';
 import { executeProvider, type Json, type ProviderRequest } from '../core/transport.js';
@@ -30,18 +35,40 @@ const citation = {
   end_index: 6,
 };
 
-test('hosted search is explicit, helper-only, and unsupported adapters fail before execution', async () => {
+test('saved search provenance deduplicates repeated continuation sources and rejects oversized attribution', () => {
+  const sources = Array.from({ length: 32 }, (_, index) => ({
+    url: `https://example.com/source/${index}`,
+    title: `Source ${index}`,
+  }));
+  expect(boundedWebSearch({ performed: true, sources: [...sources, ...sources] }).sources).toEqual(
+    sources
+  );
+  expect(() =>
+    boundedWebSearch({ performed: true, sources, searchEntryPoint: 'x'.repeat(65_537) })
+  ).toThrow('STORY_GUIDE_WEB_SEARCH_METADATA_TOO_LARGE');
+});
+
+test('hosted search is explicit, limited to helper and story guide, and unsupported adapters fail before execution', async () => {
   for (const encode of [encodeResponses, encodeAnthropic]) {
     const input = request();
     delete input.webSearch;
     expect(record(encode(input).body).tools).toHaveLength(1);
     expect(record(encode(request()).body).tools).toHaveLength(2);
     expect(() => encode({ ...request(), role: 'main' })).toThrow('INVALID_WEB_SEARCH');
+    const guide = {
+      ...request(),
+      role: 'main' as const,
+      input: { ...request().input, controls: { purpose: 'story-guide' } },
+    };
+    expect(record(encode(guide).body).tools).toHaveLength(2);
+    expect(validateRequest(guide).webSearch).toBe(true);
   }
   expect(() => validateRequest({ ...request(), role: 'translation' })).toThrow(
     'INVALID_WEB_SEARCH'
   );
   expect(helperWebSearchCapability('google-gemini-v1').supported).toBe(false);
+  expect(storyGuideWebSearchCapability('google-gemini-v1').supported).toBe(true);
+  expect(storyGuideWebSearchCapability('vertex-gemini-v1').supported).toBe(true);
   await expect(
     executeProvider(
       { id: 'x', protocol: 'openai-chat-v1', endpoint: 'https://api.openai.com/v1' },
@@ -115,6 +142,11 @@ test('Responses hosted search streams append-only prose and visible links, retai
     })
   );
   const result = decoder.finish();
+  expect(result.webSearch).toEqual({
+    performed: true,
+    sources: [{ url: citation.url, title: citation.title }],
+    queries: ['current information'],
+  });
   progress.finish(result.text);
   expect(chunks.join('')).toBe('Answer\n\n[Official source](<https://example.com/source>)');
   expect(result.toolCalls).toEqual([{ id: 'host-1', name: 'app.read', arguments: {} }]);
@@ -211,6 +243,10 @@ test('Anthropic hosted blocks and citation deltas stay distinct from host tool c
   const result = decoder.finish();
   progress.finish(result.text);
   expect(chunks.join('')).toBe('Answer\n\n[Official source](<https://example.com/source>)');
+  expect(result.webSearch).toMatchObject({
+    performed: true,
+    sources: [{ url: citation.url, title: citation.title }],
+  });
   expect(result.toolCalls).toEqual([{ id: 'host-1', name: 'app.read', arguments: {} }]);
   const next = encodeAnthropic({
     ...input,

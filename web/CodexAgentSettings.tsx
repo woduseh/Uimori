@@ -280,7 +280,7 @@ export function CodexAgentSettings({
                         : status.credits.balance !== null
                           ? t('providers.m590', {
                               value0: formatNumber(status.credits.balance, {
-                                maximumFractionDigits: 8,
+                                maximumFractionDigits: 0,
                               }),
                             })
                           : status.credits.hasCredits

@@ -118,6 +118,7 @@ function observed(overrides: Partial<StoryGuideHooks> = {}) {
   const results: ProviderResult[] = [];
   const hooks: StoryGuideHooks = {
     signal: new AbortController().signal,
+    resolveCredential: () => 'synthetic-guide-credential',
     authorize: (connection) => connection,
     onAttemptStart: (wire) => {
       wires.push(structuredClone(wire));
@@ -136,6 +137,172 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+async function searchedSnapshot(
+  protocol: 'openai-responses-v1' | 'anthropic-messages-v1' = 'openai-responses-v1'
+) {
+  const source = await snapshot();
+  source.storyGuide!.config.webSearch = true;
+  source.profile!.models.main!.connection.protocol = protocol;
+  source.profile!.models.main!.connection.credentialRef = 'SYNTHETIC_GUIDE_KEY';
+  source.profile!.models.main!.connection.endpoint =
+    protocol === 'openai-responses-v1'
+      ? 'https://api.openai.com/v1'
+      : 'https://api.anthropic.com/v1';
+  return source;
+}
+const responsesGuide = (searched = true, cited = true) =>
+  sse({
+    type: 'response.completed',
+    response: {
+      id: 'guide-response',
+      status: 'completed',
+      usage: { input_tokens: 12, output_tokens: 9 },
+      output: [
+        ...(searched
+          ? [
+              {
+                type: 'web_search_call',
+                id: 'search-1',
+                status: 'completed',
+                action: { type: 'search', query: 'public work edition' },
+              },
+            ]
+          : []),
+        {
+          type: 'message',
+          id: 'message-1',
+          status: 'completed',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: '장면에 필요한 설정. [모델이 쓴 링크](https://invented.example/)',
+              annotations: cited
+                ? [
+                    {
+                      type: 'url_citation',
+                      url: 'https://example.com/official',
+                      title: 'Official edition',
+                    },
+                  ]
+                : [],
+            },
+          ],
+        },
+      ],
+    },
+  });
+const anthropicGuide = (pause: boolean) => {
+  const content = pause
+    ? [
+        {
+          type: 'server_tool_use',
+          id: 'search-1',
+          name: 'web_search',
+          input: { query: 'public work edition' },
+        },
+        {
+          type: 'web_search_tool_result',
+          tool_use_id: 'search-1',
+          content: [
+            {
+              type: 'web_search_result',
+              url: 'https://example.com/official',
+              title: 'Official edition',
+              encrypted_content: 'exact-provider-source',
+            },
+          ],
+        },
+      ]
+    : [{ type: 'text', text: '확인한 설정으로 장면을 제안해요.' }];
+  return sse(
+    {
+      type: 'message_start',
+      message: {
+        type: 'message',
+        id: 'guide-message',
+        role: 'assistant',
+        content: [],
+        stop_reason: null,
+      },
+    },
+    ...content.flatMap((content_block, index) => [
+      { type: 'content_block_start', index, content_block },
+      { type: 'content_block_stop', index },
+    ]),
+    { type: 'message_delta', delta: { stop_reason: pause ? 'pause_turn' : 'end_turn' } },
+    { type: 'message_stop' }
+  );
+};
+
+test('searched guides persist native provenance and always search again instead of reusing a cached brief', async () => {
+  vi.mocked(fetch).mockImplementation(async () => responsesGuide());
+  const source = await searchedSnapshot();
+  const log = observed();
+  const first = await prepareStoryGuide(source, log.hooks, { reserveCalls: 1 });
+  expect(first.error).toBeNull();
+  expect(first.brief?.webSearch).toEqual({
+    performed: true,
+    sources: [{ url: 'https://example.com/official', title: 'Official edition' }],
+    queries: ['public work edition'],
+  });
+  const second = await prepareStoryGuide(source, log.hooks, {
+    reserveCalls: 1,
+    cachedBrief: first.brief,
+  });
+  expect(second.cached).toBe(false);
+  expect(second.usage.modelCalls).toBe(1);
+  expect(log.wires).toHaveLength(2);
+  expect(JSON.stringify(log.wires[0].body)).toContain('never quote private manuscript');
+});
+
+test('searched guides reject unsupported connections, fabricated links and searches without returned sources', async () => {
+  const unsupported = await snapshot();
+  unsupported.storyGuide!.config.webSearch = true;
+  expect(await prepareStoryGuide(unsupported, observed().hooks)).toMatchObject({
+    brief: null,
+    error: 'STORY_GUIDE_WEB_SEARCH_UNSUPPORTED',
+    usage: { modelCalls: 0 },
+  });
+  expect(fetch).not.toHaveBeenCalled();
+  const source = await searchedSnapshot();
+  for (const [searched, cited, error] of [
+    [false, false, 'STORY_GUIDE_WEB_SEARCH_NOT_PERFORMED'],
+    [true, false, 'STORY_GUIDE_WEB_SEARCH_NO_SOURCES'],
+  ] as const) {
+    vi.mocked(fetch).mockImplementation(async () => responsesGuide(searched, cited));
+    expect(await prepareStoryGuide(source, observed().hooks)).toMatchObject({ brief: null, error });
+  }
+});
+
+test('Anthropic guide search pauses preserve actual source receipts within the shared call reservation', async () => {
+  const source = await searchedSnapshot('anthropic-messages-v1');
+  vi.mocked(fetch)
+    .mockImplementationOnce(async () => anthropicGuide(true))
+    .mockImplementationOnce(async () => anthropicGuide(false));
+  const log = observed();
+  const result = await prepareStoryGuide(source, log.hooks, { reserveCalls: 1 });
+  expect(result).toMatchObject({
+    error: null,
+    usage: { modelCalls: 2 },
+    brief: {
+      webSearch: {
+        performed: true,
+        sources: [{ url: 'https://example.com/official', title: 'Official edition' }],
+      },
+    },
+  });
+  expect(JSON.stringify(log.wires[1].body)).toContain('exact-provider-source');
+  expect(JSON.stringify(log.wires[1].body)).not.toContain('"type":"tool_result"');
+  source.settings.maxCalls = 2;
+  vi.mocked(fetch).mockImplementation(async () => anthropicGuide(true));
+  expect(await prepareStoryGuide(source, observed().hooks, { reserveCalls: 1 })).toMatchObject({
+    brief: null,
+    error: 'STORY_GUIDE_CALL_BUDGET_EXHAUSTED',
+    usage: { modelCalls: 1 },
+  });
 });
 
 test('guide consumes prepared logical history and one summary, ignores prior advice, and caches only identical effective inputs', async () => {

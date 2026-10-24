@@ -116,7 +116,8 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
     .getByLabel('글꼴 파일', { exact: true })
     .setInputFiles('tests/fixtures/appearance-synthetic.ttf');
   await fonts.getByLabel('글꼴 이름', { exact: true }).fill(name);
-  await fonts.getByLabel('라이선스 (선택)', { exact: true }).fill('CC0 synthetic test glyph');
+  await expect(fonts.getByLabel('라이선스 (선택)', { exact: true })).toHaveCount(0);
+  await expect(fonts.getByLabel('출처 주소 (선택)', { exact: true })).toHaveCount(0);
   await fonts.getByRole('button', { name: '글꼴 등록', exact: true }).click();
   const app = fonts.getByRole('combobox', { name: '앱 글꼴', exact: true });
   const reader = fonts.getByRole('combobox', { name: '본문 글꼴', exact: true });
@@ -124,6 +125,10 @@ test('APPEARANCE uploaded font loads, applies independently, persists, recovers 
   const catalog = await (await request.get('/api/fonts')).json();
   const font = catalog.fonts.find((entry: { title: string }) => entry.title === name);
   expect(font).toBeTruthy();
+  expect(font).not.toHaveProperty('license');
+  expect(font).not.toHaveProperty('sourceUrl');
+  await expect(fonts.locator('.font-preview')).toContainText('달은 지금 긴 산허리에 걸려 있다.');
+  await expect(fonts.getByText('이효석, 「메밀꽃 필 무렵」', { exact: true })).toBeVisible();
   const originalReader = await cssVariable(page, '--reading-font-family');
   await app.selectOption(font.id);
   await expect.poll(() => cssVariable(page, '--app-font-family')).toContain('uimori-font-');

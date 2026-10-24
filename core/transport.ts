@@ -29,7 +29,12 @@ import type { PricingSnapshot } from './pricing-types.js';
 import { createPublicTextProgress, type ProviderProgress } from './provider-progress.js';
 import type { ProviderOptions } from './provider-options.js';
 import type { ProviderCacheBoundary } from './provider-cache-diagnostics.js';
-import { helperWebSearchCapability } from './helper-web-search.js';
+import {
+  helperWebSearchCapability,
+  storyGuideWebSearchCapability,
+  webSearchAllowed,
+  type ProviderWebSearch,
+} from './helper-web-search.js';
 export type { ProviderProgress } from './provider-progress.js';
 export { ProviderContractError } from './provider-errors.js';
 export {
@@ -61,7 +66,7 @@ export function transportConnection(connection: ProviderConnection): ProviderCon
 }
 export type ProviderTool = { name: string; description: string; inputSchema: Json };
 export type ProviderRequest = {
-  /** Explicit helper-only hosted search; never inferred for writing or evaluation. */
+  /** Explicit helper or story-guide search; never inferred for writing or evaluation. */
   webSearch?: true;
   /** Frozen host pricing metadata; never serialized into a provider payload. */
   pricingSnapshot?: PricingSnapshot;
@@ -120,6 +125,7 @@ export type ProviderToolArgumentDiagnostic = {
   parseOffset: number | null;
 };
 export type ProviderResult = {
+  webSearch?: ProviderWebSearch;
   /** A successful hosted-search pause, resumed within the caller's existing call/time budget. */
   continuation?: 'web-search-pause';
   status: 'completed' | 'tool_calls' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -233,10 +239,13 @@ export async function executeProvider(
   options: ProviderExecutionOptions
 ): Promise<ProviderResult> {
   if (requestValue.webSearch !== undefined) {
-    if (requestValue.webSearch !== true || requestValue.role !== 'helper')
+    if (requestValue.webSearch !== true || !webSearchAllowed(requestValue))
       reject('INVALID_WEB_SEARCH');
-    if (!helperWebSearchCapability(connectionValue.protocol).supported)
-      reject('WEB_SEARCH_UNSUPPORTED');
+    const capability =
+      requestValue.role === 'helper'
+        ? helperWebSearchCapability(connectionValue.protocol)
+        : storyGuideWebSearchCapability(connectionValue.protocol);
+    if (!capability.supported) reject('WEB_SEARCH_UNSUPPORTED');
   }
   if (requestValue.providerOptions !== undefined && connectionValue.protocol !== 'vercel-chat-v1')
     reject('UNSUPPORTED_PROVIDER_OPTIONS');

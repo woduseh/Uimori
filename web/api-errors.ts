@@ -11,6 +11,8 @@ import {
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
+  SCENE_DELETED_RETRY_UNAVAILABLE:
+    '삭제된 장면을 포함한 작업은 다시 실행할 수 없어요. 현재 이야기에서 새 요청을 보내 주세요.',
   ...requestImageErrors,
   STORY_GUIDE_STALE: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
   STORY_GUIDE_CANCELLED: '원작 참고가 중단됐어요.',

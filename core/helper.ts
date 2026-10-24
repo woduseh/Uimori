@@ -57,6 +57,7 @@ export type HelperResourceRef = {
   title: string;
 };
 export type HelperTaskSnapshot = {
+  invalidatedBySceneDeletion?: true;
   /** Frozen when this task is queued. */
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
   retryOf?: string;

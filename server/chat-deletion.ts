@@ -44,7 +44,7 @@ export function chatDeletionImpact(store: Store, chatId: string) {
   };
 }
 
-function assertIdle(store: Store, chatId: string) {
+export function assertChatIdleForDeletion(store: Store, chatId: string) {
   if (
     store.db
       .prepare(
@@ -94,7 +94,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
   fields(body, []);
   return store.transaction(() => {
     store.chat(chatId);
-    assertIdle(store, chatId);
+    assertChatIdleForDeletion(store, chatId);
     const imageCandidates = new Set<string>();
     for (const sql of [
       'SELECT hash AS value FROM assets WHERE chat_id=?',
@@ -147,7 +147,7 @@ export function deleteSceneCommand(store: Store, id: string, value: unknown) {
   fields(record(value), []);
   return store.transaction(() => {
     const command = store.story.command(id);
-    assertIdle(store, command.chatId);
+    assertChatIdleForDeletion(store, command.chatId);
     if (command.runId || command.sourceRevision)
       throw new HttpError(
         409,

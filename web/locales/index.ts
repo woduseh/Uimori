@@ -16,6 +16,9 @@ import { messages as shared } from './shared.js';
 import { messages as main } from './main.js';
 import { messages as fonts } from './fonts.js';
 import { messages as palettes } from './palettes.js';
+import { messages as recent } from './recent.js';
+import { messages as chatmanagement } from './chatmanagement.js';
+import { messages as orphanmemory } from './orphanmemory.js';
 export const messages: Record<string, { ko: string; en: string; ja: string; zh: string }> = {
   ...common,
   ...errors,
@@ -35,4 +38,7 @@ export const messages: Record<string, { ko: string; en: string; ja: string; zh: 
   ...main,
   ...fonts,
   ...palettes,
+  ...recent,
+  ...chatmanagement,
+  ...orphanmemory,
 };

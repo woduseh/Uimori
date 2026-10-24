@@ -2,6 +2,7 @@ import { t, useI18n, translateMessage } from './i18n.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useEffect, useRef, useState } from 'react';
 import { ContextPanel } from './ContextPanel.js';
+import { OrphanMemoryPanel } from './OrphanMemoryPanel.js';
 import type { StoryDetail } from '../core/story.js';
 import { api } from './api.js';
 import './story.css';
@@ -17,6 +18,7 @@ type PanelProps = {
   active?: boolean;
   hideHeading?: boolean;
   refreshKey?: unknown;
+  onAskHelper?: (request: string) => void;
 };
 const id = encodeURIComponent;
 /** Ignore saved-note reads that return after navigation or unmount. */
@@ -55,6 +57,7 @@ function StoryPanelEditor({
   active = true,
   hideHeading = false,
   refreshKey,
+  onAskHelper,
 }: PanelProps) {
   useI18n();
   const capture = useScope(
@@ -122,6 +125,16 @@ function StoryPanelEditor({
         onError={onError}
         onDirtyChange={setContextDirty}
         onSaveHandlerChange={registerContextSave}
+      />
+      <OrphanMemoryPanel
+        chatId={chatId}
+        headRevision={headRevision}
+        active={active}
+        refreshKey={refreshKey}
+        disabled={contextDirty}
+        onRefreshStory={load}
+        onChanged={onChanged}
+        onAskHelper={onAskHelper}
       />
     </section>
   );

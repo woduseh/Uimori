@@ -9,9 +9,7 @@ import {
 } from './reading-preferences.js';
 import './reading.css';
 import './settings-layout.css';
-
-const previewText =
-  '그녀는 문 앞에서 돌아섰다. “<ruby>별빛<rt>星明かり</rt></ruby>을 따라 **같이** 갈 거야?” 나는 고개를 끄덕였다. ‘이번에는 도망치지 않겠어.’\n\n「그럼 출발하자.」 그녀는 『별의 기록』을 가방에 넣었다.';
+import { readingSample, readingSampleCredit } from './reading-sample.js';
 const preset = (name: string): ReadingStyle => ({
   ...DEFAULT_READABILITY,
   ...(name === 'dialogue' ? { emphasis: 'subtle', dialogueBreaks: true } : {}),
@@ -192,7 +190,8 @@ export function ReadabilitySettings({
         </header>
         <div className="reading-preview" aria-label={t('reader.readingStylePreview')}>
           <div className="prose" data-testid="reading-preview">
-            <Prose text={previewText} reading={value} />
+            <Prose text={readingSample} reading={value} />
+            <small className="muted">{readingSampleCredit}</small>
           </div>
         </div>
       </section>

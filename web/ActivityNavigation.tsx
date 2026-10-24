@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Copy,
   LoaderCircle,
   MessageCircle,
 } from 'lucide-react';
@@ -13,6 +14,8 @@ import type { ActivityFeed, ActivityFeedItem, HelperRecentTask } from '../core/a
 import type { Chat } from '../core/types.js';
 import type { Library } from '../core/product.js';
 import type { ReaderTarget } from '../core/reader-target.js';
+import { ActionMenu } from './ActionMenu.js';
+import { groupRecentDates, recentDateGroupLabel } from './recent-date-groups.js';
 import './activity-navigation.css';
 
 type Props = {
@@ -22,6 +25,8 @@ type Props = {
   feed: ActivityFeed;
   error: string;
   onSelect: (id: string, target?: ReaderTarget) => void;
+  onCopyChat?: (chatId: string) => void;
+  copyingChats?: string[];
   onAcknowledge: (items: ActivityFeedItem[]) => void;
   onInspect: (item: ActivityFeedItem) => void;
   onOpenHelper?: (task: HelperRecentTask) => void;
@@ -124,6 +129,14 @@ function timeLabel(date: string) {
     return t('helpers.m259', { v0: Math.floor(elapsed / 3600000) });
   return formatDate(new Date(time), { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
+function recentHelperGroups(tasks: HelperRecentTask[]) {
+  const active = tasks.filter((task) => task.status === 'running' || task.status === 'queued');
+  const history = tasks.filter((task) => task.status !== 'running' && task.status !== 'queued');
+  return [
+    ...(active.length ? [{ key: 'running', items: active }] : []),
+    ...groupRecentDates(history, (task) => task.updatedAt),
+  ];
+}
 export function ActivityNavigation({
   chats,
   library,
@@ -131,6 +144,8 @@ export function ActivityNavigation({
   feed,
   error,
   onSelect,
+  onCopyChat,
+  copyingChats,
   onAcknowledge,
   onInspect,
   onOpenHelper,
@@ -283,21 +298,59 @@ export function ActivityNavigation({
         empty={t('helpers.m271')}
       >
         {(limit) =>
-          recent.slice(0, limit).map((chat) => (
-            <button
-              key={chat.id}
-              type="button"
-              className={`activity-nav-link${selected === chat.id ? ' selected' : ''}`}
-              onClick={() => onSelect(chat.id)}
-            >
-              <MessageCircle size={16} aria-hidden="true" />
-              <span className="activity-nav-copy">
-                <strong>{title(chat)}</strong>
-                <small>{botName(chat)}</small>
-              </span>
-              <time dateTime={chat.lastActivityAt}>{timeLabel(chat.lastActivityAt ?? '')}</time>
-            </button>
-          ))
+          groupRecentDates(recent.slice(0, limit), (chat) => chat.lastActivityAt).map(
+            (group, index) => (
+              <div className="activity-nav-date-group" key={`${group.key}:${index}`}>
+                <h3>{recentDateGroupLabel(group)}</h3>
+                {group.items.map((chat) => (
+                  <div className="activity-nav-chat-row" key={chat.id} data-chat-id={chat.id}>
+                    <button
+                      type="button"
+                      className={`activity-nav-link${selected === chat.id ? ' selected' : ''}`}
+                      aria-current={selected === chat.id ? 'page' : undefined}
+                      onClick={() => onSelect(chat.id)}
+                    >
+                      <MessageCircle size={16} aria-hidden="true" />
+                      <span className="activity-nav-copy">
+                        <strong>{title(chat)}</strong>
+                        <small className="activity-nav-detail">
+                          <span>{botName(chat)}</span>
+                          <time
+                            dateTime={chat.lastActivityAt}
+                            title={
+                              chat.lastActivityAt ? formatDate(chat.lastActivityAt) : undefined
+                            }
+                          >
+                            {timeLabel(chat.lastActivityAt ?? '')}
+                          </time>
+                        </small>
+                      </span>
+                    </button>
+                    {onCopyChat && (
+                      <ActionMenu label={t('transfer.d013', { v0: title(chat) })} viewport>
+                        <button
+                          type="button"
+                          disabled={copyingChats?.includes(chat.id)}
+                          onClick={() => onCopyChat(chat.id)}
+                        >
+                          {copyingChats?.includes(chat.id) ? (
+                            <LoaderCircle size={18} aria-hidden="true" />
+                          ) : (
+                            <Copy size={18} aria-hidden="true" />
+                          )}
+                          {t(
+                            copyingChats?.includes(chat.id)
+                              ? 'recent.copyingChat'
+                              : 'recent.copyChat'
+                          )}
+                        </button>
+                      </ActionMenu>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )
+          )
         }
       </ActivitySection>
       <ActivitySection
@@ -307,49 +360,56 @@ export function ActivityNavigation({
         empty={t('helpers.m273')}
       >
         {(limit) =>
-          (feed.helpers ?? []).slice(0, limit).map((task) => (
-            <button
-              key={task.id}
-              type="button"
-              className="activity-nav-link"
-              onClick={() => onOpenHelper?.(task)}
-              disabled={!onOpenHelper}
-            >
-              {task.status === 'running' || task.status === 'queued' ? (
-                <LoaderCircle size={16} aria-hidden="true" />
-              ) : task.status === 'completed' ? (
-                <Check size={16} aria-hidden="true" />
-              ) : (
-                <AlertCircle size={16} className="activity-nav-warning" aria-hidden="true" />
-              )}
-              <span className="activity-nav-copy">
-                <strong>{task.title || t('helpers.m274')}</strong>
-                <small className="ui-meta-row">
-                  <span>
-                    {task.chatId
-                      ? (chatById.get(task.chatId)?.title ?? t('helpers.m275'))
-                      : t('helpers.m276')}
+          recentHelperGroups((feed.helpers ?? []).slice(0, limit)).map((group, index) => (
+            <div className="activity-nav-date-group" key={`${group.key}:${index}`}>
+              <h3>{group.key === 'running' ? t('helpers.m113') : recentDateGroupLabel(group)}</h3>
+              {group.items.map((task) => (
+                <button
+                  key={task.id}
+                  type="button"
+                  className="activity-nav-link"
+                  onClick={() => onOpenHelper?.(task)}
+                  disabled={!onOpenHelper}
+                >
+                  {task.status === 'running' || task.status === 'queued' ? (
+                    <LoaderCircle size={16} aria-hidden="true" />
+                  ) : task.status === 'completed' ? (
+                    <Check size={16} aria-hidden="true" />
+                  ) : (
+                    <AlertCircle size={16} className="activity-nav-warning" aria-hidden="true" />
+                  )}
+                  <span className="activity-nav-copy">
+                    <strong>{task.title || t('helpers.m274')}</strong>
+                    <small className="ui-meta-row">
+                      <span>
+                        {task.chatId
+                          ? (chatById.get(task.chatId)?.title ?? t('helpers.m275'))
+                          : t('helpers.m276')}
+                      </span>
+                      <span>
+                        {task.status === 'running'
+                          ? t('helpers.m113')
+                          : task.status === 'queued'
+                            ? t('helpers.m277')
+                            : task.status === 'completed'
+                              ? t('helpers.m278')
+                              : task.status === 'failed'
+                                ? t('helpers.m279')
+                                : task.status === 'cancelled'
+                                  ? t('helpers.m165')
+                                  : t('helpers.m280')}
+                        {task.committedEffects > 0
+                          ? t('helpers.m281', { v0: formatNumber(task.committedEffects) })
+                          : ''}
+                      </span>
+                      <time dateTime={task.updatedAt} title={formatDate(task.updatedAt)}>
+                        {timeLabel(task.updatedAt)}
+                      </time>
+                    </small>
                   </span>
-                  <span>
-                    {task.status === 'running'
-                      ? t('helpers.m113')
-                      : task.status === 'queued'
-                        ? t('helpers.m277')
-                        : task.status === 'completed'
-                          ? t('helpers.m278')
-                          : task.status === 'failed'
-                            ? t('helpers.m279')
-                            : task.status === 'cancelled'
-                              ? t('helpers.m165')
-                              : t('helpers.m280')}
-                    {task.committedEffects > 0
-                      ? t('helpers.m281', { v0: formatNumber(task.committedEffects) })
-                      : ''}
-                  </span>
-                </small>
-              </span>
-              <time dateTime={task.updatedAt}>{timeLabel(task.updatedAt)}</time>
-            </button>
+                </button>
+              ))}
+            </div>
           ))
         }
       </ActivitySection>

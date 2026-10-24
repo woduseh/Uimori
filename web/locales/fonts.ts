@@ -17,18 +17,6 @@ export const messages = {
   },
   'fonts.file': { ko: '글꼴 파일', en: 'Font file', ja: 'フォントファイル', zh: '字体文件' },
   'fonts.name': { ko: '글꼴 이름', en: 'Font name', ja: 'フォント名', zh: '字体名称' },
-  'fonts.source': {
-    ko: '출처 주소 (선택)',
-    en: 'Source URL (optional)',
-    ja: '配布元URL（任意）',
-    zh: '来源网址（可选）',
-  },
-  'fonts.license': {
-    ko: '라이선스 (선택)',
-    en: 'License (optional)',
-    ja: 'ライセンス（任意）',
-    zh: '许可证（可选）',
-  },
   'fonts.support': {
     ko: 'TTF, OTF, WOFF, WOFF2 파일을 등록해요. 웹 임베딩을 허용하는 글꼴을 사용해 주세요.',
     en: 'Register a TTF, OTF, WOFF, or WOFF2 file licensed for web embedding.',

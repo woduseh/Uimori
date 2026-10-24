@@ -41,6 +41,7 @@ const config: StoryGuideConfig = {
   reference: 'The harbor is closed in winter.',
   position: 'Before the spring festival',
   followCanon: false,
+  webSearch: true,
 };
 const usage = { modelCalls: 0, inputTokens: null, outputTokens: null, costUsd: null };
 
@@ -131,6 +132,27 @@ test('config CAS preserves newer edits and prior advice while reserved runs keep
   expect(store.run(run.id).snapshot.storyGuide).toEqual({ revision: 1, config });
 });
 
+test('settings saved before web search default off without changing authored references or revisions', () => {
+  const { store } = database();
+  const chat = createFixtureChat(store, 'Legacy reference settings');
+  const { webSearch: _webSearch, ...legacy } = config;
+  store.db
+    .prepare('INSERT INTO chat_story_guides(chat_id,revision,config,brief) VALUES(?,?,?,NULL)')
+    .run(chat.id, 7, JSON.stringify(legacy));
+  expect(store.storyGuide.get(chat.id)).toEqual({
+    revision: 7,
+    config: { ...legacy, webSearch: false },
+    brief: null,
+  });
+  expect(() =>
+    store.storyGuide.update(chat.id, {
+      expectedRevision: 7,
+      config: { ...config, webSearch: 'yes' },
+    })
+  ).toThrow('Invalid story guide settings');
+  expect(store.storyGuide.get(chat.id).revision).toBe(7);
+});
+
 test('only the current writer can publish advice; manual and cancelled late replies cannot replace it', () => {
   const { store } = database();
   const chat = createFixtureChat(store, 'Late guide replies');
@@ -199,6 +221,16 @@ test('forks and portable backups copy preferences only; legacy backups stay disa
     idempotencyKey: randomUUID(),
   });
   expect(target.storyGuide.get(restoredLegacy.chat.id).config).toEqual(defaultStoryGuideConfig());
+  const beforeSearch = structuredClone(backup);
+  delete (beforeSearch.chats[0].state.storyGuide as Partial<StoryGuideConfig>).webSearch;
+  const restoredBeforeSearch = await importChatBackup(target, {
+    backup: beforeSearch,
+    idempotencyKey: randomUUID(),
+  });
+  expect(target.storyGuide.get(restoredBeforeSearch.chat.id).config).toEqual({
+    ...config,
+    webSearch: false,
+  });
   const malformed = structuredClone(backup);
   malformed.chats[0].state.storyGuide!.enabled = 'yes' as unknown as boolean;
   const before = target.db.prepare('SELECT count(*) AS n FROM chats').get()!.n;

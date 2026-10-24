@@ -1,0 +1,22 @@
+.orphan-memory {
+  min-width: 0;
+  border-top: var(--hairline) solid var(--border);
+  padding-top: 1rem;
+}
+.orphan-memory .context-heading h4 {
+  margin: 0;
+}
+.orphan-memory-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.orphan-memory-provenance {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.orphan-memory-review {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-control);
+}

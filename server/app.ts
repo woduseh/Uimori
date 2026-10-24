@@ -63,6 +63,8 @@ import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
 import { providerConnectionTestRoutes } from './provider-connection-test.js';
 import { storyRoutes } from './story-routes.js';
+import { sceneDeletionRoutes } from './scene-deletion.js';
+import { orphanMemoryRoutes } from './orphan-memory.js';
 import { outlineRoutes } from './outline-routes.js';
 import { packageImageRoutes, imageCatalog, imageTargetSource } from './package-images.js';
 import { nativeTransferRoutes } from './native-transfer.js';
@@ -904,6 +906,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     execute,
   });
   outlineRoutes(app, store, { publish });
+  sceneDeletionRoutes(app, store, (chatId) => {
+    titles.cancel(chatId);
+    publish(chatId);
+  });
+  orphanMemoryRoutes(app, store, { publish });
   packageImageRoutes(app, store, { publish, pump: pumpJobs });
   illustrationRoutes(app, store, {
     publish,

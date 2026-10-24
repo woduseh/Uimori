@@ -1563,7 +1563,7 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
             }
           : null,
         planType: authenticated ? 'plus' : null,
-        credits: authenticated ? { balance: 61842, hasCredits: true, unlimited: false } : null,
+        credits: authenticated ? { balance: 61842.4, hasCredits: true, unlimited: false } : null,
         limits: authenticated
           ? [
               {

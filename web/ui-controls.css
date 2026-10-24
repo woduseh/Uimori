@@ -57,9 +57,9 @@
   background: var(--panel);
   box-shadow: 0 2px 8px var(--shade);
 }
-.action-menu-body > button,
-.action-menu-body > .resource-export-action > button,
-.action-menu-body > .delete-control > button {
+:is(.action-menu-body, .action-menu-group) > button,
+:is(.action-menu-body, .action-menu-group) > .resource-export-action > button,
+:is(.action-menu-body, .action-menu-group) > .delete-control > button {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -75,16 +75,34 @@
   text-align: left;
 }
 @media (hover: hover) {
-  .action-menu-body > button:hover:not(:disabled),
-  .action-menu-body > .resource-export-action > button:hover:not(:disabled),
-  .action-menu-body > .delete-control > button:hover:not(:disabled) {
+  :is(.action-menu-body, .action-menu-group) > button:hover:not(:disabled),
+  :is(.action-menu-body, .action-menu-group)
+    > .resource-export-action
+    > button:hover:not(:disabled),
+  :is(.action-menu-body, .action-menu-group) > .delete-control > button:hover:not(:disabled) {
     background: var(--hover);
   }
 }
 /* `.danger` alone loses to the menu item rule, so destructive items name themselves here too. */
-.action-menu-body > .delete-control > button,
-.action-menu-body > button.danger {
+:is(.action-menu-body, .action-menu-group) > .delete-control > button,
+:is(.action-menu-body, .action-menu-group) > button.danger {
   color: var(--error);
+}
+.action-menu-group {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+.action-menu-group + .action-menu-group {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: var(--hairline) solid var(--line);
+}
+.action-menu-heading {
+  padding: 3px 10px 5px;
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-weight: 600;
 }
 .action-menu-body svg {
   flex-shrink: 0;
@@ -121,7 +139,13 @@
   }
   .action-menu[open] > .action-menu-body.action-menu-body > button,
   .action-menu[open] > .action-menu-body.action-menu-body > .resource-export-action > button,
-  .action-menu[open] > .action-menu-body.action-menu-body > .delete-control > button {
+  .action-menu[open] > .action-menu-body.action-menu-body > .delete-control > button,
+  .action-menu[open] > .action-menu-body.action-menu-body > .action-menu-group > button,
+  .action-menu[open]
+    > .action-menu-body.action-menu-body
+    > .action-menu-group
+    > .delete-control
+    > button {
     min-height: 48px;
   }
 }

@@ -335,6 +335,19 @@ input.on('line', (line) => {
       const text = process.env.UIMORI_CODEX_FIXTURE_OUTPUT ?? '{"ok":true}';
       const completedItem = (item) =>
         send({ method: 'item/completed', params: { threadId, turnId, item } });
+      if (mode === 'story-guide-search') {
+        completedItem({
+          type: 'webSearch',
+          id: 'guide-search',
+          query: 'public work edition',
+          action: { type: 'search' },
+        });
+        completedItem({
+          type: 'webSearch',
+          id: 'guide-page',
+          action: { type: 'openPage', url: 'https://example.com/official' },
+        });
+      }
       if (
         [
           'native-tools',

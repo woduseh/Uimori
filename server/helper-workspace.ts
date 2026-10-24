@@ -482,6 +482,8 @@ export class HelperWorkspace {
         const previous = this.task(snapshot.retryOf);
         if (previous.conversationId !== conversationId)
           throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
+        if (previous.snapshot.invalidatedBySceneDeletion)
+          throw new HttpError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
         if (!['failed', 'cancelled', 'interrupted'].includes(previous.status))
           throw new HttpError(409, '종료된 실패 요청만 재시도할 수 있어요.');
         if (previous.completedEffects?.count)

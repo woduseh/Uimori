@@ -342,6 +342,17 @@ export function LoreContextPolicyEditor({
             <p className="muted">{t('settings.m233')}</p>
             <p className="muted">{t('settings.m234')}</p>
           </details>
+          <div className="lore-context-actions settings-form-footer">
+            <IconButton
+              icon={RotateCcw}
+              label={resetLabel}
+              className="secondary"
+              disabled={!defaults}
+              onClick={() => {
+                if (defaults) change(draftOf(defaults));
+              }}
+            />
+          </div>
         </details>
       </div>
       {validation && (
@@ -349,24 +360,17 @@ export function LoreContextPolicyEditor({
           {t('settings.flow12', { v0: translateMessage(validation) })}
         </p>
       )}
-      <div className="lore-context-actions settings-form-footer">
-        <IconButton
-          icon={RotateCcw}
-          label={resetLabel}
-          className="secondary"
-          disabled={!defaults}
-          onClick={() => {
-            if (defaults) change(draftOf(defaults));
-          }}
-        />
-        {validation && (
-          <button type="button" className="ghost" onClick={() => change(draftOf(effective))}>
-            <RotateCcw size={16} aria-hidden="true" />
-            {t('settings.m236')}
-          </button>
-        )}
-        {footerAction}
-      </div>
+      {(validation || footerAction) && (
+        <div className="lore-context-actions settings-form-footer">
+          {validation && (
+            <button type="button" className="ghost" onClick={() => change(draftOf(effective))}>
+              <RotateCcw size={16} aria-hidden="true" />
+              {t('settings.m236')}
+            </button>
+          )}
+          {footerAction}
+        </div>
+      )}
       {chatId && (
         <details className="lore-context-preview">
           <summary>{t('settings.m237')}</summary>

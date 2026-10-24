@@ -74,6 +74,8 @@ import { SourceVersions } from './SourceVersions.js';
 import { RequestMessage } from './RequestMessage.js';
 import { StoredRequestImages } from './RequestImages.js';
 import { SelectionRevision } from './SelectionRevision.js';
+import { SceneDeleteAction } from './SceneDeleteAction.js';
+import type { SceneDeletionResult } from '../core/scene-deletion.js';
 
 type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
@@ -95,6 +97,8 @@ type ReaderProps = {
   onError: (error: string) => void;
   onNativeNotice?: (messages: string[]) => void;
   onFork: (sourceId: string) => Promise<void>;
+  onDeleted?: (result: SceneDeletionResult) => Promise<void>;
+  deletionDisabled?: boolean;
   onRetry?: (mode?: 'replace' | 'copy', text?: string) => Promise<boolean>;
   retryCanReplace?: boolean;
   onModelSettings?: () => void;
@@ -219,6 +223,8 @@ function SourceReaderContent({
   onError,
   onNativeNotice,
   onFork,
+  onDeleted,
+  deletionDisabled,
   onRetry,
   retryCanReplace = false,
   onModelSettings,
@@ -1239,6 +1245,14 @@ function SourceReaderContent({
                 ? t('reader.copyingChat')
                 : t('reader.copyThroughThisSceneToANewChat')}
             </button>
+            {onDeleted && (
+              <SceneDeleteAction
+                chatId={source.chatId}
+                sourceId={source.id}
+                disabled={!!editor || !!pending || deletionDisabled}
+                onDeleted={onDeleted}
+              />
+            )}
             <button
               type="button"
               className="secondary"

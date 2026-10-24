@@ -5,6 +5,7 @@ export type StoryGuideConfig = {
   reference: string;
   position: string;
   followCanon: boolean;
+  webSearch: boolean;
 };
 export type StoryGuideBrief = {
   fingerprint: string;
@@ -14,6 +15,7 @@ export type StoryGuideBrief = {
   configRevision: number;
   runId?: string;
   modelTitle: string;
+  webSearch?: import('./helper-web-search.js').ProviderWebSearch;
 };
 export type StoryGuideState = {
   revision: number;
@@ -35,6 +37,7 @@ export const defaultStoryGuideConfig = (): StoryGuideConfig => ({
   reference: '',
   position: '',
   followCanon: false,
+  webSearch: false,
 });
 
 export function normalizeStoryGuideConfig(value: unknown): StoryGuideConfig {
@@ -44,6 +47,7 @@ export function normalizeStoryGuideConfig(value: unknown): StoryGuideConfig {
     Array.isArray(input) ||
     typeof input.enabled !== 'boolean' ||
     typeof input.followCanon !== 'boolean' ||
+    (input.webSearch !== undefined && typeof input.webSearch !== 'boolean') ||
     Object.entries(STORY_GUIDE_LIMITS).some(([key, limit]) => {
       const text = input[key as keyof typeof STORY_GUIDE_LIMITS];
       return typeof text !== 'string' || text.length > limit;
@@ -56,5 +60,6 @@ export function normalizeStoryGuideConfig(value: unknown): StoryGuideConfig {
     reference: input.reference,
     position: input.position,
     followCanon: input.followCanon,
+    webSearch: input.webSearch ?? false,
   };
 }

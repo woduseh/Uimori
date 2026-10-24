@@ -85,6 +85,8 @@ export type RunSnapshot = {
   messageChanges?: import('./message-changes.js').MessageChanges;
   /** A completed message can store just display metadata instead of execution input. */
   settled?: boolean;
+  /** Deleted source captures cannot be replayed through retry or judgment recovery. */
+  invalidatedBySceneDeletion?: true;
   displayModelTitle?: string;
   /** Frozen at reservation; only an explicit true enables response judgment. */
   mainJudgmentEnabled?: boolean;

@@ -40,6 +40,8 @@ export function retryRun(
     );
     if (previous) return { run: store.run(previous.runId), created: false };
     const original = store.run(runId);
+    if (original.snapshot.invalidatedBySceneDeletion)
+      throw new HttpError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
     if (['queued', 'running'].includes(original.status))
       throw new HttpError(409, 'Original run is still active');
     if (original.snapshot.packageStart?.mode === 'authored' || original.snapshot.nativeRisuAuthored)

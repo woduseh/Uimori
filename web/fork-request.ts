@@ -2,7 +2,7 @@ import type { Chat } from '../core/types.js';
 import { api, definiteRejection } from './api.js';
 
 /** Persist admission identity before sending; UI locks belong to the calling view. */
-export async function requestChatFork(chatId: string, sourceId: string): Promise<Chat> {
+export async function requestChatFork(chatId: string, sourceId: string | null): Promise<Chat> {
   const key = `fork-command:${chatId}:${sourceId}`;
   const storage = sessionStorage;
   const idempotencyKey = storage.getItem(key) || crypto.randomUUID();

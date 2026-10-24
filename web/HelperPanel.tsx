@@ -75,6 +75,7 @@ type Props = {
   resource?: HelperResourceRef | null;
   onClearResource?: () => void;
   outlineRequest?: OutlineHelperRequest;
+  draftRequest?: { key: string; text: string; scope: HelperScope; conversationId?: string };
   outlineWorkspace?: boolean;
   onClose: () => void;
   onModelSettings: () => void;
@@ -465,6 +466,36 @@ export function HelperPanel(props: Props) {
     };
   }, [props.outlineRequest, selectSession]);
   const taskStamp = tasks.map((task) => `${task.id}:${task.status}`).join('|');
+  useEffect(() => {
+    const selected = props.draftRequest;
+    if (!selected || appliedSelections.current.has(selected.key)) return;
+    let disposed = false;
+    void (async () => {
+      const owner = selected.conversationId
+        ? await api<HelperConversation>(
+            `/helper/conversations/${encodeURIComponent(selected.conversationId)}`
+          )
+        : await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
+      if (disposed || appliedSelections.current.has(selected.key)) return;
+      if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
+        throw new Error(uiMessage('helpers.m013'));
+      await loadHelperRecovery(`helper-input:${owner.id}`).catch(() => null);
+      if (disposed) return;
+      appliedSelections.current.add(selected.key);
+      setDrafts((old) => {
+        const previous = old[owner.id] ?? local(`uimori:helper-input:${owner.id}`) ?? '';
+        const next = previous.trim() ? `${previous}\n\n${selected.text}` : selected.text;
+        saveLocal(`uimori:helper-input:${owner.id}`, next);
+        return { ...old, [owner.id]: next };
+      });
+      selectSession(owner);
+    })().catch((cause) => {
+      if (!disposed) setErrors((old) => ({ ...old, [currentScope.current]: cause.message }));
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [props.draftRequest, selectSession]);
   useEffect(() => {
     dispatchEvent(new CustomEvent(OUTLINE_REFRESH_EVENT, { detail: taskStamp }));
   }, [taskStamp]);
