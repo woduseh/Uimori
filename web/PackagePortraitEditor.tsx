@@ -7,6 +7,8 @@ import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { maxPackageImages, uploadPackageImage } from './package-image-upload.js';
+import { SearchIcon } from './ui-icons.js';
+import './content-picker.css';
 
 /** Edits the current authoring draft; representative image changes are saved by the parent. */
 export function PackagePortraitEditor({
@@ -214,20 +216,23 @@ export function PackagePortraitEditor({
         scopeKey={scope}
       >
         <label>
-          {t('library.searchImages')}
-          <input
-            type="search"
-            aria-label={t('library.searchPortraits')}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setVisibleCount(50);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.preventDefault();
-            }}
-            placeholder={t('library.nameOrDescription')}
-          />
+          <span className="sr-only">{t('library.searchImages')}</span>
+          <span className="content-picker-search-field">
+            <SearchIcon size={17} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label={t('library.searchPortraits')}
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setVisibleCount(50);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.preventDefault();
+              }}
+              placeholder={t('library.nameOrDescription')}
+            />
+          </span>
         </label>
         <div className="package-portrait-choices">
           {found.slice(0, visibleCount).map((image) => (

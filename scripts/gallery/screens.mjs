@@ -46,10 +46,10 @@ const appLabels = {
   about: '앱 정보·라이선스',
 };
 const chatLabels = {
-  characters: '대화 구성',
-  prompts: '프롬프트·모델',
-  story: '기억·로어',
-  images: '이미지',
+  characters: '인물·자료',
+  prompts: '프롬프트·모델·번역',
+  story: '기억·메모·로어',
+  images: '이미지·삽화 참조',
 };
 
 const chatSettings = (section, title) => ({
@@ -194,9 +194,9 @@ export const screens = [
     ready: { role: 'dialog', name: '다음 요청 미리보기' },
   },
   chatSettings('characters', '봇·페르소나·모듈'),
-  chatSettings('prompts', '프롬프트·모델'),
-  chatSettings('story', '기억·로어'),
-  chatSettings('images', '이미지'),
+  chatSettings('prompts', '프롬프트·모델·번역'),
+  chatSettings('story', '기억·메모·로어'),
+  chatSettings('images', '이미지·삽화 참조'),
   {
     ...chatSettings('prompts', '고급 실행 설정'),
     id: 'chat-settings-generation-advanced',

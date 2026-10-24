@@ -317,18 +317,6 @@ export const messages = {
     ja: '翻訳 · {title}',
     zh: '翻译 · {title}',
   },
-  'shared.savedContents': {
-    ko: '최신 저장본 내용',
-    en: 'Latest saved contents',
-    ja: '最新の保存済み内容',
-    zh: '最新已保存内容',
-  },
-  'shared.previewDescription': {
-    ko: '제목과 주요 본문을 확인할 수 있어요.',
-    en: 'Review the title and main text.',
-    ja: 'タイトルと主な本文を確認できます。',
-    zh: '可查看标题和主要正文。',
-  },
   'shared.emptySavedText': {
     ko: '저장된 본문이 없어요.',
     en: 'No saved text.',
@@ -479,5 +467,11 @@ export const messages = {
     en: 'Error code: {code}',
     ja: 'エラーコード：{code}',
     zh: '错误代码：{code}',
+  },
+  'shared.savedTextPreview': {
+    ko: '제목·본문 미리보기',
+    en: 'Title and text preview',
+    ja: 'タイトル・本文プレビュー',
+    zh: '标题与正文预览',
   },
 };

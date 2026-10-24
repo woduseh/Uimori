@@ -296,10 +296,9 @@ export function ProfileEditor({
               />
             </div>
             <div hidden={tab !== 'prompts'} className="chat-profile-model-options settings-group">
-              <h3 className="settings-group-heading">{t('library.storyModel')}</h3>
               <div className="settings-group-body">
                 <label className="settings-row">
-                  <span>{t('library.storyModelForThisChat')}</span>
+                  <strong>{t('library.storyModel')}</strong>
                   <select
                     aria-label={t('library.storyModelForThisChat')}
                     value={modelId ?? ''}
@@ -352,11 +351,10 @@ export function ProfileEditor({
               </div>
             </div>
             <div hidden={tab !== 'prompts'} className="chat-profile-prompt-options settings-group">
-              <h3 className="settings-group-heading">{t('library.writingPrompt')}</h3>
               <div className="settings-group-body">
                 <label className="settings-row">
                   <span className="settings-row-copy">
-                    <strong>{t('library.writingPromptForThisChat')}</strong>
+                    <strong>{t('library.writingPrompt')}</strong>
                     <small>{t('library.chooseAPromptToPinItTo')}</small>
                   </span>
                   <select

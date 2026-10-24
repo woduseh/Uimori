@@ -32,10 +32,6 @@
   line-height: 24px;
   margin: 0;
 }
-.chat-options-header small {
-  display: block;
-  line-height: 18px;
-}
 .chat-options-scope-panel {
   display: flex;
   flex-direction: column;

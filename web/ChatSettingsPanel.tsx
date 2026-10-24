@@ -29,16 +29,14 @@ function getCategories() {
   return [
     {
       id: 'characters',
-      title: t('chatsettings.m83'),
+      title: t('chatsettings.peopleAndMaterials'),
       icon: BotIcon,
-      description: t('chatsettings.m84'),
       group: t('chatsettings.m85'),
     },
     {
       id: 'prompts',
-      title: t('chatsettings.m86'),
+      title: t('chatsettings.promptsModelsAndTranslation'),
       icon: PromptIcon,
-      description: t('chatsettings.m87'),
       group: t('chatsettings.m85'),
     },
     {
@@ -49,16 +47,14 @@ function getCategories() {
     },
     {
       id: 'story',
-      title: t('chatsettings.m90'),
+      title: t('chatsettings.memoryNotesAndLore'),
       icon: LoreIcon,
-      description: t('chatsettings.m91'),
       group: t('chatsettings.m92'),
     },
     {
       id: 'images',
-      title: t('chatsettings.m93'),
+      title: t('chatsettings.imagesAndReferences'),
       icon: ImagesIcon,
-      description: t('chatsettings.m94'),
       group: t('chatsettings.m92'),
     },
     {
@@ -347,7 +343,6 @@ export function ChatSettingsPanel({
             )}
             {visited.includes('story') && detail && (
               <div hidden={profileTab !== 'story'} className="chat-settings-memory">
-                <h3>{t('chatsettings.m101')}</h3>
                 <StoryPanel
                   chatId={state.selected}
                   refreshKey={state.detail?.reader.cursor ?? 0}

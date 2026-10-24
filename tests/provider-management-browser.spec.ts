@@ -139,7 +139,7 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   if (visualReview)
     await modelForm
       .locator('.toggle-row')
-      .filter({ hasText: '새 모델 선택에 표시' })
+      .filter({ hasText: '새 실행에 이 모델 사용' })
       .screenshot({ path: info.outputPath('model-visibility-switch.png') });
   await modelForm.getByRole('button', { name: '고급', exact: true }).click();
   await expect(modelForm.getByLabel('이 모델 프리셋에 평가 도구 사용')).not.toBeChecked();
@@ -1030,7 +1030,7 @@ test('PMUI09 invalid hidden model fields receive focus and a reversible disable 
   await openProviderModel(page, a.title);
   form = page.getByRole('form', { name: '모델 편집 양식' });
   await form.getByRole('button', { name: '기본', exact: true }).click();
-  await form.getByRole('switch', { name: '새 모델 선택에 표시' }).uncheck();
+  await form.getByRole('switch', { name: '새 실행에 이 모델 사용' }).uncheck();
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   await expect
     .poll(async () => (await library(request)).models.find((item) => item.id === a.id)?.enabled)

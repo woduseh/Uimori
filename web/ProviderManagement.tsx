@@ -1129,7 +1129,6 @@ export function ConnectionEditor({
             <div className="provider-welcome">
               <ConnectionIcon size={28} aria-hidden="true" />
               <h4>{t('providers.m78')}</h4>
-              <p>{t('providers.m79')}</p>
               <ol className="provider-steps" aria-label={t('providers.m83')}>
                 <li>{t('providers.m85')}</li>
                 <li>{t('providers.m86')}</li>
@@ -1147,7 +1146,6 @@ export function ConnectionEditor({
               <div className="provider-welcome">
                 <ModelIcon size={28} aria-hidden="true" />
                 <h4>{t('providers.m80')}</h4>
-                <p>{t('providers.m81')}</p>
                 <button type="button" disabled={busy} onClick={() => newModel()}>
                   <AddIcon size={18} aria-hidden="true" />
                   {t('providers.m71')}
@@ -1408,14 +1406,22 @@ export function ConnectionEditor({
                           }}
                         >
                           <strong>{item.title}</strong>
-                          <span className="provider-item-subtitle">
-                            {item.modelId}
-                            {item.enabled === false
-                              ? t('providers.m120')
-                              : group.connection?.enabled === false
-                                ? t('providers.m121')
-                                : ''}
-                          </span>
+                          {(item.title !== item.modelId ||
+                            item.enabled === false ||
+                            group.connection?.enabled === false) && (
+                            <span className="provider-item-subtitle">
+                              {[
+                                item.title !== item.modelId ? item.modelId : '',
+                                item.enabled === false
+                                  ? t('providers.m101')
+                                  : group.connection?.enabled === false
+                                    ? t('providers.m121')
+                                    : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                          )}
                         </button>
                         <div className="provider-model-row-actions">
                           <ActionMenu label={t('providers.m549', { value0: item.title })}>

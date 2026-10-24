@@ -1270,7 +1270,7 @@ export function LibraryPanel({
                             ? t('library.thisFolderIsEmpty')
                             : folders.length > 0
                               ? t('library.noUncategorizedResources')
-                              : t('library.createANew', { v0: t(contentLabelKeys[tab]) })}
+                              : t('library.noRegisteredResourcesYet')}
                       </h2>
                       {!query && categoryItems.length === 0 && (
                         <p className="library-role-guide">

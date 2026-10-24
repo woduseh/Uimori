@@ -174,16 +174,10 @@ export const messages = {
     zh: '应用信息 · 运行版本和许可证',
   },
   'outside.version': {
-    ko: '실행 버전',
-    en: 'Running version',
-    ja: '実行バージョン',
-    zh: '运行版本',
-  },
-  'outside.serverVersion': {
-    ko: '현재 서버의 앱 버전',
-    en: 'App version on the current server',
-    ja: '現在のサーバーのアプリバージョン',
-    zh: '当前服务器的应用版本',
+    ko: '서버 실행 버전',
+    en: 'Server version',
+    ja: 'サーバーの実行バージョン',
+    zh: '服务器运行版本',
   },
   'outside.checkFailed': {
     ko: '확인 실패',
@@ -238,12 +232,6 @@ export const messages = {
     en: 'Source repository',
     ja: 'ソースリポジトリ',
     zh: '源代码仓库',
-  },
-  'outside.sourceDescription': {
-    ko: 'Uimori 프로젝트 소스 코드',
-    en: 'Uimori project source code',
-    ja: 'Uimoriプロジェクトのソースコード',
-    zh: 'Uimori 项目源代码',
   },
   'outside.viewSource': {
     ko: '소스 보기',
@@ -347,41 +335,11 @@ export const messages = {
     ja: '作業が終わるとこの端末に通知します。',
     zh: '任务完成后会在此设备上通知你。',
   },
-  'outside.deviceOn': {
-    ko: '이 기기의 알림 켜짐',
-    en: 'Notifications on for this device',
-    ja: 'この端末の通知は有効',
-    zh: '此设备的通知已开启',
-  },
-  'outside.deviceOff': {
-    ko: '이 기기의 알림 꺼짐',
-    en: 'Notifications off for this device',
-    ja: 'この端末の通知は無効',
-    zh: '此设备的通知已关闭',
-  },
-  'outside.disablePush': {
-    ko: '알림 끄기',
-    en: 'Disable notifications',
-    ja: '通知を無効にする',
-    zh: '关闭通知',
-  },
   'outside.checkPermission': {
     ko: '권한 다시 확인',
     en: 'Check permission again',
     ja: '権限を再確認',
     zh: '重新检查权限',
-  },
-  'outside.connecting': {
-    ko: '연결 중…',
-    en: 'Connecting…',
-    ja: '接続中…',
-    zh: '正在连接…',
-  },
-  'outside.enablePush': {
-    ko: '알림 켜기',
-    en: 'Enable notifications',
-    ja: '通知を有効にする',
-    zh: '开启通知',
   },
   'outside.loadingPush': {
     ko: '알림 설정을 불러오는 중이에요…',

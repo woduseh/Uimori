@@ -33,13 +33,19 @@ test('CSUILAYOUT all chat settings sections fit shared desktop and phone setting
       await page.goto(`/?chat=${chat.id}`);
       await openChatSettings(page);
       const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-      for (const section of ['대화 구성', '프롬프트·모델', '기억·로어', '이미지', '카드 변수']) {
+      for (const section of [
+        '인물·자료',
+        '프롬프트·모델·번역',
+        '기억·메모·로어',
+        '이미지·삽화 참조',
+        '카드 변수',
+      ]) {
         await selectChatSettingsSection(page, section);
         const pane = dialog.getByRole('tabpanel');
         expect(
           await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
         ).toBeLessThanOrEqual(1);
-        if (section === '프롬프트·모델') {
+        if (section === '프롬프트·모델·번역') {
           await pane.getByText('고급 실행 설정', { exact: true }).click();
           const fields = (await pane.locator('.chat-runtime-fields').boundingBox())!;
           for (const group of await pane.locator('.chat-runtime-fields > .settings-group').all()) {
@@ -547,7 +553,7 @@ test('SCUI06 global lore defaults require a successful read and preserve chat dr
       page.locator('.workspace-header').getByText(chat.title, { exact: true })
     ).toBeVisible();
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '기억·로어');
+    await selectChatSettingsSection(page, '기억·메모·로어');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     await dialog.getByText('선별 기준과 용량', { exact: true }).click();
     const retained = dialog.getByLabel('조회 로어 토큰 한도', { exact: true });

@@ -532,8 +532,8 @@ export function NewStory({
         )}
         <details className="new-story-options">
           <summary>
-            <span>{t('transfer.m343')}</span>
-            <small>{additionalSummary || t('transfer.m344')}</small>
+            <span>{t('transfer.m344')}</span>
+            {additionalSummary && <small>{additionalSummary}</small>}
           </summary>
           <div className="new-story-options-content">
             <fieldset>

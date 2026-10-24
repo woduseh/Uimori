@@ -101,8 +101,7 @@ export function ComposerMore({
           )}
           <label className="composer-lore-toggle">
             <span className="composer-lore-copy">
-              <span>{t('prompts.uiExcludeRetrievedLoreFromNextGeneration')}</span>
-              <small aria-hidden="true">{t('prompts.uiAppliesOnlyToThisRequest')}</small>
+              {t('prompts.uiExcludeRetrievedLoreFromNextGeneration')}
             </span>
             <Switch
               ref={choice}

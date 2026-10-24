@@ -990,12 +990,6 @@ export const messages = {
     ja: 'エージェントを追加',
     zh: '添加智能体',
   },
-  'settings.m165': {
-    ko: '템플릿으로 시작한 뒤 이름과 지침을 자유롭게 바꿀 수 있어요.',
-    en: 'Start with a template, then edit the name and instructions freely.',
-    ja: 'テンプレートから始め、名前と指示を自由に変更できます。',
-    zh: '可从模板开始，自由更改名称和指示。',
-  },
   'settings.m166': {
     ko: '{v0} 에이전트 추가',
     en: 'Add {v0} agent',
@@ -2139,10 +2133,10 @@ export const messages = {
     zh: 'USD / 百万 token',
   },
   'settings.newItem': {
-    ko: '새 항목 · 미저장',
-    en: 'New item · unsaved',
-    ja: '新規項目 · 未保存',
-    zh: '新项目 · 未保存',
+    ko: '미저장',
+    en: 'Unsaved',
+    ja: '未保存',
+    zh: '未保存',
   },
   'settings.unsavedItem': {
     ko: '미저장 변경',
@@ -2167,12 +2161,6 @@ export const messages = {
     en: 'Unspecified colors use Uimori defaults. Edited colors are saved in the layout; select Original layout colors in the palette to apply them.',
     ja: '未指定の色はUimoriの既定色を使います。編集した色はレイアウトに保存されるので、適用時はパレットで「レイアウト本来の色」を選んでください。',
     zh: '未指定的颜色使用Uimori默认值。编辑的颜色保存在布局中，应用时请在配色中选择“布局原有颜色”。',
-  },
-  'settings.thisScope': {
-    ko: '이 범위에서 선택',
-    en: 'Selected for this scope',
-    ja: 'この範囲で選択',
-    zh: '为此范围选择',
   },
   'settings.themeSelection': {
     ko: '{title} · {source}',

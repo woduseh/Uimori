@@ -37,7 +37,7 @@ test('I18N11 failed illustration-reference saves keep their error identity acros
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source')).toBeVisible();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '이미지');
+  await selectChatSettingsSection(page, '이미지·삽화 참조');
   const references = page.getByTestId('illustration-references');
   const role = references.getByRole('combobox');
   await role.selectOption('character');
@@ -65,7 +65,7 @@ test('I18N09 saving an author note keeps completion expiry and saved content acr
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source')).toHaveCount(1);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델');
+  await selectChatSettingsSection(page, '프롬프트·모델·번역');
   const note = page.getByLabel('Risu 작가 노트', { exact: true });
   const value = '저장한 작가 노트 / author note 日本語 中文';
   await note.fill(value);

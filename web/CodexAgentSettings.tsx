@@ -226,13 +226,9 @@ export function CodexAgentSettings({
                 </li>
                 <li>
                   <strong>{t('providers.m437')}</strong>
-                  <p>
-                    {status.login
-                      ? t('providers.m438')
-                      : status.available
-                        ? t('providers.m439')
-                        : t('providers.m440')}
-                  </p>
+                  {!status.login && (
+                    <p>{status.available ? t('providers.m439') : t('providers.m440')}</p>
+                  )}
                 </li>
                 <li>
                   <strong>{t('providers.m441')}</strong>

@@ -38,9 +38,9 @@ test('SPUI01 usage dashboard keeps partial bills honest, filters atomically, and
     const rows = days.map((day, i) => ({
       ...empty,
       day,
-      calls: 4,
-      inputTokens: 250000,
-      outputTokens: 150000,
+      calls: i === 6 ? 0 : 4,
+      inputTokens: i === 6 ? 0 : 250000,
+      outputTokens: i === 6 ? 0 : 150000,
       reportedUsd: i === 0 ? 2.58 : 0,
       estimatedUsd: i === 1 ? 1.69 : 0,
       partialUsd: i === 2 ? 0.005 : 0,
@@ -102,8 +102,14 @@ test('SPUI01 usage dashboard keeps partial bills honest, filters atomically, and
   await expect(panel.getByRole('region', { name: '사용 비용', exact: true })).toContainText(
     '미확인 4'
   );
+  const columns = panel.locator('.usage-chart-column');
+  await expect(columns).toHaveCount(7);
+  await expect(columns.nth(5)).toHaveAttribute('aria-pressed', 'true');
+  await expect(columns.nth(6)).toHaveAttribute('aria-pressed', 'false');
+  await expect(panel.locator('.usage-chart-caption')).toContainText('4회');
   const unknown = panel.locator('.usage-chart-column').nth(3);
   await unknown.focus();
+  await expect(unknown).toHaveAttribute('aria-pressed', 'true');
   await expect(panel.locator('.usage-chart-caption')).toContainText('비용 미확인');
   await expect(panel.getByRole('region', { name: '모델별 비용', exact: true })).toContainText(
     '<US$0.01'
@@ -147,6 +153,9 @@ test('SPUI01 usage dashboard keeps partial bills honest, filters atomically, and
   await panel.getByLabel('종료일').fill('2099-12-31');
   await expect.poll(() => requests.at(-1)).toBe('2099-12-31:2099-12-31');
   await expect(panel.locator('.usage-chart-column')).toHaveCount(1);
+  await expect(panel.locator('.usage-chart-column')).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.locator('.usage-chart-caption')).toContainText('2099-12-31');
+  await expect(panel.locator('.usage-chart-caption')).toContainText('US$2.58');
   const totals = panel.locator('.usage-cards strong');
   await expect(totals).toHaveText(['US$2.58', '4', '400K']);
   pendingResponse = new Promise<void>((resolve) => {
@@ -320,6 +329,7 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
     );
     await expect(emptyMessage).toHaveCount(0);
     await expect(panel.getByRole('region', { name: '비용 추이', exact: true })).toBeVisible();
+    await expect(panel.locator('.usage-chart-column[aria-pressed="true"]')).toHaveCount(1);
     await expect(totals).toHaveText(
       next === 'free'
         ? ['US$0.00', '1', '20']
@@ -327,15 +337,17 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
           ? ['미확인', '1', '미확인']
           : ['US$0.00', '2', '미확인']
     );
+    if (next === 'free') {
+      await expect(panel.locator('.usage-chart-caption')).toContainText('US$0.00');
+      await panel.locator('.usage-chart-column[aria-pressed="true"]').focus();
+    }
     if (next === 'unknown') {
-      await panel.locator('.usage-chart-column').first().focus();
       await expect(panel.locator('.usage-chart-caption')).toContainText('비용 미확인');
     }
     if (next === 'unconfirmed') {
       await expect(panel.getByRole('region', { name: '사용 비용', exact: true })).toContainText(
         '미확인 1 · 부분 추정 1회'
       );
-      await panel.locator('.usage-chart-column').first().focus();
       await expect(panel.locator('.usage-chart-caption')).toContainText('부분 추정 1회');
       await expect(panel.locator('.usage-chart-caption')).toContainText('미확인 1회');
     }

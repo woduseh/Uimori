@@ -144,11 +144,10 @@ export function BotNavigation(
   const runningDialog = (
     <Dialog
       open={runningPicker}
-      title={t('transfer.m278')}
+      title={t('transfer.taskChatPickerTitle')}
       onClose={() => setRunningPicker(false)}
       className="bot-organize-dialog"
     >
-      <p className="muted">{t('transfer.m279')}</p>
       <nav className="bot-search-results" aria-label={t('transfer.m280')}>
         {running.map(([id, item]) => (
           <button

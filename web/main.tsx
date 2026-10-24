@@ -1327,7 +1327,7 @@ function App() {
                             <ContentAvatar content={s.bot} className="first-scene-avatar" />
                           )}
                           <h2>{t('main.m091')}</h2>
-                          <p className="muted">{t('main.m092')}</p>
+                          <p className="muted">{t('main.firstSceneRequestIdeas')}</p>
                         </div>
                       )}
                       <ReaderPages

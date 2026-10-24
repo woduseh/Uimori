@@ -299,12 +299,6 @@ export const messages = {
     ja: '会話を読み込み中…',
     zh: '正在加载对话…',
   },
-  'helpers.m062': {
-    ko: '작품이나 설정에 대해 물어보세요.',
-    en: 'Ask about your work or settings.',
-    ja: '作品や設定について質問してください。',
-    zh: '可以询问作品或设置相关的问题。',
-  },
   'helpers.m063': {
     ko: '수정한 요청으로 같은 자리에서 다시 시도해요.',
     en: 'Retry in the same place with an edited request.',
@@ -1816,5 +1810,11 @@ export const messages = {
     en: 'Completed assistant task',
     ja: '完了したアシスタント作業',
     zh: '已完成的助手任务',
+  },
+  'helpers.noMessages': {
+    ko: '아직 메시지가 없어요.',
+    en: 'No messages yet.',
+    ja: 'まだメッセージはありません。',
+    zh: '暂无消息。',
   },
 } as const;

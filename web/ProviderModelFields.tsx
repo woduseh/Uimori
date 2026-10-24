@@ -447,6 +447,9 @@ export function ProviderModelFields({
   const tokenizer = TOKENIZER_PROFILES.find(
     (profile) => profile.id === (value.tokenizer || automaticTokenizer)
   );
+  const tokenizerDescriptionInHelp =
+    !value.tokenizer ||
+    ['deepseek-v3', 'deepseek-v4', 'deepseek-v4.1', 'kimi-k2'].includes(value.tokenizer);
   const setEvaluation = (next: ModelDraft['evaluationTools']) => update({ evaluationTools: next });
   return (
     <>
@@ -568,12 +571,13 @@ export function ProviderModelFields({
             })}
           </p>
         )}
-        <details className="provider-setting-help full">
-          <summary>{t('providers.m221')}</summary>
-          <p>{t('providers.m222')}</p>
-          {protocol === 'vercel-chat-v1' && <p>{t('providers.m223')}</p>}
-          {codex && <p>{t('providers.m224')}</p>}
-        </details>
+        {(protocol === 'vercel-chat-v1' || codex) && (
+          <details className="provider-setting-help full">
+            <summary>{t('providers.m221')}</summary>
+            {protocol === 'vercel-chat-v1' && <p>{t('providers.m223')}</p>}
+            {codex && <p>{t('providers.m224')}</p>}
+          </details>
+        )}
       </div>
       <div
         className="provider-model-section full"
@@ -629,7 +633,9 @@ export function ProviderModelFields({
               </option>
             ))}
           </select>
-          {value.tokenizer && <small>{translateMessage(tokenizer?.description ?? '')}</small>}
+          {!tokenizerDescriptionInHelp && (
+            <small>{translateMessage(tokenizer?.description ?? '')}</small>
+          )}
         </label>
         <label className="full">
           {t('providers.m192')}
@@ -664,7 +670,7 @@ export function ProviderModelFields({
         )}
         <details className="provider-setting-help full">
           <summary>{t('providers.m231')}</summary>
-          {!value.tokenizer && <p>{translateMessage(tokenizer?.description ?? '')}</p>}
+          {tokenizerDescriptionInHelp && <p>{translateMessage(tokenizer?.description ?? '')}</p>}
           <p>{t('providers.m232')}</p>
           <p>{t('providers.m233')}</p>
         </details>
@@ -999,7 +1005,6 @@ export function ProviderModelFields({
           )}
           <small className="full">{t('providers.m273')}</small>
         </fieldset>
-        <h4 className="provider-field-heading full">{t('providers.m274')}</h4>
         <ModelPricingEditor
           value={value}
           connection={connection}

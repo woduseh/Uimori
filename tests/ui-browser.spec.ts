@@ -1417,7 +1417,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
   });
   expect(changed.ok()).toBeTruthy();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델');
+  await selectChatSettingsSection(page, '프롬프트·모델·번역');
   await expect(
     page.getByText('저장한 설정은 다음 실행부터 적용해요.', { exact: true })
   ).toBeVisible();
@@ -1891,7 +1891,7 @@ test('UI whole-source translation retains completed results across retry and can
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델');
+  await selectChatSettingsSection(page, '프롬프트·모델·번역');
   await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
   if (visualReview)
@@ -1994,7 +1994,7 @@ test('UI chat settings close right after saving does not warn while the refresh 
   await page.goto(`/?chat=${chat.id}`);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델');
+  await selectChatSettingsSection(page, '프롬프트·모델·번역');
   const runtime = dialog.getByRole('region', { name: '생성 설정', exact: true });
   await runtime.getByText('고급 실행 설정', { exact: true }).click();
   const maxCalls = (await data(request, chat.id)).chat.settings.maxCalls === 6 ? 7 : 6;

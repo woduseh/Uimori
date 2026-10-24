@@ -1115,7 +1115,11 @@ export function HelperPanel(props: Props) {
               label={t('helpers.m061')}
             />
           ) : (
-            messages.length === 0 && <p className="helper-empty">{t('helpers.m062')}</p>
+            messages.length === 0 && (
+              <p className="helper-empty" role="status">
+                {t('helpers.noMessages')}
+              </p>
+            )
           )}
           {messages.map((message) => {
             const task = taskMap.get(message.taskId);

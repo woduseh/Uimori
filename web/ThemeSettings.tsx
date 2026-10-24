@@ -1,7 +1,8 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { baselineThemeColors, colorInputValue } from './theme-color-input.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
 import { ThemeBackgroundSettings } from './ThemeBackgroundSettings.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
@@ -19,6 +20,7 @@ import {
 } from './ui-icons.js';
 import {
   THEME_COLOR_KEYS,
+  DEFAULT_THEME_ID,
   emptyTheme,
   getBuiltinTheme,
   parseThemeFile,
@@ -73,6 +75,7 @@ export function ThemeSettings({
   active?: boolean;
 }) {
   const { locale } = useI18n();
+  const id = useId();
   const [saveConflict, setSaveConflict] = useState(false);
   const state = useThemes();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -420,14 +423,16 @@ export function ThemeSettings({
           <div className="theme-dimension-heading">
             <div>
               <h3 id="theme-layout-heading">{t('visualpanels.layout')}</h3>
-              <small>
-                {t(layoutSource ? 'settings.inheritedThemeSelection' : 'settings.themeSelection', {
-                  title: activeLayout?.id.startsWith('builtin:')
-                    ? translateMessage(activeLayout.title)
-                    : (activeLayout?.title ?? ''),
-                  source: layoutSource ?? t('settings.thisScope'),
-                })}
-              </small>
+              {layoutSource && (
+                <small>
+                  {t('settings.inheritedThemeSelection', {
+                    title: activeLayout?.id.startsWith('builtin:')
+                      ? translateMessage(activeLayout.title)
+                      : (activeLayout?.title ?? ''),
+                    source: layoutSource,
+                  })}
+                </small>
+              )}
             </div>
             {scope !== 'global' && (
               <button
@@ -479,15 +484,15 @@ export function ThemeSettings({
                       <b style={{ background: theme.colors[mode].accent ?? '#355b39' }} />
                     </span>
                   </span>
-                  <strong>
-                    {t('visualpanels.selectedTitle', {
-                      title: theme.id.startsWith('builtin:')
+                  <strong className="theme-choice-title">
+                    <span>
+                      {theme.id.startsWith('builtin:')
                         ? translateMessage(theme.title)
-                        : theme.title,
-                      selected: selectedId === theme.id,
-                    })}
+                        : theme.title}
+                    </span>
+                    {selectedId === theme.id && <Check size={18} aria-hidden="true" />}
                   </strong>
-                  {theme.description && (
+                  {theme.description && theme.id !== DEFAULT_THEME_ID && (
                     <small>
                       {theme.id.startsWith('builtin:')
                         ? translateMessage(theme.description)
@@ -578,12 +583,14 @@ export function ThemeSettings({
           <div className="theme-dimension-heading">
             <div>
               <h3 id="theme-palette-heading">{t('visualpanels.colorPalette')}</h3>
-              <small>
-                {t(paletteSource ? 'settings.inheritedThemeSelection' : 'settings.themeSelection', {
-                  title: editedPaletteTitle,
-                  source: paletteSource ?? t('settings.thisScope'),
-                })}
-              </small>
+              {paletteSource && (
+                <small>
+                  {t('settings.inheritedThemeSelection', {
+                    title: editedPaletteTitle,
+                    source: paletteSource,
+                  })}
+                </small>
+              )}
             </div>
             <button
               disabled={
@@ -609,6 +616,7 @@ export function ThemeSettings({
                   aria-label={t('visualpanels.applyPalette', {
                     v0: translateMessage(palette.title),
                   })}
+                  aria-describedby={palette.description ? `${id}-palette-${palette.id}` : undefined}
                   aria-pressed={selectedPaletteId === palette.id}
                   disabled={busy || backgroundDirty || state.loading}
                   onClick={() => choosePalette(palette.id)}
@@ -618,13 +626,15 @@ export function ThemeSettings({
                       <span key={key} style={{ background: colors[key] }} />
                     ))}
                   </span>
-                  <strong>
-                    {t('visualpanels.selectedTitle', {
-                      title: translateMessage(palette.title),
-                      selected: selectedPaletteId === palette.id,
-                    })}
+                  <strong className="theme-choice-title">
+                    <span>{translateMessage(palette.title)}</span>
+                    {selectedPaletteId === palette.id && <Check size={18} aria-hidden="true" />}
                   </strong>
-                  {palette.description && <small>{translateMessage(palette.description)}</small>}
+                  {palette.description && (
+                    <span id={`${id}-palette-${palette.id}`} className="sr-only">
+                      {translateMessage(palette.description)}
+                    </span>
+                  )}
                 </button>
               );
             })}

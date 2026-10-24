@@ -90,7 +90,7 @@ async function openDetails(page: Page, testId: string) {
     return page.getByTestId(testId);
   }
   await storySettings(page);
-  await selectChatSettingsSection(page, '대화 구성');
+  await selectChatSettingsSection(page, '인물·자료');
   return profileInfo(page);
 }
 
@@ -139,8 +139,14 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .locator('.section-navigation')
       .filter({ visible: true })
       .locator('button .section-navigation-title')
-  ).toHaveText(['대화 구성', '프롬프트·모델', '원작·인물 참고', '기억·로어', '이미지']);
-  await selectChatSettingsSection(page, '대화 구성');
+  ).toHaveText([
+    '인물·자료',
+    '프롬프트·모델·번역',
+    '원작·인물 참고',
+    '기억·메모·로어',
+    '이미지·삽화 참조',
+  ]);
+  await selectChatSettingsSection(page, '인물·자료');
   await page.getByText('함께 사용하는 모듈 · 자료 추가', { exact: true }).click();
   await selectContent(page, '추가할 패키지', added.title);
   await expect(

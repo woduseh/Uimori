@@ -488,7 +488,7 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
       waiting = false;
       release();
       await expect(loading).toHaveCount(0);
-      const empty = panel.getByText('작품이나 설정에 대해 물어보세요.', { exact: true });
+      const empty = panel.getByText('아직 메시지가 없어요.', { exact: true });
       await expect(empty).toBeVisible();
       const emptyBox = (await empty.boundingBox())!;
       expect(
@@ -1127,7 +1127,7 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   expect(view.messages.at(-1)!.artifacts).toEqual([{ id: artifact.id, revision: 1 }]);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
   await panel.getByRole('button', { name: '새 도우미 세션' }).click();
-  await expect(panel.getByText('작품이나 설정에 대해 물어보세요.')).toBeVisible();
+  await expect(panel.getByText('아직 메시지가 없어요.')).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 작업의 초안');
   await panel.getByLabel('도우미 세션 선택').selectOption(view.conversation.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');

@@ -269,7 +269,6 @@ export function SceneNavigator({
         />
       ) : (
         <>
-          <h3>{t('reader.sceneListResults')}</h3>
           {sceneCount > 0 && (
             <p className="scene-list-count">{t('reader.sceneCount', { count: sceneCount })}</p>
           )}

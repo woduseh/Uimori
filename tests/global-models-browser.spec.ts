@@ -385,7 +385,7 @@ for (const width of DEFAULT_WIDTHS) {
     await composer.fill('고정 설정을 바꿔도 보존할 요청');
     await openChatSettings(page);
     const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    await selectChatSettingsSection(page, '프롬프트·모델');
+    await selectChatSettingsSection(page, '프롬프트·모델·번역');
     const promptSelect = settings.getByRole('combobox', {
       name: '이 채팅의 작문 프롬프트',
       exact: true,
@@ -421,7 +421,7 @@ for (const width of DEFAULT_WIDTHS) {
     await settings.getByRole('button', { name: '장착 설정 다시 불러오기', exact: true }).click();
     await expect(promptSelect).toHaveValue('');
     await promptSelect.selectOption(preset.id);
-    await selectChatSettingsSection(page, '프롬프트·모델');
+    await selectChatSettingsSection(page, '프롬프트·모델·번역');
     const modelSelect = settings.getByRole('combobox', {
       name: '이 채팅의 본문 모델',
       exact: true,

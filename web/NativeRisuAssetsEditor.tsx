@@ -15,7 +15,8 @@ import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { IconButton } from './IconButton.js';
-import { DeleteIcon, ImagesIcon } from './ui-icons.js';
+import { DeleteIcon, ImagesIcon, SearchIcon } from './ui-icons.js';
+import './content-picker.css';
 import './native-risu-assets.css';
 import './deletion.css';
 
@@ -135,19 +136,22 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
     <section className="native-risu-assets" aria-label={t('native.text_6b1779397e')}>
       <div className="native-assets-toolbar">
         <label className="native-assets-search">
-          {t('native.text_a887a65c92')}
-          <input
-            type="search"
-            value={query}
-            placeholder={t('native.text_4671f4390f')}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setPage(0);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.preventDefault();
-            }}
-          />
+          <span className="sr-only">{t('native.text_a887a65c92')}</span>
+          <span className="content-picker-search-field">
+            <SearchIcon size={17} aria-hidden="true" />
+            <input
+              type="search"
+              value={query}
+              placeholder={t('native.text_4671f4390f')}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(0);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.preventDefault();
+              }}
+            />
+          </span>
         </label>
         <label className="native-assets-upload">
           {t('native.text_d4d4ce5c0e')}

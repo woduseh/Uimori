@@ -756,12 +756,6 @@ export const messages = {
     ja: 'バックアップ設定を保存しました。',
     zh: '备份设置已保存。',
   },
-  'transfer.m151': {
-    ko: '자동 백업',
-    en: 'Automatic backup',
-    ja: '自動バックアップ',
-    zh: '自动备份',
-  },
   'transfer.m152': {
     ko: '매일 자동 백업',
     en: 'Daily automatic backup',
@@ -1488,12 +1482,6 @@ export const messages = {
     ja: '実行中の作業',
     zh: '正在运行的任务',
   },
-  'transfer.m279': {
-    ko: '작업 현황은 채팅별로 열려요. 확인할 채팅을 골라 주세요.',
-    en: 'Task status opens per chat. Choose a chat to review.',
-    ja: '作業状況はチャットごとに開きます。確認するチャットを選んでください。',
-    zh: '任务状态按聊天显示，请选择要查看的聊天。',
-  },
   'transfer.m280': {
     ko: '진행 중인 채팅',
     en: 'Chats with running tasks',
@@ -1859,12 +1847,6 @@ export const messages = {
     en: 'Start without a first message',
     ja: '最初のメッセージなしで開始',
     zh: '不使用首条消息开始',
-  },
-  'transfer.m343': {
-    ko: '추가 설정',
-    en: 'Additional settings',
-    ja: '追加設定',
-    zh: '附加设置',
   },
   'transfer.m344': {
     ko: '모듈 · 채팅 제목',
@@ -2381,5 +2363,11 @@ export const messages = {
     en: 'The Risu built-in prompt setting specified by {setting} is not applied. The preset prompt blocks and Uimori task and model settings are used.',
     ja: '{setting}で指定されたRisu内蔵プロンプト設定は適用しません。プリセットのプロンプトブロックとUimoriの作業・モデル設定を使います。',
     zh: '不应用 {setting} 指定的 Risu 内置提示词设置。使用预设的提示词区块和 Uimori 的任务、模型设置。',
+  },
+  'transfer.taskChatPickerTitle': {
+    ko: '작업 현황을 볼 채팅',
+    en: 'Choose a chat to view its tasks',
+    ja: '作業状況を確認するチャット',
+    zh: '选择要查看任务的聊天',
   },
 } as const;

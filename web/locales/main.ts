@@ -545,12 +545,6 @@ export const messages = {
     ja: '最初のシーンを教えてください。',
     zh: '请描述第一个场景。',
   },
-  'main.m092': {
-    ko: '배경과 인물, 일어나길 바라는 일을 아래에 적어주세요.',
-    en: 'Describe the setting, characters and what you would like to happen below.',
-    ja: '舞台や人物、起こってほしいことを下に書いてください。',
-    zh: '请在下方写下背景、人物和希望发生的事。',
-  },
   'main.m093': {
     ko: '시작문을 바꿨어요.',
     en: 'Starting text changed.',
@@ -1126,5 +1120,11 @@ export const messages = {
     en: 'Original chat',
     ja: '元のチャット',
     zh: '原聊天',
+  },
+  'main.firstSceneRequestIdeas': {
+    ko: '예: 배경, 등장인물, 일어나길 바라는 사건',
+    en: 'For example: the setting, characters, and what you want to happen',
+    ja: '例：舞台、登場人物、起こってほしい出来事',
+    zh: '例如：背景、人物，以及希望发生的事件',
   },
 };

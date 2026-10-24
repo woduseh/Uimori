@@ -413,12 +413,6 @@ export const messages = {
     ja: '未分類の資料がありません',
     zh: '没有未分类资料',
   },
-  'library.createANew': {
-    ko: '새 {v0} 만들기',
-    en: 'Create a new {v0}',
-    ja: '新しい{v0}を作成',
-    zh: '创建新的{v0}',
-  },
   'library.tryAnotherNameOrDescription': {
     ko: '다른 이름이나 설명으로 찾아보세요.',
     en: 'Try another name or description.',
@@ -749,18 +743,6 @@ export const messages = {
     ja: 'すべてのフォルダー',
     zh: '所有文件夹',
   },
-  'library.searchOtherCategoriesOrAddAResource': {
-    ko: '다른 분류까지 넓혀서 찾거나 서재에서 새 자료를 추가해 보세요.',
-    en: 'Search other categories or add a resource in the library.',
-    ja: '別の分類も探すか、ライブラリで新しい資料を追加してください。',
-    zh: '请搜索其他分类，或在资料库添加新资料。',
-  },
-  'library.changeTheSearchOrFolderOrAdd': {
-    ko: '검색어나 폴더를 바꾸거나 서재에서 새 자료를 추가해 보세요.',
-    en: 'Change the search or folder, or add a resource in the library.',
-    ja: '検索語やフォルダーを変えるか、ライブラリで新しい資料を追加してください。',
-    zh: '请更改搜索词或文件夹，或在资料库添加新资料。',
-  },
   'library.searchOtherCategoriesToo': {
     ko: '다른 분류의 자료도 찾기',
     en: 'Search other categories too',
@@ -852,10 +834,10 @@ export const messages = {
     zh: '解除关联',
   },
   'library.thisModuleIsRequiredByAnAttached': {
-    ko: '장착한 자료가 요구하는 모듈이에요. 연결한 자료를 해제하거나 해당 자료의 모듈 참조를 수정하면 제외할 수 있어요.',
-    en: 'This module is required by an attached resource. Detach that resource or edit its module references to remove it.',
-    ja: '装着した資料が要求するモジュールです。資料の装着を解除するか、そのモジュール参照を編集すると除外できます。',
-    zh: '此模块是已关联资料所必需的，解除该资料或修改其模块引用即可排除。',
+    ko: '이 모듈을 요구하는 자료를 해제하거나, 그 자료의 모듈 참조를 수정하면 제외할 수 있어요.',
+    en: 'To remove this module, detach the resource that requires it or edit that resource’s module references.',
+    ja: 'このモジュールを必要とする資料を外すか、その資料のモジュール参照を編集すると除外できます。',
+    zh: '解除需要此模块的资料，或修改该资料的模块引用，即可移除此模块。',
   },
   'library.reviewLoreAndInstructions': {
     ko: '사용할 로어와 지침 확인',
@@ -1680,10 +1662,10 @@ export const messages = {
     zh: '首条消息完整预览',
   },
   'library.changesThisChatSFirstMessageYour': {
-    ko: '이 채팅의 첫 메시지를 바꿔요. 작성 중인 입력은 그대로 유지해요.',
-    en: "Changes this chat's first message. Your current input is preserved.",
-    ja: 'このチャットの最初のメッセージを変えます。入力中の内容は保持します。',
-    zh: '更改此聊天的首条消息，保留当前输入。',
+    ko: '작성 중인 입력은 그대로 유지해요.',
+    en: 'Your current draft is preserved.',
+    ja: '入力中の下書きはそのまま保持されます。',
+    zh: '正在编辑的输入会保留。',
   },
   'library.checkOpeningChangeResult': {
     ko: '시작문 변경 결과 확인',
@@ -2308,5 +2290,17 @@ export const messages = {
     en: '{category} / {folder}',
     ja: '{category} / {folder}',
     zh: '{category} / {folder}',
+  },
+  'library.noRegisteredResourcesYet': {
+    ko: '아직 등록한 자료가 없어요.',
+    en: 'No resources yet.',
+    ja: 'まだ資料は登録されていません。',
+    zh: '尚未添加资料。',
+  },
+  'library.addNewResourcesInLibrary': {
+    ko: '새 자료는 서재에서 추가할 수 있어요.',
+    en: 'Add new resources in the library.',
+    ja: '新しい資料はライブラリで追加できます。',
+    zh: '可在资料库中添加新资料。',
   },
 };
