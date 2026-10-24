@@ -10,7 +10,7 @@
 
 ## 준비와 실행
 
-서버에 Docker Engine과 Compose 플러그인, 이 저장소의 코드가 필요해요. 설치는 사용 중인 배포판의 [Docker 공식 안내](https://docs.docker.com/engine/install/)를 따르세요. 호스트에 Node.js를 따로 설치할 필요는 없어요. [Dockerfile](../Dockerfile)은 Debian 기반 `node:24.21.0-bookworm-slim`을 사용하고 Node `>=24.14.0 <25`를 검사해요. 빌드 단계에서 `npm ci`와 빌드를 수행하고 실행 이미지에는 production 의존성, `dist`, 도우미 runner와 필요한 런타임 도구를 복사·설치해요. [Node 공식 이미지](https://github.com/nodejs/docker-node/blob/main/README.md), [Docker 다단계 빌드](https://docs.docker.com/build/building/multi-stage/)
+서버에 Docker Engine과 Compose 플러그인, 이 저장소의 코드가 필요해요. 설치는 사용 중인 배포판의 [Docker 공식 안내](https://docs.docker.com/engine/install/)를 따르세요. 호스트에 Node.js를 따로 설치할 필요는 없어요. [Dockerfile](../Dockerfile)은 Debian 기반 `node:24.22.1-bookworm-slim`을 사용하고 Node `>=24.22.1 <25`를 검사해요. 빌드 단계에서 `npm ci`와 빌드를 수행하고 실행 이미지에는 production 의존성, `dist`, 도우미 runner와 필요한 런타임 도구를 복사·설치해요. [Node 공식 이미지](https://github.com/nodejs/docker-node/blob/main/README.md), [Docker 다단계 빌드](https://docs.docker.com/build/building/multi-stage/)
 
 1. 사용할 호스트 이름이 서버를 가리키도록 DNS를 설정하고, 그 이름에 유효하며 PC·휴대폰이 신뢰하는 TLS 인증서를 준비해요. 예시는 `story.example.com`이에요. 서버 방화벽·공유기에서는 HTTPS 포트만 열어요. 기본 번들은 HTTP 80 포트를 열거나 인증서를 발급하지 않아요.
 2. 서버의 전용 디렉터리에 `fullchain.pem`, `privkey.pem`을 둬요. 예시는 `/srv/uimori/tls`예요. Nginx가 이 디렉터리를 읽기 전용으로 마운트해요. 파일이 바깥 경로를 가리키는 심볼릭 링크이면 컨테이너에서 읽지 못하므로 두 파일과 링크 대상이 마운트 안에 있어야 해요. 인증서는 접속할 도메인과 일치해야 해요. [Nginx TLS 설정](https://nginx.org/en/docs/http/ngx_http_ssl_module.html#ssl_certificate)
@@ -103,7 +103,7 @@ curl -sS -X POST https://story.example.com/api/maintenance \
 
 프록시 요청 본문 한도는 513 MiB예요. staged 업로드와 이미지 포함 `.uimori` archive는 512 MiB, native transfer JSON과 채팅 백업 JSON은 256 MiB까지 받아요. 서버는 base64 방식 Risu 파일의 24 MiB 제한, 원문·번역 직접 저장의 HTTP 본문 8 MiB 제한 등 route별 검사를 계속 적용해요. 프록시 한도를 높여도 이 제한은 바뀌지 않아요. [Nginx 본문 크기 제한](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size)
 
-다른 리버스 프록시를 사용한다면 동일한 조건을 유지해요. 호스트에서 앱을 직접 실행할 때는 Node `>=24.14.0 <25`, 빌드 산출물, 영구 `UIMORI_DB` 경로를 준비하고 `UIMORI_HOST=127.0.0.1`로 프록시만 접근하게 할 수 있어요. `/uimori` 같은 하위 경로 배포는 지원하지 않아요.
+다른 리버스 프록시를 사용한다면 동일한 조건을 유지해요. 호스트에서 앱을 직접 실행할 때는 Node `>=24.22.1 <25`, 빌드 산출물, 영구 `UIMORI_DB` 경로를 준비하고 `UIMORI_HOST=127.0.0.1`로 프록시만 접근하게 할 수 있어요. `/uimori` 같은 하위 경로 배포는 지원하지 않아요.
 
 ## 첫 접속 확인
 
