@@ -200,6 +200,7 @@ export function ProviderModelForm({
         />
         <SaveButton
           label={editingModel ? t('providers.m291') : t('providers.m278')}
+          text={editingModel ? t('shared.save') : t('library.register')}
           disabled={busy || !chosen}
           aria-busy={saving}
         />

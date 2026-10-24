@@ -268,6 +268,7 @@ export function ProviderConnectionForm({
         />
         <SaveButton
           label={editingConnection ? t('providers.m163') : t('providers.m133')}
+          text={editingConnection ? t('shared.save') : t('library.register')}
           disabled={busy}
           aria-busy={saving}
         />

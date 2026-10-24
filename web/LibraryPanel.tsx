@@ -1492,7 +1492,7 @@ function ContentEditor({
               disabled={editorUnavailable || !value.title.trim() || portraitBusy}
               aria-busy={busy}
               label={selected ? t('library.saveChanges') : t('library.registerResource')}
-              text={t('shared.save')}
+              text={selected ? t('shared.save') : t('library.register')}
             />
             <LibraryItemMenu title={t('library.resourceMenu')}>
               {(['bot', 'persona', 'module'] as const)
