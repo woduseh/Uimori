@@ -105,6 +105,7 @@ export function ThemeSettings({
     return () => cancelAnimationFrame(frame);
   }, [deleting]);
   const input = useRef<HTMLInputElement>(null);
+  const management = useRef<HTMLDetailsElement>(null);
   const locked = useRef(false);
   const [paletteDirty, setPaletteDirty] = useState(false);
   const paletteSave = useRef<(() => Promise<boolean>) | null>(null);
@@ -180,11 +181,6 @@ export function ThemeSettings({
       ? t('visualpanels.currentBotDefault')
       : t('visualpanels.workspaceDefault');
   const originalColors = activeLayout?.colors;
-  const defaultLegacyLayout = getBuiltinTheme(p.defaultThemeId);
-  const globalLayouts =
-    defaultLegacyLayout && !state.catalog.themes.some((theme) => theme.id === p.defaultThemeId)
-      ? [...state.catalog.themes, defaultLegacyLayout]
-      : state.catalog.themes;
   const selectedLegacyLayout = selectedId && getBuiltinTheme(selectedId);
   const layouts =
     selectedLegacyLayout && !state.catalog.themes.some((theme) => theme.id === selectedId)
@@ -224,6 +220,7 @@ export function ThemeSettings({
       setError('현재 편집을 저장하거나 취소한 뒤 다른 테마를 열어 주세요.');
       return;
     }
+    if (management.current) management.current.open = true;
     const model = theme ? structuredClone(themeDefinition(theme)) : emptyTheme();
     const isCopy = copy || !!theme?.id.startsWith('builtin:');
     if (theme && isCopy) model.title += ' 사본';
@@ -352,31 +349,6 @@ export function ThemeSettings({
           ];
         }}
       />
-      <div className="theme-toolbar theme-control-bar theme-default-control">
-        <label>
-          {t('visualpanels.defaultAppearance')}{' '}
-          <select
-            aria-label={t('visualpanels.defaultAppearance')}
-            value={p.defaultThemeId}
-            disabled={busy || backgroundDirty || paletteDirty || state.loading}
-            onChange={(event) => choose(event.target.value, 'global')}
-          >
-            {globalLayouts.map((theme) => (
-              <option key={theme.id} value={theme.id}>
-                {theme.id.startsWith('builtin:') ? translateMessage(theme.title) : theme.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="theme-current">
-          {t('visualpanels.currentDisplay', {
-            v0: state.active.id.startsWith('builtin:')
-              ? translateMessage(state.active.title)
-              : state.active.title,
-            v1: state.preview ? t('visualpanels.previewColors') : activePaletteTitle,
-          })}
-        </span>
-      </div>
       {state.disabled && (
         <p role="status" className="theme-recovery">
           {t('visualpanels.customThemesAreTemporarilyDisabledInThis')}{' '}
@@ -399,283 +371,288 @@ export function ThemeSettings({
       )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       <TransientNotice message={notice} />
-      <details className="theme-advanced">
-        <summary>{t('visualpanels.advancedAppearanceAndThemeCreation')}</summary>
-        <div className="theme-toolbar theme-control-bar">
-          <label>
-            {t('visualpanels.scope')}{' '}
-            <select
-              aria-label={t('visualpanels.themeScope')}
-              value={scope}
-              disabled={busy || backgroundDirty || paletteDirty}
-              onChange={(e) => setScope(e.target.value as typeof scope)}
-            >
-              <option value="global">{t('visualpanels.workspaceDefault')}</option>
-              {state.scope.botId && (
-                <option value="bot">{t('visualpanels.currentBotDefault')}</option>
-              )}
-              {state.scope.chatId && <option value="chat">{t('visualpanels.thisChatOnly')}</option>}
-            </select>
-          </label>
-          <label>
-            {t('visualpanels.previewColors')}{' '}
-            <select
-              aria-label={t('visualpanels.themeColorPreview')}
-              value={mode}
-              onChange={(e) => setMode(e.target.value as typeof mode)}
-            >
-              <option value="light">{t('visualpanels.lightColors')}</option>
-              <option value="dark">{t('visualpanels.darkColors')}</option>
-            </select>
-          </label>
-        </div>
-        <section className="theme-dimension" aria-labelledby="theme-layout-heading">
-          <div className="theme-dimension-heading">
-            <div>
-              <h3 id="theme-layout-heading">{t('visualpanels.layout')}</h3>
-              {layoutSource && (
-                <small>
-                  {t('settings.inheritedThemeSelection', {
-                    title: activeLayout?.id.startsWith('builtin:')
-                      ? translateMessage(activeLayout.title)
-                      : (activeLayout?.title ?? ''),
-                    source: layoutSource,
-                  })}
-                </small>
-              )}
-            </div>
-            {scope !== 'global' && (
-              <button
-                disabled={busy || backgroundDirty || paletteDirty || state.loading || !selectedId}
-                onClick={() => choose(null)}
-              >
-                {t('visualpanels.inheritLayout')}
-              </button>
+      <div className="theme-toolbar theme-control-bar">
+        <label>
+          {t('visualpanels.scope')}{' '}
+          <select
+            aria-label={t('visualpanels.themeScope')}
+            value={scope}
+            disabled={busy || backgroundDirty || paletteDirty}
+            onChange={(e) => setScope(e.target.value as typeof scope)}
+          >
+            <option value="global">{t('visualpanels.workspaceDefault')}</option>
+            {state.scope.botId && (
+              <option value="bot">{t('visualpanels.currentBotDefault')}</option>
+            )}
+            {state.scope.chatId && <option value="chat">{t('visualpanels.thisChatOnly')}</option>}
+          </select>
+        </label>
+        <label>
+          {t('visualpanels.previewColors')}{' '}
+          <select
+            aria-label={t('visualpanels.themeColorPreview')}
+            value={mode}
+            onChange={(e) => setMode(e.target.value as typeof mode)}
+          >
+            <option value="light">{t('visualpanels.lightColors')}</option>
+            <option value="dark">{t('visualpanels.darkColors')}</option>
+          </select>
+        </label>
+        <span className="theme-current">
+          {t('visualpanels.currentDisplay', {
+            v0: state.active.id.startsWith('builtin:')
+              ? translateMessage(state.active.title)
+              : state.active.title,
+            v1: state.preview ? t('visualpanels.previewColors') : activePaletteTitle,
+          })}
+        </span>
+      </div>
+      <section className="theme-dimension" aria-labelledby="theme-layout-heading">
+        <div className="theme-dimension-heading">
+          <div>
+            <h3 id="theme-layout-heading">{t('visualpanels.layout')}</h3>
+            {layoutSource && (
+              <small>
+                {t('settings.inheritedThemeSelection', {
+                  title: activeLayout?.id.startsWith('builtin:')
+                    ? translateMessage(activeLayout.title)
+                    : (activeLayout?.title ?? ''),
+                  source: layoutSource,
+                })}
+              </small>
             )}
           </div>
-          <div className="theme-grid" aria-label={t('visualpanels.savedLayouts')}>
-            {layouts.map((theme) => (
-              <article
-                className={`theme-card ${selectedId === theme.id ? 'selected' : ''}`}
-                key={theme.id}
+          {scope !== 'global' && (
+            <button
+              disabled={busy || backgroundDirty || paletteDirty || state.loading || !selectedId}
+              onClick={() => choose(null)}
+            >
+              {t('visualpanels.inheritLayout')}
+            </button>
+          )}
+        </div>
+        <div className="theme-grid" aria-label={t('visualpanels.savedLayouts')}>
+          {layouts.map((theme) => (
+            <article
+              className={`theme-card ${selectedId === theme.id ? 'selected' : ''}`}
+              key={theme.id}
+            >
+              <button
+                className="theme-card-apply"
+                aria-label={t('visualpanels.applyTheme', {
+                  v0: theme.id.startsWith('builtin:') ? translateMessage(theme.title) : theme.title,
+                })}
+                aria-pressed={selectedId === theme.id}
+                disabled={busy || backgroundDirty || paletteDirty || state.loading}
+                onClick={() => choose(theme.id)}
               >
+                <span
+                  className="theme-swatch"
+                  data-layout={theme.id}
+                  aria-hidden="true"
+                  style={{
+                    background: theme.colors[mode].bg ?? baselineThemeColors[mode].bg,
+                    color: theme.colors[mode].text ?? baselineThemeColors[mode].text,
+                  }}
+                >
+                  <span
+                    className="theme-swatch-nav"
+                    style={{
+                      background: theme.colors[mode].nav ?? baselineThemeColors[mode].nav,
+                    }}
+                  />
+                  <span className="theme-swatch-page">
+                    <span>Aa</span>
+                    <i />
+                    <i />
+                    <b
+                      style={{
+                        background: theme.colors[mode].accent ?? baselineThemeColors[mode].accent,
+                      }}
+                    />
+                  </span>
+                </span>
+                <strong className="theme-choice-title">
+                  <span>
+                    {theme.id.startsWith('builtin:') ? translateMessage(theme.title) : theme.title}
+                  </span>
+                  {selectedId === theme.id && <Check size={18} aria-hidden="true" />}
+                </strong>
+                {theme.description && theme.id !== DEFAULT_THEME_ID && (
+                  <small>
+                    {theme.id.startsWith('builtin:')
+                      ? translateMessage(theme.description)
+                      : theme.description}
+                  </small>
+                )}
+              </button>
+              <div className="theme-card-actions">
                 <button
-                  className="theme-card-apply"
-                  aria-label={t('visualpanels.applyTheme', {
+                  aria-label={
+                    theme.id.startsWith('builtin:')
+                      ? t('visualpanels.duplicateAndCustomize')
+                      : t('visualpanels.edit')
+                  }
+                  title={
+                    theme.id.startsWith('builtin:')
+                      ? t('visualpanels.duplicateAndCustomize')
+                      : t('visualpanels.edit')
+                  }
+                  disabled={busy || backgroundDirty || paletteDirty}
+                  onClick={() => edit(theme)}
+                >
+                  {theme.id.startsWith('builtin:')
+                    ? t('visualpanels.customize')
+                    : t('visualpanels.edit')}
+                </button>
+                <IconButton
+                  label={t('visualpanels.export', {
                     v0: theme.id.startsWith('builtin:')
                       ? translateMessage(theme.title)
                       : theme.title,
                   })}
-                  aria-pressed={selectedId === theme.id}
-                  disabled={busy || backgroundDirty || paletteDirty || state.loading}
-                  onClick={() => choose(theme.id)}
+                  icon={DownloadIcon}
+                  onClick={() =>
+                    saveDownload(
+                      `${theme.title}.uimori-theme.json`,
+                      themeFile(themeDefinition(theme))
+                    )
+                  }
+                />
+              </div>
+              {!theme.id.startsWith('builtin:') && (
+                <ActionMenu
+                  label={t('visualpanels.manage', {
+                    v0: theme.id.startsWith('builtin:')
+                      ? translateMessage(theme.title)
+                      : theme.title,
+                  })}
+                  className="theme-card-menu"
+                  viewport
                 >
-                  <span
-                    className="theme-swatch"
-                    data-layout={theme.id}
-                    aria-hidden="true"
-                    style={{
-                      background: theme.colors[mode].bg ?? baselineThemeColors[mode].bg,
-                      color: theme.colors[mode].text ?? baselineThemeColors[mode].text,
-                    }}
-                  >
-                    <span
-                      className="theme-swatch-nav"
-                      style={{
-                        background: theme.colors[mode].nav ?? baselineThemeColors[mode].nav,
+                  <div className="action-menu-group">
+                    <button
+                      aria-label={t('visualpanels.duplicate', {
+                        v0: theme.id.startsWith('builtin:')
+                          ? translateMessage(theme.title)
+                          : theme.title,
+                      })}
+                      disabled={busy || backgroundDirty || paletteDirty}
+                      onClick={() => edit(theme, true)}
+                    >
+                      <CopyIcon size={18} aria-hidden="true" /> {t(
+                        'visualpanels.duplicateAndEdit'
+                      )}{' '}
+                    </button>
+                  </div>
+                  <div className="action-menu-group">
+                    <button
+                      className="danger"
+                      aria-label={t('visualpanels.delete', {
+                        v0: theme.id.startsWith('builtin:')
+                          ? translateMessage(theme.title)
+                          : theme.title,
+                      })}
+                      disabled={busy || dirty}
+                      onClick={(event) => {
+                        event.currentTarget.closest('details')?.querySelector('summary')?.focus();
+                        setDeleting(theme);
                       }}
-                    />
-                    <span className="theme-swatch-page">
-                      <span>Aa</span>
-                      <i />
-                      <i />
-                      <b
-                        style={{
-                          background: theme.colors[mode].accent ?? baselineThemeColors[mode].accent,
-                        }}
-                      />
-                    </span>
-                  </span>
-                  <strong className="theme-choice-title">
-                    <span>
-                      {theme.id.startsWith('builtin:')
-                        ? translateMessage(theme.title)
-                        : theme.title}
-                    </span>
-                    {selectedId === theme.id && <Check size={18} aria-hidden="true" />}
-                  </strong>
-                  {theme.description && theme.id !== DEFAULT_THEME_ID && (
-                    <small>
-                      {theme.id.startsWith('builtin:')
-                        ? translateMessage(theme.description)
-                        : theme.description}
-                    </small>
-                  )}
-                </button>
-                <div className="theme-card-actions">
-                  <button
-                    aria-label={
-                      theme.id.startsWith('builtin:')
-                        ? t('visualpanels.duplicateAndCustomize')
-                        : t('visualpanels.edit')
-                    }
-                    title={
-                      theme.id.startsWith('builtin:')
-                        ? t('visualpanels.duplicateAndCustomize')
-                        : t('visualpanels.edit')
-                    }
-                    disabled={busy || backgroundDirty || paletteDirty}
-                    onClick={() => edit(theme)}
-                  >
-                    {theme.id.startsWith('builtin:')
-                      ? t('visualpanels.customize')
-                      : t('visualpanels.edit')}
-                  </button>
-                  <IconButton
-                    label={t('visualpanels.export', {
-                      v0: theme.id.startsWith('builtin:')
-                        ? translateMessage(theme.title)
-                        : theme.title,
-                    })}
-                    icon={DownloadIcon}
-                    onClick={() =>
-                      saveDownload(
-                        `${theme.title}.uimori-theme.json`,
-                        themeFile(themeDefinition(theme))
-                      )
-                    }
-                  />
-                </div>
-                {!theme.id.startsWith('builtin:') && (
-                  <ActionMenu
-                    label={t('visualpanels.manage', {
-                      v0: theme.id.startsWith('builtin:')
-                        ? translateMessage(theme.title)
-                        : theme.title,
-                    })}
-                    className="theme-card-menu"
-                    viewport
-                  >
-                    <div className="action-menu-group">
-                      <button
-                        aria-label={t('visualpanels.duplicate', {
-                          v0: theme.id.startsWith('builtin:')
-                            ? translateMessage(theme.title)
-                            : theme.title,
-                        })}
-                        disabled={busy || backgroundDirty || paletteDirty}
-                        onClick={() => edit(theme, true)}
-                      >
-                        <CopyIcon size={18} aria-hidden="true" />{' '}
-                        {t('visualpanels.duplicateAndEdit')}{' '}
-                      </button>
-                    </div>
-                    <div className="action-menu-group">
-                      <button
-                        className="danger"
-                        aria-label={t('visualpanels.delete', {
-                          v0: theme.id.startsWith('builtin:')
-                            ? translateMessage(theme.title)
-                            : theme.title,
-                        })}
-                        disabled={busy || dirty}
-                        onClick={(event) => {
-                          event.currentTarget.closest('details')?.querySelector('summary')?.focus();
-                          setDeleting(theme);
-                        }}
-                      >
-                        <DeleteIcon size={18} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
-                      </button>
-                    </div>
-                  </ActionMenu>
-                )}
-              </article>
-            ))}
-          </div>
-          <p className="theme-help">{t('settings.themeExportScope')}</p>
-        </section>
-        <section className="theme-dimension" aria-labelledby="theme-palette-heading">
-          <div className="theme-dimension-heading">
-            <div>
-              <h3 id="theme-palette-heading">{t('visualpanels.colorPalette')}</h3>
-              {paletteSource && (
-                <small>
-                  {t('settings.inheritedThemeSelection', {
-                    title: editedPaletteTitle,
-                    source: paletteSource,
-                  })}
-                </small>
+                    >
+                      <DeleteIcon size={18} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
+                    </button>
+                  </div>
+                </ActionMenu>
               )}
-            </div>
-            <button
-              disabled={
-                busy ||
-                backgroundDirty ||
-                paletteDirty ||
-                state.loading ||
-                (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
-              }
-              onClick={() => choosePalette(null)}
-            >
-              {scope === 'global'
-                ? t('visualpanels.resetPaletteToDefault')
-                : t('visualpanels.inheritPalette')}
-            </button>
+            </article>
+          ))}
+        </div>
+        <p className="theme-help">{t('settings.themeExportScope')}</p>
+      </section>
+      <section className="theme-dimension" aria-labelledby="theme-palette-heading">
+        <div className="theme-dimension-heading">
+          <div>
+            <h3 id="theme-palette-heading">{t('visualpanels.colorPalette')}</h3>
+            {paletteSource && (
+              <small>
+                {t('settings.inheritedThemeSelection', {
+                  title: editedPaletteTitle,
+                  source: paletteSource,
+                })}
+              </small>
+            )}
           </div>
-          <div className="theme-palette-grid" aria-label={t('visualpanels.selectColorPalette')}>
-            {palettes.map((palette) => {
-              const colors = { ...baselineThemeColors[mode], ...palette.colors[mode] };
-              return (
-                <button
-                  key={palette.id}
-                  className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
-                  aria-label={t('visualpanels.applyPalette', {
-                    v0: paletteTitle(palette),
-                  })}
-                  aria-describedby={palette.description ? `${id}-palette-${palette.id}` : undefined}
-                  aria-pressed={selectedPaletteId === palette.id}
-                  disabled={busy || backgroundDirty || paletteDirty || state.loading}
-                  onClick={() => choosePalette(palette.id)}
-                >
-                  <span className="theme-palette-swatches" aria-hidden="true">
-                    {(['bg', 'panel', 'accent', 'text'] as const).map((key) => (
-                      <span key={key} style={{ background: colors[key] }} />
-                    ))}
+          <button
+            disabled={
+              busy ||
+              backgroundDirty ||
+              paletteDirty ||
+              state.loading ||
+              (scope === 'global' ? selectedPaletteId === THEME_PALETTE_ID : !selectedPaletteId)
+            }
+            onClick={() => choosePalette(null)}
+          >
+            {scope === 'global'
+              ? t('visualpanels.resetPaletteToDefault')
+              : t('visualpanels.inheritPalette')}
+          </button>
+        </div>
+        <div className="theme-palette-grid" aria-label={t('visualpanels.selectColorPalette')}>
+          {palettes.map((palette) => {
+            const colors = { ...baselineThemeColors[mode], ...palette.colors[mode] };
+            return (
+              <button
+                key={palette.id}
+                className={`theme-palette-card ${selectedPaletteId === palette.id ? 'selected' : ''}`}
+                aria-label={t('visualpanels.applyPalette', {
+                  v0: paletteTitle(palette),
+                })}
+                aria-describedby={palette.description ? `${id}-palette-${palette.id}` : undefined}
+                aria-pressed={selectedPaletteId === palette.id}
+                disabled={busy || backgroundDirty || paletteDirty || state.loading}
+                onClick={() => choosePalette(palette.id)}
+              >
+                <span className="theme-palette-swatches" aria-hidden="true">
+                  {(['bg', 'panel', 'accent', 'text'] as const).map((key) => (
+                    <span key={key} style={{ background: colors[key] }} />
+                  ))}
+                </span>
+                <strong className="theme-choice-title">
+                  <span>{paletteTitle(palette)}</span>
+                  {selectedPaletteId === palette.id && <Check size={18} aria-hidden="true" />}
+                </strong>
+                {palette.description && (
+                  <span id={`${id}-palette-${palette.id}`} className="sr-only">
+                    {'revision' in palette
+                      ? palette.description
+                      : translateMessage(palette.description)}
                   </span>
-                  <strong className="theme-choice-title">
-                    <span>{paletteTitle(palette)}</span>
-                    {selectedPaletteId === palette.id && <Check size={18} aria-hidden="true" />}
-                  </strong>
-                  {palette.description && (
-                    <span id={`${id}-palette-${palette.id}`} className="sr-only">
-                      {'revision' in palette
-                        ? palette.description
-                        : translateMessage(palette.description)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </section>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+      <FontSettings onDirtyChange={setFontDirty} onSaveHandlerChange={registerFontSave} />
+      <ThemeBackgroundSettings
+        key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
+        scope={scope}
+        disabled={busy || paletteDirty}
+        targetId={
+          scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
+        }
+        onDirtyChange={setBackgroundDirty}
+        onSaveHandlerChange={registerBackgroundSave}
+      />
+      <details className="theme-advanced" ref={management}>
+        <summary>{t('visualpanels.manageThemes')}</summary>
         <PaletteSettings
           active={active}
           disabled={busy || backgroundDirty || dirty}
           onDirtyChange={setPaletteDirty}
           onSaveHandlerChange={registerPaletteSave}
         />
-        <FontSettings onDirtyChange={setFontDirty} onSaveHandlerChange={registerFontSave} />
-        <ThemeBackgroundSettings
-          key={`${scope}:${scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : ''}`}
-          scope={scope}
-          disabled={busy || paletteDirty}
-          targetId={
-            scope === 'bot' ? state.scope.botId : scope === 'chat' ? state.scope.chatId : undefined
-          }
-          onDirtyChange={setBackgroundDirty}
-          onSaveHandlerChange={registerBackgroundSave}
-        />
-        <section className="theme-library-tools" aria-label={t('visualpanels.manageThemes')}>
+        <section className="theme-library-tools">
           <div className="theme-library-actions">
             <button
               className="primary"
@@ -862,25 +839,6 @@ export function ThemeSettings({
             </div>
           </section>
         )}
-        {state.preview && (
-          <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>
-        )}
-        <details className="theme-sample">
-          <summary>{t('visualpanels.previewSampleWithCurrentTheme')}</summary>
-          <ThemeFrame>
-            <div slot="request">{t('visualpanels.startAStoryInAQuietLibrary')}</div>
-            <div slot="heading" className="scene-header">
-              <strong>{t('visualpanels.firstScene')}</strong>
-              <span>{t('visualpanels.originalTranslation')}</span>
-            </div>
-            <div slot="body">
-              <RisuMessageSurface html={sample} onAction={async () => {}} disabled />
-            </div>
-            <div slot="actions" className="source-actions">
-              <button type="button">{t('visualpanels.bodyActionExample')}</button>
-            </div>
-          </ThemeFrame>
-        </details>
         {importNotice && <p role="status">{translateMessage(importNotice)}</p>}
         <p className="theme-help">
           {t('visualpanels.themeRecoveryHelp', {
@@ -888,6 +846,25 @@ export function ThemeSettings({
             query: '?theme-safe=1',
           })}
         </p>
+      </details>
+      {state.preview && (
+        <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>
+      )}
+      <details className="theme-sample">
+        <summary>{t('visualpanels.previewSampleWithCurrentTheme')}</summary>
+        <ThemeFrame>
+          <div slot="request">{t('visualpanels.startAStoryInAQuietLibrary')}</div>
+          <div slot="heading" className="scene-header">
+            <strong>{t('visualpanels.firstScene')}</strong>
+            <span>{t('visualpanels.originalTranslation')}</span>
+          </div>
+          <div slot="body">
+            <RisuMessageSurface html={sample} onAction={async () => {}} disabled />
+          </div>
+          <div slot="actions" className="source-actions">
+            <button type="button">{t('visualpanels.bodyActionExample')}</button>
+          </div>
+        </ThemeFrame>
       </details>
       <Dialog
         open={!!deleting}

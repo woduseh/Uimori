@@ -271,9 +271,6 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
 }
-.theme-default-control {
-  grid-template-columns: minmax(0, 1fr);
-}
 .theme-control-bar > label {
   min-width: 0;
 }

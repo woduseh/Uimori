@@ -315,6 +315,38 @@
 .helper-task-history .task-request {
   margin: 8px 0 0;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.task-request-disclosure {
+  margin-top: 8px;
+}
+.task-request-disclosure > summary {
+  padding: 0;
+}
+.task-request-disclosure > summary::before {
+  content: none;
+}
+.task-request-preview {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.task-request-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--control-h);
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.task-request-disclosure[open] .task-request-preview {
+  display: none;
+}
+.task-request-disclosure[open] .task-request-toggle svg {
+  transform: rotate(180deg);
 }
 .helper-task-history .activity-notification-heading strong {
   font-size: var(--font-body);

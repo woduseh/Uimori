@@ -83,7 +83,7 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
     const dialog = page.getByRole('dialog', { name: '전체 채팅 검색', exact: true });
     const search = dialog.getByRole('searchbox', { name: '전체 채팅 검색', exact: true });
     const scope = dialog.getByRole('combobox', { name: '검색 범위' });
-    await expect(scope).toHaveValue('workspace');
+    await expect(scope).toHaveCount(0);
     const inputBox = (await search.boundingBox())!;
     const buttonBox = (await dialog
       .getByRole('button', { name: '검색', exact: true })
@@ -130,7 +130,7 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
       await page.setViewportSize({ width: resizedWidth, height: 900 });
       await expect(dialog).toBeVisible();
       await expect(search).toHaveValue('미카');
-      await expect(scope).toHaveValue('workspace');
+      await expect(scope).toHaveCount(0);
       await expect(dialog.getByRole('button', { name: '요청', exact: true })).toHaveAttribute(
         'aria-pressed',
         'false'

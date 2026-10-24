@@ -1621,6 +1621,78 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await expect(panel.locator('.helper-task-history').getByText('SYNTHETIC_FAILURE')).toBeVisible();
 });
 
+for (const width of DEFAULT_WIDTHS) {
+  test(`HELPHISTORY long requests fold without hiding failures, saved changes or exact text ${width}`, async ({
+    page,
+    request,
+    context,
+  }, info) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.setViewportSize({ width, height: 844 });
+    const chat = await create(request),
+      state = await harness(page, 1);
+    await page.goto(`/?chat=${chat.id}`);
+    await open(page);
+    const failed = state.addFailed(state.current());
+    const fullRequest = `  첫 문장의 공백도 유지해 주세요.\n\n${'긴 한국어 요청을 접어 두고 필요한 부분을 확인해요. '.repeat(30)}\n마지막 줄의 공백도 유지해 주세요.  `;
+    failed.request = fullRequest;
+    failed.completedEffects = { count: 1, labels: ['다음 요청 옵션'] };
+    await page.reload();
+    const panel = await open(page);
+    await panel.getByLabel('도우미에게 요청').fill('별도로 유지할 요청 초안');
+    await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
+    const history = panel.locator('.helper-task-history');
+    const record = history.locator(`[data-task-id="${failed.id}"]`).first();
+    const disclosure = record.locator('.task-request-disclosure');
+    const summary = disclosure.locator(':scope > summary');
+    const fullText = disclosure.locator('.task-request');
+    await expect(disclosure).not.toHaveAttribute('open');
+    await expect(record.locator('.task-request-preview')).toBeVisible();
+    expect(
+      await record
+        .locator('.task-request-preview')
+        .evaluate(
+          (node) =>
+            node.clientHeight <= Number.parseFloat(getComputedStyle(node).lineHeight) * 3 + 1
+        )
+    ).toBe(true);
+    await expect(fullText).toBeHidden();
+    await expect(record.getByText('작업에 실패했어요', { exact: true })).toBeVisible();
+    await expect(record.getByText('SYNTHETIC_FAILURE', { exact: true })).toBeVisible();
+    await expect(
+      record.getByText('저장한 변경 1건, 다음 요청 옵션', { exact: true })
+    ).toBeVisible();
+    const shortRecord = history
+      .getByTestId('helper-task-record')
+      .filter({ hasText: '합성 요청 1' });
+    await expect(shortRecord.locator('.task-request-disclosure')).toHaveCount(0);
+    await expect(shortRecord.locator('.task-request')).toHaveText('합성 요청 1');
+    await page.screenshot({
+      path: info.outputPath(`helper-history-collapsed-${width}.png`),
+      fullPage: true,
+    });
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(fullText).toBeVisible();
+    expect(await fullText.textContent()).toBe(fullRequest);
+    await fullText.evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      window.getSelection()?.removeAllRanges();
+      window.getSelection()?.addRange(range);
+    });
+    await page.keyboard.press('Control+c');
+    expect(
+      (await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/gu, '\n')
+    ).toBe(fullRequest);
+    await summary.click();
+    await expect(fullText).toBeHidden();
+    await panel.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
+    await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
+    expect(state.posts).toHaveLength(0);
+  });
+}
+
 test('HELPUI06 saved effects survive response failure and cannot be replayed from retry controls', async ({
   page,
   request,
