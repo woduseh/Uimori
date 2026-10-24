@@ -249,7 +249,9 @@ test('LCOM02 empty categories hide unused tools while empty folders and searches
   await page.goto('/');
   const panel = page.getByTestId('library-panel');
   await panel.getByRole('tab', { name: '모듈', exact: true }).click();
-  await expect(panel.getByRole('heading', { name: '새 모듈 만들기', exact: true })).toBeVisible();
+  await expect(
+    panel.getByRole('heading', { name: '아직 등록한 자료가 없어요.', exact: true })
+  ).toBeVisible();
   await expect(panel.getByRole('searchbox', { name: '서재 검색', exact: true })).toHaveCount(0);
   await expect(panel.getByLabel('목록 관리', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '새로 만들기', exact: true })).toHaveCount(0);

@@ -1170,10 +1170,14 @@ for (const [index, item] of providerOptionCases.entries()) {
       // Fable documents adaptive thinking only; disabling stays selectable as an unverified value.
       const mode = form.getByLabel('사고 모드', { exact: true });
       await expect(mode.locator('optgroup[label="문서로 확인한 값"] option')).toHaveText([
-        '적응형, adaptive',
+        '적응형 (adaptive)',
       ]);
+      await expect(mode.locator('optgroup[label="문서로 확인한 값"] option')).toHaveAttribute(
+        'value',
+        'adaptive'
+      );
       await expect(
-        mode.locator('optgroup[label="미확인 값, 프로바이더가 판정"] option[value="disabled"]')
+        mode.locator('optgroup[label="미확인 값 (프로바이더가 판단)"] option[value="disabled"]')
       ).toHaveCount(1);
       await form.getByLabel('이 모델 프리셋에 평가 도구 사용').check();
       await expect(

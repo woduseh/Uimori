@@ -2,7 +2,11 @@ import { MOBILE_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type Page, type TestInfo } from '@playwright/test';
 import { postFixtureChat } from './fixtures/chat.js';
-import { navigationAction, selectChatSettingsSection } from './ui-navigation.js';
+import {
+  navigationAction,
+  selectChatSettingsSection,
+  selectSettingsSection,
+} from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
 async function scriptEvidence(page: Page, info: TestInfo, name: string) {
@@ -52,7 +56,8 @@ test('LAZY04 failed library keeps desktop and mobile navigation available', asyn
       await page.screenshot({ path: info.outputPath(`library-load-failure-${width}.png`) });
     await navigationAction(page, '설정');
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
-    await expect(settings.locator('.settings-navigation')).toBeVisible();
+    await selectSettingsSection(page, '일반');
+    await expect(settings.getByRole('tabpanel', { name: '일반', exact: true })).toBeVisible();
     await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
     await expect(page.getByRole('alert')).toContainText('불러오지 못했어요');
@@ -85,7 +90,8 @@ test('LAZY05 unavailable library data keeps prompt navigation usable', async ({ 
       await page.screenshot({ path: info.outputPath(`prompt-data-failure-${width}.png`) });
     await navigationAction(page, '설정');
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
-    await expect(settings.locator('.settings-navigation')).toBeVisible();
+    await selectSettingsSection(page, '일반');
+    await expect(settings.getByRole('tabpanel', { name: '일반', exact: true })).toBeVisible();
     await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
     await expect(page.getByRole('heading', { name: '프롬프트', exact: true })).toBeVisible();
@@ -135,17 +141,8 @@ test('LAZY02 delayed settings keep the reader and composer draft available', asy
     await expect(draft).toHaveValue('SYNTHETIC_UNSENT_LAZY_DRAFT');
     release();
     await navigationAction(page, '설정');
-    await expect(settings.locator('.settings-navigation').filter({ visible: true })).toBeVisible();
-    await expect(
-      settings
-        .getByRole('tab', { name: '일반', exact: true })
-        .or(
-          settings
-            .locator('.settings-navigation')
-            .getByRole('button', { name: '일반', exact: true })
-        )
-        .filter({ visible: true })
-    ).toBeVisible();
+    await selectSettingsSection(page, '일반');
+    await expect(settings.getByRole('tabpanel', { name: '일반', exact: true })).toBeVisible();
     const opened = await scriptEvidence(page, info, 'settings-open-scripts');
     expect(opened.some((entry) => /WorkspacePanels-/.test(entry.path))).toBe(true);
     await page.keyboard.press('Escape');

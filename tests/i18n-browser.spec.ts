@@ -609,11 +609,15 @@ test('I18N10 saved conflict reviews re-render field statuses and React content f
       const review = dialog.locator('.saved-version-review');
       await expect(review).toContainText('Changed elsewhere / 保存済み本文');
       await expect(review).toContainText('Copy your input first if you want to keep it.');
-      await expect(review).toContainText('Review the title and main text.');
+      await expect(
+        review.getByRole('heading', { name: 'Title and text preview', exact: true })
+      ).toBeVisible();
       expect(reads).toBe(1);
       await switchFromAnotherTab(view, 'ja');
       await expect(review).toContainText('入力を残すには先にコピーしてください。');
-      await expect(review).toContainText('タイトルと主な本文を確認できます。');
+      await expect(
+        review.getByRole('heading', { name: 'タイトルと本文のプレビュー', exact: true })
+      ).toBeVisible();
       await expect(review).toContainText('Changed elsewhere / 保存済み本文');
       await expect(review).not.toContainText('Copy your input first');
       await expect(review).not.toContainText(draft);

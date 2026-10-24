@@ -94,11 +94,10 @@ export function SettingsEditor({
       onError('');
       // Persisted; the refresh below is not an unsaved draft.
       setSaving(false);
-      try {
-        await onSaved();
-      } catch (error) {
+      // Complete the acknowledged save before its independent reader refresh.
+      void onSaved().catch((error) => {
         setLocalError(uiMessage('settings.m80', { v0: messageRef((error as Error).message) }));
-      }
+      });
       return true;
     } catch (error) {
       const text = (error as Error).message;

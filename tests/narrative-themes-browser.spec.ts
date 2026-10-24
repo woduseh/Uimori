@@ -916,7 +916,7 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
     if (await advanced.isVisible()) await advanced.click();
   }
   await selectSettingsSection(page, '일반');
-  await page.getByLabel('화면 모드', { exact: true }).selectOption('dark');
+  await page.getByRole('combobox', { name: '앱 화면 테마', exact: true }).selectOption('dark');
   await selectSettingsSection(page, '테마와 색상');
   {
     const advanced = page.locator('.theme-advanced:not([open]) > summary');

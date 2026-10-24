@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { createReadingChat } from './fixtures/personal-workspace.js';
-import { navigationAction, selectSettingsSection } from './ui-navigation.js';
+import { navigationAction, selectSettingsSection, sourceAction } from './ui-navigation.js';
 import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 
 test.setTimeout(60000);
@@ -322,9 +322,10 @@ test('PWUI07 a worker notification focuses a semantic scene without reloading; a
   await page.goto(`/?chat=${first.chat.id}`);
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
   const scene = page.locator('[data-testid="source"]').first();
-  await scene.getByRole('button', { name: '원문 보기', exact: true }).click();
-  await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+  await sourceAction(scene, '원문 보기');
+  await sourceAction(scene, '원문 수정');
   const editor = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
+  await expect(editor).toHaveValue(first.detail.sources[0].text);
   await editor.fill('저장하지 않은 원고 초안');
   const before = page.url();
   const initialDocument = await page.evaluate(() => {

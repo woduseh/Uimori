@@ -420,7 +420,10 @@ for (const width of DEFAULT_WIDTHS) {
     expect((await conflictResponse).status()).toBe(409);
     await expect(promptSelect).toHaveValue(preset.id);
     await expect(settings.getByText(/다른 요청에서 채팅 설정이 바뀌었어요/)).toBeVisible();
+    // Generation owns one save action; profile reload remains in the material settings.
+    await selectChatSettingsSection(page, '사용 자료');
     await settings.getByRole('button', { name: '장착 설정 다시 불러오기', exact: true }).click();
+    await selectChatSettingsSection(page, '생성 설정');
     await expect(promptSelect).toHaveValue('');
     await promptSelect.selectOption(preset.id);
     await selectChatSettingsSection(page, '생성 설정');
@@ -437,6 +440,7 @@ for (const width of DEFAULT_WIDTHS) {
         mainPromptPresetId: preset.id,
         mainModel: { id: pinnedModel.id },
       });
+    expect((await detail(request, chat.id)).profile?.image).toBe(!concurrent.image);
     // Pinning shows in the select itself rather than in a line repeating it underneath.
     await expect(modelSelect.locator('option:checked')).toContainText(pinnedModel.title);
     await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
@@ -525,7 +529,8 @@ for (const width of DEFAULT_WIDTHS) {
       ).toBe(true);
       await page.reload();
       await expect(chip).toContainText('사용 불가');
-      await chip.click();
+      await openChatSettings(page);
+      await selectChatSettingsSection(page, '생성 설정');
       await expect(modelSelect).toHaveValue(pinnedModel.id);
       await expect(settings.getByRole('alert')).toContainText('선택한 본문 모델');
       await modelSelect.selectOption('');
@@ -549,7 +554,8 @@ for (const width of DEFAULT_WIDTHS) {
       await expect(chip).toHaveAccessibleName(/작문 프롬프트 사용 불가/);
       await composer.fill('삭제한 프리셋으로는 실행하지 않기');
       await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
-      await chip.click();
+      await openChatSettings(page);
+      await selectChatSettingsSection(page, '생성 설정');
       await expect(promptSelect).toHaveValue(preset.id);
       await expect(settings.getByRole('alert')).toContainText('이 채팅에 지정한 작문 프롬프트');
       await promptSelect.selectOption('');
