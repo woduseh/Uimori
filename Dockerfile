@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
-FROM node:24.21.0-bookworm-slim AS base
+FROM node:24.22.1-bookworm-slim AS base
 WORKDIR /app
-RUN node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major !== 24 || minor < 14) process.exit(1)"
+RUN node -e "const [major, minor] = process.versions.node.split('.').map(Number); if (major !== 24 || minor < 22) process.exit(1)"
 
 FROM base AS build
 COPY package.json package-lock.json ./
