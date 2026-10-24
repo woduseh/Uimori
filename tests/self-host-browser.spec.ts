@@ -1,5 +1,6 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
+import { navigationAction, openNewStoryOptions } from './ui-navigation.js';
 import { expect, test as base, type Page } from '@playwright/test';
 import type { Chat, ChatDetail } from '../core/types.js';
 import type { Content, ModelWorkspace } from '../core/product.js';
@@ -268,11 +269,8 @@ if (process.env.UIMORI_SELF_HOST_BROWSER === '1')
       expect(response.ok()).toBe(true);
       const bot = (await response.json()) as Content;
       await pc.reload();
-      await pc.getByRole('button', { name: `${bot.title} 새 채팅`, exact: true }).click();
-      await pc
-        .getByRole('dialog', { name: '새 채팅', exact: true })
-        .locator('.new-story-options > summary')
-        .click();
+      await navigationAction(pc, '설정 후 새 채팅', bot.title);
+      await openNewStoryOptions(pc);
       await pc.getByLabel('새 채팅 제목', { exact: true }).fill(title);
       const created = pc.waitForResponse(
         (item) =>
