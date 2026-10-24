@@ -87,7 +87,9 @@ for (const [index, width] of (visualReview ? [MOBILE_WIDTH, 360] : [MOBILE_WIDTH
     await panel.getByLabel('카드 설명', { exact: true }).fill(body);
     await expect(saveState).toHaveText('미저장 변경');
     const savedResponse = waitForContentSave(page);
-    await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
+    const register = panel.getByRole('button', { name: '자료 등록', exact: true });
+    await expect(register).toHaveText('등록');
+    await register.click();
     const saved = await savedResponse;
     expect(saved.text).toBe(body);
     expect(saved.package?.body).toBe(body);

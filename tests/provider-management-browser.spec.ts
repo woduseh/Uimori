@@ -113,7 +113,9 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await form.getByLabel('프로바이더 이름', { exact: true }).fill(title);
   await form.getByLabel('API 키').fill('PM_SYNTHETIC_KEY');
   await form.getByLabel('이 프로바이더 사용').check();
-  await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
+  const registerConnection = form.getByRole('button', { name: '프로바이더 등록', exact: true });
+  await expect(registerConnection).toHaveText('등록');
+  await registerConnection.click();
   await expect(
     page.getByRole('status').filter({ hasText: title + ' 프로바이더 등록됨' })
   ).toBeVisible();
@@ -187,7 +189,9 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await modelForm.getByLabel('모델 프리셋 이름').scrollIntoViewIfNeeded();
   if (visualReview)
     await page.screenshot({ path: info.outputPath('provider-management-mobile-model.png') });
-  await modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true }).click();
+  const registerModel = modelForm.getByRole('button', { name: '모델 프리셋 등록', exact: true });
+  await expect(registerModel).toHaveText('등록');
+  await registerModel.click();
   await expect(
     page.getByRole('status').filter({ hasText: title + ' 수동 모델 모델 프리셋 등록됨' })
   ).toBeVisible();
