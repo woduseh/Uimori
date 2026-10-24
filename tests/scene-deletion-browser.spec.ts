@@ -72,6 +72,25 @@ test('SCENEDEL01 cancel preserves all scenes and deleting only the middle keeps 
   await page.screenshot({ path: info.outputPath('chat-menu-groups.png') });
   await page.locator('.chat-menu').getByLabel('채팅 메뉴', { exact: true }).click();
 
+  for (const width of [412, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const source = scene(page, middle.id);
+    await openSourceActions(source);
+    const actions = source.locator('.action-menu[open] > .action-menu-body');
+    const buttons = actions.getByRole('button');
+    await expect(buttons.last()).toHaveText('장면 삭제');
+    await expect(actions.getByRole('group', { name: '본문', exact: true })).toBeVisible();
+    await expect(actions.getByRole('group', { name: '창작 도구', exact: true })).toBeVisible();
+    if (width === 412)
+      expect(
+        await buttons.evaluateAll((items) =>
+          items.every((item) => item.getBoundingClientRect().height >= 48)
+        )
+      ).toBe(true);
+    await page.screenshot({ path: info.outputPath(`scene-menu-groups-${width}.png`) });
+    await source.locator('.action-menu[open] > summary').press('Escape');
+  }
+
   let dialog = await openDeletion(page, middle.id);
   await expect(dialog.getByRole('radio', { name: '이 장면만', exact: true })).toBeChecked();
   await expect(

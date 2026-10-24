@@ -630,76 +630,82 @@ export function LibraryPanel({
     const manualIndex = filtered.findIndex((entry) => entry.id === item.id);
     return (
       <LibraryItemMenu title={t('library.menu', { v0: item.title })}>
-        {tab === 'bot' && onConfigureStartStory && (
+        <div className="action-menu-group">
+          {tab === 'bot' && onConfigureStartStory && (
+            <button
+              type="button"
+              className="secondary"
+              disabled={loading}
+              onClick={() => void openContent(item, 'configure-chat')}
+            >
+              <NewChatIcon size={18} aria-hidden="true" />
+              {t('transfer.configureNewChat')}
+            </button>
+          )}
           <button
             type="button"
             className="secondary"
             disabled={loading}
-            onClick={() => void openContent(item, 'configure-chat')}
+            onClick={() => void openContent(item, 'edit')}
           >
-            <NewChatIcon size={18} aria-hidden="true" />
-            {t('transfer.configureNewChat')}
+            <EditIcon size={18} aria-hidden="true" />
+            {t('library.edit')}
           </button>
-        )}
-        <button
-          type="button"
-          className="secondary"
-          disabled={loading}
-          onClick={() => void openContent(item, 'edit')}
-        >
-          <EditIcon size={18} aria-hidden="true" />
-          {t('library.edit')}
-        </button>
-        <button
-          type="button"
-          className="secondary"
-          disabled={organizer.busy}
-          onClick={() => setMoving([{ kind: 'content', id: item.id }])}
-        >
-          <MoveIcon size={18} aria-hidden="true" />
-          {t('library.moveCategoryOrFolder')}
-        </button>
-        {sort === 'manual' && (
-          <>
-            <button
-              type="button"
-              className="secondary"
-              disabled={manualIndex === 0}
-              onClick={() => moveManualByOffset(item, -1)}
-            >
-              <UpIcon size={18} aria-hidden="true" />
-              {t('library.moveUp')}
-            </button>
-            <button
-              type="button"
-              className="secondary"
-              disabled={manualIndex === filtered.length - 1}
-              onClick={() => moveManualByOffset(item, 1)}
-            >
-              <DownIcon size={18} aria-hidden="true" />
-              {t('library.moveDown')}
-            </button>
-          </>
-        )}
-        <button
-          type="button"
-          className="secondary"
-          disabled={loading}
-          onClick={() => void openContent(item, 'clone')}
-        >
-          <CopyIcon size={18} aria-hidden="true" />
-          {t('library.duplicate')}
-        </button>
-        <DeleteButton
-          path={`/content/${encodeURIComponent(item.id)}`}
-          revision={item.revision}
-          title={item.title}
-          onDeleted={async () => {
-            cancelOpening();
-            await reload();
-          }}
-          onError={onError}
-        />
+          <button
+            type="button"
+            className="secondary"
+            disabled={loading}
+            onClick={() => void openContent(item, 'clone')}
+          >
+            <CopyIcon size={18} aria-hidden="true" />
+            {t('library.duplicate')}
+          </button>
+        </div>
+        <div className="action-menu-group">
+          <button
+            type="button"
+            className="secondary"
+            disabled={organizer.busy}
+            onClick={() => setMoving([{ kind: 'content', id: item.id }])}
+          >
+            <MoveIcon size={18} aria-hidden="true" />
+            {t('library.moveCategoryOrFolder')}
+          </button>
+          {sort === 'manual' && (
+            <>
+              <button
+                type="button"
+                className="secondary"
+                disabled={manualIndex === 0}
+                onClick={() => moveManualByOffset(item, -1)}
+              >
+                <UpIcon size={18} aria-hidden="true" />
+                {t('library.moveUp')}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={manualIndex === filtered.length - 1}
+                onClick={() => moveManualByOffset(item, 1)}
+              >
+                <DownIcon size={18} aria-hidden="true" />
+                {t('library.moveDown')}
+              </button>
+            </>
+          )}
+        </div>
+        <div className="action-menu-group">
+          <DeleteButton
+            path={`/content/${encodeURIComponent(item.id)}`}
+            revision={item.revision}
+            title={item.title}
+            onDeleted={async () => {
+              cancelOpening();
+              await reload();
+            }}
+            onError={onError}
+          />
+        </div>
       </LibraryItemMenu>
     );
   }
@@ -843,66 +849,72 @@ export function LibraryPanel({
                 onClick={() => void openContent(detail, 'edit')}
               />
               <LibraryItemMenu title={t('library.menu', { v0: detail.title })}>
-                {detailRole === 'bot' && onConfigureStartStory && (
+                <div className="action-menu-group">
+                  {detailRole === 'bot' && onConfigureStartStory && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={loading}
+                      onClick={() => void openContent(detail, 'configure-chat')}
+                    >
+                      <NewChatIcon size={18} aria-hidden="true" />
+                      {t('transfer.configureNewChat')}
+                    </button>
+                  )}
+                  {libraryTabs
+                    .filter(({ id }) => id !== detailRole)
+                    .map(({ id, titleKey }) => (
+                      <button
+                        type="button"
+                        className="secondary"
+                        key={id}
+                        aria-label={roleActionLabel(id, t(titleKey))}
+                        disabled={
+                          loading || (id === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
+                        }
+                        onClick={() => void openContent(detail, id)}
+                      >
+                        {(() => {
+                          const Icon = roleActionIcon(id);
+                          return <Icon size={18} aria-hidden="true" />;
+                        })()}
+                        {roleActionLabel(id, t(titleKey))}
+                      </button>
+                    ))}
+                </div>
+                <div className="action-menu-group">
                   <button
                     type="button"
                     className="secondary"
                     disabled={loading}
-                    onClick={() => void openContent(detail, 'configure-chat')}
+                    onClick={() => void openContent(detail, 'clone')}
                   >
-                    <NewChatIcon size={18} aria-hidden="true" />
-                    {t('transfer.configureNewChat')}
+                    <CopyIcon size={18} aria-hidden="true" />
+                    {t('library.duplicate')}
                   </button>
-                )}
-                {libraryTabs
-                  .filter(({ id }) => id !== detailRole)
-                  .map(({ id, titleKey }) => (
-                    <button
-                      type="button"
-                      className="secondary"
-                      key={id}
-                      aria-label={roleActionLabel(id, t(titleKey))}
-                      disabled={
-                        loading || (id === 'bot' ? !onUseContent && !onStartStory : !onUseContent)
-                      }
-                      onClick={() => void openContent(detail, id)}
-                    >
-                      {(() => {
-                        const Icon = roleActionIcon(id);
-                        return <Icon size={18} aria-hidden="true" />;
-                      })()}
-                      {roleActionLabel(id, t(titleKey))}
-                    </button>
-                  ))}
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={loading}
-                  onClick={() => void openContent(detail, 'clone')}
-                >
-                  <CopyIcon size={18} aria-hidden="true" />
-                  {t('library.duplicate')}
-                </button>
-                <button
-                  type="button"
-                  className="secondary"
-                  disabled={organizer.busy}
-                  onClick={() => setMoving([{ kind: 'content', id: detail.id }])}
-                >
-                  <MoveIcon size={18} aria-hidden="true" />
-                  {t('library.moveCategoryOrFolder')}
-                </button>
-                <DeleteButton
-                  path={`/content/${encodeURIComponent(detail.id)}`}
-                  revision={detail.revision}
-                  title={detail.title}
-                  onDeleted={async () => {
-                    cancelOpening();
-                    await reload();
-                    navigate(tab, true);
-                  }}
-                  onError={onError}
-                />
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={organizer.busy}
+                    onClick={() => setMoving([{ kind: 'content', id: detail.id }])}
+                  >
+                    <MoveIcon size={18} aria-hidden="true" />
+                    {t('library.moveCategoryOrFolder')}
+                  </button>
+                </div>
+                <div className="action-menu-group">
+                  <DeleteButton
+                    path={`/content/${encodeURIComponent(detail.id)}`}
+                    revision={detail.revision}
+                    title={detail.title}
+                    onDeleted={async () => {
+                      cancelOpening();
+                      await reload();
+                      navigate(tab, true);
+                    }}
+                    onError={onError}
+                  />
+                </div>
               </LibraryItemMenu>
             </div>
           </div>
@@ -1495,23 +1507,23 @@ function ContentEditor({
               text={selected ? t('shared.save') : t('library.register')}
             />
             <LibraryItemMenu title={t('library.resourceMenu')}>
-              {(['bot', 'persona', 'module'] as const)
-                .filter((role) => role !== value.kind)
-                .map((role) => (
-                  <button
-                    type="button"
-                    key={role}
-                    disabled={
-                      editorUnavailable || !value.title.trim() || nativeDraftDirty || portraitBusy
-                    }
-                    onClick={() => void saveContent(role)}
-                  >
-                    <CopyIcon size={18} aria-hidden="true" />
-                    {t('library.copyAs', { role: t(contentLabelKeys[role]) })}
-                  </button>
-                ))}
-              {selected && (
-                <>
+              <div className="action-menu-group">
+                {(['bot', 'persona', 'module'] as const)
+                  .filter((role) => role !== value.kind)
+                  .map((role) => (
+                    <button
+                      type="button"
+                      key={role}
+                      disabled={
+                        editorUnavailable || !value.title.trim() || nativeDraftDirty || portraitBusy
+                      }
+                      onClick={() => void saveContent(role)}
+                    >
+                      <CopyIcon size={18} aria-hidden="true" />
+                      {t('library.copyAs', { role: t(contentLabelKeys[role]) })}
+                    </button>
+                  ))}
+                {selected && (
                   <RisuExportButton
                     kind="content"
                     linkedModules={!!selected.package?.modules?.length}
@@ -1527,6 +1539,10 @@ function ContentEditor({
                     disabled={editorUnavailable || dirty || nativeDraftDirty || portraitBusy}
                     onError={setExportError}
                   />
+                )}
+              </div>
+              {selected && (
+                <div className="action-menu-group">
                   <DeleteButton
                     path={`/content/${encodeURIComponent(selected.id)}`}
                     revision={selected.revision}
@@ -1540,7 +1556,7 @@ function ContentEditor({
                       await reload();
                     }}
                   />
-                </>
+                </div>
               )}
             </LibraryItemMenu>
           </div>

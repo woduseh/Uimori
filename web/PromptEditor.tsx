@@ -261,56 +261,61 @@ export function PromptEditor({
         />
         {draft.base && (
           <ActionMenu label={t('prompts.uiManagePrompts')} className="prompt-management-menu">
-            <RisuExportButton
-              kind="prompt-presets"
-              id={draft.base.id}
-              revision={draft.base.revision}
-              title={draft.base.title}
-              disabled={busy || draft.dirty || pendingTemplate}
-              onError={setExportError}
-            />
-            {draft.base && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy || !!collaborationIssue || !draft.title.trim()}
-                onClick={() => void save(false)}
-              >
-                <CopyIcon size={18} aria-hidden="true" />
-                {t('prompts.uiSaveACopy')}
-              </button>
-            )}
-            {draft.base && (
-              <DeleteButton
-                path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
+            <div className="action-menu-group">
+              {draft.base && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={busy || !!collaborationIssue || !draft.title.trim()}
+                  onClick={() => void save(false)}
+                >
+                  <CopyIcon size={18} aria-hidden="true" />
+                  {t('prompts.uiSaveACopy')}
+                </button>
+              )}
+              <RisuExportButton
+                kind="prompt-presets"
+                id={draft.base.id}
                 revision={draft.base.revision}
                 title={draft.base.title}
-                label={t('prompts.uiDeletePrompt')}
-                disabled={busy}
-                onError={onError}
-                onDeleted={async () => {
-                  const removed = draft.base!.id;
-                  setLocalPresets((current) => current.filter((item) => item.id !== removed));
-                  for (const [key, cached] of cache.current) {
-                    if (cached.snapshot().document.targetId === removed) cache.current.delete(key);
-                  }
-                  setSelectedSessions(
-                    (current) =>
-                      Object.fromEntries(
-                        roles.map((role) => {
-                          if (current[role].snapshot().document.targetId !== removed)
-                            return [role, current[role]];
-                          const next = createSession(role);
-                          cache.current.set(next.editorKey, next);
-                          return [role, next];
-                        })
-                      ) as Record<PromptRole, ResourceEditorSession>
-                  );
-                  await reload?.();
-                  setStatus(uiMessage('prompts.uiPromptDeleted'));
-                }}
+                disabled={busy || draft.dirty || pendingTemplate}
+                onError={setExportError}
               />
-            )}
+            </div>
+            <div className="action-menu-group">
+              {draft.base && (
+                <DeleteButton
+                  path={`/prompt-presets/${encodeURIComponent(draft.base.id)}`}
+                  revision={draft.base.revision}
+                  title={draft.base.title}
+                  label={t('prompts.uiDeletePrompt')}
+                  disabled={busy}
+                  onError={onError}
+                  onDeleted={async () => {
+                    const removed = draft.base!.id;
+                    setLocalPresets((current) => current.filter((item) => item.id !== removed));
+                    for (const [key, cached] of cache.current) {
+                      if (cached.snapshot().document.targetId === removed)
+                        cache.current.delete(key);
+                    }
+                    setSelectedSessions(
+                      (current) =>
+                        Object.fromEntries(
+                          roles.map((role) => {
+                            if (current[role].snapshot().document.targetId !== removed)
+                              return [role, current[role]];
+                            const next = createSession(role);
+                            cache.current.set(next.editorKey, next);
+                            return [role, next];
+                          })
+                        ) as Record<PromptRole, ResourceEditorSession>
+                    );
+                    await reload?.();
+                    setStatus(uiMessage('prompts.uiPromptDeleted'));
+                  }}
+                />
+              )}
+            </div>
           </ActionMenu>
         )}
       </div>

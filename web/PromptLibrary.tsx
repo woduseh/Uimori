@@ -821,66 +821,72 @@ export function PromptLibrary({
                     </span>
                   </button>
                   <LibraryItemMenu title={t('prompts.menuNamed', { name: item.title })}>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() => void editPreset(item)}
-                    >
-                      <EditIcon size={18} aria-hidden="true" />
-                      {t('prompts.uiEdit2')}
-                    </button>
-                    <button type="button" className="secondary" onClick={() => onAskHelper(item)}>
-                      <MessageCircle size={18} aria-hidden="true" />
-                      {t('prompts.uiAskHelper')}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={organizer.busy}
-                      onClick={() => setMoving([{ kind: 'prompt-preset', id: item.id }])}
-                    >
-                      <MoveIcon size={18} aria-hidden="true" />
-                      {t('prompts.uiMoveToFolder')}
-                    </button>
-                    {sort === 'manual' && (
-                      <>
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={filtered[0]?.id === item.id}
-                          onClick={() => moveByOffset(item.id, -1)}
-                        >
-                          <UpIcon size={18} aria-hidden="true" />
-                          {t('prompts.uiMoveUp')}
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          disabled={filtered.at(-1)?.id === item.id}
-                          onClick={() => moveByOffset(item.id, 1)}
-                        >
-                          <DownIcon size={18} aria-hidden="true" />
-                          {t('prompts.uiMoveDown')}
-                        </button>
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      onClick={() => void clone(item)}
-                    >
-                      <CopyIcon size={18} aria-hidden="true" />
-                      {t('prompts.uiDuplicate')}
-                    </button>
-                    <DeleteButton
-                      path={`/prompt-presets/${encodeURIComponent(item.id)}`}
-                      revision={item.revision}
-                      title={item.title}
-                      onDeleted={reload}
-                      onError={onError}
-                    />
+                    <div className="action-menu-group">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => void editPreset(item)}
+                      >
+                        <EditIcon size={18} aria-hidden="true" />
+                        {t('prompts.uiEdit2')}
+                      </button>
+                      <button type="button" className="secondary" onClick={() => onAskHelper(item)}>
+                        <MessageCircle size={18} aria-hidden="true" />
+                        {t('prompts.uiAskHelper')}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        onClick={() => void clone(item)}
+                      >
+                        <CopyIcon size={18} aria-hidden="true" />
+                        {t('prompts.uiDuplicate')}
+                      </button>
+                    </div>
+                    <div className="action-menu-group">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={organizer.busy}
+                        onClick={() => setMoving([{ kind: 'prompt-preset', id: item.id }])}
+                      >
+                        <MoveIcon size={18} aria-hidden="true" />
+                        {t('prompts.uiMoveToFolder')}
+                      </button>
+                      {sort === 'manual' && (
+                        <>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={filtered[0]?.id === item.id}
+                            onClick={() => moveByOffset(item.id, -1)}
+                          >
+                            <UpIcon size={18} aria-hidden="true" />
+                            {t('prompts.uiMoveUp')}
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={filtered.at(-1)?.id === item.id}
+                            onClick={() => moveByOffset(item.id, 1)}
+                          >
+                            <DownIcon size={18} aria-hidden="true" />
+                            {t('prompts.uiMoveDown')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <div className="action-menu-group">
+                      <DeleteButton
+                        path={`/prompt-presets/${encodeURIComponent(item.id)}`}
+                        revision={item.revision}
+                        title={item.title}
+                        onDeleted={reload}
+                        onError={onError}
+                      />
+                    </div>
                   </LibraryItemMenu>
                 </article>
               ))}

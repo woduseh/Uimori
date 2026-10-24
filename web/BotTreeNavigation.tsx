@@ -554,35 +554,39 @@ export function BotNavigation(
           </button>
           <div className="bot-row-actions">
             <ActionMenu label={t('transfer.m293')} viewport>
-              <label>
-                {t('transfer.m294')}
-                <select
-                  aria-label={t('transfer.m294')}
-                  value={view.sort}
-                  onChange={(event) =>
-                    setView((current) => ({
-                      ...current,
-                      sort: event.target.value === 'manual' ? 'manual' : 'recent',
-                    }))
-                  }
+              <div className="action-menu-group">
+                <label>
+                  {t('transfer.m294')}
+                  <select
+                    aria-label={t('transfer.m294')}
+                    value={view.sort}
+                    onChange={(event) =>
+                      setView((current) => ({
+                        ...current,
+                        sort: event.target.value === 'manual' ? 'manual' : 'recent',
+                      }))
+                    }
+                  >
+                    <option value="recent">{t('transfer.m295')}</option>
+                    <option value="manual">{t('transfer.m296')}</option>
+                  </select>
+                </label>
+              </div>
+              <div className="action-menu-group">
+                <button
+                  onClick={() => {
+                    setTitle('');
+                    setEditing('new');
+                  }}
                 >
-                  <option value="recent">{t('transfer.m295')}</option>
-                  <option value="manual">{t('transfer.m296')}</option>
-                </select>
-              </label>
-              <button
-                onClick={() => {
-                  setTitle('');
-                  setEditing('new');
-                }}
-              >
-                <FolderAddIcon size={16} />
-                {t('transfer.m297')}
-              </button>
-              <button onClick={() => onLibrary('bot')}>
-                <LibraryIcon size={16} />
-                {t('transfer.m250')}
-              </button>
+                  <FolderAddIcon size={16} />
+                  {t('transfer.m297')}
+                </button>
+                <button onClick={() => onLibrary('bot')}>
+                  <LibraryIcon size={16} />
+                  {t('transfer.m250')}
+                </button>
+              </div>
             </ActionMenu>
           </div>
         </div>
@@ -640,23 +644,27 @@ export function BotNavigation(
                     </button>
                     <div className="bot-row-actions">
                       <ActionMenu label={t('transfer.d027', { v0: entry.title })} viewport>
-                        <button
-                          onClick={() => {
-                            setEditing(entry.folder!);
-                            setTitle(entry.title);
-                          }}
-                        >
-                          <EditIcon size={18} aria-hidden="true" />
-                          {t('transfer.m299')}
-                        </button>
-                        <button
-                          disabled={busy}
-                          onClick={() =>
-                            void mutate(`/library/folders/${entry.folder!.id}`, {}, 'DELETE')
-                          }
-                        >
-                          {t('transfer.m300')}
-                        </button>
+                        <div className="action-menu-group">
+                          <button
+                            onClick={() => {
+                              setEditing(entry.folder!);
+                              setTitle(entry.title);
+                            }}
+                          >
+                            <EditIcon size={18} aria-hidden="true" />
+                            {t('transfer.m299')}
+                          </button>
+                        </div>
+                        <div className="action-menu-group">
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              void mutate(`/library/folders/${entry.folder!.id}`, {}, 'DELETE')
+                            }
+                          >
+                            {t('transfer.m300')}
+                          </button>
+                        </div>
                       </ActionMenu>
                     </div>
                   </div>

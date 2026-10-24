@@ -275,7 +275,7 @@ for (const width of DEFAULT_WIDTHS) {
     await row.hover();
     await row.getByLabel(`${chat.title} 채팅 메뉴`, { exact: true }).click();
     const actions = row.locator('.action-menu-body');
-    await expect(actions.getByRole('button')).toHaveText(['제목 변경', '채팅 삭제']);
+    await expect(actions.getByRole('button')).toHaveText(['채팅 복사', '제목 변경', '채팅 삭제']);
     await actions.getByRole('button', { name: '제목 변경', exact: true }).click();
     const menu = page.getByRole('dialog', { name: '채팅 제목 변경', exact: true });
     const title = menu.getByRole('textbox', { name: '채팅 제목', exact: true });

@@ -503,53 +503,57 @@ export function IllustrationPresetSettings({
                   })}
                   viewport
                 >
-                  {!preset.id.startsWith('builtin:') && (
+                  <div className="action-menu-group">
+                    {!preset.id.startsWith('builtin:') && (
+                      <button
+                        disabled={busy || dirty}
+                        aria-label={t('visualpanels.duplicateIllustrationPreset', {
+                          v0: preset.id.startsWith('builtin:')
+                            ? translateMessage(preset.title)
+                            : preset.title,
+                        })}
+                        onClick={() => edit(preset, true)}
+                      >
+                        <Copy size={16} aria-hidden="true" /> {t('visualpanels.duplicate2')}{' '}
+                      </button>
+                    )}
                     <button
-                      disabled={busy || dirty}
-                      aria-label={t('visualpanels.duplicateIllustrationPreset', {
-                        v0: preset.id.startsWith('builtin:')
-                          ? translateMessage(preset.title)
-                          : preset.title,
-                      })}
-                      onClick={() => edit(preset, true)}
-                    >
-                      <Copy size={16} aria-hidden="true" /> {t('visualpanels.duplicate2')}{' '}
-                    </button>
-                  )}
-                  <button
-                    disabled={busy}
-                    aria-label={t('visualpanels.exportIllustrationPreset', {
-                      v0: preset.id.startsWith('builtin:')
-                        ? translateMessage(preset.title)
-                        : preset.title,
-                    })}
-                    onClick={() => {
-                      void action(async () =>
-                        saveDownload(
-                          `${preset.title}.uimori-illustration.json`,
-                          illustrationPresetFile(preset)
-                        )
-                      );
-                    }}
-                  >
-                    <Download size={16} aria-hidden="true" /> {t('visualpanels.export2')}{' '}
-                  </button>
-                  {!preset.id.startsWith('builtin:') && (
-                    <button
-                      disabled={busy || dirty}
-                      className="danger"
-                      aria-label={t('visualpanels.deleteIllustrationPreset', {
+                      disabled={busy}
+                      aria-label={t('visualpanels.exportIllustrationPreset', {
                         v0: preset.id.startsWith('builtin:')
                           ? translateMessage(preset.title)
                           : preset.title,
                       })}
                       onClick={() => {
-                        setError('');
-                        setDeleting(preset);
+                        void action(async () =>
+                          saveDownload(
+                            `${preset.title}.uimori-illustration.json`,
+                            illustrationPresetFile(preset)
+                          )
+                        );
                       }}
                     >
-                      <Trash2 size={16} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
+                      <Download size={16} aria-hidden="true" /> {t('visualpanels.export2')}{' '}
                     </button>
+                  </div>
+                  {!preset.id.startsWith('builtin:') && (
+                    <div className="action-menu-group">
+                      <button
+                        disabled={busy || dirty}
+                        className="danger"
+                        aria-label={t('visualpanels.deleteIllustrationPreset', {
+                          v0: preset.id.startsWith('builtin:')
+                            ? translateMessage(preset.title)
+                            : preset.title,
+                        })}
+                        onClick={() => {
+                          setError('');
+                          setDeleting(preset);
+                        }}
+                      >
+                        <Trash2 size={16} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
+                      </button>
+                    </div>
                   )}
                 </ActionMenu>
               </div>

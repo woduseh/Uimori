@@ -556,34 +556,37 @@ export function ThemeSettings({
                     className="theme-card-menu"
                     viewport
                   >
-                    <button
-                      aria-label={t('visualpanels.duplicate', {
-                        v0: theme.id.startsWith('builtin:')
-                          ? translateMessage(theme.title)
-                          : theme.title,
-                      })}
-                      disabled={busy || backgroundDirty || paletteDirty}
-                      onClick={() => edit(theme, true)}
-                    >
-                      <CopyIcon size={18} aria-hidden="true" /> {t(
-                        'visualpanels.duplicateAndEdit'
-                      )}{' '}
-                    </button>
-                    <button
-                      className="danger"
-                      aria-label={t('visualpanels.delete', {
-                        v0: theme.id.startsWith('builtin:')
-                          ? translateMessage(theme.title)
-                          : theme.title,
-                      })}
-                      disabled={busy || dirty}
-                      onClick={(event) => {
-                        event.currentTarget.closest('details')?.querySelector('summary')?.focus();
-                        setDeleting(theme);
-                      }}
-                    >
-                      <DeleteIcon size={18} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
-                    </button>
+                    <div className="action-menu-group">
+                      <button
+                        aria-label={t('visualpanels.duplicate', {
+                          v0: theme.id.startsWith('builtin:')
+                            ? translateMessage(theme.title)
+                            : theme.title,
+                        })}
+                        disabled={busy || backgroundDirty || paletteDirty}
+                        onClick={() => edit(theme, true)}
+                      >
+                        <CopyIcon size={18} aria-hidden="true" />{' '}
+                        {t('visualpanels.duplicateAndEdit')}{' '}
+                      </button>
+                    </div>
+                    <div className="action-menu-group">
+                      <button
+                        className="danger"
+                        aria-label={t('visualpanels.delete', {
+                          v0: theme.id.startsWith('builtin:')
+                            ? translateMessage(theme.title)
+                            : theme.title,
+                        })}
+                        disabled={busy || dirty}
+                        onClick={(event) => {
+                          event.currentTarget.closest('details')?.querySelector('summary')?.focus();
+                          setDeleting(theme);
+                        }}
+                      >
+                        <DeleteIcon size={18} aria-hidden="true" /> {t('visualpanels.delete2')}{' '}
+                      </button>
+                    </div>
                   </ActionMenu>
                 )}
               </article>
