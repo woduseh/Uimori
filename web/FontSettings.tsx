@@ -1,13 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { api, ApiError } from './api.js';
-import {
-  fontFamily,
-  useFonts,
-  type FontAsset,
-  type FontCatalog,
-  type FontPreferences,
-} from './FontContext.js';
+import { useFonts, type FontAsset, type FontCatalog, type FontPreferences } from './FontContext.js';
 import { useThemes } from './ThemeContext.js';
 import { t, useI18n, message, translateMessage } from './i18n.js';
 import { NoticeBanner } from './NoticeBanner.js';
@@ -34,8 +28,10 @@ export function FontSettings({
   const [file, setFile] = useState<File | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
+  const management = useRef<HTMLDetailsElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState('');
-  const [preview, setPreview] = useState('');
+  const [previewTarget, setPreviewTarget] = useState<'app' | 'reader'>('reader');
   const [deleting, setDeleting] = useState<FontAsset | null>(null);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
@@ -67,11 +63,15 @@ export function FontSettings({
   }
   async function upload() {
     if (!dirty) return true;
-    if (!file || !title.trim() || !form.current?.reportValidity()) {
-      input.current?.focus();
+    if (!file || !title.trim() || !form.current?.checkValidity()) {
+      if (management.current) management.current.open = true;
+      form.current?.reportValidity();
+      if (!file) input.current?.focus();
+      else if (!title.trim()) nameInput.current?.focus();
       return false;
     }
     if (file.size > MAX_FONT_BYTES) {
+      if (management.current) management.current.open = true;
       setError(message('fonts.tooLarge'));
       return false;
     }
@@ -82,11 +82,10 @@ export function FontSettings({
         reader.onerror = () => reject(reader.error);
         reader.readAsDataURL(file);
       });
-      const registered = await api<FontAsset>('/fonts', {
+      await api<FontAsset>('/fonts', {
         title: title.trim(),
         data,
       });
-      setPreview(registered.id);
       setFile(null);
       setTitle('');
       if (input.current) input.current.value = '';
@@ -94,8 +93,13 @@ export function FontSettings({
     }, message('fonts.registered'));
   }
   useSettingsSaveHandler(onSaveHandlerChange, upload);
-  function select(appFontId: string | null, readerFontId: string | null) {
+  function select(
+    appFontId: string | null,
+    readerFontId: string | null,
+    target: 'app' | 'reader' = previewTarget
+  ) {
     if (!state.catalog) return;
+    setPreviewTarget(target);
     const expectedRevision = state.catalog.preferences.revision;
     void operation(async () => {
       const preferences = await api<FontPreferences>(
@@ -150,7 +154,7 @@ export function FontSettings({
             disabled={busy || !catalog}
             value={catalog?.preferences.appFontId ?? ''}
             onChange={(event) =>
-              select(event.target.value || null, catalog!.preferences.readerFontId)
+              select(event.target.value || null, catalog!.preferences.readerFontId, 'app')
             }
           >
             <option value="">{t('fonts.default')}</option>
@@ -167,7 +171,9 @@ export function FontSettings({
             id={`${id}-reader`}
             disabled={busy || !catalog}
             value={catalog?.preferences.readerFontId ?? ''}
-            onChange={(event) => select(catalog!.preferences.appFontId, event.target.value || null)}
+            onChange={(event) =>
+              select(catalog!.preferences.appFontId, event.target.value || null, 'reader')
+            }
           >
             <option value="">{t('fonts.default')}</option>
             {catalog?.fonts.map((font) => (
@@ -177,6 +183,23 @@ export function FontSettings({
             ))}
           </select>
         </label>
+      </div>
+      <div className="font-settings-preview">
+        <span className="muted">
+          {t('fonts.preview', {
+            target: t(previewTarget === 'app' ? 'fonts.app' : 'fonts.reader'),
+          })}
+        </span>
+        <p
+          className="font-preview"
+          style={{
+            fontFamily:
+              previewTarget === 'app' ? 'var(--app-font-family)' : 'var(--reading-font-family)',
+          }}
+        >
+          {readingSample}
+        </p>
+        <small className="muted">{readingSampleCredit}</small>
       </div>
       <div className="form-actions">
         <button
@@ -192,80 +215,55 @@ export function FontSettings({
           {t('fonts.restore')}
         </button>
       </div>
-      <form
-        ref={form}
-        className="font-upload"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void upload();
-        }}
-      >
-        <label htmlFor={`${id}-file`}>
-          {t('fonts.file')}
-          <input
-            id={`${id}-file`}
-            ref={input}
-            type="file"
-            required
-            accept=".ttf,.otf,.woff,.woff2"
-            disabled={busy}
-            onChange={(event) => {
-              const selected = event.target.files?.[0] ?? null;
-              setFile(selected);
-              if (selected) setTitle(selected.name.replace(/\.(ttf|otf|woff2?)$/i, ''));
-            }}
-          />
-        </label>
-        <p className="muted">{t('fonts.support')}</p>
-        <label htmlFor={`${id}-name`}>
-          {t('fonts.name')}
-          <input
-            id={`${id}-name`}
-            required
-            maxLength={200}
-            value={title}
-            disabled={busy}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </label>
-        <div className="form-actions">
-          <SaveButton
-            label={t('fonts.registerLabel')}
-            text={t('fonts.register')}
-            disabled={busy || !file || !title.trim()}
-            aria-busy={busy}
-          />
-        </div>
-      </form>
-      {!!catalog?.fonts.length && (
-        <>
-          <label htmlFor={`${id}-preview`}>
-            {t('fonts.preview')}
-            <select
-              id={`${id}-preview`}
-              value={preview}
-              onChange={(event) => setPreview(event.target.value)}
-            >
-              <option value="">{t('fonts.default')}</option>
-              {catalog.fonts.map((font) => (
-                <option key={font.id} value={font.id}>
-                  {font.title}
-                </option>
-              ))}
-            </select>
+      <details ref={management} className="font-management">
+        <summary>{t('fonts.manage')}</summary>
+        <form
+          ref={form}
+          className="font-upload"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void upload();
+          }}
+        >
+          <label htmlFor={`${id}-file`}>
+            {t('fonts.file')}
+            <input
+              id={`${id}-file`}
+              ref={input}
+              type="file"
+              required
+              accept=".ttf,.otf,.woff,.woff2"
+              disabled={busy}
+              onChange={(event) => {
+                const selected = event.target.files?.[0] ?? null;
+                setFile(selected);
+                if (selected) setTitle(selected.name.replace(/\.(ttf|otf|woff2?)$/i, ''));
+              }}
+            />
           </label>
-          <p
-            className="font-preview"
-            style={{
-              fontFamily:
-                !disabled && catalog.fonts.some((font) => font.id === preview)
-                  ? `"${fontFamily(preview)}", sans-serif`
-                  : undefined,
-            }}
-          >
-            {readingSample}
-          </p>
-          <small className="muted">{readingSampleCredit}</small>
+          <p className="muted">{t('fonts.support')}</p>
+          <label htmlFor={`${id}-name`}>
+            {t('fonts.name')}
+            <input
+              id={`${id}-name`}
+              ref={nameInput}
+              required
+              maxLength={200}
+              value={title}
+              disabled={busy}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+          </label>
+          <div className="form-actions">
+            <SaveButton
+              label={t('fonts.registerLabel')}
+              text={t('fonts.register')}
+              disabled={busy || !file || !title.trim()}
+              aria-busy={busy}
+            />
+          </div>
+        </form>
+        {!!catalog?.fonts.length && (
           <ul className="font-list">
             {catalog.fonts.map((font) => (
               <li key={font.id}>
@@ -284,9 +282,11 @@ export function FontSettings({
               </li>
             ))}
           </ul>
-        </>
-      )}
-      {!state.loading && catalog?.fonts.length === 0 && <p className="muted">{t('fonts.empty')}</p>}
+        )}
+        {!state.loading && catalog?.fonts.length === 0 && (
+          <p className="muted">{t('fonts.empty')}</p>
+        )}
+      </details>
       <Dialog
         open={!!deleting}
         title={t('fonts.deleteTitle')}

@@ -30,7 +30,13 @@ export const messages = {
     ja: 'フォントを登録',
     zh: '注册字体',
   },
-  'fonts.preview': { ko: '미리보기', en: 'Preview', ja: 'プレビュー', zh: '预览' },
+  'fonts.preview': {
+    ko: '{target} 미리보기',
+    en: '{target} preview',
+    ja: '{target}のプレビュー',
+    zh: '{target}预览',
+  },
+  'fonts.manage': { ko: '글꼴 관리', en: 'Manage fonts', ja: 'フォント管理', zh: '管理字体' },
   'fonts.delete': {
     ko: '{title} 글꼴 삭제',
     en: 'Delete font {title}',

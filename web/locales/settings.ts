@@ -1651,9 +1651,9 @@ export const messages = {
     zh: '上下文摘要',
   },
   'settings.m277': {
-    ko: '새로 확인',
+    ko: '새로고침',
     en: 'Refresh',
-    ja: '再確認',
+    ja: '更新',
     zh: '刷新',
   },
   'settings.m278': {
@@ -1729,10 +1729,10 @@ export const messages = {
     zh: '编辑摘要',
   },
   'settings.m290': {
-    ko: '요약 작성',
-    en: 'Write summary',
-    ja: '要約を作成',
-    zh: '撰写摘要',
+    ko: '직접 요약 작성',
+    en: 'Write summary manually',
+    ja: '要約を手入力',
+    zh: '手动撰写摘要',
   },
   'settings.m291': {
     ko: '컨텍스트 압축을 요청했어요.',
@@ -1741,10 +1741,10 @@ export const messages = {
     zh: '已请求上下文压缩。',
   },
   'settings.m292': {
-    ko: '지금 압축',
-    en: 'Compress now',
-    ja: '今すぐ圧縮',
-    zh: '立即压缩',
+    ko: 'AI로 요약 압축',
+    en: 'Compress with AI',
+    ja: 'AIで要約・圧縮',
+    zh: '用 AI 摘要压缩',
   },
   'settings.m293': {
     ko: '압축 취소를 요청했어요.',

@@ -431,7 +431,7 @@ for (const width of [412, 1440]) {
     await openChatSettings(page);
     await selectChatSettingsSection(page, '기억과 메모');
     const panel = page.getByTestId('context-panel');
-    await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
+    await panel.getByRole('button', { name: '직접 요약 작성', exact: true }).click();
     const summary = panel.getByLabel('편집할 컨텍스트 요약', { exact: true });
     await summary.fill('Cancelled summary draft');
     const summaryForm = panel.locator('.context-summary-editor');
@@ -440,7 +440,7 @@ for (const width of [412, 1440]) {
     await expectPrimary(summarySave, summaryCancel);
     await summaryCancel.click();
     expect((await read<ContextDetail>(request, `/chats/${chat.id}/context`)).checkpoint).toBeNull();
-    await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
+    await panel.getByRole('button', { name: '직접 요약 작성', exact: true }).click();
     await expect(summary).toHaveValue('');
     await summary.fill('Saved synthetic summary');
     await summarySave.click();

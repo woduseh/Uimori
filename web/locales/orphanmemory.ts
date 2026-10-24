@@ -3,10 +3,16 @@ export const messages = {
   'orphanmemory.field.description': { ko: '설명', en: 'Description', ja: '説明', zh: '说明' },
   'orphanmemory.field.text': { ko: '본문', en: 'Body', ja: '本文', zh: '正文' },
   'orphanmemory.title': {
-    ko: '연결이 끊긴 기억 정리',
-    en: 'Review unlinked memory',
-    ja: '関連が切れた記憶の整理',
-    zh: '整理失去关联的记忆',
+    ko: '연결이 끊긴 기억',
+    en: 'Unlinked memory',
+    ja: '関連が切れた記憶',
+    zh: '失去关联的记忆',
+  },
+  'orphanmemory.count': {
+    ko: '연결이 끊긴 기억 ({count})',
+    en: 'Unlinked memory ({count})',
+    ja: '関連が切れた記憶（{count}）',
+    zh: '失去关联的记忆（{count}）',
   },
   'orphanmemory.hint': {
     ko: '다음 요청에서 제외된 메모와 전용 로어예요.',
@@ -20,12 +26,6 @@ export const messages = {
     en: 'Checking unlinked memory…',
     ja: '関連が切れた記憶を確認中…',
     zh: '正在检查失去关联的记忆…',
-  },
-  'orphanmemory.empty': {
-    ko: '연결이 끊긴 메모나 전용 로어가 없어요.',
-    en: 'No unlinked notes or chat lore.',
-    ja: '関連が切れたメモや専用ロアはありません。',
-    zh: '没有失去关联的笔记或专用设定。',
   },
   'orphanmemory.note': { ko: '사용자 메모', en: 'Author note', ja: 'ユーザーメモ', zh: '用户笔记' },
   'orphanmemory.imported': {

@@ -20,7 +20,14 @@
   display: grid;
   gap: 12px;
   padding-block: 16px;
-  border-block: var(--hairline) solid var(--line);
+}
+.font-management {
+  border-top: var(--hairline) solid var(--line);
+  padding-top: 12px;
+}
+.font-settings-preview {
+  display: grid;
+  gap: 6px;
 }
 .font-settings input,
 .font-settings select {
@@ -29,6 +36,8 @@
 }
 .font-preview {
   padding: 12px;
+  max-height: 12em;
+  overflow: auto;
   background: var(--surface);
   border-radius: var(--radius-control);
   font-size: 18px;

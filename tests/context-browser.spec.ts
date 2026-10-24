@@ -71,7 +71,7 @@ async function create(page: Page, title: string) {
   await openChatSettings(page);
   await selectChatSettingsSection(page, '기억과 메모');
   const panel = page.getByTestId('context-panel');
-  await expect(panel.getByRole('button', { name: '요약 작성', exact: true })).toBeEnabled();
+  await expect(panel.getByRole('button', { name: '직접 요약 작성', exact: true })).toBeEnabled();
   return { chat, panel };
 }
 async function saveSummary(request: APIRequestContext, chatId: string, summary: string) {
@@ -103,7 +103,7 @@ test('CTXUI01 summary authoring without a Run, edits replace the current summary
   request,
 }, info) => {
   const { chat, panel } = await create(page, 'CTXUI01 합성 요약');
-  await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
+  await panel.getByRole('button', { name: '직접 요약 작성', exact: true }).click();
   await panel.getByLabel('편집할 컨텍스트 요약').fill('첫 요약: 항구의 종이 울렸다.');
   await panel.getByRole('button', { name: '요약 저장', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText(
@@ -140,10 +140,10 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
   request,
 }) => {
   const { chat, panel } = await create(page, 'CTXUI02 합성 충돌');
-  await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
+  await panel.getByRole('button', { name: '직접 요약 작성', exact: true }).click();
   await panel.getByLabel('편집할 컨텍스트 요약').fill('내 요약 초안');
   await saveSummary(request, chat.id, '다른 창에서 저장한 요약');
-  await panel.getByRole('button', { name: '새로 확인', exact: true }).click();
+  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText('다른 창에서 저장한 요약');
   await expect(panel.getByLabel('편집할 컨텍스트 요약')).toHaveValue('내 요약 초안');
   await expect(panel.getByRole('button', { name: '요약 저장', exact: true })).toBeDisabled();
@@ -167,7 +167,7 @@ test('CTXUI02 concurrent summary and note changes preserve local drafts and requ
     },
   });
   expect(added.ok(), await added.text()).toBe(true);
-  await panel.getByRole('button', { name: '새로 확인', exact: true }).click();
+  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
   await expect(notes.getByText('다른 창의 메모', { exact: true })).toBeVisible();
   await expect(notes.getByLabel('메모와 정정 내용')).toHaveValue('내 메모 초안');
   await expect(notes.getByRole('button', { name: '새 메모 저장', exact: true })).toBeEnabled();
@@ -203,9 +203,9 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
 }) => {
   const { chat, panel } = await create(page, 'CTXUI03 합성 압축 상태');
   await saveSummary(request, chat.id, '보존할 요약');
-  await panel.getByRole('button', { name: '새로 확인', exact: true }).click();
+  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText('보존할 요약');
-  await panel.getByRole('button', { name: '지금 압축', exact: true }).click();
+  await panel.getByRole('button', { name: 'AI로 요약 압축', exact: true }).click();
   await expect(
     panel.getByText('정리할 구간이 없어 원문과 요약을 유지했어요.', { exact: true })
   ).toBeVisible();
@@ -236,7 +236,7 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
     job.status = 'cancelled';
     await route.fulfill({ json: job });
   });
-  await panel.getByRole('button', { name: '새로 확인', exact: true }).click();
+  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
   await expect.poll(() => contextReads).toBeGreaterThan(0);
   await expect(panel.getByRole('button', { name: '압축 취소', exact: true })).toBeEnabled();
   await panel.getByRole('button', { name: '압축 취소', exact: true }).click();
@@ -275,7 +275,7 @@ for (const width of [1440, 412]) {
         response.url().endsWith(`/api/chats/${chat.id}/context/compact`) &&
         response.request().method() === 'POST'
     );
-    await dialog.getByRole('button', { name: '지금 압축', exact: true }).click();
+    await dialog.getByRole('button', { name: 'AI로 요약 압축', exact: true }).click();
     const response = await accepted;
     expect(response.ok(), await response.text()).toBe(true);
     expect(response.request().postDataJSON().priorities).toBe(
