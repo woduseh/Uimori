@@ -166,17 +166,19 @@ export function ManuscriptSearchPanel({
           </button>
         </div>
         <div className="manuscript-search-filters">
-          <label className="manuscript-search-scope">
-            <span className="sr-only">{t('transfer.m215')}</span>
-            <select
-              value={scope}
-              onChange={(event) => setScope(event.target.value as ManuscriptSearchQuery['scope'])}
-            >
-              <option value="workspace">{t('transfer.m216')}</option>
-              {botId && <option value="bot">{t('transfer.m217')}</option>}
-              {chatId && <option value="chat">{t('transfer.m218')}</option>}
-            </select>
-          </label>
+          {(botId || chatId) && (
+            <label className="manuscript-search-scope">
+              <span className="sr-only">{t('transfer.m215')}</span>
+              <select
+                value={scope}
+                onChange={(event) => setScope(event.target.value as ManuscriptSearchQuery['scope'])}
+              >
+                <option value="workspace">{t('transfer.m216')}</option>
+                {botId && <option value="bot">{t('transfer.m217')}</option>}
+                {chatId && <option value="chat">{t('transfer.m218')}</option>}
+              </select>
+            </label>
+          )}
           <fieldset className="manuscript-search-kinds">
             <legend className="sr-only">{t('transfer.m219')}</legend>
             <div className="manuscript-search-kind-options">

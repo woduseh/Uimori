@@ -1,4 +1,10 @@
 export const messages = {
+  'helpers.historyFullRequest': {
+    ko: '요청 전체 보기',
+    en: 'View full request',
+    ja: '依頼全文を表示',
+    zh: '查看完整请求',
+  },
   'helpers.modelPickerTitle': {
     ko: '도우미 모델 선택',
     en: 'Choose helper model',

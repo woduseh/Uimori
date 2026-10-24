@@ -42,17 +42,19 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   await page.goto('/');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '테마와 색상');
-  await expect(page.getByLabel('기본 외관', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByLabel('테마 적용 범위', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByLabel('기본 외관', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('테마 화면 모드', { exact: true })).toHaveCount(0);
   await expect(page.locator('.theme-advanced')).not.toHaveAttribute('open', '');
   const layout = page.getByRole('region', { name: '레이아웃', exact: true });
   const palette = page.getByRole('region', { name: '색상 팔레트', exact: true });
   const background = page.getByRole('region', { name: '본문 바깥 배경', exact: true });
-  await expect(layout).toBeHidden();
-  await expect(background).toBeHidden();
-  await page.screenshot({ path: info.outputPath('theme-primary-mobile.png') });
-  await page.getByText('고급 테마 설정', { exact: true }).click();
   await expect(layout).toBeVisible();
+  await expect(palette).toBeVisible();
+  await expect(page.getByRole('combobox', { name: '앱 글꼴', exact: true })).toBeVisible();
+  await expect(background).toBeVisible();
+  await expect(page.getByRole('button', { name: '새 커스텀 테마', exact: true })).toBeHidden();
+  await page.screenshot({ path: info.outputPath('theme-primary-mobile.png') });
   const layoutBox = await layout.boundingBox();
   const paletteBox = await palette.boundingBox();
   const backgroundBox = await background.boundingBox();
@@ -243,9 +245,20 @@ test('THEMES invalid import leaves selection untouched and closing dirty editor 
   });
   await expect(page.getByRole('alert')).toContainText('slot name');
   await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:forest');
-  await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
+  await page.locator('.theme-advanced > summary').click();
+  await page.getByRole('button', { name: '복제해서 꾸미기', exact: true }).first().click();
+  await expect(page.locator('.theme-advanced')).toHaveAttribute('open', '');
+  await page.getByLabel('테마 이름', { exact: true }).fill('관리 영역을 접어도 남는 초안');
+  await page.locator('.theme-advanced > summary').click();
+  await expect(page.getByLabel('테마 이름', { exact: true })).toBeHidden();
   await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(page.getByRole('alertdialog', { name: '미저장 설정 확인' })).toBeVisible();
+  await page.getByRole('button', { name: '계속 편집', exact: true }).click();
+  await page.locator('.theme-advanced > summary').click();
+  await expect(page.getByLabel('테마 이름', { exact: true })).toHaveValue(
+    '관리 영역을 접어도 남는 초안'
+  );
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await page.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeHidden();
 });
@@ -289,7 +302,7 @@ test('THEMES rejects leading executable markup instead of silently dropping it o
   expect(await page.evaluate(() => 'themeScriptExecuted' in window)).toBe(false);
 });
 
-test('THEMES legacy global appearance stays selected across advanced scopes', async ({
+test('THEMES legacy layout remains selected in its scope without changing saved selections', async ({
   page,
   request,
 }) => {
@@ -316,11 +329,17 @@ test('THEMES legacy global appearance stays selected across advanced scopes', as
   }
   const before = await (await request.get('/api/themes')).json();
   await openThemes(page, `/?chat=${chat.id}`);
-  const appearance = page.getByLabel('기본 외관', { exact: true });
-  for (const scope of ['global', 'bot', 'chat', 'global']) {
+  for (const [scope, title] of [
+    ['global', '서재'],
+    ['bot', '편지지'],
+    ['chat', '스크랩북'],
+    ['global', '서재'],
+  ]) {
     await page.getByLabel('테마 적용 범위', { exact: true }).selectOption(scope);
-    await expect(appearance).toHaveValue('builtin:library');
-    await expect(appearance.locator('option:checked')).toHaveText('서재');
+    await expect(
+      page.getByRole('button', { name: `${title} 테마 적용`, exact: true })
+    ).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:scrapbook');
   }
   expect((await (await request.get('/api/themes')).json()).preferences).toEqual(before.preferences);
 });

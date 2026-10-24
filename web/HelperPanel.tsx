@@ -1292,7 +1292,27 @@ export function HelperPanel(props: Props) {
                   </small>
                 </div>
               </div>
-              <p className="task-request">{task.request}</p>
+              {task.request.length > 240 || task.request.split(/\r\n|\r|\n/u).length > 4 ? (
+                <details className="task-request-disclosure">
+                  <summary aria-label={t('helpers.historyFullRequest')}>
+                    <span className="task-request-preview">
+                      {task.request
+                        .slice(0, 180)
+                        .split(/\r\n|\r|\n/u)
+                        .slice(0, 3)
+                        .join('\n')}
+                      …
+                    </span>
+                    <span className="task-request-toggle">
+                      <ChevronDown size={14} aria-hidden="true" />
+                      {t('helpers.historyFullRequest')}
+                    </span>
+                  </summary>
+                  <p className="task-request">{task.request}</p>
+                </details>
+              ) : (
+                <p className="task-request">{task.request}</p>
+              )}
               {task.error && <p className="error">{translateMessage(task.error ?? '')}</p>}
               {task.completedEffects && (
                 <p>

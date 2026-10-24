@@ -77,6 +77,8 @@ Risu 메시지의 기본 글자색·글자 크기·글꼴·줄간격은 상속�
 
 ## Helper sessions
 
+도우미 **작업 기록**의 긴 요청은 앞부분만 표시하고 **요청 전체 보기**로 펼쳐요. 펼친 요청은 원래 공백과 줄바꿈을 유지하며 선택해서 복사할 수 있어요. 짧은 요청, 실패 사유와 저장한 변경 결과는 접지 않아요.
+
 Each independent chat can have multiple helper sessions. A session owns its conversation, draft and context; closing the panel or selecting another session does not cancel its work. Tools can explicitly target another chat when requested. Copying a chat produces an independent chat, not a shared branch with a mutable default.
 
 The helper header opens the searchable model picker directly. Selecting a model updates the global helper role for the next request; it does not change the current chat's main model, prompt choices or another role. A failed or uncertain change requires an explicit reread before another selection. Newer confirmed revisions take precedence over delayed acknowledgements in the header and picker.
