@@ -49,6 +49,7 @@ import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { CopyIcon, EditIcon, IllustrationIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
 import {
+  Check,
   Eye,
   EyeOff,
   GitFork,
@@ -101,7 +102,7 @@ type ReaderProps = {
   onEditingChange?: (sourceId: string, editing: boolean) => void;
   request?: string;
   requestImages?: RequestImage[];
-  /** The newest scene keeps its request actions standing on narrow widths. */
+  /** The newest scene keeps frequent reading and request actions directly available. */
   latest?: boolean;
   onCheckRequest?: () => Promise<boolean>;
   onAskHelper?: (sourceId: string, text: string) => void;
@@ -710,7 +711,13 @@ function SourceReaderContent({
       )}
     </>
   );
-  const trailing = (
+  // Past scenes stay quiet while reading, but pending work and recovery keep their
+  // original controls visible beside the affected scene instead of inside a menu.
+  const directRepresentation =
+    latest ||
+    pending === 'translation' ||
+    (translation && (activeJob(translation) || retryable(translation.status)));
+  const trailing = directRepresentation ? (
     <div
       className="segmented compact"
       role="group"
@@ -736,6 +743,10 @@ function SourceReaderContent({
         </button>
       )}
     </div>
+  ) : (
+    <span className="scene-badge" data-testid="scene-representation">
+      {mode === 'translation' ? t('reader.translation') : t('reader.original')}
+    </span>
   );
   const activityNode = activity?.({ leading, badges }) || null;
   const canRetranslate = !!translation && !activeJob(translation) && !retryable(translation.status);
@@ -1026,22 +1037,26 @@ function SourceReaderContent({
           )}
         </div>
         <div slot="actions" data-uimori-part="actions" className="source-actions">
-          <IconButton
-            label={t('reader.copyText')}
-            icon={CopyIcon}
-            size={18}
-            className="scene-action"
-            disabled={!!editor || !!pending}
-            onClick={copyCurrent}
-          />
-          <IconButton
-            label={editorLabel(mode)}
-            icon={EditIcon}
-            size={18}
-            className="scene-action"
-            disabled={!!editor || !!pending}
-            onClick={(event) => openEditor(mode, event.currentTarget)}
-          />
+          {latest && (
+            <>
+              <IconButton
+                label={t('reader.copyText')}
+                icon={CopyIcon}
+                size={18}
+                className="scene-action"
+                disabled={!!editor || !!pending}
+                onClick={copyCurrent}
+              />
+              <IconButton
+                label={editorLabel(mode)}
+                icon={EditIcon}
+                size={18}
+                className="scene-action"
+                disabled={!!editor || !!pending}
+                onClick={(event) => openEditor(mode, event.currentTarget)}
+              />
+            </>
+          )}
           <BookmarkButton
             title={
               sceneNumber
@@ -1066,6 +1081,75 @@ function SourceReaderContent({
             }}
           />
           <ActionMenu label={t('reader.sceneActions')} placement="top" viewport>
+            {!latest && (
+              <>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!!editor || !!pending}
+                  onClick={copyCurrent}
+                >
+                  <CopyIcon size={18} aria-hidden="true" />
+                  {t('reader.copyText')}
+                </button>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!!editor || !!pending}
+                  onClick={(event) => openEditor(mode, event.currentTarget)}
+                >
+                  <EditIcon size={18} aria-hidden="true" />
+                  {editorLabel(mode)}
+                </button>
+                {!directRepresentation && (
+                  <>
+                    <button
+                      type="button"
+                      className="secondary"
+                      aria-pressed={
+                        validTranslation || (translation && activeJob(translation))
+                          ? mode === 'translation'
+                          : undefined
+                      }
+                      disabled={!!editor || !!pending}
+                      onClick={(event) => {
+                        if (!validTranslation && !(translation && activeJob(translation))) {
+                          const menu = event.currentTarget.closest('details');
+                          if (menu) {
+                            menu.open = false;
+                            menu.querySelector('summary')?.focus({ preventScroll: true });
+                          }
+                        }
+                        viewTranslation();
+                      }}
+                    >
+                      {mode === 'translation' ? (
+                        <Check size={18} aria-hidden="true" />
+                      ) : (
+                        <Languages size={18} aria-hidden="true" />
+                      )}
+                      {translationActionLabel}
+                    </button>
+                    {showToggle && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        aria-pressed={mode === 'original'}
+                        disabled={!!editor || !!pending}
+                        onClick={() => switchMode('original')}
+                      >
+                        {mode === 'original' ? (
+                          <Check size={18} aria-hidden="true" />
+                        ) : (
+                          <Eye size={18} aria-hidden="true" />
+                        )}
+                        {t('reader.viewOriginal')}
+                      </button>
+                    )}
+                  </>
+                )}
+              </>
+            )}
             {startSelection && (
               <button
                 type="button"

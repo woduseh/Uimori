@@ -1,5 +1,9 @@
-import { t, useI18n, translateMessage } from './i18n.js';
+import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
+import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
+import { readSettingsLocation, rememberSettingsLocation } from './settings-location.js';
+import { SaveButton } from './SaveButton.js';
+import { LoadingState } from './LoadingState.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Dialog } from './Dialog.js';
@@ -77,32 +81,40 @@ export function ChatSettingsPanel({
 }: {
   state: StoryState;
   onClose: () => void;
-  /** Open directly on this section (compact widths open its detail); the list is the default. */
+  /** Explicit destinations override the remembered section. */
   initialSection?: Section;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
   onOpenHelper: () => void;
 }) {
   useI18n();
   const categories = getCategories();
+  const requestedSection =
+    initialSection ??
+    (readSettingsLocation(
+      'uimori:chat-settings-section',
+      categories.map((item) => item.id),
+      'characters'
+    ) as Section);
   const startSection =
-    initialSection === 'models' || initialSection === 'runtime'
-      ? 'prompts'
-      : (initialSection ?? 'characters');
+    requestedSection === 'models' || requestedSection === 'runtime' ? 'prompts' : requestedSection;
   const [active, setActive] = useState<Section>(startSection);
   const [profileTab, setProfileTab] = useState<ProfileSection>(
     isProfile(startSection) ? startSection : 'characters'
   );
   const [visited, setVisited] = useState<Section[]>([startSection]);
-  const [detailOpen, setDetailOpen] = useState(!!initialSection);
+  const [detailOpen, setDetailOpen] = useState(true);
   const [profileDirty, setProfileDirty] = useState(false);
   const [storyDirty, setStoryDirty] = useState(false);
   const [guideDirty, setGuideDirty] = useState(false);
   const [imageDirty, setImageDirty] = useState(false);
   const [referenceDirty, setReferenceDirty] = useState(false);
   const [runtimeDirty, setRuntimeDirty] = useState(false);
-  const [packageFeatures, setPackageFeatures] = useState(false);
+  const [packageFeatures, setPackageFeatures] = useState<boolean | null>(null);
   const [discard, setDiscard] = useState(false);
   const [savingClose, setSavingClose] = useState(false);
+  const [savingPage, setSavingPage] = useState(false);
+  const [saveNotice, setSaveNotice] = useState('');
+  const savingPageRef = useRef(false);
   const saveGroup = useSettingsSaveGroup(saveSections);
   const dirty =
     profileDirty || storyDirty || guideDirty || imageDirty || referenceDirty || runtimeDirty;
@@ -127,7 +139,7 @@ export function ChatSettingsPanel({
   }
   const closeHistory = useSettingsHistory(
     () => {
-      if (savingClose) return true;
+      if (savingClose || savingPageRef.current) return true;
       const nested = root.current
         ?.closest('dialog')
         ?.querySelector<HTMLDialogElement>('dialog[open]');
@@ -151,7 +163,7 @@ export function ChatSettingsPanel({
     }
   );
   function requestClose(next?: () => void) {
-    if (savingClose) return;
+    if (savingClose || savingPageRef.current) return;
     afterClose.current = next ?? null;
     if (dirty) setDiscard(true);
     else closeHistory();
@@ -199,6 +211,33 @@ export function ChatSettingsPanel({
       });
     }
   }
+  async function saveGeneration() {
+    if (savingPageRef.current || savingClose) return;
+    // Validate both native forms before the first independent write.
+    for (const form of root.current?.querySelectorAll<HTMLFormElement>(
+      '.settings form, .profile-editor form'
+    ) ?? [])
+      if (!form.reportValidity()) return;
+    savingPageRef.current = true;
+    setSavingPage(true);
+    setSaveNotice('');
+    try {
+      if (await saveGroup.save({ profile: profileDirty, runtime: runtimeDirty }))
+        setSaveNotice(uiMessage('library.chatSettingsSaved'));
+      else
+        requestAnimationFrame(() => {
+          root.current
+            ?.querySelector<HTMLElement>('.settings [role="alert"], .profile-editor [role="alert"]')
+            ?.scrollIntoView({ block: 'nearest' });
+        });
+    } finally {
+      savingPageRef.current = false;
+      setSavingPage(false);
+    }
+  }
+  useEffect(() => {
+    rememberSettingsLocation('uimori:chat-settings-section', active);
+  }, [active]);
   useEffect(() => {
     state.setProfileDirty(dirty);
     return () => state.setProfileDirty(false);
@@ -233,7 +272,7 @@ export function ChatSettingsPanel({
     let current = true;
     if (previousPackageScope.current !== packageScope) {
       previousPackageScope.current = packageScope;
-      setPackageFeatures(false);
+      setPackageFeatures(null);
     }
     void packageAvailabilityKey;
     let hasDraft = false;
@@ -265,6 +304,13 @@ export function ChatSettingsPanel({
       current = false;
     };
   }, [packageAvailabilityKey, packageScope, state.selected]);
+  useEffect(() => {
+    if (active === 'packages' && packageFeatures === false) {
+      setActive('characters');
+      setProfileTab('characters');
+      setVisited((old) => (old.includes('characters') ? old : [...old, 'characters']));
+    }
+  }, [active, packageFeatures]);
   const visibleCategories = categories.filter((item) => item.id !== 'packages' || packageFeatures);
   return (
     <Dialog
@@ -277,6 +323,24 @@ export function ChatSettingsPanel({
       headerLeading={
         compact && detailOpen ? (
           <IconButton label={t('chatsettings.m98')} icon={BackIcon} onClick={backToList} />
+        ) : undefined
+      }
+      headerActions={
+        compact && detailOpen ? (
+          <select
+            className="settings-section-select"
+            aria-label={t('chatsettings.sectionSelector')}
+            value={active}
+            onChange={(event) => select(event.target.value as Section)}
+          >
+            {categories
+              .filter((item) => item.id !== 'packages' || packageFeatures || active === 'packages')
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title}
+                </option>
+              ))}
+          </select>
         ) : undefined
       }
     >
@@ -321,6 +385,9 @@ export function ChatSettingsPanel({
                   onSaved={() => state.refresh(state.selected)}
                   onError={state.setError}
                   hideHeading
+                  hideSaveActions
+                  disabled={savingPage}
+                  onSaveRequest={() => void saveGeneration()}
                   onDirtyChange={setRuntimeDirty}
                   onSaveHandlerChange={saveGroup.registrations.runtime}
                 />
@@ -332,6 +399,9 @@ export function ChatSettingsPanel({
                 library={library}
                 activeTab={profileTab}
                 hideNavigation
+                hideSaveActions={profileTab === 'prompts'}
+                disabled={savingPage}
+                onSaveRequest={profileTab === 'prompts' ? () => void saveGeneration() : undefined}
                 onSaved={() => state.refresh(state.selected)}
                 onError={state.setError}
                 onDirtyChange={setProfileDirty}
@@ -340,6 +410,17 @@ export function ChatSettingsPanel({
                 nextRequest={state.pendingRequest ?? state.draft}
                 loreContextReset={state.loreContextReset}
               />
+            )}
+            {profileTab === 'prompts' && (
+              <div className="form-actions settings-save-actions">
+                <SaveButton
+                  type="button"
+                  label={t('library.saveChatSettings')}
+                  disabled={savingPage || savingClose || !(profileDirty || runtimeDirty)}
+                  aria-busy={savingPage}
+                  onClick={() => void saveGeneration()}
+                />
+              </div>
             )}
             {visited.includes('story') && detail && (
               <div hidden={profileTab !== 'story'} className="chat-settings-memory">
@@ -430,6 +511,9 @@ export function ChatSettingsPanel({
                         }}
                       />
                     )}
+                    {section === 'packages' && packageFeatures === null && (
+                      <LoadingState presentation="region" loading />
+                    )}
                   </>
                 )}
               </section>
@@ -441,6 +525,7 @@ export function ChatSettingsPanel({
           {translateMessage(state.error)}
         </p>
       )}
+      <TransientNotice message={saveNotice} />
       <Dialog
         open={discard}
         title={t('chatsettings.m105')}

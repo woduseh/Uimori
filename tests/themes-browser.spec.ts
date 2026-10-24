@@ -17,6 +17,12 @@ async function expectPalette(page: Page, id: string, mode: 'light' | 'dark' = 'l
     .toBe(palette.colors[mode].bg);
 }
 
+async function setAppearance(page: Page, mode: 'light' | 'dark') {
+  await selectSettingsSection(page, '일반');
+  await page.getByLabel('앱 화면 테마', { exact: true }).selectOption(mode);
+  await selectSettingsSection(page, '테마와 색상');
+}
+
 async function openThemes(page: Page, url = '/') {
   await page.goto(url);
   await navigationAction(page, '설정');
@@ -37,7 +43,7 @@ test('THEMES mobile primary choices precede background and preserve its unsaved 
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '테마와 색상');
   await expect(page.getByLabel('기본 외관', { exact: true })).toBeInViewport({ ratio: 1 });
-  await expect(page.getByLabel('테마 화면 모드', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByLabel('테마 화면 모드', { exact: true })).toHaveCount(0);
   await expect(page.locator('.theme-advanced')).not.toHaveAttribute('open', '');
   const layout = page.getByRole('region', { name: '레이아웃', exact: true });
   const palette = page.getByRole('region', { name: '색상 팔레트', exact: true });
@@ -86,17 +92,17 @@ for (const width of [1440, 412]) {
     page.on('pageerror', (e) => errors.push(e.message));
     await openThemes(page);
     await expect(page.getByRole('button', { name: '편지지 테마 적용', exact: true })).toBeVisible();
-    await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('light');
+    await setAppearance(page, 'light');
     await page.getByRole('button', { name: '시네마틱 테마 적용', exact: true }).click();
     await page.getByRole('button', { name: '미드나이트 팔레트 적용', exact: true }).click();
     await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:cinematic');
-    await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('dark');
+    await setAppearance(page, 'dark');
     await expect
       .poll(() =>
         page.locator('html').evaluate((e) => getComputedStyle(e).getPropertyValue('--bg').trim())
       )
       .toBe('#111113');
-    await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('light');
+    await setAppearance(page, 'light');
     const name = `Theme ${width} ${randomUUID().slice(0, 8)}`;
     await page.getByRole('button', { name: '새 커스텀 테마', exact: true }).click();
     await page.getByLabel('테마 이름', { exact: true }).fill(name);
@@ -337,7 +343,7 @@ test('THEMES bot/chat inheritance, cross-tab refresh and theme settings keyboard
   const scope = page.getByLabel('테마 적용 범위', { exact: true });
   await expect(scope.locator('option[value="bot"]')).toBeAttached();
   await scope.selectOption('global');
-  await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('light');
+  await setAppearance(page, 'light');
   await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
   await page.getByRole('button', { name: '세이지 팔레트 적용', exact: true }).click();
   await scope.selectOption('bot');
@@ -390,7 +396,7 @@ for (const width of [1440, 412]) {
   }, info) => {
     await page.setViewportSize({ width, height: 1000 });
     await openThemes(page);
-    await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('light');
+    await setAppearance(page, 'light');
     await page.getByRole('button', { name: '편지지 테마 적용', exact: true }).click();
     await page.getByRole('button', { name: '레이아웃 원래 색상 팔레트 적용', exact: true }).click();
     await expect(page.getByRole('heading', { name: '레이아웃', exact: true })).toBeVisible();
@@ -424,14 +430,14 @@ for (const width of [1440, 412]) {
         'Unchanged local palette draft'
       );
       await expect(page.getByLabel('light accent 색상', { exact: true })).toHaveValue('#663399');
-      await expect(page.getByLabel('테마 화면 모드', { exact: true })).toHaveValue('light');
+      expect(await page.evaluate(() => localStorage.getItem('uimori:theme'))).toBe('light');
     }
     await page.getByRole('button', { name: '차콜 팔레트 적용', exact: true }).click();
     await page.getByRole('button', { name: '시네마틱 테마 적용', exact: true }).click();
     await expectPalette(page, 'charcoal');
     await expect(memo).toHaveValue('palette keeps this node');
     await expect(memo).toHaveAttribute('data-stable-node', 'palette');
-    await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('dark');
+    await setAppearance(page, 'dark');
     await expectPalette(page, 'charcoal', 'dark');
     await page.getByRole('button', { name: '편집 취소', exact: true }).click();
     const beforeReload = await (await request.get('/api/themes')).json();
@@ -448,8 +454,8 @@ for (const width of [1440, 412]) {
     await page.getByRole('button', { name: '팔레트 기본값으로', exact: true }).click();
     await expectPalette(page, 'midnight', 'dark');
     await expect(page.locator('html')).toHaveAttribute('data-uimori-theme', 'builtin:cinematic');
-    await expect(page.getByLabel('테마 화면 모드', { exact: true })).toHaveValue('dark');
-    await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('light');
+    expect(await page.evaluate(() => localStorage.getItem('uimori:theme'))).toBe('dark');
+    await setAppearance(page, 'light');
     await page.getByRole('button', { name: '기본 테마 적용', exact: true }).click();
     await page.screenshot({
       path: info.outputPath(`independent-palettes-${width}.png`),

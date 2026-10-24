@@ -129,17 +129,20 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await page.reload();
   const profile = await openDetails(page, 'profile-editor');
   const chatSettings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  const backToCategories = chatSettings.getByRole('button', {
-    name: '채팅 설정 목록으로',
+  const sectionSelector = chatSettings.getByRole('combobox', {
+    name: '설정 영역 선택',
     exact: true,
   });
-  if (await backToCategories.isVisible()) await backToCategories.click();
-  await expect(
-    chatSettings
-      .locator('.section-navigation')
-      .filter({ visible: true })
-      .locator('button .section-navigation-title')
-  ).toHaveText(['사용 자료', '생성 설정', '원작 참고', '기억과 메모', '이미지']);
+  const sections = ['사용 자료', '생성 설정', '원작 참고', '기억과 메모', '이미지'];
+  if (await sectionSelector.isVisible())
+    await expect(sectionSelector.locator('option')).toHaveText(sections);
+  else
+    await expect(
+      chatSettings
+        .locator('.section-navigation')
+        .filter({ visible: true })
+        .locator('button .section-navigation-title')
+    ).toHaveText(sections);
   await selectChatSettingsSection(page, '사용 자료');
   await page.getByText('함께 사용하는 모듈', { exact: true }).click();
   await selectContent(page, '추가할 패키지', added.title);

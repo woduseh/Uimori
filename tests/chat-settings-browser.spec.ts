@@ -112,6 +112,48 @@ async function expectUnchanged(
   expect(after.attempts ?? []).toHaveLength(0);
 }
 
+test('SETTINGSLOCATION mobile opens the remembered available section and explicit destinations win', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: 360, height: 900 });
+  const { before, writes, errors } = await prepare(
+    page,
+    request,
+    `설정 위치 복원 ${Date.now()}`,
+    nativePrompt('No variable defaults.')
+  );
+  await page.evaluate(() => {
+    localStorage.setItem('uimori:chat-settings-section', 'packages');
+    localStorage.setItem('uimori:app-settings-section', 'lore');
+  });
+  let dialog = await openSettings(page);
+  const selector = dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true });
+  await expect(selector).toHaveValue('characters');
+  await expect(dialog.getByRole('heading', { name: '사용 자료', exact: true })).toBeVisible();
+  await selector.selectOption('prompts');
+  await expect(dialog.getByLabel('Risu 작가 노트', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+  dialog = await openSettings(page);
+  await expect(dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
+    'prompts'
+  );
+  await expect(dialog.getByRole('heading', { name: '생성 설정', exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '전역 모델 설정', exact: true }).click();
+  const global = page.getByRole('dialog', { name: '설정', exact: true });
+  await expect(global.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
+    'models'
+  );
+  await global.getByRole('combobox', { name: '설정 영역 선택', exact: true }).selectOption('lore');
+  await global.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await navigationAction(page, '설정');
+  await expect(global.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
+    'lore'
+  );
+  await global.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expectUnchanged(request, before, writes, errors);
+});
+
 test('CSUI01 chat settings list and conditional details fit six widths with accessible navigation and no writes', async ({
   page,
   request,
@@ -129,6 +171,14 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
     const dialog = await openSettings(page);
     const nav = dialog.locator('.chat-settings-panel > .section-navigation');
     const compact = width <= 760;
+    if (compact) {
+      await expect(nav).toBeHidden();
+      await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
+      await expectTouchTarget(
+        dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true })
+      );
+      await dialog.getByRole('button', { name: '채팅 설정 목록으로', exact: true }).click();
+    }
     await expect(nav).toBeVisible();
     const actions = nav.getByRole(compact ? 'button' : 'tab');
     await expect(actions).toHaveCount(sections.length);
@@ -660,7 +710,7 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   let choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
   await expect(choice).toHaveValue('inherit');
   await choice.selectOption('on');
-  await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   const read = async () =>
     (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
   await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(true);
@@ -670,10 +720,10 @@ test('CSUI08 automatic translation toggle persists per chat and reopens without 
   choice = dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true });
   await expect(choice).toHaveValue('on');
   await choice.selectOption('off');
-  await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBe(false);
   await choice.selectOption('inherit');
-  await dialog.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect.poll(async () => (await read()).chat.settings.autoTranslate).toBeUndefined();
   expect((await read()).jobs).toHaveLength(0);
   expect(errors).toEqual([]);

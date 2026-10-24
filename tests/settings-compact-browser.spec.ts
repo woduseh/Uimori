@@ -149,7 +149,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
           ).toBeLessThanOrEqual(1);
         } else if (section === '테마와 색상') {
           const controls = pane.locator('.theme-control-bar select');
-          await expect(controls).toHaveCount(4);
+          await expect(controls).toHaveCount(3);
+          await expect(pane.getByLabel('테마 화면 모드', { exact: true })).toHaveCount(0);
           await expect(pane.getByLabel('기본 외관', { exact: true })).toBeVisible();
           await expect(pane.getByLabel('테마 적용 범위', { exact: true })).toBeHidden();
           await pane.getByText('고급 테마 설정', { exact: true }).click();
@@ -318,6 +319,12 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   await navigationAction(page, '설정');
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   const nav = dialog.locator('.settings-navigation');
+  await expect(nav).toBeHidden();
+  await expect(dialog.getByRole('tabpanel')).toHaveCount(1);
+  await expect(dialog.getByRole('combobox', { name: '설정 영역 선택', exact: true })).toHaveValue(
+    'general'
+  );
+  await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
   await expect(nav.getByRole('button', { name: '삽화', exact: true })).toBeVisible();
   const categoryCount = await nav.getByRole('button').count();
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);

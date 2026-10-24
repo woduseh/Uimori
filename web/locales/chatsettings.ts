@@ -1,4 +1,10 @@
 export const messages = {
+  'chatsettings.sectionSelector': {
+    ko: '설정 영역 선택',
+    en: 'Choose settings section',
+    ja: '設定セクションを選択',
+    zh: '选择设置分类',
+  },
   'chatsettings.m0': {
     ko: '이야기를 열면 실행한 작업을 확인할 수 있어요.',
     en: 'Open a story to see its tasks.',

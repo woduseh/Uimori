@@ -1,5 +1,17 @@
 /** App-owned transfer, navigation, and new-chat presentation only. */
 export const messages = {
+  'transfer.configureNewChat': {
+    ko: '설정 후 새 채팅',
+    en: 'Configure new chat',
+    ja: '設定して新しいチャット',
+    zh: '配置新聊天',
+  },
+  'transfer.quickStartLoading': {
+    ko: '새 채팅을 여는 중이에요…',
+    en: 'Opening new chat…',
+    ja: '新しいチャットを開いています…',
+    zh: '正在打开新聊天…',
+  },
   'transfer.m001': {
     ko: '항상 포함',
     en: 'Always included',

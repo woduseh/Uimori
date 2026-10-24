@@ -15,6 +15,92 @@ import {
 
 preservePromptWorkspace();
 
+for (const width of [1440, 412]) {
+  test(`SETTINGSFLOW one generation save validates both forms and retries only the remaining draft at ${width}px`, async ({
+    page,
+    request,
+  }) => {
+    const created = await postFixtureChat(request, {
+      data: { title: `단일 생성 설정 저장 ${width}` },
+    });
+    expect(created.ok()).toBe(true);
+    const chat = (await created.json()) as Chat;
+    const before = await (await request.get(`/api/chats/${chat.id}`)).json();
+    const writes: string[] = [];
+    page.on('request', (entry) => {
+      if (['PUT', 'PATCH'].includes(entry.method()) && /\/(profile|settings)$/.test(entry.url()))
+        writes.push(new URL(entry.url()).pathname.split('/').at(-1)!);
+    });
+    await page.setViewportSize({ width, height: 915 });
+    await page.goto(`/?chat=${chat.id}`);
+    await openChatSettings(page);
+    await selectChatSettingsSection(page, '생성 설정');
+    const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+    const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
+    await expect(save).toHaveCount(1);
+    await expect(dialog.getByRole('button', { name: '설정 저장', exact: true })).toHaveCount(0);
+    await dialog
+      .getByLabel('Risu 작가 노트', { exact: true })
+      .fill('두 설정을 함께 저장하는 작가 노트');
+    await dialog.getByText('고급 실행 설정', { exact: true }).click();
+    const calls = dialog.getByLabel('작업당 모델 호출 한도', { exact: true });
+    await calls.fill('0');
+    await save.click();
+    expect(
+      await calls.evaluate((element: HTMLInputElement) => element.validity.rangeUnderflow)
+    ).toBe(true);
+    expect(writes).toEqual([]);
+    const nextCalls = chat.settings.maxCalls === 16 ? 15 : 16;
+    await calls.fill(String(nextCalls));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(`**/api/chats/${chat.id}/settings`, async (route) => {
+      if (route.request().method() !== 'PATCH') return route.continue();
+      await gate;
+      await route.fulfill({ status: 503, json: { error: '합성 실행 설정 저장 실패' } });
+    });
+    try {
+      await save.click();
+      await expect.poll(() => writes).toEqual(['profile', 'settings']);
+      await expect(save).toBeDisabled();
+      await expect(save).toHaveAttribute('aria-busy', 'true');
+      await expect(calls).toBeDisabled();
+      await expect(dialog.getByLabel('Risu 작가 노트', { exact: true })).toBeDisabled();
+      await save.evaluate((element: HTMLButtonElement) => element.click());
+      expect(writes).toEqual(['profile', 'settings']);
+    } finally {
+      release();
+    }
+    await expect(
+      dialog.getByRole('region', { name: '생성 설정', exact: true }).getByRole('alert')
+    ).toContainText('서버 작업을 완료하지 못했어요. (503)');
+    await expect(save).toBeEnabled();
+    const partial = await (await request.get(`/api/chats/${chat.id}`)).json();
+    expect(partial.profile.authorNote).toBe('두 설정을 함께 저장하는 작가 노트');
+    expect(partial.profile.revision).toBe(before.profile.revision + 1);
+    expect(partial.chat.settings).toEqual(before.chat.settings);
+    await expect(calls).toHaveValue(String(nextCalls));
+    await page.unroute(`**/api/chats/${chat.id}/settings`);
+    await save.click();
+    await expect(save).toBeDisabled();
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get(`/api/chats/${chat.id}`)).json()).chat.settings.maxCalls
+      )
+      .toBe(nextCalls);
+    expect(writes).toEqual(['profile', 'settings', 'settings']);
+    const saved = await (await request.get(`/api/chats/${chat.id}`)).json();
+    expect(saved.profile.revision).toBe(partial.profile.revision);
+    expect(saved.chat.settingsRevision).toBe(before.chat.settingsRevision + 1);
+    expect(saved.runs).toHaveLength(0);
+    await dialog.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
+    await expect(dialog).toBeHidden();
+  });
+}
+
 test('AUDIT2 acknowledged runtime save remains successful when the reader refresh fails', async ({
   page,
   request,
@@ -60,7 +146,7 @@ test('AUDIT2 acknowledged runtime save remains successful when the reader refres
     if (route.request().method() === 'PATCH') await saveGate;
     await route.continue();
   });
-  const save = runtime.getByRole('button', { name: '설정 저장', exact: true });
+  const save = dialog.getByRole('button', { name: '채팅 설정 저장', exact: true });
   await expect(save).toHaveText('저장');
   await expect(save).toBeEnabled();
   const idleBox = (await save.boundingBox())!;
@@ -83,7 +169,7 @@ test('AUDIT2 acknowledged runtime save remains successful when the reader refres
   expect((await saved).ok()).toBe(true);
   await expect(runtime.getByRole('alert')).toContainText('실행 설정은 저장했어요.');
   await expect(runtime.getByRole('alert')).toContainText('화면을 다시 불러오지 못했어요.');
-  await expect(runtime.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: '채팅 설정 저장', exact: true })).toBeDisabled();
   await expect(save).toHaveText('저장');
   await expect(save).toHaveAttribute('aria-busy', 'false');
   await expect(calls).toHaveValue('16');
@@ -146,7 +232,9 @@ for (const width of [360, 412]) {
     await confirmation.getByRole('button', { name: '변경 버리기', exact: true }).click();
     await expect(confirmation).toBeHidden();
     await expect(calls).toHaveValue(original);
-    await expect(runtime.getByRole('button', { name: '설정 저장', exact: true })).toBeDisabled();
+    await expect(
+      dialog.getByRole('button', { name: '채팅 설정 저장', exact: true })
+    ).toBeDisabled();
     expect(settingsWrites).toEqual([]);
     const after = await (await request.get(`/api/chats/${chat.id}`)).json();
     expect(after.chat.settings).toEqual(chat.settings);

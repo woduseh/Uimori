@@ -8,7 +8,7 @@ import { get_encoding } from 'tiktoken';
 import type { Content } from '../core/product.js';
 import type { ChatDetail, Run } from '../core/types.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { openChatMenu, openHelper } from './ui-navigation.js';
+import { openChatMenu, openHelper, openSourceActions, sourceAction } from './ui-navigation.js';
 
 const passage = `창문 너머로 스며드는 햇살이 책장 끝에 닿았다. 밤새 내리던 비는 어느새 그쳐 있었다. 젖은 돌길 위로 바람이 지나갈 때마다, 나뭇잎에 남아 있던 물방울이 작은 별처럼 반짝였다.
 
@@ -280,11 +280,15 @@ for (const width of [1440, 412]) {
       await expect(dialog).toBeHidden();
       await expect(enlarge).toBeFocused();
       expect(Math.abs((await reader.evaluate((node) => node.scrollTop)) - before)).toBeLessThan(3);
-      // Theme slots move the existing copy/edit controls to the top, not clones.
+      // Theme slots keep the standing scene menu at the top, outside the long manuscript.
       await scroll(0);
+      const sceneMenu = scene.getByLabel('장면 작업 메뉴', { exact: true });
+      await expect(sceneMenu).toBeVisible();
+      expect((await sceneMenu.boundingBox())!.y).toBeLessThan(
+        (await reader.boundingBox())!.y + 400
+      );
       const copy = scene.getByRole('button', { name: '본문 복사', exact: true });
-      await expect(copy).toBeVisible();
-      expect((await copy.boundingBox())!.y).toBeLessThan((await reader.boundingBox())!.y + 400);
+      await expect(copy).toBeHidden();
       if (mode === 'light') {
         expect(errors).toEqual([]);
         continue;
@@ -302,23 +306,34 @@ for (const width of [1440, 412]) {
           },
         })
       );
-      await copy.click();
+      await openSourceActions(scene);
+      await expect(copy).toBeInViewport();
+      const menuBounds = (await sceneMenu
+        .locator('..')
+        .locator(':scope > .action-menu-body')
+        .boundingBox())!;
+      expect(menuBounds.x).toBeGreaterThanOrEqual(0);
+      expect(menuBounds.y).toBeGreaterThanOrEqual(0);
+      expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(width);
+      expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+      await sourceAction(scene, '본문 복사');
       await expect.poll(() => clipboard.length).toBe(1);
       expect(clipboard[0]).toContain('마지막 문장.');
       // A compact director memo keeps its real copy action reachable at desktop and phone widths.
       await scene.getByTestId('source-request').click();
       await scene.getByRole('button', { name: '요청 복사', exact: true }).click();
       await expect.poll(() => clipboard.at(-1)).toBe(requestText);
-      await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
+      await sourceAction(scene, '원문 수정');
       const editor = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
       await expect(editor).toBeFocused();
       await expect(editor).toHaveValue(longText);
       await page.keyboard.press('Escape');
       await expect(editor).toHaveCount(0);
-      const toggle = scene.getByRole('group', { name: '원문과 번역 보기' });
-      await toggle.getByRole('button', { name: '번역 보기', exact: true }).click();
+      await expect(sceneMenu).toBeFocused();
+      await sourceAction(scene, '번역 보기');
       await expect(scene.getByTestId('translation-text')).toContainText('After the rain');
-      await toggle.getByRole('button', { name: '원문 보기', exact: true }).click();
+      await sourceAction(scene, '원문 보기');
+      await page.keyboard.press('Escape');
       await expect(source).toContainText('마지막 문장.');
       const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
       await composer.fill('이 다음 장면에서는 두 사람이 함께 산책하도록 이어줘.');
@@ -684,16 +699,19 @@ if (process.env.UIMORI_BENCHMARK === '1')
           'original'
         );
         const scene = page.locator(`[data-source-id="${sources[pastStart].id}"]`);
+        await openSourceActions(scene);
         const translation = await sample(
           scene.getByRole('button', { name: '번역 보기', exact: true }),
           [pastStart],
           'translation'
         );
+        await openSourceActions(scene);
         const originalView = await sample(
           scene.getByRole('button', { name: '원문 보기', exact: true }),
           [pastStart],
           'original'
         );
+        await page.keyboard.press('Escape');
         const authored = scene.locator('.risu-message-content');
         await expect(authored.locator('.perf-panel')).toHaveCSS('border-top-width', '2px');
         await expect(

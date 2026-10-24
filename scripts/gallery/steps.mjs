@@ -2,6 +2,7 @@
 //
 //   { click: { label | role+name | testid | text | css, nth?, within? } }
 //   { fill: { <locator>, text } }
+//   { select: { <locator>, option } }   chooses an option by its visible label
 //   { menu: 'chat' | 'scene' | 'app' | '<aria-label>', which?: 'first' | 'last' }   opens an ActionMenu
 //   { visible: <locator> }   waits for the element
 //   { press: 'Escape' }   { wait: 300 }
@@ -10,9 +11,9 @@
 // `useCompactLayout`). `$name` in names, labels and texts is replaced from the seed ids.
 
 const menuLabels = { chat: '채팅 메뉴', scene: '장면 작업 메뉴', app: '앱 메뉴' };
-const kinds = ['click', 'fill', 'menu', 'press', 'visible', 'wait'];
+const kinds = ['click', 'fill', 'select', 'menu', 'press', 'visible', 'wait'];
 /** Steps that count as a user interaction when a journey is measured. */
-const interactive = new Set(['click', 'fill', 'menu', 'press']);
+const interactive = new Set(['click', 'fill', 'select', 'menu', 'press']);
 
 function substitute(value, ids) {
   return String(value).replaceAll(/\$([a-z]+(?:\.[a-z]+)*)/gu, (_, key) => {
@@ -55,6 +56,9 @@ export async function runStep(page, step, ids) {
     // `text` is the value to type here, never the getByText locator.
     const { text, ...locator } = step.fill;
     await locatorFor(page, locator, ids).fill(substitute(text, ids));
+  } else if (step.select) {
+    const { option, ...locator } = step.select;
+    await locatorFor(page, locator, ids).selectOption({ label: substitute(option, ids) });
   } else if (step.click) {
     await locatorFor(page, step.click, ids).click();
   } else if (step.menu) {

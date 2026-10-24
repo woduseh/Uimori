@@ -7,7 +7,7 @@ import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSett
 import { RefreshIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Chat, Settings } from '../core/types.js';
 import type { AutoTranslationDefaults } from '../core/chat-settings.js';
 import { api } from './api.js';
@@ -18,6 +18,9 @@ export function SettingsEditor({
   onDirtyChange,
   onSaveHandlerChange,
   hideHeading = false,
+  hideSaveActions = false,
+  onSaveRequest,
+  disabled = false,
 }: {
   chat: Chat;
   onSaved: () => Promise<void>;
@@ -25,8 +28,12 @@ export function SettingsEditor({
   onDirtyChange?: (dirty: boolean) => void;
   onSaveHandlerChange?: SettingsSaveRegistration;
   hideHeading?: boolean;
+  hideSaveActions?: boolean;
+  onSaveRequest?: () => void;
+  disabled?: boolean;
 }) {
   useI18n();
+  const form = useRef<HTMLFormElement>(null);
   const [value, setValue] = useState<Settings>(chat.settings);
   const [revision, setRevision] = useState(chat.settingsRevision);
   const [dirty, setDirty] = useState(false);
@@ -67,6 +74,7 @@ export function SettingsEditor({
   async function save() {
     if (saving) return false;
     if (!dirty) return true;
+    if (!form.current?.reportValidity()) return false;
     if (!Number.isInteger(value.maxCalls) || value.maxCalls < 1 || value.maxCalls > 32) {
       setLocalError(uiMessage('settings.m78'));
       return false;
@@ -105,12 +113,14 @@ export function SettingsEditor({
       {!hideHeading && <h3>{t('settings.m82')}</h3>}
       <small>{t('settings.m83')}</small>
       <form
+        ref={form}
         onSubmit={(event) => {
           event.preventDefault();
-          void save();
+          if (onSaveRequest) onSaveRequest();
+          else void save();
         }}
       >
-        <fieldset className="editor-fields full chat-runtime-fields" disabled={saving}>
+        <fieldset className="editor-fields full chat-runtime-fields" disabled={saving || disabled}>
           <div className="settings-group full">
             <h4 className="settings-group-heading">{t('settings.m84')}</h4>
             <div className="settings-group-body">
@@ -170,17 +180,26 @@ export function SettingsEditor({
               </label>
             </div>
           </details>
-          <div className="form-actions full settings-save-actions">
+          <div
+            className="form-actions full settings-save-actions"
+            hidden={hideSaveActions && !dirty}
+          >
             {dirty && (
               <button type="button" className="secondary" onClick={() => setConfirmReload(true)}>
                 <RefreshIcon size={18} aria-hidden="true" />
                 {t('settings.m94')}
               </button>
             )}
-            <SaveButton label={t('settings.m95')} disabled={!dirty || saving} aria-busy={saving} />
+            {!hideSaveActions && (
+              <SaveButton
+                label={t('settings.m95')}
+                disabled={!dirty || saving}
+                aria-busy={saving}
+              />
+            )}
           </div>
         </fieldset>
-        <TransientNotice message={message} />
+        <TransientNotice message={hideSaveActions ? '' : message} />
         {localError && (
           <NoticeBanner tone="error" className="full">
             {translateMessage(localError)}

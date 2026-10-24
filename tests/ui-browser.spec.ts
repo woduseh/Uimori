@@ -14,6 +14,7 @@ import {
   selectStartPrompt,
   selectChatSettingsSection,
   openSourceActions,
+  sourceAction,
   openChatMenu,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
@@ -194,7 +195,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByTestId('source')).toHaveCount(3);
   const source = page.getByTestId('source').first();
-  await source.getByRole('button', { name: '원문 보기', exact: true }).click();
+  await sourceAction(source, '원문 보기');
   const prose = nativeProse(source.getByTestId('source-text'));
   await expect(prose.getByRole('heading', { name: '황혼의 부두', exact: true })).toBeVisible();
   await expect(prose.locator('strong').first()).toHaveText('미라');
@@ -211,11 +212,11 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
   ).toBeUndefined();
   await expect(prose.locator('script, iframe, [onerror], a[href^="javascript:"]')).toHaveCount(0);
   await expect(prose.locator('ruby rt')).toHaveText('이야기');
-  await source.getByRole('button', { name: '번역 보기', exact: true }).click();
+  await sourceAction(source, '번역 보기');
   const translated = nativeProse(source.getByTestId('translation-text'));
   await expect(translated).toBeVisible();
   await expect(translated).toContainText('황혼의 부두');
-  await source.getByRole('button', { name: '원문 보기', exact: true }).click();
+  await sourceAction(source, '원문 보기');
   await openSourceActions(source);
   await source.getByRole('button', { name: '원문 연결 정보', exact: true }).click();
   const sourceInfo = page.getByRole('dialog', { name: '원문 연결 정보', exact: true });
@@ -268,8 +269,7 @@ test('UI03 bot-first retry saves one story and complete profile before any gener
     } else await route.continue();
   });
   await page.goto('/');
-  await nav(page, '서재');
-  await page.getByRole('button', { name: `${title} 새 채팅`, exact: true }).click();
+  await navigationAction(page, '새 채팅', title);
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('시작할 봇 찾기')).toHaveCount(0);
@@ -1008,8 +1008,7 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
     if (item.method() === 'POST' && /\/api\/chats$/.test(item.url())) chatPosts++;
   });
   await page.goto('/');
-  await nav(page, '서재');
-  await page.getByRole('button', { name: `${title} 새 채팅`, exact: true }).click();
+  await navigationAction(page, '새 채팅', title);
   const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
   await selectStartPrompt(page, choice);
   let rejectRead = true;
@@ -1140,10 +1139,11 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   if (await connectionTab.isVisible())
     await expect(connectionTab).toHaveAttribute('aria-selected', 'true');
   else {
-    await expect(settings.getByRole('heading', { name: '역할별 모델', exact: true })).toBeVisible();
     await expect(
-      settings.getByRole('button', { name: '설정 목록으로', exact: true })
-    ).toBeVisible();
+      settings
+        .getByRole('combobox', { name: '설정 영역 선택', exact: true })
+        .locator('option:checked')
+    ).toHaveText('역할별 모델');
   }
   await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
   await expect(dialog).toBeVisible();
@@ -1193,7 +1193,8 @@ test('UI03 UI12 global model choices survive chat creation and disabled connecti
   expect(detail.profile!.routes).toEqual(workspace.routes);
   expect(detail.runs).toHaveLength(0);
   expect(detail.attempts).toHaveLength(0);
-  await page.getByRole('button', { name: /^현재 본문 모델/ }).click();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '역할별 모델');
   await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(models[0].id);
   await expect(page.getByLabel('번역 모델', { exact: true })).toHaveValue(models[1].id);
   if (visualReview) await page.screenshot({ path: info.outputPath('starting-models-mobile.png') });
@@ -1522,7 +1523,7 @@ test('UI18 source and translation edits keep the current manuscript and feed fut
   await expect(nativeProse(scene.getByTestId('source-text'))).toContainText(
     'Final authored source.'
   );
-  await scene.getByRole('button', { name: '번역 생성', exact: true }).click();
+  await sourceAction(scene, '번역 생성');
   await expect(scene.getByTestId('translation-text')).toBeVisible();
   const regenerated = await data(request, chat.id);
   const currentJobs = regenerated.jobs.filter(
@@ -2009,9 +2010,9 @@ test('UI chat settings close right after saving does not warn while the refresh 
     await held;
     await route.continue();
   });
-  await runtime.getByRole('button', { name: '설정 저장', exact: true }).click();
+  await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   await expect(
-    page.locator('.transient-notice[role="status"]').filter({ hasText: '실행 설정을 저장했어요.' })
+    page.locator('.transient-notice[role="status"]').filter({ hasText: '채팅 설정을 저장했어요.' })
   ).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();

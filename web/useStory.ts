@@ -1,4 +1,4 @@
-import { useI18n } from './i18n.js';
+import { message as uiMessage, useI18n } from './i18n.js';
 import { IMAGE_INPUT_MAX_BYTES } from '../core/image-limits.js';
 import { REQUEST_IMAGE_MAX_COUNT, type RequestImageUpload } from '../core/request-images.js';
 import {
@@ -39,6 +39,7 @@ import { useInputTranslation } from './useInputTranslation.js';
 import { useCodexContentWarning } from './useCodexContentWarning.js';
 import { combinationOwner, matchesPromptCombination } from '../core/prompt-combinations.js';
 import { refValue } from './content-ref.js';
+import { isModelSelectable } from './model-selection.js';
 import {
   retainReaderNavigation,
   type ReaderNavigationPosition,
@@ -1409,7 +1410,7 @@ export function useStory() {
         }
       : undefined
     : promptWorkspace?.main;
-  async function quickChange(kind: 'combination' | 'persona' | 'module', value: string) {
+  async function quickChange(kind: 'combination' | 'persona' | 'module' | 'model', value: string) {
     if (
       !detail?.profile ||
       detail.chat.id !== selected ||
@@ -1420,11 +1421,43 @@ export function useStory() {
       return;
     const chatId = detail.chat.id;
     const profile = detail.profile;
+    const epoch = navigation.current.epoch;
     quickLock.current = true;
     setQuickBusy(true);
     setError('');
     setNotice('');
+    let modelWriteAttempted = false;
     try {
+      if (kind === 'model') {
+        const model = library.models.find((item) => item.id === value);
+        if (value && (!model || !isModelSelectable(model, library.models, library.connections)))
+          throw new Error(uiMessage('main.modelPickerInvalid'));
+        if ((profile.pinned?.mainModel?.id ?? '') === value) return true;
+        modelWriteAttempted = true;
+        await api(
+          `/chats/${chatId}/profile`,
+          {
+            expectedRevision: profile.revision,
+            image: profile.image,
+            pinned: {
+              ...profile.pinned,
+              mainModel: model ? { id: model.id } : undefined,
+            },
+          },
+          'PUT'
+        );
+        // Admission is known after the acknowledged write. A failed read must not invite
+        // another write, and a response for an old chat must not close a new chat's picker.
+        if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return false;
+        setNotice('다음 요청에 적용할 설정을 저장했어요.');
+        try {
+          await refresh(chatId);
+        } catch {
+          if (navigation.current.chat === chatId && navigation.current.epoch === epoch)
+            setError(uiMessage('main.modelPickerRefreshFailed'));
+        }
+        return navigation.current.chat === chatId && navigation.current.epoch === epoch;
+      }
       if (kind === 'combination') {
         const preset = library.promptCombinations?.find((c) => refValue(c) === value);
         if (
@@ -1517,8 +1550,17 @@ export function useStory() {
       await refresh(chatId);
       return true;
     } catch (error) {
-      if (navigation.current.chat === chatId)
-        setError(error instanceof Error ? error : '설정을 저장하지 못했어요.');
+      if (
+        navigation.current.chat === chatId &&
+        (kind !== 'model' || navigation.current.epoch === epoch)
+      )
+        setError(
+          kind === 'model' && modelWriteAttempted && !definiteRejection(error)
+            ? uiMessage('main.modelPickerUnknown')
+            : error instanceof Error
+              ? error
+              : '설정을 저장하지 못했어요.'
+        );
       await refresh(chatId).catch(() => undefined);
       return false;
     } finally {

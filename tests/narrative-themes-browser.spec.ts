@@ -9,7 +9,13 @@ import type { PackageImage } from '../core/package-images.js';
 import type { ChatDetail } from '../core/types.js';
 import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
 import { nativeContent } from './fixtures/native-content.js';
-import { navigationAction, openChatMenu, selectSettingsSection } from './ui-navigation.js';
+import {
+  navigationAction,
+  openChatMenu,
+  openSourceActions,
+  selectSettingsSection,
+  sourceAction,
+} from './ui-navigation.js';
 
 const layouts = ['cinematic', 'letter', 'scrapbook', 'classic-frame'] as const;
 type Layout = (typeof layouts)[number];
@@ -414,23 +420,34 @@ for (const layout of layouts) {
             },
           });
         });
+        const sceneMenu = scene.getByLabel('장면 작업 메뉴', { exact: true });
         const copy = scene.getByRole('button', { name: '본문 복사', exact: true });
-        await expect(copy).toHaveCount(1);
+        await expect(copy).toBeHidden();
+        await expect(sceneMenu).toBeVisible();
         await expect(
           bodyScroll.getByRole('button', { name: '본문 복사', exact: true })
         ).toHaveCount(0);
         await expect(
           bodyScroll.getByRole('button', { name: '원문 수정', exact: true })
         ).toHaveCount(0);
-        await copy.click();
+        await openSourceActions(scene);
+        await expect(copy).toHaveCount(1);
+        await expect(copy).toBeInViewport();
+        const menuBounds = (await sceneMenu
+          .locator('..')
+          .locator(':scope > .action-menu-body')
+          .boundingBox())!;
+        expect(menuBounds.x).toBeGreaterThanOrEqual(0);
+        expect(menuBounds.y).toBeGreaterThanOrEqual(0);
+        expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(width);
+        expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(page.viewportSize()!.height);
+        await sourceAction(scene, '본문 복사');
         await expect.poll(() => clipboard.at(-1)).toBe(data.text);
-        const edit = scene.getByRole('button', { name: '원문 수정', exact: true });
-        await expect(edit).toHaveCount(1);
         await bodyScroll.evaluate((node) => {
           node.scrollTop = 400;
         });
         const beforeEdit = await bodyScroll.evaluate((node) => node.scrollTop);
-        await edit.click();
+        await sourceAction(scene, '원문 수정');
         const editor = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
         await expect(editor).toBeFocused();
         await expect(editor).toBeInViewport();
@@ -438,6 +455,7 @@ for (const layout of layouts) {
         await editor.fill('Unsaved narrative edit');
         await page.keyboard.press('Escape');
         await expect(editor).toHaveCount(0);
+        await expect(sceneMenu).toBeFocused();
         await expect(source).toContainText(endMarker);
         await expect
           .poll(async () =>
@@ -445,10 +463,10 @@ for (const layout of layouts) {
           )
           .toBeLessThan(3);
 
-        const language = scene.getByRole('group', { name: '원문과 번역 보기' });
-        await language.getByRole('button', { name: '번역 보기', exact: true }).click();
+        await sourceAction(scene, '번역 보기');
         await expect(scene.getByTestId('translation-text')).toContainText('After the rain');
-        await language.getByRole('button', { name: '원문 보기', exact: true }).click();
+        await sourceAction(scene, '원문 보기');
+        await page.keyboard.press('Escape');
         await expect(source).toContainText(endMarker);
 
         // Wheel scrolling stays inside the scene body while its portrait and actions stay put.
@@ -461,7 +479,7 @@ for (const layout of layouts) {
         await bodyScroll.scrollIntoViewIfNeeded();
         const outerPosition = await reader.evaluate((node) => node.scrollTop);
         const portraitPosition = (await bot.boundingBox())!.y;
-        const actionPosition = (await copy.boundingBox())!.y;
+        const actionPosition = (await sceneMenu.boundingBox())!.y;
         const bounds = await bodyScroll.boundingBox();
         await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
         await page.mouse.wheel(0, 700);
@@ -471,17 +489,17 @@ for (const layout of layouts) {
         ).toBeLessThan(3);
         expect(Math.abs((await bot.boundingBox())!.y - portraitPosition)).toBeLessThan(3);
         await expect(bot).toBeInViewport();
-        expect(Math.abs((await copy.boundingBox())!.y - actionPosition)).toBeLessThan(3);
+        expect(Math.abs((await sceneMenu.boundingBox())!.y - actionPosition)).toBeLessThan(3);
         await bodyScroll.evaluate((node) => {
           node.scrollTop = node.scrollHeight;
         });
         await expect(source.getByText(endMarker, { exact: true })).toBeInViewport();
-        await copy.click();
+        await sourceAction(scene, '본문 복사');
         await expect.poll(() => clipboard.at(-1)).toBe(data.text);
         const second = page.locator(`[data-source-id="${data.secondId}"]`);
         await second.getByTestId('source-text').scrollIntoViewIfNeeded();
         await expect(second.getByTestId('source-text')).toContainText('SECOND_SCENE_END');
-        await second.getByRole('button', { name: '본문 복사', exact: true }).click();
+        await sourceAction(second, '본문 복사');
         await expect.poll(() => clipboard.at(-1)).toContain('SECOND_SCENE_END');
         await noHorizontalOverflow(page, second);
 
@@ -897,7 +915,13 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
     const advanced = page.locator('.theme-advanced:not([open]) > summary');
     if (await advanced.isVisible()) await advanced.click();
   }
-  await page.getByLabel('테마 화면 모드', { exact: true }).selectOption('dark');
+  await selectSettingsSection(page, '일반');
+  await page.getByLabel('화면 모드', { exact: true }).selectOption('dark');
+  await selectSettingsSection(page, '테마와 색상');
+  {
+    const advanced = page.locator('.theme-advanced:not([open]) > summary');
+    if (await advanced.isVisible()) await advanced.click();
+  }
   await page.getByLabel('테마 적용 범위', { exact: true }).selectOption('chat');
   await page.getByRole('button', { name: '배경 초기화', exact: true }).click();
   await page.getByRole('button', { name: '배경 저장', exact: true }).click();
@@ -1030,12 +1054,12 @@ for (const layout of layouts) {
     }
     await page.setViewportSize({ width: 412, height: 700 });
     // A short translation uses its content height, rather than stretching to the cap.
-    const language = scene.getByRole('group', { name: '원문과 번역 보기' });
     const originalHeight = await bodyScroll.evaluate((node) => node.clientHeight);
-    await language.getByRole('button', { name: '번역 보기', exact: true }).click();
+    await sourceAction(scene, '번역 보기');
     await expect(scene.getByTestId('translation-text')).toContainText('After the rain');
     expect(await bodyScroll.evaluate((node) => node.clientHeight)).toBeLessThan(originalHeight);
-    await language.getByRole('button', { name: '원문 보기', exact: true }).click();
+    await sourceAction(scene, '원문 보기');
+    await page.keyboard.press('Escape');
     await expect(scene.getByTestId('source-text')).toContainText(endMarker);
 
     await page.setViewportSize({ width: 360, height: 600 });
@@ -1057,9 +1081,12 @@ for (const layout of layouts) {
     });
     await portrait.scrollIntoViewIfNeeded();
     await expect(portrait).toBeInViewport();
-    const copy = scene.getByRole('button', { name: '본문 복사', exact: true });
-    await copy.scrollIntoViewIfNeeded();
-    await expect(copy).toBeInViewport();
+    const sceneMenu = scene.getByLabel('장면 작업 메뉴', { exact: true });
+    await sceneMenu.scrollIntoViewIfNeeded();
+    await expect(sceneMenu).toBeInViewport();
+    await openSourceActions(scene);
+    await expect(scene.getByRole('button', { name: '본문 복사', exact: true })).toBeInViewport();
+    await page.keyboard.press('Escape');
     await bodyScroll.focus();
     await expect(bodyScroll).toBeFocused();
     await bodyScroll.evaluate((node) => {

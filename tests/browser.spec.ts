@@ -102,7 +102,7 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     const b = await newChat(bPage, '합성 B · 정원');
     await storySettings(bPage);
     await bPage.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true }).fill('6');
-    await bPage.getByRole('button', { name: '설정 저장', exact: true }).click();
+    await bPage.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
     await expect
       .poll(async () => (await detail(request, b.id)).chat.settingsRevision)
       .toBe(b.settingsRevision + 1);
@@ -160,11 +160,11 @@ test('F02 F03 F05 two contexts and two tabs keep commands, snapshots, source job
     // A changed setting while held must not alter the existing run snapshot.
     await storySettings(page);
     await page.getByRole('spinbutton', { name: '작업당 모델 호출 한도', exact: true }).fill('6');
-    await page.getByRole('button', { name: '설정 저장', exact: true }).click();
+    await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
     await expect
       .poll(async () => (await detail(request, a.id)).chat.settingsRevision)
       .toBe(a.settingsRevision + 1);
-    await aSecondTab.getByRole('button', { name: '설정 저장', exact: true }).click();
+    await aSecondTab.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
     await expect(
       aSecondTab.getByRole('region', { name: '생성 설정', exact: true }).getByRole('alert')
     ).toContainText('다른 요청이 먼저 반영됐어요');

@@ -1,6 +1,6 @@
 import { MOBILE_WIDTH, DESKTOP_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
-import { selectChatSettingsSection } from './ui-navigation.js';
+import { selectChatSettingsSection, sourceAction } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
@@ -74,8 +74,8 @@ async function complete(request: APIRequestContext, chatId: string, runId: strin
 async function original(page: Page, source: Source) {
   const article = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
   await expect(article).toBeVisible();
-  const button = article.getByRole('button', { name: '원문 보기', exact: true });
-  if (await button.count()) await button.click();
+  if ((await article.getAttribute('data-representation')) === 'translation')
+    await sourceAction(article, '원문 보기');
   await expect(article.getByTestId('source-text')).toContainText(source.text.split('\n')[0]);
   return article;
 }

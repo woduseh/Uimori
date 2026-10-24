@@ -4,7 +4,7 @@ import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { SettingsIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ChatProfile, Library } from '../core/product.js';
 import { api } from './api.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
@@ -47,6 +47,9 @@ export function ProfileEditor({
   initialTab = 'characters',
   activeTab,
   hideNavigation = false,
+  hideSaveActions = false,
+  onSaveRequest,
+  disabled = false,
   nextRequest = '',
   loreContextReset = false,
 }: {
@@ -60,10 +63,14 @@ export function ProfileEditor({
   initialTab?: ProfileSection;
   activeTab?: ProfileSection;
   hideNavigation?: boolean;
+  hideSaveActions?: boolean;
+  onSaveRequest?: () => void;
+  disabled?: boolean;
   nextRequest?: string;
   loreContextReset?: boolean;
 }) {
   useI18n();
+  const form = useRef<HTMLFormElement>(null);
   const [value, setValue] = useState(profile);
   const [dirty, setDirty] = useState(false);
   const { workspace } = usePromptWorkspace();
@@ -109,6 +116,7 @@ export function ProfileEditor({
   useSettingsSaveHandler(onSaveHandlerChange, async () => {
     if (saving || attachmentPending || lorePending) return false;
     if (!dirty) return true;
+    if (!form.current?.reportValidity()) return false;
     return save(() =>
       api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody(value), 'PUT')
     );
@@ -216,8 +224,10 @@ export function ProfileEditor({
       </div>
       <p className="muted">{t('library.appliesOnlyToThisChat')}</p>
       <form
+        ref={form}
         onSubmit={(event) => {
           event.preventDefault();
+          if (onSaveRequest) return onSaveRequest();
           void save(() =>
             api<ChatProfile>(`/chats/${profile.chatId}/profile`, profileBody(value), 'PUT')
           );
@@ -228,7 +238,7 @@ export function ProfileEditor({
           role={hideNavigation ? undefined : 'tabpanel'}
           aria-labelledby={hideNavigation ? undefined : `profile-tab-${tab}`}
         >
-          <fieldset className="profile-fields" disabled={saving}>
+          <fieldset className="profile-fields" disabled={saving || disabled}>
             <div hidden={tab !== 'characters'} className="settings-group">
               <h3 className="settings-group-heading">{t('library.conversationResources')}</h3>
               <ContentAttachments
@@ -466,7 +476,7 @@ export function ProfileEditor({
         )}
         <div
           className="profile-savebar form-actions settings-save-actions"
-          hidden={tab !== 'characters' && !dirty && !lorePending}
+          hidden={hideSaveActions || (tab !== 'characters' && !dirty && !lorePending)}
         >
           {(dirty || lorePending) && (
             <button
@@ -500,7 +510,7 @@ export function ProfileEditor({
             aria-busy={saving}
           />
         </div>
-        <TransientNotice message={status} />
+        <TransientNotice message={hideSaveActions ? '' : status} />
       </form>
     </section>
   );

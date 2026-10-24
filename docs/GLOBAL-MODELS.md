@@ -12,6 +12,8 @@
 
 미지정·삭제·비활성 모델이나 사용 불가 프로바이더는 해당 본문·번역 작업을 차단해요. 임의의 다른 모델로 대체하지 않아요. 원본 카드의 Lua 모델 호출에도 연결 권한과 호출 예산을 적용해요. 과거 snapshot에 프로바이더 정보가 있어도 실제 전송 권한은 매 호출 최신 프로바이더의 활성 상태·endpoint·저장된 인증 설정으로 확인해요.
 
+상단 모델 이름을 누르면 **이 채팅의 본문 모델** 선택 창이 열려요. 검색해서 선택하면 현재 채팅의 모델만 다음 요청부터 바뀌며, **기본값 사용**은 모델 고정만 해제해요. 작문 프롬프트 고정과 전역 역할 모델은 그대로예요. 새 모델 등록과 연결 편집은 선택 창의 **모델 관리**에서 열어요. 채팅의 **생성 설정**에서는 모델, 프롬프트와 실행 옵션을 한 저장 버튼으로 저장해요. 각 저장의 수정 번호는 독립적이며 일부만 성공하면 나머지 초안을 유지해요.
+
 ## 저장과 실행 경계
 
 `GET /api/model-workspace`는 `{revision, routes, translationPolicy, summaryLength, mainJudgmentEnabled, mainJudgmentThreshold, titleModel, helperModel, contextModel, scriptModel}`을 반환하고, `PUT`은 `expectedRevision`으로 동시 편집을 보호해요. 선택 기능 모델과 `scriptModel`은 `{id}` 참조 또는 `null`이며 PUT에서 생략하면 기존 값을 유지해요. `summaryLength`는 본문·도우미의 [요약 길이](CONTEXT-LIMITS.md#공통-요약-지침과-출력-여유)를 정해요. 프롬프트 선택과 같은 `prompt_workspace` JSON 행에 저장하므로 모델·프롬프트의 동시 저장 충돌도 CAS로 처리해요. 작문·번역 프롬프트는 프리셋 ID와 명시적인 전역 옵션만 저장하고, 본문과 기본 옵션은 원본의 최신 저장본에서 읽어요. 과거 실행은 접수 당시 스냅샷을 유지해요.

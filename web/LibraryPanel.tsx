@@ -217,6 +217,7 @@ export function LibraryPanel({
   libraryError = '',
   onError,
   onStartStory,
+  onConfigureStartStory,
   onUseContent,
   initialTab = 'bot',
   listRequest = 0,
@@ -232,6 +233,7 @@ export function LibraryPanel({
   libraryError?: string;
   onError: (error: string) => void;
   onStartStory?: (bot: Content) => void;
+  onConfigureStartStory?: (bot: Content) => void;
   onUseContent?: (content: Content, role: PrimaryLibraryTab) => void;
   initialTab?: PrimaryLibraryTab;
   /** Bumped when the navigation entry is chosen, so the same tab still returns to its list. */
@@ -398,7 +400,7 @@ export function LibraryPanel({
   }
   async function openContent(
     item: Content,
-    action: 'detail' | 'edit' | 'clone' | PrimaryLibraryTab = 'detail'
+    action: 'detail' | 'edit' | 'clone' | 'configure-chat' | PrimaryLibraryTab = 'detail'
   ) {
     if (action === 'clone') {
       if (cloning.current) return;
@@ -462,6 +464,7 @@ export function LibraryPanel({
             );
         }
       } else if (action === 'detail') setDetail(full);
+      else if (action === 'configure-chat') onConfigureStartStory?.(full);
       else if (onUseContent) onUseContent(full, action);
       else if (action === 'bot') onStartStory?.(full);
     } catch (error) {
@@ -627,6 +630,17 @@ export function LibraryPanel({
     const manualIndex = filtered.findIndex((entry) => entry.id === item.id);
     return (
       <LibraryItemMenu title={t('library.menu', { v0: item.title })}>
+        {tab === 'bot' && onConfigureStartStory && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={loading}
+            onClick={() => void openContent(item, 'configure-chat')}
+          >
+            <NewChatIcon size={18} aria-hidden="true" />
+            {t('transfer.configureNewChat')}
+          </button>
+        )}
         <button
           type="button"
           className="secondary"
@@ -829,6 +843,17 @@ export function LibraryPanel({
                 onClick={() => void openContent(detail, 'edit')}
               />
               <LibraryItemMenu title={t('library.menu', { v0: detail.title })}>
+                {detailRole === 'bot' && onConfigureStartStory && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={loading}
+                    onClick={() => void openContent(detail, 'configure-chat')}
+                  >
+                    <NewChatIcon size={18} aria-hidden="true" />
+                    {t('transfer.configureNewChat')}
+                  </button>
+                )}
                 {libraryTabs
                   .filter(({ id }) => id !== detailRole)
                   .map(({ id, titleKey }) => (

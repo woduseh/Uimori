@@ -673,7 +673,8 @@ for (const width of DEFAULT_WIDTHS) {
       nav.locator(`[data-bot-id="${a.owner.id}"] .bot-chat-item[data-chat-id="${a.chats[0].id}"]`)
     ).toBeVisible();
     await revealBotActions(nav, a.owner.title);
-    await nav.getByRole('button', { name: `${a.owner.title} 새 채팅`, exact: true }).click();
+    await nav.getByLabel(`${a.owner.title} 관리`, { exact: true }).click();
+    await nav.getByRole('button', { name: '설정 후 새 채팅', exact: true }).click();
     const create = page.getByRole('dialog', { name: '새 채팅', exact: true });
     await expect(create).toBeVisible();
     await page.keyboard.press('Escape');
