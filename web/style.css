@@ -8,7 +8,7 @@
   --surface-active: #dfe2df;
   --hover: #e7e9e7;
   --line: #d7dad7;
-  --input-border: #cccfcc;
+  --input-border: #b9bcb8;
   --border-hover: #b9bcb8;
   --focus-ring: #2a7e3b;
   --text: #1d211c;
@@ -20,7 +20,7 @@
   --accent-hover-ink: #000000;
   --accent-text: #2a7e3b;
   --accent-line: #94ce9a;
-  --accent-soft: #c9e8ca;
+  --accent-soft: #e9f6e9;
   --user: #e9f6e9;
   --error: #ce2c31;
   --error-ink: #000000;
@@ -87,7 +87,7 @@
   --surface-active: #2f312e;
   --hover: #282a27;
   --line: #383a36;
-  --input-border: #454843;
+  --input-border: #5c625b;
   --border-hover: #5c625b;
   --focus-ring: #71d083;
   --text: #eceeec;
@@ -99,7 +99,7 @@
   --accent-hover-ink: #000000;
   --accent-text: #71d083;
   --accent-line: #366740;
-  --accent-soft: #25482d;
+  --accent-soft: #1d3a24;
   --user: #1b2a1e;
   --error: #ff9592;
   --error-ink: #000000;
@@ -176,6 +176,16 @@ button {
   }
 }
 button:disabled {
+  /* Keep each control's geometry while its accent and destructive fills become neutral.
+     Local tokens also cover buttons disabled by an enclosing fieldset. */
+  --accent: var(--surface);
+  --accent-ink: var(--muted);
+  --accent-text: var(--muted);
+  --accent-soft: var(--surface);
+  --accent-line: var(--line);
+  --error: var(--muted);
+  --error-solid: var(--surface);
+  --error-ink: var(--muted);
   opacity: 0.5;
   cursor: default;
 }
@@ -1277,6 +1287,9 @@ input[type="checkbox"] {
 }
 .app-dialog.wide {
   --dialog-size: var(--settings-w);
+}
+:root[data-theme="dark"] .app-dialog {
+  background: var(--panel);
 }
 .app-dialog[open] {
   display: flex;

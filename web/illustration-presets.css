@@ -134,6 +134,9 @@
   flex: none;
   font-size: var(--font-small);
   font-weight: 500;
+  color: var(--text);
+}
+.illustration-preset-selected > svg {
   color: var(--accent-text);
 }
 .illustration-preset-card.selected {

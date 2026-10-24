@@ -321,7 +321,7 @@ describe('Independent layout and palette choices', () => {
     }
   });
 
-  test('built-in palettes keep readable contrast on text and solid backgrounds', () => {
+  test('built-in palettes keep readable contrast on controls, selections and solid actions', () => {
     const luminance = (hex: string) => {
       const rgb = hex.match(/[0-9a-f]{2}/gi)!.map((value) => parseInt(value, 16) / 255);
       const [r, g, b] = rgb.map((value) =>
@@ -336,6 +336,12 @@ describe('Independent layout and palette choices', () => {
           ['panel', 'text'],
           ['panel', 'muted'],
           ['panel', 'accent-text'],
+          ['surface', 'text'],
+          ['surface', 'muted'],
+          ['hover', 'text'],
+          ['hover', 'muted'],
+          ['accent-soft', 'text'],
+          ['accent-soft', 'accent-text'],
           ['accent', 'accent-ink'],
           ['accent-hover', 'accent-hover-ink'],
           ['error-solid', 'error-ink'],

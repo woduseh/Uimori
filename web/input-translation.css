@@ -78,7 +78,7 @@
 }
 .input-translation-language-menu > button[aria-pressed="true"] {
   background: var(--accent-soft);
-  color: var(--accent-text);
+  color: var(--text);
 }
 .input-translation-feedback {
   margin: 6px 6px 0;

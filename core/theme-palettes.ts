@@ -35,7 +35,7 @@ function colors(
     'surface-active': neutral[5],
     hover: neutral[4],
     line: neutral[6],
-    'input-border': neutral[7],
+    'input-border': neutral[8],
     'border-hover': neutral[8],
     'focus-ring': accent[11],
     text: neutral[12],
@@ -48,7 +48,7 @@ function colors(
     // Jade 11 on sage 2 falls just below AA for the app's small text.
     'accent-text': accentName === 'jade' && mode === 'light' ? accent[12] : accent[11],
     'accent-line': accent[7],
-    'accent-soft': accent[5],
+    'accent-soft': mode === 'light' ? accent[3] : accent[4],
     user: accent[3],
     error: red[11],
     'error-ink': '#000000',

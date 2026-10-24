@@ -17,6 +17,9 @@
 .helper-panel[hidden] {
   display: none;
 }
+:root[data-theme="dark"] .helper-panel {
+  background: var(--panel);
+}
 .helper-messages[hidden],
 .helper-composer[hidden] {
   display: none;
