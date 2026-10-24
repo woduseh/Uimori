@@ -151,18 +151,12 @@
     white-space: normal;
   }
 }
-.prompt-current-links {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
+.prompt-current-preset {
+  flex-wrap: nowrap;
 }
-.prompt-current-settings .prompt-current-links {
-  padding-block: 12px;
-  border-top: var(--hairline) solid var(--line);
-}
-.prompt-current-settings .prompt-current-links:empty {
-  display: none;
+.prompt-current-preset > select {
+  flex: 1;
+  width: auto;
 }
 .prompt-current-settings .pc-composer-fold {
   border: 0;
@@ -194,17 +188,4 @@
 .prompt-current-settings .prompt-option-field textarea {
   min-height: 72px;
   height: auto;
-}
-
-.prompt-current-links > button {
-  background: transparent;
-  color: var(--muted);
-  border: 0;
-  font-weight: 500;
-  padding-inline: 8px;
-}
-@media (hover: hover) {
-  .prompt-current-links > button:hover:not(:disabled) {
-    color: var(--text);
-  }
 }

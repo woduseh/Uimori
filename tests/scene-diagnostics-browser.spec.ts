@@ -1,7 +1,8 @@
 import { expect, test, type APIRequestContext, type APIResponse } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import type { Attempt, ChatProfile, ModelWorkspace, PromptWorkspace } from '../core/product.js';
-import type { ChatDetail, Run } from '../core/types.js';
+import type { ChatDetail, ReaderDetail, Run } from '../core/types.js';
+import type { RequestLore } from '../core/request-lore.js';
 import type { RequestContext, LastSceneLoreDetail, SceneUsageDetail } from '../core/scene-usage.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { fixtureBotInput } from './fixtures/chat.js';
@@ -212,7 +213,7 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       })
     );
 
-    for (const width of DEFAULT_WIDTHS) {
+    for (const width of [360, ...DEFAULT_WIDTHS]) {
       const detailRequests: string[] = [];
       const captureDetail = (req: { url(): string }) => {
         if (req.url().endsWith('/scene-detail')) detailRequests.push(req.url());
@@ -236,11 +237,13 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       expect(detailRequests).toHaveLength(1);
       await expect(usage).toContainText(/Scene diagnostics writer\s*scene-diagnostics-writer/);
       await expect(usage).not.toContainText('오늘 바꾼 모델 이름');
-      await expect(usage).toContainText('프롬프트 선택');
+      await expect(
+        usage.locator('.scene-receipt dt').filter({ hasText: '프롬프트' })
+      ).toBeVisible();
       await expect(usage).toContainText('Synthetic scene diagnostics prompt');
       await expect(usage).toContainText('호출 당시 미라');
       await expect(
-        usage.locator('.scene-receipt-lore li').filter({ hasText: loreTitle })
+        usage.locator('.request-lore-group').filter({ hasText: loreTitle })
       ).toContainText('고정 자료');
       await expect(usage).toContainText('입력 1,234 / 컨텍스트 한도 65,536');
       await expect(usage.getByRole('meter', { name: '컨텍스트 한도 대비 입력' })).toHaveAttribute(
@@ -265,6 +268,39 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       // Rendering proof only: the automatic-selection summary is an API fixture,
       // while the source, token and pinned-lore persistence above use the real app.
       const detailPath = `**/api/attempts/${attempt.id}/scene-detail`;
+      const readerPath = `**/api/chats/${chat.id}/reader?*`;
+      const richEntries: RequestLore['entries'] = [
+        included.lore!.entries[0],
+        ...Array.from(
+          { length: 18 },
+          (_, index) =>
+            ({
+              id: index === 2 || index === 3 ? 'repeated-retrieval' : `record-${index}`,
+              title:
+                index < 2
+                  ? '학생 인명부'
+                  : `아주 긴 한국어 로어 제목 ${index + 1} — 항구와 등대에 관한 등장인물의 비밀과 약속`,
+              via: index < 2 ? 'selected' : index > 14 ? 'retained' : 'tool-result',
+              delivery:
+                index > 14 ? 'unverified' : index > 12 ? 'summary' : index % 2 ? 'excerpt' : 'full',
+              source: {
+                contentId: `source-${index}`,
+                sourceName:
+                  index === 0 ? '항구 인물집' : index === 1 ? '등대 인물집' : '항구 설정집',
+                entryId: `source-entry-${index}`,
+              },
+            }) as RequestLore['entries'][number]
+        ),
+      ];
+      await page.route(readerPath, async (route) => {
+        const response = await route.fetch();
+        const reader = (await response.json()) as ReaderDetail;
+        for (const item of reader.runs) {
+          if (item.sceneUsage?.receipt)
+            item.sceneUsage.receipt.model.title = item.sceneUsage.receipt.model.modelId;
+        }
+        await route.fulfill({ response, json: reader });
+      });
       await page.route(detailPath, async (route) => {
         const response = await route.fetch();
         const detail = (await response.json()) as SceneUsageDetail;
@@ -274,6 +310,8 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
             ...detail,
             lore: {
               ...detail.lore!,
+              status: 'partial',
+              entries: richEntries,
               selection: { total: 1234, evaluated: 30, selected: 2, failed: 1 },
             },
           } satisfies SceneUsageDetail,
@@ -287,16 +325,83 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await selectionSummary.scrollIntoViewIfNeeded();
       await expect(selectionSummary).toBeVisible();
       await expect(
-        usage.locator('.scene-receipt-lore li').filter({ hasText: loreTitle })
+        usage.locator('.request-lore-group').filter({ hasText: loreTitle })
       ).toContainText('고정 자료');
+      await expect(usage.locator('.scene-receipt dd').first()).toHaveText(
+        'scene-diagnostics-writer'
+      );
+      const rows = usage.locator('.request-lore-entries > li');
+      await expect(rows).toHaveCount(19);
+      await expect(usage.locator('.request-lore-group-heading')).toContainText([
+        '고정 자료',
+        '자동 선택',
+        '자동 선택',
+        '도구 조회',
+        '도구 조회',
+        '도구 조회',
+        '이전 요청 포함',
+      ]);
+      await expect(usage.getByText('항구 인물집', { exact: true }).first()).toBeVisible();
+      await expect(usage.getByText('등대 인물집', { exact: true }).first()).toBeVisible();
+      const bounds = await rows.evaluateAll((items) =>
+        items.map((item) => {
+          const rect = item.getBoundingClientRect();
+          return {
+            top: rect.top,
+            bottom: rect.bottom,
+            width: item.clientWidth,
+            scroll: item.scrollWidth,
+          };
+        })
+      );
+      for (const [index, boundsRow] of bounds.entries()) {
+        expect(boundsRow.scroll).toBeLessThanOrEqual(boundsRow.width + 1);
+        if (index > 0) expect(boundsRow.top).toBeGreaterThanOrEqual(bounds[index - 1].bottom - 1);
+      }
+      const duplicateRetrievals = rows.filter({ hasText: 'repeated-retrieval' });
+      await expect(duplicateRetrievals).toHaveCount(2);
+      await duplicateRetrievals.first().locator('summary').click();
+      await expect(
+        duplicateRetrievals.first().getByText('source-entry-2', { exact: true })
+      ).toBeVisible();
+      await duplicateRetrievals.first().locator('summary').click();
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
       ).toBe(true);
+      await usage.locator(':scope > summary').scrollIntoViewIfNeeded();
       await page.screenshot({ path: info.outputPath(`scene-selection-coverage-${width}.png`) });
+      const lorePath = `**/api/chats/${chat.id}/last-scene-lore`;
+      await page.route(lorePath, async (route) => {
+        const response = await route.fetch();
+        const value = (await response.json()) as LastSceneLoreDetail;
+        await route.fulfill({
+          response,
+          json: { ...value, lore: { status: 'partial', entries: richEntries } },
+        });
+      });
+      await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+      await page.getByRole('button', { name: '마지막 장면의 로어', exact: true }).click();
+      await expect(lore.locator('.request-lore-entries > li')).toHaveCount(19);
+      await expect(lore.getByText('항구 인물집', { exact: true }).first()).toBeVisible();
+      const unconfirmed = lore.getByText('포함 여부 미확인: 3건', { exact: true });
+      await expect(unconfirmed).toBeVisible();
+      await unconfirmed.click();
+      await expect(lore.getByText(richEntries.at(-1)!.title, { exact: true })).toBeVisible();
+      await expect(lore).toContainText('프롬프트에서 가공된 자료');
+      expect(await lore.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+        true
+      );
+      await lore.locator('.dialog-body').evaluate((element) => {
+        element.scrollTop = 0;
+      });
+      await page.screenshot({ path: info.outputPath(`scene-lore-rich-${width}.png`) });
+      await lore.getByRole('button', { name: '마지막 장면의 로어 닫기', exact: true }).click();
+      await page.unroute(lorePath);
       // TurnActivity restores its open state on reload. Close it before the next width.
       await activity.locator(':scope > summary').click();
       await expect(activity).not.toHaveAttribute('open', '');
       await page.unroute(detailPath);
+      await page.unroute(readerPath);
     }
   } finally {
     await peer.close();

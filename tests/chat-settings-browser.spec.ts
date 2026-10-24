@@ -452,7 +452,33 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
       text: 'CSUI04_PERSONA',
       loading: 'pinned',
       relatedIds: [],
-      package: nativeContent({ name: title, description: 'CSUI04_PERSONA' }, {}, 'persona'),
+      package: nativeContent(
+        {
+          name: title,
+          description: 'CSUI04_PERSONA',
+          character_book: {
+            entries: [
+              {
+                id: 'identity',
+                comment: '오래된 항구의 안내인',
+                content: 'CSUI04_IDENTITY',
+                constant: true,
+                enabled: true,
+              },
+              {
+                id: 'harbor',
+                comment: '안개가 짙은 날의 항구',
+                content: 'CSUI04_HARBOR',
+                constant: false,
+                enabled: true,
+                keys: ['harbor'],
+              },
+            ],
+          },
+        },
+        {},
+        'persona'
+      ),
     },
   });
   expect(seeded.ok(), await seeded.text()).toBe(true);
@@ -506,9 +532,26 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
   ).toHaveCount(0);
   const attached = dialog
     .locator('.package-attachment')
-    .filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+    .filter({ has: page.getByRole('button', { name: '페르소나', exact: true }) });
   await expect(attached).toBeVisible();
-  await attached.getByRole('button', { name: '해제', exact: true }).click();
+  await expect(attached.getByText(title, { exact: true })).toHaveCount(1);
+  for (const width of [1440, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(attached.getByRole('button', { name: '페르소나', exact: true })).toContainText(
+      title
+    );
+    await expect(attached.locator('summary')).toHaveText('로어 2개');
+    await page.screenshot({
+      path: info.outputPath(`materials-${width}.png`),
+      animations: 'disabled',
+    });
+  }
+  await attached.locator('summary').click();
+  await expect(attached.getByText('오래된 항구의 안내인', { exact: true })).toBeVisible();
+  await expect(attached.getByText('항상 포함', { exact: true })).toBeVisible();
+  await expect(attached.getByText('안개가 짙은 날의 항구', { exact: true })).toBeVisible();
+  await expect(attached.getByText('필요할 때 읽기', { exact: true })).toBeVisible();
+  await attached.getByRole('button', { name: `${title} 선택 해제`, exact: true }).click();
   await dialog.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
   const completion = page
     .locator('.transient-notice')
@@ -531,7 +574,10 @@ test('CSUI04 quick persona and chat settings share persisted attachments and non
   await expect(composer).toBeVisible();
   const reopened = await openSettings(page);
   await selectChatSettingsSection(page, sections[0]);
-  await expect(reopened.getByRole('heading', { name: title, exact: true })).toHaveCount(0);
+  await expect(reopened.getByRole('button', { name: '페르소나', exact: true })).toContainText(
+    '선택 안 함'
+  );
+  await expect(reopened.getByText(title, { exact: true })).toHaveCount(0);
   expect(await selected()).toEqual([]);
   const after = await read();
   expect(after.runs).toHaveLength(0);

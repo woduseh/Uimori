@@ -1,9 +1,57 @@
 export const messages = {
+  'helpers.modelPickerTitle': {
+    ko: '도우미 모델 선택',
+    en: 'Choose helper model',
+    ja: 'ヘルパーモデルを選択',
+    zh: '选择助手模型',
+  },
+  'helpers.modelPickerScope': {
+    ko: '모든 도우미 대화의 다음 요청부터 적용해요.',
+    en: 'Applies to the next request in every helper conversation.',
+    ja: 'すべてのヘルパー会話の次の依頼から適用します。',
+    zh: '从所有助手对话的下一次请求开始生效。',
+  },
+  'helpers.modelPickerNone': {
+    ko: '선택 안 함',
+    en: 'None selected',
+    ja: '選択なし',
+    zh: '不选择',
+  },
+  'helpers.modelPickerManage': {
+    ko: '역할별 모델 설정',
+    en: 'Role model settings',
+    ja: '役割別モデル設定',
+    zh: '按角色设置模型',
+  },
+  'helpers.modelSaved': {
+    ko: '도우미 모델을 변경했어요.',
+    en: 'Helper model changed.',
+    ja: 'ヘルパーモデルを変更しました。',
+    zh: '已更改助手模型。',
+  },
+  'helpers.modelCheckAgain': {
+    ko: '모델 설정을 다시 불러와 변경 결과를 확인해 주세요.',
+    en: 'Reload model settings to check the result of the change.',
+    ja: 'モデル設定を再読み込みして、変更結果を確認してください。',
+    zh: '请重新加载模型设置以确认更改结果。',
+  },
+  'helpers.modelRefreshFailed': {
+    ko: '도우미 모델은 변경했지만 설정을 다시 읽지 못했어요: {error}',
+    en: 'The helper model changed, but settings could not be refreshed: {error}',
+    ja: 'ヘルパーモデルは変更しましたが、設定を再読み込みできませんでした: {error}',
+    zh: '助手模型已更改，但无法刷新设置：{error}',
+  },
+  'helpers.toneSaved': {
+    ko: '도우미 말투를 저장했어요.',
+    en: 'Helper tone saved.',
+    ja: 'ヘルパーの話し方を保存しました。',
+    zh: '已保存助手语气。',
+  },
   'helpers.chatTitle': {
-    ko: '이 채팅 도우미',
+    ko: '채팅 도우미',
     en: 'Chat helper',
-    ja: 'このチャットのヘルパー',
-    zh: '此聊天助手',
+    ja: 'チャットヘルパー',
+    zh: '聊天助手',
   },
   'helpers.libraryTitle': {
     ko: '서재 도우미',

@@ -82,23 +82,22 @@ export function LoreContextDiagnostics({
           <ol className="lore-context-entries">
             {snapshot.entries.map((entry, index) => (
               <li key={`${entry.id}:${entry.revision}:${entry.start}:${entry.end}:${index}`}>
-                <strong>{entry.title || entry.id}</strong>
-                <span>
-                  {t('settings.flow20', {
-                    v0: entry.revision,
-                    v1: entry.start.toLocaleString(getLocale()),
-                    v2: entry.end.toLocaleString(getLocale()),
-                    v3: entry.text.length.toLocaleString(getLocale()),
-                  })}
-                </span>
-                <small>
-                  {t('settings.flow21', {
-                    v0: entry.origin.sourceRevision,
-                    v1: entry.origin.runId,
-                  })}
-                </small>
                 <details>
-                  <summary>{t('settings.m267')}</summary>
+                  <summary>{entry.title || entry.id}</summary>
+                  <p>
+                    {t('settings.flow20', {
+                      v0: entry.revision,
+                      v1: entry.start.toLocaleString(getLocale()),
+                      v2: entry.end.toLocaleString(getLocale()),
+                      v3: entry.text.length.toLocaleString(getLocale()),
+                    })}
+                  </p>
+                  <small>
+                    {t('settings.flow21', {
+                      v0: entry.origin.sourceRevision,
+                      v1: entry.origin.runId,
+                    })}
+                  </small>
                   <pre>{entry.text}</pre>
                 </details>
               </li>

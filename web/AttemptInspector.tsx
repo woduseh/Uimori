@@ -6,6 +6,7 @@ import type { Run } from '../core/types.js';
 import type { RequestLore } from '../core/request-lore.js';
 import { providerCacheUsage } from '../core/provider-cache-usage.js';
 import { formatUsd, pricingRateLabels, pricingNote } from './pricing-display.js';
+import { RequestLoreEntries } from './RequestLoreEntries.js';
 import './model-pricing.css';
 import './lore-context.css';
 
@@ -206,42 +207,10 @@ function CacheUsage({ attempt }: { attempt: Attempt }) {
   );
 }
 
-const loreVia = {
-  pinned: '고정 자료',
-  selected: '자동 선택',
-  retained: '이전 요청 포함',
-  'tool-result': '도구 조회',
-};
-const loreDelivery = {
-  excerpt: '읽은 구간',
-  summary: '요약만',
-  unverified: '포함 여부 미확인',
-};
 export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
   useI18n();
   const confirmed = lore?.entries.filter((entry) => entry.delivery !== 'unverified') ?? [];
   const uncertain = lore?.entries.filter((entry) => entry.delivery === 'unverified') ?? [];
-  const entries = (items: RequestLore['entries']) => (
-    <ul className="lore-context-entries">
-      {items.map((entry, index) => (
-        <li key={`${entry.id}:${entry.via}:${index}`}>
-          <strong>{entry.title || entry.id}</strong>
-          <span className="ui-meta-row">
-            <span>{translateMessage(loreVia[entry.via])}</span>
-            {entry.delivery !== 'full' && (
-              <span>{translateMessage(loreDelivery[entry.delivery])}</span>
-            )}
-          </span>
-          {entry.source && (
-            <small>
-              {t('visualpanels.source', { v0: entry.source.sourceName || entry.source.contentId })}
-            </small>
-          )}
-          <small>{entry.id}</small>
-        </li>
-      ))}
-    </ul>
-  );
   return (
     <section
       className="lore-context-result attempt-lore"
@@ -253,12 +222,7 @@ export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
       ) : (
         <>
           {confirmed.length ? (
-            <details open={confirmed.length <= 6}>
-              <summary>
-                {t('visualpanels.loreListVPluralOneOther', { v0: confirmed.length })}
-              </summary>
-              {entries(confirmed)}
-            </details>
+            <RequestLoreEntries entries={confirmed} />
           ) : (
             <p className="muted">
               {lore.status === 'complete'
@@ -274,7 +238,7 @@ export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
               <summary>
                 {t('visualpanels.inclusionUnconfirmedVPluralOneOther', { v0: uncertain.length })}
               </summary>
-              {entries(uncertain)}
+              <RequestLoreEntries entries={uncertain} />
             </details>
           )}
           <small className="muted">{t('visualpanels.basedOnMaterialsAttachedByTheApp')}</small>
@@ -356,10 +320,7 @@ function AttemptTable({
           </thead>
           <tbody>
             {Object.keys(roleLabels)
-              .filter(
-                (role) =>
-                  role !== 'status' || attempts.some((attempt) => String(attempt.role) === role)
-              )
+              .filter((role) => attempts.some((attempt) => String(attempt.role) === role))
               .map((role) => {
                 const selected = attempts.filter((attempt) => attempt.role === role);
                 const cost = total(selected, 'costUsd');

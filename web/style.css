@@ -349,7 +349,16 @@ input[type="checkbox"] {
   border-color: var(--line);
   color: var(--text);
 }
+.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+}
 @media (hover: hover) {
+  .ghost:hover:not(:disabled) {
+    border-color: transparent;
+  }
+  .ghost:hover:not(:disabled),
   .secondary:hover:not(:disabled),
   .icon-button:hover:not(:disabled) {
     background: var(--hover);

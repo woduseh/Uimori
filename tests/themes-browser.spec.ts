@@ -108,6 +108,8 @@ for (const width of [1440, 412]) {
     await page.getByLabel('테마 이름', { exact: true }).fill(name);
     await page.getByLabel('테마 설명', { exact: true }).fill('Synthetic portable theme');
     await page.getByLabel('light accent 색상', { exact: true }).fill('#663399');
+    await page.getByLabel('테마 이름', { exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`theme-custom-editor-${width}.png`) });
     await page.getByText('CSS와 HTML 직접 편집', { exact: true }).click();
     await page
       .getByLabel('레이아웃 HTML', { exact: true })

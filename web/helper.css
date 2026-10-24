@@ -40,9 +40,19 @@
 .helper-header small {
   display: block;
   line-height: 18px;
-}
-.helper-header small {
   color: var(--muted);
+}
+.helper-header .helper-model-chip {
+  max-width: 140px;
+  margin: 0;
+  flex-shrink: 1;
+}
+.helper-header > .icon-button {
+  flex-shrink: 0;
+}
+.helper-header > .icon-button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--accent-text);
 }
 .helper-messages {
   flex: 1;
@@ -119,7 +129,7 @@
   font-size: var(--font-small);
 }
 .helper-activity-details summary {
-  min-height: 32px;
+  min-height: var(--control-h);
   align-content: center;
   cursor: pointer;
 }
@@ -372,16 +382,6 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-/* Global model management lives with session settings, keeping the conversation compact. */
-.helper-model {
-  display: flex;
-  padding-block: 14px;
-}
-.helper-model .model-chip {
-  max-width: 100%;
-  margin-right: 0;
-}
-
 .app-shell.panel-docked.helper-open {
   grid-template-columns: var(--nav-w) minmax(0, 1fr) var(--panel-w);
 }
@@ -412,9 +412,6 @@
   }
 }
 
-.helper-work-selector {
-  align-items: center;
-}
 .helper-work-selector .icon-button {
   flex-shrink: 0;
 }

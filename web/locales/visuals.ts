@@ -174,10 +174,10 @@ export const messages = {
     zh: '已保存参考图片，将用于下次插图请求。',
   },
   'visuals.m032': {
-    ko: 'Codex 삽화 생성 때 함께 보내는 이미지예요. 캐릭터 디자인은 인물의 외형을, 그림체는 화풍만 참고하도록 구분해서 보내요. 8개까지 선택하고, ComfyUI 경로에서는 아직 사용하지 않아요.',
-    en: 'Images sent with Codex illustration requests. Character design references appearance; style references only the art style. Select up to 8. ComfyUI does not use these yet.',
-    ja: 'Codex挿絵のリクエストに添える画像です。キャラクターデザインは外見、画風はスタイルのみを参照します。最大8枚。ComfyUIではまだ使いません。',
-    zh: '这些图片随Codex插图请求发送。角色设计参考外观，画风只参考风格。最多选择8张，ComfyUI暂不使用。',
+    ko: 'Codex 삽화에 최대 8개를 참조해요. ComfyUI에는 적용되지 않아요.',
+    en: 'Use up to 8 references for Codex illustrations. Not used by ComfyUI.',
+    ja: 'Codexの挿絵に最大8枚を参照します。ComfyUIには適用されません。',
+    zh: 'Codex插图最多使用8张参考图片，不适用于ComfyUI。',
   },
   'visuals.m033': {
     ko: '다시 불러오기',

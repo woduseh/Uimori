@@ -13,7 +13,6 @@ export function LastSceneLore({
   useI18n();
   return (
     <section aria-label={t('library.loreIncludedInTheLastScene')}>
-      <p className="muted">{t('library.recordsOfLoreActuallyAttachedToThe')}</p>
       <LazyDiagnostics<LastSceneLoreDetail>
         path={`/chats/${encodeURIComponent(chatId)}/last-scene-lore`}
         revision={headRevision ?? ''}

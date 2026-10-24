@@ -105,7 +105,7 @@ for (const format of ['charx', 'json'] as const) {
 test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep the exact request across tabs', async ({
   page,
   request,
-}) => {
+}, info) => {
   const title = `RISUKINDUI02 ${Date.now()}`;
   let rejectKind = false;
   await page.route('**/api/risu-imports/prepare', async (route) => {
@@ -144,6 +144,14 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await expect(
     dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' })
   ).not.toBeChecked();
+  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
+    const viewport = page.viewportSize()!;
+    for (const width of [412, 1440]) {
+      await page.setViewportSize({ ...viewport, width });
+      await page.screenshot({ path: info.outputPath(`risu-bot-import-preview-${width}.png`) });
+    }
+    await page.setViewportSize(viewport);
+  }
   const revealKind = async () => {
     const processing = dialog.locator('.risu-import-processing');
     if ((await processing.getAttribute('open')) === null)
@@ -159,6 +167,14 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await (await revealKind()).selectOption('module');
   await expect(await revealKind()).toHaveValue('module');
   await expect(dialog.locator('.risu-import-memory')).toHaveCount(0);
+  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
+    const viewport = page.viewportSize()!;
+    for (const width of [412, 1440]) {
+      await page.setViewportSize({ ...viewport, width });
+      await page.screenshot({ path: info.outputPath(`risu-module-import-preview-${width}.png`) });
+    }
+    await page.setViewportSize(viewport);
+  }
   await (await revealKind()).selectOption('bot');
   await expect(await revealKind()).toHaveValue('bot');
   await dialog.getByText('로어 미리보기 (1개)', { exact: true }).click();
@@ -170,6 +186,14 @@ test('RISUKINDUI02 failed kind changes preserve review and uncertain saves keep 
   await expect(dialog.getByRole('button', { name: '가져오지 않고 닫기' })).toBeDisabled();
   await expect(await revealKind()).toBeDisabled();
   await expect(dialog.getByLabel('Risu 파일 선택', { exact: true })).toBeDisabled();
+  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
+    const viewport = page.viewportSize()!;
+    for (const width of [412, 1440]) {
+      await page.setViewportSize({ ...viewport, width });
+      await page.screenshot({ path: info.outputPath(`risu-import-uncertain-${width}.png`) });
+    }
+    await page.setViewportSize(viewport);
+  }
   await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
   await page.getByTestId('library-panel').getByRole('tab', { name: '모듈', exact: true }).click();
   await trigger.click();

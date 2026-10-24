@@ -336,10 +336,10 @@ export const messages = {
     zh: '回复显示方式',
   },
   'main.m043': {
-    ko: '본문과 도우미 응답에 적용해요. 생성 방식은 그대로이며, 진행 상태와 취소는 계속 사용할 수 있어요.',
-    en: 'Applies to writing and assistant responses. Generation is unchanged; progress and cancellation remain available.',
-    ja: '本文とアシスタントの応答に適用します。生成方法は変わらず、進行状況の確認とキャンセルも利用できます。',
-    zh: '应用于正文和助手回复。生成方式保持不变，仍可查看进度并取消。',
+    ko: '본문과 도우미 응답에 적용해요.',
+    en: 'Applies to writing and assistant responses.',
+    ja: '本文とアシスタントの応答に適用します。',
+    zh: '应用于正文和助手回复。',
   },
   'main.m044': {
     ko: '실시간 표시',

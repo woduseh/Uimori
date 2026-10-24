@@ -7,7 +7,7 @@ import type { Content, Library } from '../core/product.js';
 import type { PackageModuleRef } from '../core/package-features.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
-import { api } from './api.js';
+import { api, libraryChangedKey } from './api.js';
 import { RefreshIcon } from './ui-icons.js';
 import './package-authoring.css';
 
@@ -29,6 +29,7 @@ export function PackageFeaturesEditor({
     [statuses, setStatuses] = useState<Record<string, ReferenceStatus>>({});
   const [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
+    [listError, setListError] = useState(''),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [reload, setReload] = useState(0);
@@ -53,17 +54,34 @@ export function PackageFeaturesEditor({
   useEffect(() => {
     onDirtyChange?.(busy);
   }, [busy, onDirtyChange]);
+  useEffect(() => {
+    const refresh = () => setReload((current) => current + 1);
+    const storage = (event: StorageEvent) => {
+      if (event.key === libraryChangedKey) refresh();
+    };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('uimori-helper-updated', refresh);
+    window.addEventListener('uimori-resource-saved', refresh);
+    window.addEventListener('storage', storage);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('uimori-helper-updated', refresh);
+      window.removeEventListener('uimori-resource-saved', refresh);
+      window.removeEventListener('storage', storage);
+    };
+  }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit reload retries the available module lists for this package.
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.allSettled([api<Library>('/library?view=summary')])
-      .then((results) => {
+    api<Library>('/library?view=summary')
+      .then((contents) => {
         if (!active) return;
-        const [contents] = results;
-        if (contents.status === 'fulfilled') setLibrary(contents.value);
-        if (results.some((result) => result.status === 'rejected'))
-          setError(uiMessage('library.couldNotLoadResourcesTryRefreshing'));
+        setLibrary(contents);
+        setListError('');
+      })
+      .catch(() => {
+        if (active) setListError(uiMessage('library.couldNotLoadResourcesTryRefreshing'));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -147,6 +165,17 @@ export function PackageFeaturesEditor({
       });
     });
   }
+  const retryRead = (
+    <button
+      type="button"
+      className="secondary"
+      disabled={busy || loading}
+      onClick={() => setReload((current) => current + 1)}
+    >
+      <RefreshIcon size={16} aria-hidden="true" />
+      {t('shared.reload')}
+    </button>
+  );
   return (
     <div
       className="package-stack package-authoring-editor"
@@ -164,9 +193,9 @@ export function PackageFeaturesEditor({
               <legend>{status?.content?.title ?? ref.id}</legend>
               <ContentAvatar content={status?.content} title={status?.content?.title ?? ref.id} />
               {status?.error && (
-                <p className="error" role="alert">
+                <NoticeBanner tone="error" actions={retryRead}>
                   {t('library.moduleError', { error: translateMessage(status.error) })}
-                </p>
+                </NoticeBanner>
               )}
               <div className="package-role-actions">
                 <button
@@ -196,18 +225,6 @@ export function PackageFeaturesEditor({
         </div>
         <footer className="package-module-footer">
           <small>{t('library.editsToModulesInTheLibraryApply')}</small>
-          <button
-            type="button"
-            className="ghost package-module-refresh"
-            disabled={busy || loading}
-            onClick={() => {
-              setError('');
-              setReload((current) => current + 1);
-            }}
-          >
-            <RefreshIcon size={16} aria-hidden="true" />
-            {t('library.refreshList')}
-          </button>
         </footer>
       </section>
       <div className="package-module-status" aria-live="polite">
@@ -218,6 +235,11 @@ export function PackageFeaturesEditor({
           <LoadingState presentation="inline" label={t('library.loadingSelectedResource')} />
         )}
       </div>
+      {listError && (
+        <NoticeBanner tone="error" actions={retryRead}>
+          {translateMessage(listError)}
+        </NoticeBanner>
+      )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
       {notice && <NoticeBanner>{translateMessage(notice)}</NoticeBanner>}
     </div>

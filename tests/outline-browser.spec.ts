@@ -100,7 +100,18 @@ for (const width of WIDTHS) {
       if (r.method() === 'POST' && /\/messages$|\/run$/.test(new URL(r.url()).pathname))
         modelRequests++;
     });
+    let failRead = true;
+    await page.route(`**/api/chats/${chat.id}/outline`, async (route) => {
+      if (route.request().method() === 'GET' && failRead) {
+        failRead = false;
+        await route.fulfill({ status: 503, json: { error: 'Outline temporarily unavailable' } });
+      } else await route.continue();
+    });
     const panel = await open(page, chat.id, width);
+    await expect(panel.getByRole('alert')).toContainText('503');
+    await panel.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+    await expect(panel.getByRole('alert')).toHaveCount(0);
+    await expect(panel.getByRole('button', { name: '새로고침', exact: true })).toHaveCount(0);
     await expect(
       panel.getByRole('button', { name: '도우미와 구성 시작', exact: true })
     ).toBeVisible();
@@ -163,7 +174,7 @@ for (const width of WIDTHS) {
       },
     });
     expect(linked.ok()).toBe(true);
-    await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     const links = panel.locator('.outline-related-list');
     await expect(links).not.toHaveAttribute('open');
     await links.locator('summary').click();
@@ -415,7 +426,7 @@ for (const width of WIDTHS) {
           },
         });
         expect(saved.ok()).toBe(true);
-        await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+        await page.evaluate(() => window.dispatchEvent(new Event('focus')));
         await expect(panel.locator('.outline-review')).toHaveCount(0);
         await page.screenshot({ path: info.outputPath(`outline-review-${width}.png`) });
         await panel.getByRole('button', { name: '도우미', exact: true }).click();

@@ -174,6 +174,9 @@ for (const viewport of [
       dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
       await selectChatSettingsSection(page, '카드 변수');
       await expect(raw).toHaveValue('{"trust":');
+      await page.screenshot({
+        path: info.outputPath(`chat-packages-raw-draft-${viewport.width}.png`),
+      });
       await raw.fill('{"trust":""}');
       await dialog.getByRole('button', { name: '행 편집', exact: true }).click();
       await expect(value('trust')).toHaveValue('');

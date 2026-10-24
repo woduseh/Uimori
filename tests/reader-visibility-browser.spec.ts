@@ -163,7 +163,7 @@ test('READVIS01 hidden and library readers defer SSE refreshes and restore curre
 test('READVIS02 native input wakes on events without idle polling and coalesces reads and answers', async ({
   page,
   request,
-}) => {
+}, info) => {
   const { chat, detail } = await createReadingChat(request, 'Native input visibility', 1);
   await observeStream(page);
   let interaction: { id: string; kind: 'input'; prompt: string } | undefined;
@@ -230,6 +230,14 @@ test('READVIS02 native input wakes on events without idle polling and coalesces 
     const input = dialog.getByRole('textbox', { name: '입력 내용', exact: true });
     await input.fill('달빛 아래의 도서관');
     await expect.poll(() => active).toBe(0);
+    if (process.env.UIMORI_VISUAL_REVIEW === '1') {
+      const viewport = page.viewportSize()!;
+      for (const width of [412, 1440]) {
+        await page.setViewportSize({ ...viewport, width });
+        await page.screenshot({ path: info.outputPath(`risu-native-input-dialog-${width}.png`) });
+      }
+      await page.setViewportSize(viewport);
+    }
 
     await hidden(page, true);
     const hiddenReads = reads;

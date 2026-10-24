@@ -331,10 +331,10 @@ export const messages = {
     zh: '模型预设',
   },
   'providers.m64': {
-    ko: '목록 새로고침',
-    en: 'Refresh list',
-    ja: '一覧を更新',
-    zh: '刷新列表',
+    ko: 'TypeSafe AI 등록 상태 다시 불러오기',
+    en: 'Retry loading TypeSafe AI registration',
+    ja: 'TypeSafe AIの登録状態を再読み込み',
+    zh: '重新加载 TypeSafe AI 注册状态',
   },
   'providers.m65': {
     ko: '목록을 새로 읽었어요. 편집 초안은 유지돼요.',
@@ -343,10 +343,10 @@ export const messages = {
     zh: '列表已刷新。编辑草稿已保留。',
   },
   'providers.m66': {
-    ko: 'TypeSafe AI 등록 상태를 확인하지 못했어요. 목록을 새로고침해 주세요.',
-    en: 'Could not check TypeSafe AI registration. Refresh the list.',
-    ja: 'TypeSafe AIの登録状態を確認できませんでした。一覧を更新してください。',
-    zh: '未能检查 TypeSafe AI 添加状态。请刷新列表。',
+    ko: 'TypeSafe AI 등록 상태를 확인하지 못했어요.',
+    en: 'Could not check TypeSafe AI registration.',
+    ja: 'TypeSafe AIの登録状態を確認できませんでした。',
+    zh: '未能检查 TypeSafe AI 注册状态。',
   },
   'providers.m67': {
     ko: '프로바이더와 모델 검색',

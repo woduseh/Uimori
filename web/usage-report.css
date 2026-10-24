@@ -227,9 +227,7 @@
 }
 .usage-model-name strong {
   display: block;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+  overflow-wrap: anywhere;
   font-size: var(--font-body);
   font-weight: 500;
 }
@@ -338,8 +336,18 @@
   }
 }
 @media (max-width: 600px) {
+  .usage-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 8px;
+  }
+  .usage-toolbar-actions {
+    margin-left: 0;
+  }
   .usage-presets button {
     min-height: var(--control-h);
+    min-width: var(--control-h);
   }
   .usage-cards {
     grid-template-columns: 1fr 1fr;

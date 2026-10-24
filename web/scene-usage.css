@@ -21,20 +21,21 @@
 }
 .scene-receipt {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 4px 12px;
+  grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr);
+  gap: 8px 16px;
   margin-block: 10px;
 }
 .scene-receipt dt {
   color: var(--muted);
+  max-width: 7rem;
 }
 .scene-receipt dd {
   margin: 0;
   color: var(--text);
 }
-.scene-receipt-lore {
-  padding-inline-start: 20px;
-  margin-block: 6px;
+.scene-receipt-model-id {
+  display: block;
+  color: var(--muted);
 }
 .scene-usage-help {
   margin-top: 12px;
@@ -50,10 +51,7 @@
     padding-inline: 12px;
   }
   .scene-receipt {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
-  }
-  .scene-receipt dd:not(:last-child) {
-    margin-bottom: 8px;
+    grid-template-columns: minmax(4rem, max-content) minmax(0, 1fr);
+    gap: 8px 12px;
   }
 }

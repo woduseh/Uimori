@@ -444,6 +444,19 @@ for (const viewport of viewports) {
       await chooseGroup('기본 입력');
       await definitions.getByRole('button', { name: '시점 편집', exact: true }).click();
       await definitions.getByLabel('선택지 0', { exact: true }).fill('주인공 시점');
+      if (viewport.name === 'mobile') {
+        const optionActions = definitions.locator('.nt-option-actions button');
+        expect(await optionActions.count()).toBeGreaterThan(0);
+        for (const target of await optionActions.evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const bounds = node.getBoundingClientRect();
+            return { width: bounds.width, height: bounds.height };
+          })
+        )) {
+          expect(target.width).toBeGreaterThanOrEqual(44);
+          expect(target.height).toBeGreaterThanOrEqual(44);
+        }
+      }
       await editorFits(page, editor, save, 1200);
       await page.screenshot({
         path: info.outputPath(`native-toggle-editor-${viewport.name}.png`),
@@ -596,7 +609,24 @@ for (const viewport of viewports) {
       ).toHaveCount(0);
       await expect(
         moduleEditor.getByRole('button', { name: '목록 새로고침', exact: true })
-      ).toBeVisible();
+      ).toHaveCount(0);
+      const moduleListUrl = /\/api\/library\?view=summary$/;
+      await page.route(moduleListUrl, (route) =>
+        route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'SYNTHETIC_MODULE_LIST_READ_FAILURE' }),
+        })
+      );
+      await page.evaluate(() => window.dispatchEvent(new Event('uimori-resource-saved')));
+      const moduleListError = moduleEditor.getByRole('alert').filter({
+        hasText: '자료 목록을 불러오지 못했어요.',
+      });
+      await expect(moduleListError).toBeVisible();
+      await page.unroute(moduleListUrl);
+      await moduleListError.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+      await expect(moduleListError).toHaveCount(0);
+      await expect(modulePicker).toBeEnabled();
       await page.screenshot({ path: info.outputPath(`bot-advanced-modules-${viewport.name}.png`) });
 
       const moduleDialogErrors: string[] = [];

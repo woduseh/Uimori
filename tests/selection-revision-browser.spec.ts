@@ -215,7 +215,7 @@ test('SREV a late proposal cannot overwrite edits or an edit reverted to its ori
 test('SREV cancelling a pending preflight allows immediate retry and ignores the older response', async ({
   page,
   request,
-}) => {
+}, info) => {
   const before = await seed(request);
   const started = gate(),
     released = gate(),
@@ -263,6 +263,16 @@ test('SREV cancelling a pending preflight allows immediate retry and ignores the
     await finished.promise;
     await expect(warning).toBeVisible();
     expect(calls).toBe(0);
+    if (process.env.UIMORI_VISUAL_REVIEW === '1') {
+      const viewport = page.viewportSize()!;
+      for (const width of [412, 1440]) {
+        await page.setViewportSize({ ...viewport, width });
+        await page.screenshot({
+          path: info.outputPath(`codex-content-warning-dialog-${width}.png`),
+        });
+      }
+      await page.setViewportSize(viewport);
+    }
     await warning.getByRole('button', { name: '그래도 Codex로 전송', exact: true }).click();
     await expect(page.getByTestId('selection-revision-proposal')).toHaveText(proposal);
     await expect(field).toHaveValue(original);

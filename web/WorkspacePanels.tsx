@@ -740,38 +740,40 @@ export function AppSettingsPanel({
                           </span>
                         </label>
                       </div>
-                      <h4>{t('settings.desktopPanels')}</h4>
-                      <div className="settings-group-body">
-                        <label className="settings-row">
-                          <span className="settings-row-copy">
-                            <strong>{t('chatsettings.m67')}</strong>
-                          </span>
-                          <select
-                            aria-label={t('chatsettings.m67')}
-                            value={sidebarWidth}
-                            onChange={(event) => setSidebarWidth(Number(event.target.value))}
-                          >
-                            <option value={248}>{t('chatsettings.m69')}</option>
-                            <option value={320}>{t('chatsettings.m70')}</option>
-                            <option value={400}>{t('chatsettings.m71')}</option>
-                          </select>
-                        </label>
-                        <label className="settings-row">
-                          <span className="settings-row-copy">
-                            <strong>{t('settings.utilityPanelWidth')}</strong>
-                            <small>{t('settings.panelOverlap')}</small>
-                          </span>
-                          <select
-                            aria-label={t('settings.utilityPanelWidth')}
-                            value={panelWidth}
-                            onChange={(event) => setPanelWidth(Number(event.target.value))}
-                          >
-                            <option value={360}>{t('chatsettings.m74')}</option>
-                            <option value={384}>{t('chatsettings.m69')}</option>
-                            <option value={480}>{t('chatsettings.m70')}</option>
-                          </select>
-                        </label>
-                      </div>
+                      <details className="settings-desktop-panels" open={!compact}>
+                        <summary>{t('settings.desktopPanels')}</summary>
+                        <div className="settings-group-body">
+                          <label className="settings-row">
+                            <span className="settings-row-copy">
+                              <strong>{t('chatsettings.m67')}</strong>
+                            </span>
+                            <select
+                              aria-label={t('chatsettings.m67')}
+                              value={sidebarWidth}
+                              onChange={(event) => setSidebarWidth(Number(event.target.value))}
+                            >
+                              <option value={248}>{t('chatsettings.m69')}</option>
+                              <option value={320}>{t('chatsettings.m70')}</option>
+                              <option value={400}>{t('chatsettings.m71')}</option>
+                            </select>
+                          </label>
+                          <label className="settings-row">
+                            <span className="settings-row-copy">
+                              <strong>{t('settings.utilityPanelWidth')}</strong>
+                              <small>{t('settings.panelOverlap')}</small>
+                            </span>
+                            <select
+                              aria-label={t('settings.utilityPanelWidth')}
+                              value={panelWidth}
+                              onChange={(event) => setPanelWidth(Number(event.target.value))}
+                            >
+                              <option value={360}>{t('chatsettings.m74')}</option>
+                              <option value={384}>{t('chatsettings.m69')}</option>
+                              <option value={480}>{t('chatsettings.m70')}</option>
+                            </select>
+                          </label>
+                        </div>
+                      </details>
                     </section>
                   )}
                   {key === 'general' && (

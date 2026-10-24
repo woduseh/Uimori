@@ -363,9 +363,9 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
     data: {
       title: 'Original image',
       description: 'Original description',
-      actor: '',
-      outfit: '',
-      location: '',
+      actor: '유나',
+      outfit: '교복',
+      location: '하굣길',
       allowedUse: 'both',
       mime: 'image/png',
       base64: image.toString('base64'),
@@ -378,6 +378,23 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
   await openChatSettings(page);
   await selectChatSettingsSection(page, '이미지');
   await page.locator('.chat-settings-image-management > summary').click();
+  const metadata = page.locator('.asset-grid small.ui-meta-row').filter({ hasText: '유나' });
+  await expect(metadata).toBeVisible();
+  for (const width of [412, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await metadata.evaluate((element) => {
+        const boxes = Array.from(element.children).map((child) => child.getBoundingClientRect());
+        return boxes
+          .slice(1)
+          .every(
+            (box, index) => box.top >= boxes[index].bottom || box.left >= boxes[index].right + 4
+          );
+      })
+    ).toBe(true);
+    await metadata.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`asset-metadata-spacing-${width}.png`) });
+  }
   await page.getByText('이름과 설명 편집', { exact: true }).click();
   const title = page.getByLabel('업로드 이미지 이름', { exact: true });
   const description = page.getByLabel('업로드 이미지 설명', { exact: true });

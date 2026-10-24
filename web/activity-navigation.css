@@ -166,6 +166,11 @@
   background: var(--nav-item-selected);
   color: var(--text);
 }
+@media (max-width: 760px) {
+  .bot-navigation-modes > button {
+    min-height: var(--control-h);
+  }
+}
 .bot-navigation-modes > button:hover {
   background: var(--nav-item-selected);
 }
@@ -181,7 +186,7 @@
   line-height: 15px;
   border-radius: var(--radius-control);
   background: var(--accent);
-  color: white;
+  color: var(--accent-ink);
   font-size: var(--font-small);
   text-align: center;
 }

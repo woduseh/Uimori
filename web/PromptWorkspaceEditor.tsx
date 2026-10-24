@@ -4,8 +4,9 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { promptControls } from '../core/risu-prompt.js';
-import { ExpandIcon, ExternalLinkIcon, SaveIcon, CloseIcon } from './ui-icons.js';
-import { useCallback, useEffect, useState } from 'react';
+import { ExpandIcon, EditIcon, SaveIcon, CloseIcon } from './ui-icons.js';
+import { IconButton } from './IconButton.js';
+import { useCallback, useEffect, useId, useState } from 'react';
 import type { Library, PromptRole, PromptWorkspace } from '../core/product.js';
 import type { WorkspaceEditModel } from '../core/resource-editing.js';
 import {
@@ -48,6 +49,7 @@ export function PromptWorkspaceEditor({
   navigationDisabled?: boolean;
 }) {
   const { t } = useI18n();
+  const presetId = useId();
   const [role, setRole] = useState<PromptRole>('main');
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState('');
@@ -184,9 +186,6 @@ export function PromptWorkspaceEditor({
         {showRecovery && <ResourceEditorActions value={shared} hideSyncError />}
         <div className="prompt-editor-fields">
           <section className="settings-group">
-            <div className="settings-group-heading">
-              <h4>{t('prompts.uiSelectPrompt')}</h4>
-            </div>
             <div className="settings-group-body">
               <label className="settings-row">
                 <span className="settings-row-copy">{t('prompts.uiRole')}</span>
@@ -203,38 +202,39 @@ export function PromptWorkspaceEditor({
                   <option value="translation">{t('prompts.uiTranslation')}</option>
                 </select>
               </label>
-              <label className="settings-row">
-                <span className="settings-row-copy">{t('prompts.uiPrompts')}</span>
-                <select
-                  aria-label={t('prompts.uiCurrentPromptPreset')}
-                  value={preset?.id ?? ''}
-                  disabled={busy || dirty || conflict}
-                  onChange={(event) => {
-                    if (event.target.value) void applyPreset(event.target.value);
-                  }}
-                >
-                  {!preset && <option value="">{current.title}</option>}
-                  {library.promptPresets
-                    ?.filter((item) => item.role === role)
-                    .map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.id === current.presetId ? current.title : item.title}
-                      </option>
-                    ))}
-                </select>
-              </label>
-              <div className="prompt-current-links">
-                {onEditPrompt && (
-                  <button
-                    type="button"
-                    className="ghost"
-                    disabled={busy || dirty || navigationDisabled}
-                    onClick={() => onEditPrompt(preset?.id)}
+              <div className="settings-row">
+                <label className="settings-row-copy" htmlFor={presetId}>
+                  {t('prompts.uiPrompts')}
+                </label>
+                <div className="settings-row-control prompt-current-preset">
+                  <select
+                    id={presetId}
+                    aria-label={t('prompts.uiCurrentPromptPreset')}
+                    value={preset?.id ?? ''}
+                    disabled={busy || dirty || conflict}
+                    onChange={(event) => {
+                      if (event.target.value) void applyPreset(event.target.value);
+                    }}
                   >
-                    <ExternalLinkIcon size={16} aria-hidden="true" />
-                    {t('prompts.uiEditPrompt')}
-                  </button>
-                )}
+                    {!preset && <option value="">{current.title}</option>}
+                    {library.promptPresets
+                      ?.filter((item) => item.role === role)
+                      .map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.id === current.presetId ? current.title : item.title}
+                        </option>
+                      ))}
+                  </select>
+                  {onEditPrompt && (
+                    <IconButton
+                      icon={EditIcon}
+                      label={t('prompts.uiEditPrompt')}
+                      className="secondary"
+                      disabled={busy || dirty || navigationDisabled}
+                      onClick={() => onEditPrompt(preset?.id)}
+                    />
+                  )}
+                </div>
               </div>
             </div>
           </section>

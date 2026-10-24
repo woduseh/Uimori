@@ -139,6 +139,14 @@ test(
       .toBe('직접 수정');
     for (const width of [1440, MOBILE_WIDTH]) {
       await page.setViewportSize({ width, height: 900 });
+      const presetChoice = editor.getByLabel('현재 프롬프트 프리셋');
+      const editPrompt = editor.getByRole('button', { name: '프롬프트 편집', exact: true });
+      const choiceBox = (await presetChoice.boundingBox())!;
+      const editBox = (await editPrompt.boundingBox())!;
+      expect(Math.abs(choiceBox.y - editBox.y)).toBeLessThanOrEqual(1);
+      expect(editBox.x).toBeGreaterThanOrEqual(choiceBox.x + choiceBox.width);
+      expect(editBox.width).toBeGreaterThanOrEqual(44);
+      expect(editBox.height).toBeGreaterThanOrEqual(44);
       const openCombination = async () => {
         await editor.getByLabel('옵션 조합 메뉴', { exact: true }).click();
         await editor

@@ -3,13 +3,14 @@ import type { KeyboardEvent } from 'react';
 import type { Library } from '../core/product.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { LoadingState } from './LoadingState.js';
 import { t, translateMessage, useI18n } from './i18n.js';
 import { isModelSelectable } from './model-selection.js';
 import { modelLabel } from './storyLabels.js';
 import { CheckIcon, SearchIcon, SettingsIcon } from './ui-icons.js';
 import './chat-model-picker.css';
 
-/** Selection is controlled by the chat profile owner; this dialog never writes global settings. */
+/** The calling chat or role owner controls selection; the picker only presents choices. */
 export function ChatModelPicker({
   open,
   scopeKey,
@@ -22,6 +23,10 @@ export function ChatModelPicker({
   onSelect,
   onClose,
   onManage,
+  purpose = 'chat',
+  loading = false,
+  onRetry,
+  errorLabel,
 }: {
   open: boolean;
   scopeKey: string;
@@ -34,6 +39,10 @@ export function ChatModelPicker({
   onSelect: (modelId: string | undefined) => void;
   onClose: () => void;
   onManage: () => void;
+  purpose?: 'chat' | 'helper';
+  loading?: boolean;
+  onRetry?: () => void;
+  errorLabel?: string;
 }) {
   useI18n();
   const [query, setQuery] = useState('');
@@ -54,7 +63,7 @@ export function ChatModelPicker({
   const unavailable =
     !!currentId && (!current || !isModelSelectable(current, library.models, library.connections));
   const inherited = library.models.find((model) => model.id === defaultModelId);
-  const locked = disabled || pending;
+  const locked = disabled || pending || loading;
   function moveFocus(event: KeyboardEvent<HTMLElement>) {
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     if (event.target instanceof HTMLInputElement && ['Home', 'End'].includes(event.key)) return;
@@ -83,12 +92,24 @@ export function ChatModelPicker({
     <Dialog
       open={open}
       scopeKey={scopeKey}
-      title={t('main.modelPickerTitle')}
+      title={t(purpose === 'helper' ? 'helpers.modelPickerTitle' : 'main.modelPickerTitle')}
       onClose={onClose}
       className="chat-model-picker-dialog"
     >
-      <p className="muted chat-model-picker-scope">{t('main.modelPickerScope')}</p>
-      {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+      <p className="muted chat-model-picker-scope">
+        {t(purpose === 'helper' ? 'helpers.modelPickerScope' : 'main.modelPickerScope')}
+      </p>
+      {onRetry ? (
+        <LoadingState
+          presentation="inline"
+          loading={loading}
+          error={translateMessage(error)}
+          errorLabel={errorLabel}
+          onRetry={onRetry}
+        />
+      ) : error ? (
+        <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>
+      ) : null}
       {unavailable && (
         <NoticeBanner>
           {t('main.modelPickerUnavailable', { model: current?.title ?? currentId ?? '' })}
@@ -115,10 +136,14 @@ export function ChatModelPicker({
           onClick={() => onSelect(undefined)}
         >
           <span>
-            <strong>{t('main.modelPickerDefault')}</strong>
-            <small className="muted">
-              {inherited ? modelLabel(inherited, library) : t('main.modelPickerNoDefault')}
-            </small>
+            <strong>
+              {t(purpose === 'helper' ? 'helpers.modelPickerNone' : 'main.modelPickerDefault')}
+            </strong>
+            {purpose === 'chat' && (
+              <small className="muted">
+                {inherited ? modelLabel(inherited, library) : t('main.modelPickerNoDefault')}
+              </small>
+            )}
           </span>
           {!selectedModelId && <CheckIcon size={18} aria-hidden="true" />}
         </button>
@@ -167,7 +192,7 @@ export function ChatModelPicker({
       <div className="chat-model-picker-footer">
         <button type="button" className="secondary" disabled={pending} onClick={onManage}>
           <SettingsIcon size={16} aria-hidden="true" />
-          {t('main.modelPickerManage')}
+          {t(purpose === 'helper' ? 'helpers.modelPickerManage' : 'main.modelPickerManage')}
         </button>
       </div>
     </Dialog>

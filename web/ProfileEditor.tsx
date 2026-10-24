@@ -240,7 +240,9 @@ export function ProfileEditor({
         >
           <fieldset className="profile-fields" disabled={saving || disabled}>
             <div hidden={tab !== 'characters'} className="settings-group">
-              <h3 className="settings-group-heading">{t('library.conversationResources')}</h3>
+              <h3 className={hideNavigation ? 'sr-only' : 'settings-group-heading'}>
+                {t('library.conversationResources')}
+              </h3>
               <ContentAttachments
                 profile={value}
                 library={library}

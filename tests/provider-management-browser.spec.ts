@@ -518,8 +518,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
     connectionBody(original, { title: title + ' 다른 변경' }),
     'PUT'
   );
-  await page.getByRole('button', { name: '목록 새로고침', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: '목록을 새로 읽었어요' })).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title + ' 내 초안');
   await expect(form).toContainText('다른 곳에서 프로바이더가 변경됐어요');
   const put = page.waitForRequest(

@@ -2148,6 +2148,12 @@ function App() {
         enterSend={enterSend}
         responseDisplay={responseDisplay}
         modelDescription={helperDescription}
+        modelTitle={
+          helperModel?.title ??
+          (s.promptWorkspace?.helperModel ? helperDescription : t('main.m015'))
+        }
+        modelRevision={s.promptWorkspace?.revision ?? 0}
+        library={s.library}
         open={helperOpen}
         navigation={helperNavigation}
         selection={helperSelection}

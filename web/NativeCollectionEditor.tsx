@@ -133,9 +133,6 @@ export function NativeCollectionEditor({
       <div className="native-item-detail">
         {items.length > 0 && (
           <div className="native-mobile-picker">
-            <button type="button" disabled={index === 0} onClick={() => setSelected(index - 1)}>
-              {t('native.text_dc03452ea5')}
-            </button>
             <select
               aria-label={t('native.collectionCurrent', { label })}
               value={index}
@@ -147,13 +144,6 @@ export function NativeCollectionEditor({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              disabled={index >= items.length - 1}
-              onClick={() => setSelected(index + 1)}
-            >
-              {t('native.text_854c76f3bc')}
-            </button>
             <IconButton label={t('native.collectionAdd', { label })} icon={AddIcon} onClick={add} />
           </div>
         )}
