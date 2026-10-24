@@ -22,6 +22,7 @@ import {
 import type { PromptCompilation } from '../core/risu-prompt.js';
 import { api } from './api.js';
 import { LoreContextDiagnostics } from './LoreContextDiagnostics.js';
+import { IconButton } from './IconButton.js';
 import './lore-context.css';
 import './settings-layout.css';
 import { DEFAULT_JEV_JUDGMENT } from '../core/judgment.js';
@@ -259,7 +260,6 @@ export function LoreContextPolicyEditor({
   }
   return (
     <section className="lore-context-panel settings-group full" aria-label={t('settings.m217')}>
-      <h3 className="settings-group-heading">{t('settings.m218')}</h3>
       <div className="settings-group-body">
         <div className="lore-context-heading settings-row settings-row-toggle">
           <div className="settings-row-copy">
@@ -350,16 +350,15 @@ export function LoreContextPolicyEditor({
         </p>
       )}
       <div className="lore-context-actions settings-form-footer">
-        <button
-          type="button"
+        <IconButton
+          icon={RotateCcw}
+          label={resetLabel}
           className="secondary"
           disabled={!defaults}
           onClick={() => {
             if (defaults) change(draftOf(defaults));
           }}
-        >
-          <RotateCcw size={16} aria-hidden="true" /> {resetLabel}
-        </button>
+        />
         {validation && (
           <button type="button" className="ghost" onClick={() => change(draftOf(effective))}>
             <RotateCcw size={16} aria-hidden="true" />

@@ -64,7 +64,7 @@ async function openJevModel(page: Page) {
   if ((await group.getAttribute('open')) === null) await group.locator(':scope > summary').click();
   await page.getByRole('button', { name: 'JEV 모델 설정', exact: true }).click();
   const section = page.getByRole('region', { name: 'JEV 모델 설정', exact: true });
-  await expect(section.getByLabel('모델 ID', { exact: true })).toHaveValue('jev-latest');
+  await expect(section.getByText('jev-latest', { exact: true })).toBeVisible();
   return section;
 }
 
@@ -146,7 +146,7 @@ test('JEVUI01 saves and removes a server key without exposing it or changing wri
   await page.getByRole('button', { name: 'JEV 모델 설정', exact: true }).click();
   const modelSection = page.getByRole('region', { name: 'JEV 모델 설정', exact: true });
   await expect(modelSection).toBeVisible();
-  await expect(modelSection.getByLabel('모델 ID', { exact: true })).toHaveValue('jev-latest');
+  await expect(modelSection.getByText('jev-latest', { exact: true })).toBeVisible();
   await expect(modelSection.getByLabel('JEV API 키', { exact: true })).toBeHidden();
   await expect(
     modelSection.getByRole('button', { name: 'JEV 연결 테스트', exact: true })

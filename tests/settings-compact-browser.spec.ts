@@ -158,11 +158,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
             pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
           ).toBeVisible();
         } else if (section === '로어 컨텍스트') {
-          await expect(pane.getByRole('heading', { name: '로어 사용', exact: true })).toBeVisible();
-          await expect(pane.getByLabel('조회 로어를 다음 생성에도 유지')).toBeVisible();
+          await expect(
+            pane.getByRole('switch', { name: '조회 로어를 다음 생성에도 유지', exact: true })
+          ).toBeVisible();
         } else if (section === '데이터 관리') {
           await expect(
-            pane.getByRole('heading', { name: '백업과 복원', exact: true })
+            pane.getByRole('heading', { name: '작업실 전체 백업', exact: true })
           ).toBeVisible();
           await expect(
             pane.getByRole('button', { name: '백업 다운로드', exact: true })
@@ -180,12 +181,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
           await restore.locator('summary').click();
         } else if (section === 'Codex 연결') {
           await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
-          await expect(pane.locator('.codex-connection-guide')).not.toHaveAttribute('open', '');
-          await pane.getByText('연결 절차', { exact: true }).click();
-          await expect(
-            pane.getByRole('list', { name: 'Codex 연결 단계' }).getByRole('listitem')
-          ).toHaveCount(3);
-          await pane.getByText('연결 절차', { exact: true }).click();
+          const help = pane.locator('.codex-agent-help');
+          await expect(pane.locator('.codex-agent-settings details')).toHaveCount(1);
+          await expect(help).not.toHaveAttribute('open', '');
+          await help.getByText('연결 도움말', { exact: true }).click();
+          await expect(help).toContainText('공식 Codex 실행기와 전용 로그인 환경');
+          await expect(help).toContainText('로그인 후');
+          await expect(help).toContainText('Codex 프로바이더와 모델 프리셋');
+          await expect(help).toContainText('PC와 휴대폰에서 같은 구독 한도');
+          await help.getByText('연결 도움말', { exact: true }).click();
           await expect(
             pane.getByRole('button', { name: 'ChatGPT로 로그인', exact: true })
           ).toHaveCount(0);
@@ -201,7 +205,10 @@ for (const colorScheme of ['light', 'dark'] as const) {
             pane.getByRole('region', { name: '현재 삽화 설정', exact: true })
           ).toBeVisible();
           await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeHidden();
-          await pane.getByText('프리셋과 적용 범위 관리', { exact: true }).click();
+          await pane
+            .locator('summary')
+            .filter({ hasText: /^프리셋$/ })
+            .click();
           await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeVisible();
         } else if (section === '사용량') {
           await expect(
@@ -661,7 +668,10 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '삽화');
-    await page.getByText('기본 생성 환경과 자동 생성 관리', { exact: true }).click();
+    await page
+      .locator('summary')
+      .filter({ hasText: /^생성 환경$/ })
+      .click();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const count = settings.getByLabel('장면당 최대 삽화 개수', { exact: true });
     await count.fill('0');

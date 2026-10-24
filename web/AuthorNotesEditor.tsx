@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AuthorNote, ImportedMemoryOrigin } from '../core/notes.js';
 import { ApiError } from './api.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
+import { SaveButton } from './SaveButton.js';
 
 type AuthorNoteCommand = {
   expectedHeadRevision: string | null;
@@ -277,12 +278,12 @@ export function AuthorNotesEditor({
             />
           </label>
           <div className="form-actions full">
-            <button
+            <SaveButton
               className="primary"
+              label={draft.originalId ? t('library.saveEditedNote') : t('library.saveNewNote')}
+              aria-busy={busy}
               disabled={busy || disabled || !draft.text.trim() || !draft.author.trim()}
-            >
-              {draft.originalId ? t('library.saveEditedNote') : t('library.saveNewNote')}
-            </button>
+            />
             <button
               type="button"
               className="secondary"

@@ -20,7 +20,15 @@ import { api } from './api.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { useSettingsHistory } from './useSettingsHistory.js';
 import type { StoryState } from './useStory.js';
-import { BackIcon, BotIcon, PromptIcon, LoreIcon, ImagesIcon, BehaviorIcon } from './ui-icons.js';
+import {
+  BackIcon,
+  BotIcon,
+  PromptIcon,
+  LoreIcon,
+  ImagesIcon,
+  BehaviorIcon,
+  ExpandIcon,
+} from './ui-icons.js';
 import './chat-settings.css';
 import './settings-layout.css';
 
@@ -445,6 +453,7 @@ export function ChatSettingsPanel({
               <div hidden={profileTab !== 'images'} className="chat-settings-images">
                 <details className="chat-settings-image-management">
                   <summary>
+                    <ExpandIcon size={16} aria-hidden="true" />
                     {t('chatsettings.m102')}{' '}
                     <small>
                       {t('chatsettings.imagesCount', { count: (detail.assets ?? []).length })}

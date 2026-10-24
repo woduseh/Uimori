@@ -522,10 +522,10 @@ export const messages = {
     zh: '正在加载当前提示词…',
   },
   'prompts.uiUsesTheLatestSavedPresetDefaultOptionChangesApply': {
-    ko: '선택한 프리셋의 최신 저장본을 사용해요. 기본 옵션 변경은 모든 채팅의 다음 요청부터 적용해요.',
-    en: 'Uses the latest saved preset. Default option changes apply from the next request in every chat.',
-    ja: '選択したプリセットの最新保存版を使います。既定オプションの変更は全チャットの次のリクエストから反映します。',
-    zh: '使用所选预设的最新保存版本。默认选项更改从所有聊天的下一次请求开始生效。',
+    ko: '프리셋 최신 저장본을 사용해요. 옵션은 모든 채팅의 다음 요청부터 적용해요.',
+    en: 'Uses the latest saved preset. Options apply to every chat from its next request.',
+    ja: 'プリセットの最新保存版を使います。オプションは全チャットの次のリクエストから適用します。',
+    zh: '使用预设的最新保存版本。选项从所有聊天的下次请求起生效。',
   },
   'prompts.uiSelectPrompt': {
     ko: '프롬프트 선택',

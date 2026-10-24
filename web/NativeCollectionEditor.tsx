@@ -34,6 +34,9 @@ export function NativeCollectionEditor({
     position: number;
   } | null>(null);
   const index = Math.min(selected, Math.max(0, items.length - 1));
+  const found = items
+    .map((item, i) => ({ item, i }))
+    .filter(({ item }) => item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   const add = () => {
     onAdd();
     setSelected(items.length);
@@ -82,50 +85,55 @@ export function NativeCollectionEditor({
           </strong>
           <IconButton label={t('native.collectionAdd', { label })} icon={AddIcon} onClick={add} />
         </div>
-        {items
-          .map((item, i) => ({ item, i }))
-          .filter(({ item }) => item.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()))
-          .map(({ item, i }) => (
-            <button
-              type="button"
-              key={i}
-              aria-current={index === i ? 'true' : undefined}
-              data-dragging={dragged === i ? 'true' : undefined}
-              data-drop-position={dropTarget?.index === i ? dropTarget.position : undefined}
-              draggable={!!onReorder}
-              title={onReorder ? t('native.text_52df394c6c') : undefined}
-              onClick={() => setSelected(i)}
-              onDragStart={(event) => {
-                if (!onReorder) return;
-                setSelected(i);
-                setDragged(i);
-                event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', String(i));
-              }}
-              onDragEnd={clearDrag}
-              onDragOver={(event) => {
-                if (dragged === null || !onReorder) return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = 'move';
-                setDropTarget(targetFor(event, i));
-                const list = event.currentTarget.closest('.native-item-list');
-                if (list) {
-                  const bounds = list.getBoundingClientRect();
-                  if (event.clientY < bounds.top + 36) list.scrollTop -= 12;
-                  if (event.clientY > bounds.bottom - 36) list.scrollTop += 12;
-                }
-              }}
-              onDrop={(event) => drop(event, targetFor(event, i))}
-            >
-              <strong>{item.title}</strong>
-              {item.subtitle && <small>{item.subtitle}</small>}
-              {onReorder && (
-                <span className="native-row-drag-handle" aria-hidden="true">
-                  <DragHandleIcon size={16} />
-                </span>
-              )}
+        {found.map(({ item, i }) => (
+          <button
+            type="button"
+            key={i}
+            aria-current={index === i ? 'true' : undefined}
+            data-dragging={dragged === i ? 'true' : undefined}
+            data-drop-position={dropTarget?.index === i ? dropTarget.position : undefined}
+            draggable={!!onReorder}
+            title={onReorder ? t('native.text_52df394c6c') : undefined}
+            onClick={() => setSelected(i)}
+            onDragStart={(event) => {
+              if (!onReorder) return;
+              setSelected(i);
+              setDragged(i);
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', String(i));
+            }}
+            onDragEnd={clearDrag}
+            onDragOver={(event) => {
+              if (dragged === null || !onReorder) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'move';
+              setDropTarget(targetFor(event, i));
+              const list = event.currentTarget.closest('.native-item-list');
+              if (list) {
+                const bounds = list.getBoundingClientRect();
+                if (event.clientY < bounds.top + 36) list.scrollTop -= 12;
+                if (event.clientY > bounds.bottom - 36) list.scrollTop += 12;
+              }
+            }}
+            onDrop={(event) => drop(event, targetFor(event, i))}
+          >
+            <strong>{item.title}</strong>
+            {item.subtitle && <small>{item.subtitle}</small>}
+            {onReorder && (
+              <span className="native-row-drag-handle" aria-hidden="true">
+                <DragHandleIcon size={16} />
+              </span>
+            )}
+          </button>
+        ))}
+        {!!items.length && !!query && !found.length && (
+          <div className="native-list-empty">
+            <p role="status">{t('native.text_a9a4407910')}</p>
+            <button type="button" className="ghost" onClick={() => setQuery('')}>
+              {t('library.clearSearch')}
             </button>
-          ))}
+          </div>
+        )}
         <p className="sr-only" role="status" aria-live="polite">
           {moveAnnouncement && t('native.collectionMoved', moveAnnouncement)}
         </p>

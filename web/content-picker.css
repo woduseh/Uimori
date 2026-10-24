@@ -136,10 +136,7 @@
   justify-items: center;
   gap: 5px;
   padding: 28px 20px;
-  border: var(--hairline) dashed var(--line);
-  border-radius: var(--radius-panel);
   text-align: center;
-  background: var(--surface);
 }
 .content-picker-empty strong {
   font-size: var(--font-body);

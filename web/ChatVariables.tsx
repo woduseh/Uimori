@@ -1,10 +1,12 @@
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { TransientNotice } from './TransientNotice.js';
+import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
 import { api, ApiError } from './api.js';
-import { RefreshIcon, SaveIcon, ResetIcon } from './ui-icons.js';
+import { RefreshIcon, SearchIcon, ResetIcon } from './ui-icons.js';
 import './chat-variables.css';
 
 type VariableView = ChatVariableState & {
@@ -188,6 +190,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
       const saved = await api<VariableView>(endpoint, body, 'PUT');
       if (!alive.current) return;
       readEpoch.current++;
+      setLoading(false);
       setView(saved);
       setDraft(null);
       try {
@@ -255,18 +258,17 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
           <small>
             {t('chatsettings.overrides', {
               count: Object.keys(view.values).length,
-              revision: view.revision,
             })}
           </small>
         )}
-        <button
+        <IconButton
           type="button"
           className="ghost"
+          icon={RefreshIcon}
+          label={t('chatsettings.m168')}
           disabled={loading || busy}
           onClick={() => void load()}
-        >
-          <RefreshIcon size={16} aria-hidden="true" /> {t('chatsettings.m168')}
-        </button>
+        />
       </header>
       <p className="muted">{t('chatsettings.m169')}</p>
       {loading && <LoadingState presentation="placeholder" label={t('chatsettings.m170')} />}
@@ -314,9 +316,15 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
         }}
       >
         <div className="chat-variable-toolbar">
-          <label>
-            {t('chatsettings.m176')}
-            <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <label className="chat-variable-search">
+            <SearchIcon size={18} aria-hidden="true" />
+            <input
+              type="search"
+              aria-label={t('chatsettings.m176')}
+              placeholder={t('chatsettings.m176')}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
           </label>
           <button
             type="button"
@@ -427,19 +435,19 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
             <ResetIcon size={16} aria-hidden="true" /> {t('chatsettings.m189')}
           </button>
 
-          <button
+          <SaveButton
             type="submit"
+            label={hasUncertainSave ? t('chatsettings.m190') : t('chatsettings.m191')}
+            text={hasUncertainSave ? t('chatsettings.m190') : t('shared.save')}
+            aria-busy={busy}
             disabled={
               !view ||
-              loading ||
+              (loading && !hasUncertainSave) ||
               busy ||
               !parsed ||
               (!hasUncertainSave && (!dirty || conflict || view.pending))
             }
-          >
-            <SaveIcon size={16} aria-hidden="true" />
-            {hasUncertainSave ? t('chatsettings.m190') : t('chatsettings.m191')}
-          </button>
+          />
         </div>
       </form>
       {view && (

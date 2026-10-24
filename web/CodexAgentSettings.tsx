@@ -216,27 +216,6 @@ export function CodexAgentSettings({
               {runtimeErrors[status.error] ?? t('providers.m431')}
             </p>
           ) : null}
-          {!(status.authenticated && status.authMode === 'chatgpt') && (
-            <details className="codex-connection-guide">
-              <summary>{t('providers.m432')}</summary>
-              <ol className="codex-connection-steps" aria-label={t('providers.m433')}>
-                <li>
-                  <strong>{t('providers.m434')}</strong>
-                  <p>{status.available ? t('providers.m435') : t('providers.m436')}</p>
-                </li>
-                <li>
-                  <strong>{t('providers.m437')}</strong>
-                  {!status.login && (
-                    <p>{status.available ? t('providers.m439') : t('providers.m440')}</p>
-                  )}
-                </li>
-                <li>
-                  <strong>{t('providers.m441')}</strong>
-                  <p>{t('providers.m442')}</p>
-                </li>
-              </ol>
-            </details>
-          )}
           {status.login && (
             <div className="compact-card" role="region" aria-label={t('providers.m443')}>
               <strong>{t('providers.m444')}</strong>

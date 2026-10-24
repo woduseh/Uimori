@@ -268,8 +268,11 @@
 
 .theme-control-bar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
+}
+.theme-default-control {
+  grid-template-columns: minmax(0, 1fr);
 }
 .theme-control-bar > label {
   min-width: 0;
@@ -282,18 +285,6 @@
   display: grid;
   gap: 12px;
   padding: 16px 0;
-}
-.theme-library-copy {
-  min-width: 0;
-}
-.theme-library-copy h4,
-.theme-library-copy p {
-  margin: 0;
-}
-.theme-library-copy p {
-  margin-top: 5px;
-  color: var(--muted);
-  font-size: var(--font-small);
 }
 .theme-library-actions {
   display: flex;

@@ -270,7 +270,9 @@ export function ContentPicker({
           {!candidates.length && (
             <div className="content-picker-empty">
               <strong>{emptyTitle}</strong>
-              <small>{t('library.addNewResourcesInLibrary')}</small>
+              {!needle && activeFolder === 'all' && (
+                <small>{t('library.addNewResourcesInLibrary')}</small>
+              )}
             </div>
           )}
         </div>
@@ -286,32 +288,13 @@ export function ContentPicker({
             })}
           </button>
         )}
-        {!all || activeFolder !== 'all' || (!candidates.length && !!needle) ? (
+        {!candidates.length && !!needle && (
           <div className="content-picker-footer">
-            {!candidates.length && !!needle && (
-              <button type="button" className="ghost" onClick={() => setQuery('')}>
-                {t('library.clearSearch')}
-              </button>
-            )}
-            {!all && (
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
-                  setAll(true);
-                  setFolder('all');
-                }}
-              >
-                {t('library.searchOtherCategoriesToo')}
-              </button>
-            )}
-            {activeFolder !== 'all' && (
-              <button type="button" className="ghost" onClick={() => setFolder('all')}>
-                {t('library.searchAllFolders')}
-              </button>
-            )}
+            <button type="button" className="ghost" onClick={() => setQuery('')}>
+              {t('library.clearSearch')}
+            </button>
           </div>
-        ) : null}
+        )}
       </Dialog>
     </div>
   );

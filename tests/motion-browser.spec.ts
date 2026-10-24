@@ -106,6 +106,16 @@ for (const width of [412, 1440]) {
       if (motion === 'no-preference')
         expect(transition.easing.every((value) => value === 'ease-out')).toBe(true);
       const original = await toggle.isChecked();
+      if (width === 412) {
+        const target = (await toggle.boundingBox())!;
+        expect(target.width).toBeGreaterThanOrEqual(44);
+        expect(target.height).toBeGreaterThanOrEqual(44);
+        // The space above and below the visual track must also toggle the native input.
+        await toggle.click({ position: { x: target.width / 2, y: 2 } });
+        await expect(toggle).toBeChecked({ checked: !original });
+        await toggle.click({ position: { x: target.width / 2, y: target.height - 2 } });
+        await expect(toggle).toBeChecked({ checked: original });
+      }
       await toggle.focus();
       await page.keyboard.press('Space');
       await expect(toggle).toBeChecked({ checked: !original });

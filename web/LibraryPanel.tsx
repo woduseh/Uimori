@@ -10,7 +10,7 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { DismissibleError } from './DismissibleError.js';
 import { TransientNotice } from './TransientNotice.js';
-import { SaveIcon } from './ui-icons.js';
+import { SaveButton } from './SaveButton.js';
 import { RisuNativeFields } from './RisuNativeFields.js';
 import { RisuExportButton } from './RisuExportButton.js';
 import { IconButton } from './IconButton.js';
@@ -1485,21 +1485,15 @@ function ContentEditor({
           <h2>{selected ? selected.title : t('library.new', { v0: t(contentLabelKeys[kind]) })}</h2>
           <div className="library-detail-actions">
             <ResourceEditorActions value={shared} hideSyncError />
-            <button
+            <SaveButton
               type="submit"
               form={formId}
               className="primary native-editor-save"
               disabled={editorUnavailable || !value.title.trim() || portraitBusy}
-            >
-              <SaveIcon size={18} aria-hidden="true" />
-              <span>
-                {busy
-                  ? t('library.saving')
-                  : selected
-                    ? t('library.saveChanges')
-                    : t('library.registerResource')}
-              </span>
-            </button>
+              aria-busy={busy}
+              label={selected ? t('library.saveChanges') : t('library.registerResource')}
+              text={t('shared.save')}
+            />
             <LibraryItemMenu title={t('library.resourceMenu')}>
               {(['bot', 'persona', 'module'] as const)
                 .filter((role) => role !== value.kind)

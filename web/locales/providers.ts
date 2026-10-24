@@ -1879,10 +1879,10 @@ export const messages = {
     zh: '密钥存储和优先级',
   },
   'providers.m360': {
-    ko: '저장한 키를 우선 사용해요. 삭제하면 서버의 TYPESAFE_API_KEY가 설정되어 있을 때 그 키를 사용해요.',
-    en: "The saved key takes priority. If deleted, the server's TYPESAFE_API_KEY is used when configured.",
-    ja: '保存済みキーを優先して使用します。削除した場合、サーバーにTYPESAFE_API_KEYが設定されていれば、そのキーを使用します。',
-    zh: '优先使用已保存的密钥。删除后，如果服务器设置了 TYPESAFE_API_KEY，则使用该密钥。',
+    ko: '저장한 키는 서버 DB에 보관돼요. 삭제하면 JEV 기능을 사용할 수 없어요.',
+    en: 'The saved key is stored in the server database. Deleting it disables JEV features.',
+    ja: '保存したキーはサーバーDBに保管されます。削除するとJEV機能を利用できなくなります。',
+    zh: '保存的密钥存储在服务器数据库中。删除后将无法使用 JEV 功能。',
   },
   'providers.m361': {
     ko: '연결 상태 새로고침과 관리 탭 전환은 입력한 키를 유지해요.',
@@ -2233,10 +2233,10 @@ export const messages = {
     zh: 'Codex 代理连接',
   },
   'providers.m422': {
-    ko: 'Uimori 서버에서 사용하는 ChatGPT 구독 연결',
-    en: 'ChatGPT subscription connection used by the Uimori server',
-    ja: 'Uimoriサーバーで使用するChatGPTサブスクリプション接続',
-    zh: 'Uimori 服务器使用的 ChatGPT 订阅连接',
+    ko: '서버의 ChatGPT 구독 연결',
+    en: 'Server ChatGPT subscription connection',
+    ja: 'サーバーのChatGPTサブスクリプション接続',
+    zh: '服务器的 ChatGPT 订阅连接',
   },
   'providers.m423': {
     ko: 'Codex 상태 다시 확인',

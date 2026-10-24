@@ -15,7 +15,7 @@ import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { IconButton } from './IconButton.js';
-import { DeleteIcon, ImagesIcon, SearchIcon } from './ui-icons.js';
+import { CheckIcon, DeleteIcon, ImagesIcon, SearchIcon } from './ui-icons.js';
 import './content-picker.css';
 import './native-risu-assets.css';
 import './deletion.css';
@@ -208,6 +208,9 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
               >
                 <img src={`/api/package-image-blobs/${image.blobHash}`} alt="" loading="lazy" />
                 <span>{image.title}</span>
+                {image.id === selected && (
+                  <CheckIcon className="native-assets-selected" size={16} aria-hidden="true" />
+                )}
                 {image.id === value.portraitImageId && <small>{t('native.text_384374b51a')}</small>}
               </button>
             ))}
@@ -216,6 +219,11 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             <div className="native-assets-empty">
               <ImagesIcon size={28} aria-hidden="true" />
               <p>{images.length ? t('native.text_a9a4407910') : t('native.text_06183c3690')}</p>
+              {query && (
+                <button type="button" className="ghost" onClick={() => setQuery('')}>
+                  {t('library.clearSearch')}
+                </button>
+              )}
             </div>
           )}
           {found.length > pageSize && (

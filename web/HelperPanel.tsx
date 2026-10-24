@@ -26,7 +26,6 @@ import { UI_HELPER_PERSONA } from './helper-persona.js';
 import { api, ApiError } from './api.js';
 import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
-import { ActionMenu } from './ActionMenu.js';
 import { ActivityBar } from './ActivityBar.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { HelperActivityDetails, useHelperActivity } from './HelperActivity.js';
@@ -1254,12 +1253,14 @@ export function HelperPanel(props: Props) {
                         timeStyle: 'medium',
                       })}
                     </time>
+                    <span>
+                      {t('helpers.m310', { model: task.modelTitle ?? t('helpers.m026') })}
+                    </span>
                     <span>{t('helpers.m314', { count: formatNumber(task.usage.modelCalls) })}</span>
                     <HelperTaskElapsed task={task} visible={props.open && !!taskHistory} />
                   </small>
                 </div>
               </div>
-              <p>{t('helpers.m310', { model: task.modelTitle ?? t('helpers.m026') })}</p>
               <p className="task-request">{task.request}</p>
               {task.error && <p className="error">{translateMessage(task.error ?? '')}</p>}
               {task.completedEffects && (
@@ -1530,12 +1531,11 @@ export function HelperPanel(props: Props) {
             }}
           />
           <div className="quick-controls">
-            <ActionMenu label={t('helpers.m105')} placement="top" viewport>
-              <button type="button" onClick={() => setTaskHistory({})}>
-                <History size={18} aria-hidden="true" />
-                {t('helpers.m106')}
-              </button>
-            </ActionMenu>
+            <IconButton
+              label={t('helpers.m106')}
+              icon={History}
+              onClick={() => setTaskHistory({})}
+            />
             {running && draft.trim() && (
               <button
                 type="button"

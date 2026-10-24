@@ -936,10 +936,10 @@ export const messages = {
     zh: '刷新',
   },
   'chatsettings.m169': {
-    ko: '카드와 스크립트가 이 채팅에서 함께 읽는 문자열 값이에요. 서재 원본은 바꾸지 않아요. 빈 문자열도 값으로 저장하며, 키를 지우면 자료의 기본값을 다시 사용해요.',
-    en: 'String values shared by cards and scripts in this chat. Library originals stay unchanged. Empty strings are values; deleting a key restores the resource default.',
-    ja: 'このチャットのカードとスクリプトが共有する文字列の値です。原本は変えません。空文字列も値として保存し、キーを削除すると資料の初期値に戻ります。',
-    zh: '卡片和脚本在此聊天共享的字符串值，不会更改资料库原件。空字符串也会作为值保存；删除键后将恢复资料默认值。',
+    ko: '이 채팅에서 공유하는 문자열 값이에요. 자료 원본은 유지돼요. 빈 문자열도 값이며, 재정의 해제로 기본값을 복원해요.',
+    en: 'String values shared in this chat. Library originals stay unchanged. Empty strings are values; clearing an override restores its default.',
+    ja: 'このチャットで共有する文字列です。資料の原本は保持します。空文字列も値で、上書きを解除すると初期値に戻ります。',
+    zh: '此聊天共享的字符串值，资料原件保持不变。空字符串也是值；清除覆盖后将恢复默认值。',
   },
   'chatsettings.m170': {
     ko: '공유 변수를 불러오는 중이에요…',
@@ -1074,10 +1074,10 @@ export const messages = {
     zh: '{title}，关闭此页面后服务器任务仍会继续。',
   },
   'chatsettings.overrides': {
-    ko: '재정의 {count, number}개, 수정 번호 {revision, number}',
-    en: '{count, plural, one {# override} other {# overrides}}, Revision {revision, number}',
-    ja: '上書き {count, number} 件、リビジョン {revision, number}',
-    zh: '覆盖 {count, number} 个，修订号 {revision, number}',
+    ko: '이 채팅에서 지정한 값 {count, number}개',
+    en: '{count, plural, one {# chat override} other {# chat overrides}}',
+    ja: 'このチャットで指定した値 {count, number} 件',
+    zh: '此聊天指定的值 {count, number} 个',
   },
   'chatsettings.defaultsError': {
     ko: '자료 기본 변수를 적용하지 못했어요: {error}',

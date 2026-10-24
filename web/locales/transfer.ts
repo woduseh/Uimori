@@ -2382,4 +2382,10 @@ export const messages = {
     ja: '作業状況を確認するチャット',
     zh: '选择要查看任务的聊天',
   },
+  'transfer.followGlobalSettings': {
+    ko: '전역 설정 따름',
+    en: 'Uses global settings',
+    ja: '全体設定に従う',
+    zh: '使用全局设置',
+  },
 } as const;

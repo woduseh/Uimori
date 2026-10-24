@@ -52,12 +52,11 @@ export function ArchivePanel({
       {!expanded && <summary>{t('transfer.m179')}</summary>}
       <section className="settings-group" aria-label={t('transfer.m180')}>
         <header className="settings-group-heading archive-card-heading">
-          <h3>{t('transfer.m181')}</h3>
+          <h3>{t('transfer.m182')}</h3>
         </header>
         <div className="settings-group-body archive-management-card">
           <div className="archive-action-row settings-row">
             <div className="settings-row-copy">
-              <strong>{t('transfer.m182')}</strong>
               <p className="muted">{t('transfer.m183')}</p>
             </div>
             <button

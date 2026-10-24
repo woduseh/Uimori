@@ -260,6 +260,10 @@
   margin-top: 4px;
   padding-top: 0;
 }
+.lore-context-actions.settings-form-footer > .ui-icon-button {
+  flex: 0 0 var(--control-h);
+  padding: 0;
+}
 .settings-form-footer > .settings-save-button {
   margin-left: auto;
   background: var(--accent);

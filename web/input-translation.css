@@ -67,6 +67,10 @@
   box-shadow: 0 2px 8px var(--shade);
 }
 .input-translation-language-menu > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   min-height: var(--control-h);
   padding: 7px 10px;
   border: 0;
@@ -75,6 +79,10 @@
   color: var(--text);
   text-align: left;
   font-size: var(--font-body);
+}
+.input-translation-language-menu > button svg {
+  flex: none;
+  color: var(--accent-text);
 }
 .input-translation-language-menu > button[aria-pressed="true"] {
   background: var(--accent-soft);

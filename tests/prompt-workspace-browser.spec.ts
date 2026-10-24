@@ -161,7 +161,7 @@ test(
       await openCombination();
       const title = `PWS 조합 ${width} ${crypto.randomUUID()}`;
       await combo.getByLabel('조합 이름', { exact: true }).fill(title);
-      const save = combo.getByRole('button', { name: '저장', exact: true });
+      const save = combo.getByRole('button', { name: '옵션 조합 저장', exact: true });
       await expect(save).toHaveClass(/primary/);
       expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       await page.screenshot({ path: info.outputPath(`prompt-combination-save-${width}.png`) });
@@ -413,7 +413,10 @@ test('PWS05 summary length controls save independently and survive reload on mob
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '역할별 모델');
   let models = page.getByRole('region', { name: '역할별 모델 설정' });
-  await models.locator('summary').filter({ hasText: '대화와 자료 지원' }).click();
+  await models
+    .locator('summary')
+    .filter({ hasText: /^보조 작업/ })
+    .click();
   const conversation = models.getByLabel('세션 요약 길이', { exact: true });
   const helper = models.getByLabel('도우미 요약 길이', { exact: true });
   await expect(conversation).toHaveValue('auto');
@@ -434,7 +437,10 @@ test('PWS05 summary length controls save independently and survive reload on mob
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '역할별 모델');
   models = page.getByRole('region', { name: '역할별 모델 설정' });
-  await models.locator('summary').filter({ hasText: '대화와 자료 지원' }).click();
+  await models
+    .locator('summary')
+    .filter({ hasText: /^보조 작업/ })
+    .click();
   await expect(models.getByLabel('세션 요약 길이', { exact: true })).toHaveValue('16384');
   await expect(models.getByLabel('도우미 요약 길이', { exact: true })).toHaveValue('2048');
 });
@@ -449,9 +455,10 @@ test('PWS06 role model settings show concise help and compact sections at both w
   for (const width of [MOBILE_WIDTH, 1200]) {
     await page.setViewportSize({ width, height: 900 });
     const group = models.locator('details.model-secondary-settings').filter({
-      has: page.locator('summary').filter({ hasText: '대화와 자료 지원' }),
+      has: page.locator('summary').filter({ hasText: /^보조 작업/ }),
     });
     const heading = group.locator('summary');
+    await expect(heading).toHaveCount(1);
     await expect(heading).toBeVisible();
     await heading.click();
     await expect(models.getByLabel('세션 요약 길이', { exact: true })).toBeVisible();

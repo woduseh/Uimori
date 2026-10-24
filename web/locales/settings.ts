@@ -115,10 +115,10 @@ export const messages = {
     zh: '提供商和模型设置',
   },
   'settings.m19': {
-    ko: '대화와 자료 지원',
-    en: 'Conversation and resource support',
-    ja: '会話と資料のサポート',
-    zh: '对话和资料辅助',
+    ko: '보조 작업',
+    en: 'Supporting tasks',
+    ja: '補助タスク',
+    zh: '辅助任务',
   },
   'settings.m20': {
     ko: '도우미 모델',
@@ -499,10 +499,10 @@ export const messages = {
     zh: '自动翻译和调用上限',
   },
   'settings.m83': {
-    ko: '저장한 설정은 다음 실행부터 적용해요.',
-    en: 'Saved settings apply to the next run.',
-    ja: '保存した設定は次の実行から適用します。',
-    zh: '已保存设置将从下次运行起应用。',
+    ko: '이 채팅에 저장하며, 다음 실행부터 적용돼요.',
+    en: 'Saved for this chat and applied from the next run.',
+    ja: 'このチャットに保存し、次の実行から適用します。',
+    zh: '保存于此聊天，从下次运行起应用。',
   },
   'settings.m84': {
     ko: '본문 번역',
@@ -517,10 +517,10 @@ export const messages = {
     zh: '生成正文后自动翻译',
   },
   'settings.m86': {
-    ko: '본문을 저장하면 현재 번역 모델로 자동 번역해요. 원문은 먼저 읽을 수 있고, 번역에 실패해도 원문은 유지돼요. Codex에서 콘텐츠 확인이 필요하면 직접 번역을 시작해 주세요.',
-    en: 'Automatically translates saved writing with the current translation model. You can read the source first, and the source is preserved if translation fails. Start translation manually when Codex requires content review.',
-    ja: '本文保存後、現在の翻訳モデルで自動翻訳します。原文は先に読め、翻訳失敗時も保持します。Codexで内容確認が必要な場合は手動で翻訳を開始してください。',
-    zh: '保存正文后使用当前翻译模型自动翻译。可先阅读原文，翻译失败时原文保持不变。Codex需要内容确认时，请手动开始翻译。',
+    ko: '현재 번역 모델을 사용해요. 원문은 번역 전과 실패 시에도 읽을 수 있어요. Codex 콘텐츠 확인이 필요하면 수동 번역해 주세요.',
+    en: 'Uses the current translation model. The source remains readable before translation and after failures. Translate manually when Codex requires content review.',
+    ja: '現在の翻訳モデルを使用します。翻訳前や失敗時も原文を読めます。Codexで内容確認が必要な場合は手動で翻訳してください。',
+    zh: '使用当前翻译模型。翻译前及失败后均可阅读原文。Codex 需要内容确认时，请手动翻译。',
   },
   'settings.m87': {
     ko: '현재 전체 기본값:',

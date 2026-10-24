@@ -114,8 +114,7 @@
   border-top: var(--hairline) solid var(--line);
   padding-top: 8px;
 }
-.codex-agent-help summary,
-.codex-connection-guide summary {
+.codex-agent-help summary {
   cursor: pointer;
   min-height: var(--control-h);
   align-content: center;

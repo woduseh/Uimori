@@ -155,7 +155,7 @@ test('COLOR selected outline and illustration labels retain readable text and ac
   await page.keyboard.press('Escape');
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
-  for (const label of ['기본 생성 환경과 자동 생성 관리', '프리셋과 적용 범위 관리']) {
+  for (const label of ['생성 환경', '프리셋']) {
     const disclosure = page.getByText(label, { exact: true });
     if ((await disclosure.locator('..').getAttribute('open')) === null) await disclosure.click();
   }

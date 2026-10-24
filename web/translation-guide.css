@@ -45,13 +45,6 @@
   gap: 6px;
   flex-shrink: 0;
 }
-.translation-guide-empty {
-  background: var(--surface-raised);
-  color: var(--muted);
-  border-radius: var(--radius-panel);
-  padding: 18px;
-  margin: 0;
-}
 .translation-guide-terms {
   display: grid;
   gap: 20px;
@@ -104,9 +97,6 @@
   background: var(--surface-raised);
   padding: 16px;
   border-radius: var(--radius-control);
-}
-.translation-guide-help {
-  margin: 0;
 }
 @media (max-width: 760px) {
   .translation-guide-term {

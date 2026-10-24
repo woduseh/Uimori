@@ -1947,7 +1947,13 @@ function App() {
                         <button
                           type="button"
                           className="secondary"
-                          disabled={optionsBusy || optionsDirty || s.profileDirty || s.quickBusy}
+                          disabled={
+                            optionsBusy ||
+                            optionsDirty ||
+                            s.profileDirty ||
+                            s.quickBusy ||
+                            (!s.draft.trim() && s.requestImagePreviews.length === 0)
+                          }
                           onClick={() => setChatTool({ scope: s.viewKey, kind: 'preview' })}
                         >
                           <Eye size={18} aria-hidden="true" />

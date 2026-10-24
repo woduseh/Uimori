@@ -58,7 +58,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 72px;
+  min-width: var(--control-h);
   min-height: 44px;
 }
 .prompt-templates-error {

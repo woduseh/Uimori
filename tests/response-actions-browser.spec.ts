@@ -542,7 +542,10 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     const fullResponse = await fullLoaded;
     expect(fullResponse.ok()).toBe(true);
     const full = (await fullResponse.json()) as Run;
-    await expect(diagnostics.locator('..').locator(':scope > pre')).toHaveText(
+    const rawRecord = diagnostics.locator('..').locator('.run-raw-record');
+    await rawRecord.locator(':scope > summary').click();
+    await expect(rawRecord.locator(':scope > pre')).toBeVisible();
+    await expect(rawRecord.locator(':scope > pre')).toHaveText(
       JSON.stringify(
         { snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents },
         null,
@@ -559,22 +562,13 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     expect(attemptsResponse.ok()).toBe(true);
     const attempts = (await attemptsResponse.json()) as unknown[];
     await expect(usage.getByRole('table')).toBeVisible();
-    await expect(usage.getByRole('rowheader')).toHaveText([
-      '원문',
-      '번역',
-      '이미지 배치',
-      '카드 스크립트',
-      '컨텍스트 압축',
-      '도우미',
-      '채팅 제목',
-      '삽화',
-    ]);
-    await expect(usage.getByRole('rowheader', { name: '채팅 제목', exact: true })).toBeVisible();
+    await expect(usage.getByRole('rowheader')).toHaveText(['원문']);
+    await expect(usage.getByRole('rowheader', { name: '채팅 제목', exact: true })).toHaveCount(0);
     await expect(usage.getByText(new RegExp(`^전송 시도 ${attempts.length}회`))).toBeVisible();
     await expect(panel.getByRole('status').filter({ hasText: /불러오는 중/ })).toHaveCount(0);
     await expect(panel.getByRole('alert')).toHaveCount(0);
     await noHorizontalOverflow(page, dialog);
-    await panel.locator('.panel-intro').scrollIntoViewIfNeeded();
+    await panel.getByTestId('run').first().scrollIntoViewIfNeeded();
     if (visualReview) await page.screenshot({ path: info.outputPath(`tasks-loaded-${width}.png`) });
   }
   const after = await detail(request, before.chat.id);

@@ -121,7 +121,6 @@ export function SettingsEditor({
       >
         <fieldset className="editor-fields full chat-runtime-fields" disabled={saving || disabled}>
           <div className="settings-group full">
-            <h4 className="settings-group-heading">{t('settings.m84')}</h4>
             <div className="settings-group-body">
               <label className="settings-row">
                 <span className="settings-row-copy">

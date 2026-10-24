@@ -5,6 +5,7 @@ import { api } from './api.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { ReaderEditingContext } from './Bookmarks.js';
+import { SaveButton } from './SaveButton.js';
 
 export function SceneTitleEditor({
   item,
@@ -87,7 +88,7 @@ export function SceneTitleEditor({
         >
           <fieldset disabled={busy}>
             <label>
-              {t('reader.sceneName')}
+              <span className="sr-only">{t('reader.sceneName')}</span>
               <input
                 value={title}
                 maxLength={200}
@@ -97,9 +98,7 @@ export function SceneTitleEditor({
             </label>
             <small>{t('reader.leaveBlankToShowTheLinkedConfigurationTitleOr')}</small>
             <div className="form-actions">
-              <button type="submit" disabled={!dirty}>
-                {busy ? t('reader.saving') : t('reader.saveName')}
-              </button>
+              <SaveButton label={t('reader.saveName')} disabled={!dirty} aria-busy={busy} />
             </div>
           </fieldset>
           {error && (

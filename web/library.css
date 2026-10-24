@@ -252,6 +252,10 @@
     order: 3;
     flex-basis: 100%;
   }
+  .library-preview > .library-detail-heading > .library-detail-actions {
+    order: initial;
+    flex-basis: auto;
+  }
 }
 .library-detail .editor-grid {
   margin-top: 0;

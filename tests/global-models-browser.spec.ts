@@ -82,7 +82,9 @@ for (const width of DEFAULT_WIDTHS) {
     const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
     await expect(editor).toContainText('변경한 설정은 이후 작업부터 적용돼요.');
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
-    await expect(editor.getByText('핵심 작업', { exact: true })).toBeVisible();
+    const supportingSummary = editor.locator('summary').filter({ hasText: /^보조 작업/ });
+    await expect(supportingSummary).toHaveCount(1);
+    await expect(supportingSummary).toBeVisible();
     await expect(editor.getByLabel('도우미 모델', { exact: true })).toBeHidden();
     await expect(editor.getByLabel('컨텍스트 요약 모델', { exact: true })).toBeHidden();
     await expect(editor.getByLabel('장면 해설 모델', { exact: true })).toHaveCount(0);
@@ -138,10 +140,9 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(
       translationRefusal.getByLabel('번역 거절 확신 기준', { exact: true })
     ).toBeVisible();
-    await editor
-      .locator('summary')
-      .filter({ hasText: /^자동 작업/ })
-      .click();
+    await supportingSummary.click();
+    for (const label of ['도우미 모델', '컨텍스트 요약 모델', '채팅 제목 모델', '확장 호출 모델'])
+      await expect(editor.getByLabel(label, { exact: true })).toBeVisible();
     for (const label of ['원문 모델', '번역 모델', '채팅 제목 모델'])
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');

@@ -18,6 +18,7 @@ export function LastSceneLore({
         revision={headRevision ?? ''}
         title={t('library.inclusionRecords')}
         initiallyOpen
+        disclosure={false}
       >
         {(detail) =>
           detail.sourceRevision === null ? (
