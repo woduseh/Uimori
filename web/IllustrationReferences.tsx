@@ -121,7 +121,7 @@ export function IllustrationReferencesEditor({
       data-testid="illustration-references"
     >
       <h4>{t('visuals.m028')}</h4>
-      <small>{t('visuals.m032')}</small>
+      {!!loaded.candidates.length && <small>{t('visuals.m032')}</small>}
       {loadError && (
         <NoticeBanner
           tone="error"
@@ -167,15 +167,17 @@ export function IllustrationReferencesEditor({
           </figure>
         ))}
       </div>
-      <div className="form-actions settings-save-actions">
-        <SaveButton
-          type="button"
-          label={t('visuals.m040')}
-          aria-busy={saving}
-          disabled={!dirty || saving}
-          onClick={() => void save()}
-        />
-      </div>
+      {(loaded.candidates.length > 0 || dirty) && (
+        <div className="form-actions settings-save-actions">
+          <SaveButton
+            type="button"
+            label={t('visuals.m040')}
+            aria-busy={saving}
+            disabled={!dirty || saving}
+            onClick={() => void save()}
+          />
+        </div>
+      )}
       <TransientNotice message={message} />
     </section>
   );

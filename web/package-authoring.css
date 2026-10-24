@@ -40,12 +40,6 @@
   gap: 12px 20px;
   padding-top: 2px;
 }
-.package-module-refresh {
-  flex: none;
-  min-height: 34px;
-  padding: 5px 8px;
-  color: var(--muted);
-}
 .package-module-status:empty {
   display: none;
 }

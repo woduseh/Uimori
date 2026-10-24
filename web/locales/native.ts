@@ -510,18 +510,6 @@ export const messages = {
     ja: 'ロア本文',
     zh: '设定正文',
   },
-  'native.text_7f3ba385e9': {
-    ko: '사용',
-    en: 'Enabled',
-    ja: '有効',
-    zh: '启用',
-  },
-  'native.text_4096a642b1': {
-    ko: '로어 사용',
-    en: 'Enable lore',
-    ja: 'ロアを有効にする',
-    zh: '启用设定',
-  },
   'native.text_bf1eea5b75': {
     ko: '조건, 배치, 원문 설정',
     en: 'Conditions, placement and source settings',

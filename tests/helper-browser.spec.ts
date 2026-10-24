@@ -13,7 +13,7 @@ import type { HelperActivityEvent } from '../core/helper-activity.js';
 import type { ResponseStreamPage } from '../core/response-stream.js';
 import type { HelperArtifactView } from '../web/HelperArtifactCard.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
-import type { ModelWorkspace } from '../core/product.js';
+import type { ModelPreset, ModelWorkspace } from '../core/product.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { navigationAction, openSourceActions, openChatMenu } from './ui-navigation.js';
 import { openHelper } from './ui-navigation.js';
@@ -643,6 +643,8 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
     });
   }
   await panel.getByRole('button', { name: /^현재 도우미 모델/ }).click();
+  const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
+  await picker.getByRole('button', { name: '역할별 모델 설정', exact: true }).click();
   const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
   await expect(editor).toBeVisible();
   await editor.locator('.task-behavior-settings > summary').click();
@@ -675,6 +677,284 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   expect(saved.translationPolicy.maxCalls).toBe(12);
   await conflict.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
   await expect(draft).toHaveValue('9');
+});
+
+async function helperModels(request: APIRequestContext) {
+  const providerResponse = await request.post('/api/connections', {
+    data: {
+      title: `도우미 선택 합성 ${randomUUID()}`,
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9/not-called',
+      enabled: true,
+    },
+  });
+  expect(providerResponse.ok()).toBe(true);
+  const provider = (await providerResponse.json()) as { id: string };
+  const models: ModelPreset[] = [];
+  for (const suffix of ['A', 'B']) {
+    const response = await request.post('/api/model-presets', {
+      data: {
+        title: `도우미 검색 모델 ${suffix} ${randomUUID()}`,
+        connectionId: provider.id,
+        modelId: `helper-picker-${suffix}`,
+        maxOutputTokens: 1000,
+        temperature: null,
+      },
+    });
+    expect(response.ok()).toBe(true);
+    models.push((await response.json()) as ModelPreset);
+  }
+  return models;
+}
+
+test('HELPMODEL direct helper selection preserves other global roles, chat settings, drafts and focus on desktop and mobile', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await create(request);
+  const models = await helperModels(request);
+  await harness(page);
+  const before = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+  const chatBefore = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  const promptsBefore = await (await request.get('/api/prompt-workspace')).json();
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const input = panel.getByLabel('도우미에게 요청');
+  await input.fill('모델을 골라도 남아야 하는 도우미 초안');
+  for (const [index, width] of [DESKTOP_WIDTH, MOBILE_WIDTH].entries()) {
+    await page.setViewportSize({ width, height: 844 });
+    const trigger = panel.getByRole('button', { name: /^현재 도우미 모델:/ });
+    await trigger.click();
+    const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
+    await expect(picker).toContainText('모든 도우미 대화의 다음 요청부터 적용해요.');
+    await picker.getByRole('searchbox', { name: '모델 검색' }).fill(models[index].title);
+    const choice = picker.getByRole('button', { name: new RegExp(models[index].title) });
+    await expect(choice).toBeEnabled();
+    expect(await picker.evaluate((node) => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`helper-model-picker-${width}.png`) });
+    await choice.click();
+    await expect(picker).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toContainText(models[index].title);
+    await expect(input).toHaveValue('모델을 골라도 남아야 하는 도우미 초안');
+    const saved = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+    expect(saved).toEqual({
+      ...before,
+      revision: before.revision + index + 1,
+      helperModel: { id: models[index].id },
+    });
+    await page.screenshot({ path: info.outputPath(`helper-model-selected-${width}.png`) });
+  }
+  const chatAfter = (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+  expect(chatAfter.profile).toEqual(chatBefore.profile);
+  const promptsAfter = await (await request.get('/api/prompt-workspace')).json();
+  expect(promptsAfter.main).toEqual(promptsBefore.main);
+  expect(promptsAfter.translation).toEqual(promptsBefore.translation);
+  await panel.getByRole('button', { name: /^현재 도우미 모델:/ }).click();
+  const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
+  await picker.getByRole('button', { name: '선택 안 함', exact: true }).click();
+  await expect(picker).toBeHidden();
+  expect((await (await request.get('/api/model-workspace')).json()).helperModel).toBeNull();
+});
+
+test('HELPMODEL rejected and uncertain helper changes require an explicit reread and never replay a write', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request);
+  const models = await helperModels(request);
+  await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  let writes = 0;
+  await page.route('**/api/model-workspace', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    writes++;
+    if (writes === 1)
+      return route.fulfill({
+        status: 409,
+        json: { error: '전역 설정이 변경됐어요. 새로고침한 뒤 저장해 주세요.' },
+      });
+    await route.fetch();
+    await route.abort('failed');
+  });
+  await panel.getByRole('button', { name: /^현재 도우미 모델:/ }).click();
+  const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
+  const choice = picker.getByRole('button', { name: new RegExp(models[0].title) });
+  await choice.click();
+  await expect(picker.getByRole('alert')).toBeVisible();
+  await expect(choice).toBeDisabled();
+  expect(writes).toBe(1);
+  await picker.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect(choice).toBeEnabled();
+  await choice.click();
+  await expect(picker.getByRole('alert')).toBeVisible();
+  await expect(choice).toBeDisabled();
+  expect(writes).toBe(2);
+  expect((await (await request.get('/api/model-workspace')).json()).helperModel).toEqual({
+    id: models[0].id,
+  });
+  await picker.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect(choice).toHaveAttribute('aria-pressed', 'true');
+  expect(writes).toBe(2);
+});
+
+test('HELPMODEL delayed acknowledgement preserves a newer confirmed model and the reopened picker', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request);
+  const models = await helperModels(request);
+  await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let writes = 0;
+  await page.route('**/api/model-workspace', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    writes++;
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
+  const trigger = panel.getByRole('button', { name: /^현재 도우미 모델:/ });
+  await trigger.click();
+  const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
+  await picker.getByRole('button', { name: new RegExp(models[0].title) }).click();
+  await expect
+    .poll(async () => (await (await request.get('/api/model-workspace')).json()).helperModel?.id)
+    .toBe(models[0].id);
+  await picker.getByRole('button', { name: '도우미 모델 선택 닫기', exact: true }).click();
+  const accepted = (await (await request.get('/api/model-workspace')).json()) as ModelWorkspace;
+  const newer = await request.put('/api/model-workspace', {
+    data: {
+      expectedRevision: accepted.revision,
+      routes: accepted.routes,
+      translationPolicy: accepted.translationPolicy,
+      helperModel: { id: models[1].id },
+    },
+  });
+  expect(newer.ok()).toBe(true);
+  await page.evaluate(() => dispatchEvent(new Event('prompt-workspace-changed')));
+  await trigger.click();
+  const current = picker.getByRole('button', { name: new RegExp(models[1].title) });
+  await expect(current).toHaveAttribute('aria-pressed', 'true');
+  await expect(trigger).toContainText(models[1].title);
+  release();
+  await expect(current).toBeEnabled();
+  await expect(picker).toBeVisible();
+  await expect(current).toHaveAttribute('aria-pressed', 'true');
+  await expect(trigger).toContainText(models[1].title);
+  expect(writes).toBe(1);
+  expect((await (await request.get('/api/model-workspace')).json()).helperModel).toEqual({
+    id: models[1].id,
+  });
+});
+
+test('HELPMODEL acknowledged selection stays successful when the following settings refresh fails', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request);
+  const models = await helperModels(request);
+  await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  let failRefresh = false;
+  let writes = 0;
+  await page.route('**/api/prompt-workspace', async (route) => {
+    if (failRefresh && route.request().method() === 'GET')
+      return route.fulfill({ status: 503, json: { error: '합성 설정 새로고침 실패' } });
+    return route.continue();
+  });
+  await page.route('**/api/model-workspace', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    writes++;
+    const response = await route.fetch();
+    failRefresh = true;
+    await route.fulfill({ response });
+  });
+  await panel.getByRole('button', { name: /^현재 도우미 모델:/ }).click();
+  const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
+  await picker.getByRole('button', { name: new RegExp(models[0].title) }).click();
+  await expect(picker).toBeHidden();
+  await expect(panel.getByRole('button', { name: /^현재 도우미 모델:/ })).toContainText(
+    models[0].title
+  );
+  const warning = panel.getByRole('alert').filter({ hasText: '도우미 모델은 변경했지만' });
+  await expect(warning).toContainText('서버 작업을 완료하지 못했어요. (503)');
+  expect(writes).toBe(1);
+  expect((await (await request.get('/api/model-workspace')).json()).helperModel).toEqual({
+    id: models[0].id,
+  });
+  failRefresh = false;
+  await warning.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect(warning).toHaveCount(0);
+  expect(writes).toBe(1);
+});
+
+test('HELPUI16 helper tone save shows pending and completion without changing the conversation draft', async ({
+  page,
+}) => {
+  await harness(page);
+  await page.goto('/');
+  const panel = await open(page);
+  await panel.getByLabel('도우미에게 요청').fill('설정을 바꿔도 보존할 초안');
+  await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
+  const settingsToggle = panel.getByRole('button', { name: '도우미 말투 설정', exact: true });
+  await expect(settingsToggle).toHaveAttribute('aria-pressed', 'true');
+  await panel.getByLabel('도우미 말투', { exact: true }).fill('차분하고 간결하게 응답해 주세요.');
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/helper/conversations/*', async (route) => {
+    if (route.request().method() === 'PATCH') await held;
+    await route.fallback();
+  });
+  const save = panel.getByRole('button', { name: '도우미 설정 저장', exact: true });
+  await save.click();
+  await expect(save).toHaveAttribute('aria-busy', 'true');
+  await expect(save).toBeDisabled();
+  release();
+  await expect(
+    page.getByRole('status').filter({ hasText: '도우미 말투를 저장했어요.' })
+  ).toBeVisible();
+  await settingsToggle.click();
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('설정을 바꿔도 보존할 초안');
+});
+
+test('HELPACTIVITY a failed completed-task activity read can be retried in place', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request);
+  const state = await harness(page);
+  await page.goto(`/?chat=${chat.id}`);
+  let panel = await open(page);
+  const task = state.addFailed(state.current());
+  state.activity(task, [{ seq: 1, kind: 'tool.finished', name: 'resource.read', denied: false }]);
+  await page.reload();
+  panel = await open(page);
+  let reads = 0;
+  await page.route(`**/api/helper/tasks/${task.id}/activity`, async (route) => {
+    if (++reads === 1)
+      return route.fulfill({ status: 503, json: { error: '합성 기록 읽기 실패' } });
+    return route.fallback();
+  });
+  const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
+  await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
+  const activity = row.getByTestId('helper-activity-details');
+  await activity.locator(':scope > summary').click();
+  await expect(activity.getByRole('alert')).toContainText('활동 내역을 새로 읽지 못했어요.');
+  await expect(activity.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
+  await activity.getByRole('button', { name: '다시 불러오기', exact: true }).click();
+  await expect(activity.locator('.helper-activity-stages > li')).toHaveCount(1);
+  await expect(activity.getByRole('alert')).toHaveCount(0);
+  expect(reads).toBe(2);
 });
 
 test(`HELPUI01 helper panel preserves separate input, reading position and Back behavior at ${MOBILE_WIDTH}/${DESKTOP_WIDTH}`, async ({

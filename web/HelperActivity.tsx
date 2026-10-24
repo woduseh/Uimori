@@ -1,13 +1,19 @@
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { HelperActivity as Activity } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
 import { api } from './api.js';
 import { helperActivityStages } from './helper-activity.js';
 
-type ActivityView = { taskId?: string; data: Activity | null; error: string };
+type ActivityView = {
+  taskId?: string;
+  data: Activity | null;
+  error: string;
+  reading?: boolean;
+  retry?: () => void;
+};
 
 export function useHelperActivity(
   taskId: string | undefined,
@@ -16,6 +22,9 @@ export function useHelperActivity(
 ): ActivityView {
   useI18n();
   const [view, setView] = useState<ActivityView>({ data: null, error: '' });
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt explicitly retries the same activity read.
   useEffect(() => {
     if (!taskId || !visible) return;
     let disposed = false;
@@ -24,6 +33,12 @@ export function useHelperActivity(
     const read = async () => {
       if (disposed || pending || document.hidden) return;
       pending = true;
+      setView((old) => ({
+        taskId,
+        data: old.taskId === taskId ? old.data : null,
+        error: old.taskId === taskId ? old.error : '',
+        reading: true,
+      }));
       clearTimeout(timer);
       try {
         const data = await api<Activity>(`/helper/tasks/${encodeURIComponent(taskId)}/activity`);
@@ -37,6 +52,7 @@ export function useHelperActivity(
           }));
       } finally {
         pending = false;
+        if (!disposed) setView((old) => ({ ...old, reading: false }));
         if (!disposed && status === 'running' && !document.hidden)
           timer = setTimeout(() => void read(), 1200);
       }
@@ -52,8 +68,8 @@ export function useHelperActivity(
       clearTimeout(timer);
       document.removeEventListener('visibilitychange', visibility);
     };
-  }, [taskId, status, visible]);
-  return view.taskId === taskId ? view : { data: null, error: '' };
+  }, [taskId, status, visible, attempt]);
+  return { ...(view.taskId === taskId ? view : { data: null, error: '' }), retry };
 }
 
 const stateLabels = {
@@ -78,7 +94,7 @@ export function HelperActivityDetails({
   useI18n();
   const [open, setOpen] = useState(false);
   const own = useHelperActivity(taskId, status, visible && open && !source);
-  const { data, error } = source ?? own;
+  const { data, error, reading, retry } = source ?? own;
   return (
     <details
       className="helper-activity-details"
@@ -93,10 +109,11 @@ export function HelperActivityDetails({
           {(!data || error) && (
             <LoadingState
               presentation="inline"
-              loading={!error}
+              loading={reading || (!data && !error)}
               error={translateMessage(error)}
               errorLabel={t('helpers.m119')}
               label={t('helpers.m120')}
+              onRetry={retry}
             />
           )}
           {data?.hasEarlier && <p className="muted">{t('helpers.m121')}</p>}

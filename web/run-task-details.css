@@ -1,6 +1,15 @@
 .run-task-details {
   min-width: 0;
 }
+.run-raw-record {
+  margin-top: 12px;
+  border-top: var(--hairline) solid var(--line);
+}
+.run-raw-record > summary {
+  min-height: var(--control-h);
+  align-content: center;
+  cursor: pointer;
+}
 .run-input-details > .scene-usage,
 .run-input-details > .inspector {
   margin-top: 12px;

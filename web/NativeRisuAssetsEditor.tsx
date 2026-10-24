@@ -262,10 +262,10 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             <details>
               <summary>{t('native.text_24016d85c7')}</summary>
               <code>{names.join(', ') || active.id}</code>
+              <p className="muted">
+                {names.length ? t('native.text_59d5a7b430') : t('native.text_f87c057551')}
+              </p>
             </details>
-            <p className="muted">
-              {names.length ? t('native.text_59d5a7b430') : t('native.text_f87c057551')}
-            </p>
             <div className="native-assets-actions">
               <label>
                 {t('native.text_597b8746b1')}

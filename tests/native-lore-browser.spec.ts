@@ -203,18 +203,16 @@ for (const viewport of viewports) {
       );
       await expect(editor.getByLabel('로어 폴더', { exact: true })).toHaveValue(FOLDER_KEY);
       await expect(editor.getByLabel('포함 방식', { exact: true })).toHaveValue('conditional');
-      await expect(editor.getByRole('switch', { name: '로어 사용', exact: true })).toBeChecked();
+      await expect(editor.getByRole('switch', { name: '로어 사용', exact: true })).toHaveCount(0);
 
       await editor.getByLabel('로어 이름', { exact: true }).fill('수도');
       await editor.getByLabel('로어 본문', { exact: true }).fill('수도는 강과 성벽 사이에 있어요.');
       await editor.getByLabel('로어 폴더', { exact: true }).selectOption('');
       await editor.getByLabel('포함 방식', { exact: true }).selectOption('always');
       await editor.getByLabel('포함 방식', { exact: true }).selectOption('none');
-      await expect(
-        editor.getByRole('switch', { name: '로어 사용', exact: true })
-      ).not.toBeChecked();
+      await expect(editor.getByLabel('포함 방식', { exact: true })).toHaveValue('none');
       await editor.getByLabel('포함 방식', { exact: true }).selectOption('conditional');
-      await expect(editor.getByRole('switch', { name: '로어 사용', exact: true })).toBeChecked();
+      await expect(editor.getByLabel('포함 방식', { exact: true })).toHaveValue('conditional');
       await editor.getByLabel('포함 방식', { exact: true }).selectOption('always');
       await editor.getByLabel('포함 방식', { exact: true }).selectOption('none');
 
@@ -287,29 +285,9 @@ for (const viewport of viewports) {
       );
       await expect(reloaded.getByLabel('로어 폴더', { exact: true })).toHaveValue('');
       await expect(reloaded.getByLabel('포함 방식', { exact: true })).toHaveValue('none');
-      await expect(
-        reloaded.getByRole('switch', { name: '로어 사용', exact: true })
-      ).not.toBeChecked();
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
       ).toBeLessThanOrEqual(1);
-      const switchFit = await reloaded
-        .getByRole('switch', { name: '로어 사용', exact: true })
-        .evaluate((node) => {
-          const control = node.getBoundingClientRect();
-          const label = node.closest('label')!.getBoundingClientRect();
-          const text = [...node.closest('label')!.childNodes].find(
-            (child) => child.nodeType === Node.TEXT_NODE && child.textContent?.trim() === '사용'
-          )!;
-          const range = document.createRange();
-          range.selectNodeContents(text);
-          return {
-            insideLabel: control.left >= label.left - 1 && control.right <= label.right + 1,
-            insideViewport: control.left >= -1 && control.right <= window.innerWidth + 1,
-            textLines: range.getClientRects().length,
-          };
-        });
-      expect(switchFit).toEqual({ insideLabel: true, insideViewport: true, textLines: 1 });
       await page.screenshot({
         path: info.outputPath(`native-lore-detail-${viewport.name}.png`),
         fullPage: true,

@@ -18,7 +18,6 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
-  RefreshCw,
 } from 'lucide-react';
 import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -126,6 +125,8 @@ export function OutlinePanel({
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending | null>(() => stored(pendingKey, null));
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [brief, setBrief] = useState<Brief | null>(null);
   const [writing, setWriting] = useState(false);
   const [requestText, setRequestText] = useState('');
@@ -146,12 +147,18 @@ export function OutlinePanel({
   const load = useCallback(async () => {
     if (!chatId) return;
     const generation = ++loadGeneration.current;
+    setLoading(true);
     try {
       const value = await api<OutlineDetail>(`/chats/${chatId}/outline`);
-      if (mounted.current && generation === loadGeneration.current) setOutline(value);
+      if (mounted.current && generation === loadGeneration.current) {
+        setOutline(value);
+        setLoadError('');
+      }
     } catch (cause) {
       if (mounted.current && generation === loadGeneration.current)
-        setError((cause as Error).message);
+        setLoadError((cause as Error).message);
+    } finally {
+      if (mounted.current && generation === loadGeneration.current) setLoading(false);
     }
   }, [chatId]);
   useEffect(() => {
@@ -489,6 +496,15 @@ export function OutlinePanel({
       {outline && (
         <DismissibleError message={translateMessage(error)} onDismiss={() => setError('')} />
       )}
+      {outline && loadError && (
+        <LoadingState
+          presentation="inline"
+          loading={loading}
+          error={translateMessage(loadError)}
+          label={t('prompts.uiLoadingOutline')}
+          onRetry={() => void load()}
+        />
+      )}
       {pending && !busy && (
         <div className="outline-pending" role="status">
           <p>{t('prompts.uiTheSubmissionResultIsStillUnknownYourInputIs')}</p>
@@ -500,8 +516,8 @@ export function OutlinePanel({
       {!outline && (
         <LoadingState
           presentation="region"
-          loading={!error}
-          error={translateMessage(error)}
+          loading={loading || !loadError}
+          error={translateMessage(loadError)}
           label={t('prompts.uiLoadingOutline')}
           onRetry={() => void load()}
         />
@@ -512,7 +528,6 @@ export function OutlinePanel({
             <GitBranch size={32} />
           </div>
           <p className="outline-eyebrow">{t('prompts.uiNoOutlineYet')}</p>
-          <p>{t('prompts.uiTheOutlineRemainsAPlanOnlyTheSelectedUnit')}</p>
           <div className="outline-welcome-actions">
             <button type="button" onClick={() => help('compose', null)}>
               <Sparkles size={18} />
@@ -1081,12 +1096,6 @@ export function OutlinePanel({
           </div>
         )
       )}
-      <footer className="outline-workspace-footer">
-        <button type="button" className="text-button" onClick={() => void load()}>
-          <RefreshCw size={13} />
-          {t('prompts.uiRefresh')}
-        </button>
-      </footer>
     </section>
   );
 }

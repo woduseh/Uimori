@@ -1559,12 +1559,6 @@ export const messages = {
     ja: 'ライブラリでモジュールを編集すると、次の実行から最新の内容を使います。',
     zh: '在资料库修改模块后，从下次运行起使用最新内容。',
   },
-  'library.refreshList': {
-    ko: '목록 새로고침',
-    en: 'Refresh list',
-    ja: '一覧を更新',
-    zh: '刷新列表',
-  },
   'library.loadingResourcesAndFeatures': {
     ko: '자료와 기능 목록을 불러오는 중이에요…',
     en: 'Loading resources and features…',

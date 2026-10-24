@@ -64,8 +64,24 @@ test('PCUI01 empty connections and empty models each expose one relevant startin
     models: [],
   };
   const observed = await projectLibrary(page, value);
+  let registrationReads = 0;
+  await page.route('**/api/provider-management/jev', async (route) => {
+    registrationReads++;
+    if (registrationReads === 1)
+      await route.fulfill({ status: 503, json: { error: 'Synthetic registration read failed' } });
+    else await route.continue();
+  });
   await openProviders(page);
   const editor = page.getByTestId('connection-editor');
+  const registrationFailure = editor
+    .getByRole('alert')
+    .filter({ hasText: 'TypeSafe AI 등록 상태' });
+  await expect(registrationFailure).toBeVisible();
+  await registrationFailure
+    .getByRole('button', { name: 'TypeSafe AI 등록 상태 다시 불러오기', exact: true })
+    .click();
+  await expect(registrationFailure).toBeHidden();
+  expect(registrationReads).toBe(2);
   await expect(editor.getByRole('searchbox', { name: '프로바이더와 모델 검색' })).toHaveCount(0);
   await expect(editor.getByRole('button', { name: '프로바이더 추가', exact: true })).toHaveCount(1);
   await expect(editor.getByRole('button', { name: '새 모델 입력', exact: true })).toHaveCount(0);
@@ -81,7 +97,10 @@ test('PCUI01 empty connections and empty models each expose one relevant startin
   await expect(editor.getByRole('region', { name: '프로바이더 선택', exact: true })).toBeVisible();
   await editor.getByRole('button', { name: '목록으로', exact: true }).click();
   value.connections = [connection];
-  await editor.getByRole('button', { name: '목록 새로고침', exact: true }).click();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(
+    editor.getByRole('article', { name: connection.title + ' 프로바이더', exact: true })
+  ).toBeVisible();
   await editor.getByRole('button', { name: '모델 프리셋', exact: true }).click();
   await expect(editor.getByRole('button', { name: '새 모델 입력', exact: true })).toHaveCount(1);
   await expect(editor.getByRole('button', { name: '프로바이더 추가', exact: true })).toHaveCount(0);
@@ -114,24 +133,23 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
       const rect = (selector: string) => node.querySelector(selector)!.getBoundingClientRect();
       const input = rect('.provider-toolbar input');
       const icon = rect('.provider-toolbar .provider-search > svg');
-      const tab = rect('.provider-workspace-navigation > button');
-      const refresh = rect('.provider-refresh');
       return {
         input: { left: input.left, right: input.right },
         iconOffset: Math.abs(icon.top + icon.height / 2 - input.top - input.height / 2),
-        tabOffset: Math.abs(tab.top + tab.height / 2 - refresh.top - refresh.height / 2),
-        refreshWidth: refresh.width,
-        refreshHeight: refresh.height,
         overflow: node.scrollWidth - node.clientWidth,
       };
     });
     expect(geometry.input.left).toBeGreaterThanOrEqual(0);
     expect(geometry.input.right).toBeLessThanOrEqual(width);
     if (visualReview) expect(geometry.iconOffset).toBeLessThanOrEqual(1);
-    if (visualReview) expect(geometry.tabOffset).toBeLessThanOrEqual(1);
-    expect(geometry.refreshWidth).toBeGreaterThanOrEqual(44);
-    expect(geometry.refreshHeight).toBeGreaterThanOrEqual(44);
     expect(geometry.overflow).toBeLessThanOrEqual(1);
+    if (width <= 600) {
+      const box = (await item
+        .getByLabel(model.title + ' 모델 메뉴', { exact: true })
+        .boundingBox())!;
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+    }
     if (width === MOBILE_WIDTH || width === DESKTOP_WIDTH)
       if (visualReview)
         await page.screenshot({

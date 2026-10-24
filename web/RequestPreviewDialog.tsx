@@ -230,13 +230,6 @@ export function RequestPreviewDialog({
                     value={Math.min(tokens.estimatedInputTokens!, tokens.inputTokenLimit)}
                   />
                 )}
-                {tokenizer && (
-                  <small className="muted">
-                    {t('reader.tokenizerEstimate', {
-                      tokenizer: translateMessage(tokenizer.label),
-                    })}
-                  </small>
-                )}
                 {!!tokens?.imageCount && (
                   <small className="muted">
                     {t('reader.imageTokenEstimate', {
@@ -259,6 +252,13 @@ export function RequestPreviewDialog({
               </div>
               <details className="request-preview-help">
                 <summary>{t('reader.estimationBasis')}</summary>
+                {tokenizer && (
+                  <p>
+                    {t('reader.tokenizerEstimate', {
+                      tokenizer: translateMessage(tokenizer.label),
+                    })}
+                  </p>
+                )}
                 <p>{t('reader.calculatesTheInitialInputFromSavedSettingsAndYour')}</p>
                 <p>{t('reader.inputMayChangeDuringGenerationDueToLoreSelection')}</p>
                 <p>{t('reader.loreCountsReflectCurrentlyPreparedMaterialCheckActualInclusion')}</p>

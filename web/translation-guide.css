@@ -54,21 +54,24 @@
 }
 .translation-guide-terms {
   display: grid;
-  gap: 12px;
+  gap: 20px;
 }
 .translation-guide-term {
   display: grid;
   grid-template-columns: 1fr 1fr auto;
   gap: 12px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-panel);
-  padding: 16px;
+  border: 0;
+  padding: 0;
   margin: 0;
   min-width: 0;
 }
+.translation-guide-term + .translation-guide-term {
+  border-top: var(--hairline) solid var(--line);
+  padding-top: 20px;
+}
 .translation-guide-term legend {
   color: var(--muted);
-  padding: 0 5px;
+  padding: 0 0 8px;
   font-size: var(--font-body);
 }
 .translation-guide-term-note {

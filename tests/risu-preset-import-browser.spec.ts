@@ -10,7 +10,7 @@ import { DESKTOP_WIDTH, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission through dialog close', async ({
   page,
   request,
-}) => {
+}, info) => {
   // The response fault is synthetic; conversion semantics are covered separately.
   const title = `RISUPRESETUI01 ${Date.now()}`;
   const response = await request.post('/api/prompt-presets', {
@@ -61,6 +61,16 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
   const save = dialog.getByRole('button', { name: '작문 프롬프트로 저장', exact: true });
   await expect(save).toBeDisabled();
   expect(submissions).toHaveLength(0);
+  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
+    const viewport = page.viewportSize()!;
+    for (const width of [412, 1440]) {
+      await page.setViewportSize({ ...viewport, width });
+      await page.screenshot({
+        path: info.outputPath(`risu-preset-import-unsupported-preview-${width}.png`),
+      });
+    }
+    await page.setViewportSize(viewport);
+  }
   await dialog.getByRole('button', { name: '프롬프트 가져오기 닫기', exact: true }).click();
   await trigger.click();
   await expect(dialog.getByRole('heading', { name: title })).toBeVisible();
@@ -70,6 +80,14 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
   await expect(dialog.getByRole('button', { name: '같은 요청으로 다시 확인' })).toBeVisible();
   await expect(dialog.getByLabel('Risu 프리셋 파일 선택', { exact: true })).toBeDisabled();
   await expect(dialog.getByRole('checkbox')).toBeDisabled();
+  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
+    const viewport = page.viewportSize()!;
+    for (const width of [412, 1440]) {
+      await page.setViewportSize({ ...viewport, width });
+      await page.screenshot({ path: info.outputPath(`risu-preset-import-uncertain-${width}.png`) });
+    }
+    await page.setViewportSize(viewport);
+  }
   await dialog.getByRole('button', { name: '프롬프트 가져오기 닫기', exact: true }).click();
   await trigger.click();
   await dialog.getByRole('button', { name: '같은 요청으로 다시 확인' }).click();
@@ -121,6 +139,14 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   });
   await expect(dialog.getByRole('heading', { name: title })).toBeVisible();
   await expect(dialog.getByRole('checkbox')).toHaveCount(0);
+  if (process.env.UIMORI_VISUAL_REVIEW === '1') {
+    const viewport = page.viewportSize()!;
+    for (const width of [412, 1440]) {
+      await page.setViewportSize({ ...viewport, width });
+      await page.screenshot({ path: info.outputPath(`risu-preset-import-preview-${width}.png`) });
+    }
+    await page.setViewportSize(viewport);
+  }
   const savedResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/risu-preset-imports/apply') &&

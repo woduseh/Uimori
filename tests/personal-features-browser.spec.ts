@@ -248,6 +248,14 @@ test('PWUI02 backup settings, status, verified download and retention are reacha
     );
     await page.screenshot({ path: info.outputPath(`backups-${width}.png`) });
   }
+  const scheduled = panel.getByLabel('서버 자동 백업', { exact: true });
+  await scheduled.check();
+  for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await scheduled.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`scheduled-backup-configuration-${width}.png`) });
+  }
+  await scheduled.uncheck();
 });
 
 test('PWUI03 real scene navigation syncs to another device without gating its manuscript or moving its open page; bookmarks save in one action', async ({

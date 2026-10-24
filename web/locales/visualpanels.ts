@@ -1,4 +1,40 @@
 export const messages = {
+  'visualpanels.fullLoreText': {
+    ko: '전문',
+    en: 'Full text',
+    ja: '全文',
+    zh: '全文',
+  },
+  'visualpanels.loreSource': {
+    ko: '출처',
+    en: 'Source',
+    ja: '出典',
+    zh: '来源',
+  },
+  'visualpanels.loreRecordId': {
+    ko: '기록 ID',
+    en: 'Record ID',
+    ja: '記録ID',
+    zh: '记录 ID',
+  },
+  'visualpanels.loreSourceId': {
+    ko: '자료 ID',
+    en: 'Resource ID',
+    ja: '資料ID',
+    zh: '资料 ID',
+  },
+  'visualpanels.loreEntryId': {
+    ko: '항목 ID',
+    en: 'Entry ID',
+    ja: '項目ID',
+    zh: '条目 ID',
+  },
+  'visualpanels.rawExecutionRecord': {
+    ko: '실행 원본 기록',
+    en: 'Raw execution record',
+    ja: '実行の元記録',
+    zh: '执行原始记录',
+  },
   'visualpanels.background': {
     ko: '바탕',
     en: 'Background',

@@ -3,6 +3,7 @@ import { LoadingState } from './LoadingState.js';
 import { useEffect, useState } from 'react';
 import type { SceneUsageDetail, SceneUsageReceipt } from '../core/scene-usage.js';
 import { api } from './api.js';
+import { RequestLoreEntries } from './RequestLoreEntries.js';
 import './scene-usage.css';
 
 const amount = (value: number | null) =>
@@ -80,13 +81,15 @@ export function SceneUsage({
         {receipt ? (
           <dl className="scene-receipt">
             <dt>{t('reader.model')}</dt>
-            <dd className="ui-meta-row">
+            <dd>
               <span>{receipt.model.title}</span>
-              <span>{receipt.model.modelId}</span>
+              {receipt.model.title.trim() !== receipt.model.modelId.trim() && (
+                <small className="scene-receipt-model-id">{receipt.model.modelId}</small>
+              )}
             </dd>
-            <dt>{t('reader.promptSelection')}</dt>
+            <dt>{t('reader.prompt')}</dt>
             <dd>{receipt.prompt?.title ?? t('reader.noSelectionRecord')}</dd>
-            <dt>{t('reader.personaSelection')}</dt>
+            <dt>{t('reader.persona')}</dt>
             <dd>
               {receipt.persona
                 ? (receipt.persona.name ?? receipt.persona.title ?? receipt.persona.id)
@@ -164,34 +167,10 @@ export function SceneUsage({
                 </p>
               )}
               {!!recordedDetail.lore?.entries.length && (
-                <ul className="scene-receipt-lore">
-                  {recordedDetail.lore.entries.map((entry, index) => (
-                    <li key={`${entry.id}:${entry.via}:${index}`} className="ui-meta-row">
-                      <span>{entry.title}</span>
-                      <span>
-                        {
-                          {
-                            pinned: t('reader.pinnedMaterial'),
-                            selected: t('reader.automaticallySelected'),
-                            retained: t('reader.includedInPreviousRequest'),
-                            'tool-result': t('reader.toolLookup'),
-                          }[entry.via]
-                        }
-                      </span>
-                      {entry.delivery !== 'full' && (
-                        <span>
-                          {
-                            {
-                              excerpt: t('reader.readPassage'),
-                              summary: t('reader.summaryOnly'),
-                              unverified: t('reader.inclusionUnknown'),
-                            }[entry.delivery]
-                          }
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <RequestLoreEntries entries={recordedDetail.lore.entries} />
+              )}
+              {recordedDetail.lore?.status === 'partial' && (
+                <p>{t('visualpanels.inclusionMayBeUncertainForMaterialProcessed')}</p>
               )}
             </>
           ) : open ? (

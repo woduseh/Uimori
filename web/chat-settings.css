@@ -128,29 +128,12 @@
 .chat-settings-panel .chat-composition-row {
   background: transparent;
   border: 0;
-  border-bottom: var(--hairline) solid var(--line);
   border-radius: 0;
-  padding: 18px 0;
+  padding: 14px 0;
   margin: 0;
-}
-.chat-composition-role {
-  display: block;
-  color: var(--muted);
-  margin-bottom: 12px;
-}
-.chat-composition-persona {
-  margin-bottom: 20px;
-}
-.chat-composition-add {
-  margin-top: 20px;
-}
-.chat-composition-add > summary {
-  min-height: 44px;
-  cursor: pointer;
-}
-.chat-settings-panel .chat-composition-add .package-entry {
-  border: 0;
-  padding: 8px 0;
+  display: grid;
+  min-width: 0;
+  gap: 4px;
 }
 @media (max-width: 760px) {
   .chat-profile-model-options > label,
@@ -168,30 +151,8 @@
 }
 
 .chat-settings-panel .package-attachments {
-  display: flex;
-  flex-direction: column;
-}
-.chat-settings-panel .chat-composition-persona {
-  order: 1;
-  margin-block: 20px;
-}
-.chat-settings-panel .chat-composition-row {
-  order: 2;
-}
-.chat-settings-panel .package-attachment-fixed-bot {
-  order: 0;
-}
-.chat-settings-panel .chat-composition-add {
-  order: 3;
-}
-
-/* Keep the attachment identity compact even when other editor headers stack on phones. */
-.chat-settings-panel .chat-composition-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px 12px;
-  padding-block: 14px;
+  gap: 0;
 }
 .chat-settings-panel .chat-composition-row > header {
   display: flex;
@@ -201,29 +162,67 @@
   gap: 10px;
   min-width: 0;
 }
-.chat-settings-panel .chat-composition-row > header > .content-avatar {
-  --content-avatar-size: 36px;
-  flex: 0 0 36px;
-}
-.chat-settings-panel .chat-composition-row > header > div {
-  min-width: 0;
+.chat-settings-panel .chat-composition-identity {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.chat-settings-panel .chat-composition-row .content-avatar {
+  --content-avatar-size: 36px;
+}
+.chat-settings-panel .chat-composition-identity > div {
+  min-width: 0;
 }
 .chat-settings-panel .chat-composition-row h3 {
   margin: 0;
-  font-size: var(--font-heading);
+  font-size: var(--font-body);
   overflow-wrap: anywhere;
 }
-.chat-settings-panel .chat-composition-row > small:not(.chat-composition-role) {
+.chat-settings-panel .chat-composition-identity small,
+.chat-settings-panel .chat-composition-count,
+.chat-settings-panel .chat-composition-persona .content-picker-label {
   color: var(--muted);
   font-size: var(--font-small);
 }
-.chat-settings-panel .chat-composition-row > .chat-composition-role,
-.chat-settings-panel .chat-composition-row > details,
-.chat-settings-panel .chat-composition-row > p {
-  grid-column: 1 / -1;
+.chat-settings-panel .chat-composition-count {
+  flex-shrink: 0;
 }
-.chat-settings-panel .chat-composition-row > .chat-composition-role {
+.chat-settings-panel .chat-composition-row > p {
+  margin: 0;
+  font-size: var(--font-small);
+}
+.chat-settings-panel .chat-composition-persona .content-picker {
+  flex: 1;
+  gap: 4px;
+}
+.chat-settings-panel .chat-composition-persona .content-picker-trigger {
+  min-height: var(--control-h);
+  padding: 4px 8px 4px 0;
+  border-color: transparent;
+  background: transparent;
+}
+.chat-settings-panel .chat-composition-persona .content-picker-trigger:hover {
+  background: var(--surface);
+}
+.chat-settings-panel .chat-composition-lore > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  width: fit-content;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: var(--font-small);
+  cursor: pointer;
+}
+.chat-settings-panel .chat-composition-lore-list {
+  display: grid;
+  gap: 8px;
+  padding-block: 4px 8px;
+}
+.chat-settings-panel .chat-composition-lore-list p {
   margin: 0;
 }
 
@@ -244,10 +243,6 @@
   margin-left: auto;
   color: var(--muted);
 }
-.chat-settings-image-management > .workspace-tools > p.muted {
-  display: none;
-}
-
 /* Chat overrides use the same groups as app settings. Scope this treatment to the
    dialog so compact inline resource editors keep their own layout. */
 .chat-settings-panel .profile-fields,
@@ -299,7 +294,6 @@
 .chat-settings-panel .settings-inherited > dl > div + div {
   border-top: var(--hairline) solid var(--line);
 }
-.chat-settings-panel .package-attachments,
 .chat-settings-panel .context-content,
 .chat-settings-panel .illustration-reference-options:not(:empty),
 .chat-settings-panel .workspace-tools > form {
@@ -309,27 +303,13 @@
   padding: 0 16px;
   min-width: 0;
 }
-.chat-settings-panel .chat-composition-row {
-  border-bottom: 0;
-}
-.chat-settings-panel .chat-composition-row:not(.package-attachment-fixed-bot),
+.chat-settings-panel .chat-composition-row ~ .chat-composition-row,
 .chat-settings-panel .chat-composition-add {
-  border-top: var(--hairline) solid var(--line);
-}
-.chat-settings-panel .chat-composition-persona {
-  margin-block: 0;
-  padding-block: 16px;
   border-top: var(--hairline) solid var(--line);
 }
 .chat-settings-panel .chat-composition-add {
   margin-top: 0;
-  padding-top: 12px;
-}
-.chat-settings-panel .chat-composition-persona .content-picker {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 44%);
-  align-items: center;
-  gap: 20px;
+  padding-block: 14px;
 }
 .chat-settings-panel .context-content {
   display: grid;
@@ -382,10 +362,4 @@
 }
 .chat-settings-panel .chat-variable-editor > .form-actions {
   border-top: 0;
-}
-@media (max-width: 760px) {
-  .chat-settings-panel .chat-composition-persona .content-picker {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
 }

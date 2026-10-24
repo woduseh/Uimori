@@ -1049,23 +1049,23 @@ export function ConnectionEditor({
             <ModelIcon size={18} aria-hidden="true" />
             {t('providers.m63')}
           </button>
-          <IconButton
-            label={t('providers.m64')}
-            icon={RefreshIcon}
-            className="provider-refresh"
-            hidden={screen === 'jev'}
-            disabled={busy}
-            onClick={() => {
-              void perform(async () => {
-                await reload();
-                setJevListRefresh((value) => value + 1);
-                setMessage(uiMessage('providers.m65'));
-              });
-            }}
-          />
         </div>
       </div>
-      {jevListError && <NoticeBanner tone="error">{t('providers.m66')}</NoticeBanner>}
+      {jevListError && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            <IconButton
+              label={t('providers.m64')}
+              icon={RefreshIcon}
+              disabled={busy}
+              onClick={() => setJevListRefresh((value) => value + 1)}
+            />
+          }
+        >
+          {t('providers.m66')}
+        </NoticeBanner>
+      )}
       {(screen === 'models' || screen === 'connections') && (
         <>
           {((screen === 'models' ? library.models.length : library.connections.length) > 0 ||
@@ -1129,10 +1129,6 @@ export function ConnectionEditor({
             <div className="provider-welcome">
               <ConnectionIcon size={28} aria-hidden="true" />
               <h4>{t('providers.m78')}</h4>
-              <ol className="provider-steps" aria-label={t('providers.m83')}>
-                <li>{t('providers.m85')}</li>
-                <li>{t('providers.m86')}</li>
-              </ol>
               <button type="button" disabled={busy} onClick={newConnection}>
                 {t('providers.m72')}
                 <ForwardIcon size={18} aria-hidden="true" />

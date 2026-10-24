@@ -92,7 +92,7 @@
   min-width: 0;
 }
 .activity-notification-heading small {
-  display: block;
+  display: flex;
   overflow-wrap: anywhere;
   color: var(--muted);
   margin-top: 4px;

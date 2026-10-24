@@ -385,6 +385,15 @@ test('ACTUI06 old notification pages, bulk confirmation and execution identity s
   const dialog = page.getByRole('dialog', { name: '작업 알림', exact: true });
   const rows = dialog.getByTestId('activity-notice');
   await expect(rows).toHaveCount(30);
+  const metadata = rows.first().locator('.activity-notification-heading .ui-meta-row');
+  expect(
+    await metadata.evaluate((element) => {
+      const [date, identity] = Array.from(element.children).map((child) =>
+        child.getBoundingClientRect()
+      );
+      return identity.top >= date.bottom || identity.left >= date.right + 4;
+    })
+  ).toBe(true);
   await dialog.getByRole('button', { name: '이전 작업 더 보기', exact: true }).click();
   await expect(rows).toHaveCount(42);
   expect(state.historyReads).toEqual(['first', 'synthetic-older-page']);

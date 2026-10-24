@@ -24,7 +24,7 @@ for (const viewport of viewports) {
   test(`DECISION resource conflict review and failed recovery preserve input at ${viewport.width}px`, async ({
     page,
     request,
-  }) => {
+  }, info) => {
     await page.setViewportSize(viewport);
     const title = `Decision ${randomUUID().slice(0, 8)}`;
     const response = await request.post('/api/prompt-presets', {
@@ -70,6 +70,9 @@ for (const viewport of viewports) {
     await expect(review).toBeVisible();
     await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
     await expect(review).toContainText('Changed elsewhere');
+    await page.screenshot({
+      path: info.outputPath(`resource-conflict-review-${viewport.width}.png`),
+    });
     await review.getByRole('button', { name: '현재 입력 유지', exact: true }).click();
     await expect(body).toHaveValue('Keep my unsaved instructions');
     expect(saves).toBe(1);

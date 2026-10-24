@@ -538,14 +538,6 @@ export function NativeRisuLoreEditor({
                     onChange={(e) => edit({ content: e.target.value })}
                   />
                 </label>
-                <label className="check nl-switch">
-                  {t('native.text_7f3ba385e9')}
-                  <Switch
-                    aria-label={t('native.text_4096a642b1')}
-                    checked={entry.enabled !== false}
-                    onChange={(e) => edit({ enabled: e.target.checked })}
-                  />
-                </label>
                 <details className="native-advanced nl-advanced" key={index}>
                   <summary>{t('native.text_bf1eea5b75')}</summary>
                   <label>

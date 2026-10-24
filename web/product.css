@@ -171,6 +171,9 @@
 .asset-grid small {
   display: block;
 }
+.asset-grid small.ui-meta-row {
+  display: flex;
+}
 .asset-grid:has(> figure > figcaption > details[open]) {
   max-height: none;
 }

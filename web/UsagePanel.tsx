@@ -307,13 +307,13 @@ export function UsagePanel({
             <section aria-label={t('visualpanels.usageCalls')}>
               <h4>{t('visualpanels.calls')}</h4>
               <strong>{usageNumber(current.totals.calls)}</strong>
-              <small>
-                {current.totals.runningCalls
-                  ? t('visualpanels.includesVPluralOneOtherInProgress', {
-                      v0: current.totals.runningCalls,
-                    })
-                  : t('visualpanels.basedOnActualSends')}
-              </small>
+              {current.totals.runningCalls > 0 && (
+                <small>
+                  {t('visualpanels.includesVPluralOneOtherInProgress', {
+                    v0: current.totals.runningCalls,
+                  })}
+                </small>
+              )}
             </section>
             <section aria-label={t('visualpanels.usedTokens')}>
               <h4>{t('visualpanels.knownTokens')}</h4>
@@ -353,7 +353,9 @@ export function UsagePanel({
               )}
             </section>
           </div>
-          <p className="usage-note">{t('visualpanels.costsUseRecordsFromTheTimeOf')}</p>
+          {current.totals.calls > 0 && (
+            <p className="usage-note">{t('visualpanels.costsUseRecordsFromTheTimeOf')}</p>
+          )}
           {current.totals.calls === 0 ? (
             <p className="usage-period-empty" role="status">
               {t('visualpanels.noRecordsForTheSelectedPeriod')}

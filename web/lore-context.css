@@ -78,9 +78,7 @@
   min-width: 0;
 }
 .lore-context-result {
-  padding: 12px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-control);
+  padding-block: 12px;
 }
 .lore-context-stats {
   display: grid;
@@ -92,6 +90,69 @@
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+.request-lore-groups {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin-block: 12px;
+}
+.request-lore-group {
+  min-width: 0;
+}
+.request-lore-group-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: var(--font-small);
+  font-weight: 500;
+}
+.request-lore-count {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+.request-lore-entries {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.request-lore-entries > li {
+  display: block;
+  min-width: 0;
+  border-top: var(--hairline) solid var(--line);
+}
+.request-lore-entries > li > details > summary {
+  min-height: var(--control-h);
+  padding-block: 6px;
+  align-content: center;
+  cursor: pointer;
+  color: var(--text);
+  font-size: var(--font-body);
+  overflow-wrap: anywhere;
+}
+.request-lore-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 0 0 12px;
+  font-size: var(--font-small);
+  color: var(--muted);
+}
+.request-lore-source-name {
+  display: block;
+  margin-inline-start: 16px;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.request-lore-identity dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 .lore-context-stats dt {
   font-size: var(--font-small);
@@ -108,7 +169,18 @@
   min-width: 0;
 }
 .lore-context-entries > li {
-  margin-bottom: 14px;
+  padding-block: 6px;
+}
+.lore-context-entries > li + li {
+  border-top: var(--hairline) solid var(--line);
+}
+.lore-context-entries > li > details > summary {
+  min-height: var(--control-h);
+  align-content: center;
+  cursor: pointer;
+}
+.lore-context-entries > li > details > :not(summary) {
+  margin-top: 6px;
 }
 .lore-context-entries > li > span,
 .lore-context-entries > li > small {
@@ -150,7 +222,7 @@
 }
 .lore-context-advanced > summary,
 .lore-context-preview > summary {
-  min-height: 28px;
+  min-height: var(--control-h);
   cursor: pointer;
 }
 .lore-context-advanced[open] > * + * {

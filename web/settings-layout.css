@@ -24,10 +24,10 @@
 }
 .settings-group-body {
   min-width: 0;
-  padding: 0 16px;
-  border: var(--hairline) solid var(--line);
-  border-radius: var(--radius-panel);
-  background: var(--panel);
+  padding: 0;
+}
+.settings-desktop-panels > summary {
+  font-weight: 500;
 }
 .settings-row {
   display: grid;

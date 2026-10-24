@@ -302,13 +302,17 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     const lore = usage.getByRole('region', { name: '요청에 포함된 로어' });
     await expect(lore).toContainText('포함된 로어, 4건');
     await expect(lore).toContainText('항구의 지도와 오래된 등대');
-    await expect(lore).toContainText('출처: 항구 이야기');
+    const pinnedLore = lore.getByRole('listitem').filter({ hasText: '항구의 지도와 오래된 등대' });
+    await pinnedLore.locator('summary').click();
+    await expect(pinnedLore.getByText('출처', { exact: true })).toBeVisible();
+    await expect(pinnedLore.getByText('항구 이야기', { exact: true })).toBeVisible();
+    await pinnedLore.locator('summary').click();
     await expect(
-      lore.getByRole('listitem').filter({ hasText: '항구의 지도와 오래된 등대' })
+      lore.locator('.request-lore-group').filter({ hasText: '항구의 지도와 오래된 등대' })
     ).toContainText('고정 자료');
-    await expect(lore.getByRole('listitem').filter({ hasText: '이번 장면의 항구' })).toContainText(
-      '자동 선택'
-    );
+    await expect(
+      lore.locator('.request-lore-group').filter({ hasText: '이번 장면의 항구' })
+    ).toContainText('자동 선택');
     await expect(lore).not.toContainText('전체 본문');
     await expect(lore).toContainText(/이전 요청 포함\s*읽은 구간/);
     await expect(lore).toContainText('읽은 구간');

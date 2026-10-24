@@ -11,8 +11,9 @@ import { LoadingState } from './LoadingState.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import type { OutlineTarget } from '../core/outline.js';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, Copy, History, Square, X, Settings2 } from 'lucide-react';
-import { SaveIcon, SettingsIcon, CloseIcon } from './ui-icons.js';
+import { ArrowUp, Check, Copy, History, Square, X, Settings2, ChevronDown } from 'lucide-react';
+import { SettingsIcon, CloseIcon } from './ui-icons.js';
+import type { Library } from '../core/product.js';
 import type {
   HelperConversation,
   HelperEditor,
@@ -50,6 +51,10 @@ import {
 } from './resource-editor.js';
 import { useHelperSessions } from './useHelperSessions.js';
 import { HelperSessionBar } from './HelperSessionBar.js';
+import { HelperModelPicker } from './HelperModelPicker.js';
+import { SaveButton } from './SaveButton.js';
+import { TransientNotice } from './TransientNotice.js';
+import { modelLabel } from './storyLabels.js';
 import {
   cachedHelperRecovery,
   clearHelperRecoveryIf,
@@ -76,6 +81,9 @@ type Props = {
   onModelSettings: () => void;
   /** Current global helper model, worded like the reader's main-model chip. */
   modelDescription: string;
+  modelTitle: string;
+  modelRevision: number;
+  library: Library | null;
 };
 type Outbox = {
   retryOf?: string;
@@ -308,6 +316,15 @@ export function HelperPanel(props: Props) {
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
   const [editor, setEditor] = useState<ActiveEditorContext | null>(null);
   const [settings, setSettings] = useState(false);
+  const [modelPicker, setModelPicker] = useState(false);
+  const [savedModel, setSavedModel] = useState<{
+    id: string | undefined;
+    revision: number;
+  } | null>(null);
+  const [saveNotice, setSaveNotice] = useState('');
+  useEffect(() => {
+    if (!props.open) setModelPicker(false);
+  }, [props.open]);
   const [taskHistory, setTaskHistory] = useState<{ taskId?: string } | null>(null);
   const [hiddenActivity, setHiddenActivity] = useState<string[]>([]);
   const [openTaskActivities, setOpenTaskActivities] = useState<Record<string, boolean>>({});
@@ -861,6 +878,16 @@ export function HelperPanel(props: Props) {
       )}
     </div>
   );
+  const confirmedModel =
+    savedModel && savedModel.revision > props.modelRevision ? savedModel : null;
+  const savedModelPreset = props.library?.models.find((model) => model.id === confirmedModel?.id);
+  const modelDescription = confirmedModel
+    ? savedModelPreset
+      ? modelLabel(savedModelPreset, props.library)
+      : confirmedModel.id
+        ? t('main.m011')
+        : t('helpers.modelPickerNone')
+    : props.modelDescription;
   return (
     <aside
       id="helper-panel"
@@ -897,9 +924,28 @@ export function HelperPanel(props: Props) {
         <div>
           <h2>{scope.kind === 'chat' ? t('helpers.chatTitle') : t('helpers.libraryTitle')}</h2>
         </div>
+        <button
+          type="button"
+          className="model-chip secondary helper-model-chip"
+          aria-haspopup="dialog"
+          aria-expanded={modelPicker}
+          aria-label={t('helpers.m049', { v0: modelDescription })}
+          title={t('helpers.modelPickerScope')}
+          disabled={!props.library}
+          onClick={() => setModelPicker(true)}
+        >
+          <span>
+            {confirmedModel ? (savedModelPreset?.title ?? modelDescription) : props.modelTitle}
+          </span>
+          <ChevronDown size={14} aria-hidden="true" />
+        </button>
         <IconButton
           label={t('helpers.m044')}
           icon={Settings2}
+          aria-pressed={settings}
+          aria-expanded={settings && !!conversation}
+          aria-controls="helper-tone-settings"
+          disabled={!conversation}
           onClick={() => setSettings((value) => !value)}
         />
         <button
@@ -912,6 +958,25 @@ export function HelperPanel(props: Props) {
           <X size={20} />
         </button>
       </header>
+      {props.library && (
+        <HelperModelPicker
+          open={modelPicker && props.open}
+          library={props.library}
+          onClose={() => setModelPicker(false)}
+          onManage={() => {
+            setModelPicker(false);
+            props.onModelSettings();
+          }}
+          onSaved={(workspace) =>
+            setSavedModel((old) =>
+              old && old.revision > workspace.revision
+                ? old
+                : { id: workspace.helperModel?.id, revision: workspace.revision }
+            )
+          }
+        />
+      )}
+      <TransientNotice message={saveNotice} />
       {props.outlineWorkspace && (
         <div className="outline-helper-return">
           <button
@@ -946,24 +1011,8 @@ export function HelperPanel(props: Props) {
         <NoticeBanner className="helper-scope-notice">{t('helpers.m047')}</NoticeBanner>
       )}
       {settings && conversation && (
-        <div className="helper-settings">
+        <div className="helper-settings" id="helper-tone-settings">
           <div className="helper-settings-body">
-            <section className="settings-group">
-              <header className="settings-group-heading">
-                <h3>{t('helpers.m048')}</h3>
-              </header>
-              <div className="settings-group-body helper-model">
-                <button
-                  type="button"
-                  className="model-chip secondary"
-                  aria-label={t('helpers.m049', { v0: props.modelDescription })}
-                  title={t('helpers.m050')}
-                  onClick={props.onModelSettings}
-                >
-                  <span>{props.modelDescription}</span>
-                </button>
-              </div>
-            </section>
             <section className="settings-group">
               <header className="settings-group-heading">
                 <h3>{t('helpers.sessionVoice')}</h3>
@@ -1017,10 +1066,10 @@ export function HelperPanel(props: Props) {
             >
               {t('helpers.m057')}
             </button>
-            <button
+            <SaveButton
               type="button"
-              aria-label={t('helpers.m058')}
-              title={t('helpers.m058')}
+              label={t('helpers.m058')}
+              aria-busy={savingPersona}
               disabled={
                 props.ready === false ||
                 scopeMismatch ||
@@ -1030,6 +1079,7 @@ export function HelperPanel(props: Props) {
               onClick={() => {
                 if (props.ready === false || scopeMismatch) return;
                 setSavingPersona(true);
+                setSaveNotice('');
                 void api<HelperConversation>(
                   `/helper/conversations/${conversation.id}`,
                   {
@@ -1039,6 +1089,7 @@ export function HelperPanel(props: Props) {
                   'PATCH'
                 )
                   .then((value) => {
+                    setSaveNotice(uiMessage('helpers.toneSaved'));
                     data.updateConversation(value);
                     setPersonas((old) => ({
                       ...old,
@@ -1062,10 +1113,7 @@ export function HelperPanel(props: Props) {
                   })
                   .finally(() => setSavingPersona(false));
               }}
-            >
-              <SaveIcon size={18} aria-hidden="true" />
-              {t('helpers.m059')}
-            </button>
+            />
           </div>
         </div>
       )}

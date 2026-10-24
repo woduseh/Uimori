@@ -79,6 +79,8 @@ Risu 메시지의 기본 글자색·글자 크기·글꼴·줄간격은 상속�
 
 Each independent chat can have multiple helper sessions. A session owns its conversation, draft and context; closing the panel or selecting another session does not cancel its work. Tools can explicitly target another chat when requested. Copying a chat produces an independent chat, not a shared branch with a mutable default.
 
+The helper header opens the searchable model picker directly. Selecting a model updates the global helper role for the next request; it does not change the current chat's main model, prompt choices or another role. A failed or uncertain change requires an explicit reread before another selection. Newer confirmed revisions take precedence over delayed acknowledgements in the header and picker.
+
 새 도우미 세션을 만들거나 같은 대화를 이어갈 수 있어요. 도우미 세션의 신규 분기는 제공하지 않지만 기존 분기 대화와 복사된 기록은 계속 읽고 이어갈 수 있어요. 소설 채팅 사본은 별도 기능으로 유지해요. 현재 편집 중인 자료는 표시하고 요청할 때 최신 초안을 자동으로 참고해요. 초안 조회·저장 오류와 충돌은 해당 편집기에서 확인해요.
 
 대화별 호출 한도는 편집하지 않아요. 새로 접수하는 작업은 내부 정책인 도우미 판단 64회·전체 모델 호출 128회와 호스트 도구 호출 256회를 사용해요. 이미 접수한 작업은 저장된 호출 한도를 유지해요. 20분 실행 기한과 취소·작업별 재시도도 유지해요. 네이티브 Codex의 내부 모델 요청은 관측할 수 없으므로 이 한도는 비용 상한을 뜻하지 않아요.

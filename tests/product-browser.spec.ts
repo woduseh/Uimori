@@ -144,13 +144,15 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
         .locator('button .section-navigation-title')
     ).toHaveText(sections);
   await selectChatSettingsSection(page, '사용 자료');
-  await page.getByText('함께 사용하는 모듈', { exact: true }).click();
-  await selectContent(page, '추가할 패키지', added.title);
+  await selectContent(page, '함께 사용하는 모듈', added.title);
   await expect(
     profile
       .locator('.package-attachment')
       .filter({ has: page.getByRole('heading', { name: added.title, exact: true }) })
   ).toBeVisible();
+  await expect(
+    profile.locator('.package-attachment').filter({ hasText: added.title }).locator('details')
+  ).toHaveCount(0);
   expect((await getDetail(request, chat.id)).profile?.packageAttachments).toEqual([owner]);
   await expect(page.getByRole('button', { name: '패키지 장착', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();

@@ -209,13 +209,16 @@ export function RunTaskDetails({
                   reset={full.snapshot.loreContextReset}
                 />
                 <LoreSelectionStatus snapshot={full.snapshot} />
-                <pre>
-                  {JSON.stringify(
-                    { snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents },
-                    null,
-                    2
-                  )}
-                </pre>
+                <details className="run-raw-record">
+                  <summary>{t('visualpanels.rawExecutionRecord')}</summary>
+                  <pre>
+                    {JSON.stringify(
+                      { snapshot: full.snapshot, inputs: full.inputs, toolEvents: full.toolEvents },
+                      null,
+                      2
+                    )}
+                  </pre>
+                </details>
               </>
             )}
           </LazyDiagnostics>

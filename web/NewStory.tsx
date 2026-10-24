@@ -20,6 +20,7 @@ import './package-authoring.css';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
 import type { ContentRole } from '../core/risu-content.js';
+import { CloseIcon } from './ui-icons.js';
 import { newChatPersona, type BotDefaults } from '../core/bot-defaults.js';
 import './new-story.css';
 
@@ -673,14 +674,15 @@ export function NewStory({
                     <span>{item?.title ?? t('transfer.m347')}</span>
                     <button
                       type="button"
-                      className="ghost"
+                      className="ghost icon-button"
                       disabled={locked}
                       aria-label={t('transfer.d030', { v0: item?.title ?? t('transfer.m003') })}
+                      title={t('transfer.d030', { v0: item?.title ?? t('transfer.m003') })}
                       onClick={() =>
                         setModules((values) => values.filter((value) => value !== key))
                       }
                     >
-                      {t('transfer.m348')}
+                      <CloseIcon size={18} aria-hidden="true" />
                     </button>
                   </div>
                 );

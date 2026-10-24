@@ -276,9 +276,6 @@ export function NativeRisuPresetEditor({
         <div className="native-item-detail">
           {!!items.length && (
             <div className="native-mobile-picker">
-              <button type="button" disabled={index === 0} onClick={() => setSelected(index - 1)}>
-                {t('native.text_dc03452ea5')}
-              </button>
               <select
                 aria-label={t('native.text_429c4628a8')}
                 value={index}
@@ -290,13 +287,6 @@ export function NativeRisuPresetEditor({
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
-                disabled={index >= items.length - 1}
-                onClick={() => setSelected(index + 1)}
-              >
-                {t('native.text_854c76f3bc')}
-              </button>
               <IconButton label={t('native.text_454e043199')} icon={AddIcon} onClick={add} />
             </div>
           )}
