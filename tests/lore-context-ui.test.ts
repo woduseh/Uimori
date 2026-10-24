@@ -104,7 +104,8 @@ describe('lore context UI boundaries', () => {
     const before = structuredClone(snapshot),
       html = renderToStaticMarkup(createElement(LoreContextDiagnostics, { snapshot, reset: true }));
     expect(html).toContain(`UTF-16 5–${5 + text.length}`);
-    expect(html).toContain('처음 읽은 원문 source-one · Run run-one');
+    expect(html).toContain('처음 읽은 원문 source-one');
+    expect(html).toContain('Run run-one');
     expect(html).toContain('4자');
     expect(html).toContain('조회 로어 예산에 맞춰 정리');
     expect(html).toContain('12 / 16,000토큰');

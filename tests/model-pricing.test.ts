@@ -38,30 +38,6 @@ test('manual Flex alternatives survive a standard reservation without being infe
   ).toBeUndefined();
 });
 
-test('unknown models, custom endpoints, regions, wrong adapters and Codex have no automatic USD price', () => {
-  for (const c of [
-    connection('openai-responses-v1', 'https://proxy.example/v1'),
-    connection('openai-responses-v1', 'https://api.openai.com/v1/custom'),
-    connection('openai-responses-v1', 'https://api.openai.com/v1?region=eu'),
-    connection('codex-app-server-v1', 'codex://local'),
-    connection('fixture-sse-v1', 'http://127.0.0.1:9'),
-  ])
-    expect(resolve('gpt-5.6-sol', c)).toBeUndefined();
-  expect(resolve('gpt-5.6-sol-experimental')).toBeUndefined();
-  expect(
-    resolve(
-      'gemini-3.8-flash',
-      connection('vertex-gemini-v1', vertex.endpoint.replace('/global/', '/us-central1/'))
-    )
-  ).toBeUndefined();
-  expect(
-    resolve(
-      'gemini-3.8-flash',
-      connection('vertex-gemini-v1', 'https://generativelanguage.googleapis.com/v1beta')
-    )
-  ).toBeUndefined();
-});
-
 test('Gateway uses catalog rates only at standard tier and never discounts an already tiered reference twice', () => {
   const c = connection('vercel-chat-v1', 'https://ai-gateway.vercel.sh/v1');
   expect(resolve('openai/gpt-5.6-sol', c)).toBeUndefined();

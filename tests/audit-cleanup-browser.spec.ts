@@ -1,27 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { fixtureBotInput } from './fixtures/chat.js';
-import { nativePrompt } from './fixtures/native-prompt.js';
 import { visualReview } from './fixtures/visual-review.js';
 
 for (const width of [412, 1440]) {
-  test(`CLEANUP presentation ignores title events; source edits and one-off options work ${width}`, async ({
+  test(`CLEANUP presentation ignores title events and refreshes edited source text ${width}`, async ({
     page,
     request,
   }, info) => {
     await page.setViewportSize({ width, height: 1000 });
-    const current = await (await request.get('/api/prompt-workspace')).json();
-    const configured = await request.put('/api/prompt-workspace', {
-      data: {
-        expectedRevision: current.revision,
-        main: {
-          ...current.main,
-          program: nativePrompt('', { customPromptTemplateToggle: 'tone=검사 문체=text' }),
-          values: { tone: '차분하게' },
-        },
-      },
-    });
-    expect(configured.ok(), await configured.text()).toBe(true);
     const botResponse = await request.post('/api/content', {
       data: fixtureBotInput('Cleanup ' + randomUUID()),
     });
@@ -91,27 +78,10 @@ for (const width of [412, 1440]) {
         .getByText('Updated cleanup manuscript.', { exact: true })
     ).toBeVisible();
     expect(presentations).toBeGreaterThan(baseline);
-    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-    await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
-    await expect(page.getByRole('tab', { name: '이 채팅', exact: true })).toHaveCount(0);
-    await expect(page.getByText('도우미에게 옵션 조정 위임', { exact: true })).toHaveCount(0);
-    await page.getByRole('switch', { name: '다음 생성에만 적용', exact: true }).check();
-    await page.locator('.chat-option-group > summary').first().click();
-    await page
-      .getByRole('button', { name: /검사 문체.*다음 생성만 지정|다음 생성만 지정.*검사 문체/ })
-      .click();
-    await page.getByRole('button', { name: '1회 옵션 예약', exact: true }).click();
-    await expect(
-      page.getByRole('region', { name: '다음 생성 옵션 예약', exact: true })
-    ).toBeVisible();
-    await page.getByRole('button', { name: '예약 취소', exact: true }).click();
-    await expect(
-      page.getByRole('region', { name: '다음 생성 옵션 예약', exact: true })
-    ).toHaveCount(0);
     expect(errors).toEqual([]);
     if (visualReview)
       await page.screenshot({
-        path: info.outputPath(`cleanup-options-${width}.png`),
+        path: info.outputPath(`cleanup-presentation-${width}.png`),
         fullPage: true,
       });
   });

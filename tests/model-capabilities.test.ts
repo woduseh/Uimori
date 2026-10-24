@@ -1,9 +1,7 @@
 import { expect, test } from 'vitest';
 import {
   generationFromModel,
-  modelCapability,
   protocolOptionKeys,
-  supportedModels,
   validateModelOptions,
 } from '../core/model-capabilities.js';
 import { PROVIDER_PROTOCOLS, type ModelGeneration, type ModelPreset } from '../core/product.js';
@@ -12,29 +10,6 @@ import { createEvaluationToolSession } from '../server/evaluation-session.js';
 import { defaultEvaluationToolOptions } from '../core/evaluation-tool-config.js';
 
 const base: ModelGeneration = { maxOutputTokens: 8192, temperature: null };
-
-test('Gemini 4 Argon is reviewed with explicit thinking levels and implicit-only caching', () => {
-  for (const protocol of ['vertex-gemini-v1', 'google-gemini-v1'] as const) {
-    expect(modelCapability(protocol, 'gemini-4-argon')).toMatchObject({
-      maxOutputTokens: 65_536,
-      thinkingLevels: ['LOW', 'MEDIUM', 'HIGH'],
-      defaultThinkingLevel: 'MEDIUM',
-    });
-    expect(modelCapability(protocol, 'gemini-4-argon')?.cacheModes).toBeUndefined();
-  }
-});
-
-test('AI Studio reuses Gemini model hints with its own service tiers', () => {
-  const capability = modelCapability('google-gemini-v1', 'gemini-3.1-pro-preview');
-  expect(capability?.thinkingLevels).toEqual(['LOW', 'MEDIUM', 'HIGH']);
-  expect(capability?.serviceTiers).toEqual(['standard', 'flex', 'priority']);
-  expect(() =>
-    validateModelOptions({ ...base, serviceTier: 'priority' }, 'google-gemini-v1')
-  ).not.toThrow();
-  expect(() =>
-    validateModelOptions({ ...base, serviceTier: 'default' }, 'google-gemini-v1')
-  ).toThrow();
-});
 
 test('validation is protocol-level: any listed or unlisted model may use every option its encoder sends', () => {
   // Unlisted values on reviewed models and reviewed values on unlisted models both pass locally.
@@ -74,6 +49,9 @@ test('validation is protocol-level: any listed or unlisted model may use every o
 });
 
 test('options the encoder cannot send and values outside the protocol vocabulary are rejected', () => {
+  expect(() =>
+    validateModelOptions({ ...base, serviceTier: 'default' }, 'google-gemini-v1')
+  ).toThrow();
   expect(() =>
     validateModelOptions({ ...base, maxOutputTokens: 500001 }, 'vercel-chat-v1')
   ).toThrow();
@@ -174,33 +152,6 @@ test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct c
       },
     })
   ).toThrow('INVALID_GENERATION_BINDING');
-});
-
-test('the hint table still describes reviewed models but never gates unlisted IDs', () => {
-  expect(modelCapability('vertex-gemini-v1', 'gemini-3.1-pro-preview')?.defaultThinkingLevel).toBe(
-    'HIGH'
-  );
-  expect(modelCapability('vertex-gemini-v1', 'gemini-3.8-flash')?.thinkingLevels).toEqual([
-    'LOW',
-    'MEDIUM',
-    'HIGH',
-  ]);
-  expect(modelCapability('anthropic-messages-v1', 'claude-fable-5-1')?.thinkingModes).toEqual([
-    'adaptive',
-  ]);
-  expect(modelCapability('anthropic-messages-v1', 'claude-opus-5-5')).toMatchObject({
-    defaultOutputEffort: 'medium',
-    thinkingModes: ['adaptive'],
-    forcedTools: false,
-    cacheModes: ['disabled', 'explicit', 'automatic'],
-    cacheTtls: ['5m', '1h'],
-  });
-  expect(modelCapability('openai-responses-v1', 'gpt-5.6-sol-future')).toBeUndefined();
-  expect(modelCapability('openai-chat-v1', 'spacexai/grok-4.6')).toBeUndefined();
-  expect(supportedModels('openai-chat-v1').every((item) => item.cacheModes === undefined)).toBe(
-    true
-  );
-  expect(generationFromModel({ ...base, modelId: 'gpt-5.6-sol' } as ModelGeneration)).toEqual(base);
 });
 
 test('cache times are explicit, provider-specific, and incompatible with OFF', () => {

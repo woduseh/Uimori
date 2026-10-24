@@ -82,7 +82,6 @@ describe('offline text token counting', () => {
   it('preserves the existing bounded algorithm across mixed Unicode chunk boundaries', () => {
     const text = `${'a'.repeat(4095)}😀日本語 한국어\n${' hello'.repeat(1500)}`;
     expect(countTextTokens(text)).toBe(boundedReference(text));
-    expect(countTextTokens(text)).toBe(boundedReference(text));
   });
 
   it('does not add JSON quoting or the request safety margin to plain text', () => {

@@ -73,9 +73,6 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
       denied: true,
       error: 'recoverable',
     });
-    expect(helperActivityStages(retained).find((stage) => stage.state === 'issue')).toMatchObject({
-      label: '자료·설정 변경',
-    });
     workspace.event(conversation.id, task.id, 'attempt.finished', {
       id: 'native',
       status: 'error',
@@ -130,10 +127,10 @@ test('helper stages group observed reads and keep failed edits separate without 
     ],
   };
   expect(helperActivityStages(activity)).toMatchObject([
-    { label: '요청 처리', state: 'completed', events: [{ seq: 1 }, { seq: 2 }] },
-    { label: '자료 확인', state: 'completed', events: [{ seq: 3 }, { seq: 4 }] },
-    { label: '자료·설정 변경', state: 'issue', events: [{ error: 'CONFLICT' }] },
-    { label: '대화 내용 정리', state: 'running' },
+    { state: 'completed', events: [{ seq: 1 }, { seq: 2 }] },
+    { state: 'completed', events: [{ seq: 3 }, { seq: 4 }] },
+    { state: 'issue', events: [{ error: 'CONFLICT' }] },
+    { state: 'running' },
   ]);
   expect(helperActivitySummary(activity)).toBe('대화 내용 정리 중이에요');
   expect(

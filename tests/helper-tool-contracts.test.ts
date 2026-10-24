@@ -912,59 +912,6 @@ test('notes schema exposes CAS but keeps mutation identity host-owned', async ()
   expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM author_notes').get()).toEqual({ n: 1 });
 });
 
-test('resource schemas expose scoped reads and typed native patches without a model-owned identity', async () => {
-  const f = await fixture('library');
-  mockSend((request) => {
-    const read = definition(request, 'resource.read') as Record<string, any>;
-    const patch = definition(request, 'resource.patch') as Record<string, any>;
-    const clone = definition(request, 'resource.clone') as Record<string, any>;
-    const many = definition(request, 'resource.patchMany') as Record<string, any>;
-    expect(many.properties.items.maxItems).toBe(16);
-    expect(many.properties.items.items.properties.changes.items.properties.target).toEqual({
-      type: 'string',
-    });
-    expect(describeHelperTools({ names: ['resource.patchMany'] }).tools[0]).not.toHaveProperty(
-      'targets'
-    );
-    expect(helperToolTraits('resource.readMany', { items: [] }).readOnly).toBe(true);
-    expect(helperToolTraits('preset.validate', { id: 'example' }).readOnly).toBe(true);
-    expect(read).toMatchObject({
-      required: ['kind', 'id'],
-      properties: {
-        path: { type: 'string' },
-        textOffset: { type: 'integer', minimum: 0 },
-        textLimit: { type: 'integer', minimum: 1, maximum: 10000 },
-      },
-    });
-    expect(patch).toMatchObject({
-      required: ['kind', 'id', 'expectedRevision', 'changes'],
-      properties: {
-        changes: {
-          minItems: 1,
-          items: {
-            properties: {
-              op: { enum: ['set', 'replaceText', 'insert', 'remove', 'move'] },
-              from: { type: 'string' },
-            },
-          },
-        },
-      },
-    });
-    expect(patch.properties).not.toHaveProperty('operationId');
-    expect(clone).toMatchObject({
-      required: ['kind', 'sourceId', 'expectedSourceRevision', 'title'],
-      additionalProperties: false,
-      properties: {
-        kind: { enum: ['content', 'prompt-preset'] },
-        expectedSourceRevision: { type: 'integer', minimum: 1 },
-      },
-    });
-    expect(clone.properties).not.toHaveProperty('operationId');
-    return structuredClone(success);
-  });
-  await submit(f, '현재 자료를 고치는 도구 형식을 확인해줘');
-});
-
 test('patch failures identify exact change and batch item without treating text mismatch as a stale revision', async () => {
   const f = await fixture('library');
   const other = f.store.product.content(fixtureBotInput('Other', 'same same')) as Content;

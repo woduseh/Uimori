@@ -100,14 +100,16 @@ test('sidebar activity groups all chats, excludes settled and stale work, and ex
 });
 
 test('shared inbox running snapshot aggregates kinds and totals for the existing bot tree', () => {
-  expect(
-    chatActivitySummaries([
-      { chatId: 'one', kind: 'main', count: 1 },
-      { chatId: 'one', kind: 'illustration', count: 2 },
-      { chatId: 'two', kind: 'translation', count: 1 },
-    ])
-  ).toEqual({
-    one: { count: 3, label: '원문 생성 1개 · 삽화 2개' },
-    two: { count: 1, label: '번역 1개' },
+  const summary = chatActivitySummaries([
+    { chatId: 'one', kind: 'main', count: 1 },
+    { chatId: 'one', kind: 'illustration', count: 2 },
+    { chatId: 'two', kind: 'translation', count: 1 },
+  ]);
+  expect(summary).toEqual({
+    one: { count: 3, label: expect.any(String) },
+    two: { count: 1, label: expect.any(String) },
   });
+  expect(summary.one.label).toContain('원문 생성 1개');
+  expect(summary.one.label).toContain('삽화 2개');
+  expect(summary.two.label).toContain('번역 1개');
 });

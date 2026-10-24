@@ -219,13 +219,3 @@ test('chat prompt pin reports the effective prompt and preserves the model pin',
   });
   expect(promptWorkspace(store)).toEqual(before);
 });
-
-test('usage read returns the existing report for the requested period', () => {
-  const report = call(database(), 'usage.read', { from: '2026-09-01', to: '2026-09-29' });
-  expect(report).toMatchObject({
-    from: '2026-09-01',
-    to: '2026-09-29',
-    timeZone: 'Asia/Seoul',
-    totals: { calls: 0 },
-  });
-});

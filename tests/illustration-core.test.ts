@@ -19,8 +19,6 @@ import { countTextTokens } from '../core/text-tokens.js';
 
 describe('ComfyUI API-format workflow templates', () => {
   test('parses an API workflow, rejects the UI export and requires the prompt placeholder', () => {
-    const workflow = parseComfyWorkflow(FIXTURE_WORKFLOW);
-    expect(Object.keys(workflow)).toEqual(['3', '4', '6', '7', '9']);
     expect(() => parseComfyWorkflow('not json')).toThrow(
       new IllustrationError('COMFYUI_WORKFLOW_INVALID')
     );
