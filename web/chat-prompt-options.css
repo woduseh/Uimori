@@ -17,6 +17,9 @@
 .chat-prompt-options[hidden] {
   display: none;
 }
+:root[data-theme="dark"] .chat-prompt-options {
+  background: var(--panel);
+}
 .chat-options-header {
   display: flex;
   align-items: center;

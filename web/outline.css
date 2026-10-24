@@ -134,7 +134,7 @@
 }
 .outline-entry.is-selected > .outline-row {
   background: var(--accent-soft);
-  color: var(--accent-text);
+  color: var(--text);
 }
 .outline-panel .outline-fold {
   flex: 0 0 24px;
@@ -301,7 +301,7 @@
   min-height: 32px;
 }
 .outline-panel .text-button:hover {
-  color: var(--accent-text);
+  color: var(--text);
   background: var(--hover);
 }
 .outline-panel .outline-preview-link {

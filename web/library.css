@@ -138,7 +138,7 @@
   font-size: var(--font-body);
 }
 .library-page .library-tabs > button[aria-selected="true"] {
-  color: var(--accent-text);
+  color: var(--text);
   background: transparent;
   border-bottom-color: var(--accent);
 }
