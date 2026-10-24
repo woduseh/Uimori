@@ -1284,3 +1284,144 @@ test('helper gateway follows browse results into an exact reference read without
     f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
   ).toEqual({ n: 0 });
 });
+
+test('helper saves a palette without selecting it, applies explicitly and preserves receipt on stale selection', async () => {
+  const f = await fixture('library');
+  const { BUILTIN_PALETTES } = await import('../core/theme-palettes.js');
+  const { themePreferences, paletteCatalog } = await import('../server/themes.js');
+  const before = themePreferences(f.store);
+  let paletteId = '';
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('create-palette', 'app.call', {
+          name: 'palette.save',
+          arguments: {
+            model: {
+              title: 'Helper test palette',
+              description: 'Explicit creation',
+              colors: BUILTIN_PALETTES[0].colors,
+            },
+          },
+        })
+      );
+    if (round === 1) {
+      const saved = result<{ id: string; revision: number }>(request, 'create-palette');
+      paletteId = saved.id;
+      expect(themePreferences(f.store)).toEqual(before);
+      return calls(
+        call('apply-palette', 'app.call', {
+          name: 'theme.select',
+          arguments: {
+            scope: 'global',
+            dimension: 'palette',
+            paletteId,
+            expectedRevision: before.revision,
+          },
+        })
+      );
+    }
+    if (round === 2) {
+      expect(result<{ defaultPaletteId: string }>(request, 'apply-palette').defaultPaletteId).toBe(
+        paletteId
+      );
+      return calls(
+        call('stale-apply', 'app.call', {
+          name: 'theme.select',
+          arguments: {
+            scope: 'global',
+            dimension: 'palette',
+            paletteId: 'forest',
+            expectedRevision: before.revision,
+          },
+        })
+      );
+    }
+    expect(event(request, 'stale-apply').denied).toBe(true);
+    return success;
+  });
+  const task = await submit(f, 'Create and apply a palette');
+  expect(themePreferences(f.store).defaultPaletteId).toBe(paletteId);
+  expect(paletteCatalog(f.store).some((palette) => palette.id === paletteId)).toBe(true);
+  expect(
+    Number(
+      f.store.db
+        .prepare('SELECT count(*) AS count FROM helper_operations WHERE task_id=?')
+        .get(task.id)?.count
+    )
+  ).toBe(2);
+  expect(
+    f.workspace.events(f.conversation.id, 0).some((item) => item.kind === 'theme.updated')
+  ).toBe(true);
+});
+
+test('presentation operations are discoverable and writes remain excluded from read-only review', () => {
+  for (const name of [
+    'font.list',
+    'font.register',
+    'font.select',
+    'font.delete',
+    'palette.list',
+    'palette.save',
+    'palette.delete',
+    'theme.select',
+  ]) {
+    expect(describeHelperTools({ names: [name] }).tools[0]?.name).toBe(name);
+    expect(helperToolTraits(name).readOnly).toBe(name.endsWith('.list'));
+    expect(helperToolTraits(name).reviewAllowed).toBe(false);
+    expect(helperToolTraits(name).direct).toBe(true);
+  }
+});
+
+test('helper registers a downloaded font before explicit selection and records both writes', async () => {
+  const f = await fixture('library');
+  const fonts = await import('../server/fonts.js');
+  const bytes = Buffer.alloc(48);
+  bytes.write('wOF2');
+  bytes.writeUInt32BE(bytes.length, 8);
+  bytes.writeUInt16BE(1, 12);
+  bytes.writeUInt32BE(48, 16);
+  const download = vi.spyOn(fonts, 'downloadFont').mockResolvedValue(bytes);
+  const before = fonts.fontPreferences(f.store);
+  let fontId = '';
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('register-font', 'app.call', {
+          name: 'font.register',
+          arguments: {
+            title: 'Licensed test font',
+            url: 'https://example.org/font.woff2',
+            license: 'Synthetic fixture only',
+          },
+        })
+      );
+    if (round === 1) {
+      fontId = result<{ id: string }>(request, 'register-font').id;
+      expect(fonts.fontPreferences(f.store)).toEqual(before);
+      return calls(
+        call('select-font', 'app.call', {
+          name: 'font.select',
+          arguments: { expectedRevision: before.revision, appFontId: null, readerFontId: fontId },
+        })
+      );
+    }
+    expect(result<{ readerFontId: string }>(request, 'select-font').readerFontId).toBe(fontId);
+    return success;
+  });
+  const task = await submit(f, 'Register this licensed font and use it for reading');
+  expect(download).toHaveBeenCalledWith('https://example.org/font.woff2', expect.any(AbortSignal));
+  expect(fonts.fontCatalog(f.store).fonts).toContainEqual(
+    expect.objectContaining({ id: fontId, license: 'Synthetic fixture only' })
+  );
+  expect(
+    Number(
+      f.store.db
+        .prepare('SELECT count(*) AS count FROM helper_operations WHERE task_id=?')
+        .get(task.id)?.count
+    )
+  ).toBe(2);
+  expect(f.workspace.events(f.conversation.id).some((item) => item.kind === 'font.updated')).toBe(
+    true
+  );
+});

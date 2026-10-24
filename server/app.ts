@@ -14,6 +14,7 @@ import { imageInputSupported } from '../core/provider-images.js';
 import { APP_VERSION } from './app-version.js';
 import { flushPendingImageCleanup } from './unused-data.js';
 import { themeRoutes } from './themes.js';
+import { fontRoutes } from './fonts.js';
 import { inputTranslationRoutes } from './input-translation.js';
 import { storyGuideRoutes } from './story-guide-routes.js';
 import { selectionRevisionRoutes } from './selection-revision.js';
@@ -864,6 +865,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
   resourceRoutes(app, store);
   themeRoutes(app, store);
+  fontRoutes(app, store);
   illustrationPresetRoutes(app, store);
   inputTranslationRoutes(app, store, {
     signal: stopping.signal,

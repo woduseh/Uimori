@@ -151,6 +151,8 @@ export function useHelperConversation(
             window.dispatchEvent(new Event('uimori-illustration-presets-changed'));
           if (event.kind === 'theme.updated')
             window.dispatchEvent(new Event('uimori-themes-changed'));
+          if (event.kind === 'font.updated')
+            window.dispatchEvent(new Event('uimori-fonts-changed'));
           cursor = event.seq;
           // Diagnostics advance the cursor without reloading unchanged conversation text.
           if (!diagnosticEvent(event.kind)) changed = true;

@@ -1,4 +1,4 @@
-import type { ThemeColorKey } from './themes.js';
+import type { ThemeColorKey, ThemeColors } from './themes.js';
 import { RADIX_COLOR_SCALES } from './radix-colors.js';
 
 /** The explicit theme-owned palette stops inheritance; null in the API means inherit. */
@@ -103,3 +103,10 @@ export function isPaletteId(id: unknown): id is string {
     (id === THEME_PALETTE_ID || BUILTIN_PALETTES.some((palette) => palette.id === id))
   );
 }
+
+export type PaletteDefinition = {
+  title: string;
+  description: string;
+  colors: { light: ThemeColors; dark: ThemeColors };
+};
+export type Palette = PaletteDefinition & { id: string; revision: number };

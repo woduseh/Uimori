@@ -1,0 +1,46 @@
+.palette-editor-section {
+  margin-top: 16px;
+}
+.palette-management-list {
+  margin: 12px 0;
+}
+.palette-management-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+}
+.palette-management-row + .palette-management-row {
+  border-top: var(--hairline) solid var(--line);
+}
+.palette-editor {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+}
+.palette-editor > label {
+  display: grid;
+  gap: 6px;
+}
+.palette-color-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px 20px;
+}
+.palette-color-fields label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px 20px;
+  gap: 8px;
+  align-items: center;
+}
+.palette-color-fields input {
+  min-width: 0;
+  width: 100%;
+}
+.palette-color-dot {
+  height: 20px;
+  border: var(--hairline) solid var(--input-border);
+  border-radius: var(--radius-small);
+}

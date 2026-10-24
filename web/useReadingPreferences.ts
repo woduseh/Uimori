@@ -6,6 +6,7 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { readingPositionElements } from './reader-dom.js';
 import { readPresentationSetting, writePresentationSetting } from './presentation-settings.js';
+import { defaultAppFont } from '../core/fonts.js';
 import {
   normalizeReadability,
   READABILITY_STORAGE_KEY,
@@ -50,7 +51,15 @@ function readingPositions(): ReadingPosition[] {
 }
 
 /** Owns only browser presentation, including keeping the visible source/message in place. */
-export function useReadingPreferences(font: string, fontSize: number, width: number) {
+export function useReadingPreferences(
+  font: string,
+  fontSize: number,
+  width: number,
+  {
+    appFamily = null,
+    readerFamily = null,
+  }: { appFamily?: string | null; readerFamily?: string | null } = {}
+) {
   const [settings, setSettings] = useState(readPreferences);
   const positions = useRef<ReadingPosition[]>([]);
   const changeLayout = useCallback((change: () => void) => {
@@ -63,12 +72,19 @@ export function useReadingPreferences(font: string, fontSize: number, width: num
   );
   useLayoutEffect(() => {
     const root = document.documentElement;
+    const anchors = positions.current.length ? positions.current : readingPositions();
+    root.style.setProperty(
+      '--app-font-family',
+      appFamily ? `${appFamily}, ${defaultAppFont}` : defaultAppFont
+    );
     root.dataset.readingFont = font;
     root.style.setProperty(
       '--reading-font-family',
-      font === 'serif'
-        ? 'Georgia, "Batang", "Noto Serif CJK KR", serif'
-        : getComputedStyle(root).fontFamily
+      readerFamily
+        ? `${readerFamily}, ${font === 'serif' ? 'Georgia, "Batang", "Noto Serif CJK KR", serif' : defaultAppFont}`
+        : font === 'serif'
+          ? 'Georgia, "Batang", "Noto Serif CJK KR", serif'
+          : defaultAppFont
     );
     root.style.setProperty('--reading', `${fontSize}px`);
     root.style.setProperty('--reading-width', `${width}px`);
@@ -81,12 +97,12 @@ export function useReadingPreferences(font: string, fontSize: number, width: num
       root.style.setProperty('--reading-paragraph-gap', `${settings.paragraphSpacing}em`);
       root.dataset.readingParagraphSpacing = 'custom';
     }
-    for (const { element, scrollport, top } of positions.current) {
+    for (const { element, scrollport, top } of anchors) {
       if (element.isConnected && scrollport.isConnected)
         scrollport.scrollTop += element.getBoundingClientRect().top - top;
     }
     positions.current = [];
-  }, [font, fontSize, width, settings]);
+  }, [font, fontSize, width, settings, appFamily, readerFamily]);
   useEffect(() => {
     writePresentationSetting(READABILITY_STORAGE_KEY, JSON.stringify(settings));
   }, [settings]);

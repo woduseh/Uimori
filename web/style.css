@@ -73,7 +73,14 @@
   --chevron: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>');
   --nav-w: 248px;
   --app-height: 100dvh;
-  font-family: system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  font-family: var(
+    --app-font-family,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    "Malgun Gothic",
+    sans-serif
+  );
   font-synthesis: none;
   font-weight: 400;
 }
@@ -798,6 +805,7 @@ input[type="checkbox"] {
   padding: 3px 10px;
 }
 .prose {
+  font-family: var(--reading-font-family, system-ui, sans-serif);
   font-size: var(--reading);
   line-height: var(--reading-line-height, 1.9);
   white-space: normal;
@@ -806,7 +814,7 @@ input[type="checkbox"] {
   color: var(--text);
 }
 [data-reading-font="serif"] .prose {
-  font-family: Georgia, "Batang", "Noto Serif CJK KR", serif;
+  font-family: var(--reading-font-family, Georgia, "Batang", "Noto Serif CJK KR", serif);
 }
 .prose p {
   margin: 0 0 var(--reading-paragraph-gap, 1.35em);
