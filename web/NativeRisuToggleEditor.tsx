@@ -512,44 +512,51 @@ export function NativeRisuToggleEditor({
             <DropdownIcon size={16} className="nt-chevron" aria-hidden="true" />
           </button>
           <ActionMenu label={t('native.itemMenu', { title })} viewport>
-            <button
-              type="button"
-              disabled={locked}
-              onClick={() => structural(() => moveToggleItem(value, item.index, -1))}
-            >
-              <UpIcon />
-              {t('native.text_0de1511afe')}
-            </button>
-            <button
-              type="button"
-              disabled={locked}
-              onClick={() => structural(() => moveToggleItem(value, item.index, 1))}
-            >
-              <DownIcon />
-              {t('native.text_763e79eea6')}
-            </button>
-            <button
-              type="button"
-              disabled={locked}
-              onClick={() => structural(() => duplicateToggleItem(value, item.index))}
-            >
-              <CopyIcon />
-              {t('native.text_ec3a6b612c')}
-            </button>
-            <button
-              type="button"
-              disabled={locked}
-              onClick={() =>
-                setConfirmation({
-                  title: () => t('native.text_28e82332d9'),
-                  description: () => t('native.deleteItemDescription', { title }),
-                  action: () => structural(() => deleteToggleItem(value, item.index)),
-                })
-              }
-            >
-              <DeleteIcon />
-              {t('native.text_28e82332d9')}
-            </button>
+            <div className="action-menu-group">
+              <button
+                type="button"
+                disabled={locked}
+                onClick={() => structural(() => duplicateToggleItem(value, item.index))}
+              >
+                <CopyIcon />
+                {t('native.text_ec3a6b612c')}
+              </button>
+            </div>
+            <div className="action-menu-group">
+              <button
+                type="button"
+                disabled={locked}
+                onClick={() => structural(() => moveToggleItem(value, item.index, -1))}
+              >
+                <UpIcon />
+                {t('native.text_0de1511afe')}
+              </button>
+              <button
+                type="button"
+                disabled={locked}
+                onClick={() => structural(() => moveToggleItem(value, item.index, 1))}
+              >
+                <DownIcon />
+                {t('native.text_763e79eea6')}
+              </button>
+            </div>
+            <div className="action-menu-group">
+              <button
+                className="danger"
+                type="button"
+                disabled={locked}
+                onClick={() =>
+                  setConfirmation({
+                    title: () => t('native.text_28e82332d9'),
+                    description: () => t('native.deleteItemDescription', { title }),
+                    action: () => structural(() => deleteToggleItem(value, item.index)),
+                  })
+                }
+              >
+                <DeleteIcon />
+                {t('native.text_28e82332d9')}
+              </button>
+            </div>
           </ActionMenu>
         </div>
         {open && itemForm(item, parentId)}
@@ -762,55 +769,64 @@ export function NativeRisuToggleEditor({
                   </ActionMenu>
                   {current.id !== -1 && (
                     <ActionMenu label={t('native.text_1b6a9feaef')} viewport>
-                      <button
-                        type="button"
-                        disabled={locked}
-                        onClick={() => {
-                          setGroupName(current.name);
-                          setGroupDialog('rename');
-                        }}
-                      >
-                        {t('native.text_73e5a894f7')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={locked}
-                        onClick={() => structural(() => moveToggleGroup(value, current.id, -1))}
-                      >
-                        {t('native.text_7e814bb8d6')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={locked}
-                        onClick={() => structural(() => moveToggleGroup(value, current.id, 1))}
-                      >
-                        {t('native.text_cec7cb8385')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={locked}
-                        onClick={() => structural(() => ungroupToggleGroup(value, current.id), -1)}
-                      >
-                        {t('native.text_71b4663593')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={locked}
-                        onClick={() =>
-                          setConfirmation({
-                            title: () => t('native.text_a3900e2c94'),
-                            destructive: true,
-                            description: () =>
-                              t('native.deleteGroupDescription', {
-                                name: current.id === -1 ? t('native.ungrouped') : current.name,
-                              }),
-                            action: () =>
-                              structural(() => deleteToggleGroup(value, current.id), -1),
-                          })
-                        }
-                      >
-                        {t('native.text_a3900e2c94')}
-                      </button>
+                      <div className="action-menu-group">
+                        <button
+                          type="button"
+                          disabled={locked}
+                          onClick={() => {
+                            setGroupName(current.name);
+                            setGroupDialog('rename');
+                          }}
+                        >
+                          {t('native.text_73e5a894f7')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={locked}
+                          onClick={() =>
+                            structural(() => ungroupToggleGroup(value, current.id), -1)
+                          }
+                        >
+                          {t('native.text_71b4663593')}
+                        </button>
+                      </div>
+                      <div className="action-menu-group">
+                        <button
+                          type="button"
+                          disabled={locked}
+                          onClick={() => structural(() => moveToggleGroup(value, current.id, -1))}
+                        >
+                          {t('native.text_7e814bb8d6')}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={locked}
+                          onClick={() => structural(() => moveToggleGroup(value, current.id, 1))}
+                        >
+                          {t('native.text_cec7cb8385')}
+                        </button>
+                      </div>
+                      <div className="action-menu-group">
+                        <button
+                          className="danger"
+                          type="button"
+                          disabled={locked}
+                          onClick={() =>
+                            setConfirmation({
+                              title: () => t('native.text_a3900e2c94'),
+                              destructive: true,
+                              description: () =>
+                                t('native.deleteGroupDescription', {
+                                  name: current.id === -1 ? t('native.ungrouped') : current.name,
+                                }),
+                              action: () =>
+                                structural(() => deleteToggleGroup(value, current.id), -1),
+                            })
+                          }
+                        >
+                          {t('native.text_a3900e2c94')}
+                        </button>
+                      </div>
                     </ActionMenu>
                   )}
                 </div>

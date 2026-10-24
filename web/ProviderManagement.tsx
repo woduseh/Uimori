@@ -788,7 +788,6 @@ export function ConnectionEditor({
           <strong>TypeSafe AI</strong>
         </button>
         <ActionMenu label={t('providers.m24')}>
-          {orderMenu('connection', JEV_PROVIDER_DEFINITION.id)}
           <button
             type="button"
             className="secondary"
@@ -798,6 +797,7 @@ export function ConnectionEditor({
             <ConnectionIcon size={18} aria-hidden="true" />
             {t('providers.m25')}
           </button>
+          {orderMenu('connection', JEV_PROVIDER_DEFINITION.id)}
         </ActionMenu>
       </div>
     </article>
@@ -832,7 +832,6 @@ export function ConnectionEditor({
               <span className="provider-item-subtitle">{JEV_PROVIDER_DEFINITION.modelId}</span>
             </button>
             <ActionMenu label={t('providers.m29')}>
-              {orderMenu('connection', JEV_PROVIDER_DEFINITION.id)}
               <button
                 type="button"
                 className="secondary"
@@ -844,6 +843,7 @@ export function ConnectionEditor({
                 <ModelIcon size={18} aria-hidden="true" />
                 {t('providers.m30')}
               </button>
+              {orderMenu('connection', JEV_PROVIDER_DEFINITION.id)}
             </ActionMenu>
           </div>
           <section className="provider-model-test" aria-label={t('providers.m31')}>
@@ -1253,57 +1253,61 @@ export function ConnectionEditor({
                     )}
                   </button>
                   <ActionMenu label={t('providers.m541', { value0: item.title })}>
-                    {orderMenu('connection', item.id)}
-                    {(testMode || item.protocol !== 'fixture-sse-v1') && (
+                    <div className="action-menu-group">
                       <button
                         type="button"
                         className="secondary"
                         disabled={busy}
-                        aria-label={t('providers.m542', { value0: item.title })}
-                        onClick={() => showConnection(item, true)}
+                        aria-label={t('providers.m544', { value0: item.title })}
+                        onClick={() => {
+                          replaceDraft('model', () => startModelFor(item));
+                        }}
                       >
-                        <CopyIcon size={18} aria-hidden="true" />
-                        {t('providers.m104')}
+                        <ModelIcon size={18} aria-hidden="true" />
+                        {t('providers.m108')}
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      aria-label={t('providers.m543', {
-                        name: item.title,
-                        enabled: String(item.enabled),
-                      })}
-                      onClick={() => statusConnection(item)}
-                    >
-                      <PowerIcon size={18} aria-hidden="true" />{' '}
-                      {item.enabled ? t('providers.m101') : t('providers.m106')}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      aria-label={t('providers.m544', { value0: item.title })}
-                      onClick={() => {
-                        replaceDraft('model', () => startModelFor(item));
-                      }}
-                    >
-                      <ModelIcon size={18} aria-hidden="true" />
-                      {t('providers.m108')}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={busy}
-                      aria-label={t('providers.m545', { value0: item.title })}
-                      onClick={() => {
-                        void perform(() => catalog(item));
-                      }}
-                    >
-                      <RefreshIcon size={18} aria-hidden="true" />
-                      {t('providers.m110')}
-                    </button>
-                    {deleteConnection(item)}
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        aria-label={t('providers.m545', { value0: item.title })}
+                        onClick={() => {
+                          void perform(() => catalog(item));
+                        }}
+                      >
+                        <RefreshIcon size={18} aria-hidden="true" />
+                        {t('providers.m110')}
+                      </button>
+                    </div>
+                    <div className="action-menu-group">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy}
+                        aria-label={t('providers.m543', {
+                          name: item.title,
+                          enabled: String(item.enabled),
+                        })}
+                        onClick={() => statusConnection(item)}
+                      >
+                        <PowerIcon size={18} aria-hidden="true" />{' '}
+                        {item.enabled ? t('providers.m101') : t('providers.m106')}
+                      </button>
+                      {(testMode || item.protocol !== 'fixture-sse-v1') && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={busy}
+                          aria-label={t('providers.m542', { value0: item.title })}
+                          onClick={() => showConnection(item, true)}
+                        >
+                          <CopyIcon size={18} aria-hidden="true" />
+                          {t('providers.m104')}
+                        </button>
+                      )}
+                      {orderMenu('connection', item.id)}
+                    </div>
+                    <div className="action-menu-group">{deleteConnection(item)}</div>
                   </ActionMenu>
                 </div>
                 {item.catalogError && (
@@ -1397,33 +1401,35 @@ export function ConnectionEditor({
                         </button>
                         <div className="provider-model-row-actions">
                           <ActionMenu label={t('providers.m549', { value0: item.title })}>
-                            {orderMenu('model', item.id)}
-                            <button
-                              type="button"
-                              className="secondary"
-                              disabled={busy}
-                              aria-label={t('providers.m550', { value0: item.title })}
-                              onClick={() => {
-                                void perform(() => showModel(item, true), 'model');
-                              }}
-                            >
-                              <CopyIcon size={18} aria-hidden="true" />
-                              {t('providers.m104')}
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary"
-                              disabled={busy}
-                              aria-label={t('providers.m551', {
-                                name: item.title,
-                                enabled: String(item.enabled !== false),
-                              })}
-                              onClick={() => statusModel(item)}
-                            >
-                              <PowerIcon size={18} aria-hidden="true" />{' '}
-                              {item.enabled === false ? t('providers.m106') : t('providers.m101')}
-                            </button>
-                            {deleteModel(item)}
+                            <div className="action-menu-group">
+                              <button
+                                type="button"
+                                className="secondary"
+                                disabled={busy}
+                                aria-label={t('providers.m551', {
+                                  name: item.title,
+                                  enabled: String(item.enabled !== false),
+                                })}
+                                onClick={() => statusModel(item)}
+                              >
+                                <PowerIcon size={18} aria-hidden="true" />{' '}
+                                {item.enabled === false ? t('providers.m106') : t('providers.m101')}
+                              </button>
+                              <button
+                                type="button"
+                                className="secondary"
+                                disabled={busy}
+                                aria-label={t('providers.m550', { value0: item.title })}
+                                onClick={() => {
+                                  void perform(() => showModel(item, true), 'model');
+                                }}
+                              >
+                                <CopyIcon size={18} aria-hidden="true" />
+                                {t('providers.m104')}
+                              </button>
+                            </div>
+                            <div className="action-menu-group">{orderMenu('model', item.id)}</div>
+                            <div className="action-menu-group">{deleteModel(item)}</div>
                           </ActionMenu>
                         </div>
                       </div>

@@ -179,28 +179,32 @@ export function LibraryFolders({
   function folderActions(folder: LibraryFolder) {
     return (
       <>
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy}
-          onClick={() => openEdit(folder)}
-        >
-          <EditIcon size={18} aria-hidden="true" />
-          {t('library.rename')}
-        </button>
-        <DeleteButton
-          path={`/library/folders/${encodeURIComponent(folder.id)}`}
-          revision={organization?.revision}
-          title={folder.title}
-          label={t('library.deleteFolder')}
-          description={t('library.resourcesInThisFolderWillMoveTo')}
-          disabled={busy}
-          onError={(message) => {
-            onError(message);
-            void reload();
-          }}
-          onDeleted={reload}
-        />
+        <div className="action-menu-group">
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => openEdit(folder)}
+          >
+            <EditIcon size={18} aria-hidden="true" />
+            {t('library.rename')}
+          </button>
+        </div>
+        <div className="action-menu-group">
+          <DeleteButton
+            path={`/library/folders/${encodeURIComponent(folder.id)}`}
+            revision={organization?.revision}
+            title={folder.title}
+            label={t('library.deleteFolder')}
+            description={t('library.resourcesInThisFolderWillMoveTo')}
+            disabled={busy}
+            onError={(message) => {
+              onError(message);
+              void reload();
+            }}
+            onDeleted={reload}
+          />
+        </div>
       </>
     );
   }

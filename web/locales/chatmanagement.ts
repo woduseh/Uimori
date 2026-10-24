@@ -1,4 +1,6 @@
 export const messages = {
+  'chatmanage.sceneText': { ko: '본문', en: 'Text', ja: '本文', zh: '正文' },
+  'chatmanage.details': { ko: '정보', en: 'Details', ja: '情報', zh: '信息' },
   'chatmanage.reading': { ko: '읽기', en: 'Reading', ja: '読む', zh: '阅读' },
   'chatmanage.tools': { ko: '창작 도구', en: 'Writing tools', ja: '創作ツール', zh: '创作工具' },
   'chatmanage.copyExport': {

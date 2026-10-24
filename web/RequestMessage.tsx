@@ -308,54 +308,60 @@ export function RequestMessage({
             {(onSave || onToggleRequest || onToggleScene) && (
               <ActionMenu label={t('reader.requestAndContextMenu')} placement="top" viewport>
                 {(onSubmit || onSave) && (
-                  <button
-                    ref={trigger}
-                    type="button"
-                    className="secondary"
-                    disabled={disabled && !onConfirm}
-                    onClick={(event) => {
-                      const menu = event.currentTarget.closest('details');
-                      if (menu) menu.open = false;
-                      openEditor();
-                    }}
-                  >
-                    <Pencil size={18} aria-hidden="true" />
-                    {onSave ? t('reader.editContextRequest') : t('reader.editRequest')}
-                  </button>
+                  <div className="action-menu-group">
+                    <button
+                      ref={trigger}
+                      type="button"
+                      className="secondary"
+                      disabled={disabled && !onConfirm}
+                      onClick={(event) => {
+                        const menu = event.currentTarget.closest('details');
+                        if (menu) menu.open = false;
+                        openEditor();
+                      }}
+                    >
+                      <Pencil size={18} aria-hidden="true" />
+                      {onSave ? t('reader.editContextRequest') : t('reader.editRequest')}
+                    </button>
+                  </div>
                 )}
-                {onToggleRequest && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={disabled}
-                    onClick={() => void onToggleRequest()}
-                  >
-                    {requestEnabled ? (
-                      <EyeOff size={18} aria-hidden="true" />
-                    ) : (
-                      <Eye size={18} aria-hidden="true" />
+                {(onToggleRequest || onToggleScene) && (
+                  <div className="action-menu-group">
+                    {onToggleRequest && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={disabled}
+                        onClick={() => void onToggleRequest()}
+                      >
+                        {requestEnabled ? (
+                          <EyeOff size={18} aria-hidden="true" />
+                        ) : (
+                          <Eye size={18} aria-hidden="true" />
+                        )}
+                        {requestEnabled
+                          ? t('reader.excludeInputFromContext')
+                          : t('reader.includeInputInContext')}
+                      </button>
                     )}
-                    {requestEnabled
-                      ? t('reader.excludeInputFromContext')
-                      : t('reader.includeInputInContext')}
-                  </button>
-                )}
-                {onToggleScene && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={disabled}
-                    onClick={() => void onToggleScene()}
-                  >
-                    {sceneEnabled ? (
-                      <EyeOff size={18} aria-hidden="true" />
-                    ) : (
-                      <Eye size={18} aria-hidden="true" />
+                    {onToggleScene && (
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={disabled}
+                        onClick={() => void onToggleScene()}
+                      >
+                        {sceneEnabled ? (
+                          <EyeOff size={18} aria-hidden="true" />
+                        ) : (
+                          <Eye size={18} aria-hidden="true" />
+                        )}
+                        {sceneEnabled
+                          ? t('reader.excludeSceneFromContext')
+                          : t('reader.includeSceneInContext')}
+                      </button>
                     )}
-                    {sceneEnabled
-                      ? t('reader.excludeSceneFromContext')
-                      : t('reader.includeSceneInContext')}
-                  </button>
+                  </div>
                 )}
               </ActionMenu>
             )}

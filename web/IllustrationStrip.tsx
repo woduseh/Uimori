@@ -460,49 +460,57 @@ function IllustrationCard({
             {collapsed ? t('visuals.m124') : t('visuals.m125')}
           </button>
           <ActionMenu label={t('visuals.m126')} placement="top">
-            {!stale && job.target && job.display && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy}
-                onClick={() =>
-                  void act(
-                    `/sources/${job.sourceRevision}/illustration-presentation`,
-                    {
-                      expectedSourceHash: job.sourceHash,
-                      expectedRevision: job.display!.revision,
-                      heroTargetId: hero ? null : job.target!.id,
-                    },
-                    'PATCH'
-                  )
-                }
-              >
-                {hero ? t('visuals.m127') : t('visuals.m128')}
-              </button>
-            )}
             {!stale && job.target && (
-              <button
-                type="button"
-                className="secondary"
-                disabled={busy || active}
-                onClick={() => void act(`/illustrations/${job.id}/regenerate`)}
-              >
-                {t('visuals.m129')}
-              </button>
+              <div className="action-menu-group">
+                {!stale && job.target && job.display && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() =>
+                      void act(
+                        `/sources/${job.sourceRevision}/illustration-presentation`,
+                        {
+                          expectedSourceHash: job.sourceHash,
+                          expectedRevision: job.display!.revision,
+                          heroTargetId: hero ? null : job.target!.id,
+                        },
+                        'PATCH'
+                      )
+                    }
+                  >
+                    {hero ? t('visuals.m127') : t('visuals.m128')}
+                  </button>
+                )}
+                {!stale && job.target && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={busy || active}
+                    onClick={() => void act(`/illustrations/${job.id}/regenerate`)}
+                  >
+                    {t('visuals.m129')}
+                  </button>
+                )}
+              </div>
             )}
-            <button type="button" className="secondary" onClick={() => setDetailOpen(true)}>
-              {t('visuals.m130')}
-            </button>
+            <div className="action-menu-group">
+              <button type="button" className="secondary" onClick={() => setDetailOpen(true)}>
+                {t('visuals.m130')}
+              </button>
+            </div>
             {!active && (
-              <DeleteButton
-                path={`/illustrations/${job.id}`}
-                title={job.target?.focus || picture?.images[0]?.caption || t('visuals.m131')}
-                label={t('visuals.m132')}
-                description={t('visuals.m133')}
-                disabled={busy}
-                onDeleted={refresh}
-                onError={onError}
-              />
+              <div className="action-menu-group">
+                <DeleteButton
+                  path={`/illustrations/${job.id}`}
+                  title={job.target?.focus || picture?.images[0]?.caption || t('visuals.m131')}
+                  label={t('visuals.m132')}
+                  description={t('visuals.m133')}
+                  disabled={busy}
+                  onDeleted={refresh}
+                  onError={onError}
+                />
+              </div>
             )}
           </ActionMenu>
         </div>

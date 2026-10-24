@@ -379,41 +379,45 @@ export function BotBranch(
               {status(activity(chat)?.label)}
               <div className="bot-row-actions">
                 <ActionMenu label={t('transfer.d013', { v0: chat.title })} viewport>
-                  {props.onCopyChat && (
+                  <div className="action-menu-group">
+                    {props.onCopyChat && (
+                      <button
+                        type="button"
+                        disabled={props.copyingChats?.includes(chat.id)}
+                        onClick={() => props.onCopyChat?.(chat.id)}
+                      >
+                        {props.copyingChats?.includes(chat.id) ? (
+                          <LoaderCircle size={18} aria-hidden="true" />
+                        ) : (
+                          <Copy size={18} aria-hidden="true" />
+                        )}
+                        {t(
+                          props.copyingChats?.includes(chat.id)
+                            ? 'recent.copyingChat'
+                            : 'recent.copyChat'
+                        )}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      disabled={props.copyingChats?.includes(chat.id)}
-                      onClick={() => props.onCopyChat?.(chat.id)}
+                      onClick={(event) => openFromMenu(event, () => setMenuId(chat.id))}
                     >
-                      {props.copyingChats?.includes(chat.id) ? (
-                        <LoaderCircle size={18} aria-hidden="true" />
-                      ) : (
-                        <Copy size={18} aria-hidden="true" />
-                      )}
-                      {t(
-                        props.copyingChats?.includes(chat.id)
-                          ? 'recent.copyingChat'
-                          : 'recent.copyChat'
-                      )}
+                      <EditIcon size={18} aria-hidden="true" />
+                      {t('transfer.m239')}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(event) => openFromMenu(event, () => setMenuId(chat.id))}
-                  >
-                    <EditIcon size={18} aria-hidden="true" />
-                    {t('transfer.m239')}
-                  </button>
-                  <DeleteButton
-                    path={`/chats/${encodeURIComponent(chat.id)}`}
-                    preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
-                    title={chat.title}
-                    label={t('transfer.m240')}
-                    disabled={busy}
-                    description={t('transfer.m241')}
-                    onError={onError}
-                    onDeleted={onChatsChanged}
-                  />
+                  </div>
+                  <div className="action-menu-group">
+                    <DeleteButton
+                      path={`/chats/${encodeURIComponent(chat.id)}`}
+                      preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
+                      title={chat.title}
+                      label={t('transfer.m240')}
+                      disabled={busy}
+                      description={t('transfer.m241')}
+                      onError={onError}
+                      onDeleted={onChatsChanged}
+                    />
+                  </div>
                 </ActionMenu>
               </div>
             </div>
@@ -566,71 +570,75 @@ export function BotBranch(
         </button>
         <div className="bot-branch-actions">
           <ActionMenu label={t('transfer.d019', { v0: bot?.title ?? t('transfer.m005') })} viewport>
-            {bot && props.onConfigureNew && (
+            <div className="action-menu-group">
+              <button
+                type="button"
+                onClick={(event) => {
+                  const menu = event.currentTarget.closest('details');
+                  if (menu) menu.open = false;
+                  setSearching(true);
+                }}
+              >
+                <SearchIcon size={18} aria-hidden="true" />
+                {t('transfer.m248')}
+              </button>
+              {bot && props.onConfigureNew && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={(event) => openFromMenu(event, () => void start(undefined, true))}
+                >
+                  <AddIcon size={18} aria-hidden="true" />
+                  {t('transfer.configureNewChat')}
+                </button>
+              )}
+              {bot && props.onImportChat && (
+                <button
+                  type="button"
+                  onClick={(event) => openFromMenu(event, () => props.onImportChat?.(bot))}
+                >
+                  <LibraryIcon size={18} aria-hidden="true" />
+                  {t('transfer.m106')}
+                </button>
+              )}
+            </div>
+            <div className="action-menu-group">
               <button
                 type="button"
                 disabled={busy}
-                onClick={(event) => openFromMenu(event, () => void start(undefined, true))}
+                onClick={(event) => {
+                  const menu = event.currentTarget.closest('details');
+                  if (menu) {
+                    menu.open = false;
+                    menu.querySelector('summary')?.focus();
+                  }
+                  setCreating(true);
+                }}
               >
-                <AddIcon size={18} aria-hidden="true" />
-                {t('transfer.configureNewChat')}
+                <FolderAddIcon size={18} aria-hidden="true" />
+                {t('transfer.m249')}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={(event) => {
-                const menu = event.currentTarget.closest('details');
-                if (menu) menu.open = false;
-                setSearching(true);
-              }}
-            >
-              <SearchIcon size={18} aria-hidden="true" />
-              {t('transfer.m248')}
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={(event) => {
-                const menu = event.currentTarget.closest('details');
-                if (menu) {
-                  menu.open = false;
-                  menu.querySelector('summary')?.focus();
-                }
-                setCreating(true);
-              }}
-            >
-              <FolderAddIcon size={18} aria-hidden="true" />
-              {t('transfer.m249')}
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                const menu = event.currentTarget.closest('details');
-                if (menu) menu.open = false;
-                onLibrary('bot');
-              }}
-            >
-              <LibraryIcon size={18} aria-hidden="true" />
-              {t('transfer.m250')}
-            </button>
-            {bot && library && (
+              {bot && library && (
+                <button
+                  type="button"
+                  onClick={(event) => openFromMenu(event, () => setEditingDefaults(true))}
+                >
+                  <EditIcon size={18} aria-hidden="true" />
+                  {t('transfer.m251')}
+                </button>
+              )}
               <button
                 type="button"
-                onClick={(event) => openFromMenu(event, () => setEditingDefaults(true))}
-              >
-                <EditIcon size={18} aria-hidden="true" />
-                {t('transfer.m251')}
-              </button>
-            )}
-            {bot && props.onImportChat && (
-              <button
-                type="button"
-                onClick={(event) => openFromMenu(event, () => props.onImportChat?.(bot))}
+                onClick={(event) => {
+                  const menu = event.currentTarget.closest('details');
+                  if (menu) menu.open = false;
+                  onLibrary('bot');
+                }}
               >
                 <LibraryIcon size={18} aria-hidden="true" />
-                {t('transfer.m106')}
+                {t('transfer.m250')}
               </button>
-            )}
+            </div>
           </ActionMenu>
           <IconButton
             label={t('transfer.d020', { v0: bot?.title ?? t('transfer.m005') })}

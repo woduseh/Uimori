@@ -59,6 +59,7 @@
   box-shadow: 0 2px 8px var(--shade);
 }
 .library-item-menu > div > button,
+.library-item-menu > div > .action-menu-group > button,
 .library-item-menu .delete-button {
   width: 100%;
   display: flex;

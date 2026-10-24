@@ -144,6 +144,11 @@
   .action-menu[open]
     > .action-menu-body.action-menu-body
     > .action-menu-group
+    > .resource-export-action
+    > button,
+  .action-menu[open]
+    > .action-menu-body.action-menu-body
+    > .action-menu-group
     > .delete-control
     > button {
     min-height: 48px;

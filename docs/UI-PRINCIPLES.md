@@ -87,6 +87,8 @@ Chat option editing refreshes automatically when idle and preserves drafts when 
 
 ## Korean terminology
 
+Group mixed-purpose action menus by task, with common editing actions first, supporting information later, and destructive actions separated at the end. Use short headings for long menus; compact menus can use dividers alone. Keep homogeneous choice lists ungrouped. Conditional actions must not leave empty groups, and nested export/delete controls retain the same mobile touch height as other items.
+
 Use the same terms in visible copy, accessible names and user documentation.
 
 Write guidance in plain Korean 해요체 and use short action labels for controls. Name the affected object, observable result and next action; remove decorative encouragement and explanations that repeat a nearby label or button. Keep familiar domain terms such as 봇, 페르소나 and 로어, but explain internal execution terms in ordinary controls. Technical identifiers can remain in diagnostics where they help interpretation.

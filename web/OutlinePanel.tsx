@@ -776,55 +776,66 @@ export function OutlinePanel({
                       <h3>{selected.title}</h3>
                     </div>
                     <ActionMenu label={t('prompts.uiManageOutline')}>
-                      <button type="button" disabled={disabled} onClick={edit}>
-                        <PenLine size={16} />
-                        {t('prompts.uiEditOutline2')}
-                      </button>
-                      {selected.level !== 'beat' && (
-                        <button type="button" disabled={disabled} onClick={() => add(selected)}>
-                          <Plus size={16} />
-                          {t('prompts.uiAddChildOutline')}
+                      <div className="action-menu-group">
+                        <button type="button" disabled={disabled} onClick={edit}>
+                          <PenLine size={16} />
+                          {t('prompts.uiEditOutline2')}
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        disabled={disabled}
-                        onClick={() =>
-                          apply([
-                            {
-                              op: 'update',
-                              id: selected.id,
-                              expectedRevision: selected.revision,
-                              fixed: !selected.fixed,
-                            },
-                          ])
-                        }
-                      >
-                        <Pin size={16} />
-                        {selected.fixed
-                          ? t('prompts.uiRemoveKeepCondition')
-                          : t('prompts.uiMarkAsKeepCondition')}
-                      </button>
-                      <button type="button" disabled={disabled} onClick={() => moveSelected(-1)}>
-                        <ArrowUp size={16} />
-                        {t('prompts.uiMoveUp')}
-                      </button>
-                      <button type="button" disabled={disabled} onClick={() => moveSelected(1)}>
-                        <ArrowDown size={16} />
-                        {t('prompts.uiMoveDown')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={disabled || sources.length > 0}
-                        onClick={() =>
-                          apply([
-                            { op: 'remove', id: selected.id, expectedRevision: selected.revision },
-                          ])
-                        }
-                      >
-                        <Trash2 size={16} />
-                        {t('prompts.uiDeleteOutline')}
-                      </button>
+                        {selected.level !== 'beat' && (
+                          <button type="button" disabled={disabled} onClick={() => add(selected)}>
+                            <Plus size={16} />
+                            {t('prompts.uiAddChildOutline')}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() =>
+                            apply([
+                              {
+                                op: 'update',
+                                id: selected.id,
+                                expectedRevision: selected.revision,
+                                fixed: !selected.fixed,
+                              },
+                            ])
+                          }
+                        >
+                          <Pin size={16} />
+                          {selected.fixed
+                            ? t('prompts.uiRemoveKeepCondition')
+                            : t('prompts.uiMarkAsKeepCondition')}
+                        </button>
+                      </div>
+                      <div className="action-menu-group">
+                        <button type="button" disabled={disabled} onClick={() => moveSelected(-1)}>
+                          <ArrowUp size={16} />
+                          {t('prompts.uiMoveUp')}
+                        </button>
+                        <button type="button" disabled={disabled} onClick={() => moveSelected(1)}>
+                          <ArrowDown size={16} />
+                          {t('prompts.uiMoveDown')}
+                        </button>
+                      </div>
+                      <div className="action-menu-group">
+                        <button
+                          className="danger"
+                          type="button"
+                          disabled={disabled || sources.length > 0}
+                          onClick={() =>
+                            apply([
+                              {
+                                op: 'remove',
+                                id: selected.id,
+                                expectedRevision: selected.revision,
+                              },
+                            ])
+                          }
+                        >
+                          <Trash2 size={16} />
+                          {t('prompts.uiDeleteOutline')}
+                        </button>
+                      </div>
                     </ActionMenu>
                   </div>
                   <div className="outline-status-line">

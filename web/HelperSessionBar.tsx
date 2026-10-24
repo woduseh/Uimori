@@ -138,32 +138,36 @@ export function HelperSessionBar(props: Props) {
             onClick={props.onCreate}
           />
           <ActionMenu label={t('helpers.m177')} viewport>
-            <button
-              type="button"
-              disabled={!props.conversation || props.busy}
-              onClick={() => {
-                setRename(props.conversation);
-                setTitle(props.conversation?.title ?? '');
-                setError('');
-              }}
-            >
-              <EditIcon size={18} aria-hidden="true" />
-              {t('helpers.m178')}
-            </button>
-            <button
-              type="button"
-              className="danger"
-              disabled={!props.conversation || props.busy}
-              onClick={() => {
-                setDeleting(props.conversation);
-                setImpact(null);
-                setError('');
-                setReadError('');
-              }}
-            >
-              <DeleteIcon size={18} aria-hidden="true" />
-              {t('helpers.m179')}
-            </button>
+            <div className="action-menu-group">
+              <button
+                type="button"
+                disabled={!props.conversation || props.busy}
+                onClick={() => {
+                  setRename(props.conversation);
+                  setTitle(props.conversation?.title ?? '');
+                  setError('');
+                }}
+              >
+                <EditIcon size={18} aria-hidden="true" />
+                {t('helpers.m178')}
+              </button>
+            </div>
+            <div className="action-menu-group">
+              <button
+                type="button"
+                className="danger"
+                disabled={!props.conversation || props.busy}
+                onClick={() => {
+                  setDeleting(props.conversation);
+                  setImpact(null);
+                  setError('');
+                  setReadError('');
+                }}
+              >
+                <DeleteIcon size={18} aria-hidden="true" />
+                {t('helpers.m179')}
+              </button>
+            </div>
           </ActionMenu>
         </div>
         {props.unread.length > 0 && (
