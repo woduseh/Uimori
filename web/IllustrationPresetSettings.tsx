@@ -330,13 +330,14 @@ export function IllustrationPresetSettings({
         aria-label={t('visualpanels.currentIllustrationSettings')}
       >
         <h3>{t('visualpanels.currentIllustrationSettings')}</h3>
-        <p>
-          {scope.chatId
-            ? t('visualpanels.currentChat')
-            : scope.botId
-              ? t('visualpanels.currentBot')
-              : t('visualpanels.workspaceDefault')}{' '}
-          ·{' '}
+        <p className="ui-meta-row">
+          <span>
+            {scope.chatId
+              ? t('visualpanels.currentChat')
+              : scope.botId
+                ? t('visualpanels.currentBot')
+                : t('visualpanels.workspaceDefault')}
+          </span>
           <strong>
             {effective.id.startsWith('builtin:')
               ? translateMessage(effective.title)
@@ -348,13 +349,16 @@ export function IllustrationPresetSettings({
             v0: effective.generator === 'comfyui' ? 'ComfyUI' : 'Codex',
           })}
         </p>
-        <p>
-          {effective.generator === 'comfyui'
-            ? t('visualpanels.promptModel')
-            : t('visualpanels.illustrationModel')}{' '}
-          ·{' '}
-          {model?.title ??
-            (environment ? t('visualpanels.noModelSelected') : t('visualpanels.checking'))}
+        <p className="ui-meta-row">
+          <span>
+            {effective.generator === 'comfyui'
+              ? t('visualpanels.promptModel')
+              : t('visualpanels.illustrationModel')}
+          </span>
+          <span>
+            {model?.title ??
+              (environment ? t('visualpanels.noModelSelected') : t('visualpanels.checking'))}
+          </span>
         </p>
         <p role="status">{readiness}</p>
       </section>

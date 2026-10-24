@@ -220,7 +220,7 @@ export function RequestPreviewDialog({
                         v0: amount(tokens.estimatedInputTokens),
                         v1: amount(tokens.inputTokenLimit),
                       })}
-                  {percent !== null && ` · ${formatNumber(percent, { maximumFractionDigits: 1 })}%`}
+                  {percent !== null && ` (${formatNumber(percent, { maximumFractionDigits: 1 })}%)`}
                 </p>
                 {percent !== null && tokens?.inputTokenLimit && (
                   <meter

@@ -9,7 +9,7 @@
   display: block;
   color: var(--muted);
   overflow: visible;
-  font-size: 14px;
+  font-size: var(--font-body);
 }
 .chat-retry-failure .turn-failure-actions {
   align-items: center;

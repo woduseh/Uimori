@@ -633,7 +633,7 @@ for (const width of [1440, 412]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('/');
     await navigationAction(page, '설정');
-    await selectSettingsSection(page, '테마·색상');
+    await selectSettingsSection(page, '테마와 색상');
     {
       const advanced = page.locator('.theme-advanced:not([open]) > summary');
       if (await advanced.isVisible()) await advanced.click();
@@ -795,7 +795,7 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   const data = await seed(request, 'classic-frame', { long: false });
   await openStory(page, data, 'classic-frame', 1440, 'light');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '테마·색상');
+  await selectSettingsSection(page, '테마와 색상');
   {
     const advanced = page.locator('.theme-advanced:not([open]) > summary');
     if (await advanced.isVisible()) await advanced.click();
@@ -892,7 +892,7 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   await page.reload();
   await expect(background).toBeVisible();
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '테마·색상');
+  await selectSettingsSection(page, '테마와 색상');
   {
     const advanced = page.locator('.theme-advanced:not([open]) > summary');
     if (await advanced.isVisible()) await advanced.click();
@@ -944,7 +944,7 @@ test('BACKGROUND pending upload discard and dirty save-close preserve scope owne
   const data = await seed(request, 'classic-frame', { long: false });
   await openStory(page, data, 'classic-frame', 1440, 'light');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '테마·색상');
+  await selectSettingsSection(page, '테마와 색상');
   {
     const advanced = page.locator('.theme-advanced:not([open]) > summary');
     if (await advanced.isVisible()) await advanced.click();
@@ -981,7 +981,7 @@ test('BACKGROUND pending upload discard and dirty save-close preserve scope owne
   release();
   await page.unroute('**/api/package-image-blobs');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '테마·색상');
+  await selectSettingsSection(page, '테마와 색상');
   {
     const advanced = page.locator('.theme-advanced:not([open]) > summary');
     if (await advanced.isVisible()) await advanced.click();

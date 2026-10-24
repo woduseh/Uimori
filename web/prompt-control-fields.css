@@ -15,7 +15,7 @@
   grid-column: 1 / -1;
   margin: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--font-body);
   line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -26,7 +26,7 @@
   align-items: center;
   gap: 12px;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--font-body);
   overflow-wrap: anywhere;
 }
 .prompt-option-divider hr {
@@ -34,5 +34,5 @@
   min-width: 20px;
   margin: 0;
   border: 0;
-  border-top: 1px solid var(--border);
+  border-top: var(--hairline) solid var(--border);
 }

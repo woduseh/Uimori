@@ -43,7 +43,7 @@ function presetFindingMessage(finding: RisuPresetImportPreview['findings'][numbe
     }
     case 'RISU_PRESET_HOST_SETTING': {
       const match =
-        /^(utilOverride|customChainOfThought)로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요\. 프리셋의 프롬프트 블록과 Uimori의 작업·모델 설정을 사용해요\.$/u.exec(
+        /^(utilOverride|customChainOfThought)로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요\. 프리셋의 프롬프트 블록과 Uimori의 작업과 모델 설정을 사용해요\.$/u.exec(
           finding.message
         );
       if (match) return t('transfer.finding.hostSetting', { setting: match[1] });
@@ -226,8 +226,8 @@ export function RisuPresetImport({
                         <strong>
                           {finding.level === 'unsupported'
                             ? t('transfer.m034')
-                            : t('transfer.m035')}{' '}
-                          ·{' '}
+                            : t('transfer.m035')}
+                          {': '}
                         </strong>
                         {presetFindingMessage(finding)}
                       </li>

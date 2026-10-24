@@ -1,7 +1,7 @@
 .dismissible-error {
   margin-bottom: 8px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
 }
 .dismissible-error .notice-banner-actions button {
   color: inherit;

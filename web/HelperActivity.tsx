@@ -117,12 +117,12 @@ export function HelperActivityDetails({
                     </summary>
                     <ul className="helper-activity-records">
                       {stage.events.map((event) => (
-                        <li key={event.seq}>
+                        <li key={event.seq} className="ui-meta-row">
                           <code>{event.name ?? event.kind}</code>
-                          {event.status && <span> · {event.status}</span>}
-                          {event.purpose && <span> · {event.purpose}</span>}
+                          {event.status && <span>{event.status}</span>}
+                          {event.purpose && <span>{event.purpose}</span>}
                           {event.applied !== undefined && (
-                            <span> · {event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
+                            <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
                           )}
                         </li>
                       ))}
@@ -131,7 +131,7 @@ export function HelperActivityDetails({
                   {stage.events.map((event) =>
                     event.error || event.denied ? (
                       <NoticeBanner tone="error" key={event.seq}>
-                        {event.name ? `${event.name} · ` : ''}
+                        {event.name ? `${event.name}: ` : ''}
                         {event.error ?? t('helpers.m126')}
                       </NoticeBanner>
                     ) : event.text ? (

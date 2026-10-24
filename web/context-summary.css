@@ -4,11 +4,11 @@
   min-width: 0;
   margin: 10px 0;
   padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   background: var(--panel);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.6;
   white-space: normal;
   overflow-wrap: anywhere;

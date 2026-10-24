@@ -43,7 +43,7 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
           code: 'RISU_PRESET_HOST_SETTING',
           level: 'unsupported' as const,
           path: `promptSettings.${key}`,
-          message: `${key}로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요. 프리셋의 프롬프트 블록과 Uimori의 작업·모델 설정을 사용해요.`,
+          message: `${key}로 지정한 Risu 내장 프롬프트 설정은 적용하지 않아요. 프리셋의 프롬프트 블록과 Uimori의 작업과 모델 설정을 사용해요.`,
         })),
       ...((native.preset.promptTemplate as Record<string, unknown>[]).some(
         (item) => item.type === 'memory'
@@ -61,7 +61,7 @@ export function importRisuPresetProgram(value: unknown): RisuPresetProgramImport
         code: 'RISU_PRESET_NATIVE_PROMPT',
         level: 'warning',
         message:
-          '프롬프트 구성·CBS·토글·기본 변수·정규식을 원래 형식으로 사용해요. 모델·연결·생성 설정은 Uimori의 선택을 유지해요.',
+          '프롬프트 구성, CBS, 토글, 기본 변수, 정규식을 원래 형식으로 사용해요. 모델, 연결, 생성 설정은 Uimori의 선택을 유지해요.',
       },
     ],
   };

@@ -166,7 +166,7 @@ for (const viewport of viewports) {
       let navigation = await loreNavigation(editor);
 
       await expect(navigation.getByLabel('로어 찾기', { exact: true })).toBeVisible();
-      await expect(navigation.getByText('로어북 · 2', { exact: true })).toBeVisible();
+      await expect(navigation.getByText('로어북: 2', { exact: true })).toBeVisible();
       await expect(navigation.getByRole('button', { name: '세계관', exact: true })).toBeVisible();
       await expect(navigation.getByRole('button', { name: '도시', exact: true })).toBeVisible();
       await expect(
@@ -228,7 +228,7 @@ for (const viewport of viewports) {
         .getByLabel('로어 본문', { exact: true })
         .fill('수문장은 해 질 무렵 문을 닫아요.');
       await editor.getByLabel('로어 폴더', { exact: true }).selectOption({ label: '인물' });
-      await editor.getByText('조건·배치·원문 설정', { exact: true }).click();
+      await editor.getByText('조건, 배치, 원문 설정', { exact: true }).click();
       await editor.getByRole('switch', { name: '보조 키워드 사용', exact: true }).check();
       await expect(editor.getByLabel('보조 키워드', { exact: true })).toHaveValue('');
 
@@ -315,7 +315,7 @@ for (const viewport of viewports) {
         fullPage: true,
       });
       navigation = await loreNavigation(reloaded);
-      await expect(navigation.getByText('로어북 · 3', { exact: true })).toBeVisible();
+      await expect(navigation.getByText('로어북: 3', { exact: true })).toBeVisible();
       await expect(navigation.getByRole('button', { name: '수문장', exact: true })).toBeVisible();
     });
   });
@@ -366,7 +366,7 @@ test('NATIVELORE02 card lore keeps native keyword arrays and folder references',
   const editor = await openLoreEditor(page, title);
   await selectLore(editor, '문');
   await editor.getByLabel('로어 폴더', { exact: true }).selectOption(FOLDER_KEY);
-  await editor.getByText('조건·배치·원문 설정', { exact: true }).click();
+  await editor.getByText('조건, 배치, 원문 설정', { exact: true }).click();
   await editor.getByLabel('로어 키워드', { exact: true }).fill('gate, wall');
 
   const saveResponse = nextSave(page);

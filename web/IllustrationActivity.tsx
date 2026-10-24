@@ -95,11 +95,13 @@ export function IllustrationActivity({
         {progress.phases.map((phase) => (
           <div key={phase.task}>
             <dt>{illustrationTaskNames[phase.task]}</dt>
-            <dd>
-              {phase.task === 'placement' && phase.status === 'completed' && progress.unresolved
-                ? t('visuals.m173')
-                : translateMessage(labels[phase.status] ?? phase.status)}
-              {phase.detail && ` · ${phase.detail}`}
+            <dd className="ui-meta-row">
+              <span>
+                {phase.task === 'placement' && phase.status === 'completed' && progress.unresolved
+                  ? t('visuals.m173')
+                  : translateMessage(labels[phase.status] ?? phase.status)}
+              </span>
+              {phase.detail && <span>{phase.detail}</span>}
             </dd>
           </div>
         ))}

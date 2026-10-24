@@ -430,7 +430,7 @@ export function RisuImport({
                             : finding.level === 'warning'
                               ? t('transfer.m035')
                               : t('transfer.m036')}
-                          {' · '}
+                          {': '}
                         </strong>
                         {importFindingMessage(finding)}
                       </li>
@@ -455,9 +455,9 @@ export function RisuImport({
                   {preview.lore.map((entry) => (
                     <details key={entry.id} className="risu-import-lore-entry">
                       <summary>{entry.title || t('transfer.m039')}</summary>
-                      <small className="muted">
-                        {entry.enabled ? t('transfer.m040') : t('transfer.m041')} ·{' '}
-                        {loreLoadingLabel(entry)}
+                      <small className="muted ui-meta-row">
+                        <span>{entry.enabled ? t('transfer.m040') : t('transfer.m041')}</span>
+                        <span>{loreLoadingLabel(entry)}</span>
                       </small>
                       <p className="risu-import-lore-text">{entry.text || t('transfer.m042')}</p>
                     </details>

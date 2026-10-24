@@ -25,7 +25,7 @@ export function chatActivitySummaries(
         t('helpers.m307', { v0: t(kindLabels[row.kind]), v1: formatNumber(row.count) }),
       ]
         .filter(Boolean)
-        .join(' · '),
+        .join(', '),
     };
   }
   return result;

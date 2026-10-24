@@ -141,7 +141,7 @@ export function ContentAttachments({
       {!!profile.optionAdjustments?.length && (
         <p role="status">
           {t('library.previousSelectionsThatNoLongerMatchAvailable')}{' '}
-          {profile.optionAdjustments.join(' · ')}
+          {profile.optionAdjustments.join(', ')}
         </p>
       )}
       {busy && !loadError && (
@@ -262,11 +262,13 @@ export function ContentAttachments({
               <details>
                 <summary>{t('library.reviewLoreAndInstructions')}</summary>
                 {pkg.lore.map((lore) => (
-                  <p key={lore.id}>
-                    <strong>{lore.title}</strong> ·{' '}
-                    {lore.loading === 'pinned'
-                      ? t('library.alwaysInclude')
-                      : t('library.readWhenNeeded')}
+                  <p key={lore.id} className="ui-meta-row">
+                    <strong>{lore.title}</strong>
+                    <span>
+                      {lore.loading === 'pinned'
+                        ? t('library.alwaysInclude')
+                        : t('library.readWhenNeeded')}
+                    </span>
                   </p>
                 ))}
               </details>

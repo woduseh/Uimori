@@ -30,7 +30,7 @@
   align-items: center;
   gap: 16px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .prompt-template-row:last-child {
   border-bottom: 0;
@@ -42,14 +42,14 @@
 }
 .prompt-template-copy h3 {
   margin: 0 0 4px;
-  font-size: 16px;
+  font-size: var(--font-heading);
 }
 .prompt-template-copy > span {
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .prompt-template-copy p {
   margin: 6px 0 0;
-  font-size: 14px;
+  font-size: var(--font-body);
   line-height: 1.5;
 }
 .prompt-template-row > button {

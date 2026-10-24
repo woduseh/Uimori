@@ -5,14 +5,14 @@
   margin: 0 0 6px;
   min-width: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .activity-status button {
   background: transparent;
   color: inherit;
   min-height: var(--control-h);
   padding: 8px;
-  border-radius: 9px;
+  border-radius: var(--radius-control);
   font-size: inherit;
 }
 @media (hover: hover) {
@@ -41,7 +41,7 @@
 .activity-count {
   white-space: nowrap;
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--font-small);
 }
 .activity-details {
   flex-shrink: 0;
@@ -68,7 +68,7 @@
 }
 .activity-notification-toolbar > p {
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .activity-notification-toolbar > button {
   flex: none;
@@ -79,7 +79,7 @@
   padding: 0;
 }
 .activity-notification-items > li {
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   padding: 12px 0;
 }
 .activity-notification-heading {
@@ -104,7 +104,7 @@
 }
 .activity-notification-detail {
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 @media (max-width: 600px) {
   .activity-notification-heading {
@@ -126,8 +126,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
+  border-bottom: var(--hairline) solid var(--line);
+  font-size: var(--font-body);
 }
 @keyframes activity-spin {
   to {
@@ -147,6 +147,6 @@
     padding: 6px;
   }
   .activity-label {
-    font-size: 11px;
+    font-size: var(--font-small);
   }
 }

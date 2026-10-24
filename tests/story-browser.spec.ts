@@ -38,7 +38,7 @@ async function create(page: Page, title: string): Promise<Chat> {
 async function panel(page: Page) {
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   if (!(await dialog.isVisible())) await openChatSettings(page);
-  await selectChatSettingsSection(page, '기억·메모·로어');
+  await selectChatSettingsSection(page, '기억과 메모');
   const section = dialog.getByRole('region', { name: '이야기 기억과 컨텍스트', exact: true });
   await expect(section).toBeVisible();
   return section;
@@ -104,22 +104,22 @@ test('S04 explicit user note and correction remain separate from prose after rel
   request,
 }, testInfo) => {
   const chat = await create(page, 'S04 합성 사용자 메모');
-  const notes = await open(await panel(page), /^사용자 메모·정정/);
+  const notes = await open(await panel(page), /^사용자 메모와 정정/);
   await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
   await notes.getByLabel('메모 작성자').fill('합성 작가');
-  await notes.getByLabel('메모·정정 내용').fill('항구의 종은 파란색이다.');
+  await notes.getByLabel('메모와 정정 내용').fill('항구의 종은 파란색이다.');
   await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
   await expect.poll(async () => (await story(request, chat.id)).notes.length).toBe(1);
   await notes
     .getByRole('button', { name: '메모 수정: 항구의 종은 파란색이다.', exact: true })
     .click();
-  await notes.getByLabel('메모·정정 내용').fill('항구의 종은 초록색이다.');
+  await notes.getByLabel('메모와 정정 내용').fill('항구의 종은 초록색이다.');
   await notes.getByRole('button', { name: '메모 수정 저장', exact: true }).click();
   await expect
     .poll(async () => (await story(request, chat.id)).notes.map((entry) => entry.text))
     .toEqual(['항구의 종은 초록색이다.']);
   await page.reload();
-  const reloaded = await open(await panel(page), /^사용자 메모·정정/);
+  const reloaded = await open(await panel(page), /^사용자 메모와 정정/);
   await expect(reloaded.getByText('항구의 종은 초록색이다.', { exact: true })).toBeVisible();
   await expect(reloaded.getByText('항구의 종은 파란색이다.', { exact: true })).toHaveCount(0);
   expect((await story(request, chat.id)).notes[0]).toMatchObject({
@@ -247,7 +247,9 @@ test('STUI01 story memory fits mobile and desktop without the retired independen
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 1000 });
     await section.scrollIntoViewIfNeeded();
-    await expect(section.locator('summary').filter({ hasText: /^사용자 메모·정정/ })).toBeVisible();
+    await expect(
+      section.locator('summary').filter({ hasText: /^사용자 메모와 정정/ })
+    ).toBeVisible();
     await expect(section.locator('summary').filter({ hasText: /^장면 예약/ })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true

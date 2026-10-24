@@ -19,14 +19,14 @@
 .settings-group-heading p {
   margin-top: 4px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.5;
 }
 .settings-group-body {
   min-width: 0;
   padding: 0 16px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
 }
 .settings-row {
@@ -42,7 +42,7 @@
   max-width: none;
 }
 .settings-row + .settings-row {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .settings-row-copy {
   display: grid;
@@ -56,7 +56,7 @@
 .settings-row-copy small {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.5;
 }
 .settings-row-control {

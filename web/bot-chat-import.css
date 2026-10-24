@@ -11,7 +11,7 @@
   width: 40px;
   height: 48px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .chat-import-target > div,
 .chat-import-review {
@@ -22,7 +22,7 @@
 .chat-import-target small,
 .chat-import-review small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   overflow-wrap: anywhere;
 }
 .chat-transcript-import {
@@ -36,8 +36,8 @@
 .chat-import-review {
   padding: 16px;
   background: var(--surface);
-  border-radius: 8px;
-  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  border: var(--hairline) solid var(--line);
 }
 .chat-import-review button {
   justify-self: end;

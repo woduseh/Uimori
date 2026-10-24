@@ -1002,19 +1002,24 @@ function SourceReaderContent({
                       key={job.id}
                       data-job-id={job.id}
                     >
-                      <span>
-                        {jobTitle(job)} · {labels[job.status]}
-                        {retryable(job.status) ? t('reader.originalPreserved') : ''}
+                      <span className="ui-meta-row">
+                        <span>{jobTitle(job)}</span>
+                        <span>
+                          {labels[job.status]}
+                          {retryable(job.status) ? t('reader.originalPreserved') : ''}
+                        </span>
                       </span>
                       {job.error && <AuxiliaryError error={job.error} />}
                       <JobActions job={job} refresh={refresh} onError={setActionError} compact />
                     </div>
                   ))
                 : jobs.length > 0 && (
-                    <p className="muted">
-                      {displayJobs
-                        .map((job) => `${jobTitle(job)} ${labels[job.status]}`)
-                        .join(' · ')}
+                    <p className="muted ui-meta-row">
+                      {displayJobs.map((job) => (
+                        <span key={job.id}>
+                          {jobTitle(job)} {labels[job.status]}
+                        </span>
+                      ))}
                     </p>
                   )}
             </div>

@@ -206,11 +206,11 @@ test('LUSE04 standalone module navigation omits bot-only panes and retains its s
   await panel.getByRole('tab', { name: '고급 설정', exact: true }).click();
   const navigation = panel.getByRole('group', { name: '고급 설정 영역', exact: true });
   await expect(navigation.getByRole('button', { name: '추가 지침', exact: true })).toHaveCount(0);
-  await expect(navigation.getByRole('button', { name: '배경 HTML·CSS', exact: true })).toHaveCount(
-    0
-  );
   await expect(
-    navigation.getByRole('button', { name: '변수 초기값·토글', exact: true })
+    navigation.getByRole('button', { name: '배경 HTML과 CSS', exact: true })
+  ).toHaveCount(0);
+  await expect(
+    navigation.getByRole('button', { name: '변수와 토글 초기값', exact: true })
   ).toHaveAttribute('aria-pressed', 'true');
   const retained = (await (await request.get(`/api/content/${saved.id}`)).json()) as Content;
   expect(retained.revision).toBe(saved.revision);

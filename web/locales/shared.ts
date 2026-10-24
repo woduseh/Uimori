@@ -306,16 +306,16 @@ export const messages = {
     zh: '无法在此设备上保存恢复输入。若未保存就离开，将无法恢复当前输入。',
   },
   'shared.writingTitle': {
-    ko: '작문 · {title}',
-    en: 'Writing · {title}',
-    ja: '執筆 · {title}',
-    zh: '写作 · {title}',
+    ko: '작문: {title}',
+    en: 'Writing: {title}',
+    ja: '執筆、{title}',
+    zh: '写作，{title}',
   },
   'shared.translationTitle': {
-    ko: '번역 · {title}',
-    en: 'Translation · {title}',
-    ja: '翻訳 · {title}',
-    zh: '翻译 · {title}',
+    ko: '번역: {title}',
+    en: 'Translation: {title}',
+    ja: '翻訳、{title}',
+    zh: '翻译，{title}',
   },
   'shared.emptySavedText': {
     ko: '저장된 본문이 없어요.',
@@ -469,9 +469,9 @@ export const messages = {
     zh: '错误代码：{code}',
   },
   'shared.savedTextPreview': {
-    ko: '제목·본문 미리보기',
+    ko: '제목과 본문 미리보기',
     en: 'Title and text preview',
-    ja: 'タイトル・本文プレビュー',
+    ja: 'タイトルと本文のプレビュー',
     zh: '标题与正文预览',
   },
 };

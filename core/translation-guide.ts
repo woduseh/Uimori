@@ -80,7 +80,7 @@ export function validateTranslationGuide(value: unknown): TranslationGuide {
       (typeof term.note !== 'string' || term.note.length > TRANSLATION_GUIDE_LIMITS.note)
     )
       fail(
-        `표기 ${index + 1}: 조건·설명은 ${TRANSLATION_GUIDE_LIMITS.note}자 이내로 작성해 주세요.`
+        `표기 ${index + 1}: 조건과 설명은 ${TRANSLATION_GUIDE_LIMITS.note}자 이내로 작성해 주세요.`
       );
   }
   return structuredClone(guide) as TranslationGuide;

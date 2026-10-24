@@ -103,7 +103,7 @@ atWidths(
       buffer: Buffer.from(JSON.stringify(card(title))),
     });
     await expect(dialog.locator('.risu-import-processing > summary')).toHaveText(
-      '페르소나로 가져오기 · 변경'
+      '페르소나로 가져오기, 변경'
     );
     const applied = page.waitForResponse(
       (response) =>

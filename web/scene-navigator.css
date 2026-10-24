@@ -37,7 +37,7 @@
   width: 100%;
 }
 .scene-list-toggle span {
-  font-size: 12px;
+  font-size: var(--font-small);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -55,19 +55,18 @@
   height: 18px;
   min-height: 0;
   padding: 0;
-  border-radius: 3px;
+  border-radius: var(--radius-small);
 }
 .scene-tick {
   width: 12px;
-  height: 2px;
+  height: var(--hairline);
   background: var(--line);
-  border-radius: 1px;
-  transition: width 120ms;
+  border-radius: var(--radius-small);
 }
 .scene-mark[aria-current] .scene-tick {
   width: 26px;
   background: var(--accent);
-  height: 3px;
+  height: var(--hairline);
 }
 .scene-mark:focus-visible .scene-tick {
   width: 26px;
@@ -89,12 +88,12 @@
   max-width: min(340px, 55vw);
   text-align: left;
   padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   background: var(--panel);
   color: var(--text);
-  box-shadow: 0 4px 16px var(--shade);
-  font-size: 12px;
+  box-shadow: 0 2px 8px var(--shade);
+  font-size: var(--font-small);
   line-height: 1.5;
   pointer-events: none;
   overflow-wrap: anywhere;
@@ -112,7 +111,7 @@
 }
 @media (hover: hover) {
   .scene-navigator button:hover {
-    color: var(--accent);
+    color: var(--accent-text);
     background: var(--surface);
   }
 }
@@ -129,7 +128,7 @@
 }
 .scene-list-count {
   margin: 16px 0 8px;
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
 }
 .scene-list {
@@ -151,7 +150,7 @@
   padding: 12px;
   background: transparent;
   color: var(--text);
-  border: 1px solid transparent;
+  border: var(--hairline) solid transparent;
   box-shadow: none;
 }
 .scene-list > li > button:first-child {
@@ -201,7 +200,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 /* The compact jump action shares the composer's existing toolbar height. */
 @media (max-width: 760px) {

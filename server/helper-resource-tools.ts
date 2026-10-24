@@ -405,7 +405,7 @@ export function invokeResourceTool(
     if (args.syncNativeName !== undefined && typeof args.syncNativeName !== 'boolean')
       throw new HttpError(400, '내부 이름 동기화 옵션을 확인해 주세요.');
     if (kind !== 'content' && kind !== 'prompt-preset')
-      throw new HttpError(400, '봇·페르소나·모듈과 프롬프트 프리셋만 복제할 수 있어요.');
+      throw new HttpError(400, '봇, 페르소나, 모듈과 프롬프트 프리셋만 복제할 수 있어요.');
     const result = cloneResource(store, {
       kind,
       sourceId: text(args.sourceId, 'source resource ID', 100),

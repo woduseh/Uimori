@@ -227,19 +227,21 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await expect(usage).toHaveCount(0);
       await activity.locator(':scope > summary').click();
       await expect(activity.getByTestId('scene-usage')).toBeVisible();
-      await expect(usage).toContainText('요청 1,234 · 응답 87 토큰');
+      await expect(usage).toContainText('요청 1,234, 응답 87 토큰');
       await expect(usage.locator(':scope > summary')).toContainText('컨텍스트 사용량 1.9%');
       expect(detailRequests).toHaveLength(0);
       await usage.locator(':scope > summary').click();
-      await expect(usage).toContainText('전송 로어 · 1개 기록');
+      await expect(usage).toContainText('전송 로어: 1개 기록');
       await expect(usage).not.toContainText('자동 선별');
       expect(detailRequests).toHaveLength(1);
-      await expect(usage).toContainText('Scene diagnostics writer · scene-diagnostics-writer');
+      await expect(usage).toContainText(/Scene diagnostics writer\s*scene-diagnostics-writer/);
       await expect(usage).not.toContainText('오늘 바꾼 모델 이름');
       await expect(usage).toContainText('프롬프트 선택');
       await expect(usage).toContainText('Synthetic scene diagnostics prompt');
       await expect(usage).toContainText('호출 당시 미라');
-      await expect(usage).toContainText(`${loreTitle} · 고정 자료`);
+      await expect(
+        usage.locator('.scene-receipt-lore li').filter({ hasText: loreTitle })
+      ).toContainText('고정 자료');
       await expect(usage).toContainText('입력 1,234 / 컨텍스트 한도 65,536');
       await expect(usage.getByRole('meter', { name: '컨텍스트 한도 대비 입력' })).toHaveAttribute(
         'value',
@@ -280,13 +282,13 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await page.reload();
       await activity.locator(':scope > summary').click();
       await usage.locator(':scope > summary').click();
-      await expect(usage).toContainText('자동 선별 · 대상 1,234 · 판단 30 · 선택 2 · 실패 1건');
-      const selectionSummary = usage.getByText(
-        '자동 선별 · 대상 1,234 · 판단 30 · 선택 2 · 실패 1건'
-      );
+      await expect(usage).toContainText('자동 선별, 대상 1,234, 판단 30, 선택 2, 실패 1건');
+      const selectionSummary = usage.getByText('자동 선별, 대상 1,234, 판단 30, 선택 2, 실패 1건');
       await selectionSummary.scrollIntoViewIfNeeded();
       await expect(selectionSummary).toBeVisible();
-      await expect(usage).toContainText(`${loreTitle} · 고정 자료`);
+      await expect(
+        usage.locator('.scene-receipt-lore li').filter({ hasText: loreTitle })
+      ).toContainText('고정 자료');
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
       ).toBe(true);

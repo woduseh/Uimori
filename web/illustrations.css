@@ -5,8 +5,8 @@
 }
 .illustration {
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
   padding: 12px 14px;
   display: grid;
   gap: 10px;
@@ -18,7 +18,7 @@
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .illustration-head strong {
   font-weight: 600;
@@ -48,11 +48,11 @@
   height: auto;
   max-height: min(70vh, 640px);
   margin: 0 auto;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--surface);
 }
 .illustration-images figcaption {
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.6;
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -61,7 +61,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .illustration .error {
   margin: 0;
@@ -73,11 +73,11 @@
   align-items: center;
 }
 .illustration-actions button {
-  font-size: 12px;
+  font-size: var(--font-small);
   min-height: 36px;
 }
 .illustration-diagnostic {
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
 }
 .illustration-diagnostic summary {
@@ -95,13 +95,13 @@
   overflow-wrap: anywhere;
   max-height: 240px;
   overflow: auto;
-  font-size: 11px;
+  font-size: var(--font-small);
 }
 .illustration-settings textarea {
   width: 100%;
   min-height: 160px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .illustration-settings label.full {
   max-width: none;
@@ -130,7 +130,7 @@
   padding-bottom: 14px;
 }
 .illustration-environment .illustration-test + .settings-row {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .illustration-environment .illustration-environment-disclosure {
   border-top: 0;
@@ -145,7 +145,7 @@
   align-items: center;
 }
 .illustration-settings .illustration-test-result {
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
@@ -154,7 +154,7 @@
   gap: 10px;
   margin-top: 20px;
   padding-top: 12px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .illustration-references .asset-grid figure {
   display: grid;
@@ -162,7 +162,7 @@
 }
 .illustration-references select {
   width: 100%;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 
 /* Finished cuts belong to the manuscript, not a diagnostic card stack. */
@@ -173,7 +173,7 @@
   gap: 12px;
   margin: 8px 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .illustration-toolbar button,
 .illustration-actions .quiet {
@@ -182,7 +182,7 @@
   border: 0;
   min-height: 36px;
   padding: 4px 8px;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .illustration-cut {
   padding: 0;
@@ -204,20 +204,20 @@
 }
 .illustration-title strong {
   flex: none;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .illustration-title > span {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .illustration-head > .illustration-actions {
   flex: none;
   flex-wrap: nowrap;
 }
 .illustration-cut.is-collapsed {
-  border-block: 1px solid var(--line);
+  border-block: var(--hairline) solid var(--line);
   padding-block: 4px;
 }
 .illustration-cut .illustration-images {
@@ -232,13 +232,13 @@
 }
 .illustration-cut .illustration-images figcaption {
   text-align: center;
-  font-size: 12px;
+  font-size: var(--font-small);
   margin: 0;
 }
 .illustration-variations,
 .illustration-supplement {
   margin-block: 12px;
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
 }
 .illustration-variations > summary,
@@ -250,7 +250,7 @@
   margin-top: 10px;
 }
 .illustration-supplement {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .illustration-task,
 .illustration-state {
@@ -259,7 +259,7 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px 12px;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .illustration-task {
   margin-block: 6px;
@@ -272,7 +272,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--font-small);
   margin: 0;
   line-height: 1.6;
 }
@@ -288,7 +288,7 @@
 .illustration-slot {
   color: var(--text);
   font-family: var(--font-ui, sans-serif);
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .illustration-phases {
   display: grid;
@@ -315,7 +315,7 @@
 }
 .illustration-placement-note {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
   line-height: 1.6;
 }
@@ -324,7 +324,7 @@
   margin: 0 auto;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: transparent;
   max-width: 100%;
   line-height: 0;
@@ -362,5 +362,5 @@
   text-align: center;
   color: var(--muted);
   margin-top: 12px;
-  font-size: 13px;
+  font-size: var(--font-body);
 }

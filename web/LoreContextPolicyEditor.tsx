@@ -406,8 +406,13 @@ export function LoreContextPolicyEditor({
                     <li key={message.id}>
                       <details>
                         <summary>
-                          {index + 1}. {message.role} · {message.provenance.origin} ·{' '}
-                          {message.provenance.blockId}
+                          <span className="ui-meta-row">
+                            <span>
+                              {index + 1}. {message.role}
+                            </span>
+                            <span>{message.provenance.origin}</span>
+                            <span>{message.provenance.blockId}</span>
+                          </span>
                         </summary>
                         <pre>
                           {message.content

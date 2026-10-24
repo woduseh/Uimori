@@ -25,7 +25,7 @@ export function RisuImageHandoffFields({
       {policy.ranges.map((range) => (
         <details key={range.id}>
           <summary>
-            {range.field} · {range.start}–{range.end}
+            {range.field}: {range.start}–{range.end}
             {range.confidence === 'candidate'
               ? t('native.text_baf852faae')
               : t('native.text_7069bd6597')}

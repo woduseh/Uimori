@@ -54,7 +54,7 @@ export const messages = {
     zh: '描述姓名、背景以及对方如何称呼你。',
   },
   'library.modulesAddSettingsAndInstructionsToConversations': {
-    ko: '모듈은 대화에 더할 설정·지침이에요.',
+    ko: '모듈은 대화에 더할 설정과 지침이에요.',
     en: 'Modules add settings and instructions to conversations.',
     ja: 'モジュールは会話に設定や指示を加えます。',
     zh: '模块为对话添加设定与指引。',
@@ -96,9 +96,9 @@ export const messages = {
     zh: '编辑',
   },
   'library.moveCategoryOrFolder': {
-    ko: '분류·폴더 이동',
+    ko: '분류와 폴더 이동',
     en: 'Move category or folder',
-    ja: '分類・フォルダーを移動',
+    ja: '分類、フォルダーを移動',
     zh: '移动分类或文件夹',
   },
   'library.moveUp': {
@@ -690,10 +690,10 @@ export const messages = {
     zh: '没有可关联的{v0}资料。',
   },
   'library.currentSelectionV': {
-    ko: ' · 현재 선택 v{v0}',
-    en: ' · Current selection v{v0}',
-    ja: ' ・現在の選択 v{v0}',
-    zh: ' · 当前选择 v{v0}',
+    ko: ', 현재 선택 v{v0}',
+    en: ', Current selection v{v0}',
+    ja: '、現在の選択 v{v0}',
+    zh: '，当前选择 v{v0}',
   },
   'library.selectedResourceNeedsReview': {
     ko: '선택한 자료 확인 필요',
@@ -804,16 +804,16 @@ export const messages = {
     zh: '已关联的包',
   },
   'library.primaryBotFixed': {
-    ko: '소속 봇 · 고정',
-    en: 'Primary bot · fixed',
-    ja: '所属ボット・固定',
-    zh: '所属机器人 · 固定',
+    ko: '소속 봇 (고정)',
+    en: 'Primary bot, fixed',
+    ja: '所属ボット（固定）',
+    zh: '所属机器人，固定',
   },
   'library.requiredModuleAttachedAutomatically': {
-    ko: '필수 모듈 · 자동 연결',
-    en: 'Required module · attached automatically',
-    ja: '必須モジュール・自動接続',
-    zh: '必需模块 · 自动关联',
+    ko: '필수 모듈 (자동 연결)',
+    en: 'Required module, attached automatically',
+    ja: '必須モジュール（自動接続）',
+    zh: '必需模块，自动关联',
   },
   'library.myPersona': {
     ko: '내 페르소나',
@@ -858,10 +858,10 @@ export const messages = {
     zh: '按需读取',
   },
   'library.addSharedModulesOrResources': {
-    ko: '함께 사용하는 모듈 · 자료 추가',
-    en: 'Add shared modules or resources',
-    ja: '併用するモジュール・資料を追加',
-    zh: '添加共用模块或资料',
+    ko: '함께 사용하는 모듈',
+    en: 'Shared modules',
+    ja: '併用するモジュール',
+    zh: '共用模块',
   },
   'library.addResource': {
     ko: '자료 추가',
@@ -888,16 +888,16 @@ export const messages = {
     zh: '对话配置',
   },
   'library.promptsAndModels': {
-    ko: '프롬프트·모델',
-    en: 'Prompts and models',
-    ja: 'プロンプト・モデル',
-    zh: '提示词与模型',
+    ko: '생성 설정',
+    en: 'Generation settings',
+    ja: '生成設定',
+    zh: '生成设置',
   },
   'library.memoryAndLore': {
-    ko: '기억·로어',
-    en: 'Memory and lore',
-    ja: '記憶・ロア',
-    zh: '记忆与设定',
+    ko: '기억과 메모',
+    en: 'Memory and notes',
+    ja: '記憶とメモ',
+    zh: '记忆与笔记',
   },
   'library.chatSettingsSaved': {
     ko: '채팅 설정을 저장했어요.',
@@ -1032,7 +1032,7 @@ export const messages = {
     zh: '此聊天的写作提示词',
   },
   'library.chooseAPromptToPinItTo': {
-    ko: '직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요. 모델·프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 과거·진행 중인 작업은 바뀌지 않고, 창작 옵션은 선택한 프롬프트를 따라요.',
+    ko: '직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요. 모델과 프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 완료됐거나 진행 중인 작업은 바뀌지 않고, 창작 옵션은 선택한 프롬프트를 따라요.',
     en: 'Choose a prompt to pin it to this chat, or follow global settings. The latest saved versions of models and prompts apply to the next request; past and running jobs stay unchanged. Creative options follow the selected prompt.',
     ja: '直接選ぶとこのチャットに固定し、「全体に従う」では全体設定を使います。モデルとプロンプトの最新の保存済み内容は次のリクエストから反映され、過去や実行中の作業は変わりません。創作オプションは選択したプロンプトに従います。',
     zh: '直接选择会固定用于此聊天，也可使用全局设置。模型与提示词的最新已保存版本从下次请求起生效，过去与进行中的任务不变，创作选项遵循所选提示词。',
@@ -1056,9 +1056,9 @@ export const messages = {
     zh: 'Risu作者备注',
   },
   'library.insertedAtTheAuthorNotePositionIn': {
-    ko: 'Risu 프롬프트의 작가 노트 위치에 넣어요. 일반적인 지속 조건은 기억·로어의 메모·정정에 적어요. 비워 두면 프롬프트에 저장된 기본값을 사용해요.',
+    ko: 'Risu 프롬프트의 작가 노트 위치에 넣어요. 일반적인 지속 조건은 기억과 메모에 적어요. 비워 두면 프롬프트에 저장된 기본값을 사용해요.',
     en: "Inserted at the author note position in the Risu prompt. Use Memory and lore notes for general persistent instructions. Leave empty to use the prompt's saved default.",
-    ja: 'Risuプロンプトの作家ノート位置に挿入します。一般的な継続条件は記憶・ロアのメモに記入してください。空欄ならプロンプトの保存済み初期値を使います。',
+    ja: 'Risuプロンプトの作家ノート位置に挿入します。一般的な継続条件は記憶とメモのメモに記入してください。空欄ならプロンプトの保存済み初期値を使います。',
     zh: '放在Risu提示词的作者备注位置。通用持续指令请填写在记忆与设定的备注中，留空则使用提示词中保存的默认值。',
   },
   'library.modelsUsedByGlobalChatSettings': {
@@ -1074,10 +1074,10 @@ export const messages = {
     zh: '翻译',
   },
   'library.unavailableRegisteredModelNotFound': {
-    ko: '사용 불가 · 등록된 모델을 찾을 수 없어요',
-    en: 'Unavailable · registered model not found',
-    ja: '利用不可・登録済みモデルが見つかりません',
-    zh: '不可用 · 找不到已注册的模型',
+    ko: '사용 불가: 등록된 모델을 찾을 수 없어요',
+    en: 'Unavailable, registered model not found',
+    ja: '利用不可：登録済みモデルが見つかりません',
+    zh: '不可用，找不到已注册的模型',
   },
   'library.noModelSelected': {
     ko: '사용할 모델 미지정',
@@ -1086,9 +1086,9 @@ export const messages = {
     zh: '未指定模型',
   },
   'library.loreTranslationRefusalAndImagePlacementDecisions': {
-    ko: '로어·번역 거절·이미지 배치 판단',
+    ko: '로어 선별, 번역 거절 판정, 이미지 배치',
     en: 'Lore, translation refusal, and image placement decisions',
-    ja: 'ロア・翻訳拒否・画像配置の判断',
+    ja: 'ロア、翻訳拒否、画像配置の判断',
     zh: '设定、翻译拒绝与图片排布判断',
   },
   'library.promptsUsedByGlobalChatSettings': {
@@ -1128,9 +1128,9 @@ export const messages = {
     zh: '有未保存的更改。',
   },
   'library.saveChangesToConversationSetupPromptsModels': {
-    ko: '대화 구성·프롬프트·모델·로어 정책·자동 배치의 변경을 함께 저장해요.',
+    ko: '대화 구성, 생성 설정, 로어 정책, 자동 배치의 변경을 함께 저장해요.',
     en: 'Save changes to conversation setup, prompts, models, lore policies, and automatic placement together.',
-    ja: '会話構成・プロンプト・モデル・ロア方針・自動配置の変更をまとめて保存します。',
+    ja: '会話構成、プロンプト、モデル、ロア方針、自動配置の変更をまとめて保存します。',
     zh: '一并保存对话配置、提示词、模型、设定策略与自动排布的更改。',
   },
   'library.saveChatSettings': {
@@ -1278,15 +1278,15 @@ export const messages = {
     zh: '此故事的图片',
   },
   'library.editStoryImagesAttachedToBotsPersonas': {
-    ko: '봇·페르소나·모듈에 등록한 본문용 이미지는 각 자료에서 편집해요. 자동 이미지 배치에 이 이미지들도 사용할 수 있어요.',
+    ko: '봇, 페르소나, 모듈에 등록한 본문용 이미지는 각 자료에서 편집해요. 자동 이미지 배치에 이 이미지들도 사용할 수 있어요.',
     en: 'Edit story images attached to bots, personas, and modules in their resources. Automatic placement can use them too.',
-    ja: 'ボット・ペルソナ・モジュールの本文用画像は各資料で編集します。自動配置ではこれらの画像も使えます。',
+    ja: 'ボット、ペルソナ、モジュールの本文用画像は各資料で編集します。自動配置ではこれらの画像も使えます。',
     zh: '机器人、角色、模块中的正文图片在各自资料中编辑，自动排布也可以使用这些图片。',
   },
   'library.editNameAndDescription': {
-    ko: '이름·설명 편집',
+    ko: '이름과 설명 편집',
     en: 'Edit name and description',
-    ja: '名前・説明を編集',
+    ja: '名前と説明を編集',
     zh: '编辑名称与描述',
   },
   'library.uploadedImageName': {
@@ -1296,10 +1296,10 @@ export const messages = {
     zh: '已上传图片名称',
   },
   'library.descriptionOptional': {
-    ko: '설명 · 선택',
-    en: 'Description · optional',
-    ja: '説明・任意',
-    zh: '描述 · 可选',
+    ko: '설명 (선택)',
+    en: 'Description (optional)',
+    ja: '説明（任意）',
+    zh: '说明（可选）',
   },
   'library.uploadedImageDescription': {
     ko: '업로드 이미지 설명',
@@ -1428,10 +1428,10 @@ export const messages = {
     zh: '取消封面指定',
   },
   'library.pngJpegWebpAvifGifUpTo': {
-    ko: 'PNG · JPEG · WebP · AVIF · GIF, 최대 64MiB · 자동 WebP 변환',
-    en: 'PNG · JPEG · WebP · AVIF · GIF, up to 64 MiB · automatic WebP conversion',
-    ja: 'PNG・JPEG・WebP・AVIF・GIF、最大64MiB・WebPに自動変換',
-    zh: 'PNG · JPEG · WebP · AVIF · GIF，最大64MiB · 自动转为WebP',
+    ko: 'PNG, JPEG, WebP, AVIF, GIF, 최대 64MiB, 자동 WebP 변환',
+    en: 'PNG, JPEG, WebP, AVIF, GIF, up to 64 MiB, automatic WebP conversion',
+    ja: 'PNG、JPEG、WebP、AVIF、GIF、最大64MiB、WebPに自動変換',
+    zh: 'PNG，JPEG，WebP，AVIF，GIF，最大64MiB，自动转为WebP',
   },
   'library.uploadingPortrait': {
     ko: '대표 이미지를 업로드하고 있어요…',
@@ -1848,9 +1848,9 @@ export const messages = {
     zh: '备注作者',
   },
   'library.noteOrCorrection': {
-    ko: '메모·정정 내용',
+    ko: '메모와 정정 내용',
     en: 'Note or correction',
-    ja: 'メモ・訂正の内容',
+    ja: 'メモと訂正の内容',
     zh: '备注或更正内容',
   },
   'library.saveEditedNote': {
@@ -1896,10 +1896,10 @@ export const messages = {
     zh: '从此聊天的后续请求中排除此备注，保留过去的运行与备注历史。',
   },
   'library.confirmedRetire': {
-    ko: '확인했어요 · 사용 중단',
-    en: 'Confirmed · retire',
-    ja: '確認済み・使用を中止',
-    zh: '已确认 · 停用',
+    ko: '확인 후 사용 중단',
+    en: 'Acknowledge and retire',
+    ja: '確認して使用を中止',
+    zh: '确认并停用',
   },
   'library.back': {
     ko: '돌아가기',
@@ -1920,16 +1920,16 @@ export const messages = {
     zh: '用作机器人时的翻译指引',
   },
   'library.addThisWorkSTerminologyAndVoice': {
-    ko: '번역 프리셋의 공통 원칙에 이 작품의 표기와 말투를 더해요. 이 자료를 봇으로 사용하는 채팅의 다음 번역·재번역부터 사용해요. 페르소나·모듈 역할로 장착하면 적용하지 않아요.',
+    ko: '번역 프리셋의 공통 원칙에 이 작품의 표기와 말투를 더해요. 이 자료를 봇으로 사용하는 채팅의 다음 번역과 재번역부터 사용해요. 페르소나나 모듈 역할로 장착하면 적용하지 않아요.',
     en: "Add this work's terminology and voice to the translation preset's shared principles. Applies from the next translation or retranslation in chats using this resource as a bot. Does not apply in persona or module roles.",
-    ja: '翻訳プリセットの共通原則に、この作品の表記や話し方を加えます。この資料をボットとして使うチャットで、次の翻訳・再翻訳から使います。ペルソナやモジュールとして装着した場合は適用しません。',
+    ja: '翻訳プリセットの共通原則に、この作品の表記や話し方を加えます。この資料をボットとして使うチャットで、次の翻訳、再翻訳から使います。ペルソナやモジュールとして装着した場合は適用しません。',
     zh: '在翻译预设的通用原则上添加本作品的用词与语气。从以此资料为机器人的聊天的下次翻译或重新翻译起生效，用作角色或模块时不适用。',
   },
   'library.voiceAddressAndStyleInstructions': {
-    ko: '말투·호칭·문체 지침',
-    en: 'Voice, address, and style instructions',
-    ja: '話し方・呼称・文体の指示',
-    zh: '语气、称呼与文风指引',
+    ko: '말투와 문체 지침',
+    en: 'Voice and style instructions',
+    ja: '話し方と文体の指示',
+    zh: '语气与文风指导',
   },
   'library.botTranslationGuide': {
     ko: '봇 번역 지침',
@@ -1944,9 +1944,9 @@ export const messages = {
     zh: '例：米拉平时语气平淡，对罗恩使用敬语。原文中若有意改变语气，请保留这种变化。',
   },
   'library.namesAndTerminology': {
-    ko: '이름·용어 표기',
+    ko: '이름과 용어 표기',
     en: 'Names and terminology',
-    ja: '名前・用語の表記',
+    ja: '名前、用語の表記',
     zh: '姓名与术语用词',
   },
   'library.theTranslationModelUsesTerminologyAndConditions': {
@@ -1998,15 +1998,15 @@ export const messages = {
     zh: '米拉',
   },
   'library.conditionsOrDescription': {
-    ko: '조건·설명',
+    ko: '조건과 설명',
     en: 'Conditions or description',
-    ja: '条件・説明',
+    ja: '条件、説明',
     zh: '条件或说明',
   },
   'library.termConditionsOrDescription': {
-    ko: '표기 {v0} 조건·설명',
+    ko: '표기 {v0} 조건과 설명',
     en: 'Term {v0} conditions or description',
-    ja: '表記{v0}の条件・説明',
+    ja: '表記{v0}の条件、説明',
     zh: '用词{v0}条件或说明',
   },
   'library.applyOnlyWhenUsedAsAPerson': {
@@ -2034,9 +2034,9 @@ export const messages = {
     zh: '预览发送给翻译的指引',
   },
   'library.thisPreviewsCurrentEditsSaveChangesTo': {
-    ko: '현재 편집 내용이에요. ‘변경사항 저장’ 후 다음 번역 요청에 전달하며, 미리보기는 모델을 호출하지 않아요. 기존 봇·페르소나·로어는 별도 참고 자료로 계속 사용해요.',
+    ko: '현재 편집 내용이에요. ‘변경사항 저장’ 후 다음 번역 요청에 전달하며, 미리보기는 모델을 호출하지 않아요. 기존 봇, 페르소나, 로어는 별도 참고 자료로 계속 사용해요.',
     en: 'This previews current edits. Save changes to send them with the next translation request. Preview does not call the model. Existing bots, personas, and lore remain separate references.',
-    ja: '現在の編集内容です。変更を保存すると次の翻訳リクエストから渡します。プレビューではモデルを呼び出しません。既存のボット・ペルソナ・ロアは別の参考資料として引き続き使います。',
+    ja: '現在の編集内容です。変更を保存すると次の翻訳リクエストから渡します。プレビューではモデルを呼び出しません。既存のボット、ペルソナ、ロアは別の参考資料として引き続き使います。',
     zh: '这是当前编辑内容，保存后将随下次翻译请求发送。预览不会调用模型，现有机器人、角色与设定继续作为独立参考资料使用。',
   },
   'library.writingTips': {
@@ -2046,9 +2046,9 @@ export const messages = {
     zh: '编写帮助',
   },
   'library.askTheAssistantToDraftTranslationInstructions': {
-    ko: '도우미에게 ‘이 봇의 설명과 로어를 참고해 번역 지침 초안을 만들어줘’라고 요청할 수 있어요. 지침은 요청했을 때만 작성·저장하며, 새 용어를 자동으로 누적하지 않아요.',
+    ko: '도우미에게 ‘이 봇의 설명과 로어를 참고해 번역 지침 초안을 만들어줘’라고 요청할 수 있어요. 지침은 요청했을 때만 작성하고 저장하며, 새 용어를 자동으로 누적하지 않아요.',
     en: "Ask the assistant to draft translation instructions using this bot's description and lore. Instructions are written and saved only on request; new terms are not collected automatically.",
-    ja: 'アシスタントに、このボットの説明とロアを参考に翻訳指示の下書きを頼めます。指示は依頼したときだけ作成・保存し、新しい用語を自動で蓄積しません。',
+    ja: 'アシスタントに、このボットの説明とロアを参考に翻訳指示の下書きを頼めます。指示は依頼したときだけ作成して保存し、新しい用語を自動で蓄積しません。',
     zh: '可以请助手参考此机器人的描述与设定起草翻译指引。指引仅在请求时编写和保存，不会自动累积新术语。',
   },
   'library.aPngJpegWebpAvifOrGif': {
@@ -2130,13 +2130,13 @@ export const messages = {
     zh: '已保存{title}，将用于后续运行。',
   },
   'library.savedPlacementWarning': {
-    ko: '{title} 저장됨 · 서재의 분류 반영을 확인해 주세요.',
+    ko: '{title} 저장됨, 서재의 분류 반영을 확인해 주세요.',
     en: '{title} saved. Check its library category placement.',
     ja: '{title}は保存済みです。ライブラリの分類を確認してください。',
     zh: '{title}已保存，请检查资料库分类。',
   },
   'library.savedRefreshWarning': {
-    ko: '{title} 저장됨 · 서재 목록을 갱신하지 못했어요.',
+    ko: '{title} 저장됨, 서재 목록을 갱신하지 못했어요.',
     en: '{title} saved, but the library list could not be refreshed.',
     ja: '{title}は保存済みですが、ライブラリ一覧を更新できませんでした。',
     zh: '{title}已保存，但无法刷新资料库列表。',
@@ -2196,16 +2196,16 @@ export const messages = {
     zh: '设定{count}项',
   },
   'library.globalValue': {
-    ko: '전역 따르기 · {value}',
-    en: 'Follow global · {value}',
-    ja: '全体に従う・{value}',
-    zh: '使用全局设置 · {value}',
+    ko: '전역 따르기: {value}',
+    en: 'Follow global, {value}',
+    ja: '全体に従う：{value}',
+    zh: '使用全局设置，{value}',
   },
   'library.unavailableValue': {
-    ko: '사용 불가 · {value}',
-    en: 'Unavailable · {value}',
-    ja: '利用不可・{value}',
-    zh: '不可用 · {value}',
+    ko: '사용 불가: {value}',
+    en: 'Unavailable, {value}',
+    ja: '利用不可：{value}',
+    zh: '不可用，{value}',
   },
   'library.imageDeleted': {
     ko: '{title} 이미지를 삭제했어요.',
@@ -2214,10 +2214,10 @@ export const messages = {
     zh: '已删除图片{title}。',
   },
   'library.chatImageCount': {
-    ko: '이 채팅의 이미지 · {count, number}개',
-    en: 'Images in this chat · {count, number}',
-    ja: 'このチャットの画像 · {count, number}件',
-    zh: '此聊天的图片 · {count, number}张',
+    ko: '이 채팅의 이미지: {count, number}개',
+    en: 'Images in this chat, {count, number}',
+    ja: 'このチャットの画像、{count, number}件',
+    zh: '此聊天的图片，{count, number}张',
   },
   'library.imageMetadataHint': {
     ko: '이름과 설명은 JEV의 이미지 선택에 사용돼요. 본문이 포함된 용도는 자동 이미지 배치 후보가 돼요.{portrait, select, yes { 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.} other {}}',
@@ -2250,22 +2250,22 @@ export const messages = {
     zh: '此角色用于{title}的新聊天，现有聊天不变。',
   },
   'library.notesSummary': {
-    ko: '사용자 메모·정정{imported, select, yes {·가져온 기억} other {}} {count, number}개',
-    en: 'User notes and corrections{imported, select, yes { · Imported memories} other {}} ({count, number})',
-    ja: 'ユーザーメモ・訂正{imported, select, yes {・インポートした記憶} other {}} {count, number}件',
-    zh: '用户备注与更正{imported, select, yes {·导入的记忆} other {}} {count, number}项',
+    ko: '사용자 메모와 정정{imported, select, yes {, 가져온 기억} other {}} {count, number}개',
+    en: 'User notes and corrections{imported, select, yes {, Imported memories} other {}} ({count, number})',
+    ja: 'ユーザーメモと訂正{imported, select, yes {、インポートした記憶} other {}} {count, number}件',
+    zh: '用户备注与更正{imported, select, yes {，导入的记忆} other {}} {count, number}项',
   },
   'library.notesHint': {
-    ko: '이후 요청에 지시·정정으로 참고해요. 원문·요약, Risu 프롬프트의 배치용 작가 노트와는 별도로 보존돼요.',
+    ko: '이후 요청에 지시와 정정으로 참고해요. 원문, 요약, Risu 프롬프트의 배치용 작가 노트와는 별도로 보존돼요.',
     en: 'Used as instructions or corrections in future requests. Kept separately from originals, summaries, and author notes placed in Risu prompts.',
-    ja: '今後のリクエストで指示・訂正として参照します。原文・要約やRisuプロンプト内の配置用作家ノートとは別に保持します。',
+    ja: '今後のリクエストで指示、訂正として参照します。原文、要約やRisuプロンプト内の配置用作家ノートとは別に保持します。',
     zh: '在后续请求中作为指令或更正参考，与原文、摘要及Risu提示词中的作者备注分别保留。',
   },
   'library.noteAttribution': {
-    ko: '{imported, select, yes {가져온 기억: {origin} · } other {}}작성자: {author} · {linked, select, yes {원문에 연결된 메모} other {첫 장면 전 메모}}',
-    en: '{imported, select, yes {Imported memory: {origin} · } other {}}Author: {author} · {linked, select, yes {Note linked to original} other {Note before first scene}}',
-    ja: '{imported, select, yes {インポートした記憶：{origin}・} other {}}作成者：{author}・{linked, select, yes {原文に関連付けたメモ} other {最初の場面より前のメモ}}',
-    zh: '{imported, select, yes {导入的记忆：{origin} · } other {}}作者：{author} · {linked, select, yes {关联原文的备注} other {首个场景前的备注}}',
+    ko: '{imported, select, yes {가져온 기억: {origin}, } other {}}작성자: {author}, {linked, select, yes {원문에 연결된 메모} other {첫 장면 전 메모}}',
+    en: '{imported, select, yes {Imported memory: {origin}, } other {}}Author: {author}, {linked, select, yes {Note linked to original} other {Note before first scene}}',
+    ja: '{imported, select, yes {インポートした記憶：{origin}、} other {}}作成者：{author}、{linked, select, yes {原文に関連付けたメモ} other {最初の場面より前のメモ}}',
+    zh: '{imported, select, yes {导入的记忆：{origin}，} other {}}作者：{author}，{linked, select, yes {关联原文的备注} other {首个场景前的备注}}',
   },
   'library.termNumber': {
     ko: '표기 {number, number}',

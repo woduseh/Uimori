@@ -185,7 +185,7 @@ function nodeErrors(value: unknown): ComfyDiagnostic['nodeErrors'] {
           .slice(0, 5)
           .map((item) =>
             object(item)
-              ? [bounded(item.message), bounded(item.details, 200)].filter(Boolean).join(' · ')
+              ? [bounded(item.message), bounded(item.details, 200)].filter(Boolean).join(': ')
               : ''
           )
           .filter(Boolean)
@@ -212,7 +212,7 @@ function statusMessages(status: unknown): string[] {
           bounded(detail.exception_message, 400),
         ]
           .filter(Boolean)
-          .join(' · ')
+          .join(': ')
       : '';
     result.push(message || String(kind));
   }

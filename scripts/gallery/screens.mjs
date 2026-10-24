@@ -34,27 +34,27 @@ const openPrompts = [
 ];
 const appLabels = {
   general: '일반',
-  themes: '테마·색상',
+  themes: '테마와 색상',
   models: '역할별 모델',
   prompts: '현재 프롬프트',
-  connections: '프로바이더·모델',
+  connections: '프로바이더와 모델',
   lore: '로어 컨텍스트',
   agents: 'Codex 연결',
   illustrations: '삽화',
   usage: '사용량',
   data: '데이터 관리',
-  about: '앱 정보·라이선스',
+  about: '앱 정보',
 };
 const chatLabels = {
-  characters: '인물·자료',
-  prompts: '프롬프트·모델·번역',
-  story: '기억·메모·로어',
-  images: '이미지·삽화 참조',
+  characters: '사용 자료',
+  prompts: '생성 설정',
+  story: '기억과 메모',
+  images: '이미지',
 };
 
 const chatSettings = (section, title) => ({
   id: `chat-settings-${section}`,
-  title: `채팅 설정 · ${title}`,
+  title: `채팅 설정: ${title}`,
   url: chat,
   enter: [
     { menu: 'chat', when: 'compact' },
@@ -67,7 +67,7 @@ const chatSettings = (section, title) => ({
 });
 const appSettings = (section, title) => ({
   id: `settings-${section}`,
-  title: `설정 · ${title}`,
+  title: `설정: ${title}`,
   url: {},
   enter: [
     { click: { label: '탐색 메뉴' }, when: 'compact' },
@@ -80,7 +80,7 @@ const appSettings = (section, title) => ({
 });
 const library = (tab, title) => ({
   id: `library-${tab}`,
-  title: `서재 · ${title}`,
+  title: `서재: ${title}`,
   url: {},
   enter: [...openLibrary, { click: { role: 'tab', name: title, within: libraryTabs } }],
   ready: { testid: 'library-panel' },
@@ -185,7 +185,7 @@ export const screens = [
   },
   {
     id: 'composer-request-preview-empty',
-    title: '다음 요청 미리보기 · 빈 요청',
+    title: '다음 요청 미리보기: 빈 요청',
     url: chat,
     enter: [
       { click: { label: '입력창 더보기' } },
@@ -193,10 +193,10 @@ export const screens = [
     ],
     ready: { role: 'dialog', name: '다음 요청 미리보기' },
   },
-  chatSettings('characters', '봇·페르소나·모듈'),
-  chatSettings('prompts', '프롬프트·모델·번역'),
-  chatSettings('story', '기억·메모·로어'),
-  chatSettings('images', '이미지·삽화 참조'),
+  chatSettings('characters', '사용 자료'),
+  chatSettings('prompts', '생성 설정'),
+  chatSettings('story', '기억과 메모'),
+  chatSettings('images', '이미지'),
   {
     ...chatSettings('prompts', '고급 실행 설정'),
     id: 'chat-settings-generation-advanced',
@@ -247,7 +247,7 @@ export const screens = [
   },
   {
     id: 'navigation-chat-menu',
-    title: '모바일 탐색 드로어 · 채팅 행 ⋯',
+    title: '모바일 탐색 드로어: 채팅 행 ⋯',
     url: chat,
     enter: [{ click: { label: '탐색 메뉴' } }],
     ready: { role: 'dialog', name: '탐색' },
@@ -257,7 +257,7 @@ export const screens = [
   },
   {
     id: 'sidebar-chat-menu',
-    title: '사이드바 · 채팅 행 ⋯',
+    title: '사이드바: 채팅 행 ⋯',
     url: chat,
     ready: { testid: 'source-text' },
     steps: [{ menu: '$chat.main.title 채팅 메뉴' }],
@@ -269,14 +269,14 @@ export const screens = [
   library('module', '모듈'),
   {
     id: 'library-prompts',
-    title: '서재 · 프롬프트',
+    title: '서재: 프롬프트',
     url: {},
     enter: openPrompts,
     ready: { testid: 'prompt-library' },
   },
   {
     id: 'library-detail',
-    title: '서재 · 자료 상세',
+    title: '서재: 자료 상세',
     url: {},
     enter: openLibrary,
     ready: { testid: 'library-panel' },
@@ -284,7 +284,7 @@ export const screens = [
   },
   {
     id: 'library-item-menu',
-    title: '서재 · 자료 행 ⋯',
+    title: '서재: 자료 행 ⋯',
     url: {},
     enter: openLibrary,
     ready: { testid: 'library-panel' },
@@ -292,14 +292,14 @@ export const screens = [
     metrics: ['menu-in-viewport', ...defaultMetrics],
   },
   appSettings('general', '일반'),
-  appSettings('themes', '테마·색상'),
+  appSettings('themes', '테마와 색상'),
   appSettings('models', '역할별 모델'),
   appSettings('prompts', '현재 프롬프트'),
-  appSettings('connections', '프로바이더·모델'),
+  appSettings('connections', '프로바이더와 모델'),
   appSettings('lore', '로어 컨텍스트'),
   appSettings('agents', 'Codex 연결'),
   appSettings('illustrations', '삽화'),
   appSettings('usage', '사용량'),
   appSettings('data', '데이터 관리'),
-  appSettings('about', '앱 정보·라이선스'),
+  appSettings('about', '앱 정보'),
 ];

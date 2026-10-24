@@ -654,7 +654,7 @@ for (const viewport of [
         mount();
       });
       await page.getByRole('tab', { name: '로어북', exact: true }).click();
-      await page.getByText('조건·배치·원문 설정', { exact: true }).click();
+      await page.getByText('조건, 배치, 원문 설정', { exact: true }).click();
       const keywords = page.getByLabel('로어 키워드', { exact: true });
       await keywords.focus();
       await keywords.press('End');

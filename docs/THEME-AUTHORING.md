@@ -4,7 +4,7 @@ Uimori 테마는 **화면 표현만 바꾸는 독립 자료**예요. 이야기 �
 
 ## 사용과 제작 흐름
 
-설정 → **테마·색상**의 기본 화면에서 **기본 외관**과 **화면 모드**를 선택해요. **고급 외관·테마 제작**은 기본으로 접혀 있으며, 여기에서 **레이아웃**과 **팔레트**를 따로 선택하거나 기본 테마의 **꾸미기**로 사본 편집을 시작해요. 배경 이미지 설정은 레이아웃·팔레트 선택 아래에 있어요. 기본 레이아웃은 기본·시네마틱·편지지·스크랩북·클래식 프레임이며 팔레트는 어떤 레이아웃에도 적용할 수 있어요. **레이아웃 원래 색상**은 그 레이아웃/사용자 테마에 저장된 색상을 사용해요. **화면 모드**는 실제 앱의 밝기이며 **미리보기 색상**은 카드 미리보기와 편집할 색상 모드를 정해요. 편집기의 색상 입력 바로 위 **편집할 색상**에서도 밝은 색/어두운 색을 바꿀 수 있으며 두 선택은 함께 움직여요. 고급 편집에는 앱 CSS·본문 CSS·레이아웃 HTML·레이아웃 CSS가 있어요.
+설정 → **테마와 색상**의 기본 화면에서 **기본 외관**과 **화면 모드**를 선택해요. **고급 테마 설정**은 기본으로 접혀 있으며, 여기에서 **레이아웃**과 **팔레트**를 따로 선택하거나 기본 테마의 **꾸미기**로 사본 편집을 시작해요. 배경 이미지 설정은 레이아웃·팔레트 선택 아래에 있어요. 기본 레이아웃은 기본·시네마틱·편지지·스크랩북·클래식 프레임이며 팔레트는 어떤 레이아웃에도 적용할 수 있어요. **레이아웃 원래 색상**은 그 레이아웃/사용자 테마에 저장된 색상을 사용해요. **화면 모드**는 실제 앱의 밝기이며 **미리보기 색상**은 카드 미리보기와 편집할 색상 모드를 정해요. 편집기의 색상 입력 바로 위 **편집할 색상**에서도 밝은 색/어두운 색을 바꿀 수 있으며 두 선택은 함께 움직여요. 고급 편집에는 앱 CSS·본문 CSS·레이아웃 HTML·레이아웃 CSS가 있어요.
 
 **미리 적용**은 이 탭의 임시 화면이며 서버 선택을 바꾸지 않아요. 다른 설정으로 이동하거나 설정을 닫으면 끝나요. **테마 저장** 아이콘은 자료만 저장해요. 저장 후 테마 카드를 누르면 선택한 범위에 적용해요. 기본 테마는 읽기 전용이고 사용자 테마는 이름 변경·복제·삭제·내보내기를 지원해요. 사용자 테마의 복제·삭제는 카드 위쪽 관리 메뉴에 있어요. 편집 초안은 이 편집기가 열려 있는 동안만 보관하며, 미저장 상태로 설정을 닫을 때 저장/버리기를 고르게 해요. 편집 취소 아이콘은 현재 편집을 버리고 닫아요. 새로고침 후 초안 복원은 제공하지 않아요.
 
@@ -40,12 +40,19 @@ Uimori 테마는 **화면 표현만 바꾸는 독립 자료**예요. 이야기 �
 색상 이름에는 `--`를 붙이지 않아요. 지원 목록은 `core/themes.ts`의 `THEME_COLOR_KEYS`가 기준이에요.
 
 ```text
-bg, nav, panel, surface, surface-raised, hover, line, input-border,
-text, muted, faint, accent, accent-ink, accent-soft, user,
-error, error-ink, error-bg, shade
+bg, nav, panel, surface, surface-raised, surface-active, hover,
+line, input-border, border-hover, focus-ring, text, muted, faint,
+accent, accent-ink, accent-hover, accent-hover-ink, accent-text, accent-line, accent-soft,
+user, error, error-ink, error-bg, error-line, error-solid, error-hover,
+success, success-bg, success-line, warning, warning-bg, warning-line,
+info, info-bg, info-line, shade
 ```
 
 색상은 HEX(`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`)예요. 생략한 값은 Uimori 기본 CSS를 상속해요. `--border`는 `--line`을 사용하는 기존 별칭이에요. 복잡한 그라디언트·여백·테두리·서체는 CSS 필드를 사용해요. 사용자 글꼴·크기·행간 등 읽기 설정을 `!important`로 덮어쓰지 마세요.
+
+내장 팔레트는 [Radix Colors의 단계별 용도](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale)를 따라요. 배경은 1–2, 조작부 상태는 3–5, 경계는 6–8, 단색 버튼은 9–10, 글자는 11–12단계예요. `accent`는 버튼 배경이고 강조 글자는 `accent-text`를 사용해요. 버튼의 일반 상태와 hover 상태는 각각 `accent-ink`, `accent-hover-ink`를 짝지어요. 작은 글자 대비를 위해 밝은 세이지 팔레트의 강조 글자는 jade 12를 사용해요. 기존 팔레트 ID와 사용자 테마 자료는 유지해요.
+
+앱 조작부는 `--font-small`(12px), `--font-body`(14px), `--font-heading`(16px), `--hairline`(0.5px)을 사용해요. 원고 읽기 크기는 별도 설정이에요. 모서리는 `--radius-small`(4px), `--radius-control`(6px), `--radius-panel`(10px)을 사용하고, 중첩된 표면은 안쪽 여백만큼 곡률을 줄여요.
 
 ## 세 가지 스타일 영역
 
@@ -87,11 +94,11 @@ error, error-ink, error-bg, shade
 ```css
 .paper {
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   padding: clamp(14px, 3vw, 30px);
 }
-header { border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+header { border-bottom: var(--hairline) solid var(--line); margin-bottom: 20px; }
 footer { margin-top: 16px; }
 @media (max-width: 600px) { .paper { padding: 14px; } }
 ```
@@ -142,7 +149,7 @@ HTML 맨 앞의 `style`도 레이아웃 안에 보존해요. 템플릿은 비활
 
 ## 내장 레이아웃과 등장인물
 
-내장 **시네마틱**은 오른쪽 인물과 은은한 이중 프레임, **편지지**는 작은 인물 머리글과 종이 여백, **스크랩북**은 왼쪽 테이프 사진과 책갈피 장식으로 긴 본문을 읽어요. `core/narrative-themes.ts`가 레이아웃의 단일 원본, `core/theme-palettes.ts`가 팔레트 목록이에요. 특정 배경·캐릭터 이미지·외부 폰트·가짜 조작 버튼은 포함하지 않아요. 장식 색은 공통 색상 변수를 사용해 어느 팔레트든 함께 쓸 수 있어요.
+내장 **시네마틱**은 가장자리로 스며드는 오른쪽 인물, **편지지**는 작은 인물 머리글과 종이 여백, **스크랩북**은 왼쪽 테이프 사진, **클래식 프레임**은 단일 사각 테두리로 긴 본문을 읽어요. `core/narrative-themes.ts`가 레이아웃의 단일 원본, `core/theme-palettes.ts`가 팔레트 목록이에요. 특정 배경·캐릭터 이미지·외부 폰트·가짜 조작 버튼은 포함하지 않아요. 장식 색은 공통 색상 변수를 사용해 어느 팔레트든 함께 쓸 수 있어요.
 
 기존 숲·미드나이트·벚꽃의 동일 구조는 **기본** 레이아웃과 팔레트로 합쳤어요. 이전 선택은 같은 색을 유지하도록 읽을 때 해석하며, 기존 서재의 별도 종이 배치는 이전 선택에 한해 보존해요. 새로운 목록에는 별도 서재 카드가 없어요. Liquid Gallery는 기본 목록에서 제거하고 그 ID 선택만 시네마틱으로 연결해요. 복제·가져오기한 사용자 테마와 그 색상은 삭제하거나 덮어쓰지 않아요. 이전 선택에 포함된 사용자 색은 범위 경계를 유지해 새 상위 팔레트가 뜻하지 않게 덮어쓰지 않아요.
 

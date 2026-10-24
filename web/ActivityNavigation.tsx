@@ -214,11 +214,14 @@ export function ActivityNavigation({
                   />
                   <span className="activity-nav-copy">
                     <strong>{title(chat)}</strong>
-                    <small>
-                      {botName(chat)} · {activityStatusLabel(relevant)}
-                      {items.length > 1
-                        ? t('helpers.m265', { v0: formatNumber(items.length - 1) })
-                        : ''}
+                    <small className="ui-meta-row">
+                      <span>{botName(chat)}</span>
+                      <span>
+                        {activityStatusLabel(relevant)}
+                        {items.length > 1
+                          ? t('helpers.m265', { v0: formatNumber(items.length - 1) })
+                          : ''}
+                      </span>
                     </small>
                   </span>
                   <time dateTime={relevant.at}>{timeLabel(relevant.at)}</time>
@@ -263,7 +266,7 @@ export function ActivityNavigation({
                   <strong>{title(chat)}</strong>
                   <small>
                     {t('helpers.m332', {
-                      kinds: [...info.kinds].join(' · '),
+                      kinds: [...info.kinds].join(', '),
                       count: formatNumber(info.count),
                     })}
                   </small>
@@ -321,25 +324,28 @@ export function ActivityNavigation({
               )}
               <span className="activity-nav-copy">
                 <strong>{task.title || t('helpers.m274')}</strong>
-                <small>
-                  {task.chatId
-                    ? (chatById.get(task.chatId)?.title ?? t('helpers.m275'))
-                    : t('helpers.m276')}{' '}
-                  ·{' '}
-                  {task.status === 'running'
-                    ? t('helpers.m113')
-                    : task.status === 'queued'
-                      ? t('helpers.m277')
-                      : task.status === 'completed'
-                        ? t('helpers.m278')
-                        : task.status === 'failed'
-                          ? t('helpers.m279')
-                          : task.status === 'cancelled'
-                            ? t('helpers.m165')
-                            : t('helpers.m280')}
-                  {task.committedEffects > 0
-                    ? t('helpers.m281', { v0: formatNumber(task.committedEffects) })
-                    : ''}
+                <small className="ui-meta-row">
+                  <span>
+                    {task.chatId
+                      ? (chatById.get(task.chatId)?.title ?? t('helpers.m275'))
+                      : t('helpers.m276')}
+                  </span>
+                  <span>
+                    {task.status === 'running'
+                      ? t('helpers.m113')
+                      : task.status === 'queued'
+                        ? t('helpers.m277')
+                        : task.status === 'completed'
+                          ? t('helpers.m278')
+                          : task.status === 'failed'
+                            ? t('helpers.m279')
+                            : task.status === 'cancelled'
+                              ? t('helpers.m165')
+                              : t('helpers.m280')}
+                    {task.committedEffects > 0
+                      ? t('helpers.m281', { v0: formatNumber(task.committedEffects) })
+                      : ''}
+                  </span>
                 </small>
               </span>
               <time dateTime={task.updatedAt}>{timeLabel(task.updatedAt)}</time>

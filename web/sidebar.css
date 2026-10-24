@@ -2,8 +2,10 @@
    loses its primary entry points. The rail is only a narrower navigation column, so
    every existing template keeps working through --nav-w. Below 1024px navigation is
    already a drawer and --rail-w collapses to zero. */
-.app-shell {
-  transition: grid-template-columns var(--motion-panel) ease;
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell {
+    transition: grid-template-columns var(--motion-panel) var(--motion-ease-out);
+  }
 }
 /* Desktop width choices do not change the collapsed rail or mobile drawer. */
 @media (min-width: 1024px) {
@@ -53,7 +55,7 @@
 }
 .sidebar-rail > .sidebar-app-actions {
   padding-top: 8px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .sidebar-rail-spacer {
   flex: 1;

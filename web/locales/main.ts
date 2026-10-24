@@ -48,10 +48,10 @@ export const messages = {
     zh: '正在检查正文模型',
   },
   'main.m009': {
-    ko: '선택한 본문 모델 · 확인 필요',
-    en: 'Selected writing model · needs review',
-    ja: '選択中の本文モデル · 要確認',
-    zh: '所选正文模型 · 需要检查',
+    ko: '선택한 본문 모델: 확인 필요',
+    en: 'Selected writing model, needs review',
+    ja: '選択中の本文モデル、要確認',
+    zh: '所选正文模型，需要检查',
   },
   'main.m010': {
     ko: '본문 모델을 선택해 주세요',
@@ -60,10 +60,10 @@ export const messages = {
     zh: '请选择正文模型',
   },
   'main.m011': {
-    ko: '선택한 도우미 모델 · 확인 필요',
-    en: 'Selected assistant model · needs review',
-    ja: '選択中のアシスタントモデル · 要確認',
-    zh: '所选助手模型 · 需要检查',
+    ko: '선택한 도우미 모델: 확인 필요',
+    en: 'Selected assistant model, needs review',
+    ja: '選択中のアシスタントモデル、要確認',
+    zh: '所选助手模型，需要检查',
   },
   'main.m012': {
     ko: '도우미 모델을 선택해 주세요',
@@ -314,7 +314,7 @@ export const messages = {
   'main.m053': {
     ko: '직접 접거나 펼친 컷의 선택은 유지해요. 그림 생성과 저장에는 영향을 주지 않아요.',
     en: 'Individual expand and collapse choices are preserved. Image generation and storage are unchanged.',
-    ja: '個別に折りたたみ・展開した選択は保持します。画像の生成や保存には影響しません。',
+    ja: '個別に折りたたみや展開した選択は保持します。画像の生成や保存には影響しません。',
     zh: '保留每张插图的展开或折叠选择。不影响图片生成和保存。',
   },
   'main.m054': {
@@ -372,10 +372,10 @@ export const messages = {
     zh: '助手',
   },
   'main.m063': {
-    ko: '원작·인물 참고',
-    en: 'Story and character reference',
-    ja: '原作・人物の参照',
-    zh: '原作与角色参考',
+    ko: '원작 참고',
+    en: 'Canon reference',
+    ja: '原作参照',
+    zh: '原作参考',
   },
   'main.m064': {
     ko: '원고 내보내기',
@@ -390,9 +390,9 @@ export const messages = {
     zh: '导出聊天备份',
   },
   'main.m066': {
-    ko: '원문·자료·이미지·실행 기록을 새 채팅으로 복원할 수 있는 백업을 받아요',
+    ko: '원문, 자료, 이미지, 실행 기록을 새 채팅으로 복원할 수 있는 백업을 받아요',
     en: 'Download a backup that can restore text, resources, images and execution history to a new chat',
-    ja: '原文・資料・画像・実行履歴を新しいチャットに復元できるバックアップを取得します',
+    ja: '原文、資料、画像、実行履歴を新しいチャットに復元できるバックアップを取得します',
     zh: '下载可将原文、资料、图片和执行记录恢复到新聊天的备份',
   },
   'main.m067': {
@@ -434,7 +434,7 @@ export const messages = {
   'main.m073': {
     ko: '이 채팅의 원문, 번역, 이미지와 실행 기록을 영구 삭제해요. 실행 중인 작업은 먼저 취소하거나 완료해 주세요.',
     en: 'Permanently delete this chat’s originals, translations, images and execution history. Cancel or finish running tasks first.',
-    ja: 'このチャットの原文・翻訳・画像・実行履歴を完全に削除します。実行中のタスクを先に完了またはキャンセルしてください。',
+    ja: 'このチャットの原文、翻訳、画像、実行履歴を完全に削除します。実行中のタスクを先に完了またはキャンセルしてください。',
     zh: '永久删除此聊天的原文、译文、图片和执行记录。请先取消或完成正在进行的任务。',
   },
   'main.m074': {
@@ -876,22 +876,22 @@ export const messages = {
     zh: '确定',
   },
   'main.modelAvailability': {
-    ko: '{model}{available, select, true {} other { · 사용 불가}}',
-    en: '{model}{available, select, true {} other { · unavailable}}',
-    ja: '{model}{available, select, true {} other { · 利用不可}}',
-    zh: '{model}{available, select, true {} other { · 不可用}}',
+    ko: '{model}{available, select, true {} other {, 사용 불가}}',
+    en: '{model}{available, select, true {} other {, unavailable}}',
+    ja: '{model}{available, select, true {} other {、利用不可}}',
+    zh: '{model}{available, select, true {} other {，不可用}}',
   },
   'main.modelAria': {
-    ko: '현재 본문 모델 · {model}{pinned, select, true { · 이 채팅 고정} other {}}{prompt, select, pinned { · 작문 프롬프트 이 채팅 고정} unavailable { · 작문 프롬프트 사용 불가} other {}}',
-    en: 'Current writing model · {model}{pinned, select, true { · pinned to this chat} other {}}{prompt, select, pinned { · writing prompt pinned to this chat} unavailable { · writing prompt unavailable} other {}}',
-    ja: '現在の本文モデル · {model}{pinned, select, true { · このチャットに固定} other {}}{prompt, select, pinned { · 執筆プロンプトをこのチャットに固定} unavailable { · 執筆プロンプト利用不可} other {}}',
-    zh: '当前正文模型 · {model}{pinned, select, true { · 固定到此聊天} other {}}{prompt, select, pinned { · 写作提示词固定到此聊天} unavailable { · 写作提示词不可用} other {}}',
+    ko: '현재 본문 모델: {model}{pinned, select, true {, 이 채팅 고정} other {}}{prompt, select, pinned {, 작문 프롬프트 이 채팅 고정} unavailable {, 작문 프롬프트 사용 불가} other {}}',
+    en: 'Current writing model, {model}{pinned, select, true {, pinned to this chat} other {}}{prompt, select, pinned {, writing prompt pinned to this chat} unavailable {, writing prompt unavailable} other {}}',
+    ja: '現在の本文モデル、{model}{pinned, select, true {、このチャットに固定} other {}}{prompt, select, pinned {、執筆プロンプトをこのチャットに固定} unavailable {、執筆プロンプト利用不可} other {}}',
+    zh: '当前正文模型，{model}{pinned, select, true {，固定到此聊天} other {}}{prompt, select, pinned {，写作提示词固定到此聊天} unavailable {，写作提示词不可用} other {}}',
   },
   'main.modelPinnedTitle': {
-    ko: '{model} · 이 채팅 고정{pinned, select, true { · 본문 모델} other {}}{prompt, select, true { · 작문 프롬프트: {title}} other {}}',
-    en: '{model} · pinned to this chat{pinned, select, true { · writing model} other {}}{prompt, select, true { · writing prompt: {title}} other {}}',
-    ja: '{model} · このチャットに固定{pinned, select, true { · 本文モデル} other {}}{prompt, select, true { · 執筆プロンプト: {title}} other {}}',
-    zh: '{model} · 固定到此聊天{pinned, select, true { · 正文模型} other {}}{prompt, select, true { · 写作提示词：{title}} other {}}',
+    ko: '{model}, 이 채팅 고정{pinned, select, true {, 본문 모델} other {}}{prompt, select, true {, 작문 프롬프트: {title}} other {}}',
+    en: '{model}, pinned to this chat{pinned, select, true {, writing model} other {}}{prompt, select, true {, writing prompt: {title}} other {}}',
+    ja: '{model}、このチャットに固定{pinned, select, true {、本文モデル} other {}}{prompt, select, true {、執筆プロンプト: {title}} other {}}',
+    zh: '{model}，固定到此聊天{pinned, select, true {，正文模型} other {}}{prompt, select, true {，写作提示词：{title}} other {}}',
   },
   'main.unavailable': {
     ko: '사용 불가',
@@ -900,16 +900,16 @@ export const messages = {
     zh: '不可用',
   },
   'main.modelChip': {
-    ko: '{model}{pinned, select, true { · 고정} other {}}{prompt, select, true {} other { · 프롬프트 사용 불가}}',
-    en: '{model}{pinned, select, true { · pinned} other {}}{prompt, select, true {} other { · prompt unavailable}}',
-    ja: '{model}{pinned, select, true { · 固定} other {}}{prompt, select, true {} other { · プロンプト利用不可}}',
-    zh: '{model}{pinned, select, true { · 已固定} other {}}{prompt, select, true {} other { · 提示词不可用}}',
+    ko: '{model}{pinned, select, true {, 고정} other {}}{prompt, select, true {} other {, 프롬프트 사용 불가}}',
+    en: '{model}{pinned, select, true {, pinned} other {}}{prompt, select, true {} other {, prompt unavailable}}',
+    ja: '{model}{pinned, select, true {、固定} other {}}{prompt, select, true {} other {、プロンプト利用不可}}',
+    zh: '{model}{pinned, select, true {，已固定} other {}}{prompt, select, true {} other {，提示词不可用}}',
   },
   'main.botPersona': {
-    ko: '{bot}{hasPersona, select, true { · 페르소나 {persona}} other {}}',
-    en: '{bot}{hasPersona, select, true { · persona {persona}} other {}}',
-    ja: '{bot}{hasPersona, select, true { · ペルソナ {persona}} other {}}',
-    zh: '{bot}{hasPersona, select, true { · 角色 {persona}} other {}}',
+    ko: '{bot}{hasPersona, select, true {, 페르소나 {persona}} other {}}',
+    en: '{bot}{hasPersona, select, true {, persona {persona}} other {}}',
+    ja: '{bot}{hasPersona, select, true {、ペルソナ {persona}} other {}}',
+    zh: '{bot}{hasPersona, select, true {，角色 {persona}} other {}}',
   },
   'main.forkNotice': {
     ko: '「{title}」에서 복사한 새 채팅이에요.',
@@ -918,22 +918,22 @@ export const messages = {
     zh: '这是从“{title}”复制的新聊天。',
   },
   'main.composerPlaceholder': {
-    ko: '다음 장면을 부탁하거나, 채팅을 이어가세요… · {key} 보내기',
-    en: 'Request the next scene or continue the chat… · {key} to send',
-    ja: '次のシーンを依頼するか、チャットを続けてください… · {key} で送信',
-    zh: '请求下一个场景或继续聊天… · {key} 发送',
+    ko: '집필 요청을 입력하세요… ({key} 보내기)',
+    en: 'Enter a writing request… ({key} to send)',
+    ja: '執筆リクエストを入力…（{key}で送信）',
+    zh: '输入写作请求…（{key}发送）',
   },
   'main.writingOptions': {
-    ko: '창작 옵션{dirty, select, true { · 미적용} other {}}',
-    en: 'Writing options{dirty, select, true { · not applied} other {}}',
-    ja: '創作オプション{dirty, select, true { · 未適用} other {}}',
-    zh: '创作选项{dirty, select, true { · 未应用} other {}}',
+    ko: '창작 옵션{dirty, select, true {, 미적용} other {}}',
+    en: 'Writing options{dirty, select, true {, not applied} other {}}',
+    ja: '創作オプション{dirty, select, true {、未適用} other {}}',
+    zh: '创作选项{dirty, select, true {，未应用} other {}}',
   },
   'main.sendShortcut': {
-    ko: '보내기 · {key}',
-    en: 'Send · {key}',
-    ja: '送信 · {key}',
-    zh: '发送 · {key}',
+    ko: '보내기 ({key})',
+    en: 'Send ({key})',
+    ja: '送信（{key}）',
+    zh: '发送（{key}）',
   },
   'main.moduleChat': {
     ko: '{title}을 사용할 채팅을 선택해요.',
@@ -942,10 +942,10 @@ export const messages = {
     zh: '请选择使用{title}的聊天。',
   },
   'main.addModule': {
-    ko: '현재 채팅에 추가 · {title}',
-    en: 'Add to current chat · {title}',
-    ja: '現在のチャットに追加 · {title}',
-    zh: '添加到当前聊天 · {title}',
+    ko: '현재 채팅에 추가: {title}',
+    en: 'Add to current chat: {title}',
+    ja: '現在のチャットに追加、{title}',
+    zh: '添加到当前聊天，{title}',
   },
   'main.resumeOther': {
     ko: '다른 기기에서 이어 읽기',
@@ -980,7 +980,7 @@ export const messages = {
   'main.story3': {
     ko: '참고 이미지는 PNG, JPEG, 정지 WebP 파일로 첨부해 주세요.',
     en: 'Attach reference images as PNG, JPEG or still WebP files.',
-    ja: '参考画像にはPNG・JPEG・静止WebPファイルを添付してください。',
+    ja: '参考画像にはPNG、JPEG、静止WebPファイルを添付してください。',
     zh: '请附加PNG、JPEG或静态WebP格式的参考图片。',
   },
   'main.story4': {

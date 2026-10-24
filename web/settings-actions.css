@@ -55,7 +55,7 @@
 .model-workspace-settings .model-workspace-intro {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.5;
 }
 .model-workspace-settings .model-workspace-controls {
@@ -73,7 +73,7 @@
   padding: 0;
   margin-bottom: 8px;
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--font-body);
   font-weight: 600;
 }
 .model-secondary-settings {
@@ -85,8 +85,8 @@
   gap: 8px;
   min-height: 48px;
   padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
   font-weight: 500;
   cursor: pointer;
@@ -94,7 +94,7 @@
 .model-secondary-settings > summary small {
   margin-left: auto;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   font-weight: 400;
 }
 .model-secondary-settings[open] {
@@ -102,10 +102,10 @@
 }
 .model-secondary-settings[open] > summary {
   border-bottom: 0;
-  border-radius: 10px 10px 0 0;
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
 }
 .model-secondary-settings > .settings-group-body {
-  border-radius: 0 0 10px 10px;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
 }
 @media (hover: hover) {
   .model-secondary-settings > summary:hover {
@@ -120,7 +120,7 @@
   font-weight: 500;
 }
 .model-workspace-settings .settings-row-copy small {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.5;
 }
 .model-role-setting .settings-row-control > select {
@@ -133,9 +133,9 @@
 }
 .model-workspace-settings .model-summary-note {
   padding: 10px 0 12px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.5;
 }
 .model-workspace-settings .task-behavior-settings-body {
@@ -150,25 +150,25 @@
 }
 
 .task-behavior-section + .task-behavior-section {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 18px;
 }
 
 .task-behavior-section > h4 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--font-heading);
 }
 
 .refusal-settings-help {
   margin: 0;
   color: var(--muted);
-  font-size: 0.875rem;
+  font-size: var(--font-body);
   line-height: 1.6;
 }
 .refusal-role {
   display: grid;
   gap: 10px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
   padding-top: 14px;
 }
 .refusal-role-heading,
@@ -181,7 +181,7 @@
 .refusal-role-heading h4,
 .refusal-role-heading h5 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--font-heading);
 }
 .refusal-field-row > label {
   margin: 0;

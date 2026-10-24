@@ -365,7 +365,7 @@ export function NewStory({
     title.trim() ? t('transfer.m321') : '',
   ]
     .filter(Boolean)
-    .join(' · ');
+    .join(', ');
   return (
     <form
       className="new-story"

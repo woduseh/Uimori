@@ -541,7 +541,7 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
       await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
       await page
         .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
-        .getByRole('button', { name: '접수 확인·다시 시도' })
+        .getByRole('button', { name: '접수 확인 및 재시도' })
         .click();
       await expect(panel.locator('.helper-outbox')).toHaveCount(0);
       expect(state.steerPosts).toHaveLength(2);
@@ -960,7 +960,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   first.usage = { ...first.usage, modelCalls: 2, inputTokens: 25 };
   state.emit('attempt.finished');
   state.emit('tool.finished');
-  await expect(firstTaskStatus).toContainText('실행 요청 2회 · 누적 입력 25');
+  await expect(firstTaskStatus).toContainText('실행 요청 2회, 누적 입력 25');
   expect(state.viewReads).toBe(viewsBeforeDiagnostics + 1);
   await input.fill('뒤이어 처리할 작업');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
@@ -987,7 +987,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   await panel.getByRole('button', { name: '도우미 이전 요청 확인', exact: true }).click();
   await page
     .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
-    .getByRole('button', { name: '접수 확인·다시 시도' })
+    .getByRole('button', { name: '접수 확인 및 재시도' })
     .click();
   await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toHaveCount(0);
   expect(state.posts.at(-1)!.requestKey).toBe(key);
@@ -1253,7 +1253,7 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   await expect(panel).toBeVisible();
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('선택한 원문을 검토해 주세요.');
   await expect(
-    panel.getByText(`선택한 원문 · ${selectedText.length.toLocaleString()}자`, { exact: true })
+    panel.getByText(`선택한 원문: ${selectedText.length.toLocaleString()}자`, { exact: true })
   ).toBeVisible();
   const customRequest = '선택한 원문 전체에서 마지막 문장이 앞부분과 모순되는지 검토해 주세요.';
   await panel.getByLabel('도우미에게 요청').fill(customRequest);
@@ -1303,7 +1303,7 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
     `[data-testid="helper-task-activity"][data-task-id="${failed.id}"]`
   );
   await details.locator(':scope > summary').click();
-  await expect(details.getByText('모델 · 이전 시도의 도우미 모델', { exact: true })).toBeVisible();
+  await expect(details.getByText('모델: 이전 시도의 도우미 모델', { exact: true })).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 요청 작성 중');
   await panel.getByRole('button', { name: '요청 편집', exact: true }).click();
   await panel.getByLabel('요청 수정 내용').fill('고친 요청');
@@ -1317,7 +1317,7 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
   await page
     .getByRole('dialog', { name: '도우미 요청 확인', exact: true })
-    .getByRole('button', { name: '접수 확인·다시 시도' })
+    .getByRole('button', { name: '접수 확인 및 재시도' })
     .click();
   await expect.poll(() => state.posts.length).toBe(2);
   expect(state.posts[1].requestKey).toBe(key);
@@ -1337,10 +1337,10 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(2);
   await expect(
     panel.locator(`[data-testid="helper-task-record"][data-task-id="${failed.id}"]`)
-  ).toContainText('모델 · 이전 시도의 도우미 모델');
+  ).toContainText('모델: 이전 시도의 도우미 모델');
   await expect(
     panel.locator(`[data-testid="helper-task-record"][data-task-id="${retried.id}"]`)
-  ).toContainText('모델 · 재시도에 선택한 도우미 모델');
+  ).toContainText('모델: 재시도에 선택한 도우미 모델');
   await expect(panel.locator('.helper-task-history').getByText('SYNTHETIC_FAILURE')).toBeVisible();
 });
 
@@ -1371,7 +1371,7 @@ test('HELPUI06 saved effects survive response failure and cannot be replayed fro
     `[data-testid="helper-task-activity"][data-task-id="${failed.id}"]`
   );
   await details.locator(':scope > summary').click();
-  await expect(details.getByText('저장한 작업 · 다음 요청 옵션')).toBeVisible();
+  await expect(details.getByText('저장한 작업: 다음 요청 옵션')).toBeVisible();
   await expect(details.getByText('UNEXPECTED_EOF', { exact: true })).toBeVisible();
 });
 
@@ -1804,7 +1804,7 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation on deskto
   await expect(activity.locator('.helper-activity-stages > li')).toHaveCount(4);
   await expect(activity.locator('[data-state="running"]')).toContainText('대화 내용 정리');
   await expect(
-    activity.getByText('resource.patch · EDITOR_SAVE_REQUIRED', { exact: true })
+    activity.getByText('resource.patch: EDITOR_SAVE_REQUIRED', { exact: true })
   ).toBeVisible();
   await activity.getByText('자료 확인', { exact: true }).click();
   await expect(activity.locator('code').filter({ hasText: /^resource\.read$/u })).toBeVisible();
@@ -1812,7 +1812,7 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation on deskto
   await page.screenshot({ path: info.outputPath('helper-activity-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
   await expect(
-    activity.getByText('resource.patch · EDITOR_SAVE_REQUIRED', { exact: true })
+    activity.getByText('resource.patch: EDITOR_SAVE_REQUIRED', { exact: true })
   ).toBeVisible();
   expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath('helper-activity-mobile.png'), fullPage: true });
@@ -1822,6 +1822,6 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation on deskto
   );
   await expect(activity.locator('[data-state="running"]')).toHaveCount(0);
   await expect(
-    activity.getByText('resource.patch · EDITOR_SAVE_REQUIRED', { exact: true })
+    activity.getByText('resource.patch: EDITOR_SAVE_REQUIRED', { exact: true })
   ).toBeVisible();
 });

@@ -258,7 +258,7 @@ test('ITRAN typing, including edit-then-revert, cannot be overwritten by a late 
     released.release();
     await finished.promise;
     await expect(
-      page.getByText('이전 초안의 번역 · 현재 입력은 유지했어요', { exact: true })
+      page.getByText('이전 초안의 번역 (현재 입력 유지)', { exact: true })
     ).toBeVisible();
     await expect(composer(page)).toHaveValue(original);
     await composer(page).fill('지금 보존해야 할 새 초안');

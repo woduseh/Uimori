@@ -12,8 +12,8 @@
   padding: 0;
   overflow: hidden;
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
 }
 .reader-portrait-button img {
   display: block;
@@ -31,7 +31,7 @@
   width: 100%;
   color: var(--muted);
   background: var(--surface);
-  font-size: 32px;
+  font-size: var(--font-heading);
 }
 .app-dialog.reader-portrait-dialog {
   width: fit-content;
@@ -49,7 +49,7 @@
   max-width: 100%;
   max-height: calc(var(--app-height, 100dvh) - 170px);
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 
 /* The default layout opts in; existing custom themes retain their original context strip. */
@@ -64,7 +64,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 .reader-bot-avatar > .profile-asset {

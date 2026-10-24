@@ -203,7 +203,7 @@ export class HelperWorkspace {
       workerActive: false,
       canDelete: activeTasks === 0 && unsettledAttempts === 0,
       description:
-        '이 도우미 대화의 메시지·작업·가정 장면·개인 요약을 삭제해요. 이미 저장한 본편·공통 자료와 다음 요청 옵션은 유지돼요. 사용량 숫자는 내용 없이 유지해요. 진행 중인 작업은 먼저 중지해 주세요.',
+        '이 도우미 대화의 메시지, 작업, 가정 장면, 개인 요약을 삭제해요. 이미 저장한 본편, 공통 자료와 다음 요청 옵션은 유지돼요. 사용량 숫자는 내용 없이 유지해요. 진행 중인 작업은 먼저 중지해 주세요.',
     };
   }
   delete(id: string, expected: HelperConversationDeletion['request']) {

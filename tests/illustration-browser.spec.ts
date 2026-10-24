@@ -143,7 +143,7 @@ for (const width of [360, 412]) {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto(`/?chat=${chat.id}`);
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '이미지·삽화 참조');
+    await selectChatSettingsSection(page, '이미지');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     const references = dialog.getByRole('region', { name: '삽화 참조 이미지', exact: true });
     const personRole = references.getByLabel('인물 기준 이미지 참조 역할', { exact: true });
@@ -312,11 +312,11 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
   {
-    const management = page.getByText('기본 생성 환경·자동 생성 관리', { exact: true });
+    const management = page.getByText('기본 생성 환경과 자동 생성 관리', { exact: true });
     if ((await management.locator('..').getAttribute('open')) === null) await management.click();
   }
   {
-    const management = page.getByText('프리셋·적용 범위 관리', { exact: true });
+    const management = page.getByText('프리셋과 적용 범위 관리', { exact: true });
     if ((await management.locator('..').getAttribute('open')) === null) await management.click();
   }
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });
@@ -389,11 +389,11 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
   {
-    const management = page.getByText('기본 생성 환경·자동 생성 관리', { exact: true });
+    const management = page.getByText('기본 생성 환경과 자동 생성 관리', { exact: true });
     if ((await management.locator('..').getAttribute('open')) === null) await management.click();
   }
   {
-    const management = page.getByText('프리셋·적용 범위 관리', { exact: true });
+    const management = page.getByText('프리셋과 적용 범위 관리', { exact: true });
     if ((await management.locator('..').getAttribute('open')) === null) await management.click();
   }
   const section = page.getByRole('region', { name: '삽화 설정', exact: true });

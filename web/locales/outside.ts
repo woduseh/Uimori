@@ -108,7 +108,7 @@ export const messages = {
     zh: '可通过 HTTPS 或 localhost 安装。',
   },
   'outside.securePwa': {
-    ko: '이 환경에서는 앱 설치·알림을 준비할 수 없어요. HTTPS 주소로 열어 주세요.',
+    ko: '이 환경에서는 앱 설치와 알림을 준비할 수 없어요. HTTPS 주소로 열어 주세요.',
     en: 'App installation and notifications are unavailable here. Open an HTTPS address.',
     ja: 'この環境ではアプリのインストールと通知を準備できません。HTTPSのアドレスで開いてください。',
     zh: '当前环境无法准备应用安装和通知。请使用 HTTPS 地址打开。',
@@ -168,10 +168,10 @@ export const messages = {
     zh: '关于 Uimori',
   },
   'outside.about': {
-    ko: '앱 정보 · 실행 버전과 라이선스',
-    en: 'About · Running version and license',
-    ja: 'アプリ情報 · 実行バージョンとライセンス',
-    zh: '应用信息 · 运行版本和许可证',
+    ko: '앱 정보',
+    en: 'About',
+    ja: 'アプリ情報',
+    zh: '应用信息',
   },
   'outside.version': {
     ko: '서버 실행 버전',
@@ -246,9 +246,9 @@ export const messages = {
     zh: '许可证全文',
   },
   'outside.notices': {
-    ko: '저작권·제3자 고지',
+    ko: '저작권 및 제3자 고지',
     en: 'Copyright and third-party notices',
-    ja: '著作権・第三者に関する告知',
+    ja: '著作権、第三者に関する告知',
     zh: '版权和第三方声明',
   },
   'outside.prefMain': {
@@ -264,16 +264,16 @@ export const messages = {
     zh: '需要关注的任务失败',
   },
   'outside.prefTranslation': {
-    ko: '개별 번역 완료·실패',
-    en: 'Individual translation completion and failure',
-    ja: '個別翻訳の完了・失敗',
-    zh: '单独翻译完成或失败',
+    ko: '개별 번역 결과',
+    en: 'Translation results',
+    ja: '個別翻訳の結果',
+    zh: '单次翻译结果',
   },
   'outside.prefIllustration': {
-    ko: '삽화 완료·실패',
-    en: 'Illustration completion and failure',
-    ja: '挿絵の完了・失敗',
-    zh: '插图完成或失败',
+    ko: '삽화 생성 결과',
+    en: 'Illustration results',
+    ja: '挿絵生成の結果',
+    zh: '插图生成结果',
   },
   'outside.prefTitle': {
     ko: '채팅 제목 표시 (잠금 화면에도 표시될 수 있어요)',

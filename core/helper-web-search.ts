@@ -35,5 +35,5 @@ export function webCitationLinks(citations: Json[]): string {
     const target = url.href.replace(/[<>\s]/gu, (value) => encodeURIComponent(value));
     links.push(`[${label}](<${target}>)`);
   }
-  return links.length ? '\n\n' + links.join(' · ') : '';
+  return links.length ? '\n\n' + links.join('\n') : '';
 }

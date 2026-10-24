@@ -255,7 +255,7 @@ test('C04V saved versions stay read-only until saved, preserve the previous draf
   await name.getByRole('textbox', { name: '장면 이름', exact: true }).fill('The quiet lighthouse');
   await name.getByRole('button', { name: '이름 저장' }).click();
   await expect(
-    list.getByRole('button', { name: '1번째 장면 · The quiet lighthouse', exact: true })
+    list.getByRole('button', { name: '1번째 장면, The quiet lighthouse', exact: true })
   ).toBeVisible();
   const search = list.getByRole('searchbox', { name: '장면 검색어' });
   await search.fill('lighthouse');

@@ -52,8 +52,8 @@ async function application(directory?: string) {
 
 test('builtin catalog offers fixed RP, novel and translation presets without separate collaboration or OOC entries', () => {
   expect(builtinPromptTemplates().map(({ id, title, role }) => ({ id, title, role }))).toEqual([
-    { id: 'pheme', title: 'Phēmē · RP', role: 'main' },
-    { id: 'pheme-novel', title: 'Phēmē · 소설', role: 'main' },
+    { id: 'pheme', title: 'Phēmē RP', role: 'main' },
+    { id: 'pheme-novel', title: 'Phēmē 소설', role: 'main' },
     { id: 'hermeneia', title: 'Hermēneía', role: 'translation' },
   ]);
   for (const id of [
@@ -236,7 +236,7 @@ test('reopening preserves legacy working programs as preset references, options 
   const entry = await application();
   const prior = promptWorkspace(entry.app!.store);
   const initialPresetCount = entry.app!.store.product.all('prompt-preset').length;
-  expect(prior.main.title).toBe('Phēmē · RP');
+  expect(prior.main.title).toBe('Phēmē RP');
   expect(prior.main.values).not.toHaveProperty('pheme_session_mode');
   expect(prior.main.program.collaboration).toMatchObject({ enabled: false });
   prior.main = {

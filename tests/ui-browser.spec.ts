@@ -184,7 +184,7 @@ test('UI01 UI02 UI04 UI05 UI09 long real sources keep composer accessible, safe 
       )
     ).toBe(true);
     await nav(page, '설정');
-    await selectSettingsSection(page, '프로바이더·모델');
+    await selectSettingsSection(page, '프로바이더와 모델');
     const connectionDialog = page.getByRole('dialog', { name: '설정', exact: true });
     expect(
       await connectionDialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
@@ -1417,7 +1417,7 @@ test('UI18 translation is requested only by first view click, never by restore, 
   });
   expect(changed.ok()).toBeTruthy();
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   await expect(
     page.getByText('저장한 설정은 다음 실행부터 적용해요.', { exact: true })
   ).toBeVisible();
@@ -1891,7 +1891,7 @@ test('UI whole-source translation retains completed results across retry and can
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   await expect(page.getByLabel('번역 구간 기준 글자 수', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('번역 구간 무제한', { exact: true })).toHaveCount(0);
   if (visualReview)
@@ -1994,7 +1994,7 @@ test('UI chat settings close right after saving does not warn while the refresh 
   await page.goto(`/?chat=${chat.id}`);
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '프롬프트·모델·번역');
+  await selectChatSettingsSection(page, '생성 설정');
   const runtime = dialog.getByRole('region', { name: '생성 설정', exact: true });
   await runtime.getByText('고급 실행 설정', { exact: true }).click();
   const maxCalls = (await data(request, chat.id)).chat.settings.maxCalls === 6 ? 7 : 6;
@@ -2067,7 +2067,7 @@ test('UI mobile jump shares the composer row and navigator preference keeps scen
   await expect(page.getByRole('dialog', { name: '장면 목록' })).toBeVisible();
   await page
     .getByRole('dialog', { name: '장면 목록' })
-    .getByRole('button', { name: /^1번째 장면 ·/ })
+    .getByRole('button', { name: /^1번째 장면,/ })
     .click();
   await expect(page.locator('.header-scene-position')).toHaveText('1 / 2');
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -2100,7 +2100,7 @@ test('UI compact title remains readable when keyboard focus returns from the sce
       await page.setViewportSize({ width, height: 844 });
       await expect(dialog).toBeVisible();
       await expect(search).toHaveValue('1');
-      await expect(dialog.getByRole('button', { name: /^1번째 장면 ·/ })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: /^1번째 장면,/ })).toBeVisible();
     }
     await page.keyboard.press('Tab');
     await page.keyboard.press('Escape');

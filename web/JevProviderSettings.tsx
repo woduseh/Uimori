@@ -297,13 +297,13 @@ export function JevProviderSettings({
                     setMessage('');
                   }}
                 />
-                <small>
+                <small className="ui-meta-row">
                   <span>
                     {status.credentialSource === 'saved'
                       ? t('providers.m355')
                       : t('providers.m356')}
                   </span>
-                  {t('providers.m579', { value0: ' · ' })}
+                  <span>{t('providers.m579', { value0: '' })}</span>
                 </small>
               </label>
               <div className="jev-provider-links">

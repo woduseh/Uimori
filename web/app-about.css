@@ -16,7 +16,7 @@
   max-width: 100%;
   justify-self: end;
   overflow-wrap: anywhere;
-  font-size: 0.875rem;
+  font-size: var(--font-body);
 }
 .app-about-details a {
   display: inline-flex;
@@ -29,7 +29,7 @@
   padding-block: 0;
 }
 .app-about-details .app-about-build-id {
-  font-size: 0.75rem;
+  font-size: var(--font-small);
   font-weight: 400;
 }
 @container (max-width: 520px) {

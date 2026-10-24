@@ -32,7 +32,7 @@
   flex-shrink: 0;
   margin-top: auto;
   padding: 12px 24px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .new-story-submit > button {
   width: 100%;
@@ -55,7 +55,7 @@
 }
 .new-story-opening-preview summary {
   padding-block: 10px;
-  font-size: 13px;
+  font-size: var(--font-body);
   color: var(--muted);
 }
 .new-story-opening-full {
@@ -63,8 +63,8 @@
   overflow: auto;
   overscroll-behavior: contain;
   padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   background: var(--panel);
 }
 .new-story fieldset {
@@ -87,7 +87,7 @@
 }
 .new-story-bot > small {
   grid-column: 2;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .new-story-main-model,
 .new-story-options-content {
@@ -98,17 +98,17 @@
 .new-story-main-model {
   gap: 12px;
   padding-block: 16px;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .new-story-main-model > p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .new-story-settings-summary {
   display: grid;
   gap: 12px;
   margin: 0;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .new-story-settings-summary > div {
   display: grid;
@@ -130,10 +130,10 @@
 }
 .new-story-main-model > button {
   justify-self: end;
-  font-size: 13px;
+  font-size: var(--font-body);
   border-color: transparent;
   background: transparent;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .new-story-options-content > label {
   min-width: 0;
@@ -143,7 +143,7 @@
 }
 .new-story-options {
   min-width: 0;
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .new-story-options > summary > span {
   font-weight: 600;

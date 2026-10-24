@@ -181,7 +181,7 @@ test('PERSONAL UI accepts a direct API key for a custom LAN endpoint without res
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/');
   await navigationAction(page, '설정');
-  await page.getByRole('tab', { name: '프로바이더·모델', exact: true }).click();
+  await page.getByRole('tab', { name: '프로바이더와 모델', exact: true }).click();
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await page.getByRole('button', { name: `${title} 프로바이더 수정`, exact: true }).click();
   await page.getByLabel('API 키', { exact: true }).fill(key);
@@ -376,9 +376,9 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
-  await selectChatSettingsSection(page, '이미지·삽화 참조');
+  await selectChatSettingsSection(page, '이미지');
   await page.locator('.chat-settings-image-management > summary').click();
-  await page.getByText('이름·설명 편집', { exact: true }).click();
+  await page.getByText('이름과 설명 편집', { exact: true }).click();
   const title = page.getByLabel('업로드 이미지 이름', { exact: true });
   const description = page.getByLabel('업로드 이미지 설명', { exact: true });
   const submit = page.getByRole('button', { name: '이미지 정보 저장', exact: true });
@@ -437,9 +437,9 @@ test('PERSONAL uploaded metadata locks pending fields and retains rejected input
   await expect(description).toBeEnabled();
   await expect(title).toHaveValue('Keep unsaved title');
   await expect(description).toHaveValue('Keep unsaved description');
-  await page.getByText('이름·설명 편집', { exact: true }).click();
+  await page.getByText('이름과 설명 편집', { exact: true }).click();
   await expect(title).not.toBeVisible();
-  await page.getByText('이름·설명 편집', { exact: true }).click();
+  await page.getByText('이름과 설명 편집', { exact: true }).click();
   await expect(title).toHaveValue('Keep unsaved title');
   await expect(description).toHaveValue('Keep unsaved description');
   await expect(page.getByRole('alert')).toBeVisible();
@@ -472,7 +472,7 @@ test('PERSONAL binary resource backup downloads and imports through the archive 
     buffer: await (await import('node:fs/promises')).readFile(path!),
   });
   await expect(
-    page.getByText('자료 백업 · 1개 자료 · 0개 프리셋 · 0개 이미지', { exact: true })
+    page.getByText('자료 백업, 1개 자료, 0개 프리셋, 0개 이미지', { exact: true })
   ).toBeVisible();
   const applied = page.waitForResponse((response) =>
     response.url().endsWith('/api/native-transfers/apply-archive')
@@ -591,7 +591,7 @@ for (const width of [412, 1440]) {
       mimeType: 'application/zip',
       buffer: bytes,
     });
-    await expect(importer).toContainText('1개 자료 · 0개 프리셋 · 0개 이미지');
+    await expect(importer).toContainText('1개 자료, 0개 프리셋, 0개 이미지');
     await importer.getByRole('button', { name: '새 자료로 가져오기', exact: true }).click();
     await expect(importer.getByRole('alert')).toContainText('503');
     expect(receipt?.created).toBe(true);

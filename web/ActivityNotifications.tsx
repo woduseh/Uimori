@@ -125,17 +125,18 @@ export function ActivityNotifications({
               <div className="activity-notification-heading">
                 <div>
                   <strong>{message(item)}</strong>
-                  <small>
+                  <small className="ui-meta-row">
                     <time dateTime={item.startedAt}>
                       {formatDate(new Date(item.startedAt), {
                         dateStyle: 'medium',
                         timeStyle: 'medium',
                       })}
-                    </time>{' '}
-                    ·{' '}
-                    {item.kind === 'request'
-                      ? t('helpers.m288')
-                      : t('helpers.m238', { v0: item.runId.slice(0, 8) })}
+                    </time>
+                    <span>
+                      {item.kind === 'request'
+                        ? t('helpers.m288')
+                        : t('helpers.m238', { v0: item.runId.slice(0, 8) })}
+                    </span>
                   </small>
                 </div>
                 <div className="activity-notification-actions">

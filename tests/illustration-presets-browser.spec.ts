@@ -26,11 +26,11 @@ async function open(page: Page, request: APIRequestContext) {
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
   {
-    const management = page.getByText('기본 생성 환경·자동 생성 관리', { exact: true });
+    const management = page.getByText('기본 생성 환경과 자동 생성 관리', { exact: true });
     if ((await management.locator('..').getAttribute('open')) === null) await management.click();
   }
   {
-    const management = page.getByText('프리셋·적용 범위 관리', { exact: true });
+    const management = page.getByText('프리셋과 적용 범위 관리', { exact: true });
     if ((await management.locator('..').getAttribute('open')) === null) await management.click();
   }
   const section = page.getByRole('region', { name: '삽화 프리셋', exact: true });
@@ -155,11 +155,11 @@ test('IPUI01 named recipes save, apply by scope, duplicate and round-trip throug
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '삽화');
   {
-    const management = page.getByText('기본 생성 환경·자동 생성 관리', { exact: true });
+    const management = page.getByText('기본 생성 환경과 자동 생성 관리', { exact: true });
     if ((await management.locator('..').getAttribute('open')) === null) await management.click();
   }
   {
-    const management = page.getByText('프리셋·적용 범위 관리', { exact: true });
+    const management = page.getByText('프리셋과 적용 범위 관리', { exact: true });
     if ((await management.locator('..').getAttribute('open')) === null) await management.click();
   }
   await expect(

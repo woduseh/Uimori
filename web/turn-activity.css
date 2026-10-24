@@ -1,6 +1,6 @@
 .turn-activity {
   margin: 0 0 8px;
-  font-size: 0.85rem;
+  font-size: var(--font-body);
   min-width: 0;
 }
 .turn-activity > summary {
@@ -18,9 +18,9 @@
   display: none;
 }
 .turn-activity > summary:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: var(--hairline) solid var(--focus-ring);
   outline-offset: 3px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .turn-activity-lead {
   display: flex;
@@ -42,19 +42,19 @@
   color: var(--error);
 }
 .turn-activity-text {
-  font-size: 12px;
+  font-size: var(--font-small);
   overflow-wrap: anywhere;
 }
 .turn-activity > summary small {
-  font-size: 12px;
+  font-size: var(--font-small);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .turn-activity-body {
   margin: 4px 0 14px;
   padding: 12px 14px 14px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-panel);
   overflow-wrap: anywhere;
 }
 .turn-activity-body .task-heading {

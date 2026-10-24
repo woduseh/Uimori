@@ -33,7 +33,7 @@ export function validateThemeBackground(value: unknown): ThemeBackground {
     Number(b.darkOverlay) < 0 ||
     Number(b.darkOverlay) > 100
   )
-    throw new Error('배경 이미지와 흐림·덮개 범위를 확인해 주세요.');
+    throw new Error('배경 이미지와 흐림과 덮개 범위를 확인해 주세요.');
   return {
     imageHash: b.imageHash as string | null,
     blur: Number(b.blur),

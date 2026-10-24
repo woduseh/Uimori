@@ -31,7 +31,7 @@
 .native-regex-form textarea,
 .native-regex-raw textarea {
   font-family: var(--font-mono, monospace);
-  font-size: 13px;
+  font-size: var(--font-body);
   line-height: 1.65;
 }
 .native-regex-editor textarea.native-regex-find {
@@ -98,7 +98,7 @@
   }
   .native-regex-form textarea,
   .native-regex-raw textarea {
-    font-size: 16px;
+    font-size: var(--font-heading);
   }
   .native-regex-flags button {
     min-height: 44px;

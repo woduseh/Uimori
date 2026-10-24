@@ -113,7 +113,7 @@ const strengthLabels: Record<string, string> = {
   },
 };
 const strengthLabel = (value: string) =>
-  strengthLabels[value] ? `${strengthLabels[value]} · ${value}` : value;
+  strengthLabels[value] ? `${strengthLabels[value]} (${value})` : value;
 const modeLabel = (value: string) =>
   value === 'adaptive' ? t('providers.m180') : value === 'disabled' ? t('providers.m181') : value;
 const UNDOCUMENTED = () => t('providers.m182');
@@ -590,8 +590,8 @@ export function ProviderModelFields({
             <ul>
               {specified.map((item) => (
                 <li key={item.key}>
-                  <span>
-                    {translateMessage(item.label)} ·{' '}
+                  <span className="ui-meta-row">
+                    <span>{translateMessage(item.label)}</span>
                     <strong>
                       {item.key === 'tokenizer' ? translateMessage(item.text) : item.text}
                     </strong>

@@ -1,20 +1,20 @@
 .reading-quote[data-emphasis="subtle"][data-quote-role="dialogue"] {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 500;
 }
 .reading-quote[data-emphasis="subtle"][data-quote-role="thought"] {
-  color: var(--reading-thought, #62516d);
+  color: var(--reading-thought, #5753c6);
   font-weight: 500;
 }
 .reading-quote[data-emphasis="subtle"][data-quote-role="quote"] {
   font-weight: 500;
 }
 .reading-quote[data-emphasis="strong"][data-quote-role="dialogue"] {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
 }
 .reading-quote[data-emphasis="strong"][data-quote-role="thought"] {
-  color: var(--reading-thought, #62516d);
+  color: var(--reading-thought, #5753c6);
   font-weight: 600;
 }
 .reading-quote[data-emphasis="strong"][data-quote-role="quote"] {

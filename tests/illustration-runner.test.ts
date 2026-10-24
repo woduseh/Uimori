@@ -189,7 +189,7 @@ describe('illustration runner with the synthetic generator', () => {
     expect(item.diagnostic?.retries).toEqual([
       { attempt: 1, code: 'FIXTURE_FAILURE', at: expect.any(String) },
     ]);
-    expect(item.images[0]).toMatchObject({ mime: 'image/webp', caption: '모의 삽화 · 시도 2' });
+    expect(item.images[0]).toMatchObject({ mime: 'image/webp', caption: '모의 삽화: 시도 2' });
     expect(observed.wires).toEqual([]);
     expect(observed.progress()).toBeGreaterThan(0);
     expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toBeNull();

@@ -238,7 +238,7 @@ test('LIBUI02 mobile folder deletion refreshes another page and stale moves requ
     panel.getByRole('button', { name: `${item.title} 상세 보기`, exact: true })
   ).toBeVisible();
   await panel.getByLabel(`${item.title} 메뉴`, { exact: true }).click();
-  await panel.getByRole('button', { name: '분류·폴더 이동', exact: true }).click();
+  await panel.getByRole('button', { name: '분류와 폴더 이동', exact: true }).click();
   const move = page.getByRole('dialog', { name: '자료 이동', exact: true });
   await move.getByLabel('이동할 분류').selectOption('module');
   const before = await organization(request);
@@ -992,7 +992,7 @@ for (const kind of ['bot', 'persona'] as const) {
       // Completion expires independently; a failed follow-up read still needs review.
       release();
       const warning = editor.getByRole('status', { name: '저장 후 확인할 사항', exact: true });
-      await expect(warning).toContainText(`${updated} 저장됨 · 서재 목록을 갱신하지 못했어요.`);
+      await expect(warning).toContainText(`${updated} 저장됨, 서재 목록을 갱신하지 못했어요.`);
       await page.clock.fastForward(4500);
       await expect(completion).toHaveCount(0);
       await expect(warning).toBeVisible();

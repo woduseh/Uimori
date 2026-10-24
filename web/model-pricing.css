@@ -27,8 +27,8 @@
 .model-pricing-inputs {
   min-width: 0;
   padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
 }
 .model-pricing-input-grid,
 .model-pricing-rates {
@@ -55,7 +55,7 @@
 }
 .model-pricing-rates dt {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .model-pricing-rates dd {
   margin: 3px 0 0;
@@ -68,7 +68,7 @@
   margin: 0;
   padding-left: 18px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .attempt-pricing {
   display: grid;
@@ -88,7 +88,7 @@
 }
 .attempt-usage {
   padding-block: 12px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
 }
 .attempt-usage dd {
   font-variant-numeric: tabular-nums;

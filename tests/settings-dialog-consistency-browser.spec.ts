@@ -76,7 +76,7 @@ for (const width of [412, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     await navigationAction(page, '설정');
-    await selectSettingsSection(page, '테마·색상');
+    await selectSettingsSection(page, '테마와 색상');
     {
       const advanced = page.locator('.theme-advanced:not([open]) > summary');
       if (await advanced.isVisible()) await advanced.click();
@@ -238,7 +238,7 @@ for (const width of [412, 1440]) {
     await openChatSettings(page);
     const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     await expectShell(page, settings, 1160);
-    await selectChatSettingsSection(page, '인물·자료');
+    await selectChatSettingsSection(page, '사용 자료');
     const pickerTrigger = page.getByRole('button', { name: '페르소나', exact: true });
     await pickerTrigger.click();
     const picker = page.getByRole('dialog', { name: '페르소나', exact: true });
@@ -248,7 +248,7 @@ for (const width of [412, 1440]) {
     await expect(picker).toBeHidden();
     await expect(pickerTrigger).toBeFocused();
 
-    await selectChatSettingsSection(page, '이미지·삽화 참조');
+    await selectChatSettingsSection(page, '이미지');
     await page.locator('.chat-settings-image-management > summary').click();
     await expect(
       settings.locator('.asset-grid figure').first().locator('figcaption')
@@ -256,7 +256,7 @@ for (const width of [412, 1440]) {
     await expect(
       settings.locator('.asset-grid figure').first().locator('figcaption')
     ).not.toContainText('both');
-    await page.getByText('이름·설명 편집', { exact: true }).click();
+    await page.getByText('이름과 설명 편집', { exact: true }).click();
     const metadataSave = page.getByRole('button', { name: '이미지 정보 저장', exact: true });
     await expectPrimary(metadataSave);
     await page.getByLabel('업로드 이미지 이름', { exact: true }).fill('Saved metadata image');
@@ -281,7 +281,7 @@ for (const width of [412, 1440]) {
     await expect(remove).toBeHidden();
     await expect(imageTrigger).toBeFocused();
 
-    await selectChatSettingsSection(page, '프롬프트·모델·번역');
+    await selectChatSettingsSection(page, '생성 설정');
     await page.getByText('고급 실행 설정', { exact: true }).click();
     const limit = page.getByLabel('작업당 모델 호출 한도', { exact: true });
     const original = await limit.inputValue();
@@ -300,12 +300,12 @@ for (const width of [412, 1440]) {
     await confirmation.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(settings).toBeHidden();
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '프롬프트·모델·번역');
+    await selectChatSettingsSection(page, '생성 설정');
     await page.getByText('고급 실행 설정', { exact: true }).click();
     await expect(limit).toHaveValue(original);
-    await selectChatSettingsSection(page, '이미지·삽화 참조');
+    await selectChatSettingsSection(page, '이미지');
     await page.locator('.chat-settings-image-management > summary').click();
-    await page.getByText('이름·설명 편집', { exact: true }).click();
+    await page.getByText('이름과 설명 편집', { exact: true }).click();
     await expect(page.getByLabel('업로드 이미지 이름', { exact: true })).toHaveValue(
       'Saved metadata image'
     );
@@ -335,7 +335,7 @@ for (const width of [412, 1440]) {
     try {
       await page.goto('/');
       await navigationAction(page, '설정');
-      await selectSettingsSection(page, '테마·색상');
+      await selectSettingsSection(page, '테마와 색상');
       {
         const advanced = page.locator('.theme-advanced:not([open]) > summary');
         if (await advanced.isVisible()) await advanced.click();
@@ -381,7 +381,7 @@ for (const width of [412, 1440]) {
       ).toBe(Number(changed));
       await page.reload();
       await navigationAction(page, '설정');
-      await selectSettingsSection(page, '테마·색상');
+      await selectSettingsSection(page, '테마와 색상');
       {
         const advanced = page.locator('.theme-advanced:not([open]) > summary');
         if (await advanced.isVisible()) await advanced.click();
@@ -429,7 +429,7 @@ for (const width of [412, 1440]) {
     const chat = await created.json();
     await page.goto(`/?chat=${chat.id}`);
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '기억·메모·로어');
+    await selectChatSettingsSection(page, '기억과 메모');
     const panel = page.getByTestId('context-panel');
     await panel.getByRole('button', { name: '요약 작성', exact: true }).click();
     const summary = panel.getByLabel('편집할 컨텍스트 요약', { exact: true });
@@ -453,7 +453,7 @@ for (const width of [412, 1440]) {
     await notes.locator(':scope > summary').click();
     await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
     await notes
-      .getByRole('textbox', { name: '메모·정정 내용', exact: true })
+      .getByRole('textbox', { name: '메모와 정정 내용', exact: true })
       .fill('Cancelled note draft');
     const noteCancel = notes.getByRole('button', { name: '편집 취소', exact: true });
     await expectPrimary(
@@ -463,11 +463,11 @@ for (const width of [412, 1440]) {
     await noteCancel.click();
     expect((await read<StoryDetail>(request, `/chats/${chat.id}/story`)).notes).toEqual([]);
     await notes.getByRole('button', { name: '메모 추가', exact: true }).click();
-    await expect(notes.getByRole('textbox', { name: '메모·정정 내용', exact: true })).toHaveValue(
+    await expect(notes.getByRole('textbox', { name: '메모와 정정 내용', exact: true })).toHaveValue(
       ''
     );
     await notes
-      .getByRole('textbox', { name: '메모·정정 내용', exact: true })
+      .getByRole('textbox', { name: '메모와 정정 내용', exact: true })
       .fill('Saved synthetic note');
     await notes.getByRole('button', { name: '새 메모 저장', exact: true }).click();
     await expect(notes.getByText('Saved synthetic note', { exact: true })).toBeVisible();
@@ -477,7 +477,7 @@ for (const width of [412, 1440]) {
     const noteSave = notes.getByRole('button', { name: '메모 수정 저장', exact: true });
     await expectPrimary(noteSave, noteCancel);
     await notes
-      .getByRole('textbox', { name: '메모·정정 내용', exact: true })
+      .getByRole('textbox', { name: '메모와 정정 내용', exact: true })
       .fill('Cancelled note change');
     await noteCancel.click();
     expect(
@@ -487,7 +487,7 @@ for (const width of [412, 1440]) {
       .getByRole('button', { name: '메모 수정: Saved synthetic note', exact: true })
       .click();
     await notes
-      .getByRole('textbox', { name: '메모·정정 내용', exact: true })
+      .getByRole('textbox', { name: '메모와 정정 내용', exact: true })
       .fill('Updated synthetic note');
     await noteSave.scrollIntoViewIfNeeded();
     await page.screenshot({ path: info.outputPath(`note-primary-save-${width}.png`) });
@@ -495,7 +495,7 @@ for (const width of [412, 1440]) {
     await expect(notes.getByText('Updated synthetic note', { exact: true })).toBeVisible();
     await page.reload();
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '기억·메모·로어');
+    await selectChatSettingsSection(page, '기억과 메모');
     await expect(panel.getByTestId('context-summary-text')).toHaveText('Saved synthetic summary');
     await notes.locator(':scope > summary').click();
     await expect(notes.getByText('Updated synthetic note', { exact: true })).toBeVisible();

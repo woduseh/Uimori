@@ -49,8 +49,8 @@
 .selection-revision {
   margin-block: 12px;
   padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-panel);
 }
 .selection-revision p {
   margin-block: 8px;
@@ -83,7 +83,7 @@
   font-family: inherit;
   padding: 10px;
   background: var(--bg);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 .selection-revision .form-actions {
   flex-wrap: wrap;
@@ -114,7 +114,7 @@
   max-height: 320px;
   padding: 10px;
   background: var(--bg);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   font-family: inherit;
 }
 .source-versions .form-actions {
@@ -131,6 +131,6 @@
 
 .scene-context-notice {
   margin: 6px 0 10px;
-  font-size: 12px;
+  font-size: var(--font-small);
   color: var(--muted);
 }

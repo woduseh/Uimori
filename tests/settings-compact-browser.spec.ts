@@ -33,19 +33,13 @@ test('CSUILAYOUT all chat settings sections fit shared desktop and phone setting
       await page.goto(`/?chat=${chat.id}`);
       await openChatSettings(page);
       const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-      for (const section of [
-        '인물·자료',
-        '프롬프트·모델·번역',
-        '기억·메모·로어',
-        '이미지·삽화 참조',
-        '카드 변수',
-      ]) {
+      for (const section of ['사용 자료', '생성 설정', '기억과 메모', '이미지', '카드 변수']) {
         await selectChatSettingsSection(page, section);
         const pane = dialog.getByRole('tabpanel');
         expect(
           await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
         ).toBeLessThanOrEqual(1);
-        if (section === '프롬프트·모델·번역') {
+        if (section === '생성 설정') {
           await pane.getByText('고급 실행 설정', { exact: true }).click();
           const fields = (await pane.locator('.chat-runtime-fields').boundingBox())!;
           for (const group of await pane.locator('.chat-runtime-fields > .settings-group').all()) {
@@ -130,16 +124,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
       const dialog = page.getByRole('dialog', { name: '설정', exact: true });
       for (const section of [
         '일반',
-        '테마·색상',
+        '테마와 색상',
         '역할별 모델',
         '현재 프롬프트',
-        '프로바이더·모델',
+        '프로바이더와 모델',
         '로어 컨텍스트',
         'Codex 연결',
         '삽화',
         '사용량',
         '데이터 관리',
-        '앱 정보·라이선스',
+        '앱 정보',
       ]) {
         await selectSettingsSection(page, section);
         const pane = dialog.getByRole('tabpanel');
@@ -153,12 +147,12 @@ for (const colorScheme of ['light', 'dark'] as const) {
           expect(
             Math.abs(rowBox.x + rowBox.width - controlBox.x - controlBox.width)
           ).toBeLessThanOrEqual(1);
-        } else if (section === '테마·색상') {
+        } else if (section === '테마와 색상') {
           const controls = pane.locator('.theme-control-bar select');
           await expect(controls).toHaveCount(4);
           await expect(pane.getByLabel('기본 외관', { exact: true })).toBeVisible();
           await expect(pane.getByLabel('테마 적용 범위', { exact: true })).toBeHidden();
-          await pane.getByText('고급 외관·테마 제작', { exact: true }).click();
+          await pane.getByText('고급 테마 설정', { exact: true }).click();
           await expect(
             pane.getByRole('button', { name: '새 커스텀 테마', exact: true })
           ).toBeVisible();
@@ -167,7 +161,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           await expect(pane.getByLabel('조회 로어를 다음 생성에도 유지')).toBeVisible();
         } else if (section === '데이터 관리') {
           await expect(
-            pane.getByRole('heading', { name: '백업 · 복원', exact: true })
+            pane.getByRole('heading', { name: '백업과 복원', exact: true })
           ).toBeVisible();
           await expect(
             pane.getByRole('button', { name: '백업 다운로드', exact: true })
@@ -199,14 +193,14 @@ for (const colorScheme of ['light', 'dark'] as const) {
           await expect(pane.getByLabel('원문 모델', { exact: true })).toBeVisible();
         } else if (section === '현재 프롬프트') {
           await expect(pane.getByLabel('현재 프롬프트 역할', { exact: true })).toBeVisible();
-        } else if (section === '프로바이더·모델') {
-          await expect(pane.getByLabel('프로바이더·모델 검색', { exact: true })).toBeVisible();
+        } else if (section === '프로바이더와 모델') {
+          await expect(pane.getByLabel('프로바이더와 모델 검색', { exact: true })).toBeVisible();
         } else if (section === '삽화') {
           await expect(
             pane.getByRole('region', { name: '현재 삽화 설정', exact: true })
           ).toBeVisible();
           await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeHidden();
-          await pane.getByText('프리셋·적용 범위 관리', { exact: true }).click();
+          await pane.getByText('프리셋과 적용 범위 관리', { exact: true }).click();
           await expect(pane.getByLabel('삽화 프리셋 적용 범위', { exact: true })).toBeVisible();
         } else if (section === '사용량') {
           await expect(
@@ -220,9 +214,9 @@ for (const colorScheme of ['light', 'dark'] as const) {
             'GNU AFFERO GENERAL PUBLIC LICENSE'
           );
           await pane.getByText('라이선스 전문', { exact: true }).click();
-          await pane.getByText('저작권·제3자 고지', { exact: true }).click();
+          await pane.getByText('저작권 및 제3자 고지', { exact: true }).click();
           await expect(pane.locator('.app-about-document').last()).toContainText('RisuAI');
-          await pane.getByText('저작권·제3자 고지', { exact: true }).click();
+          await pane.getByText('저작권 및 제3자 고지', { exact: true }).click();
         }
         expect(
           await pane.evaluate((node) => node.scrollWidth - node.clientWidth)
@@ -251,7 +245,7 @@ test('SCUIVERSION app version lookup reports a failure and recovers on retry', a
     failed = true;
     return route.fulfill({ status: 503, json: { error: 'Synthetic health failure' } });
   });
-  await selectSettingsSection(page, '앱 정보·라이선스');
+  await selectSettingsSection(page, '앱 정보');
   const about = page.getByRole('region', { name: 'Uimori 앱 정보', exact: true });
   await expect(about.getByTestId('app-version')).toHaveText('확인 실패');
   await expect(about.getByTestId('app-build-id')).toHaveText('확인 실패');
@@ -293,9 +287,9 @@ test('SCUI03 multi-entry browser back keeps the address and chat consistent with
   await next.click();
   await expect(composer).toHaveValue('두번째 채팅의 미전송 요청');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await startProviderConnection(page);
-  await page.getByRole('button', { name: /OpenAI · Responses/ }).click();
+  await page.getByRole('button', { name: /OpenAI Responses/ }).click();
   const name = page
     .getByRole('form', { name: '프로바이더 편집 양식' })
     .getByLabel('프로바이더 이름', { exact: true });
@@ -329,7 +323,7 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
   if (visualReview)
     await page.screenshot({ path: info.outputPath(`settings-list-${MOBILE_WIDTH}.png`) });
-  const provider = nav.getByRole('button', { name: '프로바이더·모델', exact: true });
+  const provider = nav.getByRole('button', { name: '프로바이더와 모델', exact: true });
   await provider.focus();
   await page.keyboard.press('Enter');
   await expect(nav).toBeHidden();
@@ -393,11 +387,11 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   }
   await nav.getByRole('tab', { name: '일반', exact: true }).focus();
   await page.keyboard.press('End');
-  await expect(nav.getByRole('tab', { name: '앱 정보·라이선스', exact: true })).toBeFocused();
+  await expect(nav.getByRole('tab', { name: '앱 정보', exact: true })).toBeFocused();
   await expect(dialog.getByRole('region', { name: 'Uimori 앱 정보' })).toBeVisible();
-  await nav.getByRole('tab', { name: '앱 정보·라이선스', exact: true }).press('Home');
+  await nav.getByRole('tab', { name: '앱 정보', exact: true }).press('Home');
   await expect(nav.getByRole('tab', { name: '일반', exact: true })).toBeFocused();
-  for (const section of ['테마·색상', '역할별 모델', '현재 프롬프트', '프로바이더·모델']) {
+  for (const section of ['테마와 색상', '역할별 모델', '현재 프롬프트', '프로바이더와 모델']) {
     await page.keyboard.press('ArrowDown');
     await expect(nav.getByRole('tab', { name: section, exact: true })).toBeFocused();
   }
@@ -428,9 +422,9 @@ test('SCUISEARCH settings search opens real destinations without losing an unsav
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     await navigationAction(page, '설정');
-    await selectSettingsSection(page, '프로바이더·모델');
+    await selectSettingsSection(page, '프로바이더와 모델');
     await startProviderConnection(page);
-    await page.getByRole('button', { name: /OpenAI · Responses/ }).click();
+    await page.getByRole('button', { name: /OpenAI Responses/ }).click();
     const dialog = page.getByRole('dialog', { name: '설정', exact: true });
     const name = page
       .getByRole('form', { name: '프로바이더 편집 양식' })
@@ -442,7 +436,7 @@ test('SCUISEARCH settings search opens real destinations without losing an unsav
     const search = dialog.getByRole('searchbox', { name: '설정 검색', exact: true });
     await search.fill('백업');
     await expect(
-      dialog.locator('.settings-search-results').getByRole('button', { name: /백업·복원/ })
+      dialog.locator('.settings-search-results').getByRole('button', { name: /백업과 복원/ })
     ).toBeVisible();
     await page.screenshot({ path: info.outputPath(`settings-search-${width}.png`) });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -459,7 +453,7 @@ test('SCUISEARCH settings search opens real destinations without losing an unsav
       .click();
     await expect(dialog.locator('.settings-page[data-settings-section="general"]')).toBeVisible();
     await expect(dialog.locator('[id$="-general-reading"]')).toBeFocused();
-    await selectSettingsSection(page, '프로바이더·모델');
+    await selectSettingsSection(page, '프로바이더와 모델');
     await expect(name).toHaveValue('검색해도 남는 연결 초안');
     if (width <= 760) {
       await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
@@ -553,7 +547,7 @@ test('SCUI06 global lore defaults require a successful read and preserve chat dr
       page.locator('.workspace-header').getByText(chat.title, { exact: true })
     ).toBeVisible();
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '기억·메모·로어');
+    await selectChatSettingsSection(page, '기억과 메모');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     await dialog.getByText('선별 기준과 용량', { exact: true }).click();
     const retained = dialog.getByLabel('조회 로어 토큰 한도', { exact: true });
@@ -607,9 +601,9 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   const composer = page.getByLabel('다음 장면 요청', { exact: true });
   await composer.fill('계속 보존할 사용자 요청');
   await navigationAction(page, '설정');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await startProviderConnection(page);
-  await page.getByRole('button', { name: /OpenAI · Responses/ }).click();
+  await page.getByRole('button', { name: /OpenAI Responses/ }).click();
   const name = page
     .getByRole('form', { name: '프로바이더 편집 양식' })
     .getByLabel('프로바이더 이름', { exact: true });
@@ -622,13 +616,13 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });
   await expect(confirm).toBeVisible();
   await confirm.getByRole('button', { name: '계속 편집', exact: true }).click();
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');
   await name.focus();
   await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
   await expect(name).toBeFocused();
   await selectSettingsSection(page, '일반');
-  await selectSettingsSection(page, '프로바이더·모델');
+  await selectSettingsSection(page, '프로바이더와 모델');
   await expect(name).toHaveValue('아직 저장하지 않은 합성 연결');
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
   await expect(name).toBeVisible();
@@ -660,7 +654,7 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
     await page.goto('/');
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '삽화');
-    await page.getByText('기본 생성 환경·자동 생성 관리', { exact: true }).click();
+    await page.getByText('기본 생성 환경과 자동 생성 관리', { exact: true }).click();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const count = settings.getByLabel('장면당 최대 삽화 개수', { exact: true });
     await count.fill('0');

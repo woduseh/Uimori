@@ -22,7 +22,7 @@
 .prose-table-wrap th,
 .prose-table-wrap td {
   padding: 0.5em 0.65em;
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
   text-align: left;
   vertical-align: top;
 }
@@ -53,7 +53,7 @@
 .prose mark,
 .helper-prose mark {
   color: inherit;
-  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  background: var(--accent-soft);
 }
 
 /* Geometry markers preserve canonical anchors without breaking Markdown containers. */

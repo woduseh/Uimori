@@ -3,16 +3,17 @@ import { fields, record, text } from './request-validation.js';
 import type { Chat, Store } from './store.js';
 
 function numberedCopyTitle(store: Store, title: string): string {
-  const base = title.replace(/(?: · (?:새 이야기|사본 [1-9]\d*)| \(사본\))+$/u, '') || title;
+  const base =
+    title.replace(/(?: · (?:새 이야기|사본 [1-9]\d*)| \(사본(?: [1-9]\d*)?\))+$/u, '') || title;
   let last = 0;
   for (const row of store.db.prepare('SELECT title FROM chats').all()) {
     const existing = String(row.title);
-    const match = existing.match(/ · 사본 ([1-9]\d*)$/u);
+    const match = existing.match(/(?: · 사본 ([1-9]\d*)| \(사본 ([1-9]\d*)\))$/u);
     if (!match || existing.slice(0, match.index) !== base.slice(0, 200 - match[0].length)) continue;
-    const number = Number(match[1]);
+    const number = Number(match[1] ?? match[2]);
     if (Number.isSafeInteger(number)) last = Math.max(last, number);
   }
-  const suffix = ` · 사본 ${last + 1}`;
+  const suffix = ` (사본 ${last + 1})`;
   return base.slice(0, 200 - suffix.length) + suffix;
 }
 

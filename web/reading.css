@@ -1,10 +1,10 @@
 @import "./reading-prose.css";
 
 :root {
-  --reading-thought: #62516d;
+  --reading-thought: #5753c6;
 }
 [data-theme="dark"] {
-  --reading-thought: #d6c4e0;
+  --reading-thought: #b1a9ff;
 }
 .reading-settings {
   display: grid;
@@ -14,9 +14,9 @@
 .reading-preview {
   min-width: 0;
   padding: 14px 16px;
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   background: var(--surface-raised);
-  border: 1px solid var(--line);
+  border: var(--hairline) solid var(--line);
 }
 .reading-preview .reading-markdown-content > p:last-of-type {
   margin-bottom: 0;
@@ -84,7 +84,7 @@
 }
 .reading-settings-rows > * + *,
 .reading-spacing > label + label {
-  border-top: 1px solid var(--line);
+  border-top: var(--hairline) solid var(--line);
 }
 .reading-settings-group select {
   width: 100%;

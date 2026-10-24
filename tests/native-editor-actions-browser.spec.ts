@@ -91,7 +91,7 @@ for (const viewport of [
       program,
     });
     const editor = await openPrompt(page, preset);
-    await editor.getByRole('tab', { name: '변수·토글', exact: true }).click();
+    await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
     const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
     const add = definitions
       .getByRole('button', { name: '그룹 추가', exact: true })

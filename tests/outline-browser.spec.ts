@@ -77,7 +77,7 @@ async function open(page: Page, chatId: string, width: number) {
 }
 async function choose(page: Page, title: string, width: number) {
   if (width < 760)
-    await page.locator('.outline-mobile-select select').selectOption({ label: `회차 · ${title}` });
+    await page.locator('.outline-mobile-select select').selectOption({ label: `회차: ${title}` });
   else
     await page
       .locator('.outline-navigation .outline-title')
@@ -112,7 +112,7 @@ for (const width of WIDTHS) {
     const intent = form.getByRole('textbox', { name: '이번 회차의 사건과 목적', exact: true });
     await intent.pressSequentially('대화를 길게 나누되 관계를 급하게 진전시키지 않아요.');
     await expect(intent).toBeFocused();
-    await form.getByRole('button', { name: '닫기 · 초안 보관' }).click();
+    await form.getByRole('button', { name: '초안을 보관하고 닫기' }).click();
     await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
     await expect(form.getByRole('textbox', { name: '이름', exact: true })).toHaveValue(
       '한 회차에서 시작'
@@ -178,7 +178,7 @@ for (const width of WIDTHS) {
     await expect(additional).toHaveValue('');
     const previous = panel
       .locator('details')
-      .filter({ hasText: '이전 집필 요청 초안 · 읽기·복사' });
+      .filter({ hasText: '이전 집필 요청 초안 (읽기 및 복사)' });
     await previous.locator('summary').click();
     await expect(previous.getByRole('textbox')).toHaveValue(oldDraft);
     await expect(previous.getByRole('textbox')).toHaveAttribute('readonly');

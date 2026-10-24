@@ -14,7 +14,7 @@
 }
 .agent-collaboration p,
 .agent-collaboration small {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.7;
 }
 .ac-heading {
@@ -42,7 +42,7 @@
   gap: 18px;
 }
 .agent-collaboration .ac-field {
-  font-size: 13px;
+  font-size: var(--font-body);
   gap: 7px;
 }
 .ac-budget {
@@ -60,7 +60,7 @@
   min-height: var(--control-h);
   min-width: 0;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--font-body);
   cursor: pointer;
 }
 .agent-collaboration input:not([type="checkbox"]),
@@ -80,14 +80,14 @@
 }
 .ac-options {
   min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-control);
   padding: 8px 12px;
   margin: 0;
 }
 .ac-options legend {
   max-width: 100%;
-  font-size: 13px;
+  font-size: var(--font-body);
   padding: 0 4px;
 }
 .ac-checks {
@@ -117,30 +117,29 @@
   padding: 12px;
 }
 .ac-templates > button span {
-  font-size: 12px;
+  font-size: var(--font-small);
   line-height: 1.6;
   color: var(--muted);
 }
 .ac-validation {
-  border-inline-start: 3px solid var(--accent);
   padding: 8px 12px;
   background: var(--surface-raised);
 }
 .ac-agent {
   min-width: 0;
   border: 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
 }
 .ac-agent > summary {
   min-height: var(--control-h);
   padding: 14px 4px;
   cursor: pointer;
   box-sizing: border-box;
-  font-size: 13px;
+  font-size: var(--font-body);
 }
 .ac-agent > summary > span {
   margin-inline-start: 10px;
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .ac-agent-fields {
   padding: 6px 4px 18px;
@@ -152,7 +151,7 @@
   align-items: center;
   gap: 8px 16px;
   padding-block: 14px;
-  border-block: 1px solid var(--border);
+  border-block: var(--hairline) solid var(--border);
 }
 .ac-shared-summary > div:first-child {
   min-width: 0;
@@ -170,9 +169,9 @@
 }
 .ac-shared-tags > span {
   padding: 5px 9px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--accent-soft);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .ac-shared-tags > span.missing {
   color: var(--error);
@@ -181,7 +180,7 @@
   grid-column: 1 / -1;
 }
 .ac-limits {
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--border);
 }
 .ac-limits > summary {
   display: flex;
@@ -205,7 +204,7 @@
 .ac-control-picker > aside {
   min-width: 0;
   padding: 16px;
-  border-right: 1px solid var(--line);
+  border-right: var(--hairline) solid var(--line);
 }
 .ac-control-picker > section {
   min-width: 0;
@@ -257,9 +256,9 @@
 .ac-control-picker-heading > span {
   flex: 0 0 auto;
   padding: 6px 9px;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--accent-soft);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 .ac-control-row {
   display: grid;
@@ -267,7 +266,7 @@
   align-items: center;
   gap: 12px;
   min-height: 54px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--hairline) solid var(--line);
   cursor: pointer;
 }
 .ac-control-row > small {
@@ -282,7 +281,6 @@
 .ac-control-note {
   margin-top: 24px !important;
   padding: 14px 16px;
-  border-left: 3px solid var(--accent);
   background: var(--accent-soft);
 }
 .ac-agent-actions {
@@ -291,7 +289,7 @@
 }
 .ac-agent-actions button {
   min-height: var(--control-h);
-  font-size: 12px;
+  font-size: var(--font-small);
 }
 @media (max-width: 600px) {
   .ac-grid,
@@ -302,7 +300,7 @@
   .agent-collaboration input:not([type="checkbox"]),
   .agent-collaboration select,
   .prompt-editor .agent-collaboration textarea {
-    font-size: 16px;
+    font-size: var(--font-heading);
   }
   .ac-templates > button {
     min-height: 64px;
@@ -323,7 +321,7 @@
   }
   .ac-control-picker > aside {
     border-right: 0;
-    border-bottom: 1px solid var(--line);
+    border-bottom: var(--hairline) solid var(--line);
   }
   .ac-control-groups {
     display: flex;
@@ -346,7 +344,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  border-block: 1px solid var(--border);
+  border-block: var(--hairline) solid var(--border);
 }
 .ac-disclosure-heading .ac-disclosure {
   display: flex;
@@ -362,7 +360,6 @@
 }
 .ac-disclosure > svg {
   flex-shrink: 0;
-  transition: transform 120ms;
 }
 .ac-disclosure[aria-expanded="true"] > svg {
   transform: rotate(90deg);
@@ -370,4 +367,10 @@
 .ac-disclosure-heading .ac-enable {
   flex: 0 0 auto;
   margin: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ac-disclosure > svg {
+    transition: transform var(--motion-fast) var(--motion-ease-out);
+  }
 }

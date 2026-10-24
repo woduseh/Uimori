@@ -44,7 +44,7 @@ export class StoryGuideStore {
     return this.store.transaction(() => {
       const current = this.get(chatId);
       if (current.revision !== expectedRevision)
-        throw new HttpError(409, '원작·인물 참고 설정이 바뀌었어요. 다시 읽어 주세요.');
+        throw new HttpError(409, '원작 참고 설정이 바뀌었어요. 다시 읽어 주세요.');
       if (JSON.stringify(current.config) === JSON.stringify(config)) return current;
       this.store.db
         .prepare(`INSERT INTO chat_story_guides(chat_id,revision,config,brief) VALUES(?,?,?,NULL)

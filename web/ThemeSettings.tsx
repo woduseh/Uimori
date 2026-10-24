@@ -465,23 +465,25 @@ export function ThemeSettings({
                     data-layout={theme.id}
                     aria-hidden="true"
                     style={{
-                      background:
-                        theme.colors[mode].bg ?? (mode === 'light' ? '#fafbf8' : '#1a1d1b'),
-                      color: theme.colors[mode].text ?? (mode === 'light' ? '#232c22' : '#eef1eb'),
+                      background: theme.colors[mode].bg ?? baselineThemeColors[mode].bg,
+                      color: theme.colors[mode].text ?? baselineThemeColors[mode].text,
                     }}
                   >
                     <span
                       className="theme-swatch-nav"
                       style={{
-                        background:
-                          theme.colors[mode].nav ?? (mode === 'light' ? '#f0f2ec' : '#141715'),
+                        background: theme.colors[mode].nav ?? baselineThemeColors[mode].nav,
                       }}
                     />
                     <span className="theme-swatch-page">
                       <span>Aa</span>
                       <i />
                       <i />
-                      <b style={{ background: theme.colors[mode].accent ?? '#355b39' }} />
+                      <b
+                        style={{
+                          background: theme.colors[mode].accent ?? baselineThemeColors[mode].accent,
+                        }}
+                      />
                     </span>
                   </span>
                   <strong className="theme-choice-title">

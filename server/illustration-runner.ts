@@ -290,7 +290,7 @@ export async function runIllustrationJob(
         const targets = available.slice(0, input.plan.maxTargets).map((block) => ({
           startAnchor: block.anchor,
           endAnchor: block.anchor,
-          focus: `모의 삽화 · ${block.text.slice(0, 100)}`,
+          focus: `모의 삽화: ${block.text.slice(0, 100)}`,
           visualBrief: block.text,
         }));
         storyboard = {
@@ -387,7 +387,7 @@ export async function runIllustrationJob(
         {
           mime: 'image/png',
           bytes: FIXTURE_PNG,
-          caption: `모의 삽화 · 시도 ${job.attempt}`,
+          caption: `모의 삽화: 시도 ${job.attempt}`,
           prompt: `fixture:${source.hash.slice(0, 12)}`,
         },
       ];

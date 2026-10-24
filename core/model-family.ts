@@ -15,7 +15,7 @@ export type ModelFamilyProfile = Readonly<{
 const common = ['maxOutputTokens', 'temperature', 'structuredOutput', 'serviceTier'] as const;
 const profiles: Record<ModelFamily, ModelFamilyProfile> = {
   openai: {
-    label: 'OpenAI · GPT',
+    label: 'OpenAI GPT',
     optionKeys: [
       ...common,
       'reasoningEffort',
@@ -29,7 +29,7 @@ const profiles: Record<ModelFamily, ModelFamilyProfile> = {
     ],
   },
   anthropic: {
-    label: 'Anthropic · Claude',
+    label: 'Anthropic Claude',
     optionKeys: [
       ...common,
       'outputEffort',
@@ -41,7 +41,7 @@ const profiles: Record<ModelFamily, ModelFamilyProfile> = {
     ],
   },
   google: {
-    label: 'Google · Gemini',
+    label: 'Google Gemini',
     optionKeys: [...common, 'thinkingLevel', 'topP', 'stopSequences'],
   },
   deepseek: {
@@ -49,7 +49,7 @@ const profiles: Record<ModelFamily, ModelFamilyProfile> = {
     optionKeys: [...common, 'reasoningEffort', 'topP', 'stopSequences'],
   },
   xai: {
-    label: 'xAI · Grok',
+    label: 'xAI Grok',
     optionKeys: [...common, 'reasoningEffort', 'topP', 'stopSequences'],
   },
 };
