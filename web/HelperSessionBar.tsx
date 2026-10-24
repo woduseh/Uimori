@@ -12,6 +12,7 @@ import { CheckIcon, CloseIcon, DeleteIcon, EditIcon, StopIcon } from './ui-icons
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
 import type { HelperTaskView } from './useHelperConversation.js';
 import { deleteHelperSessionRecovery } from './helper-recovery.js';
+import { groupRecentDates, recentDateGroupLabel } from './recent-date-groups.js';
 import './deletion.css';
 
 type Props = {
@@ -110,19 +111,24 @@ export function HelperSessionBar(props: Props) {
               <option value="" disabled>
                 {t('helpers.m172')}
               </option>
-              {props.sessions.map((session) => {
-                return (
-                  <option key={session.id} value={session.id}>
-                    {props.unread.includes(session.id) ? '● ' : ''}
-                    {session.title || t('helpers.m173')}
-                    {session.activity?.running
-                      ? t('helpers.m174')
-                      : session.activity?.queued
-                        ? t('helpers.m175', { v0: formatNumber(session.activity.queued) })
-                        : ''}
-                  </option>
-                );
-              })}
+              {groupRecentDates(
+                props.sessions.toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+                (session) => session.updatedAt
+              ).map((group) => (
+                <optgroup key={group.key} label={recentDateGroupLabel(group)}>
+                  {group.items.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {props.unread.includes(session.id) ? '● ' : ''}
+                      {session.title || t('helpers.m173')}
+                      {session.activity?.running
+                        ? t('helpers.m174')
+                        : session.activity?.queued
+                          ? t('helpers.m175', { v0: formatNumber(session.activity.queued) })
+                          : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </label>
           <IconButton

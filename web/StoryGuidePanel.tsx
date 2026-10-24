@@ -11,7 +11,7 @@ import { api, ApiError } from './api.js';
 import { AuthorNotesEditor } from './AuthorNotesEditor.js';
 import { SelectionCheckbox, Switch } from './BooleanControls.js';
 import { LoadingState } from './LoadingState.js';
-import { Prose } from './Prose.js';
+import { Prose, safeProseLink } from './Prose.js';
 import { SaveButton } from './SaveButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -246,6 +246,17 @@ function StoryGuideEditor({
                 />
                 <span>{t('prompts.uiAlsoConsultCanonPlotEvents')}</span>
               </label>
+              <label className="story-guide-check">
+                <SelectionCheckbox
+                  aria-label={t('prompts.uiVerifyCanonWithWebSearch')}
+                  checked={draft.webSearch}
+                  onChange={(event) => update('webSearch', event.target.checked)}
+                />
+                <span className="settings-row-copy">
+                  <span>{t('prompts.uiVerifyCanonWithWebSearch')}</span>
+                  <small>{t('prompts.uiStoryGuideWebSearchScope')}</small>
+                </span>
+              </label>
               <details className="story-guide-reference">
                 <summary>{t('prompts.uiAdditionalReferences')}</summary>
                 <p className="muted">
@@ -294,12 +305,59 @@ function StoryGuideEditor({
             <div className="story-guide-result" aria-label={t('prompts.uiLastWritingBriefContent')}>
               <Prose text={loaded.brief.text} />
             </div>
+            {loaded.brief.webSearch && (
+              <section aria-label={t('prompts.uiStoryGuideWebSources')}>
+                <p className="muted">
+                  {t(
+                    loaded.brief.webSearch.performed
+                      ? loaded.brief.webSearch.sources.length
+                        ? 'prompts.uiStoryGuideWebSources'
+                        : 'prompts.uiStoryGuideWebSearchNoSources'
+                      : 'prompts.uiStoryGuideWebSearchNotPerformed'
+                  )}
+                </p>
+                {loaded.brief.webSearch.sources.length > 0 && (
+                  <ul>
+                    {loaded.brief.webSearch.sources.map((source) => (
+                      <li key={source.url}>
+                        <a
+                          href={safeProseLink(source.url)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          {source.title || source.url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {loaded.brief.webSearch.searchEntryPoint && (
+                  <iframe
+                    title={t('prompts.uiStoryGuideSearchSuggestions')}
+                    srcDoc={loaded.brief.webSearch.searchEntryPoint}
+                    sandbox="allow-popups allow-popups-to-escape-sandbox"
+                    referrerPolicy="no-referrer"
+                    style={{ width: '100%', height: 160, border: 0 }}
+                  />
+                )}
+              </section>
+            )}
           </details>
         ) : (
           <p className="muted">{t('prompts.uiNoWritingBriefHasBeenUsedYet')}</p>
         )}
         {loaded.latestRun?.error && (
-          <p className="muted">{t('prompts.uiTheLatestWritingProceededWithoutABriefCheckThe')}</p>
+          <p className="muted">
+            {t(
+              loaded.latestRun.error === 'STORY_GUIDE_WEB_SEARCH_UNSUPPORTED'
+                ? 'prompts.uiStoryGuideWebSearchUnsupported'
+                : loaded.latestRun.error === 'STORY_GUIDE_WEB_SEARCH_NOT_PERFORMED'
+                  ? 'prompts.uiStoryGuideWebSearchNotPerformed'
+                  : loaded.latestRun.error === 'STORY_GUIDE_WEB_SEARCH_NO_SOURCES'
+                    ? 'prompts.uiStoryGuideWebSearchNoSources'
+                    : 'prompts.uiTheLatestWritingProceededWithoutABriefCheckThe'
+            )}
+          </p>
         )}
       </section>
       {onOpenHelper && (
@@ -348,6 +406,10 @@ function StoryGuideEditor({
             {
               label: t('prompts.uiAlsoConsultCanonPlotEvents'),
               value: value.config.followCanon ? t('prompts.uiYes') : t('prompts.uiNo'),
+            },
+            {
+              label: t('prompts.uiVerifyCanonWithWebSearch'),
+              value: value.config.webSearch ? t('prompts.uiOn') : t('prompts.uiOff'),
             },
             { label: t('prompts.uiAdditionalReferences'), value: value.config.reference },
           ];

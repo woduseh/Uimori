@@ -7,8 +7,6 @@ export interface FontAsset {
   format: FontFormat;
   mimeType: string;
   byteLength: number;
-  sourceUrl?: string;
-  license?: string;
   createdAt: string;
 }
 export interface FontPreferences {

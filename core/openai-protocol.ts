@@ -24,7 +24,7 @@ import {
 import { modelCapability, validateModelOptions } from './model-capabilities.js';
 import { planProviderCache } from './provider-cache.js';
 import { ProviderOptionsError, validateProviderOptions } from './provider-options.js';
-import { webCitationLinks } from './helper-web-search.js';
+import { webCitationLinks, webSearchAllowed, webSearchSources } from './helper-web-search.js';
 
 export class OpenAIProtocolError extends Error {
   constructor(readonly code: string) {
@@ -102,7 +102,7 @@ function prepare(
   const continuationInput = continuationInputText(request);
   if (
     request.webSearch !== undefined &&
-    (request.webSearch !== true || request.role !== 'helper' || protocol !== 'openai-responses-v1')
+    (request.webSearch !== true || !webSearchAllowed(request) || protocol !== 'openai-responses-v1')
   )
     reject('INVALID_WEB_SEARCH');
   if (!nonempty(request.modelId) || request.modelId.length > 200) reject('INVALID_MODEL_ID');
@@ -662,6 +662,22 @@ export class ResponsesDecoder {
         reject('UNSUPPORTED_OUTPUT_ITEM');
     }
     this.result.text = text + (strict && this.context.webSearch ? webCitationLinks(citations) : '');
+    if (this.context.webSearch) {
+      const searches = [
+        ...this.context.input,
+        ...[...this.items.values()].map(({ item }) => item),
+      ].filter(
+        (item) => object(item) && item.type === 'web_search_call' && item.status === 'completed'
+      );
+      this.result.webSearch = {
+        performed: searches.length > 0,
+        sources: webSearchSources(citations),
+        queries: searches.flatMap((item) => {
+          const action = object(item) && object(item.action) ? item.action : null;
+          return action && typeof action.query === 'string' ? [action.query] : [];
+        }),
+      };
+    }
     this.result.refusal = refusal || null;
     this.result.toolCalls = calls;
   }

@@ -47,6 +47,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import './themes.css';
 import './deletion.css';
+import { readingSample, readingSampleCredit } from './reading-sample.js';
 
 type Draft = { id: string | null; revision?: number; model: ThemeDefinition };
 const labels: Partial<Record<ThemeColorKey, string>> = {
@@ -68,8 +69,12 @@ function paletteTitle(palette?: { title: string; revision?: number }) {
       : palette.title
     : '';
 }
-const sample =
-  '<div class="risu-chat-text"><p data-uimori-prose>책장을 넘기자 오래된 종이 냄새가 은은하게 퍼졌다.</p><p data-uimori-prose>“오늘은 어떤 이야기를 함께 읽을까요?”</p></div><details><summary>봇이 만든 상태창</summary><label>메모 <input aria-label="테마 예문 메모" placeholder="테마를 바꿔도 유지돼요" /></label></details>';
+const sample = `<div class="risu-chat-text">${readingSample
+  .split('\n\n')
+  .map((paragraph) => `<p data-uimori-prose>${paragraph}</p>`)
+  .join(
+    ''
+  )}<small>${readingSampleCredit}</small></div><details><summary>봇이 만든 상태창</summary><label>메모 <input aria-label="테마 예문 메모" placeholder="테마를 바꿔도 유지돼요" /></label></details>`;
 export function ThemeSettings({
   onDirtyChange,
   onSaveHandlerChange,

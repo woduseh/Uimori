@@ -1367,6 +1367,29 @@ export function useStory() {
       setForking([...forkLocks.current]);
     }
   }
+  async function copyChat(chatId: string) {
+    const original = chats.find((chat) => chat.id === chatId);
+    if (!original || [...forkLocks.current].some((key) => key.startsWith(`${chatId}:`))) return;
+    const epoch = navigation.current.epoch;
+    const lock = `${chatId}:${original.headRevision ?? 'empty'}`;
+    forkLocks.current.add(lock);
+    setForking([...forkLocks.current]);
+    setError('');
+    try {
+      const next = await requestChatFork(chatId, original.headRevision);
+      setChats((current) => [next, ...current.filter((chat) => chat.id !== next.id)]);
+      if (navigation.current.epoch === epoch) {
+        setForkOrigin({ id: chatId, title: original.title, forkId: next.id });
+        select(next.id);
+      }
+    } catch (error) {
+      if (navigation.current.epoch === epoch)
+        setError(error instanceof Error ? error.message : uiMessage('recent.copyFailed'));
+    } finally {
+      forkLocks.current.delete(lock);
+      setForking([...forkLocks.current]);
+    }
+  }
   const quickLock = useRef(false);
   const pinnedPromptId = detail?.profile?.pinned?.mainPromptPresetId;
   const pinnedMetadata = library?.promptPresets?.find(
@@ -1723,6 +1746,7 @@ export function useStory() {
     canReuseRun,
     reuseBlocked,
     fork,
+    copyChat,
     quickChange,
   };
 }

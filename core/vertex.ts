@@ -280,6 +280,7 @@ export async function executeGeminiProvider(
     );
     if (signal.aborted) return failure('CANCELLED');
     const result = decoder.finish();
+    if (request.webSearch) await progress?.(result.text);
     progress?.finish(result.text);
     const raw = result.usage.raw;
     if (

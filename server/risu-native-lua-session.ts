@@ -223,6 +223,9 @@ export function disposeNativeRisuSession(key: string) {
 export function disposeAllNativeRisuSessions() {
   for (const session of sessions.values()) session.dispose();
 }
+export function disposeNativeRisuChatSessions(chatId: string) {
+  for (const [key, session] of sessions) if (key.startsWith(`native:${chatId}:`)) session.dispose();
+}
 
 /** One sandbox per caller-owned chat/branch/revision session; invocations serialize per key. */
 export async function runNativeRisuLua(

@@ -109,6 +109,125 @@ test('Argon omits ignored sampling, rejects minimal thinking and unsupported lon
 });
 
 test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
+  '%s enables native search only for an explicit story guide without local tools',
+  (protocol) => {
+    const input = request();
+    input.webSearch = true;
+    input.input.controls.purpose = 'story-guide';
+    expect(() => encodeVertex(input, protocol)).toThrow(
+      'GEMINI_SEARCH_TOOL_COMBINATION_UNSUPPORTED'
+    );
+    input.stable.tools = [];
+    const encoded = encodeVertex(input, protocol);
+    expect(bodyObject(encoded.body).tools).toEqual([{ googleSearch: {} }]);
+    expect(bodyObject(encoded.body)).not.toHaveProperty('toolConfig');
+    expect(encoded.context.webSearch).toBe(true);
+    delete input.input.controls.purpose;
+    expect(() => encodeVertex(input, protocol)).toThrow('INVALID_WEB_SEARCH');
+    input.input.controls.purpose = 'story-guide';
+    input.role = 'helper';
+    expect(() => encodeVertex(input, protocol)).toThrow('INVALID_WEB_SEARCH');
+    delete input.webSearch;
+    expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('tools');
+  }
+);
+
+test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
+  '%s accumulates native grounding sources and adds verified inline citations without changing raw parts',
+  (protocol) => {
+    const input = request();
+    input.webSearch = true;
+    input.input.controls.purpose = 'story-guide';
+    input.stable.tools = [];
+    const encoded = encodeVertex(input, protocol);
+    const decoder = new VertexDecoder(encoded.context);
+    const prose = '그는 등대를 지켰다. 같은 말. 같은 말.\n추측 https://invented.example/';
+    expect(
+      decoder.accept({
+        candidates: [
+          {
+            content: { parts: [{ text: prose }] },
+            groundingMetadata: {
+              webSearchQueries: ['등대지기 원작'],
+              groundingChunks: [
+                { web: { uri: 'https://source.example/canon', title: '원작 자료' } },
+              ],
+            },
+          },
+        ],
+      })
+    ).toBeUndefined();
+    const suggestions =
+      '<style>.chip { color: blue }</style><a href="https://www.google.com/search?q=canon">canon</a>';
+    decoder.accept({
+      candidates: [
+        {
+          finishReason: 'STOP',
+          groundingMetadata: {
+            webSearchQueries: ['등대지기 원작', '인물 해설'],
+            groundingChunks: [
+              { web: { uri: 'https://source.example/character', title: '인물 해설' } },
+              { web: { uri: 'javascript:alert(1)', title: 'Invalid' } },
+              { web: { uri: 'https://secret@source.example/', title: 'Invalid' } },
+            ],
+            groundingSupports: [
+              {
+                segment: { text: '그는 등대를 지켰다.', startIndex: 0, endIndex: 27 },
+                groundingChunkIndices: [0, 1],
+              },
+              { segment: { text: '같은 말.' }, groundingChunkIndices: [0] },
+              { segment: { text: '응답에 없는 문장' }, groundingChunkIndices: [0] },
+              { segment: { text: '추측' }, groundingChunkIndices: [2, 3, 99] },
+            ],
+            searchEntryPoint: { renderedContent: suggestions },
+          },
+        },
+      ],
+    });
+    const result = decoder.finish();
+    expect(result.status).toBe('completed');
+    expect(result.text).toBe(
+      '그는 등대를 지켰다. [원작 자료](<https://source.example/canon>) [인물 해설](<https://source.example/character>) 같은 말. 같은 말.\n추측 https://invented.example/'
+    );
+    expect(result.webSearch).toEqual({
+      performed: true,
+      sources: [
+        { url: 'https://source.example/canon', title: '원작 자료' },
+        { url: 'https://source.example/character', title: '인물 해설' },
+      ],
+      queries: ['등대지기 원작', '인물 해설'],
+      searchEntryPoint: suggestions,
+    });
+    expect(bodyObject(result.opaqueState).contents.at(-1).parts).toEqual([{ text: prose }]);
+    const untouched = new VertexDecoder(encodeVertex(request(), protocol).context);
+    untouched.accept({
+      candidates: [
+        {
+          content: { parts: [{ text: prose }] },
+          finishReason: 'STOP',
+          groundingMetadata: {
+            webSearchQueries: ['should not count'],
+            groundingChunks: [{ web: { uri: 'https://source.example/canon' } }],
+          },
+        },
+      ],
+    });
+    expect(untouched.finish()).toMatchObject({ text: prose });
+    expect(untouched.finish()).not.toHaveProperty('webSearch');
+  }
+);
+
+test('an enabled Gemini search that returns no grounding is reported as unperformed', () => {
+  const input = request();
+  input.webSearch = true;
+  input.input.controls.purpose = 'story-guide';
+  input.stable.tools = [];
+  const { decoder } = start(input);
+  decoder.accept(event([{ text: 'Model knowledge only, https://invented.example/' }], 'STOP'));
+  expect(decoder.finish().webSearch).toEqual({ performed: false, sources: [] });
+});
+
+test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
   '%s serializes only selected safety filters and preserves them across tool turns',
   (protocol) => {
     const input = request();

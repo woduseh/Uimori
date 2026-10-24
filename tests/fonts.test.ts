@@ -33,14 +33,12 @@ function fixture() {
   bytes.writeUInt32BE(4, 24);
   return bytes;
 }
-test('font bytes deduplicate without replacing provenance and selections fall back after deletion', () => {
+test('font bytes deduplicate without replacing the original title and selections fall back after deletion', () => {
   const store = database();
   const bytes = fixture();
   const font = registerFont(store, {
     title: 'First',
     bytes,
-    sourceUrl: 'https://example.com/font.ttf',
-    license: 'OFL',
   });
   expect(registerFont(store, { title: 'Duplicate', bytes })).toEqual(font);
   expect(fontCatalog(store).fonts).toHaveLength(1);
@@ -57,6 +55,35 @@ test('font bytes deduplicate without replacing provenance and selections fall ba
     fonts: [],
     preferences: { revision: 2, appFontId: null, readerFontId: null },
   });
+});
+
+test('opening existing fonts removes retired metadata while preserving files, identity and selections', () => {
+  const store = database();
+  const bytes = fixture();
+  const font = registerFont(store, { title: 'Existing font', bytes });
+  const preferences = selectFonts(store, {
+    expectedRevision: 0,
+    appFontId: font.id,
+    readerFontId: font.id,
+  });
+  store.db
+    .prepare('UPDATE font_assets SET metadata=? WHERE id=?')
+    .run(
+      JSON.stringify({ ...font, sourceUrl: 'https://example.com/font.ttf', license: 'Old note' }),
+      font.id
+    );
+  store.close();
+  stores.splice(stores.indexOf(store), 1);
+  const reopened = new Store(store.path);
+  stores.push(reopened);
+  expect(fontCatalog(reopened)).toEqual({ fonts: [font], preferences });
+  const row = reopened.db
+    .prepare('SELECT metadata,bytes FROM font_assets WHERE id=?')
+    .get(font.id)!;
+  expect(JSON.parse(String(row.metadata))).toEqual(font);
+  expect(Buffer.from(row.bytes as Uint8Array)).toEqual(bytes);
+  expect(registerFont(reopened, { title: 'Duplicate', bytes })).toEqual(font);
+  expect(fontCatalog(reopened)).toEqual({ fonts: [font], preferences });
 });
 test('rejects unsupported signatures and table ranges before storing any font', () => {
   const store = database();
@@ -86,6 +113,18 @@ test('HTTP upload round-trips exact bytes, survives reopening, and protects font
   const bytes = fixture();
   let id = '';
   try {
+    for (const retired of ['sourceUrl', 'license']) {
+      const rejected = await app.inject({
+        method: 'POST',
+        url: '/api/fonts',
+        payload: {
+          title: 'Retired metadata',
+          data: bytes.toString('base64'),
+          [retired]: 'Old note',
+        },
+      });
+      expect(rejected.statusCode).toBe(400);
+    }
     const uploaded = await app.inject({
       method: 'POST',
       url: '/api/fonts',

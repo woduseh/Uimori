@@ -1,0 +1,76 @@
+export const messages = {
+  'chatmanage.reading': { ko: '읽기', en: 'Reading', ja: '読む', zh: '阅读' },
+  'chatmanage.tools': { ko: '창작 도구', en: 'Writing tools', ja: '創作ツール', zh: '创作工具' },
+  'chatmanage.copyExport': {
+    ko: '복사와 내보내기',
+    en: 'Copy and export',
+    ja: 'コピーとエクスポート',
+    zh: '复制与导出',
+  },
+  'chatmanage.management': {
+    ko: '채팅 관리',
+    en: 'Manage chat',
+    ja: 'チャット管理',
+    zh: '聊天管理',
+  },
+  'chatmanage.deleteScene': {
+    ko: '장면 삭제',
+    en: 'Delete scene',
+    ja: 'シーンを削除',
+    zh: '删除场景',
+  },
+  'chatmanage.deleteTitle': {
+    ko: '장면 삭제 범위',
+    en: 'Choose scenes to delete',
+    ja: '削除する範囲',
+    zh: '选择删除范围',
+  },
+  'chatmanage.only': {
+    ko: '이 장면만',
+    en: 'Only this scene',
+    ja: 'このシーンのみ',
+    zh: '仅此场景',
+  },
+  'chatmanage.following': {
+    ko: '이 장면부터 이후까지 ({count}개)',
+    en: 'This scene and all following ({count})',
+    ja: 'このシーン以降（{count}件）',
+    zh: '此场景及之后（{count}个）',
+  },
+  'chatmanage.deleteHelp': {
+    ko: '선택한 장면의 요청, 원문, 번역과 삽화를 삭제해요. 다른 채팅 사본은 유지해요. 되돌릴 수 없어요.',
+    en: 'Deletes the selected scenes, their requests, translations and illustrations. Other chat copies are kept. This cannot be undone.',
+    ja: '選択したシーンのリクエスト、原文、翻訳、挿絵を削除します。他のチャットのコピーは保持します。元に戻せません。',
+    zh: '删除所选场景的请求、原文、翻译和插图。保留其他聊天副本。无法撤销。',
+  },
+  'chatmanage.memoryHelp': {
+    ko: '연결된 기억은 보관하되 생성에서 제외해요. 기억과 메모에서 정리할 수 있어요.',
+    en: 'Linked memories are kept but excluded from generation. Review them in Memory and notes.',
+    ja: '関連する記憶は保管し、生成から除外します。「記憶とメモ」で整理できます。',
+    zh: '关联记忆会保留，但不用于生成。可在“记忆与笔记”中整理。',
+  },
+  'chatmanage.variablesHelp': {
+    ko: '중간 장면 하나만 삭제하면 이후 장면과 현재 카드 변수는 유지돼요.',
+    en: 'Deleting one earlier scene keeps later scenes and current card variables.',
+    ja: '途中のシーンだけを削除する場合、以降のシーンと現在のカード変数は保持します。',
+    zh: '仅删除中间场景时，保留后续场景和当前卡片变量。',
+  },
+  'chatmanage.confirmDelete': {
+    ko: '선택한 {count}개 장면 삭제',
+    en: 'Delete {count} selected scenes',
+    ja: '選択した{count}件のシーンを削除',
+    zh: '删除所选的{count}个场景',
+  },
+  'chatmanage.confirmOutcome': {
+    ko: '삭제 결과 다시 확인',
+    en: 'Check deletion result',
+    ja: '削除結果を再確認',
+    zh: '重新确认删除结果',
+  },
+  'chatmanage.unknown': {
+    ko: '삭제 결과를 확인하지 못했어요. 같은 요청으로 결과를 다시 확인해 주세요.',
+    en: 'Could not confirm deletion. Check the result using the same request.',
+    ja: '削除結果を確認できませんでした。同じリクエストで結果を再確認してください。',
+    zh: '无法确认删除结果。请使用同一请求重新确认。',
+  },
+};

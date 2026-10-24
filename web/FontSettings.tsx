@@ -19,9 +19,7 @@ import { IconButton } from './IconButton.js';
 import './fonts.css';
 import { MAX_FONT_BYTES } from '../core/fonts.js';
 import { LoadingState } from './LoadingState.js';
-
-const sample =
-  '책장을 넘기자 오래된 종이 냄새가 은은하게 퍼졌다. “오늘은 어떤 이야기를 함께 읽을까요?” Aa 0123456789';
+import { readingSample, readingSampleCredit } from './reading-sample.js';
 export function FontSettings({
   onDirtyChange,
   onSaveHandlerChange,
@@ -37,15 +35,13 @@ export function FontSettings({
   const input = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const [title, setTitle] = useState('');
-  const [sourceUrl, setSourceUrl] = useState('');
-  const [license, setLicense] = useState('');
   const [preview, setPreview] = useState('');
   const [deleting, setDeleting] = useState<FontAsset | null>(null);
   const [busy, setBusy] = useState(false);
   const locked = useRef(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const dirty = !!file || !!title || !!sourceUrl || !!license;
+  const dirty = !!file || !!title;
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -89,14 +85,10 @@ export function FontSettings({
       const registered = await api<FontAsset>('/fonts', {
         title: title.trim(),
         data,
-        ...(sourceUrl.trim() && { sourceUrl: sourceUrl.trim() }),
-        ...(license.trim() && { license: license.trim() }),
       });
       setPreview(registered.id);
       setFile(null);
       setTitle('');
-      setSourceUrl('');
-      setLicense('');
       if (input.current) input.current.value = '';
       await state.refresh(true);
     }, message('fonts.registered'));
@@ -236,25 +228,6 @@ export function FontSettings({
             onChange={(event) => setTitle(event.target.value)}
           />
         </label>
-        <label htmlFor={`${id}-source`}>
-          {t('fonts.source')}
-          <input
-            id={`${id}-source`}
-            type="url"
-            value={sourceUrl}
-            disabled={busy}
-            onChange={(event) => setSourceUrl(event.target.value)}
-          />
-        </label>
-        <label htmlFor={`${id}-license`}>
-          {t('fonts.license')}
-          <input
-            id={`${id}-license`}
-            value={license}
-            disabled={busy}
-            onChange={(event) => setLicense(event.target.value)}
-          />
-        </label>
         <div className="form-actions">
           <SaveButton
             label={t('fonts.registerLabel')}
@@ -290,8 +263,9 @@ export function FontSettings({
                   : undefined,
             }}
           >
-            {sample}
+            {readingSample}
           </p>
+          <small className="muted">{readingSampleCredit}</small>
           <ul className="font-list">
             {catalog.fonts.map((font) => (
               <li key={font.id}>
@@ -300,12 +274,6 @@ export function FontSettings({
                   <small>
                     {font.format.toUpperCase()} · {Math.ceil(font.byteLength / 1024)} KB
                   </small>
-                  {font.license && <small>{font.license}</small>}
-                  {font.sourceUrl && (
-                    <a href={font.sourceUrl} target="_blank" rel="noreferrer">
-                      {t('fonts.source')}
-                    </a>
-                  )}
                 </div>
                 <IconButton
                   label={t('fonts.delete', { title: font.title })}

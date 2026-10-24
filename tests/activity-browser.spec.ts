@@ -866,6 +866,179 @@ test('ACTUI14 activity sections show 5 then more, retain folding and never exclu
   ).toBe(true);
 });
 
+test('ACTUI16 recent navigation groups saved dates and keeps active helpers ahead of dated history', async ({
+  page,
+  request,
+}, info) => {
+  const seeded = await seed(request);
+  const chats = [seeded.chat];
+  for (const title of ['어제의 합성 채팅', '지난주의 합성 채팅']) {
+    const response = await request.post('/api/chats', {
+      data: { title, botId: seeded.chat.botId },
+    });
+    expect(response.ok()).toBe(true);
+    chats.push((await response.json()) as Chat);
+  }
+  const now = new Date(2026, 9, 25, 12);
+  const yesterday = new Date(2026, 9, 24, 23, 59).toISOString();
+  const earlier = new Date(2026, 9, 20, 12).toISOString();
+  await page.clock.install({ time: now });
+  await page.route('**/api/chats', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({
+          json: chats.map((chat, index) => ({
+            ...chat,
+            lastActivityAt: [now.toISOString(), yesterday, earlier][index],
+          })),
+        })
+      : route.continue()
+  );
+  await page.route('**/api/activity-feed', (route) =>
+    route.fulfill({
+      json: {
+        items: [],
+        running: [],
+        helpers: [
+          {
+            id: 'active-old',
+            conversationId: 'synthetic',
+            chatId: seeded.chat.id,
+            workId: null,
+            title: '지난주부터 진행 중인 합성 작업',
+            status: 'running',
+            updatedAt: earlier,
+            committedEffects: 0,
+          },
+          {
+            id: 'completed-today',
+            conversationId: 'synthetic',
+            chatId: seeded.chat.id,
+            workId: null,
+            title: '오늘 완료한 합성 작업',
+            status: 'completed',
+            updatedAt: now.toISOString(),
+            committedEffects: 0,
+          },
+          {
+            id: 'completed-yesterday',
+            conversationId: 'synthetic',
+            chatId: seeded.chat.id,
+            workId: null,
+            title: '어제 완료한 합성 작업',
+            status: 'completed',
+            updatedAt: yesterday,
+            committedEffects: 0,
+          },
+        ],
+      },
+    })
+  );
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+  await page.goto(`/?chat=${seeded.chat.id}`);
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  await nav.locator('.bot-navigation-modes > button').nth(1).click();
+  const recent = nav.locator('[data-activity-section="recent"]');
+  await expect(recent.locator('.activity-nav-date-group > h3')).toHaveText([
+    '오늘',
+    '어제',
+    '지난 7일',
+  ]);
+  await expect(recent.locator('.activity-nav-date-group').nth(1)).toContainText(chats[1].title);
+  const helpers = nav.locator('[data-activity-section="helpers"]');
+  await helpers.locator('.activity-nav-heading').click();
+  await expect(helpers.locator('.activity-nav-date-group > h3')).toHaveText([
+    '진행 중',
+    '오늘',
+    '어제',
+  ]);
+  await expect(helpers.locator('.activity-nav-link').first()).toContainText(
+    '지난주부터 진행 중인 합성 작업'
+  );
+  await expect(helpers.locator('time').first()).toHaveAttribute('datetime', earlier);
+  await page.screenshot({
+    path: info.outputPath('recent-date-groups-desktop.png'),
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+  const mobileRecent = page
+    .getByRole('dialog', { name: '탐색' })
+    .locator('[data-activity-section="recent"]');
+  await expect(mobileRecent.locator('.activity-nav-date-group > h3')).toHaveText([
+    '오늘',
+    '어제',
+    '지난 7일',
+  ]);
+  await mobileRecent.locator('.activity-nav-chat-row .action-menu > summary').first().click();
+  await expect(
+    mobileRecent.getByRole('button', { name: '채팅 복사', exact: true }).first()
+  ).toBeVisible();
+  await page.screenshot({
+    path: info.outputPath('recent-copy-mobile.png'),
+    animations: 'disabled',
+  });
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: '탐색' })).toBeVisible();
+});
+
+test('ACTUI17 sidebar copies a nonselected chat and an empty chat immediately while preserving drafts', async ({
+  page,
+  request,
+}, info) => {
+  const seeded = await seed(request);
+  const response = await request.post('/api/chats', {
+    data: { title: '복사할 빈 합성 채팅', botId: seeded.chat.botId },
+  });
+  expect(response.ok()).toBe(true);
+  const empty = (await response.json()) as Chat;
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 900 });
+  await page.goto(`/?chat=${empty.id}`);
+  const composer = page.getByLabel('다음 장면 요청');
+  await composer.fill('빈 원본 채팅에 남겨 둘 합성 초안');
+  const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+  const row = nav.locator(`[data-chat-id="${seeded.chat.id}"]`);
+  await row.hover();
+  await expect(row.locator('.bot-row-actions')).toHaveCSS('opacity', '1');
+  await row.locator('.action-menu > summary').click();
+  await expect(row.getByRole('button', { name: '채팅 복사', exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('sidebar-copy-menu.png'), animations: 'disabled' });
+  const copiedResponse = page.waitForResponse(
+    (reply) =>
+      reply.url().endsWith(`/api/chats/${seeded.chat.id}/fork`) &&
+      reply.request().method() === 'POST'
+  );
+  await row.getByRole('button', { name: '채팅 복사', exact: true }).click();
+  const copiedReply = await copiedResponse;
+  expect(copiedReply.ok(), await copiedReply.text()).toBe(true);
+  const copy = (await copiedReply.json()) as Chat;
+  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(copy.id);
+  const copied = await detail(request, copy.id);
+  expect(copied.sources.map((source) => source.text)).toEqual(
+    seeded.sources.map((source) => source.text)
+  );
+  expect((await detail(request, seeded.chat.id)).chat.headRevision).toBe(seeded.chat.headRevision);
+  await nav.locator(`[data-chat-id="${empty.id}"] .chat-link`).click();
+  await expect(composer).toHaveValue('빈 원본 채팅에 남겨 둘 합성 초안');
+  await nav.locator('.bot-navigation-modes > button').nth(1).click();
+  const recentRow = nav.locator(`.activity-nav-chat-row[data-chat-id="${empty.id}"]`);
+  await recentRow.locator('.action-menu > summary').click();
+  const emptyResponse = page.waitForResponse(
+    (reply) =>
+      reply.url().endsWith(`/api/chats/${empty.id}/fork`) && reply.request().method() === 'POST'
+  );
+  await recentRow.getByRole('button', { name: '채팅 복사', exact: true }).click();
+  const emptyReply = await emptyResponse;
+  expect(emptyReply.ok(), await emptyReply.text()).toBe(true);
+  const emptyCopy = (await emptyReply.json()) as Chat;
+  await expect.poll(() => new URL(page.url()).searchParams.get('chat')).toBe(emptyCopy.id);
+  expect((await detail(request, emptyCopy.id)).sources).toHaveLength(0);
+  expect((await detail(request, empty.id)).sources).toHaveLength(0);
+  await nav
+    .locator(`.activity-nav-chat-row[data-chat-id="${empty.id}"] .activity-nav-link`)
+    .click();
+  await expect(composer).toHaveValue('빈 원본 채팅에 남겨 둘 합성 초안');
+});
+
 test('ACTUI11 an already visible source is confirmed only after its inbox entry is selected', async ({
   page,
   request,

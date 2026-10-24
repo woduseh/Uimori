@@ -12,15 +12,16 @@ import { validateProviderPrompt } from './risu-prompt.js';
 import { NATIVE_HOST_CONTEXT_ID, nativeHostContextText } from './provider-messages.js';
 import { providerImagePart, requestImages } from './provider-image-reference.js';
 import type { ProviderPrompt } from './risu-prompt.js';
+import { webSearchAllowed } from './helper-web-search.js';
 
 export const CODEX_ENDPOINT = 'codex://local';
 /** Native tools that do not require access to the Uimori host filesystem or credentials. */
 export const CODEX_BUILTIN_TOOLS = { codeMode: true, webSearch: 'cached' } as const;
 /** Illustration planning, prompt writing and alignment need no native search or code tools. */
-export const codexBuiltinTools = (role: ProviderRole) =>
+export const codexBuiltinTools = (role: ProviderRole, liveSearch = false) =>
   role === 'illustration'
     ? ({ codeMode: false, webSearch: 'disabled' } as const)
-    : role === 'helper'
+    : role === 'helper' || liveSearch
       ? ({ codeMode: true, webSearch: 'live' } as const)
       : CODEX_BUILTIN_TOOLS;
 export const HELPER_BASE_INSTRUCTIONS =
@@ -172,7 +173,10 @@ export function buildCodexDescriptor(
     developerInstructions: built.developerInstructions,
     input: built.input,
     outputSchema: built.outputSchema,
-    builtinTools: codexBuiltinTools(request.role),
+    builtinTools: codexBuiltinTools(
+      request.role,
+      request.webSearch === true && webSearchAllowed(request)
+    ),
     environmentAccess: false,
     ephemeral: true,
   };

@@ -504,6 +504,12 @@ test('SCUI05 global lore defaults are saved and copied only to new chats', async
   await selectSettingsSection(page, '로어 컨텍스트');
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
   const section = settings.getByRole('region', { name: '로어 컨텍스트 기본값', exact: true });
+  const reset = section.getByRole('button', { name: '초기값으로 되돌리기', exact: true });
+  await expect(reset).toBeHidden();
+  await section.getByText('선별 기준과 용량', { exact: true }).click();
+  await expect(reset).toBeVisible();
+  await section.getByText('선별 기준과 용량', { exact: true }).click();
+  await expect(reset).toBeHidden();
   await section.getByText('선별 기준과 용량', { exact: true }).click();
   const retained = section.getByLabel('조회 로어 토큰 한도', { exact: true });
   await expect(retained).toBeVisible();
@@ -563,6 +569,9 @@ test('SCUI06 global lore defaults require a successful read and preserve chat dr
     await openChatSettings(page);
     await selectChatSettingsSection(page, '기억과 메모');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+    await expect(
+      dialog.getByRole('button', { name: '전역 기본값 적용', exact: true })
+    ).toBeHidden();
     await dialog.getByText('선별 기준과 용량', { exact: true }).click();
     const retained = dialog.getByLabel('조회 로어 토큰 한도', { exact: true });
     const reset = dialog.getByRole('button', { name: '전역 기본값 적용', exact: true });

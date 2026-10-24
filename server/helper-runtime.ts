@@ -698,6 +698,8 @@ export class HelperRuntime {
       const previous = this.workspace.task(retryOf);
       if (previous.conversationId !== conversationId)
         throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
+      if (previous.snapshot.invalidatedBySceneDeletion)
+        throw new HttpError(409, 'SCENE_DELETED_RETRY_UNAVAILABLE');
       if (previous.completedEffects?.count)
         throw new HttpError(409, 'HELPER_EFFECTS_ALREADY_COMMITTED');
       editor ??= previous.snapshot.editor;

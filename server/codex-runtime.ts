@@ -51,6 +51,11 @@ import {
   type ProviderUsage,
 } from '../core/transport.js';
 import { CodexProcess, CodexProcessError } from './codex-process.js';
+import {
+  webSearchAllowed,
+  webSearchSources,
+  type ProviderWebSearch,
+} from '../core/helper-web-search.js';
 
 const runFile = promisify(execFile);
 const object = (v: unknown): v is Record<string, unknown> =>
@@ -735,6 +740,7 @@ export class CodexRuntime implements CodexRuntimeService {
   ): Promise<ProviderResult> {
     if (options.signal.aborted) return failure('CANCELLED');
     if (this.authAction || this.loginValue) return failure('CODEX_BUSY');
+    const searched: ProviderWebSearch = { performed: false, sources: [], queries: [] };
     let plan: TurnPlan;
     try {
       assertCodexConnection(connection);
@@ -761,10 +767,31 @@ export class CodexRuntime implements CodexRuntimeService {
         config:
           request.role === 'illustration'
             ? CODEX_ILLUSTRATION_TEXT_CONFIG
-            : request.role === 'helper'
+            : request.role === 'helper' || (request.webSearch === true && webSearchAllowed(request))
               ? CODEX_HELPER_CONFIG
               : CODEX_RUNTIME_CONFIG,
         allowedItems: TEXT_ITEMS,
+        ...(request.webSearch
+          ? {
+              onItem: (item: Record<string, unknown>, method: string) => {
+                if (method !== 'item/completed' || item.type !== 'webSearch') return;
+                searched.performed = true;
+                if (typeof item.query === 'string') searched.queries!.push(item.query);
+                if (!object(item.action)) return;
+                const action = item.action;
+                if (typeof action.query === 'string') searched.queries!.push(action.query);
+                if (Array.isArray(action.queries))
+                  searched.queries!.push(
+                    ...action.queries.filter((query): query is string => typeof query === 'string')
+                  );
+                if (
+                  ['openPage', 'findInPage'].includes(String(action.type)) &&
+                  typeof action.url === 'string'
+                )
+                  searched.sources.push(...webSearchSources([{ url: action.url }]));
+              },
+            }
+          : {}),
       };
     } catch (caught) {
       return failure(options.signal.aborted ? 'CANCELLED' : safeError(caught));
@@ -772,7 +799,11 @@ export class CodexRuntime implements CodexRuntimeService {
     const slots = this.hostToolContext.getStore()?.active ? this.childTextSlots : this.textSlots;
     const outcome = await this.runTurn(connection, plan, options, slots);
     if (!outcome.ok) return failure(outcome.code, outcome.usage);
-    return { ...decodeCodexOutput(outcome.output, request), usage: outcome.usage };
+    return {
+      ...decodeCodexOutput(outcome.output, request),
+      usage: outcome.usage,
+      ...(request.webSearch ? { webSearch: searched } : {}),
+    };
   }
   /** One native task: Codex owns its reasoning/tool loop and receives each host result in place. */
   async executeAgent(

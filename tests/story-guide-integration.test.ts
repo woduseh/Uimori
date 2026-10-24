@@ -17,6 +17,7 @@ import { sse } from './fixtures/loopback-provider.js';
 
 const guideConfig = {
   enabled: true,
+  webSearch: false,
   work: 'The Copper Observatory',
   reference: 'The keeper knows the harbor route, but the visitor does not.',
   position: 'Before the visitor learns the keeper is her sister.',

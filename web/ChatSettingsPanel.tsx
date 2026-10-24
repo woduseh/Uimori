@@ -86,6 +86,7 @@ export function ChatSettingsPanel({
   initialSection,
   onGlobalSettings,
   onOpenHelper,
+  onAskHelper,
 }: {
   state: StoryState;
   onClose: () => void;
@@ -93,6 +94,7 @@ export function ChatSettingsPanel({
   initialSection?: Section;
   onGlobalSettings: (section: 'models' | 'prompts') => void;
   onOpenHelper: () => void;
+  onAskHelper?: (request: string) => void;
 }) {
   useI18n();
   const categories = getCategories();
@@ -433,6 +435,9 @@ export function ChatSettingsPanel({
             {visited.includes('story') && detail && (
               <div hidden={profileTab !== 'story'} className="chat-settings-memory">
                 <StoryPanel
+                  onAskHelper={
+                    onAskHelper ? (request) => requestClose(() => onAskHelper(request)) : undefined
+                  }
                   chatId={state.selected}
                   refreshKey={state.detail?.reader.cursor ?? 0}
                   headRevision={detail.chat.headRevision}

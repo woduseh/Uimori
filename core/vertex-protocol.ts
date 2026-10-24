@@ -1,5 +1,6 @@
 import { canonicalJson as canonical } from './canonical-json.js';
 import { GEMINI_SAFETY_CATEGORIES } from './gemini-safety.js';
+import { webCitationLinks, webSearchSources, type ProviderWebSearch } from './helper-web-search.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
 import { TRANSLATION_FORMAT_INSTRUCTION } from './provider-format.js';
@@ -53,6 +54,7 @@ const VERSION = 'vertex-gemini-turn-v1' as const;
 type PendingCall = { hostId: string; name: string; partIndex: number; providerId?: string };
 export type VertexTurn = {
   version: typeof VERSION;
+  webSearch?: true;
   modelId: string;
   bindingHash: string;
   phase: 'request' | ProviderResult['status'];
@@ -93,6 +95,16 @@ export function encodeVertex(
   request: ProviderRequest,
   protocol: Extract<ProviderProtocol, 'vertex-gemini-v1' | 'google-gemini-v1'> = 'vertex-gemini-v1'
 ): { body: Json; context: VertexTurn; messageMetadata?: NativeMessageMetadata } {
+  if (
+    request.webSearch !== undefined &&
+    (request.webSearch !== true ||
+      request.role !== 'main' ||
+      request.input.controls.purpose !== 'story-guide')
+  )
+    reject('INVALID_WEB_SEARCH');
+  // Google Search and function calling cannot share a generateContent request.
+  if (request.webSearch && (request.stable.tools.length || request.toolChoice))
+    reject('GEMINI_SEARCH_TOOL_COMBINATION_UNSUPPORTED');
   const continuationInput = continuationInputText(request);
   const generation = request.generation;
   if (generation) validateModelOptions(generation, protocol);
@@ -118,6 +130,7 @@ export function encodeVertex(
     copy(
       {
         role: request.role,
+        ...(request.webSearch ? { webSearch: true } : {}),
         // Preserve existing Vertex bindings while keeping Studio continuations separate.
         ...(protocol === 'google-gemini-v1' ? { protocol } : {}),
         modelId: request.modelId,
@@ -293,6 +306,7 @@ export function encodeVertex(
             : {}),
         }
       : {}),
+    ...(request.webSearch ? { tools: [{ googleSearch: {} }] } : {}),
     generationConfig: {
       maxOutputTokens,
       ...(generation?.thinkingLevel !== undefined
@@ -313,6 +327,7 @@ export function encodeVertex(
     messageMetadata: nativeMessageMetadata(plan),
     context: seal({
       version: VERSION,
+      ...(request.webSearch ? { webSearch: true as const } : {}),
       modelId: request.modelId,
       bindingHash,
       phase: 'request',
@@ -391,6 +406,10 @@ export class VertexDecoder {
   private readonly calls: ProviderToolCall[] = [];
   private readonly pending: PendingCall[] = [];
   private readonly ids: Set<string>;
+  private readonly groundingChunks: Json[] = [];
+  private readonly groundingSupports: Json[] = [];
+  private readonly searchQueries = new Set<string>();
+  private searchEntryPoint: string | undefined;
   private text = '';
   private eventText = '';
   private finishReason: string | null = null;
@@ -413,6 +432,9 @@ export class VertexDecoder {
     try {
       this.eventText = '';
       this.acceptEvent(copy(event));
+      // Grounding arrives separately from prose. Publish once the complete response
+      // can include its verified inline citations, rather than changing emitted text.
+      if (this.context.webSearch) return;
       if (this.eventText) return { text: this.eventText, offset: this.text.length };
     } catch (error) {
       this.fault = error instanceof VertexProtocolError ? error.code : 'INVALID_VERTEX_EVENT';
@@ -442,6 +464,8 @@ export class VertexDecoder {
       if (!object(candidate) || (candidate.index !== undefined && candidate.index !== 0))
         reject('VERTEX_MULTIPLE_CANDIDATES');
       if (this.promptBlock) reject('VERTEX_DUPLICATE_TERMINAL');
+      if (this.context.webSearch && candidate.groundingMetadata !== undefined)
+        this.acceptGrounding(candidate.groundingMetadata);
       if (candidate.content !== undefined) {
         if (
           !object(candidate.content) ||
@@ -468,6 +492,66 @@ export class VertexDecoder {
         this.finishReason = reason;
       }
     }
+  }
+  private acceptGrounding(metadata: Json): void {
+    if (!object(metadata)) reject('INVALID_VERTEX_EVENT');
+    for (const field of ['groundingChunks', 'groundingSupports', 'webSearchQueries'])
+      if (metadata[field] !== undefined && !Array.isArray(metadata[field]))
+        reject('INVALID_VERTEX_EVENT');
+    // Streaming chunks are incremental and support indices address the accumulated list.
+    this.groundingChunks.push(...((metadata.groundingChunks as Json[] | undefined) ?? []));
+    this.groundingSupports.push(...((metadata.groundingSupports as Json[] | undefined) ?? []));
+    for (const query of (metadata.webSearchQueries as Json[] | undefined) ?? [])
+      if (typeof query === 'string' && query.trim()) this.searchQueries.add(query);
+    if (
+      object(metadata.searchEntryPoint) &&
+      typeof metadata.searchEntryPoint.renderedContent === 'string' &&
+      metadata.searchEntryPoint.renderedContent.trim()
+    )
+      this.searchEntryPoint = metadata.searchEntryPoint.renderedContent;
+  }
+  private searchSources(chunks = this.groundingChunks): ProviderWebSearch['sources'] {
+    return webSearchSources(
+      chunks.flatMap((chunk) =>
+        object(chunk) && object(chunk.web)
+          ? [{ url: chunk.web.uri ?? null, title: chunk.web.title ?? null }]
+          : []
+      )
+    );
+  }
+  private groundedText(): string {
+    if (!this.context.webSearch) return this.text;
+    const insertions = new Map<number, Json[]>();
+    for (const support of this.groundingSupports) {
+      if (
+        !object(support) ||
+        !object(support.segment) ||
+        !nonempty(support.segment.text) ||
+        !Array.isArray(support.groundingChunkIndices)
+      )
+        continue;
+      const segment = support.segment.text;
+      const start = this.text.indexOf(segment);
+      // Native offsets are UTF-8 bytes in a Part, not JavaScript text offsets.
+      // Only an exact, unambiguous public segment can establish an inline citation.
+      if (start < 0 || start !== this.text.lastIndexOf(segment)) continue;
+      const end = start + segment.length;
+      const chunks = support.groundingChunkIndices.flatMap((index) =>
+        typeof index === 'number' &&
+        Number.isSafeInteger(index) &&
+        index >= 0 &&
+        this.groundingChunks[index] !== undefined
+          ? [this.groundingChunks[index]]
+          : []
+      );
+      insertions.set(end, [...(insertions.get(end) ?? []), ...this.searchSources(chunks)]);
+    }
+    let text = this.text;
+    for (const [end, sources] of [...insertions].sort(([a], [b]) => b - a)) {
+      const links = webCitationLinks(sources).trim().replaceAll('\n', ' ');
+      if (links) text = text.slice(0, end) + ' ' + links + text.slice(end);
+    }
+    return text;
   }
   private acceptPart(part: Json): void {
     if (
@@ -524,7 +608,7 @@ export class VertexDecoder {
     });
   }
   publicText(): string {
-    return this.text;
+    return this.groundedText();
   }
   snapshot(): ProviderResult {
     let status: ProviderResult['status'] = this.text || this.parts.length ? 'partial' : 'error';
@@ -563,12 +647,26 @@ export class VertexDecoder {
     });
     return structuredClone({
       status,
-      text: this.text,
+      text: this.groundedText(),
       toolCalls: this.calls,
       refusal,
       error,
       usage: this.observedUsage,
       opaqueState,
+      ...(this.context.webSearch
+        ? {
+            webSearch: {
+              performed: !!(
+                this.searchQueries.size ||
+                this.groundingChunks.length ||
+                this.searchEntryPoint
+              ),
+              sources: this.searchSources(),
+              ...(this.searchQueries.size ? { queries: [...this.searchQueries] } : {}),
+              ...(this.searchEntryPoint ? { searchEntryPoint: this.searchEntryPoint } : {}),
+            },
+          }
+        : {}),
     }) as ProviderResult;
   }
   finish(): ProviderResult {

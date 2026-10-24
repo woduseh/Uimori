@@ -270,6 +270,12 @@ function App() {
     !!s.pendingRequest ||
     s.submitting.includes(s.viewKey);
   const [outlineHelperRequest, setOutlineHelperRequest] = useState<OutlineHelperRequest>();
+  const [helperDraftRequest, setHelperDraftRequest] = useState<{
+    key: string;
+    text: string;
+    scope: HelperScope;
+    conversationId?: string;
+  }>();
   const [helperSelection, setHelperSelection] = useState<{
     key: string;
     sourceId: string;
@@ -758,6 +764,8 @@ function App() {
       }}
       onLibrary={showLibrary}
       onChatsChanged={s.loadChats}
+      onCopyChat={s.copyChat}
+      copyingChats={s.forking.map((key) => key.split(':')[0])}
       onLibraryChanged={s.retryLibrary}
       onError={s.setError}
       onSettings={() => {
@@ -1020,142 +1028,169 @@ function App() {
                     </button>
                   )}
                   <ActionMenu label={t('main.m061')} className="chat-menu">
-                    {compact && (
-                      <>
-                        <button
-                          type="button"
-                          className="secondary"
-                          aria-label={t('main.m003')}
-                          onClick={(event) => {
-                            fromChatMenu(event);
-                            openChatSettings();
-                          }}
-                        >
-                          <SlidersHorizontal size={18} aria-hidden="true" />
-                          {t('main.m003')}
-                        </button>
-                        <button
-                          type="button"
-                          className="secondary"
-                          aria-label={t('main.m027')}
-                          aria-expanded={helperOpen}
-                          aria-controls="helper-panel"
-                          onClick={() => {
-                            setWorkspacePanel('helper');
-                          }}
-                        >
-                          <MessageCircle size={18} aria-hidden="true" />
-                          {t('main.m062')}
-                        </button>
-                      </>
-                    )}
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={(event) => {
-                        fromChatMenu(event);
-                        openChatSettings('guide');
-                      }}
+                    <div
+                      className="action-menu-group"
+                      role="group"
+                      aria-label={t('chatmanage.reading')}
                     >
-                      <BookOpen size={18} aria-hidden="true" />
-                      {t('main.m063')}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      disabled={!sceneCount}
-                      onClick={() => setChatTool({ scope: s.viewKey, kind: 'export' })}
-                    >
-                      <Download size={18} aria-hidden="true" />
-                      {t('main.m064')}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      aria-label={t('main.m065')}
-                      title={t('main.m066')}
-                      onClick={() => {
-                        const chatId = s.selected;
-                        const title = s.chats.find((chat) => chat.id === chatId)?.title ?? 'chat';
-                        void downloadArchive(
-                          `/chats/${chatId}/backup-archive`,
-                          `${title.replace(/[\\/:*?"<>|]/g, '_')}.chat.uimori`
-                        ).catch((error: Error) => s.setError(error.message));
-                      }}
-                    >
-                      <Download size={18} aria-hidden="true" />
-                      {t('main.m065')}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      aria-label={t('main.m067')}
-                      title={t('main.m068')}
-                      disabled={
-                        !s.sources.length ||
-                        s.forking.some((key) => key.startsWith(`${s.selected}:`))
-                      }
-                      onClick={() => {
-                        const source = s.sources.at(-1);
-                        if (source) void s.fork(source.id);
-                      }}
-                    >
-                      <GitFork size={18} aria-hidden="true" />
-                      {t('main.m069')}
-                    </button>
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={(event) => {
-                        fromChatMenu(event);
-                        setPanel('reading');
-                      }}
-                    >
-                      <Type size={18} aria-hidden="true" />
-                      {t('main.m070')}
-                    </button>
-                    {!focus && (
-                      <button type="button" className="secondary" onClick={() => setFocus(true)}>
-                        <Maximize size={18} aria-hidden="true" />
-                        {t('main.m071')}
-                      </button>
-                    )}
-                    {s.detail && (
+                      <span className="action-menu-heading">{t('chatmanage.reading')}</span>
                       <button
                         type="button"
                         className="secondary"
                         onClick={(event) => {
                           fromChatMenu(event);
-                          setPanel('outline');
+                          setPanel('reading');
                         }}
                       >
-                        <ListTree size={18} aria-hidden="true" />
-                        {t('main.m007')}
+                        <Type size={18} aria-hidden="true" />
+                        {t('main.m070')}
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={(event) => {
-                        fromChatMenu(event);
-                        inspect('');
-                      }}
+                      {!focus && (
+                        <button type="button" className="secondary" onClick={() => setFocus(true)}>
+                          <Maximize size={18} aria-hidden="true" />
+                          {t('main.m071')}
+                        </button>
+                      )}
+                    </div>
+                    <div
+                      className="action-menu-group"
+                      role="group"
+                      aria-label={t('chatmanage.tools')}
                     >
-                      <Activity size={18} aria-hidden="true" />
-                      {t('main.m006')}
-                    </button>
-                    {s.detail && (
-                      <DeleteButton
-                        path={`/chats/${encodeURIComponent(s.selected)}`}
-                        preparePath={`/chats/${encodeURIComponent(s.selected)}/deletion-impact`}
-                        title={s.detail.chat.title}
-                        label={t('main.m072')}
-                        description={t('main.m073')}
-                        disabled={!!s.active}
-                        onError={s.setError}
-                        onDeleted={() => s.loadChats()}
-                      />
-                    )}
+                      <span className="action-menu-heading">{t('chatmanage.tools')}</span>
+                      {compact && (
+                        <>
+                          <button
+                            type="button"
+                            className="secondary"
+                            aria-label={t('main.m003')}
+                            onClick={(event) => {
+                              fromChatMenu(event);
+                              openChatSettings();
+                            }}
+                          >
+                            <SlidersHorizontal size={18} aria-hidden="true" />
+                            {t('main.m003')}
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            aria-label={t('main.m027')}
+                            aria-expanded={helperOpen}
+                            aria-controls="helper-panel"
+                            onClick={() => {
+                              setWorkspacePanel('helper');
+                            }}
+                          >
+                            <MessageCircle size={18} aria-hidden="true" />
+                            {t('main.m062')}
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={(event) => {
+                          fromChatMenu(event);
+                          openChatSettings('guide');
+                        }}
+                      >
+                        <BookOpen size={18} aria-hidden="true" />
+                        {t('main.m063')}
+                      </button>
+                      {s.detail && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          onClick={(event) => {
+                            fromChatMenu(event);
+                            setPanel('outline');
+                          }}
+                        >
+                          <ListTree size={18} aria-hidden="true" />
+                          {t('main.m007')}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={(event) => {
+                          fromChatMenu(event);
+                          inspect('');
+                        }}
+                      >
+                        <Activity size={18} aria-hidden="true" />
+                        {t('main.m006')}
+                      </button>
+                    </div>
+                    <div
+                      className="action-menu-group"
+                      role="group"
+                      aria-label={t('chatmanage.copyExport')}
+                    >
+                      <span className="action-menu-heading">{t('chatmanage.copyExport')}</span>
+                      <button
+                        type="button"
+                        className="secondary"
+                        aria-label={t('main.m067')}
+                        title={t('main.m068')}
+                        disabled={
+                          !s.sources.length ||
+                          s.forking.some((key) => key.startsWith(`${s.selected}:`))
+                        }
+                        onClick={() => {
+                          const source = s.sources.at(-1);
+                          if (source) void s.fork(source.id);
+                        }}
+                      >
+                        <GitFork size={18} aria-hidden="true" />
+                        {t('main.m069')}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={!sceneCount}
+                        onClick={() => setChatTool({ scope: s.viewKey, kind: 'export' })}
+                      >
+                        <Download size={18} aria-hidden="true" />
+                        {t('main.m064')}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        aria-label={t('main.m065')}
+                        title={t('main.m066')}
+                        onClick={() => {
+                          const chatId = s.selected;
+                          const title = s.chats.find((chat) => chat.id === chatId)?.title ?? 'chat';
+                          void downloadArchive(
+                            `/chats/${chatId}/backup-archive`,
+                            `${title.replace(/[\\/:*?"<>|]/g, '_')}.chat.uimori`
+                          ).catch((error: Error) => s.setError(error.message));
+                        }}
+                      >
+                        <Download size={18} aria-hidden="true" />
+                        {t('main.m065')}
+                      </button>
+                    </div>
+                    <div
+                      className="action-menu-group"
+                      role="group"
+                      aria-label={t('chatmanage.management')}
+                    >
+                      {s.detail && (
+                        <DeleteButton
+                          path={`/chats/${encodeURIComponent(s.selected)}`}
+                          preparePath={`/chats/${encodeURIComponent(s.selected)}/deletion-impact`}
+                          title={s.detail.chat.title}
+                          label={t('main.m072')}
+                          description={t('main.m073')}
+                          disabled={!!s.active}
+                          onError={s.setError}
+                          onDeleted={() => s.loadChats()}
+                        />
+                      )}
+                    </div>
                   </ActionMenu>
                 </>
               )}
@@ -1446,6 +1481,16 @@ function App() {
                               refresh={() => s.refresh(s.selected)}
                               onError={s.setError}
                               onFork={s.fork}
+                              deletionDisabled={!!s.active || sourceEditing}
+                              onDeleted={async (result) => {
+                                try {
+                                  if (result.chatId === s.selected)
+                                    s.chooseSource(result.headRevision ?? '', true);
+                                  await s.loadChats();
+                                } catch (cause) {
+                                  s.setError((cause as Error).message);
+                                }
+                              }}
                               onNativeNotice={(messages) =>
                                 setNativeNotices((previous) => [...previous, ...messages])
                               }
@@ -2168,6 +2213,7 @@ function App() {
         resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
         onClearResource={clearHelperResource}
         outlineRequest={outlineHelperRequest}
+        draftRequest={helperDraftRequest}
         outlineWorkspace={panel === 'outline'}
         scope={
           s.destination === 'story' && s.selected && s.detail
@@ -2436,6 +2482,16 @@ function App() {
           state={s}
           onClose={() => setPanel('')}
           onOpenHelper={() => setWorkspacePanel('helper')}
+          onAskHelper={(text) => {
+            const scope: HelperScope = { kind: 'chat', chatId: s.selected };
+            setHelperDraftRequest({
+              key: crypto.randomUUID(),
+              text,
+              scope,
+              conversationId: selectedHelperSession(scope) ?? undefined,
+            });
+            setWorkspacePanel('helper');
+          }}
           initialSection={settingsSection}
           onGlobalSettings={(section) => {
             setSettingsTab(section);

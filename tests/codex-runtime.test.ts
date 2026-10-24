@@ -80,6 +80,31 @@ afterEach(async () => {
 });
 
 describe('official Codex runtime boundary using a synthetic stdio executable', () => {
+  it('enables live guide search and records only native search receipts as sources', async () => {
+    const { runtime, records } = setup('story-guide-search');
+    const guide = request();
+    guide.webSearch = true;
+    guide.input.controls.purpose = 'story-guide';
+    const wires: WireRecord[] = [];
+    const result = await runtime.execute(connection, guide, {
+      signal: new AbortController().signal,
+      onWire: (wire) => {
+        wires.push(wire);
+      },
+    });
+    expect(result).toMatchObject({
+      status: 'completed',
+      webSearch: {
+        performed: true,
+        sources: [{ url: 'https://example.com/official', title: 'example.com' }],
+        queries: ['public work edition'],
+      },
+    });
+    expect(wires[0].body).toMatchObject({ builtinTools: { webSearch: 'live' } });
+    expect(records().find((row) => row.method === 'thread/start').params.config.web_search).toBe(
+      'live'
+    );
+  });
   it('keeps host tool results and plain assistant final output inside one native turn', async () => {
     const { runtime, records } = setup('agent-normal');
     const onToolCall = vi.fn<CodexAgentExecutionOptions['onToolCall']>(async () => ({

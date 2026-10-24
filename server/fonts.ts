@@ -20,6 +20,8 @@ export function initFonts(store: Store) {
   store.db.exec(
     'CREATE TABLE IF NOT EXISTS font_assets(id TEXT PRIMARY KEY, metadata TEXT NOT NULL, bytes BLOB NOT NULL)'
   );
+  store.db.exec(`UPDATE font_assets SET metadata=json_remove(metadata,'$.sourceUrl','$.license')
+    WHERE json_type(metadata,'$.sourceUrl') IS NOT NULL OR json_type(metadata,'$.license') IS NOT NULL`);
   initialized.add(store);
 }
 export function fontPreferences(store: Store): FontPreferences {
@@ -75,27 +77,11 @@ function format(bytes: Buffer): FontFormat {
   }
   return signature === 'OTTO' ? 'otf' : 'ttf';
 }
-export function registerFont(
-  store: Store,
-  input: { title: string; bytes: Uint8Array; sourceUrl?: string; license?: string }
-): FontAsset {
+export function registerFont(store: Store, input: { title: string; bytes: Uint8Array }): FontAsset {
   initFonts(store);
   const title = text(input.title, 'title', 200).trim();
   const bytes = Buffer.from(input.bytes);
   const fontFormat = format(bytes);
-  const sourceUrl =
-    input.sourceUrl === undefined ? undefined : text(input.sourceUrl, 'source URL', 2000);
-  if (sourceUrl) {
-    let url: URL;
-    try {
-      url = new URL(sourceUrl);
-    } catch {
-      throw new HttpError(400, '글꼴 출처 URL을 확인해 주세요.');
-    }
-    if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password)
-      throw new HttpError(400, '글꼴 출처 URL을 확인해 주세요.');
-  }
-  const license = input.license === undefined ? undefined : text(input.license, 'license', 4000);
   const id = createHash('sha256').update(bytes).digest('hex');
   const existing = store.db.prepare('SELECT metadata FROM font_assets WHERE id=?').get(id);
   if (existing) return JSON.parse(String(existing.metadata));
@@ -110,8 +96,6 @@ export function registerFont(
     format: fontFormat,
     mimeType: `font/${fontFormat}`,
     byteLength: bytes.length,
-    ...(sourceUrl ? { sourceUrl } : {}),
-    ...(license ? { license } : {}),
     createdAt: new Date().toISOString(),
   };
   store.db
@@ -258,10 +242,10 @@ export async function downloadFont(
 }
 export async function importFontFromUrl(
   store: Store,
-  input: { title: string; url: string; license?: string }
+  input: { title: string; url: string }
 ): Promise<FontAsset> {
   const bytes = await downloadFont(input.url, AbortSignal.timeout(15000));
-  return registerFont(store, { ...input, sourceUrl: input.url, bytes });
+  return registerFont(store, { title: input.title, bytes });
 }
 export function fontRoutes(app: FastifyInstance, store: Store) {
   initFonts(store);
@@ -270,15 +254,13 @@ export function fontRoutes(app: FastifyInstance, store: Store) {
   app.put('/api/font-preferences', (request) => selectFonts(store, request.body));
   app.post('/api/fonts', { bodyLimit: Math.ceil((MAX_FONT_BYTES * 4) / 3) + 10000 }, (request) => {
     const body = record(request.body);
-    fields(body, ['title', 'data', 'sourceUrl', 'license']);
+    fields(body, ['title', 'data']);
     const data = text(body.data, 'font data', Math.ceil((MAX_FONT_BYTES * 4) / 3));
     if (/[^A-Za-z0-9+/=]/.test(data) || Buffer.from(data, 'base64').toString('base64') !== data)
       throw new HttpError(400, '글꼴 데이터가 올바르지 않아요.');
     return registerFont(store, {
       title: body.title,
       bytes: Buffer.from(data, 'base64'),
-      sourceUrl: body.sourceUrl,
-      license: body.license,
     });
   });
   app.delete<{ Params: { id: string } }>('/api/fonts/:id', (request) =>

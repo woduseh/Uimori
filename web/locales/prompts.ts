@@ -1157,6 +1157,48 @@ export const messages = {
     ja: '原作の事件展開も参考にする',
     zh: '也参考原作情节发展',
   },
+  'prompts.uiVerifyCanonWithWebSearch': {
+    ko: '원작 정보를 웹에서 확인',
+    en: 'Verify canon information with web search',
+    ja: '原作情報をウェブで確認',
+    zh: '通过网络搜索核实原作信息',
+  },
+  'prompts.uiStoryGuideWebSearchScope': {
+    ko: '검색 비용이 추가될 수 있고, 기준 시점 이후의 내용이 포함될 수 있어요.',
+    en: 'Search may add costs and include spoilers beyond your reference point.',
+    ja: '検索費用が増えたり、基準時点より後の内容が含まれたりする場合があります。',
+    zh: '搜索可能产生额外费用，并包含参考时间点之后的剧透。',
+  },
+  'prompts.uiStoryGuideWebSources': {
+    ko: '웹 검색 출처',
+    en: 'Web search sources',
+    ja: 'ウェブ検索の出典',
+    zh: '网络搜索来源',
+  },
+  'prompts.uiStoryGuideSearchSuggestions': {
+    ko: 'Google 검색 제안',
+    en: 'Google Search suggestions',
+    ja: 'Google 検索の候補',
+    zh: 'Google 搜索建议',
+  },
+  'prompts.uiStoryGuideWebSearchUnsupported': {
+    ko: '현재 본문 모델 연결은 웹 검색을 지원하지 않아 참고문 없이 집필했어요.',
+    en: 'The current writing model connection does not support web search. Writing continued without a brief.',
+    ja: '現在の本文モデル接続はウェブ検索に対応していないため、参考文なしで執筆しました。',
+    zh: '当前正文模型连接不支持网络搜索，已在不使用参考文的情况下继续写作。',
+  },
+  'prompts.uiStoryGuideWebSearchNotPerformed': {
+    ko: '웹 검색이 실행되지 않아 참고문 없이 집필했어요.',
+    en: 'Web search was not performed. Writing continued without a brief.',
+    ja: 'ウェブ検索が実行されなかったため、参考文なしで執筆しました。',
+    zh: '未执行网络搜索，已在不使用参考文的情况下继续写作。',
+  },
+  'prompts.uiStoryGuideWebSearchNoSources': {
+    ko: '웹 검색에서 확인할 출처를 받지 못해 참고문 없이 집필했어요.',
+    en: 'Web search returned no sources to check. Writing continued without a brief.',
+    ja: 'ウェブ検索で確認できる出典を取得できなかったため、参考文なしで執筆しました。',
+    zh: '网络搜索未返回可核实的来源，已在不使用参考文的情况下继续写作。',
+  },
   'prompts.uiAdditionalReferences': {
     ko: '추가 참고 자료',
     en: 'Additional references',

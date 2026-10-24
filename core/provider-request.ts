@@ -28,6 +28,7 @@ import { ProviderOptionsError, validateProviderOptions } from './provider-option
 import type { CatalogModel, ProviderConnection, ProviderRequest } from './transport.js';
 import { continuationInputText } from './provider-messages.js';
 import { requestImages } from './provider-image-reference.js';
+import { webSearchAllowed } from './helper-web-search.js';
 
 export function reject(code: string): never {
   throw new ProviderContractError(code);
@@ -143,7 +144,10 @@ export function validateRequest(value: unknown): ProviderRequest {
     }
   }
   if (!MODEL_ROLES.includes(value.role as ModelRole)) reject('INVALID_ROLE');
-  if (value.webSearch !== undefined && (value.webSearch !== true || value.role !== 'helper'))
+  if (
+    value.webSearch !== undefined &&
+    (value.webSearch !== true || !webSearchAllowed(value as ProviderRequest))
+  )
     reject('INVALID_WEB_SEARCH');
   string(value.modelId);
   if (value.generation !== undefined) validateGeneration(value.generation);

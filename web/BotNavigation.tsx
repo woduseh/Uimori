@@ -30,6 +30,7 @@ import type { ChatFolder } from '../core/product.js';
 import { api } from './api.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
+import { Copy, LoaderCircle } from 'lucide-react';
 import { BotDefaultPersona } from './BotDefaultPersona.js';
 import './bot-navigation.css';
 
@@ -46,6 +47,8 @@ export type Props = {
   onImportChat?: (bot: Content) => void;
   onLibrary: (tab: LibraryDestination) => void;
   onChatsChanged: () => Promise<void>;
+  onCopyChat?: (chatId: string) => void;
+  copyingChats?: string[];
   onError: (message: string) => void;
   onSettings: () => void;
   onTasks: () => void;
@@ -376,6 +379,24 @@ export function BotBranch(
               {status(activity(chat)?.label)}
               <div className="bot-row-actions">
                 <ActionMenu label={t('transfer.d013', { v0: chat.title })} viewport>
+                  {props.onCopyChat && (
+                    <button
+                      type="button"
+                      disabled={props.copyingChats?.includes(chat.id)}
+                      onClick={() => props.onCopyChat?.(chat.id)}
+                    >
+                      {props.copyingChats?.includes(chat.id) ? (
+                        <LoaderCircle size={18} aria-hidden="true" />
+                      ) : (
+                        <Copy size={18} aria-hidden="true" />
+                      )}
+                      {t(
+                        props.copyingChats?.includes(chat.id)
+                          ? 'recent.copyingChat'
+                          : 'recent.copyChat'
+                      )}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={(event) => openFromMenu(event, () => setMenuId(chat.id))}

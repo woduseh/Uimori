@@ -39,3 +39,23 @@
   width: auto;
   min-height: var(--control-h);
 }
+.scene-delete-scopes {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0;
+}
+.scene-delete-scopes label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--control-h);
+}
+.scene-delete-scopes input[type="radio"] {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
