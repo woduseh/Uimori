@@ -1,9 +1,19 @@
 .orphan-memory {
   min-width: 0;
   border-top: var(--hairline) solid var(--border);
-  padding-top: 1rem;
+  padding-top: 0.6rem;
 }
-.orphan-memory .context-heading h4 {
+.story-panel .orphan-memory-disclosure {
+  border-top: 0;
+  padding-top: 0;
+  margin-top: 0;
+}
+.orphan-memory-disclosure > summary {
+  min-height: var(--control-h);
+  box-sizing: border-box;
+  align-content: center;
+}
+.orphan-memory .context-heading p {
   margin: 0;
 }
 .orphan-memory-text {

@@ -1635,6 +1635,18 @@ input[type="checkbox"] {
   text-align: left;
   font-weight: 500;
 }
+.settings-navigation-list > button > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.settings-navigation-list > button small {
+  font-size: var(--font-small);
+  color: var(--muted);
+  font-weight: 400;
+  line-height: 1.5;
+}
 .settings-search-results > button {
   justify-content: space-between;
   flex-wrap: wrap;
@@ -1746,7 +1758,6 @@ input[type="checkbox"] {
   }
   .settings-page-title {
     margin-bottom: 14px;
-    padding-bottom: 12px;
   }
 }
 .archive-file-field {

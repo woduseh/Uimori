@@ -118,184 +118,187 @@ export function OrphanMemoryPanel({
     }
   }
   const current = detail?.headRevision === headRevision;
+  if (current && !detail.entries.length && !loading && !error)
+    return <TransientNotice message={notice} />;
   return (
     <section
       className="orphan-memory"
       aria-label={t('orphanmemory.title')}
       data-testid="orphan-memory"
     >
-      <div className="context-heading">
-        <h4>{t('orphanmemory.title')}</h4>
-        <button
-          type="button"
-          className="secondary"
-          disabled={busy || loading}
-          onClick={() => void load()}
-        >
-          {t('orphanmemory.refresh')}
-        </button>
-      </div>
       <TransientNotice message={notice} />
-      {!detail || !current ? (
-        <LoadingState
-          presentation="placeholder"
-          loading={loading}
-          error={translateMessage(error)}
-          label={t('orphanmemory.loading')}
-          onRetry={() => void load()}
-        />
-      ) : (
-        <>
-          {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-          {loading && <LoadingState presentation="inline" label={t('orphanmemory.loading')} />}
-          {!detail.entries.length ? (
-            <p className="muted">{t('orphanmemory.empty')}</p>
-          ) : (
-            <>
-              <p className="muted">{t('orphanmemory.hint')}</p>
-              <ul className="story-records">
-                {detail.entries.map((entry) => {
-                  const key = entryId(entry);
-                  const selected =
-                    review?.entry.kind === entry.kind && entryId(review.entry) === key;
-                  return (
-                    <li key={`${entry.kind}:${key}`}>
-                      <strong>
-                        {entry.kind === 'note'
-                          ? t(
-                              entry.note.kind === 'imported-memory'
-                                ? 'orphanmemory.imported'
-                                : 'orphanmemory.note'
-                            )
-                          : t('orphanmemory.lore', {
-                              title: entry.override.baseEntry.title,
-                              field: t(`orphanmemory.field.${entry.override.selector.field}`),
-                            })}
-                      </strong>
-                      <p className="orphan-memory-text">{entryText(entry)}</p>
-                      <p className="muted">{t(`orphanmemory.${entry.reason}`)}</p>
-                      <details className="orphan-memory-provenance">
-                        <summary>{t('orphanmemory.provenance')}</summary>
-                        <small>
-                          {t('orphanmemory.anchor', {
-                            source:
-                              entry.kind === 'note'
-                                ? (entry.note.atRevision ?? '')
-                                : (entry.override.atSource ?? ''),
-                          })}
-                        </small>
-                        {entry.kind === 'note' && (
-                          <small>
-                            {t('orphanmemory.author', {
-                              author: entry.note.declaration.author,
-                              origin: entry.note.origin?.title ?? '',
-                            })}
-                          </small>
+      {error && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || loading}
+              onClick={() => void load()}
+            >
+              {t('orphanmemory.refresh')}
+            </button>
+          }
+        >
+          {translateMessage(error)}
+        </NoticeBanner>
+      )}
+      {loading && <LoadingState presentation="inline" label={t('orphanmemory.loading')} />}
+      {current && detail.entries.length > 0 && (
+        <details className="orphan-memory-disclosure">
+          <summary>{t('orphanmemory.count', { count: detail.entries.length })}</summary>
+          <div className="context-heading">
+            <p className="muted">{t('orphanmemory.hint')}</p>
+            <button
+              type="button"
+              className="secondary"
+              disabled={busy || loading}
+              onClick={() => void load()}
+            >
+              {t('orphanmemory.refresh')}
+            </button>
+          </div>
+          <ul className="story-records">
+            {detail.entries.map((entry) => {
+              const key = entryId(entry);
+              const selected = review?.entry.kind === entry.kind && entryId(review.entry) === key;
+              return (
+                <li key={`${entry.kind}:${key}`}>
+                  <strong>
+                    {entry.kind === 'note'
+                      ? t(
+                          entry.note.kind === 'imported-memory'
+                            ? 'orphanmemory.imported'
+                            : 'orphanmemory.note'
+                        )
+                      : t('orphanmemory.lore', {
+                          title: entry.override.baseEntry.title,
+                          field: t(`orphanmemory.field.${entry.override.selector.field}`),
+                        })}
+                  </strong>
+                  <p className="orphan-memory-text">{entryText(entry)}</p>
+                  <p className="muted">{t(`orphanmemory.${entry.reason}`)}</p>
+                  <details className="orphan-memory-provenance">
+                    <summary>{t('orphanmemory.provenance')}</summary>
+                    <small>
+                      {t('orphanmemory.anchor', {
+                        source:
+                          entry.kind === 'note'
+                            ? (entry.note.atRevision ?? '')
+                            : (entry.override.atSource ?? ''),
+                      })}
+                    </small>
+                    {entry.kind === 'note' && (
+                      <small>
+                        {t('orphanmemory.author', {
+                          author: entry.note.declaration.author,
+                          origin: entry.note.origin?.title ?? '',
+                        })}
+                      </small>
+                    )}
+                  </details>
+                  {selected ? (
+                    <div className="orphan-memory-review">
+                      <p>
+                        {t(
+                          review.action === 'retire'
+                            ? 'orphanmemory.retireConfirm'
+                            : review.base.headRevision
+                              ? 'orphanmemory.reanchorConfirm'
+                              : 'orphanmemory.reanchorChatConfirm'
                         )}
-                      </details>
-                      {selected ? (
-                        <div className="orphan-memory-review">
-                          <p>
-                            {t(
-                              review.action === 'retire'
-                                ? 'orphanmemory.retireConfirm'
-                                : review.base.headRevision
-                                  ? 'orphanmemory.reanchorConfirm'
-                                  : 'orphanmemory.reanchorChatConfirm'
-                            )}
-                          </p>
-                          {review.action === 'reanchor' && entry.kind === 'lore' && (
-                            <p className="muted">{t('orphanmemory.loreConflict')}</p>
-                          )}
-                          <div className="form-actions">
-                            <button
-                              type="button"
-                              className="primary"
-                              disabled={busy || disabled}
-                              onClick={() => void apply()}
-                            >
-                              {busy
-                                ? t('orphanmemory.applying')
-                                : t(
-                                    review.action === 'retire'
-                                      ? 'orphanmemory.retire'
-                                      : 'orphanmemory.reanchor'
-                                  )}
-                            </button>
-                            <button
-                              type="button"
-                              className="secondary"
-                              disabled={busy}
-                              onClick={() => setReview(null)}
-                            >
-                              {t('orphanmemory.cancel')}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="form-actions">
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={busy || disabled || review !== null}
-                            onClick={() =>
-                              setReview({
-                                entry,
-                                action: 'reanchor',
-                                base: detail,
-                                key: crypto.randomUUID(),
-                              })
-                            }
-                          >
-                            {t('orphanmemory.reanchor')}
-                          </button>
-                          <button
-                            type="button"
-                            className="secondary"
-                            disabled={busy || disabled || review !== null}
-                            onClick={() =>
-                              setReview({
-                                entry,
-                                action: 'retire',
-                                base: detail,
-                                key: crypto.randomUUID(),
-                              })
-                            }
-                          >
-                            {t('orphanmemory.retire')}
-                          </button>
-                          {onAskHelper && (
-                            <button
-                              type="button"
-                              className="secondary"
-                              disabled={busy || disabled || review !== null}
-                              onClick={() =>
-                                onAskHelper(
-                                  t('orphanmemory.helperRequest', {
-                                    id: key,
-                                    kind: entry.kind,
-                                    source:
-                                      entry.kind === 'note'
-                                        ? (entry.note.atRevision ?? '')
-                                        : (entry.override.atSource ?? ''),
-                                    reason: t(`orphanmemory.${entry.reason}`),
-                                    text: entryText(entry).slice(0, 6000),
-                                  })
-                                )
-                              }
-                            >
-                              {t('orphanmemory.askHelper')}
-                            </button>
-                          )}
-                        </div>
+                      </p>
+                      {review.action === 'reanchor' && entry.kind === 'lore' && (
+                        <p className="muted">{t('orphanmemory.loreConflict')}</p>
                       )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          )}
-        </>
+                      <div className="form-actions">
+                        <button
+                          type="button"
+                          className="primary"
+                          disabled={busy || disabled}
+                          onClick={() => void apply()}
+                        >
+                          {busy
+                            ? t('orphanmemory.applying')
+                            : t(
+                                review.action === 'retire'
+                                  ? 'orphanmemory.retire'
+                                  : 'orphanmemory.reanchor'
+                              )}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={busy}
+                          onClick={() => setReview(null)}
+                        >
+                          {t('orphanmemory.cancel')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="form-actions">
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy || disabled || review !== null}
+                        onClick={() =>
+                          setReview({
+                            entry,
+                            action: 'reanchor',
+                            base: detail,
+                            key: crypto.randomUUID(),
+                          })
+                        }
+                      >
+                        {t('orphanmemory.reanchor')}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={busy || disabled || review !== null}
+                        onClick={() =>
+                          setReview({
+                            entry,
+                            action: 'retire',
+                            base: detail,
+                            key: crypto.randomUUID(),
+                          })
+                        }
+                      >
+                        {t('orphanmemory.retire')}
+                      </button>
+                      {onAskHelper && (
+                        <button
+                          type="button"
+                          className="secondary"
+                          disabled={busy || disabled || review !== null}
+                          onClick={() =>
+                            onAskHelper(
+                              t('orphanmemory.helperRequest', {
+                                id: key,
+                                kind: entry.kind,
+                                source:
+                                  entry.kind === 'note'
+                                    ? (entry.note.atRevision ?? '')
+                                    : (entry.override.atSource ?? ''),
+                                reason: t(`orphanmemory.${entry.reason}`),
+                                text: entryText(entry).slice(0, 6000),
+                              })
+                            )
+                          }
+                        >
+                          {t('orphanmemory.askHelper')}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </details>
       )}
     </section>
   );

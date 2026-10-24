@@ -298,7 +298,6 @@
 .chat-settings-panel .settings-inherited > dl > div + div {
   border-top: var(--hairline) solid var(--line);
 }
-.chat-settings-panel .context-content,
 .chat-settings-panel .illustration-reference-options:not(:empty),
 .chat-settings-panel .workspace-tools > form {
   border: var(--hairline) solid var(--line);
@@ -318,7 +317,7 @@
 .chat-settings-panel .context-content {
   display: grid;
   gap: 12px;
-  padding-block: 16px;
+  min-width: 0;
 }
 .chat-settings-panel .context-content > p {
   margin: 0;
@@ -366,4 +365,17 @@
 }
 .chat-settings-panel .chat-variable-editor > .form-actions {
   border-top: 0;
+}
+@media (max-width: 760px) {
+  .chat-settings-panel .profile-fields,
+  .chat-settings-panel .chat-runtime-fields {
+    gap: 16px;
+  }
+  .chat-settings-panel .chat-settings-memory,
+  .chat-settings-panel .chat-settings-images {
+    margin-top: 20px;
+  }
+  .chat-settings-panel .chat-settings-image-management {
+    margin-bottom: 20px;
+  }
 }

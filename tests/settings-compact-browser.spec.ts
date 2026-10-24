@@ -343,6 +343,13 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   await expect(nav).toBeHidden();
   await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
   await selectSettingsSection(page, '일반');
+  await dialog.getByLabel('앱 화면 테마').selectOption('dark');
+  await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
+  await expect(
+    nav.getByRole('button', { name: '일반', exact: true }).locator('small')
+  ).toContainText('어둡게');
+  await selectSettingsSection(page, '일반');
+  await dialog.getByLabel('앱 화면 테마').selectOption('system');
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     await expect(dialog.getByLabel('앱 화면 테마')).toBeVisible();
@@ -634,6 +641,12 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
   await page.goBack();
   const dialog = page.getByRole('dialog', { name: '설정', exact: true });
   await expect(dialog.locator('.settings-navigation')).toBeVisible();
+  await expect(
+    dialog
+      .locator('.settings-navigation')
+      .getByRole('button', { name: '프로바이더와 모델', exact: true })
+      .locator('small')
+  ).toHaveText('저장하지 않은 변경');
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
   await page.goBack();
   const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });

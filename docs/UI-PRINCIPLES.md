@@ -87,6 +87,8 @@ Chat option editing refreshes automatically when idle and preserves drafts when 
 
 ## Korean terminology
 
+Settings navigation may show short current-value summaries from already loaded state. Keep destination names stable, omit unknown values, and show unsaved changes instead of presenting a saved value as the current draft. Font previews follow the selected app or manuscript target; font registration and deletion stay in a collapsible management area without losing input. Show unlinked-memory review only when records exist, with its count before expansion and read errors outside the disclosure.
+
 Group mixed-purpose action menus by task, with common editing actions first, supporting information later, and destructive actions separated at the end. Use short headings for long menus; compact menus can use dividers alone. Keep homogeneous choice lists ungrouped. Conditional actions must not leave empty groups, and nested export/delete controls retain the same mobile touch height as other items.
 
 Use the same terms in visible copy, accessible names and user documentation.

@@ -50,10 +50,27 @@ test('ORPHAN manual memory review preserves source records and AI review only pr
   }
   const memory = async (): Promise<OrphanMemoryDetail> =>
     (await request.get(`/api/chats/${chat.id}/orphan-memory`)).json();
+  let failRead = true;
+  await page.route(`**/api/chats/${chat.id}/orphan-memory`, async (route) => {
+    if (route.request().method() === 'GET' && failRead) {
+      failRead = false;
+      await route.fulfill({ status: 500, json: { error: '합성 기억 읽기 실패' } });
+    } else await route.continue();
+  });
   await page.goto(`/?chat=${chat.id}`);
   await openChatSettings(page);
   await selectChatSettingsSection(page, '기억과 메모');
   const panel = page.getByTestId('orphan-memory');
+  await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (500)');
+  await panel.getByRole('button', { name: '새로고침', exact: true }).click();
+  const disclosure = panel.locator('.orphan-memory-disclosure');
+  await expect(disclosure.locator(':scope > summary')).toHaveText('연결이 끊긴 기억 (2)');
+  await expect(panel.getByText(note.text, { exact: true })).toBeHidden();
+  await expect(
+    panel.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).first()
+  ).toBeHidden();
+  await page.screenshot({ path: info.outputPath('orphan-memory-collapsed.png') });
+  await disclosure.locator(':scope > summary').click();
   await expect(panel.getByText(note.text, { exact: true })).toBeVisible();
   await expect(panel.getByText('연결된 원문 장면이 삭제되었어요.', { exact: true })).toHaveCount(2);
   expect((await memory()).entries).toHaveLength(2);
@@ -88,12 +105,15 @@ test('ORPHAN manual memory review preserves source records and AI review only pr
   await page.getByRole('button', { name: '도우미 닫기', exact: true }).click();
   await openChatSettings(page);
   await selectChatSettingsSection(page, '기억과 메모');
+  if (!(await disclosure.evaluate((element) => (element as HTMLDetailsElement).open)))
+    await disclosure.locator(':scope > summary').click();
   await first.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).click();
   await first.getByRole('button', { name: '취소', exact: true }).click();
   expect((await memory()).entries).toHaveLength(2);
   await first.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).click();
   await first.getByRole('button', { name: '현재 장면에 다시 연결', exact: true }).click();
   await expect.poll(async () => (await memory()).entries.length).toBe(1);
+  await expect(disclosure.locator(':scope > summary')).toHaveText('연결이 끊긴 기억 (1)');
   const story = await (await request.get(`/api/chats/${chat.id}/story`)).json();
   expect(story.notes).toMatchObject([
     { text: note.text, declaration: note.declaration, atRevision: null },
@@ -102,15 +122,11 @@ test('ORPHAN manual memory review preserves source records and AI review only pr
   await other.getByRole('button', { name: '사용 중지', exact: true }).click();
   await other.getByRole('button', { name: '사용 중지', exact: true }).click();
   await expect.poll(async () => (await memory()).entries.length).toBe(0);
-  await expect(
-    panel.getByText('연결이 끊긴 메모나 전용 로어가 없어요.', { exact: true })
-  ).toBeVisible();
+  await expect(panel).toHaveCount(0);
   await page.reload();
   await openChatSettings(page);
   await selectChatSettingsSection(page, '기억과 메모');
-  await expect(
-    panel.getByText('연결이 끊긴 메모나 전용 로어가 없어요.', { exact: true })
-  ).toBeVisible();
+  await expect(panel).toHaveCount(0);
   const saved = new DatabaseSync(process.env.UIMORI_DB!, { readOnly: true });
   try {
     expect(
