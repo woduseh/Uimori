@@ -5,28 +5,33 @@
   <title>Uimori halo</title>
   <rect width="350" height="350" rx="66" fill="#14141b"/>
   <!-- Concentric inlays and four bridges preserve the reference seal at larger sizes. -->
-  <circle cx="175" cy="175" r="119" stroke="#fff4e3" stroke-width="40"/>
-  <circle cx="175" cy="175" r="119" stroke="#ffe5c8" stroke-width="36"/>
+  <circle cx="175" cy="175" r="116.5" stroke="#fff4e3" stroke-width="45"/>
+  <circle cx="175" cy="175" r="116.5" stroke="#ffe5c8" stroke-width="41"/>
   <circle cx="175" cy="175" r="125" stroke="#887566" stroke-width="12.5"/>
   <circle cx="175" cy="175" r="125" stroke="#d5c7b8" stroke-width="11"/>
-  <circle cx="175" cy="175" r="107" stroke="#887566" stroke-width=".8"/>
+  <circle cx="175" cy="175" r="104.5" stroke="#887566" stroke-width="7.8"/>
+  <circle cx="175" cy="175" r="104.5" stroke="#d5c7b8" stroke-width="6.3"/>
   <g fill="#ffe5c8" stroke="#887566" stroke-width=".8">
     <path d="M170 56h10v12h-10z"/>
     <path d="M170 282h10v12h-10z"/>
     <path d="M56 170h12v10H56z"/>
     <path d="M282 170h12v10h-12z"/>
   </g>
-  <circle cx="175" cy="175" r="71" stroke="#fff4e3" stroke-width="24"/>
-  <circle cx="175" cy="175" r="71" stroke="#ffe5c8" stroke-width="20"/>
-  <circle cx="175" cy="175" r="71" stroke="#887566" stroke-width="9.5"/>
-  <circle cx="175" cy="175" r="71" stroke="#d5c7b8" stroke-width="8"/>
-  <!-- The central hub merges into the upper and right spokes. -->
-  <path d="M175 104v71h71" stroke="#fff4e3" stroke-width="22"/>
-  <path d="M175 104v71h71" stroke="#887566" stroke-width="18"/>
-  <path d="M175 103v72h72" stroke="#ffe5c8" stroke-width="16"/>
-  <circle cx="175" cy="175" r="24" fill="#fff4e3"/>
-  <circle cx="175" cy="175" r="21" fill="#ffe5c8"/>
-  <circle cx="175" cy="175" r="17" fill="#d5c7b8" stroke="#887566" stroke-width=".8"/>
+  <!-- One compound silhouette joins the ring, hub and spokes without overlapping caps. -->
+  <path fill="#ffe5c8" fill-rule="evenodd" stroke="#fff4e3" stroke-width="2"
+    d="M175 92a83 83 0 1 1 0 166 83 83 0 1 1 0-166Z
+       M188 116.42A60 60 0 0 1 233.58 162H196.35A25 25 0 0 0 188 153.65Z
+       M162 116.42V153.65A25 25 0 1 0 196.35 188H233.58A60 60 0 1 1 162 116.42Z"/>
+  <circle cx="175" cy="175" r="75.5" stroke="#887566" stroke-width=".8"/>
+  <!-- A continuous inset follows the spoke junctions and the lower-left arc. -->
+  <path fill="#d5c7b8" stroke="#887566" stroke-width=".75"
+    d="M170 106.18A69 69 0 1 0 243.82 180H192.29A18 18 0 1 1 170 157.71Z"/>
+  <path fill="#14141b" stroke="#fff4e3" stroke-width="2"
+    d="M162 116.42V153.65A25 25 0 1 0 196.35 188H233.58A60 60 0 1 1 162 116.42Z"/>
+  <path fill="#d5c7b8" stroke="#887566" stroke-width=".75"
+    d="M180 106.18A69 69 0 0 1 243.82 170H192.29A18 18 0 0 0 180 157.71Z"/>
+  <path fill="#14141b" stroke="#fff4e3" stroke-width="2"
+    d="M188 116.42A60 60 0 0 1 233.58 162H196.35A25 25 0 0 0 188 153.65Z"/>
   <circle cx="175" cy="175" r="10" fill="#ffe5c8" stroke="#887566" stroke-width=".7"/>
   <circle cx="175" cy="175" r="2" fill="#fff4e3" stroke="#887566" stroke-width=".6"/>
 </g>
