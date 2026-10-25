@@ -94,7 +94,9 @@ function prepareImageJudgment(
     return {
       state: {
         selectionVersion: version,
-        ...(modern ? { settings } : {}),
+        ...(modern
+          ? { settings: { images: settings.images, longContext: settings.longContext } }
+          : {}),
         sourceHash: source.hash,
         guidance,
         evaluatedAssets: included.size,
