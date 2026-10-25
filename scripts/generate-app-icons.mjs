@@ -6,6 +6,11 @@ import { fileURLToPath } from 'node:url';
 const favicon = await readFile(new URL('../web/public/icons/halo-small.svg', import.meta.url));
 const source = await readFile(new URL('../web/public/icons/halo.svg', import.meta.url));
 const publicRoot = new URL('../web/public/', import.meta.url);
+// The compact in-app wordmark sits directly on the active sidebar surface.
+await writeFile(
+  new URL('icons/halo-mark.svg', publicRoot),
+  favicon.toString().replace(/  <rect[^>]*\/>\r?\n/, '')
+);
 const contents = (svg) =>
   svg
     .toString()
