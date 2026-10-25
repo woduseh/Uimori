@@ -4,18 +4,10 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
+import type { JevProviderStatus as Status } from '../core/jev-provider.js';
 import { createApp, type App } from '../server/app.js';
 import { CONNECTION_TEST_TIMEOUT_MS } from '../server/provider-connection-test.js';
 
-type Status = {
-  revision: number;
-  configured: boolean;
-  credentialSource: 'saved' | 'environment' | 'missing';
-  hasSavedKey: boolean;
-  modelId: string;
-  endpoint: string;
-  latestTest: ProviderConnectionTest | null;
-};
 const base = '/api/provider-management/jev';
 const savedKey = 'synthetic-jev-saved-secret-never-export';
 const envKey = 'synthetic-jev-environment-secret-never-export';
@@ -105,6 +97,43 @@ function success(init?: RequestInit, score = 0.95) {
 }
 
 describe('JEV connection settings and explicit diagnostics', () => {
+  test('judgment opt-ins persist with an independent revision and reject stale or invalid writes', async () => {
+    const { app, item } = await setup();
+    const initial = await status(app);
+    expect(initial.settings).toEqual({ revision: 0, images: false, longContext: false });
+    const credential = await save(app, initial.revision);
+    const updated = await app.inject({
+      method: 'PUT',
+      url: `${base}/settings`,
+      payload: { expectedRevision: 0, images: true, longContext: true },
+    });
+    expect(updated.statusCode, updated.body).toBe(200);
+    expect(updated.headers['cache-control']).toBe('no-store');
+    const saved = updated.json() as Status;
+    expect(saved.settings).toEqual({ revision: 1, images: true, longContext: true });
+    expect(saved.revision).toBe(credential.revision);
+    for (const [payload, expectedStatus] of [
+      [{ expectedRevision: 0, images: false, longContext: false }, 409],
+      [{ expectedRevision: 1, images: 'true', longContext: false }, 400],
+      [{ expectedRevision: 1, images: false }, 400],
+    ] as const) {
+      const response = await app.inject({ method: 'PUT', url: `${base}/settings`, payload });
+      expect(response.statusCode, response.body).toBe(expectedStatus);
+      expect(await status(app)).toEqual(saved);
+    }
+    const changedKey = await save(app, credential.revision, savedKey + '-replacement');
+    expect(changedKey.settings).toEqual(saved.settings);
+    await app.close();
+    item.app = undefined;
+    const reopened = (item.app = await createApp({
+      dbPath: join(item.directory, 'story.sqlite'),
+      buildId: 'jev-settings-recovery',
+    }));
+    await reopened.ready();
+    expect((await status(reopened)).settings).toEqual(saved.settings);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   test.each([
     ['whitespace', '   '],
     ['header injection', 'secret\r\nheader:value'],
@@ -132,6 +161,11 @@ describe('JEV connection settings and explicit diagnostics', () => {
     expect(new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers).get('authorization')).toBe(
       `Bearer ${savedKey}`
     );
+    expect(
+      new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers).get(
+        'TypeSafe-Danger-Zone-Long-Context'
+      )
+    ).toBeNull();
     const conflict = await app.inject({
       method: 'DELETE',
       url: base,
@@ -159,12 +193,20 @@ describe('JEV connection settings and explicit diagnostics', () => {
   test('runs one tiny fixed judgment, deduplicates pending and completed requests, and retains only safe diagnostics', async () => {
     const { app } = await setup();
     const saved = await save(app, (await status(app)).revision);
+    const settings = await app.inject({
+      method: 'PUT',
+      url: `${base}/settings`,
+      payload: { expectedRevision: 0, images: true, longContext: true },
+    });
+    expect(settings.statusCode, settings.body).toBe(200);
     let release!: () => void;
     vi.mocked(fetch).mockImplementation(async (url, init) => {
       expect(url).toBe('https://api.typesafe.ai/v1/systemone');
       expect(init?.method).toBe('POST');
       expect(init?.redirect).toBe('error');
       expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${savedKey}`);
+      expect(new Headers(init?.headers).get('TypeSafe-Danger-Zone-Long-Context')).toBe('true');
+      expect(new Headers(init?.headers).get('TypeSafe-Danger-Zone-Images')).toBeNull();
       const body = JSON.parse(String(init?.body));
       expect(body.model).toBe('jev-latest');
       expect(Object.keys(body.questions)).toHaveLength(1);
@@ -341,6 +383,15 @@ describe('JEV connection settings and explicit diagnostics', () => {
       expect(response.statusCode, `${method}: ${response.body}`).toBe(401);
       expect(response.body).not.toContain(savedKey);
     }
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: `${base}/settings`,
+          payload: { expectedRevision: 0, images: true, longContext: true },
+        })
+      ).statusCode
+    ).toBe(401);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -356,6 +407,15 @@ describe('JEV connection settings and explicit diagnostics', () => {
       expect(response.statusCode, response.body).toBe(503);
       expect(response.json()).toMatchObject({ error: 'MAINTENANCE_CLOSED' });
     }
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: `${base}/settings`,
+          payload: { expectedRevision: current.settings.revision, images: true, longContext: true },
+        })
+      ).statusCode
+    ).toBe(503);
     expect(fetch).not.toHaveBeenCalled();
   });
 });

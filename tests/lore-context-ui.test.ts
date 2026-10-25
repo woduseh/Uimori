@@ -13,7 +13,7 @@ describe('lore context UI boundaries', () => {
     maxPinnedTokens: '64000',
     threshold: '0.65',
     maxSelectedTokens: '8000',
-    maxInputTokens: '28000',
+    maxInputTokens: '262000',
   };
   it('accepts explicit zero retention and both inclusive policy limits', () => {
     expect(parseLorePolicyDraft(valid)).toEqual(DEFAULT_LORE_CONTEXT);
@@ -129,7 +129,7 @@ describe('lore context UI boundaries', () => {
       maxInputTokens: 28000,
     });
     expect(() => parseLorePolicyDraft({ ...draft, threshold: '1.1' })).toThrow('0–1');
-    expect(() => parseLorePolicyDraft({ ...draft, maxInputTokens: '30001' })).toThrow('30,000');
+    expect(() => parseLorePolicyDraft({ ...draft, maxInputTokens: '262001' })).toThrow('262,000');
     expect(() => parseLorePolicyDraft({ ...draft, maxSelectedTokens: '' })).toThrow('입력');
   });
 });

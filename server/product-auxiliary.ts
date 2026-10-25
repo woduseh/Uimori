@@ -127,7 +127,7 @@ export type AuxiliaryStoreBridge = {
 };
 export type AuxiliaryJobHooks = {
   /** Server injection for isolated transport tests; never part of persisted user settings. */
-  jev?: Pick<JevHooks, 'credential' | 'fetch'>;
+  jev?: Pick<JevHooks, 'credential' | 'fetch' | 'settings' | 'readImage'>;
   executeCodex?: import('../core/transport.js').ProviderExecutionOptions['executeCodex'];
   resolveCredential?: import('../core/transport.js').ProviderExecutionOptions['resolveCredential'];
   signal: AbortSignal;

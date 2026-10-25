@@ -37,6 +37,15 @@ async function removeKey(request: APIRequestContext) {
   expect(response.ok(), await response.text()).toBe(true);
 }
 
+async function resetJudgmentSettings(request: APIRequestContext) {
+  const { settings } = await connection(request);
+  if (!settings.images && !settings.longContext) return;
+  const response = await request.put(`${endpoint}/settings`, {
+    data: { expectedRevision: settings.revision, images: false, longContext: false },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+}
+
 async function openJev(page: Page) {
   await page.goto('/');
   await navigationAction(page, '설정');
@@ -89,6 +98,7 @@ async function revealResult(page: Page, section: Locator) {
 
 test.beforeEach(async ({ page, request }) => {
   await removeKey(request);
+  await resetJudgmentSettings(request);
   await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
   // A browser spec must never submit this endpoint to the server: doing so could call JEV.
   // Response tests register a more specific later handler and fulfill synthetic receipts.
@@ -99,6 +109,7 @@ test.beforeEach(async ({ page, request }) => {
 
 test.afterEach(async ({ request }) => {
   await removeKey(request);
+  await resetJudgmentSettings(request);
 });
 
 test('JEVUI01 saves and removes a server key without exposing it or changing writing models', async ({
@@ -343,4 +354,78 @@ test('JEVUI03 recovers a synthetic uncertain test and shows structured success a
     await page.screenshot({ path: info.outputPath('jev-test-auth-error-mobile.png') });
   }
   expect((await connection(request)).latestTest).toBeNull();
+});
+
+test('JEVUI04 judgment switches wait for saved values, recover after failure and preserve the key draft', async ({
+  page,
+  request,
+}, info) => {
+  const credential = await saveKey(request);
+  const connectionSection = await openJev(page);
+  const draft = syntheticKey + '-unsaved-draft';
+  await connectionSection.getByLabel('JEV API 키', { exact: true }).fill(draft);
+  const section = await openJevModel(page);
+  const images = section.getByRole('switch', { name: '이미지를 보고 선택', exact: true });
+  const longContext = section.getByRole('switch', { name: '긴 컨텍스트', exact: true });
+  await expect(images).not.toBeChecked();
+  await expect(longContext).not.toBeChecked();
+  let release!: () => void;
+  let fail = false;
+  const submissions: unknown[] = [];
+  await page.route('**/api/provider-management/jev/settings', async (route) => {
+    submissions.push(route.request().postDataJSON());
+    if (fail) {
+      await route.fulfill({ status: 503, json: { error: 'SYNTHETIC_SETTINGS_FAILURE' } });
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await route.continue();
+  });
+  await images.click();
+  await expect(images).toBeDisabled();
+  await expect(images).not.toBeChecked();
+  await expect(longContext).toBeDisabled();
+  await expect.poll(() => submissions.length).toBe(1);
+  release();
+  await expect(images).toBeChecked();
+  await expect(longContext).toBeEnabled();
+  expect((await connection(request)).revision).toBe(credential.revision);
+
+  fail = true;
+  await longContext.click();
+  await expect(section.getByRole('alert')).toContainText('저장 결과');
+  await expect(longContext).not.toBeChecked();
+  await expect(images).toBeChecked();
+  await expect(longContext).toBeDisabled();
+  await section
+    .getByRole('alert')
+    .getByRole('button', { name: '연결 상태 새로고침', exact: true })
+    .click();
+  await expect(longContext).toBeEnabled();
+  await expect(section.getByRole('alert')).toHaveCount(0);
+  await page.unroute('**/api/provider-management/jev/settings');
+  await longContext.click();
+  await expect(longContext).toBeChecked();
+  const saved = await connection(request);
+  expect(saved.settings).toMatchObject({ images: true, longContext: true });
+  expect(saved.revision).toBe(credential.revision);
+  await containedControls(section, MOBILE_WIDTH);
+  if (visualReview) {
+    await section.getByRole('heading', { name: 'JEV', exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath('jev-judgment-settings-mobile.png') });
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+    await containedControls(section, DESKTOP_WIDTH);
+    await page.screenshot({ path: info.outputPath('jev-judgment-settings-desktop.png') });
+  }
+  await section.getByRole('button', { name: '프로바이더 설정', exact: true }).click();
+  await expect(connectionSection.getByLabel('JEV API 키', { exact: true })).toHaveValue(draft);
+  await page.reload();
+  await openJev(page);
+  const reopened = await openJevModel(page);
+  await expect(
+    reopened.getByRole('switch', { name: '이미지를 보고 선택', exact: true })
+  ).toBeChecked();
+  await expect(reopened.getByRole('switch', { name: '긴 컨텍스트', exact: true })).toBeChecked();
 });

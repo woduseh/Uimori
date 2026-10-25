@@ -111,7 +111,7 @@ export function parseLorePolicyDraft(draft: PolicyDraft): LoreContextPolicy {
       throw policyError('settings.m211');
     for (const [key, label, min, max] of [
       ['maxSelectedTokens', 'settings.m212', 0, 100000],
-      ['maxInputTokens', 'settings.m213', 1000, 30000],
+      ['maxInputTokens', 'settings.m213', 1000, 262000],
     ] as const) {
       const value = Number(draft[key]);
       if (!Number.isSafeInteger(value) || value < min || value > max)
@@ -322,7 +322,7 @@ export function LoreContextPolicyEditor({
                 aria-label={t('settings.m213')}
                 type="number"
                 min="1000"
-                max="30000"
+                max="262000"
                 value={draft.maxInputTokens}
                 onChange={(event) => change({ ...draft, maxInputTokens: event.target.value })}
               />

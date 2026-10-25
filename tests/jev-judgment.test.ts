@@ -16,6 +16,13 @@ import type { WireRecord } from '../core/transport.js';
 import { executeTool, knowledgeReadResults } from '../core/provider.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 
+const sentEntries = (body: {
+  questions: Record<
+    string,
+    { instructions: { entry: { id: string; title: string; text: string; description?: string } } }
+  >;
+}) => Object.values(body.questions).map((question) => question.instructions.entry);
+
 const response = (answers: Record<string, number>) =>
   new Response(
     JSON.stringify({
@@ -194,8 +201,8 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
     const h = hooks();
     const send = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
-      expect(body.state.entries).toHaveLength(4);
-      expect(new Set(body.state.entries.map((entry: { id: string }) => entry.id)).size).toBe(4);
+      expect(sentEntries(body)).toHaveLength(4);
+      expect(new Set(sentEntries(body).map((entry: { id: string }) => entry.id)).size).toBe(4);
       return response({ entry_0: 0.8, entry_1: 0.1, entry_2: 0.95, entry_3: 0.2 });
     });
     const result = await prepareLoreSelection(
@@ -228,7 +235,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
     const h = hooks(),
       send = vi.fn(async (_url: unknown, init?: RequestInit) => {
         const body = JSON.parse(String(init?.body));
-        expect(body.state.entries.map((e: { id: string }) => e.id)).toEqual(['harbor', 'mountain']);
+        expect(sentEntries(body).map((e: { id: string }) => e.id)).toEqual(['harbor', 'mountain']);
         return response({ entry_0: 0.9, entry_1: 0.1 });
       });
     const mainHooks = {
@@ -328,7 +335,8 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
       jev: {
         credential: h.credential,
         fetch: async (_url, init) => {
-          const state = JSON.parse(String(init?.body)).state;
+          const body = JSON.parse(String(init?.body));
+          const state = body.state;
           expect(state.request).toBe('Native edited request');
           // This is longer than the former character cap but fits the token excerpt budget.
           expect(state.conversation[0]).toEqual({
@@ -336,7 +344,7 @@ describe('JEV-only lore judgment and batch supplemental reads', () => {
             text: value.nativeRisuExecution!.history[0].text,
             truncated: false,
           });
-          expect(state.entries).toEqual([
+          expect(sentEntries(body)).toEqual([
             { id: 'mountain', title: 'Mountain', text: 'Evaluated mountain.' },
           ]);
           return response({ entry_0: 0.9 });

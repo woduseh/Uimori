@@ -7,7 +7,7 @@ export type JevJudgmentPolicy = {
 export const DEFAULT_JEV_JUDGMENT: JevJudgmentPolicy = Object.freeze({
   threshold: 0.65,
   maxSelectedTokens: 8_000,
-  maxInputTokens: 28_000,
+  maxInputTokens: 262_000,
 });
 export function validateJevJudgmentPolicy(value: unknown): JevJudgmentPolicy {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -23,7 +23,7 @@ export function validateJevJudgmentPolicy(value: unknown): JevJudgmentPolicy {
     policy.maxSelectedTokens > 100_000 ||
     !Number.isSafeInteger(policy.maxInputTokens) ||
     policy.maxInputTokens < 1000 ||
-    policy.maxInputTokens > 30_000
+    policy.maxInputTokens > 262_000
   )
     throw new Error('JEV_POLICY_INVALID');
   return { ...policy };

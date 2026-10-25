@@ -10,6 +10,7 @@ import type { ProviderConnectionTest } from '../core/provider-connection-test.js
 import { api, ApiError } from './api.js';
 import { SaveButton } from './SaveButton.js';
 import { RefreshIcon } from './ui-icons.js';
+import { ToggleRow } from './ToggleRow.js';
 import './JevProviderSettings.css';
 
 type Attempt = { expectedRevision: number; idempotencyKey: string };
@@ -57,7 +58,8 @@ export function JevProviderSettings({
   const [status, setStatus] = useState<JevProviderStatus | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [loading, setLoading] = useState(false);
-  const [operation, setOperation] = useState<'save' | 'delete' | 'test' | null>(null);
+  const [operation, setOperation] = useState<'save' | 'delete' | 'test' | 'settings' | null>(null);
+  const [settingsError, setSettingsError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -109,6 +111,7 @@ export function JevProviderSettings({
       .then((next) => {
         if (controller.signal.aborted) return;
         setStatus(next);
+        setSettingsError('');
         setConflict(false);
         // A status refresh must not replace a possibly submitted test with an older receipt.
         if (!attemptRef.current) {
@@ -184,6 +187,35 @@ export function JevProviderSettings({
   }
 
   useSettingsSaveHandler(onSaveHandlerChange, save);
+
+  async function changeSettings(
+    change: Partial<Pick<JevProviderStatus['settings'], 'images' | 'longContext'>>
+  ) {
+    if (!status || lock.current || busy || settingsError) return;
+    lock.current = true;
+    setOperation('settings');
+    setMessage('');
+    try {
+      const next = await api<JevProviderStatus>(
+        `${path}/settings`,
+        {
+          expectedRevision: status.settings.revision,
+          images: status.settings.images,
+          longContext: status.settings.longContext,
+          ...change,
+        },
+        'PUT'
+      );
+      if (!alive.current) return;
+      setStatus(next);
+      setMessage(uiMessage('providers.jevSettingsSaved'));
+    } catch {
+      if (alive.current) setSettingsError(uiMessage('providers.jevSettingsFailed'));
+    } finally {
+      lock.current = false;
+      if (alive.current) setOperation(null);
+    }
+  }
 
   async function startTest() {
     if (!status || lock.current || busy || apiKey || conflict) return;
@@ -361,6 +393,41 @@ export function JevProviderSettings({
                   <dd>{status.modelId}</dd>
                 </div>
               </dl>
+              <div className="jev-judgment-settings">
+                <small>{t('providers.jevExperimental')}</small>
+                <div className="jev-settings-rows">
+                  <ToggleRow
+                    label={t('providers.jevImages')}
+                    description={t('providers.jevImagesHelp')}
+                    checked={status.settings.images}
+                    disabled={busy || !!settingsError}
+                    onChange={(images) => void changeSettings({ images })}
+                  />
+                  <ToggleRow
+                    label={t('providers.jevLongContext')}
+                    description={t('providers.jevContextLimits')}
+                    checked={status.settings.longContext}
+                    disabled={busy || !!settingsError}
+                    onChange={(longContext) => void changeSettings({ longContext })}
+                  />
+                </div>
+                {operation === 'settings' && (
+                  <LoadingState presentation="inline" label={t('providers.jevSettingsSaving')} />
+                )}
+                {settingsError && (
+                  <NoticeBanner tone="error">
+                    {translateMessage(settingsError)}{' '}
+                    <button
+                      type="button"
+                      className="link-button"
+                      disabled={busy}
+                      onClick={() => setRefresh((value) => value + 1)}
+                    >
+                      {t('providers.m350')}
+                    </button>
+                  </NoticeBanner>
+                )}
+              </div>
               <div className="provider-actions">
                 <button
                   type="button"

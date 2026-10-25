@@ -9,6 +9,13 @@ import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import { compileRisuPrompt } from '../core/risu-prompt.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 import { contextBudgetForModel } from '../core/context-budget.js';
+const sentEntries = (body: {
+  questions: Record<
+    string,
+    { instructions: { entry: { id: string; title: string; text: string; description?: string } } }
+  >;
+}) => Object.values(body.questions).map((question) => question.instructions.entry);
+
 const snapshot = (): RunSnapshot => ({
   chatId: 'lore-test',
   parentRevision: null,
@@ -85,7 +92,7 @@ test('token budgets preserve long requests and catalogs without character-based 
   expect(send).toHaveBeenCalledTimes(1);
   const body = JSON.parse(String(send.mock.calls[0][1]!.body));
   expect(body.state.request).toBe(input.request);
-  expect(body.state.entries[0].text).toBe(input.profile!.packages![0].lore[0].text);
+  expect(sentEntries(body)[0].text).toBe(input.profile!.packages![0].lore[0].text);
   expect(body.state.conversation[0].truncated).toBe(true);
   expect(body.state.conversation[0].text.endsWith('마지막 단서')).toBe(true);
   expect(countTextTokens(body.state.conversation[0].text)).toBeLessThanOrEqual(500);

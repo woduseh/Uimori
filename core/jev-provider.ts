@@ -1,5 +1,13 @@
 import type { ProviderConnectionTest } from './provider-connection-test.js';
 
+export type JevSettings = { revision: number; images: boolean; longContext: boolean };
+
+export const DEFAULT_JEV_SETTINGS: JevSettings = {
+  revision: 0,
+  images: false,
+  longContext: false,
+};
+
 /** Connection metadata only. Credentials never enter a library or story archive. */
 export type JevProviderStatus = {
   revision: number;
@@ -9,6 +17,7 @@ export type JevProviderStatus = {
   modelId: string;
   endpoint: string;
   latestTest: ProviderConnectionTest | null;
+  settings: JevSettings;
 };
 
 /** Judgment models use their own transport, while sharing provider registration and model lists. */

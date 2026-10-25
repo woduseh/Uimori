@@ -31,6 +31,14 @@
   gap: 16px;
   min-width: 0;
 }
+.jev-judgment-settings {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.jev-settings-rows > .toggle-row + .toggle-row {
+  border-top: var(--hairline) solid var(--line);
+}
 .jev-provider-details dt {
   font-size: var(--font-small);
   color: var(--muted);
