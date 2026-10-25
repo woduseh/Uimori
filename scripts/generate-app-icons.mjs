@@ -19,7 +19,7 @@ for (const [file, size] of [
 
 // The complete seal fits inside the maskable icon's central 80% safe circle.
 const mark = await sharp(source, { density: 768 }).resize(400, 400).png().toBuffer();
-await sharp({ create: { width: 512, height: 512, channels: 4, background: '#25231f' } })
+await sharp({ create: { width: 512, height: 512, channels: 4, background: '#14141b' } })
   .composite([{ input: mark, gravity: 'centre' }])
   .png()
   .toFile(fileURLToPath(new URL('icons/app-maskable-512.png', publicRoot)));

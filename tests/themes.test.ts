@@ -290,7 +290,7 @@ describe('Independent layout and palette choices', () => {
     });
   }
 
-  test('every named palette supplies complete, valid light and dark tokens', () => {
+  test('default and named palettes supply complete, valid light and dark tokens', () => {
     expect(BUILTIN_PALETTES.map((palette) => palette.id)).toEqual([
       'forest',
       'cream',
@@ -299,7 +299,10 @@ describe('Independent layout and palette choices', () => {
       'rose',
       'sage',
     ]);
-    for (const palette of BUILTIN_PALETTES) {
+    for (const palette of [
+      ...BUILTIN_PALETTES,
+      { id: 'default', colors: DEFAULT_PALETTE_COLORS },
+    ]) {
       for (const mode of ['light', 'dark'] as const)
         expect(Object.keys(palette.colors[mode]).sort()).toEqual([...THEME_COLOR_KEYS].sort());
       expect(validateTheme({ ...emptyTheme(), colors: palette.colors }).colors).toEqual(
@@ -329,7 +332,10 @@ describe('Independent layout and palette choices', () => {
       );
       return 0.2126 * r + 0.7152 * g + 0.0722 * b;
     };
-    for (const palette of BUILTIN_PALETTES) {
+    for (const palette of [
+      ...BUILTIN_PALETTES,
+      { id: 'default', colors: DEFAULT_PALETTE_COLORS },
+    ]) {
       for (const mode of ['light', 'dark'] as const) {
         const colors = palette.colors[mode];
         for (const [background, foreground] of [

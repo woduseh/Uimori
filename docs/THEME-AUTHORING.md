@@ -50,9 +50,9 @@ info, info-bg, info-line, shade
 
 색상은 HEX(`#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`)예요. 생략한 값은 Uimori 기본 CSS를 상속해요. `--border`는 `--line`을 사용하는 기존 별칭이에요. 복잡한 그라디언트·여백·테두리·서체는 CSS 필드를 사용해요. 사용자 글꼴·크기·행간 등 읽기 설정을 `!important`로 덮어쓰지 마세요.
 
-내장 팔레트는 [Radix Colors의 단계별 용도](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale)를 따라요. 배경은 1–2, 조작부 상태는 3–5, 경계는 6–8, 단색 버튼은 9–10, 글자는 11–12단계예요. 기본 레이아웃의 원래 색상은 기존 크림 팔레트(sand/bronze)를 사용해요. 숲을 포함한 내장 팔레트의 색상과 명시적 선택, 사용자 테마 자료는 유지해요. `accent`는 버튼 배경이고 강조 글자는 `accent-text`를 사용해요. 버튼의 일반 상태와 hover 상태는 각각 `accent-ink`, `accent-hover-ink`를 짝지어요. 작은 글자 대비를 위해 밝은 세이지 팔레트의 강조 글자는 jade 12를 사용해요. 기존 팔레트 ID는 유지해요.
+이름이 있는 내장 팔레트는 [Radix Colors의 단계별 용도](https://www.radix-ui.com/colors/docs/palette-composition/understanding-the-scale)를 따라요. 배경은 1–2, 조작부 상태는 3–5, 경계는 6–8, 단색 버튼은 9–10, 글자는 11–12단계예요. 기본 레이아웃의 원래 색상은 헤일로의 크림색과 청흑색 머리카락에서 따온 독립 색상이에요. 어두운 모드는 파비콘과 같은 `#14141b` 바탕에 `#ffe5c8` 강조색을 사용하고, 밝은 모드는 따뜻한 종이색 바탕과 청회색 잉크를 사용해요. 숲을 포함한 여섯 가지 내장 팔레트의 기존 Radix 색상과 명시적 선택, 사용자 테마 자료는 유지해요. `accent`는 버튼 배경이고 강조 글자는 `accent-text`를 사용해요. 버튼의 일반 상태와 hover 상태는 각각 `accent-ink`, `accent-hover-ink`를 짝지어요. 작은 글자 대비를 위해 밝은 세이지 팔레트의 강조 글자는 jade 12를 사용해요. 기존 팔레트 ID는 유지해요.
 
-선택 배경 `accent-soft`는 밝은 모드에서 accent 3, 어두운 모드에서 accent 4를 사용해요. 선택된 문구는 `text`, 체크와 아이콘은 강조색으로 구분해요. 입력 경계 `input-border`는 neutral 8, 장식 구분선 `line`은 neutral 6이에요. 어두운 모드의 모달과 도우미/창작 옵션 패널은 `panel`을 사용하고 원고 바탕은 `bg`를 유지해요. 비활성 버튼은 버튼 안의 강조/삭제 색상 변수를 `surface`, `muted`, `line`으로 바꾸고 기존 흐림과 크기를 유지해요. 이 처리는 앱 조작부에만 적용하며 저장된 테마 색상이나 봇이 작성한 Shadow DOM은 바꾸지 않아요.
+이름이 있는 내장 팔레트의 선택 배경 `accent-soft`는 밝은 모드에서 accent 3, 어두운 모드에서 accent 4를 사용해요. 선택된 문구는 `text`, 체크와 아이콘은 강조색으로 구분해요. 이름이 있는 내장 팔레트의 입력 경계 `input-border`는 neutral 8, 장식 구분선 `line`은 neutral 6이에요. 어두운 모드의 모달과 도우미/창작 옵션 패널은 `panel`을 사용하고 원고 바탕은 `bg`를 유지해요. 비활성 버튼은 버튼 안의 강조/삭제 색상 변수를 `surface`, `muted`, `line`으로 바꾸고 기존 흐림과 크기를 유지해요. 이 처리는 앱 조작부에만 적용하며 저장된 테마 색상이나 봇이 작성한 Shadow DOM은 바꾸지 않아요.
 
 앱 조작부는 `--font-small`(12px), `--font-body`(14px), `--font-heading`(16px), `--hairline`(0.5px)을 사용해요. 원고 읽기 크기는 별도 설정이에요. 모서리는 `--radius-small`(4px), `--radius-control`(6px), `--radius-panel`(10px)을 사용하고, 중첩된 표면은 안쪽 여백만큼 곡률을 줄여요.
 

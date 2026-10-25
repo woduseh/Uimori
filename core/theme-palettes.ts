@@ -95,8 +95,59 @@ export const BUILTIN_PALETTES: ThemePalette[] = [
   palette('sage', '세이지', '옅은 허브빛과 고요한 청록 포인트', 'sage', 'jade'),
 ];
 
-/** The default layout reuses cream while named palette selections remain independent. */
-export const DEFAULT_PALETTE_COLORS = BUILTIN_PALETTES.find((item) => item.id === 'cream')!.colors;
+/** Halo cream and blue-black ink belong to the default layout, not a named selection. */
+export const DEFAULT_PALETTE_COLORS: ThemePalette['colors'] = {
+  light: {
+    ...colors('light', 'slate', 'bronze'),
+    bg: '#fffaf3',
+    nav: '#f7f0e7',
+    panel: '#f7f0e7',
+    surface: '#eee8e2',
+    'surface-raised': '#eee8e2',
+    'surface-active': '#ded6d1',
+    hover: '#e8e1dc',
+    line: '#d7d0cb',
+    'input-border': '#aaa3a3',
+    'border-hover': '#8d8792',
+    'focus-ring': '#555065',
+    text: '#252632',
+    muted: '#62616c',
+    faint: '#62616c',
+    accent: '#343746',
+    'accent-ink': '#ffe5c8',
+    'accent-hover': '#45495c',
+    'accent-hover-ink': '#ffe5c8',
+    'accent-text': '#555065',
+    'accent-line': '#bcb0a7',
+    'accent-soft': '#f0e4d8',
+    user: '#f0e4d8',
+  },
+  dark: {
+    ...colors('dark', 'slate', 'bronze'),
+    bg: '#14141b',
+    nav: '#1a1b24',
+    panel: '#1e202b',
+    surface: '#272936',
+    'surface-raised': '#272936',
+    'surface-active': '#393c4c',
+    hover: '#303341',
+    line: '#414453',
+    'input-border': '#65697f',
+    'border-hover': '#82869b',
+    'focus-ring': '#ffe5c8',
+    text: '#f2eee8',
+    muted: '#b4b6c6',
+    faint: '#b4b6c6',
+    accent: '#ffe5c8',
+    'accent-ink': '#242632',
+    'accent-hover': '#fff0dd',
+    'accent-hover-ink': '#242632',
+    'accent-text': '#ffe5c8',
+    'accent-line': '#736455',
+    'accent-soft': '#39333a',
+    user: '#292730',
+  },
+};
 
 export function isPaletteId(id: unknown): id is string {
   return (
