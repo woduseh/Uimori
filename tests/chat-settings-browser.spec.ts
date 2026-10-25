@@ -169,7 +169,7 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
   for (const width of reviewWidths([320, 360, 390, 412, 768, 1440])) {
     await page.setViewportSize({ width, height: 900 });
     const dialog = await openSettings(page);
-    const nav = dialog.locator('.chat-settings-panel > .section-navigation');
+    const nav = dialog.locator('.section-navigation');
     const compact = width <= 760;
     if (compact) {
       await expect(nav).toBeHidden();
@@ -274,7 +274,7 @@ test('CSUI02 section changes, browser Back and resizing preserve chat setting dr
   const composer = page.getByLabel('다음 장면 요청', { exact: true });
   await composer.fill('채팅 설정을 닫아도 유지할 미전송 요청');
   const dialog = await openSettings(page);
-  const nav = dialog.locator('.chat-settings-panel > .section-navigation');
+  const nav = dialog.locator('.section-navigation');
   const confirm = page.getByRole('alertdialog', { name: '미저장 채팅 설정 확인', exact: true });
   await selectChatSettingsSection(page, '이미지');
   await expect(

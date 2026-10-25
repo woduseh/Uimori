@@ -209,6 +209,8 @@ for (const width of [360, 412, 1440]) {
     expect(
       await page.evaluate((id) => sessionStorage.getItem(`input-translation:draft:${id}`), chat.id)
     ).toBeNull();
+    // API completion can precede the SSE render that adds the final request actions.
+    await expect(page.locator('#source-' + saved.runs[0].sourceRevision)).toBeVisible();
     const copy = page.getByRole('button', { name: '요청 복사', exact: true });
     // Clipboard APIs are user-gesture sensitive on some desktop browsers. A real click
     // proves the product copy path; keyboard button semantics are covered by native button behavior.

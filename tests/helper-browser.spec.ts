@@ -2089,7 +2089,10 @@ for (const grouped of [false, true]) {
         );
       await expect(undo).toBeDisabled();
       await expect(
-        panel.getByText('이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.')
+        panel
+          .getByRole('region', { name: '도우미 최근 자료 수정' })
+          .locator('small')
+          .filter({ hasText: '이 자료의 편집을 저장하거나 취소한 뒤 되돌려 주세요.' })
       ).toBeVisible();
       expect(state.undoPosts).toHaveLength(0);
       await expect(draft).toHaveValue('지키려는 미저장 입력');

@@ -233,6 +233,11 @@ for (const viewport of [
         const confirm = dialog.getByRole('button', { name: '저장 결과 확인', exact: true });
         await expect(confirm).toBeEnabled();
         await expect(value('trust')).toBeDisabled();
+        // The committed write emits a cursor refresh despite the lost PUT response.
+        // Let that read reach the editor before gating the explicit refresh below.
+        await expect(dialog.locator('.chat-variable-readbacks pre').first()).toContainText(
+          '"trust": ""'
+        );
         const refresh = dialog.getByRole('button', { name: '새로고침', exact: true });
         await expect(refresh).toBeEnabled();
         holdReads = true;

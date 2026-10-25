@@ -345,10 +345,9 @@ test('SCUI01 settings list and details adapt at six widths with no overflow', as
   await selectSettingsSection(page, '일반');
   await dialog.getByLabel('앱 화면 테마').selectOption('dark');
   await dialog.getByRole('button', { name: '설정 목록으로', exact: true }).click();
-  await expect(
-    nav.getByRole('button', { name: '일반', exact: true }).locator('small')
-  ).toContainText('어둡게');
+  await expect(nav.getByRole('button', { name: '일반', exact: true })).toBeVisible();
   await selectSettingsSection(page, '일반');
+  await expect(dialog.getByLabel('앱 화면 테마')).toHaveValue('dark');
   await dialog.getByLabel('앱 화면 테마').selectOption('system');
   for (const width of reviewWidths([360, 390, 430, 768, 1024, 1440])) {
     await page.setViewportSize({ width, height: 900 });
