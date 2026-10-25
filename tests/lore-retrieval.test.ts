@@ -4,7 +4,7 @@ import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import { defaultProfile } from '../core/product.js';
 import type { RisuLoreProjection } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
-import { estimateContextTokens } from '../core/context-budget.js';
+import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
 import { compiledPackages } from '../core/package-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import {
@@ -139,6 +139,31 @@ test('finds the last folder lore by a short Korean name and late body fact witho
   expect(
     receipt.omitted.every((entry) => entry.reason !== 'irrelevant' || judged.has(entry.id))
   ).toBe(true);
+});
+
+test('shortlists lore named only in the derived summary when the catalog exceeds the JEV budget', async () => {
+  const filler = 'Ordinary stores record flour, rain and deliveries. '.repeat(25);
+  const entries = Array.from({ length: 1000 }, (_, index) => lore(`ordinary-${index}`, filler));
+  entries.push(lore('zz-summary', `${filler}청월인장을 보관하는 탑의 기록.`));
+  const input = snapshot([entries], '계속');
+  input.contextPlan = {
+    version: 1,
+    status: 'ready',
+    budget: contextBudgetForModel({ modelId: 'fixture' }),
+    dependencyKey: '',
+    estimatedInputTokens: 100,
+    compacted: [],
+    recentSourceRevisions: [],
+    summary: '청월인장을 찾으러 북쪽 탑에 도착했다.',
+    summaryCalls: 0,
+    usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    error: null,
+  };
+  const result = await select(input);
+  expect(result.snapshot.loreSelection!.entries[0].selected).toEqual(['zz-summary']);
+  expect(result.body.state.entries[0].id).toBe('zz-summary');
+  expect(result.body.state.summary.text).toBe(input.contextPlan.summary);
+  expect(result.snapshot.loreSelection!.entries[0].partial).toBe('catalog');
 });
 
 test('searches later attached packages beyond the combined provider question limit', async () => {
