@@ -19,7 +19,6 @@ import { messages as palettes } from './palettes.js';
 import { messages as recent } from './recent.js';
 import { messages as chatmanagement } from './chatmanagement.js';
 import { messages as orphanmemory } from './orphanmemory.js';
-import { messages as settingssummary } from './settingssummary.js';
 export const messages: Record<string, { ko: string; en: string; ja: string; zh: string }> = {
   ...common,
   ...errors,
@@ -29,7 +28,6 @@ export const messages: Record<string, { ko: string; en: string; ja: string; zh: 
   ...providers,
   ...library,
   ...settings,
-  ...settingssummary,
   ...native,
   ...transfer,
   ...prompts,

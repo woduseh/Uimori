@@ -1,7 +1,7 @@
 import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen, Sprout } from 'lucide-react';
+import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import {
   libraryCategory,
@@ -473,7 +473,7 @@ export function BotNavigation(
     <div className="bot-navigation bot-tree-navigation" data-testid="bot-navigation">
       <div className="brand">
         <span className="brand-name">
-          <Sprout size={26} aria-hidden="true" />
+          <img src="/favicon.svg" width={26} height={26} alt="" aria-hidden="true" />
           Uimori
         </span>
         {props.onToggleCollapse && (

@@ -275,33 +275,6 @@ export function ChatSettingsPanel({
   }, [compact]);
   const detail = state.detail;
   const library = state.library;
-  const profile = detail?.profile;
-  const modelId = profile?.pinned?.mainModel?.id ?? state.promptWorkspace?.modelRoutes.main?.id;
-  const model = library?.models.find((item) => item.id === modelId);
-  const summaries: Partial<Record<Section, string>> = profile
-    ? {
-        characters: profileDirty
-          ? t('settingssummary.unsaved')
-          : t('settingssummary.attachments', {
-              count: profile.packageAttachments?.length ?? 0,
-            }),
-        prompts:
-          profileDirty || runtimeDirty
-            ? t('settingssummary.unsaved')
-            : model && !state.libraryError && !state.promptWorkspaceError
-              ? t('settingssummary.mainModel', { title: model.title })
-              : undefined,
-        images:
-          profileDirty || imageDirty || referenceDirty
-            ? t('settingssummary.unsaved')
-            : detail.assets
-              ? t('settingssummary.images', {
-                  owner: profile.image ? 'JEV' : t('library.writingModel'),
-                  count: detail.assets.length,
-                })
-              : undefined,
-      }
-    : {};
   const packageScope = state.selected;
   const packageAvailabilityKey = `${detail?.profile?.revision ?? 0}:${detail?.reader.cursor ?? 0}`;
   const previousPackageScope = useRef(packageScope);
@@ -396,7 +369,6 @@ export function ChatSettingsPanel({
           label={t('chatsettings.m100')}
           items={visibleCategories.map((item) => ({
             ...item,
-            description: summaries[item.id],
             panelId: panelId(item.id),
           }))}
           value={active}

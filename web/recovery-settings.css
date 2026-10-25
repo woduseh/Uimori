@@ -15,12 +15,8 @@
   justify-content: flex-start;
   padding-bottom: 24px;
 }
-.recovery-settings-brand > svg {
-  box-sizing: content-box;
-  padding: 14px;
-  border-radius: var(--radius-panel);
-  background: var(--accent-soft);
-  color: var(--accent-text);
+.recovery-settings-brand > img {
+  display: block;
   flex: none;
 }
 .recovery-settings-brand h3,
