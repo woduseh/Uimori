@@ -29,7 +29,7 @@ export function editNativeSource(
     if (!Array.isArray(parsed)) throw new Error('JSON 배열을 입력해 주세요.');
     if (part === 'greetings') {
       if (parsed.some((item) => typeof item !== 'string'))
-        throw new Error('시작문은 문자열 배열로 입력해 주세요.');
+        throw new Error('첫 메시지는 문자열 배열로 입력해 주세요.');
       next.card.alternate_greetings = parsed;
     } else {
       if (parsed.some((item) => !item || typeof item !== 'object' || Array.isArray(item)))

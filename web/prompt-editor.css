@@ -148,6 +148,7 @@
 }
 .prompt-current-preset {
   flex-wrap: nowrap;
+  align-items: start;
 }
 .prompt-current-preset > select {
   flex: 1;

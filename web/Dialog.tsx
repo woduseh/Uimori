@@ -60,6 +60,7 @@ export function Dialog({
   return (
     <dialog
       ref={ref}
+      {...{ closedby: 'any' }}
       role={role}
       className={`app-dialog ${wide ? 'wide' : ''} ${variant === 'confirmation' ? 'confirmation-dialog' : ''} ${className}`}
       aria-labelledby={headerTitle ? undefined : id}
@@ -102,18 +103,6 @@ export function Dialog({
         event.stopPropagation();
         if (isOpen.current) close.current();
         else onAfterClose?.();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          const r = event.currentTarget.getBoundingClientRect();
-          if (
-            event.clientX < r.left ||
-            event.clientX > r.right ||
-            event.clientY < r.top ||
-            event.clientY > r.bottom
-          )
-            close.current();
-        }
       }}
     >
       <header className="dialog-header">

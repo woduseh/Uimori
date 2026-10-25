@@ -13,6 +13,7 @@ import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { promptControls } from '../core/risu-prompt.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { BotChatImportDialog } from './BotChatImportDialog.js';
+import { ReadingSettingsSearch } from './ReadingSettingsSearch.js';
 import { ReadabilitySettings } from './ReadabilitySettings.js';
 import { Switch } from './BooleanControls.js';
 import { ReadingPreferencesContext } from './ReadingPreferencesContext.js';
@@ -803,7 +804,7 @@ function App() {
   );
   function renderReadingSettings(onStartFocus?: () => void) {
     return (
-      <div className="settings-stack reading-preferences">
+      <ReadingSettingsSearch searchable={!!onStartFocus}>
         <section className="settings-group reading-settings-group" aria-label={t('main.m028')}>
           <header className="settings-group-heading">
             <h4>{t('main.m028')}</h4>
@@ -813,6 +814,7 @@ function App() {
               {t('main.m029')}
               <select
                 aria-label={t('main.m029')}
+                data-reading-setting="font"
                 value={font}
                 onChange={(event) => reading.changeLayout(() => setFont(event.target.value))}
               >
@@ -825,6 +827,7 @@ function App() {
               <span className="reading-range-control">
                 <input
                   aria-label={t('main.m032')}
+                  data-reading-setting="size"
                   type="range"
                   min={9}
                   max={28}
@@ -841,6 +844,7 @@ function App() {
               {t('main.m033')}
               <select
                 aria-label={t('main.m033')}
+                data-reading-setting="width"
                 value={readingWidth}
                 onChange={(event) =>
                   reading.changeLayout(() => setReadingWidth(Number(event.target.value)))
@@ -859,6 +863,7 @@ function App() {
               <label className="check">
                 <Switch
                   aria-label={t('main.m039')}
+                  data-reading-setting="navigator"
                   checked={sceneNavigatorEnabled}
                   onChange={(event) => setSceneNavigatorEnabled(event.target.checked)}
                 />
@@ -876,6 +881,7 @@ function App() {
               </span>
               <select
                 aria-label={t('main.m042')}
+                data-reading-setting="response"
                 value={responseDisplay}
                 onChange={(event) => setResponseDisplay(event.target.value as ResponseDisplayMode)}
               >
@@ -898,6 +904,7 @@ function App() {
               </span>
               <select
                 aria-label={t('main.m047')}
+                data-reading-setting="language"
                 value={readingLanguage}
                 onChange={(event) => setReadingLanguage(event.target.value)}
               >
@@ -917,6 +924,7 @@ function App() {
               </span>
               <select
                 aria-label={t('main.m052')}
+                data-reading-setting="illustrations"
                 value={String(illustrationsCollapsed)}
                 onChange={(event) => setIllustrationsCollapsed(event.target.value === 'true')}
               >
@@ -932,7 +940,7 @@ function App() {
             {t('main.m056')}
           </button>
         )}
-      </div>
+      </ReadingSettingsSearch>
     );
   }
   const workspace = (
@@ -2571,7 +2579,12 @@ function App() {
           />
         )}
       </Dialog>
-      <Dialog open={panel === 'reading'} title={t('main.m070')} onClose={() => setPanel('')}>
+      <Dialog
+        open={panel === 'reading'}
+        title={t('main.m070')}
+        onClose={() => setPanel('')}
+        className="reading-settings-dialog"
+      >
         {renderReadingSettings(() => {
           setFocus(true);
           setPanel('');

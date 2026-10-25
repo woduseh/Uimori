@@ -236,12 +236,14 @@ test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
     expect(bodyObject(encodeVertex(input, protocol).body)).not.toHaveProperty('safetySettings');
     input.generation!.safetySettings = {
       HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+      HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH',
       HARM_CATEGORY_HARASSMENT: 'OFF',
     };
     const first = encodeVertex(input, protocol);
     expect(bodyObject(first.body).safetySettings).toEqual([
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'OFF' },
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'BLOCK_ONLY_HIGH' },
     ]);
     const decoder = new VertexDecoder(first.context);
     decoder.accept(event([call('Call-1')], 'STOP'));
@@ -249,7 +251,7 @@ test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
     expect(bodyObject(encodeVertex(nextInput, protocol).body).safetySettings).toEqual(
       bodyObject(first.body).safetySettings
     );
-    nextInput.generation!.safetySettings!.HARM_CATEGORY_HARASSMENT = 'BLOCK_NONE';
+    nextInput.generation!.safetySettings!.HARM_CATEGORY_JAILBREAK = 'BLOCK_LOW_AND_ABOVE';
     expect(() => encodeVertex(nextInput, protocol)).toThrow('VERTEX_CONTINUATION_MISMATCH');
   }
 );
@@ -715,20 +717,23 @@ describe('Vertex streamed response decoder', () => {
     }
   );
 
-  test('treats explicit prompt blocking as terminal without a generated candidate', () => {
-    const { decoder } = start();
-    decoder.accept({
-      promptFeedback: { blockReason: 'SAFETY', blockReasonMessage: 'Private provider details' },
-      candidates: [],
-    });
-    expect(decoder.finish()).toMatchObject({
-      status: 'refused',
-      refusal: 'SAFETY',
-      text: '',
-      toolCalls: [],
-    });
-    expect(JSON.stringify(decoder.finish())).not.toContain('Private provider details');
-  });
+  test.each(['SAFETY', 'JAILBREAK'])(
+    'treats explicit %s prompt blocking as terminal without a generated candidate',
+    (reason) => {
+      const { decoder } = start();
+      decoder.accept({
+        promptFeedback: { blockReason: reason, blockReasonMessage: 'Private provider details' },
+        candidates: [],
+      });
+      expect(decoder.finish()).toMatchObject({
+        status: 'refused',
+        refusal: reason,
+        text: '',
+        toolCalls: [],
+      });
+      expect(JSON.stringify(decoder.finish())).not.toContain('Private provider details');
+    }
+  );
 
   test('MAX_TOKENS remains partial even with a complete-looking tool object', () => {
     const { decoder } = start();

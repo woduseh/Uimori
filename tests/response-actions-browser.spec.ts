@@ -217,17 +217,18 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await trigger.press('Enter');
     await expect(menu).toHaveJSProperty('open', true);
     const actions = menu.locator('.action-menu-body');
-    // The row already edits the current view, so the menu offers the other editor only.
+    // Existing menu groups keep editing first, then tools, copying, details and deletion.
     await expect(actions.getByRole('button')).toHaveText([
-      '도우미에게 물어보기',
-      '다시 쓰기',
-      '이 장면까지 새 채팅으로 복사',
       '번역 수정',
+      '다시 쓰기',
+      '도우미에게 물어보기',
       '삽화 생성',
+      '이 장면까지 새 채팅으로 복사',
       '원문 연결 정보',
       ...(before.attempts?.some((attempt) => attempt.runId === source.runId)
         ? ['본문 추정 비용']
         : []),
+      '장면 삭제',
     ]);
     const openTriggerBox = (await trigger.boundingBox())!;
     const menuBox = (await actions.boundingBox())!;
@@ -254,6 +255,35 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
     await page.keyboard.press('Escape');
     await expect(menu).toHaveJSProperty('open', false);
     await expect(trigger).toBeFocused();
+
+    if (width === DESKTOP_WIDTH) {
+      // Keep a long menu usable with little vertical room, including both sides of the
+      // sheet breakpoint. Reopening after resize also covers native scroll dismissal.
+      for (const compactWidth of [768, 600, 601]) {
+        await page.setViewportSize({ width: compactWidth, height: 320 });
+        await trigger.scrollIntoViewIfNeeded();
+        if (!(await menu.evaluate((node) => (node as HTMLDetailsElement).open)))
+          await trigger.click();
+        await expect(menu).toHaveJSProperty('open', true);
+        const box = (await actions.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.y).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(compactWidth);
+        expect(box.y + box.height).toBeLessThanOrEqual(320);
+        if (compactWidth === 600) expect(box.y + box.height).toBeGreaterThanOrEqual(296);
+        // Native sequential keyboard navigation must reveal every item inside the scroll
+        // surface; explicit scrollIntoView would hide a focus/scroll regression here.
+        await trigger.focus();
+        for (const item of await actions.getByRole('button').all()) {
+          await page.keyboard.press('Tab');
+          await expect(item).toBeFocused();
+          await expect(item).toBeInViewport();
+        }
+      }
+      await trigger.press('Escape');
+      await expect(trigger).toBeFocused();
+      await page.setViewportSize({ width, height: 1000 });
+    }
 
     await openSourceActions(scene);
     const composer = page.getByLabel('다음 장면 요청', { exact: true });

@@ -572,11 +572,11 @@ for (const viewport of viewports) {
       await page.screenshot({ path: info.outputPath(`bot-basic-${viewport.name}.png`) });
 
       await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();
-      await editor.getByLabel('기본 시작문', { exact: true }).fill(opening);
+      await editor.getByLabel('기본 첫 메시지', { exact: true }).fill(opening);
       await editor.getByRole('tab', { name: '기본 정보', exact: true }).click();
       await expect(editor.getByLabel('Risu 자료 이름', { exact: true })).toHaveValue(editedName);
       await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();
-      await expect(editor.getByLabel('기본 시작문', { exact: true })).toHaveValue(opening);
+      await expect(editor.getByLabel('기본 첫 메시지', { exact: true })).toHaveValue(opening);
       await editorFits(page, editor, save);
       await page.screenshot({ path: info.outputPath(`bot-opening-${viewport.name}.png`) });
 

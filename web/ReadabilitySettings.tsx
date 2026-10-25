@@ -52,6 +52,7 @@ export function ReadabilitySettings({
             {t('reader.style')}
             <select
               aria-label={t('reader.readingStyle')}
+              data-reading-setting="style"
               value={currentPreset(value)}
               onChange={(event) =>
                 onChange({ ...preset(event.target.value), quoteRoles: value.quoteRoles })
@@ -69,6 +70,7 @@ export function ReadabilitySettings({
             {t('reader.quoteEmphasis')}
             <select
               aria-label={t('reader.quoteEmphasis')}
+              data-reading-setting="emphasis"
               value={value.emphasis}
               onChange={(event) =>
                 onChange({ ...value, emphasis: event.target.value as ReadingStyle['emphasis'] })
@@ -84,6 +86,7 @@ export function ReadabilitySettings({
               {t('reader.lineSpacing')}
               <select
                 aria-label={t('reader.lineSpacing')}
+                data-reading-setting="line-spacing"
                 value={value.lineHeight ?? 'default'}
                 onChange={(event) =>
                   onChange({
@@ -103,6 +106,7 @@ export function ReadabilitySettings({
               {t('reader.paragraphSpacing')}
               <select
                 aria-label={t('reader.paragraphSpacing')}
+                data-reading-setting="paragraph-spacing"
                 value={value.paragraphSpacing ?? 'default'}
                 onChange={(event) =>
                   onChange({
@@ -138,6 +142,7 @@ export function ReadabilitySettings({
             <span>{t('reader.dialogueLineBreaks')}</span>
             <span className="settings-row-control">
               <Switch
+                data-reading-setting="dialogue"
                 checked={value.dialogueBreaks}
                 onChange={(event) => onChange({ ...value, dialogueBreaks: event.target.checked })}
               />
@@ -147,13 +152,14 @@ export function ReadabilitySettings({
             <span>{t('reader.thoughtLineBreaks')}</span>
             <span className="settings-row-control">
               <Switch
+                data-reading-setting="thought"
                 checked={value.thoughtBreaks}
                 onChange={(event) => onChange({ ...value, thoughtBreaks: event.target.checked })}
               />
             </span>
           </label>
           <details className="reading-quote-settings">
-            <summary>{t('reader.styleByPunctuation')}</summary>
+            <summary data-reading-setting="punctuation">{t('reader.styleByPunctuation')}</summary>
             <p>{t('reader.stylesFollowPunctuationTheyDoNotDetermineTheActual')}</p>
             <div className="reading-quote-rules">
               {QUOTE_PAIRS.map(({ id, label }) => (
@@ -198,7 +204,12 @@ export function ReadabilitySettings({
 
       <div className="reading-settings-footer">
         <small>{t('reader.appliesToRegularTextAndHelperContentBotCreated')}</small>
-        <button type="button" className="secondary" onClick={() => onChange(DEFAULT_READABILITY)}>
+        <button
+          type="button"
+          data-reading-setting="reset"
+          className="secondary"
+          onClick={() => onChange(DEFAULT_READABILITY)}
+        >
           {t('reader.resetReadingStyle')}
         </button>
       </div>

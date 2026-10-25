@@ -7,6 +7,18 @@
     min-width: 0;
     isolation: isolate;
   }
+  /* A base-layer default: authored selections and message themes still win. */
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 24%, var(--bg));
+    color: var(--text);
+    text-shadow: none;
+  }
+  @media (forced-colors: active) {
+    ::selection {
+      background: Highlight;
+      color: HighlightText;
+    }
+  }
   .risu-message-content {
     display: flow-root;
     min-width: 0;

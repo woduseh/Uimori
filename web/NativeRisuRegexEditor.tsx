@@ -1,3 +1,4 @@
+import { SelectionCheckbox } from './BooleanControls.js';
 import { useI18n, translateMessage } from './i18n.js';
 import type { ResourceModel } from '../core/resource-editing.js';
 import { useEffect, useMemo, useState } from 'react';
@@ -183,8 +184,7 @@ export function NativeRisuRegexEditor({
                   />
                 </label>
                 <label className="check">
-                  <input
-                    type="checkbox"
+                  <SelectionCheckbox
                     checked={entry.ableFlag === true}
                     onChange={(e) =>
                       edit({
@@ -218,8 +218,7 @@ export function NativeRisuRegexEditor({
                       <div className="native-regex-actions">
                         {actions.map(([key, title]) => (
                           <label className="check" key={key}>
-                            <input
-                              type="checkbox"
+                            <SelectionCheckbox
                               checked={parsed.actions.includes(key)}
                               onChange={() => edit({ flag: toggleNativeRegexAction(flag, key) })}
                             />

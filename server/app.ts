@@ -984,8 +984,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   app.post<{ Params: { id: string } }>('/api/chats/:id/package-start', async (request) => {
     const result = createPackageStart(store, request.params.id, request.body);
     if (result.created) {
-      publish(result.run.chatId);
-      if (result.run.status === 'queued') execute(result.run.id);
+      publish(request.params.id);
+      if (result.run?.status === 'queued') execute(result.run.id);
     }
     return result;
   });

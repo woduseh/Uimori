@@ -2,7 +2,7 @@ import { useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { LoadingState } from './LoadingState.js';
-import { Switch } from './BooleanControls.js';
+import { SelectionCheckbox, Switch } from './BooleanControls.js';
 import { RunningIcon } from './ui-icons.js';
 import './push-settings.css';
 import { useEffect, useId, useState } from 'react';
@@ -229,8 +229,7 @@ export function PushSettings() {
           <div className="push-preferences">
             {labels.map(([key, label]) => (
               <label key={key}>
-                <input
-                  type="checkbox"
+                <SelectionCheckbox
                   checked={info.device!.preferences[key]}
                   disabled={busy}
                   onChange={(event) => void change(key, event.target.checked)}

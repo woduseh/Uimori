@@ -94,7 +94,7 @@ export function analyzeNativeRisuImport(
   findings.add(
     'native-risu',
     'info',
-    '카드, 모듈, CBS, 정규식, 트리거 코드는 Risu 원문으로 보존해요. 본문, 시작문, 로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.'
+    '카드, 모듈, CBS, 정규식, 트리거 코드는 Risu 원문으로 보존해요. 본문, 첫 메시지, 로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.'
   );
   if (
     nativeRisuTriggers(native).some(

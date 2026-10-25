@@ -131,3 +131,13 @@
       background-color var(--motion-fast) var(--motion-ease-out);
   }
 }
+
+/* Native high-contrast glyphs remain visible when authored fills are replaced by the OS. */
+@media (forced-colors: active) {
+  :root input.ui-selection-checkbox[type="checkbox"] {
+    appearance: auto;
+  }
+  :root input.ui-selection-checkbox::before {
+    display: none;
+  }
+}

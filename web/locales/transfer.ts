@@ -2317,7 +2317,7 @@ export const messages = {
     zh: '卡片、模块源码和支持的图片将保留在资料中。如需原始文件本身，请自行保存。',
   },
   'transfer.finding.native-risu': {
-    ko: '카드, 모듈, CBS, 정규식, 트리거 코드는 Risu 원문으로 보존해요. 본문, 시작문, 로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.',
+    ko: '카드, 모듈, CBS, 정규식, 트리거 코드는 Risu 원문으로 보존해요. 본문, 첫 메시지, 로어는 이 원문에서 읽어 표시해요. 원문을 보존해도 모든 스크립트가 실행되는 것은 아니에요.',
     en: 'Cards, modules, and CBS, regex, and trigger code are preserved as Risu source. Text, openings, and lore are read from it for display. Preserving the source does not mean every script can run.',
     ja: 'カード、モジュールとCBS、正規表現、トリガーコードはRisuソースとして保持します。本文、開始文、ロアはソースから読み込んで表示します。ソースを保持してもすべてのスクリプトが実行できるわけではありません。',
     zh: '卡片、模块以及 CBS、正则表达式和触发器代码将作为 Risu 源码保留。正文、开场和设定从中读取并显示。保留源码并不表示所有脚本均可执行。',

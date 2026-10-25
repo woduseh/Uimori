@@ -1,3 +1,4 @@
+import { SettingsSearch, hasSettingsSearch } from './SettingsSearch.js';
 import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { useSettingsSaveGroup } from './useSettingsSaveHandler.js';
@@ -41,36 +42,42 @@ function getCategories() {
   return [
     {
       id: 'characters',
+      terms: t('chatsettings.searchCharacters'),
       title: t('chatsettings.peopleAndMaterials'),
       icon: BotIcon,
       group: t('chatsettings.m85'),
     },
     {
       id: 'prompts',
+      terms: t('chatsettings.searchPrompts'),
       title: t('chatsettings.promptsModelsAndTranslation'),
       icon: PromptIcon,
       group: t('chatsettings.m85'),
     },
     {
       id: 'guide',
+      terms: t('chatsettings.searchGuide'),
       title: t('chatsettings.m88'),
       icon: LoreIcon,
       group: t('chatsettings.m85'),
     },
     {
       id: 'story',
+      terms: t('chatsettings.searchStory'),
       title: t('chatsettings.memoryNotesAndLore'),
       icon: LoreIcon,
       group: t('chatsettings.m92'),
     },
     {
       id: 'images',
+      terms: t('chatsettings.searchImages'),
       title: t('chatsettings.imagesAndReferences'),
       icon: ImagesIcon,
       group: t('chatsettings.m92'),
     },
     {
       id: 'packages',
+      terms: t('chatsettings.searchPackages'),
       title: t('chatsettings.m95'),
       icon: BehaviorIcon,
       group: t('chatsettings.m92'),
@@ -113,6 +120,9 @@ export function ChatSettingsPanel({
   );
   const [visited, setVisited] = useState<Section[]>([startSection]);
   const [detailOpen, setDetailOpen] = useState(true);
+  const [search, setSearch] = useState('');
+  const searchInput = useRef<HTMLInputElement>(null);
+  const searching = hasSettingsSearch(search);
   const [profileDirty, setProfileDirty] = useState(false);
   const [storyDirty, setStoryDirty] = useState(false);
   const [guideDirty, setGuideDirty] = useState(false);
@@ -145,7 +155,10 @@ export function ChatSettingsPanel({
   function backToList() {
     rememberPosition();
     setDetailOpen(false);
-    requestAnimationFrame(() => document.getElementById(`${id}-${active}-tab`)?.focus());
+    requestAnimationFrame(() => {
+      if (searching) searchInput.current?.focus();
+      else document.getElementById(`${id}-${active}-tab`)?.focus();
+    });
   }
   const closeHistory = useSettingsHistory(
     () => {
@@ -178,7 +191,7 @@ export function ChatSettingsPanel({
     if (dirty) setDiscard(true);
     else closeHistory();
   }
-  function select(section: Section) {
+  function select(section: Section, fromSearch = false) {
     rememberPosition();
     setActive(section);
     if (isProfile(section)) setProfileTab(section);
@@ -188,7 +201,7 @@ export function ChatSettingsPanel({
       const pane = document.getElementById(panelId(section));
       if (pane) {
         pane.scrollTop = scroll.current.get(section) ?? 0;
-        if (compact) {
+        if (compact || fromSearch) {
           const position = positions.current.get(section);
           if (position?.element.isConnected && position.element.checkVisibility()) {
             position.element.focus({ preventScroll: true });
@@ -365,18 +378,36 @@ export function ChatSettingsPanel({
           }
         }}
       >
-        <SectionNavigation
-          label={t('chatsettings.m100')}
-          items={visibleCategories.map((item) => ({
-            ...item,
-            panelId: panelId(item.id),
-          }))}
-          value={active}
-          onSelect={select}
-          compact={compact}
-          idPrefix={id}
+        <div
+          className="settings-navigation"
           hidden={compact && detailOpen}
-        />
+          role="navigation"
+          aria-label={t('chatsettings.m53')}
+        >
+          <SettingsSearch
+            value={search}
+            onChange={setSearch}
+            inputRef={searchInput}
+            items={visibleCategories.map((item) => ({
+              id: item.id,
+              label: item.title,
+              terms: item.terms,
+            }))}
+            onSelect={(section) => select(section as Section, true)}
+          />
+          <SectionNavigation
+            label={t('chatsettings.m100')}
+            items={visibleCategories.map((item) => ({
+              ...item,
+              panelId: panelId(item.id),
+            }))}
+            value={active}
+            onSelect={(section) => select(section)}
+            compact={compact}
+            idPrefix={id}
+            hidden={searching}
+          />
+        </div>
         <div className="settings-pages" hidden={!showingDetail}>
           <section
             className="settings-page"

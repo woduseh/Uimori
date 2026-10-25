@@ -1,4 +1,10 @@
 export const messages = {
+  'reader.sizeSearchTerms': {
+    ko: '글자 크기 글씨 크기 폰트 크기',
+    en: 'font size text size',
+    ja: '文字サイズ フォントサイズ',
+    zh: '字体大小 文字大小',
+  },
   'reader.storySummary': {
     ko: '이야기 요약',
     en: 'Story summary',
@@ -270,9 +276,9 @@ export const messages = {
     zh: '场景操作',
   },
   'reader.changeOpeningMessage': {
-    ko: '시작문 바꾸기',
-    en: 'Change opening message',
-    ja: '開始文を変更',
+    ko: '첫 메시지 바꾸기',
+    en: 'Change first message message',
+    ja: '最初のメッセージを変更',
     zh: '更换开场白',
   },
   'reader.excludeSceneFromContext': {

@@ -1759,7 +1759,7 @@ export const messages = {
     zh: 'Risu源码编辑对象',
   },
   'native.text_1c7e81d795': {
-    ko: '대체 시작문',
+    ko: '대체 첫 메시지',
     en: 'Alternate greeting',
     ja: '代替開始文',
     zh: '备选开场白',
@@ -1837,7 +1837,7 @@ export const messages = {
     zh: '默认首条消息',
   },
   'native.text_3a91359cae': {
-    ko: '기본 시작문',
+    ko: '기본 첫 메시지',
     en: 'Default greeting',
     ja: '既定の開始文',
     zh: '默认开场白',
@@ -2383,7 +2383,7 @@ export const messages = {
     zh: '请输入JSON数组。',
   },
   'native.sourceGreetings': {
-    ko: '시작문은 문자열 배열로 입력해 주세요.',
+    ko: '첫 메시지는 문자열 배열로 입력해 주세요.',
     en: 'Enter greetings as an array of strings.',
     ja: '開始文は文字列の配列で入力してください。',
     zh: '请以字符串数组输入开场白。',

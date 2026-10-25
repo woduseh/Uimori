@@ -1,3 +1,5 @@
+import { readImportReceipt, saveImportReceipt } from './import-operations.js';
+import { jsonPayloadHash } from './json-hash.js';
 import { HttpError, fields, isSha256Hex, number, record, text } from './request-validation.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import type { Content, ProfileSnapshot } from '../core/product.js';
@@ -12,7 +14,8 @@ import {
 import { chatVariableProfile } from './chat-variable-context.js';
 import type { Store } from './store.js';
 
-export type PackageStartCommand = PackageStartRef & {
+export type PackageStartCommand = Omit<PackageStartRef, 'startId'> & {
+  startId: string | null;
   expectedSettingsRevision: number;
   expectedProfileRevision: number;
   idempotencyKey: string;
@@ -31,6 +34,8 @@ export function validatePackageStartCommand(value: unknown): PackageStartCommand
     'expectedRevision',
     'expectedSourceHash',
   ]);
+  if (body.startId === null && body.expectedRevision === undefined)
+    throw new HttpError(400, 'Source revision required');
   const replacing = body.expectedRevision !== undefined || body.expectedSourceHash !== undefined;
   if (replacing && !isSha256Hex(body.expectedSourceHash))
     throw new HttpError(400, 'Invalid source hash');
@@ -44,8 +49,9 @@ export function validatePackageStartCommand(value: unknown): PackageStartCommand
     ...validatePackageStartRef({
       packageId: body.packageId,
       packageRevision: body.packageRevision,
-      startId: body.startId,
+      startId: body.startId === null ? 'start-0' : body.startId,
     }),
+    ...(body.startId === null ? { startId: null } : {}),
     expectedSettingsRevision: number(body.expectedSettingsRevision, 'settings revision'),
     expectedProfileRevision: number(body.expectedProfileRevision, 'profile revision'),
     idempotencyKey: text(body.idempotencyKey, 'idempotency key', 120),
@@ -62,7 +68,7 @@ export function canChangePackageStart(store: Store, chatId: string): boolean {
         AND v.id=json_extract(r.snapshot,'$.packageStart.packageId')
         AND v.revision=json_extract(r.snapshot,'$.packageStart.packageRevision')
       WHERE c.id=? AND s.chat_id=c.id AND s.parent_revision IS NULL
-      AND json_array_length(v.body,'$.package.starts')>1
+      AND json_array_length(v.body,'$.package.starts')>=1
       AND json_extract(r.snapshot,'$.packageStart.mode')='authored'
       AND NOT EXISTS (SELECT 1 FROM runs other WHERE other.chat_id=c.id
         AND (COALESCE(json_extract(other.snapshot,'$.packageStart.mode'),'')!='authored' OR other.status!='completed'))`
@@ -70,19 +76,100 @@ export function canChangePackageStart(store: Store, chatId: string): boolean {
     .get(chatId);
 }
 
+function clearPackageStart(store: Store, chatId: string, command: PackageStartCommand) {
+  const key = `transcript:package-start:${chatId}:${command.idempotencyKey}`;
+  const digest = jsonPayloadHash(command);
+  return store.transaction(() => {
+    const prior = readImportReceipt<{ run: null }>(
+      store,
+      key,
+      digest,
+      'Idempotency key reused with different command'
+    );
+    if (prior) return { run: null, created: false };
+    if (
+      store.db
+        .prepare('SELECT 1 FROM runs WHERE chat_id=? AND request_key=?')
+        .get(chatId, command.idempotencyKey)
+    )
+      throw new HttpError(409, 'Idempotency key reused with different command');
+    const chat = store.assertRunAdmission(chatId, {
+      ...command,
+      request: '',
+      expectedRevision: command.expectedRevision!,
+    });
+    if (!canChangePackageStart(store, chatId))
+      throw new HttpError(409, 'PACKAGE_START_CONVERSATION_STARTED');
+    const profile = chatVariableProfile(store, chatId);
+    if (
+      chat.botId !== command.packageId ||
+      !profile?.packageAttachments?.some(
+        (item) =>
+          item.role === 'bot' &&
+          item.id === command.packageId &&
+          item.revision === command.packageRevision
+      )
+    )
+      throw new HttpError(409, 'PACKAGE_START_OWNER_CHANGED');
+    store.db.prepare('UPDATE chats SET head_revision=NULL WHERE id=?').run(chatId);
+    store.db
+      .prepare('UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL WHERE chat_id=?')
+      .run(chatId);
+    // Detach the opening, retaining authored edits and completed artifacts as history.
+    for (const table of ['jobs', 'illustration_jobs']) {
+      const jobs = store.db
+        .prepare(
+          `SELECT id FROM ${table} WHERE source_revision=? AND status IN ('queued','running')`
+        )
+        .all(command.expectedRevision!);
+      store.db
+        .prepare(
+          `UPDATE ${table} SET status='cancelled',generation=generation+1,owner=NULL,updated_at=? WHERE source_revision=? AND status IN ('queued','running')`
+        )
+        .run(new Date().toISOString(), command.expectedRevision!);
+      for (const job of jobs)
+        store.event(
+          chatId,
+          table === 'jobs' ? 'job.cancelled' : 'illustration.cancelled',
+          String(job.id)
+        );
+    }
+    store.event(chatId, 'source.updated', command.expectedRevision!);
+    saveImportReceipt(store, key, digest, { run: null });
+    return { run: null, created: true };
+  });
+}
+
+export function createPackageStart<T extends { startId: string }>(
+  store: Store,
+  chatId: string,
+  value: T
+): { run: Run; created: boolean };
+export function createPackageStart(
+  store: Store,
+  chatId: string,
+  value: unknown
+): { run: Run | null; created: boolean };
 /** Confirm a Risu greeting atomically without making a model request. */
 export function createPackageStart(
   store: Store,
   chatId: string,
   value: unknown
-): { run: Run; created: boolean } {
+): { run: Run | null; created: boolean } {
   const command = validatePackageStartCommand(value);
+  if (command.startId === null) return clearPackageStart(store, chatId, command);
   const ref: PackageStartRef = {
     packageId: command.packageId,
     packageRevision: command.packageRevision,
     startId: command.startId,
   };
   return store.transaction(() => {
+    if (
+      store.db
+        .prepare('SELECT 1 FROM import_operations WHERE key=?')
+        .get(`transcript:package-start:${chatId}:${command.idempotencyKey}`)
+    )
+      throw new HttpError(409, 'Idempotency key reused with different command');
     const prior = store.db
       .prepare('SELECT command FROM runs WHERE chat_id=? AND request_key=?')
       .get(chatId, command.idempotencyKey) as { command: string } | undefined;
@@ -118,7 +205,7 @@ export function createPackageStart(
       );
       if (!profile || !attachment || chat.botId !== command.packageId)
         throw new HttpError(409, 'PACKAGE_START_OWNER_CHANGED');
-      const selected = resolvePackageStart(content.package!, command.startId);
+      const selected = resolvePackageStart(content.package!, ref.startId);
       prepared = { profile, selected };
       request = `[작성된 도입문] ${selected.title}`;
     }

@@ -1,0 +1,24 @@
+/* Native interest invokers own hover, keyboard focus, Escape and the hover bridge. */
+.ui-tooltip {
+  position: fixed;
+  position-area: block-end;
+  position-try-fallbacks: flip-block, flip-inline;
+  justify-self: anchor-center;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 16px));
+  margin: 8px;
+  padding: 6px 9px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 2px 8px var(--shade);
+  font: inherit;
+  font-size: var(--font-small);
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: default;
+}

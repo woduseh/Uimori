@@ -69,3 +69,14 @@
   font-size: var(--font-body);
   line-height: 1.7;
 }
+
+/* Reference notes grow with the draft, without pushing the form beyond the viewport. */
+.story-guide textarea {
+  field-sizing: content;
+  min-block-size: calc(2lh + 20px);
+  max-block-size: max(120px, min(480px, 50dvb));
+  overflow-y: auto;
+}
+.story-guide textarea[rows="6"] {
+  min-block-size: min(calc(6lh + 20px), 50dvb);
+}

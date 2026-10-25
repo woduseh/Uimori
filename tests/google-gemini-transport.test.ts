@@ -153,6 +153,7 @@ test.each(['standard', 'flex', 'priority'])(
     input.generation!.safetySettings = {
       HARM_CATEGORY_HARASSMENT: 'OFF',
       HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+      HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH',
     };
     const original = structuredClone(input),
       wires: WireRecord[] = [];
@@ -182,6 +183,7 @@ test.each(['standard', 'flex', 'priority'])(
     expect(body.safetySettings).toEqual([
       { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'OFF' },
       { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_JAILBREAK', threshold: 'BLOCK_ONLY_HIGH' },
     ]);
     expect(body.systemInstruction.parts[0].text).toBe(input.stable.contract);
     expect(JSON.stringify(body.contents)).toContain('한글');

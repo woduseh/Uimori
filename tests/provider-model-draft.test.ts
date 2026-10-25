@@ -73,6 +73,7 @@ describe('model numeric drafts', () => {
       safetySettings: {
         HARM_CATEGORY_HARASSMENT: 'OFF' as const,
         HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE' as const,
+        HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH' as const,
       },
     };
     for (const gemini of [vertex, studio]) {

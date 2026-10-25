@@ -1,3 +1,7 @@
+import {
+  settingsSearchText as searchText,
+  matchesSettingsSearch as matchesSearch,
+} from './SettingsSearch.js';
 import { LanguageSelect } from './LanguageSelect.js';
 import { t, useI18n, translateMessage } from './i18n.js';
 import { PushSettings } from './PushSettings.js';
@@ -331,19 +335,6 @@ function getLibrarySettingsSubjects(): Record<string, string> {
     connections: t('chatsettings.m48'),
     illustrations: t('chatsettings.m49'),
   };
-}
-
-function searchText(value: string) {
-  return value.normalize('NFKC').toLocaleLowerCase().replace(/\s+/g, '');
-}
-
-function matchesSearch(value: string, query: string) {
-  const text = searchText(value);
-  return query
-    .trim()
-    .split(/[\s/·-]+/)
-    .filter(Boolean)
-    .every((term) => text.includes(searchText(term)));
 }
 
 export function AppSettingsPanel({

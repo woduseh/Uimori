@@ -17,7 +17,8 @@ export type PackageStartSelection = PackageStartRef & {
   expectedProfileRevision: number;
   userName?: string;
 };
-type Command = Omit<PackageStartSelection, 'userName'> & {
+type Command = Omit<PackageStartSelection, 'userName' | 'startId'> & {
+  startId: string | null;
   expectedRevision: string;
   expectedSourceHash: string;
   idempotencyKey: string;
@@ -56,7 +57,12 @@ export function PackageStartPicker({
   const reviewed = useRef({ source, selection });
   // biome-ignore lint/correctness/useExhaustiveDependencies: Opening captures the reviewed revisions; live updates must not silently adopt a newer write target.
   useEffect(() => {
-    if (open && !submitted.current) reviewed.current = { source, selection };
+    if (open && !submitted.current) {
+      reviewed.current = { source, selection };
+      setSelected(selection.startId);
+      setExpanded(false);
+      setError('');
+    }
   }, [open]);
   const mounted = useRef(true);
   useEffect(() => {
@@ -98,7 +104,7 @@ export function PackageStartPicker({
     const command = (submitted.current ??= {
       packageId: captured.selection.packageId,
       packageRevision: captured.selection.packageRevision,
-      startId: selected,
+      startId: selected || null,
       expectedSettingsRevision: captured.selection.expectedSettingsRevision,
       expectedProfileRevision: captured.selection.expectedProfileRevision,
       expectedRevision: captured.source.id,
@@ -106,7 +112,10 @@ export function PackageStartPicker({
       idempotencyKey: crypto.randomUUID(),
     });
     try {
-      const result = await api<{ run: Run }>('/chats/' + source.chatId + '/package-start', command);
+      const result = await api<{ run: Run | null }>(
+        '/chats/' + source.chatId + '/package-start',
+        command
+      );
       submitted.current = null;
       if (!mounted.current) return;
       setUncertain(false);
@@ -114,12 +123,14 @@ export function PackageStartPicker({
       onClose();
       try {
         await refresh();
-        // Replacing the opening removes its old menu trigger. Restore focus to its successor.
+        // The old trigger disappears. An empty reader returns focus to the retained draft.
         requestAnimationFrame(() => {
-          document
-            .getElementById('source-' + result.run.sourceRevision)
-            ?.querySelector<HTMLElement>('.action-menu > summary')
-            ?.focus({ preventScroll: true });
+          const target = result.run
+            ? document
+                .getElementById('source-' + result.run.sourceRevision)
+                ?.querySelector<HTMLElement>('.action-menu > summary')
+            : document.querySelector<HTMLElement>('[data-uimori-part="composer-input"]');
+          target?.focus({ preventScroll: true });
         });
       } catch (cause) {
         onError(
@@ -169,6 +180,7 @@ export function PackageStartPicker({
                 setError('');
               }}
             >
+              <option value="">{t('transfer.m342')}</option>
               {starts.map((start) => (
                 <option key={start.id} value={start.id}>
                   {start.title}
@@ -176,25 +188,27 @@ export function PackageStartPicker({
               ))}
             </select>
           </label>
-          <details
-            key={selected}
-            className="package-start-preview"
-            onToggle={(event) => setExpanded(event.currentTarget.open)}
-          >
-            <summary>{t('library.preview')}</summary>
-            {expanded && (
-              <div
-                className="package-start-preview-body"
-                aria-label={t('library.fullFirstMessagePreview')}
-              >
-                <RisuStartPreview
-                  content={content}
-                  startId={selected}
-                  userName={selection.userName}
-                />
-              </div>
-            )}
-          </details>
+          {selected && (
+            <details
+              key={selected}
+              className="package-start-preview"
+              onToggle={(event) => setExpanded(event.currentTarget.open)}
+            >
+              <summary>{t('library.preview')}</summary>
+              {expanded && (
+                <div
+                  className="package-start-preview-body"
+                  aria-label={t('library.fullFirstMessagePreview')}
+                >
+                  <RisuStartPreview
+                    content={content}
+                    startId={selected}
+                    userName={selection.userName}
+                  />
+                </div>
+              )}
+            </details>
+          )}
           <p className="muted">{t('library.changesThisChatSFirstMessageYour')}</p>
         </>
       )}
@@ -215,7 +229,7 @@ export function PackageStartPicker({
               (!content ||
                 !!readError ||
                 selected === selection.startId ||
-                !starts.some((start) => start.id === selected)))
+                (selected !== '' && !starts.some((start) => start.id === selected))))
           }
           onClick={() => void apply()}
         />

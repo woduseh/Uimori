@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type CSSProperties,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { MoreIcon } from './ui-icons.js';
 import './ui-controls.css';
@@ -31,7 +24,6 @@ export function ActionMenu({
   const ref = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
   const body = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<CSSProperties>();
   const [sheet, setSheet] = useState(false);
   // Narrow screens open every menu as a bottom sheet (CSS): a popover anchored to its trigger has
   // no room above or below once it holds more than a few rows, and gets clipped by the header.
@@ -45,57 +37,17 @@ export function ActionMenu({
   }, [open]);
   useLayoutEffect(() => {
     if (!open || (!viewport && !sheet)) return;
-    const place = () => {
-      const anchor = ref.current?.querySelector('summary')?.getBoundingClientRect();
-      const menu = body.current;
-      if (!anchor || !menu) return;
-      // Sheet geometry lives in ui-controls.css (see SHEET_MEDIA there) so the first painted
-      // frame is already the sheet; the details toggle event arrives after that frame.
-      if (sheet) {
-        setPosition(undefined);
-        return;
-      }
-      const height = Math.min(menu.scrollHeight + 2, window.innerHeight - 16);
-      const below = window.innerHeight - anchor.bottom - 8;
-      const above = anchor.top - 8;
-      const upward =
-        placement === 'top' ? above >= height || above > below : below < height && above > below;
-      setPosition({
-        position: 'fixed',
-        transformOrigin: upward ? 'bottom right' : 'top right',
-        left: Math.max(
-          8,
-          Math.min(anchor.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)
-        ),
-        right: 'auto',
-        top: Math.max(
-          8,
-          upward
-            ? anchor.top - height - 4
-            : Math.min(anchor.bottom + 4, window.innerHeight - height - 8)
-        ),
-        bottom: 'auto',
-        maxHeight: 'calc(100dvh - 16px)',
-        overflowY: 'auto',
-      });
-    };
     const scroll = (event: Event) => {
       if (event.target instanceof Node && body.current?.contains(event.target)) return;
       if (ref.current && !ref.current.querySelector('dialog[open]')) ref.current.open = false;
     };
-    place();
-    const observer = new ResizeObserver(place);
-    if (body.current) observer.observe(body.current);
-    window.addEventListener('resize', place);
     // An anchored popover drifts from its trigger when the page scrolls, so it closes; a sheet is
     // pinned to the viewport behind a scrim and only closes by pointer, Escape or blur.
     if (!sheet) document.addEventListener('scroll', scroll, true);
     return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', place);
       document.removeEventListener('scroll', scroll, true);
     };
-  }, [open, viewport, placement, sheet]);
+  }, [open, viewport, sheet]);
   useEffect(() => {
     // Reads the native open state: the details toggle event is asynchronous, so a tap right
     // after opening must still dismiss. The sheet's scrim is the details' own ::before, so a tap
@@ -173,7 +125,7 @@ export function ActionMenu({
   return (
     <details
       ref={ref}
-      className={`action-menu${placement === 'top' ? ' action-menu-up' : ''} ${className}`}
+      className={`action-menu${placement === 'top' ? ' action-menu-up' : ''}${viewport ? ' action-menu-viewport' : ''} ${className}`}
       onToggle={(event) => setOpen(event.currentTarget.open)}
       onKeyDown={(event) => {
         if (event.key !== 'Escape' || !event.currentTarget.open) return;
@@ -201,7 +153,6 @@ export function ActionMenu({
       <div
         ref={body}
         className="action-menu-body"
-        style={viewport && !sheet ? position : undefined}
         onClick={(event) => {
           // Choosing an item closes the menu, unless the item opens something inside it (a
           // confirmation dialog, a picker). The check runs after the item's own handler committed.
