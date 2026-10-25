@@ -323,14 +323,10 @@ test('LCOM03 selection replaces list tools and retains search, view and card rat
     'aria-pressed',
     'true'
   );
-  await expect(views.getByRole('button', { name: '카드', exact: true })).toHaveAttribute(
-    'title',
-    '카드 보기'
-  );
-  await expect(views.getByRole('button', { name: '목록', exact: true })).toHaveAttribute(
-    'title',
-    '목록 보기'
-  );
+  await views.getByRole('button', { name: '카드', exact: true }).hover();
+  await expect(views.getByRole('tooltip', { name: '카드 보기', exact: true })).toBeVisible();
+  await views.getByRole('button', { name: '목록', exact: true }).hover();
+  await expect(views.getByRole('tooltip', { name: '목록 보기', exact: true })).toBeVisible();
   await options.click();
   const ratioOptions = panel.getByRole('group', { name: '카드 비율', exact: true });
   await expect(ratioOptions).toBeVisible();

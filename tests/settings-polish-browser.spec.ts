@@ -371,7 +371,9 @@ test('SPUI02 lore reset is an unsaved form action and incomplete backup input ne
   await expect(lore.getByLabel('조회 로어 토큰 한도', { exact: true })).toHaveValue('16000');
   expect(await (await request.get('/api/lore-context-defaults')).json()).toEqual(before);
   await lore.getByText('단위와 예산 설명', { exact: true }).click();
-  await lore.locator('.settings-form-footer').scrollIntoViewIfNeeded();
+  await lore
+    .getByRole('button', { name: '로어 컨텍스트 기본값 저장', exact: true })
+    .scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('lore-footer-desktop.png') });
   await selectSettingsSection(page, '데이터 관리');
   const backup = page.getByRole('region', { name: '서버 자동 백업', exact: true });
