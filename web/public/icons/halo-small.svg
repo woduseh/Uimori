@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Uimori</title>
+  <rect width="64" height="64" rx="12" fill="#14141b"/>
+  <!-- Broad cream bands retain the reference's concentric seal at tab-icon sizes. -->
+  <g stroke="#887566" stroke-width="5">
+    <circle cx="32" cy="32" r="27"/>
+    <circle cx="32" cy="32" r="16"/>
+    <path d="M32 16v16h16"/>
+  </g>
+  <g stroke="#ffe5c8" stroke-width="3.5">
+    <circle cx="32" cy="32" r="27"/>
+    <circle cx="32" cy="32" r="16"/>
+    <path d="M32 16v16h16"/>
+  </g>
+  <circle cx="32" cy="32" r="4" fill="#ffe5c8" stroke="#887566" stroke-width=".75"/>
+  <circle cx="32" cy="32" r="1" fill="#887566"/>
+</svg>
