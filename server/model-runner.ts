@@ -215,7 +215,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   const executeCalls = async (
     result: ProviderResult,
     signal: AbortSignal = hooks.signal,
-    native = false
+    native = false,
+    prepareShellEvent?: (event: ToolEvent, remainingCalls: ProviderResult['toolCalls']) => ToolEvent
   ): Promise<MainResult | undefined> => {
     if (evaluation && ++evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT) {
       if (result.toolCalls.length !== 1 || result.toolCalls[0].name !== 'eval_submit_artifact')
@@ -342,7 +343,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       return { status: 'completed', text: submitted.artifact.text, error: null, usage };
     }
     opaqueState = result.opaqueState;
-    for (const call of result.toolCalls) {
+    for (const [callIndex, call] of result.toolCalls.entries()) {
       if (signal.aborted) return fail('CANCELLED');
       // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
       const action = { callId: call.id, name: call.name, args: call.arguments };
@@ -369,6 +370,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
           : await executeMainTool(action, signal);
+      if (!saved && event.name === 'data.exec' && !event.denied)
+        event = prepareShellEvent?.(event, result.toolCalls.slice(callIndex + 1)) ?? event;
       readHeadroomTokens = Math.max(0, readHeadroomTokens - readTokens(event));
       results.push(event);
       if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
@@ -414,12 +417,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       !economizedBootstrap
         ? hooks.executeCodexAgent
         : undefined;
-    const build = (freshHistory?: ToolEvent[]) => {
+    const build = (freshHistory?: ToolEvent[], projectedResults: ToolEvent[] = results) => {
       const fresh = freshHistory !== undefined;
       const history = freshHistory ?? completedToolHistory;
       return buildMainProviderRequest(fixed, {
         shell: !!hooks.executeShell,
-        results: fresh ? [] : results,
+        results: fresh ? [] : projectedResults,
         ...(evaluation
           ? {
               evaluation: {
@@ -683,7 +686,36 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         error: result.refusal ?? result.error?.code ?? null,
         usage,
       };
-    const terminal = await executeCalls(result);
+    const terminal = await executeCalls(result, hooks.signal, false, (event, remainingCalls) => {
+      const execution = { ...(event.result as Record<string, Json>) };
+      delete execution.output;
+      const limited: ToolEvent = {
+        ...event,
+        denied: true,
+        errorKind: 'recoverable',
+        result: {
+          code: 'TOOL_CONTEXT_LIMIT_EXCEEDED',
+          returned: false,
+          execution,
+          guidance:
+            'The command already ran. Its output was not supplied. Read a smaller range from outputFile, or finish writing with the evidence already available; do not repeat the original command.',
+        },
+      };
+      // HTTP continuations carry all paired results in our next request. Reserve
+      // correction space for pending calls before accepting this stdout. Native
+      // Codex owns its internal tool loop and does not use this request projection.
+      const pending = remainingCalls.map((call) => ({
+        ...limited,
+        callId: call.id,
+        name: call.name,
+        args: call.arguments,
+      }));
+      const projected = build(undefined, [...results, event, ...pending]).request;
+      return !projected.contextBudget ||
+        measure(projected) <= projected.contextBudget.inputTokenLimit
+        ? event
+        : limited;
+    });
     if (terminal) return terminal;
   }
 }

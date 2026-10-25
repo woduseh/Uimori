@@ -347,6 +347,7 @@ async function selectOne(
       );
       const ids = search.rank([
         { text: payload.request, weight: 3 },
+        ...(payload.summary ? [{ text: payload.summary.text, weight: 0.5 }] : []),
         ...payload.conversation.map((message, index) => ({
           text: message.text,
           weight:

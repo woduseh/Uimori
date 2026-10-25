@@ -312,6 +312,132 @@ test('main shell results reach the next request and saved receipts avoid repeati
   ).toBe(false);
 });
 
+test.each([4000, 800])(
+  'shell output of %i repetitions keeps logs and paired results so writing can continue',
+  async (repetitions) => {
+    const fixed = await snapshot();
+    fixed.profile!.models.main!.inputTokenLimit = 8192;
+    fixed.contextPlan!.budget.inputTokenLimit = 8192;
+    const observed = hooks();
+    const output = '가나다🙂'.repeat(repetitions);
+    const calls = Array.from({ length: 3 }, (_, index) => ({
+      id: `large-shell-${index}`,
+      name: 'data.exec',
+      args: { command: `cat current/resources/${index}.txt`, maxOutputBytes: 65536 },
+    }));
+    observed.value.executeShell = vi.fn(async (_snapshot, action) => ({
+      ...action,
+      denied: false,
+      result: {
+        output,
+        outputFile: `scratch/${action.callId}.log`,
+        exitCode: 0,
+        timedOut: false,
+        truncated: false,
+      },
+    }));
+    const bodies = script([
+      (_body, n) => toolTurn(calls, n),
+      (body) => {
+        expect(body.input.results).toHaveLength(calls.length);
+        for (const [index, event] of body.input.results.entries()) {
+          if (!event.denied) {
+            expect(event).toMatchObject({ denied: false, result: { output } });
+            continue;
+          }
+          expect(event).toMatchObject({
+            callId: calls[index].id,
+            denied: true,
+            errorKind: 'recoverable',
+            result: {
+              code: 'TOOL_CONTEXT_LIMIT_EXCEEDED',
+              returned: false,
+              execution: { outputFile: `scratch/${calls[index].id}.log`, exitCode: 0 },
+            },
+          });
+          expect(JSON.stringify(event.result)).not.toContain(output);
+        }
+        if (repetitions === 800)
+          expect(body.input.results.some((event) => !event.denied)).toBe(true);
+        expect(body.input.results.some((event) => event.denied)).toBe(true);
+        expect(estimateContextTokens(body)).toBeLessThanOrEqual(8192);
+        return completed();
+      },
+    ]);
+    const result = await runMain(fixed, observed.value);
+    expect(result.error).toBe(null);
+    expect(result).toMatchObject({ status: 'completed', text: finalText });
+    expect(bodies.map((body) => body.role)).toEqual(['main', 'main']);
+    expect(observed.value.executeShell).toHaveBeenCalledTimes(calls.length);
+    expect(observed.events).toEqual(bodies[1].input.results);
+  }
+);
+
+test('Chat continuation pairs every shell result while admitting accumulated output', async () => {
+  const fixed = await snapshot();
+  const target = fixed.profile!.models.main!;
+  target.inputTokenLimit = 8192;
+  target.connection.protocol = 'openai-chat-v1';
+  target.connection.endpoint = `${origin}/v1/chat/completions`;
+  fixed.contextPlan!.budget.inputTokenLimit = 8192;
+  const observed = hooks();
+  const output = '가나다🙂'.repeat(800);
+  observed.value.executeShell = async (_snapshot, action) => ({
+    ...action,
+    denied: false,
+    result: { output, outputFile: `scratch/${action.callId}.log`, exitCode: 0 },
+  });
+  const bodies: any[] = [];
+  vi.mocked(fetch).mockImplementation(async (_url, options) => {
+    const body = JSON.parse(String(options?.body));
+    bodies.push(body);
+    const delta =
+      bodies.length === 1
+        ? {
+            role: 'assistant',
+            tool_calls: Array.from({ length: 3 }, (_, index) => ({
+              index,
+              id: `chat-shell-${index}`,
+              type: 'function',
+              function: {
+                name: body.tools.find((tool: any) => tool.function.name.endsWith('_data_exec'))
+                  .function.name,
+                arguments: JSON.stringify({ command: 'cat current/resources/0.txt' }),
+              },
+            })),
+          }
+        : { role: 'assistant', content: finalText };
+    const response = sse({
+      id: 'shell-continuation',
+      choices: [{ index: 0, delta, finish_reason: bodies.length === 1 ? 'tool_calls' : 'stop' }],
+    });
+    return new Response((await response.text()) + 'data: [DONE]\n\n', {
+      headers: response.headers,
+    });
+  });
+  expect(await runMain(fixed, observed.value)).toMatchObject({
+    status: 'completed',
+    text: finalText,
+  });
+  expect(bodies).toHaveLength(2);
+  const continuation = bodies[1];
+  const returned = continuation.messages.filter((message: any) => message.role === 'tool');
+  expect(returned.map((message: any) => message.tool_call_id)).toEqual([
+    'chat-shell-0',
+    'chat-shell-1',
+    'chat-shell-2',
+  ]);
+  expect(continuation.messages.find((message: any) => message.tool_calls)?.tool_calls).toHaveLength(
+    3
+  );
+  expect(observed.events.some((event) => !event.denied)).toBe(true);
+  expect(observed.events.some((event) => event.denied && event.errorKind === 'recoverable')).toBe(
+    true
+  );
+  expect(estimateContextTokens(continuation, fixed.contextPlan!.budget)).toBeLessThanOrEqual(8192);
+  expect(observed.events.some((event) => event.name === 'context.compact')).toBe(false);
+});
+
 describe('host read compaction and provider continuation inside one main run', () => {
   test.each([
     {
