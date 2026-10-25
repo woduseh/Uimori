@@ -1178,9 +1178,18 @@ for (const width of [1440, 412]) {
     await picker.getByLabel('첫 메시지 선택').selectOption({ label: '첫 메시지 없이 시작' });
     await page.screenshot({ path: info.outputPath('empty-opening-picker-' + width + '.png') });
     const commands: Record<string, unknown>[] = [];
-    // On desktop, lose the success response after the server commits. Explicit result
-    // confirmation must replay the original command rather than create another effect.
+    // Keep reader delivery pending on desktop so SSE cannot remove the picker
+    // before the lost-response retry is exercised. The mobile case covers normal
+    // authoritative refresh; both cases retain the same persistence assertions.
+    let releaseReader: (() => void) | undefined;
+    const readerDelivery = new Promise<void>((resolve) => {
+      releaseReader = resolve;
+    });
     if (width === 1440) {
+      await page.route(`**/api/chats/${chat.id}/reader?*`, async (route) => {
+        await readerDelivery;
+        await route.continue();
+      });
       await page.route(`**/api/chats/${chat.id}/package-start`, async (route) => {
         commands.push(route.request().postDataJSON());
         if (commands.length === 1) {
@@ -1207,6 +1216,8 @@ for (const width of [1440, 412]) {
     if (width === 1440) {
       expect(commands).toHaveLength(2);
       expect(commands[1]).toEqual(commands[0]);
+      await expect(picker).toBeHidden();
+      releaseReader?.();
     }
     await expect(picker).toBeHidden();
     await expect(page.getByTestId('source')).toHaveCount(0);

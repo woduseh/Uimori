@@ -165,7 +165,9 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
   await menu.focus();
   await page.keyboard.press('Enter');
   await expect(copy).toBeVisible();
-  await expect(item.locator('.action-menu-body > .delete-control > button > svg')).toHaveCount(1);
+  await expect(
+    item.getByRole('button', { name: model.title + ' 모델 삭제', exact: true })
+  ).toBeVisible();
   await copy.focus();
   await page.keyboard.press('Escape');
   await expect(copy).not.toBeVisible();
@@ -203,9 +205,9 @@ test('PCUI02 compact provider lists align at six widths and retain accessible me
     exact: true,
   });
   await provider.getByLabel(connection.title + ' 프로바이더 메뉴', { exact: true }).click();
-  await expect(provider.locator('.action-menu-body > .delete-control > button > svg')).toHaveCount(
-    1
-  );
+  await expect(
+    provider.getByRole('button', { name: connection.title + ' 프로바이더 삭제', exact: true })
+  ).toBeVisible();
   // Close the (sheet) menu before reaching the tab bar it would otherwise cover on 412px.
   await page.keyboard.press('Escape');
   await editor.getByRole('button', { name: '모델 프리셋', exact: true }).click();

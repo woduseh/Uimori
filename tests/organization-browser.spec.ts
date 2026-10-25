@@ -156,11 +156,13 @@ for (const width of DEFAULT_WIDTHS) {
     await dialog
       .getByRole('button', { name: `${folder.title} 기본 페르소나`, exact: true })
       .click();
-    await page
-      .getByRole('dialog', { name: `${folder.title} 기본 페르소나`, exact: true })
-      .locator('[data-content-choice]')
-      .filter({ hasText: draftPersona.title })
-      .click();
+    const picker = page.getByRole('dialog', {
+      name: `${folder.title} 기본 페르소나`,
+      exact: true,
+    });
+    // Other cases share this library; the new persona may be beyond the first 50 choices.
+    await picker.getByRole('searchbox').fill(draftPersona.title);
+    await picker.locator('[data-content-choice]').filter({ hasText: draftPersona.title }).click();
     const changed = await request.patch(`/api/bots/${owner.id}/folders/${folder.id}`, {
       data: {
         expectedRevision: original.revision,
