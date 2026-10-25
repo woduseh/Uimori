@@ -7,6 +7,7 @@ const usage = `Usage:
   uimori call <operation> [JSON | --input <file|->]
   uimori apply <relative-file-path>
   uimori refresh <relative-file-path>
+  uimori export [JSON | --input <file|->] (main writing workspace)
 
 JSON arguments must be an object. --input - reads JSON from stdin.
 tools returns the app catalog or exact schemas (for example {"names":["resource.read"]}).
@@ -35,7 +36,7 @@ try {
     let payload;
     if ((command === 'apply' || command === 'refresh') && args.length === 1) {
       payload = { path: args[0] };
-    } else if (command === 'tools') {
+    } else if (command === 'tools' || command === 'export') {
       payload = { arguments: input(args) };
     } else if (command === 'call' && args[0] && !args[0].startsWith('--')) {
       payload = { name: args[0], arguments: input(args.slice(1)) };

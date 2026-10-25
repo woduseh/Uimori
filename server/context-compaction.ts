@@ -26,6 +26,7 @@ import {
 import { measureProviderRequest } from './main-request.js';
 import type { MainHooks } from './model-runner.js';
 import { modelAuthorNotes } from '../core/notes.js';
+import { resetCompactedLore } from '../core/lore-context.js';
 
 export type ContextCompactionHooks = MainHooks & {
   onProgress: (plan: ContextPlan) => void | Promise<void>;
@@ -258,6 +259,9 @@ export async function prepareInputContext(
         usage: structuredClone(usage),
       };
     }
+    // This private projection is adopted only after successful compaction. Failed or
+    // cancelled work cannot reset the successful turn's durable lore state.
+    if (fixed.loreContext) fixed.loreContext = resetCompactedLore(fixed.loreContext);
     // Measuring the fixed input is only a feasibility check; this empty-history projection is never returned or sent.
     const fixedEstimate =
       measureInput(withContextProjection(fixed, allRefs, plan.summary)).estimatedInputTokens +

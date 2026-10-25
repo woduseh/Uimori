@@ -384,6 +384,12 @@ export function compileRisuPrompt(
     values?: Record<string, PromptValue>;
     slots: Record<string, string>;
     history: PromptHistoryMessage[];
+    /** Host reference data is inserted after native chat ranges and cache targets resolve. */
+    references?: {
+      message: PromptHistoryMessage;
+      beforeMessageId?: string;
+      afterMessageId?: string;
+    }[];
     examples?: NativePromptMessage[];
     controls?: PromptControl[];
     compilerVersion?: PromptCompilerVersion;
@@ -519,6 +525,34 @@ export function compileRisuPrompt(
       }
     } else fail('RISU_NATIVE_PRESET_BLOCK', type);
     trace.push({ blockId: id, included: true, messageIds: messages.slice(start).map((m) => m.id) });
+  }
+  for (const reference of context.references ?? []) {
+    const before = reference.beforeMessageId
+      ? messages.findIndex(
+          (message) => message.provenance.sourceMessageId === reference.beforeMessageId
+        )
+      : -1;
+    const after = reference.afterMessageId
+      ? messages.findIndex(
+          (message) => message.provenance.sourceMessageId === reference.afterMessageId
+        )
+      : -1;
+    const fallback = messages.findIndex(
+      (message) =>
+        message.provenance.origin === 'history' || message.provenance.origin === 'current'
+    );
+    const at =
+      before >= 0 ? before : after >= 0 ? after + 1 : fallback >= 0 ? fallback : messages.length;
+    const id = reference.message.id;
+    if (messages.some((message) => message.id === id)) fail('PROMPT_DUPLICATE_MESSAGE', id);
+    messages.splice(at, 0, {
+      id,
+      role: reference.message.role,
+      content: [{ type: 'text', text: reference.message.text }],
+      completion: 'complete',
+      provenance: { blockId: id, origin: 'prompt' },
+    });
+    trace.push({ blockId: id, included: true, messageIds: [id] });
   }
   inspectPromptData(messages);
   return {

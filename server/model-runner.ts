@@ -41,6 +41,12 @@ export type MainResult = {
   usage: Usage;
 };
 export type MainHooks = {
+  /** Optional Linux workspace owned by this main Run, shared by HTTP and native tool dispatch. */
+  executeShell?: (
+    snapshot: RunSnapshot,
+    action: { callId: string; name: string; args: Record<string, unknown> },
+    signal: AbortSignal
+  ) => Promise<ToolEvent>;
   /** Explicit deterministic behavior for the no-model test path only. */
   fixture?: FixtureGeneration;
   prepareRequest?: (request: ProviderRequest, usage: Usage) => Promise<ProviderRequest>;
@@ -122,13 +128,18 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
   // headroom remains for model output and protocol wrapping. Admission still owns safety.
   let readHeadroomTokens = 0;
   const readTokens = (event: ToolEvent) => estimateContextTokens(event, fixed.contextPlan?.budget);
-  const executeMainTool = (action: Parameters<typeof executeTool>[1], signal?: AbortSignal) => {
+  const executeMainTool = async (
+    action: Parameters<typeof executeTool>[1],
+    signal: AbortSignal = hooks.signal
+  ) => {
+    if (action.name === 'data.exec' && hooks.executeShell)
+      return hooks.executeShell(fixed, action, signal);
     let event = executeTool(fixed, action, signal);
     if (
       !event.denied &&
       action.name === 'knowledge.read' &&
       Array.isArray(action.args.ids) &&
-      action.args.ids.length > 1 &&
+      (action.args.ids.length > 1 || Number(action.args.tokenLimit) > KNOWLEDGE_READ_TOKENS) &&
       fixed.contextPlan !== undefined &&
       fixed.contextPlan.budget.inputTokenLimit > MIN_INPUT_TOKEN_LIMIT &&
       readTokens(event) < readHeadroomTokens
@@ -357,7 +368,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       } else
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
-          : executeMainTool(action, signal);
+          : await executeMainTool(action, signal);
       readHeadroomTokens = Math.max(0, readHeadroomTokens - readTokens(event));
       results.push(event);
       if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
@@ -407,6 +418,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       const fresh = freshHistory !== undefined;
       const history = freshHistory ?? completedToolHistory;
       return buildMainProviderRequest(fixed, {
+        shell: !!hooks.executeShell,
         results: fresh ? [] : results,
         ...(evaluation
           ? {

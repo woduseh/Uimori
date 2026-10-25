@@ -183,9 +183,9 @@ function definition(request: transport.ProviderRequest, name: string) {
 }
 
 test.each(['resource.read', 'chat.lore'] as const)(
-  '%s round-budget recovery uses an exposed tool that can be called unchanged',
+  '%s preserves requested pages when the selected model has room for the complete round',
   async (name) => {
-    // Dense multilingual text must exceed the round token budget, not merely a character count.
+    // Dense multilingual pages exceed the former 32k round cap together.
     const prose = '한글漢字 설정 記録 경계 '.repeat(6000);
     const f = await fixture('library', prose);
     const attachment = new ChatOverridesStore(f.store).get(f.chat.id).attachments[0];
@@ -207,45 +207,24 @@ test.each(['resource.read', 'chat.lore'] as const)(
             call(`page-${index}`, 'app.call', { name, arguments: args })
           )
         );
-      if (round === 1) {
-        const denied = (request.input.results as unknown as ToolEvent[]).find(
-          (item) =>
-            item.denied && (item.result as { error?: string }).error === 'HELPER_READ_TOO_LARGE'
-        );
-        expect(denied).toBeDefined();
-        const retry = (
-          denied!.result as {
-            nextRead: { name: string; arguments: Record<string, unknown> };
-          }
-        ).nextRead;
-        expect(request.stable.tools.map((tool) => tool.name)).toContain(retry.name);
-        expect(retry).toEqual({
-          name: 'app.call',
-          arguments: {
-            name,
-            arguments:
-              name === 'resource.read'
-                ? { ...args, limit: 5, textLimit: 1000 }
-                : { ...args, limit: 5, textLimit: 2000 },
-          },
-        });
-        return calls(call('retry-page', retry.name, retry.arguments));
-      }
-      const recovered = result(request, 'retry-page');
-      expect(recovered).toMatchObject(
+      expect(round).toBe(1);
+      expect((request.input.results as unknown as ToolEvent[]).every((item) => !item.denied)).toBe(
+        true
+      );
+      expect(result(request, 'page-6')).toMatchObject(
         name === 'resource.read'
           ? {
               id: f.bot.id,
               revision: f.bot.revision,
               path: args.path,
-              text: prose.slice(37, 1037),
+              text: prose.slice(37, 10037),
               textOffset: 37,
-              nextOffset: 1037,
+              nextOffset: 10037,
             }
           : {
               chatId: f.chat.id,
               selector,
-              original: { text: prose.slice(37, 2037), offset: 37, nextOffset: 2037 },
+              original: { text: prose.slice(37, 10037), offset: 37, nextOffset: 10037 },
             }
       );
       return structuredClone(success);
@@ -318,7 +297,6 @@ test('retired artifact writes are unavailable while historical revisions remain 
     payload: { expectedRevision: 2, text: 'Must not save', requestKey: 'retired-edit' },
   });
   expect(patch.statusCode).toBe(404);
-  let retry!: { name: string; arguments: Record<string, unknown> };
   mockSend((request, round) => {
     if (round === 0) {
       return calls(
@@ -375,24 +353,17 @@ test('retired artifact writes are unavailable while historical revisions remain 
         totalChars: prompt.length,
         nextOffset: 20,
       });
-      const denied = event(request, 'page-6');
-      expect(denied).toMatchObject({ denied: true, result: { error: 'HELPER_READ_TOO_LARGE' } });
-      retry = (denied.result as { nextRead: typeof retry }).nextRead;
-      expect(retry).toMatchObject({
-        name: 'app.call',
-        arguments: {
-          name: 'artifact.read',
-          arguments: { id: artifact.id, revision: 1, offset: 60000, limit: 1000 },
+      expect(event(request, 'page-6')).toMatchObject({
+        denied: false,
+        result: {
+          text: prose.slice(60000, 70000),
+          range: { start: 60000, end: 70000 },
+          nextOffset: 70000,
         },
       });
-      return calls(call('retry-page', retry.name, retry.arguments));
+      return structuredClone(success);
     }
-    expect(result(request, 'retry-page')).toMatchObject({
-      text: prose.slice(60000, 61000),
-      range: { start: 60000, end: 61000 },
-      nextOffset: 61000,
-    });
-    return structuredClone(success);
+    throw new Error('Unexpected reread');
   });
   const task = await submit(f, '이전 가정 장면을 읽고 생성을 재시도하지 마세요.');
   expect(generate).not.toHaveBeenCalled();

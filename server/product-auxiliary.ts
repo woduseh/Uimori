@@ -1,5 +1,6 @@
 import { modelRequestFields } from '../core/model-request-fields.js';
 import { requestLore } from './request-lore.js';
+import { measureProviderRequest } from './main-request.js';
 import { prepareNativeRisuTranslationPrompt } from './risu-native-preset.js';
 import {
   nativeRisuSnapshotNeedsRefresh,
@@ -394,7 +395,6 @@ export async function runAuxiliaryJob(
   await hooks.onProgress?.();
   const target = job.kind === 'image' ? undefined : snapshot.profile?.models[job.kind];
   let calls = 0;
-  let contextBytes = 0;
   const readTranslation = translationReader(snapshot, bundle.translationReferences ?? []);
   const evaluation = createEvaluationToolSession(target, hooks.timeoutMs);
   let evaluationRounds = 0;
@@ -476,6 +476,24 @@ export async function runAuxiliaryJob(
         tools: [...packet.tools, ...evaluation.definitions.map((tool) => tool.name)],
       };
     let opaqueState: Json | undefined;
+    const providerRequest = (next: AuxiliaryInput, model: ModelSnapshot) => {
+      const generation = generationFromModel(model);
+      const completedToolResults = Array.isArray(next.results) ? next.results.length : 0;
+      const body: ProviderRequest = {
+        ...providerInput(
+          next,
+          modelRequestFields(model),
+          evaluation ? evaluation.generation(generation, completedToolResults) : generation,
+          opaqueState,
+          executionSnapshot,
+          evaluation
+        ),
+        contextBudget: contextBudgetForModel(model),
+      };
+      const generationBinding = evaluation?.generationBinding(generation, completedToolResults);
+      if (generationBinding) body.generationBinding = generationBinding;
+      return body;
+    };
     const request = async (next: AuxiliaryInput) => {
       stage = 'preparation';
       lastAttemptId = undefined;
@@ -487,21 +505,7 @@ export async function runAuxiliaryJob(
         calls++;
         return scriptedAuxiliary(next, hooks.signal);
       }
-      const generation = generationFromModel(target);
-      const completedToolResults = Array.isArray(next.results) ? next.results.length : 0;
-      const body: ProviderRequest = {
-        ...providerInput(
-          next,
-          modelRequestFields(target),
-          evaluation ? evaluation.generation(generation, completedToolResults) : generation,
-          opaqueState,
-          executionSnapshot,
-          evaluation
-        ),
-        contextBudget: contextBudgetForModel(target),
-      };
-      const generationBinding = evaluation?.generationBinding(generation, completedToolResults);
-      if (generationBinding) body.generationBinding = generationBinding;
+      const body = providerRequest(next, target);
       stage = job.kind;
       const result = await callProvider(target, body, evaluation);
       if (result.status === 'tool_calls') {
@@ -598,14 +602,53 @@ export async function runAuxiliaryJob(
         },
       },
       onInput: (value) => hooks.onInput?.(jobId, value),
-      onToolEvent: async (value) => {
-        if (job.kind === 'translation') {
-          contextBytes += Buffer.byteLength(JSON.stringify(value), 'utf8');
-          if (contextBytes > 96000)
-            throw new AuxiliaryExecutionError('TOOL_CONTEXT_BUDGET_EXHAUSTED');
-        }
-        await hooks.onToolEvent?.(jobId, value);
+      prepareToolEvent: (event, next, remainingActions) => {
+        if (
+          !target ||
+          job.kind !== 'translation' ||
+          event.denied ||
+          evaluation?.allNames.some((name) => name === event.name)
+        )
+          return event;
+        const tooLarge = (event: ToolEvent): ToolEvent => ({
+          ...event,
+          denied: true,
+          errorKind: 'recoverable',
+          result: {
+            code: 'TOOL_CONTEXT_LIMIT_EXCEEDED',
+            returned: false,
+            guidance:
+              'This optional read was not supplied. Request a narrower range or finish translating the complete current source with the evidence already available.',
+          },
+        });
+        // Reserve a complete, paired correction result for every pending call.
+        // Protocol continuations require all results, and later denials need room too.
+        const body = providerRequest(
+          {
+            ...next,
+            results: [
+              ...(next.results ?? []),
+              ...remainingActions.map((action) =>
+                tooLarge({
+                  callId: action.callId,
+                  name: action.name,
+                  args: action.args,
+                  result: null,
+                  denied: false,
+                })
+              ),
+            ],
+          },
+          target
+        );
+        if (
+          measureProviderRequest(body, target).estimatedInputTokens <=
+          body.contextBudget!.inputTokenLimit
+        )
+          return event;
+        return tooLarge(event);
       },
+      onToolEvent: (value) => hooks.onToolEvent?.(jobId, value),
     });
   };
   try {

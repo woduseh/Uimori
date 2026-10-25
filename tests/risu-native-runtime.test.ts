@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { NATIVE_LUA_LIMITS } from '../server/risu-native-lua-session.js';
@@ -500,6 +500,47 @@ describe('native Risu execution', () => {
     await expect(
       executeRisuNative(input(native([lua('function choose(id) while true do end end')])))
     ).rejects.toThrow(/TIMEOUT/);
+  });
+  it('lets an awaiting host model own its deadline beyond five minutes', async () => {
+    vi.useFakeTimers();
+    let started!: () => void, release!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const running = executeRisuNative(
+      input(
+        native([
+          lua(
+            "function choose(id) local response = LLM(id, 'Wait'); setChatVar(id, 'result', response.result) end",
+            true
+          ),
+        ])
+      ),
+      {
+        host: async () => {
+          started();
+          await pending;
+          return { success: true, result: 'Complete model response' };
+        },
+      }
+    );
+    // Attach immediately so a regression's watchdog rejection remains observed.
+    const outcome = running.then(
+      (value) => value,
+      (error: unknown) => error
+    );
+    try {
+      await entered;
+      await vi.advanceTimersByTimeAsync(5 * 60_000 + 1);
+      release();
+      expect(await outcome).toMatchObject({ variables: { result: 'Complete model response' } });
+    } finally {
+      release();
+      vi.useRealTimers();
+    }
   });
   it('waits for explicit UI input, reports authored alerts, and provides bounded random values', async () => {
     const content = native([

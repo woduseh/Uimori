@@ -122,11 +122,13 @@ export function fitFixedLoreContext(snapshot: RunSnapshot): RunSnapshot {
   const lore = fitted.loreContext!,
     ancestry = fitted.history.map((source) => source.revision);
   do {
-    let oldest = 0;
-    for (let index = 1; index < lore.entries.length; index++)
+    let oldest = lore.entries.findIndex((entry) => entry.retention !== 'selection');
+    if (oldest < 0) break;
+    for (let index = oldest + 1; index < lore.entries.length; index++)
       if (
+        lore.entries[index]!.retention !== 'selection' &&
         ancestry.indexOf(lore.entries[index]!.lastUsed) <
-        ancestry.indexOf(lore.entries[oldest]!.lastUsed)
+          ancestry.indexOf(lore.entries[oldest]!.lastUsed)
       )
         oldest = index;
     lore.entries.splice(oldest, 1);

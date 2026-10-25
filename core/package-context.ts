@@ -12,6 +12,8 @@ import { projectNativeRisuFields } from './risu-native-execution.js';
 import { projectRisuImageHandoff } from './risu-image-handoff.js';
 
 export type ResolvedPackage = CompiledContentAttachment & {
+  /** This turn's dynamically admitted bodies; fixed/native positions keep their authored path. */
+  selectedLore: Resource[];
   attachment: ContentAttachment;
   package: RisuContent;
 };
@@ -42,9 +44,36 @@ export function compiledPackages(snapshot: RunSnapshot, target: ContentTarget): 
       () => true,
       chosen
     );
+    const selectedLore = projected.compiled.resources.filter(
+      (resource) =>
+        resource.sourceKind === 'lore' && chosen?.has(resource.risuSource?.entryId ?? '')
+    );
+    const dynamic = new Set(
+      selectedLore
+        .filter((resource) => target === 'main' && !resource.nativeRisuPosition)
+        .map((resource) => resource.id)
+    );
+    const retainedNative = projected.compiled.resources.filter(
+      (resource) =>
+        resource.nativeRisuPosition &&
+        snapshot.loreContext?.entries.some(
+          (entry) =>
+            entry.retention === 'selection' &&
+            entry.id === resource.id &&
+            entry.revision === resource.revision &&
+            entry.start === 0 &&
+            entry.end === resource.text.length &&
+            entry.text === resource.text
+        )
+    );
+    const pinned = projected.compiled.pinned.filter((resource) => !dynamic.has(resource.id));
+    for (const resource of retainedNative)
+      if (!pinned.some((item) => item.id === resource.id)) pinned.push(resource);
     return [
       {
         ...projected.compiled,
+        pinned,
+        selectedLore,
         attachment: structuredClone(attachment),
         package: structuredClone(projected.package),
       },

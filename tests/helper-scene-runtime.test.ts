@@ -31,7 +31,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function fixture(kind: 'chat' | 'library' = 'chat') {
+async function fixture(kind: 'chat' | 'library' = 'chat', inputTokenLimit = 272000) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-scene-runtime-'));
   const app = await createApp({
     dbPath: join(path, 'test.sqlite'),
@@ -52,6 +52,7 @@ async function fixture(kind: 'chat' | 'library' = 'chat') {
     modelId: 'fixture-helper',
     temperature: null,
     maxOutputTokens: 1024,
+    inputTokenLimit,
   });
   const selected = modelWorkspace(store);
   updateModelWorkspace(store, {
@@ -280,7 +281,7 @@ test('chat.read numbers only visible scenes and returns optional bounded live pr
 });
 
 test('oversized scene search suggests a narrower continuation without losing its scope', async () => {
-  const f = await fixture();
+  const f = await fixture('chat', 20000);
   f.store.editSource(f.source.id, { text: '\u0001'.repeat(5000), expectedRevision: 0 });
   const patterns = Array.from({ length: 8 }, () => '\u0001'.repeat(256));
   mockSend((request, round) => {
@@ -489,11 +490,11 @@ test('helper translation save aborts the active provider and preserves the manua
 });
 
 test.each(['scene.read', 'scene.versions'] as const)(
-  '%s round-budget recovery preserves the selected chat, version and unread range',
+  '%s keeps all requested pages when the model context can admit the complete round',
   async (name) => {
     const f = await fixture('library');
     const prose = '한글🙂 '.repeat(20000);
-    // Each page fits the 16k token limit; seven pages exceed the shared 32k budget.
+    // Seven pages exceed the former shared 32k budget.
     const pageTokens = countTextTokens(JSON.stringify({ text: prose.slice(37, 10037) }));
     expect(pageTokens).toBeLessThan(16000);
     expect(pageTokens * 7).toBeGreaterThan(32000);
@@ -521,33 +522,15 @@ test.each(['scene.read', 'scene.versions'] as const)(
         };
         return calls(...Array.from({ length: 7 }, (_, index) => call(`page-${index}`, name, args)));
       }
-      if (round === 2) {
-        const denied = (request.input.results as unknown as ToolEvent[]).find(
-          (item) =>
-            item.denied && (item.result as { error?: string }).error === 'HELPER_READ_TOO_LARGE'
-        );
-        expect(denied).toBeDefined();
-        const retry = (
-          denied!.result as {
-            nextRead: { name: string; arguments: Record<string, unknown> };
-          }
-        ).nextRead;
-        expect(request.stable.tools.map((tool) => tool.name)).toContain(retry.name);
-        expect(retry).toEqual({
-          name: 'app.call',
-          arguments: { name, arguments: { ...args, limit: 2000 } },
-        });
-        return calls({
-          id: 'retry-page',
-          name: retry.name,
-          arguments: asJson(retry.arguments) as Record<string, transport.Json>,
-        });
-      }
-      expect(result(request, 'retry-page')).toMatchObject({
+      expect(round).toBe(2);
+      expect((request.input.results as unknown as ToolEvent[]).every((item) => !item.denied)).toBe(
+        true
+      );
+      expect(result(request, 'page-6')).toMatchObject({
         chatId: f.chat.id,
-        text: prose.slice(37, 2037),
+        text: prose.slice(37, 10037),
         offset: 37,
-        nextOffset: 2037,
+        nextOffset: 10037,
       });
       return structuredClone(success);
     });

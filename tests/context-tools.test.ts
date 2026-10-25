@@ -265,6 +265,53 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+test('main shell results reach the next request and saved receipts avoid repeating a command', async () => {
+  const fixed = await snapshot();
+  const action = {
+    callId: 'shell-search',
+    name: 'data.exec',
+    args: { command: 'rg harbor current/' },
+  };
+  const receipt: ToolEvent = {
+    ...action,
+    denied: false,
+    result: {
+      output: 'FOUND_REFERENCE: the harbor closes at dusk.',
+      outputFile: 'scratch/search.log',
+    },
+  };
+  const observed = hooks();
+  const executeShell = vi.fn(async () => receipt);
+  observed.value.executeShell = executeShell;
+  const rounds = () =>
+    script([
+      (body) => {
+        expect(body.stable.tools.some((tool) => tool.name === 'data.exec')).toBe(true);
+        return toolTurn([{ id: action.callId, name: action.name, args: action.args }], 1);
+      },
+      (body) => {
+        expect(body.input.results).toContainEqual(receipt);
+        return completed();
+      },
+    ]);
+  const sent = rounds();
+  expect((await runMain(fixed, observed.value)).status).toBe('completed');
+  expect(sent).toHaveLength(2);
+  expect(executeShell).toHaveBeenCalledTimes(1);
+  expect(observed.events).toContainEqual(receipt);
+
+  executeShell.mockClear();
+  observed.value.replayToolEvents = [receipt];
+  rounds();
+  expect((await runMain(fixed, observed.value)).status).toBe('completed');
+  expect(executeShell).not.toHaveBeenCalled();
+  expect(
+    buildMainProviderRequest(fixed, { shell: false }).request.stable.tools.some(
+      (tool) => tool.name === 'data.exec'
+    )
+  ).toBe(false);
+});
+
 describe('host read compaction and provider continuation inside one main run', () => {
   test.each([
     {
@@ -1066,11 +1113,12 @@ test.each([
   { inputLimit: 8192, count: 1, expanded: false },
   { inputLimit: 8192, count: 16, expanded: false },
   { inputLimit: 272000, count: 1, expanded: false },
+  { inputLimit: 272000, count: 1, expanded: true, tokenLimit: 8000 },
   { inputLimit: 272000, count: 10, expanded: true },
   { inputLimit: 32768, count: 8, expanded: true, batches: 2 },
 ])(
   'a $inputLimit-token writer reads $count references without immediate summarization',
-  async ({ inputLimit, count, expanded, batches = 1 }) => {
+  async ({ inputLimit, count, expanded, batches = 1, tokenLimit }) => {
     const fixed = await snapshot();
     fixed.history = [];
     fixed.logicalHistory = [];
@@ -1092,7 +1140,7 @@ test.each([
       text:
         `EXACT_LORE_${index}: ` +
         '항구의 종이 울리자 소녀는 젖은 편지를 접고 등대를 바라보았다. '.repeat(
-          expanded ? 50 : 200
+          expanded && !tokenLimit ? 50 : 200
         ),
     }));
     await refreshNativeSnapshot(fixed);
@@ -1118,7 +1166,7 @@ test.each([
                   ids: ready.resources
                     .slice(index * count, (index + 1) * count)
                     .map(({ id }) => id),
-                  limit: 4096,
+                  ...(tokenLimit ? { tokenLimit } : { limit: 4096 }),
                 }),
               },
             })),

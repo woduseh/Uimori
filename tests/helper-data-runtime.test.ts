@@ -531,7 +531,7 @@ test('independent helper data reads refill a free slot while results, budgets an
       if (index === 4) throw new Error('DATA_QUERY_TIMEOUT: narrow the query');
       return {
         index,
-        text: index < 3 ? ' token'.repeat(12_000) : 'after the write',
+        text: index < 3 ? ' token'.repeat(index === 0 ? 20_000 : 12_000) : 'after the write',
         folders: f.store.libraryOrganization.snapshot().folders.length,
       };
     } finally {
@@ -539,7 +539,7 @@ test('independent helper data reads refill a free slot while results, budgets an
       inFlight--;
     }
   });
-  // Each read fits 16k tokens, but the third exceeds the shared 32k round budget.
+  // The selected model has room for all three reads, exceeding the former 32k round cap.
   expect(countTextTokens(' token'.repeat(12_000))).toBeGreaterThan(11_000);
   expect(countTextTokens(' token'.repeat(12_000))).toBeLessThan(16_000);
   const revision = f.store.libraryOrganization.snapshot().revision;
@@ -588,11 +588,10 @@ test('independent helper data reads refill a free slot while results, budgets an
         .map((item: any) => item.tool_call_id)
     ).toEqual(['first', 'second', 'third', 'write', 'after', 'failed-read']);
     expect(toolResult(wire, 'first')).toMatchObject({ index: 0, folders: 0 });
+    expect(toolResult(wire, 'first').text).toBe(' token'.repeat(20_000));
     expect(toolResult(wire, 'second')).toMatchObject({ index: 1, folders: 0 });
-    expect(toolResult(wire, 'third')).toMatchObject({
-      error: 'HELPER_READ_TOO_LARGE',
-      returned: false,
-    });
+    expect(toolResult(wire, 'third')).toMatchObject({ index: 2, folders: 0 });
+    expect(toolResult(wire, 'third').text).toBe(' token'.repeat(12_000));
     expect(toolResult(wire, 'write').folders).toHaveLength(1);
     expect(toolResult(wire, 'after')).toMatchObject({ index: 3, folders: 1 });
     expect(toolResult(wire, 'failed-read')).toMatchObject({

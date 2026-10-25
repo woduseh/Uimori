@@ -6,6 +6,9 @@ import { prepareLoreSelection } from '../server/lore-selection.js';
 import { projectLoreSelectionReceipt } from '../core/lore-selection.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
+import { compileRisuPrompt } from '../core/risu-prompt.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
+import { contextBudgetForModel } from '../core/context-budget.js';
 const snapshot = (): RunSnapshot => ({
   chatId: 'lore-test',
   parentRevision: null,
@@ -148,4 +151,94 @@ test('authored openings and tool-only lore never trigger relevance judgments', a
   });
   expect(result.snapshot.loreSelection).toBeUndefined();
   expect(fetch).not.toHaveBeenCalled();
+});
+test('turn references are inserted after native negative chat slices and cache anchors resolve', () => {
+  const program = nativePrompt('', {
+    promptTemplate: [
+      { type: 'chat', rangeStart: 0, rangeEnd: -2 },
+      { type: 'cache' },
+      { type: 'plain', role: 'system', text: 'TAIL_SYSTEM' },
+      { type: 'chat', rangeStart: -2, rangeEnd: 'end' },
+    ],
+  });
+  const history = [
+    { id: 'request:old', role: 'user' as const, text: 'OLD_REQUEST' },
+    { id: 'source:old', role: 'assistant' as const, text: 'OLD_REPLY' },
+    { id: 'current-input', role: 'user' as const, text: 'CURRENT_REQUEST', current: true },
+  ];
+  const baseline = compileRisuPrompt(program, { history, slots: {} });
+  const actual = compileRisuPrompt(program, {
+    history,
+    slots: {},
+    references: [
+      {
+        message: { id: 'lore-reference:old', role: 'user', text: 'OLD_REFERENCE' },
+        beforeMessageId: 'request:old',
+      },
+      {
+        message: { id: 'lore-reference:current', role: 'user', text: 'CURRENT_REFERENCE' },
+        beforeMessageId: 'current-input',
+      },
+    ],
+  });
+  expect(actual.messages.filter((message) => !message.id.startsWith('lore-reference:'))).toEqual(
+    baseline.messages
+  );
+  expect(actual.cachePlan).toEqual(baseline.cachePlan);
+  expect(actual.messages.map((message) => (message.content[0] as { text: string }).text)).toEqual([
+    'OLD_REFERENCE',
+    'OLD_REQUEST',
+    'TAIL_SYSTEM',
+    'OLD_REPLY',
+    'CURRENT_REFERENCE',
+    'CURRENT_REQUEST',
+  ]);
+});
+test('judgment uses the finalized derived summary and visible recent turns without another summary call', async () => {
+  let input = snapshot();
+  input.history = [
+    { revision: 'old', text: 'COMPACTED_CANARY' },
+    { revision: 'recent', text: 'RECENT_CANARY' },
+  ];
+  // Reuse the established context-plan shape; JEV consumes it as reference data.
+  input = {
+    ...input,
+    contextPlan: {
+      version: 1,
+      status: 'ready',
+      dependencyKey: '',
+      budget: contextBudgetForModel({ modelId: 'fixture' }),
+      compacted: [{ revision: 'old', hash: 'a'.repeat(64) }],
+      recentSourceRevisions: ['recent'],
+      summary: 'EARLIER_HARBOR_FACT',
+      estimatedInputTokens: 100,
+      summaryCalls: 0,
+      usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+      error: null,
+    },
+  };
+  const send = vi.fn(async (_url: unknown, init?: RequestInit) => {
+    const { state } = JSON.parse(String(init?.body));
+    expect(state.summary).toEqual({
+      kind: 'derived-conversation-summary',
+      text: 'EARLIER_HARBOR_FACT',
+    });
+    expect(state.conversation.map((message: { text: string }) => message.text)).toEqual([
+      'RECENT_CANARY',
+    ]);
+    return new Response(
+      JSON.stringify({
+        model: 'jev-latest',
+        answers: { entry_0: { type: 'noul', noul: 0.99 } },
+        usage: { input_tokens: 10, output_tokens: 1 },
+      })
+    );
+  });
+  const result = await prepareLoreSelection(input, hooks(), {
+    reserveCalls: 1,
+    jev: { credential: () => 'synthetic', fetch: send },
+  });
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(result.usage.modelCalls).toBe(1);
+  expect(result.snapshot.loreSelection!.entries[0].selected).toEqual(['harbor']);
 });

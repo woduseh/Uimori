@@ -3,7 +3,7 @@ import { prepareNativeRisuRun } from '../server/risu-native-run.js';
 import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { createFixtureChat, injectWithFixtureBot } from './fixtures/chat.js';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -13,6 +13,8 @@ import { createApp } from '../server/app.js';
 import { executeTool } from '../core/provider.js';
 import { DEFAULT_LORE_CONTEXT, loreHistory } from '../core/lore-context.js';
 import { freezeLoreContext, verifiedRunLoreReads } from '../server/lore-context.js';
+import { prepareLoreSelection } from '../server/lore-selection.js';
+import type { MainHooks } from '../server/model-runner.js';
 import type { Run, RunSnapshot } from '../core/types.js';
 import type { ChatProfile, Content } from '../core/product.js';
 
@@ -28,7 +30,7 @@ afterEach(async () => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-function fixture() {
+function fixture(mode: 'discoverable' | 'model' = 'discoverable') {
   const dir = mkdtempSync(join(tmpdir(), 'uimori-lore-')),
     store = new Store(join(dir, 'story.sqlite'));
   owned.push({ store, dir });
@@ -49,7 +51,7 @@ function fixture() {
         {},
         'module'
       ),
-      loreActivation: { mode: 'discoverable' },
+      loreActivation: { mode },
     },
     loading: 'discoverable',
     relatedIds: [],
@@ -136,6 +138,67 @@ function complete(f: ReturnType<typeof fixture>, run: Run, text = 'Synthetic sou
     costUsd: null,
   });
 }
+test('successful JEV bodies carry as stable turn references and are not judged again on later turns', async () => {
+  const f = fixture('model');
+  let first = (await queue(f)).run;
+  const send = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          model: 'jev-latest',
+          answers: { entry_0: { type: 'noul', noul: 0.99 } },
+          usage: { input_tokens: 10, output_tokens: 1 },
+        })
+      )
+  );
+  const hooks: MainHooks = {
+    signal: new AbortController().signal,
+    onInput: () => {},
+    onToolEvent: () => {},
+    onAttemptStart: () => 'synthetic-selection',
+    onAttemptFinish: () => {},
+    authorize: (connection) => connection,
+  };
+  const selected = await prepareLoreSelection(first.snapshot, hooks, {
+    reserveCalls: 1,
+    jev: { credential: () => 'synthetic', fetch: send },
+  });
+  expect(selected.snapshot.loreSelection!.entries[0].selected).toEqual(['lore-0']);
+  const initial = compileSnapshotPrompt(selected.snapshot);
+  const reference = initial.promptCompilation!.messages.find((message) =>
+    message.id.startsWith('lore-reference:')
+  )!;
+  expect(reference).toBeDefined();
+  expect(JSON.stringify(reference.content)).toContain(f.loreText);
+  f.store.db
+    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(initial), first.id);
+  first = f.store.run(first.id);
+  complete(f, first);
+  const second = (await queue(f)).run;
+  expect(second.snapshot.loreContext!.entries).toMatchObject([
+    { retention: 'selection', text: f.loreText },
+  ]);
+  expect(second.snapshot.loreSelection).toBeUndefined();
+  const carried = second.snapshot.promptCompilation!.messages.find((message) =>
+    message.id.startsWith('lore-reference:')
+  )!;
+  expect(carried.content).toEqual(reference.content);
+  const next = await prepareLoreSelection(second.snapshot, hooks, {
+    reserveCalls: 1,
+    jev: { credential: () => 'synthetic', fetch: send },
+  });
+  expect(next.usage.modelCalls).toBe(0);
+  expect(next.snapshot.loreSelection!.entries[0].selected).toEqual([]);
+  expect(send).toHaveBeenCalledTimes(1);
+  complete(f, second);
+  const third = (await queue(f)).run;
+  expect(third.snapshot.loreContext!.entries[0].text).toBe(f.loreText);
+  f.store.startRun(third.id);
+  f.store.finishRun(third.id, 'cancelled', 'synthetic cancellation');
+  const reset = (await queue(f, { loreContextReset: true })).run;
+  expect(reset.snapshot.loreContext!.entries).toEqual([]);
+});
 test('only successful main reads retain the exact observed range; search, denied, forged and unread text do not', async () => {
   const f = fixture(),
     first = (await queue(f)).run;

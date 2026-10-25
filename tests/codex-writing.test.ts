@@ -149,6 +149,27 @@ const read = (offset = 0): Step => ({
 });
 const submit: Step = { name: 'story.submit', args: { content: 'The keeper walked north.' } };
 
+test('native writer awaits the main Linux tool and receives its completed output', async () => {
+  const f = await fixture({
+    writer: [{ name: 'data.exec', args: { command: 'rg observatory current/' } }, submit],
+  });
+  f.hooks.executeShell = async (_snapshot, action, signal) => {
+    signal.throwIfAborted();
+    await Promise.resolve();
+    return {
+      ...action,
+      denied: false,
+      result: { output: 'SHELL_EVIDENCE: north of the lake.', outputFile: 'scratch/read.log' },
+    };
+  };
+  const result = await runMain(compileSnapshotPrompt(f.work), f.hooks);
+  expect(result.status, JSON.stringify(result)).toBe('completed');
+  expect(f.events.find((event) => event.name === 'data.exec')?.result).toMatchObject({
+    output: 'SHELL_EVIDENCE: north of the lake.',
+  });
+  expect(JSON.stringify(await f.records())).toContain('SHELL_EVIDENCE: north of the lake.');
+});
+
 test('native writer consults a native advisor with one occupied parent slot, reuses advice and submits without another sample', async () => {
   const consult: Step = {
     name: 'agents.consult',

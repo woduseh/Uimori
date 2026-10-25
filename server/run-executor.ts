@@ -9,6 +9,7 @@ import {
   contextSourceRefs,
   validateContextPlan,
   persistedContextSnapshot,
+  measureMainContext,
 } from './context-planning.js';
 import { prepareNativeRisuRun, prepareNativeRisuOutput } from './risu-native-run.js';
 import { createNativeRisuHost } from './risu-native-host.js';
@@ -21,12 +22,14 @@ import {
   loreSelectionPending,
   prepareLoreSelection,
   loreSelectionAttemptInputHashes,
+  selectedLoreReceiptTokens,
 } from './lore-selection.js';
 import { JEV_ENDPOINT, JEV_MODEL, JevError } from './jev-judgment.js';
 import { judgeMainRefusal, mainJudgmentInput, validateMainJudgmentWire } from './main-judgment.js';
 import { JevCredentialStore } from './jev-credentials.js';
 import { AnthropicBatchRun } from './anthropic-batch.js';
 import { readRequestImage } from './request-images.js';
+import { MainShell } from './main-shell.js';
 import type { Usage } from '../core/types.js';
 import {
   applyStoryGuide,
@@ -80,6 +83,7 @@ export function createRunExecutor({
   const execute = (id: string, resume = false) => {
     const fixture = { ...controls.fixture };
     const controller = new AbortController();
+    const shell = process.env.UIMORI_SHELL_ROOT ? new MainShell(store, id) : undefined;
     const anthropicBatch = new AnthropicBatchRun(store, id, batchPollIntervalMs);
     runs.set(id, controller);
     const onStop = () => controller.abort(new Error('Server stopping'));
@@ -163,6 +167,28 @@ export function createRunExecutor({
               anthropicBatch.execute(connection, request, execution),
             executeCodex,
             executeCodexAgent,
+            ...(shell
+              ? ({
+                  executeShell: async (snapshot, action, actionSignal) => {
+                    try {
+                      return {
+                        ...action,
+                        result: await shell.run(snapshot, action.callId, action.args, actionSignal),
+                        denied: false,
+                      };
+                    } catch (error) {
+                      if (actionSignal.aborted) throw error;
+                      return {
+                        ...action,
+                        result: {
+                          error: error instanceof Error ? error.message : 'SHELL_EXECUTION_FAILED',
+                        },
+                        denied: false,
+                      };
+                    }
+                  },
+                } satisfies Pick<MainHooks, 'executeShell'>)
+              : {}),
             authorize: (connection) => store.product.authorize(connection),
             vertexRequestTier,
             cancelRemoteOnAbort: () => controller.signal.aborted && !signal.aborted,
@@ -306,41 +332,16 @@ export function createRunExecutor({
                   );
               });
             }
-            // Freeze selection before lore context and input planning measure the pinned material.
-            if (loreSelectionPending(executionSnapshot)) {
-              assertCurrent();
-              const selection = await prepareLoreSelection(executionSnapshot, hooks, {
-                jev: { credential: jevCredential },
-                reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
-              });
-              priorUsage = mergeUsage(priorUsage, selection.usage);
-              hooks.initialUsage = structuredClone(priorUsage);
-              const receipt = selection.snapshot.loreSelection;
-              executionSnapshot = { ...executionSnapshot, loreSelection: receipt };
-              store.transaction(() => {
-                assertCurrent();
-                store.db
-                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
-                  .run(
-                    JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
-                    ),
-                    new Date().toISOString(),
-                    id
-                  );
-                store.event(run.chatId, 'run.context.updated', id);
-              });
-              publish(run.chatId);
-            }
             if (
               (executionSnapshot.nativeRisuExecution !== undefined ||
-                executionSnapshot.loreSelection !== undefined) &&
-              !executionSnapshot.contextPlan
+                loreSelectionPending(executionSnapshot)) &&
+              (!executionSnapshot.contextPlan || executionSnapshot.contextPlan.status === 'pending')
             ) {
               assertCurrent();
               executionSnapshot = freezeLoreContext(store, executionSnapshot);
               const contextBase = run.snapshot.contextBase;
-              executionSnapshot = store.context.prepareRun(executionSnapshot);
+              if (!executionSnapshot.contextPlan)
+                executionSnapshot = store.context.prepareRun(executionSnapshot);
               executionSnapshot.contextBase = contextBase;
             }
             if (executionSnapshot.contextPlan) {
@@ -400,6 +401,62 @@ export function createRunExecutor({
                 store.event(run.chatId, 'run.context.updated', id);
               });
               executionSnapshot = prepared.snapshot;
+            }
+            // Judge once after actual compaction has reset its private retained projection.
+            // A carried receipt belongs only to a retry/candidate, never to a fresh turn.
+            if (loreSelectionPending(executionSnapshot)) {
+              assertCurrent();
+              const selection = await prepareLoreSelection(executionSnapshot, hooks, {
+                jev: { credential: jevCredential },
+                reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
+              });
+              priorUsage = mergeUsage(priorUsage, selection.usage);
+              hooks.initialUsage = structuredClone(priorUsage);
+              executionSnapshot = { ...selection.snapshot };
+              delete executionSnapshot.promptCompilation;
+              if (executionSnapshot.contextPlan) {
+                // Measure the exact serialized reference wrappers as well as their bodies.
+                // Trim only new admission; retained JEV lore never loses an LRU contest.
+                let measured = measureMainContext(executionSnapshot);
+                while (
+                  measured.estimatedInputTokens >
+                  executionSnapshot.contextPlan.budget.inputTokenLimit
+                ) {
+                  const entry = executionSnapshot.loreSelection!.entries.findLast(
+                    (item) => item.selected.length
+                  );
+                  if (!entry) throw new Error('CONTEXT_FIXED_INPUT_TOO_LARGE');
+                  const removed = entry.selected.pop()!;
+                  entry.omitted.push({ id: removed, reason: 'budget' });
+                  // Recompute the receipt's body-only accounting from the actual scoped resources.
+                  if (entry.judgment)
+                    entry.judgment.selectedTokens = selectedLoreReceiptTokens(
+                      executionSnapshot,
+                      entry.key
+                    );
+                  delete executionSnapshot.promptCompilation;
+                  measured = measureMainContext(executionSnapshot);
+                }
+                executionSnapshot = measured.snapshot;
+                executionSnapshot.contextPlan = {
+                  ...executionSnapshot.contextPlan!,
+                  estimatedInputTokens: measured.estimatedInputTokens,
+                };
+              }
+              store.transaction(() => {
+                assertCurrent();
+                store.db
+                  .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
+                  .run(
+                    JSON.stringify(
+                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                    ),
+                    new Date().toISOString(),
+                    id
+                  );
+                store.event(run.chatId, 'run.context.updated', id);
+              });
+              publish(run.chatId);
             }
             if (executionSnapshot.storyGuide?.config.enabled) {
               const guide = await prepareStoryGuide(
@@ -622,6 +679,9 @@ export function createRunExecutor({
           }
         } finally {
           const status = readRunStatus(store, id);
+          if (status === 'completed' || status === 'failed' || status === 'cancelled')
+            shell?.cleanup();
+          else shell?.close();
           if (status !== 'completed') disposeNativeRisuSession(nativeRisuSessionKey(run.snapshot));
           response?.finish(status === 'queued' || status === 'running' ? 'interrupted' : status);
           runs.delete(id);
