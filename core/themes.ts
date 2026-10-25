@@ -156,7 +156,7 @@ export const BUILTIN_THEMES: Theme[] = [
   {
     ...originalBuiltinThemes[0],
     title: '기본',
-    revision: 5,
+    revision: 6,
     description: '군더더기 없는 기본 읽기 레이아웃',
     templateHtml:
       '<div class="request-row"><slot name="request"></slot><aside class="request-persona"><slot name="request-persona"></slot></aside></div><slot name="heading"></slot><slot name="body"></slot><slot name="actions"></slot>',

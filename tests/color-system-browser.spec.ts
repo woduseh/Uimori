@@ -1,5 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test';
-import { BUILTIN_PALETTES } from '../core/theme-palettes.js';
+import { BUILTIN_PALETTES, DEFAULT_PALETTE_COLORS } from '../core/theme-palettes.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { navigationAction, selectSettingsSection } from './ui-navigation.js';
 
@@ -33,7 +33,7 @@ async function expectReadableText(locator: Locator, description: string) {
   expect(contrast, description).toBeGreaterThanOrEqual(4.5);
 }
 
-test('COLOR selected mobile language and avatar text stay readable in every built-in palette', async ({
+test('COLOR selected mobile language and avatar text stay readable in default and named palettes', async ({
   page,
   request,
 }, info) => {
@@ -68,7 +68,7 @@ test('COLOR selected mobile language and avatar text stay readable in every buil
 
   for (const mode of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: mode, reducedMotion: 'reduce' });
-    for (const palette of BUILTIN_PALETTES) {
+    for (const palette of [{ id: 'theme', colors: DEFAULT_PALETTE_COLORS }, ...BUILTIN_PALETTES]) {
       const catalog = await (await request.get('/api/themes')).json();
       const changed = await request.post('/api/themes/selection', {
         data: {
@@ -96,8 +96,10 @@ test('COLOR selected mobile language and avatar text stay readable in every buil
       await expect(menu).toHaveAttribute('open', '');
       await expect(selected).toHaveText('일본어');
       await expect(composer).toHaveValue('팔레트를 바꿔도 이 요청과 선택한 언어를 유지해요.');
-      if (palette.id === 'forest')
-        await page.screenshot({ path: info.outputPath(`selected-language-${mode}.png`) });
+      if (palette.id === 'theme' || palette.id === 'forest')
+        await page.screenshot({
+          path: info.outputPath(`selected-language-${palette.id}-${mode}.png`),
+        });
     }
   }
   await selected.press('Escape');
