@@ -1,7 +1,8 @@
 import { applyMessageChanges } from '../core/message-changes.js';
+import { createHash } from 'node:crypto';
 import { nativeCharacterExamples, nativePromptSlots } from './native-prompt-slots.js';
 import { effectiveRisuControls } from '../core/risu-effective-controls.js';
-import { loreHistory } from '../core/lore-context.js';
+import { loreHistory, type RetainedLore } from '../core/lore-context.js';
 import { placeNativeRisuLore } from '../core/risu-native-lore.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { attachMainHostContext } from './main-host-context.js';
@@ -223,14 +224,62 @@ function contextFromPackages(
   };
   const historyInput = [...structuredClone(logical)];
   const history = [
-    ...loreHistory(projectedLogicalHistory(snapshot, historyInput), snapshot.loreContext),
+    ...projectedLogicalHistory(snapshot, historyInput),
     ...(snapshot.nativeRisuExecution?.requestPresent === false ? [] : [current]),
   ];
+  const fixedIds = new Set(input.pinnedSources?.map((resource) => resource.id));
+  const selected: RetainedLore[] = packages
+    .flatMap((pkg) => pkg.selectedLore)
+    .filter((resource) => !resource.nativeRisuPosition && resource.text)
+    .map((resource) => ({
+      id: resource.id,
+      revision: resource.revision,
+      hash: '',
+      title: resource.title,
+      start: 0,
+      end: resource.text.length,
+      text: resource.text,
+      retention: 'selection',
+      ...(resource.risuSource ? { risuSource: resource.risuSource } : {}),
+      origin: {
+        sourceRevision: 'current-input',
+        sourceHash: '',
+        runId: '',
+        callId: 'lore-selection',
+      },
+      lastUsed: '',
+    }));
+  // Hashes already exist in the input only for fixed bodies; admitted references use
+  // the same server hash as successful retention, without changing authored sources.
+  for (const entry of selected) entry.hash = createHash('sha256').update(entry.text).digest('hex');
+  const entries = [
+    ...(snapshot.loreContext?.entries ?? []).filter(
+      (entry) => !fixedIds.has(entry.id) && !selected.some((item) => item.id === entry.id)
+    ),
+    ...selected,
+  ];
+  const expanded = loreHistory(history, { entries });
+  const references = expanded.flatMap((message, index) =>
+    message.id.startsWith('lore-reference:')
+      ? [
+          {
+            message,
+            beforeMessageId: expanded
+              .slice(index + 1)
+              .find((item) => !item.id.startsWith('lore-reference:'))?.id,
+            afterMessageId: expanded
+              .slice(0, index)
+              .findLast((item) => !item.id.startsWith('lore-reference:'))?.id,
+          },
+        ]
+      : []
+  );
   const preset = snapshot.profile?.promptPresets?.main;
   return {
     examples: nativeCharacterExamples(snapshot, packages)?.messages ?? [],
     slots,
     history,
+    references,
     values: preset
       ? snapshot.profile?.promptControls?.[`${preset.id}@${preset.revision}`]?.values
       : undefined,

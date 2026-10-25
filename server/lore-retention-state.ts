@@ -7,6 +7,8 @@ export type LoreRetentionState = {
   sourceHash: string;
   context: LoreContextSnapshot;
   reads: RetainedLore[];
+  /** Actual compacted source frontier at the successful turn, for later manual compaction. */
+  compacted?: import('../core/context-plan.js').ContextPlan['compacted'];
 };
 
 export function readLoreRetention(
@@ -33,6 +35,7 @@ export function retainCompletedLore(
     sourceHash: source.hash,
     context: run.snapshot.loreContext,
     reads,
+    compacted: structuredClone(run.snapshot.contextPlan?.compacted ?? []),
   };
   store.db
     .prepare(`INSERT INTO chat_lore_state(chat_id,source_id,body) VALUES(?,?,?)

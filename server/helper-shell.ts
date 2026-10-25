@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer, request as httpRequest, type Server } from 'node:http';
+import { createServer, type Server } from 'node:http';
 import { join, relative, resolve, dirname } from 'node:path';
 import type { HelperTask } from '../core/helper.js';
 import {
@@ -18,6 +18,8 @@ import { HELPER_SHELL_GUIDE } from './helper-shell-guide.js';
 import { HttpError, record } from './request-validation.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
+import { shellRunnerRpc as rpc } from './shell-transport.js';
+import { SHELL_TIMEOUT_MAX_MS } from '../core/main-shell.js';
 
 type SceneMetadata = {
   sceneNumber: number | null;
@@ -133,48 +135,6 @@ function changedPaths(before: unknown, after: unknown) {
   visit(before, after, '');
   return { paths: paths.slice(0, 20), truncated: paths.length > 20 };
 }
-function rpc(
-  socketPath: string,
-  path: string,
-  payload: unknown,
-  timeoutMs = 35000,
-  signal?: AbortSignal
-): Promise<any> {
-  return new Promise((resolveResult, reject) => {
-    const body = JSON.stringify(payload);
-    const req = httpRequest(
-      {
-        socketPath,
-        signal,
-        path,
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) },
-      },
-      (res) => {
-        res.setEncoding('utf8');
-        let result = '';
-        res.on('data', (chunk) => {
-          result += chunk;
-          if (result.length > 100_000) req.destroy(new Error('SHELL_RESULT_TOO_LARGE'));
-        });
-        res.once('error', reject);
-        res.on('end', () => {
-          try {
-            const data = JSON.parse(result);
-            if (res.statusCode !== 200) reject(new Error(data.error ?? 'SHELL_REQUEST_FAILED'));
-            else resolveResult(data);
-          } catch (error) {
-            reject(error);
-          }
-        });
-      }
-    );
-    req.setTimeout(timeoutMs, () => req.destroy(new Error('SHELL_TIMEOUT')));
-    req.on('error', reject);
-    req.end(body);
-  });
-}
-
 /** The only bridge between an ordinary Linux workspace and Uimori's saved resources. */
 export class HelperShell {
   private readonly root = resolve(process.env.UIMORI_SHELL_ROOT ?? '/helper-workspaces');
@@ -834,7 +794,8 @@ export class HelperShell {
     command: string,
     timeoutMs: number,
     signal?: AbortSignal,
-    invoke?: AppInvoker
+    invoke?: AppInvoker,
+    maxOutputBytes = 16384
   ) {
     signal?.throwIfAborted();
     if (!process.env.UIMORI_SHELL_ROOT) throw new HttpError(400, 'SHELL_RUNNER_NOT_CONFIGURED');
@@ -855,8 +816,8 @@ export class HelperShell {
         result = await rpc(
           join(this.root, '.exec.sock'),
           '/exec',
-          { taskId: task.id, toolId, command, timeoutMs },
-          Math.min(30000, Math.max(1000, timeoutMs)) + 5000,
+          { taskId: task.id, toolId, command, timeoutMs, maxOutputBytes },
+          Math.min(SHELL_TIMEOUT_MAX_MS, Math.max(1000, timeoutMs)) + 5000,
           signal
         );
       } catch (error) {

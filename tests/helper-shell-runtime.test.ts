@@ -42,7 +42,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function fixture(sceneUpdated?: (id: string) => void) {
+async function fixture(sceneUpdated?: (id: string) => void, inputTokenLimit = 272000) {
   const dir = mkdtempSync(join(tmpdir(), 'uimori-shell-runtime-'));
   const root = join(dir, 'shell');
   vi.stubEnv('UIMORI_SHELL_ROOT', root);
@@ -60,7 +60,7 @@ async function fixture(sceneUpdated?: (id: string) => void) {
     connectionId: connection.id,
     modelId: 'synthetic-helper',
     maxOutputTokens: 2048,
-    inputTokenLimit: 272000,
+    inputTokenLimit,
     temperature: null,
   });
   const selected = modelWorkspace(store);
@@ -213,7 +213,9 @@ linuxTest(
 linuxTest(
   'oversized shell output is narrowed from its log without replaying the command',
   async () => {
-    const f = await fixture();
+    // Recovery is needed when the selected model cannot fit the result, not at a
+    // fixed 16k threshold in an otherwise roomy 272k context.
+    const f = await fixture(undefined, 16384);
     const counter = join(f.root, 'executions');
     const command = `printf x >> ${counter}; python3 -c "print(chr(0) * 18000, end='')"`;
     const bodies = provider((body, round) => {

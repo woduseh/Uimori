@@ -129,7 +129,9 @@ class Session {
     }
     const current = this.current;
     this.pending = true;
-    this.watch(300_000);
+    // Host operations own their deadlines (model timeout or UI cancellation).
+    // Time spent awaiting them is separate from local Lua execution and idle reuse.
+    clearTimeout(this.timer);
     const operation = (async () => {
       try {
         const result = await current.host(value.method, args, current.controller.signal);

@@ -132,8 +132,8 @@ jobs:
       - run: npm run build
       - name: Server persistence, restart and backup recovery
         run: npm test -- tests/server.test.ts tests/personal-workspace-flow.test.ts
-      - name: Linux helper shell, save bridge and process lifecycle
-        run: npm test -- tests/helper-shell.test.ts tests/helper-shell-runtime.test.ts tests/helper-runner.test.ts
+      - name: Linux writer/helper shell, save bridge and process lifecycle
+        run: npm test -- tests/main-shell.test.ts tests/helper-shell.test.ts tests/helper-shell-runtime.test.ts tests/helper-runner.test.ts
       - name: Install managed Chromium
         run: |
           npx playwright install --with-deps chromium

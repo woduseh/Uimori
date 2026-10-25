@@ -7,6 +7,7 @@ import { serializeRisuLoreSources } from '../core/risu-context-source.js';
 import type { Json, ProviderRequest, WireRecord } from '../core/transport.js';
 import type { Resource, RunSnapshot } from '../core/types.js';
 import { requestLore } from '../server/request-lore.js';
+import { compileSnapshotPrompt } from '../server/prompt-snapshot.js';
 
 const resource = (id: string, text: string, risuSource?: Resource['risuSource']): Resource => ({
   id,
@@ -106,8 +107,14 @@ test('JEV-selected lore is distinct from always-pinned lore and attachment roles
   };
   const before = structuredClone(fixed);
   const input = buildMainInput(fixed);
-  const sent = wire(serializeRisuLoreSources(input.pinnedSources!));
-  expect(requestLore(fixed, request(), sent, { pinned: input.pinnedSources! })).toEqual({
+  const compiled = compileSnapshotPrompt(fixed).promptCompilation!;
+  const actualRequest = { ...request(), prompt: compiled };
+  const sent = wire(
+    ...compiled.messages.flatMap((message) =>
+      message.content.flatMap((part) => (part.type === 'text' ? [part.text] : []))
+    )
+  );
+  expect(requestLore(fixed, actualRequest, sent, { pinned: input.pinnedSources! })).toEqual({
     status: 'complete',
     entries: [
       {
@@ -118,17 +125,17 @@ test('JEV-selected lore is distinct from always-pinned lore and attachment roles
         delivery: 'full',
       },
       {
-        id: 'package:card:bot:lore:harbor',
-        title: 'Harbor',
-        source: { contentId: 'card', entryId: 'harbor', sourceName: 'Card' },
-        via: 'selected',
-        delivery: 'full',
-      },
-      {
         id: 'package:card:module:lore:always',
         title: 'Always',
         source: { contentId: 'card', entryId: 'always', sourceName: 'Card' },
         via: 'pinned',
+        delivery: 'full',
+      },
+      {
+        id: 'package:card:bot:lore:harbor',
+        title: 'Harbor',
+        source: { contentId: 'card', entryId: 'harbor', sourceName: 'Card' },
+        via: 'selected',
         delivery: 'full',
       },
     ],

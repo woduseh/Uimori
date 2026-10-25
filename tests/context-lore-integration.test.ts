@@ -381,7 +381,7 @@ async function terminal(app: App, id: string) {
 }
 
 describe('automatic summary and retained lore at the same input boundary', () => {
-  test('summarizes only logical conversation pairs and carries old-source raw references after the summary before recent history', async () => {
+  test('summarizes only logical conversation pairs and resets old raw references after actual compaction', async () => {
     const f = await fixture('history-pressure'),
       expected = freezeLoreContext(
         f.app.store,
@@ -394,8 +394,9 @@ describe('automatic summary and retained lore at the same input boundary', () =>
       summaries = f.bodies.filter((body) => body.role === 'context');
     expect(summaries.length).toBeGreaterThan(0);
     expect(plan.compacted.some((ref) => ref.revision === f.sources[0].id)).toBe(true);
-    expect(run.snapshot.loreContext!.entries).toEqual(expected.loreContext!.entries);
-    expect(run.snapshot.loreContext!.entries).toHaveLength(1);
+    expect(expected.loreContext!.entries).toHaveLength(1);
+    expect(run.snapshot.loreContext!.entries).toEqual([]);
+    expect(run.snapshot.loreContext!.stats.reasons).toContain('context-compacted');
     expect(run.snapshot.logicalHistory).toEqual(originals);
     expect(run.snapshot.history.map((source) => source.text)).toEqual(
       f.sources.map((source) => source.text)
@@ -421,13 +422,10 @@ describe('automatic summary and retained lore at the same input boundary', () =>
           recent.has(message.provenance.sourceRevision)
       );
     expect(summaryIndex).toBeGreaterThanOrEqual(0);
-    expect(carriedIndex).toBeGreaterThan(summaryIndex);
-    expect(recentIndex).toBeGreaterThan(carriedIndex);
+    expect(carriedIndex).toBe(-1);
+    expect(recentIndex).toBeGreaterThan(summaryIndex);
     expect(messages[summaryIndex].content.map((part) => part.text).join('')).not.toContain(
       'LORE_A_RAW_BODY_ONLY'
-    );
-    expect(messages[carriedIndex].content.map((part) => part.text).join('')).toContain(
-      'Previously read reference data'
     );
     expect(run.usage.modelCalls).toBe(f.bodies.length);
   });

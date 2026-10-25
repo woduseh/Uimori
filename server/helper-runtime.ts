@@ -64,6 +64,7 @@ import { AUTHOR_NOTE_GUIDANCE, modelAuthorNotes } from '../core/notes.js';
 import { RisuContentError } from '../core/risu-content.js';
 import { readHelperChatLore } from './helper-lore-read.js';
 import { generationFromModel } from '../core/model-capabilities.js';
+import { shellExecutionOptions } from '../core/main-shell.js';
 import { executeTool } from '../core/provider.js';
 import {
   executeProvider,
@@ -91,9 +92,6 @@ import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
-// Stable local tool budgets; the selected model also admits the complete request.
-const MAX_HELPER_READ_TOKENS = 16_000;
-const MAX_HELPER_ROUND_READ_TOKENS = 32_000;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
 /** Keep complete recent turns; an oversized turn belongs wholly to the summary. */
 function recentHelperHistory(
@@ -1047,7 +1045,6 @@ export class HelperRuntime {
         const name = call.name === 'app.call' ? call.arguments.name : call.name;
         return HELPER_DATA_TOOLS.some((tool) => tool.name === name);
       };
-      let roundReadTokens = 0;
       const readConcurrency = Math.min(4, availableParallelism());
       for (let index = 0; index < calls.length; ) {
         const group = [calls[index++]];
@@ -1087,9 +1084,13 @@ export class HelperRuntime {
             const providedTokens = countTextTokens(
               JSON.stringify(call.name === 'data.exec' ? event.result : event)
             );
+            // Keep completed evidence for the existing compaction path. Only a
+            // single result beyond this model's entire input capacity is narrowed;
+            // fixed and accumulated context pass the complete-request admission.
+            const budget = contextBudgetForModel(task.snapshot.model);
             if (
-              providedTokens > MAX_HELPER_READ_TOKENS ||
-              roundReadTokens + providedTokens > MAX_HELPER_ROUND_READ_TOKENS
+              estimateContextTokens(call.name === 'data.exec' ? event.result : event, budget) >
+              budget.inputTokenLimit
             ) {
               const args = record(call.arguments);
               const nextRead = smallerHelperRead(
@@ -1131,9 +1132,6 @@ export class HelperRuntime {
               event.errorKind = errorKind = 'recoverable';
               output = event.result;
             }
-            roundReadTokens += countTextTokens(
-              JSON.stringify(call.name === 'data.exec' ? event.result : event)
-            );
           }
           returned.push(event);
           this.workspace.event(task.conversationId, id, 'tool.finished', {
@@ -1960,21 +1958,21 @@ export class HelperRuntime {
       return service(task, name, args, operationId);
     }
     if (name === 'data.exec') {
-      if (
-        typeof args.command !== 'string' ||
-        args.command.length > 50000 ||
-        (args.timeoutMs !== undefined &&
-          (!Number.isInteger(args.timeoutMs) || args.timeoutMs < 1000 || args.timeoutMs > 30000))
-      )
+      let options: ReturnType<typeof shellExecutionOptions>;
+      try {
+        options = shellExecutionOptions(args);
+      } catch {
         throw new HttpError(400, 'INVALID_SHELL_ARGUMENTS');
+      }
       return this.shell.exec(
         task,
         operationId,
-        args.command,
-        args.timeoutMs ?? 10000,
+        options.command,
+        options.timeoutMs,
         hooks.signal,
         (name, args, operationId, signal) =>
-          this.callFromShell(task, name, args, { ...hooks, signal }, operationId)
+          this.callFromShell(task, name, args, { ...hooks, signal }, operationId),
+        options.maxOutputBytes
       );
     }
     if (HELPER_DATA_TOOLS.some((tool) => tool.name === name))

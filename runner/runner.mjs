@@ -21,8 +21,7 @@ function reply(res, code, data) {
   res.end(JSON.stringify(data));
 }
 
-function readOutput(path) {
-  const max = 16384;
+function readOutput(path, max) {
   const marker = '\n... [output truncated] ...\n';
   const size = statSync(path).size;
   const log = openSync(path, 'r');
@@ -73,7 +72,8 @@ function run(args, signal) {
     mkdirSync(scratch, { recursive: true });
     const outputFile = join(scratch, `exec-${randomUUID()}.log`);
     const fd = openSync(outputFile, 'w');
-    const timeoutMs = Math.min(30000, Math.max(1000, Number(args.timeoutMs) || 10000));
+    const timeoutMs = Math.min(300000, Math.max(1000, Number(args.timeoutMs) || 10000));
+    const maxOutputBytes = Math.min(65536, Math.max(256, Math.floor(Number(args.maxOutputBytes) || 16384)));
     let child;
     try {
       child = spawn('/bin/bash', ['-c', args.command], {
@@ -84,7 +84,7 @@ function run(args, signal) {
           TMPDIR: scratch,
           UIMORI_TASK_ID: taskId,
           UIMORI_TOOL_ID: args.toolId,
-          UIMORI_BRIDGE_SOCKET: join(root, '.apply.sock'),
+          UIMORI_BRIDGE_SOCKET: args.workspaceKind === 'main' ? join(cwd, '.read.sock') : join(root, '.apply.sock'),
         },
       });
     } finally {
@@ -112,7 +112,7 @@ function run(args, signal) {
       terminate();
       if (spawnError) { done({ error: spawnError.message }); return; }
       let output;
-      try { output = readOutput(outputFile); }
+      try { output = readOutput(outputFile, maxOutputBytes); }
       catch (error) { output = { output: '', truncated: false, outputError: String(error) }; }
       done({
         exitCode: code,

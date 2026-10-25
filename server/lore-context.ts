@@ -1,9 +1,11 @@
 import { readLoreRetention } from './lore-retention-state.js';
 import { countTextTokens } from '../core/text-tokens.js';
+import { compiledPackages } from '../core/package-context.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import {
   appendLoreReads,
+  resetCompactedLore,
   DEFAULT_LORE_CONTEXT,
   validateLoreContextPolicy,
   type LoreContextSnapshot,
@@ -18,6 +20,7 @@ import {
 } from '../core/provider.js';
 import type { Resource, Run, RunSnapshot } from '../core/types.js';
 import type { Store } from './store.js';
+import { seedContextPlan } from './context-planning.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 export const loreDependencies = (snapshot: RunSnapshot): LoreDependency[] =>
@@ -65,6 +68,29 @@ export function verifiedRunLoreReads(store: Store, run: Run): RetainedLore[] {
   const source = store.sourceOriginal(run.sourceRevision!),
     resources = roleResources(run.snapshot),
     result: RetainedLore[] = [];
+  for (const pkg of compiledPackages(run.snapshot, 'main'))
+    for (const resource of pkg.selectedLore) {
+      if (!resource.text) continue;
+      result.push({
+        id: resource.id,
+        revision: resource.revision,
+        hash: hash(resource.text),
+        title: resource.title,
+        start: 0,
+        end: resource.text.length,
+        text: resource.text,
+        retention: 'selection',
+        ...(resource.risuSource ? { risuSource: resource.risuSource } : {}),
+        ...(resource.nativeRisuPosition ? { nativeRisuPosition: resource.nativeRisuPosition } : {}),
+        origin: {
+          sourceRevision: source.id,
+          sourceHash: source.hash,
+          runId: run.id,
+          callId: 'lore-selection',
+        },
+        lastUsed: source.id,
+      });
+    }
   for (const event of run.toolEvents) {
     if (event.denied || event.name !== 'knowledge.read') continue;
     try {
@@ -170,9 +196,17 @@ export function selectLoreContext(
   }
   const resources = new Map(roleResources(snapshot).map((r) => [r.id, r]));
   const pinned = new Set((buildMainInput(snapshot).pinnedSources ?? []).map((r) => r.id));
+  const selectedIds = new Set(
+    compiledPackages(snapshot, 'main').flatMap((pkg) =>
+      pkg.selectedLore.map((resource) => resource.id)
+    )
+  );
   const permitted = (entries: RetainedLore[]) =>
     entries.filter((entry) => {
-      const allowed = !pinned.has(entry.id) && allowedEntry(entry, resources, dependencies);
+      // Selection admission is an execution projection, never a reason to erase earlier reads.
+      const allowed =
+        (!pinned.has(entry.id) || selectedIds.has(entry.id) || entry.retention === 'selection') &&
+        allowedEntry(entry, resources, dependencies);
       if (!allowed) {
         droppedEntries++;
         reasons.push(
@@ -232,10 +266,16 @@ export function freezeLoreContext(store: Store, snapshot: RunSnapshot): RunSnaps
       // A missing or changed parent cannot authorize retained text.
     }
   }
-  return selectLoreContext(snapshot, {
+  const compacted = retained
+    ? (store.context.previous(snapshot.contextPlan ? snapshot : seedContextPlan(snapshot))
+        ?.compacted ?? [])
+    : [];
+  const advanced = retained && compacted.length > (retained.compacted?.length ?? 0);
+  const result = selectLoreContext(snapshot, {
     canonHash,
-    parent: retained?.context,
+    parent: advanced && retained ? resetCompactedLore(retained.context) : retained?.context,
     parentEligible,
-    parentReads: retained && parentEligible ? retained.reads : [],
+    parentReads: retained && parentEligible && !advanced ? retained.reads : [],
   });
+  return result;
 }

@@ -26,6 +26,7 @@ import {
   withContextProjection,
 } from '../server/context-planning.js';
 import { buildMainProviderRequest } from '../server/main-request.js';
+import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 const origin = 'http://127.0.0.1:44999';
@@ -202,6 +203,57 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+});
+test('only successful actual compaction resets admitted lore; a fitting no-op retains it', async () => {
+  const attachLore = (input: RunSnapshot) => ({
+    ...input,
+    loreContext: {
+      version: 1 as const,
+      policy: DEFAULT_LORE_CONTEXT,
+      canonHash: 'canon',
+      dependencies: [],
+      entries: [
+        {
+          id: 'fact',
+          revision: 1,
+          hash: hash('STICKY_FACT'),
+          title: 'Fact',
+          start: 0,
+          end: 11,
+          text: 'STICKY_FACT',
+          retention: 'selection' as const,
+          origin: {
+            sourceRevision: 'source-0',
+            sourceHash: input.history[0].contentHash!,
+            runId: 'old-run',
+            callId: 'lore-selection',
+          },
+          lastUsed: 'source-0',
+        },
+      ],
+      stats: {
+        retainedChars: 11,
+        retainedTokens: 4,
+        retainedEntries: 1,
+        appendedChars: 0,
+        droppedEntries: 0,
+        reasons: [],
+      },
+    },
+  });
+  const small = attachLore(await snapshot(['A short scene.']));
+  const noop = await prepareInputContext(small, observed().hooks);
+  expect(noop.usage.modelCalls).toBe(0);
+  expect(noop.snapshot.loreContext!.entries).toEqual(small.loreContext.entries);
+  const large = attachLore(await snapshot(oldScenes()));
+  const log = observed();
+  respondWithMergedSummary(log);
+  const compacted = await prepareInputContext(large, log.hooks);
+  expect(compacted.usage.modelCalls).toBeGreaterThan(0);
+  expect(compacted.snapshot.contextPlan!.compacted.length).toBeGreaterThan(0);
+  expect(compacted.snapshot.loreContext!.entries).toEqual([]);
+  expect(compacted.snapshot.loreContext!.stats.reasons).toContain('context-compacted');
+  expect(large.loreContext.entries).toHaveLength(1);
 });
 
 describe('input context projection and durable summary calls', () => {

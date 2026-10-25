@@ -1,4 +1,5 @@
 import { expect, test, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import { defaultProfile } from '../core/product.js';
 import type { RisuLoreProjection } from '../core/risu-content.js';
@@ -207,13 +208,13 @@ test('searches and judges every scoped body sharing one selected lore id', async
   expect(sent).toContain('Ordinary weather.');
   expect(sent).toContain('Hidden 청월인장 is kept at the north tower.');
   expect(result.loreSelection!.entries[0].selected).toEqual(['fact']);
-  expect(compiledPackages(result, 'main')[0].pinned.map((entry) => entry.text)).toEqual([
+  expect(compiledPackages(result, 'main')[0].selectedLore.map((entry) => entry.text)).toEqual([
     'Ordinary weather.',
     'Hidden 청월인장 is kept at the north tower.',
   ]);
 });
 
-test('budgets all scoped pinned bodies before a paid judgment and records their actual token sum', async () => {
+test('budgets all scoped admitted bodies before a paid judgment and records their actual token sum', async () => {
   const fact = lore('fact', 'Original record.');
   const input = snapshot([[fact]], '청월인장');
   projectLore(input, [
@@ -232,7 +233,7 @@ test('budgets all scoped pinned bodies before a paid judgment and records their 
   input.profile!.loreContext!.judgment.maxSelectedTokens = 5000;
   const accepted = await select(input);
   const receipt = accepted.snapshot.loreSelection!.entries[0];
-  const pinned = compiledPackages(accepted.snapshot, 'main')[0].pinned;
+  const pinned = compiledPackages(accepted.snapshot, 'main')[0].selectedLore;
   expect(pinned).toHaveLength(2);
   const tokens = pinned.reduce((sum, entry) => sum + countTextTokens(entry.text), 0);
   expect(tokens).toBeGreaterThan(100);
@@ -240,7 +241,7 @@ test('budgets all scoped pinned bodies before a paid judgment and records their 
   expect(receipt.judgment!.selectedTokens).toBe(tokens);
 });
 
-test('counts equal bodies twice when distinct scoped metadata makes both bodies pinned', async () => {
+test('counts equal bodies twice when distinct scoped metadata makes both bodies admitted', async () => {
   const fact = lore('fact', '청월인장');
   const input = snapshot([[fact]], '청월인장');
   projectLore(input, [[{ ...fact, title: 'Bot record' }], [{ ...fact, title: 'Persona record' }]]);
@@ -252,7 +253,7 @@ test('counts equal bodies twice when distinct scoped metadata makes both bodies 
   input.profile!.loreContext!.maxRetainedTokens = singleBodyTokens * 2;
   input.profile!.loreContext!.judgment.maxSelectedTokens = singleBodyTokens * 2;
   const accepted = await select(input);
-  const pinned = compiledPackages(accepted.snapshot, 'main')[0].pinned;
+  const pinned = compiledPackages(accepted.snapshot, 'main')[0].selectedLore;
   expect(pinned.map((entry) => entry.text)).toEqual([fact.text, fact.text]);
   expect(accepted.snapshot.loreSelection!.entries[0].judgment!.selectedTokens).toBe(
     singleBodyTokens * 2
@@ -270,6 +271,59 @@ test.each(['title', 'description', 'text'] as const)(
     expect(loreSelectionInputHash(loreSelectionTargets(input)[0])).not.toBe(before);
   }
 );
+
+test('skips only fully retained identical scoped bodies and charges all retained bodies against new admission', async () => {
+  const fact = lore('fact', '청월인장');
+  const input = snapshot([[fact]], '청월인장');
+  projectLore(input, [[{ ...fact, title: 'First scope' }], [{ ...fact, title: 'Second scope' }]]);
+  const parts = compiledPackages(input, 'main')[0].resources;
+  const entries = parts.map((part) => ({
+    id: part.id,
+    revision: part.revision,
+    hash: createHash('sha256').update(part.text).digest('hex'),
+    title: part.title,
+    start: 0,
+    end: part.text.length,
+    text: part.text,
+    retention: 'selection' as const,
+    origin: {
+      sourceRevision: 'old',
+      sourceHash: 'a'.repeat(64),
+      runId: 'old-run',
+      callId: 'selection',
+    },
+    lastUsed: 'old',
+  }));
+  input.loreContext = {
+    version: 1,
+    policy: input.profile!.loreContext!,
+    canonHash: '',
+    dependencies: [],
+    entries,
+    stats: {
+      retainedChars: 0,
+      retainedTokens: 0,
+      retainedEntries: entries.length,
+      appendedChars: 0,
+      droppedEntries: 0,
+      reasons: [],
+    },
+  };
+  const carried = await select(input, 0);
+  expect(carried.snapshot.loreSelection!.entries[0].coverage).toEqual({ total: 0, evaluated: 0 });
+  input.profile!.chatOverrides!.projections[1].package.lore[0].text = 'Changed 청월인장';
+  const changed = await select(input);
+  expect(changed.body.state.entries[0].text).toContain('Changed 청월인장');
+  expect(changed.body.state.entries[0].text).toContain(fact.text);
+  input.profile!.loreContext!.maxRetainedTokens = entries.reduce(
+    (sum, entry) => sum + countTextTokens(entry.text),
+    0
+  );
+  const full = await select(input, 0);
+  expect(full.snapshot.loreSelection!.entries[0].omitted).toEqual([
+    { id: 'fact', reason: 'budget' },
+  ]);
+});
 
 test('reuses a frozen older selection receipt without another paid judgment', async () => {
   const input = snapshot([[lore('fact', '청월인장')]], '청월인장');
@@ -289,7 +343,7 @@ test('reuses a frozen older selection receipt without another paid judgment', as
   const before = structuredClone(input);
   const result = await select(input, 0);
   expect(result.snapshot).toEqual(before);
-  expect(compiledPackages(result.snapshot, 'main')[0].pinned.map((entry) => entry.text)).toEqual([
-    '청월인장',
-  ]);
+  expect(
+    compiledPackages(result.snapshot, 'main')[0].selectedLore.map((entry) => entry.text)
+  ).toEqual(['청월인장']);
 });

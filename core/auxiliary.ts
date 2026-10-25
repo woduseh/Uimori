@@ -248,7 +248,7 @@ export function translationInput(
       (snapshot.translationGuide ? '\n' + TRANSLATION_GUIDE_POLICY : '') +
       (mode === 'source-only'
         ? ''
-        : ' Optional story.search/read retrieves frozen prior originals; explicit source-time notes are already supplied as context evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Total tool result budget is 96000 UTF-8 bytes per job.'),
+        : ' Optional story.search/read retrieves frozen prior originals; explicit source-time notes are already supplied as context evidence; translation.search/read retrieves prior wording, never new facts. Search names, forms of address and speaker register when useful, then read only needed ranges. Current source and source-time references take precedence over prior translations, beliefs and summaries. A search with no matches needs no retry; translation remains possible without tools. Read results must fit the selected model context. If a result is too large, narrow the read or finish with the available evidence.'),
     ...(snapshot.profile?.promptPresets?.translation ? { customPrompt: true } : {}),
     outputSchema: {},
   };
@@ -346,6 +346,11 @@ export async function executeAuxiliary(
     maxCalls?: number;
     onInput?: (input: AuxiliaryInput) => void | Promise<void>;
     onToolEvent?: (event: ToolEvent) => void | Promise<void>;
+    prepareToolEvent?: (
+      event: ToolEvent,
+      nextInput: AuxiliaryInput,
+      remainingActions: readonly ToolAction[]
+    ) => ToolEvent;
     localTools?: {
       names: readonly string[];
       execute: (action: ToolAction) => ToolEvent | { event: ToolEvent; terminalOutput: unknown };
@@ -394,10 +399,10 @@ export async function executeAuxiliary(
     const actions =
       (output as { kind: string }).kind === 'tools'
         ? (output as { actions?: ToolAction[] }).actions
-        : [(output as { action?: ToolAction }).action];
+        : [(output as { action?: ToolAction }).action!];
     if (!Array.isArray(actions) || !actions.length || actions.length > 32)
       throw new Error('TOOL_CALL_INVALID');
-    for (const action of actions) {
+    for (const [actionIndex, action] of actions.entries()) {
       check();
       if (
         !action ||
@@ -432,6 +437,15 @@ export async function executeAuxiliary(
         if (event.callId !== action.callId || event.name !== action.name)
           throw new Error('TOOL_CALL_INVALID');
       } else event = executeTool(fixedScope, action, hooks.signal, 'translation');
+      event =
+        hooks.prepareToolEvent?.(
+          event,
+          {
+            ...structuredClone(fixedInput),
+            results: [...structuredClone(toolEvents), structuredClone(event)],
+          },
+          structuredClone(actions.slice(actionIndex + 1))
+        ) ?? event;
       toolEvents.push(structuredClone(event));
       await hooks.onToolEvent?.(structuredClone(event));
       check();

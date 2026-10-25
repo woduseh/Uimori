@@ -7,6 +7,7 @@ import {
   bridge,
   hooks,
   selectProvider,
+  translationFixtureRenderedSlot,
   translationFixtureSlot,
 } from './fixtures/translation-job.js';
 import { loopbackProvider, writeSse } from './fixtures/loopback-provider.js';
@@ -23,6 +24,101 @@ async function fixture(handler: Parameters<typeof loopbackProvider>[0]) {
 function translationBody(wire: string) {
   return `합성 번역 ${translationFixtureSlot(JSON.parse(wire), 'source')}`;
 }
+
+test.each([272000, 8192])(
+  'translation admits optional reads by model tokens and can finish after a read exceeds %i tokens',
+  async (inputTokenLimit) => {
+    const seed = bundle();
+    seed.snapshot.resources[0].text = 'Reference wording. '.repeat(12000);
+    const events: import('../core/types.js').ToolEvent[] = [];
+    const handlerErrors: unknown[] = [];
+    const server = await fixture(async (captured, response) => {
+      try {
+        const body = JSON.parse(captured.body);
+        const results = body.messages.filter(
+          (message: { role: string }) => message.role === 'tool'
+        );
+        const delta = !results.length
+          ? {
+              role: 'assistant',
+              tool_calls: Array.from({ length: 16 }, (_, index) => ({
+                index,
+                id: `reference-${index}`,
+                type: 'function',
+                function: {
+                  name: body.tools.find((tool: { function: { name: string } }) =>
+                    tool.function.name.endsWith('knowledge_read')
+                  ).function.name,
+                  arguments: JSON.stringify({
+                    ids: ['old-glossary'],
+                    offset: index * 1000,
+                    tokenLimit: 8000,
+                  }),
+                },
+              })),
+            }
+          : { role: 'assistant', content: `합성 번역 ${seed.source.text}` };
+        if (results.length) {
+          expect(results).toHaveLength(16);
+          expect(
+            translationFixtureRenderedSlot(
+              body.messages.flatMap((message: { content: unknown }) =>
+                typeof message.content === 'string'
+                  ? [message.content]
+                  : Array.isArray(message.content)
+                    ? message.content.map((part: { text?: string }) => part.text ?? '')
+                    : []
+              ),
+              'source'
+            )
+          ).toBe(seed.source.text);
+        }
+        response.writeHead(200, { 'content-type': 'text/event-stream' });
+        response.end(
+          `data: ${JSON.stringify({ id: 'translation-budget', choices: [{ index: 0, delta, finish_reason: results.length ? 'stop' : 'tool_calls' }] })}\n\ndata: [DONE]\n\n`
+        );
+      } catch (error) {
+        handlerErrors.push(error);
+        throw error;
+      }
+    });
+    selectProvider(seed, server.endpoint);
+    seed.snapshot.profile!.models.translation!.inputTokenLimit = inputTokenLimit;
+    seed.snapshot.profile!.models.translation!.connection.protocol = 'openai-chat-v1';
+    const observed = hooks(server.origin);
+    observed.options.onToolEvent = (_job, event) => {
+      events.push(event);
+    };
+    const source = structuredClone(seed.source);
+    const outcome = await runAuxiliaryJob(
+      bridge(seed).store,
+      seed.job.id,
+      'reader-budget',
+      observed.options
+    );
+    expect(outcome?.status, handlerErrors.map(String).join('\n') || outcome?.error || '').toBe(
+      'completed'
+    );
+    expect(outcome?.result?.text).toBe(`합성 번역 ${source.text}`);
+    expect(seed.source).toEqual(source);
+    expect(server.requests).toHaveLength(2);
+    expect(events).toHaveLength(16);
+    if (inputTokenLimit === 8192) {
+      expect(events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            denied: true,
+            errorKind: 'recoverable',
+            result: expect.objectContaining({ code: 'TOOL_CONTEXT_LIMIT_EXCEEDED' }),
+          }),
+        ])
+      );
+    } else {
+      expect(events.every((event) => !event.denied)).toBe(true);
+      expect(Buffer.byteLength(JSON.stringify(events))).toBeGreaterThan(96000);
+    }
+  }
+);
 
 describe('M1 durable auxiliary orchestration with actual fixture HTTP', () => {
   test('P07 P05 records actual selected transport attempts, paired batched calls and opaque source-time results', async () => {

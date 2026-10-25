@@ -1,3 +1,4 @@
+import { SHELL_EXEC_PROPERTIES } from '../core/main-shell.js';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,13 +26,10 @@ const reference = {
 export const HELPER_SHELL_TOOL: ProviderTool = {
   name: 'data.exec',
   description:
-    'Run real Bash, rg, jq, grep, sed, Python or Node in a Linux workspace containing Uimori library, chats, current task and usage files. Start with INDEX.md and library/index.jsonl. Combine multiple searches/transforms inside one command and print only the relevant result. Edit canonical library/<id>/resource.json or chats/<id>/scenes/<source-id>.txt freely; commit with uimori apply <path>. Content title/description/text are derived: edit the native card/module paths listed in manifest.json. Other files are projections and cannot be applied. Use uimori tools to discover existing app operations and uimori call <operation> with JSON or --input <file|-> to invoke them inside scripts; app.call remains available. uimori refresh <path> updates a clean file in place; for a dirty file it preserves local edits and returns a separately editable latestPath. Synchronous execution: default 10s, up to 30s; no background jobs. Output is capped at 16KB with head/tail preview and a complete outputFile in scratch/. Filter that log instead of rerunning a command. Apply returns actual saved paths/revision/hash; refresh stale files before reconciling a revision conflict. This workspace never includes server credentials or the SQLite database.',
+    'Run real Bash, rg, jq, grep, sed, Python or Node in a Linux workspace containing Uimori library, chats, current task and usage files. Start with INDEX.md and library/index.jsonl. Combine multiple searches/transforms inside one command and print only the relevant result. Edit canonical library/<id>/resource.json or chats/<id>/scenes/<source-id>.txt freely; commit with uimori apply <path>. Content title/description/text are derived: edit the native card/module paths listed in manifest.json. Other files are projections and cannot be applied. Use uimori tools to discover existing app operations and uimori call <operation> with JSON or --input <file|-> to invoke them inside scripts; app.call remains available. uimori refresh <path> updates a clean file in place; for a dirty file it preserves local edits and returns a separately editable latestPath. Synchronous execution: default 10s, up to 300s; no background jobs. Output defaults to 16KB (maxOutputBytes permits up to 64KB) with head/tail preview and a complete outputFile in scratch/. Filter that log instead of rerunning a command. Apply returns actual saved paths/revision/hash; refresh stale files before reconciling a revision conflict. This workspace never includes server credentials or the SQLite database.',
   inputSchema: {
     type: 'object',
-    properties: {
-      command: { type: 'string', maxLength: 50000 },
-      timeoutMs: { type: 'integer', minimum: 1000, maximum: 30000 },
-    },
+    properties: SHELL_EXEC_PROPERTIES,
     required: ['command'],
     additionalProperties: false,
   },

@@ -145,8 +145,44 @@ export function requestLore(
       contains(item) || hasLoreEntry(evidence(), item) ? 'full' : 'unverified'
     );
   }
+  // Dynamic JEV bodies now travel as host reference messages rather than pinned slots.
+  // Inspect that frozen projection; do not recompile native sources just for diagnostics.
+  const dynamicIds = new Set<string>();
+  if (request.role === 'main')
+    for (const message of request.prompt?.messages ?? []) {
+      if (!message.id.startsWith('lore-reference:')) continue;
+      for (const part of message.content) {
+        if (part.type !== 'text') continue;
+        const start = part.text.indexOf('\n[');
+        if (start < 0) continue;
+        let references: unknown;
+        try {
+          references = JSON.parse(part.text.slice(start + 1));
+        } catch {
+          continue;
+        }
+        for (const value of array(references)) {
+          const reference = object(value);
+          if (reference?.retention !== 'selection' || typeof reference.id !== 'string') continue;
+          const source = object(reference.risuSource);
+          const via =
+            source &&
+            selected.has(
+              sourceKey(String(source.contentId), String(source.sourceRole), String(source.entryId))
+            )
+              ? 'selected'
+              : 'retained';
+          dynamicIds.add(reference.id);
+          add({ ...reference, kind: 'lore' } as LoreIdentity, via, () =>
+            contains(reference) ? 'full' : 'unverified'
+          );
+        }
+      }
+    }
   if (request.role === 'main')
     for (const retained of snapshot.loreContext?.entries ?? []) {
+      if (dynamicIds.has(retained.id) || options.pinned.some((item) => item.id === retained.id))
+        continue;
       const { lastUsed: _lastUsed, ...sent } = retained;
       add({ id: retained.id, title: retained.title, kind: 'lore' }, 'retained', () => {
         if (!contains(sent)) return 'unverified';
