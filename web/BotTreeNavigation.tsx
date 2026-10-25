@@ -473,7 +473,7 @@ export function BotNavigation(
     <div className="bot-navigation bot-tree-navigation" data-testid="bot-navigation">
       <div className="brand">
         <span className="brand-name">
-          <img src="/favicon.svg" width={26} height={26} alt="" aria-hidden="true" />
+          <img src="/icons/halo-mark.svg" width={26} height={26} alt="" aria-hidden="true" />
           Uimori
         </span>
         {props.onToggleCollapse && (
