@@ -95,7 +95,8 @@ export const BUILTIN_PALETTES: ThemePalette[] = [
   palette('sage', '세이지', '옅은 허브빛과 고요한 청록 포인트', 'sage', 'jade'),
 ];
 
-export const DEFAULT_PALETTE_COLORS = BUILTIN_PALETTES[0].colors;
+/** The default layout reuses cream while named palette selections remain independent. */
+export const DEFAULT_PALETTE_COLORS = BUILTIN_PALETTES.find((item) => item.id === 'cream')!.colors;
 
 export function isPaletteId(id: unknown): id is string {
   return (
