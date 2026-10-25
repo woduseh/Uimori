@@ -1241,10 +1241,13 @@ test.each(['current failed task', 'earlier completed task'] as const)(
     seed.spy.mockRestore();
     f.readValue = {
       revision: 1,
-      text: Array.from({ length: 2_500 }, (_, index) => index.toString(36).padStart(4, '0')).join(
+      // A single read must fit the selected model; accumulated context triggers
+      // compaction, whose checkpoint is the subject of the retry assertions.
+      text: Array.from({ length: 1_600 }, (_, index) => index.toString(36).padStart(4, '0')).join(
         ' '
       ),
     };
+    expect(estimateContextTokens(f.readValue)).toBeLessThan(f.target('helper').inputTokenLimit!);
     let helperCalls = 0;
     const failedCall = coveredTask === 'current failed task' ? 2 : 3;
     const log = script(f, (request) => {

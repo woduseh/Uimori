@@ -495,7 +495,15 @@ test.each(['missing-scene', 'budget', 'empty'] as const)(
         return;
       }
       if (mode === 'empty') expect(wire.input.results[0].result.total).toBe(0);
-      else
+      else if (mode === 'budget') {
+        // Large but fitting evidence no longer fails at the old 96KB byte cap.
+        expect(wire.input.results).toHaveLength(7);
+        expect(Buffer.byteLength(JSON.stringify(wire.input.results), 'utf8')).toBeGreaterThan(
+          96000
+        );
+        for (const event of wire.input.results)
+          expect(event).toMatchObject({ denied: false, result: { text: 'A'.repeat(16000) } });
+      } else
         expect(wire.input.results[0]).toMatchObject({
           denied: true,
           errorKind: 'recoverable',
@@ -514,10 +522,9 @@ test.each(['missing-scene', 'budget', 'empty'] as const)(
     const target = source(store, chat.id);
     const job = store.requestTranslation(target.id);
     const outcome = await execute(store, job.id, server.origin);
-    expect(outcome?.status).toBe(mode === 'budget' ? 'failed' : 'completed');
-    expect(count).toBe(mode === 'budget' ? 1 : 2);
-    expect(store.job(job.id).result?.text).toBe(mode === 'budget' ? undefined : '조용히 기다렸다.');
-    if (mode === 'budget') expect(outcome?.error).toBe('TOOL_CONTEXT_BUDGET_EXHAUSTED');
+    expect(outcome?.status).toBe('completed');
+    expect(count).toBe(2);
+    expect(store.job(job.id).result?.text).toBe('조용히 기다렸다.');
   }
 );
 
