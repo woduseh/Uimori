@@ -1,5 +1,53 @@
 /** App-owned provider presentation. Provider data, model IDs and request payloads retain their original values. */
 export const messages = {
+  'providers.jevExperimental': {
+    ko: '실험 기능이며 다음 판단부터 적용해요.',
+    en: 'Experimental features. Applies from the next judgment.',
+    ja: '実験的な機能です。次の判定から適用されます。',
+    zh: '实验功能，从下一次判断开始生效。',
+  },
+  'providers.jevImages': {
+    ko: '이미지를 보고 선택',
+    en: 'Choose by viewing images',
+    ja: '画像を見て選択',
+    zh: '查看图片后选择',
+  },
+  'providers.jevImagesHelp': {
+    ko: '선택 후보 이미지를 TypeSafe에 전송해요.',
+    en: 'Sends candidate images to TypeSafe.',
+    ja: '選択候補の画像をTypeSafeに送信します。',
+    zh: '将候选图片发送给 TypeSafe。',
+  },
+  'providers.jevLongContext': {
+    ko: '긴 컨텍스트',
+    en: 'Extended context',
+    ja: '長いコンテキスト',
+    zh: '长上下文',
+  },
+  'providers.jevContextLimits': {
+    ko: '기본 전체 64k / 질문별 32k → 확장 262k 토큰',
+    en: 'Standard: 64k total / 32k per question → Extended: 262k tokens',
+    ja: '通常は合計64k / 質問ごとに32k → 拡張時は262kトークン',
+    zh: '默认总计 64k / 每个问题 32k → 扩展至 262k token',
+  },
+  'providers.jevSettingsSaved': {
+    ko: 'JEV 판단 설정을 저장했어요.',
+    en: 'JEV judgment settings saved.',
+    ja: 'JEVの判定設定を保存しました。',
+    zh: 'JEV 判断设置已保存。',
+  },
+  'providers.jevSettingsSaving': {
+    ko: 'JEV 판단 설정 저장 중…',
+    en: 'Saving JEV judgment settings…',
+    ja: 'JEVの判定設定を保存中…',
+    zh: '正在保存 JEV 判断设置…',
+  },
+  'providers.jevSettingsFailed': {
+    ko: 'JEV 판단 설정의 저장 결과를 확인하지 못했어요. 연결 상태를 새로고침해 저장된 값을 확인해 주세요.',
+    en: 'Could not confirm the JEV settings save. Refresh the connection status to check the saved values.',
+    ja: 'JEVの判定設定の保存結果を確認できませんでした。接続状態を更新して保存済みの値を確認してください。',
+    zh: '无法确认 JEV 判断设置的保存结果。请刷新连接状态，查看已保存的值。',
+  },
   'providers.m0': {
     ko: '판단',
     en: 'Judgment',

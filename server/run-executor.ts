@@ -27,6 +27,7 @@ import {
 import { JEV_ENDPOINT, JEV_MODEL, JevError } from './jev-judgment.js';
 import { judgeMainRefusal, mainJudgmentInput, validateMainJudgmentWire } from './main-judgment.js';
 import { JevCredentialStore } from './jev-credentials.js';
+import { jevSettings } from './jev-settings.js';
 import { AnthropicBatchRun } from './anthropic-batch.js';
 import { readRequestImage } from './request-images.js';
 import { MainShell } from './main-shell.js';
@@ -81,6 +82,7 @@ export function createRunExecutor({
   afterSource,
 }: RunExecutorDependencies) {
   const execute = (id: string, resume = false) => {
+    const judgmentSettings = jevSettings(store.db);
     const fixture = { ...controls.fixture };
     const controller = new AbortController();
     const shell = process.env.UIMORI_SHELL_ROOT ? new MainShell(store, id) : undefined;
@@ -407,7 +409,7 @@ export function createRunExecutor({
             if (loreSelectionPending(executionSnapshot)) {
               assertCurrent();
               const selection = await prepareLoreSelection(executionSnapshot, hooks, {
-                jev: { credential: jevCredential },
+                jev: { credential: jevCredential, settings: judgmentSettings },
                 reserveCalls: 1 + Number(judgeResponse) + priorUsage.modelCalls,
               });
               priorUsage = mergeUsage(priorUsage, selection.usage);
@@ -559,6 +561,7 @@ export function createRunExecutor({
             const judgment = await judgeMainRefusal(input, {
               signal: controller.signal,
               credential: jevCredential,
+              settings: judgmentSettings,
               onAttemptStart: async (wire) => {
                 const attempt = await hooks.onAttemptStart(wire);
                 priorUsage.modelCalls++;

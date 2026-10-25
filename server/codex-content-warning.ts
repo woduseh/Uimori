@@ -14,7 +14,8 @@ import type {
 import { workspaceModelRef, type ModelSnapshot } from '../core/product.js';
 import type { Store } from './store.js';
 import type { JevCredentialStore } from './jev-credentials.js';
-import { executeJevJudgment, type JevRequest } from './jev-judgment.js';
+import { executeJevJudgment, type JevHooks, type JevRequest } from './jev-judgment.js';
+import { jevSettings } from './jev-settings.js';
 import { HttpError, fields, record, text } from './request-validation.js';
 import { promptWorkspace } from './prompt-workspace.js';
 
@@ -73,7 +74,8 @@ async function judge(
   recentContext: string,
   credential: JevCredentialStore['resolve'],
   signal: AbortSignal,
-  conservative = false
+  conservative = false,
+  settings?: JevHooks['settings']
 ): Promise<CodexContentPreflightResult> {
   try {
     if (!credential()) return { warning: conservative };
@@ -82,6 +84,7 @@ async function judge(
     const result = await executeJevJudgment(request, digest({ role, request }), null, {
       signal: AbortSignal.any([signal, timeout]),
       credential,
+      settings,
       onAttemptStart: () => randomUUID(),
       onAttemptFinish: () => {},
     });
@@ -97,10 +100,11 @@ export async function autoTranslationNeedsConfirmation(
   model: ModelSnapshot | undefined,
   source: string,
   credential: JevCredentialStore['resolve'],
-  signal: AbortSignal
+  signal: AbortSignal,
+  settings?: JevHooks['settings']
 ): Promise<boolean> {
   if (!isCodex(model)) return false;
-  return (await judge('translation', source, '', credential, signal, true)).warning;
+  return (await judge('translation', source, '', credential, signal, true, settings)).warning;
 }
 
 function currentContext(store: Store, chatId: string): string {
@@ -172,7 +176,15 @@ export function codexContentWarningRoutes(
         const selected = workspaceModelRef(promptWorkspace(store), 'helper');
         if (!selected || !isCodex(store.product.modelSnapshot(selected.id, 'helper')))
           return { warning: false };
-        return judge(role, content, selection, credentials.resolve, signal);
+        return judge(
+          role,
+          content,
+          selection,
+          credentials.resolve,
+          signal,
+          false,
+          jevSettings(store.db)
+        );
       }
       const target =
         role === 'main'
@@ -182,7 +194,15 @@ export function codexContentWarningRoutes(
               context: '',
             };
       if (!isCodex(target.model)) return { warning: false };
-      return judge(role, content, target.context, credentials.resolve, signal);
+      return judge(
+        role,
+        content,
+        target.context,
+        credentials.resolve,
+        signal,
+        false,
+        jevSettings(store.db)
+      );
     }
   );
 
@@ -195,7 +215,15 @@ export function codexContentWarningRoutes(
       const source = store.source(request.params.id);
       const model = store.product.snapshot(source.chatId, 'translation').models.translation;
       if (!isCodex(model)) return { warning: false };
-      return judge('translation', source.text, '', credentials.resolve, signal);
+      return judge(
+        'translation',
+        source.text,
+        '',
+        credentials.resolve,
+        signal,
+        false,
+        jevSettings(store.db)
+      );
     }
   );
 }

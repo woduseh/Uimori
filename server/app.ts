@@ -94,6 +94,8 @@ import { createPackageStart } from './package-start.js';
 import { deniedBrowserRequest, networkPolicy } from './network-policy.js';
 import { VertexCredentialStore } from './vertex-credentials.js';
 import { JevCredentialStore } from './jev-credentials.js';
+import { jevSettings } from './jev-settings.js';
+import { readImage as readJevImage } from './image-storage.js';
 import {
   autoTranslationNeedsConfirmation,
   codexContentWarningRoutes,
@@ -571,7 +573,8 @@ export async function createApp(options: AppOptions): Promise<App> {
                 snapshot.profile?.models.translation,
                 source.text,
                 jevCredentials.resolve,
-                signal
+                signal,
+                jevSettings(store.db)
               ))
             ) {
               store.failQueuedJob(
@@ -582,7 +585,11 @@ export async function createApp(options: AppOptions): Promise<App> {
               return;
             }
             await runAuxiliaryJob(auxiliaryBridge(store, controls, signal), id, instanceId, {
-              jev: { credential: jevCredentials.resolve },
+              jev: {
+                credential: jevCredentials.resolve,
+                settings: jevSettings(store.db),
+                readImage: (hash) => readJevImage(store.db, hash).bytes,
+              },
               signal,
 
               resolveCredential,

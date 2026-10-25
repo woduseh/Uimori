@@ -8,6 +8,13 @@ import type { RunSnapshot } from '../core/types.js';
 import type { MainHooks } from '../server/model-runner.js';
 import { prepareLoreSelection } from '../server/lore-selection.js';
 
+const sentEntries = (body: {
+  questions: Record<
+    string,
+    { instructions: { entry: { id: string; title: string; text: string; description?: string } } }
+  >;
+}) => Object.values(body.questions).map((question) => question.instructions.entry);
+
 const text = 'The harbor is open. 항구의 문이 열려 있다. 日本語も含む。';
 
 async function selectedSnapshot(
@@ -119,7 +126,7 @@ describe('local-token selection receipt accounting', () => {
     );
     expect(send).toHaveBeenCalledTimes(1);
     const body = JSON.parse(String(send.mock.calls[0][1]?.body));
-    expect(body.state.entries).toEqual([
+    expect(sentEntries(body)).toEqual([
       { id: 'entry_0_1', title: 'Package 0: Harbor', text },
       { id: 'entry_0_2', title: 'Package 0: Promise', text: lore[2].text },
       { id: 'entry_1_1', title: 'Package 1: Harbor', text },

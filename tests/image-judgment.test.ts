@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
+import sharp from 'sharp';
 import type { AssetEntry } from '../core/auxiliary.js';
 import type { Json, WireRecord } from '../core/transport.js';
 import {
@@ -14,6 +15,7 @@ import { countTextTokens } from '../core/text-tokens.js';
 import { JEV_MODEL } from '../server/jev-judgment.js';
 import { runAuxiliaryJob } from '../server/product-auxiliary.js';
 import { bundle, bridge, hooks } from './fixtures/translation-job.js';
+import { prepareJevImage } from '../server/jev-images.js';
 const text = 'Mira waits near the pier.\n\nThe harbor fills with morning light.';
 const source = {
   id: 'source',
@@ -173,6 +175,187 @@ function paragraphCatalog() {
   };
 }
 describe('JEV-only existing image placement', () => {
+  it('normalizes a small EXIF-rotated original into an upright supported still without changing it', async () => {
+    const original = await sharp({
+      create: { width: 120, height: 360, channels: 3, background: '#e00000' },
+    })
+      .jpeg()
+      .withMetadata({ orientation: 6 })
+      .toBuffer();
+    const originalCopy = Buffer.from(original);
+    const image = await prepareJevImage(original);
+    expect(image).toMatchObject({ type: 'image', format: 'jpeg' });
+    const decoded = Buffer.from(image.data_base64, 'base64');
+    const metadata = await sharp(decoded).metadata();
+    expect(metadata).toMatchObject({ format: 'jpeg', width: 512, height: 512 });
+    expect(metadata.orientation).toBeUndefined();
+    expect(metadata.isProgressive).toBe(false);
+    // EXIF 6 rotates the portrait to landscape, leaving white padding above it.
+    const { data, info } = await sharp(decoded).raw().toBuffer({ resolveWithObject: true });
+    const rgb = (x: number, y: number) => [
+      ...data.subarray(
+        (y * info.width + x) * info.channels,
+        (y * info.width + x) * info.channels + 3
+      ),
+    ];
+    expect(rgb(256, 20).every((channel) => channel > 245)).toBe(true);
+    expect(rgb(256, 256)[0]).toBeGreaterThan(200);
+    expect(rgb(256, 256)[1]).toBeLessThan(20);
+    expect(original).toEqual(originalCopy);
+    await expect(prepareJevImage(new Uint8Array([1, 2, 3]))).rejects.toThrow('JEV_IMAGE_INVALID');
+  });
+  it('sends only shortlisted pictures once, selects an existing asset, and binds saved vision wires', async () => {
+    const original = await sharp({
+      create: { width: 64, height: 96, channels: 4, background: '#1a7b98' },
+    })
+      .webp()
+      .toBuffer();
+    const catalog = Array.from({ length: 1000 }, (_, index) => ({
+      ...assets[1],
+      ref: `warehouse-${index}`,
+      alt: `Warehouse crate ${index}`,
+      caption: 'Unrelated warehouse storage',
+    }));
+    catalog[999] = { ...assets[0], ref: 'tail-pier' };
+    let wire: WireRecord | undefined;
+    const readImage = vi.fn(() => original);
+    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.state.selectionVersion).toBe('image-selection-jev-v4');
+      expect(body.state.settings).toEqual({ images: true, longContext: false });
+      expect(Object.keys(body.assets).length).toBeLessThanOrEqual(16);
+      expect(Object.keys(body.assets)).toHaveLength(body.state.assets.length);
+      for (const asset of body.state.assets) {
+        expect(body.assets[asset.image]).toMatchObject({ type: 'image', format: 'jpeg' });
+        expect(
+          JSON.stringify({ state: body.state, questions: body.questions }).split(asset.image)
+        ).toHaveLength(2);
+      }
+      const tail = body.state.assets.find(
+        (asset: { name: string }) => asset.name === 'Mira at pier'
+      );
+      expect(tail).toBeDefined();
+      return typedResponse(body, tail.id);
+    });
+    const result = await judgeImagePlacement(source, catalog, '', {
+      settings: { images: true, longContext: false },
+      readImage,
+      signal: new AbortController().signal,
+      credential: () => 'key',
+      fetch,
+      onAttemptStart: (value) => {
+        wire = value;
+        return 'vision';
+      },
+      onAttemptFinish: vi.fn(),
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(readImage.mock.calls.length).toBeGreaterThan(0);
+    expect(readImage.mock.calls.length).toBeLessThanOrEqual(16);
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({
+      assetRef: 'tail-pier',
+      assetRevision: 1,
+      assetHash: assets[0].hash,
+    });
+    expect(wire?.headers['TypeSafe-Danger-Zone-Images']).toBe('true');
+    expect(() => validateImageJudgmentWire(source, catalog, wire!)).not.toThrow();
+    const changed = structuredClone(wire!);
+    const changedAssets = (changed.body as { assets: Record<string, { data_base64: string }> })
+      .assets;
+    changedAssets[Object.keys(changedAssets)[0]].data_base64 =
+      Buffer.from('tampered').toString('base64');
+    expect(() => validateImageJudgmentWire(source, catalog, changed)).toThrow(
+      'IMAGE_JUDGMENT_ATTEMPT_MISMATCH'
+    );
+    expect(() =>
+      validateImageJudgmentWire(
+        source,
+        catalog.map((asset) => ({ ...asset, revision: 2 })),
+        wire!
+      )
+    ).toThrow('IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
+    const withoutHeader = structuredClone(wire!);
+    delete withoutHeader.headers['TypeSafe-Danger-Zone-Images'];
+    expect(() => validateImageJudgmentWire(source, catalog, withoutHeader)).toThrow(
+      'IMAGE_JUDGMENT_ATTEMPT_MISMATCH'
+    );
+  });
+  it('uses the configured context window without loading bytes when vision is off', async () => {
+    const readImage = vi.fn();
+    const guidance = 'z '.repeat(40000);
+    const settings = { images: false, longContext: true };
+    let wire: WireRecord | undefined;
+    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body).not.toHaveProperty('assets');
+      expect(body.state.assets.every((asset: object) => !Object.hasOwn(asset, 'image'))).toBe(true);
+      expect(body.state.guidance).toBe(guidance);
+      return typedResponse(body, 'none');
+    });
+    const result = await judgeImagePlacement(source, assets, guidance, {
+      settings,
+      readImage,
+      signal: new AbortController().signal,
+      credential: () => 'key',
+      fetch,
+      onAttemptStart: (value) => {
+        wire = value;
+        return 'long';
+      },
+      onAttemptFinish: vi.fn(),
+    });
+    expect(result.entries).toEqual([]);
+    expect(readImage).not.toHaveBeenCalled();
+    expect(wire?.headers['TypeSafe-Danger-Zone-Long-Context']).toBe('true');
+    expect(() => validateImageJudgmentWire(source, assets, wire!)).not.toThrow();
+    expect(() =>
+      imageJudgmentRequest(source, assets, guidance, { images: false, longContext: false })
+    ).toThrow('JEV_INPUT_BUDGET');
+  });
+  it('keeps none and the four-image result cap after judging actual pictures', async () => {
+    const bytes = await sharp({
+      create: { width: 300, height: 300, channels: 3, background: '#5a7089' },
+    })
+      .png()
+      .toBuffer();
+    const catalog = Array.from({ length: 6 }, (_, index) => ({
+      ...assets[0],
+      ref: `picture-${index}`,
+    }));
+    const text = Array.from({ length: 6 }, (_, index) => `Scene ${index} at the pier.`).join(
+      '\n\n'
+    );
+    const input = { ...source, text, hash: createHash('sha256').update(text).digest('hex') };
+    const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const response = await typedResponse(body, 'none').json();
+      for (let index = 0; index < 5; index++)
+        response.answers[`block_${index}`] = {
+          type: 'choice',
+          choice: `asset_${index}`,
+          probabilities: { [`asset_${index}`]: 0.95 },
+        };
+      return new Response(JSON.stringify(response));
+    });
+    const result = await judgeImagePlacement(input, catalog, '', {
+      settings: { images: true, longContext: false },
+      readImage: () => bytes,
+      signal: new AbortController().signal,
+      credential: () => 'key',
+      fetch,
+      onAttemptStart: () => 'cap',
+      onAttemptFinish: vi.fn(),
+    });
+    expect(result.entries).toHaveLength(4);
+    expect(new Set(result.entries.map((entry) => entry.assetRef)).size).toBe(4);
+    expect(
+      result.entries.every(
+        (entry) => entry.assetRevision === 1 && entry.assetHash === assets[0].hash
+      )
+    ).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it('selects existing source-bound images in one typed call and validates attribution', async () => {
     let wire: WireRecord | undefined;
     const finish = vi.fn();

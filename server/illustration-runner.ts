@@ -1,5 +1,6 @@
 import { checkCodexIllustrationContent } from './illustration-content-check.js';
 import type { JevHooks } from './jev-judgment.js';
+import { jevSettings } from './jev-settings.js';
 import { splitSource } from '../core/auxiliary.js';
 import { imageTargetSource } from './package-images.js';
 import {
@@ -194,6 +195,7 @@ export async function runIllustrationJob(
     return { status: 'failed', code: 'ILLUSTRATION_SOURCE_UNAVAILABLE', images: 0 };
   }
   if (!claimed) return null;
+  const judgmentSettings = jevSettings(store.db);
   const { job, source } = claimed;
   const { generation, input } = job;
   const diagnostic: IllustrationDiagnostic = {
@@ -417,6 +419,7 @@ export async function runIllustrationJob(
         {
           signal: hooks.signal,
           credential: hooks.resolveJevCredential,
+          settings: judgmentSettings,
           onAttemptStart: recordAttempt,
           onAttemptFinish: hooks.onAttemptFinish,
         },

@@ -4,7 +4,7 @@ import { DEFAULT_LORE_CONTEXT } from '../core/lore-context.js';
 import { defaultProfile } from '../core/product.js';
 import type { RisuLoreProjection } from '../core/risu-content.js';
 import type { RunSnapshot } from '../core/types.js';
-import { contextBudgetForModel, estimateContextTokens } from '../core/context-budget.js';
+import { contextBudgetForModel } from '../core/context-budget.js';
 import { compiledPackages } from '../core/package-context.js';
 import { countTextTokens } from '../core/text-tokens.js';
 import {
@@ -13,6 +13,14 @@ import {
   prepareLoreSelection,
 } from '../server/lore-selection.js';
 import type { MainHooks } from '../server/model-runner.js';
+import { jevRequestBudget } from '../server/jev-judgment.js';
+
+const sentEntries = (body: {
+  questions: Record<
+    string,
+    { instructions: { entry: { id: string; title: string; text: string; description?: string } } }
+  >;
+}) => Object.values(body.questions).map((question) => question.instructions.entry);
 
 const lore = (id: string, text: string, title = 'Archive'): RisuLoreProjection => ({
   id,
@@ -78,7 +86,7 @@ function projectLore(input: RunSnapshot, catalogs: RisuLoreProjection[][]) {
     })),
   };
 }
-async function select(input: RunSnapshot, expectedCalls = 1) {
+async function select(input: RunSnapshot, expectedCalls = 1, longContext = false) {
   const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body));
     return new Response(
@@ -90,7 +98,7 @@ async function select(input: RunSnapshot, expectedCalls = 1) {
             key,
             {
               type: 'noul',
-              noul: JSON.stringify(body.state.entries[index]).includes('청월인장') ? 0.95 : 0.1,
+              noul: JSON.stringify(sentEntries(body)[index]).includes('청월인장') ? 0.95 : 0.1,
             },
           ])
         ),
@@ -109,17 +117,63 @@ async function select(input: RunSnapshot, expectedCalls = 1) {
   };
   const result = await prepareLoreSelection(input, hooks, {
     reserveCalls: 1,
-    jev: { credential: () => 'synthetic-key', fetch },
+    jev: { credential: () => 'synthetic-key', fetch, settings: { images: false, longContext } },
   });
   expect(fetch).toHaveBeenCalledTimes(expectedCalls);
   const body = expectedCalls ? JSON.parse(String(fetch.mock.calls[0][1]?.body)) : undefined;
   if (body)
-    expect(estimateContextTokens(body)).toBeLessThanOrEqual(
+    expect(jevRequestBudget(body).requestTokens).toBeLessThanOrEqual(
       input.profile!.loreContext!.judgment.maxInputTokens
     );
   expect(result.usage.modelCalls).toBe(expectedCalls);
   return { ...result, body };
 }
+
+test('shares only the conversation while packing a catalog beyond 32k, expands in long context and preserves a saved input cap', async () => {
+  const entries = Array.from({ length: 12 }, (_, index) =>
+    lore(`entry-${index}`, 'Ordinary records. '.repeat(2000))
+  );
+  const input = snapshot([entries], 'Continue the ordinary records.');
+  const standard = await select(input);
+  const extended = await select(input, 1, true);
+  expect(standard.body.state).not.toHaveProperty('entries');
+  expect(jevRequestBudget(standard.body).requestTokens).toBeGreaterThan(32000);
+  expect(jevRequestBudget(standard.body).requestTokens).toBeLessThanOrEqual(64000);
+  expect(jevRequestBudget(standard.body).questionTokens).toBeLessThanOrEqual(32000);
+  expect(sentEntries(extended.body)).toHaveLength(12);
+  expect(sentEntries(standard.body).length).toBeLessThan(12);
+  expect(extended.snapshot.loreSelection!.entries[0].coverage).toEqual({
+    total: 12,
+    evaluated: 12,
+  });
+  input.profile!.loreContext!.judgment.maxInputTokens = 28000;
+  const limited = await select(input, 1, true);
+  expect(input.profile!.loreContext!.judgment.maxInputTokens).toBe(28000);
+  expect(jevRequestBudget(limited.body).requestTokens).toBeLessThanOrEqual(28000);
+  expect(sentEntries(limited.body).length).toBeLessThan(sentEntries(standard.body).length);
+});
+
+test('skips a candidate beyond the independent question budget without hiding a smaller candidate', async () => {
+  const large = lore('large', '청월인장 ' + 'ordinary '.repeat(35000));
+  const small = lore('small', 'The 청월인장 is in the tower.');
+  const input = snapshot([[large, small]], '청월인장');
+  input.profile!.loreContext!.maxRetainedTokens = 100000;
+  input.profile!.loreContext!.judgment.maxSelectedTokens = 100000;
+  const standard = await select(input);
+  expect(sentEntries(standard.body).map((entry) => entry.id)).toEqual(['small']);
+  expect(standard.snapshot.loreSelection!.entries[0]).toMatchObject({
+    selected: ['small'],
+    coverage: { total: 2, evaluated: 1 },
+    partial: 'catalog',
+  });
+  expect(standard.snapshot.loreSelection!.entries[0].omitted).not.toContainEqual({
+    id: 'large',
+    reason: 'irrelevant',
+  });
+  const extended = await select(input, 1, true);
+  expect(sentEntries(extended.body).map((entry) => entry.id)).toEqual(['large', 'small']);
+  expect(extended.snapshot.loreSelection!.entries[0].selected).toEqual(['large', 'small']);
+});
 
 test('finds the last folder lore by a short Korean name and late body fact without changing frozen input', async () => {
   const filler = 'The archives list ordinary weather and supplies. '.repeat(25);
@@ -129,10 +183,10 @@ test('finds the last folder lore by a short Korean name and late body fact witho
   const before = structuredClone(input);
   const result = await select(input);
   expect(input).toEqual(before);
-  expect(result.body.state.entries[0]).toMatchObject({ id: 'late', text: entries[1000].text });
+  expect(sentEntries(result.body)[0]).toMatchObject({ id: 'late', text: entries[1000].text });
   const receipt = result.snapshot.loreSelection!.entries[0];
   expect(receipt.selected).toEqual(['late']);
-  expect(receipt.coverage).toEqual({ total: 1001, evaluated: result.body.state.entries.length });
+  expect(receipt.coverage).toEqual({ total: 1001, evaluated: sentEntries(result.body).length });
   expect(receipt.coverage!.evaluated).toBeLessThan(1001);
   expect(receipt.partial).toBe('catalog');
   const judged = new Set(receipt.judgment!.scores.map((score) => score.id));
@@ -161,7 +215,7 @@ test('shortlists lore named only in the derived summary when the catalog exceeds
   };
   const result = await select(input);
   expect(result.snapshot.loreSelection!.entries[0].selected).toEqual(['zz-summary']);
-  expect(result.body.state.entries[0].id).toBe('zz-summary');
+  expect(sentEntries(result.body)[0].id).toBe('zz-summary');
   expect(result.body.state.summary.text).toBe(input.contextPlan.summary);
   expect(result.snapshot.loreSelection!.entries[0].partial).toBe('catalog');
 });
@@ -174,12 +228,12 @@ test('searches later attached packages beyond the combined provider question lim
   catalogs[1][1000] = lore('late', `${filler}청월인장을 보관하는 탑의 기록.`);
   const input = snapshot(catalogs, '청월인장의 봉인을 조사한다.');
   const { snapshot: result, body } = await select(input);
-  expect(body.state.entries[0].text).toContain('청월인장');
+  expect(sentEntries(body)[0].text).toContain('청월인장');
   expect(result.loreSelection!.entries.map((entry) => entry.selected)).toEqual([[], ['late']]);
   expect(result.loreSelection!.entries.map((entry) => entry.coverage!.total)).toEqual([1001, 1001]);
   expect(
     result.loreSelection!.entries.reduce((sum, entry) => sum + entry.coverage!.evaluated, 0)
-  ).toBe(body.state.entries.length);
+  ).toBe(sentEntries(body).length);
   expect(Object.keys(body.questions).length).toBeLessThanOrEqual(2000);
 });
 
@@ -195,7 +249,7 @@ test('skips a relevant entry too large for the judgment request and still evalua
   );
   input.profile!.loreContext!.judgment.maxInputTokens = 1000;
   const { snapshot: result, body } = await select(input);
-  expect(body.state.entries.map((entry: { id: string }) => entry.id)).toEqual(['small']);
+  expect(sentEntries(body).map((entry: { id: string }) => entry.id)).toEqual(['small']);
   expect(result.loreSelection!.entries[0].selected).toEqual(['small']);
 });
 
@@ -209,8 +263,8 @@ test.each(['title', 'description'] as const)(
     projectLore(input, [[entries[0], { ...entries[1], [field]: '청월인장' }]]);
     const before = structuredClone(input);
     const { snapshot: result, body } = await select(input);
-    expect(body.state.entries.map((entry: { id: string }) => entry.id)).toEqual(['target']);
-    expect(JSON.stringify(body.state.entries[0])).toContain('청월인장');
+    expect(sentEntries(body).map((entry: { id: string }) => entry.id)).toEqual(['target']);
+    expect(JSON.stringify(sentEntries(body)[0])).toContain('청월인장');
     expect(result.loreSelection!.entries[0].selected).toEqual(['target']);
     expect(result.loreSelection!.entries[0].coverage).toEqual({ total: 2, evaluated: 1 });
     expect(input).toEqual(before);
@@ -228,8 +282,8 @@ test('searches and judges every scoped body sharing one selected lore id', async
     [ordinary, { ...fact, text: 'Hidden 청월인장 is kept at the north tower.' }],
   ]);
   const { snapshot: result, body } = await select(input);
-  expect(body.state.entries[0].id).toBe('fact');
-  const sent = JSON.stringify(body.state.entries[0]);
+  expect(sentEntries(body)[0].id).toBe('fact');
+  const sent = JSON.stringify(sentEntries(body)[0]);
   expect(sent).toContain('Ordinary weather.');
   expect(sent).toContain('Hidden 청월인장 is kept at the north tower.');
   expect(result.loreSelection!.entries[0].selected).toEqual(['fact']);
@@ -338,8 +392,8 @@ test('skips only fully retained identical scoped bodies and charges all retained
   expect(carried.snapshot.loreSelection!.entries[0].coverage).toEqual({ total: 0, evaluated: 0 });
   input.profile!.chatOverrides!.projections[1].package.lore[0].text = 'Changed 청월인장';
   const changed = await select(input);
-  expect(changed.body.state.entries[0].text).toContain('Changed 청월인장');
-  expect(changed.body.state.entries[0].text).toContain(fact.text);
+  expect(sentEntries(changed.body)[0].text).toContain('Changed 청월인장');
+  expect(sentEntries(changed.body)[0].text).toContain(fact.text);
   input.profile!.loreContext!.maxRetainedTokens = entries.reduce(
     (sum, entry) => sum + countTextTokens(entry.text),
     0

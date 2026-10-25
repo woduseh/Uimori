@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { estimateContextTokens } from '../core/context-budget.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
+import type { JevSettings } from '../core/jev-provider.js';
 
 export const JEV_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 export const JEV_MODEL = 'jev-latest';
@@ -8,12 +9,45 @@ export const JEV_MODEL = 'jev-latest';
 // not a guaranteed provider tokenizer; explicit provider budget failures also remain fatal.
 export const JEV_REQUEST_TOKEN_LIMIT = 64_000;
 export const JEV_STATE_QUESTION_TOKEN_LIMIT = 32_000;
+export const JEV_LONG_CONTEXT_TOKEN_LIMIT = 262_000;
 // https://docs.typesafe.ai/api (2026-10-08): maximum options per Choice.
 export const JEV_CHOICE_OPTION_LIMIT = 255;
 export type JevQuestion =
-  | { type: 'noul'; instructions: string }
-  | { type: 'choice'; instructions: string; criteria: Record<string, string | null> };
-export type JevRequest = { state: Json; questions: Record<string, JevQuestion> };
+  | { type: 'noul'; instructions: Json }
+  | { type: 'choice'; instructions: Json; criteria: Record<string, string | null> };
+export type JevImage = { type: 'image'; format: 'jpeg' | 'png'; data_base64: string };
+export type JevRequest = {
+  state: Json;
+  questions: Record<string, JevQuestion>;
+  assets?: Record<string, JevImage>;
+};
+
+/** Text estimates only: the provider reports image tokens after evaluation. */
+export function jevRequestBudget(request: JevRequest) {
+  const state = estimateContextTokens(request.state);
+  const questions = Object.values(request.questions).map((question) =>
+    estimateContextTokens(question)
+  );
+  return {
+    requestTokens: state + questions.reduce((sum, tokens) => sum + tokens, 0),
+    questionTokens: state + Math.max(0, ...questions),
+  };
+}
+
+export function jevRequestFits(
+  request: JevRequest,
+  maxInputTokens: number | null = null,
+  longContext = false
+): boolean {
+  const budget = jevRequestBudget(request);
+  return (
+    budget.requestTokens <=
+      (longContext ? JEV_LONG_CONTEXT_TOKEN_LIMIT : JEV_REQUEST_TOKEN_LIMIT) &&
+    budget.questionTokens <=
+      (longContext ? JEV_LONG_CONTEXT_TOKEN_LIMIT : JEV_STATE_QUESTION_TOKEN_LIMIT) &&
+    (maxInputTokens === null || budget.requestTokens <= maxInputTokens)
+  );
+}
 export type JevResult = {
   scores: Record<string, number>;
   choices: Record<
@@ -24,6 +58,8 @@ export type JevResult = {
   attemptId: string;
 };
 export type JevHooks = {
+  settings?: Pick<JevSettings, 'images' | 'longContext'>;
+  readImage?: (hash: string) => Uint8Array | undefined;
   kind?: NonNullable<WireRecord['judgment']>['kind'];
   signal: AbortSignal;
   onAttemptStart: (wire: WireRecord) => string | Promise<string>;
@@ -81,17 +117,14 @@ export async function executeJevJudgment(
   )
     throw new JevError('JEV_REQUEST_INVALID');
   const body = { model: JEV_MODEL, ...request };
-  const stateTokens = estimateContextTokens(request.state);
-  const questionTokens = Object.values(request.questions).map((question) =>
-    estimateContextTokens(question)
-  );
-  if (
-    stateTokens + Math.max(...questionTokens) > JEV_STATE_QUESTION_TOKEN_LIMIT ||
-    stateTokens + questionTokens.reduce((sum, tokens) => sum + tokens, 0) >
-      JEV_REQUEST_TOKEN_LIMIT ||
-    (maxInputTokens !== null && estimateContextTokens(body) > maxInputTokens)
-  )
+  if (!jevRequestFits(request, maxInputTokens, hooks.settings?.longContext))
     throw new JevError('JEV_INPUT_BUDGET');
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (hooks.settings?.longContext) headers['TypeSafe-Danger-Zone-Long-Context'] = 'true';
+  if (request.assets && Object.keys(request.assets).length) {
+    if (!hooks.settings?.images) throw new JevError('JEV_IMAGES_DISABLED');
+    headers['TypeSafe-Danger-Zone-Images'] = 'true';
+  }
   const key = await (hooks.credential ?? (() => process.env.TYPESAFE_API_KEY))();
   if (!key || /[\r\n]/u.test(key)) throw new JevError('JEV_CREDENTIAL_REQUIRED');
   if (hooks.signal.aborted) throw new JevError('JEV_CANCELLED');
@@ -112,7 +145,7 @@ export async function executeJevJudgment(
     modelId: JEV_MODEL,
     method: 'POST',
     url: JEV_ENDPOINT,
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: body as unknown as Json,
     bodySha256: digest(encoded),
     stablePrefixSha256: digest(JSON.stringify(request.questions)),
@@ -140,7 +173,7 @@ export async function executeJevJudgment(
     const response = await (hooks.fetch ?? fetch)(JEV_ENDPOINT, {
       method: 'POST',
       redirect: 'error',
-      headers: { authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+      headers: { ...headers, authorization: `Bearer ${key}` },
       body: encoded,
       signal: controller.signal,
     });

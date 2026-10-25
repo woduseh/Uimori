@@ -5,7 +5,8 @@ import type { ProviderConnectionTest } from '../core/provider-connection-test.js
 import type { ProviderResult } from '../core/transport.js';
 import type { Store } from './store.js';
 import type { JevCredentialStore } from './jev-credentials.js';
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import { HttpError, boolean, fields, number, record, text } from './request-validation.js';
+import { jevSettings, JEV_SETTINGS_KEY } from './jev-settings.js';
 import { executeJevJudgment, JevError, JEV_ENDPOINT, JEV_MODEL } from './jev-judgment.js';
 import {
   ProviderConnectionTestStore,
@@ -48,6 +49,7 @@ export function jevProviderRoutes(
       modelId: JEV_MODEL,
       endpoint: JEV_ENDPOINT,
       latestTest: latest ? (JSON.parse(latest.body) as ProviderConnectionTest) : null,
+      settings: jevSettings(store.db),
     };
   };
   app.get('/api/provider-management/jev', async (_request, reply) => {
@@ -64,6 +66,28 @@ export function jevProviderRoutes(
       body.apiKey
     );
     return status();
+  });
+  app.put('/api/provider-management/jev/settings', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const body = record(request.body);
+    fields(body, ['expectedRevision', 'images', 'longContext']);
+    const expected = number(body.expectedRevision, 'expectedRevision', 0, Number.MAX_SAFE_INTEGER);
+    const images = boolean(body.images);
+    const longContext = boolean(body.longContext);
+    return store.transaction(() => {
+      const previous = jevSettings(store.db);
+      if (previous.revision !== expected)
+        throw new HttpError(409, 'JEV_SETTINGS_REVISION_CONFLICT');
+      store.db
+        .prepare(
+          'INSERT INTO app_metadata(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
+        )
+        .run(
+          JEV_SETTINGS_KEY,
+          JSON.stringify({ revision: previous.revision + 1, images, longContext })
+        );
+      return status();
+    });
   });
   app.delete('/api/provider-management/jev', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -138,6 +162,7 @@ export function jevProviderRoutes(
           try {
             authorize();
             const result = await executeJevJudgment(input, inputHash, 1000, {
+              settings: jevSettings(store.db),
               signal: options.signal,
               timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
               credential: () => {
