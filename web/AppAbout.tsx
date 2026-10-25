@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import './app-about.css';
 import { api } from './api.js';
-import { ExternalLinkIcon, LibraryIcon } from './ui-icons.js';
+import { ExternalLinkIcon } from './ui-icons.js';
 import license from '../LICENSE?raw';
 import notices from '../THIRD_PARTY_NOTICES.md?raw';
 
@@ -33,7 +33,7 @@ export function AppAbout() {
   return (
     <section className="app-about" aria-label={t('outside.aboutLabel')}>
       <div className="recovery-settings-brand">
-        <LibraryIcon size={28} aria-hidden="true" />
+        <img src="/favicon.svg" width={56} height={56} alt="" aria-hidden="true" />
         <div>
           <h3>Uimori</h3>
         </div>

@@ -375,7 +375,7 @@ export function AppSettingsPanel({
   onClose: () => void;
   onEditPrompt?: (presetId?: string) => void;
 }) {
-  const { locale } = useI18n();
+  useI18n();
   const settingsCategories = getSettingsCategories();
   const librarySettingsSubjects = getLibrarySettingsSubjects();
   const [signingOut, setSigningOut] = useState(false);
@@ -413,52 +413,6 @@ export function AppSettingsPanel({
     loreDirty ||
     illustrationDirty ||
     themeDirty;
-  const library = state.library;
-  const workspace = state.promptWorkspace;
-  const modelTitle = (role: 'main' | 'translation') => {
-    const reference = workspace?.modelRoutes[role];
-    return reference
-      ? (library?.models.find((item) => item.id === reference.id)?.title ??
-          t('settingssummary.unavailable'))
-      : t('settingssummary.unassigned');
-  };
-  const summaries: Record<string, string | undefined> = {
-    general: t('settingssummary.general', {
-      language: new Intl.DisplayNames([locale], { type: 'language' }).of(locale) ?? locale,
-      mode: t(
-        theme === 'system'
-          ? 'chatsettings.m61'
-          : theme === 'dark'
-            ? 'chatsettings.m62'
-            : 'chatsettings.m63'
-      ),
-      key: enterSend ? 'Enter' : 'Ctrl / Cmd + Enter',
-    }),
-    models: modelDirty
-      ? t('settingssummary.unsaved')
-      : workspace && library && !state.promptWorkspaceError && !state.libraryError
-        ? t('settingssummary.roles', {
-            main: modelTitle('main'),
-            translation: modelTitle('translation'),
-          })
-        : undefined,
-    prompts: promptDirty
-      ? t('settingssummary.unsaved')
-      : workspace && !state.promptWorkspaceError
-        ? t('settingssummary.roles', {
-            main: workspace.main.title,
-            translation: workspace.translation.title,
-          })
-        : undefined,
-    connections: connectionDirty
-      ? t('settingssummary.unsaved')
-      : library && !state.libraryError
-        ? t('settingssummary.providers', {
-            enabled: library.connections.filter((item) => item.enabled !== false).length,
-            total: library.connections.length,
-          })
-        : undefined,
-  };
   const root = useRef<HTMLElement>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const positions = useRef(
@@ -673,16 +627,12 @@ export function AppSettingsPanel({
                 id={`${id}-${key}-tab`}
                 aria-controls={`${id}-${key}-panel`}
                 aria-label={label}
-                aria-describedby={summaries[key] ? `${id}-${key}-summary` : undefined}
                 aria-selected={compact ? undefined : active === key}
                 tabIndex={compact || active === key ? 0 : -1}
                 onClick={() => select(key)}
               >
                 <Icon size={18} aria-hidden="true" />
-                <span>
-                  <span>{label}</span>
-                  {summaries[key] && <small id={`${id}-${key}-summary`}>{summaries[key]}</small>}
-                </span>
+                <span>{label}</span>
               </button>
             ))}
           </div>

@@ -645,8 +645,7 @@ test('SCUI02 settings back, resize and close preserve provider and chat drafts u
     dialog
       .locator('.settings-navigation')
       .getByRole('button', { name: '프로바이더와 모델', exact: true })
-      .locator('small')
-  ).toHaveText('저장하지 않은 변경');
+  ).toHaveText('프로바이더와 모델');
   await expect(dialog.getByRole('tabpanel')).toHaveCount(0);
   await page.goBack();
   const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });

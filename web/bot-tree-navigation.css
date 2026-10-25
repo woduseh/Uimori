@@ -14,9 +14,9 @@
   align-items: center;
   gap: 8px;
 }
-.brand-name > svg {
+.brand-name > img {
   flex: none;
-  color: var(--accent-text);
+  display: block;
 }
 .sidebar-quick-actions .navigation-quick-actions {
   display: grid;
