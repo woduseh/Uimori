@@ -237,8 +237,10 @@ describe('JEV-only existing image placement', () => {
       expect(tail).toBeDefined();
       return typedResponse(body, tail.id);
     });
+    // App settings include a storage revision; only model-facing opt-ins belong in the receipt.
+    const settings = { revision: 7, images: true, longContext: false };
     const result = await judgeImagePlacement(source, catalog, '', {
-      settings: { images: true, longContext: false },
+      settings,
       readImage,
       signal: new AbortController().signal,
       credential: () => 'key',
