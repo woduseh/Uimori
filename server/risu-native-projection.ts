@@ -73,7 +73,7 @@ export function projectNativeRisuPackage(
         ? [
             {
               id: `start-${index}`,
-              title: index === 0 ? '기본 시작문' : `시작문 ${index + 1}`,
+              title: index === 0 ? '기본 첫 메시지' : `첫 메시지 ${index + 1}`,
               mode: 'authored' as const,
               text: string(value),
             },

@@ -66,6 +66,14 @@ Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 
 
 Gemini에서 도구 호출 후 이어지는 요청은 모델의 원본 응답과 사고 서명을 보존하고, 동일한 사용자 턴 안의 추가 제어 텍스트를 도구 결과(`functionResponse`) 앞에 배치해요. Vertex가 도구 결과 뒤에 텍스트를 붙인 요청을 거부하는 문제를 피하기 위한 프로토콜 전용 처리이며, Claude·OpenAI·Codex 요청 형식은 변경하지 않아요.
 
+## Gemini 안전 필터
+
+모델의 **고급 → Gemini 안전 필터**에서 괴롭힘, 증오 표현, 성적 콘텐츠, 위험 콘텐츠, Jailbreak를 각각 선택해요. Google AI Studio와 Google Agent Platform 직접 연결에 적용하며, 새 항목도 기존 모델에 값을 자동 추가하지 않아요. **모델 기본값**은 범주를 생략하고, 모두 기본값이면 `safetySettings` 전체를 생략해요. `OFF`는 조정 가능한 필터를 끄며 `BLOCK_NONE`은 차단 없이 평가를 요청해요. 나머지 단계는 높음만, 중간 이상, 낮음 이상을 차단해요. 모델의 내장 보호 기능까지 해제하는 설정은 아니에요.
+
+[Gemini generateContent REST](https://ai.google.dev/api/generate-content#SafetySetting)와 [Google Cloud 안전 필터](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/capabilities/configure-safety-filters)의 범주·임계값을 따르며 `HARM_CATEGORY_JAILBREAK`를 전달해요. 모델 ID로 설정을 숨기거나 자동 치환하지 않으며 실제 사용 가능 여부는 제공사의 응답을 따라요.
+
+현재 연결은 generateContent 계열의 `safetySettings`, `category`, `threshold` 형식을 사용해요. Interactions 형식과 섞지 않아요. 도구 후속 요청과 저장된 실행 설정에서도 범주별 값을 유지하며, Jailbreak 차단 응답은 거절로 처리해요. 평가 방식 `method`는 생략해 기존 API 기본 동작을 유지하고, 폐기된 Civic integrity 범주는 추가하지 않아요.
+
 ## Codex
 
 Codex는 API 키를 입력하는 연결이 아니라 전용 실행기의 로그인 상태를 사용해요. [Codex 안내](CODEX.md)를 따라 등록해요. 외부 실행기의 로그인 파일은 SQLite 백업과 별개예요.

@@ -111,9 +111,45 @@
   top: auto;
   bottom: calc(100% + 4px);
 }
+/* Anchor scope keeps repeated scene menus attached to their own trigger. Geometry is native;
+   details still owns opening, dismissal and the lifetime of dialogs launched by menu items. */
+.action-menu-viewport {
+  anchor-scope: --action-menu-trigger;
+}
+.action-menu-viewport > summary {
+  anchor-name: --action-menu-trigger;
+}
+@media (min-width: 601px) {
+  .action-menu-viewport[open] > .action-menu-body.action-menu-body {
+    position: fixed;
+    position-anchor: --action-menu-trigger;
+    inset: auto;
+    position-area: bottom span-left;
+    justify-self: end;
+    margin: 4px 8px;
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline,
+      --action-menu-viewport;
+  }
+  .action-menu-viewport.action-menu-up[open] > .action-menu-body.action-menu-body {
+    position-area: top span-left;
+  }
+}
+/* When neither side can hold a long menu, use the available viewport and scroll its contents. */
+@position-try --action-menu-viewport {
+  position-area: none;
+  inset: 8px;
+  margin: 0;
+  align-self: center;
+  justify-self: end;
+}
 /* Bottom sheet below 600px (SHEET_MEDIA in ActionMenu.tsx): a scrim behind and rows sized for
    thumbs. The doubled class outranks per-screen popover overrides such as `.source-actions >
-   .action-menu > .action-menu-body`; the component drops its anchored inline position here. */
+   .action-menu > .action-menu-body`; desktop anchor positioning does not apply here. */
 @media (max-width: 600px) {
   .action-menu[open]::before {
     content: "";

@@ -179,6 +179,7 @@ describe('provider settings, catalogs and archive contracts', () => {
       const safetySettings = {
         HARM_CATEGORY_HARASSMENT: 'OFF',
         HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+        HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH',
       };
       const saved = await request<ModelPreset>(
         app,

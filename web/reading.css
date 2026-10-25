@@ -145,3 +145,15 @@
     align-items: flex-start;
   }
 }
+
+.reading-settings-content[hidden] {
+  display: none;
+}
+
+/* Search results keep the input and dialog in place while the list gets shorter. */
+.app-dialog.reading-settings-dialog {
+  height: var(--dialog-max-height);
+}
+.reading-settings-dialog > .dialog-body {
+  flex: 1;
+}

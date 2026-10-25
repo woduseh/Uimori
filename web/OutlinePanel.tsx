@@ -1,3 +1,4 @@
+import { SelectionCheckbox } from './BooleanControls.js';
 import { useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -700,8 +701,7 @@ export function OutlinePanel({
                       .filter((node) => node.id !== selectedId || adding)
                       .map((node) => (
                         <label key={node.id}>
-                          <input
-                            type="checkbox"
+                          <SelectionCheckbox
                             disabled={disabled}
                             checked={draft.relatedIds.includes(node.id)}
                             onChange={(event) =>
@@ -722,8 +722,7 @@ export function OutlinePanel({
                   </details>
                   {!adding && (
                     <label className="outline-keep">
-                      <input
-                        type="checkbox"
+                      <SelectionCheckbox
                         checked={draft.fixed}
                         disabled={disabled}
                         onChange={(event) => changeDraft({ ...draft, fixed: event.target.checked })}

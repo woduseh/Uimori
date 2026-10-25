@@ -630,10 +630,10 @@ export const messages = {
     zh: '请描述第一个场景。',
   },
   'main.m093': {
-    ko: '시작문을 바꿨어요.',
-    en: 'Starting text changed.',
-    ja: '開始文を変更しました。',
-    zh: '已更改开场文本。',
+    ko: '첫 메시지를 바꿨어요.',
+    en: 'First message changed.',
+    ja: '最初のメッセージを変更しました。',
+    zh: '已更改首条消息。',
   },
   'main.m094': {
     ko: '수정한 요청을 현재 설정으로 다시 실행해요.',

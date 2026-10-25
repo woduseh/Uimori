@@ -1,7 +1,8 @@
 import { translateMessage, useI18n } from './i18n.js';
-import type { ComponentPropsWithRef } from 'react';
+import { useId, type ComponentPropsWithRef } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import './ui-controls.css';
+import './tooltip.css';
 
 type Props = Omit<ComponentPropsWithRef<'button'>, 'children' | 'aria-label'> & {
   label: string;
@@ -19,15 +20,32 @@ export function IconButton({
   ...props
 }: Props) {
   useI18n();
+  const tooltipId = useId();
+  const tooltip = title ? translateMessage(title) : '';
   return (
     <button
       {...props}
+      {...(tooltip ? { interestfor: tooltipId } : {})}
       type={type}
       className={`icon-button ui-icon-button ${className}`}
       aria-label={translateMessage(label)}
-      title={title ? translateMessage(title) : title}
     >
       <Icon size={size} aria-hidden="true" />
+      {tooltip && (
+        <span
+          id={tooltipId}
+          className="ui-tooltip"
+          popover="hint"
+          role="tooltip"
+          onClick={(event) => {
+            // Keep the hoverable text from activating its owning button.
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          {tooltip}
+        </span>
+      )}
     </button>
   );
 }

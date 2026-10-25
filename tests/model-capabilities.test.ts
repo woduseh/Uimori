@@ -98,6 +98,7 @@ test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct c
     safetySettings: {
       HARM_CATEGORY_HARASSMENT: 'OFF',
       HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+      HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH',
     },
   };
   for (const protocol of ['vertex-gemini-v1', 'google-gemini-v1'] as const) {
@@ -139,6 +140,7 @@ test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct c
         safetySettings: {
           HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE' as const,
           HARM_CATEGORY_HARASSMENT: 'OFF' as const,
+          HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH' as const,
         },
       },
     })
@@ -148,7 +150,10 @@ test('Gemini categories accept explicit OFF and BLOCK_NONE, but only on direct c
       ...request,
       generation: {
         ...configured,
-        safetySettings: { HARM_CATEGORY_HARASSMENT: 'BLOCK_NONE' as const },
+        safetySettings: {
+          ...configured.safetySettings,
+          HARM_CATEGORY_JAILBREAK: 'BLOCK_LOW_AND_ABOVE' as const,
+        },
       },
     })
   ).toThrow('INVALID_GENERATION_BINDING');

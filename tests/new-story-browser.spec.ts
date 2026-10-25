@@ -909,7 +909,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await expect(library.getByLabel('Risu 자료 이름')).toHaveValue(title);
   await expect(library.getByTestId('package-fields')).toHaveCount(0);
   await library.getByRole('tab', { name: '첫 메시지', exact: true }).click();
-  await library.getByLabel('기본 시작문', { exact: true }).fill('<selector> Edited');
+  await library.getByLabel('기본 첫 메시지', { exact: true }).fill('<selector> Edited');
   await library.getByRole('tab', { name: '고급 설정', exact: true }).click();
   await library.getByRole('button', { name: '원문 JSON', exact: true }).click();
   await library.getByLabel('Risu 원문 JSON').fill('[{"unfinished":');
@@ -1013,8 +1013,8 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
   await draft.fill('시작문을 바꿔도 남겨 둘 다음 장면 초안');
   await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
-  await source.getByRole('button', { name: '시작문 바꾸기', exact: true }).click();
-  const picker = page.getByRole('dialog', { name: '시작문 바꾸기', exact: true });
+  await source.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: '첫 메시지 바꾸기', exact: true });
   await expect(picker.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
   await picker.getByLabel('첫 메시지 선택').selectOption('start-1');
   await picker.getByText('미리보기', { exact: true }).click();
@@ -1028,7 +1028,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
       await page.emulateMedia({ colorScheme });
       await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
       await expect(
-        picker.getByRole('button', { name: '시작문 바꾸기', exact: true })
+        picker.getByRole('button', { name: '첫 메시지 바꾸기', exact: true })
       ).toBeInViewport({
         ratio: 1,
       });
@@ -1043,7 +1043,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   const changed = page.waitForResponse(
     (response) => /\/package-start$/.test(response.url()) && response.request().method() === 'POST'
   );
-  await picker.getByRole('button', { name: '시작문 바꾸기', exact: true }).click();
+  await picker.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
   const switched = await changed;
   expect(switched.ok()).toBe(true);
   await expect(picker).toBeHidden();
@@ -1070,7 +1070,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   await expect(draft).toHaveValue('시작문을 바꿔도 남겨 둘 다음 장면 초안');
   await expect(source.getByTestId('turn-activity')).toHaveCount(0);
   await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
-  await source.getByRole('button', { name: '시작문 바꾸기', exact: true }).click();
+  await source.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
   await expect(picker.getByLabel('첫 메시지 선택')).toHaveValue('start-1');
   await page.keyboard.press('Escape');
   await expect(picker).toBeHidden();
@@ -1094,5 +1094,141 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
   await expect.poll(async () => (await readActive()).reader.total).toBe(2);
   await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
-  await expect(source.getByRole('button', { name: '시작문 바꾸기', exact: true })).toHaveCount(0);
+  await expect(source.getByRole('button', { name: '첫 메시지 바꾸기', exact: true })).toHaveCount(
+    0
+  );
 });
+
+for (const width of [1440, 412]) {
+  test(`NSUI11 clearing a single authored greeting preserves the chat, history and draft ${width}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({ width, height: 900 });
+    const title = `Empty opening ${width} ${crypto.randomUUID()}`;
+    const greeting = 'A single authored greeting to preserve in history.';
+    const saved = await request.post('/api/content', {
+      data: {
+        kind: 'bot',
+        title,
+        description: '',
+        text: '',
+        loading: 'pinned',
+        relatedIds: [],
+        package: nativeContent({ name: title, first_mes: greeting }),
+      },
+    });
+    expect(saved.ok()).toBe(true);
+    const bot = (await saved.json()) as Content;
+    const created = await request.post('/api/chats', {
+      data: { title, botId: bot.id },
+    });
+    expect(created.ok()).toBe(true);
+    const chat = (await created.json()) as Chat;
+    const read = async () =>
+      (await (await request.get(`/api/chats/${chat.id}`)).json()) as ChatDetail;
+    const initial = await read();
+    const started = await request.post(`/api/chats/${chat.id}/package-start`, {
+      data: {
+        packageId: bot.id,
+        packageRevision: bot.revision,
+        startId: 'start-0',
+        expectedSettingsRevision: chat.settingsRevision,
+        expectedProfileRevision: initial.profile!.revision,
+        idempotencyKey: crypto.randomUUID(),
+      },
+    });
+    expect(started.ok(), await started.text()).toBe(true);
+    const before = await read();
+    const executionRequests: string[] = [];
+    page.on('request', (item) => {
+      if (item.method() === 'POST' && /\/(?:runs|candidate|translation)$/.test(item.url()))
+        executionRequests.push(item.url());
+    });
+    await page.goto(`/?chat=${chat.id}`);
+    const source = page.getByTestId('source').first();
+    await expect(source).toContainText(greeting);
+    const composer = page.getByRole('textbox', {
+      name: '다음 장면 요청',
+      exact: true,
+    });
+    const draft = '첫 메시지를 비워도 보존할 작성 중인 초안';
+    await composer.fill(draft);
+    const picker = page.getByRole('dialog', {
+      name: '첫 메시지 바꾸기',
+      exact: true,
+    });
+    const openPicker = async () => {
+      await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
+      await source.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
+      await expect(picker.getByLabel('첫 메시지 선택')).toHaveValue('start-0');
+    };
+    await openPicker();
+    await picker.getByText('미리보기', { exact: true }).click();
+    await expect(picker.locator('.risu-message-surface')).toContainText(greeting);
+    await picker.getByLabel('첫 메시지 선택').selectOption({ label: '첫 메시지 없이 시작' });
+    await expect(picker.getByText('미리보기', { exact: true })).toHaveCount(0);
+    await expect(picker.locator('.risu-message-surface')).toHaveCount(0);
+    await picker.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(picker).toBeHidden();
+    await expect(source).toContainText(greeting);
+    await expect(composer).toHaveValue(draft);
+    expect((await read()).chat.headRevision).toBe(before.chat.headRevision);
+    await openPicker();
+    await picker.getByLabel('첫 메시지 선택').selectOption({ label: '첫 메시지 없이 시작' });
+    await page.screenshot({ path: info.outputPath('empty-opening-picker-' + width + '.png') });
+    const commands: Record<string, unknown>[] = [];
+    // On desktop, lose the success response after the server commits. Explicit result
+    // confirmation must replay the original command rather than create another effect.
+    if (width === 1440) {
+      await page.route(`**/api/chats/${chat.id}/package-start`, async (route) => {
+        commands.push(route.request().postDataJSON());
+        if (commands.length === 1) {
+          const response = await route.fetch();
+          expect(response.ok()).toBe(true);
+          expect(await response.json()).toMatchObject({ run: null });
+          await route.abort('failed');
+        } else await route.continue();
+      });
+    }
+    const changed = page.waitForResponse(
+      (response) => response.url().endsWith(`/api/chats/${chat.id}/package-start`) && response.ok()
+    );
+    await picker.getByRole('button', { name: '첫 메시지 바꾸기', exact: true }).click();
+    if (width === 1440) {
+      await expect(picker.getByRole('alert')).toContainText('결과');
+      await expect(picker.getByLabel('첫 메시지 선택')).toBeDisabled();
+      expect((await read()).chat.headRevision).toBeNull();
+      await picker.getByRole('button', { name: /변경 결과 확인$/ }).click();
+    }
+    const response = await changed;
+    expect(response.request().postDataJSON().startId).toBeNull();
+    expect(await response.json()).toMatchObject({ run: null });
+    if (width === 1440) {
+      expect(commands).toHaveLength(2);
+      expect(commands[1]).toEqual(commands[0]);
+    }
+    await expect(picker).toBeHidden();
+    await expect(page.getByTestId('source')).toHaveCount(0);
+    await expect(composer).toHaveValue(draft);
+    await expect(composer).toBeFocused();
+    expect(new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
+    const after = await read();
+    expect(after.chat.headRevision).toBeNull();
+    expect(after.sources).toEqual(before.sources);
+    expect(after.runs).toEqual(before.runs);
+    expect(after.runs.every((run) => run.usage.modelCalls === 0)).toBe(true);
+    expect(after.attempts).toHaveLength(0);
+    const reader = (await (
+      await request.get(`/api/chats/${chat.id}/reader`)
+    ).json()) as ReaderDetail;
+    expect(reader.reader.order).toEqual([]);
+    expect(reader.reader.total).toBe(0);
+    expect(reader.sources).toEqual([]);
+    expect(executionRequests).toEqual([]);
+    await page.reload();
+    await expect(composer).toHaveValue(draft);
+    await expect(page.getByTestId('source')).toHaveCount(0);
+    expect((await read()).chat.headRevision).toBeNull();
+  });
+}

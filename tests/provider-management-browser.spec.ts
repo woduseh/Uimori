@@ -317,6 +317,8 @@ test('PMUI Google AI Studio registers an API key and preserves model settings on
   await modelForm.getByLabel('모델 ID', { exact: true }).fill('gemini-3.8-flash');
   await modelForm.getByRole('button', { name: '고급', exact: true }).click();
   await modelForm.getByText('Gemini 안전 필터', { exact: true }).click();
+  await expect(modelForm.getByLabel('Jailbreak 안전 필터')).toHaveValue('');
+  await modelForm.getByLabel('Jailbreak 안전 필터').selectOption('BLOCK_ONLY_HIGH');
   await modelForm.getByLabel('괴롭힘 안전 필터').selectOption('OFF');
   await modelForm.getByLabel('성적 콘텐츠 안전 필터').selectOption('BLOCK_NONE');
   await modelForm.getByRole('button', { name: '기본', exact: true }).click();
@@ -331,6 +333,7 @@ test('PMUI Google AI Studio registers an API key and preserves model settings on
       safetySettings: {
         HARM_CATEGORY_HARASSMENT: 'OFF',
         HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE',
+        HARM_CATEGORY_JAILBREAK: 'BLOCK_ONLY_HIGH',
       },
     });
   await settings(page);
@@ -341,6 +344,22 @@ test('PMUI Google AI Studio registers an API key and preserves model settings on
   await expect(modelForm.getByLabel('괴롭힘 안전 필터')).toHaveValue('OFF');
   await expect(modelForm.getByLabel('성적 콘텐츠 안전 필터')).toHaveValue('BLOCK_NONE');
   await expect(modelForm.getByLabel('증오 표현 안전 필터')).toHaveValue('');
+  const jailbreak = modelForm.getByLabel('Jailbreak 안전 필터', { exact: true });
+  await expect(jailbreak).toHaveValue('BLOCK_ONLY_HIGH');
+  await jailbreak.scrollIntoViewIfNeeded();
+  await modelForm
+    .locator('.provider-stop-sequences')
+    .filter({ has: page.getByRole('combobox', { name: 'Jailbreak 안전 필터', exact: true }) })
+    .screenshot({ path: info.outputPath('gemini-safety-mobile.png') });
+  await jailbreak.selectOption('');
+  await modelForm.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await library(request)).models.find((item) => item.title === title + ' model')
+          ?.safetySettings
+    )
+    .toEqual({ HARM_CATEGORY_HARASSMENT: 'OFF', HARM_CATEGORY_SEXUALLY_EXPLICIT: 'BLOCK_NONE' });
   await page.getByRole('button', { name: '프로바이더 관리', exact: true }).click();
   await page.getByRole('button', { name: title + ' 프로바이더 수정', exact: true }).click();
   await expect(connectionForm.getByLabel('API 키', { exact: true })).toHaveValue('');
@@ -2105,4 +2124,70 @@ test('PMUI model presets group by provider, start collapsed and persist manual o
         .evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value))
     ).filter((id) => [alpha.id, beta.id, gamma.id].includes(id))
   ).toEqual([gamma.id, beta.id, alpha.id]);
+});
+
+test('PMUI Gemini Jailbreak on Agent Platform preserves explicit thresholds and removes only the reset category', async ({
+  page,
+  request,
+}, info) => {
+  const title = 'Jailbreak settings ' + crypto.randomUUID();
+  const connection = await api<Connection>(request, '/connections', {
+    title,
+    protocol: 'vertex-gemini-v1',
+    endpoint:
+      'https://aiplatform.googleapis.com/v1/projects/synthetic-safety/locations/global/publishers/google/models',
+    apiKey: 'SYNTHETIC_SAFETY_KEY',
+    enabled: true,
+  });
+  const model = await api<ModelPreset>(request, '/model-presets', {
+    ...modelInput(connection, title),
+    modelId: 'gemini-3.8-flash',
+    safetySettings: { HARM_CATEGORY_HATE_SPEECH: 'BLOCK_MEDIUM_AND_ABOVE' },
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.addInitScript(() => localStorage.setItem('uimori:theme', 'dark'));
+  await settings(page);
+  await openProviderModel(page, title);
+  const form = page.getByRole('form', { name: '모델 편집 양식' });
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  const jailbreak = form.getByLabel('Jailbreak 안전 필터', { exact: true });
+  await expect(jailbreak).toHaveValue('');
+  await jailbreak.selectOption('BLOCK_NONE');
+  await jailbreak.scrollIntoViewIfNeeded();
+  await form
+    .locator('.provider-stop-sequences')
+    .filter({ has: page.getByRole('combobox', { name: 'Jailbreak 안전 필터', exact: true }) })
+    .screenshot({ path: info.outputPath('gemini-safety-desktop.png') });
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(
+      async () => (await api<ModelPreset>(request, '/model-presets/' + model.id)).safetySettings
+    )
+    .toEqual({
+      HARM_CATEGORY_HATE_SPEECH: 'BLOCK_MEDIUM_AND_ABOVE',
+      HARM_CATEGORY_JAILBREAK: 'BLOCK_NONE',
+    });
+  await settings(page);
+  await openProviderModel(page, title);
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await expect(jailbreak).toHaveValue('BLOCK_NONE');
+  await jailbreak.selectOption('OFF');
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(
+      async () =>
+        (await api<ModelPreset>(request, '/model-presets/' + model.id)).safetySettings
+          ?.HARM_CATEGORY_JAILBREAK
+    )
+    .toBe('OFF');
+  await settings(page);
+  await openProviderModel(page, title);
+  await form.getByRole('button', { name: '고급', exact: true }).click();
+  await jailbreak.selectOption('');
+  await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
+  await expect
+    .poll(
+      async () => (await api<ModelPreset>(request, '/model-presets/' + model.id)).safetySettings
+    )
+    .toEqual({ HARM_CATEGORY_HATE_SPEECH: 'BLOCK_MEDIUM_AND_ABOVE' });
 });

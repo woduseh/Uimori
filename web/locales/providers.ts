@@ -1,5 +1,11 @@
 /** App-owned provider presentation. Provider data, model IDs and request payloads retain their original values. */
 export const messages = {
+  'providers.geminiJailbreak': {
+    ko: 'Jailbreak',
+    en: 'Jailbreak',
+    ja: 'Jailbreak',
+    zh: 'Jailbreak',
+  },
   'providers.jevExperimental': {
     ko: '실험 기능이며 다음 판단부터 적용해요.',
     en: 'Experimental features. Applies from the next judgment.',
@@ -901,16 +907,16 @@ export const messages = {
     zh: '危险内容',
   },
   'providers.m168': {
-    ko: 'OFF (필터 비활성화)',
-    en: 'OFF (filter disabled)',
-    ja: 'OFF（フィルター無効）',
-    zh: 'OFF（禁用过滤器）',
+    ko: '필터 끄기',
+    en: 'Filter off',
+    ja: 'フィルターを無効',
+    zh: '关闭过滤器',
   },
   'providers.m169': {
-    ko: 'BLOCK_NONE (차단 없이 평가)',
-    en: 'BLOCK_NONE (assess without blocking)',
-    ja: 'BLOCK_NONE（ブロックせず評価）',
-    zh: 'BLOCK_NONE（不拦截，仅评估）',
+    ko: '차단 없이 평가',
+    en: 'Assess without blocking',
+    ja: 'ブロックせず評価',
+    zh: '评估但不拦截',
   },
   'providers.m170': {
     ko: '높음만 차단',
@@ -1266,23 +1272,11 @@ export const messages = {
     ja: '追加',
     zh: '添加',
   },
-  'providers.m241': {
-    ko: '각 범주를 별도로 지정해요. 모델 기본값은 해당 범주를 요청에서 생략하며, OFF는 필터를 끄고 BLOCK_NONE은 차단 없이 안전성 평가를 요청해요.',
-    en: 'Set each category separately. Model default omits that category from the request. OFF disables the filter; BLOCK_NONE requests safety assessment without blocking.',
-    ja: '各カテゴリを個別に指定します。モデルの既定値ではそのカテゴリをリクエストから省略します。OFFはフィルターを無効にし、BLOCK_NONEはブロックなしの安全性評価を要求します。',
-    zh: '分别设置每个类别。模型默认值会在请求中省略该类别；OFF 关闭过滤器，BLOCK_NONE 请求安全评估但不拦截。',
-  },
   'providers.m242': {
-    ko: '모델 기본값 (전송하지 않음)',
-    en: 'Model default (not sent)',
-    ja: 'モデルの既定値（送信しない）',
-    zh: '模型默认值（不发送）',
-  },
-  'providers.m243': {
-    ko: '적용 가능 여부는 모델과 프로바이더에 따라 달라요. 특히 Vertex의 BLOCK_NONE은 사용 권한이 제한될 수 있어요. 실패 시 다른 값으로 자동 변경하지 않아요.',
-    en: 'Availability depends on the model and provider. In particular, Vertex BLOCK_NONE access may be restricted. Failures do not automatically switch to another value.',
-    ja: '適用可否はモデルとプロバイダーにより異なります。特にVertexのBLOCK_NONEは利用権限が制限される場合があります。失敗しても別の値へ自動変更しません。',
-    zh: '是否可用取决于模型和提供商。尤其是 Vertex 的 BLOCK_NONE 可能有使用权限限制。失败时不会自动改用其他值。',
+    ko: '모델 기본값',
+    en: 'Model default',
+    ja: 'モデルの既定値',
+    zh: '模型默认值',
   },
   'providers.m244': {
     ko: '이 연결에서는 안전 필터 설정을 전달할 수 없어요. 위 직접 지정한 설정에서 해제해 주세요.',

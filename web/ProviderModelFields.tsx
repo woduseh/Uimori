@@ -19,7 +19,6 @@ import {
   PROTOCOL_OPTION_VALUES,
   protocolCacheTtls,
   protocolServiceTiers,
-  supportedModels,
 } from '../core/model-capabilities.js';
 import { modelHints, type ModelHints } from '../core/model-hints.js';
 import {
@@ -49,6 +48,9 @@ const geminiSafetyLabels: Record<GeminiSafetyCategory, string> = {
   },
   get HARM_CATEGORY_DANGEROUS_CONTENT() {
     return t('providers.m167');
+  },
+  get HARM_CATEGORY_JAILBREAK() {
+    return t('providers.geminiJailbreak');
   },
 };
 const geminiThresholdLabels: Record<GeminiSafetyThreshold, string> = {
@@ -380,16 +382,6 @@ export function ProviderModelFields({
   useEffect(() => {
     providerOptionsRef.current?.setCustomValidity(translateMessage(providerOptionsError));
   }, [providerOptionsError]);
-  const modelChoices = connection
-    ? [
-        ...new Map(
-          [...supportedModels(connection.protocol), ...connection.catalog].map((item) => [
-            item.id,
-            item,
-          ])
-        ).values(),
-      ]
-    : [];
   const update = (next: Partial<ModelDraft>) => onChange({ ...value, ...next });
   const specified: { key: string; label: string; text: string; reset: () => void }[] = (
     [
@@ -462,18 +454,10 @@ export function ProviderModelFields({
           {t('providers.m203')}
           <input
             aria-label={t('providers.m203')}
-            list="available-models"
             required
             value={value.modelId}
             onChange={(event) => onChange({ ...value, modelId: event.target.value })}
           />
-          <datalist id="available-models">
-            {modelChoices.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </datalist>
         </label>
         {connection && protocol === 'vercel-chat-v1' && (
           <label className="full">
@@ -831,7 +815,6 @@ export function ProviderModelFields({
             <div className="provider-stop-sequences-body editor-fields">
               {sends('safetySettings') ? (
                 <>
-                  <p className="muted full">{t('providers.m241')}</p>
                   {GEMINI_SAFETY_CATEGORIES.map((category) => (
                     <label key={category}>
                       {geminiSafetyLabels[category]}
@@ -855,7 +838,6 @@ export function ProviderModelFields({
                       </select>
                     </label>
                   ))}
-                  <small className="full">{t('providers.m243')}</small>
                 </>
               ) : (
                 <p className="error full">{t('providers.m244')}</p>

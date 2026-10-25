@@ -218,6 +218,279 @@ select {
 textarea {
   resize: vertical;
 }
+/* Native control state stays with the form; these rules only describe that state. */
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+input,
+textarea {
+  caret-color: var(--accent-text);
+}
+input:autofill:not(:disabled) {
+  -webkit-text-fill-color: var(--text);
+  box-shadow: inset 0 0 0 1000px var(--surface-raised);
+}
+input[readonly],
+textarea[readonly] {
+  background-color: var(--panel);
+  border-color: var(--line);
+}
+:is(input, textarea, select):disabled:not([type="checkbox"], [type="radio"], [type="range"]) {
+  color: var(--muted);
+  background-color: var(--surface);
+  border-color: var(--line);
+  cursor: default;
+}
+/* Do not mark untouched required fields as errors on first render. */
+:is(input, textarea, select):is(:user-invalid, [aria-invalid="true"]):not(:disabled) {
+  border-color: var(--error);
+}
+input[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-inline-start: 8px;
+  cursor: pointer;
+  background: var(--muted);
+  mask:
+    url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>')
+    center / 16px 16px no-repeat;
+}
+@media (hover: hover) {
+  input[type="search"]::-webkit-search-cancel-button:hover {
+    background-color: var(--text);
+  }
+}
+@media (forced-colors: active) {
+  input:autofill:not(:disabled) {
+    -webkit-text-fill-color: FieldText;
+    box-shadow: none;
+  }
+  input[type="search"]::-webkit-search-cancel-button {
+    background: ButtonText;
+  }
+}
+/* Keep native form state and keyboard handling; only app-owned controls opt in.
+   Authored message controls live in their own ShadowRoot. */
+@supports (appearance: base-select) {
+  select:where(:not([multiple], [size])),
+  select:where(:not([multiple], [size]))::picker(select) {
+    appearance: base-select;
+  }
+  select:where(:not([multiple], [size])) {
+    gap: 12px;
+    align-items: center;
+    text-align: start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+  }
+  select:where(:not([multiple], [size]))::picker-icon {
+    content: "";
+    width: 16px;
+    height: 16px;
+    flex: none;
+    margin-inline-start: auto;
+    color: var(--muted);
+    background: currentColor;
+    mask: var(--chevron) center / 16px 16px no-repeat;
+    rotate: 90deg;
+  }
+  select:where(:not([multiple], [size])):open::picker-icon {
+    rotate: -90deg;
+  }
+  select:where(:not([multiple], [size])):open {
+    border-color: var(--focus-ring);
+  }
+  select:where(:not([multiple], [size]))::picker(select) {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel);
+    border: var(--hairline) solid var(--input-border);
+    border-radius: var(--radius-panel);
+    box-shadow: 0 8px 24px color-mix(in srgb, var(--shade) 25%, transparent);
+    padding: 4px;
+    margin-block: 4px;
+    min-inline-size: anchor-size(self-inline);
+    max-inline-size: calc(100dvi - 24px);
+    max-block-size: min(360px, 70dvb);
+    overflow: auto;
+    scrollbar-color: var(--muted) transparent;
+    scrollbar-width: thin;
+  }
+  select:where(:not([multiple], [size])) option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-block-size: var(--control-h);
+    padding: 8px 12px;
+    border-radius: var(--radius-control);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    background: transparent;
+  }
+  select:where(:not([multiple], [size])) option:checked {
+    background: var(--accent-soft);
+    font-weight: 500;
+  }
+  select:where(:not([multiple], [size])) option::checkmark {
+    order: 1;
+    margin-inline-start: auto;
+    color: var(--accent-text);
+  }
+  select:where(:not([multiple], [size])) option:focus-visible {
+    outline: var(--hairline) solid var(--focus-ring);
+    outline-offset: -2px;
+    background: var(--hover);
+  }
+  select:where(:not([multiple], [size])) option:disabled {
+    color: var(--muted);
+    cursor: default;
+  }
+  select:where(:not([multiple], [size])) optgroup {
+    color: var(--muted);
+    font-weight: 500;
+  }
+  @media (hover: hover) {
+    select:where(:not([multiple], [size])):hover:not(:disabled) {
+      border-color: var(--border-hover);
+    }
+    select:where(:not([multiple], [size])) option:hover:not(:disabled) {
+      background: var(--hover);
+    }
+  }
+}
+select:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+/* Inherited colors keep existing thin/hidden scrollbar choices and hit areas. */
+html {
+  scrollbar-color: var(--muted) transparent;
+}
+::selection {
+  background: color-mix(in srgb, var(--accent) 24%, var(--bg));
+  color: var(--text);
+  text-shadow: none;
+}
+input[type="radio"] {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  border: var(--hairline) solid var(--muted);
+  border-radius: 50%;
+  background: var(--surface);
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+input[type="radio"]::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-ink);
+  transform: scale(0);
+}
+input[type="radio"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input[type="radio"]:checked::before {
+  transform: scale(1);
+}
+input[type="radio"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (forced-colors: active) {
+  input[type="radio"] {
+    appearance: auto;
+  }
+  input[type="radio"]::before {
+    display: none;
+  }
+}
+input[type="range"] {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border: var(--hairline) solid var(--input-border);
+  border-radius: var(--radius-small);
+  background: var(--surface-active);
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6.5px;
+  border: var(--hairline) solid var(--accent-text);
+  border-radius: 50%;
+  background: var(--accent);
+}
+input[type="range"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: var(--hairline) solid var(--input-border);
+  border-radius: var(--radius-small);
+}
+meter {
+  height: 8px;
+}
+meter::-webkit-meter-bar {
+  border: var(--hairline) solid var(--input-border);
+  border-radius: var(--radius-small);
+  background: var(--surface-active);
+}
+meter::-webkit-meter-optimum-value {
+  background: var(--accent);
+}
+meter::-webkit-meter-suboptimum-value {
+  background: var(--warning);
+}
+meter::-webkit-meter-even-less-good-value {
+  background: var(--error);
+}
+@media (forced-colors: active) {
+  html {
+    scrollbar-color: auto;
+  }
+  ::selection {
+    background: Highlight;
+    color: HighlightText;
+  }
+  input[type="range"] {
+    appearance: auto;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: auto;
+  }
+  select:where(:not([multiple], [size])) option:checked {
+    background: Highlight;
+    color: HighlightText;
+  }
+  select:where(:not([multiple], [size])) option::checkmark {
+    color: currentColor;
+  }
+}
 /* One file picker look: the browser's own button becomes a secondary button of this app. */
 input[type="file"] {
   padding: 6px;
@@ -226,7 +499,7 @@ input[type="file"] {
 input[type="file"]::file-selector-button {
   font: inherit;
   min-height: 32px;
-  margin-right: 10px;
+  margin-inline-end: 10px;
   padding: 6px 12px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-control);

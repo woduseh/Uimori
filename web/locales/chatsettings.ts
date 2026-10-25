@@ -1,4 +1,40 @@
 export const messages = {
+  'chatsettings.searchCharacters': {
+    ko: '봇 캐릭터 페르소나 인물 자료 카드 로어북 로어 추가 제거 순서',
+    en: 'bot character persona people materials cards lorebook lore add remove order',
+    ja: 'ボット キャラクター ペルソナ 人物 資料 カード ロアブック ロア 追加 削除 順序',
+    zh: '机器人 角色 人设 人物 资料 卡片 世界书 设定 添加 移除 顺序',
+  },
+  'chatsettings.searchPrompts': {
+    ko: '프롬프트 모델 번역 자동 번역 생성 최대 호출 횟수 실행 설정 응답 요청 지침',
+    en: 'prompt model translation auto translate generation maximum calls execution settings response request instructions',
+    ja: 'プロンプト モデル 翻訳 自動翻訳 生成 最大呼び出し回数 実行設定 応答 リクエスト 指示',
+    zh: '提示词 模型 翻译 自动翻译 生成 最大调用次数 执行设置 回复 请求 指令',
+  },
+  'chatsettings.searchGuide': {
+    ko: '원작 캐릭터 참고 가이드 작품 판본 설정 스포일러 제한 줄거리 사건 웹 검색 추가 참고 자료 작성 브리핑',
+    en: 'canon character references guide work edition setting spoiler limits plot events web search additional reference writing brief',
+    ja: '原作 キャラクター 参考 ガイド 作品 版 設定 ネタバレ 制限 あらすじ 出来事 ウェブ検索 追加資料 執筆ブリーフ',
+    zh: '原作 角色 参考 指南 作品 版本 设定 剧透 限制 情节 事件 网页搜索 补充资料 写作简报',
+  },
+  'chatsettings.searchStory': {
+    ko: '기억 메모 로어 요약 장기 기억 컨텍스트 노트 이야기',
+    en: 'memory notes lore summary long term memory context story',
+    ja: '記憶 メモ ロア 要約 長期記憶 コンテキスト ノート 物語',
+    zh: '记忆 笔记 设定 摘要 长期记忆 上下文 故事',
+  },
+  'chatsettings.searchImages': {
+    ko: '이미지 삽화 참조 참고 사진 업로드 관리 에셋 생성',
+    en: 'images illustrations references pictures upload management assets generation',
+    ja: '画像 挿絵 参照 参考 写真 アップロード 管理 アセット 生成',
+    zh: '图片 插图 参考 照片 上传 管理 素材 生成',
+  },
+  'chatsettings.searchPackages': {
+    ko: '카드 변수 패키지 기본값 값 복원',
+    en: 'card variables package default values restore',
+    ja: 'カード 変数 パッケージ 既定値 値 復元',
+    zh: '卡片 变量 包 默认值 值 恢复',
+  },
   'chatsettings.sectionSelector': {
     ko: '설정 영역 선택',
     en: 'Choose settings section',

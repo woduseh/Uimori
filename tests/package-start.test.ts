@@ -35,12 +35,12 @@ function database() {
   return store;
 }
 
-function fixture() {
+function fixture(alternateGreetings = ['A second opening.']) {
   const store = database(),
     pkg = nativeContent({
       name: 'Ari',
       first_mes: '\r\nAri opens the observatory door.\n',
-      alternate_greetings: ['A second opening.'],
+      alternate_greetings: alternateGreetings,
     });
   const content = store.product.content({
     kind: 'bot',
@@ -272,3 +272,122 @@ test.each(['ordinary', 'native-action'] as const)(
     expect(f.store.chat(chat.id).headRevision).toBe(initial.source.id);
   }
 );
+
+test('clearing the opening detaches history without an empty run, preserves explicit state, and replays after generation', () => {
+  const f = fixture();
+  const initial = selectedStart(f);
+  const edited = f.store.editSource(initial.source.id, {
+    text: 'Edited opening.',
+    expectedRevision: 0,
+  });
+  writeChatVariables(f.store, f.chat.id, {
+    expectedRevision: 0,
+    expectedSourceHash: edited.hash,
+    idempotencyKey: 'variables',
+    values: { $name: 'Reader' },
+  });
+  const translation = f.store.editTranslation(edited.id, {
+    text: 'Saved translation.',
+    expectedRevision: 0,
+    expectedSourceHash: edited.hash,
+  });
+  const pending = f.store.retranslate(edited.id);
+  const profile = f.store.product.profile(f.chat.id);
+  const command = { ...initial.command, startId: null, expectedSourceHash: edited.hash };
+  expect(createPackageStart(f.store, f.chat.id, command)).toEqual({ run: null, created: true });
+  expect(f.store.chat(f.chat.id).headRevision).toBeNull();
+  expect(f.store.history(null)).toEqual([]);
+  expect(readerDetail(f.store, f.chat.id, {}).reader.order).toEqual([]);
+  expect(
+    f.store.db.prepare('SELECT count(*) AS count FROM runs WHERE chat_id=?').get(f.chat.id)?.count
+  ).toBe(1);
+  expect(f.store.source(edited.id).text).toBe('Edited opening.');
+  expect(sourceVersions(f.store, edited.id).versions).toHaveLength(2);
+  expect(f.store.job(translation.id).status).toBe('completed');
+  expect(f.store.job(pending.id).status).toBe('cancelled');
+  expect(readChatVariables(f.store, f.chat.id).values).toEqual({ $name: 'Reader' });
+  expect(f.store.product.profile(f.chat.id)).toEqual(profile);
+  const chat = f.store.chat(f.chat.id);
+  const run = f.store.createRun(
+    chat.id,
+    {
+      request: 'Hello',
+      expectedRevision: null,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: 'next',
+    },
+    () => ({
+      chatId: chat.id,
+      request: 'Hello',
+      parentRevision: null,
+      settingsRevision: chat.settingsRevision,
+      settings: chat.settings,
+      history: f.store.history(chat.headRevision),
+      resources: [],
+    })
+  ).run;
+  expect(run.snapshot.history).toEqual([]);
+  f.store.db.prepare("UPDATE runs SET status='running' WHERE id=?").run(run.id);
+  f.store.completeRun(run.id, 'New conversation.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
+  const head = f.store.chat(chat.id).headRevision;
+  expect(createPackageStart(f.store, chat.id, command)).toEqual({ run: null, created: false });
+  expect(f.store.chat(chat.id).headRevision).toBe(head);
+  expect(() => createPackageStart(f.store, chat.id, { ...command, startId: 'start-1' })).toThrow(
+    'Idempotency key reused'
+  );
+});
+
+test('clearing requires current source identity and rejects progressed conversations or reused authored keys', () => {
+  const f = fixture();
+  const initial = selectedStart(f);
+  const command = { ...initial.command, startId: null };
+  expect(() =>
+    createPackageStart(f.store, f.chat.id, { ...command, expectedSourceHash: '0'.repeat(64) })
+  ).toThrow('Source hash conflict');
+  expect(() =>
+    createPackageStart(f.store, f.chat.id, { ...command, idempotencyKey: f.command.idempotencyKey })
+  ).toThrow('Idempotency key reused');
+  expect(() =>
+    createPackageStart(f.store, f.chat.id, {
+      ...command,
+      expectedRevision: undefined,
+      expectedSourceHash: undefined,
+    })
+  ).toThrow('Source revision required');
+  f.store.db
+    .prepare("UPDATE runs SET snapshot=json_remove(snapshot,'$.packageStart') WHERE chat_id=?")
+    .run(f.chat.id);
+  expect(() => createPackageStart(f.store, f.chat.id, command)).toThrow(
+    'PACKAGE_START_CONVERSATION_STARTED'
+  );
+  expect(f.store.chat(f.chat.id).headRevision).toBe(initial.source.id);
+});
+
+test('a single authored opening can be cleared with full admission revision checks', () => {
+  const f = fixture([]);
+  const opening = createPackageStart(f.store, f.chat.id, f.command).run;
+  const source = f.store.source(opening.sourceRevision!);
+  expect(canChangePackageStart(f.store, f.chat.id)).toBe(true);
+  const command = {
+    ...f.command,
+    startId: null,
+    expectedRevision: source.id,
+    expectedSourceHash: source.hash,
+    idempotencyKey: 'clear-single',
+  };
+  for (const conflict of [
+    { expectedRevision: 'stale-source' },
+    { expectedSettingsRevision: command.expectedSettingsRevision + 1 },
+    { expectedProfileRevision: command.expectedProfileRevision + 1 },
+  ])
+    expect(() => createPackageStart(f.store, f.chat.id, { ...command, ...conflict })).toThrow(
+      'conflict'
+    );
+  expect(createPackageStart(f.store, f.chat.id, command)).toEqual({ run: null, created: true });
+  expect(canChangePackageStart(f.store, f.chat.id)).toBe(false);
+});

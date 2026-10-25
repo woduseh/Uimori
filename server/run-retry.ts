@@ -45,7 +45,7 @@ export function retryRun(
     if (['queued', 'running'].includes(original.status))
       throw new HttpError(409, 'Original run is still active');
     if (original.snapshot.packageStart?.mode === 'authored' || original.snapshot.nativeRisuAuthored)
-      throw new HttpError(409, '작성된 시작문은 생성 요청이 아니에요. 새 장면을 요청해 주세요.');
+      throw new HttpError(409, '작성된 첫 메시지는 생성 요청이 아니에요. 새 장면을 요청해 주세요.');
     const originalChat = store.chat(original.chatId);
     const replace =
       options.mode === 'replace' ||

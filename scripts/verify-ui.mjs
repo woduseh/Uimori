@@ -9,5 +9,8 @@ await runBrowserVerification({
     'tests/reading-markdown-browser.spec.ts',
     'tests/motion-browser.spec.ts',
     'tests/settings-dialog-consistency-browser.spec.ts',
+    'tests/settings-search-browser.spec.ts',
+    'tests/input-affordances-browser.spec.ts',
+    'tests/tooltip-browser.spec.ts',
   ],
 });

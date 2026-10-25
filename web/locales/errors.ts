@@ -216,7 +216,7 @@ export const messages = {
     zh: '待保存图片总大小超出{limit, number} MiB。请选择减少了图片的文件。',
   },
   'errors.PACKAGE_START_CONVERSATION_STARTED': {
-    ko: '대화가 진행됐거나 원래 봇의 시작문을 사용할 수 없어 바꾸지 못했어요. 선택 창을 닫고 현재 대화를 확인해 주세요.',
+    ko: '대화가 진행됐거나 원래 봇의 첫 메시지를 사용할 수 없어 바꾸지 못했어요. 선택 창을 닫고 현재 대화를 확인해 주세요.',
     en: 'The conversation has started or the original bot opening is unavailable. Close the selector and check the current conversation.',
     ja: '会話が進んでいるか、元のボットの開始文を使用できません。選択画面を閉じて現在の会話を確認してください。',
     zh: '对话已开始或原机器人的开场白不可用。请关闭选择窗口并检查当前对话。',
@@ -228,7 +228,7 @@ export const messages = {
     zh: '聊天的机器人设置已更改。请关闭并重新打开选择窗口。',
   },
   'errors.PACKAGE_START_TEXT_TOO_LONG': {
-    ko: '시작문 하나가 {limit, number}자 저장 상한을 넘었어요. 기본 시작문과 대체 시작문의 길이를 확인해 주세요.',
+    ko: '첫 메시지 하나가 {limit, number}자 저장 상한을 넘었어요. 기본 첫 메시지와 대체 첫 메시지의 길이를 확인해 주세요.',
     en: 'An opening exceeds the storage limit of {limit, number} characters. Check the default and alternate openings.',
     ja: '開始文が保存上限の{limit, number}文字を超えています。基本と代替の開始文の長さを確認してください。',
     zh: '某条开场白超出{limit, number}字符的存储上限。请检查默认和备选开场白。',

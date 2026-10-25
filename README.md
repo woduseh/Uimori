@@ -2,7 +2,7 @@
 
 긴 원고를 읽고 다음 장면을 이어 쓰는 개인용 창작 웹앱이에요. 봇별로 채팅·폴더를 관리하고 Risu 원본 봇·페르소나·모듈을 사용할 수 있어요. 프롬프트와 모델은 따로 설정하며, 원문·번역을 직접 편집하거나 채팅을 독립 사본으로 복사할 수 있어요. 이야기 기억과 백업 기능도 제공해요.
 
-이 소스의 앱 버전은 **`v0.11.21`**이에요. JEV 로어를 다음 생성까지 유지하고, 메인 모델의 Linux 조회와 도우미·번역의 입력 처리를 개선했어요. **DB 스키마는 15**로 유지해요. 자세한 변경은 [릴리스 노트](docs/releases/v0.11.21.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
+이 소스의 앱 버전은 **`v0.11.22`**이에요. 테마에 맞춘 기본 UI와 설정 검색, 첫 메시지 선택, Gemini 안전 필터 및 JEV 이미지·컨텍스트 처리를 개선했어요. **DB 스키마는 15**로 유지해요. 자세한 변경은 [릴리스 노트](docs/releases/v0.11.22.md), 설치 절차는 [업데이트 안내](docs/UPDATES.md)를 참고해요.
 
 개인 ChatGPT 구독으로 에이전트를 실행하려면 [Codex 연결 안내](docs/CODEX.md)를 따라 서버 실행기를 준비하고 **설정 → Codex 연결**에서 로그인해요.
 
@@ -10,10 +10,10 @@
 
 Node **24.22.1 이상 24.x**, npm, Chrome 또는 Edge가 필요해요. SQLite는 Node에 포함된 기능을 사용해요.
 
-태그 기반 설치는 `v0.11.21`를 사용해요. 설치 전에 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 해당 릴리스가 공개됐는지 확인해요.
+태그 기반 설치는 `v0.11.22`를 사용해요. 설치 전에 [GitHub Releases](https://github.com/woduseh/Uimori/releases)에서 해당 릴리스가 공개됐는지 확인해요.
 
 ```powershell
-git clone --branch v0.11.21 --single-branch https://github.com/woduseh/Uimori.git
+git clone --branch v0.11.22 --single-branch https://github.com/woduseh/Uimori.git
 cd Uimori
 npm ci
 npm run dev
