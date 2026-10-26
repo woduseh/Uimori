@@ -264,6 +264,8 @@ async function harness(page: Page, seedCount = 0) {
         return route.fulfill({ status: 404, json: { error: 'Helper conversation not found' } });
       const kind = conversationMatch[2];
       if (!kind && request.method() === 'PATCH') {
+        if (body.expectedRevision !== view.conversation.revision)
+          return route.fulfill({ status: 409, json: { error: '합성 대화 충돌' } });
         view.conversation = {
           ...view.conversation,
           title: body.title ?? view.conversation.title,
@@ -599,6 +601,104 @@ test('HELPMESSAGE a failed answer save retains the exact draft across reload and
   await expect(answer.locator('.helper-prose')).toHaveText(saved.text);
   expect(state.messageMutations).toHaveLength(1);
   expect(state.posts).toHaveLength(0);
+});
+
+test('HELPMESSAGE conflict review preserves request and response drafts in older history', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 55);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    view = state.current();
+  await panel.getByRole('button', { name: '이전 메시지 불러오기', exact: true }).click();
+  for (const [index, role] of [
+    [0, 'user'],
+    [1, 'assistant'],
+  ] as const) {
+    const saved = view.messages[index];
+    const article = panel.locator(`[data-message-id="${saved.id}"]`);
+    await article
+      .getByLabel(role === 'user' ? '요청과 문맥 메뉴' : '메시지 메뉴', { exact: true })
+      .click();
+    await page
+      .getByRole('button', {
+        name: role === 'user' ? '문맥용 요청 수정' : '응답 수정',
+        exact: true,
+      })
+      .click();
+    const input = article.getByLabel(role === 'user' ? '요청 수정 내용' : '응답 수정', {
+      exact: true,
+    });
+    const draft = `작성 중인 ${role} 초안`;
+    await input.fill(draft);
+    saved.text = `다른 화면에서 저장한 ${role}`;
+    view.conversation.revision++;
+    view.conversation.historyRevision = state.emit('messages.changed', {
+      revision: view.conversation.revision,
+      updatedMessage: { id: saved.id, text: saved.text },
+    });
+    await article.getByRole('button', { name: '입력 저장', exact: true }).click();
+    const dialog = page.getByRole('alertdialog', { name: '메시지가 변경됐어요' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
+    await expect(dialog.getByText(saved.text, { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
+    await expect(input).toHaveValue(draft);
+    expect(saved.text).not.toBe(draft);
+    await article.getByRole('button', { name: '입력 저장', exact: true }).click();
+    await expect(input).toHaveCount(0);
+    expect(saved.text).toBe(draft);
+  }
+  expect(state.messageMutations).toHaveLength(4);
+  expect(state.posts).toHaveLength(0);
+});
+
+test('HELPMESSAGE local edit does not skip an unseen older message change', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 55);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    view = state.current();
+  await panel.getByRole('button', { name: '이전 메시지 불러오기', exact: true }).click();
+  let releaseEvents = () => {};
+  const heldEvents = new Promise<void>((resolve) => {
+    releaseEvents = resolve;
+  });
+  await page.route('**/api/helper/conversations/*/events?*', async (route) => {
+    await heldEvents;
+    await route.fallback();
+  });
+  const old = view.messages[1],
+    latest = view.messages.at(-1)!;
+  const oldArticle = panel.locator(`[data-message-id="${old.id}"]`);
+  await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
+  await panel.getByLabel('도우미 말투', { exact: true }).fill('새 말투 초안');
+  old.text = '다른 화면에서 저장한 오래된 응답';
+  view.conversation.revision++;
+  view.conversation.historyRevision = state.emit('messages.changed', {
+    revision: view.conversation.revision,
+    updatedMessage: { id: old.id, text: old.text },
+  });
+  await panel.getByRole('button', { name: '도우미 설정 저장', exact: true }).click();
+  await expect(
+    panel.getByText('도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.')
+  ).toBeVisible();
+  await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
+  const article = panel.locator(`[data-message-id="${latest.id}"]`);
+  await article.getByLabel('메시지 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '응답 수정', exact: true }).click();
+  await article.getByLabel('응답 수정', { exact: true }).fill('현재 화면에서 수정한 응답');
+  await article.getByRole('button', { name: '입력 저장', exact: true }).click();
+  await expect(article.locator('.helper-prose')).toHaveText('현재 화면에서 수정한 응답');
+  await expect(oldArticle.locator('.helper-prose')).not.toHaveText(old.text);
+  releaseEvents();
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(oldArticle.locator('.helper-prose')).toHaveText(old.text);
 });
 
 test('HELPMESSAGE pair and following deletion discard loaded older messages while retaining task history', async ({
