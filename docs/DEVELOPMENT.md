@@ -144,6 +144,8 @@ Browser reports, screenshots, traces, and `summary.json` are under `output/playw
 - **Unexpected shared settings in a failed run:** Inspect the preserved SQLite at `output/playwright/<run-id>/evidence-db/app.sqlite` before replaying a long browser suite.
 - **Loopback hangs behind a proxy:** Browser launch options include `--no-proxy-server` for local traffic.
 
+Cases using `preservePromptWorkspace` restore their captured global model settings through the public API, then compare a separate GET with that baseline (excluding the advancing revision). A restore mismatch fails the originating case and reports the changed fields. `npm run verify:global-models -- --grep GMUI01` exercises this boundary with saved model selections and refusal-detection settings; a successful save response alone is not restoration evidence.
+
 Local fixtures, browser emulation, live providers, and physical devices establish different evidence. Report which one actually ran.
 
 ## Reset and cleanup

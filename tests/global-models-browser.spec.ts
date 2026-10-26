@@ -143,7 +143,7 @@ for (const width of DEFAULT_WIDTHS) {
     await supportingSummary.click();
     for (const label of ['도우미 모델', '컨텍스트 요약 모델', '채팅 제목 모델', '확장 호출 모델'])
       await expect(editor.getByLabel(label, { exact: true })).toBeVisible();
-    for (const label of ['원문 모델', '번역 모델', '채팅 제목 모델'])
+    for (const label of ['원문 모델', '번역 모델', '채팅 제목 모델', '확장 호출 모델'])
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
     await translationLimit.fill('12');
@@ -156,6 +156,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect.poll(async () => (await models(request)).routes.main?.id).toBe(ids[0]);
     const selected = await models(request);
     expect(selected.titleModel).toEqual({ id: ids[0] });
+    expect(selected.scriptModel).toEqual({ id: ids[0] });
     expect(selected.mainJudgmentEnabled).toBe(false);
     expect(selected.mainJudgmentThreshold).toBe(0.8);
     expect(selected.translationPolicy).toEqual({

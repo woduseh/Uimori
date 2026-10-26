@@ -108,18 +108,26 @@ export function preservePromptWorkspace() {
     }
     try {
       const modelCurrent = await (await request.get('/api/model-workspace')).json();
+      // The read model contains the writable settings plus its CAS revision. Restore the
+      // whole snapshot so a setting cannot silently leak through a partial update.
+      const { revision: _revision, ...settings } = originalModels;
       const modelRestored = await request.put('/api/model-workspace', {
         data: {
+          ...settings,
           expectedRevision: modelCurrent.revision,
-          routes: originalModels.routes,
-          titleModel: originalModels.titleModel ?? null,
-          helperModel: originalModels.helperModel ?? null,
-          contextModel: originalModels.contextModel ?? null,
-          summaryLength: originalModels.summaryLength,
-          translationPolicy: originalModels.translationPolicy,
         },
       });
       expect(modelRestored.ok(), await modelRestored.text()).toBe(true);
+      // A successful write alone does not prove the next case will read the baseline.
+      // Restoration advances the revision; all actual settings must remain identical.
+      const observed = await request.get('/api/model-workspace');
+      expect(observed.ok(), await observed.text()).toBe(true);
+      expect(await observed.json(), 'model settings must be restored before the next case').toEqual(
+        {
+          ...originalModels,
+          revision: expect.any(Number),
+        }
+      );
     } catch (error) {
       failures.push(`model workspace: ${(error as Error).message}`);
     }
