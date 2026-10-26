@@ -103,12 +103,15 @@ export function useHelperConversation(
     if (alive.current) setViews(Object.fromEntries(cache.current));
   }, []);
   const applyMessageMutation = useCallback(
-    (change: HelperMessageMutation) => {
+    (change: HelperMessageMutation, replayed = false) => {
       const key = change.conversation.id;
       const previous = cache.current.get(key);
       if (!previous) return;
       const next = applyMessageChange(previous, change);
       if (next === previous) return;
+      // An acknowledged local write is only one change, not proof that preceding events
+      // were read. Keep that replay boundary until polling catches up in sequence.
+      if (!replayed) next.conversation.historyRevision = previous.conversation.historyRevision;
       // A response started before this mutation cannot restore the old text or deleted rows.
       versions.current.set(key, ++requestVersion.current);
       write(key, next);
@@ -225,7 +228,7 @@ export function useHelperConversation(
           if (event.seq <= cursor) continue;
           if (event.kind === 'messages.changed') {
             const view = cache.current.get(conversationId);
-            if (view) applyMessageMutation(messageChange(view, event));
+            if (view) applyMessageMutation(messageChange(view, event), true);
           }
           if (event.kind === 'illustration-preset.updated')
             window.dispatchEvent(new Event('uimori-illustration-presets-changed'));
@@ -378,6 +381,7 @@ export function useHelperConversation(
     setError,
     loadingEarlier,
     refresh,
+    readCurrent: (conversationId: string) => cache.current.get(conversationId),
     applyMessageMutation,
     earlier,
     updateConversation: (conversation: HelperConversation) => {

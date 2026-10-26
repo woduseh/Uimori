@@ -96,6 +96,7 @@ export function HelperResponseEditor({
   text,
   disabled,
   onSave,
+  onEditingChange,
   onDelete,
   revision,
   copy,
@@ -103,14 +104,14 @@ export function HelperResponseEditor({
   id: string;
   text: string;
   disabled: boolean;
-  onSave: (text: string, revision: number) => Promise<boolean>;
+  onSave: (text: string) => Promise<boolean>;
+  onEditingChange: (editing: boolean) => void;
   onDelete: (scope: HelperDeleteScope, revision: number) => Promise<boolean>;
   revision: number;
   copy: ReactNode;
 }) {
   useI18n();
   const [editing, setEditing] = useState(false);
-  const [baseRevision, setBaseRevision] = useState(revision);
   const [draft, setDraft] = useState(text);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -118,6 +119,7 @@ export function HelperResponseEditor({
   const close = () => {
     const article = form.current?.closest('article');
     setEditing(false);
+    onEditingChange(false);
     requestAnimationFrame(() =>
       article?.querySelector<HTMLElement>('.action-menu > summary')?.focus({ preventScroll: true })
     );
@@ -137,7 +139,7 @@ export function HelperResponseEditor({
     } catch {
       setDraft(text);
     }
-    setBaseRevision(revision);
+    onEditingChange(true);
     setEditing(true);
   };
   if (editing)
@@ -151,7 +153,7 @@ export function HelperResponseEditor({
           lock.current = true;
           setBusy(true);
           try {
-            if (await onSave(draft, baseRevision)) {
+            if (await onSave(draft)) {
               persist();
               close();
             }

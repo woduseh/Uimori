@@ -1,4 +1,28 @@
 export const messages = {
+  'helpers.messageConflict': {
+    ko: '메시지가 변경됐어요',
+    en: 'The message changed',
+    ja: 'メッセージが変更されました',
+    zh: '消息已更改',
+  },
+  'helpers.messageMissing': {
+    ko: '메시지를 찾을 수 없어요. 삭제되었는지 확인해 주세요.',
+    en: 'The message could not be found. Check whether it was deleted.',
+    ja: 'メッセージが見つかりません。削除されたか確認してください。',
+    zh: '找不到消息，请确认是否已删除。',
+  },
+  'helpers.messageDraft': {
+    ko: '작성 중인 내용',
+    en: 'Your draft',
+    ja: '編集中の内容',
+    zh: '正在编辑的内容',
+  },
+  'helpers.continueMessageEdit': {
+    ko: '입력 유지하고 계속 편집',
+    en: 'Keep input and continue editing',
+    ja: '入力を保って編集を続ける',
+    zh: '保留输入并继续编辑',
+  },
   'helpers.historyFullRequest': {
     ko: '요청 전체 보기',
     en: 'View full request',

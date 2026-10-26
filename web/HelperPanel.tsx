@@ -57,6 +57,7 @@ import { useHelperSessions } from './useHelperSessions.js';
 import { HelperSessionBar } from './HelperSessionBar.js';
 import { HelperModelPicker } from './HelperModelPicker.js';
 import { SaveButton } from './SaveButton.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { TransientNotice } from './TransientNotice.js';
 import { modelLabel } from './storyLabels.js';
 import {
@@ -343,6 +344,11 @@ export function HelperPanel(props: Props) {
     displayedScope = useRef('');
   const prepend = useRef<{ scope: string; height: number; top: number } | null>(null);
   const editRevisions = useRef(new Map<string, number>());
+  const [editConflict, setEditConflict] = useState<{
+    conversationId: string;
+    messageId: string;
+    draft: string;
+  } | null>(null);
   const locks = useRef(new Set<string>()),
     appliedSelections = useRef(new Set<string>());
   const close = useRef(props.onClose);
@@ -803,6 +809,11 @@ export function HelperPanel(props: Props) {
       data.applyMessageMutation(result);
       return true;
     } catch (cause) {
+      if ('text' in mutation && cause instanceof ApiError && cause.status === 409) {
+        if (currentScope.current === owner)
+          setEditConflict({ conversationId: owner, messageId, draft: mutation.text });
+        return false;
+      }
       setErrors((old) => ({
         ...old,
         [owner]: cause instanceof Error ? cause.message : uiMessage('helpers.m207'),
@@ -1264,6 +1275,10 @@ export function HelperPanel(props: Props) {
                   disabled={messageDisabled}
                   revision={conversation.revision}
                   onSave={saveMessage}
+                  onEditingChange={(editing) => {
+                    if (editing) editRevisions.current.set(message.id, conversation.revision);
+                    else editRevisions.current.delete(message.id);
+                  }}
                   onDelete={deleteMessage}
                   copy={<HelperResponseActions text={message.text} />}
                 />
@@ -1318,6 +1333,53 @@ export function HelperPanel(props: Props) {
             })}
         </div>
       </div>
+      <SaveConflictDialog
+        open={props.open && editConflict?.conversationId === scopeKey}
+        title={t('helpers.messageConflict')}
+        onClose={() => setEditConflict(null)}
+        readSaved={async () => {
+          if (!editConflict) throw new Error(t('shared.savedFailure'));
+          await data.refresh({ id: editConflict.conversationId });
+          const view = data.readCurrent(editConflict.conversationId);
+          const saved = view?.messages.find((message) => message.id === editConflict.messageId);
+          if (!view) throw new Error(t('shared.savedFailure'));
+          if (!saved)
+            return {
+              content: (
+                <>
+                  <p>{t('helpers.messageMissing')}</p>
+                  <label>
+                    {t('helpers.messageDraft')}
+                    <textarea readOnly value={editConflict.draft} rows={5} />
+                  </label>
+                </>
+              ),
+            };
+          const revision = view.conversation.revision;
+          return {
+            content: (
+              <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{saved.text}</p>
+            ),
+            actions: (
+              <>
+                <button type="button" className="secondary" onClick={() => setEditConflict(null)}>
+                  {t('shared.keepInput')}
+                </button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    editRevisions.current.set(editConflict.messageId, revision);
+                    setEditConflict(null);
+                  }}
+                >
+                  {t('helpers.continueMessageEdit')}
+                </button>
+              </>
+            ),
+          };
+        }}
+      />
       <Dialog
         open={!!taskHistory}
         title={t('helpers.m064')}
