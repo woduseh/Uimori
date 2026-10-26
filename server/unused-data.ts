@@ -142,6 +142,7 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
     'SELECT text AS value FROM source_edits',
     'SELECT text AS value FROM helper_messages',
     'SELECT text AS value FROM helper_seed_messages',
+    'SELECT text AS value FROM helper_message_changes WHERE deleted=0',
     'SELECT text AS value FROM helper_artifacts',
     'SELECT bot_id AS value FROM chat_organization',
   ])

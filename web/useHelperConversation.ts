@@ -4,6 +4,7 @@ import type {
   HelperConversation,
   HelperEvent,
   HelperMessage,
+  HelperMessageMutation,
   HelperResourceEdit,
   HelperTask,
 } from '../core/helper.js';
@@ -25,6 +26,40 @@ const diagnosticEvent = (kind: string) =>
   kind === 'input.measured' ||
   kind === 'progress' ||
   kind.startsWith('context.');
+
+function applyMessageChange(view: View, change: HelperMessageMutation): View {
+  if ((change.conversation.historyRevision ?? 0) <= (view.conversation.historyRevision ?? 0))
+    return view;
+  const removed = new Set(change.deletedMessageIds);
+  return {
+    ...view,
+    conversation: {
+      ...(change.conversation.revision >= view.conversation.revision
+        ? change.conversation
+        : view.conversation),
+      historyRevision: change.conversation.historyRevision,
+    },
+    messages: view.messages
+      .filter((message) => !removed.has(message.id))
+      .map((message) =>
+        message.id === change.updatedMessage?.id
+          ? { ...message, text: change.updatedMessage.text }
+          : message
+      ),
+  };
+}
+
+function messageChange(view: View, event: HelperEvent): HelperMessageMutation {
+  const data = event.data as Omit<HelperMessageMutation, 'conversation'> & { revision: number };
+  return {
+    ...data,
+    conversation: {
+      ...view.conversation,
+      revision: data.revision,
+      historyRevision: event.seq,
+    },
+  };
+}
 
 /** Retains the current and recent conversations across panel hides; idle reads use event cursors. */
 export function useHelperConversation(
@@ -67,6 +102,19 @@ export function useHelperConversation(
     }
     if (alive.current) setViews(Object.fromEntries(cache.current));
   }, []);
+  const applyMessageMutation = useCallback(
+    (change: HelperMessageMutation) => {
+      const key = change.conversation.id;
+      const previous = cache.current.get(key);
+      if (!previous) return;
+      const next = applyMessageChange(previous, change);
+      if (next === previous) return;
+      // A response started before this mutation cannot restore the old text or deleted rows.
+      versions.current.set(key, ++requestVersion.current);
+      write(key, next);
+    },
+    [write]
+  );
   const refresh = useCallback(
     async (conversation: Pick<HelperConversation, 'id'>) => {
       const key = conversation.id;
@@ -90,7 +138,35 @@ export function useHelperConversation(
         if (!alive.current || versions.current.get(key) !== version) return;
         // The first view starts at now. Later views must not skip effects arriving between polls.
         if (!cursors.current.has(key)) cursors.current.set(key, eventCursor);
-        const previous = cache.current.get(key);
+        let previous = cache.current.get(key);
+        if (
+          (latestConversation.historyRevision ?? 0) < (previous?.conversation.historyRevision ?? 0)
+        )
+          return;
+        // Explicit refreshes can precede event polling. Replay only message changes so older
+        // loaded pages stay current without discarding their reading position or task records.
+        if (
+          previous &&
+          (latestConversation.historyRevision ?? 0) > (previous.conversation.historyRevision ?? 0)
+        ) {
+          let cursor = previous.conversation.historyRevision ?? 0;
+          while (cursor < (latestConversation.historyRevision ?? 0)) {
+            const events = await api<HelperEvent[]>(
+              `/helper/conversations/${id(key)}/events?after=${cursor}`
+            );
+            if (!alive.current || versions.current.get(key) !== version) return;
+            for (const event of events) {
+              if (
+                event.kind === 'messages.changed' &&
+                event.seq <= (latestConversation.historyRevision ?? 0)
+              )
+                previous = applyMessageChange(previous, messageChange(previous, event));
+            }
+            const nextCursor = events.at(-1)?.seq ?? cursor;
+            if (nextCursor <= cursor) break;
+            cursor = nextCursor;
+          }
+        }
         const messageIds = new Set(messages.map((message) => message.id));
         const latestGroups = new Map(
           messages.map((message) => [message.requestGroupId, message.latestTaskId])
@@ -147,6 +223,10 @@ export function useHelperConversation(
         if (disposed) return false;
         for (const event of page) {
           if (event.seq <= cursor) continue;
+          if (event.kind === 'messages.changed') {
+            const view = cache.current.get(conversationId);
+            if (view) applyMessageMutation(messageChange(view, event));
+          }
           if (event.kind === 'illustration-preset.updated')
             window.dispatchEvent(new Event('uimori-illustration-presets-changed'));
           if (event.kind === 'theme.updated')
@@ -243,7 +323,7 @@ export function useHelperConversation(
       document.removeEventListener('visibilitychange', visible);
       window.removeEventListener('focus', visible);
     };
-  }, [open, scopeKey, conversationId, refresh]);
+  }, [open, scopeKey, conversationId, refresh, applyMessageMutation]);
   useEffect(() => {
     if (open && (running || (latestEventSeq ?? 0) > (cursors.current.get(scopeKey) ?? 0)))
       wake.current();
@@ -251,6 +331,7 @@ export function useHelperConversation(
   const earlier = async (kind: 'messages' | 'tasks') => {
     const view = cache.current.get(scopeKey);
     if (!view || earlierLock.current) return;
+    const historyRevision = view.conversation.historyRevision ?? 0;
     const before = kind === 'messages' ? view.messages[0]?.id : view.tasks.at(-1)?.id;
     if (!before) return;
     earlierLock.current = true;
@@ -259,6 +340,8 @@ export function useHelperConversation(
       const path = `/helper/conversations/${id(view.conversation.id)}/${kind}?before=${id(before)}`;
       if (kind === 'messages') {
         const page = await api<HelperMessage[]>(path);
+        if ((cache.current.get(scopeKey)?.conversation.historyRevision ?? 0) !== historyRevision)
+          return;
         if (!alive.current || (!cache.current.has(scopeKey) && selectedScope.current !== scopeKey))
           return;
         const latest = cache.current.get(scopeKey) ?? view;
@@ -295,10 +378,18 @@ export function useHelperConversation(
     setError,
     loadingEarlier,
     refresh,
+    applyMessageMutation,
     earlier,
     updateConversation: (conversation: HelperConversation) => {
       const previous = cache.current.get(conversation.id);
-      if (previous) write(conversation.id, { ...previous, conversation });
+      if (previous && conversation.revision >= previous.conversation.revision)
+        write(conversation.id, {
+          ...previous,
+          conversation: {
+            ...conversation,
+            historyRevision: previous.conversation.historyRevision,
+          },
+        });
     },
     updateTask: (task: HelperTaskView) => {
       const view = cache.current.get(task.conversationId);

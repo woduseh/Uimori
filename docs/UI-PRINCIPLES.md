@@ -55,6 +55,8 @@ Retained creative-option drafts and saves only block controls for their own chat
 
 The card-variable editor keeps an uncertain save's exact request available for explicit result confirmation during background refreshes. Acknowledgement ends the superseded read's loading state; a late read cannot replace the saved result or a newer draft.
 
+Helper messages reuse inline editing and message action menus. Saving an edit never reruns a task. Pair and following-message deletion live in the menu; only the deletion confirmation explains that completed resource changes and task records remain. Keep failed edits in place and preserve loaded older messages when another message changes.
+
 Keep settings action groups aligned to the right below their content, and toggle names on the left with switches on the right. Repeated usage meters share the same column boundaries regardless of adjacent text length.
 
 Apply the same grouping to chat settings and helper settings. Picker dialogs own their filter layout; compact controls in the surrounding composer must not shrink or restyle the dialog's search and folder fields.

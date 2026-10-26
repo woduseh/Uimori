@@ -6,6 +6,7 @@ import type {
   HelperConversation,
   HelperEvent,
   HelperMessage,
+  HelperMessageMutation,
   HelperScope,
   HelperResourceEdit,
 } from '../core/helper.js';
@@ -41,6 +42,14 @@ async function harness(page: Page, seedCount = 0) {
   let loseUndo = false;
   const posts: { requestKey: string; text: string; selection?: unknown }[] = [];
   const steerPosts: { taskId: string; requestKey: string; text: string }[] = [];
+  const messageMutations: {
+    messageId: string;
+    method: string;
+    expectedRevision: number;
+    text?: string;
+    scope?: 'pair' | 'following';
+  }[] = [];
+  let failNextMessageMutation = false;
   const streamReads = new Map<string, number>();
   const streamCursors = new Map<string, number[]>();
   const pendingStreams = new Map<string, number>();
@@ -195,6 +204,55 @@ async function harness(page: Page, seedCount = 0) {
           }
       }
       return route.fulfill({ json: view.conversation });
+    }
+    const messageMatch = /^\/api\/helper\/conversations\/([^/]+)\/messages\/([^/]+)$/u.exec(path);
+    if (messageMatch && ['PATCH', 'DELETE'].includes(request.method())) {
+      const view = views.get(messageMatch[1])!;
+      messageMutations.push({ messageId: messageMatch[2], method: request.method(), ...body });
+      if (failNextMessageMutation) {
+        failNextMessageMutation = false;
+        return route.fulfill({ status: 503, json: { error: '합성 저장 실패' } });
+      }
+      if (body.expectedRevision !== view.conversation.revision)
+        return route.fulfill({ status: 409, json: { error: '합성 대화 충돌' } });
+      const selected = view.messages.find((item) => item.id === messageMatch[2])!;
+      const mutation: HelperMessageMutation = { conversation: view.conversation };
+      if (request.method() === 'PATCH') {
+        selected.text = body.text;
+        mutation.updatedMessage = { id: selected.id, text: selected.text };
+      } else {
+        const group = selected.requestGroupId ?? selected.taskId;
+        const first = view.messages.findIndex(
+          (item) => (item.requestGroupId ?? item.taskId) === group
+        );
+        const removed = view.messages.filter((item, index) =>
+          body.scope === 'following'
+            ? index >= first
+            : (item.requestGroupId ?? item.taskId) === group
+        );
+        mutation.deletedMessageIds = removed.map((item) => item.id);
+        const removedIds = new Set(mutation.deletedMessageIds);
+        view.messages = view.messages.filter((item) => !removedIds.has(item.id));
+      }
+      const seq = ++nextSeq;
+      view.conversation = {
+        ...view.conversation,
+        revision: view.conversation.revision + 1,
+        historyRevision: seq,
+      };
+      mutation.conversation = view.conversation;
+      view.events.push({
+        seq,
+        conversationId: view.conversation.id,
+        taskId: null,
+        kind: 'messages.changed',
+        data: {
+          revision: view.conversation.revision,
+          ...(mutation.updatedMessage ? { updatedMessage: mutation.updatedMessage } : {}),
+          ...(mutation.deletedMessageIds ? { deletedMessageIds: mutation.deletedMessageIds } : {}),
+        },
+      });
+      return route.fulfill({ json: mutation });
     }
     const conversationMatch =
       /^\/api\/helper\/conversations\/([^/]+)(?:\/(view|messages|tasks|events|undo-resource))?$/u.exec(
@@ -362,6 +420,10 @@ async function harness(page: Page, seedCount = 0) {
     views,
     posts,
     steerPosts,
+    messageMutations,
+    failNextMessageMutation: () => {
+      failNextMessageMutation = true;
+    },
     artifacts,
     artifactWrites,
     undoPosts,
@@ -396,15 +458,16 @@ async function harness(page: Page, seedCount = 0) {
       loseNext = true;
     },
     current: () => [...views.values()].at(-1)!,
-    emit(kind: string) {
+    emit(kind: string, data: unknown = null) {
       const view = [...views.values()].at(-1)!;
       view.events.push({
         seq: ++nextSeq,
         conversationId: view.conversation.id,
         taskId: null,
         kind,
-        data: null,
+        data,
       });
+      return nextSeq;
     },
     progress(task: HelperTaskView, text: string, offset: number) {
       const value = streams.get(task.id)!;
@@ -453,6 +516,154 @@ async function open(page: Page) {
   await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
   return panel;
 }
+
+test('HELPMESSAGE edits saved requests and answers without rerunning completed work on mobile', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    view = state.current(),
+    tasksBefore = JSON.stringify(view.tasks),
+    user = panel.locator(`[data-message-id="${view.messages[0].id}"]`),
+    answer = panel.locator(`[data-message-id="${view.messages[1].id}"]`);
+  await panel.getByLabel('도우미에게 요청').fill('다음 요청으로 남겨 둘 초안');
+  await user.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '문맥용 요청 수정', exact: true }).click();
+  await user.getByLabel('요청 수정 내용', { exact: true }).fill('수정한 보관 요청');
+  await user.getByRole('button', { name: '입력 저장', exact: true }).click();
+  await expect(user.getByTestId('source-request')).toHaveText('수정한 보관 요청');
+  await answer.getByLabel('메시지 메뉴', { exact: true }).click();
+  await page.screenshot({
+    path: info.outputPath('helper-message-menu-mobile.png'),
+    fullPage: true,
+  });
+  await page.getByRole('button', { name: '응답 수정', exact: true }).click();
+  await answer.getByLabel('응답 수정', { exact: true }).fill('직접 고친 **보관 응답**이에요.');
+  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.screenshot({
+    path: info.outputPath('helper-message-editor-mobile.png'),
+    fullPage: true,
+  });
+  await answer.getByRole('button', { name: '입력 저장', exact: true }).click();
+  await expect(answer.locator('.helper-prose')).toHaveText('직접 고친 보관 응답이에요.');
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('다음 요청으로 남겨 둘 초안');
+  expect(await panel.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.screenshot({
+    path: info.outputPath('helper-message-edit-mobile.png'),
+    fullPage: true,
+  });
+  await page.reload();
+  await open(page);
+  await expect(user.getByTestId('source-request')).toHaveText('수정한 보관 요청');
+  await expect(answer.locator('.helper-prose')).toHaveText('직접 고친 보관 응답이에요.');
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('다음 요청으로 남겨 둘 초안');
+  expect(
+    state.messageMutations.map(({ method, expectedRevision }) => ({ method, expectedRevision }))
+  ).toEqual([
+    { method: 'PATCH', expectedRevision: 1 },
+    { method: 'PATCH', expectedRevision: 2 },
+  ]);
+  expect(JSON.stringify(view.tasks)).toBe(tasksBefore);
+  expect(state.posts).toHaveLength(0);
+});
+
+test('HELPMESSAGE a failed answer save retains the exact draft across reload and cancel restores the saved answer', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 1);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    saved = state.current().messages[1],
+    answer = panel.locator(`[data-message-id="${saved.id}"]`),
+    draft = '저장에 실패해도 남아야 할\n**응답 편집 초안**';
+  await answer.getByLabel('메시지 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '응답 수정', exact: true }).click();
+  await answer.getByLabel('응답 수정', { exact: true }).fill(draft);
+  state.failNextMessageMutation();
+  await answer.getByRole('button', { name: '입력 저장', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
+  await expect(answer.getByLabel('응답 수정', { exact: true })).toHaveValue(draft);
+  expect(saved.text).not.toBe(draft);
+  await page.reload();
+  await open(page);
+  await answer.getByLabel('메시지 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '응답 수정', exact: true }).click();
+  await expect(answer.getByLabel('응답 수정', { exact: true })).toHaveValue(draft);
+  await answer.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(answer.locator('.helper-prose')).toHaveText(saved.text);
+  expect(state.messageMutations).toHaveLength(1);
+  expect(state.posts).toHaveLength(0);
+});
+
+test('HELPMESSAGE pair and following deletion discard loaded older messages while retaining task history', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request),
+    state = await harness(page, 55);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page),
+    view = state.current(),
+    tasksBefore = JSON.stringify(view.tasks),
+    removedPair = view.messages.slice(4, 6).map((message) => message.id),
+    followingStart = view.messages[6].id;
+  await panel.getByRole('button', { name: '이전 메시지 불러오기', exact: true }).click();
+  await expect(panel.locator('.helper-message')).toHaveCount(110);
+  const oldAnswer = panel.locator(`[data-message-id="${removedPair[1]}"]`);
+  // A second client edits a message outside the latest 100-row view projection.
+  const changed = view.messages[5];
+  changed.text = '다른 화면에서 고친 이전 응답';
+  view.conversation.revision++;
+  view.conversation.historyRevision = state.emit('messages.changed', {
+    revision: view.conversation.revision,
+    updatedMessage: { id: changed.id, text: changed.text },
+  });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(oldAnswer.locator('.helper-prose')).toHaveText(changed.text);
+  await oldAnswer.getByLabel('메시지 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '요청과 응답 삭제', exact: true }).click();
+  const pairConfirmation = page.getByRole('alertdialog', { name: '요청과 응답 삭제', exact: true });
+  await pairConfirmation.getByRole('button', { name: '요청과 응답 삭제', exact: true }).click();
+  await expect(pairConfirmation).toBeHidden();
+  for (const messageId of removedPair)
+    await expect(panel.locator(`[data-message-id="${messageId}"]`)).toHaveCount(0);
+  await expect(panel.locator('.helper-message')).toHaveCount(108);
+  await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await open(page);
+  for (const messageId of removedPair)
+    await expect(panel.locator(`[data-message-id="${messageId}"]`)).toHaveCount(0);
+  const oldRequest = panel.locator(`[data-message-id="${followingStart}"]`);
+  await oldRequest.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '여기부터 삭제', exact: true }).click();
+  const followingConfirmation = page.getByRole('alertdialog', {
+    name: '여기부터 삭제',
+    exact: true,
+  });
+  await followingConfirmation.getByRole('button', { name: '여기부터 삭제', exact: true }).click();
+  await expect(followingConfirmation).toBeHidden();
+  await expect(panel.locator('.helper-message')).toHaveCount(4);
+  await expect(panel.getByTestId('source-request')).toHaveText(['합성 요청 1', '합성 요청 2']);
+  await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+  await open(page);
+  await expect(panel.locator('.helper-message')).toHaveCount(4);
+  await page.reload();
+  await open(page);
+  await expect(panel.locator('.helper-message')).toHaveCount(4);
+  await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
+  await expect(panel.getByTestId('helper-task-record')).toHaveCount(50);
+  expect(JSON.stringify(view.tasks)).toBe(tasksBefore);
+  expect(state.messageMutations.map(({ method, scope }) => ({ method, scope }))).toEqual([
+    { method: 'DELETE', scope: 'pair' },
+    { method: 'DELETE', scope: 'following' },
+  ]);
+  expect(state.posts).toHaveLength(0);
+});
 
 for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
   test(`HELPUI15 initial loading and the empty conversation center within the reading area ${width}`, async ({
@@ -1565,7 +1776,7 @@ test('HELPUI04 selected source is frozen in the request and a terminal missing s
   ).toEqual(selectedSources);
 });
 
-test('HELPUI05 retry edits in place, preserves composer and hides historical failure after reload', async ({
+test('HELPUI05 explicitly retries a saved edited request, preserves composer and hides historical failure after reload', async ({
   page,
   request,
 }) => {
@@ -1583,11 +1794,20 @@ test('HELPUI05 retry edits in place, preserves composer and hides historical fai
   await details.locator(':scope > summary').click();
   await expect(details.getByText('모델: 이전 시도의 도우미 모델', { exact: true })).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 요청 작성 중');
-  await panel.getByRole('button', { name: '요청 편집', exact: true }).click();
+  await panel.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '문맥용 요청 수정', exact: true }).click();
   await panel.getByLabel('요청 수정 내용').fill('고친 요청');
+  await panel.getByRole('button', { name: '입력 저장', exact: true }).click();
+  await expect(panel.getByTestId('source-request')).toHaveText('고친 요청');
+  expect(state.posts).toHaveLength(0);
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('새 요청 작성 중');
   state.loseNext();
-  await panel.getByRole('button', { name: '수정한 요청 보내기', exact: true }).click();
+  await panel
+    .getByRole('group', { name: '실패한 요청' })
+    .getByRole('button', { name: '다시 시도', exact: true })
+    .click();
   await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  expect(state.posts[0].text).toBe('고친 요청');
   const key = state.posts.at(-1)!.requestKey;
   await page.reload();
   panel = await open(page);

@@ -552,3 +552,12 @@
   font-size: var(--font-small);
   white-space: nowrap;
 }
+
+.helper-response-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.helper-response-actions .helper-copy-error {
+  flex-basis: 100%;
+}

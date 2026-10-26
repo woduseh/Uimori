@@ -8,6 +8,7 @@ import type {
   HelperConversationSummary,
   HelperEvent,
   HelperMessage,
+  HelperMessageMutation,
   HelperScope,
   HelperTask,
   HelperTaskSnapshot,
@@ -38,6 +39,7 @@ function conversationData(row: Row): HelperConversation {
     scope: JSON.parse(row.scope),
     title: row.title,
     revision: row.revision,
+    historyRevision: Number(row.history_revision ?? 0),
     persona: row.persona,
     limits: currentLimits(JSON.parse(row.limits)),
     createdAt: row.created_at,
@@ -87,9 +89,11 @@ export function initHelperWorkspace(store: Store) {
 export class HelperWorkspace {
   constructor(readonly store: Store) {}
   conversation(id: string): HelperConversation {
-    const row = this.store.db.prepare('SELECT * FROM helper_conversations WHERE id=?').get(id) as
-      | Row
-      | undefined;
+    const row = this.store.db
+      .prepare(`SELECT c.*,
+      (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision
+      FROM helper_conversations c WHERE id=?`)
+      .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, '도우미 대화를 찾을 수 없어요.');
     return conversationData(row);
   }
@@ -145,7 +149,8 @@ export class HelperWorkspace {
         `SELECT c.*,
           (SELECT json_object('running',COALESCE(SUM(status='running'),0),
             'queued',COALESCE(SUM(status='queued'),0)) FROM helper_tasks WHERE conversation_id=c.id) AS activity,
-          (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id) AS latest_seq
+          (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id) AS latest_seq,
+          (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision
         FROM helper_conversations c
         WHERE ${scope.kind === 'library' ? 'c.chat_id IS NULL' : 'c.chat_id=?'}
         ORDER BY c.updated_at DESC,c.rowid DESC`
@@ -239,6 +244,116 @@ export class HelperWorkspace {
       return { deleted: true as const };
     });
   }
+  private transcriptEntries(id: string) {
+    return this.store.db
+      .prepare(`
+      SELECT m.id,COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id) AS group_id,
+        1 AS phase,root.rowid AS position,COALESCE(c.deleted,0) AS deleted
+      FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id
+      JOIN helper_tasks root ON root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id)
+      LEFT JOIN helper_message_changes c ON c.message_id=m.id
+      WHERE m.conversation_id=?
+      UNION ALL
+      SELECT s.id,'seed:' || COALESCE((SELECT u.id FROM helper_seed_messages u
+        WHERE u.conversation_id=s.conversation_id AND u.role='user' AND u.ordinal<=s.ordinal
+        ORDER BY u.ordinal DESC LIMIT 1),s.id) AS group_id,
+        0 AS phase,COALESCE((SELECT MAX(u.ordinal) FROM helper_seed_messages u
+          WHERE u.conversation_id=s.conversation_id AND u.role='user' AND u.ordinal<=s.ordinal),s.ordinal) AS position,
+        COALESCE(c.deleted,0) AS deleted
+      FROM helper_seed_messages s LEFT JOIN helper_message_changes c ON c.message_id=s.id
+      WHERE s.conversation_id=?`)
+      .all(id, id) as (Row & {
+      id: string;
+      group_id: string;
+      phase: number;
+      position: number;
+      deleted: number;
+    })[];
+  }
+  private changeMessages(
+    id: string,
+    messageId: string,
+    expectedRevision: number,
+    change: { text: string } | { scope: 'pair' | 'following' }
+  ): HelperMessageMutation {
+    return this.store.transaction(() => {
+      const conversation = this.conversation(id);
+      if (conversation.revision !== expectedRevision)
+        throw new HttpError(
+          409,
+          '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 시도해 주세요.'
+        );
+      if (!this.deletionImpact(id).canDelete)
+        throw new HttpError(
+          409,
+          '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 수정해 주세요.'
+        );
+      const entries = this.transcriptEntries(id);
+      const selected = entries.find((entry) => entry.id === messageId && !entry.deleted);
+      if (!selected) throw new HttpError(404, '도우미 메시지를 찾을 수 없어요.');
+      let projection: Omit<HelperMessageMutation, 'conversation'>;
+      if ('text' in change) {
+        this.store.db
+          .prepare(`INSERT INTO helper_message_changes(message_id,conversation_id,text)
+          VALUES(?,?,?) ON CONFLICT(message_id) DO UPDATE SET text=excluded.text`)
+          .run(messageId, id, change.text);
+        projection = { updatedMessage: { id: messageId, text: change.text } };
+      } else {
+        const deletedMessageIds = entries
+          .filter(
+            (entry) =>
+              !entry.deleted &&
+              (change.scope === 'pair'
+                ? entry.group_id === selected.group_id
+                : entry.phase > selected.phase ||
+                  (entry.phase === selected.phase && entry.position >= selected.position))
+          )
+          .map((entry) => entry.id);
+        const mark =
+          this.store.db.prepare(`INSERT INTO helper_message_changes(message_id,conversation_id,deleted)
+          VALUES(?,?,1) ON CONFLICT(message_id) DO UPDATE SET deleted=1`);
+        for (const messageId of deletedMessageIds) mark.run(messageId, id);
+        projection = { deletedMessageIds };
+      }
+      // A checkpoint may contain edited/deleted text, including in its recent exact tail.
+      // Retain the immutable checkpoint as evidence and detach its active pointer.
+      this.store.db
+        .prepare(
+          'UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL WHERE scope_key=?'
+        )
+        .run(`helper:${id}`);
+      this.store.db
+        .prepare('UPDATE helper_conversations SET revision=revision+1,updated_at=? WHERE id=?')
+        .run(now(), id);
+      this.event(id, null, 'messages.changed', {
+        revision: conversation.revision + 1,
+        ...projection,
+      });
+      return { conversation: this.conversation(id), ...projection };
+    });
+  }
+  editMessage(id: string, messageId: string, expectedRevision: number, text: string) {
+    return this.changeMessages(id, messageId, expectedRevision, { text });
+  }
+  deleteMessages(
+    id: string,
+    messageId: string,
+    expectedRevision: number,
+    scope: 'pair' | 'following'
+  ) {
+    return this.changeMessages(id, messageId, expectedRevision, { scope });
+  }
+  assertRetryVisible(taskId: string) {
+    const hidden = this.store.db
+      .prepare(`SELECT 1 FROM helper_tasks t
+      JOIN helper_tasks member ON member.conversation_id=t.conversation_id
+        AND COALESCE(json_extract(member.snapshot,'$.requestGroupId'),member.id)=COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id)
+      JOIN helper_messages m ON m.task_id=member.id
+      JOIN helper_message_changes c ON c.message_id=m.id AND c.deleted=1
+      WHERE t.id=? LIMIT 1`)
+      .get(taskId);
+    if (hidden) throw new HttpError(409, '삭제한 도우미 요청은 재시도할 수 없어요.');
+  }
   messages(id: string, before?: string): HelperMessage[] {
     this.conversation(id);
     const seedCursor = before
@@ -250,17 +365,19 @@ export class HelperWorkspace {
       ? []
       : (this.store.db
           .prepare(
-            `SELECT m.*, t.status AS task_status, t.request AS request_text, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
+            `SELECT m.*,COALESCE(c.text,CASE WHEN m.role='user' THEN t.request ELSE m.text END) AS display_text, t.status AS task_status, COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id) AS request_group_id, root.rowid AS request_order,
         (SELECT latest.id FROM helper_tasks latest WHERE latest.conversation_id=m.conversation_id AND COALESCE(json_extract(latest.snapshot,'$.requestGroupId'),latest.id)=root.id ORDER BY latest.rowid DESC LIMIT 1) AS latest_task_id
         FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id JOIN helper_tasks root ON root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'), t.id)
-        WHERE m.conversation_id=? ${before ? 'AND m.rowid < (SELECT rowid FROM helper_messages WHERE id=?)' : ''} ORDER BY m.rowid DESC LIMIT 100`
+        LEFT JOIN helper_message_changes c ON c.message_id=m.id
+        WHERE m.conversation_id=? AND COALESCE(c.deleted,0)=0 ${before ? 'AND m.rowid < (SELECT rowid FROM helper_messages WHERE id=? AND conversation_id=m.conversation_id)' : ''} ORDER BY m.rowid DESC LIMIT 100`
           )
           .all(...(before ? [id, before] : [id])) as Row[]);
     const remaining = 100 - rows.length;
     const seeds = remaining
       ? (this.store.db
-          .prepare(`SELECT * FROM helper_seed_messages
-      WHERE conversation_id=? AND ordinal<? ORDER BY ordinal DESC LIMIT ?`)
+          .prepare(`SELECT s.*,COALESCE(c.text,s.text) AS display_text FROM helper_seed_messages s
+      LEFT JOIN helper_message_changes c ON c.message_id=s.id
+      WHERE s.conversation_id=? AND COALESCE(c.deleted,0)=0 AND ordinal<? ORDER BY ordinal DESC LIMIT ?`)
           .all(id, seedCursor?.ordinal ?? Number.MAX_SAFE_INTEGER, remaining) as Row[])
       : [];
     return [
@@ -273,7 +390,7 @@ export class HelperWorkspace {
         taskId: `seed:${row.id}`,
         taskStatus: 'completed' as const,
         role: row.role as 'user' | 'assistant',
-        text: row.text,
+        text: row.display_text,
         artifacts: [],
         createdAt: row.created_at,
       })),
@@ -286,7 +403,7 @@ export class HelperWorkspace {
         taskId: row.task_id,
         taskStatus: row.task_status,
         role: row.role,
-        text: row.role === 'user' ? row.request_text : row.text,
+        text: row.display_text,
         artifacts: JSON.parse(row.artifacts),
         createdAt: row.created_at,
       })),
@@ -317,7 +434,7 @@ export class HelperWorkspace {
     return (
       this.store.db
         .prepare(
-          `SELECT seq,conversation_id,task_id,kind,${view === 'updates' ? 'NULL' : 'data'} AS data FROM helper_events WHERE conversation_id=? AND seq>? ORDER BY seq LIMIT 500`
+          `SELECT seq,conversation_id,task_id,kind,${view === 'updates' ? "CASE WHEN kind='messages.changed' THEN data ELSE NULL END" : 'data'} AS data FROM helper_events WHERE conversation_id=? AND seq>? ORDER BY seq LIMIT 500`
         )
         .all(id, after) as Row[]
     ).map((r) => ({
@@ -479,6 +596,7 @@ export class HelperWorkspace {
       const prior = this.existing(conversationId, key, request, snapshot.retryOf);
       if (prior) return prior;
       if (snapshot.retryOf) {
+        this.assertRetryVisible(snapshot.retryOf);
         const previous = this.task(snapshot.retryOf);
         if (previous.conversationId !== conversationId)
           throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
@@ -528,6 +646,10 @@ export class HelperWorkspace {
           conversationId
         );
       if (titled.changes) this.event(conversationId, null, 'conversation.updated');
+      else
+        this.store.db
+          .prepare('UPDATE helper_conversations SET revision=revision+1,updated_at=? WHERE id=?')
+          .run(time, conversationId);
       this.store.db
         .prepare(
           'INSERT INTO helper_tasks(id,conversation_id,request_key,request,status,snapshot,usage,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)'

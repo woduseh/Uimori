@@ -83,6 +83,10 @@ Risu 메시지의 기본 글자색·글자 크기·글꼴·줄간격은 상속�
 
 Each independent chat can have multiple helper sessions. A session owns its conversation, draft and context; closing the panel or selecting another session does not cancel its work. Tools can explicitly target another chat when requested. Copying a chat produces an independent chat, not a shared branch with a mutable default.
 
+도우미의 요청과 답변은 메시지에서 편집하고 저장할 수 있어요. 저장은 다시 실행하지 않고 이후 도우미 요청에 사용할 대화 내용을 바꿔요. 메시지 메뉴에서 요청·답변 한 쌍을 삭제하거나 해당 쌍부터 이후 대화를 삭제할 수 있어요. 이미 수행한 자료 수정과 작업·사용량 기록은 유지해요. 해당 세션에 진행 중인 작업이 있으면 종료된 뒤 편집·삭제할 수 있어요.
+
+Transcript edits retain original execution evidence separately. Edited or deleted messages are reflected in both conversation reads and future helper history, including copied seed messages and retry groups. A transcript mutation detaches the active helper summary so stale text cannot re-enter the next request through compaction. Existing task snapshots and completed resource edits are not rewritten or undone.
+
 The helper header opens the searchable model picker directly. Selecting a model updates the global helper role for the next request; it does not change the current chat's main model, prompt choices or another role. A failed or uncertain change requires an explicit reread before another selection. Newer confirmed revisions take precedence over delayed acknowledgements in the header and picker.
 
 새 도우미 세션을 만들거나 같은 대화를 이어갈 수 있어요. 도우미 세션의 신규 분기는 제공하지 않지만 기존 분기 대화와 복사된 기록은 계속 읽고 이어갈 수 있어요. 소설 채팅 사본은 별도 기능으로 유지해요. 현재 편집 중인 자료는 표시하고 요청할 때 최신 초안을 자동으로 참고해요. 초안 조회·저장 오류와 충돌은 해당 편집기에서 확인해요.

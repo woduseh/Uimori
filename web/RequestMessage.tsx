@@ -1,7 +1,7 @@
 import { t, useI18n } from './i18n.js';
 import type { RequestImage } from '../core/request-images.js';
 import { StoredRequestImages } from './RequestImages.js';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { ArrowUp, Check, Copy, Eye, EyeOff, Pencil, RefreshCw, Save, X } from 'lucide-react';
 import { IconButton } from './IconButton.js';
@@ -26,10 +26,14 @@ export function RequestMessage({
   onConfirm,
   onEditingChange,
   editHint = t('reader.generateInANewChatWithTheEditedRequest'),
+  saveHint,
+  menuActions,
   maxLength = REQUEST_TEXT_MAX_CHARS,
   compactActions = 'always',
 }: {
   editHint?: string;
+  saveHint?: string;
+  menuActions?: ReactNode;
   maxLength?: number;
   /** Narrow widths: keep the edit action standing ('always') or show it when the bubble is tapped ('tap'). */
   compactActions?: 'always' | 'tap';
@@ -173,7 +177,8 @@ export function RequestMessage({
               {onConfirm
                 ? t('reader.checkWhetherThePreviousSubmissionWasAcceptedCheckUsing')
                 : onSave
-                  ? t('reader.appliesToFutureGenerationContextExistingScenesArePreserved')
+                  ? (saveHint ??
+                    t('reader.appliesToFutureGenerationContextExistingScenesArePreserved'))
                   : editHint}
             </small>
             <div className="request-edit-buttons">
@@ -325,6 +330,7 @@ export function RequestMessage({
                     </button>
                   </div>
                 )}
+                {menuActions}
                 {(onToggleRequest || onToggleScene) && (
                   <div className="action-menu-group">
                     {onToggleRequest && (

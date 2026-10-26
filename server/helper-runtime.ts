@@ -693,6 +693,7 @@ export class HelperRuntime {
       return prior;
     }
     if (retryOf) {
+      this.workspace.assertRetryVisible(retryOf);
       const previous = this.workspace.task(retryOf);
       if (previous.conversationId !== conversationId)
         throw new HttpError(403, '다른 대화의 요청은 재시도할 수 없어요.');
@@ -822,6 +823,27 @@ export class HelperRuntime {
         );
       return this.workspace.delete(id, expected);
     });
+  }
+  editMessage(id: string, messageId: string, expectedRevision: number, text: string) {
+    if (!this.deletionImpact(id).canDelete)
+      throw new HttpError(
+        409,
+        '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 수정해 주세요.'
+      );
+    return this.workspace.editMessage(id, messageId, expectedRevision, text);
+  }
+  deleteMessages(
+    id: string,
+    messageId: string,
+    expectedRevision: number,
+    scope: 'pair' | 'following'
+  ) {
+    if (!this.deletionImpact(id).canDelete)
+      throw new HttpError(
+        409,
+        '진행 중인 작업을 중지하고 프로바이더 요청이 종료된 뒤 수정해 주세요.'
+      );
+    return this.workspace.deleteMessages(id, messageId, expectedRevision, scope);
   }
   pump() {
     if (this.options.signal.aborted || this.controllers.size >= 2) return;

@@ -9,6 +9,8 @@ export type HelperConversation = {
   scope: HelperScope;
   title: string;
   revision: number;
+  /** Latest transcript mutation event; settings and task updates do not advance it. */
+  historyRevision?: number;
   persona: string;
   limits: HelperLimits;
   createdAt: string;
@@ -108,6 +110,11 @@ export type HelperMessage = {
   text: string;
   artifacts: { id: string; revision: number }[];
   createdAt: string;
+};
+export type HelperMessageMutation = {
+  conversation: HelperConversation;
+  updatedMessage?: { id: string; text: string };
+  deletedMessageIds?: string[];
 };
 export type HelperArtifact = {
   id: string;

@@ -277,13 +277,14 @@ function* documents(
     const rows = db
       .prepare(
         `SELECT COALESCE(m.id,s.id) AS id,COALESCE(m.role,s.role) AS role,
-           COALESCE(m.text,s.text) AS text,
+           COALESCE(c.text,m.text,s.text) AS text,
            COALESCE(m.task_id,'seed:' || s.id) AS task_id,
            COALESCE(m.created_at,s.created_at) AS created_at
          FROM helper_tasks request JOIN json_each(request.snapshot,'$.history') history
          LEFT JOIN helper_messages m ON m.id=json_extract(history.value,'$.id') AND m.conversation_id=request.conversation_id
          LEFT JOIN helper_seed_messages s ON s.id=json_extract(history.value,'$.id') AND s.conversation_id=request.conversation_id
-         WHERE request.id=? AND (m.id IS NOT NULL OR s.id IS NOT NULL)
+         LEFT JOIN helper_message_changes c ON c.message_id=COALESCE(m.id,s.id)
+         WHERE request.id=? AND (m.id IS NOT NULL OR s.id IS NOT NULL) AND COALESCE(c.deleted,0)=0
          ${ids.length ? `AND COALESCE(m.id,s.id) IN (${ids.map(() => '?').join(',')})` : ''}
          ORDER BY CAST(history.key AS INTEGER)`
       )
