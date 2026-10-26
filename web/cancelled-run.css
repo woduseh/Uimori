@@ -1,0 +1,17 @@
+.cancelled-run {
+  padding: 8px 0;
+  font-size: var(--font-body);
+}
+.cancelled-run-status,
+.cancelled-run-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cancelled-run-status {
+  margin: 0 0 10px;
+  color: var(--muted);
+}
+.cancelled-run-actions {
+  flex-wrap: wrap;
+}

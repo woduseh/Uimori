@@ -313,7 +313,9 @@ test('ACTUI03 failure persists, cancellation expires and chat navigation does no
   await state.set([activity('cancelled-task')]);
   await expect(status).toContainText('장면을 쓰는 중');
   await state.set([activity('cancelled-task', 'main', 'cancelled')]);
-  await expect(status).toContainText('중단');
+  await expect(status).toContainText('본문 취소됨');
+  await expect(status.locator('svg.lucide-square')).toHaveCount(1);
+  await expect(status.locator('svg.lucide-check')).toHaveCount(0);
   await page.clock.fastForward(4500);
   await expect(status).toHaveCount(0);
   await page.evaluate((id) => {
@@ -355,7 +357,7 @@ test('ACTUI05 old failure does not replace a later completion or cancellation', 
   await state.set([failed, cancelled]);
   await expect(status).toContainText('장면을 쓰는 중');
   await state.set([failed, { ...cancelled, status: 'cancelled', finishedAt: iso(2000) }]);
-  await expect(status).toContainText('본문 중단됨');
+  await expect(status).toContainText('본문 취소됨');
   await page.clock.fastForward(4500);
   await expect(status).toHaveCount(0);
   expect(state.writes).toEqual([]);
@@ -879,9 +881,15 @@ test('ACTUI16 recent navigation groups saved dates and keeps active helpers ahea
     expect(response.ok()).toBe(true);
     chats.push((await response.json()) as Chat);
   }
-  const now = new Date(2026, 9, 25, 12);
-  const yesterday = new Date(2026, 9, 24, 23, 59).toISOString();
-  const earlier = new Date(2026, 9, 20, 12).toISOString();
+  // The selected chat also refreshes from the real reader endpoint with today's activity date.
+  const now = new Date();
+  const previousDay = new Date(now);
+  previousDay.setDate(previousDay.getDate() - 1);
+  previousDay.setHours(23, 59, 0, 0);
+  const yesterday = previousDay.toISOString();
+  const previousWeek = new Date(now);
+  previousWeek.setDate(previousWeek.getDate() - 5);
+  const earlier = previousWeek.toISOString();
   await page.clock.install({ time: now });
   await page.route('**/api/chats', (route) =>
     route.request().method() === 'GET'
@@ -1038,6 +1046,77 @@ test('ACTUI17 sidebar copies a nonselected chat and an empty chat immediately wh
     .click();
   await expect(composer).toHaveValue('빈 원본 채팅에 남겨 둘 합성 초안');
 });
+
+for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+  test(`ACTUI18 ${width}px recent chat menus rename and delete without changing the current draft`, async ({
+    page,
+    request,
+  }, info) => {
+    const seeded = await seed(request);
+    const created = await request.post('/api/chats', {
+      data: { title: `최근 목록에서 관리할 채팅 ${width}`, botId: seeded.chat.botId },
+    });
+    expect(created.ok()).toBe(true);
+    const target = (await created.json()) as Chat;
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${seeded.chat.id}`);
+    const composer = page.getByLabel('다음 장면 요청');
+    const draft = `현재 채팅에 남겨 둘 합성 초안 ${width}`;
+    await composer.fill(draft);
+    if (width === MOBILE_WIDTH)
+      await page.getByRole('button', { name: '탐색 메뉴', exact: true }).click();
+    const nav = page.getByTestId('bot-navigation').filter({ visible: true });
+    await nav.locator('.bot-navigation-modes > button').nth(1).click();
+    const row = nav.locator(`.activity-nav-chat-row[data-chat-id="${target.id}"]`);
+    const trigger = row.locator('.action-menu > summary');
+    const actions = row.locator('.action-menu-body');
+    await trigger.click();
+    await expect(actions.getByRole('button')).toHaveText(['채팅 복사', '제목 변경', '채팅 삭제']);
+    await page.screenshot({
+      path: info.outputPath(`recent-chat-menu-${width}.png`),
+      animations: 'disabled',
+    });
+    await actions.getByRole('button', { name: '제목 변경', exact: true }).click();
+    const rename = page.getByRole('dialog', { name: '채팅 제목 변경', exact: true });
+    const title = rename.getByRole('textbox', { name: '채팅 제목', exact: true });
+    await title.fill('취소할 제목 초안');
+    await rename.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(rename).toBeHidden();
+    await expect(trigger).toBeFocused();
+    expect((await detail(request, target.id)).chat.title).toBe(target.title);
+    await trigger.click();
+    await actions.getByRole('button', { name: '제목 변경', exact: true }).click();
+    await expect(title).toHaveValue(target.title);
+    const renamed = `최근 목록에서 바꾼 제목 ${width}`;
+    await title.fill(renamed);
+    await rename.getByRole('button', { name: '제목 저장', exact: true }).click();
+    await expect(rename).toBeHidden();
+    await expect(trigger).toHaveAccessibleName(`${renamed} 채팅 메뉴`);
+    expect((await detail(request, target.id)).chat.title).toBe(renamed);
+    expect(new URL(page.url()).searchParams.get('chat')).toBe(seeded.chat.id);
+    await expect(composer).toHaveValue(draft);
+    await trigger.click();
+    await actions.getByRole('button', { name: `${renamed} 채팅 삭제`, exact: true }).click();
+    const deletion = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
+    await expect(deletion).toContainText(renamed);
+    await deletion.getByRole('button', { name: '취소', exact: true }).click();
+    await expect(deletion).toBeHidden();
+    await expect(trigger).toBeFocused();
+    expect((await request.get(`/api/chats/${target.id}`)).ok()).toBe(true);
+    await trigger.click();
+    await actions.getByRole('button', { name: `${renamed} 채팅 삭제`, exact: true }).click();
+    await deletion.getByRole('button', { name: '영구 삭제', exact: true }).click();
+    await expect(row).toHaveCount(0);
+    expect((await request.get(`/api/chats/${target.id}`)).status()).toBe(404);
+    expect(new URL(page.url()).searchParams.get('chat')).toBe(seeded.chat.id);
+    await expect(composer).toHaveValue(draft);
+    expect((await detail(request, seeded.chat.id)).sources.map((source) => source.text)).toEqual(
+      seeded.sources.map((source) => source.text)
+    );
+    if (width === MOBILE_WIDTH)
+      await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeVisible();
+  });
+}
 
 test('ACTUI11 an already visible source is confirmed only after its inbox entry is selected', async ({
   page,

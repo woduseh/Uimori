@@ -1224,10 +1224,10 @@ export const messages = {
     zh: '{v0}已完成',
   },
   'helpers.m231': {
-    ko: '{v0} 중단됨',
-    en: '{v0} interrupted',
-    ja: '{v0}中断',
-    zh: '{v0}已中断',
+    ko: '{v0} 취소됨',
+    en: '{v0} cancelled',
+    ja: '{v0}キャンセル済み',
+    zh: '{v0}已取消',
   },
   'helpers.m232': {
     ko: '{v0} 생성 거절',

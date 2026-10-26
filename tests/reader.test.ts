@@ -43,7 +43,7 @@ async function setup() {
   owned.push({ app, directory });
   return app;
 }
-function source(store: Store, chatId: string, text = 'Synthetic paragraph.') {
+function queued(store: Store, chatId: string) {
   const chat = store.chat(chatId);
   const run = store.createRun(
     chatId,
@@ -63,6 +63,10 @@ function source(store: Store, chatId: string, text = 'Synthetic paragraph.') {
       resources: [],
     })
   ).run;
+  return run;
+}
+function source(store: Store, chatId: string, text = 'Synthetic paragraph.') {
+  const run = queued(store, chatId);
   store.startRun(run.id);
   return store.completeRun(run.id, text, {
     modelCalls: 0,
@@ -123,6 +127,41 @@ function readerSourceBatch(store: Store, chatId: string, texts: string[]) {
     })
   );
 }
+
+test('HTTP reader dismissal validates confirmed cancellation and preserves task history', async () => {
+  const app = await setup(),
+    store = app.store,
+    chat = createFixtureChat(store, 'Cancelled reader request');
+  const original = source(store, chat.id, 'Keep the original');
+  const run = queued(store, chat.id);
+  const post = (id: string, operation: 'cancel' | 'dismiss-reader', payload = {}) =>
+    app.inject({ method: 'POST', url: `/api/runs/${id}/${operation}`, payload });
+  expect((await post(run.id, 'dismiss-reader')).statusCode).toBe(409);
+  expect((await post(run.id, 'cancel')).json()).toMatchObject({ status: 'cancelled' });
+  const before = store.run(run.id);
+  const response = await post(run.id, 'dismiss-reader');
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.json()).toEqual({ chatId: chat.id, runId: run.id, readerDismissed: true });
+  const cursor = store.latestEventSequence(chat.id);
+  expect((await post(run.id, 'dismiss-reader')).statusCode).toBe(200);
+  expect(store.latestEventSequence(chat.id)).toBe(cursor);
+  expect((await post(run.id, 'dismiss-reader', { unexpected: true })).statusCode).toBe(400);
+  const detail = (await app.inject(`/api/chats/${chat.id}/reader`)).json();
+  expect(detail.reader.pendingRunIds).not.toContain(run.id);
+  expect(detail.sources.map((item: { id: string }) => item.id)).toEqual([original.id]);
+  const tasks = (await app.inject(`/api/chats/${chat.id}/reader-runs`)).json();
+  expect(tasks.find((item: { id: string }) => item.id === run.id)).toMatchObject({
+    status: 'cancelled',
+    readerDismissed: true,
+  });
+  expect(store.run(run.id)).toEqual(before);
+  expect((await post(original.runId, 'cancel')).json()).toMatchObject({
+    status: 'completed',
+    sourceRevision: original.id,
+  });
+  expect((await post(original.runId, 'dismiss-reader')).statusCode).toBe(409);
+  expect((await post('missing-run', 'dismiss-reader')).statusCode).toBe(404);
+});
 
 test('100-source HTTP reader pages retain order while execution snapshot and full detail stay intact', async () => {
   const app = await setup(),

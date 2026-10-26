@@ -1,14 +1,15 @@
 import { t, useI18n } from './i18n.js';
 import { useState, type ReactNode } from 'react';
-import { DoneIcon, IssueIcon, RunningIcon, UncertainIcon } from './ui-icons.js';
+import { DoneIcon, IssueIcon, RunningIcon, StopIcon, UncertainIcon } from './ui-icons.js';
 import './turn-activity.css';
 import './activity-status.css';
 
 /** Progress vocabulary shared by the main reader and the helper conversation. */
-export type StatusTone = 'running' | 'done' | 'issue' | 'uncertain';
+export type StatusTone = 'running' | 'done' | 'cancelled' | 'issue' | 'uncertain';
 export const statusGlyph = {
   running: RunningIcon,
   done: DoneIcon,
+  cancelled: StopIcon,
   issue: IssueIcon,
   uncertain: UncertainIcon,
 } as const;

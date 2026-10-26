@@ -45,6 +45,8 @@ import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperRecentTask } from '../core/activity-feed.js';
 import type { HelperScope, HelperResourceRef } from '../core/helper.js';
 import { ResponseDisplay } from './StreamingResponse.js';
+import { CancelledRun } from './CancelledRun.js';
+import { canDismissReaderRun } from '../core/reader-conversation.js';
 import {
   readPresentationChoice,
   readFontSize,
@@ -1558,6 +1560,29 @@ function App() {
                           );
                         }
                         const { run } = entry;
+                        if (canDismissReaderRun(run))
+                          return (
+                            <CancelledRun
+                              key={run.id}
+                              run={run}
+                              disabled={s.reuseBlocked || optionsBusy}
+                              onRetry={
+                                s.canReuseRun(run.id) ? () => void s.generate(run.id) : undefined
+                              }
+                              onSubmit={
+                                s.canReuseRun(run.id)
+                                  ? (text) => s.generate(run.id, text)
+                                  : undefined
+                              }
+                              onConfirm={
+                                s.pendingEditedRunId === run.id
+                                  ? () => submitRequest(true)
+                                  : undefined
+                              }
+                              onDismiss={() => s.dismissCancelledRun(run.id)}
+                              onHistory={() => inspect(run.id)}
+                            />
+                          );
                         return (
                           <article
                             className="pending-turn"

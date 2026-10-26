@@ -9,6 +9,7 @@ import { ProviderRejectionNotice } from './provider-rejection.js';
 import { JobCard } from './SourceReader.js';
 import { mainJudgmentError } from './main-judgment-error.js';
 import { SceneUsage } from './SceneUsage.js';
+import { PartialResponse, StreamingResponse } from './StreamingResponse.js';
 import './run-task-details.css';
 
 /**
@@ -87,6 +88,7 @@ export function RunTaskDetails({
             <ContextSummaryStatus summary={run.contextSummary} />
           )}
           {run.error &&
+            !(run.status === 'cancelled' && run.error === 'Run cancelled') &&
             !(
               run.contextSummary?.status === 'failed' && run.contextSummary.error === run.error
             ) && <p className="error">{mainJudgmentError(run.error) ?? run.error}</p>}
@@ -114,6 +116,11 @@ export function RunTaskDetails({
               </div>
               <pre>{run.partialText}</pre>
             </details>
+          )}
+          {run.status === 'cancelled' && !run.partialText && !run.sourceRevision && (
+            <PartialResponse>
+              <StreamingResponse taskKind="main" taskId={run.id} taskStatus={run.status} settled />
+            </PartialResponse>
           )}
           {canCancel && (
             <div className="form-actions">

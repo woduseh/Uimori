@@ -255,13 +255,15 @@ export type ReaderRun = Omit<Run, 'snapshot' | 'inputs' | 'toolEvents'> & {
   requestOrder?: number;
   retryOf?: string | null;
   supersededBy?: string | null;
+  /** Explicitly hidden from the reader; retained in task history with all execution data. */
+  readerDismissed?: boolean;
   estimatedCost?: {
     usd: number | null;
     subtotalUsd: number;
     unknownCount: number;
     attemptCount: number;
   };
-  snapshot: Pick<RunSnapshot, 'loreContextReset' | 'requestImages'>;
+  snapshot: Pick<RunSnapshot, 'loreContextReset' | 'requestImages' | 'replacement'>;
   contextSummary?: {
     status: 'pending' | 'ready' | 'failed';
     inputTokenLimit: number;

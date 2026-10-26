@@ -2,7 +2,9 @@ import { readImportReceipt, saveImportReceipt } from '../server/import-operation
 import { readStoredRunSnapshot } from '../server/run-projections.js';
 import { readerConversation } from '../core/reader-conversation.js';
 import type { ReaderRun } from '../core/types.js';
-import { readerDetail } from '../server/reader.js';
+import { readerDetail, readerRuns } from '../server/reader.js';
+import { dismissReaderRun, readerRunDismissalKey } from '../server/run-reader-state.js';
+import { deleteChat } from '../server/chat-deletion.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
 import { afterEach, expect, test } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -137,6 +139,17 @@ test.each(['failed', 'cancelled', 'refused'] as const)(
     store.finishRun(retry.id, status, 'Fixture failure');
     expect(store.chat(chat.id).headRevision).toBe(selected.source.id);
     expect(store.source(selected.source.id).text).toBe('Keep me');
+    const detail = readerDetail(store, chat.id, {});
+    expect(detail.runs.find((run) => run.id === retry.id)?.snapshot.replacement).toEqual(
+      retry.snapshot.replacement
+    );
+    expect(detail.reader.pendingRunIds.includes(retry.id)).toBe(status !== 'cancelled');
+    expect(
+      readerConversation(detail.sources, detail.runs as ReaderRun[]).some(
+        (entry) => entry.kind === 'pending' && entry.run.id === retry.id
+      )
+    ).toBe(status !== 'cancelled');
+    expect(readerRuns(store, chat.id).some((run) => run.id === retry.id)).toBe(true);
     expect(() => store.completeRun(retry.id, 'Late response', selected.run.usage!)).toThrow(
       /owns completion/
     );
@@ -518,6 +531,8 @@ test('pending turns follow five-source page boundaries without losing active wor
   for (let index = 0; index < 5; index++) complete(store, chat.id, `Source ${index + 1}`);
   const failed = queued(store, chat.id, 'Between pages');
   store.finishRun(failed.id, 'failed', 'Failed between pages');
+  const cancelled = queued(store, chat.id, 'Cancelled between pages');
+  store.finishRun(cancelled.id, 'cancelled', 'Run cancelled', 'Retained partial');
   const sixth = complete(store, chat.id, 'Source 6');
   complete(store, chat.id, 'Source 7');
   const first = readerDetail(store, chat.id, {});
@@ -527,6 +542,13 @@ test('pending turns follow five-source page boundaries without losing active wor
   expect(last.reader.start).toBe(5);
   expect(last.sources).toHaveLength(2);
   expect(last.reader.pendingRunIds).toContain(failed.id);
+  expect(last.reader.pendingRunIds).toContain(cancelled.id);
+  dismissReaderRun(store, cancelled.id);
+  const dismissed = readerDetail(store, chat.id, { source: sixth.source.id });
+  expect(dismissed.reader.pendingRunIds).not.toContain(cancelled.id);
+  expect(dismissed.reader.pendingRunIds).toContain(failed.id);
+  expect(dismissed.reader.order).toEqual(last.reader.order);
+  expect(dismissed.reader.navigation).toEqual(last.reader.navigation);
   const timeline = readerConversation(last.sources, last.runs as ReaderRun[]);
   expect(timeline[0]).toMatchObject({ kind: 'pending', run: { id: failed.id } });
   expect(timeline.filter((entry) => entry.kind === 'source').map((entry) => entry.index)).toEqual([
@@ -534,4 +556,126 @@ test('pending turns follow five-source page boundaries without losing active wor
   ]);
   const active = queued(store, chat.id, 'Active at latest head');
   expect(readerDetail(store, chat.id, {}).reader.pendingRunIds).toContain(active.id);
+});
+
+test('reader dismissal survives reopening without modifying execution data, and a retry stays visible', () => {
+  let store = database();
+  const chat = createFixtureChat(store, 'Dismiss cancelled request');
+  const original = complete(store, chat.id, 'Original story');
+  const run = queued(store, chat.id, 'Keep the cancelled request');
+  store.startRun(run.id);
+  store.finishRun(run.id, 'cancelled', 'Run cancelled', 'Keep the partial response', {
+    modelCalls: 1,
+    inputTokens: 31,
+    outputTokens: 12,
+    costUsd: 0.01,
+  });
+  const before = store.run(run.id);
+  const rowBefore = store.db.prepare('SELECT * FROM runs WHERE id=?').get(run.id);
+  const initial = readerDetail(store, chat.id, {});
+  expect(initial.reader.pendingRunIds).toContain(run.id);
+  dismissReaderRun(store, run.id);
+  const cursor = store.latestEventSequence(chat.id);
+  expect(dismissReaderRun(store, run.id)).toEqual({
+    chatId: chat.id,
+    runId: run.id,
+    readerDismissed: true,
+  });
+  expect(store.latestEventSequence(chat.id)).toBe(cursor);
+  expect(cursor).toBe(initial.reader.cursor + 1);
+  expect(store.run(run.id)).toEqual(before);
+  expect(store.db.prepare('SELECT * FROM runs WHERE id=?').get(run.id)).toEqual(rowBefore);
+  expect(store.source(original.source.id).text).toBe('Original story');
+  expect(store.chat(chat.id).headRevision).toBe(original.source.id);
+  expect(readerRuns(store, chat.id).find((item) => item.id === run.id)).toMatchObject({
+    readerDismissed: true,
+    partialText: 'Keep the partial response',
+    usage: before.usage,
+  });
+  const owner = owned.at(-1)!;
+  store.close();
+  store = new Store(join(owner.path, 'story.sqlite'));
+  owner.store = store;
+  const detail = readerDetail(store, chat.id, {});
+  expect(detail.reader.pendingRunIds).not.toContain(run.id);
+  expect(
+    readerConversation(detail.sources, detail.runs as ReaderRun[]).some(
+      (entry) => entry.kind === 'pending' && entry.run.id === run.id
+    )
+  ).toBe(false);
+  expect(store.run(run.id)).toEqual(before);
+  const retry = store.retryRun(run.id, 'retry-dismissed').run;
+  expect(store.retryRun(run.id, 'retry-dismissed')).toMatchObject({
+    created: false,
+    run: { id: retry.id },
+  });
+  expect(readerDetail(store, chat.id, {}).reader.pendingRunIds).toContain(retry.id);
+  expect(readerRuns(store, chat.id).find((item) => item.id === retry.id)?.readerDismissed).toBe(
+    false
+  );
+  store.finishRun(retry.id, 'cancelled', 'Run cancelled');
+  deleteChat(store, chat.id, {});
+  expect(
+    store.db
+      .prepare('SELECT 1 FROM app_metadata WHERE key=?')
+      .get(readerRunDismissalKey(chat.id, run.id))
+  ).toBeUndefined();
+});
+
+test.each([
+  'queued',
+  'running',
+  'failed',
+  'interrupted',
+  'refused',
+  'partial',
+  'uncertain',
+] as const)('reader dismissal rejects %s work and leaves it visible', (status) => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Keep unresolved work');
+  const run = queued(store, chat.id);
+  if (status === 'running') store.startRun(run.id);
+  else if (status !== 'queued')
+    store.finishRun(
+      run.id,
+      status === 'uncertain' ? 'cancelled' : status,
+      status === 'uncertain' ? 'PROVIDER_UNCERTAIN' : 'Fixture terminal state'
+    );
+  expect(() => dismissReaderRun(store, run.id)).toThrow(/Only a cancelled request/);
+  expect(readerDetail(store, chat.id, {}).reader.pendingRunIds).toContain(run.id);
+});
+
+test('completion winning a cancel race keeps its source and cannot be dismissed', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Completed before cancellation');
+  const result = complete(store, chat.id, 'Completed response');
+  expect(store.finishRun(result.run.id, 'cancelled', 'Run cancelled')).toEqual(result.run);
+  expect(() => dismissReaderRun(store, result.run.id)).toThrow(/Only a cancelled request/);
+  const detail = readerDetail(store, chat.id, {});
+  expect(detail.sources.map((source) => source.id)).toEqual([result.source.id]);
+  expect(detail.reader.pendingRunIds).toEqual([]);
+  expect(store.run(result.run.id)).toEqual(result.run);
+});
+
+test('uncertain cancellation of a replacement stays visible and cannot be dismissed', () => {
+  const store = database(),
+    chat = createFixtureChat(store, 'Uncertain replacement');
+  const original = complete(store, chat.id, 'Preserved original');
+  const run = store.retryRun(
+    original.run.id,
+    'uncertain-replacement',
+    undefined,
+    undefined,
+    'replace'
+  ).run;
+  store.finishRun(run.id, 'cancelled', 'PROVIDER_UNCERTAIN');
+  expect(() => dismissReaderRun(store, run.id)).toThrow(/Only a cancelled request/);
+  const detail = readerDetail(store, chat.id, {});
+  expect(detail.reader.pendingRunIds).toContain(run.id);
+  expect(
+    readerConversation(detail.sources, detail.runs as ReaderRun[]).some(
+      (entry) => entry.kind === 'pending' && entry.run.id === run.id
+    )
+  ).toBe(true);
+  expect(store.source(original.source.id).text).toBe('Preserved original');
 });

@@ -5,7 +5,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Copy,
   LoaderCircle,
   MessageCircle,
 } from 'lucide-react';
@@ -14,7 +13,7 @@ import type { ActivityFeed, ActivityFeedItem, HelperRecentTask } from '../core/a
 import type { Chat } from '../core/types.js';
 import type { Library } from '../core/product.js';
 import type { ReaderTarget } from '../core/reader-target.js';
-import { ActionMenu } from './ActionMenu.js';
+import { ChatActionMenu, ChatTitleDialog } from './ChatActionMenu.js';
 import { groupRecentDates, recentDateGroupLabel } from './recent-date-groups.js';
 import './activity-navigation.css';
 
@@ -27,6 +26,8 @@ type Props = {
   onSelect: (id: string, target?: ReaderTarget) => void;
   onCopyChat?: (chatId: string) => void;
   copyingChats?: string[];
+  onChatsChanged: () => Promise<void>;
+  onError: (message: string) => void;
   onAcknowledge: (items: ActivityFeedItem[]) => void;
   onInspect: (item: ActivityFeedItem) => void;
   onOpenHelper?: (task: HelperRecentTask) => void;
@@ -146,12 +147,15 @@ export function ActivityNavigation({
   onSelect,
   onCopyChat,
   copyingChats,
+  onChatsChanged,
+  onError,
   onAcknowledge,
   onInspect,
   onOpenHelper,
   onRetry,
 }: Props) {
   useI18n();
+  const [renamingChatId, setRenamingChatId] = useState<string | null>(null);
   const names = new Map(library?.contents.map((bot) => [bot.id, bot.title]) ?? []);
   const chatById = new Map(chats.map((chat) => [chat.id, chat]));
   const grouped = new Map<string, ActivityFeedItem[]>();
@@ -326,26 +330,14 @@ export function ActivityNavigation({
                         </small>
                       </span>
                     </button>
-                    {onCopyChat && (
-                      <ActionMenu label={t('transfer.d013', { v0: title(chat) })} viewport>
-                        <button
-                          type="button"
-                          disabled={copyingChats?.includes(chat.id)}
-                          onClick={() => onCopyChat(chat.id)}
-                        >
-                          {copyingChats?.includes(chat.id) ? (
-                            <LoaderCircle size={18} aria-hidden="true" />
-                          ) : (
-                            <Copy size={18} aria-hidden="true" />
-                          )}
-                          {t(
-                            copyingChats?.includes(chat.id)
-                              ? 'recent.copyingChat'
-                              : 'recent.copyChat'
-                          )}
-                        </button>
-                      </ActionMenu>
-                    )}
+                    <ChatActionMenu
+                      chat={chat}
+                      onCopyChat={onCopyChat}
+                      copying={copyingChats?.includes(chat.id)}
+                      onRename={() => setRenamingChatId(chat.id)}
+                      onChatsChanged={onChatsChanged}
+                      onError={onError}
+                    />
                   </div>
                 ))}
               </div>
@@ -421,6 +413,11 @@ export function ActivityNavigation({
           </button>
         </p>
       )}
+      <ChatTitleDialog
+        chat={chats.find((chat) => chat.id === renamingChatId)}
+        onChatsChanged={onChatsChanged}
+        onClose={() => setRenamingChatId(null)}
+      />
     </nav>
   );
 }

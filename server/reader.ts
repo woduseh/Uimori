@@ -4,10 +4,11 @@ import { validateTranslationArtifact } from './translation-artifacts.js';
 import type { Store } from './store.js';
 import { mergedReaderAssets } from './package-images.js';
 import { illustrationsForSources } from './illustrations.js';
-import type { ReaderActivity } from '../core/types.js';
+import type { ReaderActivity, ReaderRun } from '../core/types.js';
 import { changedReaderSources, readerJobIds, readerPresentationRevisions } from './reader-data.js';
 import { providerRejection } from '../core/provider-rejection.js';
-import { readerRequestOrder } from '../core/reader-conversation.js';
+import { isReaderPendingRun, readerRequestOrder } from '../core/reader-conversation.js';
+import { RUN_READER_DISMISSAL_PREFIX } from './run-reader-state.js';
 import type { SceneUsageReceipt } from '../core/scene-usage.js';
 import { outlineSceneTitles, sceneTitles } from './scene-titles.js';
 import { readSceneContext } from './scene-context.js';
@@ -196,16 +197,22 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
       AND partial_text=json_extract(snapshot,'$.mainJudgment.response')
       AND json_type(snapshot,'$.nativeRisuExecution.output') IS NULL) AS canRejudge,
     json_extract(command,'$.retryOf') AS retryOf,
+    EXISTS(SELECT 1 FROM app_metadata m WHERE m.key=? || runs.chat_id || ':' || runs.id) AS readerDismissed,
     CASE WHEN source_revision IS NULL THEN (SELECT newer.id FROM runs newer WHERE newer.chat_id=runs.chat_id AND json_extract(newer.command,'$.retryOf')=runs.id ORDER BY newer.created_at DESC,newer.id DESC LIMIT 1) END AS supersededBy,
     json_extract(snapshot,'$.settingsRevision') AS settingsRevision,CASE WHEN json_extract(snapshot,'$.packageStart.mode')='authored' THEN NULL ELSE COALESCE(json_extract(snapshot,'$.displayModelTitle'),json_extract(snapshot,'$.profile.models.main.title')) END AS modelTitle,json_extract(snapshot,'$.profile.models.main.executionMode') AS executionMode,(COALESCE(json_array_length(snapshot,'$.profile.packageAttachments'),0)>0) AS hasPackages,
     CASE WHEN json_type(snapshot,'$.packageStart') IS NOT NULL THEN json_object('mode',json_extract(snapshot,'$.packageStart.mode'),'title',json_extract(snapshot,'$.packageStart.title'),'startId',json_extract(snapshot,'$.packageStart.startId'),'packageId',json_extract(snapshot,'$.packageStart.packageId'),'packageRevision',json_extract(snapshot,'$.packageStart.packageRevision')) END AS packageStart,
     CASE WHEN json_type(snapshot,'$.contextPlan')='object' THEN json_object('status',json_extract(snapshot,'$.contextPlan.status'),'inputTokenLimit',json_extract(snapshot,'$.contextPlan.budget.inputTokenLimit'),'estimatedInputTokens',json_extract(snapshot,'$.contextPlan.estimatedInputTokens'),'compactedSources',json_array_length(snapshot,'$.contextPlan.compacted'),'summaryCalls',json_extract(snapshot,'$.contextPlan.summaryCalls'),'error',json_extract(snapshot,'$.contextPlan.error')) END AS contextSummary,
-    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'requestImages',json_extract(snapshot,'$.requestImages')) AS snapshot
+    json_object('loreContextReset',json_extract(snapshot,'$.loreContextReset'),'requestImages',json_extract(snapshot,'$.requestImages'),'replacement',json_extract(snapshot,'$.replacement')) AS snapshot
     FROM runs
     WHERE runs.chat_id=? ${scope ? 'AND runs.id IN (SELECT value FROM json_each(?))' : ''} ORDER BY runs.created_at,runs.id`)
-      .all(id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<string, any> & {
+      .all(RUN_READER_DISMISSAL_PREFIX, id, ...(scope ? [JSON.stringify(scope)] : [])) as (Record<
+      string,
+      any
+    > & {
       id: string;
       request: string;
+      status: ReaderRun['status'];
+      error: string | null;
       retryOf: string | null;
       supersededBy: string | null;
       sourceRevision: string | null;
@@ -213,6 +220,7 @@ export function readerRuns(store: Store, id: string, scope?: string[]) {
   ).map((row) => ({
     ...row,
     canRejudge: !!row.canRejudge,
+    readerDismissed: !!row.readerDismissed,
     executionMode: row.executionMode ?? undefined,
     estimatedCost: runCosts.get(row.id),
     sceneUsage: sceneUsage.get(row.id),
@@ -352,7 +360,7 @@ export function readerDetail(store: Store, id: string, query: Record<string, str
   for (const run of runs) Object.assign(run, { requestOrder: requestOrder(run.id) });
   const pendingRunIds = runs
     .filter((run) => {
-      if (run.sourceRevision || run.supersededBy) return false;
+      if (!isReaderPendingRun(run)) return false;
       return (
         ['queued', 'running'].includes(requestRows.get(run.id)?.status ?? '') ||
         (requestOrder(run.id) > previousOrder && requestOrder(run.id) <= finalOrder)

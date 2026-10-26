@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readerRunDismissalKey } from './run-reader-state.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import type { RunSnapshot } from '../core/types.js';
@@ -306,6 +307,9 @@ export function deleteScenes(
         .run(`source-title:${id}`, `illustration-presentation:${id}`);
     }
     for (const id of runIds) {
+      store.db
+        .prepare('DELETE FROM app_metadata WHERE key=?')
+        .run(readerRunDismissalKey(chatId, id));
       store.db
         .prepare(
           'UPDATE outline_nodes SET command_id=NULL,revision=revision+1 WHERE command_id IN (SELECT id FROM scene_commands WHERE run_id=?)'
