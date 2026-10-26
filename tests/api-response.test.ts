@@ -108,10 +108,13 @@ test('binary uploads preserve the Blob and do not announce JSON mutations', asyn
 
 test('successful JSON provider edits retain cross-tab and workspace invalidation', async () => {
   const b = browser();
+  const activity = vi.fn();
+  window.addEventListener(activityChangedEvent, activity);
   respond(200, { saved: true });
   await expect(api('/connections/synthetic', {}, 'PUT')).resolves.toEqual({ saved: true });
   expect(b.setItem).toHaveBeenCalledWith(libraryChangedKey, expect.any(String));
   expect(b.workspace).toHaveBeenCalledTimes(1);
+  expect(activity).not.toHaveBeenCalled();
 });
 
 test('failed JSON edits do not announce a saved library change', async () => {
@@ -150,19 +153,6 @@ test.each([
   respond(200, { ok: true });
   await api(path, {});
   expect(changed).toHaveBeenCalledTimes(1);
-});
-
-test.each([
-  '/story-jobs/synthetic/cancel',
-  '/chats/synthetic/extension',
-  '/sources/synthetic/status',
-])('retired mutation %s does not wake activity views', async (path) => {
-  browser();
-  const changed = vi.fn();
-  window.addEventListener(activityChangedEvent, changed);
-  respond(200, { ok: true });
-  await api(path, {});
-  expect(changed).not.toHaveBeenCalled();
 });
 
 test.each(['json', 'binary'] as const)(
