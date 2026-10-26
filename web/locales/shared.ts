@@ -179,6 +179,30 @@ export const messages = {
     ja: '応答の生成をキャンセルしました。',
     zh: '已取消响应生成。',
   },
+  'shared.cancelledRequest': {
+    ko: '취소한 요청',
+    en: 'Cancelled request',
+    ja: 'キャンセルしたリクエスト',
+    zh: '已取消的请求',
+  },
+  'shared.dismissFromReader': {
+    ko: '화면에서 정리',
+    en: 'Dismiss from reader',
+    ja: '閲覧画面から非表示',
+    zh: '从阅读界面隐藏',
+  },
+  'shared.dismissedFromReader': {
+    ko: '화면에서 정리했어요. 요청과 일부 응답은 작업 기록에서 확인할 수 있어요.',
+    en: 'Dismissed from the reader. The request and partial response remain in task history.',
+    ja: '閲覧画面から非表示にしました。リクエストと応答の一部は作業履歴で確認できます。',
+    zh: '已从阅读界面隐藏。请求和部分响应仍可在任务记录中查看。',
+  },
+  'shared.replacementCancelled': {
+    ko: '재생성을 취소했어요. 기존 응답은 유지돼요.',
+    en: 'Regeneration was cancelled. The existing response is preserved.',
+    ja: '再生成をキャンセルしました。既存の応答は保持されています。',
+    zh: '已取消重新生成。原有响应已保留。',
+  },
   'shared.interrupted': {
     ko: '응답 생성이 중단됐어요.',
     en: 'Response generation was interrupted.',

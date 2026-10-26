@@ -46,6 +46,7 @@ import { chatOptionRoutes } from './chat-options.js';
 import { chatVariableRoutes } from './chat-variable-routes.js';
 import { ResponseStreamStore, responseStreamRoutes } from './response-stream.js';
 import { readerActivities, readerDetail, readerRuns } from './reader.js';
+import { dismissReaderRun } from './run-reader-state.js';
 import { chatActivities } from './chat-activity.js';
 import { activityFeed, acknowledgedActivities, acknowledgeActivities } from './activity-feed.js';
 import { readerRoutes } from './reader-routes.js';
@@ -1233,6 +1234,12 @@ export async function createApp(options: AppOptions): Promise<App> {
     runs.get(run.id)?.abort(new Error('Run cancelled'));
     publish(run.chatId);
     return run;
+  });
+  app.post<{ Params: { id: string } }>('/api/runs/:id/dismiss-reader', async (request) => {
+    fields(record(request.body ?? {}), []);
+    const result = dismissReaderRun(store, request.params.id);
+    publish(result.chatId);
+    return result;
   });
   app.post<{ Params: { id: string } }>('/api/jobs/:id/rejudge', async (request) => {
     fields(record(request.body ?? {}), []);

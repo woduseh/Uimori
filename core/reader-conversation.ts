@@ -37,11 +37,30 @@ export function readerRequestOrder(
   return order;
 }
 
+export function canDismissReaderRun(
+  run: Pick<ReaderRun, 'status' | 'sourceRevision' | 'error'>
+): boolean {
+  return (
+    run.status === 'cancelled' && !run.sourceRevision && !run.error?.includes('PROVIDER_UNCERTAIN')
+  );
+}
+
+/** Only confirmed cancellations can leave the manuscript; uncertain outcomes remain visible. */
+export function isReaderPendingRun(
+  run: Pick<
+    ReaderRun,
+    'sourceRevision' | 'supersededBy' | 'status' | 'error' | 'snapshot' | 'readerDismissed'
+  >
+): boolean {
+  if (run.sourceRevision || run.supersededBy) return false;
+  return !(canDismissReaderRun(run) && (run.snapshot.replacement || run.readerDismissed));
+}
+
 /** Preserve source pagination and numbering, inserting attempts at their original request position. */
 export function readerConversation(sources: Source[], runs: ReaderRun[]): ConversationEntry[] {
   const byId = new Map(runs.map((run) => [run.id, run]));
   const pending = runs
-    .filter((run) => !run.sourceRevision && !run.supersededBy)
+    .filter(isReaderPendingRun)
     .sort((a, b) => (a.requestOrder ?? Infinity) - (b.requestOrder ?? Infinity));
   const entries: ConversationEntry[] = [];
   let next = 0;

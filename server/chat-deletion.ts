@@ -2,6 +2,7 @@ import { detachAttemptUsage } from './usage-accounting.js';
 import { removeIllustrationPresetScope } from './illustration-presets.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { HttpError, fields, record } from './request-validation.js';
+import { RUN_READER_DISMISSAL_PREFIX } from './run-reader-state.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 
@@ -137,6 +138,9 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
     store.db
       .prepare('DELETE FROM app_metadata WHERE key LIKE ?')
       .run(`activity-feed:ack:v1:${chatId}:%`);
+    store.db
+      .prepare('DELETE FROM app_metadata WHERE key LIKE ?')
+      .run(`${RUN_READER_DISMISSAL_PREFIX}${chatId}:%`);
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
     pruneUnusedData(store.db, imageCandidates);
     return { deleted: true };

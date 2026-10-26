@@ -320,7 +320,9 @@ export function ActivityStatus({
       ? 'issue'
       : running.length
         ? 'running'
-        : 'done';
+        : item?.status === 'cancelled'
+          ? 'cancelled'
+          : 'done';
   const label = connectionIssue
     ? t('helpers.m237')
     : item

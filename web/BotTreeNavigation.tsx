@@ -602,6 +602,8 @@ export function BotNavigation(
             onSelect={onSelect}
             onCopyChat={props.onCopyChat}
             copyingChats={props.copyingChats}
+            onChatsChanged={props.onChatsChanged}
+            onError={props.onError}
             onAcknowledge={(items) => void activityFeed.acknowledge(items)}
             onInspect={activityFeed.inspect}
             onOpenHelper={onOpenHelperTask}

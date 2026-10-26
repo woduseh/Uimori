@@ -8,7 +8,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { ActionMenu } from './ActionMenu.js';
 import type { chatActivitySummaries } from './chat-activity-summaries.js';
 import type { DragEvent, MouseEvent, HTMLAttributes } from 'react';
-import { DeleteButton } from './DeleteButton.js';
+import { ChatActionMenu, ChatTitleDialog } from './ChatActionMenu.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { useEffect, useRef, useState } from 'react';
@@ -18,7 +18,6 @@ import {
   ExpandIcon,
   FolderAddIcon,
   FolderIcon,
-  CloseIcon,
   LibraryIcon,
   MoreIcon,
   RunningIcon,
@@ -30,7 +29,6 @@ import type { ChatFolder } from '../core/product.js';
 import { api } from './api.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
-import { Copy, LoaderCircle } from 'lucide-react';
 import { BotDefaultPersona } from './BotDefaultPersona.js';
 import './bot-navigation.css';
 
@@ -378,47 +376,15 @@ export function BotBranch(
               </button>
               {status(activity(chat)?.label)}
               <div className="bot-row-actions">
-                <ActionMenu label={t('transfer.d013', { v0: chat.title })} viewport>
-                  <div className="action-menu-group">
-                    {props.onCopyChat && (
-                      <button
-                        type="button"
-                        disabled={props.copyingChats?.includes(chat.id)}
-                        onClick={() => props.onCopyChat?.(chat.id)}
-                      >
-                        {props.copyingChats?.includes(chat.id) ? (
-                          <LoaderCircle size={18} aria-hidden="true" />
-                        ) : (
-                          <Copy size={18} aria-hidden="true" />
-                        )}
-                        {t(
-                          props.copyingChats?.includes(chat.id)
-                            ? 'recent.copyingChat'
-                            : 'recent.copyChat'
-                        )}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(event) => openFromMenu(event, () => setMenuId(chat.id))}
-                    >
-                      <EditIcon size={18} aria-hidden="true" />
-                      {t('transfer.m239')}
-                    </button>
-                  </div>
-                  <div className="action-menu-group">
-                    <DeleteButton
-                      path={`/chats/${encodeURIComponent(chat.id)}`}
-                      preparePath={`/chats/${encodeURIComponent(chat.id)}/deletion-impact`}
-                      title={chat.title}
-                      label={t('transfer.m240')}
-                      disabled={busy}
-                      description={t('transfer.m241')}
-                      onError={onError}
-                      onDeleted={onChatsChanged}
-                    />
-                  </div>
-                </ActionMenu>
+                <ChatActionMenu
+                  chat={chat}
+                  disabled={busy}
+                  onCopyChat={props.onCopyChat}
+                  copying={props.copyingChats?.includes(chat.id)}
+                  onRename={() => setMenuId(chat.id)}
+                  onChatsChanged={onChatsChanged}
+                  onError={onError}
+                />
               </div>
             </div>
           );
@@ -777,132 +743,13 @@ export function BotBranch(
           </button>
         )}
       </Dialog>
-      <Dialog
-        open={!!menuChat}
-        title={t('transfer.m257')}
+      <ChatTitleDialog
+        chat={menuChat}
+        disabled={busy}
+        onChatsChanged={onChatsChanged}
         onClose={() => setMenuId(null)}
-        className="bot-organize-dialog"
-      >
-        {menuChat && (
-          <div className="bot-chat-menu">
-            <ChatTitleEditor
-              key={menuChat.id}
-              chat={menuChat}
-              disabled={busy}
-              onChatsChanged={onChatsChanged}
-              onClose={() => setMenuId(null)}
-            />
-          </div>
-        )}
-      </Dialog>
+      />
     </div>
-  );
-}
-
-function ChatTitleEditor({
-  chat,
-  disabled,
-  onChatsChanged,
-  onClose,
-}: {
-  chat: Chat;
-  disabled: boolean;
-  onChatsChanged: () => Promise<void>;
-  onClose: () => void;
-}) {
-  useI18n();
-  const [draft, setDraft] = useState(chat.title);
-  const [baseTitle, setBaseTitle] = useState(chat.title);
-  const [baseTitleRevision, setBaseTitleRevision] = useState(chat.titleRevision ?? 0);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const lock = useRef(false);
-  const observedTitleRevision = useRef(chat.titleRevision ?? 0);
-  const dirty = draft !== baseTitle;
-  // Background refreshes may publish an automatic title while the user is typing.
-  // Only adopt it when there is no manual draft to preserve.
-  useEffect(() => {
-    const changed = observedTitleRevision.current !== (chat.titleRevision ?? 0);
-    observedTitleRevision.current = chat.titleRevision ?? 0;
-    if (changed && !dirty && !saving) {
-      setDraft(chat.title);
-      setBaseTitle(chat.title);
-      setBaseTitleRevision(chat.titleRevision ?? 0);
-    }
-  }, [chat.title, chat.titleRevision, dirty, saving]);
-  async function save() {
-    if (lock.current || !draft.trim()) return;
-    lock.current = true;
-    setSaving(true);
-    setError('');
-    try {
-      const updated = await api<Chat>(
-        `/chats/${encodeURIComponent(chat.id)}/title`,
-        { title: draft.trim(), expectedTitleRevision: baseTitleRevision },
-        'PATCH'
-      );
-      setDraft(updated.title);
-      setBaseTitle(updated.title);
-      setBaseTitleRevision(updated.titleRevision ?? 0);
-      await onChatsChanged();
-      onClose();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : retainedMessage('transfer.m258'));
-    } finally {
-      lock.current = false;
-      setSaving(false);
-    }
-  }
-  return (
-    <form
-      className="bot-chat-title-editor"
-      onSubmit={(event) => {
-        event.preventDefault();
-        void save();
-      }}
-    >
-      <label>
-        {t('transfer.m221')}
-        <input
-          aria-label={t('transfer.m221')}
-          value={draft}
-          maxLength={200}
-          required
-          disabled={disabled || saving}
-          onChange={(event) => setDraft(event.target.value)}
-        />
-      </label>
-      <div className="form-actions">
-        <button
-          type="button"
-          className="secondary"
-          disabled={saving}
-          onClick={() => {
-            setDraft(chat.title);
-            setBaseTitle(chat.title);
-            setBaseTitleRevision(chat.titleRevision ?? 0);
-            setError('');
-            onClose();
-          }}
-        >
-          <CloseIcon size={18} aria-hidden="true" />
-          {t('transfer.m206')}
-        </button>
-        <SaveButton
-          label={t('transfer.m260')}
-          disabled={disabled || !dirty || !draft.trim()}
-          aria-busy={saving}
-        />
-      </div>
-      {dirty && (chat.titleRevision ?? 0) !== baseTitleRevision && (
-        <small>{t('transfer.m261')}</small>
-      )}
-      {error && (
-        <p className="error" role="alert">
-          {translateMessage(error)}
-        </p>
-      )}
-    </form>
   );
 }
 

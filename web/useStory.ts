@@ -12,7 +12,7 @@ import {
 import { readerLocation, THEME_BODY_SCROLL_SELECTOR } from './theme-body-scroll.js';
 import { captureReaderLocation, useReadingSync } from './useReadingSync.js';
 import { readerTargetFromUrl, readerTargetUrl, type ReaderTarget } from '../core/reader-target.js';
-import { readerConversation } from '../core/reader-conversation.js';
+import { canDismissReaderRun, readerConversation } from '../core/reader-conversation.js';
 import { createReaderSync } from './reader-sync.js';
 import {
   transitionReaderNavigation,
@@ -377,6 +377,18 @@ export function useStory() {
           }
           readerCache.current = { key: cacheKey, detail: merged };
           setDetail(merged);
+          if (
+            value.runs.some(
+              (run) =>
+                canDismissReaderRun(run) &&
+                run.snapshot.replacement &&
+                cached?.runs.some(
+                  (previous) =>
+                    previous.id === run.id && ['queued', 'running'].includes(previous.status)
+                )
+            )
+          )
+            setNotice(uiMessage('shared.replacementCancelled'));
           setReaderLoad({
             key: cacheKey,
             epoch: navigation.current.epoch,
@@ -1592,6 +1604,35 @@ export function useStory() {
     }
   }
   const active = visibleRuns.find((run) => run.status === 'queued' || run.status === 'running');
+  async function dismissCancelledRun(runId: string) {
+    const chatId = selected;
+    const epoch = navigation.current.epoch;
+    const accepted = await api<{ chatId: string; runId: string; readerDismissed: true }>(
+      `/runs/${runId}/dismiss-reader`,
+      {}
+    );
+    if (navigation.current.chat !== chatId || navigation.current.epoch !== epoch) return;
+    // Apply only the acknowledged presentation change; pre-ack reads cannot resurrect it.
+    refreshVersion.current++;
+    const cached = readerCache.current;
+    if (cached?.key === readerQuery.current.key && cached.detail.chat.id === accepted.chatId) {
+      const next: ReaderDetail = {
+        ...cached.detail,
+        runs: cached.detail.runs.map((run) =>
+          run.id === accepted.runId ? { ...run, readerDismissed: true } : run
+        ),
+        reader: {
+          ...cached.detail.reader,
+          pendingRunIds: cached.detail.reader.pendingRunIds?.filter((id) => id !== accepted.runId),
+        },
+      };
+      readerCache.current = { ...cached, detail: next };
+      setDetail(next);
+    }
+    setNotice(uiMessage('shared.dismissedFromReader'));
+    // A refresh failure belongs to the reader's existing retry state, not this completed write.
+    void refresh(chatId).catch(() => undefined);
+  }
   async function cancelActive() {
     if (!active || cancelLocks.current.has(active.id)) return;
     const runId = active.id;
@@ -1744,6 +1785,7 @@ export function useStory() {
     showLibrary,
     generate,
     canReuseRun,
+    dismissCancelledRun,
     reuseBlocked,
     fork,
     copyChat,
