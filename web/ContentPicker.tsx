@@ -21,6 +21,7 @@ export function ContentPicker({
   onChange,
   role,
   label,
+  describedBy,
   disabled = false,
   allowNone = false,
   noneLabel = t('library.none'),
@@ -32,6 +33,7 @@ export function ContentPicker({
   onChange: (reference: string) => void;
   role: ContentRole;
   label: string;
+  describedBy?: string;
   disabled?: boolean;
   allowNone?: boolean;
   noneLabel?: string;
@@ -146,6 +148,7 @@ export function ContentPicker({
         type="button"
         className="secondary content-picker-trigger"
         aria-label={label}
+        aria-describedby={describedBy}
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={disabled}

@@ -51,6 +51,8 @@ Let titles, values and nearby actions explain the layout. Omit navigation subtit
 
 Creative options use one editor with a next-generation-only scope switch. Changing scope preserves edits and makes no write; saved one-off reservations remain visible with their own cancellation action. Saving fixed values and reserving one-off values stay distinct, including during conflicts or an uncertain response.
 
+Retained creative-option drafts and saves only block controls for their own chat. Switching chats preserves those drafts and their unload protection. In the composer menu, the options action itself identifies unapplied changes and opens their review; do not add a duplicate explanatory row or creative-settings heading. Combination selection applies a copy of its values, then confirms the applied name in the shared completion notice rather than presenting that name as a persistent binding.
+
 The card-variable editor keeps an uncertain save's exact request available for explicit result confirmation during background refreshes. Acknowledgement ends the superseded read's loading state; a late read cannot replace the saved result or a newer draft.
 
 Keep settings action groups aligned to the right below their content, and toggle names on the left with switches on the right. Repeated usage meters share the same column boundaries regardless of adjacent text length.
