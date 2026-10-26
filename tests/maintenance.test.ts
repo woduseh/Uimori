@@ -114,7 +114,7 @@ test('a closed gate blocks new writes, keeps reads and cancellation, and survive
   expect(accepted.statusCode).not.toBe(503);
 });
 
-test('repeating the same gate change keeps one epoch and a maintenance boot cannot be reopened', async () => {
+test('repeating the same gate change keeps one epoch and a forced maintenance boot rejects reopening through HTTP', async () => {
   const { app, directory } = await boot();
   setMaintenance(app.store, { closed: true, reason: 'first' });
   setMaintenance(app.store, { closed: true, reason: 'second' });

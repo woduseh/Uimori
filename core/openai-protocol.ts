@@ -205,7 +205,6 @@ function prepare(
       index.delete(call.id);
       return result;
     });
-    if (index.size) reject('TOOL_RESULT_MISMATCH');
   } else if (results.length) reject('OPENAI_CONTINUATION_REQUIRED');
   const instructions =
     request.stable.contract +

@@ -112,10 +112,6 @@ export function validateConnection(value: unknown): ProviderConnection {
   };
 }
 
-function validateGeneration(value: unknown): asserts value is ModelGeneration {
-  validateGenerationShape(value);
-}
-
 export function validateRequest(value: unknown): ProviderRequest {
   keys(value, [
     'webSearch',
@@ -150,7 +146,7 @@ export function validateRequest(value: unknown): ProviderRequest {
   )
     reject('INVALID_WEB_SEARCH');
   string(value.modelId);
-  if (value.generation !== undefined) validateGeneration(value.generation);
+  if (value.generation !== undefined) validateGenerationShape(value.generation);
   if (value.providerOptions !== undefined) {
     try {
       validateProviderOptions(value.providerOptions);
@@ -160,7 +156,7 @@ export function validateRequest(value: unknown): ProviderRequest {
   }
   if (value.contextBudget !== undefined) validateContextBudget(value.contextBudget);
   if (value.generationBinding !== undefined) {
-    validateGeneration(value.generationBinding);
+    validateGenerationShape(value.generationBinding);
     if (value.generation === undefined) reject('INVALID_GENERATION_BINDING');
     for (const key of GENERATION_KEYS.filter(
       (key) =>
