@@ -62,7 +62,7 @@ function input(): NativeRisuExecutionInput {
 }
 
 test.each(['completed', 'failed', 'cancelled'] as const)(
-  'native invocation owns one serial CBS session and closes after %s',
+  'native invocation owns one serial mocked CBS session and closes after %s',
   async (outcome) => {
     state.fail = outcome === 'failed';
     const controller = new AbortController();
@@ -89,8 +89,3 @@ test.each(['completed', 'failed', 'cancelled'] as const)(
     expect(state.sessions[1]).toEqual({ calls: ['{{one}}', '{{two}}', '{{three}}'], closed: 1 });
   }
 );
-
-test('an injected CBS evaluator keeps ownership of its own lifetime', async () => {
-  await executeRisuNative(input(), { cbs: async () => 'provided' });
-  expect(state.sessions).toEqual([]);
-});

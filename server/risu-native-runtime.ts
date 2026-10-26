@@ -69,8 +69,6 @@ export interface NativeRisuExecutionOptions {
   signal?: AbortSignal;
   /** External calls preserve Risu's method and arguments; the caller owns model selection. */
   host?: (method: string, args: unknown, signal: AbortSignal) => Promise<unknown>;
-  /** Run CBS in an isolated evaluator. No authored CBS is evaluated on the server thread. */
-  cbs?: (text: string, context: NativeRisuExecutionInput) => Promise<string>;
 }
 
 export class NativeRisuRuntimeError extends Error {
@@ -163,14 +161,14 @@ function compare(left: string, right: string, operator: string, numericEquality:
 /** Executes original trigger records. No imported BehaviorAction representation is involved. */
 async function executeNativeRisuInvocation(
   input: NativeRisuExecutionInput,
-  options: NativeRisuExecutionOptions & { cbs: NonNullable<NativeRisuExecutionOptions['cbs']> }
+  options: NativeRisuExecutionOptions,
+  evaluate: (text: string, context: NativeRisuExecutionInput) => Promise<string>
 ): Promise<NativeRisuExecutionResult> {
   const state: NativeRisuExecutionInput = {
     ...input,
     variables: variables(input.variables),
     messages: messages(input.messages),
   };
-  const evaluate = options.cbs;
   const output: NativeRisuExecutionResult = {
     variables: state.variables,
     messages: state.messages,
@@ -434,16 +432,13 @@ export async function executeRisuNative(
   input: NativeRisuExecutionInput,
   options: NativeRisuExecutionOptions = {}
 ): Promise<NativeRisuExecutionResult> {
-  const cbs = options.cbs ? undefined : createNativeRisuCbsSession(options.signal);
+  const cbs = createNativeRisuCbsSession(options.signal);
   try {
-    return await executeNativeRisuInvocation(input, {
-      ...options,
-      cbs: options.cbs ?? cbs!.evaluate,
-    });
+    return await executeNativeRisuInvocation(input, options, cbs.evaluate);
   } catch (error) {
     if (options.sessionKey) disposeNativeRisuSession(options.sessionKey);
     throw error;
   } finally {
-    await cbs?.close();
+    await cbs.close();
   }
 }

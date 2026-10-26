@@ -10,7 +10,7 @@ export type MaintenanceState = {
   reason?: string;
   updatedAt: string;
 };
-type Row = Record<string, unknown>;
+type Row = Record<string, unknown> & { status: MaintenanceState['status'] };
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 /** Control, sign-in, local diagnostics and stopping already-admitted work stay available. */
 const ALWAYS_ADMITTED = new Set([
@@ -37,10 +37,9 @@ export function initMaintenance(store: Store) {
 }
 
 export function maintenanceState(store: Store): MaintenanceState {
-  const row = store.db.prepare('SELECT * FROM maintenance WHERE id=1').get() as Row | undefined;
-  if (!row) return { status: 'open', epoch: 0, updatedAt: new Date(0).toISOString() };
+  const row = store.db.prepare('SELECT * FROM maintenance WHERE id=1').get() as Row;
   return {
-    status: row.status === 'closed' ? 'closed' : 'open',
+    status: row.status,
     epoch: Number(row.epoch),
     ...(typeof row.reason === 'string' && row.reason ? { reason: row.reason } : {}),
     updatedAt: String(row.updated_at),

@@ -274,7 +274,6 @@ export function encodeAnthropic(request: ProviderRequest): {
         ...(item.denied === true ? { is_error: true } : {}),
       };
     });
-    if (fresh.size) reject('TOOL_RESULT_MISMATCH');
     messages = [
       ...previous.messages,
       ...(!paused || continuationInput !== undefined

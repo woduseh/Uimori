@@ -204,7 +204,6 @@ export function encodeVertex(
         },
       };
     });
-    if (indexed.size) reject('TOOL_RESULT_MISMATCH');
     contents = [
       ...previous.contents,
       {
