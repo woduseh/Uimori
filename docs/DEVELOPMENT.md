@@ -6,6 +6,8 @@ Use [CODE-MAP](CODE-MAP.md) to find feature contracts and entry points. This pag
 
 Use Node 24.x, at least 24.22.1, as specified by [package.json](../package.json) and [.nvmrc](../.nvmrc). Windows PowerShell is the primary development environment; the browser helpers also discover Chrome and Edge on macOS and Linux.
 
+Doctor and the browser verification runners share the Node support check in `scripts/node-runtime.mjs`, which reads `package.json`'s `engines.node` interval. The declared range owns the minimum patch and upper major bound; `.nvmrc` pins the version used by CI.
+
 ```powershell
 npm ci --no-audit --no-fund
 npm run dev
