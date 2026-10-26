@@ -780,4 +780,85 @@ for (const width of DEFAULT_WIDTHS) {
   }
 }
 
+test('GMACK role model save finishes before a delayed refresh and preserves the next draft after read failure', async ({
+  page,
+  request,
+}, info) => {
+  const before = await models(request);
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto('/');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '역할별 모델');
+  const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
+  await editor
+    .locator('summary')
+    .filter({ hasText: /^작업 동작/ })
+    .click();
+  const retries = editor.getByLabel('번역 자동 재요청 횟수', { exact: true });
+  const first = before.translationPolicy.maxRetries === 1 ? 2 : 1;
+  await retries.fill(String(first));
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let failing = true;
+  let reads = 0;
+  await page.route('**/api/prompt-workspace', async (route) => {
+    if (route.request().method() !== 'GET' || !failing) return route.continue();
+    reads++;
+    await gate;
+    await route.fulfill({ status: 503, json: { error: 'Synthetic post-save refresh failure' } });
+  });
+  const writes: { expectedRevision: number }[] = [];
+  page.on('request', (entry) => {
+    if (entry.method() === 'PUT' && entry.url().endsWith('/api/model-workspace'))
+      writes.push(entry.postDataJSON());
+  });
+  const save = editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true });
+  const accepted = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' && response.url().endsWith('/api/model-workspace')
+  );
+  try {
+    await save.click();
+    const response = await accepted;
+    expect(response.ok()).toBe(true);
+    const saved = (await response.json()) as ModelWorkspace;
+    await expect.poll(() => reads).toBeGreaterThan(0);
+    await expect(save).toHaveAttribute('aria-busy', 'false');
+    await expect(retries).toBeEnabled();
+    await expect(retries).toHaveValue(String(first));
+    await expect(save).toBeDisabled();
+    await expect(page.locator('.transient-notice')).toBeVisible();
+    const next = first + 1;
+    await retries.fill(String(next));
+    await expect(save).toBeEnabled();
+    await page.screenshot({
+      path: info.outputPath('model-save-ack-next-draft-refresh-pending.png'),
+    });
+    release();
+    await expect(editor.getByRole('alert')).toContainText('(503)');
+    await expect(retries).toHaveValue(String(next));
+    expect(writes).toHaveLength(1);
+    expect(writes[0].expectedRevision).toBe(before.revision);
+    expect((await models(request)).revision).toBe(saved.revision);
+    failing = false;
+    await save.click();
+    await expect(save).toBeDisabled();
+    await expect(save).toHaveAttribute('aria-busy', 'false');
+    expect(writes).toHaveLength(2);
+    expect(writes[1].expectedRevision).toBe(saved.revision);
+    const final = await models(request);
+    expect(final.revision).toBe(saved.revision + 1);
+    expect(final.translationPolicy.maxRetries).toBe(next);
+    await expect(retries).toHaveValue(String(next));
+    await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+    await expect(
+      page.getByRole('alertdialog', { name: '저장하지 않은 설정', exact: true })
+    ).toHaveCount(0);
+  } finally {
+    release();
+  }
+});
+
 preservePromptWorkspace();

@@ -125,11 +125,12 @@ export function ModelWorkspaceEditor({
       },
       'PUT'
     )
-      .then(async (accepted) => {
+      .then((accepted) => {
         setDraft(accepted);
         setDirty(false);
-        await refresh();
         setMessage(uiMessage('settings.m1'));
+        // The canonical write result completes saving; the shared read owns its own errors.
+        void refresh();
         return true;
       })
       .catch((caught: Error) => {
