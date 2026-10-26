@@ -1,6 +1,6 @@
 import type { ChatOptionState, OptionValues } from '../core/chat-options.js';
-import { promptControls, type PromptValue } from '../core/risu-prompt.js';
-import { reviewChatOptionDraft } from './chat-option-review.js';
+import { promptControls, reconcilePromptValues, type PromptValue } from '../core/risu-prompt.js';
+import { t } from './i18n.js';
 
 export type OptionScope = 'fixed' | 'oneoff';
 export type OptionDraft = Record<string, { value: PromptValue } | { inherit: true }>;
@@ -11,19 +11,67 @@ export function reviewOptionDraft(
   draft: OptionDraft,
   saved: ChatOptionState
 ) {
-  const values: OptionValues = {};
-  const unsetIds: string[] = [];
-  for (const [id, edit] of Object.entries(draft)) {
-    if ('value' in edit) values[id] = edit.value;
-    else unsetIds.push(id);
-  }
-  const review = reviewChatOptionDraft(base, {}, values, saved, unsetIds);
+  const oldControls = base.controls ?? promptControls(base.program);
+  const controls = saved.controls ?? promptControls(saved.program);
+  const sameOwner = base.binding.owner === saved.binding.owner;
+  const discarded: {
+    scope: OptionScope;
+    id: string;
+    label: string;
+    value: PromptValue;
+    reason: string;
+    unset?: boolean;
+  }[] = [];
   const retained: OptionDraft = {};
-  for (const [id, value] of Object.entries(review.oneoff)) retained[id] = { value };
-  for (const id of unsetIds)
-    if (!review.discarded.some((item) => item.scope === 'fixed' && item.id === id))
-      retained[id] = { inherit: true };
-  return { draft: retained, discarded: review.discarded };
+  const retainedUnsets: string[] = [];
+  // Preserve the review's unset-before-value order and existing scope keys.
+  for (const [id, edit] of Object.entries(draft)) {
+    if ('value' in edit) continue;
+    const previous = oldControls.find((control) => control.id === id);
+    const control = controls.find((entry) => entry.id === id);
+    if (sameOwner && previous && control && previous.type === control.type) retainedUnsets.push(id);
+    else
+      discarded.push({
+        scope: 'fixed',
+        id,
+        label: previous?.label ?? id,
+        value: null,
+        unset: true,
+        reason: t('settings.m111'),
+      });
+  }
+  for (const [id, edit] of Object.entries(draft)) {
+    if (!('value' in edit)) continue;
+    const { value } = edit;
+    const previous = oldControls.find((control) => control.id === id);
+    const control = controls.find((control) => control.id === id);
+    let reason = '';
+    let reconciled: ReturnType<typeof reconcilePromptValues> | undefined;
+    if (!sameOwner) reason = t('settings.m106');
+    else if (!control) reason = t('settings.m107');
+    else if (!previous || previous.type !== control.type) reason = t('settings.m108');
+    else {
+      reconciled = reconcilePromptValues([control], { [id]: value });
+      if (reconciled.resetKeys.length) reason = t('settings.m109');
+      else if (
+        control.type === 'select' &&
+        previous.options?.find((option) => option.value === (value ?? previous.default))?.label !==
+          control.options?.find((option) => option.value === (value ?? control.default))?.label
+      )
+        reason = t('settings.m110');
+    }
+    if (reason)
+      discarded.push({
+        scope: 'oneoff',
+        id,
+        label: previous?.label ?? control?.label ?? id,
+        value,
+        reason,
+      });
+    else retained[id] = { value: reconciled!.values[id]! };
+  }
+  for (const id of retainedUnsets) retained[id] = { inherit: true };
+  return { draft: retained, discarded };
 }
 
 /** One set of edits can target either scope without turning saved fixed values into edits. */
