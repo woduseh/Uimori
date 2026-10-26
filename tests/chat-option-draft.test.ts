@@ -1,6 +1,12 @@
 import { expect, test } from 'vitest';
 import type { ChatOptionState } from '../core/chat-options.js';
-import { editOptionDraft, optionDraftValues, reviewOptionDraft } from '../web/chat-option-draft.js';
+import type { PromptControl } from '../core/risu-prompt.js';
+import {
+  editOptionDraft,
+  optionDraftValues,
+  reviewOptionDraft,
+  type OptionDraft,
+} from '../web/chat-option-draft.js';
 import { nativePrompt } from './fixtures/native-prompt.js';
 
 const base: ChatOptionState = {
@@ -55,7 +61,7 @@ test('a oneoff value equal to the inherited value remains an explicit reservatio
   expect(optionDraftValues(base, draft).oneoff).toEqual({ tone: '채팅 문체' });
 });
 
-test('acknowledging a cancellation keeps local edits and adopts independently saved fixed values', () => {
+test('applying a draft to refreshed state preserves edits and independently saved fixed values', () => {
   const draft = editOptionDraft(base, {}, 'fixed', { tone: '채팅 문체', note: '작성 중인 메모' });
   const accepted = { ...base, revision: 4, fixedValues: { tone: '다른 창의 문체' } };
   expect(optionDraftValues(accepted, draft)).toEqual({
@@ -107,4 +113,156 @@ test('an incompatible unset is reviewed once even if the saved fixed value is ab
   const review = reviewOptionDraft(base, draft, saved);
   expect(review.draft).toEqual({});
   expect(review.discarded).toEqual([expect.objectContaining({ id: 'tone', unset: true })]);
+});
+
+const text = (id = 'tone', label = '문체'): PromptControl => ({
+  id,
+  label,
+  type: 'text',
+  default: '',
+});
+const choice = (label = '차분하게'): PromptControl => ({
+  id: 'tone',
+  label: '문체',
+  type: 'select',
+  default: '0',
+  options: [
+    { value: '0', label },
+    { value: '1', label: '활기차게' },
+  ],
+});
+
+test.each([
+  { name: 'removed control', before: text(), after: [], value: 'my text' },
+  { name: 'changed control type', before: text(), after: [choice()], value: '0' },
+  {
+    name: 'removed selected value',
+    before: choice(),
+    after: [{ ...choice(), options: [{ value: '0', label: '차분하게' }] }],
+    value: '1',
+  },
+  { name: 'changed selected meaning', before: choice(), after: [choice('냉정하게')], value: '0' },
+  {
+    name: 'narrowed number range',
+    before: { id: 'tone', label: '횟수', type: 'number' as const, default: 0, min: 0, max: 10 },
+    after: [{ id: 'tone', label: '횟수', type: 'number' as const, default: 0, min: 0, max: 3 }],
+    value: 5,
+  },
+])(
+  'definition review reports $name once without mutating either state or the draft',
+  ({ before, after, value }) => {
+    const initial = { ...base, controls: [before] };
+    const saved = {
+      ...base,
+      controls: after,
+      binding: { ...base.binding, definitionHash: 'changed-definition' },
+    };
+    const draft = { tone: { value } };
+    const originals = structuredClone({ initial, saved, draft });
+    expect(reviewOptionDraft(initial, draft, saved)).toEqual({
+      draft: {},
+      discarded: [
+        {
+          scope: 'oneoff',
+          id: 'tone',
+          label: before.label,
+          value,
+          reason: expect.stringMatching(/\S/u),
+        },
+      ],
+    });
+    expect({ initial, saved, draft }).toEqual(originals);
+  }
+);
+
+test.each([text(), choice()])(
+  'a heading rename preserves the edited value and explicit unset for $type',
+  (control) => {
+    const initial = { ...base, controls: [control] };
+    const saved = {
+      ...initial,
+      controls: [{ ...control, label: '새 제목' }],
+      binding: { ...base.binding, definitionHash: 'renamed-definition' },
+    };
+    const draft: OptionDraft = { tone: { value: control.type === 'select' ? '0' : 'my text' } };
+    expect(reviewOptionDraft(initial, draft, saved)).toEqual({ draft, discarded: [] });
+    expect(reviewOptionDraft(initial, { tone: { inherit: true } }, saved)).toEqual({
+      draft: { tone: { inherit: true } },
+      discarded: [],
+    });
+  }
+);
+
+test('an enum choice label or order change still permits an explicit unset', () => {
+  const initial = { ...base, controls: [choice()] };
+  const saved = {
+    ...initial,
+    controls: [{ ...choice('새 선택지'), options: [...choice('새 선택지').options!].reverse() }],
+  };
+  expect(reviewOptionDraft(initial, { tone: { inherit: true } }, saved)).toEqual({
+    draft: { tone: { inherit: true } },
+    discarded: [],
+  });
+});
+
+test.each(['owner', 'type'] as const)(
+  'incompatible %s review preserves saved values and reports unsets before values',
+  (changed) => {
+    const initial = { ...base, controls: [text(), text('note', '메모')] };
+    const saved = {
+      ...initial,
+      controls:
+        changed === 'type'
+          ? [choice(), { ...text('note', '메모'), type: 'boolean' as const, default: true }]
+          : initial.controls,
+      binding: {
+        ...base.binding,
+        owner: changed === 'owner' ? 'preset:other' : base.binding.owner,
+      },
+      fixedValues: { tone: changed === 'type' ? '0' : 'other owner', note: 'independent' },
+    };
+    const draft: OptionDraft = { note: { value: 'local note' }, tone: { inherit: true } };
+    const originals = structuredClone({ initial, saved, draft });
+    expect(reviewOptionDraft(initial, draft, saved)).toEqual({
+      draft: {},
+      discarded: [
+        {
+          scope: 'fixed',
+          id: 'tone',
+          label: '문체',
+          value: null,
+          unset: true,
+          reason: expect.stringMatching(/\S/u),
+        },
+        {
+          scope: 'oneoff',
+          id: 'note',
+          label: '메모',
+          value: 'local note',
+          reason: expect.stringMatching(/\S/u),
+        },
+      ],
+    });
+    expect({ initial, saved, draft }).toEqual(originals);
+  }
+);
+
+test('definition review retains explicit false, zero and empty text values', () => {
+  const initial = {
+    ...base,
+    controls: [
+      { id: 'enabled', label: '사용', type: 'boolean' as const, default: true },
+      { id: 'count', label: '횟수', type: 'number' as const, default: 1, min: 0, max: 3 },
+      text('note', '메모'),
+    ],
+  };
+  const draft: OptionDraft = {
+    enabled: { value: false },
+    count: { value: 0 },
+    note: { value: '' },
+  };
+  expect(reviewOptionDraft(initial, draft, { ...initial, revision: 2 })).toEqual({
+    draft,
+    discarded: [],
+  });
 });
