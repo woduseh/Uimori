@@ -1865,6 +1865,42 @@ export const messages = {
     ja: '完了したアシスタント作業',
     zh: '已完成的助手任务',
   },
+  'helpers.messageMenu': {
+    ko: '메시지 메뉴',
+    en: 'Message menu',
+    ja: 'メッセージメニュー',
+    zh: '消息菜单',
+  },
+  'helpers.editResponse': {
+    ko: '응답 수정',
+    en: 'Edit response',
+    ja: '回答を編集',
+    zh: '编辑回复',
+  },
+  'helpers.deletePair': {
+    ko: '요청과 응답 삭제',
+    en: 'Delete request and response',
+    ja: '依頼と回答を削除',
+    zh: '删除请求和回复',
+  },
+  'helpers.deleteFollowing': {
+    ko: '여기부터 삭제',
+    en: 'Delete from here',
+    ja: 'ここから削除',
+    zh: '从此处删除',
+  },
+  'helpers.deleteFailed': {
+    ko: '메시지를 삭제하지 못했어요.',
+    en: 'Could not delete messages.',
+    ja: 'メッセージを削除できませんでした。',
+    zh: '无法删除消息。',
+  },
+  'helpers.deleteWarning': {
+    ko: '이미 적용된 도구 변경은 되돌리지 않아요.',
+    en: 'Changes already made by tools are not undone.',
+    ja: 'ツールがすでに行った変更は元に戻りません。',
+    zh: '工具已经进行的更改不会撤销。',
+  },
   'helpers.noMessages': {
     ko: '아직 메시지가 없어요.',
     en: 'No messages yet.',

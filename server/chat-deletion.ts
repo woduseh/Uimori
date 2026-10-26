@@ -106,6 +106,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       'SELECT r.result AS value FROM job_results r JOIN jobs j ON j.id=r.job_id WHERE j.chat_id=?',
       'SELECT m.text AS value FROM helper_messages m JOIN helper_conversations c ON c.id=m.conversation_id WHERE c.chat_id=?',
       'SELECT m.text AS value FROM helper_seed_messages m JOIN helper_conversations c ON c.id=m.conversation_id WHERE c.chat_id=?',
+      'SELECT m.text AS value FROM helper_message_changes m JOIN helper_conversations c ON c.id=m.conversation_id WHERE c.chat_id=?',
       'SELECT a.text AS value FROM helper_artifacts a JOIN helper_conversations c ON c.id=a.conversation_id WHERE c.chat_id=?',
     ])
       for (const row of store.db.prepare(sql).iterate(chatId))

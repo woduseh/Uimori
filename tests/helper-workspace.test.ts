@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative } from 'node:path';
 import { Store } from '../server/store.js';
 import { HelperWorkspace } from '../server/helper-workspace.js';
-import { helperHistory } from '../server/helper-context.js';
+import { helperContext, helperHistory, publishHelperContext } from '../server/helper-context.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
@@ -1799,4 +1799,265 @@ test('helper routes reject retired branching and limit editing without changing 
   } finally {
     await app.close();
   }
+});
+
+test('message editing changes future dialogue while preserving task evidence, effects and checkpoint history', async () => {
+  const f = fixture();
+  const task = f.workspace.enqueue(f.conversation.id, 'original', '원래 요청', snapshot(f));
+  f.workspace.start(task.id, 'owner');
+  const checkpoint = publishHelperContext(
+    f.store,
+    f.workspace.task(task.id),
+    '원래 요약',
+    { modelCalls: 1, inputTokens: 1, outputTokens: 1, costUsd: 0 },
+    10,
+    { activeRevision: 0, checkpoint: null }
+  );
+  f.workspace.operation(task.id, 'durable-effect', {}, () => ({ saved: true }));
+  f.workspace.finish(task.id, 'owner', 1, 'failed', '원래 답변', 'UNEXPECTED_EOF');
+  const originalTask = f.workspace.task(task.id);
+  const messages = f.workspace.messages(f.conversation.id);
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  try {
+    let revision = f.workspace.conversation(f.conversation.id).revision;
+    for (const [message, text] of [
+      [messages[0], '고친 요청'],
+      [messages[1], '고친 답변'],
+    ] as const) {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/helper/conversations/${f.conversation.id}/messages/${message.id}`,
+        payload: { expectedRevision: revision, text },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        updatedMessage: { id: message.id, text },
+        conversation: { revision: revision + 1 },
+      });
+      expect(response.json().conversation.historyRevision).toBeGreaterThan(0);
+      revision++;
+    }
+    expect(f.workspace.messages(f.conversation.id).map((message) => message.text)).toEqual([
+      '고친 요청',
+      '고친 답변',
+    ]);
+    expect(helperHistory(f.store, f.conversation.id).map((message) => message.text)).toEqual([
+      '고친 요청',
+      '고친 답변',
+    ]);
+    expect(
+      helperContext(f.store, f.conversation.id, helperHistory(f.store, f.conversation.id))
+    ).toMatchObject({ checkpoint: null });
+    expect(f.store.context.checkpoint(checkpoint.checkpoint).plan.summary).toBe('원래 요약');
+    expect(f.workspace.task(task.id)).toEqual(originalTask);
+    const updates = await app.inject({
+      method: 'GET',
+      url: `/api/helper/conversations/${f.conversation.id}/events`,
+    });
+    expect(updates.statusCode).toBe(200);
+    expect(
+      updates.json().filter((event: { kind: string }) => event.kind === 'messages.changed')
+    ).toMatchObject([
+      {
+        data: { revision: revision - 1, updatedMessage: { id: messages[0].id, text: '고친 요청' } },
+      },
+      { data: { revision, updatedMessage: { id: messages[1].id, text: '고친 답변' } } },
+    ]);
+    expect(
+      updates
+        .json()
+        .filter((event: { kind: string }) => event.kind !== 'messages.changed')
+        .every((event: { data: unknown }) => event.data === null)
+    ).toBe(true);
+    expect(
+      f.store.db.prepare('SELECT text FROM helper_messages WHERE id=?').get(messages[0].id)?.text
+    ).toBe('원래 요청');
+    const stale = await app.inject({
+      method: 'PATCH',
+      url: `/api/helper/conversations/${f.conversation.id}/messages/${messages[0].id}`,
+      payload: { expectedRevision: revision - 1, text: '덮어쓰기' },
+    });
+    expect(stale.statusCode).toBe(409);
+    const other = f.workspace.create(f.conversation.scope, 'other');
+    const foreign = await app.inject({
+      method: 'PATCH',
+      url: `/api/helper/conversations/${other.id}/messages/${messages[0].id}`,
+      payload: { expectedRevision: other.revision, text: '다른 대화' },
+    });
+    expect(foreign.statusCode).toBe(404);
+    const owner = owned.find((item) => item.store === f.store)!;
+    f.store.close();
+    owner.store = new Store(join(owner.path, 'story.sqlite'));
+    expect(
+      new HelperWorkspace(owner.store).messages(f.conversation.id).map((message) => message.text)
+    ).toEqual(['고친 요청', '고친 답변']);
+  } finally {
+    await app.close();
+  }
+});
+
+test('pair deletion hides every retry attempt without deleting task evidence or allowing resurrection', () => {
+  const f = fixture();
+  const first = f.workspace.enqueue(f.conversation.id, 'first', '첫 요청', snapshot(f));
+  f.workspace.start(first.id, 'owner');
+  f.workspace.finish(first.id, 'owner', 1, 'failed', '미완성 답변', 'UNEXPECTED_EOF');
+  const retry = f.workspace.enqueue(f.conversation.id, 'retry', '다시 요청', {
+    ...snapshot(f),
+    retryOf: first.id,
+  });
+  f.workspace.cancel(retry.id);
+  const later = f.workspace.enqueue(f.conversation.id, 'later', '다음 요청', snapshot(f));
+  f.workspace.start(later.id, 'owner');
+  f.workspace.finish(later.id, 'owner', 1, 'completed', '다음 답변', null);
+  const messages = f.workspace.messages(f.conversation.id);
+  const removedIds = messages
+    .filter((message) => message.requestGroupId === first.id)
+    .map((message) => message.id);
+  const selected = messages.find((message) => message.taskId === retry.id)!;
+  const result = f.runtime.deleteMessages(
+    f.conversation.id,
+    selected.id,
+    f.workspace.conversation(f.conversation.id).revision,
+    'pair'
+  );
+  expect(new Set(result.deletedMessageIds)).toEqual(new Set(removedIds));
+  expect(f.workspace.messages(f.conversation.id).map((message) => message.text)).toEqual([
+    '다음 요청',
+    '다음 답변',
+  ]);
+  expect(helperHistory(f.store, f.conversation.id).map((message) => message.text)).toEqual([
+    '다음 요청',
+    '다음 답변',
+  ]);
+  expect(f.workspace.taskSummaries(f.conversation.id)).toHaveLength(3);
+  expect(() =>
+    f.workspace.enqueue(f.conversation.id, 'revive', '다시 요청', {
+      ...snapshot(f),
+      retryOf: retry.id,
+    })
+  ).toThrow('삭제한 도우미 요청');
+  expect(() =>
+    f.runtime.enqueue(
+      f.conversation.id,
+      'runtime-revive',
+      '다시 요청',
+      undefined,
+      undefined,
+      retry.id
+    )
+  ).toThrow('삭제한 도우미 요청');
+});
+
+test('seed edits and following deletion use request chronology rather than retry insertion order', () => {
+  const f = fixture();
+  const add = f.store.db.prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)');
+  const time = new Date().toISOString();
+  for (const [ordinal, role, text] of [
+    [0, 'user', '시드 요청'],
+    [1, 'assistant', '시드 답변'],
+    [2, 'user', '나중 시드 요청'],
+    [3, 'assistant', '나중 시드 답변'],
+  ] as const)
+    add.run(`seed-${ordinal}`, f.conversation.id, ordinal, role, text, time);
+  const first = f.workspace.enqueue(f.conversation.id, 'first', '먼저 보낸 요청', snapshot(f));
+  f.workspace.cancel(first.id);
+  const second = f.workspace.enqueue(f.conversation.id, 'second', '뒤에 보낸 요청', snapshot(f));
+  f.workspace.cancel(second.id);
+  const retry = f.workspace.enqueue(f.conversation.id, 'retry', '먼저 보낸 요청 재시도', {
+    ...snapshot(f),
+    retryOf: first.id,
+  });
+  f.workspace.cancel(retry.id);
+  const edited = f.workspace.editMessage(
+    f.conversation.id,
+    'seed-1',
+    f.workspace.conversation(f.conversation.id).revision,
+    '고친 시드 답변'
+  );
+  expect(helperHistory(f.store, f.conversation.id)[1].text).toBe('고친 시드 답변');
+  const selected = f.workspace
+    .messages(f.conversation.id)
+    .find((message) => message.taskId === second.id)!;
+  const deleted = f.workspace.deleteMessages(
+    f.conversation.id,
+    selected.id,
+    edited.conversation.revision,
+    'following'
+  );
+  expect(deleted.deletedMessageIds).toEqual([selected.id]);
+  expect(
+    f.workspace.messages(f.conversation.id).some((message) => message.taskId === retry.id)
+  ).toBe(true);
+  const seeds = f.workspace.deleteMessages(
+    f.conversation.id,
+    'seed-1',
+    deleted.conversation.revision,
+    'pair'
+  );
+  expect(new Set(seeds.deletedMessageIds)).toEqual(new Set(['seed-0', 'seed-1']));
+  const tail = f.workspace.deleteMessages(
+    f.conversation.id,
+    'seed-3',
+    seeds.conversation.revision,
+    'following'
+  );
+  expect(tail.deletedMessageIds).toContain('seed-2');
+  expect(f.workspace.messages(f.conversation.id)).toEqual([]);
+  expect(helperHistory(f.store, f.conversation.id)).toEqual([]);
+});
+
+test('message changes block only activity in their conversation, including unsettled provider work', () => {
+  const f = fixture();
+  const task = f.workspace.enqueue(f.conversation.id, 'first', '요청', snapshot(f));
+  const message = f.workspace.messages(f.conversation.id)[0];
+  const revision = f.workspace.conversation(f.conversation.id).revision;
+  expect(() => f.runtime.editMessage(f.conversation.id, message.id, revision, '변경')).toThrow(
+    '진행 중인 작업'
+  );
+  f.workspace.start(task.id, 'owner');
+  const attempt = f.workspace.startAttempt(task.id, 'owner', 1, 'helper', 0, {
+    connectionId: 'test',
+    protocol: 'fixture-sse-v1',
+    role: 'helper',
+    modelId: 'test',
+    method: 'POST',
+    url: 'http://127.0.0.1:9',
+    headers: {},
+    body: {},
+    bodySha256: 'test',
+    stablePrefixSha256: 'test',
+  });
+  f.workspace.cancel(task.id);
+  expect(() => f.runtime.deleteMessages(f.conversation.id, message.id, revision, 'pair')).toThrow(
+    '진행 중인 작업'
+  );
+  f.workspace.finishAttempt(task.id, attempt, success);
+  const other = f.workspace.create(f.conversation.scope, 'other');
+  f.workspace.enqueue(other.id, 'active-elsewhere', '다른 대화 요청', {
+    ...snapshot(f),
+    scope: other.scope,
+  });
+  expect(
+    f.runtime.editMessage(f.conversation.id, message.id, revision, '변경').updatedMessage?.text
+  ).toBe('변경');
+});
+
+test('a new request invalidates an older delete confirmation but duplicate admission does not', () => {
+  const f = fixture();
+  const first = f.workspace.enqueue(f.conversation.id, 'first', '첫 요청', snapshot(f));
+  f.workspace.cancel(first.id);
+  const message = f.workspace.messages(f.conversation.id)[0];
+  const revision = f.workspace.conversation(f.conversation.id).revision;
+  const second = f.workspace.enqueue(f.conversation.id, 'second', '새 요청', snapshot(f));
+  f.workspace.cancel(second.id);
+  expect(f.workspace.conversation(f.conversation.id).revision).toBe(revision + 1);
+  expect(f.workspace.enqueue(f.conversation.id, 'second', '새 요청', snapshot(f)).id).toBe(
+    second.id
+  );
+  expect(f.workspace.conversation(f.conversation.id).revision).toBe(revision + 1);
+  expect(() =>
+    f.workspace.deleteMessages(f.conversation.id, message.id, revision, 'following')
+  ).toThrow('대화가 변경됐어요');
+  expect(f.workspace.messages(f.conversation.id)).toHaveLength(2);
 });

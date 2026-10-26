@@ -16,6 +16,7 @@ import { SettingsIcon, CloseIcon } from './ui-icons.js';
 import type { Library } from '../core/product.js';
 import type {
   HelperConversation,
+  HelperMessageMutation,
   HelperEditor,
   HelperResourceRef,
   HelperScope,
@@ -37,8 +38,12 @@ import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { IconButton } from './IconButton.js';
 import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
 import type { ResponseDisplayMode } from './presentation-settings.js';
-import { Prose } from './Prose.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
+import {
+  HelperDeleteActions,
+  HelperResponseEditor,
+  type HelperDeleteScope,
+} from './HelperMessageActions.js';
 import { HelperResourceUndo } from './HelperResourceUndo.js';
 import { useHelperConversation, type HelperTaskView } from './useHelperConversation.js';
 import { interceptAppHistory } from './app-history.js';
@@ -183,19 +188,17 @@ function HelperResponseActions({ text }: { text: string }) {
 
   return (
     <>
-      <div className="helper-response-actions">
-        <IconButton
-          icon={copyState === 'copied' ? Check : Copy}
-          label={copyState === 'copied' ? t('helpers.m008') : t('helpers.m009')}
-          className="secondary"
-          size={18}
-          disabled={copyState === 'copying'}
-          onClick={() => void copyResponse()}
-        />
-        <span className="sr-only" role="status">
-          {copyState === 'copied' ? t('helpers.m010') : ''}
-        </span>
-      </div>
+      <IconButton
+        icon={copyState === 'copied' ? Check : Copy}
+        label={copyState === 'copied' ? t('helpers.m008') : t('helpers.m009')}
+        className="secondary"
+        size={18}
+        disabled={copyState === 'copying'}
+        onClick={() => void copyResponse()}
+      />
+      <span className="sr-only" role="status">
+        {copyState === 'copied' ? t('helpers.m010') : ''}
+      </span>
       {copyState === 'failed' && (
         <p className="error helper-copy-error" role="alert">
           {t('helpers.m011')}
@@ -339,6 +342,7 @@ export function HelperPanel(props: Props) {
   const following = useRef(true),
     displayedScope = useRef('');
   const prepend = useRef<{ scope: string; height: number; top: number } | null>(null);
+  const editRevisions = useRef(new Map<string, number>());
   const locks = useRef(new Set<string>()),
     appliedSelections = useRef(new Set<string>());
   const close = useRef(props.onClose);
@@ -771,6 +775,44 @@ export function HelperPanel(props: Props) {
       setBusyScopes((old) => ({ ...old, [owner]: false }));
     }
   }
+  async function mutateMessage(
+    messageId: string,
+    mutation: { text: string } | { scope: HelperDeleteScope },
+    expectedRevision = conversation?.revision
+  ): Promise<boolean> {
+    if (
+      !conversation ||
+      expectedRevision === undefined ||
+      scopeMismatch ||
+      busy ||
+      outbox ||
+      pending.length ||
+      locks.current.has(scopeKey)
+    )
+      return false;
+    const owner = conversation.id;
+    locks.current.add(owner);
+    setBusyScopes((old) => ({ ...old, [owner]: true }));
+    setErrors((old) => ({ ...old, [owner]: '' }));
+    try {
+      const result = await api<HelperMessageMutation>(
+        `/helper/conversations/${encodeURIComponent(owner)}/messages/${encodeURIComponent(messageId)}`,
+        { expectedRevision, ...mutation },
+        'text' in mutation ? 'PATCH' : 'DELETE'
+      );
+      data.applyMessageMutation(result);
+      return true;
+    } catch (cause) {
+      setErrors((old) => ({
+        ...old,
+        [owner]: cause instanceof Error ? cause.message : uiMessage('helpers.m207'),
+      }));
+      return false;
+    } finally {
+      locks.current.delete(owner);
+      setBusyScopes((old) => ({ ...old, [owner]: false }));
+    }
+  }
   async function cancel(task: HelperTaskView) {
     try {
       data.updateTask(
@@ -781,7 +823,11 @@ export function HelperPanel(props: Props) {
       setError(cause instanceof Error ? cause.message : uiMessage('helpers.m021'));
     }
   }
-  async function retry(task: HelperTaskView, text = task.request) {
+  async function retry(
+    task: HelperTaskView,
+    text = messages.find((message) => message.taskId === task.id && message.role === 'user')
+      ?.text ?? task.request
+  ) {
     if (
       props.ready === false ||
       scopeMismatch ||
@@ -1199,61 +1245,77 @@ export function HelperPanel(props: Props) {
               </p>
             )
           )}
-          {messages.map((message) => {
-            const task = taskMap.get(message.taskId);
-            const status = task?.status ?? message.taskStatus;
-            const response = (
-              <>
-                <div className="helper-prose">
-                  <Prose text={message.text} />
-                </div>
-                <HelperResponseActions text={message.text} />
-              </>
-            );
-            return (
-              <article
-                key={message.id}
-                className={`helper-message ${message.role === 'user' ? 'request' : message.role}`}
-                data-message-id={message.id}
-              >
-                {message.role === 'user' ? (
-                  <RequestMessage
-                    runId={message.taskId}
-                    request={message.text}
-                    maxLength={REQUEST_TEXT_MAX_CHARS}
-                    editHint={t('helpers.m063')}
-                    disabled={scopeMismatch || busy || Boolean(outbox)}
-                    onSubmit={
-                      taskMap.get(message.taskId) &&
-                      !active(taskMap.get(message.taskId)!) &&
-                      !taskMap.get(message.taskId)!.completedEffects &&
-                      taskMap.get(message.taskId)!.status !== 'completed'
-                        ? (text) => retry(taskMap.get(message.taskId)!, text)
-                        : undefined
-                    }
-                  />
-                ) : props.responseDisplay === 'complete' && status !== 'completed' ? (
-                  status && !['queued', 'running'].includes(status) ? (
-                    <PartialResponse>{response}</PartialResponse>
-                  ) : null
-                ) : (
-                  response
-                )}
-                {message.artifacts.map((artifact) => (
-                  <HelperArtifactCard
-                    conversationId={conversation.id}
-                    key={`${artifact.id}:${artifact.revision}`}
-                    {...artifact}
-                  />
-                ))}
-                {message.role === 'user' &&
-                  taskMap.get(message.taskId) &&
-                  (taskMap.get(message.taskId)!.status !== 'completed' ||
-                    !answered.has(message.taskId)) &&
-                  taskStatus(taskMap.get(message.taskId)!)}
-              </article>
-            );
-          })}
+          {conversation &&
+            messages.map((message) => {
+              const task = taskMap.get(message.taskId);
+              const status = task?.status ?? message.taskStatus;
+              const messageDisabled =
+                scopeMismatch || busy || Boolean(outbox) || pending.length > 0;
+              const saveMessage = (
+                text: string,
+                revision = editRevisions.current.get(message.id) ?? conversation.revision
+              ) => mutateMessage(message.id, { text }, revision);
+              const deleteMessage = (deleteScope: HelperDeleteScope, revision: number) =>
+                mutateMessage(message.id, { scope: deleteScope }, revision);
+              const response = (
+                <HelperResponseEditor
+                  id={message.id}
+                  text={message.text}
+                  disabled={messageDisabled}
+                  revision={conversation.revision}
+                  onSave={saveMessage}
+                  onDelete={deleteMessage}
+                  copy={<HelperResponseActions text={message.text} />}
+                />
+              );
+              return (
+                <article
+                  key={message.id}
+                  className={`helper-message ${message.role === 'user' ? 'request' : message.role}`}
+                  data-message-id={message.id}
+                >
+                  {message.role === 'user' ? (
+                    <RequestMessage
+                      runId={message.taskId}
+                      request={message.text}
+                      maxLength={REQUEST_TEXT_MAX_CHARS}
+                      saveHint=""
+                      disabled={messageDisabled}
+                      onSave={saveMessage}
+                      onEditingChange={(editing) => {
+                        if (editing) editRevisions.current.set(message.id, conversation.revision);
+                        else editRevisions.current.delete(message.id);
+                      }}
+                      menuActions={
+                        <HelperDeleteActions
+                          disabled={messageDisabled}
+                          revision={conversation.revision}
+                          onDelete={deleteMessage}
+                        />
+                      }
+                    />
+                  ) : props.responseDisplay === 'complete' && status !== 'completed' ? (
+                    status && !['queued', 'running'].includes(status) ? (
+                      <PartialResponse>{response}</PartialResponse>
+                    ) : null
+                  ) : (
+                    response
+                  )}
+                  {message.artifacts.map((artifact) => (
+                    <HelperArtifactCard
+                      conversationId={conversation.id}
+                      key={`${artifact.id}:${artifact.revision}`}
+                      {...artifact}
+                    />
+                  ))}
+                  {message.role === 'user' &&
+                    taskMap.get(message.taskId) &&
+                    (taskMap.get(message.taskId)!.status !== 'completed' ||
+                      !answered.has(message.taskId)) &&
+                    taskStatus(taskMap.get(message.taskId)!)}
+                </article>
+              );
+            })}
         </div>
       </div>
       <Dialog

@@ -127,6 +127,35 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     '/api/helper/conversations/:id/tasks',
     (request) => store.taskSummaries(request.params.id, request.query.before)
   );
+  app.patch<{ Params: { id: string; messageId: string } }>(
+    '/api/helper/conversations/:id/messages/:messageId',
+    { bodyLimit: 16 * 1024 * 1024 },
+    (request) => {
+      const body = record(request.body);
+      fields(body, ['expectedRevision', 'text']);
+      return runtime.editMessage(
+        request.params.id,
+        request.params.messageId,
+        number(body.expectedRevision, 'conversation revision'),
+        text(body.text, 'helper message', REQUEST_TEXT_MAX_CHARS)
+      );
+    }
+  );
+  app.delete<{ Params: { id: string; messageId: string } }>(
+    '/api/helper/conversations/:id/messages/:messageId',
+    (request) => {
+      const body = record(request.body);
+      fields(body, ['expectedRevision', 'scope']);
+      if (body.scope !== 'pair' && body.scope !== 'following')
+        throw new HttpError(400, 'Invalid helper message deletion scope');
+      return runtime.deleteMessages(
+        request.params.id,
+        request.params.messageId,
+        number(body.expectedRevision, 'conversation revision'),
+        body.scope
+      );
+    }
+  );
   app.post<{ Params: { id: string } }>(
     '/api/helper/conversations/:id/messages',
     { bodyLimit: 48 * 1024 * 1024 },

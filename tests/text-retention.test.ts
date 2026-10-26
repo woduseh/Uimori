@@ -259,6 +259,38 @@ describe('Image references across copies and editing', () => {
     expect(store.db.prepare('SELECT * FROM library_hidden').all()).toEqual([]);
   });
 
+  test('images referenced only by edited helper text survive cleanup until their chat is deleted', () => {
+    const store = database();
+    const bot = store.product.content(fixtureBotInput()) as Content;
+    const chat = store.createChat('Edited helper image', { botId: bot.id });
+    const workspace = new HelperWorkspace(store);
+    const conversation = workspace.create({ kind: 'chat', chatId: chat.id }, 'edited-image');
+    const hash = 'b'.repeat(64);
+    store.db
+      .prepare('INSERT INTO image_blobs VALUES(?,?,?)')
+      .run(hash, 'image/webp', Buffer.from('synthetic image bytes'));
+    store.db
+      .prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)')
+      .run(
+        'edited-image-message',
+        conversation.id,
+        0,
+        'assistant',
+        'Original text',
+        new Date().toISOString()
+      );
+    workspace.editMessage(
+      conversation.id,
+      'edited-image-message',
+      conversation.revision,
+      `![reference](/api/package-image-blobs/${hash})`
+    );
+    pruneUnusedData(store.db, [hash]);
+    expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeTruthy();
+    deleteChat(store, chat.id, {});
+    expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
+  });
+
   test('saved independent copies and one-level undo retain referenced image bytes, then release them', async () => {
     const store = database();
     const image = await processImage(

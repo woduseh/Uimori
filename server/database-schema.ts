@@ -17,7 +17,13 @@ function initHelperSeeds(db: DatabaseSync) {
     id TEXT PRIMARY KEY,conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,
     ordinal INTEGER NOT NULL,role TEXT NOT NULL CHECK(role IN ('user','assistant')),
     text TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(conversation_id,ordinal)
-  );`);
+  );
+  CREATE TABLE IF NOT EXISTS helper_message_changes (
+    message_id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL REFERENCES helper_conversations(id) ON DELETE CASCADE,
+    text TEXT,deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1))
+  );
+  CREATE INDEX IF NOT EXISTS helper_message_changes_conversation ON helper_message_changes(conversation_id);`);
 }
 
 export class DatabaseSchemaError extends Error {

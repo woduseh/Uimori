@@ -173,6 +173,47 @@ test('conversation search recovers exact earlier dialogue with message roles and
   expect(read.nextOffset).toBe(text.indexOf('마지막 합의') + 6);
 });
 
+test('conversation retrieval uses edited text and excludes deleted request pairs', async () => {
+  const f = fixture();
+  const workspace = new HelperWorkspace(f.store);
+  workspace.start(f.task.id, 'owner');
+  workspace.finish(f.task.id, 'owner', 1, 'completed', '사라질 원래 합의', null);
+  const messages = workspace.messages(f.task.conversationId);
+  workspace.editMessage(
+    f.task.conversationId,
+    messages[1].id,
+    workspace.conversation(f.task.conversationId).revision,
+    '현재 유효한 고친 합의'
+  );
+  const retained = workspace.enqueue(
+    f.task.conversationId,
+    'retained',
+    '남겨둘 요청',
+    f.task.snapshot
+  );
+  workspace.cancel(retained.id);
+  const deleted = workspace.deleteMessages(
+    f.task.conversationId,
+    workspace.messages(f.task.conversationId).find((message) => message.taskId === retained.id)!.id,
+    workspace.conversation(f.task.conversationId).revision,
+    'pair'
+  );
+  const current = workspace.enqueue(f.task.conversationId, 'current', '과거 대화 조회', {
+    ...f.task.snapshot,
+    history: helperHistory(f.store, f.task.conversationId),
+  });
+  const result = (await runDataProcess({
+    path: f.store.path,
+    taskId: current.id,
+    name: 'data.search',
+    args: { scope: 'conversation', patterns: ['합의', '남겨둘 요청'] },
+  })) as any;
+  expect(result.items.map((item: any) => item.text).join('\n')).toContain('현재 유효한 고친 합의');
+  expect(JSON.stringify(result)).not.toContain('사라질 원래 합의');
+  expect(JSON.stringify(result)).not.toContain('남겨둘 요청');
+  expect(deleted.deletedMessageIds).toHaveLength(1);
+});
+
 test('branched conversation keeps exact searchable dialogue independent of original task', async () => {
   const f = fixture();
   const workspace = new HelperWorkspace(f.store);

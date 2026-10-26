@@ -51,12 +51,15 @@ export function helperHistory(store: Store, conversationId: string): HelperTaskS
   return store.db
     .prepare(
       `WITH visible AS (
-        SELECT s.id,s.role,s.text,0 AS phase,s.ordinal AS position FROM helper_seed_messages s WHERE s.conversation_id=?
+        SELECT s.id,s.role,COALESCE(c.text,s.text) AS text,0 AS phase,s.ordinal AS position
+        FROM helper_seed_messages s LEFT JOIN helper_message_changes c ON c.message_id=s.id
+        WHERE s.conversation_id=? AND COALESCE(c.deleted,0)=0
         UNION ALL
-        SELECT m.id,m.role,m.text,1 AS phase,
+        SELECT m.id,m.role,COALESCE(c.text,m.text) AS text,1 AS phase,
           (SELECT root.rowid FROM helper_tasks root WHERE root.id=COALESCE(json_extract(t.snapshot,'$.requestGroupId'),t.id)) AS position
         FROM helper_messages m JOIN helper_tasks t ON t.id=m.task_id
-        WHERE m.conversation_id=? AND NOT EXISTS (SELECT 1 FROM helper_tasks next WHERE next.conversation_id=t.conversation_id AND json_extract(next.snapshot,'$.retryOf')=t.id)
+        LEFT JOIN helper_message_changes c ON c.message_id=m.id
+        WHERE m.conversation_id=? AND COALESCE(c.deleted,0)=0 AND NOT EXISTS (SELECT 1 FROM helper_tasks next WHERE next.conversation_id=t.conversation_id AND json_extract(next.snapshot,'$.retryOf')=t.id)
       ) SELECT id,role,text FROM visible ORDER BY phase,position,CASE role WHEN 'user' THEN 0 ELSE 1 END`
     )
     .all(conversationId, conversationId)
