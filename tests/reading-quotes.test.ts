@@ -13,8 +13,6 @@ const reading = (overrides: Partial<ReadabilitySettings> = {}): ReadabilitySetti
 });
 const render = (text: string, settings = reading()) =>
   renderToStaticMarkup(createElement(PlainProse, { text, reading: settings }));
-const renderPlain = (text: string, settings = reading()) =>
-  renderToStaticMarkup(createElement(PlainProse, { text, reading: settings }));
 const renderedText = (html: string) =>
   html.replace(/<[^>]*>/gu, '').replace(/&(amp|lt|gt|quot|#x27);/gu, (_, entity: string) => {
     return ({ amp: '&', lt: '<', gt: '>', quot: '"', '#x27': "'" } as Record<string, string>)[
@@ -142,8 +140,8 @@ describe('reading quotation pairing', () => {
 describe('literal reading styles', () => {
   test('PlainProse preserves literal Markdown, all whitespace and original newline characters', () => {
     const text = '  **서술**\r\n“**대사**”  \r\n\r\n\t「둘째 대사」\n\n마지막\n';
-    expect(renderPlain(text, DEFAULT_READABILITY)).toBe(text);
-    const html = renderPlain(text);
+    expect(render(text, DEFAULT_READABILITY)).toBe(text);
+    const html = render(text);
     expect(renderedText(html)).toBe(text);
     expect(html).not.toContain('<strong>');
     expect(html).not.toContain('<br');
@@ -153,7 +151,7 @@ describe('literal reading styles', () => {
 
   test('PlainProse protects complete and unfinished code fences across blank lines', () => {
     const text = '“대사”\n\n```json\n{"quoted": "code"}\n\n“코드”\n```\n\n~~~\n“미완료 코드”';
-    const html = renderPlain(text);
+    const html = render(text);
     expect(renderedText(html)).toBe(text);
     expect(html.match(/reading-quote-break(?=[\s"])/gu)).toHaveLength(1);
     expect(html).not.toContain('<code>');
@@ -161,7 +159,7 @@ describe('literal reading styles', () => {
 
   test('PlainProse uses paragraph wrappers for spacing without enabling quotations', () => {
     const text = '“첫 문단”\n\n‘둘째 문단’';
-    const html = renderPlain(text, { ...DEFAULT_READABILITY, paragraphSpacing: 1 });
+    const html = render(text, { ...DEFAULT_READABILITY, paragraphSpacing: 1 });
     expect(html.match(/reading-plain-paragraph/gu)).toHaveLength(2);
     expect(html).not.toContain('reading-quote');
     expect(renderedText(html)).toBe(text);
@@ -176,7 +174,7 @@ describe('literal reading styles', () => {
       `prefix ${'`'.repeat(120_000)}`,
     ];
     const started = performance.now();
-    for (const text of samples) expect(renderedText(renderPlain(text))).toBe(text);
+    for (const text of samples) expect(renderedText(render(text))).toBe(text);
     // This generous budget guards synchronous UI stalls from rescanning every
     // suffix. Linear parsing and server rendering of all samples is subsecond
     // locally; the former repeated-ruby scan alone takes many seconds.

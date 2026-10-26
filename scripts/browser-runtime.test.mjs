@@ -27,7 +27,7 @@ function fixture({
   };
 }
 
-test('probe actually visits loopback and checks text layout, then closes the browser', async () => {
+test('probe checks loopback HTTP and stubbed text geometry, then closes the browser stub', async () => {
   const f = fixture();
   const result = await assertBrowserRuntime({ executablePath: process.execPath, launch: f.launch });
   assert.equal(result.version, 'synthetic');
@@ -57,7 +57,7 @@ test('empty text geometry is blocked even when the browser and DOM are available
   assert.equal(f.seen.closed, true);
 });
 
-test('cleanup cannot replace the primary failure, or silently turn success into PASS', async () => {
+test('cleanup errors preserve the primary diagnostic and fail an otherwise successful probe', async () => {
   const f = fixture({ text: 'wrong page', closeError: 'close failed' });
   await assert.rejects(
     assertBrowserRuntime({ executablePath: process.execPath, launch: f.launch }),

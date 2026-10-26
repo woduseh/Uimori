@@ -75,7 +75,7 @@ const request = (variant: Variant): ProviderRequest => ({
     results: [],
   },
 });
-// Official providers need no operator configuration; compatible servers still require explicit approval.
+// Credentials are resolved through the connection's configured reference.
 const options = (_variant: Variant) => ({
   signal: new AbortController().signal,
 

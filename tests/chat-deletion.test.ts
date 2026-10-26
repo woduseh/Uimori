@@ -66,7 +66,7 @@ async function run(store: Store, chatId: string, finish = true) {
   return { run, source };
 }
 
-test('active run or outstanding provider attempt blocks deletion until completion', async () => {
+test('active runs and outstanding provider attempts block deletion until both become terminal', async () => {
   const store = await fixture(),
     chat = createFixtureChat(store, 'Busy');
   const pending = (await run(store, chat.id, false)).run;
