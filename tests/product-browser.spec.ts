@@ -19,6 +19,7 @@ import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { Chat, ChatDetail, Run } from '../core/types.js';
 import type { Connection, Content, Library, ModelPreset } from '../core/product.js';
+import type { ChatOptionState } from '../core/chat-options.js';
 
 preservePromptWorkspace();
 
@@ -92,6 +93,11 @@ async function openDetails(page: Page, testId: string) {
   await storySettings(page);
   await selectChatSettingsSection(page, '사용 자료');
   return profileInfo(page);
+}
+async function composerMenu(page: Page) {
+  const trigger = page.getByRole('button', { name: '입력창 더보기', exact: true });
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+  return page.getByRole('group', { name: '이번 요청 옵션', exact: true });
 }
 
 test('P01 packages use latest settings and prompt-owned creative choices replace prior values', {
@@ -228,6 +234,160 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   expect(saved.snapshot.profile?.promptPresets).toBeUndefined();
   expect(saved.snapshot.promptCompilation).toBeUndefined();
   expect(saved.inputs).toEqual([]);
+});
+
+test('P02 creative option drafts block only their own chat and survive quick changes in another chat', async ({
+  page,
+  request,
+}, info) => {
+  const unique = `P02-${Date.now()}`;
+  const choice = await createPromptChoice(request, unique);
+  const personaResponse = await request.post('/api/content', {
+    data: {
+      kind: 'persona',
+      title: `항구 안내자 ${unique}`,
+      description: 'Synthetic cross-chat persona.',
+      text: '',
+      loading: 'pinned',
+      relatedIds: [],
+      package: nativeContent({ name: `항구 안내자 ${unique}` }, {}, 'persona'),
+    },
+  });
+  expect(personaResponse.ok()).toBe(true);
+  const persona = (await personaResponse.json()) as Content;
+  const otherResponse = await postFixtureChat(request, { data: { title: `다른 채팅 ${unique}` } });
+  expect(otherResponse.ok()).toBe(true);
+  const other = (await otherResponse.json()) as Chat;
+  await page.setViewportSize({ width: 412, height: 915 });
+  const chat = await createChat(page, `초안 채팅 ${unique}`);
+  await (await composerMenu(page)).getByRole('button', { name: '창작 옵션', exact: true }).click();
+  const panel = page.locator('#chat-prompt-options');
+  await panel.locator('.chat-option-group > summary').first().click();
+  await panel.getByRole('button', { name: '합성 상세도 개별 지정', exact: true }).click();
+  const detail = panel.getByLabel('합성 상세도', { exact: true });
+  await detail.fill('보존할 첫 채팅의 초안');
+  await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
+  let menu = await composerMenu(page);
+  await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
+  await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeDisabled();
+  await expect(menu.getByRole('button', { name: '창작 옵션', exact: true })).toContainText(
+    '미적용 확인'
+  );
+  await page.screenshot({ path: info.outputPath('creative-options-draft-menu-412.png') });
+  await page.keyboard.press('Escape');
+
+  await selectStoredChat(page, other);
+  menu = await composerMenu(page);
+  const combinations = menu.getByLabel('빠른 옵션 조합', { exact: true });
+  await expect(combinations).toBeEnabled();
+  await expect(combinations.locator('option').first()).toHaveText('조합 적용…');
+  await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeEnabled();
+  await page.screenshot({ path: info.outputPath('creative-options-other-chat-menu-412.png') });
+  await combinations.selectOption(`${choice.combination.id}@${choice.combination.revision}`);
+  await expect(page.locator('.transient-notice')).toContainText(
+    `“${choice.combination.title}” 조합을 적용했어요.`
+  );
+  await expect
+    .poll(
+      async () => (await (await request.get(`/api/chats/${other.id}/options`)).json()).fixedValues
+    )
+    .toEqual(choice.combination.values);
+  await composerMenu(page);
+  await selectContent(page, '빠른 페르소나', persona.title);
+  await expect
+    .poll(async () => (await getDetail(request, other.id)).profile?.packageAttachments)
+    .toContainEqual({ id: persona.id, revision: persona.revision, role: 'persona' });
+  expect((await (await request.get(`/api/chats/${chat.id}/options`)).json()).fixedValues).toEqual(
+    {}
+  );
+
+  await selectStoredChat(page, chat);
+  menu = await composerMenu(page);
+  await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
+  await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeDisabled();
+  await menu.getByRole('button', { name: '창작 옵션', exact: true }).click();
+  await expect(detail).toHaveValue('보존할 첫 채팅의 초안');
+  const saved = page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/api/chats/${chat.id}/options/fixed`) &&
+      response.request().method() === 'POST'
+  );
+  await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
+  expect((await saved).ok()).toBe(true);
+  await expect
+    .poll(
+      async () => (await (await request.get(`/api/chats/${chat.id}/options`)).json()).fixedValues
+    )
+    .toEqual({ detail: '보존할 첫 채팅의 초안' });
+});
+
+test('P03 a pending creative option reset blocks only its own chat', async ({ page, request }) => {
+  const unique = `P03-${Date.now()}`;
+  const choice = await createPromptChoice(request, unique);
+  const otherResponse = await postFixtureChat(request, {
+    data: { title: `진행 중 아닌 채팅 ${unique}` },
+  });
+  expect(otherResponse.ok()).toBe(true);
+  const other = (await otherResponse.json()) as Chat;
+  const chat = await createChat(page, `저장 진행 채팅 ${unique}`);
+  const state = (await (
+    await request.get(`/api/chats/${chat.id}/options`)
+  ).json()) as ChatOptionState;
+  const seeded = await request.post(`/api/chats/${chat.id}/options/fixed`, {
+    data: {
+      expectedRevision: state.revision,
+      operationId: crypto.randomUUID(),
+      binding: state.binding,
+      values: { detail: '저장된 상세도' },
+    },
+  });
+  expect(seeded.ok()).toBe(true);
+  await (await composerMenu(page)).getByRole('button', { name: '창작 옵션', exact: true }).click();
+  const panel = page.locator('#chat-prompt-options');
+  let releaseSave = () => {};
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  await page.route(`**/api/chats/${chat.id}/options/fixed`, async (route) => {
+    await saveGate;
+    await route.continue();
+  });
+  try {
+    await panel.getByRole('button', { name: '고정 옵션 모두 해제', exact: true }).click();
+    await expect(
+      panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true })
+    ).toHaveAttribute('aria-busy', 'true');
+    await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
+    let menu = await composerMenu(page);
+    await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
+    await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await selectStoredChat(page, other);
+    menu = await composerMenu(page);
+    await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeEnabled();
+    await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeEnabled();
+    await menu
+      .getByLabel('빠른 옵션 조합', { exact: true })
+      .selectOption(`${choice.combination.id}@${choice.combination.revision}`);
+    await expect
+      .poll(
+        async () => (await (await request.get(`/api/chats/${other.id}/options`)).json()).fixedValues
+      )
+      .toEqual(choice.combination.values);
+    await page.keyboard.press('Escape');
+    await selectStoredChat(page, chat);
+    menu = await composerMenu(page);
+    await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
+    releaseSave();
+    await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeEnabled();
+    await expect
+      .poll(
+        async () => (await (await request.get(`/api/chats/${chat.id}/options`)).json()).fixedValues
+      )
+      .toEqual({});
+  } finally {
+    releaseSave();
+  }
 });
 
 test('P04 manual model IDs and distinct main/translation routing preserve connection authority after catalog failure', async ({

@@ -1949,12 +1949,14 @@ function App() {
                           role="group"
                           aria-label={t('main.m113')}
                         >
-                          <div className="composer-menu-heading">{t('main.m113')}</div>
                           {creativePresets.length > 0 && (
                             <label className="composer-menu-choice">
                               <span>{t('main.m114')}</span>
                               <select
                                 aria-label={t('main.m115')}
+                                aria-describedby={
+                                  optionsDirty ? 'composer-options-review' : undefined
+                                }
                                 value=""
                                 disabled={
                                   s.quickBusy ||
@@ -1983,6 +1985,7 @@ function App() {
                                 library={s.library}
                                 role="persona"
                                 label={t('main.m118')}
+                                describedBy={optionsDirty ? 'composer-options-review' : undefined}
                                 value={s.persona ? refValue(s.persona) : ''}
                                 selectedContent={s.persona}
                                 allowNone
@@ -2004,6 +2007,7 @@ function App() {
                           {hasCreativeOptions && (
                             <button
                               ref={optionsButton}
+                              id="composer-options-review"
                               type="button"
                               className="secondary creative-options-button"
                               aria-label={t('main.m121')}

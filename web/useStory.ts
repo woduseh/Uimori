@@ -1462,6 +1462,7 @@ export function useStory() {
     setError('');
     setNotice('');
     let modelWriteAttempted = false;
+    let completion = '다음 요청에 적용할 설정을 저장했어요.';
     try {
       if (kind === 'model') {
         const model = library.models.find((item) => item.id === value);
@@ -1525,6 +1526,7 @@ export function useStory() {
             values: preset.values,
           });
           dispatchEvent(new Event('chat-options-changed'));
+          completion = uiMessage('main.combinationApplied', { title: preset.title });
         }
       } else if (kind === 'module') {
         const epoch = navigation.current.epoch;
@@ -1581,7 +1583,7 @@ export function useStory() {
           'PUT'
         );
       }
-      if (navigation.current.chat === chatId) setNotice('다음 요청에 적용할 설정을 저장했어요.');
+      if (navigation.current.chat === chatId) setNotice(completion);
       await refresh(chatId);
       return true;
     } catch (error) {

@@ -768,10 +768,10 @@ export const messages = {
     zh: '快捷选项组合',
   },
   'main.m116': {
-    ko: '이 채팅에 적용',
-    en: 'Apply to this chat',
-    ja: 'このチャットに適用',
-    zh: '应用到此聊天',
+    ko: '조합 적용…',
+    en: 'Apply combination…',
+    ja: '組み合わせを適用…',
+    zh: '应用组合…',
   },
   'main.m117': {
     ko: '페르소나',
@@ -1008,10 +1008,16 @@ export const messages = {
     zh: '输入写作请求…（{key}发送）',
   },
   'main.writingOptions': {
-    ko: '창작 옵션{dirty, select, true {, 미적용} other {}}',
-    en: 'Writing options{dirty, select, true {, not applied} other {}}',
-    ja: '創作オプション{dirty, select, true {、未適用} other {}}',
-    zh: '创作选项{dirty, select, true {，未应用} other {}}',
+    ko: '창작 옵션{dirty, select, true {, 미적용 확인} other {}}',
+    en: 'Writing options{dirty, select, true {, review unapplied changes} other {}}',
+    ja: '創作オプション{dirty, select, true {、未適用の変更を確認} other {}}',
+    zh: '创作选项{dirty, select, true {，检查未应用的更改} other {}}',
+  },
+  'main.combinationApplied': {
+    ko: '“{title}” 조합을 적용했어요.',
+    en: 'Applied “{title}”.',
+    ja: '「{title}」を適用しました。',
+    zh: '已应用“{title}”。',
   },
   'main.sendShortcut': {
     ko: '보내기 ({key})',

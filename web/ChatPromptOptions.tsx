@@ -36,12 +36,12 @@ export function ChatPromptOptions(props: Props) {
     setContexts((current) => (current.includes(id) ? current : [...current, id]));
   }, [props.open, props.chatId]);
   useEffect(
-    () => props.onDirtyChange(Object.values(dirtyScopes).some(Boolean)),
-    [dirtyScopes, props.onDirtyChange]
+    () => props.onDirtyChange(!!props.chatId && !!dirtyScopes[props.chatId]),
+    [dirtyScopes, props.chatId, props.onDirtyChange]
   );
   useEffect(
-    () => props.onBusyChange(Object.values(busyScopes).some(Boolean)),
-    [busyScopes, props.onBusyChange]
+    () => props.onBusyChange(!!props.chatId && !!busyScopes[props.chatId]),
+    [busyScopes, props.chatId, props.onBusyChange]
   );
   useEffect(() => {
     if (props.open) closeButton.current?.focus();
