@@ -5,7 +5,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
-import { doctor, doctorStatus, probeNodeChild, supportedNode } from './doctor.mjs';
+import { doctor, doctorStatus, probeNodeChild } from './doctor.mjs';
+import { requiredNode, supportedNode } from './node-runtime.mjs';
 import { artifactRoot, newId, removeOwned } from './lib.mjs';
 
 function childStub({ output = 'uimori-doctor-child-ready', code = 0, error, hang = false } = {}) {
@@ -28,11 +29,20 @@ function childStub({ output = 'uimori-doctor-child-ready', code = 0, error, hang
   };
 }
 
-test('doctor rejects unsupported Node minor, major, prerelease and malformed versions', () => {
-  for (const version of ['24.14.0', 'v24.14.1', '24.99.0'])
+test('doctor enforces the supported Node patch, minor and major boundaries', () => {
+  for (const version of ['24.22.1', 'v24.22.2', '24.23.0', '24.99.0'])
     assert.equal(supportedNode(version), true);
-  for (const version of ['24.13.9', '22.20.0', '25.0.0', '24.14', '24.14.0-rc.1', 'invalid'])
-    assert.equal(supportedNode(version), false);
+  for (const version of [
+    '24.14.0',
+    '24.21.9',
+    '24.22.0',
+    '22.20.0',
+    '25.0.0',
+    '24.22',
+    '24.22.1-rc.1',
+    'invalid',
+  ])
+    assert.equal(supportedNode(version), false, version);
 });
 
 test('doctor status never promotes failed, blocked, unknown or required unrun checks to PASS', () => {
@@ -92,12 +102,17 @@ test('unsupported runtime and malformed child output remain visible with indepen
   try {
     const result = await doctor(directory, {
       browser: false,
-      nodeVersion: '24.13.9',
+      nodeVersion: '24.22.0',
       spawnChild: childStub({ output: 'incorrect-ready' }),
     });
     const checks = Object.fromEntries(result.checks.map((check) => [check.name, check]));
     assert.equal(result.status, 'FAIL');
+    assert.equal(result.requiredNode, requiredNode);
     assert.equal(checks['supported-node-runtime'].status, 'BLOCKED');
+    assert.equal(
+      checks['supported-node-runtime'].error,
+      `This checkout requires Node ${requiredNode}.`
+    );
     assert.equal(checks['node-child-ready-exit'].status, 'FAIL');
     assert.equal(checks['file-sqlite-transaction-reopen'].status, 'PASS');
     assert.equal(checks['localhost-bind-http'].status, 'PASS');

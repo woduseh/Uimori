@@ -9,11 +9,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { assertBrowserRuntime } from './browser-runtime.mjs';
 import { artifactRoot, newId, json, removeOwned } from './lib.mjs';
-
-export function supportedNode(version) {
-  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(version);
-  return Boolean(match && Number(match[1]) === 24 && Number(match[2]) >= 14);
-}
+import { requiredNode, supportedNode } from './node-runtime.mjs';
 
 export function doctorStatus(checks) {
   if (
@@ -121,7 +117,7 @@ export async function doctor(
     platform: process.platform,
     os: os.release(),
     node: nodeVersion,
-    requiredNode: '>=24.14.0 <25.0.0',
+    requiredNode,
     shell: process.env.PSModulePath ? 'PowerShell host environment' : 'direct Node child processes',
     checks: [],
   };
@@ -150,7 +146,7 @@ export async function doctor(
   try {
     await check('supported-node-runtime', async () => {
       if (!supportedNode(nodeVersion))
-        throw new Error('This checkout requires Node >=24.14.0 <25.0.0.');
+        throw new Error(`This checkout requires Node ${requiredNode}.`);
     });
     await check('node-child-ready-exit', () => probeNodeChild({ spawnChild }));
     await check('writable-directory', async () => {

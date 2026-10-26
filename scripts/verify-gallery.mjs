@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { existsSync } from 'node:fs';
+import { requiredNode, supportedNode } from './node-runtime.mjs';
 import { mkdir, readdir, copyFile } from 'node:fs/promises';
 import {
   artifactRoot,
@@ -77,10 +78,9 @@ async function main() {
       throw new Error('Local test browser unavailable');
     }
     summary.environment.browser = browser;
-    const [major, minor] = process.versions.node.split('.').map(Number);
-    if (major !== 24 || minor < 14) {
+    if (!supportedNode()) {
       environmentBlocked = true;
-      throw new Error('Node >=24.14.0 <25 required');
+      throw new Error(`Node ${requiredNode} required`);
     }
     const identity = await assertBuild();
     summary.identity = identity;

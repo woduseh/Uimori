@@ -1,5 +1,6 @@
 import { retainArtifacts } from './artifact-retention.mjs';
 import { assertBrowserRuntime } from './browser-runtime.mjs';
+import { requiredNode, supportedNode } from './node-runtime.mjs';
 import { parseOptions } from './release-common.mjs';
 import browserWidths from '../fixtures/browser-viewports.json' with { type: 'json' };
 const { mobile: MOBILE_WIDTH } = browserWidths;
@@ -267,10 +268,9 @@ try {
     environmentBlocked = true;
     throw new Error('Local test browser unavailable');
   }
-  const [major, minor] = process.versions.node.split('.').map(Number);
-  if (major !== 24 || minor < 14) {
+  if (!supportedNode()) {
     environmentBlocked = true;
-    throw new Error('Node >=24.14.0 <25 required');
+    throw new Error(`Node ${requiredNode} required`);
   }
   summary.browserRuntime = await assertBrowserRuntime({ executablePath: browser });
   const identity = await assertBuild();
