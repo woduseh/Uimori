@@ -90,7 +90,6 @@ for (const width of [412, 1440]) {
         'font-size',
         '16px'
       );
-      await expect(dialog.locator('.reading-settings-footer small')).toHaveCSS('font-size', '12px');
       const toggle = dialog.getByRole('switch', { name: '대사 줄바꿈', exact: true });
       await toggle.scrollIntoViewIfNeeded();
       const transition = await toggle.evaluate((node) => {

@@ -893,8 +893,8 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
     await expect(instruction.getByRole('status')).toContainText('작업 입력에 반영');
 
     await panel.getByLabel('도우미에게 요청').fill('그다음 첫 메시지를 검토해 주세요');
-    const send = panel.getByRole('button', { name: '도우미 요청 보내기', exact: true });
-    await expect(send).toHaveAttribute('title', '다음 요청으로 보내기');
+    const send = panel.getByRole('button', { name: '다음 요청', exact: true });
+    await expect(send).toHaveText('다음 요청');
     await send.click();
     await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
     expect(state.posts).toHaveLength(2);

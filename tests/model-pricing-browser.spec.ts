@@ -276,9 +276,10 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     await openSourceActions(source);
     await source.getByRole('button', { name: '본문 추정 비용', exact: true }).click();
     const sourceCost = page.getByRole('dialog', { name: '본문 추정 비용', exact: true });
-    await expect(sourceCost).toContainText('확인분 부분합 $0.004995, 미확인 1회 포함');
-    await expect(sourceCost).toContainText('실제 청구액과 다를 수 있어요');
-    await expect(sourceCost).toContainText('전체 추정 비용은 아직 미확인');
+    await expect(sourceCost.locator('.source-cost-value')).toHaveText(
+      '확인된 금액 합계 $0.004995, 미확인 1회 포함'
+    );
+    await expect(sourceCost).toContainText('미확인 호출이 있어 전체 추정 비용은 확정할 수 없어요.');
     await sourceCost.screenshot({ path: info.outputPath(`estimate-cost-source-${width}.png`) });
     await sourceCost.getByRole('button', { name: '본문 추정 비용 닫기' }).click();
     await navigationAction(page, '작업 현황');
@@ -286,7 +287,7 @@ test('PRICECOST01 source and attempt cost disclosures separate actual, estimated
     const usage = dialog.getByTestId('usage-inspector');
     await usage.locator(':scope > details > summary').click();
     await expect(usage).toContainText('전송 시도 2회');
-    await expect(usage).toContainText('확인분 부분합 $0.004995, 1회 미확인 항목 포함');
+    await expect(usage).toContainText('확인된 금액 합계 $0.004995, 미확인 항목 1회 포함');
     await expect(
       usage
         .getByRole('row')

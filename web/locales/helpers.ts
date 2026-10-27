@@ -1524,7 +1524,7 @@ export const messages = {
     zh: '已确认',
   },
   'helpers.m293': {
-    ko: '서버 응답을 확인하지 못했어요. 같은 요청으로 다시 확인하며, 이미 접수된 요청은 중복 실행하지 않아요.',
+    ko: '서버 응답을 확인하지 못했어요. 미접수 요청은 생성을 시작하며, 이미 접수된 요청은 중복 실행하지 않아요.',
     en: 'No server response was received. Check again using the same request; generation may start if it has not yet been received. Already received requests will not generate twice.',
     ja: 'サーバーから応答を受け取れませんでした。同じリクエストで再確認します。まだ受け付けられていない場合は生成が始まることがあります。受け付け済みのリクエストは重複して生成しません。',
     zh: '未收到服务器响应。将使用同一请求再次确认；若尚未接收，可能开始生成。已接收的请求不会重复生成。',
