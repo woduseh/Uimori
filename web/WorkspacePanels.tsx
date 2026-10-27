@@ -55,11 +55,13 @@ export function TasksPanel({
   inspectedRun,
   onInspect,
   onClose,
+  onAskHelper,
 }: {
   state: StoryState;
   inspectedRun: string | null;
   onInspect: (runId: string) => void;
   onClose: () => void;
+  onAskHelper?: (kind: 'run', id: string) => void;
 }) {
   useI18n();
   const [pending, setPending] = useState<string[]>([]);
@@ -183,6 +185,17 @@ export function TasksPanel({
               presentation="list"
             >
               <div className="form-actions">
+                {onAskHelper &&
+                  (run.error || ['failed', 'interrupted', 'partial'].includes(run.status)) && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={() => onAskHelper('run', run.id)}
+                    >
+                      <AgentIcon size={18} aria-hidden="true" />
+                      {t('helpers.analyzeTask')}
+                    </button>
+                  )}
                 {run.sourceRevision && (
                   <button
                     type="button"

@@ -140,24 +140,29 @@ export class HelperWorkspace {
       return this.conversation(id);
     });
   }
-  list(scope: { kind: 'chat'; chatId: string } | { kind: 'library' }): HelperConversationSummary[] {
+  list(
+    scope: { kind: 'chat'; chatId: string } | { kind: 'library' | 'all' }
+  ): HelperConversationSummary[] {
     if (scope.kind === 'chat') {
       this.store.chat(scope.chatId);
     }
     const rows = this.store.db
       .prepare(
-        `SELECT c.*,
+        `SELECT c.*,chat.title AS chat_title,
           (SELECT json_object('running',COALESCE(SUM(status='running'),0),
             'queued',COALESCE(SUM(status='queued'),0)) FROM helper_tasks WHERE conversation_id=c.id) AS activity,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id) AS latest_seq,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision
-        FROM helper_conversations c
-        WHERE ${scope.kind === 'library' ? 'c.chat_id IS NULL' : 'c.chat_id=?'}
+        FROM helper_conversations c LEFT JOIN chats chat ON chat.id=c.chat_id
+        WHERE ${scope.kind === 'all' ? '1' : scope.kind === 'library' ? 'c.chat_id IS NULL' : 'c.chat_id=?'}
         ORDER BY c.updated_at DESC,c.rowid DESC`
       )
       .all(...(scope.kind === 'chat' ? [scope.chatId] : []));
     return rows.map((row) => ({
       ...conversationData(row),
+      ...(scope.kind === 'all' && typeof row.chat_title === 'string'
+        ? { chatTitle: row.chat_title }
+        : {}),
       activity: JSON.parse(String(row.activity)),
       latestEventSeq: Number(row.latest_seq),
     }));

@@ -32,7 +32,11 @@ import { applyHelperResourceMutation } from './helper-resource-undo.js';
 import { readHelperEditor } from './helper-resource-editing.js';
 import { HelperResourcePatchError } from './helper-resource-patch-error.js';
 import { HelperResourceBatchError } from './helper-resource-batch.js';
-import { HELPER_SETTINGS_TOOLS, invokeHelperSettingsTool } from './helper-settings-tools.js';
+import {
+  HELPER_SETTINGS_TOOLS,
+  invokeHelperSettingsTool,
+  applyHelperSettingsMutation,
+} from './helper-settings-tools.js';
 import { HELPER_SCENE_TOOLS, invokeHelperSceneTool } from './helper-scene-tools.js';
 import type {
   CodexRuntimeService,
@@ -1958,7 +1962,18 @@ export class HelperRuntime {
             : undefined
           : text(args.chatId, 'chat ID', 100);
       const { chatId: _chatId, ...body } = args;
-      const invoke = () => invokeHelperSettingsTool(this.store, name, body, chatId);
+      const invoke = () =>
+        name === 'settings.update' || name === 'model.pricing.update'
+          ? applyHelperSettingsMutation(
+              this.store,
+              this.workspace,
+              task,
+              `${task.id}:${operationId}`,
+              name,
+              body,
+              chatId
+            )
+          : invokeHelperSettingsTool(this.store, name, body, chatId);
       if (name !== 'settings.update' && name !== 'model.pricing.update') return invoke();
       const result = this.workspace.operation(
         task.id,

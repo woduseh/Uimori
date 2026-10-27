@@ -79,6 +79,12 @@ Risu 메시지의 기본 글자색·글자 크기·글꼴·줄간격은 상속�
 
 ## Helper sessions
 
+탐색의 **도우미**는 전체 대화를 찾고 이어가는 작업 공간을 열어요. 원고·서재·프롬프트의 도우미 버튼은 현재 작업 옆에서 열며, **도우미 크게 보기**로 같은 대화를 넓힐 수 있어요. 확대와 복귀는 원고 위치, 본편 입력, 도우미 초안, 미저장 자료 편집을 유지해요. 전체 목록에서 다른 작품의 도우미 대화를 선택해도 원고의 작품은 바뀌지 않아요. 새 독립 작업 대화는 작품 선택 없이 시작할 수 있어요. 기존 작품 연결 대화의 소속과 삭제 규칙은 유지해요.
+
+완료한 요청에는 실제 저장된 결과와 사용량을 함께 보여줘요. 결과를 누르면 해당 자료·프롬프트·설정을 열며, 삭제된 자료는 삭제 기록만 남아요. 결과는 당시 작업 기록이고 대상 열기는 현재 저장본을 보여줘요. 모든 과거 변경의 전체 비교나 개별 문장 되돌리기를 제공하지는 않아요. 사용량은 모델 실행 요청과 도구 실행을 구분하고, 누적 토큰·보고된 캐시/추론 토큰·비용을 표시해요. **마지막 입력 추정 토큰**은 전송 입력을 로컬에서 측정한 값이며 실행 중인 에이전트의 실제 컨텍스트 점유율은 아니에요.
+
+실행 중에는 입력창 위에서 현재 상태를 확인할 수 있어요. **현재 작업에 추가**는 진행 중인 작업에 지시를 전달하고, **다음 요청**은 별도 요청으로 접수해요. 작업 기록에서 불러온 요청의 위치로 이동할 수 있고, 본편 작업 목록의 실패 항목에서는 **실패 원인 확인**으로 해당 작업을 명시한 도우미 요청 초안을 만들 수 있어요. 이 동작만으로 진단이나 재시도를 실행하지는 않아요.
+
 도우미 **작업 기록**의 긴 요청은 앞부분만 표시하고 **요청 전체 보기**로 펼쳐요. 펼친 요청은 원래 공백과 줄바꿈을 유지하며 선택해서 복사할 수 있어요. 짧은 요청, 실패 사유와 저장한 변경 결과는 접지 않아요.
 
 Each independent chat can have multiple helper sessions. A session owns its conversation, draft and context; closing the panel or selecting another session does not cancel its work. Tools can explicitly target another chat when requested. Copying a chat produces an independent chat, not a shared branch with a mutable default.
@@ -87,7 +93,7 @@ Each independent chat can have multiple helper sessions. A session owns its conv
 
 Transcript edits retain original execution evidence separately. Edited or deleted messages are reflected in both conversation reads and future helper history, including copied seed messages and retry groups. A transcript mutation detaches the active helper summary so stale text cannot re-enter the next request through compaction. Existing task snapshots and completed resource edits are not rewritten or undone.
 
-The helper header owns session switching, creation, management and tone settings on one row, while the helper composer toolbar (and tone settings actions) opens the searchable model picker directly. Active context targets (pinned resource, active editor, outline selection or source selection) render as inline chips inside the composer, and each request's status row expands in one level to show stages, tool calls and usage. Selecting a model updates the global helper role for the next request; it does not change the current chat's main model, prompt choices or another role. A failed or uncertain change requires an explicit reread before another selection. Newer confirmed revisions take precedence over delayed acknowledgements in the model chip and picker.
+The helper header owns session switching, creation and management; tone settings live in its management menu. The helper composer toolbar (and tone settings actions) opens the searchable model picker directly. Active context targets (pinned resource, active editor, outline selection or source selection) render as inline chips inside the composer. Expanding captures the active editor for that conversation; another conversation does not silently inherit the hidden editor. Selected source text and captured editor input can be inspected. Each request's status row expands to show observed stages and tools, while saved results own their usage disclosure. Selecting a model updates the global helper role for the next request; it does not change the current chat's main model, prompt choices or another role. A failed or uncertain change requires an explicit reread before another selection. Newer confirmed revisions take precedence over delayed acknowledgements in the model chip and picker.
 
 새 도우미 세션을 만들거나 같은 대화를 이어갈 수 있어요. 도우미 세션의 신규 분기는 제공하지 않지만 기존 분기 대화와 복사된 기록은 계속 읽고 이어갈 수 있어요. 소설 채팅 사본은 별도 기능으로 유지해요. 현재 편집 중인 자료는 표시하고 요청할 때 최신 초안을 자동으로 참고해요. 초안 조회·저장 오류와 충돌은 해당 편집기에서 확인해요.
 

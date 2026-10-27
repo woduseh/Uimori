@@ -20,10 +20,10 @@ for (const width of DEFAULT_WIDTHS) {
     const destinations = navigation.getByRole('navigation', { name: '작업 공간', exact: true });
     const footer = navigation.getByRole('navigation', { name: '앱 탐색', exact: true });
     const settings = footer.getByRole('button', { name: '설정', exact: true });
-    const helper = footer.getByRole('button', { name: '도우미', exact: true });
+    const helper = destinations.getByRole('button', { name: '도우미', exact: true });
     const library = destinations.getByRole('button', { name: '서재', exact: true });
     const prompts = destinations.getByRole('button', { name: '프롬프트', exact: true });
-    await expect(destinations.getByRole('button')).toHaveText(['서재', '프롬프트']);
+    await expect(destinations.getByRole('button')).toHaveText(['서재', '프롬프트', '도우미']);
     const footerBox = await footer.boundingBox();
     const settingsBox = await settings.boundingBox();
     expect(footerBox).not.toBeNull();
@@ -81,7 +81,7 @@ for (const width of DEFAULT_WIDTHS) {
       .getByRole('button', { name: '도우미', exact: true })
       .click();
     await expect(page.locator('#helper-panel')).toBeVisible();
-    await page.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+    await page.locator('#helper-panel').getByRole('button', { name: '서재', exact: true }).click();
     await expect(page.locator('#helper-panel')).toBeHidden();
     expect(errors).toEqual([]);
   });

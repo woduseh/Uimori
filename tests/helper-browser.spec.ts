@@ -154,8 +154,11 @@ async function harness(page: Page, seedCount = 0) {
           .filter((view) => {
             const scope = view.conversation.scope;
             return (
-              scope.kind === url.searchParams.get('kind') &&
-              (scope.kind === 'library' || scope.chatId === url.searchParams.get('chatId'))
+              (url.searchParams.get('kind') === 'all' ||
+                scope.kind === url.searchParams.get('kind')) &&
+              (url.searchParams.get('kind') === 'all' ||
+                scope.kind === 'library' ||
+                scope.chatId === url.searchParams.get('chatId'))
             );
           })
           .map((view) => ({
@@ -361,7 +364,8 @@ async function harness(page: Page, seedCount = 0) {
       const start = before ? view.tasks.findIndex((task) => task.id === before) + 1 : 0;
       return route.fulfill({ json: view.tasks.slice(start, start + 50) });
     }
-    const taskMatch = /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity|\/steer)?$/u.exec(path);
+    const taskMatch =
+      /^\/api\/helper\/tasks\/([^/]+)(\/cancel|\/activity|\/steer|\/results)?$/u.exec(path);
     if (taskMatch) {
       const view = [...views.values()].find((view) =>
         view.tasks.some((task) => task.id === taskMatch[1])
@@ -385,6 +389,16 @@ async function harness(page: Page, seedCount = 0) {
         }
         return route.fulfill({ json: task });
       }
+      if (taskMatch[2] === '/results')
+        return route.fulfill({
+          json: {
+            taskId: task.id,
+            status: task.status,
+            results: [],
+            unrecordedOperations: 0,
+            usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null },
+          },
+        });
       if (taskMatch[2] === '/activity')
         return route.fulfill({
           json: {
@@ -517,6 +531,12 @@ async function open(page: Page) {
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
   await expect(panel.getByText('대화를 불러오는 중이에요…', { exact: true })).toHaveCount(0);
   return panel;
+}
+
+async function toggleHelperTone(page: Page) {
+  const panel = page.locator('#helper-panel');
+  await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
+  await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
 }
 
 test('HELPMESSAGE edits saved requests and answers without rerunning completed work on mobile', async ({
@@ -676,7 +696,7 @@ test('HELPMESSAGE local edit does not skip an unseen older message change', asyn
   const old = view.messages[1],
     latest = view.messages.at(-1)!;
   const oldArticle = panel.locator(`[data-message-id="${old.id}"]`);
-  await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
+  await toggleHelperTone(page);
   await panel.getByLabel('도우미 말투', { exact: true }).fill('새 말투 초안');
   old.text = '다른 화면에서 저장한 오래된 응답';
   view.conversation.revision++;
@@ -688,7 +708,7 @@ test('HELPMESSAGE local edit does not skip an unseen older message change', asyn
   await expect(
     panel.getByText('도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.')
   ).toBeVisible();
-  await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
+  await toggleHelperTone(page);
   const article = panel.locator(`[data-message-id="${latest.id}"]`);
   await article.getByLabel('메시지 메뉴', { exact: true }).click();
   await page.getByRole('button', { name: '응답 수정', exact: true }).click();
@@ -930,7 +950,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   await page.goto('/');
   await navigationAction(page, '서재');
   const panel = await open(page);
-  await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+  await toggleHelperTone(page);
   for (const width of [1440, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     const settings = panel.locator('.helper-settings');
@@ -1214,9 +1234,8 @@ test('HELPUI16 helper tone save shows pending and completion without changing th
   await page.goto('/');
   const panel = await open(page);
   await panel.getByLabel('도우미에게 요청').fill('설정을 바꿔도 보존할 초안');
-  await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
-  const settingsToggle = panel.getByRole('button', { name: '도우미 말투 설정', exact: true });
-  await expect(settingsToggle).toHaveAttribute('aria-pressed', 'true');
+  await toggleHelperTone(page);
+  await expect(panel.locator('.helper-settings')).toBeVisible();
   await panel.getByLabel('도우미 말투', { exact: true }).fill('차분하고 간결하게 응답해 주세요.');
   let release = () => {};
   const held = new Promise<void>((resolve) => {
@@ -1234,7 +1253,7 @@ test('HELPUI16 helper tone save shows pending and completion without changing th
   await expect(
     page.getByRole('status').filter({ hasText: '도우미 말투를 저장했어요.' })
   ).toBeVisible();
-  await settingsToggle.click();
+  await toggleHelperTone(page);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('설정을 바꿔도 보존할 초안');
 });
 
@@ -1303,7 +1322,7 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
       node.scrollTop = 400;
     });
     const readingPosition = await list.evaluate((node) => node.scrollTop);
-    await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+    await toggleHelperTone(page);
     const settings = panel.locator('.helper-settings');
     await expect(settings).toBeVisible();
     await expect(list).toBeHidden();
@@ -1316,14 +1335,14 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
     expect(settingsBox.height).toBeGreaterThan(panelBox.height / 2);
     await page.screenshot({ path: info.outputPath(`helper-settings-open-${width}.png`) });
     await panel.getByLabel('도우미 말투', { exact: true }).fill('설정 화면에서 남긴 말투 초안');
-    await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+    await toggleHelperTone(page);
     await expect(input).toHaveValue('도우미 입력 초안');
     await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(readingPosition);
-    await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+    await toggleHelperTone(page);
     await expect(panel.getByLabel('도우미 말투', { exact: true })).toHaveValue(
       '설정 화면에서 남긴 말투 초안'
     );
-    await panel.getByRole('button', { name: '도우미 말투 설정' }).click();
+    await toggleHelperTone(page);
     const box = await panel.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
@@ -1365,7 +1384,7 @@ test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effe
   await expect(panel).toBeHidden();
   const closedReads = state.streamReads.get(task.id);
   const closedEvents = state.eventReads;
-  const clock = panel.locator('.activity-elapsed');
+  const clock = panel.getByTestId('helper-task-activity').locator('.activity-elapsed');
   const closedTime = await clock.textContent();
   state.progress(task, '과 두 번째 조각', 13);
   await page.waitForTimeout(1600);
@@ -1553,13 +1572,13 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   await expect(firstTaskStatus).toContainText('실행 요청 2회, 누적 입력 25');
   expect(state.viewReads).toBe(viewsBeforeDiagnostics + 1);
   await input.fill('뒤이어 처리할 작업');
-  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await panel.getByRole('button', { name: '다음 요청', exact: true }).click();
   const activity = firstTaskStatus.getByTestId('helper-task-activity');
   await expect(activity.locator('.turn-activity-text')).toHaveText('처리 중이에요');
   await expect(activity.locator('.activity-count')).toHaveText('외 1개');
   state.loseNext();
   await input.fill('접수 응답을 잃은 작업');
-  await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
+  await panel.getByRole('button', { name: '다음 요청', exact: true }).click();
   await expect(panel.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
   const key = state.posts.at(-1)!.requestKey;
   expect(state.current().tasks).toHaveLength(3);

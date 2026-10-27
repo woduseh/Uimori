@@ -41,9 +41,10 @@ import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
 import { HelperPanel } from './HelperPanel.js';
+import { api } from './api.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperRecentTask } from '../core/activity-feed.js';
-import type { HelperScope, HelperResourceRef } from '../core/helper.js';
+import type { HelperScope, HelperResourceRef, HelperTaskResultTarget } from '../core/helper.js';
 import { ResponseDisplay } from './StreamingResponse.js';
 import { CancelledRun } from './CancelledRun.js';
 import { canDismissReaderRun } from '../core/reader-conversation.js';
@@ -55,6 +56,7 @@ import {
 } from './presentation-settings.js';
 import {
   discardActiveEditor,
+  getActiveEditorContext,
   saveActiveEditor,
   ResourceEditorLeaveWarning,
 } from './resource-editor.js';
@@ -256,6 +258,17 @@ function App() {
   const [helperResource, setHelperResource] = useState<HelperResourceRef | null>(null);
   const clearHelperResource = useCallback(() => setHelperResource(null), []);
   const [workspacePanel, setWorkspacePanel] = useState<'options' | 'helper' | null>(null);
+  const [helperExpanded, setHelperExpanded] = useState(false);
+  const [helperScope, setHelperScope] = useState<HelperScope | null>(null);
+  const rememberHelperScope = useCallback((next: HelperScope) => {
+    setHelperScope((previous) =>
+      JSON.stringify(previous) === JSON.stringify(next) ? previous : next
+    );
+  }, []);
+  const helperReturnToSidecar = useRef(false);
+  const [helperSidebarExpanded, setHelperSidebarExpanded] = useState(false);
+  const [contentToOpen, setContentToOpen] = useState<string | null>(null);
+  const helperResultNavigation = useRef(0);
   const [helperNavigation, setHelperNavigation] = useState<{
     conversationId: string;
     taskId: string;
@@ -263,6 +276,10 @@ function App() {
   } | null>(null);
   const optionsOpen = workspacePanel === 'options';
   const helperOpen = workspacePanel === 'helper';
+  const helperWorkspaceOpen = helperOpen && helperExpanded;
+  useEffect(() => {
+    if (!helperOpen) setHelperScope(null);
+  }, [helperOpen]);
   const [optionsDirty, setOptionsDirty] = useState(false),
     [optionsBusy, setOptionsBusy] = useState(false);
   const inputTranslationDisabled =
@@ -412,7 +429,7 @@ function App() {
     return () => window.removeEventListener('resize', resize);
   }, []);
   const workspacePanelOpen =
-    helperOpen || (optionsOpen && s.destination === 'story' && !!s.selected);
+    (helperOpen && !helperExpanded) || (optionsOpen && s.destination === 'story' && !!s.selected);
   /* Dock only while the centre column keeps its minimum readable width. Collapsing
      navigation frees the sidebar down to the icon rail, not to nothing. */
   const dockBesideSidebar = desktopSidebarWidth + panelWidth + MIN_CENTER_WIDTH;
@@ -422,7 +439,9 @@ function App() {
     viewportWidth >= dockBesideRail &&
     viewportWidth < dockBesideSidebar &&
     !panelSidebarExpanded;
-  const sidebarHidden = sidebarCollapsed || autoCollapseSidebar;
+  const sidebarHidden = helperWorkspaceOpen
+    ? !helperSidebarExpanded
+    : sidebarCollapsed || autoCollapseSidebar;
   const panelModal =
     viewportWidth < dockBesideRail || (!sidebarHidden && viewportWidth < dockBesideSidebar);
   useEffect(() => {
@@ -678,7 +697,10 @@ function App() {
     []
   );
   function select(id: string, target?: ReaderTarget) {
+    helperResultNavigation.current++;
     const go = () => {
+      if (helperWorkspaceOpen) setWorkspacePanel(null);
+      setHelperExpanded(false);
       if (target) s.openTarget(target);
       else s.select(id);
       setPanel('');
@@ -689,30 +711,21 @@ function App() {
     } else go();
   }
   function openRecentHelper(task: HelperRecentTask) {
-    const go = () => {
-      if (task.chatId) s.select(task.chatId);
-      else {
-        const tab = task.workId?.replace(/^library:/u, '');
-        setLibraryTab(
-          tab === 'bot' || tab === 'persona' || tab === 'module' || tab === 'prompts' ? tab : 'bot'
-        );
-        s.showLibrary();
-      }
-      setPanel('');
-      setWorkspacePanel('helper');
-      setHelperNavigation((previous) => ({
-        conversationId: task.conversationId,
-        taskId: task.id,
-        sequence: (previous?.sequence ?? 0) + 1,
-      }));
-    };
-    if (libraryDirty && s.destination === 'library') {
-      setPanel('');
-      setPendingNavigation(() => go);
-    } else go();
+    helperReturnToSidecar.current = false;
+    setPanel('');
+    setHelperExpanded(true);
+    setWorkspacePanel('helper');
+    setHelperNavigation((previous) => ({
+      conversationId: task.conversationId,
+      taskId: task.id,
+      sequence: (previous?.sequence ?? 0) + 1,
+    }));
   }
   function showLibrary(tab: 'bot' | 'persona' | 'module' | 'prompts' = 'bot') {
+    helperResultNavigation.current++;
     const go = () => {
+      if (helperWorkspaceOpen) setWorkspacePanel(null);
+      setHelperExpanded(false);
       setLibraryTab(tab);
       // Choosing the navigation entry for the section you are in returns to that section's list,
       // even when the tab does not change. The panel keeps its own unsaved-draft protection.
@@ -734,13 +747,67 @@ function App() {
     else if (role === 'persona') newStory(undefined, undefined, content);
     else setModuleToUse(content);
   }
+  async function openHelperResult(target: HelperTaskResultTarget) {
+    const navigation = ++helperResultNavigation.current;
+    const editor = getActiveEditorContext();
+    if (editor?.kind === target.kind && editor.targetId === target.id) {
+      setHelperExpanded(false);
+      return;
+    }
+    const go = async () => {
+      if (target.kind === 'content') {
+        const content = await api<Content>(`/content/${encodeURIComponent(target.id)}`);
+        await s.loadLibrary();
+        if (navigation !== helperResultNavigation.current) return;
+        setLibraryTab(
+          content.kind === 'persona' || content.kind === 'module' ? content.kind : 'bot'
+        );
+        setContentToOpen(content.id);
+        s.showLibrary();
+      } else if (target.kind === 'prompt-preset') {
+        await s.loadLibrary();
+        if (navigation !== helperResultNavigation.current) return;
+        setLibraryTab('prompts');
+        setPromptToEdit(target.id);
+        s.showLibrary();
+      } else if (target.kind === 'settings' && target.setting?.startsWith('chat.')) {
+        if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
+        setSettingsSection(target.setting === 'chat.maxCalls' ? 'runtime' : 'prompts');
+        setPanel('story');
+      } else {
+        setSettingsTab(
+          target.kind === 'theme'
+            ? 'themes'
+            : target.kind === 'illustration-preset'
+              ? 'illustrations'
+              : target.kind === 'prompt-workspace'
+                ? 'prompts'
+                : target.setting === 'model.pricing'
+                  ? 'connections'
+                  : 'models'
+        );
+        setPanel('settings');
+      }
+      setHelperExpanded(false);
+    };
+    if (
+      libraryDirty &&
+      s.destination === 'library' &&
+      (target.kind === 'content' ||
+        target.kind === 'prompt-preset' ||
+        (target.kind === 'settings' && target.setting?.startsWith('chat.')))
+    )
+      setPendingNavigation(() => () => void go().catch((error) => s.setError(error.message)));
+    else await go();
+  }
   function inspect(id: string) {
     setInspectedRun(id);
     setPanel('tasks');
   }
   // The drawer shows the quick actions in its header row instead of the brand row.
   const toggleSidebar = () => {
-    if (autoCollapseSidebar && !sidebarCollapsed) setPanelSidebarExpanded(true);
+    if (helperWorkspaceOpen) setHelperSidebarExpanded((value) => !value);
+    else if (autoCollapseSidebar && !sidebarCollapsed) setPanelSidebarExpanded(true);
     else {
       setSidebarCollapsed(!sidebarCollapsed);
       setPanelSidebarExpanded(false);
@@ -778,9 +845,12 @@ function App() {
       onTasks={() => inspect('')}
       onOpenHelperTask={openRecentHelper}
       helperOpen={helperOpen}
+      helperExpanded={helperWorkspaceOpen}
       onToggleHelper={() => {
         if (panel === 'navigation') setPanel('');
-        setWorkspacePanel((value) => (value === 'helper' ? null : 'helper'));
+        helperReturnToSidecar.current = false;
+        setHelperExpanded(true);
+        setWorkspacePanel('helper');
       }}
       tasks={s.tasks}
     />
@@ -952,7 +1022,7 @@ function App() {
   }
   const workspace = (
     <div
-      className={`app-shell ${panel === 'outline' ? 'outline-active' : ''} ${focus ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
+      className={`app-shell ${panel === 'outline' ? 'outline-active' : ''} ${focus && !helperWorkspaceOpen ? 'focus-reading' : ''} ${sidebarHidden ? 'sidebar-collapsed' : ''} ${optionsOpen && s.destination === 'story' && s.selected ? 'options-open' : ''} ${helperOpen ? 'helper-open' : ''} ${helperWorkspaceOpen ? 'helper-expanded' : ''} ${workspacePanelOpen ? (panelModal ? 'panel-overlay' : 'panel-docked') : ''}`}
     >
       {importBot && (
         <BotChatImportDialog
@@ -969,7 +1039,7 @@ function App() {
       <aside id="workspace-sidebar" className="sidebar" aria-label={t('main.m057')}>
         {!compact && panel !== 'navigation' && navigation(true, sidebarHidden)}
       </aside>
-      <main className="story-workspace">
+      <main className="story-workspace" hidden={helperWorkspaceOpen}>
         {s.destination === 'story' && (
           <header className="workspace-header">
             {navigationControls}
@@ -1294,6 +1364,10 @@ function App() {
                 onContinueChat={select}
                 initialTab={libraryTab}
                 listRequest={libraryListRequest}
+                initialContentId={contentToOpen}
+                onInitialContentHandled={(id) =>
+                  setContentToOpen((current) => (current === id ? null : current))
+                }
                 onTabChange={setLibraryTab}
                 onDirtyChange={setLibraryDirty}
               />
@@ -2238,7 +2312,21 @@ function App() {
         onBusyChange={setOptionsBusy}
       />
       <HelperPanel
-        ready={s.destination !== 'story' || !s.selected || !!s.detail}
+        ready={helperWorkspaceOpen || s.destination !== 'story' || !s.selected || !!s.detail}
+        expanded={helperWorkspaceOpen}
+        returnToSidecar={helperReturnToSidecar.current}
+        onToggleExpanded={() => {
+          if (!helperExpanded) helperReturnToSidecar.current = true;
+          setHelperExpanded((value) => !value);
+        }}
+        navigationLeading={navigationControls}
+        onScopeChange={rememberHelperScope}
+        returnLabel={
+          s.destination === 'story'
+            ? s.detail?.chat.title
+            : t(libraryTab === 'prompts' ? 'transfer.m286' : 'transfer.m285')
+        }
+        onOpenTarget={openHelperResult}
         modal={panelModal}
         enterSend={enterSend}
         responseDisplay={responseDisplay}
@@ -2258,11 +2346,15 @@ function App() {
         draftRequest={helperDraftRequest}
         outlineWorkspace={panel === 'outline'}
         scope={
-          s.destination === 'story' && s.selected && s.detail
+          helperScope ??
+          (s.destination === 'story' && s.selected && s.detail
             ? { kind: 'chat', chatId: s.selected }
-            : { kind: 'library', workId: `library:${libraryTab}` }
+            : { kind: 'library', workId: `library:${libraryTab}` })
         }
-        onClose={() => setWorkspacePanel((value) => (value === 'helper' ? null : value))}
+        onClose={() => {
+          helperResultNavigation.current++;
+          setWorkspacePanel((value) => (value === 'helper' ? null : value));
+        }}
         onModelSettings={() => {
           setSettingsTab('models');
           setPanel('settings');
@@ -2610,6 +2702,17 @@ function App() {
             inspectedRun={inspectedRun}
             onInspect={setInspectedRun}
             onClose={() => setPanel('')}
+            onAskHelper={(kind, id) => {
+              const scope: HelperScope = { kind: 'chat', chatId: s.selected };
+              setHelperScope(scope);
+              setHelperDraftRequest({
+                key: crypto.randomUUID(),
+                text: t('helpers.analyzeTaskRequest', { kind, id }),
+                scope,
+              });
+              setPanel('');
+              setWorkspacePanel('helper');
+            }}
           />
         )}
       </Dialog>

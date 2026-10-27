@@ -8,6 +8,7 @@ export type HelperSession = HelperConversation & {
   updatedAt?: string;
   activity?: { running: number; queued: number };
   latestEventSeq?: number;
+  chatTitle?: string;
 };
 const helperGroupKey = (scope: HelperScope) =>
   scope.kind === 'chat' ? `chat:${scope.chatId}` : 'library';
@@ -74,6 +75,7 @@ function forgetHelperCreation(key: string, pending: PendingHelperCreation | unde
 }
 export function forgetHelperSession(conversation: HelperConversation) {
   for (const key of [
+    'uimori:helper-session:all',
     `uimori:helper-session:${helperGroupKey(conversation.scope)}`,
     `uimori:helper-session-scope:${JSON.stringify(conversation.scope)}`,
   ])
@@ -85,10 +87,12 @@ export function selectedHelperSession(scope: HelperScope) {
 }
 
 /** Session selection belongs to the chat; drafts and event cursors belong to each session. */
-export function useHelperSessions(open: boolean, scope: HelperScope) {
+export function useHelperSessions(open: boolean, scope: HelperScope, expanded = false) {
   useI18n();
-  const group = helperGroupKey(scope);
+  const group = expanded ? 'all' : helperGroupKey(scope);
   const scopeKey = JSON.stringify(scope);
+  const [carried, setCarried] = useState<HelperSession | null>(null);
+  const lastScope = useRef(JSON.stringify(scope));
   const [lists, setLists] = useState<Record<string, HelperSession[]>>({});
   const [selected, setSelected] = useState<Record<string, string | null>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -105,8 +109,18 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
   viewedScope.current = scopeKey;
   const alive = useRef(true);
   const createLock = useRef(false);
-  const sessions = lists[group] ?? [];
-  const currentId = selected[group] ?? null;
+  const scopeChanged = lastScope.current !== scopeKey;
+  if (scopeChanged) {
+    lastScope.current = scopeKey;
+    if (carried && JSON.stringify(carried.scope) !== scopeKey) setCarried(null);
+  }
+  const carriedSession =
+    scopeChanged && carried && JSON.stringify(carried.scope) !== scopeKey ? null : carried;
+  const sessions =
+    carriedSession && !(lists[group] ?? []).some((item) => item.id === carriedSession.id)
+      ? [carriedSession, ...(lists[group] ?? [])]
+      : (lists[group] ?? []);
+  const currentId = carriedSession?.id ?? selected[group] ?? null;
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -115,11 +129,14 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
   }, []);
   const select = useCallback((conversation: HelperConversation) => {
     const key = helperGroupKey(conversation.scope);
+    setCarried(conversation);
     selectionVersions.current.set(key, (selectionVersions.current.get(key) ?? 0) + 1);
+    selectionVersions.current.set('all', (selectionVersions.current.get('all') ?? 0) + 1);
     selectionScopes.current.set(key, viewedScope.current);
     remember(`uimori:helper-session:${key}`, conversation.id);
+    remember('uimori:helper-session:all', conversation.id);
     remember(`uimori:helper-session-scope:${JSON.stringify(conversation.scope)}`, conversation.id);
-    selectedRef.current = { ...selectedRef.current, [key]: conversation.id };
+    selectedRef.current = { ...selectedRef.current, [key]: conversation.id, all: conversation.id };
     setSelected(selectedRef.current);
     setLists((old) => ({
       ...old,
@@ -133,14 +150,16 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
     const version = (versions.current.get(group) ?? 0) + 1;
     versions.current.set(group, version);
     const target = JSON.parse(scopeKey) as HelperScope;
-    const query =
-      target.kind === 'chat'
+    const query = expanded
+      ? 'kind=all'
+      : target.kind === 'chat'
         ? `kind=chat&chatId=${encodeURIComponent(target.chatId)}`
         : 'kind=library';
     const values = await api<HelperSession[]>(`/helper/conversations?${query}`);
     if (!alive.current || versions.current.get(group) !== version) return;
     const active = values.some((session) => session.activity?.running || session.activity?.queued);
     setLists((old) => ({ ...old, [group]: values }));
+    if (carried) return active;
     const moved =
       selectionScopes.current.has(group) && selectionScopes.current.get(group) !== scopeKey;
     const saved = moved
@@ -154,7 +173,9 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
       return active;
     }
     const selectionVersion = selectionVersions.current.get(group) ?? 0;
-    const created = await api<HelperConversation>('/helper/conversations', { scope: target });
+    const created = await api<HelperConversation>('/helper/conversations', {
+      scope: expanded ? { kind: 'library', workId: 'workspace' } : target,
+    });
     if (alive.current && versions.current.get(group) === version) {
       if ((selectionVersions.current.get(group) ?? 0) === selectionVersion) select(created);
       else
@@ -164,7 +185,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
         }));
     }
     return active;
-  }, [group, scopeKey, select]);
+  }, [group, scopeKey, select, expanded, carried]);
   useEffect(() => {
     if (!open) return;
     let disposed = false;
@@ -244,11 +265,12 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
     createLock.current = true;
     setCreating(true);
     setErrors((old) => ({ ...old, [group]: '' }));
-    const key = `uimori:helper-create:${scopeKey}`;
+    const creationScope: HelperScope = expanded ? { kind: 'library', workId: 'workspace' } : scope;
+    const key = `uimori:helper-create:${JSON.stringify(creationScope)}`;
     const selectionVersion = selectionVersions.current.get(group) ?? 0;
     let pending: PendingHelperCreation | undefined;
     try {
-      pending = pendingHelperCreation(key, scope);
+      pending = pendingHelperCreation(key, creationScope);
       const value = await api<HelperConversation>('/helper/conversations/new', pending.request);
       forgetHelperCreation(key, pending);
       versions.current.set(group, (versions.current.get(group) ?? 0) + 1);
@@ -260,6 +282,7 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
             [group]: [...(old[group] ?? []).filter((item) => item.id !== value.id), value],
           }));
       }
+      return value;
     } catch (cause) {
       if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status))
         forgetHelperCreation(key, pending);
@@ -282,6 +305,11 @@ export function useHelperSessions(open: boolean, scope: HelperScope) {
     creating,
     reload,
     error: errors[group] ?? '',
+    clearSelection: () => {
+      setCarried(null);
+      selectedRef.current = { ...selectedRef.current, [group]: null };
+      setSelected(selectedRef.current);
+    },
     clearError: () => setErrors((old) => ({ ...old, [group]: '' })),
   };
 }

@@ -108,6 +108,7 @@ export function BotNavigation(
     collapsed?: boolean;
     onToggleCollapse?: () => void;
     helperOpen?: boolean;
+    helperExpanded?: boolean;
     onToggleHelper?: () => void;
   }
 ) {
@@ -409,7 +410,32 @@ export function BotNavigation(
     );
   }
   const onLibraryTab = props.libraryTab;
-  const inLibrary = destination === 'library';
+  const inLibrary = destination === 'library' && !props.helperExpanded;
+  const helperDestination =
+    props.onToggleHelper &&
+    (props.collapsed ? (
+      <IconButton
+        label={t('main.m062')}
+        icon={Sparkles}
+        aria-current={props.helperExpanded ? 'page' : undefined}
+        aria-expanded={props.helperOpen}
+        aria-controls="helper-panel"
+        className={props.helperExpanded ? 'selected' : ''}
+        onClick={props.onToggleHelper}
+      />
+    ) : (
+      <button
+        type="button"
+        className={`nav-button${props.helperExpanded ? ' selected' : ''}`}
+        aria-current={props.helperExpanded ? 'page' : undefined}
+        aria-expanded={props.helperOpen}
+        aria-controls="helper-panel"
+        onClick={props.onToggleHelper}
+      >
+        <Sparkles size={20} aria-hidden="true" />
+        {t('main.m062')}
+      </button>
+    ));
   if (props.collapsed)
     return (
       <div className="bot-navigation bot-tree-navigation sidebar-rail" data-testid="bot-navigation">
@@ -439,6 +465,7 @@ export function BotNavigation(
             className={inLibrary && onLibraryTab === 'prompts' ? 'selected' : ''}
             onClick={() => onLibrary('prompts')}
           />
+          {helperDestination}
         </nav>
         <IconButton
           label={t('transfer.m287')}
@@ -464,17 +491,6 @@ export function BotNavigation(
               label={t('transfer.d025', { v0: runningTotal })}
               icon={RunningIcon}
               onClick={openRunning}
-            />
-          )}
-          {props.onToggleHelper && (
-            <IconButton
-              label={t('main.m062')}
-              icon={Sparkles}
-              aria-pressed={props.helperOpen}
-              aria-expanded={props.helperOpen}
-              aria-controls="helper-panel"
-              className={props.helperOpen ? 'selected' : ''}
-              onClick={props.onToggleHelper}
             />
           )}
           <IconButton label={t('transfer.m289')} icon={SettingsIcon} onClick={onSettings} />
@@ -508,10 +524,8 @@ export function BotNavigation(
       <nav className="sidebar-destinations" aria-label={t('transfer.m284')}>
         <button
           type="button"
-          className={`nav-button${props.destination === 'library' && props.libraryTab !== 'prompts' ? ' selected' : ''}`}
-          aria-current={
-            props.destination === 'library' && props.libraryTab !== 'prompts' ? 'page' : undefined
-          }
+          className={`nav-button${inLibrary && props.libraryTab !== 'prompts' ? ' selected' : ''}`}
+          aria-current={inLibrary && props.libraryTab !== 'prompts' ? 'page' : undefined}
           onClick={() => onLibrary('bot')}
         >
           <LibraryIcon size={20} aria-hidden="true" />
@@ -519,15 +533,14 @@ export function BotNavigation(
         </button>
         <button
           type="button"
-          className={`nav-button${props.destination === 'library' && props.libraryTab === 'prompts' ? ' selected' : ''}`}
-          aria-current={
-            props.destination === 'library' && props.libraryTab === 'prompts' ? 'page' : undefined
-          }
+          className={`nav-button${inLibrary && props.libraryTab === 'prompts' ? ' selected' : ''}`}
+          aria-current={inLibrary && props.libraryTab === 'prompts' ? 'page' : undefined}
           onClick={() => onLibrary('prompts')}
         >
           <PromptIcon size={20} aria-hidden="true" />
           {t('transfer.m286')}
         </button>
+        {helperDestination}
       </nav>
       <nav className="bot-navigation-modes" aria-label={t('transfer.m291')}>
         <button
@@ -773,19 +786,6 @@ export function BotNavigation(
           </button>
         )}
         <nav className="sidebar-app-actions" aria-label={t('transfer.m288')}>
-          {props.onToggleHelper && (
-            <button
-              type="button"
-              className={`nav-button${props.helperOpen ? ' selected' : ''}`}
-              aria-pressed={props.helperOpen}
-              aria-expanded={props.helperOpen}
-              aria-controls="helper-panel"
-              onClick={props.onToggleHelper}
-            >
-              <Sparkles size={18} aria-hidden="true" />
-              {t('main.m062')}
-            </button>
-          )}
           <button type="button" className="nav-button" onClick={onSettings}>
             <SettingsIcon size={18} />
             {t('transfer.m289')}

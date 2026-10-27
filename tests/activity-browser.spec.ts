@@ -731,7 +731,7 @@ test('ACTUI10 activity icon mode groups unread results and keeps recent chats ac
   ).toBeVisible();
 });
 
-test('ACTUI13 recent helper jobs navigate to their original chat or library sessions', async ({
+test('ACTUI13 recent helper jobs open their sessions without replacing the reader', async ({
   page,
   request,
 }) => {
@@ -788,11 +788,20 @@ test('ACTUI13 recent helper jobs navigate to their original chat or library sess
   await activityNav.locator('[data-activity-section="helpers"] .activity-nav-heading').click();
   await activityNav.getByRole('button', { name: /합성 작품 도우미/ }).click();
   const panel = page.locator('.helper-panel').filter({ visible: true });
-  await expect(panel.getByRole('combobox', { name: '도우미 세션 선택' })).toHaveValue(chat.id);
+  await expect(
+    panel.getByRole('combobox', { name: '도우미 세션 선택', includeHidden: true })
+  ).toHaveValue(chat.id);
   await expect(page.getByRole('dialog', { name: '도우미 작업 기록' })).toBeVisible();
   await page.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
+  await panel.getByRole('button', { name: seeded.chat.title, exact: true }).click();
   await activityNav.getByRole('button', { name: /합성 서재 도우미/ }).click();
-  await expect(panel.getByRole('combobox', { name: '도우미 세션 선택' })).toHaveValue(library.id);
+  await expect(
+    panel.getByRole('combobox', { name: '도우미 세션 선택', includeHidden: true })
+  ).toHaveValue(library.id);
+  await page.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
+  await panel.getByRole('button', { name: seeded.chat.title, exact: true }).click();
+  await expect(page.getByRole('heading', { name: seeded.chat.title, exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`chat=${seeded.chat.id}`));
   await expect(activityNav.getByText('확정된 앱 작업 1건')).toBeVisible();
 });
 

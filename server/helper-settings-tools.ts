@@ -12,6 +12,10 @@ import {
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import { usageReport } from './usage-report.js';
+import { isDeepStrictEqual } from 'node:util';
+import type { HelperTask, HelperTaskResultTarget } from '../core/helper.js';
+import type { HelperWorkspace } from './helper-workspace.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
 
 const schema = (properties: Record<string, Json>, required: string[] = []): Json => ({
   type: 'object',
@@ -67,6 +71,98 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
     ),
   },
 ];
+
+function settingValue(store: Store, setting: string, chatId?: string): string | number | null {
+  if ((settings as readonly string[]).includes(setting) && setting.startsWith('global.')) {
+    const role = setting.slice('global.'.length, -'Model'.length) as WorkspaceModelRole;
+    return workspaceModelRef(promptWorkspace(store), role)?.id ?? null;
+  }
+  if (!chatId) return null;
+  if (setting === 'chat.maxCalls') return store.chat(chatId).settings.maxCalls;
+  const profile = store.product.profile(chatId);
+  return setting === 'chat.mainModel'
+    ? (profile.pinned?.mainModel?.id ?? null)
+    : (profile.pinned?.mainPromptPresetId ?? null);
+}
+
+function selectionLabel(store: Store, setting: string, value: string | number | null) {
+  if (typeof value !== 'string') return value === null ? null : undefined;
+  try {
+    return store.product.get<{ title: string }>(
+      setting === 'chat.mainPromptPreset' ? 'prompt-preset' : 'model',
+      value
+    ).title;
+  } catch (error) {
+    if (!(error instanceof HttpError)) throw error;
+    return undefined;
+  }
+}
+
+/** Called inside workspace.operation so the compact result and receipt commit together. */
+export function applyHelperSettingsMutation(
+  store: Store,
+  workspace: HelperWorkspace,
+  task: Pick<HelperTask, 'id' | 'conversationId'>,
+  receiptId: string,
+  name: string,
+  args: Record<string, unknown>,
+  chatId?: string
+): unknown {
+  if (name === 'model.pricing.update') {
+    const modelId = text(args.modelId, 'saved model ID', 100);
+    const before = store.product.get<ModelPreset>('model', modelId);
+    const result = invokeHelperSettingsTool(store, name, args, chatId);
+    const after = store.product.get<ModelPreset>('model', modelId);
+    recordHelperTaskResult(workspace, task, {
+      receiptId,
+      operation: name,
+      requestedTargets: 1,
+      targets: isDeepStrictEqual(
+        before.pricing ?? { mode: 'official' },
+        after.pricing ?? { mode: 'official' }
+      )
+        ? []
+        : [
+            {
+              kind: 'settings',
+              id: modelId,
+              title: after.title,
+              revision: after.revision,
+              setting: 'model.pricing',
+            },
+          ],
+    });
+    return result;
+  }
+  const setting = text(args.setting, 'setting', 100);
+  const before = settingValue(store, setting, chatId);
+  const beforeLabel = selectionLabel(store, setting, before);
+  const result = invokeHelperSettingsTool(store, name, args, chatId) as { revision: number };
+  const after = settingValue(store, setting, chatId);
+  const targets: HelperTaskResultTarget[] =
+    before === after
+      ? []
+      : [
+          {
+            kind: 'settings',
+            id: setting.startsWith('global.') ? 'global' : chatId!,
+            title: setting.startsWith('global.') ? '공통 설정' : store.chat(chatId!).title,
+            revision: result.revision,
+            setting,
+            before,
+            after,
+            beforeLabel,
+            afterLabel: selectionLabel(store, setting, after),
+          },
+        ];
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: name,
+    requestedTargets: 1,
+    targets,
+  });
+  return result;
+}
 
 /** The caller owns helper operation receipts and resolves optional chatId to this scope. */
 export function invokeHelperSettingsTool(

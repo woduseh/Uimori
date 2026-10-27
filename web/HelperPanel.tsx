@@ -10,8 +10,18 @@ import {
 import { LoadingState } from './LoadingState.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import type { OutlineTarget } from '../core/outline.js';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, Copy, History, Square, X, Settings2, ChevronDown } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  ArrowUp,
+  Check,
+  Copy,
+  History,
+  Square,
+  X,
+  Maximize2,
+  ArrowLeft,
+  ChevronDown,
+} from 'lucide-react';
 import { SettingsIcon, CloseIcon } from './ui-icons.js';
 import type { Library } from '../core/product.js';
 import type {
@@ -38,6 +48,7 @@ import { IconButton } from './IconButton.js';
 import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
 import type { ResponseDisplayMode } from './presentation-settings.js';
 import { HelperArtifactCard } from './HelperArtifactCard.js';
+import { HelperTaskResults } from './HelperTaskResults.js';
 import {
   HelperDeleteActions,
   HelperResponseEditor,
@@ -74,6 +85,15 @@ type Props = {
   open: boolean;
   navigation?: { conversationId: string; taskId: string; sequence: number } | null;
   modal?: boolean;
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
+  returnToSidecar?: boolean;
+  navigationLeading?: ReactNode;
+  returnLabel?: string;
+  onOpenTarget?: (
+    target: import('../core/helper.js').HelperTaskResultTarget
+  ) => void | Promise<void>;
+  onScopeChange?: (scope: HelperScope) => void;
   ready?: boolean;
   scope: HelperScope;
   selection?: HelperSelection & { key: string; scope?: HelperScope; conversationId?: string };
@@ -262,7 +282,11 @@ const selectionRequest = '선택한 원문을 검토해 주세요.';
 
 export function HelperPanel(props: Props) {
   useI18n();
-  const sessions = useHelperSessions(props.open && props.ready !== false, props.scope);
+  const sessions = useHelperSessions(
+    props.open && props.ready !== false,
+    props.scope,
+    props.expanded
+  );
   const navigatedTask = useRef<number | null>(null);
   useEffect(() => {
     const target = props.navigation;
@@ -283,8 +307,10 @@ export function HelperPanel(props: Props) {
   );
   const conversation = data.current?.conversation ?? null;
   const scope = conversation?.scope ?? props.scope;
-  const scopeMismatch =
-    scope.kind === 'chat' && (props.scope.kind !== 'chat' || scope.chatId !== props.scope.chatId);
+  const selectedScope = conversation?.scope;
+  useEffect(() => {
+    if (selectedScope) props.onScopeChange?.(selectedScope);
+  }, [selectedScope, props.onScopeChange]);
   const messages = (data.current?.messages ?? [])
     .filter((message) => !message.latestTaskId || message.latestTaskId === message.taskId)
     .sort((a, b) =>
@@ -332,7 +358,54 @@ export function HelperPanel(props: Props) {
   const [openTaskActivities, setOpenTaskActivities] = useState<Record<string, boolean>>({});
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
-  const compact = props.modal ?? false;
+  const compact = (props.modal ?? false) && !props.expanded;
+  const [frozenEditors, setFrozenEditors] = useState<
+    Record<string, ReturnType<typeof captureActiveEditorContext>>
+  >({});
+  const [frozenResources, setFrozenResources] = useState<Record<string, HelperResourceRef | null>>(
+    {}
+  );
+  const wasExpanded = useRef(false);
+  useEffect(() => {
+    if (props.expanded && !wasExpanded.current && scopeKey && conversation) {
+      try {
+        if (scopeKey in frozenEditors) {
+          wasExpanded.current = true;
+          return;
+        }
+        const sameScope =
+          props.returnToSidecar &&
+          JSON.stringify(conversation.scope) === JSON.stringify(props.scope);
+        const snapshot = sameScope ? captureActiveEditorContext() : null;
+        setFrozenResources((old) => ({
+          ...old,
+          [scopeKey]: sameScope ? (props.resource ?? null) : null,
+        }));
+        setFrozenEditors((old) => ({ ...old, [scopeKey]: snapshot }));
+      } catch (cause) {
+        setErrors((old) => ({
+          ...old,
+          [scopeKey]: cause instanceof Error ? cause.message : uiMessage('helpers.m015'),
+        }));
+      }
+    }
+    if (!props.expanded) wasExpanded.current = false;
+    else if (scopeKey && conversation) {
+      if (wasExpanded.current && !(scopeKey in frozenEditors)) {
+        setFrozenEditors((old) => ({ ...old, [scopeKey]: null }));
+        setFrozenResources((old) => ({ ...old, [scopeKey]: null }));
+      }
+      wasExpanded.current = true;
+    }
+  }, [
+    props.expanded,
+    props.returnToSidecar,
+    props.resource,
+    props.scope,
+    scopeKey,
+    conversation,
+    frozenEditors,
+  ]);
   const closeButton = useRef<HTMLButtonElement>(null),
     input = useRef<HTMLTextAreaElement>(null);
   const scroll = useRef<HTMLDivElement>(null),
@@ -352,6 +425,28 @@ export function HelperPanel(props: Props) {
   const close = useRef(props.onClose);
   close.current = props.onClose;
   const closePanel = useRef(() => props.onClose());
+  const attachedEditor = frozenEditors[scopeKey];
+  const matchingLiveEditor =
+    !props.expanded &&
+    editor &&
+    attachedEditor &&
+    editor.kind === attachedEditor.kind &&
+    editor.targetId === attachedEditor.targetId;
+  const displayEditor = matchingLiveEditor
+    ? editor
+    : props.expanded || scopeKey in frozenEditors
+      ? attachedEditor
+      : editor;
+  const currentResource =
+    props.expanded || scopeKey in frozenResources
+      ? (frozenResources[scopeKey] ?? null)
+      : (props.resource ?? null);
+  const attachedResourceRequest = useRef<HelperResourceRef | null>(null);
+  useEffect(() => {
+    if (!props.resource || !scopeKey || attachedResourceRequest.current === props.resource) return;
+    attachedResourceRequest.current = props.resource;
+    setFrozenResources((old) => ({ ...old, [scopeKey]: props.resource ?? null }));
+  }, [props.resource, scopeKey]);
   const draft = drafts[scopeKey] ?? local(`uimori:helper-input:${scopeKey}`) ?? '';
   const outbox = outboxes[scopeKey] === undefined ? storedOutbox(scopeKey) : outboxes[scopeKey];
   const selection =
@@ -564,18 +659,6 @@ export function HelperPanel(props: Props) {
     if (!props.open) return;
     const prior = document.activeElement as HTMLElement | null;
     closeButton.current?.focus();
-    const background = [
-      ...document.querySelectorAll<HTMLElement>(
-        '.app-shell > .sidebar,.app-shell > .story-workspace'
-      ),
-    ];
-    const original = background.map((node) => node.inert);
-    const update = () => {
-      background.forEach((node, index) => {
-        node.inert = compact || original[index];
-      });
-    };
-    update();
     const token = crypto.randomUUID(),
       base = history.state,
       url = location.href;
@@ -596,12 +679,25 @@ export function HelperPanel(props: Props) {
     };
     return () => {
       remove();
-      background.forEach((node, index) => {
-        node.inert = original[index];
-      });
       if (owns()) history.replaceState(base, '', url);
       if (prior?.isConnected && prior.checkVisibility()) prior.focus();
     };
+  }, [props.open]);
+  useEffect(() => {
+    if (!props.open || !compact) return;
+    const background = [
+      ...document.querySelectorAll<HTMLElement>(
+        '.app-shell > .sidebar,.app-shell > .story-workspace'
+      ),
+    ];
+    const original = background.map((node) => node.inert);
+    background.forEach((node) => {
+      node.inert = true;
+    });
+    return () =>
+      background.forEach((node, index) => {
+        node.inert = original[index];
+      });
   }, [props.open, compact]);
   useLayoutEffect(() => {
     const node = scroll.current;
@@ -634,7 +730,7 @@ export function HelperPanel(props: Props) {
     if (
       props.ready === false ||
       !hydrated[scopeKey] ||
-      scopeMismatch ||
+      (props.expanded && !(scopeKey in frozenEditors)) ||
       locks.current.has(scopeKey) ||
       (!saved && (!conversation || !draft.trim()))
     )
@@ -645,11 +741,18 @@ export function HelperPanel(props: Props) {
     if (saved && (saved.scope !== owner || saved.targetConversationId !== conversation?.id))
       return false;
     // An explicit library-card target takes precedence over another mounted editor.
-    const targeted = props.scope.kind === 'library' && props.resource ? props.resource : null;
+    const sameScope = JSON.stringify(scope) === JSON.stringify(props.scope);
+    const targeted = sameScope ? currentResource : null;
     let captured: ReturnType<typeof captureActiveEditorContext> = null;
     if (!saved && !steerTaskId && !targeted) {
       try {
-        captured = captureActiveEditorContext();
+        captured = matchingLiveEditor
+          ? captureActiveEditorContext()
+          : props.expanded || owner in frozenEditors
+            ? (frozenEditors[owner] ?? null)
+            : sameScope
+              ? captureActiveEditorContext()
+              : null;
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : uiMessage('helpers.m015'));
         return false;
@@ -785,7 +888,6 @@ export function HelperPanel(props: Props) {
     if (
       !conversation ||
       expectedRevision === undefined ||
-      scopeMismatch ||
       busy ||
       outbox ||
       pending.length ||
@@ -835,14 +937,7 @@ export function HelperPanel(props: Props) {
     text = messages.find((message) => message.taskId === task.id && message.role === 'user')
       ?.text ?? task.request
   ) {
-    if (
-      props.ready === false ||
-      scopeMismatch ||
-      !conversation ||
-      outbox ||
-      busy ||
-      locks.current.has(scopeKey)
-    )
+    if (props.ready === false || !conversation || outbox || busy || locks.current.has(scopeKey))
       return false;
     if (task.completedEffects?.count) {
       setError(uiMessage('helpers.m022'));
@@ -961,7 +1056,7 @@ export function HelperPanel(props: Props) {
           <RetryFailure
             status={task.status}
             error={translateMessage(task.error ?? '')}
-            disabled={scopeMismatch || busy || Boolean(outbox)}
+            disabled={busy || Boolean(outbox)}
             onRetry={task.completedEffects ? undefined : () => void retry(task)}
             onSettings={props.onModelSettings}
             onDetails={() => setTaskHistory({ taskId: task.id })}
@@ -1001,14 +1096,14 @@ export function HelperPanel(props: Props) {
   return (
     <aside
       id="helper-panel"
-      className="helper-panel"
+      className={`helper-panel${props.expanded ? ' helper-expanded' : ''}`}
       hidden={!props.open}
-      role={compact ? 'dialog' : undefined}
+      role={props.expanded ? 'main' : compact ? 'dialog' : undefined}
       aria-modal={compact && props.open ? true : undefined}
-      aria-label={t('helpers.m040')}
+      aria-label={t(props.expanded ? 'main.m062' : 'helpers.m040')}
       onKeyDown={(event) => {
         if (event.target instanceof Element && event.target.closest('dialog[open]')) return;
-        if (event.key === 'Escape') {
+        if (event.key === 'Escape' && !props.expanded) {
           event.preventDefault();
           closePanel.current();
         }
@@ -1031,8 +1126,13 @@ export function HelperPanel(props: Props) {
       }}
     >
       <header className="helper-header">
+        {props.navigationLeading}
         <h2 className="sr-only">
-          {scope.kind === 'chat' ? t('helpers.chatTitle') : t('helpers.libraryTitle')}
+          {props.expanded
+            ? t('main.m062')
+            : scope.kind === 'chat'
+              ? t('helpers.chatTitle')
+              : t('helpers.libraryTitle')}
         </h2>
         <HelperSessionBar
           sessions={sessions.sessions}
@@ -1041,34 +1141,56 @@ export function HelperPanel(props: Props) {
           currentId={sessions.currentId}
           creating={sessions.creating || props.ready === false}
           busy={props.ready === false || busy || Boolean(outbox)}
-          onSelect={sessions.select}
-          onCreate={() => void sessions.create()}
+          expanded={props.expanded}
+          onSettings={() => setSettings((value) => !value)}
+          onSelect={(session) => {
+            if (props.expanded && session.id !== scopeKey) {
+              setFrozenEditors((old) => (session.id in old ? old : { ...old, [session.id]: null }));
+              setFrozenResources((old) =>
+                session.id in old ? old : { ...old, [session.id]: null }
+              );
+            }
+            sessions.select(session);
+          }}
+          onCreate={() => {
+            void sessions.create().then((session) => {
+              if (props.expanded && session) {
+                setFrozenEditors((old) => ({ ...old, [session.id]: null }));
+                setFrozenResources((old) => ({ ...old, [session.id]: null }));
+              }
+            });
+          }}
           onUpdate={(value) => {
             data.updateConversation(value);
             void sessions.reload().catch((cause) => setError(cause.message));
           }}
-          onDelete={() => {
-            void sessions.reload().catch((cause) => setError(cause.message));
-          }}
+          onDelete={sessions.clearSelection}
         />
-        <IconButton
-          label={t('helpers.m044')}
-          icon={Settings2}
-          aria-pressed={settings}
-          aria-expanded={settings && !!conversation}
-          aria-controls="helper-tone-settings"
-          disabled={!conversation}
-          onClick={() => setSettings((value) => !value)}
-        />
-        <button
-          ref={closeButton}
-          type="button"
-          className="icon-button"
-          aria-label={t('helpers.m045')}
-          onClick={() => closePanel.current()}
-        >
-          <X size={20} />
-        </button>
+        {props.onToggleExpanded && (
+          <IconButton
+            label={
+              props.expanded
+                ? (props.returnLabel ?? t('helpers.returnToPrevious'))
+                : t('helpers.expand')
+            }
+            icon={props.expanded ? ArrowLeft : Maximize2}
+            onClick={() => {
+              if (props.expanded && !props.returnToSidecar) closePanel.current();
+              else props.onToggleExpanded?.();
+            }}
+          />
+        )}
+        {!props.expanded && (
+          <button
+            ref={closeButton}
+            type="button"
+            className="icon-button"
+            aria-label={t('helpers.m045')}
+            onClick={() => closePanel.current()}
+          >
+            <X size={20} />
+          </button>
+        )}
       </header>
       {props.library && (
         <HelperModelPicker
@@ -1101,9 +1223,6 @@ export function HelperPanel(props: Props) {
             {t('helpers.m046')}
           </button>
         </div>
-      )}
-      {scopeMismatch && scope.kind === 'chat' && (
-        <NoticeBanner className="helper-scope-notice">{t('helpers.m047')}</NoticeBanner>
       )}
       {settings && conversation && (
         <div className="helper-settings" id="helper-tone-settings">
@@ -1166,13 +1285,10 @@ export function HelperPanel(props: Props) {
               label={t('helpers.m058')}
               aria-busy={savingPersona}
               disabled={
-                props.ready === false ||
-                scopeMismatch ||
-                savingPersona ||
-                persona.revision !== conversation.revision
+                props.ready === false || savingPersona || persona.revision !== conversation.revision
               }
               onClick={() => {
-                if (props.ready === false || scopeMismatch) return;
+                if (props.ready === false) return;
                 setSavingPersona(true);
                 setSaveNotice('');
                 void api<HelperConversation>(
@@ -1268,8 +1384,7 @@ export function HelperPanel(props: Props) {
             messages.map((message) => {
               const task = taskMap.get(message.taskId);
               const status = task?.status ?? message.taskStatus;
-              const messageDisabled =
-                scopeMismatch || busy || Boolean(outbox) || pending.length > 0;
+              const messageDisabled = busy || Boolean(outbox) || pending.length > 0;
               const saveMessage = (
                 text: string,
                 revision = editRevisions.current.get(message.id) ?? conversation.revision
@@ -1296,6 +1411,7 @@ export function HelperPanel(props: Props) {
                   key={message.id}
                   className={`helper-message ${message.role === 'user' ? 'request' : message.role}`}
                   data-message-id={message.id}
+                  data-task-id={message.taskId}
                 >
                   {message.role === 'user' ? (
                     <RequestMessage
@@ -1331,6 +1447,14 @@ export function HelperPanel(props: Props) {
                       {...artifact}
                     />
                   ))}
+                  {task && (message.role === 'assistant' || !answered.has(task.id)) && (
+                    <HelperTaskResults
+                      taskId={task.id}
+                      status={task.status}
+                      visible={props.open}
+                      onOpenTarget={props.onOpenTarget}
+                    />
+                  )}
                   {message.role === 'user' &&
                     taskMap.get(message.taskId) &&
                     (taskMap.get(message.taskId)!.status !== 'completed' ||
@@ -1444,6 +1568,26 @@ export function HelperPanel(props: Props) {
               ) : (
                 <p className="task-request">{task.request}</p>
               )}
+              {messages.some((message) => message.taskId === task.id) && (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => {
+                    setTaskHistory(null);
+                    requestAnimationFrame(() => {
+                      const node = [
+                        ...(content.current?.querySelectorAll<HTMLElement>('[data-task-id]') ?? []),
+                      ].find((item) => item.dataset.taskId === task.id);
+                      if (node) {
+                        following.current = false;
+                        node.scrollIntoView({ block: 'center' });
+                      }
+                    });
+                  }}
+                >
+                  {t('helpers.showInConversation')}
+                </button>
+              )}
               {task.error && <p className="error">{translateMessage(task.error ?? '')}</p>}
               {task.completedEffects && (
                 <p>
@@ -1519,6 +1663,12 @@ export function HelperPanel(props: Props) {
         </div>
       </Dialog>
       <footer className="helper-composer" hidden={settings && !!conversation}>
+        {summarized && (
+          <div className="helper-current-activity" role="status">
+            <span>{activityLabel ?? t(statusLabel[summarized.status] ?? summarized.status)}</span>
+            <HelperTaskElapsed task={summarized} visible={props.open} />
+          </div>
+        )}
         {conversation && data.current?.lastResourceEdit && (
           <HelperResourceUndo
             key={`${conversation.id}:${data.current.lastResourceEdit.editSeq}`}
@@ -1537,7 +1687,6 @@ export function HelperPanel(props: Props) {
               disabled={
                 props.ready === false ||
                 !hydrated[scopeKey] ||
-                scopeMismatch ||
                 !conversation ||
                 conversation.id !== outbox.targetConversationId
               }
@@ -1597,32 +1746,36 @@ export function HelperPanel(props: Props) {
             else void send();
           }}
         >
-          {((props.resource && props.scope.kind === 'library') ||
-            (editor && !props.resource) ||
+          {(currentResource ||
+            (displayEditor && !currentResource) ||
             selectedOutline ||
             selection) && (
             <div className="composer-request-chips helper-context-chips">
-              {props.resource && props.scope.kind === 'library' && (
+              {currentResource && JSON.stringify(scope) === JSON.stringify(props.scope) && (
                 <div className="helper-context-chip helper-editor">
                   <span className="helper-chip-label">
-                    {t('helpers.m316', { title: props.resource.title })}
+                    {t('helpers.m316', { title: currentResource.title })}
                   </span>
                   <button
                     type="button"
                     className="helper-chip-dismiss"
                     aria-label={t('helpers.m083')}
-                    onClick={props.onClearResource}
+                    onClick={() => {
+                      setFrozenResources((old) => ({ ...old, [scopeKey]: null }));
+                      props.onClearResource?.();
+                    }}
                   >
                     <X size={14} aria-hidden="true" />
                   </button>
                 </div>
               )}
-              {editor && !props.resource && (
-                <div className="helper-context-chip helper-editor">
-                  <span className="helper-chip-label">
-                    {t('helpers.m317', { title: editor.title || t('helpers.m085') })}
-                  </span>
-                </div>
+              {displayEditor && !currentResource && (
+                <details className="helper-context-chip helper-editor">
+                  <summary>
+                    {t('helpers.m317', { title: displayEditor.title || t('helpers.m085') })}
+                  </summary>
+                  <pre>{JSON.stringify(displayEditor.model, null, 2)}</pre>
+                </details>
               )}
               {selectedOutline && (
                 <div className="helper-context-chip helper-outline-selection">
@@ -1663,9 +1816,12 @@ export function HelperPanel(props: Props) {
               )}
               {selection && (
                 <div className="helper-context-chip helper-selection">
-                  <span className="helper-chip-label">
-                    {t('helpers.m318', { count: formatNumber(selection.text.length) })}
-                  </span>
+                  <details>
+                    <summary>
+                      {t('helpers.m318', { count: formatNumber(selection.text.length) })}
+                    </summary>
+                    <p>{selection.text}</p>
+                  </details>
                   <button
                     type="button"
                     className="helper-chip-dismiss"
@@ -1710,7 +1866,6 @@ export function HelperPanel(props: Props) {
                 disabled={
                   props.ready === false ||
                   !hydrated[scopeKey] ||
-                  scopeMismatch ||
                   busy ||
                   data.loading ||
                   Boolean(outbox)
@@ -1742,12 +1897,15 @@ export function HelperPanel(props: Props) {
             <button
               className="send-button"
               type="submit"
-              aria-label={outbox ? t('helpers.m109') : t('helpers.m110')}
-              title={outbox ? t('helpers.m096') : running ? t('helpers.m111') : t('helpers.m110')}
+              aria-label={
+                outbox ? t('helpers.m109') : running ? t('helpers.queueRequest') : t('helpers.m110')
+              }
+              title={
+                outbox ? t('helpers.m096') : running ? t('helpers.queueRequest') : t('helpers.m110')
+              }
               disabled={
                 props.ready === false ||
                 !hydrated[scopeKey] ||
-                scopeMismatch ||
                 busy ||
                 data.loading ||
                 !conversation ||
@@ -1755,6 +1913,9 @@ export function HelperPanel(props: Props) {
               }
             >
               <ArrowUp size={20} />
+              {running && !outbox && (
+                <span className="helper-queue-label">{t('helpers.queueRequest')}</span>
+              )}
             </button>
           )}
         </ChatComposer>
