@@ -110,7 +110,6 @@ export function SettingsEditor({
   return (
     <section className="settings" aria-label={t('settings.m81')}>
       {!hideHeading && <h3>{t('settings.m82')}</h3>}
-      <small>{t('settings.m83')}</small>
       <form
         ref={form}
         onSubmit={(event) => {
@@ -125,7 +124,6 @@ export function SettingsEditor({
               <label className="settings-row">
                 <span className="settings-row-copy">
                   <strong>{t('settings.m85')}</strong>
-                  <small>{t('settings.m86')}</small>
                   {globalAutoTranslate !== null && (
                     <small>
                       {t('settings.flow2', {

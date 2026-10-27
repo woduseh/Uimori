@@ -200,7 +200,6 @@ function StoryGuideEditor({
           <label className="settings-row settings-row-toggle">
             <span className="settings-row-copy">
               <strong>{t('prompts.uiConsultCanonAndCharactersBeforeWriting')}</strong>
-              <small>{t('prompts.uiOptionalGeneratingABriefMayAddAModelCall')}</small>
             </span>
             <span className="settings-row-control">
               <Switch
@@ -259,9 +258,6 @@ function StoryGuideEditor({
               </label>
               <details className="story-guide-reference">
                 <summary>{t('prompts.uiAdditionalReferences')}</summary>
-                <p className="muted">
-                  {t('prompts.uiExistingCardsAndLoreAreAlsoConsultedAddOnly')}
-                </p>
                 <label>
                   {t('prompts.uiAdditionalReferenceText')}
                   <textarea

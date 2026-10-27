@@ -179,7 +179,6 @@ export function AuthorNotesEditor({
           imported: notes.some((note) => note.kind === 'imported-memory') ? 'yes' : 'no',
         })}
       </summary>
-      <p className="muted">{t('library.notesHint')}</p>
       {error && (
         <p className="error" role="alert">
           {translateMessage(error)}

@@ -312,9 +312,6 @@ export function ChatOptionSettings(props: Props) {
         <fieldset className="chat-options-fields" disabled={disabled}>
           <ToggleRow
             label={t('chatsettings.m127')}
-            description={t(
-              scope === 'oneoff' ? 'chatsettings.oneoffScopeHelp' : 'chatsettings.fixedScopeHelp'
-            )}
             checked={scope === 'oneoff'}
             onChange={(checked) => setScope(checked ? 'oneoff' : 'fixed')}
           />

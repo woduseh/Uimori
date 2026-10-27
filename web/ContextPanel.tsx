@@ -279,7 +279,6 @@ export function ContextPanel({
                   onChange={(event) => setPriorities(event.target.value)}
                 />
               </label>
-              <small className="muted">{t('settings.m287')}</small>
             </details>
             <div className="form-actions">
               {mode === 'full' && !draft && (
