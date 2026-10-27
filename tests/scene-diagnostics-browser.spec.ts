@@ -387,7 +387,9 @@ test('SCENEDIAG a completed provider call retains token and lore receipts visibl
       await expect(unconfirmed).toBeVisible();
       await unconfirmed.click();
       await expect(lore.getByText(richEntries.at(-1)!.title, { exact: true })).toBeVisible();
-      await expect(lore).toContainText('프롬프트에서 가공된 자료');
+      await expect(lore).toContainText(
+        '스크립트나 프롬프트에서 변형된 자료는 포함 여부를 정확히 확인하지 못할 수 있어요.'
+      );
       expect(await lore.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
         true
       );

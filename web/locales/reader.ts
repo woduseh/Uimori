@@ -468,10 +468,10 @@ export const messages = {
     zh: '当前原文',
   },
   'reader.knownSubtotalValueIncludesValueUnpricedCalls': {
-    ko: ', 확인된 금액 합계 {v0}, 미확인 {v1}회 포함',
-    en: ', Known subtotal {v0}, Includes {v1} unpriced calls',
-    ja: '、確認済み小計 {v0}、不明な呼び出し {v1}回を含む',
-    zh: '，已知小计 {v0}，含{v1}次费用未知的调用',
+    ko: '확인된 금액 합계 {v0}, 미확인 {v1}회 포함',
+    en: 'Known subtotal {v0}, includes {v1} unpriced calls',
+    ja: '確認済み小計 {v0}、不明な呼び出し {v1}回を含む',
+    zh: '已知小计 {v0}，含{v1}次费用未知的调用',
   },
   'reader.unknown': {
     ko: '미확인',

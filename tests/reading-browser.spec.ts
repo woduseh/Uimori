@@ -391,6 +391,17 @@ async function helperFixture(page: Page, before: ChatDetail) {
             hasEarlier: false,
           },
         });
+      const resultsTask = tasks.find((task) => path === `/api/helper/tasks/${task.id}/results`);
+      if (resultsTask)
+        return route.fulfill({
+          json: {
+            taskId: resultsTask.id,
+            status: resultsTask.status,
+            results: [],
+            unrecordedOperations: 0,
+            usage: { attempts: [], toolExecutions: 0, latestInputEstimate: null },
+          },
+        });
       if (path === `/api/helper/artifacts/${artifact.id}`) return route.fulfill({ json: artifact });
     }
     unexpected.push(`${request.method()} ${path}`);
@@ -487,11 +498,13 @@ test('READUI02 helper answers, archived scenes and public streams share reading 
       await expect(status).toContainText('“상태 카드의 모델 이름”');
       await expect(status.locator('.reading-quote')).toHaveCount(0);
       await status.locator(':scope > summary').click();
+      await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
       await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
       await expect(panel.getByRole('textbox', { name: '도우미 말투', exact: true })).toHaveValue(
         helperPersona
       );
       await expect(panel.locator('.helper-settings .reading-quote')).toHaveCount(0);
+      await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
       await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
       await card.getByRole('button', { name: '가정 장면 복사', exact: true }).click();
       expect(copied.at(-1)).toBe(artifactText);

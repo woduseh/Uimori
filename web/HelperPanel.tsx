@@ -389,13 +389,14 @@ export function HelperPanel(props: Props) {
     try {
       const snapshot = captureActiveEditorContext();
       setFrozenEditors((old) => ({ ...old, [scopeKey]: snapshot }));
+      if (snapshot && !props.resource) setFrozenResources((old) => ({ ...old, [scopeKey]: null }));
     } catch (cause) {
       setErrors((old) => ({
         ...old,
         [scopeKey]: cause instanceof Error ? cause.message : uiMessage('helpers.m015'),
       }));
     }
-  }, [props.open, props.expanded, props.scope, scopeKey, conversation]);
+  }, [props.open, props.expanded, props.resource, props.scope, scopeKey, conversation]);
   const wasExpanded = useRef(false);
   useEffect(() => {
     if (props.expanded && !wasExpanded.current && scopeKey && conversation) {

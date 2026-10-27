@@ -426,7 +426,7 @@ test('ACTUI06 old notification pages, bulk confirmation and execution identity s
       .getByRole('button', { name: '확인', exact: true })
   ).toBeEnabled();
   await expect(dialog.locator('[data-activity-id="uncertain-job"]')).toContainText(
-    '실행 결과가 불확실해요'
+    '실행 결과를 아직 확인하지 못했어요. 확인을 누르면 알림만 닫히고 작업 기록은 유지돼요.'
   );
   await dialog.getByRole('button', { name: '모두 확인', exact: true }).click();
   await expect(rows).toHaveCount(1);

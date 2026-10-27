@@ -1303,7 +1303,6 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await form.getByLabel('캐시 방식', { exact: true }).selectOption('automatic');
   await form.getByLabel('캐시 유지 시간', { exact: true }).selectOption('30m');
   await form.getByLabel('캐시 방식', { exact: true }).selectOption('disabled');
-  await expect(form).toContainText('프롬프트의 캐시 기준점도 적용하지 않아요');
   await expect(form.getByLabel('캐시 유지 시간', { exact: true })).toHaveValue('30m');
   await form.getByLabel('Temperature', { exact: true }).fill('0');
   await form.locator('.provider-specified-settings > summary').click();

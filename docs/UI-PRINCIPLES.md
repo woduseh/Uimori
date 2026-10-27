@@ -93,7 +93,7 @@ An acknowledged execution-settings save remains successful when the subsequent r
 
 On Android, the viewport requests `interactive-widget=resizes-content` so the keyboard reduces the content area and the main composer stays at the bottom of the frame; the existing visual-viewport height logic remains for browsers that do not honor this option.
 
-The application frame stays fixed when opening menus and panels from a long manuscript. Reading and dialog content scroll within their own surfaces; focusing a menu item must not move the header or sidebar outside the viewport.
+The application frame stays fixed when opening menus and panels from a long manuscript. Reading and dialog content scroll within their own surfaces; focusing a menu item must not move the header or sidebar outside the viewport. In short desktop windows, scroll the sidebar contents together so fixed navigation controls cannot squeeze the bot list out of view.
 
 Manuscript search uses independent pressed-state filter buttons for original text, translation and requests; multiple kinds can be selected. Filter buttons retain the shared control height. Empty-query title browsing remains available. With a query, matching chat titles are shown compactly in batches of five above a separate manuscript-results section. Global search stays open with its query, filters and results when the navigation changes between desktop, collapsed rail and mobile layouts.
 

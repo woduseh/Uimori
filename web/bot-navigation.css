@@ -58,6 +58,18 @@
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+/* Short desktop windows scroll the whole sidebar instead of squeezing the tree away. */
+@media (max-height: 600px) {
+  .sidebar .bot-navigation {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+  .sidebar .bot-navigation-scroll {
+    flex: none;
+    overflow: visible;
+  }
+}
 .bot-navigation .nav-bottom {
   margin-top: 0;
   padding-top: 8px;

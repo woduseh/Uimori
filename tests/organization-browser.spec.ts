@@ -692,7 +692,7 @@ for (const width of DEFAULT_WIDTHS) {
   test(`ORG07 ${width}px lower sidebar bot menus stay within the viewport`, async ({
     page,
     request,
-  }) => {
+  }, info) => {
     const bots: Content[] = [];
     for (let index = 0; index < 10; index++) {
       const response = await request.post('/api/content', {
@@ -743,6 +743,7 @@ for (const width of DEFAULT_WIDTHS) {
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
     expect(bounds.y).toBeGreaterThanOrEqual(0);
     expect(bounds.y + bounds.height).toBeLessThanOrEqual(500);
+    await page.screenshot({ path: info.outputPath(`lower-sidebar-menu-${width}.png`) });
     await page.keyboard.press('Escape');
     await expect(body).toBeHidden();
     await expect(trigger).toBeFocused();
