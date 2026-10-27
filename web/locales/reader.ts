@@ -53,12 +53,6 @@ export const messages = {
     ja: '詳細化の際に維持するよう依頼',
     zh: '请求在细化时保留',
   },
-  'reader.noModelCall': {
-    ko: '모델 호출 없음',
-    en: 'No model call',
-    ja: 'モデル呼び出しなし',
-    zh: '不调用模型',
-  },
   'reader.koreanTranslation': {
     ko: '한국어 번역',
     en: 'Korean translation',

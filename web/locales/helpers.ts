@@ -509,12 +509,6 @@ export const messages = {
     ja: '前のリクエストを確認',
     zh: '确认上一次请求',
   },
-  'helpers.m097': {
-    ko: '진행 중인 요청 {v0}개',
-    en: 'Requests in progress: {v0}',
-    ja: '進行中のリクエスト{v0}件',
-    zh: '{v0}个请求正在进行',
-  },
   'helpers.m098': {
     ko: '작업 상태 숨기기',
     en: 'Hide task status',
@@ -526,12 +520,6 @@ export const messages = {
     en: 'Expand task status',
     ja: '作業状態を表示',
     zh: '展开任务状态',
-  },
-  'helpers.m100': {
-    ko: '상태 표시만 숨겨요. 작업은 계속 진행되고 입력도 계속할 수 있어요.',
-    en: 'Only the status display is hidden. Work continues, and you can keep typing.',
-    ja: '状態表示だけを隠します。作業は続行され、入力も続けられます。',
-    zh: '仅隐藏状态显示。任务会继续执行，也可以继续输入。',
   },
   'helpers.m101': {
     ko: '모델 설정',

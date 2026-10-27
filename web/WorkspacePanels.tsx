@@ -144,7 +144,7 @@ export function TasksPanel({
   return (
     <section className="tasks-panel" aria-label={t('chatsettings.m1')}>
       <div className="panel-intro">
-        <p>{detail.chat.title}</p>
+        <p className="muted">{detail.chat.title}</p>
         {inspectedRun && (
           <button type="button" className="secondary" onClick={() => onInspect('')}>
             {t('chatsettings.m3')}

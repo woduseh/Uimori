@@ -249,6 +249,7 @@ export function RisuPresetImport({
                 <div className="risu-import-result">
                   <CheckIcon size={28} aria-hidden="true" />
                   <h3>{t('transfer.m083')}</h3>
+                  <p className="muted">{preview.title}</p>
                   <p role="status">{t('transfer.m084')}</p>
                   <button
                     type="button"

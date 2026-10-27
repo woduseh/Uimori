@@ -989,12 +989,6 @@ export const messages = {
     ja: 'このチャットの作家プロンプト',
     zh: '此聊天的写作提示词',
   },
-  'library.chooseAPromptToPinItTo': {
-    ko: '모델과 프롬프트의 최신 저장본은 다음 요청부터 적용되며, 창작 옵션은 선택한 프롬프트를 따라요.',
-    en: 'The latest saved model and prompt apply from the next request, and writing options follow the selected prompt.',
-    ja: 'モデルとプロンプトの最新保存版は次のリクエストから適用され、創作オプションは選択したプロンプトに従います。',
-    zh: '模型和提示词的最新保存版本自下次请求起应用，创作选项跟随所选提示词。',
-  },
   'library.loading': {
     ko: '불러오는 중…',
     en: 'Loading…',
@@ -1012,12 +1006,6 @@ export const messages = {
     en: 'Risu author note',
     ja: 'Risu作家ノート',
     zh: 'Risu作者备注',
-  },
-  'library.insertedAtTheAuthorNotePositionIn': {
-    ko: 'Risu 프롬프트의 작가 노트 위치에 들어가요. 계속 유지할 설정은 기억과 메모에 적고, 비워 두면 프롬프트 기본값을 사용해요.',
-    en: "Inserted at the author note position in the Risu prompt. Use Memory and lore notes for general persistent instructions. Leave empty to use the prompt's saved default.",
-    ja: 'Risuプロンプトの作家ノート位置に挿入します。一般的な継続条件は記憶とメモのメモに記入してください。空欄ならプロンプトの保存済み初期値を使います。',
-    zh: '放在Risu提示词的作者备注位置。通用持续指令请填写在记忆与设定的备注中，留空则使用提示词中保存的默认值。',
   },
   'library.modelsUsedByGlobalChatSettings': {
     ko: '전체 채팅 설정에서 사용하는 모델',
@@ -2194,12 +2182,6 @@ export const messages = {
     en: 'User notes and corrections{imported, select, yes {, Imported memories} other {}} ({count, number})',
     ja: 'ユーザーメモと訂正{imported, select, yes {、インポートした記憶} other {}} {count, number}件',
     zh: '用户备注与更正{imported, select, yes {，导入的记忆} other {}} {count, number}项',
-  },
-  'library.notesHint': {
-    ko: '이후 요청에 지시와 정정으로 사용해요. 원문, 요약, Risu 프롬프트의 작가 노트와 별도로 보존해요.',
-    en: 'Instructions and corrections for future requests. Kept separately from originals, summaries, and Risu prompt author notes.',
-    ja: '今後のリクエストへの指示、訂正です。原文、要約、Risuプロンプトの作家ノートとは別に保持します。',
-    zh: '用于后续请求的指令和更正，与原文、摘要及Risu提示词中的作者备注分别保留。',
   },
   'library.noteAttribution': {
     ko: '{imported, select, yes {가져온 기억: {origin}, } other {}}작성자: {author}, {linked, select, yes {원문에 연결된 메모} other {첫 장면 전 메모}}',
