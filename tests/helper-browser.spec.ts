@@ -1259,7 +1259,6 @@ test('HELPACTIVITY a failed completed-task activity read can be retried in place
   const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
   await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
   const activity = row.getByTestId('helper-activity-details');
-  await activity.locator(':scope > summary').click();
   await expect(activity.getByRole('alert')).toContainText('활동 내역을 새로 읽지 못했어요.');
   await expect(activity.getByRole('alert')).toContainText('서버 작업을 완료하지 못했어요. (503)');
   await activity.getByRole('button', { name: '다시 불러오기', exact: true }).click();
@@ -1555,8 +1554,8 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   expect(state.viewReads).toBe(viewsBeforeDiagnostics + 1);
   await input.fill('뒤이어 처리할 작업');
   await panel.getByRole('button', { name: '도우미 요청 보내기' }).click();
-  const activity = panel.locator('[data-testid="helper-activity-status"]');
-  await expect(activity.locator('.activity-label')).toHaveText('처리 중이에요');
+  const activity = firstTaskStatus.getByTestId('helper-task-activity');
+  await expect(activity.locator('.turn-activity-text')).toHaveText('처리 중이에요');
   await expect(activity.locator('.activity-count')).toHaveText('외 1개');
   state.loseNext();
   await input.fill('접수 응답을 잃은 작업');
@@ -2221,7 +2220,7 @@ test('DISPLAY helper complete mode skips public reads across tools, toggles and 
   await expect.poll(() => state.eventReads).toBeGreaterThanOrEqual(events + 2);
   expect(state.streamReads.get(task.id) ?? 0).toBe(0);
   await expect(panel.locator('.streaming-response')).toHaveCount(0);
-  await expect(panel.getByTestId('helper-activity-status')).toContainText('처리 중');
+  await expect(panel.getByTestId('helper-task-activity')).toContainText('처리 중');
   await setMode('stream');
   await expect(panel.locator('.streaming-text')).toHaveText('도구 실행 전 설명');
   await setMode('complete');
@@ -2466,19 +2465,17 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation on deskto
     },
     { seq: 6, kind: 'attempt.started', attemptId: 'context', purpose: 'context' },
   ]);
-  await expect(panel.getByTestId('helper-activity-status').locator('.activity-label')).toHaveText(
+  const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
+  await expect(row.getByTestId('helper-task-activity').locator('.turn-activity-text')).toHaveText(
     '대화 내용 정리 중이에요'
   );
-  const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
   await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
   const activity = row.getByTestId('helper-activity-details');
-  await activity.locator(':scope > summary').click();
   await expect(activity.locator('.helper-activity-stages > li')).toHaveCount(4);
   await expect(activity.locator('[data-state="running"]')).toContainText('대화 내용 정리');
   await expect(
     activity.getByText('resource.patch: EDITOR_SAVE_REQUIRED', { exact: true })
   ).toBeVisible();
-  await activity.getByText('자료 확인', { exact: true }).click();
   await expect(activity.locator('code').filter({ hasText: /^resource\.read$/u })).toBeVisible();
   await expect(activity.locator('code').filter({ hasText: /^data\.search$/u })).toBeVisible();
   await page.screenshot({ path: info.outputPath('helper-activity-desktop.png'), fullPage: true });

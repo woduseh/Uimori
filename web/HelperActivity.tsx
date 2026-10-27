@@ -85,16 +85,86 @@ export function HelperActivityDetails({
   status,
   visible,
   source,
+  inline = false,
 }: {
   taskId: string;
   status: HelperStatus;
   visible: boolean;
   source?: ActivityView;
+  inline?: boolean;
 }) {
   useI18n();
   const [open, setOpen] = useState(false);
-  const own = useHelperActivity(taskId, status, visible && open && !source);
+  const active = inline ? visible : visible && open;
+  const own = useHelperActivity(taskId, status, active && !source);
   const { data, error, reading, retry } = source ?? own;
+  const body = (
+    <>
+      {(!data || error) && (
+        <LoadingState
+          presentation="inline"
+          loading={reading || (!data && !error)}
+          error={translateMessage(error)}
+          errorLabel={t('helpers.m119')}
+          label={t('helpers.m120')}
+          onRetry={retry}
+        />
+      )}
+      {data?.hasEarlier && <p className="muted">{t('helpers.m121')}</p>}
+      {data && !data.events.length && <p className="muted">{t('helpers.m122')}</p>}
+      {data && (
+        <ol className="helper-activity-stages">
+          {helperActivityStages({ ...data, status }).map((stage) => (
+            <li key={stage.id} data-state={stage.state}>
+              <div className="helper-activity-stage-head">
+                <span>{stage.label}</span>
+                <small>
+                  {t(stateLabels[stage.state])}
+                  {stage.events.length > 1
+                    ? t('helpers.m123', { v0: formatNumber(stage.events.length) })
+                    : ''}
+                </small>
+              </div>
+              <ul className="helper-activity-records">
+                {stage.events.map((event) => (
+                  <li key={event.seq} className="ui-meta-row">
+                    <code>{event.name ?? event.kind}</code>
+                    {event.status && <span>{event.status}</span>}
+                    {event.purpose && <span>{event.purpose}</span>}
+                    {event.applied !== undefined && (
+                      <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {stage.events.map((event) =>
+                event.error || event.denied ? (
+                  <NoticeBanner tone="error" key={event.seq}>
+                    {event.name ? `${event.name}: ` : ''}
+                    {event.error ?? t('helpers.m126')}
+                  </NoticeBanner>
+                ) : event.text ? (
+                  <p key={event.seq}>
+                    {event.text}
+                    {event.textTruncated ? t('helpers.m127') : ''}
+                  </p>
+                ) : null
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
+  );
+  if (inline)
+    return (
+      <div
+        className="helper-activity-details helper-activity-inline"
+        data-testid="helper-activity-details"
+      >
+        {body}
+      </div>
+    );
   return (
     <details
       className="helper-activity-details"
@@ -104,66 +174,7 @@ export function HelperActivityDetails({
       }}
     >
       <summary>{t('helpers.m118')}</summary>
-      {open && (
-        <>
-          {(!data || error) && (
-            <LoadingState
-              presentation="inline"
-              loading={reading || (!data && !error)}
-              error={translateMessage(error)}
-              errorLabel={t('helpers.m119')}
-              label={t('helpers.m120')}
-              onRetry={retry}
-            />
-          )}
-          {data?.hasEarlier && <p className="muted">{t('helpers.m121')}</p>}
-          {data && !data.events.length && <p className="muted">{t('helpers.m122')}</p>}
-          {data && (
-            <ol className="helper-activity-stages">
-              {helperActivityStages({ ...data, status }).map((stage) => (
-                <li key={stage.id} data-state={stage.state}>
-                  <details>
-                    <summary>
-                      <span>{stage.label}</span>
-                      <small>
-                        {t(stateLabels[stage.state])}
-                        {stage.events.length > 1
-                          ? t('helpers.m123', { v0: formatNumber(stage.events.length) })
-                          : ''}
-                      </small>
-                    </summary>
-                    <ul className="helper-activity-records">
-                      {stage.events.map((event) => (
-                        <li key={event.seq} className="ui-meta-row">
-                          <code>{event.name ?? event.kind}</code>
-                          {event.status && <span>{event.status}</span>}
-                          {event.purpose && <span>{event.purpose}</span>}
-                          {event.applied !== undefined && (
-                            <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                  {stage.events.map((event) =>
-                    event.error || event.denied ? (
-                      <NoticeBanner tone="error" key={event.seq}>
-                        {event.name ? `${event.name}: ` : ''}
-                        {event.error ?? t('helpers.m126')}
-                      </NoticeBanner>
-                    ) : event.text ? (
-                      <p key={event.seq}>
-                        {event.text}
-                        {event.textTruncated ? t('helpers.m127') : ''}
-                      </p>
-                    ) : null
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
-        </>
-      )}
+      {open && body}
     </details>
   );
 }
