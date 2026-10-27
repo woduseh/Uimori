@@ -220,6 +220,15 @@ export function HelperSessionBar(props: Props) {
                 >
                   <span>{session.title || t('helpers.m173')}</span>
                   {session.chatTitle && <small>{session.chatTitle}</small>}
+                  {session.activity?.running || session.activity?.queued ? (
+                    <small>
+                      {session.activity.running
+                        ? t('helpers.m113')
+                        : t('helpers.queuedCount', {
+                            count: formatNumber(session.activity.queued),
+                          })}
+                    </small>
+                  ) : null}
                   {session.id === props.currentId && (
                     <CheckIcon className="helper-session-check" size={16} aria-hidden="true" />
                   )}

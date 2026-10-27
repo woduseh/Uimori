@@ -197,6 +197,12 @@ export const messages = {
     ja: '報告された内部モデル呼び出し',
     zh: '已报告的内部模型调用',
   },
+  'helpers.queuedCount': {
+    ko: '대기 {count}',
+    en: '{count} queued',
+    ja: '待機{count}',
+    zh: '排队{count}',
+  },
   'helperResults.globalSettings': {
     ko: '공통 설정',
     en: 'Global settings',

@@ -365,11 +365,46 @@ export function HelperPanel(props: Props) {
   const [frozenResources, setFrozenResources] = useState<Record<string, HelperResourceRef | null>>(
     {}
   );
+  const contextualOpen = useRef<{ kind: HelperScope['kind']; chatId?: string } | null>(null);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (props.open && !wasOpen.current && !props.expanded)
+      contextualOpen.current =
+        props.scope.kind === 'chat'
+          ? { kind: 'chat', chatId: props.scope.chatId }
+          : { kind: 'library' };
+    if (!props.open) contextualOpen.current = null;
+    wasOpen.current = props.open;
+    const origin = contextualOpen.current;
+    if (
+      !origin ||
+      props.expanded ||
+      !scopeKey ||
+      !conversation ||
+      conversation.scope.kind !== origin.kind ||
+      (conversation.scope.kind === 'chat' && conversation.scope.chatId !== origin.chatId)
+    )
+      return;
+    contextualOpen.current = null;
+    try {
+      const snapshot = captureActiveEditorContext();
+      setFrozenEditors((old) => ({ ...old, [scopeKey]: snapshot }));
+    } catch (cause) {
+      setErrors((old) => ({
+        ...old,
+        [scopeKey]: cause instanceof Error ? cause.message : uiMessage('helpers.m015'),
+      }));
+    }
+  }, [props.open, props.expanded, props.scope, scopeKey, conversation]);
   const wasExpanded = useRef(false);
   useEffect(() => {
     if (props.expanded && !wasExpanded.current && scopeKey && conversation) {
       try {
-        if (scopeKey in frozenEditors) {
+        const attached = frozenEditors[scopeKey];
+        const live = getActiveEditorContext();
+        const matchingEditor =
+          attached && live && attached.kind === live.kind && attached.targetId === live.targetId;
+        if (scopeKey in frozenEditors && (!props.returnToSidecar || !matchingEditor)) {
           wasExpanded.current = true;
           return;
         }
