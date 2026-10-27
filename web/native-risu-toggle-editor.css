@@ -488,6 +488,9 @@
   gap: 16px;
   color: var(--muted);
 }
+.nt-raw-actions button {
+  margin-left: auto;
+}
 .nt-variable-heading,
 .nt-variable-row {
   display: grid;

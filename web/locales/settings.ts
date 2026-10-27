@@ -84,12 +84,6 @@ export const messages = {
     ja: '役割別モデル設定',
     zh: '按角色设置模型',
   },
-  'settings.m14': {
-    ko: '변경한 설정은 이후 작업부터 적용돼요.',
-    en: 'Changes apply to future tasks.',
-    ja: '変更は今後のタスクに適用します。',
-    zh: '更改将应用于后续任务。',
-  },
   'settings.m15': {
     ko: '핵심 작업',
     en: 'Core tasks',
@@ -126,23 +120,11 @@ export const messages = {
     ja: 'アシスタントモデル',
     zh: '助手模型',
   },
-  'settings.m21': {
-    ko: '작품 질문, 자료 작업에 사용해요. 미지정 시 도우미 모델 호출을 하지 않아요.',
-    en: 'Used for questions and resource work. No assistant model calls when unassigned.',
-    ja: '作品への質問や資料作業に使用します。未設定の場合は呼び出しません。',
-    zh: '用于作品问答和资料任务。未指定时不调用助手模型。',
-  },
   'settings.m22': {
     ko: '컨텍스트 요약 모델',
     en: 'Context summary model',
     ja: 'コンテキスト要約モデル',
     zh: '上下文摘要模型',
-  },
-  'settings.m23': {
-    ko: '자동 및 수동 요약에 사용해요. 미지정 시 압축 작업은 진행되지 않아요.',
-    en: 'Used for automatic and manual summaries. Compression requires a model.',
-    ja: '自動と手動要約に使用します。未設定では圧縮できません。',
-    zh: '用于自动和手动摘要。未指定时无法压缩。',
   },
   'settings.m24': {
     ko: '세션 요약 길이',
@@ -167,12 +149,6 @@ export const messages = {
     en: '{v0} tokens',
     ja: '{v0}トークン',
     zh: '{v0}词元',
-  },
-  'settings.m28': {
-    ko: '자동 상한: 세션 8,192, 도우미 4,096토큰. 실제 요약은 더 짧을 수 있으며 기존 요약은 유지돼요.',
-    en: 'Automatic caps: session 8,192; assistant 4,096 tokens. Summaries may be shorter. Existing summaries are preserved.',
-    ja: '自動上限：セッション8,192、アシスタント4,096トークン。実際の要約は短くなる場合があります。既存の要約は保持します。',
-    zh: '自动上限：会话8,192、助手4,096词元。实际摘要可能更短，现有摘要保持不变。',
   },
   'settings.m29': {
     ko: '자동 작업',
@@ -209,12 +185,6 @@ export const messages = {
     en: 'Extension call model',
     ja: '拡張呼び出しモデル',
     zh: '扩展调用模型',
-  },
-  'settings.m35': {
-    ko: '허용된 패키지의 추가 모델 호출에 사용해요. 미지정 시 호출하지 않아요.',
-    en: 'Used for extra model calls by permitted packages. No calls when unassigned.',
-    ja: '許可されたパッケージの追加モデル呼び出しに使用します。未設定では呼び出しません。',
-    zh: '用于允许的包的额外模型调用。未指定时不调用。',
   },
   'settings.m36': {
     ko: '작업 동작',
@@ -270,29 +240,11 @@ export const messages = {
     ja: '本文と翻訳指示のみ',
     zh: '仅正文和翻译指示',
   },
-  'settings.m45': {
-    ko: '본문과 번역 지침만 사용하면 봇, 페르소나, 로어, 이전 장면, 메모를 참고하지 않아요. 선택한 번역 프롬프트, 봇 번역 지침, 원문 전체는 유지해요.',
-    en: 'With source and translation instructions only, bot, persona, lore, earlier scenes, and notes are excluded. The selected translation prompt, bot translation instructions, and full source are retained.',
-    ja: '「本文と翻訳指示のみ」の場合、ボット、ペルソナ、ロア、前の場面、メモを参照しません。選択した翻訳プロンプト、ボットの翻訳指示、原文全体は保持します。',
-    zh: '仅使用正文和翻译指示时，不参考机器人、角色、设定、先前场景和笔记，仅保留所选翻译提示词、机器人翻译指示和完整原文。',
-  },
   'settings.m46': {
     ko: '번역 작업 호출 한도',
     en: 'Translation task call limit',
     ja: '翻訳タスクの呼び出し上限',
     zh: '翻译任务调用上限',
-  },
-  'settings.m47': {
-    ko: '번역 생성, 자료 조회 후속 요청, 거절 판정을 한 작업에서 합산해요. 범위는 2~64회예요.',
-    en: 'Counts translation, resource follow-ups and refusal checks together per task. Range: 2–64 calls.',
-    ja: '翻訳生成、資料参照の追加リクエスト、拒否判定をタスクごとに合算します。範囲は2～64回です。',
-    zh: '每项任务合计翻译生成、资料查询后续请求和拒绝判定，范围为2至64次。',
-  },
-  'settings.m48': {
-    ko: '전체 생성문에서 서비스 거절만 감지해요. 점수가 각 확신 기준 이상이면 거절로 처리해요.',
-    en: 'Detects service refusals in the full generated text. Scores at or above the threshold count as refusals.',
-    ja: '生成文全体からサービス拒否のみを検出します。スコアが基準以上なら拒否として扱います。',
-    zh: '仅检测完整生成文本中的服务拒绝。分数达到置信阈值时视为拒绝。',
   },
   'settings.m49': {
     ko: '본문 서비스 거절 감지',
@@ -324,12 +276,6 @@ export const messages = {
     ja: '本文拒否の確信度基準',
     zh: '正文拒绝置信阈值',
   },
-  'settings.m54': {
-    ko: '거절 시 출력을 보존하고 중단해요. 자동 재생성은 하지 않아요.',
-    en: 'Preserves output and stops on refusal. Does not regenerate automatically.',
-    ja: '拒否時は出力を保持して停止します。自動再生成は行いません。',
-    zh: '拒绝时保留输出并停止，不自动重新生成。',
-  },
   'settings.m55': {
     ko: '번역 서비스 거절 감지',
     en: 'Translation service refusal detection',
@@ -359,18 +305,6 @@ export const messages = {
     en: 'Translation automatic retry count',
     ja: '翻訳の自動再リクエスト回数',
     zh: '翻译自动重试次数',
-  },
-  'settings.m60': {
-    ko: '거절 시 설정한 횟수만큼 다시 요청해요. 실패하면 이전 번역을 유지해요.',
-    en: 'Retries the configured number of times on refusal. Previous translations remain on failure.',
-    ja: '拒否時は設定回数まで再リクエストします。失敗時は以前の翻訳を保持します。',
-    zh: '拒绝时按设置次数重试，失败时保留之前的翻译。',
-  },
-  'settings.m61': {
-    ko: '확신 기준은 0.5 초과~1이에요. 끄면 JEV 검사 없이 결과를 채택해요. 생성 오류는 계속 처리해요.',
-    en: 'Confidence must be above 0.5 and at most 1. When disabled, results are accepted without JEV checks. Generation errors are still handled.',
-    ja: '確信度は0.5超～1です。無効の場合はJEV検査なしで採用します。生成エラーの処理は継続します。',
-    zh: '置信值须大于0.5且不超过1。关闭时不经JEV检查即采用结果，仍处理生成错误。',
   },
   'settings.m62': {
     ko: '최신 설정 다시 불러오기',
@@ -498,12 +432,6 @@ export const messages = {
     ja: '自動翻訳と呼び出し上限',
     zh: '自动翻译和调用上限',
   },
-  'settings.m83': {
-    ko: '이 채팅에 저장하며, 다음 실행부터 적용돼요.',
-    en: 'Saved for this chat and applied from the next run.',
-    ja: 'このチャットに保存し、次の実行から適用します。',
-    zh: '保存于此聊天，从下次运行起应用。',
-  },
   'settings.m84': {
     ko: '본문 번역',
     en: 'Writing translation',
@@ -515,12 +443,6 @@ export const messages = {
     en: 'Translate automatically after generation',
     ja: '本文生成後に自動翻訳',
     zh: '生成正文后自动翻译',
-  },
-  'settings.m86': {
-    ko: '현재 번역 모델을 사용해요. 번역 중이거나 번역에 실패해도 원문은 바로 읽을 수 있어요. Codex 콘텐츠 확인이 필요하면 수동으로 번역해 주세요.',
-    en: 'Uses the current translation model. The source remains readable before translation and after failures. Translate manually when Codex requires content review.',
-    ja: '現在の翻訳モデルを使用します。翻訳前や失敗時も原文を読めます。Codexで内容確認が必要な場合は手動で翻訳してください。',
-    zh: '使用当前翻译模型。翻译前及失败后均可阅读原文。Codex 需要内容确认时，请手动翻译。',
   },
   'settings.m87': {
     ko: '현재 전체 기본값:',
@@ -906,23 +828,11 @@ export const messages = {
     ja: '、無効',
     zh: '，已禁用',
   },
-  'settings.m154': {
-    ko: '선택한 모델의 입력 및 최대 출력 토큰 설정을 사용해요.',
-    en: "Uses the selected model's input and maximum output token settings.",
-    ja: '選択したモデルの入力、最大出力トークン設定を使用します。',
-    zh: '使用所选模型的输入和最大输出词元设置。',
-  },
   'settings.m155': {
     ko: '의 추가 조회',
     en: 'additional resource access',
     ja: '追加参照',
     zh: '额外查询',
-  },
-  'settings.m156': {
-    ko: '현재 요청과 작문에 쓰는 컨텍스트는 함께 받아요. 필요한 내용을 더 찾아볼 조회 도구를 선택해요.',
-    en: 'The current request and writing context are included. Choose lookup tools for more information.',
-    ja: '現在のリクエストと執筆用コンテキストは共有されます。追加情報を探す参照ツールを選んでください。',
-    zh: '包含当前请求和写作上下文。请选择用于查找更多信息的查询工具。',
   },
   'settings.m157': {
     ko: '{v0} {v1} 읽기',
@@ -995,12 +905,6 @@ export const messages = {
     en: 'Creative options to share',
     ja: '共有する創作オプション',
     zh: '传递的创作选项',
-  },
-  'settings.m170': {
-    ko: '실행 시점에 선택한 옵션 값만 읽기 전용으로 전달해요. 프롬프트 본문이나 수정 권한은 전달하지 않아요.',
-    en: 'Shares only selected option values at request preparation, read-only. The full prompt and editing permission are not shared.',
-    ja: 'リクエスト準備時点の選択した値のみを読み取り専用で共有します。プロンプト全体や編集権限は共有しません。',
-    zh: '仅以只读方式传递准备请求时所选选项的值，不传递完整提示词或编辑权限。',
   },
   'settings.m171': {
     ko: '선택 변경',
@@ -1655,12 +1559,6 @@ export const messages = {
     en: 'Example: retain details about what each character knows and unresolved promises.',
     ja: '例：人物ごとの既知の事実と未解決の約束を詳しく残してください。',
     zh: '例如：详细保留各人物已知的事实和尚未解决的约定。',
-  },
-  'settings.m287': {
-    ko: '이번 압축에만 사용해요. 새 설정이나 사건을 추가하는 메모는 아니에요.',
-    en: 'Used only for this compression, not to add new lore or events.',
-    ja: '今回の圧縮にのみ使用します。新しい設定や事件を追加するメモではありません。',
-    zh: '仅用于此次压缩，不是添加新设定或事件的笔记。',
   },
   'settings.m288': {
     ko: '정리할 구간이 있으면 컨텍스트 모델을 호출해요.',

@@ -836,6 +836,12 @@ export function ThemeSettings({
           </section>
         )}
         {importNotice && <p role="status">{translateMessage(importNotice)}</p>}
+        <p className="theme-help">
+          {t('visualpanels.themeRecoveryHelp', {
+            shortcut: 'Ctrl/Cmd + .',
+            query: '?theme-safe=1',
+          })}
+        </p>
       </details>
       {state.preview && (
         <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>

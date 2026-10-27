@@ -1883,6 +1883,12 @@ export const messages = {
     ja: '時刻未確認の{v0, number}回、{v1}は期間合計から除外しました。',
     zh: '时间未知的{v0, number}次调用，{v1}已从期间合计中排除。',
   },
+  'visualpanels.themeRecoveryHelp': {
+    ko: '꾸미다가 화면이 깨지면 {shortcut}로 이 탭의 테마를 끄세요. 주소에 {query}을 붙여 열어도 돼요.',
+    en: 'If customization breaks the display, press {shortcut} to disable the theme in this tab, or open the address with {query} added.',
+    ja: 'カスタマイズで画面が崩れた場合は{shortcut}でこのタブのテーマを無効にするか、URLに{query}を付けて開いてください。',
+    zh: '如果自定义导致显示异常，请按{shortcut}关闭此标签页的主题，或在地址后添加{query}打开。',
+  },
   'visualpanels.preservedError': {
     ko: '{message} 편집 내용은 유지했어요.',
     en: '{message} Your edits are preserved.',

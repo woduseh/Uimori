@@ -965,12 +965,6 @@ export const messages = {
     ja: '更新',
     zh: '刷新',
   },
-  'chatsettings.m169': {
-    ko: '이 채팅에서 사용하는 변수 값이에요. 자료 원본은 바뀌지 않으며, 재정의를 해제하면 기본값으로 돌아가요.',
-    en: 'String values shared in this chat. Library originals stay unchanged. Empty strings are values; clearing an override restores its default.',
-    ja: 'このチャットで共有する文字列です。資料の原本は保持します。空文字列も値で、上書きを解除すると初期値に戻ります。',
-    zh: '此聊天共享的字符串值，资料原件保持不变。空字符串也是值；清除覆盖后将恢复默认值。',
-  },
   'chatsettings.m170': {
     ko: '공유 변수를 불러오는 중이에요…',
     en: 'Loading shared variables…',
@@ -1150,18 +1144,6 @@ export const messages = {
     en: 'Writing option values',
     ja: '創作オプションの値',
     zh: '创作选项值',
-  },
-  'chatsettings.fixedScopeHelp': {
-    ko: '저장하면 이 채팅의 다음 생성부터 계속 적용해요.',
-    en: 'Save to keep these changes for future generations in this chat.',
-    ja: '保存すると、このチャットの次の生成から継続して適用します。',
-    zh: '保存后，这些更改将持续应用于此聊天的后续生成。',
-  },
-  'chatsettings.oneoffScopeHelp': {
-    ko: '예약하면 다음 생성에 한 번 적용해요. 고정 옵션은 유지해요.',
-    en: 'Schedule these changes for the next generation once. Fixed options are preserved.',
-    ja: '予約すると、次の生成に一度だけ適用します。固定オプションは保持します。',
-    zh: '预约后，这些更改仅应用于下次生成，固定选项保持不变。',
   },
   'chatsettings.reserve': {
     ko: '예약',

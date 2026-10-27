@@ -809,12 +809,6 @@ export const messages = {
     ja: '一緒に参照する構成',
     zh: '参考大纲',
   },
-  'prompts.uiLinkOnlyRelatedPlansSuchAsSetupAndPayoff': {
-    ko: '다른 회차의 준비와 회수 등 관련된 계획만 연결해요.',
-    en: 'Link only related plans, such as setup and payoff across episodes.',
-    ja: '他の話の伏線や回収など、関連する計画だけをつなぎます。',
-    zh: '仅关联相关计划，如其他章节的铺垫与回收。',
-  },
   'prompts.uiTheHelperIsAskedToPreserveThisConditionWhile': {
     ko: '구성을 자세히 만들 때 이 조건을 지키도록 도우미에게 요청해요. 조건을 바꾸려면 직접 고치거나 도우미에게 변경을 요청해 주세요.',
     en: 'The assistant is asked to preserve this condition while elaborating. Edit it yourself or ask the assistant to change it.',
@@ -941,23 +935,11 @@ export const messages = {
     ja: '執筆準備を閉じる',
     zh: '关闭写作准备',
   },
-  'prompts.uiCurrentOutlineReadOnly': {
-    ko: '현재 구성 (읽기 전용)',
-    en: 'Current outline (read-only)',
-    ja: '現在の構成（読み取り専用）',
-    zh: '当前大纲（只读）',
-  },
   'prompts.uiNoOutlineContentYet': {
     ko: '아직 구성 내용이 없어요.',
     en: 'No outline content yet.',
     ja: '構成内容はまだありません。',
     zh: '还没有大纲内容。',
-  },
-  'prompts.uiSavedOutlinesAndTheInstructionsBelowAreFixedTogether': {
-    ko: '저장된 구성과 아래 추가 지시를 집필 접수 때 함께 고정해요.',
-    en: 'Saved outlines and the instructions below are fixed together when writing is submitted.',
-    ja: '執筆受付時に保存済みの構成と以下の追加指示をまとめて固定します。',
-    zh: '提交写作时会一并固定保存的大纲与下方补充指令。',
   },
   'prompts.uiAdditionalInstructionsAndStoppingPointOptional': {
     ko: '이번 추가 지시와 멈출 지점 (선택)',
@@ -970,12 +952,6 @@ export const messages = {
     en: 'Previous writing request draft (view and copy)',
     ja: '以前の執筆リクエスト下書き（閲覧とコピー）',
     zh: '先前写作请求草稿（查看与复制）',
-  },
-  'prompts.uiThePreviousDraftIsPreservedMoveOnlyNeededInstructions': {
-    ko: '이전 초안은 그대로 보관해요. 필요한 추가 지시만 위 입력에 옮겨 주세요.',
-    en: 'The previous draft is preserved. Move only needed instructions into the field above.',
-    ja: '以前の下書きはそのまま保管します。必要な追加指示だけを上の入力欄に移してください。',
-    zh: '保留上次草稿。请仅将所需指令移至上方输入框。',
   },
   'prompts.uiPreviousWritingRequestDraft': {
     ko: '이전 집필 요청 초안',
@@ -1055,12 +1031,6 @@ export const messages = {
     ja: '関連づけた原文',
     zh: '关联原文',
   },
-  'prompts.uiLinkedSourceTextMayNotCoverEveryPartOf': {
-    ko: '원문이 연결돼 있어도 구성 내용을 모두 쓴 것은 아닐 수 있어요.',
-    en: 'Linked source text may not cover every part of the outline.',
-    ja: '原文が関連づけられていても構成内容をすべて書いたとは限りません。',
-    zh: '已关联原文也可能尚未写完全部大纲内容。',
-  },
   'prompts.uiRefresh': {
     ko: '새로고침',
     en: 'Refresh',
@@ -1102,12 +1072,6 @@ export const messages = {
     en: 'Consult canon reference before writing',
     ja: '執筆前に原作を参照',
     zh: '写作前参考原作与角色',
-  },
-  'prompts.uiOptionalGeneratingABriefMayAddAModelCall': {
-    ko: '참고문을 생성하면 모델 호출과 비용이 추가될 수 있어요.',
-    en: 'Generating a brief may add a model call and cost.',
-    ja: '参考文生成でモデル呼び出しと費用が増える場合があります。',
-    zh: '生成参考文可能增加模型调用和费用。',
   },
   'prompts.uiReferenceSettings': {
     ko: '참고 설정',
@@ -1157,6 +1121,12 @@ export const messages = {
     ja: '原作情報をウェブで確認',
     zh: '通过网络搜索核实原作信息',
   },
+  'prompts.uiStoryGuideWebSearchScope': {
+    ko: '검색 비용이 추가될 수 있고, 기준 시점 이후의 내용이 포함될 수 있어요.',
+    en: 'Search may add costs and include spoilers beyond your reference point.',
+    ja: '検索費用が増えたり、基準時点より後の内容が含まれたりする場合があります。',
+    zh: '搜索可能产生额外费用，并包含参考时间点之后的剧透。',
+  },
   'prompts.uiStoryGuideWebSources': {
     ko: '웹 검색 출처',
     en: 'Web search sources',
@@ -1192,12 +1162,6 @@ export const messages = {
     en: 'Additional references',
     ja: '追加の参考資料',
     zh: '补充参考资料',
-  },
-  'prompts.uiExistingCardsAndLoreAreAlsoConsultedAddOnly': {
-    ko: '기존 카드와 로어도 함께 참고해요. 더 필요한 자료만 덧붙여요.',
-    en: 'Existing cards and lore are also consulted. Add only extra references you need.',
-    ja: '既存のカードやロアも参照します。さらに必要な資料だけを追加してください。',
-    zh: '也会参考现有卡片与设定资料。仅需添加额外所需资料。',
   },
   'prompts.uiAdditionalReferenceText': {
     ko: '추가 참고 텍스트',
@@ -1547,12 +1511,6 @@ export const messages = {
     en: 'Source text linked to {count} of {total} children',
     ja: '下位{total}件中{count}件に原文を関連づけ',
     zh: '{total}个下级中有{count}个已关联原文',
-  },
-  'prompts.writingTarget': {
-    ko: '대상: {name}{continuing, select, true {, 기존 원문 뒤에 이어 써요.} other {}}',
-    en: 'Target: {name}{continuing, select, true {, Continue after existing source text.} other {}}',
-    ja: '対象、{name}{continuing, select, true {、既存の原文の後に続けます。} other {}}',
-    zh: '目标，{name}{continuing, select, true {，接续现有原文。} other {}}',
   },
   'prompts.contextToggle': {
     ko: '입력 컨텍스트 {expanded, select, true {접기} other {미리보기}}',

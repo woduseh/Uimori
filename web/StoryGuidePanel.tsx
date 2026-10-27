@@ -251,7 +251,10 @@ function StoryGuideEditor({
                   checked={draft.webSearch}
                   onChange={(event) => update('webSearch', event.target.checked)}
                 />
-                <span>{t('prompts.uiVerifyCanonWithWebSearch')}</span>
+                <span className="settings-row-copy">
+                  <span>{t('prompts.uiVerifyCanonWithWebSearch')}</span>
+                  <small>{t('prompts.uiStoryGuideWebSearchScope')}</small>
+                </span>
               </label>
               <details className="story-guide-reference">
                 <summary>{t('prompts.uiAdditionalReferences')}</summary>
