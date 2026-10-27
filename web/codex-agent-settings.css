@@ -4,9 +4,6 @@
   justify-content: flex-end;
   gap: 12px;
 }
-.codex-agent-heading h3 {
-  margin: 0;
-}
 .codex-agent-status {
   font-weight: 600;
 }

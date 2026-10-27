@@ -362,21 +362,15 @@
 .provider-model-section > label {
   min-width: 0;
 }
-.provider-setting-help,
 .provider-specified-settings {
   min-width: 0;
   color: var(--muted);
   font-size: var(--font-body);
 }
-.provider-setting-help > summary,
 .provider-specified-settings > summary {
   cursor: pointer;
   min-height: var(--control-h);
   align-content: center;
-}
-.provider-setting-help p {
-  line-height: 1.6;
-  margin-block: 8px;
 }
 .provider-specified-settings ul {
   list-style: none;
