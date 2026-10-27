@@ -2,7 +2,6 @@ import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from
 import { useEffect, useRef, useState } from 'react';
 import type { RequestPreview } from '../core/request-preview.js';
 import type { RequestImagePreview } from '../core/request-images.js';
-import { TOKENIZER_PROFILES } from '../core/tokenizer-profiles.js';
 import { api, libraryChangedKey } from './api.js';
 import { Dialog } from './Dialog.js';
 import { LoadingState } from './LoadingState.js';
@@ -117,9 +116,6 @@ export function RequestPreviewDialog({
     tokens.inputTokenLimit
       ? (tokens.estimatedInputTokens / tokens.inputTokenLimit) * 100
       : null;
-  const tokenizer = TOKENIZER_PROFILES.find(
-    (profile) => profile.id === (tokens?.tokenizerInfo?.effective ?? tokens?.tokenizer)
-  );
 
   return (
     <Dialog
@@ -136,9 +132,8 @@ export function RequestPreviewDialog({
         <NoticeBanner>{t('reader.finishTheCurrentTaskBeforeCheckingThePreviewAgain')}</NoticeBanner>
       ) : (
         <>
-          <div className="request-preview-heading">
-            <p className="muted">{t('reader.basedOnYourDraftRequestNoExtraModelCalls')}</p>
-            {(error || preview?.error || preview?.snapshot.stale) && (
+          {(error || preview?.error || preview?.snapshot.stale) && (
+            <div className="request-preview-heading">
               <button
                 type="button"
                 className="secondary"
@@ -146,8 +141,8 @@ export function RequestPreviewDialog({
               >
                 {t('reader.checkAgain')}
               </button>
-            )}
-          </div>
+            </div>
+          )}
           {error ? (
             <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>
           ) : !preview ? (
@@ -250,26 +245,6 @@ export function RequestPreviewDialog({
                   </small>
                 )}
               </div>
-              <details className="request-preview-help">
-                <summary>{t('reader.estimationBasis')}</summary>
-                {tokenizer && (
-                  <p>
-                    {t('reader.tokenizerEstimate', {
-                      tokenizer: translateMessage(tokenizer.label),
-                    })}
-                  </p>
-                )}
-                <p>{t('reader.calculatesTheInitialInputFromSavedSettingsAndYour')}</p>
-                <p>{t('reader.inputMayChangeDuringGenerationDueToLoreSelection')}</p>
-                <p>{t('reader.loreCountsReflectCurrentlyPreparedMaterialCheckActualInclusion')}</p>
-                {!!tokens?.imageCount && (
-                  <p>{t('reader.imagesAreEstimatedSeparatelyAtTheirSendingResolutionActual')}</p>
-                )}
-                {preview.caveats.includes('NATIVE_CALLBACKS_DEFERRED') && (
-                  <p>{t('reader.risuInputStartAndRequestEditScriptsRunDuring')}</p>
-                )}
-                <p>{t('reader.checkAgainAfterChangingSettingsOrTheManuscript')}</p>
-              </details>
             </div>
           )}
         </>

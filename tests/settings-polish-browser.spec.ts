@@ -281,9 +281,9 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
   await expect(panel.locator('summary').filter({ hasText: '모델별 상세' })).toHaveCount(0);
   await expect(panel.locator('summary').filter({ hasText: '일별 및 용도별 상세' })).toHaveCount(0);
   await expect(panel).toContainText('시각 미확인 3회, US$0.03는 기간 합계에서 제외했어요.');
-  await panel.getByText('집계 기준', { exact: true }).click();
-  await expect(panel.locator('.usage-help')).toContainText('상세 집계 시작: 2026. 4. 1.');
-  await panel.getByText('집계 기준', { exact: true }).click();
+  await expect(panel.locator('.usage-note').filter({ hasText: '상세 집계 시작' })).toContainText(
+    '상세 집계 시작: 2026. 4. 1.'
+  );
   for (const theme of ['dark', 'light']) {
     await selectSettingsSection(page, '일반');
     await page.getByLabel('앱 화면 테마', { exact: true }).selectOption(theme);
@@ -370,7 +370,6 @@ test('SPUI02 lore reset is an unsaved form action and incomplete backup input ne
   await lore.getByRole('button', { name: '초기값으로 되돌리기', exact: true }).click();
   await expect(lore.getByLabel('조회 로어 토큰 한도', { exact: true })).toHaveValue('16000');
   expect(await (await request.get('/api/lore-context-defaults')).json()).toEqual(before);
-  await lore.getByText('단위와 예산 설명', { exact: true }).click();
   await lore
     .getByRole('button', { name: '로어 컨텍스트 기본값 저장', exact: true })
     .scrollIntoViewIfNeeded();

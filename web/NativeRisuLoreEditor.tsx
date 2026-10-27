@@ -612,7 +612,6 @@ export function NativeRisuLoreEditor({
                       }
                     />
                   </label>
-                  <p className="muted">{t('native.text_e2d7fc1a5d')}</p>
                 </details>
               </>
             )}

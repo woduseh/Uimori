@@ -1612,15 +1612,6 @@ test('PMUI10 Codex subscription login preserves drafts and saves a connection an
   await selectSettingsSection(page, 'Codex 연결');
   const panel = page.getByRole('region', { name: 'Codex 에이전트 연결' });
   await expect(panel).toContainText('로그인 필요');
-  const help = panel
-    .locator('details')
-    .filter({ has: page.getByText('연결 도움말', { exact: true }) });
-  await expect(help).not.toHaveAttribute('open', '');
-  const executionHelp = help.getByText('Codex는 Uimori 서버에서 실행해요.', { exact: false });
-  await expect(executionHelp).toBeHidden();
-  await help.locator('summary').click();
-  await expect(executionHelp).toBeVisible();
-  await help.locator('summary').click();
   const refresh = panel.getByRole('button', { name: 'Codex 상태 다시 확인' });
   let releaseStatus!: () => void;
   statusGate = new Promise<void>((resolve) => {

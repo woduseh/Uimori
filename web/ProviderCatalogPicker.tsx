@@ -43,15 +43,6 @@ export function ProviderCatalogPicker({
       <details className="provider-catalog-disclosure">
         <summary>{t('providers.m311')}</summary>
         <div className="provider-section-heading">
-          <div>
-            {connection.protocol === 'vertex-gemini-v1' ? (
-              <small>{t('providers.m312')}</small>
-            ) : connection.protocol === 'google-gemini-v1' ? (
-              <small>{t('providers.m313')}</small>
-            ) : connection.protocol === 'codex-app-server-v1' ? (
-              <small>{t('providers.m314')}</small>
-            ) : null}
-          </div>
           <button
             type="button"
             className="secondary"

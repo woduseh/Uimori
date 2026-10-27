@@ -13,9 +13,6 @@
 .native-trigger-heading h3 {
   margin: 0 0 10px;
 }
-.native-trigger-heading p {
-  margin: 0;
-}
 .native-trigger-heading > button {
   flex-shrink: 0;
   display: inline-flex;

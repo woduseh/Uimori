@@ -191,7 +191,6 @@ export function useIllustrationLayout({
             attention: fallback.some((cut) => ['failed', 'interrupted'].includes(cut.job.status)),
           })}
         </summary>
-        <p className="muted">{t('visuals.m106')}</p>
         {fallback.some(needsMapping) && (
           <IllustrationPlacementButton
             sourceId={sourceId}

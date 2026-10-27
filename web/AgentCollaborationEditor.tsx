@@ -150,10 +150,6 @@ export function AgentCollaborationEditor({
       )}
       <div id={`${id}-content`} hidden={!expanded}>
         <div className="ac-content">
-          <p className="muted">{t('settings.m137')}</p>
-          {!collaboration.enabled && collaboration.agents.length > 0 && (
-            <p className="muted">{t('settings.m138')}</p>
-          )}
           {collaboration.enabled && (
             <div className="ac-settings">
               <div className="ac-agents">
@@ -254,11 +250,9 @@ export function AgentCollaborationEditor({
                               </option>
                             ))}
                           </select>
-                          <small className="muted">{t('settings.m154')}</small>
                         </label>
                         <fieldset className="ac-options">
                           <legend>{t('settings.flow4', { v0: agentLabel })}</legend>
-                          <p className="muted">{t('settings.m156')}</p>
                           <div className="ac-checks">
                             {toolScopes().map((scope) => (
                               <label className="ac-check" key={scope.id}>
@@ -362,7 +356,6 @@ export function AgentCollaborationEditor({
               <section className="ac-shared-summary" aria-label={t('settings.m169')}>
                 <div>
                   <strong>{t('settings.m169')}</strong>
-                  <p className="muted">{t('settings.m170')}</p>
                 </div>
                 <button
                   type="button"

@@ -118,15 +118,13 @@ function IllustrationEnvironmentEditor({
     selected: ModelRef | null,
     models: Library['models'],
     onChange: (ref: ModelRef | null) => void,
-    emptyLabel = t('visuals.m042'),
-    description = ''
+    emptyLabel = t('visuals.m042')
   ) => {
     const model = library.models.find((item) => item.id === selected?.id);
     return (
       <label className="settings-row">
         <span className="settings-row-copy">
           <span>{label}</span>
-          {description && <small>{description}</small>}
         </span>
         <span className="settings-row-control">
           <select
@@ -164,13 +162,11 @@ function IllustrationEnvironmentEditor({
     min: number,
     max: number,
     onChange: (value: number) => void,
-    step = 1,
-    description = ''
+    step = 1
   ) => (
     <label className="settings-row">
       <span className="settings-row-copy">
         <span>{label}</span>
-        {description && <small>{description}</small>}
       </span>
       <span className="settings-row-control">
         <input
@@ -288,7 +284,6 @@ function IllustrationEnvironmentEditor({
       <div className="settings-group-heading">
         <div>
           <h3>{t('visuals.m049')}</h3>
-          <p>{t('settings.sharedIllustrationEnvironment')}</p>
         </div>
       </div>
       <fieldset disabled={busy} className="illustration-environment-fields">
@@ -316,7 +311,6 @@ function IllustrationEnvironmentEditor({
           <label className="settings-row settings-row-toggle">
             <span className="settings-row-copy">
               <span>{t('visuals.m055')}</span>
-              <small>{t('visuals.m056')}</small>
             </span>
             <span className="settings-row-control">
               <Switch
@@ -340,8 +334,7 @@ function IllustrationEnvironmentEditor({
                     ? Math.min(value, draft.automaticMaxTargets)
                     : draft.automaticMaxTargets,
               }),
-            1,
-            t('visuals.m059')
+            1
           )}
           {draft.automatic &&
             numberField(
@@ -357,8 +350,7 @@ function IllustrationEnvironmentEditor({
             0,
             5,
             (value) => change({ ...draft, maxAutoRetries: value }),
-            1,
-            t('visuals.m062')
+            1
           )}
         </div>
         <details
@@ -375,8 +367,7 @@ function IllustrationEnvironmentEditor({
               draft.codex.model,
               codexModels,
               (ref) => change({ ...draft, codex: { ...draft.codex, model: ref } }),
-              codexModels.length ? t('visuals.m042') : t('visuals.m066'),
-              t('visuals.m067')
+              codexModels.length ? t('visuals.m042') : t('visuals.m066')
             )}
             <label className="settings-row settings-row-toggle">
               <span className="settings-row-copy">{t('visuals.m068')}</span>
@@ -428,10 +419,7 @@ function IllustrationEnvironmentEditor({
               </span>
             </label>
             <label className="settings-row">
-              <span className="settings-row-copy">
-                {t('visuals.m071')}
-                <small>{t('visuals.m072')}</small>
-              </span>
+              <span className="settings-row-copy">{t('visuals.m071')}</span>
               <span className="settings-row-control">
                 <input
                   aria-label={t('visuals.m073')}
@@ -480,8 +468,7 @@ function IllustrationEnvironmentEditor({
                   ...draft,
                   comfyui: { ...draft.comfyui, promptModel: ref },
                 }),
-              t('visuals.m042'),
-              t('visuals.m078')
+              t('visuals.m042')
             )}
             {numberField(
               t('visuals.m079'),

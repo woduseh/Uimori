@@ -173,7 +173,6 @@ export function RisuPresetImport({
           aria-label={t('transfer.m069')}
           aria-busy={busy}
         >
-          {!preview && <p className="muted">{t('transfer.m070')}</p>}
           <label className={`risu-import-file${preview ? ' risu-import-file-ready' : ''}`}>
             <span>{preview ? source?.name : t('transfer.m072')}</span>
             <input
@@ -209,7 +208,7 @@ export function RisuPresetImport({
                   </div>
                 </dl>
               </div>
-              {preview.findings.length > 0 ? (
+              {preview.findings.length > 0 && (
                 <section
                   className={`risu-import-findings${unsupported ? ' warn' : ''}`}
                   aria-label={t('transfer.m078')}
@@ -229,13 +228,7 @@ export function RisuPresetImport({
                     ))}
                   </ul>
                 </section>
-              ) : (
-                <p className="muted">{t('transfer.m079')}</p>
               )}
-              <details className="risu-import-processing">
-                <summary>{t('transfer.m080')}</summary>
-                <p className="muted">{t('transfer.m081')}</p>
-              </details>
               {unsupported && (
                 <label className="risu-import-choice risu-import-partial">
                   <SelectionCheckbox
@@ -256,7 +249,6 @@ export function RisuPresetImport({
                 <div className="risu-import-result">
                   <CheckIcon size={28} aria-hidden="true" />
                   <h3>{t('transfer.m083')}</h3>
-                  <p className="muted">{preview.title}</p>
                   <p role="status">{t('transfer.m084')}</p>
                   <button
                     type="button"

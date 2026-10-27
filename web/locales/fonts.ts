@@ -9,20 +9,8 @@ export const messages = {
   'fonts.app': { ko: '앱 글꼴', en: 'App font', ja: 'アプリのフォント', zh: '应用字体' },
   'fonts.reader': { ko: '본문 글꼴', en: 'Reading font', ja: '本文のフォント', zh: '正文字体' },
   'fonts.default': { ko: '기본 글꼴', en: 'Default font', ja: '標準フォント', zh: '默认字体' },
-  'fonts.scope': {
-    ko: '이 서버의 모든 기기에 적용해요. 본문 기본 글꼴은 읽기 설정의 고딕과 명조를 따라요.',
-    en: 'Applies to every device on this server. The default reading font follows the sans-serif or serif reading setting.',
-    ja: 'このサーバーのすべての端末に適用します。本文の標準フォントは読書設定に従います。',
-    zh: '应用于此服务器上的所有设备。正文默认字体遵循阅读设置中的无衬线或衬线字体。',
-  },
   'fonts.file': { ko: '글꼴 파일', en: 'Font file', ja: 'フォントファイル', zh: '字体文件' },
   'fonts.name': { ko: '글꼴 이름', en: 'Font name', ja: 'フォント名', zh: '字体名称' },
-  'fonts.support': {
-    ko: 'TTF, OTF, WOFF, WOFF2 파일을 지원해요. 웹에서 사용할 수 있는 글꼴만 등록해 주세요.',
-    en: 'Supports TTF, OTF, WOFF, and WOFF2 files. Only register fonts licensed for web use.',
-    ja: 'ウェブ埋め込みが許可されたTTF、OTF、WOFF、WOFF2ファイルを登録してください。',
-    zh: '请注册允许网页嵌入的 TTF、OTF、WOFF 或 WOFF2 文件。',
-  },
   'fonts.register': { ko: '등록', en: 'Register', ja: '登録', zh: '注册' },
   'fonts.registerLabel': {
     ko: '글꼴 등록',

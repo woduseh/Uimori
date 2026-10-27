@@ -273,9 +273,6 @@ export function ContentPicker({
           {!candidates.length && (
             <div className="content-picker-empty">
               <strong>{emptyTitle}</strong>
-              {!needle && activeFolder === 'all' && (
-                <small>{t('library.addNewResourcesInLibrary')}</small>
-              )}
             </div>
           )}
         </div>

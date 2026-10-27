@@ -144,7 +144,7 @@ export function TasksPanel({
   return (
     <section className="tasks-panel" aria-label={t('chatsettings.m1')}>
       <div className="panel-intro">
-        <p className="muted">{t('chatsettings.taskIntro', { title: detail.chat.title })}</p>
+        <p>{detail.chat.title}</p>
         {inspectedRun && (
           <button type="button" className="secondary" onClick={() => onInspect('')}>
             {t('chatsettings.m3')}
@@ -751,7 +751,6 @@ export function AppSettingsPanel({
                           <label className="settings-row">
                             <span className="settings-row-copy">
                               <strong>{t('settings.utilityPanelWidth')}</strong>
-                              <small>{t('settings.panelOverlap')}</small>
                             </span>
                             <select
                               aria-label={t('settings.utilityPanelWidth')}
@@ -898,7 +897,6 @@ export function AppSettingsPanel({
                       <div className="settings-row">
                         <div className="settings-row-copy">
                           <span>{t('chatsettings.m77')}</span>
-                          <p className="muted">{t('chatsettings.m78')}</p>
                         </div>
                         <div className="settings-row-control">
                           <button

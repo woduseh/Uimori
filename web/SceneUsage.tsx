@@ -182,19 +182,8 @@ export function SceneUsage({
               label={t('reader.loadingCacheAndLoreRecords')}
             />
           ) : null)}
-        {usage && (
-          <details className="scene-usage-help">
-            <summary>{t('reader.aboutUsage')}</summary>
-            <p>{t('reader.seeTaskDetailsForTotalUsageAcrossCalls')}</p>
-            {context && <p>{t('reader.contextUsageUsesTheInputLimitAtCallTime')}</p>}
-            {usage.inputScope === 'turn' && (
-              <p>{t('reader.codexUsageAccumulatesMultipleInternalCallsContextUsageUses')}</p>
-            )}
-            {context?.tokenizerFallback && (
-              <p>{t('reader.theSelectedTokenizerCouldNotBeLoadedAGeneral')}</p>
-            )}
-            {recordedDetail?.cache && <p>{t('reader.cacheTokensArePartOfTheInputAndAre')}</p>}
-          </details>
+        {usage && context?.tokenizerFallback && (
+          <p role="status">{t('reader.theSelectedTokenizerCouldNotBeLoadedAGeneral')}</p>
         )}
         {!usage && <p>{t('reader.noCallRecordUsageIsNotEstimatedForImported')}</p>}
       </div>

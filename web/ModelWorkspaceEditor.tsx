@@ -172,8 +172,7 @@ export function ModelWorkspaceEditor({
     role: string,
     label: string,
     selected: ModelRef | null,
-    onChange: (ref: ModelRef | null) => void,
-    description?: string
+    onChange: (ref: ModelRef | null) => void
   ) => {
     const model = library.models.find((item) => item.id === selected?.id);
     const displayLabel = label;
@@ -182,7 +181,6 @@ export function ModelWorkspaceEditor({
       <div className="settings-row model-role-setting">
         <div className="settings-row-copy">
           <label htmlFor={fieldId}>{displayLabel}</label>
-          {description && <small>{description}</small>}
           {selected && (!model || !canSelect(model)) && (
             <small role="status">{t('settings.m5')}</small>
           )}
@@ -232,7 +230,6 @@ export function ModelWorkspaceEditor({
     Number(draft.translationPolicy.judgment.enabled !== false);
   return (
     <section aria-label={t('settings.m13')} className="settings-section model-workspace-settings">
-      <p className="model-workspace-intro">{t('settings.m14')}</p>
       <fieldset disabled={busy} className="control-grid model-workspace-controls">
         <fieldset className="settings-group full model-primary-settings">
           <legend className="sr-only">{t('settings.m15')}</legend>
@@ -271,19 +268,11 @@ export function ModelWorkspaceEditor({
             </small>
           </summary>
           <div className="settings-group-body">
-            {selector(
-              'helper',
-              t('settings.m20'),
-              draft.helperModel ?? null,
-              (ref) => change({ ...draft, helperModel: ref }),
-              t('settings.m21')
+            {selector('helper', t('settings.m20'), draft.helperModel ?? null, (ref) =>
+              change({ ...draft, helperModel: ref })
             )}
-            {selector(
-              'context',
-              t('settings.m22'),
-              draft.contextModel ?? null,
-              (ref) => change({ ...draft, contextModel: ref }),
-              t('settings.m23')
+            {selector('context', t('settings.m22'), draft.contextModel ?? null, (ref) =>
+              change({ ...draft, contextModel: ref })
             )}
             {(['conversation', 'helper'] as const).map((role) => {
               const label = role === 'conversation' ? t('settings.m24') : t('settings.m25');
@@ -324,16 +313,11 @@ export function ModelWorkspaceEditor({
                 </div>
               );
             })}
-            <p className="model-summary-note">{t('settings.m28')}</p>
             {selector('title', t('settings.m30'), draft.titleModel ?? null, (ref) =>
               change({ ...draft, titleModel: ref })
             )}
-            {selector(
-              'script',
-              t('settings.m34'),
-              draft.scriptModel ?? null,
-              (ref) => change({ ...draft, scriptModel: ref }),
-              t('settings.m35')
+            {selector('script', t('settings.m34'), draft.scriptModel ?? null, (ref) =>
+              change({ ...draft, scriptModel: ref })
             )}
           </div>
         </details>
@@ -356,7 +340,6 @@ export function ModelWorkspaceEditor({
                 {t('settings.m42')}
                 <select
                   aria-label={t('settings.m42')}
-                  aria-describedby="translation-context-help"
                   value={draft.translationPolicy.contextMode ?? 'full'}
                   onChange={(event) =>
                     change({
@@ -372,9 +355,6 @@ export function ModelWorkspaceEditor({
                   <option value="source-only">{t('settings.m44')}</option>
                 </select>
               </label>
-              <p id="translation-context-help" className="refusal-settings-help">
-                {t('settings.m45')}
-              </p>
               <div className="refusal-field-row">
                 <label htmlFor="translation-call-limit">{t('settings.m46')}</label>
                 <input
@@ -400,11 +380,9 @@ export function ModelWorkspaceEditor({
                   }
                 />
               </div>
-              <p className="refusal-settings-help">{t('settings.m47')}</p>
             </section>
             <section aria-labelledby="refusal-settings-heading" className="task-behavior-section">
               <h4 id="refusal-settings-heading">{t('settings.m40')}</h4>
-              <p className="refusal-settings-help">{t('settings.m48')}</p>
               <section aria-label={t('settings.m49')} className="refusal-role">
                 <div className="refusal-role-heading">
                   <h5>{t('settings.m50')}</h5>
@@ -435,7 +413,6 @@ export function ModelWorkspaceEditor({
                     }
                   />
                 </div>
-                <p className="refusal-settings-help">{t('settings.m54')}</p>
               </section>
               <section aria-label={t('settings.m55')} className="refusal-role">
                 <div className="refusal-role-heading">
@@ -510,9 +487,7 @@ export function ModelWorkspaceEditor({
                     }
                   />
                 </div>
-                <p className="refusal-settings-help">{t('settings.m60')}</p>
               </section>
-              <p className="refusal-settings-help">{t('settings.m61')}</p>
             </section>
           </div>
         </details>

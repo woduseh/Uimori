@@ -417,12 +417,6 @@ export function ContextPanel({
             )}
           </>
         )}
-        <details className="context-help">
-          <summary>{t('settings.m309')}</summary>
-          <p className="muted">{t('settings.m310')}</p>
-          <p className="muted">{t('settings.m311')}</p>
-          {mode === 'full' && <p className="muted">{t('settings.m312')}</p>}
-        </details>
       </div>
       {mode === 'full' && (
         <AuthorNotesEditor

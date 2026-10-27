@@ -353,9 +353,6 @@ export function UsagePanel({
               )}
             </section>
           </div>
-          {current.totals.calls > 0 && (
-            <p className="usage-note">{t('visualpanels.costsUseRecordsFromTheTimeOf')}</p>
-          )}
           {current.totals.calls === 0 ? (
             <p className="usage-period-empty" role="status">
               {t('visualpanels.noRecordsForTheSelectedPeriod')}
@@ -441,17 +438,11 @@ export function UsagePanel({
               </details>
             </>
           )}
-          <details className="usage-section usage-help">
-            <summary>{t('visualpanels.aggregationRules')}</summary>
-            <p>{t('visualpanels.providerReportedCostsTakePriorityOtherwiseEstimates')}</p>
-            <p>{t('visualpanels.includesRetriesFailuresAndCancellationsThatWere')}</p>
-            <p>
-              {t('visualpanels.detailedTrackingBeganDeletedHistoricalRecordsAre', {
-                v0: formatDate(new Date(current.coverageSince), { timeZone: 'Asia/Seoul' }),
-              })}
-            </p>
-            <p>{t('visualpanels.timeModelTokensAndAmountsRemainAfter')}</p>
-          </details>
+          <p className="usage-note">
+            {t('visualpanels.detailedTrackingBeganDeletedHistoricalRecordsAre', {
+              v0: formatDate(new Date(current.coverageSince), { timeZone: 'Asia/Seoul' }),
+            })}
+          </p>
           {current.undated.calls > 0 && (
             <p className="usage-note">
               {t('visualpanels.callsWithUnknownTimeExcludedFromPeriod', {

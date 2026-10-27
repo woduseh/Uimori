@@ -183,7 +183,6 @@ export function PackageFeaturesEditor({
       aria-label={t('library.editPackageModulesAndFeatures')}
     >
       <section className="package-module-section">
-        <p className="muted">{t('library.attachingThisResourceAlsoUsesTheModules')}</p>
         {(value.modules ?? []).map((ref) => {
           const status = statuses[referenceKey(ref)];
           return (
@@ -222,9 +221,6 @@ export function PackageFeaturesEditor({
             excludeIds={[value.id, ...(value.modules ?? []).map((ref) => ref.id)]}
           />
         </div>
-        <footer className="package-module-footer">
-          <small>{t('library.editsToModulesInTheLibraryApply')}</small>
-        </footer>
       </section>
       <div className="package-module-status" aria-live="polite">
         {loading && (

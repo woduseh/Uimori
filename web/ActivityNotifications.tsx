@@ -95,7 +95,6 @@ export function ActivityNotifications({
       className="activity-notifications"
     >
       <div className="activity-notification-toolbar">
-        <p>{t('helpers.m285')}</p>
         <button
           type="button"
           className="secondary"

@@ -229,8 +229,6 @@ export function ModelPricingEditor({
     <details className="model-pricing full" data-testid="model-pricing-editor">
       <summary>{t('providers.m499')}</summary>
       <div className="model-pricing-body">
-        <p>{t('providers.m500')}</p>
-        <p className="muted">{t('providers.m501')}</p>
         <label>
           {t('providers.m502')}
           <select
@@ -254,7 +252,6 @@ export function ModelPricingEditor({
             {longInput('longContext', 'Standard')}
             <ToggleRow
               label={t('providers.m505')}
-              description={t('providers.m506')}
               checked={draft.flexEnabled}
               onChange={(flexEnabled) => onChange({ ...draft, flexEnabled })}
             />

@@ -209,12 +209,6 @@ export const messages = {
     ja: '処理中…',
     zh: '处理中…',
   },
-  'prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown': {
-    ko: '원문은 저장할 때 검증하며, 오류가 있으면 작성한 내용을 유지한 채 알려드려요.',
-    en: 'Source input is validated on save. Errors are shown while keeping your input.',
-    ja: 'ソース入力は保存時に検証します。エラーがあれば入力を保持してお知らせします。',
-    zh: '保存时验证源码输入。如有错误，会保留输入并提示。',
-  },
   'prompts.uiSelectedPromptNotFound': {
     ko: '선택한 프롬프트를 찾을 수 없어요.',
     en: 'Selected prompt not found.',
@@ -1162,12 +1156,6 @@ export const messages = {
     en: 'Verify canon information with web search',
     ja: '原作情報をウェブで確認',
     zh: '通过网络搜索核实原作信息',
-  },
-  'prompts.uiStoryGuideWebSearchScope': {
-    ko: '검색 비용이 추가될 수 있고, 기준 시점 이후의 내용이 포함될 수 있어요.',
-    en: 'Search may add costs and include spoilers beyond your reference point.',
-    ja: '検索費用が増えたり、基準時点より後の内容が含まれたりする場合があります。',
-    zh: '搜索可能产生额外费用，并包含参考时间点之后的剧透。',
   },
   'prompts.uiStoryGuideWebSources': {
     ko: '웹 검색 출처',

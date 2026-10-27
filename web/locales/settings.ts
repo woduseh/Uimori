@@ -606,12 +606,6 @@ export const messages = {
     ja: '自動翻訳の既定値を読み込めませんでした。',
     zh: '无法加载自动翻译默认值。',
   },
-  'settings.m101': {
-    ko: '채팅마다 따로 설정하지 않았다면 새로 생성한 본문을 현재 번역 모델로 자동 번역해요. 이미 생성된 장면은 다시 번역하지 않아요.',
-    en: 'Automatically translates newly generated writing when the chat has no override. Existing tasks are unchanged. Uses the current translation model.',
-    ja: 'チャットごとの指定がない場合、新しく生成した本文を自動翻訳します。既存のタスクには遡及せず、現在の翻訳モデルを使用します。',
-    zh: '聊天无单独设置时自动翻译新生成的正文。不追溯应用于现有任务，使用当前翻译模型。',
-  },
   'settings.m102': {
     ko: '전체 자동 번역 기본값',
     en: 'Global automatic translation default',
@@ -821,18 +815,6 @@ export const messages = {
     en: 'Expand collaboration details to review.',
     ja: '協業の詳細を開いて確認してください。',
     zh: '请展开协作详情进行检查。',
-  },
-  'settings.m137': {
-    ko: '보조 에이전트가 인물이나 설정에 관한 의견을 제안하고, 본문 모델이 최종 원고를 써요.',
-    en: 'Supporting agents suggest ideas about characters and lore; the main model writes the final manuscript.',
-    ja: '補助エージェントが人物や設定への意見を提案し、本文モデルが最終原稿を書きます。',
-    zh: '辅助智能体就人物和设定提出意见，正文模型撰写最终稿。',
-  },
-  'settings.m138': {
-    ko: '꺼 두어도 설정한 에이전트 구성은 그대로 보관돼요.',
-    en: 'Collaboration is off. Settings are preserved and can be edited when re-enabled.',
-    ja: '協業は無効です。設定は保持され、再度有効にすると編集を続けられます。',
-    zh: '协作已关闭，设置已保留。重新启用后可继续编辑。',
   },
   'settings.m139': {
     ko: '기본은 꺼져 있어요. 켠 뒤 함께할 에이전트를 골라 주세요.',
@@ -1194,12 +1176,6 @@ export const messages = {
     ja: 'ロアコンテキストの既定値を読み込み中…',
     zh: '正在加载设定上下文默认值…',
   },
-  'settings.m200': {
-    ko: '새 채팅의 기본값이에요. 기존 채팅은 바뀌지 않아요.',
-    en: 'Defaults for new chats. Existing chats are unchanged.',
-    ja: '新しいチャットの既定値です。既存のチャットは変わりません。',
-    zh: '新聊天的默认值，现有聊天不变。',
-  },
   'settings.m201': {
     ko: '초기값으로 되돌리기',
     en: 'Restore original defaults',
@@ -1368,35 +1344,11 @@ export const messages = {
     ja: '判定入力のトークン上限',
     zh: '判定输入词元上限',
   },
-  'settings.m230': {
-    ko: '단위와 예산 설명',
-    en: 'Units and budgets',
-    ja: '単位と予算の説明',
-    zh: '单位与预算说明',
-  },
   'settings.m231': {
     ko: '로어를 유지할 최대 크기를 정해요.',
     en: 'Set the maximum size of retained lore.',
     ja: '保持するロアの最大サイズを設定します。',
     zh: '设置保留设定的最大容量。',
-  },
-  'settings.m232': {
-    ko: '토큰은 로컬 추정값으로, 모델의 실제 사용량과 다를 수 있어요.',
-    en: 'Tokens are local estimates and may differ from actual model usage.',
-    ja: 'トークン数はローカル推定値で、実際の使用量と異なる場合があります。',
-    zh: '词元为本地估算值，可能与模型实际用量不同。',
-  },
-  'settings.m233': {
-    ko: '조회 로어가 한도를 넘으면 일부 구간을 다음 입력에서 제외해요. 고정 자료가 한도를 넘으면 자르지 않고 오류를 알려요.',
-    en: 'When retrieved lore exceeds its limit, some segments are excluded from the next input. Pinned resources exceeding their limit produce an error instead of being truncated.',
-    ja: '参照ロアが上限を超えると一部区間を次の入力から除外します。固定資料が超過した場合は切り捨てずエラーにします。',
-    zh: '查询设定超限时，从下次输入中排除部分片段。固定资料超限时不截断，而是报告错误。',
-  },
-  'settings.m234': {
-    ko: '관련성 판단은 JEV를 사용해요. 전체 입력 한도와 프롬프트 배치는 별도예요.',
-    en: 'Relevance is judged by JEV. Total input limits and prompt placement are separate.',
-    ja: '関連性はJEVで判定します。全体の入力上限とプロンプト配置は別です。',
-    zh: '相关性使用JEV判断。总输入上限和提示词布局另行设置。',
   },
   'settings.m235': {
     ko: '선별 기준과 용량의 입력을 확인해 주세요.',
@@ -1415,12 +1367,6 @@ export const messages = {
     en: 'Preview lore for next generation',
     ja: '次の生成のロアをプレビュー',
     zh: '预览下次生成的设定',
-  },
-  'settings.m238': {
-    ko: '저장된 자료, 프롬프트와 위 정책 초안을 사용해요. 모델을 호출하거나 조회 기록을 바꾸지 않아요. 다른 채팅 설정의 초안은 먼저 저장해 주세요.',
-    en: 'Uses saved resources and prompts with this policy draft. Does not call models or alter retrieval history. Save other chat setting drafts first.',
-    ja: '保存済みの資料、プロンプトとこの方針の下書きを使用します。モデル呼び出しや参照記録の変更は行いません。他の設定の下書きは先に保存してください。',
-    zh: '使用已保存资料、提示词和当前策略草稿。不调用模型或更改查询记录，请先保存其他聊天设置草稿。',
   },
   'settings.m239': {
     ko: '새 장면, 조회 로어 정리 포함',
@@ -1842,30 +1788,6 @@ export const messages = {
     ja: '編集をキャンセル',
     zh: '取消编辑',
   },
-  'settings.m309': {
-    ko: '컨텍스트 관리 도움말',
-    en: 'Context management help',
-    ja: 'コンテキスト管理のヘルプ',
-    zh: '上下文管理帮助',
-  },
-  'settings.m310': {
-    ko: '사용할 수 있는 요약과 그 이후의 원문을 다음 요청에 사용해요.',
-    en: 'Uses the available summary and later source text for the next request.',
-    ja: '利用できる要約とその後の原文を次のリクエストに使用します。',
-    zh: '下次请求使用可用摘要和之后的原文。',
-  },
-  'settings.m311': {
-    ko: '압축해도 원문은 그대로 보존해요.',
-    en: 'Compression preserves the original text.',
-    ja: '圧縮しても原文は保持します。',
-    zh: '压缩后原文保持不变。',
-  },
-  'settings.m312': {
-    ko: '지속적인 설정 정정은 아래 메모에 남겨요.',
-    en: 'Put persistent lore corrections in the notes below.',
-    ja: '継続的な設定修正は下のメモに残してください。',
-    zh: '持续的设定修正请写在下方笔记中。',
-  },
   'settings.m313': {
     ko: '입력 추정치 미확인',
     en: 'Input estimate unknown',
@@ -2078,12 +2000,6 @@ export const messages = {
     ja: 'アシスタントと創作オプションの幅',
     zh: '助手与创作选项宽度',
   },
-  'settings.panelOverlap': {
-    ko: '공간이 부족하면 본문 위에 열려요.',
-    en: 'Opens over the manuscript when space is limited.',
-    ja: 'スペースが足りない場合は本文の上に開きます。',
-    zh: '空间不足时会覆盖在正文上方。',
-  },
   'settings.outerBackground': {
     ko: '본문 바깥 배경',
     en: 'Background outside the manuscript',
@@ -2144,23 +2060,11 @@ export const messages = {
     ja: '未保存の変更',
     zh: '未保存更改',
   },
-  'settings.vertexEndpoint': {
-    ko: '프로젝트 ID로 생성한 요청 주소예요. 직접 수정할 수 있어요.',
-    en: 'Generated from the project ID. You can edit this request URL.',
-    ja: 'プロジェクトIDから生成したリクエスト先です。直接編集できます。',
-    zh: '根据项目 ID 生成的请求地址，可直接修改。',
-  },
   'settings.editColors': {
     ko: '편집할 색상',
     en: 'Colors to edit',
     ja: '編集する配色',
     zh: '要编辑的配色',
-  },
-  'settings.layoutColorStorage': {
-    ko: '미지정 색은 Uimori 기본값을 따라요. 편집한 색은 레이아웃에 저장되며, 적용하려면 팔레트에서 ‘레이아웃 원래 색상’을 골라 주세요.',
-    en: 'Unspecified colors use Uimori defaults. Edited colors are saved in the layout; select Original layout colors in the palette to apply them.',
-    ja: '未指定の色はUimoriの既定色を使います。編集した色はレイアウトに保存されるので、適用時はパレットで「レイアウト本来の色」を選んでください。',
-    zh: '未指定的颜色使用Uimori默认值。编辑的颜色保存在布局中，应用时请在配色中选择“布局原有颜色”。',
   },
   'settings.themeSelection': {
     ko: '{title}, {source}',
@@ -2174,23 +2078,5 @@ export const messages = {
     ja: '{title}、{source}を継承',
     zh: '{title}，继承自{source}',
   },
-  'settings.themeExportScope': {
-    ko: '내보내기는 각 레이아웃 자료만 포함해요. 현재 팔레트와 배경 조합은 포함하지 않아요.',
-    en: 'Exports contain each layout resource only, excluding the current palette and background combination.',
-    ja: 'エクスポートには各レイアウト資料のみを含み、現在のパレットと背景の組み合わせは含みません。',
-    zh: '导出仅包含各布局资料，不包含当前配色与背景组合。',
-  },
   'settings.workflowEntered': { ko: '입력됨', en: 'Entered', ja: '入力済み', zh: '已输入' },
-  'settings.sharedIllustrationEnvironment': {
-    ko: '같은 생성기를 쓰는 프리셋은 이 연결과 모델을 공유해요. 변경은 다음 삽화 요청부터 적용돼요.',
-    en: 'Presets using the same generator share these connections and models. Changes apply to new illustration requests.',
-    ja: '同じ生成器のプリセットはこの接続とモデルを共有します。変更は次の挿絵リクエストから適用します。',
-    zh: '使用相同生成器的预设共用这些连接与模型，更改从下次插图请求开始应用。',
-  },
-  'settings.workflowCompatibility': {
-    ko: '워크플로를 입력해도 연결한 ComfyUI에서 실행 가능한지는 확인이 필요해요.',
-    en: 'An entered workflow still needs to be checked for compatibility with the connected ComfyUI.',
-    ja: 'ワークフローを入力しても、接続先のComfyUIで実行できるか確認が必要です。',
-    zh: '输入工作流后仍需确认能否在连接的 ComfyUI 上运行。',
-  },
 } as const;

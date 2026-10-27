@@ -29,42 +29,6 @@ export const messages = {
     ja: 'モジュール',
     zh: '模块',
   },
-  'library.yourConversationPartner': {
-    ko: '함께 이야기할 상대예요.',
-    en: 'Your conversation partner.',
-    ja: '一緒に話す相手です。',
-    zh: '与你交谈的对象。',
-  },
-  'library.describeTheirPersonalityAndVoiceToCreate': {
-    ko: '성격과 말투를 적어 나만의 대화 상대를 만들어 보세요.',
-    en: 'Describe their personality and voice to create your own companion.',
-    ja: '性格や話し方を書いて、自分だけの相手を作りましょう。',
-    zh: '描述性格与说话方式，创建专属的交谈对象。',
-  },
-  'library.aPersonaIsTheCharacterYouPlay': {
-    ko: '페르소나는 내가 맡을 인물이에요.',
-    en: 'A persona is the character you play.',
-    ja: 'ペルソナはあなたが演じる人物です。',
-    zh: '角色是你扮演的人物。',
-  },
-  'library.describeYourNameBackgroundAndHowOthers': {
-    ko: '이름과 배경, 상대가 나를 어떻게 부를지 적어 보세요.',
-    en: 'Describe your name, background, and how others address you.',
-    ja: '名前や背景、相手からの呼ばれ方を書きましょう。',
-    zh: '描述姓名、背景以及对方如何称呼你。',
-  },
-  'library.modulesAddSettingsAndInstructionsToConversations': {
-    ko: '모듈은 대화에 더할 설정과 지침이에요.',
-    en: 'Modules add settings and instructions to conversations.',
-    ja: 'モジュールは会話に設定や指示を加えます。',
-    zh: '模块为对话添加设定与指引。',
-  },
-  'library.createWorldsStylesAndSharedRulesFor': {
-    ko: '세계관, 문체, 함께 지킬 규칙을 만들어 여러 채팅에 더할 수 있어요.',
-    en: 'Create worlds, styles, and shared rules for use across chats.',
-    ja: '世界観や文体、共通のルールを作り、複数のチャットで使えます。',
-    zh: '创建世界观、文风与共同规则，用于多个聊天。',
-  },
   'library.couldNotCompleteFolderPlacement': {
     ko: '폴더 배치를 완료하지 못했어요.',
     en: 'Could not complete folder placement.',
@@ -953,12 +917,6 @@ export const messages = {
     ja: '画像配置の担当',
     zh: '图片排布负责方',
   },
-  'library.theWriterInsertsImageTagsWhileWriting': {
-    ko: '작문 모델은 집필 중 이미지 태그를 직접 넣고, JEV는 완성된 본문에 어울리는 이미지를 골라요. 원문과 번역에 모두 적용돼요.',
-    en: 'The writer inserts image tags while writing; JEV selects images from the finished text. The same method applies to originals and translations.',
-    ja: '作家モデルは文章とともに画像タグを入れ、JEVは完成した文章から画像を選びます。原文と翻訳に同じ方式を使います。',
-    zh: '写作模型在写作时插入图片标签，JEV则从成稿中选择图片。原文与译文使用相同方式。',
-  },
   'library.writingModel': {
     ko: '작문 모델',
     en: 'Writing model',
@@ -1535,12 +1493,6 @@ export const messages = {
     ja: '併用するモジュール',
     zh: '共用模块',
   },
-  'library.attachingThisResourceAlsoUsesTheModules': {
-    ko: '이 자료와 함께 사용해요. 같은 모듈은 한 번만 포함해요.',
-    en: 'Used with this resource. Each module is included only once.',
-    ja: 'この資料と一緒に使います。同じモジュールは一度だけ含めます。',
-    zh: '与此资料一起使用。同一模块仅包含一次。',
-  },
   'library.detachModule': {
     ko: '모듈 연결 해제',
     en: 'Detach module',
@@ -1552,12 +1504,6 @@ export const messages = {
     en: 'Common module to attach',
     ja: '接続する共通モジュール',
     zh: '要关联的通用模块',
-  },
-  'library.editsToModulesInTheLibraryApply': {
-    ko: '서재에서 모듈을 수정하면 다음 실행부터 최신 내용을 사용해요.',
-    en: 'Edits to modules in the library apply to the next run.',
-    ja: 'ライブラリでモジュールを編集すると、次の実行から最新の内容を使います。',
-    zh: '在资料库修改模块后，从下次运行起使用最新内容。',
   },
   'library.loadingResourcesAndFeatures': {
     ko: '자료와 기능 목록을 불러오는 중이에요…',
@@ -2290,12 +2236,6 @@ export const messages = {
     en: 'No resources yet.',
     ja: 'まだ資料は登録されていません。',
     zh: '尚未添加资料。',
-  },
-  'library.addNewResourcesInLibrary': {
-    ko: '새 자료는 서재에서 추가할 수 있어요.',
-    en: 'Add new resources in the library.',
-    ja: '新しい資料はライブラリで追加できます。',
-    zh: '可在资料库中添加新资料。',
   },
   'library.detachNamedModule': {
     ko: '{title} 연결 해제',

@@ -338,13 +338,6 @@ export function JevProviderSettings({
                   {t('providers.m358')}
                 </a>
               </div>
-              <details className="provider-auth-settings">
-                <summary>{t('providers.m359')}</summary>
-                <div className="provider-auth-settings-body">
-                  <p>{t('providers.m360')}</p>
-                  <p>{t('providers.m361')}</p>
-                </div>
-              </details>
             </fieldset>
             <div className="provider-actions full provider-save-actions">
               {status.hasSavedKey && (
@@ -394,11 +387,9 @@ export function JevProviderSettings({
                 </div>
               </dl>
               <div className="jev-judgment-settings">
-                <small>{t('providers.jevExperimental')}</small>
                 <div className="jev-settings-rows">
                   <ToggleRow
                     label={t('providers.jevImages')}
-                    description={t('providers.jevImagesHelp')}
                     checked={status.settings.images}
                     disabled={busy || !!settingsError}
                     onChange={(images) => void changeSettings({ images })}
@@ -534,15 +525,6 @@ export function JevProviderSettings({
               </div>
             )}
           </section>
-          <details hidden={view !== 'model'} className="provider-auth-settings">
-            <summary>{t('providers.m387')}</summary>
-            <div className="provider-auth-settings-body">
-              <p>{t('providers.m388')}</p>
-              <p>{t('providers.m389')}</p>
-              <p>{t('providers.m390')}</p>
-              <p>{t('providers.m391')}</p>
-            </div>
-          </details>
         </>
       )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}

@@ -1,7 +1,7 @@
 .codex-agent-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
 }
 .codex-agent-heading h3 {
@@ -108,16 +108,6 @@
 .codex-account-card + .provider-actions {
   margin-top: 0;
   justify-content: flex-end;
-}
-.codex-agent-help {
-  margin-top: 0;
-  border-top: var(--hairline) solid var(--line);
-  padding-top: 8px;
-}
-.codex-agent-help summary {
-  cursor: pointer;
-  min-height: var(--control-h);
-  align-content: center;
 }
 .codex-agent-refreshing svg {
   animation: codex-agent-spin 1s linear infinite;

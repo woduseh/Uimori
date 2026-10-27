@@ -297,7 +297,6 @@ export function BackupSettings({
                 ))}
               </details>
             ) : null}
-            <small className="muted">{t('transfer.m172')}</small>
           </>
         )}
         {!status && !error && (

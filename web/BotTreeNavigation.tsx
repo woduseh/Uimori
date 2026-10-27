@@ -468,7 +468,7 @@ export function BotNavigation(
           )}
           {props.onToggleHelper && (
             <IconButton
-              label={t('main.m015')}
+              label={t('main.m062')}
               icon={Sparkles}
               aria-pressed={props.helperOpen}
               aria-expanded={props.helperOpen}
@@ -783,7 +783,7 @@ export function BotNavigation(
               onClick={props.onToggleHelper}
             >
               <Sparkles size={18} aria-hidden="true" />
-              {t('main.m015')}
+              {t('main.m062')}
             </button>
           )}
           <button type="button" className="nav-button" onClick={onSettings}>

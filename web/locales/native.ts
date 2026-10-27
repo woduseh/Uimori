@@ -222,18 +222,6 @@ export const messages = {
     ja: 'スクリプト参照名',
     zh: '脚本引用名称',
   },
-  'native.text_59d5a7b430': {
-    ko: '에셋 이름은 원문의 연결에 사용돼요. 파일을 교체해도 이름과 연결을 유지해요.',
-    en: 'Source references use asset names. Replacing files preserves names and references.',
-    ja: 'アセット名はソースの参照に使われます。ファイルを置き換えても名前と参照は保持されます。',
-    zh: '资源名称用于源码引用，替换文件后名称和引用保持不变。',
-  },
-  'native.text_f87c057551': {
-    ko: '대표 이미지 등으로 추가한 이미지예요. CHARX 내보내기에도 포함돼요.',
-    en: 'Added as a portrait or other image. Included in CHARX exports.',
-    ja: '代表画像などとして追加した画像です。CHARXの書き出しにも含まれます。',
-    zh: '此图片作为封面等添加，也会包含在CHARX导出中。',
-  },
   'native.text_597b8746b1': {
     ko: '파일 교체',
     en: 'Replace file',
@@ -557,12 +545,6 @@ export const messages = {
     en: 'Lore insertion order',
     ja: 'ロアの挿入順序',
     zh: '设定插入顺序',
-  },
-  'native.text_e2d7fc1a5d': {
-    ko: 'CBS 조건과 나머지 원문 필드는 그대로 유지돼요.',
-    en: 'CBS conditions and other source fields are preserved.',
-    ja: 'CBS条件とその他のソースフィールドは保持されます。',
-    zh: 'CBS条件和其他源码字段保持不变。',
   },
   'native.text_c4a928ce23': {
     ko: '첫 로어를 추가하거나 폴더부터 만들어 정리해 주세요.',
@@ -1368,12 +1350,6 @@ export const messages = {
     ja: '未反映のソースがあります。',
     zh: '有未应用的源码编辑。',
   },
-  'native.text_72d58851e7': {
-    ko: '한 줄에 한 항목',
-    en: 'One item per line',
-    ja: '一行に一項目',
-    zh: '每行一项',
-  },
   'native.text_ba1543a09d': {
     ko: '원문 적용',
     en: 'Apply source',
@@ -1661,12 +1637,6 @@ export const messages = {
     en: 'Lua and triggers',
     ja: 'Luaとトリガー',
     zh: 'Lua与触发器',
-  },
-  'native.text_33506f6f0f': {
-    ko: '동작 원문은 Risu 문법과 실행 순서를 유지해요.',
-    en: 'Source preserves Risu syntax and execution order.',
-    ja: 'ソースはRisuの構文と実行順序を保持します。',
-    zh: '源码保留Risu语法和执行顺序。',
   },
   'native.text_b5b6dfa0bb': {
     ko: '트리거 선택',

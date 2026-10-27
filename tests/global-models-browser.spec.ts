@@ -80,7 +80,6 @@ for (const width of DEFAULT_WIDTHS) {
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
     const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
-    await expect(editor).toContainText('변경한 설정은 이후 작업부터 적용돼요.');
     await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
     const supportingSummary = editor.locator('summary').filter({ hasText: /^보조 작업/ });
     await expect(supportingSummary).toHaveCount(1);

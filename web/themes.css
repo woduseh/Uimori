@@ -236,12 +236,6 @@
 .theme-sample .theme-frame {
   padding-block: 12px;
 }
-.theme-help {
-  font-size: var(--font-small);
-  line-height: 1.8;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
 .theme-recovery {
   background: var(--accent-soft);
   padding: 12px;

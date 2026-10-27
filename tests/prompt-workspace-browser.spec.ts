@@ -445,7 +445,7 @@ test('PWS05 summary length controls save independently and survive reload on mob
   await expect(models.getByLabel('도우미 요약 길이', { exact: true })).toHaveValue('2048');
 });
 
-test('PWS06 role model settings show concise help and compact sections at both widths', async ({
+test('PWS06 role model settings keep summary choices in compact sections at both widths', async ({
   page,
 }, info) => {
   await page.goto('/');
@@ -463,8 +463,12 @@ test('PWS06 role model settings show concise help and compact sections at both w
     await heading.click();
     await expect(models.getByLabel('세션 요약 길이', { exact: true })).toBeVisible();
     await expect(models.getByLabel('도우미 요약 길이', { exact: true })).toBeVisible();
-    await expect(group.locator('.model-summary-note')).toContainText('8,192');
-    await expect(group.locator('.model-summary-note')).toContainText('4,096');
+    await expect(
+      models.getByLabel('세션 요약 길이', { exact: true }).locator('option[value="8192"]')
+    ).toHaveCount(1);
+    await expect(
+      models.getByLabel('도우미 요약 길이', { exact: true }).locator('option[value="4096"]')
+    ).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
       true
     );

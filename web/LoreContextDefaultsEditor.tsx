@@ -86,7 +86,6 @@ export function LoreContextDefaultsEditor({
     );
   return (
     <section className="settings-section" aria-label={t('settings.m198')}>
-      <p className="muted">{t('settings.m200')}</p>
       <fieldset disabled={busy} className="lore-context-fields">
         <LoreContextPolicyEditor
           value={policyOf(draft)}

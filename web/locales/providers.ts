@@ -6,23 +6,11 @@ export const messages = {
     ja: 'Jailbreak',
     zh: 'Jailbreak',
   },
-  'providers.jevExperimental': {
-    ko: '실험 기능이며 다음 판단부터 적용해요.',
-    en: 'Experimental features. Applies from the next judgment.',
-    ja: '実験的な機能です。次の判定から適用されます。',
-    zh: '实验功能，从下一次判断开始生效。',
-  },
   'providers.jevImages': {
     ko: '이미지를 보고 선택',
     en: 'Choose by viewing images',
     ja: '画像を見て選択',
     zh: '查看图片后选择',
-  },
-  'providers.jevImagesHelp': {
-    ko: '선택 후보 이미지를 TypeSafe에 전송해요.',
-    en: 'Sends candidate images to TypeSafe.',
-    ja: '選択候補の画像をTypeSafeに送信します。',
-    zh: '将候选图片发送给 TypeSafe。',
   },
   'providers.jevLongContext': {
     ko: '긴 컨텍스트',
@@ -798,24 +786,6 @@ export const messages = {
     ja: 'このプロバイダーを使用',
     zh: '使用此提供商',
   },
-  'providers.m150': {
-    ko: '설정 → Codex 연결에서 로그인해 주세요.',
-    en: 'Sign in under Settings → Codex connection.',
-    ja: '設定 → Codex接続でログインしてください。',
-    zh: '请在设置 → Codex 连接中登录。',
-  },
-  'providers.m151': {
-    ko: '서비스 계정 JSON을 등록하면 사용할 수 있어요.',
-    en: 'Register a service account JSON file to enable access.',
-    ja: 'サービスアカウントJSONを登録すると使用できます。',
-    zh: '添加服务账号 JSON 后即可使用。',
-  },
-  'providers.m152': {
-    ko: 'API 키는 서버 DB에 저장돼요. 키를 저장하면 재시작 없이 사용할 수 있어요.',
-    en: 'API keys are stored in the server database. Saved keys can be used without restarting.',
-    ja: 'APIキーはサーバーDBに保存されます。保存すると再起動せずに使用できます。',
-    zh: 'API 密钥保存在服务器数据库中。保存后无需重启即可使用。',
-  },
   'providers.m153': {
     ko: '연결 안내',
     en: 'Connection guide',
@@ -845,12 +815,6 @@ export const messages = {
     en: 'Model list of the signed-in agent',
     ja: 'ログイン中のエージェントのモデル一覧',
     zh: '已登录代理的模型列表',
-  },
-  'providers.m158': {
-    ko: '이 정보는 Uimori의 연결 설정을 설명해요. 모델별 기능과 요금은 확인되지 않았어요.',
-    en: 'This describes Uimori connection settings. Model-specific capabilities and pricing have not been verified.',
-    ja: 'Uimoriの接続設定についての説明です。モデルごとの機能と料金は未確認です。',
-    zh: '此信息说明 Uimori 的连接设置，尚未确认各模型的功能和费用。',
   },
   'providers.m159': {
     ko: '저장한 프로바이더예요.',
@@ -1134,12 +1098,6 @@ export const messages = {
     ja: '新しい実行でこのモデルを使用',
     zh: '在新运行中使用此模型',
   },
-  'providers.m208': {
-    ko: '끄면 모델 선택 목록에서도 숨겨요.',
-    en: 'Turning this off also hides the model from selection lists.',
-    ja: 'オフにするとモデル選択リストからも非表示になります。',
-    zh: '关闭后也会从模型选择列表中隐藏。',
-  },
   'providers.m209': {
     ko: '생성 설정',
     en: 'Generation settings',
@@ -1170,35 +1128,11 @@ export const messages = {
     ja: 'Batch、非同期、50%割引',
     zh: 'Batch，异步，五折',
   },
-  'providers.m216': {
-    ko: '본문 생성에 Anthropic Batch를 사용해요. 응답은 완료될 때 한 번에 표시돼요.',
-    en: 'Use Anthropic Batch for body generation. The response appears all at once when complete.',
-    ja: '本文生成にAnthropic Batchを使用します。応答は完了時にまとめて表示されます。',
-    zh: '正文生成使用 Anthropic Batch。响应在完成时一次性显示。',
-  },
   'providers.m217': {
     ko: '서비스 등급',
     en: 'Service tier',
     ja: 'サービス階層',
     zh: '服务等级',
-  },
-  'providers.m221': {
-    ko: '모델 설정 도움말',
-    en: 'Model settings help',
-    ja: 'モデル設定のヘルプ',
-    zh: '模型设置帮助',
-  },
-  'providers.m223': {
-    ko: '새 모델의 옵션이 맞지 않으면 계열을 직접 고르세요. 미지정 옵션은 보내지 않아요.',
-    en: 'If the options do not fit a new model, select its family manually. Unspecified options are not sent.',
-    ja: '新しいモデルにオプションが合わない場合は、系統を直接選んでください。未指定のオプションは送信されません。',
-    zh: '如果新模型的选项不匹配，请手动选择系列。未指定的选项不会发送。',
-  },
-  'providers.m224': {
-    ko: '출력 토큰 수는 모델에 전달하는 참고값이며, 최대 길이를 보장하지 않아요. 원하는 분량은 프롬프트에 적어 주세요.',
-    en: 'The output token count is guidance sent to the model and does not guarantee a maximum length. Describe the desired length in the prompt.',
-    ja: '出力トークン数はモデルに渡す参考値で、最大の長さを保証しません。希望する分量はプロンプトに記載してください。',
-    zh: '输出 token 数是传递给模型的参考值，不保证最大长度。请在提示词中说明期望篇幅。',
   },
   'providers.m227': {
     ko: '지정 해제',
@@ -1218,35 +1152,11 @@ export const messages = {
     ja: 'アプリの既定値',
     zh: '应用默认值',
   },
-  'providers.m231': {
-    ko: '컨텍스트와 토큰 계산 도움말',
-    en: 'Context and token counting help',
-    ja: 'コンテキストとトークン計算のヘルプ',
-    zh: '上下文和 token 计算帮助',
-  },
-  'providers.m232': {
-    ko: '로컬에서만 계산해요. 토큰 계산 API를 호출하지 않으며, 생성 후에는 프로바이더가 보고한 사용량을 표시해요.',
-    en: 'Calculated locally only. No token-counting API is called. After generation, usage reported by the provider is shown.',
-    ja: 'ローカルのみで計算します。トークン計算APIは呼び出しません。生成後はプロバイダーが報告した使用量を表示します。',
-    zh: '仅在本地计算，不调用 token 计算 API。生成后会显示提供商报告的用量。',
-  },
-  'providers.m233': {
-    ko: '입력 한도를 비우면 272,000토큰을 사용해요. 한도에 가까워지면 앞선 대화를 요약해요.',
-    en: 'Leave the input limit empty to use 272,000 tokens. Earlier conversations are summarized as the limit approaches.',
-    ja: '入力上限が空欄の場合は272,000トークンを使用します。上限に近づくと、以前の会話を要約します。',
-    zh: '输入上限留空时使用 272,000 token。接近上限时会摘要较早的对话。',
-  },
   'providers.m234': {
     ko: '생성 옵션',
     en: 'Generation options',
     ja: '生成オプション',
     zh: '生成选项',
-  },
-  'providers.m235': {
-    ko: '라우팅이나 추가 옵션을 직접 지정해요. 같은 프로바이더 옵션은 이 JSON의 값이 우선해요.',
-    en: 'Specify routing or additional options directly. Values in this JSON take precedence over matching provider options.',
-    ja: 'ルーティングや追加オプションを直接指定します。同じプロバイダーオプションには、このJSONの値が優先されます。',
-    zh: '直接指定路由或额外选项。相同的提供商选项以此 JSON 中的值为准。',
   },
   'providers.m236': {
     ko: '프로바이더 기본값',
@@ -1338,30 +1248,6 @@ export const messages = {
     ja: '保持時間を指定するには、キャッシュ基準点または自動キャッシュを選んでください。現在の方式では、保持時間をプロバイダーの既定値に戻す必要があります。',
     zh: '要指定保留时长，请选择缓存断点或自动缓存。当前模式需要将保留时长恢复为提供商默认值。',
   },
-  'providers.m254': {
-    ko: '프롬프트의 캐시 기준점도 적용하지 않아요.',
-    en: 'Prompt cache breakpoints are also ignored.',
-    ja: 'プロンプトのキャッシュ基準点も適用しません。',
-    zh: '也不会应用提示词中的缓存断点。',
-  },
-  'providers.m255': {
-    ko: 'Claude의 60분 캐시는 5분보다 캐시 쓰기 비용이 더 커요.',
-    en: "Claude's 60-minute cache costs more to write than its 5-minute cache.",
-    ja: 'Claudeの60分キャッシュは、5分キャッシュより書き込み費用が高くなります。',
-    zh: 'Claude 的 60 分钟缓存写入费用高于 5 分钟缓存。',
-  },
-  'providers.m256': {
-    ko: '자동 캐싱 도움말',
-    en: 'Automatic caching help',
-    ja: '自動キャッシュのヘルプ',
-    zh: '自动缓存帮助',
-  },
-  'providers.m257': {
-    ko: '자동 캐싱은 캐시 기준점 한 개를 사용해요. 프롬프트에서 직접 지정하는 기준점은 최대 3개예요.',
-    en: 'Automatic caching uses one cache breakpoint. You can specify up to 3 breakpoints directly in the prompt.',
-    ja: '自動キャッシュはキャッシュ基準点を1つ使用します。プロンプトで直接指定できる基準点は最大3つです。',
-    zh: '自动缓存会使用一个缓存断点。提示词中最多可手动指定 3 个断点。',
-  },
   'providers.m258': {
     ko: '도구',
     en: 'Tools',
@@ -1386,12 +1272,6 @@ export const messages = {
     ja: '評価メタデータ',
     zh: '评估元数据',
   },
-  'providers.m262': {
-    ko: '평가 컨텍스트와 검토자 결과에 사용할 정보를 선택해요.',
-    en: 'Select information to use in evaluation context and reviewer results.',
-    ja: '評価コンテキストとレビュー結果に使用する情報を選びます。',
-    zh: '选择评估上下文和评审结果中使用的信息。',
-  },
   'providers.m263': {
     ko: '평가 컨텍스트 제공',
     en: 'Provide evaluation context',
@@ -1410,12 +1290,6 @@ export const messages = {
     ja: 'このモデルはコンテキストとレビュー結果を先に提供する方式に対応していません。',
     zh: '此模型不支持先提供上下文和评审结果的方式。',
   },
-  'providers.m268': {
-    ko: '두 방식 모두 모델이 최종 제출해야 원고가 완성돼요.',
-    en: 'In both modes, the manuscript is completed only when the model submits its final result.',
-    ja: 'どちらの方式でも、モデルが最終提出して初めて原稿が完成します。',
-    zh: '两种方式都需要模型最终提交后，原稿才算完成。',
-  },
   'providers.m269': {
     ko: '첫 평가 단계의 추론 설정',
     en: 'Reasoning settings for first evaluation stage',
@@ -1433,18 +1307,6 @@ export const messages = {
     en: 'Lower output and reasoning settings',
     ja: '出力と推論の設定を下げる',
     zh: '降低输出和推理设置',
-  },
-  'providers.m272': {
-    ko: '낮추기를 선택하면 출력 설정은 기존 값과 8,000토큰 중 작은 값을 사용해요. 설정된 추론 및 출력 강도는 low로 낮추고, 추론 강도의 none과 minimal은 유지해요.',
-    en: 'When lowered, the output limit is the smaller of the current value and 8,000 tokens. Configured reasoning effort and output verbosity are lowered to low; none and minimal reasoning effort are retained.',
-    ja: '下げる場合、出力設定は現在の値と8,000トークンの小さい方を使用します。指定済みの推論、出力強度はlowに下げますが、推論強度のnone、minimalは維持します。',
-    zh: '选择降低时，输出设置使用现有值与 8,000 token 中较小的值。已设置的推理和输出强度降为 low，推理强度的 none 和 minimal 保持不变。',
-  },
-  'providers.m273': {
-    ko: '평가 과정에서 추가 모델 호출이 발생할 수 있어요.',
-    en: 'Evaluation may make additional model calls.',
-    ja: '評価中に追加のモデル呼び出しが発生する場合があります。',
-    zh: '评估过程中可能产生额外模型调用。',
   },
   'providers.m274': {
     ko: '요금',
@@ -1655,24 +1517,6 @@ export const messages = {
     en: 'Choose from model list',
     ja: 'モデル一覧から選択',
     zh: '从模型列表选择',
-  },
-  'providers.m312': {
-    ko: 'Google Model Garden, 등록한 Vertex 인증',
-    en: 'Google Model Garden, saved Vertex credentials',
-    ja: 'Google Model Garden、登録済みVertex認証',
-    zh: 'Google Model Garden，已保存的 Vertex 凭据',
-  },
-  'providers.m313': {
-    ko: 'Gemini API, 등록한 AI Studio API 키',
-    en: 'Gemini API, saved AI Studio API key',
-    ja: 'Gemini API、登録済みAI Studio APIキー',
-    zh: 'Gemini API，已保存的 AI Studio API 密钥',
-  },
-  'providers.m314': {
-    ko: 'Codex 실행기, 로그인한 계정',
-    en: 'Codex runner, signed-in account',
-    ja: 'Codexランナー、ログイン中のアカウント',
-    zh: 'Codex 运行器，已登录账号',
   },
   'providers.m316': {
     ko: '모델 목록 조회에 실패했어요. 마지막 저장 목록은 유지돼요.',
@@ -1914,24 +1758,6 @@ export const messages = {
     ja: 'TypeSafeでAPIキーを取得',
     zh: '在 TypeSafe 获取 API 密钥',
   },
-  'providers.m359': {
-    ko: '키 보관 및 우선순위',
-    en: 'Key storage and priority',
-    ja: 'キーの保存と優先順位',
-    zh: '密钥存储和优先级',
-  },
-  'providers.m360': {
-    ko: '저장한 키는 서버 DB에 보관돼요. 삭제하면 JEV 기능을 사용할 수 없어요.',
-    en: 'The saved key is stored in the server database. Deleting it disables JEV features.',
-    ja: '保存したキーはサーバーDBに保管されます。削除するとJEV機能を利用できなくなります。',
-    zh: '保存的密钥存储在服务器数据库中。删除后将无法使用 JEV 功能。',
-  },
-  'providers.m361': {
-    ko: '연결 상태 새로고침과 관리 탭 전환은 입력한 키를 유지해요.',
-    en: 'Refreshing connection status or switching management tabs retains the entered key.',
-    ja: '接続状態の更新や管理タブの切り替えでも、入力したキーは保持されます。',
-    zh: '刷新连接状态或切换管理标签页会保留已输入的密钥。',
-  },
   'providers.m362': {
     ko: '저장한 JEV 키 삭제',
     en: 'Delete saved JEV key',
@@ -2070,36 +1896,6 @@ export const messages = {
     ja: 'プロバイダー報告の費用',
     zh: '提供商报告费用',
   },
-  'providers.m387': {
-    ko: 'JEV가 맡는 판단',
-    en: 'Judgments handled by JEV',
-    ja: 'JEVが担当する判定',
-    zh: 'JEV 负责的判断',
-  },
-  'providers.m388': {
-    ko: '본문 서비스 거절 판정: 역할별 모델에서 켜거나 끌 수 있어요. 켜면 전체 본문을 검사하며 확신 기준은 역할별 모델의 작업 동작에서 조절해요. 거절 시 출력을 보존하고 자동 재생성하지 않아요.',
-    en: "Body service refusal detection: enable or disable in role-specific models. When enabled, the entire body is checked; adjust the confidence threshold in the role model's task behavior. On refusal, output is retained and is not automatically regenerated.",
-    ja: '本文サービスの拒否検出：役割別モデルで切り替えます。有効にすると本文全体を検査し、確信度の基準は役割別モデルのタスク動作で調整します。拒否時は出力を保持し、自動再生成しません。',
-    zh: '正文服务拒绝检测：可在各角色模型中开启或关闭。开启后检查整个正文，置信阈值在角色模型的任务行为中调整。检测到拒绝时会保留输出，不会自动重新生成。',
-  },
-  'providers.m389': {
-    ko: '번역 서비스 거절 판정: 전체 번역문을 검사해요. 역할별 모델 → 작업 동작 → 거절 감지에서 켜거나 끄고 번역 전용 기준과 재시도 한도를 조절해요.',
-    en: 'Translation service refusal detection: checks the entire translation. Enable or disable it and adjust translation-specific thresholds and retry limits under Role models → Task behavior → Refusal detection.',
-    ja: '翻訳サービスの拒否検出：翻訳文全体を検査します。役割別モデル → タスク動作 → 拒否検出で切り替え、翻訳専用の基準と再試行上限を調整します。',
-    zh: '翻译服务拒绝检测：检查完整译文。在各角色模型 → 任务行为 → 拒绝检测中开启或关闭，并调整翻译专用阈值和重试上限。',
-  },
-  'providers.m390': {
-    ko: '로어 관련성 판정: 채팅 설정 → 기억과 메모에서 관련성 기준과 예산을 조절해요.',
-    en: 'Lore relevance detection: adjust relevance thresholds and budgets under Chat settings → Memory and lore.',
-    ja: 'ロアの関連性判定：チャット設定 → 記憶とメモで関連性の基準と予算を調整します。',
-    zh: '设定相关性判断：在聊天设置 → 记忆与设定中调整相关性阈值和预算。',
-  },
-  'providers.m391': {
-    ko: '이미지 선택: 본문에 사용할 이미지 후보를 선택해요.',
-    en: 'Image selection: selects image candidates for the body.',
-    ja: '画像選択：本文に使用する画像候補を選びます。',
-    zh: '图片选择：选择正文中使用的候选图片。',
-  },
   'providers.m392': {
     ko: 'Google 서비스 계정 JSON',
     en: 'Google service account JSON',
@@ -2117,12 +1913,6 @@ export const messages = {
     en: 'JSON credentials selected',
     ja: 'JSON認証を選択済み',
     zh: '已选择 JSON 认证',
-  },
-  'providers.m395': {
-    ko: 'Google Cloud에서 발급한 서비스 계정 키 파일을 선택해요. 프로젝트 ID와 인증 설정을 자동으로 채워요.',
-    en: 'Select a service account key file issued by Google Cloud. The project ID and authentication settings are filled in automatically.',
-    ja: 'Google Cloudで発行したサービスアカウントキーファイルを選択します。プロジェクトIDと認証設定が自動入力されます。',
-    zh: '选择 Google Cloud 签发的服务账号密钥文件。项目 ID 和认证设置会自动填入。',
   },
   'providers.m396': {
     ko: '서버에 등록하는 중…',
@@ -2177,12 +1967,6 @@ export const messages = {
     en: 'Could not register the key file.',
     ja: 'キーファイルを登録できませんでした。',
     zh: '未能添加密钥文件。',
-  },
-  'providers.m406': {
-    ko: '키 파일은 서버에 보관돼요. 등록만으로 Google에 요청하지 않으며, 저장된 키 원문은 다시 표시하거나 일반 백업에 포함하지 않아요.',
-    en: 'The key file is stored on the server. Registering it does not send requests to Google. Saved key contents are never shown again or included in regular backups.',
-    ja: 'キーファイルはサーバーに保管されます。登録だけではGoogleにリクエストを送りません。保存済みキーの原文は再表示せず、通常のバックアップにも含めません。',
-    zh: '密钥文件保存在服务器上。仅添加文件不会向 Google 发送请求。已保存的密钥原文不会再次显示，也不会包含在常规备份中。',
   },
   'providers.m407': {
     ko: '서버에서 Codex 연결 기능을 활성화해 주세요.',
@@ -2273,12 +2057,6 @@ export const messages = {
     en: 'Codex agent connection',
     ja: 'Codexエージェント接続',
     zh: 'Codex 代理连接',
-  },
-  'providers.m422': {
-    ko: '서버의 ChatGPT 구독 연결',
-    en: 'Server ChatGPT subscription connection',
-    ja: 'サーバーのChatGPTサブスクリプション接続',
-    zh: '服务器的 ChatGPT 订阅连接',
   },
   'providers.m423': {
     ko: 'Codex 상태 다시 확인',
@@ -2496,30 +2274,6 @@ export const messages = {
     ja: '接続を解除',
     zh: '断开连接',
   },
-  'providers.m463': {
-    ko: '연결 도움말',
-    en: 'Connection help',
-    ja: '接続ヘルプ',
-    zh: '连接帮助',
-  },
-  'providers.m464': {
-    ko: '서버 관리자가 공식 Codex 실행기와 전용 로그인 환경을 설정해야 해요. 서버 설정 문서의 Codex 연결 절차를 확인해 주세요.',
-    en: 'The server administrator must configure the official Codex runner and a dedicated sign-in environment. See the Codex connection procedure in the server setup documentation.',
-    ja: 'サーバー管理者が公式Codex実行環境と専用ログイン環境を設定する必要があります。サーバー設定ドキュメントのCodex接続手順を確認してください。',
-    zh: '服务器管理员需要配置官方 Codex 执行器和专用登录环境。请查看服务器设置文档中的 Codex 连接步骤。',
-  },
-  'providers.m465': {
-    ko: '로그인 후 ‘프로바이더와 모델’에서 Codex 프로바이더와 모델 프리셋을 저장해요.',
-    en: 'After signing in, save a Codex provider and model preset under “Providers and models”.',
-    ja: 'ログイン後、「プロバイダーとモデル」でCodexプロバイダーとモデルプリセットを保存します。',
-    zh: '登录后，在“提供商和模型”中保存 Codex 提供商和模型预设。',
-  },
-  'providers.m466': {
-    ko: 'Codex는 Uimori 서버에서 실행해요. PC와 휴대폰에서 같은 구독 한도를 사용하며, API 키 방식으로 자동 전환하지 않아요.',
-    en: 'Codex runs on the Uimori server. Computers and phones share the same subscription limits. It does not automatically switch to API key authentication.',
-    ja: 'CodexはUimoriサーバーで実行します。PCとスマートフォンは同じサブスクリプション上限を共有し、APIキー方式には自動切り替えしません。',
-    zh: 'Codex 在 Uimori 服务器上运行。电脑和手机共用同一订阅限额，不会自动切换到 API 密钥模式。',
-  },
   'providers.m467': {
     ko: 'Codex에서 거절될 수 있어요',
     en: 'Codex may refuse this request',
@@ -2676,18 +2430,6 @@ export const messages = {
     ja: '料金と推定費用',
     zh: '费率和估算费用',
   },
-  'providers.m500': {
-    ko: '호출 후 프로바이더가 보고한 토큰에 이 단가를 적용해 추정 비용을 계산해요.',
-    en: 'After each call, estimated costs are calculated by applying these rates to provider-reported token usage.',
-    ja: '呼び出し後、プロバイダー報告のトークン数にこの単価を適用して費用を推定します。',
-    zh: '调用后，将此费率应用于提供商报告的 token 用量以估算费用。',
-  },
-  'providers.m501': {
-    ko: '참고용 추정 금액이며 실제 청구액과 다를 수 있어요. 내장 요금표는 제공하지 않으며, 연결한 프로바이더의 모델 목록에 요금이 없으면 직접 입력해요.',
-    en: "Estimates are for reference and may differ from actual charges. No built-in rate table is provided. Enter rates manually if the connected provider's model list has none.",
-    ja: '参考用の推定額で、実際の請求額とは異なる場合があります。内蔵料金表はなく、接続先プロバイダーのモデル一覧に料金がない場合は手入力します。',
-    zh: '估算金额仅供参考，可能与实际账单不同。应用不提供内置费率表，连接的提供商模型列表没有费率时需手动输入。',
-  },
   'providers.m502': {
     ko: '요금 기준',
     en: 'Pricing basis',
@@ -2711,12 +2453,6 @@ export const messages = {
     en: 'Enter Flex rates manually',
     ja: 'Flex料金を手入力',
     zh: '手动输入 Flex 费率',
-  },
-  'providers.m506': {
-    ko: 'Flex 요금은 별도로 확인해 입력해요. Standard 요금의 절반으로 가정하지 않아요.',
-    en: 'Verify and enter Flex rates separately. They are not assumed to be half the Standard rates.',
-    ja: 'Flex料金は別途確認して入力します。Standard料金の半額とは仮定しません。',
-    zh: '请单独确认并输入 Flex 费率。不会假定其为 Standard 费率的一半。',
   },
   'providers.m507': {
     ko: 'Batch 요금 직접 입력',
@@ -3071,12 +2807,6 @@ export const messages = {
     en: 'Provider catalog: {value0} tokens',
     ja: 'プロバイダー一覧の基準 {value0}トークン',
     zh: '提供商列表标注 {value0} 个 token',
-  },
-  'providers.m567': {
-    ko: '최대 4개예요. 각 항목의 문자열이 생성되면 응답을 멈춰요. 줄바꿈도 문자열에 포함돼요.{value0}',
-    en: 'Up to 4 entries. Generation stops when an entry appears in the response. Line breaks are part of the sequence.{value0}',
-    ja: '最大4個です。いずれかの文字列が生成されると応答が停止します。改行も文字列に含まれます。{value0}',
-    zh: '最多 4 项。生成任一字符串时停止响应，换行也属于字符串。{value0}',
   },
   'providers.m568': {
     ko: '{count, plural, =0 {Gemini 안전 필터} other {Gemini 안전 필터, #개 지정}}',
