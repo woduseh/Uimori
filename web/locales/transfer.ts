@@ -366,12 +366,6 @@ export const messages = {
     ja: 'Risuプリセットの確認',
     zh: '检查 Risu 预设',
   },
-  'transfer.m070': {
-    ko: 'Risu 프롬프트, 토글, 정규식과 원본 파일을 새 작문 프롬프트로 저장해요. 모델 연결과 전역 기본 프롬프트는 바뀌지 않아요.',
-    en: 'Save the Risu prompts, toggles, regular expressions, and original file as a new writing prompt. Model connections and the global default prompt stay unchanged.',
-    ja: 'Risuのプロンプト、トグル、正規表現と元ファイルを新しい作家プロンプトとして保存します。モデル接続と全体の既定プロンプトは変わりません。',
-    zh: '将 Risu 提示词、开关、正则表达式与原始文件保存为新的写作提示词。模型连接和全局默认提示词保持不变。',
-  },
   'transfer.m071': {
     ko: '모델 연결과 전역 기본 프롬프트는 바뀌지 않아요.',
     en: 'Model connections and the global default prompt stay unchanged.',
@@ -419,24 +413,6 @@ export const messages = {
     en: 'Preset import support',
     ja: 'プリセット取り込みの対応範囲',
     zh: '预设导入支持范围',
-  },
-  'transfer.m079': {
-    ko: '현재 파일에서 보고된 미지원 항목은 없어요.',
-    en: 'No unsupported items were reported in this file.',
-    ja: 'このファイルでは未対応項目は報告されていません。',
-    zh: '此文件未报告不支持的项目。',
-  },
-  'transfer.m080': {
-    ko: '원본 처리와 확인 사항',
-    en: 'Original content and review notes',
-    ja: '原本の扱いと確認事項',
-    zh: '原始内容处理及注意事项',
-  },
-  'transfer.m081': {
-    ko: 'CBS, 토글, 변수, 정규식 원본을 보존해요. 현재 사용 프롬프트와 모델은 바뀌지 않아요.',
-    en: 'Original CBS, toggles, variables, and regular expressions are preserved. Your active prompt and model stay unchanged.',
-    ja: 'CBS、トグル、変数、正規表現の原本を保持します。現在のプロンプトとモデルは変わりません。',
-    zh: '保留原始 CBS、开关、变量和正则表达式，当前提示词和模型保持不变。',
   },
   'transfer.m082': {
     ko: '서버의 완료 여부를 확인하지 못했어요. 파일과 선택을 유지한 같은 요청으로 다시 확인하면 프롬프트가 중복 생성되지 않아요. 이 창을 닫아도 요청은 유지돼요.',
@@ -888,12 +864,6 @@ export const messages = {
     ja: '0件',
     zh: '0 份',
   },
-  'transfer.m172': {
-    ko: '서버 장애에 대비한 백업은 별도 기기에 보관해 주세요.',
-    en: 'Keep backups on a separate device in case the server fails.',
-    ja: 'サーバー障害に備え、バックアップは別の機器にも保管してください。',
-    zh: '请将备份保存在其他设备上，以防服务器故障。',
-  },
   'transfer.m173': {
     ko: '백업 설정을 불러오는 중이에요…',
     en: 'Loading backup settings…',
@@ -1013,12 +983,6 @@ export const messages = {
     en: 'Export manuscript',
     ja: '原稿を書き出す',
     zh: '导出原稿',
-  },
-  'transfer.m193': {
-    ko: '요청, 작업 기록, 메모를 제외한 본문만 Markdown 파일로 저장해요.',
-    en: 'Save only the manuscript as Markdown, excluding requests, task history, and notes.',
-    ja: 'リクエスト、作業記録、メモを除いた本文のみをMarkdownで保存します。',
-    zh: '仅将正文保存为 Markdown，不包含请求、任务记录和笔记。',
   },
   'transfer.m194': {
     ko: '내보낼 본문',

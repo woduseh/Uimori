@@ -251,7 +251,6 @@ export function ProfileEditor({
                 <label className="settings-row">
                   <span className="settings-row-copy">
                     <strong>{t('library.imagePlacementOwner')}</strong>
-                    <small>{t('library.theWriterInsertsImageTagsWhileWriting')}</small>
                   </span>
                   <span className="settings-row-control">
                     <select

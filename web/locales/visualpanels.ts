@@ -545,12 +545,6 @@ export const messages = {
     ja: 'CSSとHTMLを直接編集',
     zh: '直接编辑CSS与HTML',
   },
-  'visualpanels.appCssAppliesToTheWorkspaceBody': {
-    ko: '앱 CSS는 작업실, 본문 CSS는 봇 메시지 안에 적용해요. 레이아웃은 request, heading, body, actions 슬롯을 각각 하나씩 포함해야 해요. JavaScript와 Risu CBS는 실행하지 않아요.',
-    en: 'App CSS applies to the workspace; body CSS applies inside bot messages. Layouts need exactly one each of the request, heading, body and actions slots. JavaScript and Risu CBS do not run.',
-    ja: 'アプリCSSはワークスペースに、本文CSSはボットメッセージ内に適用されます。レイアウトにはrequest、heading、body、actionsスロットを1つずつ含めてください。JavaScriptとRisu CBSは実行しません。',
-    zh: '应用CSS作用于工作室，正文CSS作用于机器人消息内部。布局必须各包含一个request、heading、body和actions插槽。不会运行JavaScript和Risu CBS。',
-  },
   'visualpanels.appCss': {
     ko: '앱 CSS',
     en: 'App CSS',
@@ -736,12 +730,6 @@ export const messages = {
     en: 'Setup needed, Save a ComfyUI workflow in the current preset.',
     ja: '設定が必要、現在のプリセットにComfyUIワークフローを保存してください。',
     zh: '需要设置，请在当前预设中保存ComfyUI工作流。',
-  },
-  'visualpanels.requiredSettingsCompleteConnectionAndLoginAre': {
-    ko: '필수 설정 완료. 실제 연결과 로그인은 생성할 때 확인해요.',
-    en: 'Required settings complete, Connection and login are checked during generation.',
-    ja: '必須設定は完了、実際の接続とログインは生成時に確認します。',
-    zh: '必需设置已完成，实际连接和登录将在生成时检查。',
   },
   'visualpanels.presetChangedAppliesFromTheNextGeneration': {
     ko: '프리셋을 변경했어요. 다음 생성부터 적용돼요.',
@@ -1061,23 +1049,11 @@ export const messages = {
     ja: '例：落ち着いた色、柔らかな光、きれいな線画。過度な光のにじみは避けてください。',
     zh: '例如：沉稳的配色、柔和的光线、干净的线稿。避免过度泛光。',
   },
-  'visualpanels.describeTheStyleRenderingRequirementsAndThings': {
-    ko: '스타일과 표현 조건, 피할 내용을 적어요. 자연어, 목록, JSON을 사용할 수 있어요.',
-    en: 'Describe the style, rendering requirements and things to avoid. Natural language, lists and JSON are supported.',
-    ja: 'スタイル、表現条件、避けたい内容を書きます。自然言語、リスト、JSONを使えます。',
-    zh: '填写风格、表现要求和需要避免的内容，可使用自然语言、列表或JSON。',
-  },
   'visualpanels.writingExamples': {
     ko: '작성 예시',
     en: 'Writing examples',
     ja: '記入例',
     zh: '填写示例',
-  },
-  'visualpanels.includeOnlyWhatYouNeedTheExamples': {
-    ko: '필요한 항목만 자유롭게 적어요. 아래 예시는 입력 내용에 자동으로 추가되지 않아요.',
-    en: 'Include only what you need. The examples below are not automatically added to your input.',
-    ja: '必要な項目だけ自由に書いてください。以下の例は入力内容に自動追加されません。',
-    zh: '按需填写即可，下方示例不会自动添加到输入内容中。',
   },
   'visualpanels.keyFeaturesCalmColorsSoftDirectionalLighting': {
     ko: '핵심 특징:\n- 차분한 색감\n- 부드러운 방향성 조명\n- 깔끔하고 섬세한 선화\n\n표현 방식:\n- 불투명한 재질은 뒤의 형태가 비치지 않게 한다.\n- 윤곽과 겹침을 또렷하게 표현한다.\n\n피할 표현:\n- 점처럼 깨지는 가장자리\n- 과도한 빛 번짐',
@@ -1085,35 +1061,17 @@ export const messages = {
     ja: '主な特徴：\n- 落ち着いた色\n- 柔らかな指向性のある照明\n- きれいで繊細な線画\n\n表現方法：\n- 不透明な素材は背後の形が透けないようにする。\n- 輪郭と重なりを明確に表現する。\n\n避ける表現：\n- 点状に崩れる輪郭\n- 過度な光のにじみ',
     zh: '主要特点：\n- 沉稳的配色\n- 柔和的定向光照\n- 干净细腻的线稿\n\n表现方式：\n- 不透明材质不应透出后方的形状。\n- 清晰表现轮廓和重叠关系。\n\n避免：\n- 碎点状边缘\n- 过度泛光',
   },
-  'visualpanels.theseInstructionsMayReduceArtifactsAndBloom': {
-    ko: '그림의 깨짐이나 빛 번짐을 줄이는 지침이지만, 결과를 보장하지는 않아요.',
-    en: 'These instructions may reduce artifacts and bloom, but do not guarantee results.',
-    ja: '絵の崩れや光のにじみを減らすための指示ですが、結果を保証するものではありません。',
-    zh: '这些指引有助于减少破图和泛光，但不保证结果。',
-  },
   'visualpanels.animaExample': {
     ko: 'Anima 예시:',
     en: 'Anima example:',
     ja: 'Animaの例：',
     zh: 'Anima示例：',
   },
-  'visualpanels.stateWhichModelAnyModelSpecificSyntax': {
-    ko: '모델 전용 문법은 적용 대상을 명시해요.',
-    en: 'State which model any model-specific syntax applies to.',
-    ja: 'モデル固有の構文は適用対象を明記してください。',
-    zh: '使用模型专用语法时请明确适用对象。',
-  },
   'visualpanels.whenWritingPromptsForAnimaInComfyui': {
     ko: 'ComfyUI에서 Anima용 프롬프트를 작성할 때:\n단순한 외형은 태그로, 복잡한 관계와 표현 조건은 자연어로 설명한다.\n일반 태그에는 언더스코어 대신 공백을 사용한다.',
     en: 'When writing prompts for Anima in ComfyUI:\nUse tags for simple appearance and natural language for complex relationships and rendering requirements.\nUse spaces rather than underscores in ordinary tags.',
     ja: 'ComfyUIでAnima用のプロンプトを書く場合：\n単純な外見はタグで、複雑な関係や表現条件は自然言語で説明する。\n通常のタグにはアンダースコアではなく空白を使う。',
     zh: '在ComfyUI中编写Anima提示词时：\n简单外观使用标签，复杂关系和表现要求使用自然语言说明。\n普通标签使用空格而非下划线。',
-  },
-  'visualpanels.pasteOrdinaryStyleJsonIntoTheIllustration': {
-    ko: '일반 스타일 JSON은 그림 지침에 붙여 넣고, ‘가져오기’에는 Uimori 프리셋 파일을 사용해 주세요.',
-    en: 'Paste ordinary style JSON into the illustration instructions. Import expects a Uimori preset file.',
-    ja: '一般的なスタイルJSONは絵の指示に貼り付け、「読み込む」にはUimoriプリセットファイルを使ってください。',
-    zh: '普通的风格JSON请粘贴到绘图指引中，“导入”功能请使用Uimori预设文件。',
   },
   'visualpanels.comfyuiSettings': {
     ko: 'ComfyUI 설정',
@@ -1133,12 +1091,6 @@ export const messages = {
     ja: 'ワークフローなし',
     zh: '无工作流',
   },
-  'visualpanels.codexDoesNotUseTheseSettingsWorkflow': {
-    ko: 'Codex는 아래 설정을 사용하지 않아요. 워크플로 있음 표시는 입력 여부이며, 실제 실행 호환성을 뜻하지 않아요.',
-    en: 'Codex does not use these settings. Workflow present only indicates that input exists; it does not confirm compatibility.',
-    ja: 'Codexは以下の設定を使いません。「ワークフローあり」は入力の有無を示すだけで、実行互換性を意味しません。',
-    zh: 'Codex不使用以下设置。“有工作流”仅表示已输入内容，不代表运行兼容性。',
-  },
   'visualpanels.additionalNegativeGuidance': {
     ko: '추가 제외 지침',
     en: 'Additional negative guidance',
@@ -1150,12 +1102,6 @@ export const messages = {
     en: 'ComfyUI negative prompt instructions',
     ja: 'ComfyUIネガティブプロンプトの指示',
     zh: 'ComfyUI负面提示词指引',
-  },
-  'visualpanels.additionalThingsToAvoidBeyondTheIllustration': {
-    ko: '그림 지침의 ‘피할 표현’에 더할 내용이에요. 반영하려면 워크플로의 적절한 제외 입력에 {v0}를 연결해 주세요.',
-    en: 'Additional things to avoid beyond the illustration instructions. Connect {v0} to an appropriate negative input in the workflow to use this.',
-    ja: '絵の指示の「避ける表現」に追加する内容です。反映するにはワークフローの適切な除外入力に{v0}を接続してください。',
-    zh: '补充绘图指引中需要避免的内容。要使其生效，请将{v0}连接到工作流中合适的负面输入。',
   },
   'visualpanels.workflowJsonApiFormat': {
     ko: '워크플로 JSON (API 형식)',
@@ -1859,12 +1805,6 @@ export const messages = {
     ja: '確認済みトークン',
     zh: '已知 token',
   },
-  'visualpanels.costsUseRecordsFromTheTimeOf': {
-    ko: '비용은 호출 당시 기록 기준이며 실제 청구액과 다를 수 있어요.',
-    en: 'Costs use records from the time of each call and may differ from actual charges.',
-    ja: '費用は呼び出し時点の記録が基準で、実際の請求額とは異なる場合があります。',
-    zh: '费用以调用当时的记录为准，可能与实际账单不同。',
-  },
   'visualpanels.costByModel': {
     ko: '모델별 비용',
     en: 'Cost by model',
@@ -1931,53 +1871,17 @@ export const messages = {
     ja: '用途未分類',
     zh: '用途未分类',
   },
-  'visualpanels.aggregationRules': {
-    ko: '집계 기준',
-    en: 'Aggregation rules',
-    ja: '集計基準',
-    zh: '汇总规则',
-  },
-  'visualpanels.providerReportedCostsTakePriorityOtherwiseEstimates': {
-    ko: '프로바이더 보고액을 우선하며, 없으면 호출 당시 요금으로 추정해요. 부분 추정이나 미확인은 무료가 아니에요.',
-    en: 'Provider-reported costs take priority. Otherwise estimates use prices at the time of the call. Partial estimates and unknown values do not mean free.',
-    ja: 'プロバイダー報告額を優先し、ない場合は呼び出し時の料金で推定します。部分推定、未確認は無料を意味しません。',
-    zh: '优先使用提供商报告金额，否则按调用当时的费率估算。部分估算和未知不代表免费。',
-  },
-  'visualpanels.includesRetriesFailuresAndCancellationsThatWere': {
-    ko: '실제 전송된 재시도, 실패, 취소도 포함해요. 모델별, 일별, 용도별은 같은 기록이므로 서로 더하지 않아요.',
-    en: 'Includes retries, failures and cancellations that were actually sent. Model, day and purpose views contain the same records; do not add them together.',
-    ja: '実際に送信した再試行、失敗、キャンセルも含みます。モデル別、日別、用途別は同じ記録なので、互いに足し合わせないでください。',
-    zh: '包含实际发送的重试、失败和取消。按模型、日期和用途统计的是同一批记录，不要相加。',
-  },
   'visualpanels.detailedTrackingBeganDeletedHistoricalRecordsAre': {
     ko: '상세 집계 시작: {v0} . 삭제된 과거 기록은 복원하지 않아요.',
     en: 'Detailed tracking began: {v0}. Deleted historical records are not restored.',
     ja: '詳細集計の開始：{v0}。削除済みの過去の記録は復元しません。',
     zh: '详细统计起始日期：{v0}。不会恢复已删除的历史记录。',
   },
-  'visualpanels.timeModelTokensAndAmountsRemainAfter': {
-    ko: '채팅 삭제 후에도 시각, 모델, 토큰, 금액은 남으며, 원고와 요청 내용은 보관하지 않아요.',
-    en: 'Time, model, tokens and amounts remain after a chat is deleted. Manuscripts and request content are not retained.',
-    ja: 'チャットを削除しても時刻、モデル、トークン、金額は残ります。原稿とリクエスト内容は保持しません。',
-    zh: '聊天删除后仍保留时间、模型、token 数和金额，不保留原稿与请求内容。',
-  },
   'visualpanels.callsWithUnknownTimeExcludedFromPeriod': {
     ko: '시각 미확인 {v0, number}회, {v1}는 기간 합계에서 제외했어요.',
     en: '{v0, number} calls with unknown time, {v1} excluded from period totals.',
     ja: '時刻未確認の{v0, number}回、{v1}は期間合計から除外しました。',
     zh: '时间未知的{v0, number}次调用，{v1}已从期间合计中排除。',
-  },
-  'visualpanels.themeAuthoringHelp': {
-    ko: '테마 제작 규약은 저장소의 {path}에 있어요.',
-    en: 'Theme authoring rules are in {path} in the repository.',
-    ja: 'テーマ制作規約はリポジトリの{path}にあります。',
-    zh: '主题制作规则位于仓库的{path}中。',
-  },
-  'visualpanels.themeRecoveryHelp': {
-    ko: '꾸미다가 화면이 깨지면 {shortcut}로 이 탭의 테마를 끄세요. 주소에 {query}을 붙여 열어도 돼요.',
-    en: 'If customization breaks the display, press {shortcut} to disable the theme in this tab, or open the address with {query} added.',
-    ja: 'カスタマイズで画面が崩れた場合は{shortcut}でこのタブのテーマを無効にするか、URLに{query}を付けて開いてください。',
-    zh: '如果自定义导致显示异常，请按{shortcut}关闭此标签页的主题，或在地址后添加{query}打开。',
   },
   'visualpanels.preservedError': {
     ko: '{message} 편집 내용은 유지했어요.',

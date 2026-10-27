@@ -304,7 +304,7 @@ export function IllustrationPresetSettings({
           ? t('visualpanels.setupNeededEnterAComfyuiAddressIn')
           : effective.generator === 'comfyui' && !effective.comfyui.workflow.trim()
             ? t('visualpanels.setupNeededSaveAComfyuiWorkflowIn')
-            : t('visualpanels.requiredSettingsCompleteConnectionAndLoginAre');
+            : '';
   const conflict =
     !!draft?.id &&
     !!catalog.presets.find((item) => item.id === draft.id && item.revision !== draft.revision);
@@ -360,7 +360,7 @@ export function IllustrationPresetSettings({
               (environment ? t('visualpanels.noModelSelected') : t('visualpanels.checking'))}
           </span>
         </p>
-        <p role="status">{readiness}</p>
+        {readiness && <p role="status">{readiness}</p>}
       </section>
       <details className="illustration-preset-disclosure">
         <summary>{t('visualpanels.managePresetsAndScopes')}</summary>
@@ -634,7 +634,6 @@ export function IllustrationPresetSettings({
                 {t('visualpanels.illustrationInstructions')}{' '}
                 <textarea
                   aria-label={t('visualpanels.illustrationStyleInstructions')}
-                  aria-describedby={`${editorId}-style-help`}
                   className="illustration-style-guidance"
                   rows={8}
                   maxLength={SOURCE_TEXT_MAX_CHARS}
@@ -642,22 +641,15 @@ export function IllustrationPresetSettings({
                   placeholder={t('visualpanels.exampleCalmColorsSoftLightCleanLinework')}
                   onChange={(event) => patch({ styleGuidance: event.target.value })}
                 />
-                <small id={`${editorId}-style-help`}>
-                  {t('visualpanels.describeTheStyleRenderingRequirementsAndThings')}
-                </small>
               </label>
               <details className="full illustration-preset-disclosure">
                 <summary>{t('visualpanels.writingExamples')}</summary>
                 <div className="illustration-preset-help">
-                  <p>{t('visualpanels.includeOnlyWhatYouNeedTheExamples')}</p>
                   <pre>{t('visualpanels.keyFeaturesCalmColorsSoftDirectionalLighting', {})}</pre>
-                  <p>{t('visualpanels.theseInstructionsMayReduceArtifactsAndBloom')}</p>
                   <p>
                     <strong>{t('visualpanels.animaExample')}</strong>{' '}
-                    {t('visualpanels.stateWhichModelAnyModelSpecificSyntax')}{' '}
                   </p>
                   <pre>{t('visualpanels.whenWritingPromptsForAnimaInComfyui', {})}</pre>
-                  <p>{t('visualpanels.pasteOrdinaryStyleJsonIntoTheIllustration')}</p>
                 </div>
               </details>
               {(draft.model.generator === 'comfyui' || workflowError) && (
@@ -671,16 +663,10 @@ export function IllustrationPresetSettings({
                     </small>
                   </summary>
                   <fieldset className="control-grid">
-                    <small className="full">
-                      {draft.model.generator === 'comfyui'
-                        ? t('settings.workflowCompatibility')
-                        : t('visualpanels.codexDoesNotUseTheseSettingsWorkflow')}
-                    </small>
                     <label className="full">
                       {t('visualpanels.additionalNegativeGuidance')}{' '}
                       <textarea
                         aria-label={t('visualpanels.comfyuiNegativePromptInstructions')}
-                        aria-describedby={`${editorId}-negative-help`}
                         rows={3}
                         maxLength={SOURCE_TEXT_MAX_CHARS}
                         value={draft.model.comfyui.negativeGuidance}
@@ -693,11 +679,6 @@ export function IllustrationPresetSettings({
                           })
                         }
                       />
-                      <small id={`${editorId}-negative-help`}>
-                        {t('visualpanels.additionalThingsToAvoidBeyondTheIllustration', {
-                          v0: '{{negative}}',
-                        })}
-                      </small>
                     </label>
                     <label className="full">
                       {t('visualpanels.workflowJsonApiFormat')}{' '}

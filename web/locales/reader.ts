@@ -485,18 +485,6 @@ export const messages = {
     ja: '不明',
     zh: '未知',
   },
-  'reader.calculatedFromProviderReportedTokensAndThePriceFixed': {
-    ko: '호출 후 프로바이더가 보고한 토큰과 호출에 고정된 요금으로 계산해요. 참고용 추정 금액이며 실제 청구액과 다를 수 있어요.',
-    en: 'Calculated from provider-reported tokens and the price fixed for each call. These estimates may differ from actual charges.',
-    ja: '呼び出し後にプロバイダーが報告したトークンと呼び出しに固定した料金で計算します。参考用の推定額で、実際の請求額とは異なる場合があります。',
-    zh: '根据提供商报告的 token 数和各次调用固定的价格计算。仅供参考，可能与实际账单不同。',
-  },
-  'reader.coversTextAndWritingAssistanceCallsSeeTaskActivity': {
-    ko: '본문과 보조 에이전트 호출 기준이에요. 번역이나 제목 생성 등 후속 작업은 작업 현황에서 확인할 수 있어요.',
-    en: 'Covers text and writing-assistance calls. See task activity for translation, titles and other follow-up tasks.',
-    ja: '本文と執筆補助の呼び出しが対象です。翻訳、タイトルなどの後続タスクはタスク状況で確認できます。',
-    zh: '涵盖正文和写作辅助调用。翻译、标题等后续任务请查看任务状态。',
-  },
   'reader.theSubtotalAddsOnlyKnownAmountsTheTotalEstimate': {
     ko: '확인된 금액만 합산한 값이며, 미확인 호출이 있어 전체 추정 비용은 확정할 수 없어요.',
     en: 'The subtotal adds only known amounts. The total estimate is still unknown.',
@@ -1145,41 +1133,11 @@ export const messages = {
     ja: 'キャッシュ、ロア記録を読み込み中…',
     zh: '正在加载缓存与设定资料记录…',
   },
-  'reader.aboutUsage': {
-    ko: '사용량 안내',
-    en: 'About usage',
-    ja: '使用量について',
-    zh: '使用量说明',
-  },
-  'reader.seeTaskDetailsForTotalUsageAcrossCalls': {
-    ko: '여러 호출을 합친 전체 사용량은 작업 상세에서 확인해요.',
-    en: 'See task details for total usage across calls.',
-    ja: '複数の呼び出しを合計した使用量はタスク詳細で確認できます。',
-    zh: '多次调用的总使用量请查看任务详情。',
-  },
-  'reader.contextUsageUsesTheInputLimitAtCallTime': {
-    ko: '컨텍스트 사용량은 호출 당시 입력 한도 기준이며 모델의 전체 컨텍스트와 다를 수 있어요. 로컬 추정에는 10% 여유를 포함해요.',
-    en: 'Context usage uses the input limit at call time and may differ from the model’s full context. Local estimates include a 10% margin.',
-    ja: 'コンテキスト使用量は呼び出し時の入力上限を基準とし、モデル全体のコンテキストとは異なる場合があります。ローカル推定には10%の余裕を含みます。',
-    zh: '上下文使用量基于调用时的输入上限，可能与模型的完整上下文不同。本地估算含10%的余量。',
-  },
-  'reader.codexUsageAccumulatesMultipleInternalCallsContextUsageUses': {
-    ko: 'Codex 사용량은 내부 여러 호출의 누적 사용량이에요. 컨텍스트 사용량에는 앱이 전송한 입력 추정치를 사용하며 내부 후속 작업은 포함하지 않아요.',
-    en: 'Codex usage accumulates multiple internal calls. Context usage uses the app’s estimated input and excludes internal follow-up tasks.',
-    ja: 'Codex使用量は複数の内部呼び出しの累計です。コンテキスト使用量にはアプリが送信した入力の推定値を使い、内部の後続タスクは含みません。',
-    zh: 'Codex使用量是多次内部调用的累计值。上下文使用量采用应用发送内容的估算值，不含内部后续任务。',
-  },
   'reader.theSelectedTokenizerCouldNotBeLoadedAGeneral': {
     ko: '선택한 토크나이저를 불러오지 못해 일반 로컬 추정치를 사용했어요.',
     en: 'The selected tokenizer could not be loaded. A general local estimate was used.',
     ja: '選択したトークナイザーを読み込めず、一般的なローカル推定を使いました。',
     zh: '无法加载所选分词器，已使用通用本地估算。',
-  },
-  'reader.cacheTokensArePartOfTheInputAndAre': {
-    ko: '캐시 토큰은 입력에 포함된 값이며 입력량에 다시 더하지 않아요.',
-    en: 'Cache tokens are part of the input and are not added again.',
-    ja: 'キャッシュトークンは入力に含まれており、入力量に再加算しません。',
-    zh: '缓存 token 已包含在输入中，不会重复累加。',
   },
   'reader.noCallRecordUsageIsNotEstimatedForImported': {
     ko: '호출 기록이 없어요. 가져온 원고나 기록 보존 이전 장면은 사용량을 추정하지 않아요.',
@@ -1481,12 +1439,6 @@ export const messages = {
     ja: '台詞と心の声',
     zh: '对话与内心独白',
   },
-  'reader.addParagraphSpacingAroundDialogueAndThoughtsTheOriginal': {
-    ko: '표시만 바뀌며 원문은 그대로예요.',
-    en: 'Only the display changes; the original stays unchanged.',
-    ja: '表示だけが変わり、原文はそのままです。',
-    zh: '仅改变显示，原文保持不变。',
-  },
   'reader.dialogueLineBreaks': {
     ko: '대사 줄바꿈',
     en: 'Dialogue line breaks',
@@ -1504,12 +1456,6 @@ export const messages = {
     en: 'Style by punctuation',
     ja: '記号別スタイル',
     zh: '按标点设置样式',
-  },
-  'reader.stylesFollowPunctuationTheyDoNotDetermineTheActual': {
-    ko: '문장 부호를 기준으로 스타일을 적용하며, 문맥상 대사나 생각인지는 따로 판단하지 않아요.',
-    en: 'Styles follow punctuation. They do not determine the actual meaning of dialogue or thoughts.',
-    ja: '記号に応じて表示します。台詞や心の声の実際の意味は判断しません。',
-    zh: '根据标点显示样式，不判断对话或内心独白的实际含义。',
   },
   'reader.valueStyle': {
     ko: '{v0} 스타일',
@@ -1552,12 +1498,6 @@ export const messages = {
     en: 'Reading style preview',
     ja: '読書スタイルのプレビュー',
     zh: '阅读样式预览',
-  },
-  'reader.appliesToRegularTextAndHelperContentBotCreated': {
-    ko: '본문과 도우미 응답에 적용되며, 봇이 만든 상태창이나 컨트롤 스타일은 유지돼요.',
-    en: 'Applies to regular text and assistant content. Bot-created status panels and controls keep their styles.',
-    ja: '通常の本文とアシスタントの内容に適用します。ボットが作成したステータス画面やコントロールのスタイルは保持します。',
-    zh: '应用于普通正文和助手内容，保留机器人创建的状态栏和控件样式。',
   },
   'reader.resetReadingStyle': {
     ko: '읽기 스타일 초기화',
@@ -1871,12 +1811,6 @@ export const messages = {
     ja: '現在のタスクを終えてからプレビューを確認し直してください。',
     zh: '请完成当前任务后重新查看预览。',
   },
-  'reader.basedOnYourDraftRequestNoExtraModelCalls': {
-    ko: '작성 중인 요청 기준 (추가 모델 호출 없음)',
-    en: 'Based on your draft (no extra model calls)',
-    ja: '入力中のリクエストが対象（追加のモデル呼び出しなし）',
-    zh: '基于当前草稿（无额外模型调用）',
-  },
   'reader.checkAgain': {
     ko: '다시 확인',
     en: 'Check again',
@@ -2033,48 +1967,6 @@ export const messages = {
     ja: 'Risuスクリプトによるリクエスト変更前の推定です。',
     zh: '此估算基于Risu脚本修改请求之前的内容。',
   },
-  'reader.estimationBasis': {
-    ko: '추정 기준',
-    en: 'Estimation basis',
-    ja: '推定の基準',
-    zh: '估算依据',
-  },
-  'reader.calculatesTheInitialInputFromSavedSettingsAndYour': {
-    ko: '현재 저장된 설정과 작성 중인 요청으로 첫 입력을 계산해요. 입력 한도와 비교하며 로컬 추정에는 10% 여유분을 포함해요.',
-    en: 'Calculates the initial input from saved settings and your draft request, relative to the input limit. Local estimates include a 10% margin.',
-    ja: '現在の保存設定と編集中のリクエストで最初の入力を計算し、入力上限と比較します。ローカル推定には10%の余裕を含みます。',
-    zh: '根据当前保存的设置与正在编写的请求计算首次输入，并与输入上限比较。本地估算含10%的余量。',
-  },
-  'reader.inputMayChangeDuringGenerationDueToLoreSelection': {
-    ko: '생성 중 로어 선별, 압축, 도구 사용에 따라 입력이 달라질 수 있어요. 캐시 적중과 응답 길이는 미리 알 수 없어요.',
-    en: 'Input may change during generation due to lore selection, compaction and tools. Cache hits and response length cannot be predicted.',
-    ja: '生成中のロア選別、圧縮、ツール使用で入力は変わる場合があります。キャッシュヒットと応答の長さは事前に分かりません。',
-    zh: '生成期间，设定资料筛选、压缩和工具使用可能改变输入。无法预知缓存命中与回复长度。',
-  },
-  'reader.loreCountsReflectCurrentlyPreparedMaterialCheckActualInclusion': {
-    ko: '로어 수는 현재 준비된 자료 기준이에요. 실제 포함 기록은 생성 후 확인해요.',
-    en: 'Lore counts reflect currently prepared resources. Check actual inclusion records after generation.',
-    ja: 'ロア数は現在準備できている資料が基準です。実際の包含記録は生成後に確認できます。',
-    zh: '设定资料数量基于当前已准备的资料。实际包含记录请在生成后查看。',
-  },
-  'reader.imagesAreEstimatedSeparatelyAtTheirSendingResolutionActual': {
-    ko: '이미지는 전송용 해상도로 별도 추정해요. 모델별 실제 이미지 토큰과 과금량을 보장하지 않으며, 이미지 변환과 스크립트 처리 후 입력량이 달라질 수 있어요.',
-    en: 'Images are estimated separately at their sending resolution. Actual image tokens and charges per model are not guaranteed, and input size may change after image conversion and script processing.',
-    ja: '画像は送信用の解像度で別途推定します。モデルごとの実際の画像トークンや課金量を保証するものではなく、画像変換やスクリプト処理後に入力量が変わる場合があります。',
-    zh: '图片按发送分辨率单独估算，不保证各模型实际图片 token 数与费用。图片转换与脚本处理后，输入量可能改变。',
-  },
-  'reader.risuInputStartAndRequestEditScriptsRunDuring': {
-    ko: 'Risu의 입력, 시작, 요청 수정 스크립트는 생성할 때 실행해요.',
-    en: 'Risu input, start and request-edit scripts run during generation.',
-    ja: 'Risuの入力、開始、リクエスト修正スクリプトは生成時に実行します。',
-    zh: 'Risu的输入、开始和请求修改脚本会在生成时执行。',
-  },
-  'reader.checkAgainAfterChangingSettingsOrTheManuscript': {
-    ko: '이후 설정이나 원고를 바꾸면 다시 확인해 주세요.',
-    en: 'Check again after changing settings or the manuscript.',
-    ja: '設定や原稿を変更した後は、もう一度確認してください。',
-    zh: '之后若修改设置或稿件，请重新确认。',
-  },
   'reader.openingTitle': {
     ko: '첫 메시지: {title}',
     en: 'Opening message: {title}',
@@ -2224,11 +2116,5 @@ export const messages = {
     en: '{kind, select, translation {Korean translation} status {Previous auxiliary task} other {{mode, select, translation {Translation} other {Original}} image placement}}: {error}',
     ja: '{kind, select, translation {韓国語訳} status {以前の補助タスク} other {{mode, select, translation {訳文} other {原文}}の画像配置}}: {error}',
     zh: '{kind, select, translation {韩语翻译} status {之前的辅助任务} other {{mode, select, translation {译文} other {原文}}图片布局}}：{error}',
-  },
-  'reader.tokenizerEstimate': {
-    ko: '{tokenizer}, 로컬 추정',
-    en: '{tokenizer}, Local estimate',
-    ja: '{tokenizer}、ローカル推定',
-    zh: '{tokenizer}，本地估算',
   },
 };

@@ -311,12 +311,6 @@ export const messages = {
     ja: '自動生成',
     zh: '自动生成',
   },
-  'visuals.m056': {
-    ko: '서로 다른 순간을 골라 대표 컷과 문단 삽화를 만들어요. 생성 중에도 다음 채팅은 계속할 수 있어요.',
-    en: 'Choose different moments for a cover illustration and paragraph illustrations. You can continue chatting while they generate.',
-    ja: '異なる瞬間を選び、代表カットと段落の挿絵を生成します。生成中もチャットを続けられます。',
-    zh: '选择不同瞬间生成主插图和段落插图。生成时仍可继续聊天。',
-  },
   'visuals.m057': {
     ko: '응답 완료 후 자동 삽화 생성',
     en: 'Generate illustrations after each response',
@@ -329,12 +323,6 @@ export const messages = {
     ja: '場面ごとの挿絵上限',
     zh: '每个场景的插图上限',
   },
-  'visuals.m059': {
-    ko: '최대 개수는 서로 다른 컷 기준이에요. 자동 생성은 기본 1컷이며, 선택한 수와 응답당 한도 안에서 필요한 만큼만 만들어요.',
-    en: 'The limit counts distinct cuts. Automatic generation defaults to one and creates only what is needed within the selected and per-response limits.',
-    ja: '上限は異なるカットの数です。自動生成は既定で1枚、選択数と応答ごとの上限内で必要な分だけ生成します。',
-    zh: '上限按不同画面计算。自动生成默认1张，在所选数量和单次回复上限内按需生成。',
-  },
   'visuals.m060': {
     ko: '자동으로 고를 최대 컷 수',
     en: 'Maximum cuts to select automatically',
@@ -346,12 +334,6 @@ export const messages = {
     en: 'Automatic retry count',
     ja: '自動再試行回数',
     zh: '自动重试次数',
-  },
-  'visuals.m062': {
-    ko: '일시적인 오류가 나면 설정한 횟수만큼 다시 시도해요.',
-    en: 'Retry temporary failures up to this many times.',
-    ja: '一時的なエラー時に、設定回数まで再試行します。',
-    zh: '发生临时错误时，最多按此次数重试。',
   },
   'visuals.m063': {
     ko: 'Codex 생성 환경',
@@ -377,12 +359,6 @@ export const messages = {
     ja: 'Codexプロバイダーのモデルプリセットがありません',
     zh: '没有Codex提供商的模型预设',
   },
-  'visuals.m067': {
-    ko: 'Codex 연결에서 로그인한 모델을 선택해요. 이미지 생성 전 JEV가 노골적인 성적 묘사를 판정하면 해당 컷을 전송하지 않아요. JEV가 설정되지 않았거나 판정 오류가 나면 프로바이더 판단에 맡겨요.',
-    en: 'Choose a model signed in through a Codex connection. JEV blocks cuts it judges sexually explicit before image generation. If JEV is unconfigured or fails, the provider decides.',
-    ja: 'Codex接続でログインしたモデルを選びます。JEVが露骨な性的描写と判定したカットは送信しません。JEV未設定や判定エラー時はプロバイダーの判断に委ねます。',
-    zh: '请选择通过Codex连接登录的模型。生成前若JEV判定为露骨性描写，则不发送该画面。JEV未配置或判定出错时交由提供商判断。',
-  },
   'visuals.m068': {
     ko: '채팅의 참조 이미지 사용',
     en: 'Use chat reference images',
@@ -406,12 +382,6 @@ export const messages = {
     en: 'Authentication header environment variable (optional)',
     ja: '認証ヘッダー環境変数（任意）',
     zh: '身份验证请求头环境变量（可选）',
-  },
-  'visuals.m072': {
-    ko: '인증이 필요한 서버에서만 입력해요.',
-    en: 'Only needed for servers requiring authentication.',
-    ja: '認証が必要なサーバーだけ入力します。',
-    zh: '仅在服务器需要身份验证时填写。',
   },
   'visuals.m073': {
     ko: 'ComfyUI 인증 환경변수',
@@ -442,12 +412,6 @@ export const messages = {
     en: 'Prompt model',
     ja: 'プロンプトモデル',
     zh: '提示词模型',
-  },
-  'visuals.m078': {
-    ko: '장면을 그림 설명으로 바꿀 모델이에요.',
-    en: 'The model that turns scenes into image descriptions.',
-    ja: '場面を画像の説明に変換するモデルです。',
-    zh: '将场景转换为图片描述的模型。',
   },
   'visuals.m079': {
     ko: '시간 제한 (초)',
@@ -592,12 +556,6 @@ export const messages = {
     en: 'Illustrations outside the text',
     ja: '本文外の挿絵',
     zh: '正文外插图',
-  },
-  'visuals.m106': {
-    ko: '본문에 연결하지 못한 삽화예요. 각 그림에 이유를 표시해요.',
-    en: 'These illustrations could not be placed in the text. Each image shows the reason.',
-    ja: '本文に対応付けられなかった挿絵です。各画像に理由を表示します。',
-    zh: '这些插图无法放入正文，每张图片均显示原因。',
   },
   'visuals.m107': {
     ko: '취소',

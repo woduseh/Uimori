@@ -37,15 +37,6 @@
   display: block;
   color: var(--muted);
 }
-.scene-usage-help {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: var(--hairline) solid var(--line);
-}
-.scene-usage-help > summary {
-  min-height: var(--control-h);
-  align-content: center;
-}
 @media (max-width: 600px) {
   .scene-usage-body {
     padding-inline: 12px;

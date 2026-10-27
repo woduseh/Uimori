@@ -836,12 +836,6 @@
   }
 }
 
-.library-role-guide {
-  margin: 12px 0;
-  font-size: var(--font-body);
-  line-height: 1.7;
-  color: var(--muted);
-}
 .library-page .library-workspace {
   margin-top: 20px;
   max-width: var(--collection-w);
@@ -985,12 +979,6 @@
 .library-page .library-bulk-toolbar > button {
   flex-shrink: 0;
   padding: 8px;
-}
-.library-page .library-empty .library-role-guide {
-  margin: 12px 0 4px;
-}
-.library-page .library-empty .library-role-guide + p {
-  margin-top: 4px;
 }
 .library-detail-actions > button {
   display: inline-flex;

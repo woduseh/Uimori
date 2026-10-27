@@ -181,15 +181,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
           await restore.locator('summary').click();
         } else if (section === 'Codex 연결') {
           await expect(pane.getByText('서버 설정 필요', { exact: true })).toBeVisible();
-          const help = pane.locator('.codex-agent-help');
-          await expect(pane.locator('.codex-agent-settings details')).toHaveCount(1);
-          await expect(help).not.toHaveAttribute('open', '');
-          await help.getByText('연결 도움말', { exact: true }).click();
-          await expect(help).toContainText('공식 Codex 실행기와 전용 로그인 환경');
-          await expect(help).toContainText('로그인 후');
-          await expect(help).toContainText('Codex 프로바이더와 모델 프리셋');
-          await expect(help).toContainText('PC와 휴대폰에서 같은 구독 한도');
-          await help.getByText('연결 도움말', { exact: true }).click();
           await expect(
             pane.getByRole('button', { name: 'ChatGPT로 로그인', exact: true })
           ).toHaveCount(0);

@@ -72,7 +72,6 @@ export function AutoTranslationDefaults() {
         <label className="settings-row settings-row-toggle">
           <span className="settings-row-copy">
             <strong>{t('settings.m85')}</strong>
-            <small>{t('settings.m101')}</small>
           </span>
           <span className="settings-row-control">
             <Switch

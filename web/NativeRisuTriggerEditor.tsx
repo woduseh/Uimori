@@ -135,10 +135,7 @@ export function NativeRisuTriggerEditor({
   return (
     <section className="native-trigger-editor" aria-label={t('native.text_7895dc3794')}>
       <div className="native-trigger-heading">
-        <div>
-          <h3>{t('native.text_7ff77a77f6')}</h3>
-          <p className="muted">{t('native.text_33506f6f0f')}</p>
-        </div>
+        <h3>{t('native.text_7ff77a77f6')}</h3>
         <button
           type="button"
           className="ghost"

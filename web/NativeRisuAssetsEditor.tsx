@@ -175,7 +175,9 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
           {t('native.imagesMissing', { count: missing })}
         </p>
       )}
-      <p className="muted">{t('native.imageCount', { count: images.length })}</p>
+      {images.length > 0 && (
+        <p className="muted">{t('native.imageCount', { count: images.length })}</p>
+      )}
       {busy && <LoadingState presentation="inline" label={t('native.text_d504143bb7')} />}
       {notice && (
         <NoticeBanner>
@@ -270,9 +272,6 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
             <details>
               <summary>{t('native.text_24016d85c7')}</summary>
               <code>{names.join(', ') || active.id}</code>
-              <p className="muted">
-                {names.length ? t('native.text_59d5a7b430') : t('native.text_f87c057551')}
-              </p>
             </details>
             <div className="native-assets-actions">
               <label>

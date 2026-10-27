@@ -134,7 +134,6 @@ export function ReadabilitySettings({
         <header className="settings-group-heading">
           <div>
             <h4>{t('reader.readingAids')}</h4>
-            <p>{t('reader.addParagraphSpacingAroundDialogueAndThoughtsTheOriginal')}</p>
           </div>
         </header>
         <div className="settings-group-body reading-settings-rows">
@@ -160,7 +159,6 @@ export function ReadabilitySettings({
           </label>
           <details className="reading-quote-settings">
             <summary data-reading-setting="punctuation">{t('reader.styleByPunctuation')}</summary>
-            <p>{t('reader.stylesFollowPunctuationTheyDoNotDetermineTheActual')}</p>
             <div className="reading-quote-rules">
               {QUOTE_PAIRS.map(({ id, label }) => (
                 <label key={id}>
@@ -203,7 +201,6 @@ export function ReadabilitySettings({
       </section>
 
       <div className="reading-settings-footer">
-        <small>{t('reader.appliesToRegularTextAndHelperContentBotCreated')}</small>
         <button
           type="button"
           data-reading-setting="reset"

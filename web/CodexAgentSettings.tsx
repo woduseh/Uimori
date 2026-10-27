@@ -182,7 +182,6 @@ export function CodexAgentSettings({
       aria-label={t('providers.m421')}
     >
       <div className="codex-agent-heading">
-        <p className="muted">{t('providers.m422')}</p>
         <IconButton
           icon={RefreshIcon}
           label={t('providers.m423')}
@@ -342,12 +341,6 @@ export function CodexAgentSettings({
           </div>
         </>
       )}
-      <details className="codex-agent-help">
-        <summary>{t('providers.m463')}</summary>
-        <p>{t('providers.m464')}</p>
-        <p>{t('providers.m465')}</p>
-        <p>{t('providers.m466')}</p>
-      </details>
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
     </section>
   );

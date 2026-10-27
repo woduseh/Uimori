@@ -124,20 +124,6 @@ const libraryTabs: { id: PrimaryLibraryTab; titleKey: string; icon: typeof BotIc
     icon: ModuleIcon,
   },
 ];
-const contentGuidance: Record<PrimaryLibraryTab, { descriptionKey: string; exampleKey: string }> = {
-  bot: {
-    descriptionKey: 'library.yourConversationPartner',
-    exampleKey: 'library.describeTheirPersonalityAndVoiceToCreate',
-  },
-  persona: {
-    descriptionKey: 'library.aPersonaIsTheCharacterYouPlay',
-    exampleKey: 'library.describeYourNameBackgroundAndHowOthers',
-  },
-  module: {
-    descriptionKey: 'library.modulesAddSettingsAndInstructionsToConversations',
-    exampleKey: 'library.createWorldsStylesAndSharedRulesFor',
-  },
-};
 type ViewMode = 'cards' | 'list';
 type SortMode = LibrarySort;
 type CardRatio = '1:1' | '2:3' | '3:4' | '9:16';
@@ -1312,11 +1298,6 @@ export function LibraryPanel({
                               ? t('library.noUncategorizedResources')
                               : t('library.noRegisteredResourcesYet')}
                       </h2>
-                      {!query && categoryItems.length === 0 && (
-                        <p className="library-role-guide">
-                          {t(contentGuidance[tab].descriptionKey)}
-                        </p>
-                      )}
                       <div className="library-empty-actions">
                         {query && (
                           <button type="button" className="secondary" onClick={() => setQuery('')}>

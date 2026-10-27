@@ -234,9 +234,6 @@
 .lore-context-policy-grid > label:last-child:nth-child(odd) {
   grid-column: 1 / -1;
 }
-.lore-context-units p {
-  margin-top: 12px;
-}
 @media (max-width: 760px) {
   .lore-context-policy-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -277,12 +274,6 @@
     height: auto;
     min-height: var(--control-h);
   }
-}
-.lore-context-units {
-  font-size: var(--font-body);
-}
-.lore-context-units p + p {
-  margin-top: 8px;
 }
 @container (max-width: 520px) {
   .lore-context-policy-grid label {

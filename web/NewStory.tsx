@@ -701,9 +701,9 @@ export function NewStory({
             </fieldset>
             <label>
               {t('transfer.m221')}
-              <small>{t('transfer.m350')}</small>
               <input
                 aria-label={t('transfer.m351')}
+                placeholder={t('transfer.m350')}
                 value={title}
                 maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}

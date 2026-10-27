@@ -328,20 +328,6 @@ export function LoreContextPolicyEditor({
               />
             </label>
           </div>
-          <details className="lore-context-units">
-            <summary>{t('settings.m230')}</summary>
-            <ul>
-              {tokenFields().map((field) => (
-                <li key={field.key}>
-                  {field.label}: {field.min.toLocaleString(getLocale())}–
-                  {field.max.toLocaleString(getLocale())} {field.unit}
-                </li>
-              ))}
-            </ul>
-            <p className="muted">{t('settings.m232')}</p>
-            <p className="muted">{t('settings.m233')}</p>
-            <p className="muted">{t('settings.m234')}</p>
-          </details>
           <div className="lore-context-actions settings-form-footer">
             <IconButton
               icon={RotateCcw}
@@ -374,7 +360,6 @@ export function LoreContextPolicyEditor({
       {chatId && (
         <details className="lore-context-preview">
           <summary>{t('settings.m237')}</summary>
-          <p className="muted">{t('settings.m238')}</p>
           <p>
             {reset ? t('settings.m239') : t('settings.m240')}
             {!request.trim() && t('settings.m241')}

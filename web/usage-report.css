@@ -322,11 +322,6 @@
   font-size: var(--font-body);
   text-align: center;
 }
-.usage-help p {
-  font-size: var(--font-body);
-  color: var(--muted);
-  margin-top: 10px;
-}
 @media (max-width: 900px) {
   .usage-cards section {
     padding: 16px 12px;

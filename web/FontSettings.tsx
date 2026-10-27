@@ -114,7 +114,6 @@ export function FontSettings({
   return (
     <section className="font-settings" aria-label={t('fonts.title')}>
       <h3 id={`${id}-heading`}>{t('fonts.title')}</h3>
-      <p className="muted">{t('fonts.scope')}</p>
       <TransientNotice message={notice} />
       <LoadingState loading={state.loading} presentation="inline" />
       {(state.error || error) && (
@@ -241,7 +240,6 @@ export function FontSettings({
               }}
             />
           </label>
-          <p className="muted">{t('fonts.support')}</p>
           <label htmlFor={`${id}-name`}>
             {t('fonts.name')}
             <input

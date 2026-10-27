@@ -444,9 +444,6 @@ export function PromptEditor({
           </fieldset>
         </fieldset>
         <TransientNotice message={busy ? '' : status} />
-        {pendingTemplate && (
-          <p className="muted">{t('prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown')}</p>
-        )}
         <DismissibleError
           message={error ? t('prompts.errorKept', { error: translateMessage(error) }) : ''}
           onDismiss={() => setError('')}

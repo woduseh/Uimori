@@ -567,7 +567,6 @@ export function ThemeSettings({
             </article>
           ))}
         </div>
-        <p className="theme-help">{t('settings.themeExportScope')}</p>
       </section>
       <section className="theme-dimension" aria-labelledby="theme-palette-heading">
         <div className="theme-dimension-heading">
@@ -768,11 +767,8 @@ export function ThemeSettings({
                   </label>
                 ))}
               </div>
-              <p className="muted">{t('settings.layoutColorStorage')}</p>
               <details className="theme-code">
                 <summary>{t('visualpanels.editCssAndHtmlDirectly')}</summary>
-                <p>{t('visualpanels.appCssAppliesToTheWorkspaceBody')}</p>
-                <p>{t('visualpanels.themeAuthoringHelp', { path: 'docs/THEME-AUTHORING.md' })}</p>
                 {(
                   [
                     ['appCss', t('visualpanels.appCss')],
@@ -840,12 +836,6 @@ export function ThemeSettings({
           </section>
         )}
         {importNotice && <p role="status">{translateMessage(importNotice)}</p>}
-        <p className="theme-help">
-          {t('visualpanels.themeRecoveryHelp', {
-            shortcut: 'Ctrl/Cmd + .',
-            query: '?theme-safe=1',
-          })}
-        </p>
       </details>
       {state.preview && (
         <p role="status">{t('visualpanels.previewingAnUnsavedThemeMovingToAnother')}</p>

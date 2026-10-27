@@ -1569,8 +1569,6 @@ function SourceReaderContent({
                     v1: estimatedCost.unknownCount,
                   })}
             </p>
-            <p>{t('reader.calculatedFromProviderReportedTokensAndThePriceFixed')}</p>
-            <p>{t('reader.coversTextAndWritingAssistanceCallsSeeTaskActivity')}</p>
             {estimatedCost.unknownCount > 0 && (
               <p>{t('reader.theSubtotalAddsOnlyKnownAmountsTheTotalEstimate')}</p>
             )}

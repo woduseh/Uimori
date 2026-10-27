@@ -503,12 +503,6 @@ export const messages = {
     ja: '現在のブラウザー',
     zh: '当前浏览器',
   },
-  'chatsettings.m78': {
-    ko: '서버에서 진행 중인 생성은 취소되지 않아요.',
-    en: 'Generation running on the server will not be canceled.',
-    ja: 'サーバーで進行中の生成はキャンセルされません。',
-    zh: '服务器上正在进行的生成不会被取消。',
-  },
   'chatsettings.m79': {
     ko: '미저장 설정 확인',
     en: 'Review unsaved settings',
@@ -1102,12 +1096,6 @@ export const messages = {
     en: 'Save shared variables',
     ja: '共有変数を保存',
     zh: '保存共享变量',
-  },
-  'chatsettings.taskIntro': {
-    ko: '{title}, 이 화면을 닫아도 서버의 작업은 이어져요.',
-    en: '{title}, Server tasks continue after closing this screen.',
-    ja: '{title}、この画面を閉じてもサーバーのタスクは続きます。',
-    zh: '{title}，关闭此页面后服务器任务仍会继续。',
   },
   'chatsettings.overrides': {
     ko: '이 채팅에서 지정한 값 {count, number}개',

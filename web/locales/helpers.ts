@@ -1505,12 +1505,6 @@ export const messages = {
     ja: '作業通知',
     zh: '任务通知',
   },
-  'helpers.m285': {
-    ko: '확인하면 알림만 사라지고 작업 기록은 보존돼요.',
-    en: 'Acknowledging removes only the notification. Task history is preserved.',
-    ja: '確認すると通知だけが消え、作業履歴は保持されます。',
-    zh: '确认后仅移除通知，任务记录会保留。',
-  },
   'helpers.m286': {
     ko: '모두 확인',
     en: 'Acknowledge all',

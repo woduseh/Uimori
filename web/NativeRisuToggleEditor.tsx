@@ -585,7 +585,7 @@ export function NativeRisuToggleEditor({
           />
         </label>
         <div className="nt-raw-actions">
-          <small>{sourcePending ? t('native.text_bd9c1a150a') : t('native.text_72d58851e7')}</small>
+          {sourcePending && <small>{t('native.text_bd9c1a150a')}</small>}
           <button
             type="button"
             disabled={

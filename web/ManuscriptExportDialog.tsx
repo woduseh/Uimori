@@ -92,7 +92,6 @@ export function ManuscriptExportDialog({
       onClose={onClose}
       scopeKey={chatId}
     >
-      <p>{t('transfer.m193')}</p>
       <fieldset className="editor-fields" disabled={busy || !metadata}>
         <label className="full">
           {t('transfer.m194')}

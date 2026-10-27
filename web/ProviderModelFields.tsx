@@ -436,12 +436,6 @@ export function ProviderModelFields({
   const evaluation = value.evaluationTools;
   const automaticMetadata = protocol ? automaticEvaluationMetadataProfile(protocol) : undefined;
   const automaticTokenizer = resolveTokenizerProfile({ modelId: value.modelId, connection });
-  const tokenizer = TOKENIZER_PROFILES.find(
-    (profile) => profile.id === (value.tokenizer || automaticTokenizer)
-  );
-  const tokenizerDescriptionInHelp =
-    !value.tokenizer ||
-    ['deepseek-v3', 'deepseek-v4', 'deepseek-v4.1', 'kimi-k2'].includes(value.tokenizer);
   const setEvaluation = (next: ModelDraft['evaluationTools']) => update({ evaluationTools: next });
   return (
     <>
@@ -493,7 +487,6 @@ export function ProviderModelFields({
         )}
         <ToggleRow
           label={t('providers.m207')}
-          description={t('providers.m208')}
           checked={value.enabled}
           onChange={(enabled) => update({ enabled })}
         />
@@ -527,7 +520,6 @@ export function ProviderModelFields({
               <option value="realtime">{t('providers.m214')}</option>
               <option value="batch">{t('providers.m215')}</option>
             </select>
-            <small>{t('providers.m216')}</small>
           </label>
         )}
         {protocol && (sends('serviceTier') || value.serviceTier) && (
@@ -554,13 +546,6 @@ export function ProviderModelFields({
               value1: tierLabel(forcedVertexTier),
             })}
           </p>
-        )}
-        {(protocol === 'vercel-chat-v1' || codex) && (
-          <details className="provider-setting-help full">
-            <summary>{t('providers.m221')}</summary>
-            {protocol === 'vercel-chat-v1' && <p>{t('providers.m223')}</p>}
-            {codex && <p>{t('providers.m224')}</p>}
-          </details>
         )}
       </div>
       <div
@@ -617,9 +602,6 @@ export function ProviderModelFields({
               </option>
             ))}
           </select>
-          {!tokenizerDescriptionInHelp && (
-            <small>{translateMessage(tokenizer?.description ?? '')}</small>
-          )}
         </label>
         <label className="full">
           {t('providers.m192')}
@@ -652,12 +634,6 @@ export function ProviderModelFields({
             />
           </label>
         )}
-        <details className="provider-setting-help full">
-          <summary>{t('providers.m231')}</summary>
-          {tokenizerDescriptionInHelp && <p>{translateMessage(tokenizer?.description ?? '')}</p>}
-          <p>{t('providers.m232')}</p>
-          <p>{t('providers.m233')}</p>
-        </details>
         <h4 className="provider-field-heading full">{t('providers.m234')}</h4>
         {protocol === 'vercel-chat-v1' && (
           <details className="full provider-extra-options" open={!!value.providerOptions}>
@@ -675,7 +651,6 @@ export function ProviderModelFields({
                 onChange={(event) => update({ providerOptions: event.target.value })}
                 placeholder={'{\n  "gateway": {\n    "only": ["openai"]\n  }\n}'}
               />
-              <small>{t('providers.m235')}</small>
             </label>
           </details>
         )}
@@ -796,11 +771,6 @@ export function ProviderModelFields({
                   {t('providers.m239')}
                 </button>
               )}
-              <small className="full">
-                {t('providers.m567', {
-                  value0: capability?.stopSequences === false ? ` ${UNDOCUMENTED()}` : '',
-                })}
-              </small>
             </div>
           </details>
         )}
@@ -889,16 +859,6 @@ export function ProviderModelFields({
               }
               invalidMessage={!cacheTtlAvailable ? t('providers.m253') : undefined}
             />
-            {value.cacheMode === 'disabled' && (
-              <small className="full">{t('providers.m254')}</small>
-            )}
-            {value.cacheTtl === '1h' && <small className="full">{t('providers.m255')}</small>}
-            {value.cacheMode === 'automatic' && (
-              <details className="provider-setting-help full">
-                <summary>{t('providers.m256')}</summary>
-                <p>{t('providers.m257')}</p>
-              </details>
-            )}
           </fieldset>
         )}
         <h4 className="provider-field-heading full">{t('providers.m258')}</h4>
@@ -939,7 +899,6 @@ export function ProviderModelFields({
                     ))}
                   </select>
                 )}
-                <small>{t('providers.m262')}</small>
               </label>
               <label className="full">
                 {t('providers.m263')}
@@ -961,7 +920,6 @@ export function ProviderModelFields({
                   </option>
                 </select>
                 {capability?.forcedTools === false && <small>{t('providers.m267')}</small>}
-                <small>{t('providers.m268')}</small>
               </label>
               {evaluation.contextMode === 'preloaded' && (
                 <label className="full">
@@ -980,12 +938,10 @@ export function ProviderModelFields({
                     <option value="configured">{t('providers.m270')}</option>
                     <option value="economized">{t('providers.m271')}</option>
                   </select>
-                  <small>{t('providers.m272')}</small>
                 </label>
               )}
             </>
           )}
-          <small className="full">{t('providers.m273')}</small>
         </fieldset>
         <ModelPricingEditor
           value={value}

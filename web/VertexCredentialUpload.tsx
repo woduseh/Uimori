@@ -37,7 +37,6 @@ export function VertexCredentialUpload({
         </strong>
         {stored && <span className="provider-status">{t('providers.m394')}</span>}
       </div>
-      <p>{t('providers.m395')}</p>
       <label className="vertex-upload-field">
         <span>
           <UploadIcon size={16} aria-hidden="true" />
@@ -107,7 +106,6 @@ export function VertexCredentialUpload({
         </p>
       )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-      <small>{t('providers.m406')}</small>
     </section>
   );
 }

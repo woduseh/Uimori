@@ -52,12 +52,6 @@
   height: 20px;
   stroke-width: 1.7;
 }
-.model-workspace-settings .model-workspace-intro {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--font-body);
-  line-height: 1.5;
-}
 .model-workspace-settings .model-workspace-controls {
   border: 0;
   padding: 0;
@@ -120,13 +114,6 @@
 }
 .model-setup-prompt .settings-row-control {
   justify-content: flex-end;
-}
-.model-workspace-settings .model-summary-note {
-  padding: 10px 0 12px;
-  border-top: var(--hairline) solid var(--line);
-  color: var(--muted);
-  font-size: var(--font-small);
-  line-height: 1.5;
 }
 .model-workspace-settings .task-behavior-settings-body {
   display: grid;

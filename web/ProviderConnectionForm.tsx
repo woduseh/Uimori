@@ -200,9 +200,6 @@ export function ProviderConnectionForm({
             value={connection.endpoint}
             onChange={(event) => onChange({ ...connection, endpoint: event.target.value })}
           />
-          {vertex && vertexProjectId && connection.endpoint === vertexEndpoint(vertexProjectId) && (
-            <small>{t('settings.vertexEndpoint')}</small>
-          )}
         </label>
         {!codex && !vertex && (
           <label className="full">
@@ -237,9 +234,6 @@ export function ProviderConnectionForm({
           checked={connection.enabled}
           onChange={(enabled) => onChange({ ...connection, enabled })}
         />
-        <small className="full">
-          {codex ? t('providers.m150') : vertex ? t('providers.m151') : t('providers.m152')}
-        </small>
         <details className="provider-definition full">
           <summary>{t('providers.m153')}</summary>
           <dl>
@@ -253,7 +247,6 @@ export function ProviderConnectionForm({
               <li key={item}>{translateMessage(item)}</li>
             ))}
           </ul>
-          <p>{t('providers.m158')}</p>
         </details>
       </fieldset>
       <div className="provider-actions full provider-save-actions">
