@@ -207,6 +207,8 @@ export function LibraryPanel({
   onUseContent,
   initialTab = 'bot',
   listRequest = 0,
+  initialContentId,
+  onInitialContentHandled,
   onTabChange,
   onDirtyChange,
   recentChatByContent,
@@ -224,6 +226,8 @@ export function LibraryPanel({
   initialTab?: PrimaryLibraryTab;
   /** Bumped when the navigation entry is chosen, so the same tab still returns to its list. */
   listRequest?: number;
+  initialContentId?: string | null;
+  onInitialContentHandled?: (id: string) => void;
   onTabChange?: (tab: PrimaryLibraryTab) => void;
   onDirtyChange?: (dirty: boolean) => void;
   recentChatByContent?: Record<string, string>;
@@ -298,6 +302,22 @@ export function LibraryPanel({
     }
   }, [initialTab]);
   const externalList = useRef(listRequest);
+  const handledContent = useRef<string | null>(null);
+  // Explicit result navigation is admitted by the app's existing unsaved-editor guard.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: explicit identity owns the read, not editor renders
+  useEffect(() => {
+    if (!initialContentId) {
+      handledContent.current = null;
+      return;
+    }
+    if (!library || handledContent.current === initialContentId) return;
+    handledContent.current = initialContentId;
+    const item = library.contents.find((value) => value.id === initialContentId);
+    if (item) {
+      setTab(item.kind === 'persona' || item.kind === 'module' ? item.kind : 'bot');
+      void openContent(item).finally(() => onInitialContentHandled?.(initialContentId));
+    } else onInitialContentHandled?.(initialContentId);
+  }, [initialContentId, library, onInitialContentHandled]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Only an explicit request leaves a detail view.
   useEffect(() => {
     if (externalList.current === listRequest) return;

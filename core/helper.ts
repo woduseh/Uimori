@@ -25,6 +25,8 @@ export type HelperConversationDeletion = {
   description: string;
 };
 export type HelperConversationSummary = HelperConversation & {
+  /** Present for chat conversations in the app-wide history. Scope remains unchanged. */
+  chatTitle?: string;
   activity: { running: number; queued: number };
   latestEventSeq: number;
 };
@@ -133,6 +135,54 @@ export type HelperEvent = {
   taskId: string | null;
   kind: string;
   data: unknown;
+};
+export type HelperTaskResultTarget = {
+  kind: import('./resource-editing.js').ResourceKind | 'settings';
+  id: string;
+  title: string;
+  revision: number;
+  setting?: string;
+  /** Only allowlisted settings values, never resource bodies or arbitrary operation arguments. */
+  before?: string | number | boolean | null;
+  after?: string | number | boolean | null;
+  /** Selection titles captured with the commit; later renames do not rewrite history. */
+  beforeLabel?: string | null;
+  afterLabel?: string | null;
+};
+/** Compact outcome committed in the same transaction as its durable operation receipt. */
+export type HelperTaskResult = {
+  eventSeq: number;
+  receiptId: string;
+  operation: string;
+  requestedTargets: number;
+  changedTargets: number;
+  /** Empty targets with changedTargets=0 confirm an observed no-op. */
+  targets: HelperTaskResultTarget[];
+};
+export type HelperTaskAttemptUsage = {
+  id: string;
+  purpose: string;
+  status: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  costUsd: number | null;
+  cachedInputTokens: number | null;
+  reasoningTokens: number | null;
+  /** Native turns may hide internal requests; missing provider reports remain unknown. */
+  internalModelCalls: number | null;
+};
+export type HelperTaskResultsView = {
+  taskId: string;
+  status: HelperStatus;
+  results: HelperTaskResult[];
+  /** Receipts without compact outcomes, including old and currently unsupported operations. */
+  unrecordedOperations: number;
+  usage: {
+    attempts: HelperTaskAttemptUsage[];
+    toolExecutions: number;
+    /** Last recorded local estimate, not the native agent's current context utilization. */
+    latestInputEstimate: number | null;
+  };
 };
 export type HelperResourceEditResource = {
   kind: import('./resource-editing.js').ResourceKind;

@@ -4,6 +4,7 @@ import type { HelperScope, HelperEditor } from '../core/helper.js';
 import type { HelperRuntime } from './helper-runtime.js';
 import { lastHelperResourceEdit, undoHelperResourceEdit } from './helper-resource-undo.js';
 import { readHelperActivity } from './helper-activity.js';
+import { readHelperTaskResults } from './helper-task-results.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
@@ -18,10 +19,10 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     '/api/helper/conversations',
     (request) => {
       const { kind, chatId } = request.query;
-      if (kind !== 'library' && kind !== 'chat')
+      if (kind !== 'library' && kind !== 'chat' && kind !== 'all')
         throw new HttpError(400, 'Helper scope kind required');
       return store.list(
-        kind === 'library'
+        kind === 'library' || kind === 'all'
           ? { kind }
           : {
               kind,
@@ -230,6 +231,9 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   );
   app.get<{ Params: { id: string } }>('/api/helper/tasks/:id/activity', (request) =>
     readHelperActivity(runtime.store, request.params.id)
+  );
+  app.get<{ Params: { id: string } }>('/api/helper/tasks/:id/results', (request) =>
+    readHelperTaskResults(runtime.store, request.params.id)
   );
   app.post<{ Params: { id: string } }>('/api/helper/tasks/:id/cancel', (request) =>
     publicTask(runtime.cancel(request.params.id))

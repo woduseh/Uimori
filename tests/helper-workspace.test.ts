@@ -25,6 +25,12 @@ import { helperRoutes } from '../server/helper-routes.js';
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { UI_HELPER_PERSONA } from '../web/helper-persona.js';
 import { chatWithSource } from './fixtures/illustration.js';
+import { readHelperTaskResults } from '../server/helper-task-results.js';
+import {
+  applyHelperResourceMutation,
+  lastHelperResourceEdit,
+} from '../server/helper-resource-undo.js';
+import { helperResourceOperation } from '../server/helper-resource-tools.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -430,6 +436,343 @@ function snapshot(f: ReturnType<typeof fixture>): HelperTaskSnapshot {
     limits: { totalCalls: 24, helperCalls: 12 },
   };
 }
+
+test('app-wide helper history preserves original scopes, filters and deletion ownership', async () => {
+  const f = fixture();
+  const chat = createFixtureChat(f.store, '이전 작품');
+  const chatConversation = f.workspace.create({ kind: 'chat', chatId: chat.id }, 'chat-history');
+  const secondLibrary = f.workspace.create(
+    { kind: 'library', workId: 'another' },
+    'library-history'
+  );
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  try {
+    const response = await app.inject({ url: '/api/helper/conversations?kind=all' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: chatConversation.id,
+          scope: chatConversation.scope,
+          chatTitle: chat.title,
+        }),
+        expect.objectContaining({ id: f.conversation.id, scope: f.conversation.scope }),
+        expect.objectContaining({ id: secondLibrary.id, scope: secondLibrary.scope }),
+      ])
+    );
+    expect(response.json()).toHaveLength(3);
+    expect(f.workspace.list({ kind: 'chat', chatId: chat.id }).map((item) => item.id)).toEqual([
+      chatConversation.id,
+    ]);
+    expect(
+      f.workspace
+        .list({ kind: 'library' })
+        .map((item) => item.id)
+        .sort()
+    ).toEqual([f.conversation.id, secondLibrary.id].sort());
+    expect(f.workspace.conversation(chatConversation.id)).toEqual(chatConversation);
+    f.workspace.delete(f.conversation.id, f.workspace.deletionImpact(f.conversation.id).request);
+    expect(
+      f.workspace
+        .list({ kind: 'all' })
+        .map((item) => item.id)
+        .sort()
+    ).toEqual([chatConversation.id, secondLibrary.id].sort());
+    expect(f.store.chat(chat.id).title).toBe(chat.title);
+    expect((await app.inject({ url: '/api/helper/conversations?kind=chat' })).statusCode).toBe(400);
+  } finally {
+    await app.close();
+  }
+});
+
+test('helper results retain actual batch targets and safe settings outcomes after payload cleanup', async () => {
+  const f = fixture();
+  const changed = f.store.product.content(fixtureBotInput('수정 전', 'PRIVATE_RESOURCE_BODY'));
+  const unchanged = f.store.product.content(fixtureBotInput('그대로'));
+  const revision = modelWorkspace(f.store).revision;
+  mockSend(
+    (_request, _options, index): transport.ProviderResult =>
+      index === 0
+        ? {
+            ...structuredClone(success),
+            status: 'tool_calls',
+            toolCalls: [
+              {
+                id: 'batch-change',
+                name: 'app.call',
+                arguments: {
+                  name: 'resource.patchMany',
+                  arguments: {
+                    items: [
+                      {
+                        kind: 'content',
+                        id: changed.id,
+                        expectedRevision: changed.revision,
+                        changes: [
+                          { path: '/package/nativeRisu/card/name', op: 'set', value: '수정 후' },
+                        ],
+                      },
+                      {
+                        kind: 'content',
+                        id: unchanged.id,
+                        expectedRevision: unchanged.revision,
+                        changes: [
+                          {
+                            path: '/package/nativeRisu/card/name',
+                            op: 'set',
+                            value: unchanged.title,
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+              {
+                id: 'same-model',
+                name: 'app.call',
+                arguments: {
+                  name: 'settings.update',
+                  arguments: {
+                    setting: 'global.mainModel',
+                    expectedRevision: revision,
+                    value: f.model.id,
+                  },
+                },
+              },
+            ],
+          }
+        : index === 1
+          ? {
+              ...structuredClone(success),
+              status: 'tool_calls',
+              toolCalls: [
+                {
+                  id: 'select-translation',
+                  name: 'app.call',
+                  arguments: {
+                    name: 'settings.update',
+                    arguments: {
+                      setting: 'global.translationModel',
+                      expectedRevision: modelWorkspace(f.store).revision,
+                      value: f.model.id,
+                    },
+                  },
+                },
+              ],
+            }
+          : structuredClone(success)
+  );
+  const task = f.runtime.enqueue(
+    f.conversation.id,
+    'results-retained',
+    '자료를 수정하고 번역 모델을 골라줘'
+  );
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).status).toBe('completed');
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  try {
+    const response = await app.inject({ url: `/api/helper/tasks/${task.id}/results` });
+    expect(response.statusCode).toBe(200);
+    const view = response.json();
+    expect(view.results).toHaveLength(3);
+    expect(
+      view.results.find((item: { operation: string }) => item.operation === 'resource.patchMany')
+    ).toMatchObject({
+      requestedTargets: 2,
+      changedTargets: 1,
+      targets: [
+        { kind: 'content', id: changed.id, title: '수정 후', revision: changed.revision + 1 },
+      ],
+    });
+    expect(view.results).toContainEqual(
+      expect.objectContaining({
+        operation: 'settings.update',
+        changedTargets: 0,
+        requestedTargets: 1,
+        targets: [],
+      })
+    );
+    expect(view.results).toContainEqual(
+      expect.objectContaining({
+        targets: [
+          expect.objectContaining({
+            kind: 'settings',
+            setting: 'global.translationModel',
+            before: null,
+            after: f.model.id,
+            beforeLabel: null,
+            afterLabel: f.model.title,
+          }),
+        ],
+      })
+    );
+    expect(view.unrecordedOperations).toBe(0);
+    expect(view.usage.toolExecutions).toBe(3);
+    expect(view.usage.attempts).toHaveLength(3);
+    expect(view.usage.latestInputEstimate).toBeGreaterThan(0);
+    expect(response.body).not.toContain('PRIVATE_RESOURCE_BODY');
+    expect(response.body).not.toContain('127.0.0.1');
+    expect(
+      f.store.db
+        .prepare('SELECT result FROM helper_operations WHERE task_id=?')
+        .all(task.id)
+        .every((row) => JSON.parse(String(row.result)).detailsOmitted)
+    ).toBe(true);
+    expect((await app.inject({ url: '/api/helper/tasks/missing/results' })).statusCode).toBe(404);
+  } finally {
+    await app.close();
+  }
+});
+
+test('task result usage preserves reported native token detail, unknown internal calls and older receipt gaps', () => {
+  const f = fixture();
+  const task = f.workspace.enqueue(f.conversation.id, 'usage-result', '사용량 확인', snapshot(f));
+  f.workspace.start(task.id, 'usage-owner');
+  const attempt = f.workspace.startAttempt(task.id, 'usage-owner', 1, 'helper', 0, {
+    connectionId: f.model.connectionId,
+    protocol: 'codex-app-server-v1',
+    role: 'helper',
+    modelId: f.model.modelId,
+    method: 'POST',
+    url: 'https://private-endpoint.invalid/secret',
+    headers: { authorization: 'PRIVATE_CREDENTIAL' },
+    body: { private: 'PRIVATE_REQUEST_BODY' },
+    bodySha256: 'synthetic',
+    stablePrefixSha256: 'synthetic',
+  });
+  f.workspace.finishAttempt(task.id, attempt, {
+    ...structuredClone(success),
+    usage: {
+      ...success.usage,
+      raw: {
+        kind: 'codex-agent-turn',
+        modelCalls: null,
+        tokenUsage: {
+          total: {
+            inputTokens: 10,
+            cachedInputTokens: 6,
+            outputTokens: 4,
+            reasoningOutputTokens: 2,
+          },
+        },
+        private: 'PRIVATE_RAW_USAGE',
+      },
+    },
+  });
+  f.workspace.operation(task.id, 'old-receipt', {}, () => ({ old: 'PRIVATE_RESULT' }));
+  f.workspace.event(f.conversation.id, task.id, 'tool.finished', { name: 'legacy-tool' });
+  f.workspace.event(f.conversation.id, task.id, 'input.measured', { estimatedInputTokens: 321 });
+  f.workspace.finish(task.id, 'usage-owner', 1, 'completed', '완료', null);
+  const view = readHelperTaskResults(f.store, task.id);
+  expect(view.results).toEqual([]);
+  expect(view.unrecordedOperations).toBe(1);
+  expect(view.usage).toEqual({
+    attempts: [
+      {
+        id: attempt,
+        purpose: 'helper',
+        status: 'completed',
+        inputTokens: 10,
+        outputTokens: 4,
+        costUsd: null,
+        cachedInputTokens: 6,
+        reasoningTokens: 2,
+        internalModelCalls: null,
+      },
+    ],
+    toolExecutions: 1,
+    latestInputEstimate: 321,
+  });
+  expect(JSON.stringify(view)).not.toContain('PRIVATE_');
+  expect(JSON.stringify(view)).not.toContain('private-endpoint');
+});
+
+test('resource creation, undo, clone and deletion outcomes retain identities without extending undo or surviving rollback', () => {
+  const f = fixture();
+  const task = f.workspace.enqueue(
+    f.conversation.id,
+    'resource-lifecycle',
+    '자료 관리',
+    snapshot(f)
+  );
+  f.workspace.start(task.id, 'resource-owner');
+  let next = 0;
+  const apply = (name: string, args: Record<string, unknown>) => {
+    const operation = helperResourceOperation(name, args);
+    if (!operation || operation.readOnly) throw new Error('Expected resource mutation');
+    const receiptId = `lifecycle-${next++}`;
+    return f.workspace.operation(task.id, receiptId, { name, args }, () =>
+      applyHelperResourceMutation(
+        f.store,
+        f.workspace,
+        task,
+        receiptId,
+        name,
+        args,
+        operation.targets ?? operation.target
+      )
+    ) as { id: string; revision: number };
+  };
+  const created = apply('resource.save', { kind: 'content', model: fixtureBotInput('새 자료') });
+  expect(lastHelperResourceEdit(f.store, f.workspace, f.conversation.id)).toBeNull();
+  const changed = apply('resource.patch', {
+    kind: 'content',
+    id: created.id,
+    expectedRevision: created.revision,
+    changes: [{ path: '/package/nativeRisu/card/name', op: 'set', value: '고친 자료' }],
+  });
+  const restored = apply('resource.undo', {
+    kind: 'content',
+    id: created.id,
+    expectedRevision: changed.revision,
+  });
+  const cloned = apply('resource.clone', {
+    kind: 'content',
+    sourceId: created.id,
+    expectedSourceRevision: restored.revision,
+    title: '복제 자료',
+  });
+  apply('resource.delete', { kind: 'content', id: cloned.id, expectedRevision: cloned.revision });
+  const results = readHelperTaskResults(f.store, task.id).results;
+  expect(results.map((item) => [item.operation, item.changedTargets, item.targets[0]?.id])).toEqual(
+    [
+      ['resource.save', 1, created.id],
+      ['resource.patch', 1, created.id],
+      ['resource.undo', 1, created.id],
+      ['resource.clone', 1, cloned.id],
+      ['resource.delete', 1, cloned.id],
+    ]
+  );
+  expect(results.at(-1)?.targets).toEqual([
+    { kind: 'content', id: cloned.id, revision: cloned.revision, title: '복제 자료' },
+  ]);
+  expect(() =>
+    f.workspace.operation(task.id, 'rolled-back', {}, () => {
+      applyHelperResourceMutation(
+        f.store,
+        f.workspace,
+        task,
+        'rolled-back',
+        'resource.patch',
+        {
+          kind: 'content',
+          id: created.id,
+          expectedRevision: restored.revision,
+          changes: [
+            { path: '/package/nativeRisu/card/name', op: 'set', value: '저장되면 안 돼요' },
+          ],
+        },
+        { kind: 'content', id: created.id }
+      );
+      throw new Error('forced rollback');
+    })
+  ).toThrow('forced rollback');
+  expect(readResource(f.store, 'content', created.id).revision).toBe(restored.revision);
+  expect(readHelperTaskResults(f.store, task.id).results).toEqual(results);
+});
 
 test('helper requests expose only remaining host calls at each boundary', async () => {
   const f = fixture();

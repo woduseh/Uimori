@@ -287,12 +287,6 @@ export const messages = {
     ja: '構成に戻る',
     zh: '返回大纲',
   },
-  'helpers.m047': {
-    ko: '다른 채팅의 도우미 대화 기록이에요. 새 요청과 자료 수정은 현재 채팅의 도우미에서 진행해 주세요.',
-    en: "This assistant history belongs to a different chat. New requests and changes use the current chat's session.",
-    ja: '現在のチャットとは別のアシスタント履歴です。新しい依頼や変更は、現在のチャットのセッションで行います。',
-    zh: '此助手记录属于其他聊天。新请求和更改将在当前聊天的会话中进行。',
-  },
   'helpers.m048': {
     ko: '도우미 모델',
     en: 'Assistant model',

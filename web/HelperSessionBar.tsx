@@ -1,6 +1,6 @@
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Settings2 } from 'lucide-react';
 import type { HelperConversation, HelperConversationDeletion } from '../core/helper.js';
 import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
@@ -17,6 +17,8 @@ import './deletion.css';
 
 type Props = {
   sessions: HelperSession[];
+  expanded?: boolean;
+  onSettings: () => void;
   unread: string[];
   conversation: HelperConversation | null;
   currentId: string | null;
@@ -29,6 +31,7 @@ type Props = {
 };
 export function HelperSessionBar(props: Props) {
   useI18n();
+  const [search, setSearch] = useState('');
   const [rename, setRename] = useState<HelperConversation | null>(null);
   const [title, setTitle] = useState('');
   const [deleting, setDeleting] = useState<HelperConversation | null>(null);
@@ -63,6 +66,13 @@ export function HelperSessionBar(props: Props) {
       clearTimeout(timer);
     };
   }, [deleting]);
+  const filteredSessions = props.sessions.filter((session) =>
+    [session.title, session.chatTitle]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase()
+      .includes(search.trim().toLocaleLowerCase())
+  );
   async function stop() {
     if (!deleting || working) return;
     setWorking(true);
@@ -98,7 +108,12 @@ export function HelperSessionBar(props: Props) {
     <>
       <div className="helper-session-block">
         <div className="helper-work-selector">
-          <label>
+          {props.expanded && (
+            <strong className="helper-session-title">
+              {props.conversation?.title || t('helpers.m173')}
+            </strong>
+          )}
+          <label className="helper-session-picker">
             <span className="sr-only">{t('helpers.m170')}</span>
             <select
               aria-label={t('helpers.m171')}
@@ -148,6 +163,10 @@ export function HelperSessionBar(props: Props) {
           />
           <ActionMenu label={t('helpers.m177')} viewport>
             <div className="action-menu-group">
+              <button type="button" disabled={!props.conversation} onClick={props.onSettings}>
+                <Settings2 size={18} aria-hidden="true" />
+                {t('helpers.m044')}
+              </button>
               <button
                 type="button"
                 disabled={!props.conversation || props.busy}
@@ -179,6 +198,39 @@ export function HelperSessionBar(props: Props) {
             </div>
           </ActionMenu>
         </div>
+        {props.expanded && (
+          <nav className="helper-session-list" aria-label={t('helpers.sessions')}>
+            <input
+              type="search"
+              aria-label={t('helpers.searchSessions')}
+              placeholder={t('helpers.searchSessions')}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            <div className="helper-session-list-items">
+              {search && filteredSessions.length === 0 && (
+                <p role="status">{t('library.noSearchResults')}</p>
+              )}
+              {filteredSessions.map((session) => (
+                <button
+                  type="button"
+                  key={session.id}
+                  aria-current={session.id === props.currentId ? 'true' : undefined}
+                  onClick={() => props.onSelect(session)}
+                >
+                  <span>{session.title || t('helpers.m173')}</span>
+                  {session.chatTitle && <small>{session.chatTitle}</small>}
+                  {session.id === props.currentId && (
+                    <CheckIcon className="helper-session-check" size={16} aria-hidden="true" />
+                  )}
+                  {props.unread.includes(session.id) && (
+                    <span aria-label={t('helpers.m325', { count: 1 })}>●</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
       </div>
       {cleanupFailure && (
         <NoticeBanner tone="error">{translateMessage(cleanupFailure)}</NoticeBanner>

@@ -12,6 +12,7 @@ import { invokeResourceTool } from './helper-resource-tools.js';
 import { HttpError } from './request-validation.js';
 import { readResource, undoResource } from './resource-service.js';
 import type { Store } from './store.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
 
 type EditRecord = HelperResourceEditResource & {
   receiptId: string;
@@ -55,26 +56,33 @@ export function applyHelperResourceMutation(
     'resource.patchMany',
     'image.update-metadata',
   ].includes(name);
-  const before = tracked
-    ? targets.flatMap((item, itemIndex) => {
-        if (!item.id) return [];
-        try {
-          return [{ kind: item.kind, id: item.id, saved: readResource(store, item.kind, item.id) }];
-        } catch (error) {
-          if (name === 'resource.patchMany' && error instanceof HttpError)
-            throw new HelperResourceBatchError(
-              itemIndex,
-              item.kind === 'content' || item.kind === 'prompt-preset' ? item.kind : undefined,
-              item.id,
-              error
-            );
-          throw error;
-        }
-      })
-    : [];
+  const before = targets.flatMap((item, itemIndex) => {
+    if (!item.id) return [];
+    try {
+      return [{ kind: item.kind, id: item.id, saved: readResource(store, item.kind, item.id) }];
+    } catch (error) {
+      if (name === 'resource.patchMany' && error instanceof HttpError)
+        throw new HelperResourceBatchError(
+          itemIndex,
+          item.kind === 'content' || item.kind === 'prompt-preset' ? item.kind : undefined,
+          item.id,
+          error
+        );
+      throw error;
+    }
+  });
   const result = invokeResourceTool(store, name, args);
   const resources: HelperResourceEditResource[] = [];
   for (const existing of before) {
+    if (name === 'resource.delete') {
+      resources.push({
+        kind: existing.kind,
+        id: existing.id,
+        revision: existing.saved.revision,
+        title: 'title' in existing.saved ? existing.saved.title : '공통 프롬프트',
+      });
+      continue;
+    }
     const saved = readResource(store, existing.kind, existing.id);
     if (
       saved.revision !== existing.saved.revision &&
@@ -91,7 +99,26 @@ export function applyHelperResourceMutation(
       });
     }
   }
-  if (resources.length) {
+  if ((name === 'resource.clone' || name === 'resource.save') && !before.length) {
+    const created = result as { id?: string };
+    const kind = targets[0]?.kind;
+    if (kind && created.id) {
+      const saved = readResource(store, kind, created.id);
+      resources.push({
+        kind,
+        id: created.id,
+        revision: saved.revision,
+        title: 'title' in saved ? saved.title : '공통 프롬프트',
+      });
+    }
+  }
+  recordHelperTaskResult(workspace, task, {
+    receiptId,
+    operation: name,
+    requestedTargets: targets.length,
+    targets: resources,
+  });
+  if (tracked && before.length && resources.length) {
     const edit: EditRecord = {
       ...resources[0]!,
       receiptId,
