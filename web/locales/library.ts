@@ -954,7 +954,7 @@ export const messages = {
     zh: '图片排布负责方',
   },
   'library.theWriterInsertsImageTagsWhileWriting': {
-    ko: '작문 모델은 글과 함께 이미지 태그를 넣고, JEV는 완성된 글에서 이미지를 골라요. 원문과 번역에 같은 방식을 사용해요.',
+    ko: '작문 모델은 집필 중 이미지 태그를 직접 넣고, JEV는 완성된 본문에 어울리는 이미지를 골라요. 원문과 번역에 모두 적용돼요.',
     en: 'The writer inserts image tags while writing; JEV selects images from the finished text. The same method applies to originals and translations.',
     ja: '作家モデルは文章とともに画像タグを入れ、JEVは完成した文章から画像を選びます。原文と翻訳に同じ方式を使います。',
     zh: '写作模型在写作时插入图片标签，JEV则从成稿中选择图片。原文与译文使用相同方式。',
@@ -1032,10 +1032,10 @@ export const messages = {
     zh: '此聊天的写作提示词',
   },
   'library.chooseAPromptToPinItTo': {
-    ko: '직접 선택하면 이 채팅에 고정하고, ‘전역 따르기’는 전체 설정을 사용해요. 모델과 프롬프트의 최신 저장본은 다음 요청부터 적용돼요. 완료됐거나 진행 중인 작업은 바뀌지 않고, 창작 옵션은 선택한 프롬프트를 따라요.',
-    en: 'Choose a prompt to pin it to this chat, or follow global settings. The latest saved versions of models and prompts apply to the next request; past and running jobs stay unchanged. Creative options follow the selected prompt.',
-    ja: '直接選ぶとこのチャットに固定し、「全体に従う」では全体設定を使います。モデルとプロンプトの最新の保存済み内容は次のリクエストから反映され、過去や実行中の作業は変わりません。創作オプションは選択したプロンプトに従います。',
-    zh: '直接选择会固定用于此聊天，也可使用全局设置。模型与提示词的最新已保存版本从下次请求起生效，过去与进行中的任务不变，创作选项遵循所选提示词。',
+    ko: '모델과 프롬프트의 최신 저장본은 다음 요청부터 적용되며, 창작 옵션은 선택한 프롬프트를 따라요.',
+    en: 'The latest saved model and prompt apply from the next request, and writing options follow the selected prompt.',
+    ja: 'モデルとプロンプトの最新保存版は次のリクエストから適用され、創作オプションは選択したプロンプトに従います。',
+    zh: '模型和提示词的最新保存版本自下次请求起应用，创作选项跟随所选提示词。',
   },
   'library.loading': {
     ko: '불러오는 중…',
@@ -1056,7 +1056,7 @@ export const messages = {
     zh: 'Risu作者备注',
   },
   'library.insertedAtTheAuthorNotePositionIn': {
-    ko: 'Risu 프롬프트의 작가 노트 위치에 넣어요. 일반적인 지속 조건은 기억과 메모에 적어요. 비워 두면 프롬프트에 저장된 기본값을 사용해요.',
+    ko: 'Risu 프롬프트의 작가 노트 위치에 들어가요. 계속 유지할 설정은 기억과 메모에 적고, 비워 두면 프롬프트 기본값을 사용해요.',
     en: "Inserted at the author note position in the Risu prompt. Use Memory and lore notes for general persistent instructions. Leave empty to use the prompt's saved default.",
     ja: 'Risuプロンプトの作家ノート位置に挿入します。一般的な継続条件は記憶とメモのメモに記入してください。空欄ならプロンプトの保存済み初期値を使います。',
     zh: '放在Risu提示词的作者备注位置。通用持续指令请填写在记忆与设定的备注中，留空则使用提示词中保存的默认值。',
@@ -1914,7 +1914,7 @@ export const messages = {
     zh: '机器人翻译指引',
   },
   'library.addThisWorkSTerminologyAndVoice': {
-    ko: '이 자료를 봇으로 쓰는 채팅의 다음 번역과 재번역에 적용해요. 페르소나와 모듈에는 적용하지 않아요.',
+    ko: '이 봇과 대화하는 채팅의 다음 번역부터 적용돼요. 페르소나나 모듈로 쓸 때는 적용되지 않아요.',
     en: 'Applies from the next translation or retranslation when this resource is the bot. Persona and module roles are excluded.',
     ja: 'この資料をボットとして使うチャットの次の翻訳、再翻訳から適用します。ペルソナやモジュールには適用しません。',
     zh: '从以此资料为机器人的聊天的下次翻译或重新翻译起生效，用作用户角色或模块时不适用。',
@@ -1944,7 +1944,7 @@ export const messages = {
     zh: '姓名与术语用词',
   },
   'library.theTranslationModelUsesTerminologyAndConditions': {
-    ko: '문맥에 맞게 참고하며, 단어를 일괄 치환하지 않아요.',
+    ko: '번역 모델이 문맥에 맞춰 참고하며, 단어를 기계적으로 일괄 치환하지는 않아요.',
     en: 'Used in context, without replacing words in bulk.',
     ja: '文脈に合わせて参照し、単語の一括置換はしません。',
     zh: '结合上下文参考，不会批量替换词语。',
@@ -2214,7 +2214,7 @@ export const messages = {
     zh: '此聊天的图片，{count, number}张',
   },
   'library.imageMetadataHint': {
-    ko: '이름과 설명은 JEV의 이미지 선택에 사용돼요. 본문이 포함된 용도는 자동 이미지 배치 후보가 돼요.{portrait, select, yes { 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.} other {}}',
+    ko: '이름과 설명은 JEV가 이미지를 고를 때 참고해요. 본문용으로 지정하면 자동 배치 후보에 포함돼요.{portrait, select, yes { 현재 대표 이미지는 ‘본문 전용’으로 바꿀 수 없어요.} other {}}',
     en: 'JEV uses names and descriptions to select images. Images allowed in the story are candidates for automatic placement.{portrait, select, yes { The current portrait cannot be set to story only.} other {}}',
     ja: '名前と説明はJEVの画像選択に使います。本文で使える画像は自動配置の候補になります。{portrait, select, yes {現在の代表画像は「本文専用」に変更できません。} other {}}',
     zh: 'JEV根据名称与描述选择图片，允许用于正文的图片会成为自动排布候选。{portrait, select, yes {当前封面无法改为“仅正文”。} other {}}',
@@ -2238,10 +2238,10 @@ export const messages = {
     zh: '首条消息已更改，但无法刷新页面。{error}',
   },
   'library.botPersonaHint': {
-    ko: '{title}의 새 채팅을 시작할 때 사용할 페르소나예요. 기존 채팅은 바뀌지 않아요.',
-    en: 'Persona for new chats with {title}. Existing chats stay unchanged.',
-    ja: '{title}の新規チャットで使うペルソナです。既存のチャットは変わりません。',
-    zh: '此角色用于{title}的新聊天，现有聊天不变。',
+    ko: '{title}의 새 채팅에서 직접 고르거나 폴더 기본값이 없을 때 사용해요. 기존 채팅은 바뀌지 않아요.',
+    en: 'Used for new chats with {title} when no persona or folder default is chosen. Existing chats do not change.',
+    ja: '{title}の新しいチャットで直接選ぶかフォルダのデフォルトがない場合に使います。既存のチャットは変わりません。',
+    zh: '在 {title} 的新聊天中未直接选择或无文件夹默认值时使用。现有聊天不会改变。',
   },
   'library.notesSummary': {
     ko: '사용자 메모와 정정{imported, select, yes {, 가져온 기억} other {}} {count, number}개',

@@ -1289,7 +1289,7 @@ export function useStory() {
         await clearRequestDraft(sentKey, sentDraftToken).catch(() => {
           if (currentView.current === sentView)
             setError(
-              '요청은 수락됐지만 기기의 초안을 정리하지 못했어요. 다시 보내기 전에 확인해 주세요.'
+              '요청은 접수됐지만 기기의 초안을 비우지 못했어요. 다시 보내기 전에 확인해 주세요.'
             );
         });
         if (currentDraftKey.current === sentKey && requestDraft.current.token === sentDraftToken) {
@@ -1304,8 +1304,8 @@ export function useStory() {
         setNotice(
           previous
             ? sessionStorage.getItem(sentKey)
-              ? '이전 요청의 수락을 확인했어요. 새로 작성한 초안은 남겨두었어요.'
-              : '이전 요청의 수락을 확인했어요.'
+              ? '이전 요청이 접수된 것을 확인했어요. 새로 작성한 초안은 그대로 두었어요.'
+              : '이전 요청이 접수된 것을 확인했어요.'
             : ''
         );
       if (
@@ -1325,14 +1325,14 @@ export function useStory() {
       )
         clearCommand(commandKey, idempotencyKey);
       if (currentView.current === sentView)
-        setError(error instanceof Error ? error : '요청의 수락 여부를 확인하지 못했어요.');
+        setError(error instanceof Error ? error : '요청이 접수됐는지 확인하지 못했어요.');
     }
     // Failure to refresh an accepted run must not turn it into a pending command.
     try {
       await refresh(chat.id);
     } catch {
       if (accepted && currentView.current === sentView)
-        setError('요청은 수락됐어요. 화면을 다시 불러오지 못해 연결을 확인하고 있어요.');
+        setError('요청은 접수됐어요. 화면을 새로 불러오지 못해 연결을 확인하고 있어요.');
     } finally {
       submitLocks.current.delete(sentView);
       setSubmitting([...submitLocks.current]);

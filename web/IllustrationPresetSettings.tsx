@@ -629,7 +629,6 @@ export function IllustrationPresetSettings({
                   </option>
                   <option value="comfyui">{t('visualpanels.comfyuiRemotePcApi')}</option>
                 </select>
-                <small>{t('visualpanels.applyingAPresetUsesTheSharedConnection')}</small>
               </label>
               <label className="full">
                 {t('visualpanels.illustrationInstructions')}{' '}
@@ -741,9 +740,6 @@ export function IllustrationPresetSettings({
                   </fieldset>
                 </details>
               )}
-              <small className="full">
-                {t('visualpanels.savedChangesApplyFromTheNextGeneration')}
-              </small>
               <div className="illustration-preset-actions illustration-preset-editor-actions full">
                 <SaveButton
                   type="button"

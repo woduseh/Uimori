@@ -816,7 +816,7 @@ export const messages = {
     zh: '模型',
   },
   'visuals.m150': {
-    ko: '이번 생성 작업의 호출 기준이에요. 공통 장면 선택과 번역 위치 연결은 장면 작업 현황의 삽화 호출과 토큰에서 확인해요.',
+    ko: '이 컷을 생성할 때 사용한 호출만 표시해요. 장면 선택과 번역 위치 연결 사용량은 장면 작업 현황의 ‘삽화 호출과 토큰’에서 확인할 수 있어요.',
     en: 'Calls for this generation only. Shared scene selection and translation placement appear under the scene activity illustration calls and tokens.',
     ja: '今回の生成の呼び出しです。共通の場面選択と翻訳位置の対応付けは、場面の作業状況にある挿絵の呼び出しとトークンで確認できます。',
     zh: '仅包含此次生成的调用。共享的场景选择与译文位置匹配，请在场景任务状态的插图调用与词元中查看。',

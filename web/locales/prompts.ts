@@ -210,7 +210,7 @@ export const messages = {
     zh: '处理中…',
   },
   'prompts.uiSourceInputIsValidatedOnSaveErrorsAreShown': {
-    ko: '원문 입력은 저장할 때 함께 검증해요. 오류가 있으면 입력을 유지하고 알려드려요.',
+    ko: '원문은 저장할 때 검증하며, 오류가 있으면 작성한 내용을 유지한 채 알려드려요.',
     en: 'Source input is validated on save. Errors are shown while keeping your input.',
     ja: 'ソース入力は保存時に検証します。エラーがあれば入力を保持してお知らせします。',
     zh: '保存时验证源码输入。如有错误，会保留输入并提示。',
@@ -522,7 +522,7 @@ export const messages = {
     zh: '正在加载当前提示词…',
   },
   'prompts.uiUsesTheLatestSavedPresetDefaultOptionChangesApply': {
-    ko: '프리셋 최신 저장본을 사용해요. 옵션은 모든 채팅의 다음 요청부터 적용해요.',
+    ko: '프리셋의 최신 저장본을 사용하며, 변경한 기본 옵션은 모든 채팅의 다음 요청부터 적용돼요.',
     en: 'Uses the latest saved preset. Options apply to every chat from its next request.',
     ja: 'プリセットの最新保存版を使います。オプションは全チャットの次のリクエストから適用します。',
     zh: '使用预设的最新保存版本。选项从所有聊天的下次请求起生效。',
@@ -1110,10 +1110,10 @@ export const messages = {
     zh: '写作前参考原作与角色',
   },
   'prompts.uiOptionalGeneratingABriefMayAddAModelCall': {
-    ko: '선택 사항이에요. 참고문 생성에 모델 호출과 비용이 추가될 수 있어요.',
-    en: 'Optional. Generating a brief may add a model call and cost.',
-    ja: '任意です。参考文生成でモデル呼び出しと費用が増える場合があります。',
-    zh: '此项可选。生成参考文可能增加模型调用和费用。',
+    ko: '참고문을 생성하면 모델 호출과 비용이 추가될 수 있어요.',
+    en: 'Generating a brief may add a model call and cost.',
+    ja: '参考文生成でモデル呼び出しと費用が増える場合があります。',
+    zh: '生成参考文可能增加模型调用和费用。',
   },
   'prompts.uiReferenceSettings': {
     ko: '참고 설정',
@@ -1573,10 +1573,10 @@ export const messages = {
     zh: '{expanded, select, true {收起输入上下文} other {预览输入上下文}}',
   },
   'prompts.actualSources': {
-    ko: '연결된 실제 원문 {count}개, 계획은 이미 일어난 사실이 아니에요.',
-    en: '{count} actual sources linked, Plans are not established facts.',
-    ja: '関連づけた実際の原文{count}件、計画は既成事実ではありません。',
-    zh: '已关联{count}份实际原文，计划并非已发生的事实。',
+    ko: '연결된 원문 {count}개, 아직 쓰지 않은 구성은 예정된 계획으로만 전달해요.',
+    en: 'Linked source scenes: {count}; unwritten outline items are passed only as planned direction.',
+    ja: 'リンクされた原文 {count}件、未執筆の構成は予定としてのみ伝えます。',
+    zh: '已关联原文 {count} 个，未撰写的提纲仅作为计划方向传递。',
   },
   'prompts.savedPlacement': {
     ko: '프롬프트는 저장됐어요. 폴더에 배치하지 못했어요. {error}',

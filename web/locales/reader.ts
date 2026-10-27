@@ -474,7 +474,7 @@ export const messages = {
     zh: '当前原文',
   },
   'reader.knownSubtotalValueIncludesValueUnpricedCalls': {
-    ko: ', 확인분 부분합 {v0}, 미확인 {v1}회 포함',
+    ko: ', 확인된 금액 합계 {v0}, 미확인 {v1}회 포함',
     en: ', Known subtotal {v0}, Includes {v1} unpriced calls',
     ja: '、確認済み小計 {v0}、不明な呼び出し {v1}回を含む',
     zh: '，已知小计 {v0}，含{v1}次费用未知的调用',
@@ -492,13 +492,13 @@ export const messages = {
     zh: '根据提供商报告的 token 数和各次调用固定的价格计算。仅供参考，可能与实际账单不同。',
   },
   'reader.coversTextAndWritingAssistanceCallsSeeTaskActivity': {
-    ko: '본문과 작문 보조 호출 기준이에요. 번역과 제목 등 후속 작업은 작업 현황에서 확인해요.',
+    ko: '본문과 보조 에이전트 호출 기준이에요. 번역이나 제목 생성 등 후속 작업은 작업 현황에서 확인할 수 있어요.',
     en: 'Covers text and writing-assistance calls. See task activity for translation, titles and other follow-up tasks.',
     ja: '本文と執筆補助の呼び出しが対象です。翻訳、タイトルなどの後続タスクはタスク状況で確認できます。',
     zh: '涵盖正文和写作辅助调用。翻译、标题等后续任务请查看任务状态。',
   },
   'reader.theSubtotalAddsOnlyKnownAmountsTheTotalEstimate': {
-    ko: '부분합은 확인된 금액만 더한 값이며 전체 추정 비용은 아직 미확인이에요.',
+    ko: '확인된 금액만 합산한 값이며, 미확인 호출이 있어 전체 추정 비용은 확정할 수 없어요.',
     en: 'The subtotal adds only known amounts. The total estimate is still unknown.',
     ja: '小計は確認できた金額のみの合計で、全体の推定費用はまだ不明です。',
     zh: '小计仅累加已知费用，总估算费用仍未知。',
@@ -1506,7 +1506,7 @@ export const messages = {
     zh: '按标点设置样式',
   },
   'reader.stylesFollowPunctuationTheyDoNotDetermineTheActual': {
-    ko: '부호에 따라 표시해요. 대사나 생각의 실제 의미를 판단하지 않아요.',
+    ko: '문장 부호를 기준으로 스타일을 적용하며, 문맥상 대사나 생각인지는 따로 판단하지 않아요.',
     en: 'Styles follow punctuation. They do not determine the actual meaning of dialogue or thoughts.',
     ja: '記号に応じて表示します。台詞や心の声の実際の意味は判断しません。',
     zh: '根据标点显示样式，不判断对话或内心独白的实际含义。',
@@ -1554,7 +1554,7 @@ export const messages = {
     zh: '阅读样式预览',
   },
   'reader.appliesToRegularTextAndHelperContentBotCreated': {
-    ko: '일반 본문과 도우미 내용에 적용하며 봇이 만든 상태창, 컨트롤 스타일은 보존해요.',
+    ko: '본문과 도우미 응답에 적용되며, 봇이 만든 상태창이나 컨트롤 스타일은 유지돼요.',
     en: 'Applies to regular text and assistant content. Bot-created status panels and controls keep their styles.',
     ja: '通常の本文とアシスタントの内容に適用します。ボットが作成したステータス画面やコントロールのスタイルは保持します。',
     zh: '应用于普通正文和助手内容，保留机器人创建的状态栏和控件样式。',
@@ -1704,7 +1704,7 @@ export const messages = {
     zh: '请求编辑内容',
   },
   'reader.checkWhetherThePreviousSubmissionWasAcceptedCheckUsing': {
-    ko: '이전 전송의 수락 여부를 확인해 주세요. 같은 요청으로 확인해요.',
+    ko: '이전 요청이 접수됐는지 확인해 주세요. 같은 요청으로 확인해요.',
     en: 'Check whether the previous submission was accepted. Check using the same request.',
     ja: '前回の送信が受け付けられたか確認してください。同じリクエストで確認します。',
     zh: '请确认上次发送是否已被接受。使用同一请求确认。',
@@ -2028,7 +2028,7 @@ export const messages = {
     zh: '无法加载所选分词器，已使用通用估算。',
   },
   'reader.estimatedBeforeRisuScriptsModifyTheRequest': {
-    ko: 'Risu 스크립트의 요청 변경 전 추정이에요.',
+    ko: 'Risu 스크립트가 요청을 수정하기 전 기준의 추정치예요.',
     en: 'Estimated before Risu scripts modify the request.',
     ja: 'Risuスクリプトによるリクエスト変更前の推定です。',
     zh: '此估算基于Risu脚本修改请求之前的内容。',

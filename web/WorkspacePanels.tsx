@@ -169,7 +169,6 @@ export function TasksPanel({
       {allRuns && !listed?.loading && !listed?.error && !runs.length && (
         <p className="muted">{inspectedRun ? t('chatsettings.m8') : t('chatsettings.m9')}</p>
       )}
-      {runs.some((run) => run.sourceRevision) && <p className="muted">{t('chatsettings.m10')}</p>}
       <div className="runs">
         {runs.map((run) => (
           <article key={run.id} data-testid="run" data-run-id={run.id} className="run">

@@ -128,7 +128,6 @@ export function BotDefaultPersona({
             )}
           </>
         )}
-        <p className="muted">{t('library.newChatsUseYourExplicitChoiceIncluding')}</p>
         {saved && error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
         <SaveButton
           disabled={!saved || busy || (mode === 'persona' && !selected)}

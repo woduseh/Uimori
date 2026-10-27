@@ -367,10 +367,10 @@ export const messages = {
     zh: '检查 Risu 预设',
   },
   'transfer.m070': {
-    ko: 'Risu 프롬프트, 토글, 정규식 원본을 새 작문 프롬프트로 저장해요. 원본 파일도 보존해요. 가져온 뒤 현재 채팅의 작문 프롬프트로 선택해서 사용할 수 있어요.',
-    en: 'Save the original Risu prompts, toggles, and regular expressions as a new writing prompt. The original file is also preserved. After importing, select it as the writing prompt for the current chat.',
-    ja: 'Risuのプロンプト、トグル、正規表現の原本を新しい作家プロンプトとして保存します。元ファイルも保持します。取り込み後、現在のチャットの作家プロンプトとして選べます。',
-    zh: '将原始 Risu 提示词、开关和正则表达式保存为新的写作提示词，同时保留原始文件。导入后可将其选为当前聊天的写作提示词。',
+    ko: 'Risu 프롬프트, 토글, 정규식과 원본 파일을 새 작문 프롬프트로 저장해요. 모델 연결과 전역 기본 프롬프트는 바뀌지 않아요.',
+    en: 'Save the Risu prompts, toggles, regular expressions, and original file as a new writing prompt. Model connections and the global default prompt stay unchanged.',
+    ja: 'Risuのプロンプト、トグル、正規表現と元ファイルを新しい作家プロンプトとして保存します。モデル接続と全体の既定プロンプトは変わりません。',
+    zh: '将 Risu 提示词、开关、正则表达式与原始文件保存为新的写作提示词。模型连接和全局默认提示词保持不变。',
   },
   'transfer.m071': {
     ko: '모델 연결과 전역 기본 프롬프트는 바뀌지 않아요.',
@@ -679,7 +679,7 @@ export const messages = {
     zh: '导入备份文件',
   },
   'transfer.m129': {
-    ko: '파일 내용을 확인한 뒤 자료 추가나 새 채팅 복원으로 안내해요. 기존 자료와 채팅은 유지해요.',
+    ko: '파일을 먼저 확인한 뒤 자료 추가나 새 채팅 복원을 진행해요. 기존 자료와 채팅은 그대로 유지돼요.',
     en: 'After reviewing the file, add resources or restore a new chat. Existing resources and chats are preserved.',
     ja: 'ファイルを確認して、資料の追加または新しいチャットへの復元に進みます。既存の資料とチャットは保持します。',
     zh: '检查文件后可添加资料或恢复为新聊天，现有资料和聊天将保留。',
@@ -703,7 +703,7 @@ export const messages = {
     zh: '这是完整工作室备份。请停止服务器，将备份数据库放在单独路径，在 UIMORI_DB 中指定该路径后重启。确认恢复成功前请保留现有数据库。',
   },
   'transfer.m137': {
-    ko: '가져온 조언자의 모델 지정은 주 모델 따르기로 바뀌어요.',
+    ko: '가져온 보조 에이전트의 모델은 본문 모델 따르기로 설정돼요.',
     en: 'Imported advisors will follow the main model.',
     ja: '取り込んだアドバイザーのモデル指定はメインモデルに従う設定になります。',
     zh: '导入的顾问模型设置将改为跟随主模型。',
@@ -1075,7 +1075,7 @@ export const messages = {
     zh: '保留 HTML 和 Risu 状态栏标记，不包含图片和 EPUB。',
   },
   'transfer.m203': {
-    ko: '범위 안에 유효한 번역이 없는 장면이 있으면 다운로드하지 않아요.',
+    ko: '선택한 범위에 아직 번역되지 않은 장면이 있으면 내보낼 수 없어요.',
     en: 'The download stops if any scene in the range lacks a valid translation.',
     ja: '範囲内に有効な翻訳のないシーンがある場合はダウンロードしません。',
     zh: '如果范围内存在没有有效翻译的场景，将不会下载。',
@@ -1255,7 +1255,7 @@ export const messages = {
     zh: '搜索剩余原稿',
   },
   'transfer.m236': {
-    ko: '색인을 준비 중이에요. 최신 저장 본문을 직접 확인한 결과예요.',
+    ko: '검색 색인을 준비하는 중이라 저장된 본문을 직접 찾아 표시했어요.',
     en: 'The index is being prepared. These results were checked directly against the latest saved text.',
     ja: '索引を準備しています。最新の保存本文を直接確認した結果です。',
     zh: '正在建立索引，这些结果是直接检查最新保存正文所得。',

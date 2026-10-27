@@ -517,7 +517,7 @@ export const messages = {
     zh: '生成正文后自动翻译',
   },
   'settings.m86': {
-    ko: '현재 번역 모델을 사용해요. 원문은 번역 전과 실패 시에도 읽을 수 있어요. Codex 콘텐츠 확인이 필요하면 수동 번역해 주세요.',
+    ko: '현재 번역 모델을 사용해요. 번역 중이거나 번역에 실패해도 원문은 바로 읽을 수 있어요. Codex 콘텐츠 확인이 필요하면 수동으로 번역해 주세요.',
     en: 'Uses the current translation model. The source remains readable before translation and after failures. Translate manually when Codex requires content review.',
     ja: '現在の翻訳モデルを使用します。翻訳前や失敗時も原文を読めます。Codexで内容確認が必要な場合は手動で翻訳してください。',
     zh: '使用当前翻译模型。翻译前及失败后均可阅读原文。Codex 需要内容确认时，请手动翻译。',
@@ -607,7 +607,7 @@ export const messages = {
     zh: '无法加载自动翻译默认值。',
   },
   'settings.m101': {
-    ko: '채팅별 선택이 없는 경우 새로 생성한 본문을 자동 번역해요. 기존 작업에는 소급 적용하지 않으며, 현재 번역 모델을 사용해요.',
+    ko: '채팅마다 따로 설정하지 않았다면 새로 생성한 본문을 현재 번역 모델로 자동 번역해요. 이미 생성된 장면은 다시 번역하지 않아요.',
     en: 'Automatically translates newly generated writing when the chat has no override. Existing tasks are unchanged. Uses the current translation model.',
     ja: 'チャットごとの指定がない場合、新しく生成した本文を自動翻訳します。既存のタスクには遡及せず、現在の翻訳モデルを使用します。',
     zh: '聊天无单独设置时自动翻译新生成的正文。不追溯应用于现有任务，使用当前翻译模型。',
@@ -829,7 +829,7 @@ export const messages = {
     zh: '辅助智能体就人物和设定提出意见，正文模型撰写最终稿。',
   },
   'settings.m138': {
-    ko: '협업을 꺼 두었어요. 설정은 보관돼요. 다시 켜면 이어서 편집할 수 있어요.',
+    ko: '꺼 두어도 설정한 에이전트 구성은 그대로 보관돼요.',
     en: 'Collaboration is off. Settings are preserved and can be edited when re-enabled.',
     ja: '協業は無効です。設定は保持され、再度有効にすると編集を続けられます。',
     zh: '协作已关闭，设置已保留。重新启用后可继续编辑。',
@@ -1015,7 +1015,7 @@ export const messages = {
     zh: '传递的创作选项',
   },
   'settings.m170': {
-    ko: '요청 준비 시점의 선택한 옵션 값만 읽기 전용으로 전달해요. 프롬프트 전체나 수정 권한은 전달하지 않아요.',
+    ko: '실행 시점에 선택한 옵션 값만 읽기 전용으로 전달해요. 프롬프트 본문이나 수정 권한은 전달하지 않아요.',
     en: 'Shares only selected option values at request preparation, read-only. The full prompt and editing permission are not shared.',
     ja: 'リクエスト準備時点の選択した値のみを読み取り専用で共有します。プロンプト全体や編集権限は共有しません。',
     zh: '仅以只读方式传递准备请求时所选选项的值，不传递完整提示词或编辑权限。',
@@ -1525,7 +1525,7 @@ export const messages = {
     zh: '本次运行没有设定保留记录。',
   },
   'settings.m256': {
-    ko: '이 실행의 로컬 o200k 토큰 추정값이에요. 전체 요청이나 실제 청구 토큰 수는 아니에요.',
+    ko: '로컬 o200k 토크나이저로 추정한 로어 토큰 수예요. 전체 요청 크기나 실제 청구 토큰 수와는 다를 수 있어요.',
     en: 'Local o200k token estimates for this run; not the full request or actual billed usage.',
     ja: 'この実行のローカルo200kトークン推定値です。全リクエストや実際の課金トークン数ではありません。',
     zh: '本次运行的本地o200k词元估算，不是完整请求或实际计费词元数。',
@@ -1597,7 +1597,7 @@ export const messages = {
     zh: '读取范围的正文',
   },
   'settings.m268': {
-    ko: '성공한 본문 창작의 자료 읽기만 이어 사용해요. 과거 도구 호출이나 응답을 재실행하지 않아요.',
+    ko: '이전에 성공한 본문 생성에서 읽은 자료만 이어서 사용하며, 과거 도구 호출을 다시 실행하지는 않아요.',
     en: 'Only resource reads from successful writing are carried forward. Earlier tool calls and responses are not replayed.',
     ja: '成功した本文執筆の資料参照のみ引き継ぎます。過去のツール呼び出しや応答は再実行しません。',
     zh: '仅延续成功正文创作的资料读取，不重放过去的工具调用或响应。',

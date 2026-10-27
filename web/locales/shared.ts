@@ -252,13 +252,13 @@ export const messages = {
     zh: '失败的请求',
   },
   'shared.rejudgeDescription': {
-    ko: '본문은 생성됐지만 판정을 완료하지 못했어요. 보존된 본문을 다시 판정할 수 있어요.',
+    ko: '본문은 생성됐지만 거절 판정을 마치지 못했어요. 생성된 본문으로 판정만 다시 시도할 수 있어요.',
     en: 'The manuscript was generated, but evaluation did not finish. You can evaluate the preserved manuscript again.',
     ja: '本文は生成されましたが、判定が完了しませんでした。保持された本文を再判定できます。',
     zh: '正文已生成，但判定未完成。可对已保留的正文重新判定。',
   },
   'shared.rejudgeHelp': {
-    ko: '보존된 본문을 다시 판정해요. 본문 생성은 반복하지 않아요.',
+    ko: '생성된 본문을 다시 판정해요. 본문을 새로 생성하지는 않아요.',
     en: 'Evaluates the preserved manuscript again without repeating generation.',
     ja: '保持された本文を再判定します。本文の生成は繰り返しません。',
     zh: '仅重新判定保留的正文，不会重复生成正文。',
@@ -432,7 +432,7 @@ export const messages = {
     zh: '恢复保存已中断。',
   },
   'shared.clonedDraftAborted': {
-    ko: '복제한 탭의 초안 복사가 중단됐어요.',
+    ko: '복제된 탭의 초안을 옮기던 작업이 중단됐어요.',
     en: 'Copying the draft for the duplicated tab was interrupted.',
     ja: '複製したタブの下書きコピーが中断されました。',
     zh: '新标签页的草稿复制已中断。',
@@ -444,7 +444,7 @@ export const messages = {
     zh: '恢复清理已中断。',
   },
   'shared.syntaxError': {
-    ko: '문법 오류가 있는 입력을 확인해 주세요. 입력은 그대로 유지돼요.',
+    ko: '입력한 문법에 오류가 없는지 확인해 주세요. 작성한 내용은 그대로 유지돼요.',
     en: 'Check input with syntax errors. Your input is preserved.',
     ja: '構文エラーのある入力を確認してください。入力は保持します。',
     zh: '请检查存在语法错误的输入。输入会保留。',

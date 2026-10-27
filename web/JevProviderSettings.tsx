@@ -466,7 +466,6 @@ export function JevProviderSettings({
                     ? t('providers.m374')
                     : t('providers.m371')}
               </button>
-              <small>{t('providers.m375')}</small>
             </div>
             {apiKey && <small>{t('providers.m376')}</small>}
             {testError && <NoticeBanner tone="error">{translateMessage(testError)}</NoticeBanner>}
