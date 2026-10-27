@@ -49,10 +49,6 @@
 .helper-header > .icon-button {
   flex-shrink: 0;
 }
-.helper-header > .icon-button[aria-pressed="true"] {
-  background: var(--surface);
-  color: var(--accent-text);
-}
 .outline-helper-return {
   display: flex;
   align-items: center;

@@ -575,12 +575,6 @@ export const messages = {
     ja: 'アシスタント依頼を送信',
     zh: '发送助手请求',
   },
-  'helpers.m111': {
-    ko: '다음 요청으로 보내기',
-    en: 'Send as next request',
-    ja: '次の依頼として送信',
-    zh: '作为下一个请求发送',
-  },
   'helpers.m112': {
     ko: '활동 내역을 읽지 못했어요.',
     en: 'Could not read activity.',

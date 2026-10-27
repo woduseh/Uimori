@@ -151,6 +151,61 @@ test('HSPACE04 a prompt-card target can be explicitly attached again after expan
   );
 });
 
+test('HSPACE05 a contextual reopen attaches the editor after an independent workspace session', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  const response = await request.post('/api/content', {
+    data: fixtureBotInput(`다시 연결할 자료 ${randomUUID().slice(0, 8)}`),
+  });
+  expect(response.ok()).toBe(true);
+  const resource = (await response.json()) as Content;
+  const session = await createSession(
+    request,
+    { kind: 'library', workId: 'library:bot' },
+    '별도 작업'
+  );
+  await page.goto('/');
+  await navigationAction(page, '서재');
+  await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(resource.title);
+  await page.getByRole('button', { name: `${resource.title} 상세 보기`, exact: true }).click();
+  await page.getByRole('button', { name: '편집', exact: true }).click();
+  await page.getByLabel('Risu 자료 이름', { exact: true }).fill('연결할 현재 편집 내용');
+  await navigationAction(page, '도우미');
+  const panel = page.locator('#helper-panel');
+  await panel
+    .getByRole('navigation', { name: '도우미 대화', exact: true })
+    .getByRole('button')
+    .filter({ hasText: session.title })
+    .click();
+  await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(session.id);
+  await expect(panel.locator('details.helper-editor')).toHaveCount(0);
+  await panel.getByRole('button', { name: '서재', exact: true }).click();
+  await expect(panel).toBeHidden();
+  await page
+    .getByRole('region', { name: '자료 상세', exact: true })
+    .getByRole('button', { name: '도우미 열기', exact: true })
+    .click();
+  await expect(panel).not.toHaveClass(/helper-expanded/u);
+  const input = panel.getByLabel('도우미에게 요청', { exact: true });
+  await expect(input).toBeEnabled();
+  await expect(panel.locator('details.helper-editor > summary')).toHaveText(
+    '편집 중: 연결할 현재 편집 내용'
+  );
+  await input.fill('현재 편집 내용을 확인해 주세요');
+  const admission = page.waitForRequest(
+    (incoming) =>
+      incoming.method() === 'POST' &&
+      new URL(incoming.url()).pathname === `/api/helper/conversations/${session.id}/messages`
+  );
+  await page.route(`**/api/helper/conversations/${session.id}/messages`, (route) =>
+    route.fulfill({ status: 400, contentType: 'application/json', body: '{"error":"synthetic"}' })
+  );
+  await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
+  expect((await admission).postDataJSON().editor?.model?.title).toBe('연결할 현재 편집 내용');
+});
+
 async function expectWithinViewport(page: Page, expanded = false) {
   const panel = page.locator('#helper-panel');
   await expect
@@ -387,6 +442,24 @@ for (const viewport of [
     await expect(context.locator('pre')).toContainText('돌아온 뒤 다시 고친 인물 이름');
     await expect(input).toHaveValue('이 자료를 검토하려고 남긴 도우미 초안');
     await page.screenshot({ path: info.outputPath(`helper-current-editor-${viewport.width}.png`) });
+    await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
+    await expect(panel).toHaveClass(/helper-expanded/u);
+    const expandedTitle = await context.locator(':scope > summary').textContent();
+    const admission = page.waitForRequest(
+      (request) =>
+        request.method() === 'POST' &&
+        new URL(request.url()).pathname === `/api/helper/conversations/${session}/messages`
+    );
+    await page.route(`**/api/helper/conversations/${session}/messages`, (route) =>
+      route.fulfill({ status: 400, contentType: 'application/json', body: '{"error":"synthetic"}' })
+    );
+    await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
+    const body = (await admission).postDataJSON();
+    expect({ title: expandedTitle, editorTitle: body.editor?.model?.title }).toEqual({
+      title: '편집 중: 돌아온 뒤 다시 고친 인물 이름',
+      editorTitle: '돌아온 뒤 다시 고친 인물 이름',
+    });
+    await panel.getByRole('button', { name: '서재', exact: true }).click();
     await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
     await expect(editor).toHaveValue('돌아온 뒤 다시 고친 인물 이름');
     const saved = (await (await request.get(`/api/content/${resource.id}`)).json()) as Content;

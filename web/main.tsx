@@ -2353,6 +2353,7 @@ function App() {
         }
         onClose={() => {
           helperResultNavigation.current++;
+          setHelperExpanded(false);
           setWorkspacePanel((value) => (value === 'helper' ? null : value));
         }}
         onModelSettings={() => {

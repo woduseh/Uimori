@@ -168,16 +168,15 @@ function ResultTarget({
   }
   const Icon = targetIcons[target.kind];
   const settingLabel = target.setting && settingsLabels[target.setting];
-  const title =
-    target.id === 'global' && target.kind === 'settings'
-      ? t('helperResults.globalSettings')
-      : target.title;
+  const globalSetting = target.id === 'global' && target.kind === 'settings';
+  const title = globalSetting ? t(settingLabel || 'helperResults.globalSettings') : target.title;
+  const subtitle = !globalSetting && settingLabel ? t(settingLabel) : undefined;
   const content = (
     <>
       <Icon size={16} aria-hidden="true" />
       <span className="helper-result-identity">
         <span>{title}</span>
-        {settingLabel && <small>{t(settingLabel)}</small>}
+        {subtitle && <small>{subtitle}</small>}
       </span>
       {!deleted && target.before !== undefined && target.after !== undefined ? (
         <span className="helper-result-values">
@@ -199,7 +198,7 @@ function ResultTarget({
         type="button"
         className="helper-result-target"
         aria-label={t('helperResults.openTarget', {
-          title: settingLabel ? `${title} ${t(settingLabel)}` : title,
+          title: subtitle ? `${title} ${subtitle}` : title,
         })}
         disabled={opening}
         aria-busy={opening}
