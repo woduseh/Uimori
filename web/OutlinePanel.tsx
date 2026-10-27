@@ -696,7 +696,6 @@ export function OutlinePanel({
                       {t('prompts.uiAdvancedRelatedOutlines')}
                       <small>{formatNumber(draft.relatedIds.length)}</small>
                     </summary>
-                    <p>{t('prompts.uiLinkOnlyRelatedPlansSuchAsSetupAndPayoff')}</p>
                     {nodes
                       .filter((node) => node.id !== selectedId || adding)
                       .map((node) => (
@@ -954,25 +953,15 @@ export function OutlinePanel({
                           onClick={() => setWriting(false)}
                         />
                       </div>
-                      <p>
-                        {t('prompts.writingTarget', {
-                          name: selected.title,
-                          continuing: sources.length > 0,
-                        })}
-                      </p>
                       <section
                         aria-label={t('prompts.uiCurrentOutline')}
                         className="outline-writing-plan"
                       >
-                        <h4>{t('prompts.uiCurrentOutlineReadOnly')}</h4>
                         <Prose
                           text={
                             brief.outline.path.at(-1)?.intent || t('prompts.uiNoOutlineContentYet')
                           }
                         />
-                        <p className="muted">
-                          {t('prompts.uiSavedOutlinesAndTheInstructionsBelowAreFixedTogether')}
-                        </p>
                       </section>
                       <label>
                         {t('prompts.uiAdditionalInstructionsAndStoppingPointOptional')}
@@ -993,9 +982,6 @@ export function OutlinePanel({
                       {previousRequest && (
                         <details className="outline-reference-picker">
                           <summary>{t('prompts.uiPreviousWritingRequestDraftReadAndCopy')}</summary>
-                          <p>
-                            {t('prompts.uiThePreviousDraftIsPreservedMoveOnlyNeededInstructions')}
-                          </p>
                           <label>
                             {t('prompts.uiPreviousWritingRequestDraft')}
                             <textarea rows={5} value={previousRequest} readOnly />
@@ -1044,7 +1030,6 @@ export function OutlinePanel({
                   {previewing && brief && (
                     <section className="outline-brief">
                       <h4>{t('prompts.uiOutlinesIncludedInThisRequest')}</h4>
-                      <p className="muted">{t('reader.noModelCall')}</p>
                       {[
                         [t('prompts.uiParentDirectionAndSelectedUnit'), brief.outline.path],
                         [t('prompts.uiChildEvents'), brief.outline.children],
@@ -1077,7 +1062,6 @@ export function OutlinePanel({
                           {t('prompts.uiLinkedSourceText')}
                           <small>{formatNumber(sources.length)}</small>
                         </h4>
-                        <span>{t('prompts.uiLinkedSourceTextMayNotCoverEveryPartOf')}</span>
                       </div>
                       {sources.map((source, index) => (
                         <button

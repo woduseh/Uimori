@@ -270,7 +270,6 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
           onClick={() => void load()}
         />
       </header>
-      <p className="muted">{t('chatsettings.m169')}</p>
       {loading && <LoadingState presentation="placeholder" label={t('chatsettings.m170')} />}
       {view?.pending && <p role="status">{t('chatsettings.m171')}</p>}
       {view?.variableDefaultsError && (

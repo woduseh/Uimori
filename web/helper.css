@@ -53,6 +53,17 @@
   background: var(--surface);
   color: var(--accent-text);
 }
+.outline-helper-return {
+  display: flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-bottom: var(--hairline) solid var(--line);
+}
+.outline-helper-return > button {
+  min-height: 28px;
+  padding: 2px 10px;
+  font-size: var(--font-small);
+}
 .helper-messages {
   flex: 1;
   min-height: 0;
@@ -177,9 +188,19 @@
   margin: 4px 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 8px;
+  gap: 4px 6px;
   color: var(--muted);
   overflow-wrap: anywhere;
+}
+.helper-activity-records > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
+  line-height: 1.4;
 }
 .helper-artifact {
   margin-top: 16px;
@@ -386,6 +407,7 @@
 .helper-work-selector select {
   min-width: 0;
   width: 100%;
+  max-height: 36px;
   border-color: transparent;
   background: transparent;
   font-size: var(--font-body);
@@ -394,6 +416,13 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+@supports (appearance: base-select) {
+  .helper-work-selector select:where(:not([multiple], [size])) {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 .helper-unread-badge {
   display: inline-flex;

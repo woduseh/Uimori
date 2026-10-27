@@ -1,7 +1,11 @@
 .helper-resource-undo {
-  padding: 0 0 8px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
   color: var(--muted);
-  font-size: var(--font-body);
+  font-size: var(--font-small);
 }
 .helper-resource-undo > div {
   display: flex;

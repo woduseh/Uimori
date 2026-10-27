@@ -361,7 +361,6 @@ export function ProfileEditor({
                 <label className="settings-row">
                   <span className="settings-row-copy">
                     <strong>{t('library.writingPrompt')}</strong>
-                    <small>{t('library.chooseAPromptToPinItTo')}</small>
                   </span>
                   <select
                     aria-label={t('library.writingPromptForThisChat')}
@@ -401,7 +400,6 @@ export function ProfileEditor({
                 <label className="settings-row">
                   <span className="settings-row-copy">
                     <strong>{t('library.risuAuthorNote')}</strong>
-                    <small>{t('library.insertedAtTheAuthorNotePositionIn')}</small>
                   </span>
                   <textarea
                     aria-label={t('library.risuAuthorNote')}

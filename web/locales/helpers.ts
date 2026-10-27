@@ -329,12 +329,6 @@ export const messages = {
     ja: '空欄の場合は、簡潔で落ち着いた口調で回答します。',
     zh: '留空时，助手将使用简洁平实的语气回复。',
   },
-  'helpers.m054': {
-    ko: '저장 후 새로 접수한 요청부터 반영해요. 작품과 저장 자료의 문체는 바꾸지 않아요.',
-    en: 'Applies to requests received after saving. The style of your work and saved resources stays unchanged.',
-    ja: '保存後に受け付けた依頼から反映します。作品や保存資料の文体は変更しません。',
-    zh: '保存后接收的新请求将应用此设置。作品和已保存资料的文风保持不变。',
-  },
   'helpers.m055': {
     ko: '도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.',
     en: 'Assistant settings have changed. Your input has been preserved.',
@@ -388,12 +382,6 @@ export const messages = {
     en: 'Assistant task history',
     ja: 'アシスタントの作業履歴',
     zh: '助手任务记录',
-  },
-  'helpers.m065': {
-    ko: '대화창에는 마지막 시도만 표시하며, 이전 시도와 전체 호출 수는 여기에 기록돼요.',
-    en: 'The conversation shows the latest attempt. Earlier attempts and execution request counts remain here.',
-    ja: '会話には最新の試行を表示します。以前の試行と実行リクエスト数はここに残ります。',
-    zh: '对话中显示最新一次尝试。之前的尝试和执行请求次数保留在此处。',
   },
   'helpers.m066': {
     ko: '전체 작업 보기',
@@ -490,18 +478,6 @@ export const messages = {
     en: 'Outline',
     ja: '構成',
     zh: '大纲',
-  },
-  'helpers.m088': {
-    ko: '읽기 전용 점검이에요. 이 요청으로는 구성과 원문을 직접 수정하지 않아요.',
-    en: 'Read-only comparison. This request does not modify the plan or source text.',
-    ja: '読み取り専用の比較です。この依頼では計画や原文を変更しません。',
-    zh: '此操作仅进行只读比较，不会修改规划或原文。',
-  },
-  'helpers.m089': {
-    ko: '선택한 구성을 이번 요청에만 함께 참고해요.',
-    en: 'The selected outline will be referenced only for this request.',
-    ja: '選択した構成は、この依頼に限り参考にします。',
-    zh: '仅在此次请求中参考所选大纲。',
   },
   'helpers.m090': {
     ko: '준비한 요청 덧붙이기',
@@ -767,12 +743,6 @@ export const messages = {
     ja: '生成された保存版',
     zh: '生成的版本',
   },
-  'helpers.m136': {
-    ko: '보관된 장면은 읽기와 복사만 할 수 있어요. 다른 전개는 채팅 메뉴에서 새 채팅으로 복사한 뒤 본문에서 이어 써 주세요.',
-    en: 'Archived scenes can only be read and copied. To explore another direction, copy the chat into a new chat from the chat menu, then continue writing in the main text.',
-    ja: '保管された場面は閲覧とコピーのみ可能です。別の展開を書くには、チャットメニューから新しいチャットにコピーし、本文で続きを書いてください。',
-    zh: '归档场景仅可阅读和复制。如需尝试其他情节，请从聊天菜单复制为新聊天，再在正文中续写。',
-  },
   'helpers.m137': {
     ko: '다시 불러오기',
     en: 'Reload',
@@ -802,12 +772,6 @@ export const messages = {
     en: 'Loading hypothetical scene…',
     ja: '仮定の場面を読み込み中…',
     zh: '正在加载假设场景…',
-  },
-  'helpers.m145': {
-    ko: '이전 편집 초안은 새로 저장할 수 없어요. 필요한 내용은 복사해 보관해 주세요. 초안은 이 기기에 그대로 남겨 둬요.',
-    en: 'Older editing drafts cannot be saved again. Copy and retain any content you need. Drafts will remain on this device.',
-    ja: '以前の編集下書きは新たに保存できません。必要な内容はコピーして保管してください。下書きはこの端末にそのまま残します。',
-    zh: '旧编辑草稿无法再次保存。请复制并保留所需内容。草稿会继续留存在此设备上。',
   },
   'helpers.m146': {
     ko: '보관된 편집 초안 {v0}',
