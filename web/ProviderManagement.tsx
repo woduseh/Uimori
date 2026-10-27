@@ -1214,7 +1214,6 @@ export function ConnectionEditor({
         onStatusChange={setJevStatus}
       />
       <section hidden={screen !== 'connections'} aria-label={t('providers.m97')}>
-        {providerIds.length > 1 && <p className="muted">{t('providers.m98')}</p>}
         <div className="connection-list provider-saved-list settings-group-body">
           {providerIds.map((id) => {
             if (id === JEV_PROVIDER_DEFINITION.id) return jevConnectionRow;
@@ -1336,7 +1335,6 @@ export function ConnectionEditor({
         className="registered-models"
         aria-label={t('providers.m114')}
       >
-        {library.models.length > 1 && <p className="muted">{t('providers.m115')}</p>}
         <div className="provider-saved-list settings-group-body">
           {providerIds.map((id) => {
             if (id === JEV_PROVIDER_DEFINITION.id) return jevModelRow;

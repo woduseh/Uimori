@@ -298,7 +298,6 @@ export function PaletteSettings({
               </label>
             ))}
           </div>
-          <p className="theme-help">{t('palettes.saveScope')}</p>
           <div className="theme-library-actions">
             <button disabled={busy || disabled} onClick={preview}>
               {t('palettes.preview')}

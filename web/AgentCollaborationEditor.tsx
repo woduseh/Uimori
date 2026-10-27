@@ -151,10 +151,8 @@ export function AgentCollaborationEditor({
       <div id={`${id}-content`} hidden={!expanded}>
         <div className="ac-content">
           <p className="muted">{t('settings.m137')}</p>
-          {!collaboration.enabled && (
-            <p className="muted">
-              {collaboration.agents.length ? t('settings.m138') : t('settings.m139')}
-            </p>
+          {!collaboration.enabled && collaboration.agents.length > 0 && (
+            <p className="muted">{t('settings.m138')}</p>
           )}
           {collaboration.enabled && (
             <div className="ac-settings">
@@ -488,7 +486,6 @@ export function AgentCollaborationEditor({
                 <label className="ac-control-row missing" key={controlId}>
                   <SelectionCheckbox checked onChange={() => setSharedControl(controlId, false)} />
                   <strong>{t('settings.flow11', { v0: index + 1 })}</strong>
-                  <small>{t('settings.m188')}</small>
                 </label>
               ))}
             {visibleControls.map((control) => (
@@ -511,7 +508,6 @@ export function AgentCollaborationEditor({
                 (controlGroup === 'selected' || controlGroup === 'all') &&
                 missingControls.length
               ) && <p className="muted ac-control-empty">{t('settings.m190')}</p>}
-            <p className="ac-control-note">{t('settings.m191')}</p>
           </section>
         </div>
       </Dialog>

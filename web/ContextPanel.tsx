@@ -281,7 +281,6 @@ export function ContextPanel({
               </label>
               <small className="muted">{t('settings.m287')}</small>
             </details>
-            <p className="muted">{t('settings.m288')}</p>
             <div className="form-actions">
               {mode === 'full' && !draft && (
                 <button

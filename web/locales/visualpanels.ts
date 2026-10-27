@@ -1350,7 +1350,7 @@ export const messages = {
     zh: '查看原始请求与响应',
   },
   'visualpanels.knownSubtotalIncludesUnknownItemsInCalls': {
-    ko: '확인분 부분합 {v0}, {v1, number}회 미확인 항목 포함',
+    ko: '확인된 금액 합계 {v0}, 미확인 항목 {v1, number}회 포함',
     en: 'Known subtotal {v0}, Includes unknown items in {v1, number} calls',
     ja: '確認済みの小計 {v0}、{v1, number}回の未確認項目を含む',
     zh: '已知小计{v0}，含{v1, number}次调用的未知项目',
@@ -1536,7 +1536,7 @@ export const messages = {
     zh: '没有已确认包含的设定。',
   },
   'visualpanels.inclusionMayBeUncertainForMaterialProcessed': {
-    ko: '프롬프트에서 가공된 자료 등은 포함 여부를 확정하지 못할 수 있어요.',
+    ko: '스크립트나 프롬프트에서 변형된 자료는 포함 여부를 정확히 확인하지 못할 수 있어요.',
     en: 'Inclusion may be uncertain for resources processed inside prompts.',
     ja: 'プロンプト内で加工された資料などは、含まれたかを確定できない場合があります。',
     zh: '对于在提示词中处理过的资料，可能无法确定是否包含。',

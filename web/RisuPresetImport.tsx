@@ -173,12 +173,7 @@ export function RisuPresetImport({
           aria-label={t('transfer.m069')}
           aria-busy={busy}
         >
-          {!preview && (
-            <>
-              <p className="muted">{t('transfer.m070')}</p>
-              <p className="muted">{t('transfer.m071')}</p>
-            </>
-          )}
+          {!preview && <p className="muted">{t('transfer.m070')}</p>}
           <label className={`risu-import-file${preview ? ' risu-import-file-ready' : ''}`}>
             <span>{preview ? source?.name : t('transfer.m072')}</span>
             <input

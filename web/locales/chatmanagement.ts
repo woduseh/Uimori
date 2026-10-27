@@ -40,13 +40,13 @@ export const messages = {
     zh: '此场景及之后（{count}个）',
   },
   'chatmanage.deleteHelp': {
-    ko: '선택한 장면의 요청, 원문, 번역과 삽화를 삭제해요. 다른 채팅 사본은 유지해요. 되돌릴 수 없어요.',
-    en: 'Deletes the selected scenes, their requests, translations and illustrations. Other chat copies are kept. This cannot be undone.',
-    ja: '選択したシーンのリクエスト、原文、翻訳、挿絵を削除します。他のチャットのコピーは保持します。元に戻せません。',
-    zh: '删除所选场景的请求、原文、翻译和插图。保留其他聊天副本。无法撤销。',
+    ko: '선택한 장면의 요청, 원문, 번역, 삽화를 영구 삭제해요. 복사해 둔 다른 채팅에는 영향을 주지 않아요.',
+    en: 'Permanently deletes the selected scenes, requests, translations, and illustrations. Other chat copies are unaffected.',
+    ja: '選択したシーンのリクエスト、原文、翻訳、挿絵を完全に削除します。他のチャットのコピーには影響しません。',
+    zh: '永久删除所选场景的请求、原文、翻译和插图。不影响其他聊天副本。',
   },
   'chatmanage.memoryHelp': {
-    ko: '연결된 기억은 보관하되 생성에서 제외해요. 기억과 메모에서 정리할 수 있어요.',
+    ko: '연결된 기억은 삭제하지 않고 다음 생성에서만 제외해요. 기억과 메모에서 정리할 수 있어요.',
     en: 'Linked memories are kept but excluded from generation. Review them in Memory and notes.',
     ja: '関連する記憶は保管し、生成から除外します。「記憶とメモ」で整理できます。',
     zh: '关联记忆会保留，但不用于生成。可在“记忆与笔记”中整理。',

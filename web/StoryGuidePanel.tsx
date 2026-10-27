@@ -282,7 +282,6 @@ function StoryGuideEditor({
               aria-busy={saving}
               disabled={busy}
             />
-            <small className="muted">{t('prompts.uiSavedChangesApplyFromTheNextRequest')}</small>
           </div>
         )}
       </form>

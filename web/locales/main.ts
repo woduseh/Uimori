@@ -198,7 +198,7 @@ export const messages = {
     zh: '选择此聊天的正文模型',
   },
   'main.m020': {
-    ko: '이전 전송의 수락을 확인해 주세요. 새 초안은 보존돼요.',
+    ko: '이전 요청이 접수됐는지 확인해 주세요. 새 초안은 그대로 유지돼요.',
     en: 'Check whether the previous submission was accepted. Your new draft is preserved.',
     ja: '前回の送信が受理されたか確認してください。新しい下書きは保持されます。',
     zh: '请确认上次提交是否已被接受。新草稿会保留。',
@@ -306,7 +306,7 @@ export const messages = {
     zh: '场景导航',
   },
   'main.m038': {
-    ko: '장면 눈금과 맨 아래 이동을 표시해요. 제목의 장면 목록은 계속 열 수 있어요.',
+    ko: '장면 눈금과 맨 아래 이동 버튼을 표시해요. 상단 제목의 장면 목록은 언제든 열 수 있어요.',
     en: 'Show scene markers and the jump-to-bottom action. The scene list remains available from the title.',
     ja: 'シーンの目盛りと末尾への移動を表示します。タイトルからシーン一覧は引き続き開けます。',
     zh: '显示场景标记和跳到底部按钮。仍可通过标题打开场景列表。',
@@ -396,7 +396,7 @@ export const messages = {
     zh: '插图默认视图',
   },
   'main.m053': {
-    ko: '직접 접거나 펼친 컷의 선택은 유지해요. 그림 생성과 저장에는 영향을 주지 않아요.',
+    ko: '직접 접거나 펼친 컷 상태는 유지되며, 삽화 생성과 저장에는 영향을 주지 않아요.',
     en: 'Individual expand and collapse choices are preserved. Image generation and storage are unchanged.',
     ja: '個別に折りたたみや展開した選択は保持します。画像の生成や保存には影響しません。',
     zh: '保留每张插图的展开或折叠选择。不影响图片生成和保存。',
@@ -864,7 +864,7 @@ export const messages = {
     zh: '生成原文',
   },
   'main.m132': {
-    ko: '이전 전송의 수락 확인',
+    ko: '이전 요청 접수 확인',
     en: 'Check previous request acceptance',
     ja: '前回のリクエストの受付を確認',
     zh: '确认上次请求是否被接收',
@@ -1110,31 +1110,31 @@ export const messages = {
     zh: '无法保存请求恢复记录，因此未发送请求。请检查浏览器存储空间。',
   },
   'main.story10': {
-    ko: '요청은 수락됐지만 기기의 초안을 정리하지 못했어요. 다시 보내기 전에 확인해 주세요.',
+    ko: '요청은 접수됐지만 기기의 초안을 비우지 못했어요. 다시 보내기 전에 확인해 주세요.',
     en: 'The request was accepted, but the local draft could not be cleared. Review it before sending again.',
     ja: 'リクエストは受理されましたが、端末の下書きを整理できませんでした。再送信する前に確認してください。',
     zh: '请求已被接受，但未能清除设备上的草稿。再次发送前请确认。',
   },
   'main.story11': {
-    ko: '이전 요청의 수락을 확인했어요. 새로 작성한 초안은 남겨두었어요.',
+    ko: '이전 요청이 접수된 것을 확인했어요. 새로 작성한 초안은 그대로 두었어요.',
     en: 'The previous request was accepted. Your new draft has been kept.',
     ja: '前回のリクエストの受理を確認しました。新しい下書きは残しています。',
     zh: '已确认上次请求被接受。新草稿已保留。',
   },
   'main.story12': {
-    ko: '이전 요청의 수락을 확인했어요.',
+    ko: '이전 요청이 접수된 것을 확인했어요.',
     en: 'The previous request was accepted.',
     ja: '前回のリクエストの受理を確認しました。',
     zh: '已确认上次请求被接受。',
   },
   'main.story13': {
-    ko: '요청의 수락 여부를 확인하지 못했어요.',
+    ko: '요청이 접수됐는지 확인하지 못했어요.',
     en: 'Could not confirm whether the request was accepted.',
     ja: 'リクエストが受理されたか確認できませんでした。',
     zh: '无法确认请求是否已被接受。',
   },
   'main.story14': {
-    ko: '요청은 수락됐어요. 화면을 다시 불러오지 못해 연결을 확인하고 있어요.',
+    ko: '요청은 접수됐어요. 화면을 새로 불러오지 못해 연결을 확인하고 있어요.',
     en: 'The request was accepted. The view could not refresh, so the connection is being checked.',
     ja: 'リクエストは受理されました。画面を再読み込みできず、接続を確認しています。',
     zh: '请求已被接受。无法刷新页面，正在检查连接。',

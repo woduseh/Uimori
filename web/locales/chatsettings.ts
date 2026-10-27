@@ -726,7 +726,7 @@ export const messages = {
     zh: '此聊天的固定选项',
   },
   'chatsettings.m125': {
-    ko: '개별 지정한 옵션만 이 채팅에 적용해요. 나머지는 이 채팅에서 사용하는 작문 프롬프트의 기본 옵션을 따라요.',
+    ko: '따로 지정한 옵션만 이 채팅에 고정하고, 나머지는 작문 프롬프트의 기본값을 따라요.',
     en: 'Only overridden options apply to this chat. Others follow its writing prompt defaults.',
     ja: '個別指定したオプションだけをこのチャットに適用します。残りは使用中の執筆プロンプトの初期設定に従います。',
     zh: '仅覆盖的选项应用于此聊天，其余沿用所用写作提示词的默认设置。',
@@ -744,7 +744,7 @@ export const messages = {
     zh: '仅应用于下次生成',
   },
   'chatsettings.m128': {
-    ko: '여기서 지정한 옵션만 현재 채팅의 다음 생성에 한 번 사용하고 해제해요.',
+    ko: '여기서 고른 옵션만 다음 생성에 한 번 적용하고 원래대로 돌아가요.',
     en: 'These options apply once to the next generation, then clear.',
     ja: 'ここで指定したオプションだけを次の生成に一度使用して解除します。',
     zh: '此处选项仅用于下一次生成，随后清除。',
@@ -972,7 +972,7 @@ export const messages = {
     zh: '刷新',
   },
   'chatsettings.m169': {
-    ko: '이 채팅에서 공유하는 문자열 값이에요. 자료 원본은 유지돼요. 빈 문자열도 값이며, 재정의 해제로 기본값을 복원해요.',
+    ko: '이 채팅에서 사용하는 변수 값이에요. 자료 원본은 바뀌지 않으며, 재정의를 해제하면 기본값으로 돌아가요.',
     en: 'String values shared in this chat. Library originals stay unchanged. Empty strings are values; clearing an override restores its default.',
     ja: 'このチャットで共有する文字列です。資料の原本は保持します。空文字列も値で、上書きを解除すると初期値に戻ります。',
     zh: '此聊天共享的字符串值，资料原件保持不变。空字符串也是值；清除覆盖后将恢复默认值。',
@@ -984,7 +984,7 @@ export const messages = {
     zh: '正在加载共享变量…',
   },
   'chatsettings.m171': {
-    ko: '원문 생성이나 자료 코드 작업이 현재 값을 사용하고 있어요. 새 편집과 저장은 완료 뒤 할 수 있으며 입력한 초안은 유지돼요.',
+    ko: '생성이나 스크립트 작업에서 변수를 사용 중이에요. 작업이 끝나면 저장할 수 있으며 입력한 초안은 유지돼요.',
     en: 'Generation or resource code is using these values. Editing and saving resume after completion; your draft is preserved.',
     ja: '生成または資料コードの処理が現在の値を使用しています。完了後に編集と保存ができます。下書きは保持されます。',
     zh: '生成或资料代码正在使用当前值。完成后可编辑和保存，输入草稿会保留。',

@@ -288,7 +288,7 @@ export const messages = {
     zh: '返回大纲',
   },
   'helpers.m047': {
-    ko: '현재 채팅과 다른 도우미 기록이에요. 새 요청과 변경은 현재 채팅의 세션에서 진행해요.',
+    ko: '다른 채팅의 도우미 대화 기록이에요. 새 요청과 자료 수정은 현재 채팅의 도우미에서 진행해 주세요.',
     en: "This assistant history belongs to a different chat. New requests and changes use the current chat's session.",
     ja: '現在のチャットとは別のアシスタント履歴です。新しい依頼や変更は、現在のチャットのセッションで行います。',
     zh: '此助手记录属于其他聊天。新请求和更改将在当前聊天的会话中进行。',
@@ -390,7 +390,7 @@ export const messages = {
     zh: '助手任务记录',
   },
   'helpers.m065': {
-    ko: '대화에는 최신 시도를 표시해요. 이전 시도와 실행 요청 수는 여기에 남아요.',
+    ko: '대화창에는 마지막 시도만 표시하며, 이전 시도와 전체 호출 수는 여기에 기록돼요.',
     en: 'The conversation shows the latest attempt. Earlier attempts and execution request counts remain here.',
     ja: '会話には最新の試行を表示します。以前の試行と実行リクエスト数はここに残ります。',
     zh: '对话中显示最新一次尝试。之前的尝试和执行请求次数保留在此处。',
@@ -492,7 +492,7 @@ export const messages = {
     zh: '大纲',
   },
   'helpers.m088': {
-    ko: '읽기 전용 비교예요. 이 요청에서는 계획과 원문을 수정하지 않아요.',
+    ko: '읽기 전용 점검이에요. 이 요청으로는 구성과 원문을 직접 수정하지 않아요.',
     en: 'Read-only comparison. This request does not modify the plan or source text.',
     ja: '読み取り専用の比較です。この依頼では計画や原文を変更しません。',
     zh: '此操作仅进行只读比较，不会修改规划或原文。',
@@ -1224,7 +1224,7 @@ export const messages = {
     zh: '请求已接受，正在检查状态',
   },
   'helpers.m227': {
-    ko: '요청 수락 여부 확인 필요',
+    ko: '요청 접수 여부 확인 필요',
     en: 'Request acceptance needs confirmation',
     ja: 'リクエスト受付の確認が必要',
     zh: '需要确认请求是否已接受',
@@ -1374,7 +1374,7 @@ export const messages = {
     zh: '正在重新检查连接。以下显示的是最后确认的状态。',
   },
   'helpers.m255': {
-    ko: '본문 생성 기록은 생성 당시 원문 기준이에요. 후속 작업은 현재 수정본에 연결된 항목을 보여줘요.',
+    ko: '본문 생성 기록은 생성 당시 원문을 기준으로 남고, 후속 작업은 현재 본문에 연결된 항목을 표시해요.',
     en: 'Main text generation history uses the source text from the time of generation. Follow-up tasks show items linked to the current revision.',
     ja: '本文の生成履歴は生成時の原文に基づきます。後続作業には現在の改訂版に紐づく項目を表示します。',
     zh: '正文生成记录基于生成时的原文。后续任务显示与当前修订版关联的项目。',
@@ -1590,7 +1590,7 @@ export const messages = {
     zh: '已确认',
   },
   'helpers.m293': {
-    ko: '서버 응답을 받지 못했어요. 같은 요청으로 다시 확인하며, 아직 접수되지 않았다면 생성을 시작할 수 있어요. 이미 접수된 요청은 중복 생성하지 않아요.',
+    ko: '서버 응답을 확인하지 못했어요. 같은 요청으로 다시 확인하며, 이미 접수된 요청은 중복 실행하지 않아요.',
     en: 'No server response was received. Check again using the same request; generation may start if it has not yet been received. Already received requests will not generate twice.',
     ja: 'サーバーから応答を受け取れませんでした。同じリクエストで再確認します。まだ受け付けられていない場合は生成が始まることがあります。受け付け済みのリクエストは重複して生成しません。',
     zh: '未收到服务器响应。将使用同一请求再次确认；若尚未接收，可能开始生成。已接收的请求不会重复生成。',
@@ -1602,7 +1602,7 @@ export const messages = {
     zh: '此标签页没有可恢复的请求信息。可以暂时隐藏通知或查看任务记录。',
   },
   'helpers.m295': {
-    ko: '실행 결과가 불확실해요. 확인은 알림만 정리하며 작업 기록과 상태는 유지돼요.',
+    ko: '실행 결과를 아직 확인하지 못했어요. 확인을 누르면 알림만 닫히고 작업 기록은 유지돼요.',
     en: 'The execution result is uncertain. Acknowledging clears only the notification; task history and status are preserved.',
     ja: '実行結果が不明です。確認では通知だけを整理し、作業履歴と状態は保持します。',
     zh: '执行结果尚不确定。确认仅清理通知，任务记录和状态会保留。',

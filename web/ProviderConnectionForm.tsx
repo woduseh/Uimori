@@ -90,7 +90,6 @@ export function ProviderConnectionForm({
           </small>
         )}
       </h3>
-      {editingConnection && <p className="provider-draft-note full">{t('providers.m134')}</p>}
       {editingConnection &&
         (conflict ||
           connections.find((item) => item.id === editingConnection.id)?.revision !==
@@ -110,7 +109,6 @@ export function ProviderConnectionForm({
             </button>
           </div>
         )}
-      {connectionCopy && <p className="provider-draft-note full">{t('providers.m137')}</p>}
       {conflict && (
         <NoticeBanner tone="error" className="full">
           {t('providers.m138')}

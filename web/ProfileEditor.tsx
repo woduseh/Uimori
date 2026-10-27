@@ -217,9 +217,6 @@ export function ProfileEditor({
           </button>
         ))}
       </div>
-      {(!hideNavigation || tab !== 'prompts') && (
-        <p className="muted">{t('library.appliesOnlyToThisChat')}</p>
-      )}
       <form
         ref={form}
         onSubmit={(event) => {
@@ -499,9 +496,6 @@ export function ProfileEditor({
             <span role="status">
               {saving ? t('library.saving') : t('library.youHaveUnsavedChanges')}
             </span>
-          )}
-          {(dirty || lorePending) && (
-            <small>{t('library.saveChangesToConversationSetupPromptsModels')}</small>
           )}
           <SaveButton
             label={t('library.saveChatSettings')}

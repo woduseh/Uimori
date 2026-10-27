@@ -270,7 +270,7 @@ export function FontSettings({
                 <div>
                   <strong>{font.title}</strong>
                   <small>
-                    {font.format.toUpperCase()} · {Math.ceil(font.byteLength / 1024)} KB
+                    {font.format.toUpperCase()}, {Math.ceil(font.byteLength / 1024)} KB
                   </small>
                 </div>
                 <IconButton

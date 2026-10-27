@@ -79,7 +79,7 @@ export const messages = {
     zh: '删除模型',
   },
   'providers.m6': {
-    ko: '삭제하면 현재 전역 역할 선택에서 해제돼요. 해당 모델을 쓰는 작문 보조는 꺼져요. 과거 실행에 저장된 모델 설정은 유지돼요.',
+    ko: '삭제하면 전역 역할 설정에서 해제되고, 이 모델을 쓰던 보조 에이전트도 해제돼요. 과거 실행 기록의 모델 정보는 유지돼요.',
     en: 'Deleting clears the current global role assignment and disables writing assistants using this model. Model settings saved in previous runs will be retained.',
     ja: '削除すると現在のグローバル役割の選択が解除され、このモデルを使う執筆アシスタントが無効になります。過去の実行に保存されたモデル設定は保持されます。',
     zh: '删除后会清除当前全局角色选择，并关闭使用此模型的写作助手。历史运行中保存的模型设置会保留。',
@@ -1333,7 +1333,7 @@ export const messages = {
     zh: '60 分钟',
   },
   'providers.m253': {
-    ko: '유지 시간을 지정하려면 캐시 기준점 또는 자동 캐싱 방식을 선택해 주세요. 현재 방식은 유지 시간을 프로바이더 기본값으로 되돌려야 해요.',
+    ko: '캐시 유지 시간을 지정하려면 캐시 기준점이나 자동 캐싱 방식을 선택해 주세요. 현재 방식에서는 프로바이더 기본값만 사용할 수 있어요.',
     en: 'Choose cache breakpoints or automatic caching to specify retention. For the current mode, reset retention to the provider default.',
     ja: '保持時間を指定するには、キャッシュ基準点または自動キャッシュを選んでください。現在の方式では、保持時間をプロバイダーの既定値に戻す必要があります。',
     zh: '要指定保留时长，请选择缓存断点或自动缓存。当前模式需要将保留时长恢复为提供商默认值。',
@@ -2857,7 +2857,7 @@ export const messages = {
     zh: '计算结果超出可处理的金额范围，因此不显示估算金额。',
   },
   'providers.m530': {
-    ko: '일부 토큰 수나 요금이 미확인이에요. 표시된 부분합은 확인된 항목만 포함해요.',
+    ko: '일부 토큰 수나 단가를 확인할 수 없어, 확인된 항목만 합산해 표시했어요.',
     en: 'Some token counts or rates are unverified. The subtotal shown includes only verified items.',
     ja: '一部のトークン数や料金が未確認です。表示する小計には確認済みの項目のみ含まれます。',
     zh: '部分 token 数或费率未确认。显示的小计仅包含已确认的项目。',
