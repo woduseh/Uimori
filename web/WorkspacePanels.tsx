@@ -761,6 +761,7 @@ export function AppSettingsPanel({
                               <option value={360}>{t('chatsettings.m74')}</option>
                               <option value={384}>{t('chatsettings.m69')}</option>
                               <option value={480}>{t('chatsettings.m70')}</option>
+                              <option value={560}>{t('chatsettings.m71')}</option>
                             </select>
                           </label>
                         </div>

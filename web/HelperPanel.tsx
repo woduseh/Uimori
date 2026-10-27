@@ -27,7 +27,6 @@ import { UI_HELPER_PERSONA } from './helper-persona.js';
 import { api, ApiError } from './api.js';
 import { RetryFailure } from './RetryFailure.js';
 import { RequestMessage } from './RequestMessage.js';
-import { ActivityBar } from './ActivityBar.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { HelperActivityDetails, useHelperActivity } from './HelperActivity.js';
 import { helperActivitySummary } from './helper-activity.js';
@@ -146,7 +145,7 @@ function HelperTaskElapsed({
     };
   }, [visible, ticking]);
   const elapsed = taskElapsed(task, now);
-  return elapsed ? `${prefix}${elapsed}` : null;
+  return elapsed ? <span className="activity-elapsed">{`${prefix}${elapsed}`}</span> : null;
 }
 const statusLabel: Record<string, string> = {
   queued: 'helpers.m002',
@@ -330,7 +329,6 @@ export function HelperPanel(props: Props) {
     if (!props.open) setModelPicker(false);
   }, [props.open]);
   const [taskHistory, setTaskHistory] = useState<{ taskId?: string } | null>(null);
-  const [hiddenActivity, setHiddenActivity] = useState<string[]>([]);
   const [openTaskActivities, setOpenTaskActivities] = useState<Record<string, boolean>>({});
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
@@ -373,10 +371,8 @@ export function HelperPanel(props: Props) {
   const recorded = taskHistory?.taskId
     ? tasks.filter((task) => task.id === taskHistory.taskId)
     : tasks;
-  // Hiding a progress row never changes or cancels the server task behind it.
   const pending = tasks.filter(active);
-  const shownPending = pending.filter((task) => !hiddenActivity.includes(task.id));
-  const summarized = shownPending.find((task) => task.status === 'running') ?? shownPending[0];
+  const summarized = pending.find((task) => task.status === 'running') ?? pending[0];
   const liveActivity = useHelperActivity(summarized?.id, summarized?.status, props.open);
   const activityLabel =
     liveActivity.error || !liveActivity.data || !summarized
@@ -876,24 +872,33 @@ export function HelperPanel(props: Props) {
             taskElapsed(task, Date.now())
           )
         }
+        badges={
+          task.id === summarized?.id && pending.length > 1 ? (
+            <span className="activity-count">
+              {t('helpers.m329', { count: formatNumber(pending.length - 1) })}
+            </span>
+          ) : undefined
+        }
         storageKey={activityKey(task)}
         onOpenChange={(open) => setOpenTaskActivities((old) => ({ ...old, [task.id]: open }))}
         dataProps={{ 'data-testid': 'helper-task-activity', 'data-task-id': task.id }}
       >
-        <p>{t('helpers.m310', { model: task.modelTitle ?? t('helpers.m026') })}</p>
-        <p>
-          {t('helpers.m311', {
-            calls: formatNumber(task.usage.modelCalls),
-            input:
-              task.usage.inputTokens == null
-                ? t('helpers.m026')
-                : formatNumber(task.usage.inputTokens),
-            output:
-              task.usage.outputTokens == null
-                ? t('helpers.m026')
-                : formatNumber(task.usage.outputTokens),
-          })}
-        </p>
+        <div className="helper-task-meta ui-meta-row">
+          <span>{t('helpers.m310', { model: task.modelTitle ?? t('helpers.m026') })}</span>
+          <span>
+            {t('helpers.m311', {
+              calls: formatNumber(task.usage.modelCalls),
+              input:
+                task.usage.inputTokens == null
+                  ? t('helpers.m026')
+                  : formatNumber(task.usage.inputTokens),
+              output:
+                task.usage.outputTokens == null
+                  ? t('helpers.m026')
+                  : formatNumber(task.usage.outputTokens),
+            })}
+          </span>
+        </div>
         {task.error && <p className="error">{translateMessage(task.error ?? '')}</p>}
         {task.completedEffects && (
           <p>
@@ -903,6 +908,7 @@ export function HelperPanel(props: Props) {
           </p>
         )}
         <HelperActivityDetails
+          inline
           taskId={task.id}
           status={task.status}
           visible={props.open && (openTaskActivities[task.id] ?? savedActivityOpen(task))}
@@ -975,6 +981,23 @@ export function HelperPanel(props: Props) {
         ? t('main.m011')
         : t('helpers.modelPickerNone')
     : props.modelDescription;
+  const modelChip = (
+    <button
+      type="button"
+      className="model-chip secondary helper-model-chip"
+      aria-haspopup="dialog"
+      aria-expanded={modelPicker}
+      aria-label={t('helpers.m049', { v0: modelDescription })}
+      title={t('helpers.modelPickerScope')}
+      disabled={!props.library}
+      onClick={() => setModelPicker(true)}
+    >
+      <span>
+        {confirmedModel ? (savedModelPreset?.title ?? modelDescription) : props.modelTitle}
+      </span>
+      <ChevronDown size={14} aria-hidden="true" />
+    </button>
+  );
   return (
     <aside
       id="helper-panel"
@@ -1008,24 +1031,26 @@ export function HelperPanel(props: Props) {
       }}
     >
       <header className="helper-header">
-        <div>
-          <h2>{scope.kind === 'chat' ? t('helpers.chatTitle') : t('helpers.libraryTitle')}</h2>
-        </div>
-        <button
-          type="button"
-          className="model-chip secondary helper-model-chip"
-          aria-haspopup="dialog"
-          aria-expanded={modelPicker}
-          aria-label={t('helpers.m049', { v0: modelDescription })}
-          title={t('helpers.modelPickerScope')}
-          disabled={!props.library}
-          onClick={() => setModelPicker(true)}
-        >
-          <span>
-            {confirmedModel ? (savedModelPreset?.title ?? modelDescription) : props.modelTitle}
-          </span>
-          <ChevronDown size={14} aria-hidden="true" />
-        </button>
+        <h2 className="sr-only">
+          {scope.kind === 'chat' ? t('helpers.chatTitle') : t('helpers.libraryTitle')}
+        </h2>
+        <HelperSessionBar
+          sessions={sessions.sessions}
+          unread={sessions.unread}
+          conversation={conversation}
+          currentId={sessions.currentId}
+          creating={sessions.creating || props.ready === false}
+          busy={props.ready === false || busy || Boolean(outbox)}
+          onSelect={sessions.select}
+          onCreate={() => void sessions.create()}
+          onUpdate={(value) => {
+            data.updateConversation(value);
+            void sessions.reload().catch((cause) => setError(cause.message));
+          }}
+          onDelete={() => {
+            void sessions.reload().catch((cause) => setError(cause.message));
+          }}
+        />
         <IconButton
           label={t('helpers.m044')}
           icon={Settings2}
@@ -1077,23 +1102,6 @@ export function HelperPanel(props: Props) {
           </button>
         </div>
       )}
-      <HelperSessionBar
-        sessions={sessions.sessions}
-        unread={sessions.unread}
-        conversation={conversation}
-        currentId={sessions.currentId}
-        creating={sessions.creating || props.ready === false}
-        busy={props.ready === false || busy || Boolean(outbox)}
-        onSelect={sessions.select}
-        onCreate={() => void sessions.create()}
-        onUpdate={(value) => {
-          data.updateConversation(value);
-          void sessions.reload().catch((cause) => setError(cause.message));
-        }}
-        onDelete={() => {
-          void sessions.reload().catch((cause) => setError(cause.message));
-        }}
-      />
       {scopeMismatch && scope.kind === 'chat' && (
         <NoticeBanner className="helper-scope-notice">{t('helpers.m047')}</NoticeBanner>
       )}
@@ -1117,7 +1125,6 @@ export function HelperPanel(props: Props) {
                   }
                   placeholder={t('helpers.m053')}
                 />
-                <p className="muted">{t('helpers.m054')}</p>
               </div>
             </section>
             {persona.revision !== conversation.revision && (
@@ -1141,6 +1148,7 @@ export function HelperPanel(props: Props) {
             {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
           </div>
           <div className="helper-settings-actions">
+            {modelChip}
             <button
               type="button"
               className="secondary"
@@ -1387,14 +1395,13 @@ export function HelperPanel(props: Props) {
         scopeKey={taskHistory?.taskId ?? 'all'}
         onClose={() => setTaskHistory(null)}
       >
-        <div className="activity-notification-toolbar">
-          <p>{t('helpers.m065')}</p>
-          {taskHistory?.taskId && (
+        {taskHistory?.taskId && (
+          <div className="activity-notification-toolbar">
             <button type="button" className="secondary" onClick={() => setTaskHistory({})}>
               {t('helpers.m066')}
             </button>
-          )}
-        </div>
+          </div>
+        )}
         <ul className="activity-notification-items">
           {recorded.map((task) => (
             <li key={task.id} data-testid="helper-task-record" data-task-id={task.id}>
@@ -1521,77 +1528,6 @@ export function HelperPanel(props: Props) {
             refresh={() => data.refresh(conversation)}
           />
         )}
-        {props.resource && props.scope.kind === 'library' && (
-          <div className="helper-editor">
-            <span>{t('helpers.m316', { title: props.resource.title })}</span>
-            <button type="button" onClick={props.onClearResource}>
-              {t('helpers.m083')}
-            </button>
-          </div>
-        )}
-        {editor && !props.resource && (
-          <div className="helper-editor">
-            <span>{t('helpers.m317', { title: editor.title || t('helpers.m085') })}</span>
-          </div>
-        )}
-        {selectedOutline && (
-          <div className="helper-outline-selection">
-            <div>
-              <strong className="ui-meta-row">
-                <span>
-                  {selectedOutline.target.purpose === 'review'
-                    ? t('helpers.m086')
-                    : t('helpers.m087')}
-                </span>
-                <span>{selectedOutline.title}</span>
-              </strong>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setOutlineSelections((old) => ({ ...old, [scopeKey]: null }));
-                  saveLocal(`uimori:helper-outline:${scopeKey}`, null);
-                  if (draft === selectedOutline.request) editDraft('');
-                }}
-              >
-                {t('helpers.m083')}
-              </button>
-            </div>
-            <small>
-              {selectedOutline.target.purpose === 'review' ? t('helpers.m088') : t('helpers.m089')}
-            </small>
-            {draft !== selectedOutline.request && (
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  editDraft(
-                    draft.trim()
-                      ? `${draft}\n\n${selectedOutline.request}`
-                      : selectedOutline.request
-                  )
-                }
-              >
-                {t('helpers.m090')}
-              </button>
-            )}
-          </div>
-        )}
-        {selection && (
-          <div className="helper-selection">
-            <span>{t('helpers.m318', { count: formatNumber(selection.text.length) })}</span>
-            <button
-              type="button"
-              onClick={() => {
-                if (draft === selectionRequest) editDraft('');
-                setSelections((old) => ({ ...old, [scopeKey]: null }));
-                saveLocal(`uimori:helper-selection:${scopeKey}`, null);
-              }}
-            >
-              {t('helpers.m093')}
-            </button>
-          </div>
-        )}
         {outbox && !busy && (
           <div className="helper-outbox" role="status">
             <p>{unpersisted[scopeKey] ? t('helpers.m094') : t('helpers.m095')}</p>
@@ -1610,36 +1546,6 @@ export function HelperPanel(props: Props) {
               {t('helpers.m096')}
             </button>
           </div>
-        )}
-        {pending.length > 0 && (
-          <ActivityBar
-            tone="running"
-            issue={false}
-            label={
-              summarized
-                ? (activityLabel ??
-                  t(statusLabel[summarized.status] ?? summarized.status) ??
-                  summarized.status)
-                : t('helpers.m097', { v0: formatNumber(pending.length) })
-            }
-            elapsed={
-              summarized ? <HelperTaskElapsed task={summarized} visible={props.open} /> : null
-            }
-            extra={summarized && pending.length > 1 ? pending.length - 1 : 0}
-            expanded={!!summarized}
-            collapsed={!summarized}
-            toggleLabel={summarized ? t('helpers.m098') : t('helpers.m099')}
-            toggleTitle={summarized ? t('helpers.m100') : t('helpers.m099')}
-            onToggle={() =>
-              setHiddenActivity((old) =>
-                summarized
-                  ? [...new Set([...old, ...pending.map((task) => task.id)])]
-                  : old.filter((id) => !pending.some((task) => task.id === id))
-              )
-            }
-            onDetails={() => setTaskHistory({})}
-            testId="helper-activity-status"
-          />
         )}
         {error && (
           <NoticeBanner
@@ -1691,6 +1597,91 @@ export function HelperPanel(props: Props) {
             else void send();
           }}
         >
+          {((props.resource && props.scope.kind === 'library') ||
+            (editor && !props.resource) ||
+            selectedOutline ||
+            selection) && (
+            <div className="composer-request-chips helper-context-chips">
+              {props.resource && props.scope.kind === 'library' && (
+                <div className="helper-context-chip helper-editor">
+                  <span className="helper-chip-label">
+                    {t('helpers.m316', { title: props.resource.title })}
+                  </span>
+                  <button
+                    type="button"
+                    className="helper-chip-dismiss"
+                    aria-label={t('helpers.m083')}
+                    onClick={props.onClearResource}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              {editor && !props.resource && (
+                <div className="helper-context-chip helper-editor">
+                  <span className="helper-chip-label">
+                    {t('helpers.m317', { title: editor.title || t('helpers.m085') })}
+                  </span>
+                </div>
+              )}
+              {selectedOutline && (
+                <div className="helper-context-chip helper-outline-selection">
+                  <span className="helper-chip-badge">
+                    {selectedOutline.target.purpose === 'review'
+                      ? t('helpers.m086')
+                      : t('helpers.m087')}
+                  </span>
+                  <span className="helper-chip-label">{selectedOutline.title}</span>
+                  {draft !== selectedOutline.request && (
+                    <button
+                      type="button"
+                      className="helper-chip-action"
+                      onClick={() =>
+                        editDraft(
+                          draft.trim()
+                            ? `${draft}\n\n${selectedOutline.request}`
+                            : selectedOutline.request
+                        )
+                      }
+                    >
+                      {t('helpers.m090')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="helper-chip-dismiss"
+                    aria-label={t('helpers.m083')}
+                    onClick={() => {
+                      setOutlineSelections((old) => ({ ...old, [scopeKey]: null }));
+                      saveLocal(`uimori:helper-outline:${scopeKey}`, null);
+                      if (draft === selectedOutline.request) editDraft('');
+                    }}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+              {selection && (
+                <div className="helper-context-chip helper-selection">
+                  <span className="helper-chip-label">
+                    {t('helpers.m318', { count: formatNumber(selection.text.length) })}
+                  </span>
+                  <button
+                    type="button"
+                    className="helper-chip-dismiss"
+                    aria-label={t('helpers.m093')}
+                    onClick={() => {
+                      if (draft === selectionRequest) editDraft('');
+                      setSelections((old) => ({ ...old, [scopeKey]: null }));
+                      saveLocal(`uimori:helper-selection:${scopeKey}`, null);
+                    }}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <ComposerInput
             inputRef={input}
             enterSend={props.enterSend}
@@ -1706,6 +1697,7 @@ export function HelperPanel(props: Props) {
             }}
           />
           <div className="quick-controls">
+            {!(settings && conversation) && modelChip}
             <IconButton
               label={t('helpers.m106')}
               icon={History}

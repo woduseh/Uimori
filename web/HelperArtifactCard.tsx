@@ -164,7 +164,6 @@ export function HelperArtifactCard({
           <small>{selected.origin === 'edit' ? t('helpers.m134') : t('helpers.m135')}</small>
         )}
       </header>
-      <p className="muted">{t('helpers.m136')}</p>
       {historyError && (
         <NoticeBanner
           tone="error"
@@ -211,7 +210,6 @@ export function HelperArtifactCard({
       {drafts.length > 0 && (
         <details className="helper-artifact-drafts">
           <summary>{t('helpers.m320', { count: formatNumber(drafts.length) })}</summary>
-          <p>{t('helpers.m145')}</p>
           {drafts.map((draft, index) => (
             <section key={draft.key} aria-label={t('helpers.m146', { v0: index + 1 })}>
               <h4>

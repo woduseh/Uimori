@@ -480,10 +480,10 @@ export const messages = {
     zh: '未命名资料',
   },
   'helpers.m086': {
-    ko: '원문 점검',
-    en: 'Review source text',
-    ja: '原文の点検',
-    zh: '检查原文',
+    ko: '읽기 전용 점검',
+    en: 'Read-only review',
+    ja: '読み取り専用点検',
+    zh: '只读检查',
   },
   'helpers.m087': {
     ko: '구성',

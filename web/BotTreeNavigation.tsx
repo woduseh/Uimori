@@ -1,7 +1,7 @@
 import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Inbox, MessageCircle, PanelLeftClose, PanelLeftOpen, Sparkles } from 'lucide-react';
 import type { Content } from '../core/product.js';
 import {
   libraryCategory,
@@ -107,6 +107,8 @@ export function BotNavigation(
     /** Collapsed navigation renders an icon rail instead of the full tree. */
     collapsed?: boolean;
     onToggleCollapse?: () => void;
+    helperOpen?: boolean;
+    onToggleHelper?: () => void;
   }
 ) {
   useI18n();
@@ -464,6 +466,17 @@ export function BotNavigation(
               onClick={openRunning}
             />
           )}
+          {props.onToggleHelper && (
+            <IconButton
+              label={t('main.m015')}
+              icon={Sparkles}
+              aria-pressed={props.helperOpen}
+              aria-expanded={props.helperOpen}
+              aria-controls="helper-panel"
+              className={props.helperOpen ? 'selected' : ''}
+              onClick={props.onToggleHelper}
+            />
+          )}
           <IconButton label={t('transfer.m289')} icon={SettingsIcon} onClick={onSettings} />
         </nav>
         {runningDialog}
@@ -760,6 +773,19 @@ export function BotNavigation(
           </button>
         )}
         <nav className="sidebar-app-actions" aria-label={t('transfer.m288')}>
+          {props.onToggleHelper && (
+            <button
+              type="button"
+              className={`nav-button${props.helperOpen ? ' selected' : ''}`}
+              aria-pressed={props.helperOpen}
+              aria-expanded={props.helperOpen}
+              aria-controls="helper-panel"
+              onClick={props.onToggleHelper}
+            >
+              <Sparkles size={18} aria-hidden="true" />
+              {t('main.m015')}
+            </button>
+          )}
           <button type="button" className="nav-button" onClick={onSettings}>
             <SettingsIcon size={18} />
             {t('transfer.m289')}

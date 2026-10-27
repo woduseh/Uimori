@@ -182,7 +182,7 @@ type Panel =
   | 'model';
 /* Device layout preferences share the same optional browser storage. */
 const READING_WIDTHS = [760, 880, 1040];
-const PANEL_WIDTHS = [360, 384, 480];
+const PANEL_WIDTHS = [360, 384, 480, 560];
 const SIDEBAR_WIDTH = 248;
 const SIDEBAR_WIDTHS = [SIDEBAR_WIDTH, 320, 400];
 const RAIL_WIDTH = 56;
@@ -777,6 +777,11 @@ function App() {
       }}
       onTasks={() => inspect('')}
       onOpenHelperTask={openRecentHelper}
+      helperOpen={helperOpen}
+      onToggleHelper={() => {
+        if (panel === 'navigation') setPanel('');
+        setWorkspacePanel((value) => (value === 'helper' ? null : 'helper'));
+      }}
       tasks={s.tasks}
     />
   );

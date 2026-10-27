@@ -131,6 +131,15 @@ export function HelperSessionBar(props: Props) {
               ))}
             </select>
           </label>
+          {props.unread.length > 0 && (
+            <span
+              className="helper-unread-badge"
+              title={t('helpers.m325', { count: formatNumber(props.unread.length) })}
+              aria-label={t('helpers.m325', { count: formatNumber(props.unread.length) })}
+            >
+              {formatNumber(props.unread.length)}
+            </span>
+          )}
           <IconButton
             label={t('helpers.m176')}
             icon={Plus}
@@ -170,11 +179,6 @@ export function HelperSessionBar(props: Props) {
             </div>
           </ActionMenu>
         </div>
-        {props.unread.length > 0 && (
-          <div className="helper-session-meta">
-            <strong>{t('helpers.m325', { count: formatNumber(props.unread.length) })}</strong>
-          </div>
-        )}
       </div>
       {cleanupFailure && (
         <NoticeBanner tone="error">{translateMessage(cleanupFailure)}</NoticeBanner>
