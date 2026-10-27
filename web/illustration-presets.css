@@ -31,10 +31,6 @@
   flex: 1;
   min-width: 0;
 }
-.illustration-preset-heading p {
-  color: var(--muted);
-  font-size: var(--font-body);
-}
 .illustration-preset-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
