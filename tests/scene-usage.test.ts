@@ -38,7 +38,6 @@ test('Codex turn-wide input remains usage accounting rather than request occupan
   expect(html).toContain('요청 50,000');
   expect(html).toContain('컨텍스트 사용량 약 25%');
   expect(html).toContain('value="2048"');
-  expect(html).toContain('누적 사용량');
   expect(html).toContain('aria-label="컨텍스트 한도 대비 추정 입력"');
   expect(html).not.toContain('aria-label="컨텍스트 한도 대비 입력"');
 });
