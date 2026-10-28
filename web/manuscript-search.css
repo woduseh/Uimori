@@ -45,6 +45,9 @@
   gap: 18px;
   align-items: end;
 }
+.manuscript-search-kinds:only-child {
+  grid-column: 1 / -1;
+}
 .manuscript-search .manuscript-search-scope {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -113,6 +116,7 @@
 }
 .manuscript-search-title-results {
   margin-bottom: 10px;
+  gap: 0;
 }
 .manuscript-search-title-choice {
   display: grid;
@@ -120,10 +124,16 @@
   gap: 4px;
   width: 100%;
   min-width: 0;
-  min-height: 54px;
-  padding: 12px;
+  min-height: var(--control-h);
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
   text-align: left;
   white-space: normal;
+}
+.manuscript-search-title-choice + .manuscript-search-title-choice {
+  border-top: var(--hairline) solid var(--line);
+  border-radius: 0;
 }
 .manuscript-search-title-choice strong,
 .manuscript-search-title-choice small {

@@ -310,5 +310,13 @@ export function measureProviderRequest(
     imageCount: estimate.imageCount,
     estimatedImageTokens: estimate.imageTokens,
     imageEstimate: estimate.imageEstimate,
+    ...(estimate.fileCount
+      ? {
+          fileCount: estimate.fileCount,
+          estimatedFileTokens: estimate.fileTokens,
+          fileTokensUnknown: estimate.fileTokensUnknown,
+          fileEstimate: estimate.fileEstimate,
+        }
+      : {}),
   };
 }

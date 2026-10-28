@@ -267,7 +267,7 @@ function App() {
   }, []);
   const helperReturnToSidecar = useRef(false);
   const [helperNavigationHost, setHelperNavigationHost] = useState<HTMLDivElement | null>(null);
-  const helperNavigationActions = useRef<{ create: () => void } | null>(null);
+  const helperNavigationActions = useRef<{ create: () => void; activity: () => void } | null>(null);
   const [helperSearchRequest, setHelperSearchRequest] = useState(0);
   const [contentToOpen, setContentToOpen] = useState<string | null>(null);
   const helperResultNavigation = useRef(0);
@@ -863,6 +863,7 @@ function App() {
       onOpenHelperTask={openRecentHelper}
       helperOpen={helperOpen}
       helperExpanded={helperWorkspaceOpen}
+      onHelperActivity={() => helperNavigationActions.current?.activity()}
       helperNavigationRef={
         (quickActions ? viewportWidth >= 768 && panel !== 'navigation' : panel === 'navigation')
           ? setHelperNavigationHost

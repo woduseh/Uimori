@@ -4,6 +4,7 @@ import { modelCapability } from './model-capabilities.js';
 import { isGeminiProtocol, type ProviderProtocol } from './product.js';
 import { isTokenizerProfileId, type TokenizerProfileId } from './tokenizer-profiles.js';
 import { plannedImageMetadata } from './provider-image-reference.js';
+import { plannedFileMetadata } from './provider-file-reference.js';
 
 export const DEFAULT_INPUT_TOKEN_LIMIT = 272_000;
 export const MIN_INPUT_TOKEN_LIMIT = 8_192;
@@ -118,8 +119,18 @@ export function estimateContextInput(value: unknown, budget?: ContextBudget) {
   let serialized: string | undefined;
   let imageTokens = 0;
   let imageCount = 0;
+  let knownFileTokens = 0;
+  let fileCount = 0;
+  let unknownFileCount = 0;
   try {
     serialized = JSON.stringify(value, (_key, item: unknown) => {
+      const file = plannedFileMetadata(item);
+      if (file) {
+        fileCount++;
+        if (file.tokenEstimate === undefined) unknownFileCount++;
+        else knownFileTokens += Math.ceil((file.tokenEstimate * 11) / 10);
+        return { type: 'file', kind: file.kind, bytes: file.bytes };
+      }
       const image = plannedImageMetadata(item);
       if (!image) return item;
       imageCount++;
@@ -144,7 +155,17 @@ export function estimateContextInput(value: unknown, budget?: ContextBudget) {
     imageTokens,
     imageCount,
     imageEstimate: imageCount ? ('conservative-dimensions-v1' as const) : null,
-    totalTokens: textTokens + imageTokens,
+    fileTokens: unknownFileCount ? null : knownFileTokens,
+    knownFileTokens,
+    fileCount,
+    unknownFileCount,
+    fileTokensUnknown: unknownFileCount > 0,
+    fileEstimate: fileCount
+      ? unknownFileCount
+        ? ('unknown' as const)
+        : ('extracted-text-v1' as const)
+      : null,
+    totalTokens: textTokens + imageTokens + knownFileTokens,
   };
 }
 

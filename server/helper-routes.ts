@@ -7,6 +7,8 @@ import { readHelperActivity } from './helper-activity.js';
 import { readHelperTaskResults } from './helper-task-results.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import { HELPER_PERSONA_MAX_CHARS, REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
+import { requestImageUploads } from './request-images.js';
+import { requestFileUploads } from './request-files.js';
 
 export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   const store = runtime.workspace;
@@ -79,11 +81,12 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   });
   app.post('/api/helper/conversations/new', (request) => {
     const body = record(request.body);
-    fields(body, ['scope', 'requestKey', 'title']);
+    fields(body, ['scope', 'requestKey', 'title', 'projectId']);
     return store.create(
       readScope(body.scope),
       `request:${text(body.requestKey, 'request key', 100)}`,
-      body.title === undefined ? undefined : text(body.title, 'conversation title', 200)
+      body.title === undefined ? undefined : text(body.title, 'conversation title', 200),
+      body.projectId == null ? body.projectId : text(body.projectId, 'project ID', 100)
     );
   });
   app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id/project', (request) => {
@@ -183,7 +186,7 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         request.params.id,
         request.params.messageId,
         number(body.expectedRevision, 'conversation revision'),
-        text(body.text, 'helper message', REQUEST_TEXT_MAX_CHARS)
+        text(body.text, 'helper message', REQUEST_TEXT_MAX_CHARS, true)
       );
     }
   );
@@ -205,9 +208,18 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
   app.post<{ Params: { id: string } }>(
     '/api/helper/conversations/:id/messages',
     { bodyLimit: 48 * 1024 * 1024 },
-    (request) => {
+    async (request) => {
       const body = record(request.body);
-      fields(body, ['requestKey', 'text', 'editor', 'selection', 'retryOf', 'outline']);
+      fields(body, [
+        'requestKey',
+        'text',
+        'editor',
+        'selection',
+        'retryOf',
+        'outline',
+        'images',
+        'files',
+      ]);
       let outline: OutlineTarget | undefined;
       if (body.outline !== undefined) {
         const selected = record(body.outline);
@@ -249,10 +261,10 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
         };
       }
       return publicTask(
-        runtime.enqueue(
+        await runtime.enqueueWithAttachments(
           request.params.id,
           text(body.requestKey, 'request key', 100),
-          text(body.text, 'helper message', REQUEST_TEXT_MAX_CHARS),
+          text(body.text, 'helper message', REQUEST_TEXT_MAX_CHARS, true),
           editor,
           body.selection === undefined
             ? undefined
@@ -266,7 +278,8 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
                 };
               })(),
           body.retryOf === undefined ? undefined : text(body.retryOf, 'retry task ID', 100),
-          outline
+          outline,
+          { images: requestImageUploads(body.images), files: requestFileUploads(body.files) }
         )
       );
     }

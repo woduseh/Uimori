@@ -82,6 +82,7 @@ export function BotNavigation(
     libraryError?: string;
     onSearch: () => void;
     onNewHelper?: () => void;
+    onHelperActivity?: () => void;
     quickActions?: boolean;
     libraryTab?: 'bot' | 'persona' | 'module' | 'prompts';
     /** Collapsed navigation renders an icon rail instead of the full tree. */
@@ -486,11 +487,14 @@ export function BotNavigation(
           />
         </nav>
         <IconButton
-          label={t('transfer.d024', { v0: unreadChats })}
+          label={props.helperExpanded ? t('helpers.m262') : t('transfer.d024', { v0: unreadChats })}
           icon={Inbox}
           onClick={() => {
-            props.onChatWorkspace?.();
-            setMode('activity');
+            if (props.helperExpanded) props.onHelperActivity?.();
+            else {
+              props.onChatWorkspace?.();
+              setMode('activity');
+            }
             props.onToggleCollapse?.();
           }}
         />
@@ -516,31 +520,31 @@ export function BotNavigation(
           <img src="/icons/halo-mark.svg" width={26} height={26} alt="" aria-hidden="true" />
           Uimori
         </span>
-        {props.onToggleCollapse && (
-          <IconButton
-            className="sidebar-toggle"
-            label={t('transfer.m290')}
-            icon={PanelLeftClose}
-            aria-expanded
-            aria-controls="workspace-sidebar"
-            onClick={props.onToggleCollapse}
-          />
-        )}
+        <div className="sidebar-header-actions">
+          {quickActions && (
+            <NavigationQuickActions
+              onSearch={props.onSearch}
+              onLibrary={onLibrary}
+              helperWorkspace={props.helperExpanded}
+              onNewHelper={props.onNewHelper}
+            />
+          )}
+          {props.onToggleCollapse && (
+            <IconButton
+              className="sidebar-toggle"
+              label={t('transfer.m290')}
+              icon={PanelLeftClose}
+              aria-expanded
+              aria-controls="workspace-sidebar"
+              onClick={props.onToggleCollapse}
+            />
+          )}
+        </div>
       </div>
       <nav className="sidebar-workspaces" aria-label={t('transfer.m284')}>
         {chatDestination}
         {helperDestination}
       </nav>
-      {quickActions && (
-        <div className="sidebar-quick-actions">
-          <NavigationQuickActions
-            onSearch={props.onSearch}
-            onLibrary={onLibrary}
-            helperWorkspace={props.helperExpanded}
-            onNewHelper={props.onNewHelper}
-          />
-        </div>
-      )}
       <nav className="sidebar-destinations" aria-label={t('transfer.m284')}>
         <button
           type="button"

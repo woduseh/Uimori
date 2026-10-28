@@ -4,6 +4,7 @@ import type { Json, ProviderRequest } from './transport.js';
 import { ProviderContractError } from './provider-errors.js';
 import { planProviderCache } from './provider-cache.js';
 import { assertProviderImageSupport, providerImagePart } from './provider-image-reference.js';
+import { assertProviderFileSupport, providerFilePart } from './provider-file-reference.js';
 
 export type MessageDiagnostic = {
   code: string;
@@ -66,6 +67,7 @@ export function planNativeMessages(
   if (!request.prompt) return;
   validateProviderPrompt(request.prompt);
   assertProviderImageSupport(request, protocol);
+  assertProviderFileSupport(request, protocol);
   const prompt = request.prompt;
   const diagnostics: MessageDiagnostic[] = [];
   const system: Json[] = [];
@@ -137,11 +139,13 @@ export function planNativeMessages(
       (part): Record<string, Json> =>
         part.type === 'image'
           ? (providerImagePart(part.image, protocol) as Record<string, Json>)
-          : responses
-            ? { type: 'input_text', text: part.text }
-            : vertex
-              ? { text: part.text }
-              : { type: 'text', text: part.text }
+          : part.type === 'file'
+            ? (providerFilePart(part.file, protocol) as Record<string, Json>)
+            : responses
+              ? { type: 'input_text', text: part.text }
+              : vertex
+                ? { text: part.text }
+                : { type: 'text', text: part.text }
     );
     for (const anchor of prompt.cachePlan.filter((a) => a.afterMessageId === message.id)) {
       if (cacheIds.has(message.id)) continue;

@@ -494,7 +494,9 @@ test('READUI02 helper answers, archived scenes and public streams share reading 
       expect(await stream.textContent()).toBe(streamText);
       await expect(panel.getByTestId('source-request')).toHaveCount(2);
       await expect(panel.getByTestId('source-request').locator('.reading-quote')).toHaveCount(0);
-      const status = panel.getByTestId('helper-task-activity');
+      const status = panel.locator(
+        '[data-testid="helper-task-activity"]:has(.turn-status-running)'
+      );
       await status.locator(':scope > summary').click();
       await expect(status).toContainText('“상태 카드의 모델 이름”');
       await expect(status.locator('.reading-quote')).toHaveCount(0);

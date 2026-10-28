@@ -101,6 +101,17 @@ button.helper-result-target:hover {
   flex-basis: 100%;
   max-width: 24rem;
 }
+.helper-input-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: var(--font-small);
+}
+.helper-input-mini > .helper-input-budget {
+  flex-basis: auto;
+  width: 72px;
+}
 @media (max-width: 760px) {
   button.helper-result-target,
   .helper-result-usage summary {

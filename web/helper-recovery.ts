@@ -1,5 +1,6 @@
 import { message as uiMessage } from './i18n.js';
 import { deleteRecoveryIfModel, readRecovery, writeRecovery } from './editor-recovery.js';
+import { deleteHelperAttachmentRecovery } from './helper-attachment-draft.js';
 
 // Keep the latest text across panel unmounts. The existing editor database owns disk storage.
 const values = new Map<string, string | null>();
@@ -58,6 +59,7 @@ export async function clearHelperRecoveryIf(key: string, expected: string): Prom
 }
 
 export async function deleteHelperSessionRecovery(id: string): Promise<void> {
+  await deleteHelperAttachmentRecovery(id);
   const artifactIndex = `helper-artifacts:${id}`;
   const artifactKeys = JSON.parse((await loadHelperRecovery(artifactIndex)) ?? '[]') as string[];
   await Promise.all(

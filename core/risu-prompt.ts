@@ -1,6 +1,7 @@
 /** Risu prompt source and host-owned execution receipts; no alternate authoring language. */
 import { validateAgentCollaboration } from './agent-collaboration.js';
 import { EXECUTION_INPUT_MAX_CHARS } from './content-limits.js';
+import { validateRequestFile, type RequestFilePart } from './request-files.js';
 import { stripDeprecatedRisuPresetFields } from './risu-deprecated-fields.js';
 import {
   validateRequestImage,
@@ -46,7 +47,7 @@ export type ChatPromptControls = {
 export type LogicalMessage = {
   id: string;
   role: PromptRoleName;
-  content: ({ type: 'text'; text: string } | RequestImagePart)[];
+  content: ({ type: 'text'; text: string } | RequestImagePart | RequestFilePart)[];
   completion: 'complete' | 'prefill';
   provenance: {
     blockId: string;
@@ -219,6 +220,14 @@ export function validateProviderPrompt(value: unknown): asserts value is Provide
           validateRequestImage(c.image);
         } catch {
           fail('PROMPT_INVALID_IMAGE');
+        }
+      } else if (isObject(part) && part.type === 'file') {
+        const c = object(part, ['type', 'file']);
+        if (m.role !== 'user' || m.completion !== 'complete') fail('PROMPT_INVALID_FILE');
+        try {
+          validateRequestFile(c.file);
+        } catch {
+          fail('PROMPT_INVALID_FILE');
         }
       } else {
         const c = object(part, ['type', 'text']);

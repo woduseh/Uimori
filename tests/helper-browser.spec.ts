@@ -795,7 +795,7 @@ test('HELPMESSAGE pair and following deletion discard loaded older messages whil
 });
 
 for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
-  test(`HELPUI15 initial loading and the empty conversation center within the reading area ${width}`, async ({
+  test(`HELPUI15 initial loading centers and the empty conversation keeps its two-row composer ready ${width}`, async ({
     page,
     request,
   }, info) => {
@@ -829,15 +829,14 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
       release();
       await expect(loading).toHaveCount(0);
       const empty = panel.getByText('아직 메시지가 없어요.', { exact: true });
-      await expect(empty).toBeVisible();
-      const emptyBox = (await empty.boundingBox())!;
-      expect(
-        Math.abs(emptyBox.x + emptyBox.width / 2 - listBox.x - listBox.width / 2)
-      ).toBeLessThan(12);
-      expect(
-        Math.abs(emptyBox.y + emptyBox.height / 2 - listBox.y - listBox.height / 2)
-      ).toBeLessThan(12);
-      await page.screenshot({ path: info.outputPath(`helper-empty-centered-${width}.png`) });
+      await expect(empty).toHaveCount(0);
+      await expect(panel.locator('.helper-message')).toHaveCount(0);
+      const input = panel.getByLabel('도우미에게 요청');
+      await expect(input).toBeEnabled();
+      const inputBox = (await input.boundingBox())!;
+      const controlsBox = (await panel.locator('.helper-composer .quick-controls').boundingBox())!;
+      expect(inputBox.y + inputBox.height).toBeLessThanOrEqual(controlsBox.y);
+      await page.screenshot({ path: info.outputPath(`helper-empty-composer-${width}.png`) });
       await panel.getByLabel('도우미에게 요청').fill('첫 대화 요청');
       await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
       await expect.poll(() => state.posts.length).toBe(1);
@@ -869,6 +868,12 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
     const task = state.current().tasks[0];
     const instructionText = '우선 설명문만 살펴봐 주세요';
     await panel.getByLabel('도우미에게 요청').fill(instructionText);
+    const stop = panel.locator('.helper-composer').getByRole('button', {
+      name: '진행 중인 도우미 작업 취소',
+      exact: true,
+    });
+    await expect(stop).toBeVisible();
+    await expect(stop).toBeEnabled();
     if (width === DESKTOP_WIDTH) state.loseNext();
     await panel.getByRole('button', { name: '현재 작업에 추가', exact: true }).click();
     if (width === DESKTOP_WIDTH) {
@@ -876,6 +881,7 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
         panel.getByRole('button', { name: '이전 요청 확인', exact: true })
       ).toBeVisible();
       await expect(panel.getByLabel('도우미에게 요청')).toHaveValue(instructionText);
+      await expect(stop).toBeVisible();
       await page.reload();
       panel = await open(page);
       await panel.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
@@ -888,6 +894,7 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
       expect(state.steerPosts[1]).toEqual(state.steerPosts[0]);
     }
     await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
+    await expect(stop).toBeVisible();
     expect(state.steerPosts[0]).toMatchObject({ taskId: task.id, text: instructionText });
     expect(state.posts).toHaveLength(1);
     expect(state.current().tasks).toHaveLength(1);
@@ -1802,7 +1809,9 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   expect(view.messages.at(-1)!.artifacts).toEqual([{ id: artifact.id, revision: 1 }]);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
   await panel.getByRole('button', { name: '새 도우미 세션' }).click();
-  await expect(panel.getByText('아직 메시지가 없어요.')).toBeVisible();
+  await expect(panel.locator('.helper-message')).toHaveCount(0);
+  await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
+  await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
   await panel.getByLabel('도우미에게 요청').fill('새 작업의 초안');
   await panel.getByLabel('도우미 세션 선택').selectOption(view.conversation.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
@@ -2558,10 +2567,22 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation on deskto
   await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
   const activity = row.getByTestId('helper-activity-details');
   await expect(activity.locator('.helper-activity-stages > li')).toHaveCount(4);
+  await expect(
+    panel.getByTestId('helper-current-activity').getByRole('button', {
+      name: '진행 과정',
+      exact: true,
+    })
+  ).toHaveAttribute('aria-expanded', 'true');
+  await expect(
+    panel.locator('.helper-current-activity-details .helper-activity-stages > li')
+  ).toHaveCount(4);
   await expect(activity.locator('[data-state="running"]')).toContainText('대화 내용 정리');
   await expect(
     activity.getByText('resource.patch: EDITOR_SAVE_REQUIRED', { exact: true })
   ).toBeVisible();
+  const reads = activity.locator('.helper-activity-stage').filter({ hasText: 'resource.read' });
+  await expect(reads.locator(':scope > summary')).toContainText('2회');
+  await reads.locator(':scope > summary').click();
   await expect(activity.locator('code').filter({ hasText: /^resource\.read$/u })).toBeVisible();
   await expect(activity.locator('code').filter({ hasText: /^data\.search$/u })).toBeVisible();
   await page.screenshot({ path: info.outputPath('helper-activity-desktop.png'), fullPage: true });
@@ -2575,6 +2596,9 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation on deskto
   await expect(row.getByTestId('helper-task-activity').locator(':scope > summary')).toContainText(
     '작업을 취소했어요'
   );
+  await expect(panel.getByTestId('helper-current-activity')).toHaveCount(0);
+  await expect(row.getByTestId('helper-task-activity')).not.toHaveAttribute('open');
+  await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
   await expect(activity.locator('[data-state="running"]')).toHaveCount(0);
   await expect(
     activity.getByText('resource.patch: EDITOR_SAVE_REQUIRED', { exact: true })

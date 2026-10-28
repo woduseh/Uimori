@@ -1,0 +1,50 @@
+.helper-request-composer .helper-draft-attachments {
+  grid-area: attachments;
+  min-width: 0;
+  padding: 4px 8px 0;
+}
+.helper-composer .helper-request-composer.composer:has(.helper-draft-attachments) {
+  grid-template-areas: "attachments attachments" "chips chips" "text text" "more send";
+}
+.helper-request-composer .helper-draft-attachments .draft-request-images {
+  padding: 4px 0 8px;
+}
+.helper-file-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 0;
+}
+.helper-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: var(--hairline) solid var(--input-border);
+  border-radius: var(--radius-control);
+  font-size: var(--font-small);
+}
+.helper-file-chip > svg {
+  flex-shrink: 0;
+}
+.helper-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.helper-file-chip a.helper-file-name {
+  color: inherit;
+}
+.helper-file-chip a.helper-file-name:hover {
+  color: var(--accent-text);
+}
+.helper-file-size {
+  color: var(--muted);
+  white-space: nowrap;
+}
+.helper-file-chip .icon-button {
+  flex-shrink: 0;
+}

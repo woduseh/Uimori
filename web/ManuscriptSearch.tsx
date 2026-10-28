@@ -211,23 +211,24 @@ export function ManuscriptSearchPanel({
             className="manuscript-search-title-results"
             aria-label={needle ? t('transfer.m222') : t('transfer.m223')}
           >
-            {titleMatches.slice(0, titleLimit).map((chat) => (
-              <button
-                type="button"
-                className="secondary manuscript-search-title-choice"
-                data-chat-id={chat.id}
-                key={chat.id}
-                onClick={() => onChat(chat.id)}
-              >
-                <strong>{chat.title}</strong>
-                <small>
-                  {scope === 'bot'
-                    ? (folders.find((item) => item.id === chat.folderId)?.title ??
-                      t('transfer.m224'))
-                    : library?.contents.find((item) => item.id === chat.botId)?.title}
-                </small>
-              </button>
-            ))}
+            {titleMatches.slice(0, titleLimit).map((chat) => {
+              const context =
+                scope === 'bot'
+                  ? (folders.find((item) => item.id === chat.folderId)?.title ?? t('transfer.m224'))
+                  : library?.contents.find((item) => item.id === chat.botId)?.title;
+              return (
+                <button
+                  type="button"
+                  className="secondary manuscript-search-title-choice"
+                  data-chat-id={chat.id}
+                  key={chat.id}
+                  onClick={() => onChat(chat.id)}
+                >
+                  <strong>{chat.title}</strong>
+                  {context && context !== chat.title && <small>{context}</small>}
+                </button>
+              );
+            })}
           </nav>
           {titleMatches.length > titleLimit && (
             <button

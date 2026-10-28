@@ -15,6 +15,8 @@ export type HelperConversation = {
   limits: HelperLimits;
   createdAt: string;
   updatedAt: string;
+  /** Organization only; never changes the execution scope. */
+  projectId?: string | null;
 };
 export type HelperConversationDeletion = {
   request: { expectedRevision: number; expectedEventSequence: number };
@@ -31,6 +33,12 @@ export type HelperConversationSummary = HelperConversation & {
   chatTitle?: string;
   activity: { running: number; queued: number };
   latestEventSeq: number;
+  /** Latest completed, failed, cancelled or interrupted task result, excluding metadata. */
+  latestActivityEventSeq: number;
+  /** Status of the task associated with the latest terminal activity event. */
+  lastTaskStatus?: HelperStatus;
+  /** Task activity time, or creation time before the first task. */
+  lastActivityAt: string;
 };
 export type HelperStatus =
   | 'queued'
@@ -63,6 +71,9 @@ export type HelperResourceRef = {
   title: string;
 };
 export type HelperTaskSnapshot = {
+  /** Authored attachments survive execution cleanup in the owning message too. */
+  images?: import('./request-images.js').RequestImage[];
+  files?: import('./request-files.js').RequestFile[];
   invalidatedBySceneDeletion?: true;
   /** Frozen when this task is queued. */
   summaryLength?: import('./summary-length.js').SummaryLengthSettings;
@@ -79,7 +90,13 @@ export type HelperTaskSnapshot = {
   editor?: HelperEditor;
   selection?: HelperSelection;
   outline?: import('./outline.js').OutlineHelperContext;
-  history: { id: string; role: 'user' | 'assistant'; text: string }[];
+  history: {
+    id: string;
+    role: 'user' | 'assistant';
+    text: string;
+    images?: import('./request-images.js').RequestImage[];
+    files?: import('./request-files.js').RequestFile[];
+  }[];
   context?: { activeRevision: number; checkpoint: ContextCheckpointRef | null };
   persona: string;
   limits: HelperLimits;
@@ -102,6 +119,8 @@ export type HelperTask = {
   instructions?: HelperInstruction[];
 };
 export type HelperMessage = {
+  images?: import('./request-images.js').RequestImage[];
+  files?: import('./request-files.js').RequestFile[];
   /** Task outcome travels with paged messages, independently of the task-history window. */
   taskStatus?: HelperStatus;
   requestOrder?: number;
@@ -184,6 +203,9 @@ export type HelperTaskResultsView = {
     toolExecutions: number;
     /** Last recorded local estimate, not the native agent's current context utilization. */
     latestInputEstimate: number | null;
+    /** Known text/image allowance only when one or more file token costs are unmeasured. */
+    knownInputEstimate?: number | null;
+    unmeasuredFileCount?: number;
     /** Input budget recorded with that estimate; older tasks may have no known limit. */
     latestInputLimit?: number | null;
   };

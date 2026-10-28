@@ -75,10 +75,11 @@ export function helperActivityStages(activity: HelperActivity): Stage[] {
               ? 'completed'
               : 'recorded';
     const previous = stages.at(-1);
-    // Adjacent successful reads/edits share one heading; every original record remains below it.
+    // Only adjacent successful lookups share a heading. Mutations remain individually visible.
     if (
       event.kind === 'tool.finished' &&
       state === 'completed' &&
+      kind === 'helpers.m199' &&
       previous?.kind === kind &&
       previous.state === state &&
       previous.events.every((item) => item.kind === 'tool.finished')

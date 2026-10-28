@@ -5,6 +5,7 @@ import { messages as reader } from './reader.js';
 import { messages as helpers } from './helpers.js';
 import { messages as helperworkspace } from './helperworkspace.js';
 import { messages as helperNavigation } from './helper-navigation.js';
+import { messages as helperConversationPolish } from './helperconversation-polish.js';
 import { messages as workspace } from './workspace.js';
 import { messages as providers } from './providers.js';
 import { messages as library } from './library.js';
@@ -22,6 +23,7 @@ import { messages as palettes } from './palettes.js';
 import { messages as recent } from './recent.js';
 import { messages as chatmanagement } from './chatmanagement.js';
 import { messages as orphanmemory } from './orphanmemory.js';
+import { messages as helperattachments } from './helperattachments.js';
 export const messages: Record<string, { ko: string; en: string; ja: string; zh: string }> = {
   ...common,
   ...errors,
@@ -30,6 +32,7 @@ export const messages: Record<string, { ko: string; en: string; ja: string; zh: 
   ...helpers,
   ...helperworkspace,
   ...helperNavigation,
+  ...helperConversationPolish,
   ...workspace,
   ...providers,
   ...library,
@@ -47,4 +50,5 @@ export const messages: Record<string, { ko: string; en: string; ja: string; zh: 
   ...recent,
   ...chatmanagement,
   ...orphanmemory,
+  ...helperattachments,
 };

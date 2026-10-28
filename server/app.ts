@@ -72,6 +72,7 @@ import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
 import { applyNativeRisuAction } from './risu-native-actions.js';
 import { pruneUploads, uploadRoutes } from './uploads.js';
+import { requestFileRoutes } from './request-files.js';
 import {
   prepareRequestImages,
   releaseRequestImageUploads,
@@ -936,6 +937,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   packageFeatureRoutes(app, store);
   nativeTransferRoutes(app, store);
   uploadRoutes(app, store.path);
+  requestFileRoutes(app, store);
   risuImportRoutes(app, store);
   nativeInteractionRoutes(app, store);
   app.post<{ Params: { id: string; sourceId: string } }>(
