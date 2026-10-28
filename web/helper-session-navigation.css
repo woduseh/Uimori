@@ -90,6 +90,12 @@
   color: var(--accent-text);
   flex-shrink: 0;
 }
+@media (max-width: 767px), (pointer: coarse) {
+  .helper-nav-heading,
+  .helper-nav-select {
+    min-height: var(--control-h);
+  }
+}
 @media (hover: hover) {
   .helper-nav-row:hover,
   .helper-nav-heading:hover {

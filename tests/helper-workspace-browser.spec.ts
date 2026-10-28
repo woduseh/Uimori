@@ -21,6 +21,46 @@ import {
 
 test.setTimeout(60000);
 
+test('HSPACE10 mobile project and conversation controls keep full touch targets with long names', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
+  const title = `프로젝트 ${randomUUID().slice(0, 8)} ${'오래된 도서관의 기록 정리 '.repeat(6)}`;
+  const session = await createSession(request, { kind: 'library', workId: 'workspace' }, title);
+  const response = await request.post('/api/helper/projects', {
+    data: { title, requestKey: randomUUID() },
+  });
+  expect(response.ok()).toBe(true);
+  const project = await response.json();
+  const moved = await request.patch(`/api/helper/conversations/${session.id}/project`, {
+    data: { projectId: project.id, expectedRevision: session.revision },
+  });
+  expect(moved.ok()).toBe(true);
+  await page.goto('/');
+  await navigationAction(page, '도우미');
+  const nav = await visibleNavigation(page);
+  const group = nav.getByRole('region', { name: title, exact: true });
+  const heading = group.getByRole('button', { name: title, exact: true });
+  const choice = group.locator(`[data-conversation-id="${session.id}"] .helper-nav-select`);
+  await expect(choice).toBeVisible();
+  const sizes = await Promise.all(
+    [heading, choice].map(async (control) => (await control.boundingBox())!.height)
+  );
+  expect(sizes).toEqual([44, 44]);
+  expect(await nav.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await heading.click();
+  await expect(choice).toHaveCount(0);
+  await heading.click();
+  await expect(choice).toBeVisible();
+  await page.screenshot({ path: info.outputPath('helper-mobile-touch-targets.png') });
+  await choice.click();
+  await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeHidden();
+  await expect(
+    page.locator('#helper-panel').getByLabel('도우미 세션 선택', { exact: true })
+  ).toHaveValue(session.id);
+});
+
 async function createSession(request: APIRequestContext, scope: HelperScope, title: string) {
   const response = await request.post('/api/helper/conversations/new', {
     data: { scope, title, requestKey: randomUUID() },
@@ -254,16 +294,16 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   await expect(history).toBeVisible();
   const recent = history.getByRole('region', { name: '최근 대화', exact: true });
   await expect(recent.locator('.helper-nav-select')).toHaveCount(5);
-  const totalSessions = (
-    (await (
-      await request.get('/api/helper/conversations?kind=all')
-    ).json()) as HelperConversationSummary[]
-  ).length;
+  const existingSessions = (await (
+    await request.get('/api/helper/conversations?kind=all')
+  ).json()) as HelperConversationSummary[];
+  const totalSessions = existingSessions.length;
   await recent
     .getByRole('button', { name: `${Math.min(5, totalSessions - 5)}개 더 보기`, exact: true })
     .click();
   await expect(recent.locator('.helper-nav-select')).toHaveCount(Math.min(10, totalSessions));
-  await expect(history.locator('.helper-nav-heading')).toHaveCount(0);
+  for (const session of sessions)
+    expect(existingSessions.find((item) => item.id === session.id)?.projectId).toBeNull();
   const projectTitle = `${prefix} 프로젝트`;
   const search = history.getByRole('searchbox', { name: '대화 검색', exact: true });
   await search.fill('일치하지 않는 검색');
@@ -801,6 +841,9 @@ for (const viewport of [
     );
     await context.locator(':scope > summary').click();
     await expect(context.locator('pre')).toContainText('돌아온 뒤 다시 고친 인물 이름');
+    const headingBox = (await context.locator(':scope > summary').boundingBox())!;
+    const previewBox = (await context.locator('pre').boundingBox())!;
+    expect(previewBox.y).toBeGreaterThanOrEqual(headingBox.y + headingBox.height);
     await expect(input).toHaveValue('이 자료를 검토하려고 남긴 도우미 초안');
     await page.screenshot({ path: info.outputPath(`helper-current-editor-${viewport.width}.png`) });
     await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
