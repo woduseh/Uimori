@@ -7,9 +7,9 @@ export const messages = {
   'recent.copyChat': { ko: '채팅 복사', en: 'Copy chat', ja: 'チャットをコピー', zh: '复制聊天' },
   'recent.copyingChat': { ko: '복사 중', en: 'Copying', ja: 'コピー中', zh: '正在复制' },
   'recent.copyFailed': {
-    ko: '채팅 복사 여부를 확인하지 못했어요. 다시 누르면 같은 요청을 확인해요.',
-    en: 'Could not confirm whether the chat was copied. Try again to check the same request.',
-    ja: 'チャットのコピー結果を確認できませんでした。もう一度押すと、同じリクエストの結果を確認します。',
-    zh: '无法确认聊天是否已复制。再次点击可确认同一请求的结果。',
+    ko: '채팅 복사 여부를 확인하지 못했어요.',
+    en: 'Could not confirm whether the chat was copied.',
+    ja: 'チャットのコピー結果を確認できませんでした。',
+    zh: '无法确认聊天是否已复制。',
   },
 };

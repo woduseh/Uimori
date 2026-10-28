@@ -2395,10 +2395,10 @@ export const messages = {
     zh: '无法对未分组项执行此操作。',
   },
   'native.useAddGroup': {
-    ko: '그룹 추가 기능을 사용해 주세요.',
+    ko: '그룹 추가를 사용해 주세요.',
     en: 'Use Add group.',
-    ja: 'グループ追加を使ってください。',
-    zh: '请使用添加分组功能。',
+    ja: 'グループ追加を使用してください。',
+    zh: '请使用添加分组。',
   },
   'native.captionControlOnly': {
     ko: '설명은 입력 항목에만 연결할 수 있어요.',

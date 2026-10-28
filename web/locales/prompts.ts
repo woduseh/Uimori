@@ -186,10 +186,10 @@ export const messages = {
     zh: '编辑提示词',
   },
   'prompts.uiSaveTextMessageStructureAndOptionsAsASeparate': {
-    ko: '본문, 메시지 구성, 옵션을 독립된 프리셋으로 저장해요. 현재 프롬프트에서 불러와 사용할 수 있어요.',
-    en: 'Save text, message structure, and options as a separate preset. Load it in current prompts to use it.',
-    ja: '本文、メッセージ構成とオプションを独立したプリセットに保存し、現在のプロンプトで読み込んで使えます。',
-    zh: '将正文、消息结构和选项保存为独立预设，可在当前提示词中加载使用。',
+    ko: '본문, 메시지 구성, 옵션을 독립된 프리셋으로 저장해요.',
+    en: 'Save text, message structure, and options as a separate preset.',
+    ja: '本文、メッセージ構成、オプションを独立したプリセットとして保存します。',
+    zh: '将正文、消息结构和选项保存为独立预设。',
   },
   'prompts.uiPromptNameRequired': {
     ko: '프롬프트 이름 (필수)',
@@ -444,10 +444,10 @@ export const messages = {
     zh: '还没有提示词',
   },
   'prompts.uiCreateInstructionsForWritingAndTranslation': {
-    ko: '작문과 번역에 사용할 지침을 만들어 보세요.',
-    en: 'Create instructions for writing and translation.',
-    ja: '執筆や翻訳に使う指示を作成しましょう。',
-    zh: '创建用于写作与翻译的指令。',
+    ko: '작문과 번역에 사용할 지침을 작성해요.',
+    en: 'Define instructions for writing and translation.',
+    ja: '執筆や翻訳に使う指示を作成します。',
+    zh: '编写用于写作与翻译的指令。',
   },
   'prompts.uiSearchAll': {
     ko: '전체에서 찾기',
@@ -456,10 +456,10 @@ export const messages = {
     zh: '搜索全部',
   },
   'prompts.uiAddAsAPresetToEditFreelyThenLoad': {
-    ko: '프리셋으로 추가해 자유롭게 편집하고, 현재 프롬프트 설정에서 불러와 사용할 수 있어요.',
-    en: 'Add as a preset to edit freely, then load it in current prompt settings.',
-    ja: 'プリセットに追加して自由に編集し、現在のプロンプト設定で読み込んで使えます。',
-    zh: '添加为预设后可自由编辑，并在当前提示词设置中加载使用。',
+    ko: '프리셋으로 추가해 편집하고, 프롬프트 설정에서 불러와 적용해요.',
+    en: 'Save as a preset to edit and load in prompt settings.',
+    ja: 'プリセットに追加して編集し、プロンプト設定で読み込んで適用します。',
+    zh: '添加为预设进行编辑，并在提示词设置中加载应用。',
   },
   'prompts.uiUnableToLoadBuiltInPrompts': {
     ko: '기본 프롬프트를 불러오지 못했어요.',

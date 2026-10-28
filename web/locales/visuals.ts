@@ -276,10 +276,10 @@ export const messages = {
     zh: '生成环境与自动生成',
   },
   'visuals.m050': {
-    ko: '선택한 프리셋이 사용할 생성기를 정해요. 같은 생성기를 쓰는 프리셋은 아래 연결과 모델을 함께 사용해요. 변경한 설정은 이후 새로 요청하는 삽화부터 사용해요.',
-    en: 'The selected preset determines the generator. Presets using the same generator share the connections and models below. Changes apply to new illustration requests.',
-    ja: '選択したプリセットで生成器が決まります。同じ生成器のプリセットは以下の接続とモデルを共有します。変更は新しいリクエストから適用されます。',
-    zh: '所选预设决定生成器。相同生成器的预设共用以下连接和模型，更改适用于之后的新插图请求。',
+    ko: '선택한 프리셋이 생성기를 정해요. 같은 생성기를 쓰는 프리셋은 연결과 모델 설정을 공유하며, 새 삽화 요청부터 적용돼요.',
+    en: 'The selected preset determines the generator. Presets sharing a generator share connections and models; changes apply to new illustration requests.',
+    ja: '選択したプリセットが生成器を決定します。同じ生成器を使うプリセットは接続とモデルを共有し、新しい挿絵リクエストから適用されます。',
+    zh: '所选预设决定生成器。相同生成器的预设共用连接和模型设置，自新插图请求起生效。',
   },
   'visuals.m051': {
     ko: '테스트 생성기',
@@ -774,10 +774,10 @@ export const messages = {
     zh: '模型',
   },
   'visuals.m150': {
-    ko: '이 컷을 생성할 때 사용한 호출만 표시해요. 장면 선택과 번역 위치 연결 사용량은 장면 작업 현황의 ‘삽화 호출과 토큰’에서 확인할 수 있어요.',
-    en: 'Calls for this generation only. Shared scene selection and translation placement appear under the scene activity illustration calls and tokens.',
-    ja: '今回の生成の呼び出しです。共通の場面選択と翻訳位置の対応付けは、場面の作業状況にある挿絵の呼び出しとトークンで確認できます。',
-    zh: '仅包含此次生成的调用。共享的场景选择与译文位置匹配，请在场景任务状态的插图调用与词元中查看。',
+    ko: '이 컷을 생성할 때 사용한 호출이에요.',
+    en: 'Calls used for generating this cut.',
+    ja: 'このカットの生成で使用した呼び出しです。',
+    zh: '生成此画面所用的调用。',
   },
   'visuals.m154': {
     ko: '차단됨 (Codex 이미지 요청 미전송)',
@@ -1416,10 +1416,10 @@ export const messages = {
     zh: '已保留回复（未应用到场景正文）',
   },
   'visuals.m280': {
-    ko: '출력을 복사하지 못했어요. 아래 글을 직접 선택해 복사해 주세요.',
-    en: 'Could not copy the output. Select and copy the text below manually.',
-    ja: '出力をコピーできませんでした。下の本文を選択してコピーしてください。',
-    zh: '无法复制输出，请手动选择下方文字并复制。',
+    ko: '출력을 복사하지 못했어요.',
+    en: 'Could not copy output.',
+    ja: '出力をコピーできませんでした。',
+    zh: '无法复制输出。',
   },
   'visuals.m281': {
     ko: '출력 복사됨',

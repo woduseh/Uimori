@@ -1381,10 +1381,10 @@ export const messages = {
     zh: '选择模型',
   },
   'providers.m287': {
-    ko: '비활성 프로바이더를 사용하는 모델은 새로 실행할 수 없어요. 프로바이더를 활성화하면 다시 사용할 수 있어요.',
-    en: 'Models using disabled providers cannot start new runs. Enable the provider to use them again.',
-    ja: '無効なプロバイダーを使うモデルは新規実行できません。プロバイダーを有効にすると再び使用できます。',
-    zh: '使用已停用提供商的模型无法开始新运行。启用提供商后即可恢复使用。',
+    ko: '비활성 프로바이더를 사용하는 모델은 새로 실행할 수 없어요.',
+    en: 'Models using disabled providers cannot start new runs.',
+    ja: '無効なプロバイダーを使うモデルは新規実行できません。',
+    zh: '使用已停用提供商的模型无法开始新运行。',
   },
   'providers.m288': {
     ko: '저장한 모델 프리셋이에요.',
@@ -1537,10 +1537,10 @@ export const messages = {
     zh: '模型名称或 ID',
   },
   'providers.m319': {
-    ko: '검색 결과가 없어요. 아래에서 모델 ID를 직접 입력할 수 있어요.',
-    en: 'No results. You can enter a model ID directly below.',
-    ja: '検索結果がありません。下でモデルIDを直接入力できます。',
-    zh: '没有搜索结果。可以在下方直接输入模型 ID。',
+    ko: '검색 결과가 없어요. 모델 ID를 직접 입력할 수 있어요.',
+    en: 'No results. You can enter a model ID directly.',
+    ja: '検索結果がありません。モデルIDを直接入力できます。',
+    zh: '没有搜索结果。可直接输入模型 ID。',
   },
   'providers.m321': {
     ko: '저장된 목록이 없어요. 목록을 새로고침하거나 모델 ID를 직접 입력해 주세요.',
@@ -1939,10 +1939,10 @@ export const messages = {
     zh: 'Google 密钥 JSON 文件',
   },
   'providers.m400': {
-    ko: '64 KB 이하의 서비스 계정 JSON 파일을 선택해 주세요.',
-    en: 'Select a service account JSON file no larger than 64 KB.',
-    ja: '64 KB以下のサービスアカウントJSONファイルを選択してください。',
-    zh: '请选择不超过 64 KB 的服务账号 JSON 文件。',
+    ko: '64 KB 이하의 서비스 계정 JSON 파일이 필요해요.',
+    en: 'Service account JSON file must be 64 KB or smaller.',
+    ja: '64 KB以下のサービスアカウントJSONファイルが必要です。',
+    zh: '服务账号 JSON 文件须在 64 KB 以内。',
   },
   'providers.m401': {
     ko: '서비스 계정 JSON 파일을 읽을 수 없어요. 파일 형식을 확인해 주세요.',
@@ -2137,10 +2137,10 @@ export const messages = {
     zh: '服务器运行环境已就绪。',
   },
   'providers.m436': {
-    ko: '서버 관리자가 실행 환경을 설정해야 해요. 아래 연결 도움말을 확인해 주세요.',
-    en: 'The server administrator must configure the runtime. See the connection help below.',
-    ja: 'サーバー管理者による実行環境の設定が必要です。下の接続ヘルプを確認してください。',
-    zh: '服务器管理员需要配置运行环境。请查看下方连接帮助。',
+    ko: '서버 관리자의 실행 환경 설정이 필요해요.',
+    en: 'The server administrator must configure the runtime.',
+    ja: 'サーバー管理者による実行環境の設定が必要です。',
+    zh: '需要服务器管理员配置运行环境。',
   },
   'providers.m437': {
     ko: '로그인',

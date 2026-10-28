@@ -738,10 +738,10 @@ export const messages = {
     zh: '仅应用于下次生成',
   },
   'chatsettings.m128': {
-    ko: '여기서 고른 옵션만 다음 생성에 한 번 적용하고 원래대로 돌아가요.',
-    en: 'These options apply once to the next generation, then clear.',
-    ja: 'ここで指定したオプションだけを次の生成に一度使用して解除します。',
-    zh: '此处选项仅用于下一次生成，随后清除。',
+    ko: '다음 생성에 한 번만 적용돼요.',
+    en: 'Applies once to the next generation, then clears.',
+    ja: '次の生成に一度だけ適用されます。',
+    zh: '仅应用于下一次生成，随后清除。',
   },
   'chatsettings.m129': {
     ko: '1회 옵션 예약',
@@ -930,10 +930,10 @@ export const messages = {
     zh: '请输入仅包含键和字符串值的 JSON 对象。',
   },
   'chatsettings.m161': {
-    ko: '저장 요청을 보관하지 못했어요. 브라우저 저장 공간을 확인한 뒤 다시 시도해 주세요.',
-    en: 'Could not keep the save request. Check browser storage and retry.',
-    ja: '保存リクエストを保持できませんでした。ブラウザーの保存容量を確認して再試行してください。',
-    zh: '无法保留保存请求。请检查浏览器存储空间后重试。',
+    ko: '저장 요청을 보관하지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
+    en: 'Could not keep save request. Check browser storage.',
+    ja: '保存リクエストを保持できませんでした。ブラウザーの空き容量を確認してください。',
+    zh: '无法保留保存请求。请检查浏览器存储空间。',
   },
   'chatsettings.m162': {
     ko: '공유 변수를 저장했어요. 다음 생성부터 적용해요.',
@@ -942,10 +942,10 @@ export const messages = {
     zh: '已保存共享变量，将从下次生成起应用。',
   },
   'chatsettings.m163': {
-    ko: '저장 결과를 확인하지 못했어요. 다시 누르면 같은 요청을 확인해요.',
-    en: 'Could not confirm save result. Press again to check the same request.',
-    ja: '保存結果を確認できませんでした。もう一度押すと同じリクエストを確認します。',
-    zh: '无法确认保存结果。再次点击将确认同一请求。',
+    ko: '저장 결과를 확인하지 못했어요.',
+    en: 'Could not confirm save result.',
+    ja: '保存結果を確認できませんでした。',
+    zh: '无法确认保存结果。',
   },
   'chatsettings.m164': {
     ko: '카드 변수 편집',
@@ -990,10 +990,10 @@ export const messages = {
     zh: '保留输入值并继续编辑',
   },
   'chatsettings.m175': {
-    ko: '이전 저장의 응답을 확인하지 못했어요. 값을 바꾸지 않고 다시 누르면 같은 저장 요청의 결과를 확인해요.',
-    en: 'The previous save response is unknown. Press again without changing values to check the same request.',
-    ja: '前の保存への応答を確認できませんでした。値を変えずにもう一度押すと同じリクエストの結果を確認します。',
-    zh: '尚未确认上次保存的响应。保持值不变再次点击，即可确认同一保存请求的结果。',
+    ko: '이전 저장 결과를 확인하지 못했어요. 값을 유지한 채 다시 확인해 주세요.',
+    en: 'Previous save outcome is unconfirmed. Keep values unchanged to recheck.',
+    ja: '前の保存結果を確認できませんでした。値を変更せずに再確認してください。',
+    zh: '无法确认上次保存结果。请保持原值并重新确认。',
   },
   'chatsettings.m176': {
     ko: '변수 이름으로 찾기',
