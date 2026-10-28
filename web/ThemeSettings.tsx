@@ -261,7 +261,7 @@ export function ThemeSettings({
       setBaseline(JSON.stringify(themeDefinition(result.saved)));
       setPreview(null);
       await state.refresh(true);
-      setNotice('테마를 저장했어요. 적용 버튼으로 사용할 수 있어요.');
+      setNotice(uiMessage('visualpanels.themeSavedUseApplyToActivateIt'));
       saved = true;
     }, true);
     return saved;
@@ -326,9 +326,7 @@ export function ThemeSettings({
       themeTemplate(model.templateHtml);
       setDraft({ id: null, model });
       setBaseline('');
-      setImportNotice(
-        '새 테마로 가져왔어요. 내용을 확인하고 저장해 주세요. 기존 테마는 덮어쓰지 않아요.'
-      );
+      setImportNotice(uiMessage('visualpanels.importedAsANewThemeReviewAnd'));
     });
   }
   return (
