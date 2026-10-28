@@ -1,5 +1,5 @@
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Settings2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import type {
@@ -39,11 +39,39 @@ type Props = {
   onDelete: (id: string) => void;
   onClone?: (session: HelperConversation) => void;
   navigationHost?: HTMLElement | null;
+  navigationActions?: MutableRefObject<{ create: () => void } | null>;
+  searchRequest?: number;
   onProjectsChanged?: () => void;
 };
 export function HelperSessionBar(props: Props) {
   useI18n();
   const [search, setSearch] = useState('');
+  const searchInput = useRef<HTMLInputElement>(null);
+  const handledSearchRequest = useRef(0);
+  const projectHeadings = useRef(new Map<string, HTMLButtonElement>());
+  const [focusProject, setFocusProject] = useState<string | null>(null);
+  useEffect(() => {
+    if (!props.navigationActions) return;
+    props.navigationActions.current = {
+      create: () => {
+        if (!props.creating) props.onCreate();
+      },
+    };
+    return () => {
+      if (props.navigationActions) props.navigationActions.current = null;
+    };
+  }, [props.navigationActions, props.onCreate, props.creating]);
+  useEffect(() => {
+    if (
+      !props.navigationHost ||
+      !props.searchRequest ||
+      handledSearchRequest.current === props.searchRequest
+    )
+      return;
+    handledSearchRequest.current = props.searchRequest;
+    const frame = requestAnimationFrame(() => searchInput.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [props.navigationHost, props.searchRequest]);
   const [recentCount, setRecentCount] = useState(5);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [copying, setCopying] = useState<string | null>(null);
@@ -52,6 +80,17 @@ export function HelperSessionBar(props: Props) {
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const projectReadVersion = useRef(0);
   const [projectEditor, setProjectEditor] = useState<HelperProject | 'new' | null>(null);
+  useEffect(() => {
+    if (!focusProject || projectEditor) return;
+    const heading = projectHeadings.current.get(focusProject);
+    if (!heading) return;
+    const frame = requestAnimationFrame(() => {
+      heading.scrollIntoView({ block: 'nearest' });
+      heading.focus();
+      setFocusProject(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusProject, projectEditor]);
   const [projectTitle, setProjectTitle] = useState('');
   const [projectDeleting, setProjectDeleting] = useState<HelperProject | null>(null);
   const [moving, setMoving] = useState<HelperSession | null>(null);
@@ -255,6 +294,7 @@ export function HelperSessionBar(props: Props) {
   const navigation = (
     <nav className="helper-navigation" aria-label={t('helpers.sessions')}>
       <input
+        ref={searchInput}
         type="search"
         aria-label={t('helpers.searchSessions')}
         placeholder={t('helpers.searchSessions')}
@@ -291,6 +331,10 @@ export function HelperSessionBar(props: Props) {
             <section key={project.id} className="helper-nav-group" aria-label={project.title}>
               <div className="helper-nav-project-heading">
                 <button
+                  ref={(node) => {
+                    if (node) projectHeadings.current.set(project.id, node);
+                    else projectHeadings.current.delete(project.id);
+                  }}
                   type="button"
                   className="helper-nav-heading"
                   aria-expanded={!collapsed[project.id]}
@@ -446,12 +490,14 @@ export function HelperSessionBar(props: Props) {
               {formatNumber(props.unread.length)}
             </span>
           )}
-          <IconButton
-            label={t('helpers.m176')}
-            icon={Plus}
-            disabled={props.creating}
-            onClick={props.onCreate}
-          />
+          {!(props.expanded && props.navigationHost) && (
+            <IconButton
+              label={t('helpers.m176')}
+              icon={Plus}
+              disabled={props.creating}
+              onClick={props.onCreate}
+            />
+          )}
           <ActionMenu label={t('helpers.m177')} viewport>
             <div className="action-menu-group">
               <button type="button" disabled={!props.conversation} onClick={props.onSettings}>
@@ -553,7 +599,14 @@ export function HelperSessionBar(props: Props) {
                   }
                 );
                 try {
-                  await api('/helper/projects', pending.request);
+                  const created = await api<HelperProject>('/helper/projects', pending.request);
+                  setProjects((old) => [
+                    ...old.filter((project) => project.id !== created.id),
+                    created,
+                  ]);
+                  setSearch('');
+                  setCollapsed((old) => ({ ...old, [created.id]: false }));
+                  setFocusProject(created.id);
                 } catch (cause) {
                   if (
                     cause instanceof ApiError &&

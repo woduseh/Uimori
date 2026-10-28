@@ -189,7 +189,14 @@ function ResultTarget({
         </span>
       ) : (
         <span className="helper-result-saved">
-          {t(deleted ? 'helperResults.deleted' : 'helperResults.saved')}
+          {deleted ? (
+            t('helperResults.deleted')
+          ) : (
+            <>
+              <Check size={16} aria-hidden="true" />
+              <span className="sr-only">{t('helperResults.saved')}</span>
+            </>
+          )}
         </span>
       )}
     </>
@@ -237,20 +244,30 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   const inputLimit = usage.latestInputLimit;
   const inputEstimate = usage.latestInputEstimate;
   const hasInputBudget = inputEstimate !== null && typeof inputLimit === 'number' && inputLimit > 0;
+  const summaryAmount = (amount: RecordedAmount) =>
+    amount.reported === 0 && amount.unknown > 0
+      ? t('helperResults.unknown')
+      : formatNumber(amount.value);
+  const partial = [totals.inputTokens, totals.outputTokens].some(
+    (amount) => amount.reported > 0 && amount.unknown > 0
+  );
   return (
     <details className="execution-record scene-usage helper-result-usage">
       <summary>
         <span className="ui-meta-row">
-          <span>{t('helperResults.usage')}</span>
+          <span className="sr-only">{t('helperResults.usage')}</span>
           <span>
-            {t('helperResults.input')} <UsageAmount amount={totals.inputTokens} />
+            {t('helperResults.tokenSummary', {
+              input: summaryAmount(totals.inputTokens),
+              output: summaryAmount(totals.outputTokens),
+            })}
           </span>
-          <span>
-            {t('helperResults.output')} <UsageAmount amount={totals.outputTokens} />
-          </span>
-          <span>
-            {t('helperResults.tools')} {formatNumber(usage.toolExecutions)}
-          </span>
+          {usage.toolExecutions > 0 && (
+            <span>
+              {t('helperResults.toolSummary', { count: formatNumber(usage.toolExecutions) })}
+            </span>
+          )}
+          {partial && <span>{t('helperResults.partialUsage')}</span>}
         </span>
       </summary>
       <dl className="scene-receipt">

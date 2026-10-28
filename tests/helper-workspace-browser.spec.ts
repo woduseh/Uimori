@@ -265,12 +265,20 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   await expect(recent.locator('.helper-nav-select')).toHaveCount(Math.min(10, totalSessions));
   await expect(history.locator('.helper-nav-heading')).toHaveCount(0);
   const projectTitle = `${prefix} 프로젝트`;
+  const search = history.getByRole('searchbox', { name: '대화 검색', exact: true });
+  await search.fill('일치하지 않는 검색');
   await history.getByRole('button', { name: '프로젝트 만들기', exact: true }).click();
   const createProject = page.getByRole('dialog', { name: '프로젝트 만들기', exact: true });
   await createProject.getByLabel('프로젝트 이름', { exact: true }).fill(projectTitle);
   await createProject.getByRole('button', { name: '프로젝트 이름 저장', exact: true }).click();
   await expect(createProject).toBeHidden();
   const group = history.getByRole('region', { name: projectTitle, exact: true });
+  await expect(search).toHaveValue('');
+  await expect(group.getByRole('button', { name: projectTitle, exact: true })).toBeFocused();
+  await expect(group.getByRole('button', { name: projectTitle, exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
   await expect(group.locator('.helper-nav-select')).toHaveCount(0);
   await recent.getByLabel(`${sessions[0].title} 대화 메뉴`, { exact: true }).click();
   await page.getByRole('button', { name: '프로젝트로 이동', exact: true }).click();
@@ -285,7 +293,6 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   await heading.click();
   await expect(heading).toHaveAttribute('aria-expanded', 'false');
   await expect(group.locator('.helper-nav-select')).toHaveCount(0);
-  const search = history.getByRole('searchbox', { name: '대화 검색', exact: true });
   await search.fill(prefix);
   await expect(history.locator('.helper-nav-select')).toHaveCount(7);
   await expect(history.locator('.helper-nav-heading')).toHaveCount(0);
@@ -387,6 +394,87 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   await expect(picker).toHaveValue(sessions[0].id);
   await expect(helperDraft).toHaveValue('작업 공간을 바꿔도 남길 도우미 초안');
 });
+
+for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
+  test(`HSPACE09 workspace quick actions keep drafts and target helper at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.setViewportSize({
+      width,
+      height: width === MOBILE_WIDTH ? MOBILE_HEIGHT : DESKTOP_HEIGHT,
+    });
+    const { chat } = await createReadingChat(request, `빠른 탐색 ${randomUUID().slice(0, 8)}`, 1);
+    await page.goto(`/?chat=${chat.id}`);
+    const draft = page.getByRole('textbox', {
+      name: '다음 장면 요청',
+      exact: true,
+      includeHidden: true,
+    });
+    await draft.fill('남겨 둘 원고 초안');
+    const admissions: string[] = [];
+    page.on('request', (item) => {
+      if (
+        item.method() === 'POST' &&
+        /\/api\/(?:helper\/conversations\/[^/]+\/messages|chats\/[^/]+\/runs)$/u.test(
+          new URL(item.url()).pathname
+        )
+      )
+        admissions.push(item.url());
+    });
+    if (width !== MOBILE_WIDTH) {
+      await openHelper(page);
+      const storyActions = (await visibleNavigation(page)).locator('.navigation-quick-actions');
+      await expect(
+        storyActions.getByRole('button', { name: '새 채팅', exact: true })
+      ).toBeVisible();
+      await expect(
+        storyActions.getByRole('button', { name: '전체 채팅 검색', exact: true })
+      ).toBeVisible();
+    }
+    await navigationAction(page, '도우미');
+    const panel = page.locator('#helper-panel');
+    const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+    await expect(picker).not.toHaveValue('');
+    const previous = await picker.inputValue();
+    const helperDraft = panel.getByLabel('도우미에게 요청', { exact: true });
+    await helperDraft.fill('남겨 둘 도우미 초안');
+    let nav = await visibleNavigation(page);
+    if (width !== MOBILE_WIDTH) {
+      await nav.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
+      nav = await visibleNavigation(page);
+    }
+    const actions =
+      width === MOBILE_WIDTH
+        ? page
+            .getByRole('dialog', { name: '탐색', exact: true })
+            .locator('.navigation-quick-actions')
+        : nav.locator('.navigation-quick-actions');
+    await actions.getByRole('button', { name: '대화 검색', exact: true }).click();
+    const history = page.getByRole('navigation', { name: '도우미 대화', exact: true });
+    const search = history.getByRole('searchbox', { name: '대화 검색', exact: true });
+    await expect(search).toBeFocused();
+    await search.fill('일치하지 않는 검색');
+    await expect(history.getByRole('status')).toBeVisible();
+    if (width !== MOBILE_WIDTH)
+      await expect(page.locator('#workspace-sidebar')).toHaveCSS('width', '320px');
+    await page.screenshot({ path: info.outputPath(`helper-quick-actions-${width}.png`) });
+    await actions.getByRole('button', { name: '새 대화', exact: true }).click();
+    await expect(picker).not.toHaveValue(previous);
+    if (width === MOBILE_WIDTH) await picker.selectOption(previous);
+    else {
+      await search.fill('');
+      await history
+        .locator(`[data-conversation-id="${previous}"] .helper-nav-select`)
+        .first()
+        .click();
+    }
+    await expect(helperDraft).toHaveValue('남겨 둘 도우미 초안');
+    await expect(draft).toHaveValue('남겨 둘 원고 초안');
+    expect(new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
+    expect(admissions).toEqual([]);
+  });
+}
 
 test('HSPACE07 project and copy retries recover the same saved result through sessionStorage and refresh projects on focus', async ({
   page,

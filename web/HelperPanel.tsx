@@ -10,7 +10,15 @@ import {
 import { LoadingState } from './LoadingState.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
 import type { OutlineTarget } from '../core/outline.js';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type MutableRefObject,
+} from 'react';
 import {
   ArrowUp,
   Check,
@@ -91,6 +99,8 @@ type Props = {
   returnToSidecar?: boolean;
   navigationLeading?: ReactNode;
   navigationHost?: HTMLElement | null;
+  navigationActions?: MutableRefObject<{ create: () => void } | null>;
+  searchRequest?: number;
   onSelectConversation?: () => void;
   returnLabel?: string;
   onOpenTarget?: (
@@ -1183,6 +1193,8 @@ export function HelperPanel(props: Props) {
               : t('helpers.libraryTitle')}
         </h2>
         <HelperSessionBar
+          navigationActions={props.navigationActions}
+          searchRequest={props.searchRequest}
           open={props.open && props.ready !== false}
           sessions={sessions.sessions}
           unread={sessions.unread}
