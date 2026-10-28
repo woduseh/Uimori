@@ -1,3 +1,4 @@
+import { message as uiMessage } from './i18n.js';
 import {
   type NativeToggleDefinition,
   type NativeToggleLine,
@@ -176,7 +177,7 @@ export function deleteToggleGroup(source: string, id: number) {
   return finish(source, doc.lines);
 }
 export function addToggleItem(source: string, groupId: number, type: NativeToggleType) {
-  if (type === 'group' || type === 'groupEnd') throw new Error('그룹 추가 기능을 사용해 주세요.');
+  if (type === 'group' || type === 'groupEnd') throw new Error(uiMessage('native.useAddGroup'));
   const doc = structural(source);
   const group = groupOf(doc, groupId);
   const raw = serializeNativeToggleDefinition({
@@ -236,7 +237,7 @@ export function editToggleItem(
   if (!item.definition) return source;
   const next = { ...item.definition, ...patch };
   if (next.type === 'group' || next.type === 'groupEnd')
-    throw new Error('그룹 추가 기능을 사용해 주세요.');
+    throw new Error(uiMessage('native.useAddGroup'));
   const line = doc.lines[index];
   if (!line) return source;
   if (
