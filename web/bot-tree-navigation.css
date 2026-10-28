@@ -18,10 +18,6 @@
   flex: none;
   display: block;
 }
-.sidebar-quick-actions .navigation-quick-actions {
-  display: grid;
-  gap: 4px;
-}
 .sidebar-destinations {
   display: grid;
   gap: 4px;
@@ -41,13 +37,6 @@
 /* In the drawer the row is the dialog header; the hidden "탐색" title leaves room for the close button. */
 .navigation-dialog > .dialog-header > .navigation-quick-actions {
   flex: 1;
-}
-.navigation-dialog > .dialog-header > .navigation-quick-actions > .nav-button {
-  width: var(--control-h);
-  padding: 10px;
-}
-.navigation-dialog > .dialog-header > .navigation-quick-actions > .nav-button > span {
-  display: none;
 }
 .bot-tree-section-heading,
 .bot-tree-folder-heading {

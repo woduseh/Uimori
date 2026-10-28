@@ -122,10 +122,7 @@ async function seed(request: APIRequestContext) {
 }
 
 const usageValue = (results: Locator, label: string) =>
-  results
-    .locator('dt')
-    .filter({ hasText: new RegExp(`^${label}$`, 'u') })
-    .locator('xpath=following-sibling::dd[1]');
+  results.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]');
 
 test('HRESULT01 ordinary answers show usage without a permanent empty-change message', async ({
   page,
@@ -139,7 +136,9 @@ test('HRESULT01 ordinary answers show usage without a permanent empty-change mes
   const results = answer.getByTestId('helper-task-results');
   const summary = results.locator('summary');
   await expect(summary).toContainText('사용량');
-  await expect(summary).toContainText('입력 120 · 출력 12 토큰');
+  await expect(summary).toContainText('입력 120');
+  await expect(summary).toContainText('출력 12 토큰');
+  await expect(summary).not.toContainText('·');
   await expect(summary).not.toContainText('도구');
   await expect(summary).not.toContainText('일부 미확인');
   await expect(results.locator('.helper-result-note')).toHaveCount(0);
@@ -261,7 +260,8 @@ for (const width of DEFAULT_WIDTHS) {
     ).toHaveCount(0);
     await expect(results.getByText('이전 도우미', { exact: true })).toBeVisible();
     await expect(results.getByText('새 도우미', { exact: true })).toBeVisible();
-    await expect(results.locator('summary')).toContainText('입력 1,000 · 출력 90 토큰');
+    await expect(results.locator('summary')).toContainText('입력 1,000');
+    await expect(results.locator('summary')).toContainText('출력 90 토큰');
     await expect(results.locator('summary')).toContainText('도구 7회');
     await expect(results.locator('summary')).toContainText('일부 미확인');
     await results.locator('summary').click();
@@ -272,7 +272,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(usageValue(results, '누적 출력 토큰')).toHaveText('90미확인 1회');
     await expect(usageValue(results, '출력 중 추론 토큰')).toHaveText('30미확인 1회');
     await expect(usageValue(results, '확인된 비용')).toHaveText('US$0.02미확인 1회');
-    await expect(usageValue(results, '마지막 입력 추정 토큰')).toHaveText('850');
+    await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850');
     await expect(results).not.toContainText('%');
     await expect(results.getByRole('meter')).toHaveCount(0);
     projection.usage.latestInputLimit = 1000;
@@ -282,7 +282,7 @@ for (const width of DEFAULT_WIDTHS) {
     });
     await expect(inputMeter).toHaveAttribute('max', '1000');
     await expect(inputMeter).toHaveAttribute('value', '850');
-    await expect(usageValue(results, '마지막 입력 추정 토큰')).toContainText('850 / 1,00085%');
+    await expect(usageValue(results, '마지막 전송 입력 (추정)')).toContainText('850 / 1,00085%');
     refreshFails = true;
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await expect(results.getByRole('alert')).toContainText('결과를 새로 확인하지 못했어요.');

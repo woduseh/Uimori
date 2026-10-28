@@ -67,10 +67,10 @@ export const messages = {
     zh: '删除项目',
   },
   'helperNavigation.deleteProjectDescription': {
-    ko: '{title} 프로젝트를 삭제할까요? 대화는 삭제되지 않고 프로젝트가 없는 상태로 남아요.',
-    en: 'Delete the project {title}? Its conversations remain without a project.',
-    ja: '{title}を削除しますか？会話は削除されず、プロジェクトなしになります。',
-    zh: '删除项目 {title}？对话会保留，但不再属于项目。',
+    ko: '{title}의 대화는 그대로 남아요.',
+    en: 'Conversations in {title} will remain.',
+    ja: '{title}の会話はそのまま残ります。',
+    zh: '{title}中的对话会保留。',
   },
   'helperNavigation.move': {
     ko: '프로젝트로 이동',

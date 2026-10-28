@@ -1,9 +1,15 @@
 export const messages = {
-  'helperResults.tokenSummary': {
-    ko: '입력 {input} · 출력 {output} 토큰',
-    en: 'Input {input} · Output {output} tokens',
-    ja: '入力 {input} · 出力 {output} トークン',
-    zh: '输入 {input} · 输出 {output} token',
+  'helperResults.inputSummary': {
+    ko: '입력 {count}',
+    en: 'Input {count}',
+    ja: '入力 {count}',
+    zh: '输入 {count}',
+  },
+  'helperResults.outputSummary': {
+    ko: '출력 {count} 토큰',
+    en: 'Output {count} tokens',
+    ja: '出力 {count} トークン',
+    zh: '输出 {count} 令牌',
   },
   'helperResults.toolSummary': {
     ko: '도구 {count}회',
@@ -27,13 +33,13 @@ export const messages = {
     ko: '입력 예산 {limit} 토큰 중 약 {input} 토큰',
     en: 'Approximately {input} of {limit} input-budget tokens',
     ja: '入力予算{limit}トークン中、約{input}トークン',
-    zh: '输入预算 {limit} token 中约 {input} token',
+    zh: '输入预算 {limit} 令牌中约 {input} 令牌',
   },
   'helpers.searchSessions': {
     ko: '대화 검색',
     en: 'Search conversations',
     ja: '会話を検索',
-    zh: '搜索会话',
+    zh: '搜索对话',
   },
   'helperResults.deleted': {
     ko: '삭제됨',
@@ -42,10 +48,10 @@ export const messages = {
     zh: '已删除',
   },
   'helperResults.openFailed': {
-    ko: '결과를 열지 못했어요. 다시 시도해 주세요.',
-    en: 'Could not open the result. Try again.',
-    ja: '結果を開けませんでした。もう一度お試しください。',
-    zh: '无法打开结果，请重试。',
+    ko: '결과를 열지 못했어요.',
+    en: 'Could not open the result.',
+    ja: '結果を開けませんでした。',
+    zh: '无法打开结果。',
   },
   'helpers.expand': {
     ko: '도우미 크게 보기',
@@ -63,7 +69,7 @@ export const messages = {
     ko: '도우미 대화',
     en: 'Assistant conversations',
     ja: 'アシスタントの会話',
-    zh: '助手会话',
+    zh: '助手对话',
   },
   'helpers.queueRequest': {
     ko: '다음 요청',
@@ -75,7 +81,7 @@ export const messages = {
     ko: '대화에서 보기',
     en: 'Show in conversation',
     ja: '会話で表示',
-    zh: '在会话中查看',
+    zh: '在对话中查看',
   },
   'helpers.analyzeTask': {
     ko: '실패 원인 확인',
@@ -186,10 +192,10 @@ export const messages = {
     zh: '{count} 次未报告',
   },
   'helperResults.latestEstimate': {
-    ko: '마지막 입력 추정 토큰',
-    en: 'Latest estimated input tokens',
-    ja: '直近の推定入力トークン',
-    zh: '最近一次估算输入令牌',
+    ko: '마지막 전송 입력 (추정)',
+    en: 'Last sent input (estimated)',
+    ja: '直近の送信入力（推定）',
+    zh: '最近发送输入（估算）',
   },
   'helperResults.enabled': {
     ko: '켜짐',

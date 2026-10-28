@@ -160,7 +160,7 @@ export class HelperWorkspace {
         .get(key);
       if (previous) {
         if (previous.creation_title !== title)
-          throw new HttpError(409, '프로젝트 생성 요청 키가 다른 요청에 사용됐어요.');
+          throw new HttpError(409, '프로젝트 생성 요청이 이전 요청과 충돌했어요.');
         return this.group(String(previous.id));
       }
       const id = randomUUID();
@@ -236,7 +236,7 @@ export class HelperWorkspace {
         .get(scopeKey, creationKey);
       if (old) {
         if (old.creation_hash !== hash)
-          throw new HttpError(409, '대화 복사 요청 키가 다른 요청에 사용됐어요.');
+          throw new HttpError(409, '대화 복사 요청이 이전 요청과 충돌했어요.');
         return this.conversation(String(old.id));
       }
       const impact = this.deletionImpact(id);

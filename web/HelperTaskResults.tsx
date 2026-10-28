@@ -257,10 +257,12 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
         <span className="ui-meta-row">
           <span className="sr-only">{t('helperResults.usage')}</span>
           <span>
-            {t('helperResults.tokenSummary', {
-              input: summaryAmount(totals.inputTokens),
-              output: summaryAmount(totals.outputTokens),
+            {t('helperResults.inputSummary', {
+              count: summaryAmount(totals.inputTokens),
             })}
+          </span>
+          <span>
+            {t('helperResults.outputSummary', { count: summaryAmount(totals.outputTokens) })}
           </span>
           {usage.toolExecutions > 0 && (
             <span>
