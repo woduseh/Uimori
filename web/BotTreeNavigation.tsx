@@ -59,38 +59,20 @@ export function NavigationQuickActions({
   onLibrary,
   onNewHelper,
   helperWorkspace = false,
-  compact = false,
 }: {
   onSearch: () => void;
   onLibrary: (tab: 'bot') => void;
   onNewHelper?: () => void;
   helperWorkspace?: boolean;
-  /** The collapsed rail shows the same two actions as icons. */
-  compact?: boolean;
 }) {
   useI18n();
   const newLabel = t(helperWorkspace ? 'helpers.m173' : 'transfer.m246');
   const searchLabel = t(helperWorkspace ? 'helpers.searchSessions' : 'transfer.m276');
   const onNew = helperWorkspace ? onNewHelper : () => onLibrary('bot');
   return (
-    <div className={`navigation-quick-actions${compact ? ' compact' : ''}`}>
-      {compact ? (
-        <>
-          <IconButton label={newLabel} icon={AddIcon} onClick={onNew} />
-          <IconButton label={searchLabel} icon={SearchIcon} onClick={onSearch} />
-        </>
-      ) : (
-        <>
-          <button type="button" className="nav-button" aria-label={newLabel} onClick={onNew}>
-            <AddIcon size={20} aria-hidden="true" />
-            <span>{newLabel}</span>
-          </button>
-          <button type="button" className="nav-button" aria-label={searchLabel} onClick={onSearch}>
-            <SearchIcon size={20} aria-hidden="true" />
-            <span>{helperWorkspace ? searchLabel : t('transfer.m248')}</span>
-          </button>
-        </>
-      )}
+    <div className="navigation-quick-actions">
+      <IconButton label={newLabel} icon={AddIcon} onClick={onNew} />
+      <IconButton label={searchLabel} icon={SearchIcon} onClick={onSearch} />
     </div>
   );
 }
@@ -446,7 +428,7 @@ export function BotNavigation(
     props.onToggleHelper &&
     (props.collapsed ? (
       <IconButton
-        label={helperRunning ? `${t('main.m062')} · ${t('helpers.m113')}` : t('main.m062')}
+        label={helperRunning ? `${t('main.m062')}, ${t('helpers.m113')}` : t('main.m062')}
         icon={Sparkles}
         aria-current={props.helperExpanded ? 'page' : undefined}
         className={`${props.helperExpanded ? 'selected' : ''}${helperRunning ? ' helper-running' : ''}`}
@@ -456,7 +438,7 @@ export function BotNavigation(
       <button
         type="button"
         className={`nav-button${props.helperExpanded ? ' selected' : ''}`}
-        aria-label={helperRunning ? `${t('main.m062')} · ${t('helpers.m113')}` : undefined}
+        aria-label={helperRunning ? `${t('main.m062')}, ${t('helpers.m113')}` : undefined}
         aria-current={props.helperExpanded ? 'page' : undefined}
         onClick={props.onToggleHelper}
       >
@@ -482,7 +464,6 @@ export function BotNavigation(
           {helperDestination}
         </nav>
         <NavigationQuickActions
-          compact
           onSearch={props.onSearch}
           onLibrary={onLibrary}
           helperWorkspace={props.helperExpanded}

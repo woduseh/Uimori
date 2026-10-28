@@ -5,22 +5,18 @@
   height: 100%;
   gap: 8px;
 }
-.helper-navigation > input {
-  width: 100%;
+.helper-navigation-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.helper-navigation-tools > input {
+  flex: 1;
+  min-width: 0;
 }
 .helper-nav-project-heading {
   display: flex;
   align-items: center;
-}
-.helper-nav-new-project {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  color: var(--text);
 }
 .helper-navigation-scroll {
   min-height: 0;

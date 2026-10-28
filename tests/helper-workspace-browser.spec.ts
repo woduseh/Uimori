@@ -349,7 +349,7 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   await renamed.getByLabel(`${renamedTitle} 프로젝트 메뉴`, { exact: true }).click();
   await page.getByRole('button', { name: '프로젝트 삭제', exact: true }).click();
   const remove = page.getByRole('alertdialog', { name: '프로젝트 삭제', exact: true });
-  await expect(remove).toContainText('대화는 삭제되지 않고');
+  await expect(remove).toContainText(`${renamedTitle}의 대화는 그대로 남아요.`);
   await remove.getByRole('button', { name: '프로젝트 삭제', exact: true }).click();
   await expect(renamed).toHaveCount(0);
   const retained = await (await request.get(`/api/helper/conversations/${sessions[0].id}`)).json();

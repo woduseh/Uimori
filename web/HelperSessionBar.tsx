@@ -1,7 +1,7 @@
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, Settings2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, FolderPlus, Settings2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import type {
   HelperConversation,
   HelperConversationDeletion,
@@ -293,26 +293,25 @@ export function HelperSessionBar(props: Props) {
   );
   const navigation = (
     <nav className="helper-navigation" aria-label={t('helpers.sessions')}>
-      <input
-        ref={searchInput}
-        type="search"
-        aria-label={t('helpers.searchSessions')}
-        placeholder={t('helpers.searchSessions')}
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-      />
-      <button
-        type="button"
-        className="helper-nav-new-project"
-        onClick={() => {
-          setProjectEditor('new');
-          setProjectTitle('');
-          setProjectError('');
-        }}
-      >
-        <Plus size={16} aria-hidden="true" />
-        {t('helperNavigation.newProject')}
-      </button>
+      <div className="helper-navigation-tools">
+        <input
+          ref={searchInput}
+          type="search"
+          aria-label={t('helpers.searchSessions')}
+          placeholder={t('helpers.searchSessions')}
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        <IconButton
+          label={t('helperNavigation.newProject')}
+          icon={FolderPlus}
+          onClick={() => {
+            setProjectEditor('new');
+            setProjectTitle('');
+            setProjectError('');
+          }}
+        />
+      </div>
       {projectError && !projectEditor && !projectDeleting && !moving && (
         <NoticeBanner tone="error">
           {translateMessage(projectError)}{' '}
