@@ -70,9 +70,9 @@ export const messages = {
     zh: '重新确认删除结果',
   },
   'chatmanage.unknown': {
-    ko: '삭제 결과를 확인하지 못했어요. 같은 요청으로 결과를 다시 확인해 주세요.',
-    en: 'Could not confirm deletion. Check the result using the same request.',
-    ja: '削除結果を確認できませんでした。同じリクエストで結果を再確認してください。',
-    zh: '无法确认删除结果。请使用同一请求重新确认。',
+    ko: '삭제 결과를 확인하지 못했어요.',
+    en: 'Could not confirm deletion.',
+    ja: '削除結果を確認できませんでした。',
+    zh: '无法确认删除结果。',
   },
 };

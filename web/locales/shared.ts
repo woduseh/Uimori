@@ -234,10 +234,10 @@ export const messages = {
     zh: '模型不支持请求选项。',
   },
   'shared.rateLimit': {
-    ko: '요청이 많아 응답을 만들지 못했어요. 잠시 후 다시 시도해 주세요.',
-    en: 'Too many requests prevented a response. Try again shortly.',
-    ja: 'リクエストが多いため応答を生成できませんでした。しばらくしてから再試行してください。',
-    zh: '请求过多，无法生成响应。请稍后重试。',
+    ko: '요청 한도를 초과했어요. 잠시 후 다시 시도할 수 있어요.',
+    en: 'Rate limit exceeded. Please wait a moment.',
+    ja: 'リクエスト制限を超過しました。しばらくお待ちください。',
+    zh: '请求过多，请稍候。',
   },
   'shared.responseFailure': {
     ko: '응답을 만들지 못했어요.',
@@ -270,10 +270,10 @@ export const messages = {
     zh: '仅重试判定',
   },
   'shared.retryHelp': {
-    ko: '같은 요청을 현재 설정으로 다시 실행해요',
-    en: 'Runs the same request again with current settings.',
+    ko: '같은 요청을 현재 설정으로 다시 실행해요.',
+    en: 'Run the same request with current settings.',
     ja: '同じリクエストを現在の設定で再実行します。',
-    zh: '使用当前设置重新执行相同请求。',
+    zh: '使用当前设置重新执行该请求。',
   },
   'shared.retry': {
     ko: '다시 시도',

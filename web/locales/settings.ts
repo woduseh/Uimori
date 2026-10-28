@@ -31,10 +31,10 @@ export const messages = {
     zh: '正文模型',
   },
   'settings.m5': {
-    ko: '이 모델은 사용할 수 없어요. 모델 프리셋과 프로바이더를 확인하거나 다른 모델을 선택해 주세요.',
-    en: 'This model is unavailable. Check the model preset and provider or select another model.',
-    ja: 'このモデルは利用できません。モデルプリセットとプロバイダーを確認するか、別のモデルを選んでください。',
-    zh: '此模型不可用。请检查模型预设和提供商，或选择其他模型。',
+    ko: '이 모델은 사용할 수 없어요. 프리셋과 프로바이더 설정을 확인해 주세요.',
+    en: 'This model is unavailable. Check preset and provider settings.',
+    ja: 'このモデルは利用できません。プリセットとプロバイダー設定を確認してください。',
+    zh: '此模型不可用。请检查预设和提供商设置。',
   },
   'settings.m6': {
     ko: '모델 미지정',
@@ -385,10 +385,10 @@ export const messages = {
     zh: '关',
   },
   'settings.m75': {
-    ko: '다른 곳에서 전역 설정이 바뀌었어요. 초안은 유지했어요. 최신 설정을 불러온 뒤 다시 적용해 주세요.',
-    en: 'Global settings changed elsewhere. Your draft is preserved. Reload the latest settings and reapply your changes.',
-    ja: '別の場所で全体設定が変わりました。下書きは保持しました。最新設定を読み込み、変更を再適用してください。',
-    zh: '全局设置已在其他位置更改。草稿已保留，请加载最新设置后重新应用更改。',
+    ko: '전역 설정이 다른 곳에서 변경됐어요. 초안은 유지했어요.',
+    en: 'Global settings changed elsewhere. Your draft is preserved.',
+    ja: '全体設定が別の場所で変更されました。下書きは保持されています。',
+    zh: '全局设置已在其他位置更改。草稿已保留。',
   },
   'settings.m76': {
     ko: '초안은 유지했어요.',
@@ -1663,10 +1663,10 @@ export const messages = {
     zh: '查看最新摘要并保留草稿',
   },
   'settings.m305': {
-    ko: '저장된 요약이나 대상 장면이 바뀌었어요. 위의 최신 요약과 입력한 내용을 비교해 주세요.',
-    en: 'The saved summary or scene changed. Compare the latest summary above with your input.',
-    ja: '保存済み要約または対象場面が変わりました。上の最新要約と入力内容を比較してください。',
-    zh: '已保存摘要或目标场景已更改，请将上方最新摘要与输入内容比较。',
+    ko: '저장된 요약이나 대상 장면이 변경됐어요. 최신 요약과 내용을 비교해 주세요.',
+    en: 'The saved summary or scene changed. Compare with the latest summary.',
+    ja: '保存済み要約または対象シーンが変更されました。最新の要約と比較してください。',
+    zh: '已保存的摘要或目标场景已更改，请对照最新摘要。',
   },
   'settings.m306': {
     ko: '편집할 컨텍스트 요약',
@@ -1753,10 +1753,10 @@ export const messages = {
     zh: '当前全局默认值：{v0}',
   },
   'settings.flow3': {
-    ko: '{v0} 협업 상세를 펼쳐 확인해 주세요.',
-    en: '{v0} Expand collaboration details to review.',
-    ja: '{v0} 協業の詳細を開いて確認してください。',
-    zh: '{v0} 请展开协作详情进行检查。',
+    ko: '{v0} 협업 상세에서 확인할 수 있어요.',
+    en: '{v0} Available in collaboration details.',
+    ja: '{v0} 協業の詳細で確認できます。',
+    zh: '{v0} 可在协作详情中查看。',
   },
   'settings.flow4': {
     ko: '{v0}의 추가 조회',

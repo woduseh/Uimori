@@ -114,10 +114,10 @@ export const messages = {
     zh: '请保存或取消当前编辑后再打开其他主题。',
   },
   'visualpanels.themeSavedUseApplyToActivateIt': {
-    ko: '테마를 저장했어요. 적용 버튼으로 사용할 수 있어요.',
-    en: 'Theme saved. Use Apply to activate it.',
-    ja: 'テーマを保存しました。適用ボタンで使用できます。',
-    zh: '主题已保存，可通过应用按钮使用。',
+    ko: '테마를 저장했어요.',
+    en: 'Theme saved.',
+    ja: 'テーマを保存しました。',
+    zh: '主题已保存。',
   },
   'visualpanels.defaultLayoutChangedThisChatUsesIts': {
     ko: '기본 레이아웃을 바꿨어요. 현재 채팅은 별도로 지정한 레이아웃을 사용해요.',
@@ -156,10 +156,10 @@ export const messages = {
     zh: '请导入不超过4 MiB的主题文件。',
   },
   'visualpanels.importedAsANewThemeReviewAnd': {
-    ko: '새 테마로 가져왔어요. 내용을 확인하고 저장해 주세요. 기존 테마는 덮어쓰지 않아요.',
-    en: 'Imported as a new theme. Review and save it. Existing themes are preserved.',
-    ja: '新しいテーマとして読み込みました。確認して保存してください。既存のテーマは上書きしません。',
-    zh: '已作为新主题导入，请检查后保存。不会覆盖现有主题。',
+    ko: '새 테마로 가져왔어요. 기존 테마는 덮어쓰지 않아요.',
+    en: 'Imported as a new theme. Existing themes are preserved.',
+    ja: '新しいテーマとして読み込みました。既存のテーマは上書きしません。',
+    zh: '已作为新主题导入。不会覆盖现有主题。',
   },
   'visualpanels.themesAndColors': {
     ko: '테마와 색상',
@@ -264,10 +264,10 @@ export const messages = {
     zh: '高级主题设置',
   },
   'visualpanels.combineLayoutsPalettesAndBackgroundsByScope': {
-    ko: '레이아웃, 팔레트, 배경을 범위별로 조합하거나, 에이전트가 만든 테마 파일을 가져와 미리 보고 편집해요.',
-    en: 'Combine layouts, palettes and backgrounds by scope, or import, preview and edit a theme file created by an agent.',
-    ja: '範囲ごとにレイアウト、パレット、背景を組み合わせたり、エージェントが作成したテーマファイルを読み込んでプレビュー、編集できます。',
-    zh: '按范围组合布局、配色与背景，也可以导入、预览和编辑代理制作的主题文件。',
+    ko: '레이아웃, 팔레트, 배경을 조합하거나 테마 파일을 가져와 편집해요.',
+    en: 'Combine layouts, palettes, and backgrounds, or import and edit theme files.',
+    ja: 'レイアウト、パレット、背景を組み合わせるか、テーマファイルを読み込んで編集します。',
+    zh: '组合布局、配色与背景，或导入并编辑主题文件。',
   },
   'visualpanels.scope': {
     ko: '적용 범위',
@@ -534,10 +534,10 @@ export const messages = {
     zh: '将{v0} {v1}恢复为默认颜色',
   },
   'visualpanels.editLightAndDarkColorsSeparatelyUsing': {
-    ko: '위 ‘미리보기 색상’에서 밝은 색과 어두운 색을 각각 편집해요. 지정하지 않은 색은 Uimori 기본 색상을 따라요. 편집한 색상은 레이아웃에 저장되며, 적용할 때는 팔레트에서 ‘레이아웃 원래 색상’을 골라 주세요.',
-    en: 'Edit light and dark colors separately using Preview colors above. Unspecified colors use Uimori defaults. Edited colors are saved in the layout; choose Original layout colors in the palette to use them.',
-    ja: '上の「プレビューの色」で明るい色と暗い色をそれぞれ編集します。未指定の色はUimoriの既定色を使います。編集した色はレイアウトに保存されるので、適用時はパレットで「レイアウト本来の色」を選んでください。',
-    zh: '在上方的“预览颜色”中分别编辑浅色和深色配色。未指定的颜色使用Uimori默认值。编辑的颜色保存在布局中，应用时请在配色中选择“布局原有颜色”。',
+    ko: '밝은 색과 어두운 색을 각각 편집해요. 지정하지 않은 색은 기본값을 따라요.',
+    en: 'Edit light and dark colors. Unspecified colors use default values.',
+    ja: '明るい色と暗い色を編集します。未指定の色は既定値に従います。',
+    zh: '分别编辑浅色和深色，未指定的颜色使用默认值。',
   },
   'visualpanels.editCssAndHtmlDirectly': {
     ko: 'CSS와 HTML 직접 편집',

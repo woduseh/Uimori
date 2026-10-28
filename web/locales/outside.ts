@@ -6,10 +6,10 @@ export const messages = {
     zh: '连接个人工作室',
   },
   'outside.sessionExpired': {
-    ko: '접속이 만료됐어요. 토큰을 입력해 다시 연결해 주세요.',
-    en: 'Your session expired. Enter your token to reconnect.',
-    ja: '接続の有効期限が切れました。トークンを入力して再接続してください。',
-    zh: '连接已过期。请输入令牌重新连接。',
+    ko: '접속이 만료됐어요. 다시 로그인해 주세요.',
+    en: 'Session expired. Sign in again.',
+    ja: 'セッションの有効期限が切れました。再ログインしてください。',
+    zh: '连接已过期，请重新登录。',
   },
   'outside.checkServer': {
     ko: '서버 연결을 확인해 주세요.',
@@ -114,10 +114,10 @@ export const messages = {
     zh: '当前环境无法准备应用安装和通知。请使用 HTTPS 地址打开。',
   },
   'outside.pwaFailure': {
-    ko: '앱 서비스를 준비하지 못했어요. 연결을 확인하고 다시 시도해 주세요.',
-    en: 'Could not prepare app services. Check your connection and try again.',
-    ja: 'アプリのサービスを準備できませんでした。接続を確認して再試行してください。',
-    zh: '无法准备应用服务。请检查连接后重试。',
+    ko: '앱 서비스를 준비하지 못했어요. 네트워크 연결을 확인해 주세요.',
+    en: 'Could not prepare app services. Check your network connection.',
+    ja: 'アプリのサービスを準備できませんでした。ネットワーク接続を確認してください。',
+    zh: '无法准备应用服务。请检查网络连接。',
   },
   'outside.installRetry': {
     ko: '브라우저의 앱 설치 메뉴에서 다시 시도해 주세요.',

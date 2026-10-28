@@ -63,10 +63,10 @@ export const messages = {
     zh: '字体已删除。',
   },
   'fonts.failed': {
-    ko: '글꼴 작업을 완료하지 못했어요. 저장 결과를 확인한 뒤 다시 시도해 주세요.',
-    en: 'The font operation could not be completed. Check the saved result before trying again.',
-    ja: 'フォント操作を完了できませんでした。保存結果を確認してから再試行してください。',
-    zh: '未能完成字体操作。请先确认保存结果，再重试。',
+    ko: '글꼴 작업을 완료하지 못했어요.',
+    en: 'Could not complete the font operation.',
+    ja: 'フォント操作を完了できませんでした。',
+    zh: '未能完成字体操作。',
   },
   'fonts.loadFailed': {
     ko: '일부 글꼴을 불러오지 못해 기본 글꼴로 표시해요.',

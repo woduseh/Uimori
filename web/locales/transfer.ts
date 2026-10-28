@@ -85,10 +85,10 @@ export const messages = {
     zh: '模块已添加，请刷新资料库后将其附加到现有聊天。',
   },
   'transfer.m013': {
-    ko: '페르소나 등록은 완료했어요. 서재를 새로고침한 뒤 사용할 수 있어요.',
-    en: 'The persona was registered. Refresh the library to use it.',
-    ja: 'ペルソナを登録しました。ライブラリを更新すると使えます。',
-    zh: '角色已添加，刷新资料库后即可使用。',
+    ko: '페르소나를 등록했어요.',
+    en: 'Persona registered.',
+    ja: 'ペルソナを登録しました。',
+    zh: '角色已注册。',
   },
   'transfer.m014': {
     ko: '가져오기는 완료했어요. 목록을 새로고침한 뒤 채팅을 열어 주세요.',
@@ -97,10 +97,10 @@ export const messages = {
     zh: '导入已完成，请刷新列表后打开聊天。',
   },
   'transfer.m015': {
-    ko: '봇 등록은 완료했어요. 서재를 새로고침한 뒤 사용할 수 있어요.',
-    en: 'The bot was registered. Refresh the library to use it.',
-    ja: 'ボットを登録しました。ライブラリを更新すると使えます。',
-    zh: '机器人已添加，刷新资料库后即可使用。',
+    ko: '봇을 등록했어요.',
+    en: 'Bot registered.',
+    ja: 'ボットを登録しました。',
+    zh: '机器人已注册。',
   },
   'transfer.m016': {
     ko: '자료 가져오기',
@@ -265,10 +265,10 @@ export const messages = {
     zh: '模块已添加到资料库，请在现有聊天的机器人、角色和模块设置中附加。',
   },
   'transfer.m053': {
-    ko: '페르소나를 서재에 등록했어요. 새 채팅이나 기존 채팅에서 선택할 수 있어요.',
-    en: 'The persona was added to the library. Select it in a new or existing chat.',
-    ja: 'ライブラリにペルソナを登録しました。新規または既存のチャットで選べます。',
-    zh: '角色已添加到资料库，可在新聊天或现有聊天中选择。',
+    ko: '페르소나를 서재에 등록했어요.',
+    en: 'Persona added to the library.',
+    ja: 'ライブラリにペルソナを登録しました。',
+    zh: '角色已添加到资料库。',
   },
   'transfer.m054': {
     ko: '봇과 새 채팅을 가져왔어요.',
@@ -277,10 +277,10 @@ export const messages = {
     zh: '已导入机器人和新聊天。',
   },
   'transfer.m055': {
-    ko: '봇을 서재에 등록했어요. 서재나 왼쪽 봇 목록에서 원할 때 채팅을 시작할 수 있어요.',
-    en: 'The bot was added to the library. Start a chat from the library or the bot list whenever you like.',
-    ja: 'ライブラリにボットを登録しました。ライブラリや左のボット一覧からいつでもチャットを開始できます。',
-    zh: '机器人已添加到资料库，可随时从资料库或左侧机器人列表开始聊天。',
+    ko: '봇을 서재에 등록했어요.',
+    en: 'Bot added to the library.',
+    ja: 'ライブラリにボットを登録しました。',
+    zh: '机器人已添加到资料库。',
   },
   'transfer.m056': {
     ko: '자료 가져오기는 완료됐어요. 연결된 채팅이 삭제되어 열 수 없어요.',

@@ -1,9 +1,9 @@
 export const messages = {
   'errors.SCENE_DELETED_RETRY_UNAVAILABLE': {
-    ko: '삭제된 장면을 포함한 작업은 다시 실행할 수 없어요. 현재 이야기에서 새 요청을 보내 주세요.',
-    en: 'A task containing deleted scenes cannot be retried. Start a new request from the current story.',
-    ja: '削除したシーンを含む作業は再実行できません。現在の物語から新しいリクエストを送信してください。',
-    zh: '包含已删除场景的任务无法重试。请基于当前故事发起新请求。',
+    ko: '삭제된 장면이 포함된 작업은 다시 실행할 수 없어요.',
+    en: 'Tasks containing deleted scenes cannot be retried.',
+    ja: '削除したシーンを含む作業は再実行できません。',
+    zh: '包含已删除场景的任务无法重试。',
   },
   'errors.STORY_GUIDE_STALE': {
     ko: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
@@ -150,10 +150,10 @@ export const messages = {
     zh: '输入翻译已中止。',
   },
   'errors.INPUT_TRANSLATION_TIMEOUT': {
-    ko: '입력 번역이 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
-    en: 'Input translation timed out. Please try again.',
-    ja: '入力の翻訳が時間内に完了しませんでした。もう一度お試しください。',
-    zh: '输入翻译超时。请重试。',
+    ko: '입력 번역 제한 시간이 초과됐어요.',
+    en: 'Input translation timed out.',
+    ja: '入力の翻訳がタイムアウトしました。',
+    zh: '输入翻译超时。',
   },
   'errors.INPUT_TRANSLATION_REFUSED': {
     ko: '번역 모델이 이 입력의 번역을 거절했어요.',
@@ -264,10 +264,10 @@ export const messages = {
     zh: '已取消资料检查。',
   },
   'errors.RISU_IMPORT_BUSY': {
-    ko: '다른 자료를 준비하고 있어요. 완료 후 다시 시도해 주세요.',
-    en: 'Another resource is being prepared. Try again when it finishes.',
-    ja: '別の資料を準備中です。完了後にもう一度お試しください。',
-    zh: '正在准备其他资料。请完成后重试。',
+    ko: '다른 자료를 준비하는 중이에요. 완료된 후 진행할 수 있어요.',
+    en: 'Another resource is being prepared. Wait for it to finish.',
+    ja: '別の資料を準備中です。完了後に実行できます。',
+    zh: '正在准备其他资料，完成后即可继续。',
   },
   'errors.UPLOAD_EMPTY': {
     ko: '빈 파일은 올릴 수 없어요. 파일을 다시 선택해 주세요.',
@@ -546,10 +546,10 @@ export const messages = {
     zh: '所选模型或提供商不可用。请检查全局设置中的各角色模型，以及模型预设和提供商管理中的启用状态、身份凭据和受支持设置。',
   },
   'errors.revisionConflict': {
-    ko: '다른 요청이 먼저 반영됐어요. 최신 내용을 확인한 뒤 다시 시도해 주세요.',
-    en: 'Another request was applied first. Check the latest content before retrying.',
-    ja: '別の依頼が先に反映されました。最新の内容を確認してから再度お試しください。',
-    zh: '其他请求已先应用。请检查最新内容后重试。',
+    ko: '다른 요청이 먼저 반영됐어요. 최신 내용을 확인해 주세요.',
+    en: 'Another request was applied first. Review the latest content.',
+    ja: '別の依頼が先に反映されました。最新の内容を確認してください。',
+    zh: '其他请求已先应用。请查看最新内容。',
   },
   'errors.serverFailed': {
     ko: '서버 작업을 완료하지 못했어요. ({status})',
@@ -1158,10 +1158,10 @@ export const messages = {
     zh: '模型响应不符合此任务的输出格式。',
   },
   'errors.auxiliary.OUTPUT_SCHEMA_INVALID.action': {
-    ko: '해당 작업의 프롬프트와 모델 설정을 확인한 뒤 다시 시도해 주세요.',
-    en: 'Check the prompt and model settings for this task before retrying.',
-    ja: 'この作業のプロンプトとモデル設定を確認してから再度お試しください。',
-    zh: '请检查此任务的提示词和模型设置后重试。',
+    ko: '프롬프트와 모델 설정을 확인해 주세요.',
+    en: 'Check the prompt and model settings.',
+    ja: 'プロンプトとモデル設定を確認してください。',
+    zh: '请检查提示词和模型设置。',
   },
   'errors.auxiliary.EVALUATION_SUBMISSION_REQUIRED.message': {
     ko: '모델이 결과 제출 도구를 호출하지 않아 작업을 완료하지 못했어요.',
@@ -1230,10 +1230,10 @@ export const messages = {
     zh: '辅助任务已取消。',
   },
   'errors.auxiliary.AUXILIARY_CANCELLED.action': {
-    ko: '다시 실행하려면 다시 시도를 선택해 주세요.',
-    en: 'Choose Retry to run it again.',
-    ja: '再度実行するには「再試行」を選んでください。',
-    zh: '选择“重试”可再次运行。',
+    ko: '작업을 다시 시작할 수 있어요.',
+    en: 'You can retry the task.',
+    ja: 'タスクを再試行できます。',
+    zh: '可以重试此任务。',
   },
   'errors.auxiliary.AUXILIARY_INCOMPLETE.message': {
     ko: '보조 작업을 완료하지 못했어요.',
