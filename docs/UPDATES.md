@@ -8,21 +8,21 @@ Use this path for source installations; see [SELF-HOST](SELF-HOST.md#저장과-�
 
 Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재-버전) before updating. Finish active generation and edits. Download the app's consistent SQLite snapshot, record the running app/image version, and preserve external Codex login files separately. Stop the server before switching code or restoring data. Do not use `reset:dev` or `docker compose down -v` to update an existing workspace.
 
-**v0.12.0 keeps SQLite schema 15**, used by releases since v0.4.0. A compatible schema-15 workspace can update in place after the normal backup. There is no direct conversion from older databases, including schema 12 from v0.3.1. Keep those files with their matching application version; do not edit the schema number or substitute an empty database to bypass a compatibility error.
+**v0.12.1 keeps SQLite schema 15**, used by releases since v0.4.0. A compatible schema-15 workspace can update in place after the normal backup. There is no direct conversion from older databases, including schema 12 from v0.3.1. Keep those files with their matching application version; do not edit the schema number or substitute an empty database to bypass a compatibility error.
 
-The current release adds an expanded assistant workspace, recorded task results and detailed usage, while simplifying recurring UI guidance. Existing manuscripts and helper conversations remain readable. Verify expanding and returning from the assistant, retained drafts and opening result targets after updating; see the [v0.12.0 notes](releases/v0.12.0.md) for details. Older task records may not contain complete result or usage details; unavailable values remain unknown rather than being reconstructed.
+The current release unifies chat and assistant navigation, adds explicit assistant projects and independent conversation copies, and shows the last sent input estimate against its recorded input budget. Existing conversations start without a project. Deleting a project keeps its conversations; copying a conversation does not replay tasks or duplicate usage. Verify side/main transitions, retained drafts, project navigation and result links after updating; see the [v0.12.1 notes](releases/v0.12.1.md).
 
 When updating from before v0.11.1, startup preserves an independent old prompt body as a library preset before changing the current prompt to a preset reference. New requests use the selected source and explicit option overrides. Keep the pre-update backup for rollback, and review the [v0.11.1 notes](releases/v0.11.1.md) for retired APIs and evaluation settings. Existing helper conversation personas, manuscripts and historical execution records remain readable.
 
 Finish queued or running evaluation Batch work under its original runtime before updating. Both retained evaluation modes now require a valid final submission, and the retired `source-bound` mode is disabled for new execution. The new runtime does not emulate the previous evaluation protocol.
 
-Use the published `v0.12.0` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
+Use the published `v0.12.1` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
 
 From a clean source checkout, with the existing server stopped:
 
 ```sh
 git fetch origin --tags
-git switch --detach v0.12.0
+git switch --detach v0.12.1
 npm ci
 npm run dev
 ```
