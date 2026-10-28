@@ -93,6 +93,8 @@ Risu 메시지의 기본 글자색·글자 크기·글꼴·줄간격은 상속�
 
 도우미 **작업 기록**의 긴 요청은 앞부분만 표시하고 **요청 전체 보기**로 펼쳐요. 펼친 요청은 원래 공백과 줄바꿈을 유지하며 선택해서 복사할 수 있어요. 짧은 요청, 실패 사유와 저장한 변경 결과는 접지 않아요.
 
+사용량을 펼치면 마지막 전송 입력의 추정치와 당시 입력 예산을 막대로 비교해요. 누적 입력 토큰이나 네이티브 에이전트의 현재 컨텍스트 점유율을 나타내는 막대는 아니에요. 입력 예산 기록이 없는 과거 작업은 저장된 모델 스냅샷의 한도를 사용할 수 있을 때만 막대를 표시하고, 어느 쪽에도 한도가 없으면 추정 토큰 숫자만 보여줘요.
+
 Each independent chat can have multiple helper sessions. A session owns its conversation, draft and context; closing the panel or selecting another session does not cancel its work. Tools can explicitly target another chat when requested. Copying a chat produces an independent chat, not a shared branch with a mutable default.
 
 도우미의 요청과 답변은 메시지에서 편집하고 저장할 수 있어요. 저장은 다시 실행하지 않고 이후 도우미 요청에 사용할 대화 내용을 바꿔요. 메시지 메뉴에서 요청·답변 한 쌍을 삭제하거나 해당 쌍부터 이후 대화를 삭제할 수 있어요. 이미 수행한 자료 수정과 작업·사용량 기록은 유지해요. 해당 세션에 진행 중인 작업이 있으면 종료된 뒤 편집·삭제할 수 있어요.

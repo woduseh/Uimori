@@ -234,6 +234,9 @@ function UsageAmount({ amount, cost = false }: { amount: RecordedAmount; cost?: 
 
 function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   const totals = helperTaskUsageTotals(usage.attempts);
+  const inputLimit = usage.latestInputLimit;
+  const inputEstimate = usage.latestInputEstimate;
+  const hasInputBudget = inputEstimate !== null && typeof inputLimit === 'number' && inputLimit > 0;
   return (
     <details className="execution-record scene-usage helper-result-usage">
       <summary>
@@ -251,6 +254,38 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
         </span>
       </summary>
       <dl className="scene-receipt">
+        {usage.latestInputEstimate !== null && (
+          <>
+            <dt>{t('helperResults.latestEstimate')}</dt>
+            <dd>
+              <span>
+                {formatNumber(usage.latestInputEstimate)}
+                {hasInputBudget && ` / ${formatNumber(inputLimit)}`}
+              </span>
+              {hasInputBudget && (
+                <>
+                  <span>
+                    {formatNumber(inputEstimate / inputLimit, {
+                      style: 'percent',
+                      maximumFractionDigits: 1,
+                    })}
+                  </span>
+                  <meter
+                    className="helper-input-budget"
+                    min={0}
+                    max={inputLimit}
+                    value={Math.min(inputEstimate, inputLimit)}
+                    aria-label={t('helperResults.inputBudgetMeter')}
+                    aria-valuetext={t('helperResults.inputBudgetValue', {
+                      input: formatNumber(inputEstimate),
+                      limit: formatNumber(inputLimit),
+                    })}
+                  />
+                </>
+              )}
+            </dd>
+          </>
+        )}
         <dt>{t('helperResults.executions')}</dt>
         <dd>{formatNumber(usage.attempts.length)}</dd>
         <dt>{t('helperResults.tools')}</dt>
@@ -291,12 +326,6 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
         <dd>
           <UsageAmount amount={totals.costUsd} cost />
         </dd>
-        {usage.latestInputEstimate !== null && (
-          <>
-            <dt>{t('helperResults.latestEstimate')}</dt>
-            <dd>{formatNumber(usage.latestInputEstimate)}</dd>
-          </>
-        )}
       </dl>
     </details>
   );

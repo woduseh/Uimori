@@ -29,7 +29,10 @@ const tokens = (value: unknown): number | null => {
 
 /** This projection reads confirmed event records, never guesses outcomes from streamed tool text. */
 export function readHelperTaskResults(store: Store, taskId: string): HelperTaskResultsView {
-  const task = store.db.prepare('SELECT status FROM helper_tasks WHERE id=?').get(taskId);
+  const task = store.db
+    .prepare(`SELECT status,json_extract(snapshot,'$.model.inputTokenLimit') AS input_limit
+      FROM helper_tasks WHERE id=?`)
+    .get(taskId);
   if (!task) throw new HttpError(404, '도우미 작업을 찾을 수 없어요.');
   const rows = store.db
     .prepare(`SELECT e.seq,e.data FROM helper_events e JOIN helper_operations o
@@ -77,9 +80,11 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     .prepare("SELECT COUNT(*) AS n FROM helper_events WHERE task_id=? AND kind='tool.finished'")
     .get(taskId);
   const measured = store.db
-    .prepare(`SELECT json_extract(data,'$.estimatedInputTokens') AS tokens FROM helper_events
+    .prepare(`SELECT json_extract(data,'$.estimatedInputTokens') AS tokens,
+      json_extract(data,'$.inputTokenLimit') AS input_limit FROM helper_events
       WHERE task_id=? AND kind='input.measured' ORDER BY seq DESC LIMIT 1`)
     .get(taskId);
+  const inputLimit = measured ? tokens(measured.input_limit ?? task.input_limit) : null;
   return {
     taskId,
     status: task.status as HelperStatus,
@@ -89,6 +94,7 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
       attempts,
       toolExecutions: Number(tools?.n ?? 0),
       latestInputEstimate: tokens(measured?.tokens),
+      latestInputLimit: inputLimit !== null && inputLimit > 0 ? inputLimit : null,
     },
   };
 }

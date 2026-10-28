@@ -95,6 +95,10 @@ button.helper-result-target:hover {
 .helper-result-usage dd small {
   color: var(--muted);
 }
+.helper-result-usage .helper-input-budget {
+  flex-basis: 100%;
+  max-width: 24rem;
+}
 @media (max-width: 760px) {
   button.helper-result-target,
   .helper-result-usage summary {

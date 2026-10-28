@@ -1393,6 +1393,7 @@ export class HelperRuntime {
             ...metrics,
             estimatedInputTokens:
               wire.requestContext?.estimatedInputTokens ?? estimateContextTokens(wire.body, budget),
+            inputTokenLimit: budget.inputTokenLimit,
             execution:
               target.connection.protocol === 'codex-app-server-v1'
                 ? 'codex-native'

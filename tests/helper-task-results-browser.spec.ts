@@ -271,6 +271,15 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(usageValue(results, '확인된 비용')).toHaveText('US$0.02미확인 1회');
     await expect(usageValue(results, '마지막 입력 추정 토큰')).toHaveText('850');
     await expect(results).not.toContainText('%');
+    await expect(results.getByRole('meter')).toHaveCount(0);
+    projection.usage.latestInputLimit = 1000;
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    const inputMeter = results.getByRole('meter', {
+      name: '입력 예산 대비 마지막 전송 입력 추정치',
+    });
+    await expect(inputMeter).toHaveAttribute('max', '1000');
+    await expect(inputMeter).toHaveAttribute('value', '850');
+    await expect(usageValue(results, '마지막 입력 추정 토큰')).toContainText('850 / 1,00085%');
     refreshFails = true;
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await expect(results.getByRole('alert')).toContainText('결과를 새로 확인하지 못했어요.');
