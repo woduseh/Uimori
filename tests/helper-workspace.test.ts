@@ -43,7 +43,7 @@ afterEach(() => {
     rmSync(path, { recursive: true, force: true });
   }
 });
-function fixture() {
+function fixture(inputTokenLimit?: number) {
   const path = mkdtempSync(join(tmpdir(), 'uimori-helper-')),
     store = new Store(join(path, 'story.sqlite'));
   owned.push({ store, path });
@@ -59,6 +59,7 @@ function fixture() {
     modelId: 'fixture-helper',
     temperature: null,
     maxOutputTokens: 1024,
+    ...(inputTokenLimit === undefined ? {} : { inputTokenLimit }),
   });
   const selected = modelWorkspace(store);
   updateModelWorkspace(store, {
@@ -487,7 +488,7 @@ test('app-wide helper history preserves original scopes, filters and deletion ow
 });
 
 test('helper results retain actual batch targets and safe settings outcomes after payload cleanup', async () => {
-  const f = fixture();
+  const f = fixture(64_000);
   const changed = f.store.product.content(fixtureBotInput('수정 전', 'PRIVATE_RESOURCE_BODY'));
   const unchanged = f.store.product.content(fixtureBotInput('그대로'));
   const revision = modelWorkspace(f.store).revision;
@@ -571,6 +572,18 @@ test('helper results retain actual batch targets and safe settings outcomes afte
   );
   await Promise.all(f.work);
   expect(f.workspace.task(task.id).status).toBe('completed');
+  f.store.product.model(
+    {
+      title: f.model.title,
+      connectionId: f.model.connectionId,
+      modelId: f.model.modelId,
+      temperature: null,
+      maxOutputTokens: 1024,
+      inputTokenLimit: 128_000,
+      expectedRevision: f.model.revision,
+    },
+    f.model.id
+  );
   const app = Fastify();
   helperRoutes(app, f.runtime);
   try {
@@ -613,6 +626,7 @@ test('helper results retain actual batch targets and safe settings outcomes afte
     expect(view.usage.toolExecutions).toBe(3);
     expect(view.usage.attempts).toHaveLength(3);
     expect(view.usage.latestInputEstimate).toBeGreaterThan(0);
+    expect(view.usage.latestInputLimit).toBe(64_000);
     expect(response.body).not.toContain('PRIVATE_RESOURCE_BODY');
     expect(response.body).not.toContain('127.0.0.1');
     expect(
@@ -685,9 +699,42 @@ test('task result usage preserves reported native token detail, unknown internal
     ],
     toolExecutions: 1,
     latestInputEstimate: 321,
+    latestInputLimit: null,
   });
   expect(JSON.stringify(view)).not.toContain('PRIVATE_');
   expect(JSON.stringify(view)).not.toContain('private-endpoint');
+});
+
+test.each([
+  [64_000, 64_000],
+  [undefined, null],
+  [0, null],
+  [-1, null],
+  [1.5, null],
+  ['64000', null],
+])('legacy input measurements use only a valid frozen budget %s', (inputTokenLimit, expected) => {
+  const f = fixture(128_000);
+  const frozen = snapshot(f);
+  const legacy = {
+    ...frozen,
+    model: { ...frozen.model, inputTokenLimit },
+  } as HelperTaskSnapshot;
+  const task = f.workspace.enqueue(f.conversation.id, 'legacy-input-budget', '사용량 확인', legacy);
+  expect(readHelperTaskResults(f.store, task.id).usage.latestInputLimit).toBeNull();
+  f.workspace.event(f.conversation.id, task.id, 'input.measured', { estimatedInputTokens: 999 });
+  f.workspace.event(f.conversation.id, task.id, 'input.measured', { estimatedInputTokens: 321 });
+  expect(readHelperTaskResults(f.store, task.id).usage).toMatchObject({
+    latestInputEstimate: 321,
+    latestInputLimit: expected,
+  });
+  f.workspace.event(f.conversation.id, task.id, 'input.measured', {
+    estimatedInputTokens: 123,
+    inputTokenLimit: 32_000,
+  });
+  expect(readHelperTaskResults(f.store, task.id).usage).toMatchObject({
+    latestInputEstimate: 123,
+    latestInputLimit: 32_000,
+  });
 });
 
 test('resource creation, undo, clone and deletion outcomes retain identities without extending undo or surviving rollback', () => {

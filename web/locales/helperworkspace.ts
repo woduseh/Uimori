@@ -1,4 +1,16 @@
 export const messages = {
+  'helperResults.inputBudgetMeter': {
+    ko: '입력 예산 대비 마지막 전송 입력 추정치',
+    en: 'Last estimated sent input relative to the input budget',
+    ja: '入力予算に対する最後の送信入力の推定値',
+    zh: '最后发送输入的估算量占输入预算的比例',
+  },
+  'helperResults.inputBudgetValue': {
+    ko: '입력 예산 {limit} 토큰 중 약 {input} 토큰',
+    en: 'Approximately {input} of {limit} input-budget tokens',
+    ja: '入力予算{limit}トークン中、約{input}トークン',
+    zh: '输入预算 {limit} token 中约 {input} token',
+  },
   'helpers.searchSessions': {
     ko: '대화 검색',
     en: 'Search conversations',

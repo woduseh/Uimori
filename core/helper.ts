@@ -184,6 +184,8 @@ export type HelperTaskResultsView = {
     toolExecutions: number;
     /** Last recorded local estimate, not the native agent's current context utilization. */
     latestInputEstimate: number | null;
+    /** Input budget recorded with that estimate; older tasks may have no known limit. */
+    latestInputLimit?: number | null;
   };
 };
 export type HelperResourceEditResource = {
