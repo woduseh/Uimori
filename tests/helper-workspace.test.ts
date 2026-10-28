@@ -1574,6 +1574,40 @@ test('helper retries retain attempts but project the latest response at the orig
   expect(reloaded.task(first.id).status).toBe('failed');
 });
 
+test('copy preserves the visible retry order across message pages without restoring superseded attempts', async () => {
+  const f = fixture();
+  const add = f.store.db.prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)');
+  for (let i = 0; i < 102; i++)
+    add.run(
+      crypto.randomUUID(),
+      f.conversation.id,
+      i,
+      i % 2 ? 'assistant' : 'user',
+      `이전 ${i}`,
+      new Date().toISOString()
+    );
+  mockSend((_request, _options, index) =>
+    index === 0
+      ? { ...structuredClone(success), status: 'error', text: '', error: { code: 'HTTP_429' } }
+      : { ...structuredClone(success), text: index === 1 ? '둘째 답변' : '재시도 답변' }
+  );
+  const first = f.runtime.enqueue(f.conversation.id, 'retry-source', '이전 요청');
+  await Promise.all(f.work);
+  f.runtime.enqueue(f.conversation.id, 'later-request', '둘째 요청');
+  await Promise.all(f.work);
+  f.runtime.enqueue(f.conversation.id, 'retry-later', '고친 요청', undefined, undefined, first.id);
+  await Promise.all(f.work);
+  const copy = f.workspace.copy(
+    f.conversation.id,
+    'copy-retry',
+    f.workspace.deletionImpact(f.conversation.id).request
+  );
+  const copied = helperHistory(f.store, copy.id).map((message) => message.text);
+  expect(copied).toHaveLength(106);
+  expect(copied.slice(0, 102)).toEqual(Array.from({ length: 102 }, (_, i) => `이전 ${i}`));
+  expect(copied.slice(102)).toEqual(['고친 요청', '재시도 답변', '둘째 요청', '둘째 답변']);
+});
+
 test('only unnamed new sessions adopt the first request title and preserve explicit or renamed titles', () => {
   const f = fixture(),
     question = `  첫 질문\n${'🌟'.repeat(90)}`;
@@ -2115,6 +2149,105 @@ test('existing helper branch seeds remain readable and usable after source delet
     { role: 'user', text: '초기 질문' },
     { role: 'assistant', text: '초기 답변' },
   ]);
+});
+
+test('helper copies keep the visible transcript and explicit project without copying tasks or usage', async () => {
+  const f = fixture();
+  const saved = f.store.product.content(fixtureBotInput('분류할 봇'));
+  mockSend(() => structuredClone(success));
+  const task = f.runtime.enqueue(f.conversation.id, 'copy-source', '첫 질문', {
+    kind: 'content',
+    source: 'saved',
+    targetId: saved.id,
+    revision: saved.revision,
+    title: saved.title,
+  });
+  await Promise.all(f.work);
+  expect(f.workspace.task(task.id).snapshot.editor).toBeUndefined();
+  expect(
+    f.workspace.list({ kind: 'all' }).find((row) => row.id === f.conversation.id)?.projectId
+  ).toBeNull();
+  const project = f.workspace.createGroup('내 프로젝트', 'create-project');
+  f.workspace.moveGroup(
+    f.conversation.id,
+    f.workspace.conversation(f.conversation.id).revision,
+    project.id
+  );
+  const source = f.workspace.conversation(f.conversation.id);
+  const edited = f.workspace.editMessage(
+    source.id,
+    f.workspace.messages(source.id)[0].id,
+    source.revision,
+    '고친 질문'
+  );
+  const expected = f.workspace.deletionImpact(source.id).request;
+  const copy = f.workspace.copy(source.id, 'copy-key', expected);
+  expect(f.workspace.copy(source.id, 'copy-key', expected).id).toBe(copy.id);
+  expect(() =>
+    f.workspace.copy(source.id, 'copy-key', {
+      ...expected,
+      expectedRevision: edited.conversation.revision + 1,
+    })
+  ).toThrow();
+  expect(f.workspace.messages(copy.id).map((m) => m.text)).toEqual(['고친 질문', '완료했어요.']);
+  expect(f.workspace.taskSummaries(copy.id)).toEqual([]);
+  expect(f.workspace.list({ kind: 'all' }).find((row) => row.id === copy.id)?.projectId).toBe(
+    project.id
+  );
+  f.workspace.delete(source.id, expected);
+  expect(helperHistory(f.store, copy.id).map((m) => m.text)).toEqual(['고친 질문', '완료했어요.']);
+});
+
+test('project changes are explicit and deleting a project preserves conversations and their execution scope', () => {
+  const f = fixture();
+  const project = f.workspace.createGroup('작품', 'project-key');
+  expect(f.workspace.createGroup('작품', 'project-key')).toEqual(project);
+  expect(() => f.workspace.createGroup('다른 이름', 'project-key')).toThrow();
+  const original = f.workspace.conversation(f.conversation.id);
+  const moved = f.workspace.moveGroup(original.id, original.revision, project.id);
+  expect(moved.scope).toEqual(original.scope);
+  expect(() => f.workspace.moveGroup(original.id, original.revision, null)).toThrow();
+  const renamed = f.workspace.renameGroup(project.id, project.revision, '새 이름');
+  expect(() => f.workspace.deleteGroup(project.id, project.revision)).toThrow();
+  f.workspace.deleteGroup(project.id, renamed.revision);
+  expect(f.workspace.conversation(original.id).scope).toEqual(original.scope);
+  expect(
+    f.workspace.list({ kind: 'all' }).find((item) => item.id === original.id)?.projectId
+  ).toBeNull();
+  expect(f.workspace.conversation(original.id).revision).toBe(moved.revision + 1);
+});
+
+test('project routes validate and persist explicit conversation membership', async () => {
+  const f = fixture();
+  const app = Fastify();
+  helperRoutes(app, f.runtime);
+  try {
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/helper/projects',
+      payload: { title: '이야기', requestKey: 'project-route' },
+    });
+    expect(created.statusCode).toBe(200);
+    const project = created.json();
+    const moved = await app.inject({
+      method: 'PATCH',
+      url: `/api/helper/conversations/${f.conversation.id}/project`,
+      payload: { projectId: project.id, expectedRevision: f.conversation.revision },
+    });
+    expect(moved.statusCode).toBe(200);
+    const list = await app.inject({ method: 'GET', url: '/api/helper/conversations?kind=all' });
+    expect(list.json()[0].projectId).toBe(project.id);
+    const deleted = await app.inject({
+      method: 'DELETE',
+      url: `/api/helper/projects/${project.id}`,
+      payload: { expectedRevision: project.revision },
+    });
+    expect(deleted.statusCode).toBe(200);
+    expect(f.workspace.conversation(f.conversation.id).scope).toEqual(f.conversation.scope);
+    expect(f.workspace.list({ kind: 'all' })[0].projectId).toBeNull();
+  } finally {
+    await app.close();
+  }
 });
 
 test('helper routes reject retired branching and limit editing without changing settings', async () => {

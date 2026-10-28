@@ -15,6 +15,29 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
     return { ...view, modelTitle: snapshot.model.title };
   };
   const publicArtifact = (artifact: ReturnType<typeof store.artifact>) => artifact;
+  app.get('/api/helper/projects', () => store.groups());
+  app.post('/api/helper/projects', (request) => {
+    const body = record(request.body);
+    fields(body, ['title', 'requestKey']);
+    return store.createGroup(
+      text(body.title, 'group title', 200).trim(),
+      text(body.requestKey, 'request key', 100)
+    );
+  });
+  app.patch<{ Params: { id: string } }>('/api/helper/projects/:id', (request) => {
+    const body = record(request.body);
+    fields(body, ['title', 'expectedRevision']);
+    return store.renameGroup(
+      request.params.id,
+      number(body.expectedRevision, 'group revision'),
+      text(body.title, 'group title', 200).trim()
+    );
+  });
+  app.delete<{ Params: { id: string } }>('/api/helper/projects/:id', (request) => {
+    const body = record(request.body);
+    fields(body, ['expectedRevision']);
+    return store.deleteGroup(request.params.id, number(body.expectedRevision, 'group revision'));
+  });
   app.get<{ Querystring: { kind?: string; chatId?: string } }>(
     '/api/helper/conversations',
     (request) => {
@@ -62,6 +85,28 @@ export function helperRoutes(app: FastifyInstance, runtime: HelperRuntime) {
       `request:${text(body.requestKey, 'request key', 100)}`,
       body.title === undefined ? undefined : text(body.title, 'conversation title', 200)
     );
+  });
+  app.patch<{ Params: { id: string } }>('/api/helper/conversations/:id/project', (request) => {
+    const body = record(request.body);
+    fields(body, ['projectId', 'expectedRevision']);
+    return store.moveGroup(
+      request.params.id,
+      number(body.expectedRevision, 'conversation revision'),
+      body.projectId === null ? null : text(body.projectId, 'project ID', 100)
+    );
+  });
+  app.post<{ Params: { id: string } }>('/api/helper/conversations/:id/copy', (request) => {
+    const body = record(request.body);
+    fields(body, ['requestKey', 'expectedRevision', 'expectedEventSequence']);
+    return store.copy(request.params.id, text(body.requestKey, 'request key', 100), {
+      expectedRevision: number(body.expectedRevision, 'conversation revision'),
+      expectedEventSequence: number(
+        body.expectedEventSequence,
+        'event sequence',
+        0,
+        Number.MAX_SAFE_INTEGER
+      ),
+    });
   });
   app.get<{ Params: { id: string } }>('/api/helper/conversations/:id', (request) =>
     store.conversation(request.params.id)

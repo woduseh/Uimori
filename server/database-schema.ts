@@ -24,6 +24,13 @@ function initHelperSeeds(db: DatabaseSync) {
     text TEXT,deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1))
   );
   CREATE INDEX IF NOT EXISTS helper_message_changes_conversation ON helper_message_changes(conversation_id);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS helper_conversation_groups (
+    id TEXT PRIMARY KEY,title TEXT NOT NULL,revision INTEGER NOT NULL,creation_key TEXT NOT NULL UNIQUE,creation_title TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS helper_conversation_memberships (
+    conversation_id TEXT PRIMARY KEY REFERENCES helper_conversations(id) ON DELETE CASCADE,
+    group_id TEXT NOT NULL REFERENCES helper_conversation_groups(id) ON DELETE CASCADE
+  );`);
 }
 
 export class DatabaseSchemaError extends Error {

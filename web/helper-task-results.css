@@ -75,23 +75,21 @@ button.helper-result-target:hover {
 }
 .helper-result-usage summary {
   cursor: pointer;
-  width: fit-content;
+  overflow-wrap: anywhere;
+}
+.helper-result-usage summary small {
+  margin-inline-start: 4px;
 }
 .helper-result-usage dl {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 6px 12px;
-  margin-block: 8px;
+  margin: 10px 14px 14px;
 }
 .helper-result-usage dd {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  justify-content: flex-end;
   gap: 4px 8px;
   min-width: 0;
   margin: 0;
-  text-align: end;
   color: var(--text);
 }
 .helper-result-usage dd small {

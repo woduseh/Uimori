@@ -137,7 +137,11 @@ test('HRESULT01 ordinary answers show usage without a permanent empty-change mes
   const answer = page.locator(`.helper-message.assistant[data-task-id="${task.id}"]`);
   await expect(answer).toContainText('요청 내용을 확인했어요.');
   const results = answer.getByTestId('helper-task-results');
-  await expect(results.locator('summary')).toHaveText('사용량');
+  const summary = results.locator('summary');
+  await expect(summary).toContainText('사용량');
+  await expect(summary).toContainText('누적 입력 토큰 120');
+  await expect(summary).toContainText('누적 출력 토큰 12');
+  await expect(summary).toContainText('도구 실행 0');
   await expect(results.locator('.helper-result-note')).toHaveCount(0);
   await expect(results.locator('.helper-result-list > li')).toHaveCount(0);
   await results.locator('summary').click();

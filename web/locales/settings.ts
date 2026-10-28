@@ -1893,10 +1893,10 @@ export const messages = {
     zh: '桌面面板',
   },
   'settings.utilityPanelWidth': {
-    ko: '도우미와 창작 옵션 폭',
-    en: 'Helper and writing options width',
-    ja: 'アシスタントと創作オプションの幅',
-    zh: '助手与创作选项宽度',
+    ko: '우측 패널 폭',
+    en: 'Right panel width',
+    ja: '右パネルの幅',
+    zh: '右侧面板宽度',
   },
   'settings.outerBackground': {
     ko: '본문 바깥 배경',

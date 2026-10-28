@@ -6,6 +6,7 @@ import type {
   HelperConversation,
   HelperConversationDeletion,
   HelperConversationSummary,
+  HelperProject,
   HelperEvent,
   HelperMessage,
   HelperMessageMutation,
@@ -140,6 +141,160 @@ export class HelperWorkspace {
       return this.conversation(id);
     });
   }
+  groups(): HelperProject[] {
+    return this.store.db
+      .prepare('SELECT id,title,revision FROM helper_conversation_groups ORDER BY rowid')
+      .all() as HelperProject[];
+  }
+  private group(id: string): HelperProject {
+    const row = this.store.db
+      .prepare('SELECT id,title,revision FROM helper_conversation_groups WHERE id=?')
+      .get(id) as HelperProject | undefined;
+    if (!row) throw new HttpError(404, '도우미 프로젝트를 찾을 수 없어요.');
+    return row;
+  }
+  createGroup(title: string, key: string): HelperProject {
+    return this.store.transaction(() => {
+      const previous = this.store.db
+        .prepare('SELECT id,creation_title FROM helper_conversation_groups WHERE creation_key=?')
+        .get(key);
+      if (previous) {
+        if (previous.creation_title !== title)
+          throw new HttpError(409, '프로젝트 생성 요청 키가 다른 요청에 사용됐어요.');
+        return this.group(String(previous.id));
+      }
+      const id = randomUUID();
+      this.store.db
+        .prepare('INSERT INTO helper_conversation_groups VALUES(?,?,1,?,?)')
+        .run(id, title, key, title);
+      return this.group(id);
+    });
+  }
+  renameGroup(id: string, revision: number, title: string): HelperProject {
+    this.group(id);
+    const result = this.store.db
+      .prepare(
+        'UPDATE helper_conversation_groups SET title=?,revision=revision+1 WHERE id=? AND revision=?'
+      )
+      .run(title, id, revision);
+    if (!result.changes) throw new HttpError(409, '도우미 프로젝트가 다른 곳에서 변경됐어요.');
+    return this.group(id);
+  }
+  deleteGroup(id: string, revision: number) {
+    return this.store.transaction(() => {
+      const group = this.group(id);
+      if (group.revision !== revision)
+        throw new HttpError(409, '도우미 프로젝트가 다른 곳에서 변경됐어요.');
+      const members = this.store.db
+        .prepare('SELECT conversation_id FROM helper_conversation_memberships WHERE group_id=?')
+        .all(id);
+      this.store.db.prepare('DELETE FROM helper_conversation_groups WHERE id=?').run(id);
+      for (const member of members) this.groupChanged(String(member.conversation_id));
+      return { deleted: true as const };
+    });
+  }
+  private groupChanged(id: string) {
+    this.store.db
+      .prepare('UPDATE helper_conversations SET revision=revision+1,updated_at=? WHERE id=?')
+      .run(now(), id);
+    this.event(id, null, 'conversation.updated');
+  }
+  moveGroup(id: string, revision: number, groupId: string | null): HelperConversation {
+    return this.store.transaction(() => {
+      const conversation = this.conversation(id);
+      if (conversation.revision !== revision)
+        throw new HttpError(409, '도우미 대화가 다른 곳에서 변경됐어요.');
+      if (groupId !== null) this.group(groupId);
+      const existing = this.store.db
+        .prepare('SELECT group_id FROM helper_conversation_memberships WHERE conversation_id=?')
+        .get(id);
+      if ((existing?.group_id ?? null) === groupId) return conversation;
+      if (groupId === null)
+        this.store.db
+          .prepare('DELETE FROM helper_conversation_memberships WHERE conversation_id=?')
+          .run(id);
+      else
+        this.store.db
+          .prepare(
+            'INSERT INTO helper_conversation_memberships VALUES(?,?) ON CONFLICT(conversation_id) DO UPDATE SET group_id=excluded.group_id'
+          )
+          .run(id, groupId);
+      this.groupChanged(id);
+      return this.conversation(id);
+    });
+  }
+  copy(id: string, requestKey: string, expected: HelperConversationDeletion['request']) {
+    return this.store.transaction(() => {
+      const source = this.conversation(id);
+      const scopeKey = json(source.scope);
+      const creationKey = `copy:${id}:${requestKey}`;
+      const hash = createHash('sha256').update(json({ id, expected })).digest('hex');
+      const old = this.store.db
+        .prepare(
+          'SELECT id,creation_hash FROM helper_conversations WHERE scope_key=? AND creation_key=?'
+        )
+        .get(scopeKey, creationKey);
+      if (old) {
+        if (old.creation_hash !== hash)
+          throw new HttpError(409, '대화 복사 요청 키가 다른 요청에 사용됐어요.');
+        return this.conversation(String(old.id));
+      }
+      const impact = this.deletionImpact(id);
+      if (
+        impact.request.expectedRevision !== expected.expectedRevision ||
+        impact.request.expectedEventSequence !== expected.expectedEventSequence
+      )
+        throw new HttpError(
+          409,
+          '도우미 대화가 변경됐어요. 최신 내용을 확인한 뒤 다시 복사해 주세요.'
+        );
+      if (!impact.canDelete) throw new HttpError(409, '진행 중인 작업이 끝난 뒤 복사해 주세요.');
+      const pages: HelperMessage[][] = [];
+      let before: string | undefined;
+      do {
+        const page = this.messages(id, before);
+        pages.unshift(page);
+        before = page.length === 100 ? page[0].id : undefined;
+      } while (before);
+      const newId = randomUUID(),
+        time = now();
+      this.store.db
+        .prepare(`INSERT INTO helper_conversations(id,scope_key,creation_key,creation_hash,chat_id,scope,title,auto_title,revision,persona,created_at,updated_at,limits)
+        VALUES(?,?,?,?,?,?,?,0,1,?,?,?,?)`)
+        .run(
+          newId,
+          scopeKey,
+          creationKey,
+          hash,
+          source.scope.kind === 'chat' ? source.scope.chatId : null,
+          scopeKey,
+          source.title,
+          source.persona,
+          time,
+          time,
+          json(source.limits)
+        );
+      this.store.db
+        .prepare(
+          'INSERT INTO helper_conversation_memberships SELECT ?,group_id FROM helper_conversation_memberships WHERE conversation_id=?'
+        )
+        .run(newId, id);
+      const add = this.store.db.prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)');
+      const visible = pages
+        .flat()
+        .filter((message) => !message.latestTaskId || message.latestTaskId === message.taskId)
+        .sort((a, b) =>
+          a.requestOrder === undefined || b.requestOrder === undefined
+            ? 0
+            : a.requestOrder - b.requestOrder ||
+              (a.role === b.role ? 0 : a.role === 'user' ? -1 : 1)
+        );
+      visible.forEach((message, ordinal) => {
+        add.run(randomUUID(), newId, ordinal, message.role, message.text, message.createdAt);
+      });
+      return this.conversation(newId);
+    });
+  }
   list(
     scope: { kind: 'chat'; chatId: string } | { kind: 'library' | 'all' }
   ): HelperConversationSummary[] {
@@ -148,18 +303,20 @@ export class HelperWorkspace {
     }
     const rows = this.store.db
       .prepare(
-        `SELECT c.*,chat.title AS chat_title,
+        `SELECT c.*,chat.title AS chat_title, member.group_id,
           (SELECT json_object('running',COALESCE(SUM(status='running'),0),
             'queued',COALESCE(SUM(status='queued'),0)) FROM helper_tasks WHERE conversation_id=c.id) AS activity,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id) AS latest_seq,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision
         FROM helper_conversations c LEFT JOIN chats chat ON chat.id=c.chat_id
+        LEFT JOIN helper_conversation_memberships member ON member.conversation_id=c.id
         WHERE ${scope.kind === 'all' ? '1' : scope.kind === 'library' ? 'c.chat_id IS NULL' : 'c.chat_id=?'}
         ORDER BY c.updated_at DESC,c.rowid DESC`
       )
       .all(...(scope.kind === 'chat' ? [scope.chatId] : []));
     return rows.map((row) => ({
       ...conversationData(row),
+      projectId: row.group_id === null ? null : String(row.group_id),
       ...(scope.kind === 'all' && typeof row.chat_title === 'string'
         ? { chatTitle: row.chat_title }
         : {}),
@@ -642,7 +799,7 @@ export class HelperWorkspace {
         time = now();
       const titled = this.store.db
         .prepare(
-          'UPDATE helper_conversations SET title=?,auto_title=0,revision=revision+1,updated_at=? WHERE id=? AND auto_title=1 AND revision=1 AND NOT EXISTS (SELECT 1 FROM helper_tasks WHERE conversation_id=?)'
+          'UPDATE helper_conversations SET title=?,auto_title=0,revision=revision+1,updated_at=? WHERE id=? AND auto_title=1 AND NOT EXISTS (SELECT 1 FROM helper_tasks WHERE conversation_id=?)'
         )
         .run(
           Array.from(request.trim().replace(/\s+/gu, ' ')).slice(0, 80).join(''),

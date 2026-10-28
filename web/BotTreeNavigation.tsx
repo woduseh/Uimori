@@ -110,6 +110,8 @@ export function BotNavigation(
     helperOpen?: boolean;
     helperExpanded?: boolean;
     onToggleHelper?: () => void;
+    onChatWorkspace?: () => void;
+    helperNavigationRef?: (node: HTMLDivElement | null) => void;
   }
 ) {
   useI18n();
@@ -121,7 +123,6 @@ export function BotNavigation(
     onLibrary,
     onSettings,
     onTasks,
-    onOpenHelperTask,
     onError,
     onLibraryChanged,
     onSelect,
@@ -411,28 +412,57 @@ export function BotNavigation(
   }
   const onLibraryTab = props.libraryTab;
   const inLibrary = destination === 'library' && !props.helperExpanded;
+  const inChat = destination === 'story' && !props.helperExpanded;
+  const helperRunning = activityFeed.feed.helpers?.some(
+    (task) => task.status === 'running' || task.status === 'queued'
+  );
+  const helperIcon = (
+    <span className="workspace-helper-icon">
+      <Sparkles size={20} aria-hidden="true" />
+      {helperRunning && <span className="workspace-running-dot" />}
+    </span>
+  );
+  const chatDestination = props.collapsed ? (
+    <IconButton
+      label={t('workspace.chat')}
+      icon={MessageCircle}
+      aria-current={inChat ? 'page' : undefined}
+      className={inChat ? 'selected' : ''}
+      onClick={() => {
+        setMode('bots');
+        props.onChatWorkspace?.();
+      }}
+    />
+  ) : (
+    <button
+      type="button"
+      className={`nav-button${inChat ? ' selected' : ''}`}
+      aria-current={inChat ? 'page' : undefined}
+      onClick={props.onChatWorkspace}
+    >
+      <MessageCircle size={20} aria-hidden="true" />
+      {t('workspace.chat')}
+    </button>
+  );
   const helperDestination =
     props.onToggleHelper &&
     (props.collapsed ? (
       <IconButton
-        label={t('main.m062')}
+        label={helperRunning ? `${t('main.m062')} · ${t('helpers.m113')}` : t('main.m062')}
         icon={Sparkles}
         aria-current={props.helperExpanded ? 'page' : undefined}
-        aria-expanded={props.helperOpen}
-        aria-controls="helper-panel"
-        className={props.helperExpanded ? 'selected' : ''}
+        className={`${props.helperExpanded ? 'selected' : ''}${helperRunning ? ' helper-running' : ''}`}
         onClick={props.onToggleHelper}
       />
     ) : (
       <button
         type="button"
         className={`nav-button${props.helperExpanded ? ' selected' : ''}`}
+        aria-label={helperRunning ? `${t('main.m062')} · ${t('helpers.m113')}` : undefined}
         aria-current={props.helperExpanded ? 'page' : undefined}
-        aria-expanded={props.helperOpen}
-        aria-controls="helper-panel"
         onClick={props.onToggleHelper}
       >
-        <Sparkles size={20} aria-hidden="true" />
+        {helperIcon}
         {t('main.m062')}
       </button>
     ));
@@ -449,6 +479,10 @@ export function BotNavigation(
             onClick={props.onToggleCollapse}
           />
         </div>
+        <nav className="sidebar-rail-workspaces" aria-label={t('transfer.m284')}>
+          {chatDestination}
+          {helperDestination}
+        </nav>
         <NavigationQuickActions compact onSearch={props.onSearch} onLibrary={onLibrary} />
         <nav className="sidebar-rail-destinations" aria-label={t('transfer.m284')}>
           <IconButton
@@ -465,20 +499,12 @@ export function BotNavigation(
             className={inLibrary && onLibraryTab === 'prompts' ? 'selected' : ''}
             onClick={() => onLibrary('prompts')}
           />
-          {helperDestination}
         </nav>
-        <IconButton
-          label={t('transfer.m287')}
-          icon={MessageCircle}
-          onClick={() => {
-            setMode('bots');
-            props.onToggleCollapse?.();
-          }}
-        />
         <IconButton
           label={t('transfer.d024', { v0: unreadChats })}
           icon={Inbox}
           onClick={() => {
+            props.onChatWorkspace?.();
             setMode('activity');
             props.onToggleCollapse?.();
           }}
@@ -516,6 +542,10 @@ export function BotNavigation(
           />
         )}
       </div>
+      <nav className="sidebar-workspaces" aria-label={t('transfer.m284')}>
+        {chatDestination}
+        {helperDestination}
+      </nav>
       {quickActions && (
         <div className="sidebar-quick-actions">
           <NavigationQuickActions onSearch={props.onSearch} onLibrary={onLibrary} />
@@ -540,201 +570,208 @@ export function BotNavigation(
           <PromptIcon size={20} aria-hidden="true" />
           {t('transfer.m286')}
         </button>
-        {helperDestination}
       </nav>
-      <nav className="bot-navigation-modes" aria-label={t('transfer.m291')}>
-        <button
-          type="button"
-          aria-label={t('transfer.m287')}
-          aria-pressed={view.mode === 'bots'}
-          title={t('transfer.m287')}
-          onClick={() => setMode('bots')}
-        >
-          <MessageCircle size={19} />
-        </button>
-        <button
-          type="button"
-          aria-label={t('transfer.d024', { v0: unreadChats })}
-          aria-pressed={view.mode === 'activity'}
-          title={t('transfer.m292')}
-          onClick={() => setMode('activity')}
-        >
-          <Inbox size={19} />
-          {unreadChats > 0 && <span className="activity-mode-count">{unreadChats}</span>}
-        </button>
-      </nav>
-      {view.mode === 'bots' && (
-        <div
-          className={`bot-tree-section-heading ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
-          onDragOver={(event) => overEntry(event, 'unfiled')}
-          onDrop={(event) => void dropEntry(event, null)}
-        >
-          <button
-            className="bot-folder-toggle"
-            aria-label={t('transfer.m005')}
-            aria-expanded={!!view.open.section}
-            onClick={() => toggle('section')}
-          >
-            {t('transfer.m005')}
-            <ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
-          </button>
-          <div className="bot-row-actions">
-            <ActionMenu label={t('transfer.m293')} viewport>
-              <div className="action-menu-group">
-                <label>
-                  {t('transfer.m294')}
-                  <select
-                    aria-label={t('transfer.m294')}
-                    value={view.sort}
-                    onChange={(event) =>
-                      setView((current) => ({
-                        ...current,
-                        sort: event.target.value === 'manual' ? 'manual' : 'recent',
-                      }))
-                    }
-                  >
-                    <option value="recent">{t('transfer.m295')}</option>
-                    <option value="manual">{t('transfer.m296')}</option>
-                  </select>
-                </label>
-              </div>
-              <div className="action-menu-group">
-                <button
-                  onClick={() => {
-                    setTitle('');
-                    setEditing('new');
-                  }}
-                >
-                  <FolderAddIcon size={16} />
-                  {t('transfer.m297')}
-                </button>
-                <button onClick={() => onLibrary('bot')}>
-                  <LibraryIcon size={16} />
-                  {t('transfer.m250')}
-                </button>
-              </div>
-            </ActionMenu>
-          </div>
-        </div>
-      )}
-      <div className="bot-navigation-scroll">
-        {view.mode === 'activity' && (
-          <ActivityNavigation
-            chats={chats}
-            library={library}
-            selected={selected}
-            feed={activityFeed.feed}
-            error={translateMessage(activityFeed.error)}
-            onSelect={onSelect}
-            onCopyChat={props.onCopyChat}
-            copyingChats={props.copyingChats}
-            onChatsChanged={props.onChatsChanged}
-            onError={props.onError}
-            onAcknowledge={(items) => void activityFeed.acknowledge(items)}
-            onInspect={activityFeed.inspect}
-            onOpenHelper={onOpenHelperTask}
-            onRetry={() => void activityFeed.refresh()}
-          />
-        )}
-        {view.mode === 'bots' && view.open.section && (
-          <nav
-            aria-label={t('transfer.m298')}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') clearDrag();
-            }}
-          >
-            {roots.map((entry) =>
-              entry.bot ? (
-                renderBot(entry, roots)
-              ) : (
-                <section
-                  className="bot-tree-folder"
-                  key={entry.key}
-                  data-bot-folder-id={entry.folder!.id}
-                >
-                  <div
-                    className={`bot-tree-folder-heading ${dragKey === entry.key ? 'tree-dragging' : ''} ${dropKey === entry.key ? `tree-drop-target tree-drop-${dropSide}` : ''}`}
-                    draggable={!busy}
-                    onDragStart={(event) => startDrag(event, entry)}
-                    onDragEnd={clearDrag}
-                    onDragOver={(event) => overEntry(event, entry.key)}
-                    onDrop={(event) => void dropEntry(event, entry)}
-                  >
-                    <button
-                      className="bot-folder-toggle"
-                      aria-label={t('transfer.d026', { v0: entry.title })}
-                      aria-expanded={!!view.open[entry.key]}
-                      onClick={() => toggle(entry.key)}
-                    >
-                      <ExpandIcon size={12} className={view.open[entry.key] ? 'expanded' : ''} />
-                      <FolderIcon size={16} />
-                      <span>{entry.title}</span>
-                    </button>
-                    <div className="bot-row-actions">
-                      <ActionMenu label={t('transfer.d027', { v0: entry.title })} viewport>
-                        <div className="action-menu-group">
-                          <button
-                            onClick={() => {
-                              setEditing(entry.folder!);
-                              setTitle(entry.title);
-                            }}
-                          >
-                            <EditIcon size={18} aria-hidden="true" />
-                            {t('transfer.m299')}
-                          </button>
-                        </div>
-                        <div className="action-menu-group">
-                          <button
-                            disabled={busy}
-                            onClick={() =>
-                              void mutate(`/library/folders/${entry.folder!.id}`, {}, 'DELETE')
-                            }
-                          >
-                            {t('transfer.m300')}
-                          </button>
-                        </div>
-                      </ActionMenu>
-                    </div>
-                  </div>
-                  {view.open[entry.key] && (
-                    <div className="bot-tree-folder-contents">
-                      {botEntries(entry.folder!.id).map((botEntry, _index, siblings) =>
-                        renderBot(botEntry, siblings)
-                      )}
-                    </div>
-                  )}
-                </section>
-              )
-            )}
-            {dragKey?.startsWith('bot:') && (
-              <div
-                className={`bot-tree-unfiled-drop ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
-                onDragOver={(event) => overEntry(event, 'unfiled')}
-                onDrop={(event) => void dropEntry(event, null)}
-              >
-                {t('transfer.m301')}
-              </div>
-            )}
-            {!bots.length &&
-              (library ? (
-                <p className="bot-navigation-empty">{t('transfer.m302')}</p>
-              ) : (
-                <LoadingState
-                  presentation="inline"
-                  loading={!props.libraryError}
-                  error={props.libraryError ? translateMessage(props.libraryError) : undefined}
-                  label={t('transfer.m303')}
-                  onRetry={() => void onLibraryChanged().catch(() => {})}
-                />
-              ))}
+      {props.helperExpanded ? (
+        <div ref={props.helperNavigationRef} className="helper-navigation-host" />
+      ) : (
+        <>
+          <nav className="bot-navigation-modes" aria-label={t('transfer.m291')}>
+            <button
+              type="button"
+              aria-label={t('transfer.m287')}
+              aria-pressed={view.mode === 'bots'}
+              title={t('transfer.m287')}
+              onClick={() => setMode('bots')}
+            >
+              <MessageCircle size={19} />
+            </button>
+            <button
+              type="button"
+              aria-label={t('transfer.d024', { v0: unreadChats })}
+              aria-pressed={view.mode === 'activity'}
+              title={t('transfer.m292')}
+              onClick={() => setMode('activity')}
+            >
+              <Inbox size={19} />
+              {unreadChats > 0 && <span className="activity-mode-count">{unreadChats}</span>}
+            </button>
           </nav>
-        )}
-        {view.mode === 'bots' && error && (
-          <p className="error" role="alert">
-            {translateMessage(error)}
-          </p>
-        )}
-      </div>
+          {view.mode === 'bots' && (
+            <div
+              className={`bot-tree-section-heading ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
+              onDragOver={(event) => overEntry(event, 'unfiled')}
+              onDrop={(event) => void dropEntry(event, null)}
+            >
+              <button
+                className="bot-folder-toggle"
+                aria-label={t('transfer.m005')}
+                aria-expanded={!!view.open.section}
+                onClick={() => toggle('section')}
+              >
+                {t('transfer.m005')}
+                <ExpandIcon size={14} className={view.open.section ? 'expanded' : ''} />
+              </button>
+              <div className="bot-row-actions">
+                <ActionMenu label={t('transfer.m293')} viewport>
+                  <div className="action-menu-group">
+                    <label>
+                      {t('transfer.m294')}
+                      <select
+                        aria-label={t('transfer.m294')}
+                        value={view.sort}
+                        onChange={(event) =>
+                          setView((current) => ({
+                            ...current,
+                            sort: event.target.value === 'manual' ? 'manual' : 'recent',
+                          }))
+                        }
+                      >
+                        <option value="recent">{t('transfer.m295')}</option>
+                        <option value="manual">{t('transfer.m296')}</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="action-menu-group">
+                    <button
+                      onClick={() => {
+                        setTitle('');
+                        setEditing('new');
+                      }}
+                    >
+                      <FolderAddIcon size={16} />
+                      {t('transfer.m297')}
+                    </button>
+                    <button onClick={() => onLibrary('bot')}>
+                      <LibraryIcon size={16} />
+                      {t('transfer.m250')}
+                    </button>
+                  </div>
+                </ActionMenu>
+              </div>
+            </div>
+          )}
+          <div className="bot-navigation-scroll">
+            {view.mode === 'activity' && (
+              <ActivityNavigation
+                chats={chats}
+                library={library}
+                selected={selected}
+                feed={activityFeed.feed}
+                error={translateMessage(activityFeed.error)}
+                onSelect={onSelect}
+                onCopyChat={props.onCopyChat}
+                copyingChats={props.copyingChats}
+                onChatsChanged={props.onChatsChanged}
+                onError={props.onError}
+                onAcknowledge={(items) => void activityFeed.acknowledge(items)}
+                onInspect={activityFeed.inspect}
+                onRetry={() => void activityFeed.refresh()}
+              />
+            )}
+            {view.mode === 'bots' && view.open.section && (
+              <nav
+                aria-label={t('transfer.m298')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') clearDrag();
+                }}
+              >
+                {roots.map((entry) =>
+                  entry.bot ? (
+                    renderBot(entry, roots)
+                  ) : (
+                    <section
+                      className="bot-tree-folder"
+                      key={entry.key}
+                      data-bot-folder-id={entry.folder!.id}
+                    >
+                      <div
+                        className={`bot-tree-folder-heading ${dragKey === entry.key ? 'tree-dragging' : ''} ${dropKey === entry.key ? `tree-drop-target tree-drop-${dropSide}` : ''}`}
+                        draggable={!busy}
+                        onDragStart={(event) => startDrag(event, entry)}
+                        onDragEnd={clearDrag}
+                        onDragOver={(event) => overEntry(event, entry.key)}
+                        onDrop={(event) => void dropEntry(event, entry)}
+                      >
+                        <button
+                          className="bot-folder-toggle"
+                          aria-label={t('transfer.d026', { v0: entry.title })}
+                          aria-expanded={!!view.open[entry.key]}
+                          onClick={() => toggle(entry.key)}
+                        >
+                          <ExpandIcon
+                            size={12}
+                            className={view.open[entry.key] ? 'expanded' : ''}
+                          />
+                          <FolderIcon size={16} />
+                          <span>{entry.title}</span>
+                        </button>
+                        <div className="bot-row-actions">
+                          <ActionMenu label={t('transfer.d027', { v0: entry.title })} viewport>
+                            <div className="action-menu-group">
+                              <button
+                                onClick={() => {
+                                  setEditing(entry.folder!);
+                                  setTitle(entry.title);
+                                }}
+                              >
+                                <EditIcon size={18} aria-hidden="true" />
+                                {t('transfer.m299')}
+                              </button>
+                            </div>
+                            <div className="action-menu-group">
+                              <button
+                                disabled={busy}
+                                onClick={() =>
+                                  void mutate(`/library/folders/${entry.folder!.id}`, {}, 'DELETE')
+                                }
+                              >
+                                {t('transfer.m300')}
+                              </button>
+                            </div>
+                          </ActionMenu>
+                        </div>
+                      </div>
+                      {view.open[entry.key] && (
+                        <div className="bot-tree-folder-contents">
+                          {botEntries(entry.folder!.id).map((botEntry, _index, siblings) =>
+                            renderBot(botEntry, siblings)
+                          )}
+                        </div>
+                      )}
+                    </section>
+                  )
+                )}
+                {dragKey?.startsWith('bot:') && (
+                  <div
+                    className={`bot-tree-unfiled-drop ${dropKey === 'unfiled' ? 'tree-drop-target' : ''}`}
+                    onDragOver={(event) => overEntry(event, 'unfiled')}
+                    onDrop={(event) => void dropEntry(event, null)}
+                  >
+                    {t('transfer.m301')}
+                  </div>
+                )}
+                {!bots.length &&
+                  (library ? (
+                    <p className="bot-navigation-empty">{t('transfer.m302')}</p>
+                  ) : (
+                    <LoadingState
+                      presentation="inline"
+                      loading={!props.libraryError}
+                      error={props.libraryError ? translateMessage(props.libraryError) : undefined}
+                      label={t('transfer.m303')}
+                      onRetry={() => void onLibraryChanged().catch(() => {})}
+                    />
+                  ))}
+              </nav>
+            )}
+            {view.mode === 'bots' && error && (
+              <p className="error" role="alert">
+                {translateMessage(error)}
+              </p>
+            )}
+          </div>
+        </>
+      )}
       <Dialog
         open={editing !== null}
         title={editing === 'new' ? t('transfer.m304') : t('transfer.m305')}

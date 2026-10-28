@@ -9,7 +9,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import { useId, useState, type ReactNode } from 'react';
-import type { ActivityFeed, ActivityFeedItem, HelperRecentTask } from '../core/activity-feed.js';
+import type { ActivityFeed, ActivityFeedItem } from '../core/activity-feed.js';
 import type { Chat } from '../core/types.js';
 import type { Library } from '../core/product.js';
 import type { ReaderTarget } from '../core/reader-target.js';
@@ -30,16 +30,14 @@ type Props = {
   onError: (message: string) => void;
   onAcknowledge: (items: ActivityFeedItem[]) => void;
   onInspect: (item: ActivityFeedItem) => void;
-  onOpenHelper?: (task: HelperRecentTask) => void;
   onRetry: () => void;
 };
-type ActivitySectionId = 'unread' | 'running' | 'recent' | 'helpers';
+type ActivitySectionId = 'unread' | 'running' | 'recent';
 const sectionStorageKey = 'uimori:activity-sections:v1';
 const initialExpanded: Record<ActivitySectionId, boolean> = {
   unread: true,
   running: true,
   recent: true,
-  helpers: false,
 };
 function readExpanded(id: ActivitySectionId) {
   try {
@@ -130,14 +128,6 @@ function timeLabel(date: string) {
     return t('helpers.m259', { v0: Math.floor(elapsed / 3600000) });
   return formatDate(new Date(time), { year: 'numeric', month: 'numeric', day: 'numeric' });
 }
-function recentHelperGroups(tasks: HelperRecentTask[]) {
-  const active = tasks.filter((task) => task.status === 'running' || task.status === 'queued');
-  const history = tasks.filter((task) => task.status !== 'running' && task.status !== 'queued');
-  return [
-    ...(active.length ? [{ key: 'running', items: active }] : []),
-    ...groupRecentDates(history, (task) => task.updatedAt),
-  ];
-}
 export function ActivityNavigation({
   chats,
   library,
@@ -151,7 +141,6 @@ export function ActivityNavigation({
   onError,
   onAcknowledge,
   onInspect,
-  onOpenHelper,
   onRetry,
 }: Props) {
   useI18n();
@@ -343,66 +332,6 @@ export function ActivityNavigation({
               </div>
             )
           )
-        }
-      </ActivitySection>
-      <ActivitySection
-        id="helpers"
-        label={t('helpers.m272')}
-        total={feed.helpers?.length ?? 0}
-        empty={t('helpers.m273')}
-      >
-        {(limit) =>
-          recentHelperGroups((feed.helpers ?? []).slice(0, limit)).map((group, index) => (
-            <div className="activity-nav-date-group" key={`${group.key}:${index}`}>
-              <h3>{group.key === 'running' ? t('helpers.m113') : recentDateGroupLabel(group)}</h3>
-              {group.items.map((task) => (
-                <button
-                  key={task.id}
-                  type="button"
-                  className="activity-nav-link"
-                  onClick={() => onOpenHelper?.(task)}
-                  disabled={!onOpenHelper}
-                >
-                  {task.status === 'running' || task.status === 'queued' ? (
-                    <LoaderCircle size={16} aria-hidden="true" />
-                  ) : task.status === 'completed' ? (
-                    <Check size={16} aria-hidden="true" />
-                  ) : (
-                    <AlertCircle size={16} className="activity-nav-warning" aria-hidden="true" />
-                  )}
-                  <span className="activity-nav-copy">
-                    <strong>{task.title || t('helpers.m274')}</strong>
-                    <small className="ui-meta-row">
-                      <span>
-                        {task.chatId
-                          ? (chatById.get(task.chatId)?.title ?? t('helpers.m275'))
-                          : t('helpers.m276')}
-                      </span>
-                      <span>
-                        {task.status === 'running'
-                          ? t('helpers.m113')
-                          : task.status === 'queued'
-                            ? t('helpers.m277')
-                            : task.status === 'completed'
-                              ? t('helpers.m278')
-                              : task.status === 'failed'
-                                ? t('helpers.m279')
-                                : task.status === 'cancelled'
-                                  ? t('helpers.m165')
-                                  : t('helpers.m280')}
-                        {task.committedEffects > 0
-                          ? t('helpers.m281', { v0: formatNumber(task.committedEffects) })
-                          : ''}
-                      </span>
-                      <time dateTime={task.updatedAt} title={formatDate(task.updatedAt)}>
-                        {timeLabel(task.updatedAt)}
-                      </time>
-                    </small>
-                  </span>
-                </button>
-              ))}
-            </div>
-          ))
         }
       </ActivitySection>
       {error && (

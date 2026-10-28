@@ -24,7 +24,9 @@ export type HelperConversationDeletion = {
   canDelete: boolean;
   description: string;
 };
+export type HelperProject = { id: string; title: string; revision: number };
 export type HelperConversationSummary = HelperConversation & {
+  projectId: string | null;
   /** Present for chat conversations in the app-wide history. Scope remains unchanged. */
   chatTitle?: string;
   activity: { running: number; queued: number };
