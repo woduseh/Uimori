@@ -57,40 +57,37 @@ function readView(): View {
 export function NavigationQuickActions({
   onSearch,
   onLibrary,
+  onNewHelper,
+  helperWorkspace = false,
   compact = false,
 }: {
   onSearch: () => void;
   onLibrary: (tab: 'bot') => void;
+  onNewHelper?: () => void;
+  helperWorkspace?: boolean;
   /** The collapsed rail shows the same two actions as icons. */
   compact?: boolean;
 }) {
   useI18n();
+  const newLabel = t(helperWorkspace ? 'helpers.m173' : 'transfer.m246');
+  const searchLabel = t(helperWorkspace ? 'helpers.searchSessions' : 'transfer.m276');
+  const onNew = helperWorkspace ? onNewHelper : () => onLibrary('bot');
   return (
     <div className={`navigation-quick-actions${compact ? ' compact' : ''}`}>
       {compact ? (
         <>
-          <IconButton label={t('transfer.m246')} icon={AddIcon} onClick={() => onLibrary('bot')} />
-          <IconButton label={t('transfer.m276')} icon={SearchIcon} onClick={onSearch} />
+          <IconButton label={newLabel} icon={AddIcon} onClick={onNew} />
+          <IconButton label={searchLabel} icon={SearchIcon} onClick={onSearch} />
         </>
       ) : (
         <>
-          <button
-            type="button"
-            className="nav-button"
-            aria-label={t('transfer.m246')}
-            onClick={() => onLibrary('bot')}
-          >
+          <button type="button" className="nav-button" aria-label={newLabel} onClick={onNew}>
             <AddIcon size={20} aria-hidden="true" />
-            <span>{t('transfer.m246')}</span>
+            <span>{newLabel}</span>
           </button>
-          <button
-            type="button"
-            className="nav-button"
-            aria-label={t('transfer.m276')}
-            onClick={onSearch}
-          >
+          <button type="button" className="nav-button" aria-label={searchLabel} onClick={onSearch}>
             <SearchIcon size={20} aria-hidden="true" />
-            <span>{t('transfer.m248')}</span>
+            <span>{helperWorkspace ? searchLabel : t('transfer.m248')}</span>
           </button>
         </>
       )}
@@ -102,6 +99,7 @@ export function BotNavigation(
     onLibraryChanged: () => Promise<void>;
     libraryError?: string;
     onSearch: () => void;
+    onNewHelper?: () => void;
     quickActions?: boolean;
     libraryTab?: 'bot' | 'persona' | 'module' | 'prompts';
     /** Collapsed navigation renders an icon rail instead of the full tree. */
@@ -483,7 +481,13 @@ export function BotNavigation(
           {chatDestination}
           {helperDestination}
         </nav>
-        <NavigationQuickActions compact onSearch={props.onSearch} onLibrary={onLibrary} />
+        <NavigationQuickActions
+          compact
+          onSearch={props.onSearch}
+          onLibrary={onLibrary}
+          helperWorkspace={props.helperExpanded}
+          onNewHelper={props.onNewHelper}
+        />
         <nav className="sidebar-rail-destinations" aria-label={t('transfer.m284')}>
           <IconButton
             label={t('transfer.m285')}
@@ -548,7 +552,12 @@ export function BotNavigation(
       </nav>
       {quickActions && (
         <div className="sidebar-quick-actions">
-          <NavigationQuickActions onSearch={props.onSearch} onLibrary={onLibrary} />
+          <NavigationQuickActions
+            onSearch={props.onSearch}
+            onLibrary={onLibrary}
+            helperWorkspace={props.helperExpanded}
+            onNewHelper={props.onNewHelper}
+          />
         </div>
       )}
       <nav className="sidebar-destinations" aria-label={t('transfer.m284')}>

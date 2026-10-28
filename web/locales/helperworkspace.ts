@@ -1,4 +1,22 @@
 export const messages = {
+  'helperResults.tokenSummary': {
+    ko: '입력 {input} · 출력 {output} 토큰',
+    en: 'Input {input} · Output {output} tokens',
+    ja: '入力 {input} · 出力 {output} トークン',
+    zh: '输入 {input} · 输出 {output} token',
+  },
+  'helperResults.toolSummary': {
+    ko: '도구 {count}회',
+    en: 'Tools {count}',
+    ja: 'ツール {count}回',
+    zh: '工具 {count}次',
+  },
+  'helperResults.partialUsage': {
+    ko: '일부 미확인',
+    en: 'Partially reported',
+    ja: '一部未確認',
+    zh: '部分未确认',
+  },
   'helperResults.inputBudgetMeter': {
     ko: '입력 예산 대비 마지막 전송 입력 추정치',
     en: 'Last estimated sent input relative to the input budget',

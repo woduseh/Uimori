@@ -50,6 +50,8 @@ button.helper-result-target:hover {
   color: var(--muted);
 }
 .helper-result-saved {
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
   margin-inline-start: auto;
 }

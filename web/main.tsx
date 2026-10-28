@@ -267,6 +267,8 @@ function App() {
   }, []);
   const helperReturnToSidecar = useRef(false);
   const [helperNavigationHost, setHelperNavigationHost] = useState<HTMLDivElement | null>(null);
+  const helperNavigationActions = useRef<{ create: () => void } | null>(null);
+  const [helperSearchRequest, setHelperSearchRequest] = useState(0);
   const [contentToOpen, setContentToOpen] = useState<string | null>(null);
   const helperResultNavigation = useRef(0);
   const [helperNavigation, setHelperNavigation] = useState<{
@@ -347,6 +349,16 @@ function App() {
   const openChatSearch = () => {
     searchOpener.current = document.activeElement as HTMLElement | null;
     setSearchingChats(true);
+  };
+  const openWorkspaceSearch = () => {
+    if (!helperWorkspaceOpen) return openChatSearch();
+    if (viewportWidth < 768) setPanel('navigation');
+    else setSidebarCollapsed(false);
+    setHelperSearchRequest((value) => value + 1);
+  };
+  const createHelperSession = () => {
+    helperNavigationActions.current?.create();
+    if (panel === 'navigation') setPanel('');
   };
   // biome-ignore lint/correctness/useExhaustiveDependencies: A new chat starts with the list closed and nothing seen yet.
   useEffect(() => {
@@ -821,7 +833,8 @@ function App() {
     <BotNavigation
       libraryError={s.libraryError}
       quickActions={quickActions}
-      onSearch={openChatSearch}
+      onSearch={openWorkspaceSearch}
+      onNewHelper={createHelperSession}
       collapsed={collapsed}
       onToggleCollapse={toggleSidebar}
       library={s.library}
@@ -2331,6 +2344,8 @@ function App() {
         onBusyChange={setOptionsBusy}
       />
       <HelperPanel
+        navigationActions={helperNavigationActions}
+        searchRequest={helperSearchRequest}
         onSelectConversation={() => {
           if (panel === 'navigation') setPanel('');
         }}
@@ -2560,7 +2575,12 @@ function App() {
         className="navigation-dialog"
         headerLeading={
           panel === 'navigation' ? (
-            <NavigationQuickActions onSearch={openChatSearch} onLibrary={showLibrary} />
+            <NavigationQuickActions
+              onSearch={openWorkspaceSearch}
+              onLibrary={showLibrary}
+              helperWorkspace={helperWorkspaceOpen}
+              onNewHelper={createHelperSession}
+            />
           ) : undefined
         }
       >

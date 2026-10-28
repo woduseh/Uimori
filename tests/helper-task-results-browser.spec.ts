@@ -139,9 +139,9 @@ test('HRESULT01 ordinary answers show usage without a permanent empty-change mes
   const results = answer.getByTestId('helper-task-results');
   const summary = results.locator('summary');
   await expect(summary).toContainText('사용량');
-  await expect(summary).toContainText('누적 입력 토큰 120');
-  await expect(summary).toContainText('누적 출력 토큰 12');
-  await expect(summary).toContainText('도구 실행 0');
+  await expect(summary).toContainText('입력 120 · 출력 12 토큰');
+  await expect(summary).not.toContainText('도구');
+  await expect(summary).not.toContainText('일부 미확인');
   await expect(results.locator('.helper-result-note')).toHaveCount(0);
   await expect(results.locator('.helper-result-list > li')).toHaveCount(0);
   await results.locator('summary').click();
@@ -261,6 +261,9 @@ for (const width of DEFAULT_WIDTHS) {
     ).toHaveCount(0);
     await expect(results.getByText('이전 도우미', { exact: true })).toBeVisible();
     await expect(results.getByText('새 도우미', { exact: true })).toBeVisible();
+    await expect(results.locator('summary')).toContainText('입력 1,000 · 출력 90 토큰');
+    await expect(results.locator('summary')).toContainText('도구 7회');
+    await expect(results.locator('summary')).toContainText('일부 미확인');
     await results.locator('summary').click();
     await expect(usageValue(results, '모델 실행 요청')).toHaveText('2');
     await expect(usageValue(results, '도구 실행')).toHaveText('7');
