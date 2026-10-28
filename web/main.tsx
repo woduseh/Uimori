@@ -266,7 +266,7 @@ function App() {
     );
   }, []);
   const helperReturnToSidecar = useRef(false);
-  const [helperSidebarExpanded, setHelperSidebarExpanded] = useState(false);
+  const [helperNavigationHost, setHelperNavigationHost] = useState<HTMLDivElement | null>(null);
   const [contentToOpen, setContentToOpen] = useState<string | null>(null);
   const helperResultNavigation = useRef(0);
   const [helperNavigation, setHelperNavigation] = useState<{
@@ -419,8 +419,11 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     readPresentationChoice('uimori:sidebar-width', SIDEBAR_WIDTHS, SIDEBAR_WIDTH)
   );
+  const [helperSidebarWidth, setHelperSidebarWidth] = useState(() =>
+    readPresentationChoice('uimori:helper-sidebar-width', SIDEBAR_WIDTHS, 320)
+  );
   const desktopSidebarWidth = Math.min(
-    sidebarWidth,
+    helperWorkspaceOpen ? helperSidebarWidth : sidebarWidth,
     Math.max(SIDEBAR_WIDTH, viewportWidth - MIN_CENTER_WIDTH)
   );
   useEffect(() => {
@@ -439,9 +442,7 @@ function App() {
     viewportWidth >= dockBesideRail &&
     viewportWidth < dockBesideSidebar &&
     !panelSidebarExpanded;
-  const sidebarHidden = helperWorkspaceOpen
-    ? !helperSidebarExpanded
-    : sidebarCollapsed || autoCollapseSidebar;
+  const sidebarHidden = sidebarCollapsed || (!helperWorkspaceOpen && autoCollapseSidebar);
   const panelModal =
     viewportWidth < dockBesideRail || (!sidebarHidden && viewportWidth < dockBesideSidebar);
   useEffect(() => {
@@ -642,6 +643,9 @@ function App() {
     writePresentationSetting('uimori:sidebar-width', String(sidebarWidth));
   }, [sidebarWidth]);
   useEffect(() => {
+    writePresentationSetting('uimori:helper-sidebar-width', String(helperSidebarWidth));
+  }, [helperSidebarWidth]);
+  useEffect(() => {
     document.documentElement.style.setProperty('--panel-w', `${panelWidth}px`);
     writePresentationSetting('uimori:panel-width', String(panelWidth));
   }, [panelWidth]);
@@ -806,8 +810,8 @@ function App() {
   }
   // The drawer shows the quick actions in its header row instead of the brand row.
   const toggleSidebar = () => {
-    if (helperWorkspaceOpen) setHelperSidebarExpanded((value) => !value);
-    else if (autoCollapseSidebar && !sidebarCollapsed) setPanelSidebarExpanded(true);
+    if (!helperWorkspaceOpen && autoCollapseSidebar && !sidebarCollapsed)
+      setPanelSidebarExpanded(true);
     else {
       setSidebarCollapsed(!sidebarCollapsed);
       setPanelSidebarExpanded(false);
@@ -846,6 +850,21 @@ function App() {
       onOpenHelperTask={openRecentHelper}
       helperOpen={helperOpen}
       helperExpanded={helperWorkspaceOpen}
+      helperNavigationRef={
+        (quickActions ? viewportWidth >= 768 && panel !== 'navigation' : panel === 'navigation')
+          ? setHelperNavigationHost
+          : undefined
+      }
+      onChatWorkspace={() => {
+        const go = () => {
+          setHelperExpanded(false);
+          setWorkspacePanel(null);
+          setPanel('');
+          if (s.destination !== 'story') s.select(s.selected);
+        };
+        if (s.destination === 'library' && libraryDirty) setPendingNavigation(() => go);
+        else go();
+      }}
       onToggleHelper={() => {
         if (panel === 'navigation') setPanel('');
         helperReturnToSidecar.current = false;
@@ -2312,6 +2331,14 @@ function App() {
         onBusyChange={setOptionsBusy}
       />
       <HelperPanel
+        onSelectConversation={() => {
+          if (panel === 'navigation') setPanel('');
+        }}
+        navigationHost={
+          helperWorkspaceOpen && (panel === 'navigation' || !sidebarHidden)
+            ? helperNavigationHost
+            : null
+        }
         ready={helperWorkspaceOpen || s.destination !== 'story' || !s.selected || !!s.detail}
         expanded={helperWorkspaceOpen}
         returnToSidecar={helperReturnToSidecar.current}
@@ -2757,6 +2784,8 @@ function App() {
           setPanelWidth={setPanelWidth}
           sidebarWidth={sidebarWidth}
           setSidebarWidth={setSidebarWidth}
+          helperSidebarWidth={helperSidebarWidth}
+          setHelperSidebarWidth={setHelperSidebarWidth}
           readingSettings={renderReadingSettings()}
         />
       )}

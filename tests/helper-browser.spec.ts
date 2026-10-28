@@ -534,6 +534,11 @@ async function open(page: Page) {
 }
 
 async function toggleHelperTone(page: Page) {
+  const settings = page.getByRole('dialog', { name: '도우미 설정', exact: true });
+  if (await settings.isVisible()) {
+    await settings.getByRole('button', { name: '도우미 설정 닫기', exact: true }).click();
+    return;
+  }
   const panel = page.locator('#helper-panel');
   await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
@@ -709,6 +714,10 @@ test('HELPMESSAGE local edit does not skip an unseen older message change', asyn
     panel.getByText('도우미 설정이 바뀌었어요. 입력한 내용은 유지했어요.')
   ).toBeVisible();
   await toggleHelperTone(page);
+  await page
+    .getByRole('alertdialog', { name: '도우미 설정', exact: true })
+    .getByRole('button', { name: '변경 버리고 닫기', exact: true })
+    .click();
   const article = panel.locator(`[data-message-id="${latest.id}"]`);
   await article.getByLabel('메시지 메뉴', { exact: true }).click();
   await page.getByRole('button', { name: '응답 수정', exact: true }).click();
@@ -953,7 +962,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   await toggleHelperTone(page);
   for (const width of [1440, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
-    const settings = panel.locator('.helper-settings');
+    const settings = page.getByRole('dialog', { name: '도우미 설정', exact: true });
     await expect(settings.locator('input[type="number"]')).toHaveCount(0);
     expect(
       await settings.evaluate((node) => node.scrollWidth - node.clientWidth)
@@ -973,6 +982,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
       node.scrollTop = 0;
     });
   }
+  await toggleHelperTone(page);
   await panel.getByRole('button', { name: /^현재 도우미 모델/ }).click();
   const picker = page.getByRole('dialog', { name: '도우미 모델 선택', exact: true });
   await picker.getByRole('button', { name: '역할별 모델 설정', exact: true }).click();
@@ -1308,6 +1318,15 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
   await open(page);
   await expect(input).toHaveValue('도우미 입력 초안');
   await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(before);
+  const session = await panel.getByLabel('도우미 세션 선택', { exact: true }).inputValue();
+  await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
+  await expect(panel).toHaveClass(/helper-expanded/u);
+  await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(session);
+  await expect(input).toHaveValue('도우미 입력 초안');
+  await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(before);
+  await panel.getByRole('button', { name: chat.title, exact: true }).click();
+  await expect(panel).not.toHaveClass(/helper-expanded/u);
+  await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(before);
   const url = page.url();
   await page.goBack();
   await expect(panel).toBeHidden();
@@ -1323,25 +1342,33 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
     });
     const readingPosition = await list.evaluate((node) => node.scrollTop);
     await toggleHelperTone(page);
-    const settings = panel.locator('.helper-settings');
+    const settings = page.getByRole('dialog', { name: '도우미 설정', exact: true });
     await expect(settings).toBeVisible();
-    await expect(list).toBeHidden();
-    await expect(input).toBeHidden();
+    await expect(list).toBeAttached();
+    await expect(input).toHaveValue('도우미 입력 초안');
     await expect(
       panel.getByRole('button', { name: '도우미 설정 저장', exact: true })
     ).toBeInViewport();
     const settingsBox = (await settings.boundingBox())!;
-    const panelBox = (await panel.boundingBox())!;
-    expect(settingsBox.height).toBeGreaterThan(panelBox.height / 2);
+    expect(settingsBox.x).toBeGreaterThanOrEqual(0);
+    expect(settingsBox.x + settingsBox.width).toBeLessThanOrEqual(width);
+    expect(settingsBox.y + settingsBox.height).toBeLessThanOrEqual(844);
     await page.screenshot({ path: info.outputPath(`helper-settings-open-${width}.png`) });
-    await panel.getByLabel('도우미 말투', { exact: true }).fill('설정 화면에서 남긴 말투 초안');
+    const tone = settings.getByLabel('도우미 말투', { exact: true });
+    const originalTone = await tone.inputValue();
+    await tone.fill('설정 화면에서 남긴 말투 초안');
     await toggleHelperTone(page);
+    const discard = page.getByRole('alertdialog', { name: '도우미 설정', exact: true });
+    await expect(discard).toContainText('저장하지 않은 말투가 사라져요.');
+    await discard.getByRole('button', { name: '계속 편집', exact: true }).click();
+    await expect(tone).toHaveValue('설정 화면에서 남긴 말투 초안');
+    await toggleHelperTone(page);
+    await discard.getByRole('button', { name: '변경 버리고 닫기', exact: true }).click();
+    await expect(settings).toBeHidden();
     await expect(input).toHaveValue('도우미 입력 초안');
     await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(readingPosition);
     await toggleHelperTone(page);
-    await expect(panel.getByLabel('도우미 말투', { exact: true })).toHaveValue(
-      '설정 화면에서 남긴 말투 초안'
-    );
+    await expect(tone).toHaveValue(originalTone);
     await toggleHelperTone(page);
     const box = await panel.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -1355,6 +1382,46 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
     if (width === DESKTOP_WIDTH)
       await expect(page.getByRole('button', { name: '도우미 열기', exact: true })).toBeVisible();
   }
+});
+
+test('HELPUI17 Back clears owned tone dialogs while retaining each session draft', async ({
+  page,
+  request,
+}) => {
+  const chat = await create(request);
+  await harness(page, 2);
+  await page.goto(`/?chat=${chat.id}`);
+  const panel = await open(page);
+  const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+  const first = await picker.inputValue();
+  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await expect(picker).not.toHaveValue(first);
+  const second = await picker.inputValue();
+  await picker.selectOption(first);
+  await panel.getByLabel('도우미에게 요청', { exact: true }).fill('말투 창을 닫아도 보존할 요청');
+  await toggleHelperTone(page);
+  const settings = page.getByRole('dialog', { name: '도우미 설정', exact: true });
+  const tone = settings.getByLabel('도우미 말투', { exact: true });
+  await tone.fill('첫 세션에서만 입력한 저장하지 않은 말투');
+  await toggleHelperTone(page);
+  const discard = page.getByRole('alertdialog', { name: '도우미 설정', exact: true });
+  await expect(discard).toBeVisible();
+  await page.goBack();
+  await expect(panel).toBeHidden();
+  await expect(settings).toBeHidden();
+  await expect(discard).toBeHidden();
+  await open(page);
+  await picker.selectOption(second);
+  await toggleHelperTone(page);
+  await expect(discard).toBeHidden();
+  await expect(tone).not.toHaveValue('첫 세션에서만 입력한 저장하지 않은 말투');
+  await toggleHelperTone(page);
+  await picker.selectOption(first);
+  await expect(panel.getByLabel('도우미에게 요청', { exact: true })).toHaveValue(
+    '말투 창을 닫아도 보존할 요청'
+  );
+  await toggleHelperTone(page);
+  await expect(tone).toHaveValue('첫 세션에서만 입력한 저장하지 않은 말투');
 });
 
 test('HELPUI14 idle and hidden helper views pause reads and resume cursors, effects and drafts', async ({

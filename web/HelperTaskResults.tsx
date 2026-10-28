@@ -12,6 +12,8 @@ import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { usageUsd } from './usage-display.js';
 import './helper-task-results.css';
+import './scene-usage.css';
+import './run-task-details.css';
 
 type RecordedAmount = { value: number; reported: number; unknown: number };
 const usageFields = [
@@ -233,9 +235,22 @@ function UsageAmount({ amount, cost = false }: { amount: RecordedAmount; cost?: 
 function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
   const totals = helperTaskUsageTotals(usage.attempts);
   return (
-    <details className="helper-result-usage">
-      <summary>{t('helperResults.usage')}</summary>
-      <dl>
+    <details className="execution-record scene-usage helper-result-usage">
+      <summary>
+        <span className="ui-meta-row">
+          <span>{t('helperResults.usage')}</span>
+          <span>
+            {t('helperResults.input')} <UsageAmount amount={totals.inputTokens} />
+          </span>
+          <span>
+            {t('helperResults.output')} <UsageAmount amount={totals.outputTokens} />
+          </span>
+          <span>
+            {t('helperResults.tools')} {formatNumber(usage.toolExecutions)}
+          </span>
+        </span>
+      </summary>
+      <dl className="scene-receipt">
         <dt>{t('helperResults.executions')}</dt>
         <dd>{formatNumber(usage.attempts.length)}</dd>
         <dt>{t('helperResults.tools')}</dt>

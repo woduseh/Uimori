@@ -4,6 +4,8 @@ import { messages as outside } from './outside.js';
 import { messages as reader } from './reader.js';
 import { messages as helpers } from './helpers.js';
 import { messages as helperworkspace } from './helperworkspace.js';
+import { messages as helperNavigation } from './helper-navigation.js';
+import { messages as workspace } from './workspace.js';
 import { messages as providers } from './providers.js';
 import { messages as library } from './library.js';
 import { messages as settings } from './settings.js';
@@ -27,6 +29,8 @@ export const messages: Record<string, { ko: string; en: string; ja: string; zh: 
   ...reader,
   ...helpers,
   ...helperworkspace,
+  ...helperNavigation,
+  ...workspace,
   ...providers,
   ...library,
   ...settings,

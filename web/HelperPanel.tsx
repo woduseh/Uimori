@@ -41,6 +41,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { HelperActivityDetails, useHelperActivity } from './HelperActivity.js';
 import { helperActivitySummary } from './helper-activity.js';
 import { Dialog } from './Dialog.js';
+import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { elapsedLabel } from './ActivityStatus.js';
 import { TurnStatus, type StatusTone } from './TurnStatus.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
@@ -89,6 +90,8 @@ type Props = {
   onToggleExpanded?: () => void;
   returnToSidecar?: boolean;
   navigationLeading?: ReactNode;
+  navigationHost?: HTMLElement | null;
+  onSelectConversation?: () => void;
   returnLabel?: string;
   onOpenTarget?: (
     target: import('../core/helper.js').HelperTaskResultTarget
@@ -344,7 +347,16 @@ export function HelperPanel(props: Props) {
   const [modelRequired, setModelRequired] = useState<Record<string, boolean>>({});
   const [busyScopes, setBusyScopes] = useState<Record<string, boolean>>({});
   const [editor, setEditor] = useState<ActiveEditorContext | null>(null);
-  const [settings, setSettings] = useState(false);
+  const [settingsOwner, setSettingsOwner] = useState<string | null>(null);
+  const [discardSettingsOwner, setDiscardSettingsOwner] = useState<string | null>(null);
+  const settings = props.open && !!scopeKey && settingsOwner === scopeKey;
+  const discardSettings = settings && discardSettingsOwner === scopeKey;
+  useEffect(() => {
+    if (!props.open || settingsOwner !== scopeKey) {
+      setSettingsOwner(null);
+      setDiscardSettingsOwner(null);
+    }
+  }, [props.open, scopeKey, settingsOwner]);
   const [modelPicker, setModelPicker] = useState(false);
   const [savedModel, setSavedModel] = useState<{
     id: string | undefined;
@@ -737,7 +749,7 @@ export function HelperPanel(props: Props) {
   }, [props.open, compact]);
   useLayoutEffect(() => {
     const node = scroll.current;
-    if (!props.open || settings || !node || !data.current) return;
+    if (!props.open || !node || !data.current) return;
     if (displayedScope.current !== scopeKey) {
       displayedScope.current = scopeKey;
       const saved = positions.current.get(scopeKey);
@@ -748,16 +760,16 @@ export function HelperPanel(props: Props) {
       prepend.current = null;
     } else if (following.current) node.scrollTop = node.scrollHeight;
     else node.scrollTop = positions.current.get(scopeKey)?.top ?? node.scrollTop;
-  }, [props.open, settings, scopeKey, data.current]);
+  }, [props.open, scopeKey, data.current]);
   useEffect(() => {
-    if (!props.open || settings || !content.current) return;
+    if (!props.open || !content.current) return;
     const observer = new ResizeObserver(() => {
       if (following.current && scroll.current)
         scroll.current.scrollTop = scroll.current.scrollHeight;
     });
     observer.observe(content.current);
     return () => observer.disconnect();
-  }, [props.open, settings]);
+  }, [props.open]);
   async function send(
     saved?: Outbox,
     withoutStorage = false,
@@ -1132,7 +1144,7 @@ export function HelperPanel(props: Props) {
   return (
     <aside
       id="helper-panel"
-      className={`helper-panel${props.expanded ? ' helper-expanded' : ''}`}
+      className={`helper-panel${props.expanded ? ' helper-expanded' : ''}${props.expanded && props.navigationHost ? ' helper-has-navigation' : ''}`}
       hidden={!props.open}
       role={props.expanded ? 'main' : compact ? 'dialog' : undefined}
       aria-modal={compact && props.open ? true : undefined}
@@ -1171,6 +1183,7 @@ export function HelperPanel(props: Props) {
               : t('helpers.libraryTitle')}
         </h2>
         <HelperSessionBar
+          open={props.open && props.ready !== false}
           sessions={sessions.sessions}
           unread={sessions.unread}
           conversation={conversation}
@@ -1178,7 +1191,8 @@ export function HelperPanel(props: Props) {
           creating={sessions.creating || props.ready === false}
           busy={props.ready === false || busy || Boolean(outbox)}
           expanded={props.expanded}
-          onSettings={() => setSettings((value) => !value)}
+          navigationHost={props.navigationHost}
+          onSettings={() => setSettingsOwner(scopeKey)}
           onSelect={(session) => {
             if (props.expanded && session.id !== scopeKey) {
               setFrozenEditors((old) => (session.id in old ? old : { ...old, [session.id]: null }));
@@ -1187,6 +1201,7 @@ export function HelperPanel(props: Props) {
               );
             }
             sessions.select(session);
+            props.onSelectConversation?.();
           }}
           onCreate={() => {
             void sessions.create().then((session) => {
@@ -1196,11 +1211,20 @@ export function HelperPanel(props: Props) {
               }
             });
           }}
+          onProjectsChanged={() => void sessions.reload()}
           onUpdate={(value) => {
-            data.updateConversation(value);
-            void sessions.reload().catch((cause) => setError(cause.message));
+            sessions.update(value);
+            if (value.id === sessions.currentId) data.updateConversation(value);
           }}
-          onDelete={sessions.clearSelection}
+          onDelete={(id) => sessions.remove(id)}
+          onClone={(session) => {
+            if (props.expanded) {
+              setFrozenEditors((old) => ({ ...old, [session.id]: null }));
+              setFrozenResources((old) => ({ ...old, [session.id]: null }));
+            }
+            sessions.select(session);
+            props.onSelectConversation?.();
+          }}
         />
         {props.onToggleExpanded && (
           <IconButton
@@ -1260,116 +1284,152 @@ export function HelperPanel(props: Props) {
           </button>
         </div>
       )}
-      {settings && conversation && (
-        <div className="helper-settings" id="helper-tone-settings">
-          <div className="helper-settings-body">
-            <section className="settings-group">
-              <header className="settings-group-heading">
-                <h3>{t('helpers.sessionVoice')}</h3>
-              </header>
-              <div className="settings-group-body helper-persona">
-                <textarea
-                  aria-label={t('helpers.m051')}
-                  value={persona.text}
-                  maxLength={HELPER_PERSONA_MAX_CHARS}
-                  onChange={(event) =>
-                    setPersonas((old) => ({
-                      ...old,
-                      [scopeKey]: { ...persona, text: event.target.value },
-                    }))
-                  }
-                  placeholder={t('helpers.m053')}
-                />
-              </div>
-            </section>
-            {persona.revision !== conversation.revision && (
-              <p role="alert">
-                {t('helpers.m055')}{' '}
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() =>
-                    setPersonas((old) => ({
-                      ...old,
-                      [scopeKey]: { ...persona, revision: conversation.revision },
-                    }))
-                  }
-                >
-                  {t('helpers.m056')}
-                </button>
-              </p>
-            )}
-
-            {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
-          </div>
-          <div className="helper-settings-actions">
-            {modelChip}
-            <button
-              type="button"
-              className="secondary"
-              onClick={() =>
-                setPersonas((old) => ({
-                  ...old,
-                  [scopeKey]: { ...persona, text: UI_HELPER_PERSONA },
-                }))
-              }
-            >
-              {t('helpers.m057')}
-            </button>
-            <SaveButton
-              type="button"
-              label={t('helpers.m058')}
-              aria-busy={savingPersona}
-              disabled={
-                props.ready === false || savingPersona || persona.revision !== conversation.revision
-              }
-              onClick={() => {
-                if (props.ready === false) return;
-                setSavingPersona(true);
-                setSaveNotice('');
-                void api<HelperConversation>(
-                  `/helper/conversations/${conversation.id}`,
-                  {
-                    expectedRevision: persona.revision,
-                    persona: persona.text,
-                  },
-                  'PATCH'
-                )
-                  .then((value) => {
-                    setSaveNotice(uiMessage('helpers.toneSaved'));
-                    data.updateConversation(value);
-                    setPersonas((old) => ({
-                      ...old,
-                      [scopeKey]: {
-                        text: value.persona,
-                        revision: value.revision,
-                      },
-                    }));
-                  })
-                  .catch(async (cause) => {
-                    setError(cause.message);
-                    if (cause instanceof ApiError && cause.status === 409) {
-                      try {
-                        data.updateConversation(
-                          await api<HelperConversation>(`/helper/conversations/${conversation.id}`)
-                        );
-                      } catch {
-                        /* Keep the local settings draft. */
-                      }
+      <Dialog
+        open={settings && !!conversation && props.open}
+        title={t('helpers.settings')}
+        className="helper-settings"
+        onClose={() => {
+          if (savingPersona) return;
+          if (conversation && persona.text !== conversation.persona)
+            setDiscardSettingsOwner(scopeKey);
+          else setSettingsOwner(null);
+        }}
+      >
+        {conversation && (
+          <>
+            <div className="helper-settings-body">
+              <section className="settings-group">
+                <header className="settings-group-heading">
+                  <h3>{t('helpers.sessionVoice')}</h3>
+                </header>
+                <div className="settings-group-body helper-persona">
+                  <textarea
+                    aria-label={t('helpers.m051')}
+                    value={persona.text}
+                    maxLength={HELPER_PERSONA_MAX_CHARS}
+                    onChange={(event) =>
+                      setPersonas((old) => ({
+                        ...old,
+                        [scopeKey]: { ...persona, text: event.target.value },
+                      }))
                     }
-                  })
-                  .finally(() => setSavingPersona(false));
-              }}
-            />
-          </div>
-        </div>
-      )}
+                    placeholder={t('helpers.m053')}
+                  />
+                </div>
+              </section>
+              {persona.revision !== conversation.revision && (
+                <p role="alert">
+                  {t('helpers.m055')}{' '}
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      setPersonas((old) => ({
+                        ...old,
+                        [scopeKey]: { ...persona, revision: conversation.revision },
+                      }))
+                    }
+                  >
+                    {t('helpers.m056')}
+                  </button>
+                </p>
+              )}
+
+              {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
+            </div>
+            <div className="helper-settings-actions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  setPersonas((old) => ({
+                    ...old,
+                    [scopeKey]: { ...persona, text: UI_HELPER_PERSONA },
+                  }))
+                }
+              >
+                {t('helpers.m057')}
+              </button>
+              <SaveButton
+                type="button"
+                label={t('helpers.m058')}
+                aria-busy={savingPersona}
+                disabled={
+                  props.ready === false ||
+                  savingPersona ||
+                  persona.revision !== conversation.revision
+                }
+                onClick={() => {
+                  if (props.ready === false) return;
+                  setSavingPersona(true);
+                  setSaveNotice('');
+                  void api<HelperConversation>(
+                    `/helper/conversations/${conversation.id}`,
+                    {
+                      expectedRevision: persona.revision,
+                      persona: persona.text,
+                    },
+                    'PATCH'
+                  )
+                    .then((value) => {
+                      setSaveNotice(uiMessage('helpers.toneSaved'));
+                      data.updateConversation(value);
+                      setPersonas((old) => ({
+                        ...old,
+                        [scopeKey]: {
+                          text: value.persona,
+                          revision: value.revision,
+                        },
+                      }));
+                    })
+                    .catch(async (cause) => {
+                      setError(cause.message);
+                      if (cause instanceof ApiError && cause.status === 409) {
+                        try {
+                          data.updateConversation(
+                            await api<HelperConversation>(
+                              `/helper/conversations/${conversation.id}`
+                            )
+                          );
+                        } catch {
+                          /* Keep the local settings draft. */
+                        }
+                      }
+                    })
+                    .finally(() => setSavingPersona(false));
+                }}
+              />
+            </div>
+          </>
+        )}
+      </Dialog>
+      <Dialog
+        open={discardSettings && settings && props.open}
+        title={t('helpers.settings')}
+        role="alertdialog"
+        variant="confirmation"
+        onClose={() => setDiscardSettingsOwner(null)}
+      >
+        <p>{t('helpers.discardTone')}</p>
+        <DraftDiscardActions
+          open={discardSettings}
+          onContinue={() => setDiscardSettingsOwner(null)}
+          onDiscard={() => {
+            setPersonas((old) => {
+              const next = { ...old };
+              delete next[scopeKey];
+              return next;
+            });
+            setDiscardSettingsOwner(null);
+            setSettingsOwner(null);
+          }}
+          discardLabel={t('visualpanels.discardChangesAndClose')}
+        />
+      </Dialog>
       <div
         ref={scroll}
         className="helper-messages"
-        hidden={settings && !!conversation}
         onScroll={() => {
-          if (settings) return;
           const node = scroll.current;
           if (node) {
             following.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
@@ -1698,7 +1758,7 @@ export function HelperPanel(props: Props) {
           </button>
         </div>
       </Dialog>
-      <footer className="helper-composer" hidden={settings && !!conversation}>
+      <footer className="helper-composer">
         {summarized && (
           <div className="helper-current-activity" role="status">
             <span>{activityLabel ?? t(statusLabel[summarized.status] ?? summarized.status)}</span>
@@ -1889,7 +1949,7 @@ export function HelperPanel(props: Props) {
             }}
           />
           <div className="quick-controls">
-            {!(settings && conversation) && modelChip}
+            {modelChip}
             <IconButton
               label={t('helpers.m106')}
               icon={History}

@@ -468,10 +468,10 @@ export const messages = {
     zh: '很宽',
   },
   'chatsettings.m72': {
-    ko: '도우미와 창작 옵션 패널 폭',
-    en: 'Helper and writing options panel width',
-    ja: 'アシスタントと創作オプションのパネル幅',
-    zh: '助手与创作选项面板宽度',
+    ko: '우측 패널 폭',
+    en: 'Right panel width',
+    ja: '右パネルの幅',
+    zh: '右侧面板宽度',
   },
   'chatsettings.m73': {
     ko: '공간이 부족하면 패널이 원고 위에 겹쳐 열려요.',

@@ -17,20 +17,23 @@ for (const width of DEFAULT_WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/');
     const navigation = await visibleNavigation(page);
-    const destinations = navigation.getByRole('navigation', { name: '작업 공간', exact: true });
+    const workspaces = navigation.locator('.sidebar-workspaces');
+    const destinations = navigation.locator('.sidebar-destinations');
     const footer = navigation.getByRole('navigation', { name: '앱 탐색', exact: true });
     const settings = footer.getByRole('button', { name: '설정', exact: true });
-    const helper = destinations.getByRole('button', { name: '도우미', exact: true });
+    const helper = workspaces.getByRole('button', { name: '도우미', exact: true });
+    const chat = workspaces.getByRole('button', { name: '채팅', exact: true });
     const library = destinations.getByRole('button', { name: '서재', exact: true });
     const prompts = destinations.getByRole('button', { name: '프롬프트', exact: true });
-    await expect(destinations.getByRole('button')).toHaveText(['서재', '프롬프트', '도우미']);
+    await expect(workspaces.getByRole('button')).toHaveText(['채팅', '도우미']);
+    await expect(destinations.getByRole('button')).toHaveText(['서재', '프롬프트']);
     const footerBox = await footer.boundingBox();
     const settingsBox = await settings.boundingBox();
     expect(footerBox).not.toBeNull();
     expect(settingsBox).not.toBeNull();
     if (!footerBox || !settingsBox) throw new Error('Sidebar footer has no visible bounds');
     expect(Math.abs(settingsBox.width - footerBox.width)).toBeLessThanOrEqual(1);
-    for (const action of [library, prompts, helper, settings]) {
+    for (const action of [chat, helper, library, prompts, settings]) {
       await expect(action).toBeVisible();
       await expect(action).toBeInViewport();
       const box = await action.boundingBox();
@@ -200,11 +203,16 @@ test('SIDENAV02 sidebar states keep titles steady and keyboard menus reachable w
       async (name) => (await nav.getByRole('button', { name, exact: true }).boundingBox())!.y
     )
   );
+  const expandedSwitch = (await nav.locator('.sidebar-workspaces').boundingBox())!;
   await nav.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
   await expect(page.locator('.sidebar')).toHaveCSS('width', '56px');
+  const railSwitch = (await nav.locator('.sidebar-rail-workspaces').boundingBox())!;
+  const switchHeightChange = railSwitch.height - expandedSwitch.height;
+  expect(switchHeightChange).toBeGreaterThan(0);
+  await expect(nav.locator('.sidebar-rail-workspaces').getByRole('button')).toHaveCount(2);
   for (const [index, name] of labels.entries()) {
     const box = (await nav.getByRole('button', { name, exact: true }).boundingBox())!;
-    expect(Math.abs(box.y - positions[index])).toBeLessThanOrEqual(1);
+    expect(Math.abs(box.y - positions[index] - switchHeightChange)).toBeLessThanOrEqual(1);
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);
   }
@@ -321,6 +329,56 @@ test('SIDENAV04 desktop width choices persist and preserve the rail, mobile draw
   await page.evaluate(() => localStorage.setItem('uimori:sidebar-width', '9999'));
   await page.reload();
   await expect(sidebar).toHaveCSS('width', '248px');
+});
+
+test('SIDENAV06 helper history width persists independently of chat sidebar and right panel widths', async ({
+  page,
+  request,
+}) => {
+  const fixture = await sidebarFixture(request);
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await page.goto(`/?chat=${fixture.chat.id}`);
+  const sidebar = page.locator('.sidebar');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
+  const chatWidth = page.getByRole('combobox', { name: '좌측 사이드바 폭', exact: true });
+  const helperWidth = page.getByRole('combobox', { name: '도우미 내역 폭', exact: true });
+  const rightWidth = page.getByRole('combobox', { name: '우측 패널 폭', exact: true });
+  await expect(helperWidth).toHaveValue('320');
+  await chatWidth.selectOption('400');
+  await helperWidth.selectOption('248');
+  await rightWidth.selectOption('480');
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '400px');
+  await navigationAction(page, '도우미');
+  await expect(sidebar).toHaveCSS('width', '248px');
+  await expect(sidebar.getByRole('navigation', { name: '도우미 대화', exact: true })).toBeVisible();
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
+  await helperWidth.selectOption('320');
+  await expect(chatWidth).toHaveValue('400');
+  await expect(rightWidth).toHaveValue('480');
+  await page.getByRole('button', { name: '설정 닫기', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '320px');
+  await sidebar.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '56px');
+  await sidebar.getByRole('button', { name: '채팅', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '56px');
+  await sidebar.getByRole('button', { name: '도우미', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '56px');
+  await sidebar.getByRole('button', { name: '좌측 패널 펼치기', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '320px');
+  await sidebar.getByRole('button', { name: '채팅', exact: true }).click();
+  await expect(sidebar).toHaveCSS('width', '400px');
+  await page.reload();
+  await expect(sidebar).toHaveCSS('width', '400px');
+  await navigationAction(page, '도우미');
+  await expect(sidebar).toHaveCSS('width', '320px');
+  await navigationAction(page, '설정');
+  await selectSettingsSection(page, '일반');
+  await expect(chatWidth).toHaveValue('400');
+  await expect(helperWidth).toHaveValue('320');
+  await expect(rightWidth).toHaveValue('480');
 });
 
 test('SIDENAV05 closing navigation restores the current opener after lazy library replacement', async ({

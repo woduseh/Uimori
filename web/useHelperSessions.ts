@@ -9,6 +9,7 @@ export type HelperSession = HelperConversation & {
   activity?: { running: number; queued: number };
   latestEventSeq?: number;
   chatTitle?: string;
+  projectId?: string | null;
 };
 const helperGroupKey = (scope: HelperScope) =>
   scope.kind === 'chat' ? `chat:${scope.chatId}` : 'library';
@@ -304,6 +305,32 @@ export function useHelperSessions(open: boolean, scope: HelperScope, expanded = 
     create,
     creating,
     reload,
+    update: (conversation: HelperConversation) => {
+      setLists((old) =>
+        Object.fromEntries(
+          Object.entries(old).map(([key, list]) => [
+            key,
+            list.map((item) => (item.id === conversation.id ? { ...item, ...conversation } : item)),
+          ])
+        )
+      );
+      setCarried((old) => (old?.id === conversation.id ? { ...old, ...conversation } : old));
+    },
+    remove: (id: string) => {
+      setLists((old) =>
+        Object.fromEntries(
+          Object.entries(old).map(([key, list]) => [key, list.filter((item) => item.id !== id)])
+        )
+      );
+      setCarried((old) => (old?.id === id ? null : old));
+      selectedRef.current = Object.fromEntries(
+        Object.entries(selectedRef.current).map(([key, value]) => [
+          key,
+          value === id ? null : value,
+        ])
+      );
+      setSelected(selectedRef.current);
+    },
     error: errors[group] ?? '',
     clearSelection: () => {
       setCarried(null);

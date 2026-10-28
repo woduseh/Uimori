@@ -367,6 +367,7 @@ async function helperFixture(page: Page, before: ChatDetail) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === 'GET') {
+      if (path === '/api/helper/projects') return route.fulfill({ json: [] });
       if (path === '/api/helper/conversations')
         return route.fulfill({
           json: [{ ...conversation, activity: { running: 1, queued: 0 }, latestEventSeq: 0 }],
@@ -504,8 +505,10 @@ test('READUI02 helper answers, archived scenes and public streams share reading 
         helperPersona
       );
       await expect(panel.locator('.helper-settings .reading-quote')).toHaveCount(0);
-      await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
-      await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
+      await page
+        .getByRole('dialog', { name: '도우미 설정', exact: true })
+        .getByRole('button', { name: '도우미 설정 닫기', exact: true })
+        .click();
       await card.getByRole('button', { name: '가정 장면 복사', exact: true }).click();
       expect(copied.at(-1)).toBe(artifactText);
       await expect(card.getByRole('button', { name: '직접 편집', exact: true })).toHaveCount(0);

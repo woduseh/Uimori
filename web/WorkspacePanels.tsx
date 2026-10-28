@@ -360,6 +360,8 @@ export function AppSettingsPanel({
   setPanelWidth,
   sidebarWidth,
   setSidebarWidth,
+  helperSidebarWidth,
+  setHelperSidebarWidth,
   readingSettings,
   onClose,
   onEditPrompt,
@@ -374,6 +376,8 @@ export function AppSettingsPanel({
   setPanelWidth: (value: number) => void;
   sidebarWidth: number;
   setSidebarWidth: (value: number) => void;
+  helperSidebarWidth: number;
+  setHelperSidebarWidth: (value: number) => void;
   readingSettings: ReactNode;
   onClose: () => void;
   onEditPrompt?: (presetId?: string) => void;
@@ -755,6 +759,22 @@ export function AppSettingsPanel({
                               aria-label={t('chatsettings.m67')}
                               value={sidebarWidth}
                               onChange={(event) => setSidebarWidth(Number(event.target.value))}
+                            >
+                              <option value={248}>{t('chatsettings.m69')}</option>
+                              <option value={320}>{t('chatsettings.m70')}</option>
+                              <option value={400}>{t('chatsettings.m71')}</option>
+                            </select>
+                          </label>
+                          <label className="settings-row">
+                            <span className="settings-row-copy">
+                              <strong>{t('workspace.helperWidth')}</strong>
+                            </span>
+                            <select
+                              aria-label={t('workspace.helperWidth')}
+                              value={helperSidebarWidth}
+                              onChange={(event) =>
+                                setHelperSidebarWidth(Number(event.target.value))
+                              }
                             >
                               <option value={248}>{t('chatsettings.m69')}</option>
                               <option value={320}>{t('chatsettings.m70')}</option>

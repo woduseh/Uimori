@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import type { Content } from '../core/product.js';
-import type { HelperConversation, HelperScope } from '../core/helper.js';
+import type { HelperConversation, HelperConversationSummary, HelperScope } from '../core/helper.js';
 import type { ChatDetail } from '../core/types.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
@@ -12,7 +12,12 @@ import {
   MOBILE_HEIGHT,
   MOBILE_WIDTH,
 } from './fixtures/browser-viewports.js';
-import { navigationAction, openHelper, selectSettingsSection } from './ui-navigation.js';
+import {
+  navigationAction,
+  openHelper,
+  selectSettingsSection,
+  visibleNavigation,
+} from './ui-navigation.js';
 
 test.setTimeout(60000);
 
@@ -174,10 +179,11 @@ test('HSPACE05 a contextual reopen attaches the editor after an independent work
   await page.getByLabel('Risu 자료 이름', { exact: true }).fill('연결할 현재 편집 내용');
   await navigationAction(page, '도우미');
   const panel = page.locator('#helper-panel');
-  await panel
+  await page
     .getByRole('navigation', { name: '도우미 대화', exact: true })
-    .getByRole('button')
+    .locator('.helper-nav-select')
     .filter({ hasText: session.title })
+    .first()
     .click();
   await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(session.id);
   await expect(panel.locator('details.helper-editor')).toHaveCount(0);
@@ -219,6 +225,269 @@ async function expectWithinViewport(page: Page, expanded = false) {
   expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
   if (expanded) expect(box!.x + box!.width).toBeCloseTo(page.viewportSize()!.width, 0);
 }
+
+test('HSPACE06 shared sidebar preserves drafts and project history across search, copy and project removal', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  const prefix = `탐색 회귀 ${randomUUID().slice(0, 8)}`;
+  const { chat } = await createReadingChat(request, prefix, 1);
+  const sessions: HelperConversation[] = [];
+  for (let index = 0; index < 7; index++)
+    sessions.push(
+      await createSession(request, { kind: 'chat', chatId: chat.id }, `${prefix} ${index}`)
+    );
+  await page.goto(`/?chat=${chat.id}`);
+  const mainDraft = page.getByRole('textbox', {
+    name: '다음 장면 요청',
+    exact: true,
+    includeHidden: true,
+  });
+  await mainDraft.fill('작업 공간을 바꿔도 남길 원고 초안');
+  await navigationAction(page, '도우미');
+  const panel = page.locator('#helper-panel');
+  const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+  const nav = await visibleNavigation(page);
+  const history = nav.getByRole('navigation', { name: '도우미 대화', exact: true });
+  await expect(panel.getByRole('navigation', { name: '도우미 대화', exact: true })).toHaveCount(0);
+  await expect(history).toBeVisible();
+  const recent = history.getByRole('region', { name: '최근 대화', exact: true });
+  await expect(recent.locator('.helper-nav-select')).toHaveCount(5);
+  const totalSessions = (
+    (await (
+      await request.get('/api/helper/conversations?kind=all')
+    ).json()) as HelperConversationSummary[]
+  ).length;
+  await recent
+    .getByRole('button', { name: `${Math.min(5, totalSessions - 5)}개 더 보기`, exact: true })
+    .click();
+  await expect(recent.locator('.helper-nav-select')).toHaveCount(Math.min(10, totalSessions));
+  await expect(history.locator('.helper-nav-heading')).toHaveCount(0);
+  const projectTitle = `${prefix} 프로젝트`;
+  await history.getByRole('button', { name: '프로젝트 만들기', exact: true }).click();
+  const createProject = page.getByRole('dialog', { name: '프로젝트 만들기', exact: true });
+  await createProject.getByLabel('프로젝트 이름', { exact: true }).fill(projectTitle);
+  await createProject.getByRole('button', { name: '프로젝트 이름 저장', exact: true }).click();
+  await expect(createProject).toBeHidden();
+  const group = history.getByRole('region', { name: projectTitle, exact: true });
+  await expect(group.locator('.helper-nav-select')).toHaveCount(0);
+  await recent.getByLabel(`${sessions[0].title} 대화 메뉴`, { exact: true }).click();
+  await page.getByRole('button', { name: '프로젝트로 이동', exact: true }).click();
+  const move = page.getByRole('dialog', { name: '프로젝트로 이동', exact: true });
+  await move
+    .getByRole('combobox', { name: '프로젝트', exact: true })
+    .selectOption({ label: projectTitle });
+  await move.getByRole('button', { name: '프로젝트로 이동', exact: true }).click();
+  await expect(move).toBeHidden();
+  await expect(group.locator('.helper-nav-select')).toHaveCount(1);
+  const heading = group.getByRole('button', { name: projectTitle, exact: true });
+  await heading.click();
+  await expect(heading).toHaveAttribute('aria-expanded', 'false');
+  await expect(group.locator('.helper-nav-select')).toHaveCount(0);
+  const search = history.getByRole('searchbox', { name: '대화 검색', exact: true });
+  await search.fill(prefix);
+  await expect(history.locator('.helper-nav-select')).toHaveCount(7);
+  await expect(history.locator('.helper-nav-heading')).toHaveCount(0);
+  const choice = history.locator(`[data-conversation-id="${sessions[0].id}"]`);
+  await choice.locator('.helper-nav-select').click();
+  await expect(picker).toHaveValue(sessions[0].id);
+  const helperDraft = panel.getByLabel('도우미에게 요청', { exact: true });
+  await helperDraft.fill('작업 공간을 바꿔도 남길 도우미 초안');
+  await nav.getByRole('button', { name: '채팅', exact: true }).click();
+  await expect(panel).toBeHidden();
+  await expect(mainDraft).toHaveValue('작업 공간을 바꿔도 남길 원고 초안');
+  await expect(nav.getByRole('button', { name: '채팅', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+  await nav.getByRole('button', { name: '도우미', exact: true }).click();
+  await expect(helperDraft).toHaveValue('작업 공간을 바꿔도 남길 도우미 초안');
+  await expect(nav.getByRole('button', { name: '도우미', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+  await search.fill(sessions[0].title);
+  await expect(choice).toHaveCount(1);
+  await choice.getByLabel(`${sessions[0].title} 대화 메뉴`, { exact: true }).click();
+  await expect(page.getByRole('button', { name: '세션 이름 변경', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '세션 삭제', exact: true })).toBeVisible();
+  const original = await (await request.get(`/api/helper/conversations/${sessions[0].id}`)).json();
+  await page.getByRole('button', { name: '대화 복사', exact: true }).click();
+  await expect(picker).not.toHaveValue(sessions[0].id);
+  const copied = (await (
+    await request.get(`/api/helper/conversations/${await picker.inputValue()}`)
+  ).json()) as HelperConversation;
+  expect(copied.scope).toEqual(sessions[0].scope);
+  const summaries = (await (
+    await request.get('/api/helper/conversations?kind=all')
+  ).json()) as HelperConversationSummary[];
+  const originalProject = summaries.find((session) => session.id === sessions[0].id)?.projectId;
+  expect(originalProject).toBeTruthy();
+  expect(summaries.find((session) => session.id === copied.id)?.projectId).toBe(originalProject);
+  expect(await (await request.get(`/api/helper/conversations/${sessions[0].id}`)).json()).toEqual(
+    original
+  );
+  await search.fill('');
+  await heading.click();
+  await page.screenshot({ path: info.outputPath('helper-project-sidebar-2560.png') });
+  await group.getByLabel(`${projectTitle} 프로젝트 메뉴`, { exact: true }).click();
+  await page.getByRole('button', { name: '프로젝트 이름 변경', exact: true }).click();
+  const rename = page.getByRole('dialog', { name: '프로젝트 이름 변경', exact: true });
+  const renamedTitle = `${projectTitle} 수정`;
+  await rename.getByLabel('프로젝트 이름', { exact: true }).fill(renamedTitle);
+  await rename.getByRole('button', { name: '프로젝트 이름 저장', exact: true }).click();
+  const renamed = history.getByRole('region', { name: renamedTitle, exact: true });
+  await expect(renamed).toBeVisible();
+  await renamed.getByLabel(`${renamedTitle} 프로젝트 메뉴`, { exact: true }).click();
+  await page.getByRole('button', { name: '프로젝트 삭제', exact: true }).click();
+  const remove = page.getByRole('alertdialog', { name: '프로젝트 삭제', exact: true });
+  await expect(remove).toContainText('대화는 삭제되지 않고');
+  await remove.getByRole('button', { name: '프로젝트 삭제', exact: true }).click();
+  await expect(renamed).toHaveCount(0);
+  const retained = await (await request.get(`/api/helper/conversations/${sessions[0].id}`)).json();
+  expect(retained).toEqual({
+    ...original,
+    revision: original.revision + 1,
+    updatedAt: retained.updatedAt,
+  });
+  const afterDelete = (await (
+    await request.get('/api/helper/conversations?kind=all')
+  ).json()) as HelperConversationSummary[];
+  expect(afterDelete.find((session) => session.id === sessions[0].id)?.projectId).toBeNull();
+  expect(afterDelete.find((session) => session.id === copied.id)?.projectId).toBeNull();
+  await search.fill(sessions[0].title);
+  await history.locator(`[data-conversation-id="${sessions[0].id}"] .helper-nav-select`).click();
+  await expect(picker).toHaveValue(sessions[0].id);
+  await expect(helperDraft).toHaveValue('작업 공간을 바꿔도 남길 도우미 초안');
+  expect(new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
+  await expect(mainDraft).toHaveValue('작업 공간을 바꿔도 남길 원고 초안');
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
+  const drawer = page.getByRole('dialog', { name: '탐색', exact: true });
+  const mobileNav = await visibleNavigation(page);
+  const mobileHistory = mobileNav.getByRole('navigation', { name: '도우미 대화', exact: true });
+  await page.screenshot({ path: info.outputPath('helper-history-drawer-412.png') });
+  await mobileHistory
+    .getByRole('searchbox', { name: '대화 검색', exact: true })
+    .fill(sessions[1].title);
+  await mobileHistory
+    .locator(`[data-conversation-id="${sessions[1].id}"] .helper-nav-select`)
+    .click();
+  await expect(drawer).toBeHidden();
+  await expect(picker).toHaveValue(sessions[1].id);
+  await helperDraft.fill('모바일에서 선택한 세션의 초안');
+  await visibleNavigation(page);
+  await mobileHistory
+    .getByRole('searchbox', { name: '대화 검색', exact: true })
+    .fill(sessions[0].title);
+  await mobileHistory
+    .locator(`[data-conversation-id="${sessions[0].id}"] .helper-nav-select`)
+    .click();
+  await expect(drawer).toBeHidden();
+  await expect(picker).toHaveValue(sessions[0].id);
+  await expect(helperDraft).toHaveValue('작업 공간을 바꿔도 남길 도우미 초안');
+});
+
+test('HSPACE07 project and copy retries recover the same saved result through sessionStorage and refresh projects on focus', async ({
+  page,
+  request,
+}) => {
+  const title = `저장소 복구 ${randomUUID().slice(0, 8)}`;
+  const { chat } = await createReadingChat(request, title, 1);
+  const original = await createSession(request, { kind: 'chat', chatId: chat.id }, title);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  await page.goto(`/?chat=${chat.id}`);
+  await navigationAction(page, '도우미');
+  const panel = page.locator('#helper-panel');
+  const history = page.getByRole('navigation', { name: '도우미 대화', exact: true });
+  await page.evaluate(() => {
+    const originalSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (
+        this === localStorage &&
+        (key.startsWith('uimori:helper-project-create:') || key.startsWith('uimori:helper-copy:'))
+      )
+        throw new DOMException('Full', 'QuotaExceededError');
+      return originalSetItem.call(this, key, value);
+    };
+  });
+  const projectPayloads: unknown[] = [];
+  const projectIds: string[] = [];
+  await page.route('**/api/helper/projects', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    projectPayloads.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    projectIds.push(((await response.json()) as { id: string }).id);
+    if (projectIds.length === 1) await route.abort('failed');
+    else await route.fulfill({ response });
+  });
+  await history.getByRole('button', { name: '프로젝트 만들기', exact: true }).click();
+  const project = page.getByRole('dialog', { name: '프로젝트 만들기', exact: true });
+  await project.getByLabel('프로젝트 이름', { exact: true }).fill(title);
+  await project.getByRole('button', { name: '프로젝트 이름 저장', exact: true }).click();
+  await expect(project.getByRole('alert')).toBeVisible();
+  const projectKey = `uimori:helper-project-create:${title}`;
+  expect(
+    await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null'), projectKey)
+  ).toEqual(projectPayloads[0]);
+  await project.getByRole('button', { name: '프로젝트 이름 저장', exact: true }).click();
+  await expect(project).toBeHidden();
+  expect(projectPayloads).toHaveLength(2);
+  expect(projectPayloads[1]).toEqual(projectPayloads[0]);
+  expect(projectIds[1]).toBe(projectIds[0]);
+  expect(
+    await page.evaluate(
+      (key) => [localStorage.getItem(key), sessionStorage.getItem(key)],
+      projectKey
+    )
+  ).toEqual([null, null]);
+  const renamedTitle = `${title} 외부 변경`;
+  const rename = await request.patch(`/api/helper/projects/${projectIds[0]}`, {
+    data: { title: renamedTitle, expectedRevision: 1 },
+  });
+  expect(rename.ok(), await rename.text()).toBe(true);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(history.getByRole('region', { name: renamedTitle, exact: true })).toBeVisible();
+  await expect(history.getByRole('region', { name: title, exact: true })).toHaveCount(0);
+  await history.getByRole('searchbox', { name: '대화 검색', exact: true }).fill(title);
+  const row = history.locator('.helper-nav-row').filter({ hasText: title });
+  const copyPayloads: unknown[] = [];
+  const copyIds: string[] = [];
+  await page.route(`**/api/helper/conversations/${original.id}/copy`, async (route) => {
+    copyPayloads.push(route.request().postDataJSON());
+    const response = await route.fetch();
+    expect(response.ok()).toBe(true);
+    copyIds.push(((await response.json()) as { id: string }).id);
+    if (copyIds.length === 1) await route.abort('failed');
+    else await route.fulfill({ response });
+  });
+  await row.getByLabel(`${title} 대화 메뉴`, { exact: true }).click();
+  await page.getByRole('button', { name: '대화 복사', exact: true }).click();
+  await expect(history.getByRole('alert')).toBeVisible();
+  const copyKey = `uimori:helper-copy:${original.id}`;
+  expect(
+    await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null'), copyKey)
+  ).toEqual(copyPayloads[0]);
+  const changed = await request.patch(`/api/helper/conversations/${original.id}`, {
+    data: { expectedRevision: original.revision, persona: '응답 유실 후 바뀐 원본 말투' },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await history.getByLabel(`${title} 대화 메뉴`, { exact: true }).click();
+  await page.getByRole('button', { name: '대화 복사', exact: true }).click();
+  await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(copyIds[0]);
+  expect(copyPayloads).toHaveLength(2);
+  expect(copyPayloads[1]).toEqual(copyPayloads[0]);
+  expect(copyIds[1]).toBe(copyIds[0]);
+  expect(
+    await page.evaluate((key) => [localStorage.getItem(key), sessionStorage.getItem(key)], copyKey)
+  ).toEqual([null, null]);
+  const copies = (await (
+    await request.get(`/api/helper/conversations?kind=chat&chatId=${chat.id}`)
+  ).json()) as HelperConversationSummary[];
+  expect(copies).toHaveLength(2);
+});
 
 for (const viewport of [
   { width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT },
@@ -315,11 +584,15 @@ for (const viewport of [
 
     await navigationAction(page, '도우미');
     await expect(panel).toHaveClass(/helper-expanded/u);
-    const list = panel.getByRole('navigation', { name: '도우미 대화', exact: true });
-    const foreignChoice = list.getByRole('button').filter({ hasText: foreign.title });
+    const list = page.getByRole('navigation', { name: '도우미 대화', exact: true });
+    const foreignChoice = list
+      .locator('.helper-nav-select')
+      .filter({ hasText: foreign.title })
+      .first();
     const selectSession = async (session: HelperConversation) => {
       if (viewport.width === MOBILE_WIDTH) await picker.selectOption(session.id);
-      else await list.getByRole('button').filter({ hasText: session.title }).click();
+      else
+        await list.locator('.helper-nav-select').filter({ hasText: session.title }).first().click();
     };
     if (viewport.width !== MOBILE_WIDTH) await expect(foreignChoice).toContainText(other.title);
     await selectSession(foreign);

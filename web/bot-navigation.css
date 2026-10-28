@@ -14,6 +14,55 @@
 .bot-navigation .brand {
   margin-bottom: 0;
 }
+.sidebar-workspaces {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+.sidebar-workspaces .nav-button {
+  justify-content: center;
+  min-width: 0;
+  gap: 8px;
+}
+.sidebar-rail-workspaces {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+.helper-navigation-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.workspace-helper-icon {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+.workspace-running-dot,
+.helper-running::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  outline: 2px solid var(--panel);
+}
+.helper-running {
+  position: relative;
+}
+.helper-running::after {
+  top: 8px;
+  right: 8px;
+}
 .sidebar-app-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

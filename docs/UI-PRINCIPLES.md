@@ -105,6 +105,8 @@ Chat option editing refreshes automatically when idle and preserves drafts when 
 
 ## Korean terminology
 
+Chat and assistant switch the central workspace within one shared navigation shell. Preserve the user's collapsed navigation choice; only a contextual side panel may temporarily collapse navigation when the manuscript needs room. Main assistant navigation replaces the chat list with user-created projects and recent conversations. Projects organize conversations explicitly, never infer membership from tools or edited resources, and never change execution scope. Removing a project keeps its conversations. Both assistant presentations share settings dialogs, composer behavior and usage disclosures; a dialog's draft/discard action belongs to the conversation that opened it.
+
 Settings navigation shows destination names only. Keep current values and unsaved-change feedback in the owning settings content; preserve the existing save/discard guards. Font previews follow the selected app or manuscript target; font registration and deletion stay in a collapsible management area without losing input. Show unlinked-memory review only when records exist, with its count before expansion and read errors outside the disclosure.
 
 Group mixed-purpose action menus by task, with common editing actions first, supporting information later, and destructive actions separated at the end. Use short headings for long menus; compact menus can use dividers alone. Keep homogeneous choice lists ungrouped. Conditional actions must not leave empty groups, and nested export/delete controls retain the same mobile touch height as other items.

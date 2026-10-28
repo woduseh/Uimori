@@ -1,23 +1,32 @@
 import { t, useI18n, translateMessage, formatNumber, message as uiMessage } from './i18n.js';
-import { useEffect, useState } from 'react';
-import { Plus, Settings2 } from 'lucide-react';
-import type { HelperConversation, HelperConversationDeletion } from '../core/helper.js';
-import { api, ApiError } from './api.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Plus, Settings2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import type {
+  HelperConversation,
+  HelperConversationDeletion,
+  HelperProject,
+} from '../core/helper.js';
+import { activityChangedEvent, api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { LoadingState } from './LoadingState.js';
 import { IconButton } from './IconButton.js';
+import { SaveButton } from './SaveButton.js';
 import { CheckIcon, CloseIcon, DeleteIcon, EditIcon, StopIcon } from './ui-icons.js';
 import { forgetHelperSession, type HelperSession } from './useHelperSessions.js';
 import type { HelperTaskView } from './useHelperConversation.js';
 import { deleteHelperSessionRecovery } from './helper-recovery.js';
 import { groupRecentDates, recentDateGroupLabel } from './recent-date-groups.js';
+import { pendingHelperRequest, clearPendingHelperRequest } from './helper-pending-request.js';
 import './deletion.css';
+import './helper-session-navigation.css';
 
 type Props = {
   sessions: HelperSession[];
   expanded?: boolean;
+  open?: boolean;
   onSettings: () => void;
   unread: string[];
   conversation: HelperConversation | null;
@@ -27,11 +36,28 @@ type Props = {
   onSelect: (session: HelperConversation) => void;
   onCreate: () => void;
   onUpdate: (session: HelperConversation) => void;
-  onDelete: () => void;
+  onDelete: (id: string) => void;
+  onClone?: (session: HelperConversation) => void;
+  navigationHost?: HTMLElement | null;
+  onProjectsChanged?: () => void;
 };
 export function HelperSessionBar(props: Props) {
   useI18n();
   const [search, setSearch] = useState('');
+  const [recentCount, setRecentCount] = useState(5);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [copying, setCopying] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState('');
+  const [projects, setProjects] = useState<HelperProject[]>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const projectReadVersion = useRef(0);
+  const [projectEditor, setProjectEditor] = useState<HelperProject | 'new' | null>(null);
+  const [projectTitle, setProjectTitle] = useState('');
+  const [projectDeleting, setProjectDeleting] = useState<HelperProject | null>(null);
+  const [moving, setMoving] = useState<HelperSession | null>(null);
+  const [moveProject, setMoveProject] = useState('');
+  const [projectError, setProjectError] = useState('');
+  const [projectWorking, setProjectWorking] = useState(false);
   const [rename, setRename] = useState<HelperConversation | null>(null);
   const [title, setTitle] = useState('');
   const [deleting, setDeleting] = useState<HelperConversation | null>(null);
@@ -40,6 +66,44 @@ export function HelperSessionBar(props: Props) {
   const [error, setError] = useState('');
   const [readError, setReadError] = useState('');
   const [cleanupFailure, setCleanupFailure] = useState('');
+  const reloadProjects = useCallback(async () => {
+    const version = ++projectReadVersion.current;
+    try {
+      const values = await api<HelperProject[]>('/helper/projects');
+      if (version !== projectReadVersion.current) return;
+      setProjects(values);
+      setProjectsLoaded(true);
+      setProjectError('');
+    } catch (cause) {
+      if (version !== projectReadVersion.current) return;
+      setProjectsLoaded(false);
+      setProjectError(
+        cause instanceof Error ? cause.message : uiMessage('helperNavigation.loadFailed')
+      );
+    }
+  }, []);
+  const projectChanged = () =>
+    window.dispatchEvent(new CustomEvent(activityChangedEvent, { detail: '/helper/projects' }));
+  useEffect(() => {
+    if (props.open === false) return;
+    const refresh = () => {
+      if (!document.hidden) void reloadProjects();
+    };
+    const submitted = (event: Event) => {
+      const path = (event as CustomEvent<string>).detail;
+      if (typeof path === 'string' && path.startsWith('/helper/projects')) refresh();
+    };
+    refresh();
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener(activityChangedEvent, submitted);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener(activityChangedEvent, submitted);
+      projectReadVersion.current++;
+    };
+  }, [props.open, reloadProjects]);
   useEffect(() => {
     if (!deleting) return;
     let disposed = false;
@@ -67,11 +131,236 @@ export function HelperSessionBar(props: Props) {
     };
   }, [deleting]);
   const filteredSessions = props.sessions.filter((session) =>
-    [session.title, session.chatTitle]
+    [
+      session.title,
+      session.chatTitle,
+      projects.find((project) => project.id === session.projectId)?.title,
+    ]
       .filter(Boolean)
       .join(' ')
       .toLocaleLowerCase()
       .includes(search.trim().toLocaleLowerCase())
+  );
+  const recent = filteredSessions.toSorted((a, b) =>
+    (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+  );
+  const startRename = (session: HelperConversation) => {
+    setRename(session);
+    setTitle(session.title ?? '');
+    setError('');
+  };
+  const startDelete = (session: HelperConversation) => {
+    setDeleting(session);
+    setImpact(null);
+    setError('');
+    setReadError('');
+  };
+  const copySession = async (session: HelperSession) => {
+    if (copying) return;
+    setCopying(session.id);
+    setCopyError('');
+    const storageKey = `uimori:helper-copy:${session.id}`;
+    const input = {
+      expectedRevision: session.revision,
+      expectedEventSequence: session.latestEventSeq ?? 0,
+    };
+    type CopyRequest = typeof input & { requestKey: string };
+    let pending: { request: CopyRequest; storage: Storage } | undefined;
+    try {
+      pending = pendingHelperRequest(
+        storageKey,
+        () => ({ ...input, requestKey: crypto.randomUUID() }),
+        (value): value is CopyRequest => {
+          if (!value || typeof value !== 'object') return false;
+          const item = value as Partial<CopyRequest>;
+          return (
+            typeof item.requestKey === 'string' &&
+            item.requestKey.length > 0 &&
+            typeof item.expectedRevision === 'number' &&
+            typeof item.expectedEventSequence === 'number'
+          );
+        }
+      );
+      const value = await api<HelperConversation>(
+        `/helper/conversations/${encodeURIComponent(session.id)}/copy`,
+        pending.request
+      );
+      clearPendingHelperRequest(storageKey, pending);
+      props.onClone?.(value);
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status)) {
+        clearPendingHelperRequest(storageKey, pending);
+      }
+      setCopyError(
+        cause instanceof Error ? cause.message : uiMessage('helperNavigation.copyFailed')
+      );
+    } finally {
+      setCopying(null);
+    }
+  };
+  const row = (session: HelperSession) => (
+    <div className="helper-nav-row" key={session.id} data-conversation-id={session.id}>
+      <button
+        type="button"
+        className="helper-nav-select"
+        aria-current={session.id === props.currentId ? 'true' : undefined}
+        onClick={() => props.onSelect(session)}
+      >
+        <span>{session.title || t('helpers.m173')}</span>
+        {session.activity?.running || session.activity?.queued ? (
+          <small>
+            {session.activity.running
+              ? t('helpers.m113')
+              : t('helpers.queuedCount', { count: formatNumber(session.activity.queued) })}
+          </small>
+        ) : null}
+        {props.unread.includes(session.id) && (
+          <span aria-label={t('helpers.m325', { count: 1 })}>●</span>
+        )}
+        {session.id === props.currentId && <CheckIcon size={16} aria-hidden="true" />}
+      </button>
+      <ActionMenu
+        label={t('helperNavigation.actions', { title: session.title || t('helpers.m173') })}
+        viewport
+      >
+        <div className="action-menu-group">
+          <button type="button" onClick={() => startRename(session)}>
+            <EditIcon size={18} aria-hidden="true" />
+            {t('helpers.m178')}
+          </button>
+          <button type="button" disabled={!!copying} onClick={() => void copySession(session)}>
+            <Copy size={18} aria-hidden="true" />
+            {t('helperNavigation.copy')}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMoving(session);
+              setMoveProject(session.projectId ?? '');
+              setProjectError('');
+            }}
+          >
+            {t('helperNavigation.move')}
+          </button>
+        </div>
+        <div className="action-menu-group">
+          <button type="button" className="danger" onClick={() => startDelete(session)}>
+            <DeleteIcon size={18} aria-hidden="true" />
+            {t('helpers.m179')}
+          </button>
+        </div>
+      </ActionMenu>
+    </div>
+  );
+  const navigation = (
+    <nav className="helper-navigation" aria-label={t('helpers.sessions')}>
+      <input
+        type="search"
+        aria-label={t('helpers.searchSessions')}
+        placeholder={t('helpers.searchSessions')}
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+      />
+      <button
+        type="button"
+        className="helper-nav-new-project"
+        onClick={() => {
+          setProjectEditor('new');
+          setProjectTitle('');
+          setProjectError('');
+        }}
+      >
+        <Plus size={16} aria-hidden="true" />
+        {t('helperNavigation.newProject')}
+      </button>
+      {projectError && !projectEditor && !projectDeleting && !moving && (
+        <NoticeBanner tone="error">
+          {translateMessage(projectError)}{' '}
+          <button type="button" onClick={() => void reloadProjects()}>
+            {t('helperNavigation.retry')}
+          </button>
+        </NoticeBanner>
+      )}
+      {copyError && <NoticeBanner tone="error">{translateMessage(copyError)}</NoticeBanner>}
+      <div className="helper-navigation-scroll">
+        {search && filteredSessions.length === 0 && (
+          <p role="status">{t('library.noSearchResults')}</p>
+        )}
+        {!search.trim() &&
+          projects.map((project) => (
+            <section key={project.id} className="helper-nav-group" aria-label={project.title}>
+              <div className="helper-nav-project-heading">
+                <button
+                  type="button"
+                  className="helper-nav-heading"
+                  aria-expanded={!collapsed[project.id]}
+                  onClick={() =>
+                    setCollapsed((old) => ({ ...old, [project.id]: !old[project.id] }))
+                  }
+                >
+                  {collapsed[project.id] ? (
+                    <ChevronRight size={16} aria-hidden="true" />
+                  ) : (
+                    <ChevronDown size={16} aria-hidden="true" />
+                  )}
+                  <span>{project.title}</span>
+                </button>
+                <ActionMenu
+                  label={t('helperNavigation.projectActions', { title: project.title })}
+                  viewport
+                >
+                  <div className="action-menu-group">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProjectEditor(project);
+                        setProjectTitle(project.title);
+                        setProjectError('');
+                      }}
+                    >
+                      <EditIcon size={18} aria-hidden="true" />
+                      {t('helperNavigation.renameProject')}
+                    </button>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => {
+                        setProjectDeleting(project);
+                        setProjectError('');
+                      }}
+                    >
+                      <DeleteIcon size={18} aria-hidden="true" />
+                      {t('helperNavigation.deleteProject')}
+                    </button>
+                  </div>
+                </ActionMenu>
+              </div>
+              {!collapsed[project.id] &&
+                recent.filter((session) => session.projectId === project.id).map(row)}
+            </section>
+          ))}
+        {recent.length > 0 && (
+          <section
+            className="helper-nav-group"
+            aria-label={search.trim() ? t('helpers.searchSessions') : t('helperNavigation.recent')}
+          >
+            {!search.trim() && <h3>{t('helperNavigation.recent')}</h3>}
+            {(search.trim() ? recent : recent.slice(0, recentCount)).map(row)}
+            {!search.trim() && recent.length > recentCount && (
+              <button
+                type="button"
+                className="helper-nav-more"
+                onClick={() => setRecentCount((old) => old + 5)}
+              >
+                {t('helpers.m331', {
+                  count: formatNumber(Math.min(5, recent.length - recentCount)),
+                })}
+              </button>
+            )}
+          </section>
+        )}
+      </div>
+    </nav>
   );
   async function stop() {
     if (!deleting || working) return;
@@ -127,7 +416,9 @@ export function HelperSessionBar(props: Props) {
                 {t('helpers.m172')}
               </option>
               {groupRecentDates(
-                props.sessions.toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+                props.sessions.toSorted((a, b) =>
+                  (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+                ),
                 (session) => session.updatedAt
               ).map((group) => (
                 <optgroup key={group.key} label={recentDateGroupLabel(group)}>
@@ -179,6 +470,31 @@ export function HelperSessionBar(props: Props) {
                 <EditIcon size={18} aria-hidden="true" />
                 {t('helpers.m178')}
               </button>
+              <button
+                type="button"
+                disabled={!props.conversation || !!copying}
+                onClick={() => {
+                  const session = props.sessions.find((item) => item.id === props.conversation?.id);
+                  if (session) void copySession(session);
+                }}
+              >
+                <Copy size={18} aria-hidden="true" />
+                {t('helperNavigation.copy')}
+              </button>
+              <button
+                type="button"
+                disabled={!props.conversation}
+                onClick={() => {
+                  const session = props.sessions.find((item) => item.id === props.conversation?.id);
+                  if (session) {
+                    setMoving(session);
+                    setMoveProject(session.projectId ?? '');
+                    setProjectError('');
+                  }
+                }}
+              >
+                {t('helperNavigation.move')}
+              </button>
             </div>
             <div className="action-menu-group">
               <button
@@ -198,49 +514,227 @@ export function HelperSessionBar(props: Props) {
             </div>
           </ActionMenu>
         </div>
-        {props.expanded && (
-          <nav className="helper-session-list" aria-label={t('helpers.sessions')}>
-            <input
-              type="search"
-              aria-label={t('helpers.searchSessions')}
-              placeholder={t('helpers.searchSessions')}
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <div className="helper-session-list-items">
-              {search && filteredSessions.length === 0 && (
-                <p role="status">{t('library.noSearchResults')}</p>
-              )}
-              {filteredSessions.map((session) => (
-                <button
-                  type="button"
-                  key={session.id}
-                  aria-current={session.id === props.currentId ? 'true' : undefined}
-                  onClick={() => props.onSelect(session)}
-                >
-                  <span>{session.title || t('helpers.m173')}</span>
-                  {session.chatTitle && <small>{session.chatTitle}</small>}
-                  {session.activity?.running || session.activity?.queued ? (
-                    <small>
-                      {session.activity.running
-                        ? t('helpers.m113')
-                        : t('helpers.queuedCount', {
-                            count: formatNumber(session.activity.queued),
-                          })}
-                    </small>
-                  ) : null}
-                  {session.id === props.currentId && (
-                    <CheckIcon className="helper-session-check" size={16} aria-hidden="true" />
-                  )}
-                  {props.unread.includes(session.id) && (
-                    <span aria-label={t('helpers.m325', { count: 1 })}>●</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </nav>
-        )}
       </div>
+      {props.expanded && props.navigationHost && createPortal(navigation, props.navigationHost)}
+      {copyError && !props.navigationHost && (
+        <NoticeBanner tone="error">{translateMessage(copyError)}</NoticeBanner>
+      )}
+      <Dialog
+        open={!!projectEditor}
+        title={t(
+          projectEditor === 'new' ? 'helperNavigation.newProject' : 'helperNavigation.renameProject'
+        )}
+        onClose={() => {
+          if (!projectWorking) setProjectEditor(null);
+        }}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!projectEditor || !projectTitle.trim() || projectWorking) return;
+            setProjectWorking(true);
+            setProjectError('');
+            const title = projectTitle.trim();
+            void (async () => {
+              if (projectEditor === 'new') {
+                const key = `uimori:helper-project-create:${title}`;
+                type ProjectRequest = { title: string; requestKey: string };
+                const pending = pendingHelperRequest(
+                  key,
+                  () => ({ title, requestKey: crypto.randomUUID() }),
+                  (value): value is ProjectRequest => {
+                    if (!value || typeof value !== 'object') return false;
+                    const item = value as Partial<ProjectRequest>;
+                    return (
+                      item.title === title &&
+                      typeof item.requestKey === 'string' &&
+                      item.requestKey.length > 0
+                    );
+                  }
+                );
+                try {
+                  await api('/helper/projects', pending.request);
+                } catch (cause) {
+                  if (
+                    cause instanceof ApiError &&
+                    cause.status < 500 &&
+                    ![408, 429].includes(cause.status)
+                  ) {
+                    clearPendingHelperRequest(key, pending);
+                  }
+                  throw cause;
+                }
+                clearPendingHelperRequest(key, pending);
+              } else {
+                await api(
+                  `/helper/projects/${encodeURIComponent(projectEditor.id)}`,
+                  { title, expectedRevision: projectEditor.revision },
+                  'PATCH'
+                );
+              }
+              setProjectEditor(null);
+              projectChanged();
+            })()
+              .catch((cause) =>
+                setProjectError(
+                  cause instanceof Error ? cause.message : uiMessage('helperNavigation.saveFailed')
+                )
+              )
+              .finally(() => setProjectWorking(false));
+          }}
+        >
+          <label>
+            {t('helperNavigation.projectName')}
+            <input
+              value={projectTitle}
+              maxLength={200}
+              disabled={projectWorking}
+              onChange={(event) => setProjectTitle(event.target.value)}
+            />
+          </label>
+          {projectError && (
+            <NoticeBanner tone="error">{translateMessage(projectError)}</NoticeBanner>
+          )}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={projectWorking}
+              onClick={() => setProjectEditor(null)}
+            >
+              {t('helpers.m165')}
+            </button>
+            <SaveButton
+              label={t('helperNavigation.saveProject')}
+              disabled={!projectTitle.trim()}
+              aria-busy={projectWorking}
+            />
+          </div>
+        </form>
+      </Dialog>
+      <Dialog
+        open={!!projectDeleting}
+        title={t('helperNavigation.deleteProject')}
+        variant="confirmation"
+        role="alertdialog"
+        onClose={() => {
+          if (!projectWorking) setProjectDeleting(null);
+        }}
+      >
+        <p>
+          {t('helperNavigation.deleteProjectDescription', { title: projectDeleting?.title ?? '' })}
+        </p>
+        {projectError && <NoticeBanner tone="error">{translateMessage(projectError)}</NoticeBanner>}
+        <div className="form-actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={projectWorking}
+            onClick={() => setProjectDeleting(null)}
+          >
+            {t('helpers.m165')}
+          </button>
+          <button
+            type="button"
+            className="delete-button"
+            disabled={projectWorking}
+            onClick={() => {
+              if (!projectDeleting || projectWorking) return;
+              setProjectWorking(true);
+              setProjectError('');
+              void api(
+                `/helper/projects/${encodeURIComponent(projectDeleting.id)}`,
+                { expectedRevision: projectDeleting.revision },
+                'DELETE'
+              )
+                .then(async () => {
+                  setProjectDeleting(null);
+                  props.onProjectsChanged?.();
+                  projectChanged();
+                })
+                .catch((cause) =>
+                  setProjectError(
+                    cause instanceof Error
+                      ? cause.message
+                      : uiMessage('helperNavigation.saveFailed')
+                  )
+                )
+                .finally(() => setProjectWorking(false));
+            }}
+          >
+            {t('helperNavigation.deleteProject')}
+          </button>
+        </div>
+      </Dialog>
+      <Dialog
+        open={!!moving}
+        title={t('helperNavigation.move')}
+        onClose={() => {
+          if (!projectWorking) setMoving(null);
+        }}
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!moving || projectWorking) return;
+            setProjectWorking(true);
+            setProjectError('');
+            void api<HelperConversation>(
+              `/helper/conversations/${encodeURIComponent(moving.id)}/project`,
+              { projectId: moveProject || null, expectedRevision: moving.revision },
+              'PATCH'
+            )
+              .then((value) => {
+                props.onUpdate({ ...value, projectId: moveProject || null } as HelperSession);
+                setMoving(null);
+                props.onProjectsChanged?.();
+              })
+              .catch((cause) =>
+                setProjectError(
+                  cause instanceof Error ? cause.message : uiMessage('helperNavigation.saveFailed')
+                )
+              )
+              .finally(() => setProjectWorking(false));
+          }}
+        >
+          <label>
+            {t('helperNavigation.project')}
+            <select
+              value={moveProject}
+              onChange={(event) => setMoveProject(event.target.value)}
+              disabled={projectWorking}
+            >
+              <option value="">{t('helperNavigation.noProject')}</option>
+              {projects.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          {!projectsLoaded && (
+            <button type="button" onClick={() => void reloadProjects()}>
+              {t('helperNavigation.retry')}
+            </button>
+          )}
+          {projectError && (
+            <NoticeBanner tone="error">{translateMessage(projectError)}</NoticeBanner>
+          )}
+          <div className="form-actions">
+            <button
+              type="button"
+              className="secondary"
+              disabled={projectWorking}
+              onClick={() => setMoving(null)}
+            >
+              {t('helpers.m165')}
+            </button>
+            <button className="primary" disabled={projectWorking || !projectsLoaded}>
+              {t('helperNavigation.move')}
+            </button>
+          </div>
+        </form>
+      </Dialog>
       {cleanupFailure && (
         <NoticeBanner tone="error">{translateMessage(cleanupFailure)}</NoticeBanner>
       )}
@@ -379,7 +873,7 @@ export function HelperSessionBar(props: Props) {
                     setCleanupFailure(uiMessage('helpers.m194'));
                   }
                   setDeleting(null);
-                  props.onDelete();
+                  props.onDelete(deleting.id);
                 })
                 .catch((cause) => setError(cause.message))
                 .finally(() => setWorking(false));
