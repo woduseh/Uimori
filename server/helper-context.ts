@@ -7,11 +7,21 @@ import { contextBudgetForModel } from '../core/context-budget.js';
 import { checkpointHash } from './context-store.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
+import { helperMessageAttachments } from './helper-attachments.js';
 
 type Row = Record<string, any>;
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const refs = (history: HelperTaskSnapshot['history']) =>
-  history.map((message) => ({ revision: message.id, hash: hash([message.role, message.text]) }));
+  history.map((message) => ({
+    revision: message.id,
+    hash: hash([
+      message.role,
+      message.text,
+      ...(message.images?.length || message.files?.length
+        ? [message.images ?? [], message.files ?? []]
+        : []),
+    ]),
+  }));
 
 /** Model reads need the active reference once, without the UI's checkpoint and job history. */
 export function readHelperChatContext(store: Store, chatId: string) {
@@ -67,7 +77,21 @@ export function helperHistory(store: Store, conversationId: string): HelperTaskS
       id: String(row.id),
       role: row.role as 'user' | 'assistant',
       text: String(row.text),
+      ...helperMessageAttachments(store.db, String(row.id)),
     }));
+}
+
+/** Admission and execution must select the same exact tail of a validated checkpoint. */
+export function helperHistoryForContext(
+  store: Store,
+  history: HelperTaskSnapshot['history'],
+  context: Pick<NonNullable<HelperTaskSnapshot['context']>, 'checkpoint'>
+) {
+  const plan = context.checkpoint ? store.context.checkpoint(context.checkpoint).plan : undefined;
+  return {
+    history: plan ? history.slice(plan.compacted.length) : history,
+    summary: plan?.summary ?? '',
+  };
 }
 export function helperContext(
   store: Store,
@@ -96,6 +120,31 @@ export function helperContext(
       throw new HttpError(409, 'HELPER_CONTEXT_DEPENDENCY_CHANGED');
   }
   return { activeRevision: Number(row?.revision ?? 0), checkpoint };
+}
+
+/** Preview the same retry replacement that commits with the new task. */
+export function helperRequestContext(store: Store, conversationId: string, retryOf?: string) {
+  const history = helperHistory(store, conversationId);
+  const context = helperContext(store, conversationId, history);
+  if (!retryOf) return { history, context, invalidatesCheckpoint: false };
+  const replaced = new Set(
+    store.db
+      .prepare('SELECT id FROM helper_messages WHERE conversation_id=? AND task_id=?')
+      .all(conversationId, retryOf)
+      .map((row) => String(row.id))
+  );
+  const plan = context.checkpoint ? store.context.checkpoint(context.checkpoint).plan : undefined;
+  const invalidatesCheckpoint =
+    !!plan &&
+    (plan.compacted.some((message) => replaced.has(message.revision)) ||
+      plan.recentSourceRevisions.some((messageId) => replaced.has(messageId)));
+  return {
+    history: history.filter((message) => !replaced.has(message.id)),
+    context: invalidatesCheckpoint
+      ? { activeRevision: context.activeRevision + 1, checkpoint: null }
+      : context,
+    invalidatesCheckpoint,
+  };
 }
 export function publishHelperContext(
   store: Store,

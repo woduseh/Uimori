@@ -204,6 +204,12 @@ export type ProviderExecutionOptions = {
   ) =>
     | import('./request-images.js').ResolvedRequestImage
     | Promise<import('./request-images.js').ResolvedRequestImage>;
+  resolveFile?: (
+    file: import('./request-files.js').RequestFile,
+    signal?: AbortSignal
+  ) =>
+    | import('./request-files.js').ResolvedRequestFile
+    | Promise<import('./request-files.js').ResolvedRequestFile>;
   executeAnthropicBatch?: (
     connection: ProviderConnection,
     request: ProviderRequest,

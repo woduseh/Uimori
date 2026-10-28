@@ -3,7 +3,7 @@ import { Pencil, Save, Trash2, X } from 'lucide-react';
 import { ActionMenu } from './ActionMenu.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
-import { Prose } from './Prose.js';
+import { HelperMessageProse } from './HelperMessageProse.js';
 import { t, useI18n } from './i18n.js';
 import { REQUEST_TEXT_MAX_CHARS } from '../core/content-limits.js';
 
@@ -208,9 +208,7 @@ export function HelperResponseEditor({
     );
   return (
     <>
-      <div className="helper-prose">
-        <Prose text={text} />
-      </div>
+      <HelperMessageProse text={text} />
       <div className="helper-response-actions">
         {copy}
         <ActionMenu label={t('helpers.messageMenu')} placement="top" viewport>

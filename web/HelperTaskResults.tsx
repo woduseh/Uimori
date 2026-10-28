@@ -252,101 +252,115 @@ function TaskUsage({ usage }: { usage: HelperTaskResultsView['usage'] }) {
     (amount) => amount.reported > 0 && amount.unknown > 0
   );
   return (
-    <details className="execution-record scene-usage helper-result-usage">
-      <summary>
-        <span className="ui-meta-row">
-          <span className="sr-only">{t('helperResults.usage')}</span>
-          <span>
-            {t('helperResults.inputSummary', {
-              count: summaryAmount(totals.inputTokens),
-            })}
-          </span>
-          <span>
-            {t('helperResults.outputSummary', { count: summaryAmount(totals.outputTokens) })}
-          </span>
-          {usage.toolExecutions > 0 && (
+    <div className="helper-result-usage">
+      <details className="execution-record scene-usage">
+        <summary>
+          <span className="ui-meta-row">
+            <span className="sr-only">{t('helperResults.usage')}</span>
             <span>
-              {t('helperResults.toolSummary', { count: formatNumber(usage.toolExecutions) })}
+              {t('helperResults.inputSummary', {
+                count: summaryAmount(totals.inputTokens),
+              })}
             </span>
-          )}
-          {partial && <span>{t('helperResults.partialUsage')}</span>}
-        </span>
-      </summary>
-      <dl className="scene-receipt">
-        {usage.latestInputEstimate !== null && (
-          <>
-            <dt>{t('helperResults.latestEstimate')}</dt>
-            <dd>
+            <span>
+              {t('helperResults.outputSummary', { count: summaryAmount(totals.outputTokens) })}
+            </span>
+            {usage.toolExecutions > 0 && (
               <span>
-                {formatNumber(usage.latestInputEstimate)}
-                {hasInputBudget && ` / ${formatNumber(inputLimit)}`}
+                {t('helperResults.toolSummary', { count: formatNumber(usage.toolExecutions) })}
               </span>
-              {hasInputBudget && (
-                <>
+            )}
+            {partial && <span>{t('helperResults.partialUsage')}</span>}
+            {hasInputBudget && (
+              <span className="helper-input-mini">
+                <span>{t('helperConversation.inputEstimate')}</span>
+                <meter
+                  className="helper-input-budget"
+                  min={0}
+                  max={inputLimit}
+                  value={Math.min(inputEstimate, inputLimit)}
+                  aria-label={t('helperResults.inputBudgetMeter')}
+                  aria-valuetext={t('helperResults.inputBudgetValue', {
+                    input: formatNumber(inputEstimate),
+                    limit: formatNumber(inputLimit),
+                  })}
+                />
+              </span>
+            )}
+          </span>
+        </summary>
+        <dl className="scene-receipt">
+          {inputEstimate !== null && (
+            <>
+              <dt>{t('helperResults.latestEstimate')}</dt>
+              <dd>
+                {formatNumber(inputEstimate)}
+                {hasInputBudget && ` / ${formatNumber(inputLimit)}`}
+              </dd>
+            </>
+          )}
+          {(usage.unmeasuredFileCount ?? 0) > 0 && (
+            <>
+              <dt>{t('helperResults.latestEstimate')}</dt>
+              <dd>
+                {usage.knownInputEstimate != null && (
                   <span>
-                    {formatNumber(inputEstimate / inputLimit, {
-                      style: 'percent',
-                      maximumFractionDigits: 1,
+                    {t('helperConversation.measuredInput', {
+                      count: formatNumber(usage.knownInputEstimate),
                     })}
                   </span>
-                  <meter
-                    className="helper-input-budget"
-                    min={0}
-                    max={inputLimit}
-                    value={Math.min(inputEstimate, inputLimit)}
-                    aria-label={t('helperResults.inputBudgetMeter')}
-                    aria-valuetext={t('helperResults.inputBudgetValue', {
-                      input: formatNumber(inputEstimate),
-                      limit: formatNumber(inputLimit),
-                    })}
-                  />
-                </>
-              )}
-            </dd>
-          </>
-        )}
-        <dt>{t('helperResults.executions')}</dt>
-        <dd>{formatNumber(usage.attempts.length)}</dd>
-        <dt>{t('helperResults.tools')}</dt>
-        <dd>{formatNumber(usage.toolExecutions)}</dd>
-        {totals.internalModelCalls.reported > 0 && (
-          <>
-            <dt>{t('helperResults.internalCalls')}</dt>
-            <dd>
-              <UsageAmount amount={totals.internalModelCalls} />
-            </dd>
-          </>
-        )}
-        <dt>{t('helperResults.input')}</dt>
-        <dd>
-          <UsageAmount amount={totals.inputTokens} />
-        </dd>
-        {totals.cachedInputTokens.reported > 0 && (
-          <>
-            <dt>{t('helperResults.cached')}</dt>
-            <dd>
-              <UsageAmount amount={totals.cachedInputTokens} />
-            </dd>
-          </>
-        )}
-        <dt>{t('helperResults.output')}</dt>
-        <dd>
-          <UsageAmount amount={totals.outputTokens} />
-        </dd>
-        {totals.reasoningTokens.reported > 0 && (
-          <>
-            <dt>{t('helperResults.reasoning')}</dt>
-            <dd>
-              <UsageAmount amount={totals.reasoningTokens} />
-            </dd>
-          </>
-        )}
-        <dt>{t('helperResults.cost')}</dt>
-        <dd>
-          <UsageAmount amount={totals.costUsd} cost />
-        </dd>
-      </dl>
-    </details>
+                )}
+                <span>
+                  {t('helperConversation.unmeasuredFiles', {
+                    count: formatNumber(usage.unmeasuredFileCount!),
+                  })}
+                </span>
+              </dd>
+            </>
+          )}
+          <dt>{t('helperResults.executions')}</dt>
+          <dd>{formatNumber(usage.attempts.length)}</dd>
+          <dt>{t('helperResults.tools')}</dt>
+          <dd>{formatNumber(usage.toolExecutions)}</dd>
+          {totals.internalModelCalls.reported > 0 && (
+            <>
+              <dt>{t('helperResults.internalCalls')}</dt>
+              <dd>
+                <UsageAmount amount={totals.internalModelCalls} />
+              </dd>
+            </>
+          )}
+          <dt>{t('helperResults.input')}</dt>
+          <dd>
+            <UsageAmount amount={totals.inputTokens} />
+          </dd>
+          {totals.cachedInputTokens.reported > 0 && (
+            <>
+              <dt>{t('helperResults.cached')}</dt>
+              <dd>
+                <UsageAmount amount={totals.cachedInputTokens} />
+              </dd>
+            </>
+          )}
+          <dt>{t('helperResults.output')}</dt>
+          <dd>
+            <UsageAmount amount={totals.outputTokens} />
+          </dd>
+          {totals.reasoningTokens.reported > 0 && (
+            <>
+              <dt>{t('helperResults.reasoning')}</dt>
+              <dd>
+                <UsageAmount amount={totals.reasoningTokens} />
+              </dd>
+            </>
+          )}
+          <dt>{t('helperResults.cost')}</dt>
+          <dd>
+            <UsageAmount amount={totals.costUsd} cost />
+          </dd>
+        </dl>
+      </details>
+    </div>
   );
 }
 

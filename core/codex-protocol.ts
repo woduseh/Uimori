@@ -11,6 +11,7 @@ import { ProviderContractError } from './provider-errors.js';
 import { validateProviderPrompt } from './risu-prompt.js';
 import { NATIVE_HOST_CONTEXT_ID, nativeHostContextText } from './provider-messages.js';
 import { providerImagePart, requestImages } from './provider-image-reference.js';
+import { assertProviderFileSupport } from './provider-file-reference.js';
 import type { ProviderPrompt } from './risu-prompt.js';
 import { webSearchAllowed } from './helper-web-search.js';
 
@@ -84,6 +85,7 @@ export function buildCodexTurn(request: ProviderRequest): {
 function codexInput(request: ProviderRequest, native = false) {
   const prompt = request.prompt;
   if (prompt) validateProviderPrompt(prompt);
+  assertProviderFileSupport(request, 'codex-app-server-v1');
   if (prompt?.messages.some((message) => message.completion === 'prefill'))
     fail('CODEX_PROMPT_PREFILL_UNSUPPORTED');
   if (prompt?.cachePlan.some((anchor) => anchor.policy === 'require'))

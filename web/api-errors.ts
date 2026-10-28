@@ -2,6 +2,7 @@ import { t, registerMessage, formatMessage, getLocale } from './i18n.js';
 import { messages as localizedErrors } from './locales/errors.js';
 import { illustrationErrorMessage } from './illustration-labels.js';
 import { requestImageErrors } from './request-image-errors.js';
+import { requestFileErrors } from './request-file-errors.js';
 import { REQUEST_TEXT_MAX_CHARS, SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import {
   RISU_IMPORT_MAX_UPLOAD_BYTES,
@@ -14,6 +15,7 @@ const messages: Record<string, string> = {
   SCENE_DELETED_RETRY_UNAVAILABLE:
     '삭제된 장면을 포함한 작업은 다시 실행할 수 없어요. 현재 이야기에서 새 요청을 보내 주세요.',
   ...requestImageErrors,
+  ...requestFileErrors,
   STORY_GUIDE_STALE: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
   STORY_GUIDE_CANCELLED: '원작 참고가 중단됐어요.',
   STORY_GUIDE_TIMEOUT: '원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 집필해 주세요.',

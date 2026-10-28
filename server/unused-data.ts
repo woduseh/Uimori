@@ -160,8 +160,12 @@ export function pruneUnusedData(db: DatabaseSync, candidates: Iterable<string> |
       scan(snapshot.nativeRisuAuthored);
     }
   }
+  for (const row of db.prepare('SELECT images FROM helper_message_attachments').iterate())
+    scan(JSON.parse(String(row.images)));
   for (const row of db
-    .prepare("SELECT snapshot FROM helper_tasks WHERE status!='completed'")
+    .prepare(`SELECT t.snapshot FROM helper_tasks t WHERE t.status!='completed'
+      AND NOT EXISTS (SELECT 1 FROM helper_messages m JOIN helper_message_changes c ON c.message_id=m.id
+        WHERE m.task_id=t.id AND c.deleted=1)`)
     .iterate())
     scan(JSON.parse(String(row.snapshot)));
   for (const row of db.prepare('SELECT hash FROM illustration_images').iterate())

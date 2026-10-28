@@ -282,7 +282,11 @@ for (const width of DEFAULT_WIDTHS) {
     });
     await expect(inputMeter).toHaveAttribute('max', '1000');
     await expect(inputMeter).toHaveAttribute('value', '850');
-    await expect(usageValue(results, '마지막 전송 입력 (추정)')).toContainText('850 / 1,00085%');
+    await expect(usageValue(results, '마지막 전송 입력 (추정)')).toHaveText('850 / 1,000');
+    await expect(inputMeter).toHaveAttribute(
+      'aria-valuetext',
+      '입력 예산 1,000 토큰 중 약 850 토큰'
+    );
     refreshFails = true;
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await expect(results.getByRole('alert')).toContainText('결과를 새로 확인하지 못했어요.');

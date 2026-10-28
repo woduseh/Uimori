@@ -28,6 +28,7 @@ import { ProviderOptionsError, validateProviderOptions } from './provider-option
 import type { CatalogModel, ProviderConnection, ProviderRequest } from './transport.js';
 import { continuationInputText } from './provider-messages.js';
 import { requestImages } from './provider-image-reference.js';
+import { requestFiles } from './provider-file-reference.js';
 import { webSearchAllowed } from './helper-web-search.js';
 
 export function reject(code: string): never {
@@ -222,7 +223,11 @@ export function validateRequest(value: unknown): ProviderRequest {
   keys(value.input, ['task', 'controls', 'source', 'catalog', 'results', 'history']);
   if (typeof value.input.task !== 'string' || value.input.task.length > EXECUTION_INPUT_MAX_CHARS)
     reject('INVALID_STRING');
-  if (!value.input.task.trim() && !requestImages(value as ProviderRequest).length)
+  if (
+    !value.input.task.trim() &&
+    !requestImages(value as ProviderRequest).length &&
+    !requestFiles(value as ProviderRequest).length
+  )
     reject('INVALID_STRING');
   if (
     !object(value.input.controls) ||

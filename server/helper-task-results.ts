@@ -81,6 +81,8 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
     .get(taskId);
   const measured = store.db
     .prepare(`SELECT json_extract(data,'$.estimatedInputTokens') AS tokens,
+      json_extract(data,'$.knownInputTokens') AS known_tokens,
+      json_extract(data,'$.unmeasuredFileCount') AS unmeasured_files,
       json_extract(data,'$.inputTokenLimit') AS input_limit FROM helper_events
       WHERE task_id=? AND kind='input.measured' ORDER BY seq DESC LIMIT 1`)
     .get(taskId);
@@ -94,6 +96,12 @@ export function readHelperTaskResults(store: Store, taskId: string): HelperTaskR
       attempts,
       toolExecutions: Number(tools?.n ?? 0),
       latestInputEstimate: tokens(measured?.tokens),
+      ...(Number(measured?.unmeasured_files ?? 0) > 0
+        ? {
+            knownInputEstimate: tokens(measured?.known_tokens),
+            unmeasuredFileCount: Number(measured?.unmeasured_files),
+          }
+        : {}),
       latestInputLimit: inputLimit !== null && inputLimit > 0 ? inputLimit : null,
     },
   };

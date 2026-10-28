@@ -52,6 +52,7 @@ import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { elapsedLabel } from './ActivityStatus.js';
 import { TurnStatus, type StatusTone } from './TurnStatus.js';
+import { ActivityBar } from './ActivityBar.js';
 import { ChatComposer, ComposerInput } from './ChatComposer.js';
 import { IconButton } from './IconButton.js';
 import { PartialResponse, ResponseDisplay } from './StreamingResponse.js';
@@ -73,8 +74,21 @@ import {
   type ActiveEditorContext,
 } from './resource-editor.js';
 import { useHelperSessions } from './useHelperSessions.js';
-import { HelperSessionBar } from './HelperSessionBar.js';
+import { HelperSessionBar, type HelperNavigationActions } from './HelperSessionBar.js';
+import { requestFileError } from './request-file-errors.js';
 import { HelperModelPicker } from './HelperModelPicker.js';
+import { usePromptWorkspace } from './usePromptWorkspace.js';
+import {
+  HelperAttachmentPicker,
+  HelperDraftAttachments,
+  HelperStoredFiles,
+} from './HelperAttachments.js';
+import {
+  acceptHelperAttachments,
+  helperAttachmentDraftMatches,
+  useHelperAttachmentDraft,
+  type FrozenHelperAttachments,
+} from './helper-attachment-draft.js';
 import { SaveButton } from './SaveButton.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { TransientNotice } from './TransientNotice.js';
@@ -99,7 +113,7 @@ type Props = {
   returnToSidecar?: boolean;
   navigationLeading?: ReactNode;
   navigationHost?: HTMLElement | null;
-  navigationActions?: MutableRefObject<{ create: () => void } | null>;
+  navigationActions?: MutableRefObject<HelperNavigationActions | null>;
   searchRequest?: number;
   onSelectConversation?: () => void;
   returnLabel?: string;
@@ -123,7 +137,7 @@ type Props = {
   modelRevision: number;
   library: Library | null;
 };
-type Outbox = {
+type Outbox = Partial<FrozenHelperAttachments> & {
   retryOf?: string;
   steerTaskId?: string;
   requestKey: string;
@@ -189,7 +203,7 @@ const statusLabel: Record<string, string> = {
   interrupted: 'helpers.m007',
 };
 const activityKey = (task: HelperTaskView) =>
-  `helper-task-activity:${task.conversationId}:${task.id}`;
+  `helper-task-activity:${task.conversationId}:${task.id}${active(task) ? '' : ':settled'}`;
 function savedActivityOpen(task: HelperTaskView) {
   try {
     return sessionStorage.getItem(activityKey(task)) === 'open';
@@ -319,6 +333,33 @@ export function HelperPanel(props: Props) {
     sessions.sessions.find((session) => session.id === sessions.currentId)?.latestEventSeq
   );
   const conversation = data.current?.conversation ?? null;
+  const currentActivitySequence = sessions.sessions.find(
+    (session) => session.id === sessions.currentId
+  )?.latestActivityEventSeq;
+  useEffect(() => {
+    if (
+      !props.open ||
+      data.loading ||
+      currentActivitySequence === undefined ||
+      conversation?.id !== sessions.currentId ||
+      !sessions.currentId
+    )
+      return;
+    const id = sessions.currentId;
+    const acknowledgeVisible = () => {
+      if (!document.hidden) sessions.acknowledge([id]);
+    };
+    acknowledgeVisible();
+    document.addEventListener('visibilitychange', acknowledgeVisible);
+    return () => document.removeEventListener('visibilitychange', acknowledgeVisible);
+  }, [
+    props.open,
+    data.loading,
+    conversation?.id,
+    sessions.currentId,
+    currentActivitySequence,
+    sessions.acknowledge,
+  ]);
   const scope = conversation?.scope ?? props.scope;
   const selectedScope = conversation?.scope;
   useEffect(() => {
@@ -378,6 +419,7 @@ export function HelperPanel(props: Props) {
   }, [props.open]);
   const [taskHistory, setTaskHistory] = useState<{ taskId?: string } | null>(null);
   const [openTaskActivities, setOpenTaskActivities] = useState<Record<string, boolean>>({});
+  const [currentActivityClosed, setCurrentActivityClosed] = useState<string | null>(null);
   const [personas, setPersonas] = useState<Record<string, { text: string; revision: number }>>({});
   const [savingPersona, setSavingPersona] = useState(false);
   const compact = (props.modal ?? false) && !props.expanded;
@@ -506,6 +548,21 @@ export function HelperPanel(props: Props) {
     setFrozenResources((old) => ({ ...old, [scopeKey]: props.resource ?? null }));
   }, [props.resource, scopeKey]);
   const draft = drafts[scopeKey] ?? local(`uimori:helper-input:${scopeKey}`) ?? '';
+  const helperWorkspace = usePromptWorkspace();
+  const modelRef =
+    savedModel && savedModel.revision > (helperWorkspace.workspace?.revision ?? -1)
+      ? savedModel
+      : helperWorkspace.workspace?.helperModel;
+  const attachmentModelPreset = props.library?.models.find((model) => model.id === modelRef?.id);
+  const attachmentConnection = props.library?.connections.find(
+    (connection) => connection.id === attachmentModelPreset?.connectionId
+  );
+  const attachments = useHelperAttachmentDraft(
+    scopeKey,
+    attachmentModelPreset && attachmentConnection
+      ? { protocol: attachmentConnection.protocol, modelId: attachmentModelPreset.modelId }
+      : null
+  );
   const outbox = outboxes[scopeKey] === undefined ? storedOutbox(scopeKey) : outboxes[scopeKey];
   const selection =
     selections[scopeKey] === undefined ? storedSelection(scopeKey) : selections[scopeKey];
@@ -514,7 +571,7 @@ export function HelperPanel(props: Props) {
       ? storedOutline(scopeKey)
       : outlineSelections[scopeKey];
   const busy = busyScopes[scopeKey] ?? false;
-  const storedError = errors[scopeKey] || data.error || sessions.error;
+  const storedError = errors[scopeKey] || data.error || sessions.error || attachments.error;
   const error = storedError === 'helper-draft-read-failed' ? t('helpers.m012') : storedError;
   const persona =
     personas[scopeKey] ??
@@ -579,10 +636,11 @@ export function HelperPanel(props: Props) {
   const editDraft = useCallback(
     (text: string) => {
       if (!scopeKey) return;
+      attachments.touch();
       saveLocal(`uimori:helper-input:${scopeKey}`, text);
       setDrafts((old) => ({ ...old, [scopeKey]: text }));
     },
-    [scopeKey]
+    [scopeKey, attachments.touch]
   );
   const setOutbox = (key: string, value: Outbox | null) => {
     setOutboxes((old) => ({ ...old, [key]: value }));
@@ -790,7 +848,9 @@ export function HelperPanel(props: Props) {
       !hydrated[scopeKey] ||
       (props.expanded && !(scopeKey in frozenEditors)) ||
       locks.current.has(scopeKey) ||
-      (!saved && (!conversation || !draft.trim()))
+      (!saved && (!conversation || (!draft.trim() && !attachments.hasAttachments))) ||
+      (!saved && (!attachments.ready || attachments.busy)) ||
+      (steerTaskId && attachments.hasAttachments)
     )
       return false;
     if (!saved && outbox) return false;
@@ -829,6 +889,7 @@ export function HelperPanel(props: Props) {
       let request = saved;
       if (!request) {
         request = {
+          ...(await attachments.freeze()),
           requestKey: crypto.randomUUID(),
           text,
           scope: owner,
@@ -873,12 +934,23 @@ export function HelperPanel(props: Props) {
           ...(request.editor ? { editor: request.editor } : {}),
           ...(request.selection ? { selection: request.selection } : {}),
           ...(request.outline ? { outline: request.outline } : {}),
+          ...(request.images?.length ? { images: request.images } : {}),
+          ...(request.files?.length ? { files: request.files } : {}),
         }
       );
       setOutbox(owner, null);
       setUnpersisted((old) => ({ ...old, [owner]: false }));
       void clearHelperRecoveryIf(`helper-outbox:${owner}`, JSON.stringify(request)).catch(() => {});
-      if (!request.retryOf)
+      const sameDraft =
+        !request.draftToken || helperAttachmentDraftMatches(owner, request.draftToken);
+      if (!request.retryOf && request.draftToken)
+        void acceptHelperAttachments(owner, request.draftToken).catch(() => {
+          setErrors((old) => ({
+            ...old,
+            [owner]: uiMessage('helperAttachments.acceptCleanupFailed'),
+          }));
+        });
+      if (!request.retryOf && sameDraft)
         setDrafts((old) => {
           const existing = old[owner] ?? local(`uimori:helper-input:${owner}`) ?? '';
           if (existing !== text) return old;
@@ -1013,6 +1085,7 @@ export function HelperPanel(props: Props) {
   const taskStatus = (task: HelperTaskView) => (
     <div className="helper-task" data-task-id={task.id}>
       <TurnStatus
+        key={`${task.id}:${active(task) ? 'active' : 'settled'}`}
         tone={tone(task)}
         text={
           (task.id === summarized?.id ? activityLabel : undefined) ??
@@ -1052,7 +1125,9 @@ export function HelperPanel(props: Props) {
             })}
           </span>
         </div>
-        {task.error && <p className="error">{translateMessage(task.error ?? '')}</p>}
+        {task.error && (
+          <p className="error">{requestFileError(task.error) ?? translateMessage(task.error)}</p>
+        )}
         {task.completedEffects && (
           <p>
             {t('helpers.m312', {
@@ -1113,7 +1188,7 @@ export function HelperPanel(props: Props) {
           )}
           <RetryFailure
             status={task.status}
-            error={translateMessage(task.error ?? '')}
+            error={requestFileError(task.error) ?? translateMessage(task.error ?? '')}
             disabled={busy || Boolean(outbox)}
             onRetry={task.completedEffects ? undefined : () => void retry(task)}
             onSettings={props.onModelSettings}
@@ -1215,14 +1290,15 @@ export function HelperPanel(props: Props) {
             sessions.select(session);
             props.onSelectConversation?.();
           }}
-          onCreate={() => {
-            void sessions.create().then((session) => {
+          onCreate={(projectId) => {
+            void sessions.create(projectId).then((session) => {
               if (props.expanded && session) {
                 setFrozenEditors((old) => ({ ...old, [session.id]: null }));
                 setFrozenResources((old) => ({ ...old, [session.id]: null }));
               }
             });
           }}
+          onAcknowledge={(ids) => void sessions.acknowledge(ids)}
           onProjectsChanged={() => void sessions.reload()}
           onUpdate={(value) => {
             sessions.update(value);
@@ -1481,13 +1557,7 @@ export function HelperPanel(props: Props) {
               error={data.error}
               label={t('helpers.m061')}
             />
-          ) : (
-            messages.length === 0 && (
-              <p className="helper-empty" role="status">
-                {t('helpers.noMessages')}
-              </p>
-            )
-          )}
+          ) : null}
           {conversation &&
             messages.map((message) => {
               const task = taskMap.get(message.taskId);
@@ -1525,6 +1595,7 @@ export function HelperPanel(props: Props) {
                     <RequestMessage
                       runId={message.taskId}
                       request={message.text}
+                      images={message.images}
                       maxLength={REQUEST_TEXT_MAX_CHARS}
                       saveHint=""
                       disabled={messageDisabled}
@@ -1548,6 +1619,7 @@ export function HelperPanel(props: Props) {
                   ) : (
                     response
                   )}
+                  {message.role === 'user' && <HelperStoredFiles files={message.files} />}
                   {message.artifacts.map((artifact) => (
                     <HelperArtifactCard
                       conversationId={conversation.id}
@@ -1565,9 +1637,9 @@ export function HelperPanel(props: Props) {
                   )}
                   {message.role === 'user' &&
                     taskMap.get(message.taskId) &&
-                    (taskMap.get(message.taskId)!.status !== 'completed' ||
-                      !answered.has(message.taskId)) &&
+                    !answered.has(message.taskId) &&
                     taskStatus(taskMap.get(message.taskId)!)}
+                  {message.role === 'assistant' && task && taskStatus(task)}
                 </article>
               );
             })}
@@ -1696,7 +1768,11 @@ export function HelperPanel(props: Props) {
                   {t('helpers.showInConversation')}
                 </button>
               )}
-              {task.error && <p className="error">{translateMessage(task.error ?? '')}</p>}
+              {task.error && (
+                <p className="error">
+                  {requestFileError(task.error) ?? translateMessage(task.error)}
+                </p>
+              )}
               {task.completedEffects && (
                 <p>
                   {t('helpers.m315', {
@@ -1772,10 +1848,35 @@ export function HelperPanel(props: Props) {
       </Dialog>
       <footer className="helper-composer">
         {summarized && (
-          <div className="helper-current-activity" role="status">
-            <span>{activityLabel ?? t(statusLabel[summarized.status] ?? summarized.status)}</span>
-            <HelperTaskElapsed task={summarized} visible={props.open} />
-          </div>
+          <>
+            <ActivityBar
+              tone={tone(summarized)}
+              issue={attention(summarized)}
+              label={activityLabel ?? t(statusLabel[summarized.status] ?? summarized.status)}
+              elapsed={<HelperTaskElapsed task={summarized} visible={props.open} />}
+              extra={pending.length - 1}
+              expanded={currentActivityClosed !== summarized.id}
+              collapsed={currentActivityClosed === summarized.id}
+              toggleLabel={t('helperConversation.activity')}
+              toggleTitle={t('helperConversation.activity')}
+              onToggle={() =>
+                setCurrentActivityClosed((old) => (old === summarized.id ? null : summarized.id))
+              }
+              onDetails={() => setTaskHistory({ taskId: summarized.id })}
+              testId="helper-current-activity"
+            />
+            {currentActivityClosed !== summarized.id && (
+              <div className="helper-current-activity-details">
+                <HelperActivityDetails
+                  inline
+                  taskId={summarized.id}
+                  status={summarized.status}
+                  visible={props.open}
+                  source={liveActivity}
+                />
+              </div>
+            )}
+          </>
         )}
         {conversation && data.current?.lastResourceEdit && (
           <HelperResourceUndo
@@ -1820,11 +1921,14 @@ export function HelperPanel(props: Props) {
                     {t('helpers.m101')}{' '}
                   </button>
                 )}
-                {!hydrated[scopeKey] && (
+                {(!hydrated[scopeKey] || !attachments.ready) && (
                   <button
                     type="button"
                     className="secondary"
-                    onClick={() => setRecoveryAttempt((old) => old + 1)}
+                    onClick={() => {
+                      setRecoveryAttempt((old) => old + 1);
+                      void attachments.retry();
+                    }}
                   >
                     {t('helpers.m102')}
                   </button>
@@ -1836,6 +1940,7 @@ export function HelperPanel(props: Props) {
                     setError('');
                     data.setError('');
                     sessions.clearError();
+                    attachments.clearError();
                   }}
                 >
                   <CloseIcon size={18} aria-hidden="true" />
@@ -1848,12 +1953,27 @@ export function HelperPanel(props: Props) {
           </NoticeBanner>
         )}
         <ChatComposer
+          className="helper-request-composer"
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+          }}
+          onDrop={(event) => {
+            if (!event.dataTransfer.files.length) return;
+            event.preventDefault();
+            if (props.ready !== false && conversation && !busy)
+              void attachments.addFiles(Array.from(event.dataTransfer.files));
+          }}
           onSubmit={(event) => {
             event.preventDefault();
             if (outbox) setOutboxDecision(outbox);
             else void send();
           }}
         >
+          <HelperDraftAttachments
+            draft={attachments.draft}
+            remove={attachments.remove}
+            disabled={busy || attachments.busy}
+          />
           {(currentResource ||
             (displayEditor && !currentResource) ||
             selectedOutline ||
@@ -1951,23 +2071,40 @@ export function HelperPanel(props: Props) {
             enterSend={props.enterSend}
             aria-label={t('helpers.m103')}
             value={draft}
-            disabled={props.ready === false || !conversation}
+            disabled={props.ready === false || !conversation || !attachments.ready}
             placeholder={t('helpers.m104')}
             maxLength={REQUEST_TEXT_MAX_CHARS}
             onChange={(event) => editDraft(event.target.value)}
+            onPaste={(event) => {
+              const files = Array.from(event.clipboardData.files);
+              if (!files.length) return;
+              event.preventDefault();
+              if (!busy) void attachments.addFiles(files);
+            }}
             onSend={() => {
               if (outbox) setOutboxDecision(outbox);
               else void send();
             }}
           />
           <div className="quick-controls">
+            <HelperAttachmentPicker
+              accept={attachments.accept}
+              disabled={
+                props.ready === false ||
+                !conversation ||
+                !attachments.ready ||
+                busy ||
+                attachments.busy
+              }
+              addFiles={attachments.addFiles}
+            />
             {modelChip}
             <IconButton
               label={t('helpers.m106')}
               icon={History}
               onClick={() => setTaskHistory({})}
             />
-            {running && draft.trim() && (
+            {running && draft.trim() && !attachments.hasAttachments && (
               <button
                 type="button"
                 className="secondary helper-steer"
@@ -1984,7 +2121,7 @@ export function HelperPanel(props: Props) {
                 {t('helpers.m108')}
               </button>
             )}
-            {running && draft.trim() && (
+            {running && (draft.trim() || attachments.hasAttachments || outbox) && (
               <IconButton
                 label={t('helpers.m031')}
                 icon={Square}
@@ -1992,7 +2129,7 @@ export function HelperPanel(props: Props) {
               />
             )}
           </div>
-          {running && !draft.trim() && !outbox ? (
+          {running && !draft.trim() && !attachments.hasAttachments && !outbox ? (
             <button
               className="send-button"
               type="button"
@@ -2016,8 +2153,10 @@ export function HelperPanel(props: Props) {
                 !hydrated[scopeKey] ||
                 busy ||
                 data.loading ||
+                !attachments.ready ||
+                attachments.busy ||
                 !conversation ||
-                (!draft.trim() && !outbox)
+                (!draft.trim() && !attachments.hasAttachments && !outbox)
               }
             >
               <ArrowUp size={20} />

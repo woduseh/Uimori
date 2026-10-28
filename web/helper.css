@@ -94,9 +94,6 @@
   display: flex;
   justify-content: flex-end;
   margin-top: 2px;
-  opacity: 0;
-}
-.helper-message.assistant:focus-within .helper-response-actions {
   opacity: 1;
 }
 .helper-copy-error {
@@ -104,25 +101,11 @@
   font-size: var(--font-small);
   text-align: right;
 }
-@media (hover: hover) {
-  .helper-message.assistant:hover .helper-response-actions {
-    opacity: 1;
-  }
-}
-@media (hover: none), (pointer: coarse), (max-width: 600px) {
-  .helper-response-actions {
-    opacity: 1;
-  }
-}
 
 .streaming-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: var(--reading-line-height, 1.7);
-}
-.helper-empty {
-  color: var(--muted);
-  line-height: 1.8;
 }
 .helper-task {
   font-size: var(--font-body);
@@ -156,7 +139,7 @@
 }
 .helper-activity-stage-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 6px;
   font-weight: 500;
@@ -165,13 +148,21 @@
 .helper-activity-stages summary small {
   color: var(--muted);
 }
-.helper-activity-stages > li[data-state="running"] > .helper-activity-stage-head,
 .helper-activity-stages > li[data-state="running"] > details > summary {
   color: var(--accent-text);
 }
-.helper-activity-stages > li[data-state="issue"] > .helper-activity-stage-head,
 .helper-activity-stages > li[data-state="issue"] > details > summary {
   font-weight: 600;
+  color: var(--error);
+}
+.helper-activity-stage-head > svg {
+  flex-shrink: 0;
+}
+.helper-current-activity-details {
+  max-height: min(28dvh, 260px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-inline: 8px;
 }
 .helper-activity-stages p {
   margin: 4px 0 8px;
@@ -228,6 +219,21 @@
   flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
+}
+.helper-composer .helper-request-composer,
+.helper-composer .helper-request-composer.grown {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "chips chips"
+    "text text"
+    "more send";
+  row-gap: 6px;
+  padding: 10px;
+}
+.helper-composer .helper-request-composer textarea {
+  padding: 4px 4px 8px;
+  min-height: 52px;
+  overflow-y: auto;
 }
 .helper-context-chips {
   padding: 2px 2px 4px;
@@ -353,11 +359,6 @@ details.helper-context-chip[open] {
   align-items: center;
   justify-content: center;
 }
-.helper-thread-empty > .helper-empty {
-  max-width: 32ch;
-  margin: 0;
-  text-align: center;
-}
 .helper-thread-empty > .loading-state {
   width: 100%;
 }
@@ -396,20 +397,6 @@ details.helper-context-chip[open] {
     overflow: hidden;
     text-overflow: ellipsis;
   }
-}
-.helper-unread-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--accent-text);
-  font-size: var(--font-small);
-  font-weight: 600;
-  flex-shrink: 0;
 }
 .helper-task-history .task-request {
   margin: 8px 0 0;
@@ -571,6 +558,34 @@ details.helper-context-chip[open] {
 .helper-prose pre {
   margin: 0 0 0.9em;
 }
+.helper-code-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-height: var(--control-h);
+  margin: 0;
+  padding: 2px 6px 2px 12px;
+  background: var(--surface);
+  border: var(--hairline) solid var(--line);
+  border-bottom: 0;
+  border-radius: var(--radius-control) var(--radius-control) 0 0;
+  font-size: var(--font-small);
+  line-height: 1.5;
+}
+.helper-code-language {
+  flex: 1;
+  color: var(--muted);
+}
+.helper-code-toolbar > .error {
+  flex-basis: 100%;
+}
+.helper-code-toolbar + pre {
+  border: var(--hairline) solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
+  background: var(--surface);
+}
 .helper-prose h1,
 .helper-prose h2,
 .helper-prose h3,
@@ -672,14 +687,6 @@ details.helper-context-chip[open] {
   .helper-has-navigation .helper-session-picker {
     display: block;
   }
-}
-.helper-current-activity {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  color: var(--muted);
-  font-size: var(--font-small);
 }
 .app-shell.helper-expanded > .story-workspace[hidden] {
   display: none;

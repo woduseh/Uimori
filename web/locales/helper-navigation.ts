@@ -91,4 +91,27 @@ export const messages = {
     zh: '无法更改项目。',
   },
   'helperNavigation.retry': { ko: '다시 시도', en: 'Retry', ja: '再試行', zh: '重试' },
+  'helperNavigation.views': {
+    ko: '도우미 탐색 방식',
+    en: 'Assistant navigation',
+    ja: 'アシスタントのナビゲーション',
+    zh: '助手导航',
+  },
+  'helperNavigation.explore': { ko: '탐색', en: 'Explore', ja: '探索', zh: '浏览' },
+  'helperNavigation.activityCount': {
+    ko: '활동, 미확인 {count}개',
+    en: 'Activity, {count} unread',
+    ja: 'アクティビティ、未確認{count}件',
+    zh: '活动，{count}条未读',
+  },
+  'helperNavigation.sort': { ko: '정렬', en: 'Sort', ja: '並べ替え', zh: '排序' },
+  'helperNavigation.sortName': { ko: '이름순', en: 'Name', ja: '名前順', zh: '名称' },
+  'helperNavigation.moveUp': { ko: '위로 이동', en: 'Move up', ja: '上に移動', zh: '上移' },
+  'helperNavigation.moveDown': { ko: '아래로 이동', en: 'Move down', ja: '下に移動', zh: '下移' },
+  'helperNavigation.acknowledge': {
+    ko: '{title} 활동 확인',
+    en: 'Mark activity in {title} as read',
+    ja: '{title}のアクティビティを確認',
+    zh: '将{title}的活动标为已读',
+  },
 };

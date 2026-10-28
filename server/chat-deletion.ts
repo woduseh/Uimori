@@ -5,6 +5,7 @@ import { HttpError, fields, record } from './request-validation.js';
 import { RUN_READER_DISMISSAL_PREFIX } from './run-reader-state.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
+import { pruneUnusedHelperFiles } from './helper-attachments.js';
 
 type Row = Record<string, any>;
 const chatTables = [
@@ -106,6 +107,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       'SELECT r.result AS value FROM job_results r JOIN jobs j ON j.id=r.job_id WHERE j.chat_id=?',
       'SELECT m.text AS value FROM helper_messages m JOIN helper_conversations c ON c.id=m.conversation_id WHERE c.chat_id=?',
       'SELECT m.text AS value FROM helper_seed_messages m JOIN helper_conversations c ON c.id=m.conversation_id WHERE c.chat_id=?',
+      'SELECT m.images AS value FROM helper_message_attachments m JOIN helper_conversations c ON c.id=m.conversation_id WHERE c.chat_id=?',
       'SELECT m.text AS value FROM helper_message_changes m JOIN helper_conversations c ON c.id=m.conversation_id WHERE c.chat_id=?',
       'SELECT a.text AS value FROM helper_artifacts a JOIN helper_conversations c ON c.id=a.conversation_id WHERE c.chat_id=?',
     ])
@@ -144,6 +146,7 @@ export function deleteChat(store: Store, chatId: string, value: unknown) {
       .run(`${RUN_READER_DISMISSAL_PREFIX}${chatId}:%`);
     store.db.prepare('DELETE FROM chats WHERE id=?').run(chatId);
     pruneUnusedData(store.db, imageCandidates);
+    pruneUnusedHelperFiles(store.db);
     return { deleted: true };
   });
 }

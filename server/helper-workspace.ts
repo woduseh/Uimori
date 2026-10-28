@@ -24,6 +24,14 @@ import type { ProviderResult, WireRecord } from '../core/transport.js';
 import { HttpError } from './request-validation.js';
 import type { Store } from './store.js';
 import type { SynchronousResult } from './synchronous-transaction.js';
+import {
+  helperMessageAttachments,
+  saveHelperMessageAttachments,
+  removeHelperMessageAttachments,
+  pruneUnusedHelperFiles,
+} from './helper-attachments.js';
+import { imageDataHashes, pruneUnusedData } from './unused-data.js';
+import { helperRequestContext } from './helper-context.js';
 
 type Row = Record<string, any>;
 const json = JSON.stringify;
@@ -45,6 +53,7 @@ function conversationData(row: Row): HelperConversation {
     limits: currentLimits(JSON.parse(row.limits)),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    projectId: row.group_id == null ? null : String(row.group_id),
   };
 }
 
@@ -91,9 +100,10 @@ export class HelperWorkspace {
   constructor(readonly store: Store) {}
   conversation(id: string): HelperConversation {
     const row = this.store.db
-      .prepare(`SELECT c.*,
+      .prepare(`SELECT c.*, member.group_id,
       (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision
-      FROM helper_conversations c WHERE id=?`)
+      FROM helper_conversations c
+      LEFT JOIN helper_conversation_memberships member ON member.conversation_id=c.id WHERE c.id=?`)
       .get(id) as Row | undefined;
     if (!row) throw new HttpError(404, '도우미 대화를 찾을 수 없어요.');
     return conversationData(row);
@@ -101,12 +111,18 @@ export class HelperWorkspace {
   open(scope: HelperScope): HelperConversation {
     return this.create(scope, 'default');
   }
-  create(scope: HelperScope, creationKey: string, title?: string): HelperConversation {
+  create(
+    scope: HelperScope,
+    creationKey: string,
+    title?: string,
+    projectId?: string | null
+  ): HelperConversation {
     return this.store.transaction(() => {
       if (scope.kind === 'chat') this.store.chat(scope.chatId);
       const key = json(scope),
         creationHash = createHash('sha256')
-          .update(json({ title: title ?? null }))
+          // Preserve fingerprints for pending requests created before project support.
+          .update(json({ title: title ?? null, ...(projectId ? { projectId } : {}) }))
           .digest('hex');
       const old = this.store.db
         .prepare(
@@ -118,6 +134,7 @@ export class HelperWorkspace {
           throw new HttpError(409, '대화 생성 요청 키가 다른 요청에 사용됐어요.');
         return this.conversation(old.id);
       }
+      if (projectId) this.group(projectId);
       const id = randomUUID(),
         time = now();
       this.store.db
@@ -138,6 +155,10 @@ export class HelperWorkspace {
           time,
           json(HELPER_TASK_LIMITS)
         );
+      if (projectId)
+        this.store.db
+          .prepare('INSERT INTO helper_conversation_memberships VALUES(?,?)')
+          .run(id, projectId);
       return this.conversation(id);
     });
   }
@@ -290,7 +311,9 @@ export class HelperWorkspace {
               (a.role === b.role ? 0 : a.role === 'user' ? -1 : 1)
         );
       visible.forEach((message, ordinal) => {
-        add.run(randomUUID(), newId, ordinal, message.role, message.text, message.createdAt);
+        const messageId = randomUUID();
+        add.run(messageId, newId, ordinal, message.role, message.text, message.createdAt);
+        saveHelperMessageAttachments(this.store.db, newId, messageId, message);
       });
       return this.conversation(newId);
     });
@@ -307,11 +330,17 @@ export class HelperWorkspace {
           (SELECT json_object('running',COALESCE(SUM(status='running'),0),
             'queued',COALESCE(SUM(status='queued'),0)) FROM helper_tasks WHERE conversation_id=c.id) AS activity,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id) AS latest_seq,
+          (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id
+            AND kind IN ('task.completed','task.failed','task.cancelled','task.interrupted')) AS latest_activity_seq,
+          (SELECT t.status FROM helper_events e JOIN helper_tasks t ON t.id=e.task_id
+            WHERE e.conversation_id=c.id AND e.kind IN ('task.completed','task.failed','task.cancelled','task.interrupted')
+            ORDER BY e.seq DESC LIMIT 1) AS last_task_status,
+          COALESCE((SELECT MAX(updated_at) FROM helper_tasks WHERE conversation_id=c.id),c.created_at) AS last_activity_at,
           (SELECT COALESCE(MAX(seq),0) FROM helper_events WHERE conversation_id=c.id AND kind='messages.changed') AS history_revision
         FROM helper_conversations c LEFT JOIN chats chat ON chat.id=c.chat_id
         LEFT JOIN helper_conversation_memberships member ON member.conversation_id=c.id
         WHERE ${scope.kind === 'all' ? '1' : scope.kind === 'library' ? 'c.chat_id IS NULL' : 'c.chat_id=?'}
-        ORDER BY c.updated_at DESC,c.rowid DESC`
+        ORDER BY last_activity_at DESC,c.rowid DESC`
       )
       .all(...(scope.kind === 'chat' ? [scope.chatId] : []));
     return rows.map((row) => ({
@@ -322,6 +351,9 @@ export class HelperWorkspace {
         : {}),
       activity: JSON.parse(String(row.activity)),
       latestEventSeq: Number(row.latest_seq),
+      latestActivityEventSeq: Number(row.latest_activity_seq),
+      ...(row.last_task_status ? { lastTaskStatus: row.last_task_status as HelperStatus } : {}),
+      lastActivityAt: String(row.last_activity_at),
     }));
   }
   persona(id: string, revision: number, persona: string) {
@@ -392,6 +424,10 @@ export class HelperWorkspace {
       const tasks = this.store.db
         .prepare('SELECT id FROM helper_tasks WHERE conversation_id=?')
         .all(id);
+      const attachmentImages = this.store.db
+        .prepare('SELECT images FROM helper_message_attachments WHERE conversation_id=?')
+        .all(id)
+        .flatMap((row) => imageDataHashes(row.images));
       for (const scopeKey of [`helper:${id}`, ...tasks.map((task) => `artifact:${task.id}`)])
         for (const table of ['context_heads', 'context_checkpoints'])
           this.store.db.prepare(`DELETE FROM ${table} WHERE scope_key=?`).run(scopeKey);
@@ -403,6 +439,8 @@ export class HelperWorkspace {
         .map((row) => String(row.attempt_id));
       detachAttemptUsage(this.store.db, attemptIds);
       this.store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(id);
+      pruneUnusedData(this.store.db, attachmentImages);
+      pruneUnusedHelperFiles(this.store.db);
       return { deleted: true as const };
     });
   }
@@ -475,6 +513,7 @@ export class HelperWorkspace {
           this.store.db.prepare(`INSERT INTO helper_message_changes(message_id,conversation_id,deleted)
           VALUES(?,?,1) ON CONFLICT(message_id) DO UPDATE SET deleted=1`);
         for (const messageId of deletedMessageIds) mark.run(messageId, id);
+        removeHelperMessageAttachments(this.store.db, deletedMessageIds);
         projection = { deletedMessageIds };
       }
       // A checkpoint may contain edited/deleted text, including in its recent exact tail.
@@ -495,6 +534,9 @@ export class HelperWorkspace {
     });
   }
   editMessage(id: string, messageId: string, expectedRevision: number, text: string) {
+    const attachments = helperMessageAttachments(this.store.db, messageId);
+    if (!text.trim() && !attachments.images?.length && !attachments.files?.length)
+      throw new HttpError(400, 'HELPER_REQUEST_EMPTY');
     return this.changeMessages(id, messageId, expectedRevision, { text });
   }
   deleteMessages(
@@ -553,6 +595,7 @@ export class HelperWorkspace {
         taskStatus: 'completed' as const,
         role: row.role as 'user' | 'assistant',
         text: row.display_text,
+        ...helperMessageAttachments(this.store.db, row.id),
         artifacts: [],
         createdAt: row.created_at,
       })),
@@ -566,6 +609,7 @@ export class HelperWorkspace {
         taskStatus: row.task_status,
         role: row.role,
         text: row.display_text,
+        ...helperMessageAttachments(this.store.db, row.id),
         artifacts: JSON.parse(row.artifacts),
         createdAt: row.created_at,
       })),
@@ -779,21 +823,11 @@ export class HelperWorkspace {
         // Retry replaces this task in helperHistory. A checkpoint depends on both
         // summarized and exact retained messages, including its current request.
         // Invalidate its active pointer atomically; retention owns the checkpoint.
-        this.store.db
-          .prepare(
-            `UPDATE context_heads SET revision=revision+1,checkpoint_id=NULL
-             WHERE scope_key=? AND EXISTS (
-               SELECT 1 FROM context_checkpoints c
-               JOIN helper_messages m ON m.task_id=?
-               WHERE c.id=context_heads.checkpoint_id AND (
-                 EXISTS (SELECT 1 FROM json_each(c.plan,'$.compacted') source
-                         WHERE json_extract(source.value,'$.revision')=m.id)
-                 OR EXISTS (SELECT 1 FROM json_each(c.plan,'$.recentSourceRevisions') source
-                            WHERE source.value=m.id)
-               )
-             )`
-          )
-          .run(`helper:${conversationId}`, previous.id);
+        const retryContext = helperRequestContext(this.store, conversationId, previous.id);
+        if (retryContext.invalidatesCheckpoint)
+          this.store.db
+            .prepare('UPDATE context_heads SET revision=?,checkpoint_id=NULL WHERE scope_key=?')
+            .run(retryContext.context.activeRevision, `helper:${conversationId}`);
       }
       const id = randomUUID(),
         time = now();
@@ -802,7 +836,16 @@ export class HelperWorkspace {
           'UPDATE helper_conversations SET title=?,auto_title=0,revision=revision+1,updated_at=? WHERE id=? AND auto_title=1 AND NOT EXISTS (SELECT 1 FROM helper_tasks WHERE conversation_id=?)'
         )
         .run(
-          Array.from(request.trim().replace(/\s+/gu, ' ')).slice(0, 80).join(''),
+          Array.from(
+            (
+              request.trim() ||
+              snapshot.files?.[0]?.name ||
+              snapshot.images?.[0]?.name ||
+              '첨부 파일'
+            ).replace(/\s+/gu, ' ')
+          )
+            .slice(0, 80)
+            .join(''),
           time,
           conversationId,
           conversationId
@@ -832,9 +875,11 @@ export class HelperWorkspace {
       const message = snapshot.selection
         ? `${request}\n\n선택한 원문 ${snapshot.selection.sourceId} (SHA-256: ${snapshot.selection.sourceHash}):\n${snapshot.selection.text}`
         : request;
+      const messageId = randomUUID();
       this.store.db
         .prepare('INSERT INTO helper_messages VALUES(?,?,?,?,?,?,?)')
-        .run(randomUUID(), conversationId, id, 'user', message, '[]', time);
+        .run(messageId, conversationId, id, 'user', message, '[]', time);
+      saveHelperMessageAttachments(this.store.db, conversationId, messageId, snapshot);
       this.event(conversationId, id, 'task.queued');
       return this.task(id);
     });

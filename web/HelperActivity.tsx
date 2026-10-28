@@ -6,6 +6,8 @@ import type { HelperActivity as Activity } from '../core/helper-activity.js';
 import type { HelperStatus } from '../core/helper.js';
 import { api } from './api.js';
 import { helperActivityStages } from './helper-activity.js';
+import { requestFileError } from './request-file-errors.js';
+import { statusGlyph } from './TurnStatus.js';
 
 type ActivityView = {
   taskId?: string;
@@ -114,44 +116,67 @@ export function HelperActivityDetails({
       {data && !data.events.length && <p className="muted">{t('helpers.m122')}</p>}
       {data && (
         <ol className="helper-activity-stages">
-          {helperActivityStages({ ...data, status }).map((stage) => (
-            <li key={stage.id} data-state={stage.state}>
-              <div className="helper-activity-stage-head">
-                <span>{stage.label}</span>
-                <small>
-                  {t(stateLabels[stage.state])}
-                  {stage.events.length > 1
-                    ? t('helpers.m123', { v0: formatNumber(stage.events.length) })
-                    : ''}
-                </small>
-              </div>
-              <ul className="helper-activity-records">
-                {stage.events.map((event) => (
-                  <li key={event.seq} className="ui-meta-row">
-                    <code>{event.name ?? event.kind}</code>
-                    {event.status && <span>{event.status}</span>}
-                    {event.purpose && <span>{event.purpose}</span>}
-                    {event.applied !== undefined && (
-                      <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
+          {helperActivityStages({ ...data, status }).map((stage) => {
+            const toolCount = stage.events.filter((event) => event.kind === 'tool.finished').length;
+            const Glyph =
+              statusGlyph[
+                stage.state === 'running'
+                  ? 'running'
+                  : stage.state === 'issue'
+                    ? 'issue'
+                    : stage.state === 'stopped'
+                      ? 'cancelled'
+                      : 'done'
+              ];
+            return (
+              <li key={stage.id} data-state={stage.state}>
+                <details className="helper-activity-stage">
+                  <summary className="helper-activity-stage-head">
+                    <Glyph
+                      size={14}
+                      aria-hidden="true"
+                      className={stage.state === 'running' ? 'activity-spinner' : undefined}
+                    />
+                    <span>{stage.label}</span>
+                    <span className="sr-only">{t(stateLabels[stage.state])}</span>
+                    {toolCount > 1 && (
+                      <small>
+                        {t('helperConversation.executions', {
+                          count: formatNumber(toolCount),
+                        })}
+                      </small>
                     )}
-                  </li>
-                ))}
-              </ul>
-              {stage.events.map((event) =>
-                event.error || event.denied ? (
-                  <NoticeBanner tone="error" key={event.seq}>
-                    {event.name ? `${event.name}: ` : ''}
-                    {event.error ?? t('helpers.m126')}
-                  </NoticeBanner>
-                ) : event.text ? (
-                  <p key={event.seq}>
-                    {event.text}
-                    {event.textTruncated ? t('helpers.m127') : ''}
-                  </p>
-                ) : null
-              )}
-            </li>
-          ))}
+                  </summary>
+                  <ul className="helper-activity-records">
+                    {stage.events.map((event) => (
+                      <li key={event.seq} className="ui-meta-row">
+                        <code>{event.name ?? event.kind}</code>
+                        {event.status && <span>{event.status}</span>}
+                        {event.purpose && <span>{event.purpose}</span>}
+                        {event.applied !== undefined && (
+                          <span>{event.applied ? t('helpers.m124') : t('helpers.m125')}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+                {stage.events.map((event) =>
+                  event.error || event.denied ? (
+                    <NoticeBanner tone="error" key={event.seq}>
+                      {event.name ? `${event.name}: ` : ''}
+                      {requestFileError(event.error) ??
+                        (event.error ? translateMessage(event.error) : t('helpers.m126'))}
+                    </NoticeBanner>
+                  ) : event.text ? (
+                    <p key={event.seq}>
+                      {event.text}
+                      {event.textTruncated ? t('helpers.m127') : ''}
+                    </p>
+                  ) : null
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
     </>

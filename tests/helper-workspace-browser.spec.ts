@@ -42,12 +42,17 @@ test('HSPACE10 mobile project and conversation controls keep full touch targets 
   const nav = await visibleNavigation(page);
   const group = nav.getByRole('region', { name: title, exact: true });
   const heading = group.getByRole('button', { name: title, exact: true });
-  const choice = group.locator(`[data-conversation-id="${session.id}"] .helper-nav-select`);
+  const choice = group.locator(`[data-conversation-id="${session.id}"] .activity-nav-link`);
   await expect(choice).toBeVisible();
   const sizes = await Promise.all(
-    [heading, choice].map(async (control) => (await control.boundingBox())!.height)
+    [
+      heading,
+      choice,
+      group.getByLabel(`${title} 프로젝트 메뉴`, { exact: true }),
+      group.getByLabel(`${title} 대화 메뉴`, { exact: true }),
+    ].map(async (control) => (await control.boundingBox())!.height)
   );
-  expect(sizes).toEqual([44, 44]);
+  for (const size of sizes) expect(size).toBeGreaterThanOrEqual(44);
   expect(await nav.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   await heading.click();
   await expect(choice).toHaveCount(0);
@@ -68,6 +73,208 @@ async function createSession(request: APIRequestContext, scope: HelperScope, tit
   expect(response.ok(), await response.text()).toBe(true);
   return (await response.json()) as HelperConversation;
 }
+
+test('HSPACE11 project creation, drag moves and keyboard ordering survive reload', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  const title = `순서 보존 ${randomUUID().slice(0, 8)}`;
+  const scope: HelperScope = { kind: 'library', workId: 'workspace' };
+  const original = await createSession(request, scope, `${title} 대화`);
+  const otherResponse = await request.post('/api/helper/projects', {
+    data: { title: `${title} 다른 프로젝트`, requestKey: randomUUID() },
+  });
+  expect(otherResponse.ok(), await otherResponse.text()).toBe(true);
+  const other = await otherResponse.json();
+  await page.goto('/');
+  await navigationAction(page, '도우미');
+  const panel = page.locator('#helper-panel');
+  const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+  const history = page.getByRole('navigation', { name: '도우미 대화', exact: true });
+  const search = history.getByRole('searchbox', { name: '대화 검색', exact: true });
+  await search.fill('일치하지 않는 검색');
+  await history.getByRole('button', { name: '프로젝트 만들기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '프로젝트 만들기', exact: true });
+  await dialog.getByLabel('프로젝트 이름', { exact: true }).fill(title);
+  await dialog.getByRole('button', { name: '프로젝트 이름 저장', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  const group = history.getByRole('region', { name: title, exact: true });
+  const heading = group.getByRole('button', { name: title, exact: true });
+  await expect(search).toHaveValue('');
+  await expect(heading).toBeFocused();
+  const previousId = await picker.inputValue();
+  await heading.click();
+  await expect(heading).toHaveAttribute('aria-expanded', 'false');
+  await group.getByLabel(`${title} 프로젝트 메뉴`, { exact: true }).click();
+  await group.getByRole('button', { name: '새 대화', exact: true }).click();
+  await expect(heading).toHaveAttribute('aria-expanded', 'true');
+  await expect(picker).not.toHaveValue(previousId);
+  const createdId = await picker.inputValue();
+  const created = (await (
+    await request.get(`/api/helper/conversations/${createdId}`)
+  ).json()) as HelperConversation;
+  const projectId = await group.getAttribute('data-helper-project-id');
+  expect(created.projectId).toBe(projectId);
+  expect(created.scope).toEqual(scope);
+  const draft = panel.getByLabel('도우미에게 요청', { exact: true });
+  await draft.fill('정렬과 이동 후에도 남길 초안');
+  const originalRow = history.locator(`[data-conversation-id="${original.id}"]`);
+  const createdRow = group.locator(`[data-conversation-id="${createdId}"]`);
+  await originalRow.dragTo(heading);
+  await expect(group.locator(`[data-conversation-id="${original.id}"]`)).toBeVisible();
+  await originalRow.dragTo(createdRow, { targetPosition: { x: 20, y: 2 } });
+  const order = () =>
+    group
+      .locator('.helper-nav-project-contents > [data-conversation-id]')
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute('data-conversation-id')));
+  await expect.poll(order).toEqual([original.id, createdId]);
+  await originalRow.getByLabel(`${original.title} 대화 메뉴`, { exact: true }).click();
+  const moveDown = originalRow.getByRole('button', { name: '아래로 이동', exact: true });
+  await moveDown.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(order).toEqual([createdId, original.id]);
+  const otherGroup = history.locator(`[data-helper-project-id="${other.id}"]`);
+  await otherGroup.locator('.helper-nav-project-heading').dragTo(heading, {
+    targetPosition: { x: 20, y: 2 },
+  });
+  const projectOrder = () =>
+    history
+      .locator('[data-helper-project-id]')
+      .evaluateAll(
+        (rows, ids) =>
+          rows
+            .map((row) => row.getAttribute('data-helper-project-id'))
+            .filter((id) => ids.includes(id!)),
+        [projectId!, other.id]
+      );
+  await expect.poll(projectOrder).toEqual([other.id, projectId]);
+  await group.getByLabel(`${title} 프로젝트 메뉴`, { exact: true }).click();
+  const moveUp = group.getByRole('button', { name: '위로 이동', exact: true });
+  await moveUp.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(projectOrder).toEqual([projectId, other.id]);
+  for (let index = 0; index < 3; index++) {
+    const response = await request.post('/api/helper/conversations/new', {
+      data: { scope, title: `가려진 대화 ${index}`, projectId, requestKey: randomUUID() },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+  }
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect.poll(async () => (await order()).length).toBe(5);
+  const [a, b, c, d, e] = await order();
+  const marker = `검색대상 ${randomUUID().slice(0, 8)}`;
+  for (const [id, suffix] of [
+    [b!, 'B'],
+    [d!, 'D'],
+  ]) {
+    const value = (await (
+      await request.get(`/api/helper/conversations/${id}`)
+    ).json()) as HelperConversation;
+    const response = await request.patch(`/api/helper/conversations/${id}`, {
+      data: { expectedRevision: value.revision, title: `${marker} ${suffix}` },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+  }
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await search.fill(marker);
+  const filteredD = group.locator(`[data-conversation-id="${d}"]`);
+  const filteredB = group.locator(`[data-conversation-id="${b}"]`);
+  await expect(group.locator('[data-conversation-id]')).toHaveCount(2);
+  await filteredD.dragTo(filteredB, { targetPosition: { x: 20, y: 2 } });
+  await search.fill('');
+  await expect.poll(order).toEqual([a, d, b, c, e]);
+  await search.fill(marker);
+  await filteredD.getByLabel(`${marker} D 대화 메뉴`, { exact: true }).click();
+  await filteredD.getByRole('button', { name: '아래로 이동', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await search.fill('');
+  const expectedOrder = [a, b, d, c, e];
+  await expect.poll(order).toEqual(expectedOrder);
+  expect(
+    (await (await request.get(`/api/helper/conversations/${original.id}`)).json()).projectId
+  ).toBe(projectId);
+  await expect(picker).toHaveValue(createdId);
+  await expect(draft).toHaveValue('정렬과 이동 후에도 남길 초안');
+  await page.reload();
+  await navigationAction(page, '도우미');
+  await expect.poll(order).toEqual(expectedOrder);
+  await expect.poll(projectOrder).toEqual([projectId, other.id]);
+  await expect(draft).toHaveValue('정렬과 이동 후에도 남길 초안');
+  await page.screenshot({ path: info.outputPath('helper-tree-order-after-reload.png') });
+});
+
+test('HSPACE12 activity tabs keep unread counts until acknowledgement and include busy conversations in recent', async ({
+  page,
+  request,
+}, info) => {
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: DESKTOP_HEIGHT });
+  const title = `활동 탐색 ${randomUUID().slice(0, 8)}`;
+  const scope: HelperScope = { kind: 'library', workId: 'workspace' };
+  const current = await createSession(request, scope, `${title} 현재`);
+  const completed = await createSession(request, scope, `${title} 완료`);
+  const failed = await createSession(request, scope, `${title} 실패`);
+  const running = await createSession(request, scope, `${title} 실행`);
+  const ids = [current.id, completed.id, failed.id, running.id];
+  // Synthetic summary projections exercise navigation and local acknowledgement only.
+  // Runtime completion provenance is covered by helper-navigation.test.ts.
+  await page.route('**/api/helper/conversations?kind=all', async (route) => {
+    const response = await route.fetch();
+    const summaries = (await response.json()) as HelperConversationSummary[];
+    await route.fulfill({
+      response,
+      json: summaries
+        .filter((item) => ids.includes(item.id))
+        .map((item) => ({
+          ...item,
+          latestActivityEventSeq: item.id === completed.id ? 700 : item.id === failed.id ? 701 : 0,
+          lastTaskStatus:
+            item.id === completed.id ? 'completed' : item.id === failed.id ? 'failed' : undefined,
+          activity: { running: Number(item.id === running.id), queued: 0 },
+        })),
+    });
+  });
+  await page.addInitScript(
+    (id) => localStorage.setItem('uimori:helper-session:all', id),
+    current.id
+  );
+  await page.goto('/');
+  await navigationAction(page, '도우미');
+  const history = page.getByRole('navigation', { name: '도우미 대화', exact: true });
+  await history.getByRole('button', { name: '활동, 미확인 2개', exact: true }).click();
+  const unread = history.locator('[data-activity-section="unread"]');
+  const active = history.locator('[data-activity-section="running"]');
+  const recent = history.locator('[data-activity-section="recent"]');
+  await expect(unread.locator('[data-conversation-id]')).toHaveCount(2);
+  await expect(unread.locator(`[data-conversation-id="${completed.id}"]`)).toContainText(
+    '완료했어요'
+  );
+  await expect(unread.locator(`[data-conversation-id="${failed.id}"]`)).toContainText(
+    '작업에 실패했어요'
+  );
+  await expect(active.locator('[data-conversation-id]')).toHaveCount(1);
+  await expect(recent.locator('[data-conversation-id]')).toHaveCount(4);
+  for (const id of ids)
+    await expect(recent.locator(`[data-conversation-id="${id}"]`)).toBeVisible();
+  await history.getByRole('button', { name: '탐색', exact: true }).click();
+  await history.getByRole('button', { name: '활동, 미확인 2개', exact: true }).click();
+  await unread.getByRole('button', { name: `${failed.title} 활동 확인`, exact: true }).click();
+  await expect(
+    history.getByRole('button', { name: '활동, 미확인 1개', exact: true })
+  ).toBeVisible();
+  await page.reload();
+  await navigationAction(page, '도우미');
+  await expect(
+    history.getByRole('button', { name: '활동, 미확인 1개', exact: true })
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(unread.locator('[data-conversation-id]')).toHaveCount(1);
+  await unread.getByRole('button', { name: `${completed.title} 활동 확인`, exact: true }).click();
+  await expect(
+    history.getByRole('button', { name: '활동, 미확인 0개', exact: true })
+  ).toBeVisible();
+  await expect(recent.locator('[data-conversation-id]')).toHaveCount(4);
+  await page.screenshot({ path: info.outputPath('helper-activity-acknowledged.png') });
+});
 
 test('HSPACE03 failed-task diagnosis prepares a precise helper draft without starting work', async ({
   page,
@@ -221,7 +428,7 @@ test('HSPACE05 a contextual reopen attaches the editor after an independent work
   const panel = page.locator('#helper-panel');
   await page
     .getByRole('navigation', { name: '도우미 대화', exact: true })
-    .locator('.helper-nav-select')
+    .locator('.activity-nav-link')
     .filter({ hasText: session.title })
     .first()
     .click();
@@ -292,16 +499,19 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   const history = nav.getByRole('navigation', { name: '도우미 대화', exact: true });
   await expect(panel.getByRole('navigation', { name: '도우미 대화', exact: true })).toHaveCount(0);
   await expect(history).toBeVisible();
-  const recent = history.getByRole('region', { name: '최근 대화', exact: true });
-  await expect(recent.locator('.helper-nav-select')).toHaveCount(5);
+  await history.getByRole('button', { name: /^활동, 미확인/u }).click();
+  const recent = history.locator('[data-activity-section="recent"]');
+  await expect(recent.locator('.activity-nav-link')).toHaveCount(5);
   const existingSessions = (await (
     await request.get('/api/helper/conversations?kind=all')
   ).json()) as HelperConversationSummary[];
   const totalSessions = existingSessions.length;
   await recent
-    .getByRole('button', { name: `${Math.min(5, totalSessions - 5)}개 더 보기`, exact: true })
+    .getByRole('button', { name: `${Math.min(20, totalSessions - 5)}개 더 보기`, exact: true })
     .click();
-  await expect(recent.locator('.helper-nav-select')).toHaveCount(Math.min(10, totalSessions));
+  await expect(recent.locator('.activity-nav-link')).toHaveCount(Math.min(25, totalSessions));
+  await history.getByRole('button', { name: '탐색', exact: true }).click();
+  const unfiled = history.locator('.helper-nav-unfiled');
   for (const session of sessions)
     expect(existingSessions.find((item) => item.id === session.id)?.projectId).toBeNull();
   const projectTitle = `${prefix} 프로젝트`;
@@ -319,8 +529,8 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
     'aria-expanded',
     'true'
   );
-  await expect(group.locator('.helper-nav-select')).toHaveCount(0);
-  await recent.getByLabel(`${sessions[0].title} 대화 메뉴`, { exact: true }).click();
+  await expect(group.locator('.activity-nav-link')).toHaveCount(0);
+  await unfiled.getByLabel(`${sessions[0].title} 대화 메뉴`, { exact: true }).click();
   await page.getByRole('button', { name: '프로젝트로 이동', exact: true }).click();
   const move = page.getByRole('dialog', { name: '프로젝트로 이동', exact: true });
   await move
@@ -328,16 +538,16 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
     .selectOption({ label: projectTitle });
   await move.getByRole('button', { name: '프로젝트로 이동', exact: true }).click();
   await expect(move).toBeHidden();
-  await expect(group.locator('.helper-nav-select')).toHaveCount(1);
+  await expect(group.locator('.activity-nav-link')).toHaveCount(1);
   const heading = group.getByRole('button', { name: projectTitle, exact: true });
   await heading.click();
   await expect(heading).toHaveAttribute('aria-expanded', 'false');
-  await expect(group.locator('.helper-nav-select')).toHaveCount(0);
+  await expect(group.locator('.activity-nav-link')).toHaveCount(0);
   await search.fill(prefix);
-  await expect(history.locator('.helper-nav-select')).toHaveCount(7);
-  await expect(history.locator('.helper-nav-heading')).toHaveCount(0);
+  await expect(history.locator('.activity-nav-link')).toHaveCount(7);
+  await expect(history.locator('.helper-nav-heading')).toHaveCount(1);
   const choice = history.locator(`[data-conversation-id="${sessions[0].id}"]`);
-  await choice.locator('.helper-nav-select').click();
+  await choice.locator('.activity-nav-link').click();
   await expect(picker).toHaveValue(sessions[0].id);
   const helperDraft = panel.getByLabel('도우미에게 요청', { exact: true });
   await helperDraft.fill('작업 공간을 바꿔도 남길 도우미 초안');
@@ -395,6 +605,7 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   const retained = await (await request.get(`/api/helper/conversations/${sessions[0].id}`)).json();
   expect(retained).toEqual({
     ...original,
+    projectId: null,
     revision: original.revision + 1,
     updatedAt: retained.updatedAt,
   });
@@ -404,7 +615,7 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   expect(afterDelete.find((session) => session.id === sessions[0].id)?.projectId).toBeNull();
   expect(afterDelete.find((session) => session.id === copied.id)?.projectId).toBeNull();
   await search.fill(sessions[0].title);
-  await history.locator(`[data-conversation-id="${sessions[0].id}"] .helper-nav-select`).click();
+  await history.locator(`[data-conversation-id="${sessions[0].id}"] .activity-nav-link`).click();
   await expect(picker).toHaveValue(sessions[0].id);
   await expect(helperDraft).toHaveValue('작업 공간을 바꿔도 남길 도우미 초안');
   expect(new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
@@ -418,7 +629,7 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
     .getByRole('searchbox', { name: '대화 검색', exact: true })
     .fill(sessions[1].title);
   await mobileHistory
-    .locator(`[data-conversation-id="${sessions[1].id}"] .helper-nav-select`)
+    .locator(`[data-conversation-id="${sessions[1].id}"] .activity-nav-link`)
     .click();
   await expect(drawer).toBeHidden();
   await expect(picker).toHaveValue(sessions[1].id);
@@ -428,7 +639,7 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
     .getByRole('searchbox', { name: '대화 검색', exact: true })
     .fill(sessions[0].title);
   await mobileHistory
-    .locator(`[data-conversation-id="${sessions[0].id}"] .helper-nav-select`)
+    .locator(`[data-conversation-id="${sessions[0].id}"] .activity-nav-link`)
     .click();
   await expect(drawer).toBeHidden();
   await expect(picker).toHaveValue(sessions[0].id);
@@ -505,7 +716,7 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     else {
       await search.fill('');
       await history
-        .locator(`[data-conversation-id="${previous}"] .helper-nav-select`)
+        .locator(`[data-conversation-id="${previous}"] .activity-nav-link`)
         .first()
         .click();
     }
@@ -714,13 +925,13 @@ for (const viewport of [
     await expect(panel).toHaveClass(/helper-expanded/u);
     const list = page.getByRole('navigation', { name: '도우미 대화', exact: true });
     const foreignChoice = list
-      .locator('.helper-nav-select')
+      .locator('.activity-nav-link')
       .filter({ hasText: foreign.title })
       .first();
     const selectSession = async (session: HelperConversation) => {
       if (viewport.width === MOBILE_WIDTH) await picker.selectOption(session.id);
       else
-        await list.locator('.helper-nav-select').filter({ hasText: session.title }).first().click();
+        await list.locator('.activity-nav-link').filter({ hasText: session.title }).first().click();
     };
     if (viewport.width !== MOBILE_WIDTH) await expect(foreignChoice).toContainText(other.title);
     await selectSession(foreign);
@@ -737,7 +948,7 @@ for (const viewport of [
     await selectSession(foreign);
     await expect(input).toHaveValue('다른 원고 세션에만 남길 초안');
     if (viewport.width !== MOBILE_WIDTH)
-      await expect(foreignChoice).toHaveAttribute('aria-current', 'true');
+      await expect(foreignChoice).toHaveAttribute('aria-current', 'page');
     expect(new URL(page.url()).searchParams.get('chat')).toBe(chat.id);
     await expect(mainInput).toHaveValue('원고를 떠나지 않고 보관할 다음 장면 초안');
 

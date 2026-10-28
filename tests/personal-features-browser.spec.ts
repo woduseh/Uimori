@@ -90,11 +90,15 @@ test('PWUI01 search uses the saved translation and opens its exact scene on desk
       .boundingBox())!;
     expect(Math.abs(inputBox.height - buttonBox.height)).toBeLessThanOrEqual(2);
     expect(Math.abs(inputBox.y - buttonBox.y)).toBeLessThanOrEqual(2);
+    const filterRows: number[] = [];
     for (const name of ['원문', '번역', '요청']) {
       const filter = dialog.getByRole('button', { name, exact: true });
       await expect(filter).toHaveAttribute('aria-pressed', 'true');
       expect((await filter.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      filterRows.push((await filter.boundingBox())!.y);
     }
+    // Global search has no scope picker; its three filters use the whole row.
+    expect(Math.max(...filterRows) - Math.min(...filterRows)).toBeLessThanOrEqual(1);
     await expect(dialog.getByRole('checkbox')).toHaveCount(0);
     await dialog.getByRole('button', { name: '요청', exact: true }).click();
     expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(

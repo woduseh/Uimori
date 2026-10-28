@@ -203,24 +203,21 @@ test('SIDENAV02 sidebar states keep titles steady and keyboard menus reachable w
       async (name) => (await nav.getByRole('button', { name, exact: true }).boundingBox())!.y
     )
   );
-  const expandedSwitch = (await nav.locator('.sidebar-workspaces').boundingBox())!;
-  const expandedQuick = (await nav.locator('.navigation-quick-actions').boundingBox())!;
   expect(positions[0]).toBe(positions[1]);
+  const header = (await nav.locator('.brand').boundingBox())!;
+  const headerActions = (await nav.locator('.sidebar-header-actions').boundingBox())!;
+  const brand = (await nav.locator('.brand-name').boundingBox())!;
+  expect(headerActions.x).toBeGreaterThanOrEqual(brand.x + brand.width - 1);
+  expect(headerActions.x + headerActions.width).toBeLessThanOrEqual(header.x + header.width + 1);
+  expect(positions[0]).toBeLessThan(positions[2]);
   await nav.getByRole('button', { name: '좌측 패널 접기', exact: true }).click();
   await expect(page.locator('.sidebar')).toHaveCSS('width', '56px');
-  const railSwitch = (await nav.locator('.sidebar-rail-workspaces').boundingBox())!;
-  const switchHeightChange = railSwitch.height - expandedSwitch.height;
-  const railQuick = (await nav.locator('.navigation-quick-actions').boundingBox())!;
-  expect(switchHeightChange).toBeGreaterThan(0);
   await expect(nav.locator('.sidebar-rail-workspaces').getByRole('button')).toHaveCount(2);
+  let previousBottom = 0;
   for (const [index, name] of labels.entries()) {
     const box = (await nav.getByRole('button', { name, exact: true }).boundingBox())!;
-    if (index >= 2)
-      expect(
-        Math.abs(
-          box.y - positions[index] - switchHeightChange - (railQuick.height - expandedQuick.height)
-        )
-      ).toBeLessThanOrEqual(1);
+    if (index > 0) expect(box.y).toBeGreaterThanOrEqual(previousBottom);
+    previousBottom = box.y + box.height;
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);
   }
