@@ -1,4 +1,5 @@
 import { countTextTokens } from '../core/text-tokens.js';
+import { sourceHash } from '../core/source-history.js';
 import { expect, test } from 'vitest';
 import {
   buildMainInput,
@@ -429,7 +430,7 @@ test('automatic catalog ranking uses metadata without scanning reference bodies'
   expect(buildMainInput(fixed).catalog[0].id).toBe('lore-1');
 });
 
-test('main catalog surfaces a late requested reference with fewer tokens and preserves complete discovery', () => {
+test('main catalog surfaces a late requested reference within the existing budget and preserves complete discovery', () => {
   const resources = Array.from({ length: 400 }, (_, index) => lore(index));
   resources[399] = lore(399, {
     title: '청월인장',
@@ -447,8 +448,7 @@ test('main catalog surfaces a late requested reference with fewer tokens and pre
   const legacyTokens = countTextTokens(JSON.stringify(legacy.catalog));
   expect(input.catalog[0].id).toBe('lore-399');
   expect(input.catalog[0].relatedIds).toEqual(['lore-0']);
-  expect(tokens).toBeLessThanOrEqual(2_000);
-  expect(tokens).toBeLessThan(legacyTokens);
+  expect(tokens).toBeLessThanOrEqual(CATALOG_TOKENS);
   expect(legacy.catalog.map((item) => item.id)).not.toContain('lore-399');
   expect(input.catalogPage!.total).toBe(400);
   expect(buildMainInput(fixed)).toEqual(input);
@@ -489,9 +489,9 @@ test('main catalog surfaces a late requested reference with fewer tokens and pre
   );
 });
 
-test('an oversized first catalog entry cannot hide a later relevant reference and stays searchable', () => {
+test('an oversized first catalog entry cannot hide a later relevant reference and stays readable', () => {
   const oversized = lore(0, {
-    title: 'Asterion '.repeat(1_100),
+    title: 'Asterion '.repeat(2_500),
     description: '',
     text: 'Asterion archive records.',
   });
@@ -503,26 +503,156 @@ test('an oversized first catalog entry cannot hide a later relevant reference an
   const fixed = snapshot([oversized, relevant]);
   fixed.request = 'Asterion';
   const before = structuredClone(fixed);
-  expect(countTextTokens(oversized.title)).toBeGreaterThan(2_000);
+  expect(countTextTokens(oversized.title)).toBeGreaterThan(CATALOG_TOKENS);
   const input = buildMainInput(fixed);
   expect(input.catalog.map((item) => item.id)).toEqual([relevant.id]);
   expect(input.catalogPage).toMatchObject({ total: 2, listed: 1 });
-  expect(countTextTokens(JSON.stringify(input.catalog))).toBeLessThanOrEqual(2_000);
-  const discover = executeTool(fixed, {
-    callId: 'oversized-discovery',
-    name: 'knowledge.search',
-    args: { query: 'Asterion' },
-  });
-  expect(discover.denied).toBe(false);
-  expect((discover.result as any).items.map((item: any) => item.id)).toEqual([
-    oversized.id,
-    relevant.id,
-  ]);
+  expect(countTextTokens(JSON.stringify(input.catalog))).toBeLessThanOrEqual(CATALOG_TOKENS);
   const read = executeTool(fixed, {
     callId: 'oversized-read',
     name: 'knowledge.read',
     args: { ids: [oversized.id] },
   });
   expect((read.result as any).items[0].read.text).toBe(oversized.text);
+  expect(fixed).toEqual(before);
+});
+
+test('initial catalog preserves thirty jointly relevant actor, place and rule references that fit the existing budget', () => {
+  const useful = ['actor', 'place', 'rule'].flatMap((kind, group) =>
+    Array.from({ length: 10 }, (_, index) =>
+      lore(group * 10 + index, {
+        id: `${kind}-${index}`,
+        title: `Harbor ${kind} ${index}`,
+        description:
+          `Harbor council ${kind} record: ` + 'Earlier agreements and separate duties. '.repeat(20),
+      })
+    )
+  );
+  const fixed = snapshot([
+    ...useful,
+    ...Array.from({ length: 60 }, (_, index) => lore(index + 30)),
+  ]);
+  fixed.request = 'Continue the harbor council with every actor, place and rule respected.';
+  const previous = resourceCatalog(fixed.resources);
+  expect(useful.every(({ id }) => previous.catalog.some((item) => item.id === id))).toBe(true);
+  const catalog = buildMainInput(fixed).catalog;
+  expect(useful.filter(({ id }) => !catalog.some((item) => item.id === id))).toEqual([]);
+  expect(countTextTokens(JSON.stringify(catalog))).toBeLessThanOrEqual(CATALOG_TOKENS);
+});
+
+test('sparse catalog metadata does not discard body-only references when the complete catalog fits the existing budget', () => {
+  const resources = Array.from({ length: 90 }, (_, index) => lore(index, { description: '' }));
+  resources[80].text = 'Asterion lies under the third stair in the northern tower.';
+  const fixed = snapshot(resources);
+  fixed.request = 'Find Asterion.';
+  expect(resourceCatalog(resources).catalog).toHaveLength(90);
+  const catalog = buildMainInput(fixed).catalog;
+  expect(catalog).toHaveLength(90);
+  expect(catalog.some((item) => item.id === 'lore-80')).toBe(true);
+});
+
+test.each(['logical', 'native'] as const)(
+  '%s prior user context ranks a late reference when the manuscript is silent',
+  (owner) => {
+    const resources = Array.from({ length: 400 }, (_, index) => lore(index));
+    resources[399] = lore(399, { title: 'Asterion', description: 'The seal and its keeper.' });
+    const fixed = snapshot(resources);
+    fixed.request = 'Continue.';
+    fixed.history = [{ revision: 'scene-1', text: 'Silence.' }];
+    const history = [
+      { id: 'prior-user', role: 'user' as const, text: 'Asterion', sourceRevision: 'scene-1' },
+      {
+        id: 'prior-scene',
+        role: 'assistant' as const,
+        text: 'Silence.',
+        sourceRevision: 'scene-1',
+      },
+    ];
+    fixed.logicalHistory = owner === 'logical' ? history : [];
+    if (owner === 'native')
+      fixed.nativeRisuExecution = {
+        version: 2,
+        beforeVariableRevision: 0,
+        variables: {},
+        fields: {},
+        request: fixed.request,
+        messages: [],
+        history,
+        issues: [],
+      };
+    const before = structuredClone(fixed);
+    expect(resourceCatalog(resources).catalog.some((item) => item.id === 'lore-399')).toBe(false);
+    expect(buildMainInput(fixed).catalog[0].id).toBe('lore-399');
+    expect(fixed).toEqual(before);
+  }
+);
+
+test('compacted raw history cannot steer ranking while the visible derived summary can', () => {
+  const resources = Array.from({ length: 400 }, (_, index) => lore(index));
+  resources[397] = lore(397, { title: 'Asterion', description: '' });
+  resources[398] = lore(398, { title: 'Borealis', description: '' });
+  resources[399] = lore(399, { title: 'Cressida', description: '' });
+  const fixed = snapshot(resources);
+  fixed.request = 'Continue.';
+  fixed.history = [
+    { revision: 'compacted', text: 'Cressida' },
+    { revision: 'visible', text: 'Silence.' },
+  ];
+  fixed.logicalHistory = [
+    { id: 'old-user', role: 'user', text: 'Cressida '.repeat(20), sourceRevision: 'compacted' },
+    { id: 'visible-scene', role: 'assistant', text: 'Silence.', sourceRevision: 'visible' },
+  ];
+  fixed.contextPlan = {
+    version: 1,
+    status: 'ready',
+    budget: { inputTokenLimit: 32768, estimator: 'o200k_base-v1' },
+    dependencyKey: '',
+    estimatedInputTokens: 0,
+    compacted: [{ revision: 'compacted', hash: sourceHash('Cressida') }],
+    recentSourceRevisions: ['visible'],
+    summary: 'Asterion',
+    summaryCalls: 0,
+    usage: { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    error: null,
+  };
+  const before = structuredClone(fixed);
+  const catalog = buildMainInput(fixed).catalog;
+  expect(catalog[0].id).toBe('lore-397');
+  expect(catalog.some((item) => item.id === 'lore-398' || item.id === 'lore-399')).toBe(false);
+  fixed.contextPlan!.summary = null;
+  expect(buildMainInput(fixed).catalog[0].id).toBe('lore-0');
+  fixed.contextPlan!.summary = 'Asterion';
+  expect(fixed).toEqual(before);
+});
+
+test('disabled scene history does not steer initial catalog ranking without a context plan', () => {
+  const resources = Array.from({ length: 400 }, (_, index) => lore(index));
+  resources[398] = lore(398, { title: 'Borealis', description: '' });
+  resources[399] = lore(399, { title: 'Asterion', description: '' });
+  const fixed = snapshot(resources);
+  fixed.request = 'Continue.';
+  fixed.history = [
+    { revision: 'visible', text: 'Silence.' },
+    {
+      revision: 'disabled',
+      text: 'Borealis',
+      sceneContext: {
+        revision: 1,
+        requestText: null,
+        requestEnabled: false,
+        sceneEnabled: false,
+      },
+    },
+  ];
+  fixed.logicalHistory = [
+    { id: 'visible-user', role: 'user', text: 'Asterion', sourceRevision: 'visible' },
+    { id: 'visible-scene', role: 'assistant', text: 'Silence.', sourceRevision: 'visible' },
+    { id: 'disabled-user', role: 'user', text: 'Borealis', sourceRevision: 'disabled' },
+    { id: 'disabled-scene', role: 'assistant', text: 'Borealis', sourceRevision: 'disabled' },
+  ];
+  const before = structuredClone(fixed);
+  const catalog = buildMainInput(fixed).catalog;
+  expect(catalog[0].id).toBe('lore-399');
+  expect(catalog.some((item) => item.id === 'lore-398')).toBe(false);
   expect(fixed).toEqual(before);
 });
