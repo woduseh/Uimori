@@ -10,12 +10,12 @@ export const KNOWLEDGE_SKILL_TOOLS: ProviderTool[] = [
   {
     name: 'knowledge.search',
     description:
-      'Search approved references; empty query lists them. Results fit 6000 local tokens. Body matches include an exact excerpt, source/range and nextRead; excerpts cover only their returned range. Metadata-only matches have no excerpt. Oversized metadata uses metadataPreview with original counts. Follow nextOffset for more results. mode=browse (without query) navigates packages, folders and unfiled references in the same frozen scope: omit nodeRef for root, then copy nextRead including expectedVersion. Browse is metadata-only, not proof of reading. A changed or unavailable view returns a root restart.',
+      'Search approved references; empty query lists them. mode=relevant requires a query and ranks lexical matches. Results fit 6000 local tokens. Body matches include an exact excerpt, source/range and nextRead; excerpts cover only their returned range. Metadata-only matches have no excerpt. Oversized metadata uses metadataPreview with original counts. Follow nextOffset for more results. mode=browse (without query) navigates packages, folders and unfiled references in the same frozen scope: omit nodeRef for root, then copy nextRead including expectedVersion. Browse is metadata-only, not proof of reading. A changed or unavailable view returns a root restart.',
     inputSchema: {
       type: 'object',
       properties: {
         query: { type: 'string', maxLength: 512 },
-        mode: { type: 'string', enum: ['search', 'browse'] },
+        mode: { type: 'string', enum: ['search', 'relevant', 'browse'] },
         nodeRef: { type: 'string', maxLength: 100 },
         expectedVersion: { type: 'string', maxLength: 64 },
         ...pagination(100),

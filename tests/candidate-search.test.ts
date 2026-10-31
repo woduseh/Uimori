@@ -96,4 +96,20 @@ describe('local text candidate retrieval', () => {
     expect(search.rank(query)).toEqual(['b', 'z', 'a']);
     expect(createCandidateSearch([]).rank(query)).toEqual([]);
   });
+
+  test('matched ranking excludes unrelated documents without changing exhaustive ranking', () => {
+    const search = createCandidateSearch([
+      { id: 'unrelated', title: 'Harbor', text: 'Ships return at dawn.' },
+      { id: 'keeper', title: 'Asterion', text: 'An ancient seal.' },
+      { id: 'mention', title: 'Market', text: 'Asterion is mentioned here.' },
+    ]);
+    expect(search.rankMatched([{ text: 'Asterion', weight: 1 }])).toEqual(['keeper', 'mention']);
+    expect(search.rankMatched([{ text: 'meteorite', weight: 1 }])).toEqual([]);
+    expect(search.rankMatched([])).toEqual([]);
+    expect(search.rank([{ text: 'meteorite', weight: 1 }])).toEqual([
+      'keeper',
+      'mention',
+      'unrelated',
+    ]);
+  });
 });

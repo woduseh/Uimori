@@ -20,10 +20,15 @@ function termCounts(text: string): Map<string, number> {
   return counts;
 }
 
+export function candidateTerms(text: string): string[] {
+  return [...termCounts(text).keys()];
+}
+
 type Posting = { index: number; score: number };
 
 export function createCandidateSearch(documents: readonly CandidateSearchDocument[]): {
   rank(queries: readonly { text: string; weight: number }[]): string[];
+  rankMatched(queries: readonly { text: string; weight: number }[]): string[];
 } {
   const ids = documents.map((document) => document.id);
   const postings = new Map<string, Posting[]>();
@@ -50,26 +55,29 @@ export function createCandidateSearch(documents: readonly CandidateSearchDocumen
   const order = ids.map((_, index) => index);
   order.sort((left, right) => (ids[left] < ids[right] ? -1 : ids[left] > ids[right] ? 1 : 0));
 
-  return {
-    rank(queries) {
-      const scores = new Float64Array(ids.length);
-      for (const query of queries) {
-        if (!Number.isFinite(query.weight) || query.weight <= 0) continue;
-        const terms = [...termCounts(query.text).keys()];
-        const total = terms.reduce((sum, term) => sum + (inverseFrequency.get(term) ?? 0), 0);
-        if (total === 0) continue;
-        // Each query has its own weight; a long or repetitive old scene cannot inflate it.
-        const weight = query.weight / total;
-        for (const term of terms) {
-          for (const posting of postings.get(term) ?? []) {
-            scores[posting.index] += posting.score * weight;
-          }
+  const rank = (queries: readonly { text: string; weight: number }[], matchedOnly: boolean) => {
+    const scores = new Float64Array(ids.length);
+    for (const query of queries) {
+      if (!Number.isFinite(query.weight) || query.weight <= 0) continue;
+      const terms = [...termCounts(query.text).keys()];
+      const total = terms.reduce((sum, term) => sum + (inverseFrequency.get(term) ?? 0), 0);
+      if (total === 0) continue;
+      // Each query has its own weight; a long or repetitive old scene cannot inflate it.
+      const weight = query.weight / total;
+      for (const term of terms) {
+        for (const posting of postings.get(term) ?? []) {
+          scores[posting.index] += posting.score * weight;
         }
       }
-      // Stable sort preserves ID order for both equal matches and unmatched documents.
-      return [...order]
-        .sort((left, right) => scores[right] - scores[left])
-        .map((index) => ids[index]);
-    },
+    }
+    // Stable sort preserves ID order for both equal matches and unmatched documents.
+    return [...order]
+      .filter((index) => !matchedOnly || scores[index] > 0)
+      .sort((left, right) => scores[right] - scores[left])
+      .map((index) => ids[index]);
+  };
+  return {
+    rank: (queries) => rank(queries, false),
+    rankMatched: (queries) => rank(queries, true),
   };
 }
