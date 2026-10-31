@@ -1,4 +1,4 @@
-import { requestImages, toolImageParts } from './provider-image-reference.js';
+import { toolImageParts } from './provider-image-reference.js';
 import { canonicalJson as canonical } from './canonical-json.js';
 import { GEMINI_SAFETY_CATEGORIES } from './gemini-safety.js';
 import { webCitationLinks, webSearchSources, type ProviderWebSearch } from './helper-web-search.js';
@@ -119,7 +119,6 @@ export function encodeVertex(
     modelCapability(protocol, request.modelId)?.maxOutputTokens ??
     8192;
   const { results: rawResults, ...input } = request.input;
-  requestImages(request);
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) reject('TOOL_RESULT_MISMATCH');
   const plan = planNativeMessages(request, protocol);

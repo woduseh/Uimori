@@ -1,4 +1,4 @@
-import { requestImages, toolImageParts } from './provider-image-reference.js';
+import { toolImageParts } from './provider-image-reference.js';
 import { canonicalJson as canonical } from './canonical-json.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
@@ -391,7 +391,6 @@ export function encodeResponses(request: ProviderRequest): {
   context: OpenAITurn;
   messageMetadata?: NativeMessageMetadata;
 } {
-  requestImages(request);
   const prepared = prepare(request, 'openai-responses-turn-v1', 'openai-responses-v1');
   const { generation, aliases, schema, previous, fresh, plan, bootstrap, continuationInput } =
     prepared;

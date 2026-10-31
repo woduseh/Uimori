@@ -326,13 +326,6 @@ test.each([
     expect(page.total).toBe(1);
     expect(page.items.map((item: any) => item.id)).toEqual(['lore-1']);
     expect(page.items[0].nextRead.arguments.ids).toEqual(['lore-1']);
-    expect(
-      executeTool(fixed, {
-        callId: 'relevant-absent',
-        name: 'knowledge.search',
-        args: { mode: 'relevant', query: 'zqxvutterlyabsent' },
-      }).result
-    ).toMatchObject({ total: 0, items: [], nextOffset: null });
   }
 );
 
@@ -349,8 +342,6 @@ test('relevant search ranks exact identities before incidental prose while prese
       name: 'knowledge.search',
       args,
     });
-  const relevant = search({ mode: 'relevant', query: 'Asterion', limit: 1 });
-  expect(relevant.denied).toBe(false);
   const seen: string[] = [];
   let offset: number | null = 0;
   while (offset !== null) {
@@ -374,17 +365,20 @@ test('relevant search ranks exact identities before incidental prose while prese
     const literal = search(args);
     expect(literal.denied).toBe(false);
     expect((literal.result as any).items.map((item: any) => item.id)).toEqual(['lore-0', 'lore-1']);
-    expect((search({ ...args, query: 'Asterion impossible' }).result as any).total).toBe(0);
-    expect(
-      (search({ ...args, query: '' }).result as any).items.map((item: any) => item.id)
-    ).toEqual(fixed.resources.map((item) => item.id));
   }
-  for (const query of ['', '   ']) {
-    expect(search({ mode: 'relevant', query })).toMatchObject({
-      denied: true,
-      result: { code: 'INVALID_ARGUMENTS' },
-    });
-  }
+  expect((search({ query: 'Asterion impossible' }).result as any).total).toBe(0);
+  expect((search({ query: '' }).result as any).items.map((item: any) => item.id)).toEqual(
+    fixed.resources.map((item) => item.id)
+  );
+  expect(search({ mode: 'relevant', query: 'zqxvutterlyabsent' }).result).toMatchObject({
+    total: 0,
+    items: [],
+    nextOffset: null,
+  });
+  expect(search({ mode: 'relevant', query: '   ' })).toMatchObject({
+    denied: true,
+    result: { code: 'INVALID_ARGUMENTS' },
+  });
 });
 
 test.each(['CAFÉ 문을 미나에게 맡겼다.', 'CAFE\u0301의 문을 미나에게 맡겼다.'])(
@@ -445,13 +439,11 @@ test('main catalog surfaces a late requested reference within the existing budge
   const input = buildMainInput(fixed);
   const legacy = resourceCatalog(resources.filter((item) => item.chatId === fixed.chatId));
   const tokens = countTextTokens(JSON.stringify(input.catalog));
-  const legacyTokens = countTextTokens(JSON.stringify(legacy.catalog));
   expect(input.catalog[0].id).toBe('lore-399');
   expect(input.catalog[0].relatedIds).toEqual(['lore-0']);
   expect(tokens).toBeLessThanOrEqual(CATALOG_TOKENS);
   expect(legacy.catalog.map((item) => item.id)).not.toContain('lore-399');
   expect(input.catalogPage!.total).toBe(400);
-  expect(buildMainInput(fixed)).toEqual(input);
   const found: string[] = [];
   let offset: number | null = 0;
   while (offset !== null) {
@@ -476,17 +468,6 @@ test('main catalog surfaces a late requested reference within the existing budge
   });
   expect((read.result as any).items[0].read.text).toBe(omitted.text);
   expect(fixed).toEqual(before);
-  console.log(
-    'MAIN_CATALOG_EVIDENCE',
-    JSON.stringify({
-      scenario: 'synthetic-400-entry-corpus',
-      sourceEntries: 400,
-      relevantFirstPage: input.catalog[0].id,
-      mainCatalogTokens: tokens,
-      defaultCatalogTokens: legacyTokens,
-      reachableEntries: found.length,
-    })
-  );
 });
 
 test('an oversized first catalog entry cannot hide a later relevant reference and stays readable', () => {

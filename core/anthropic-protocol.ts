@@ -1,4 +1,4 @@
-import { requestImages, toolImageParts } from './provider-image-reference.js';
+import { toolImageParts } from './provider-image-reference.js';
 import { canonicalJson as canonical } from './canonical-json.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
@@ -180,7 +180,6 @@ export function encodeAnthropic(request: ProviderRequest): {
       reject('INVALID_TRANSLATION_SOURCE');
     }
   }
-  requestImages(request);
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) reject('TOOL_RESULT_MISMATCH');
   const plan = planNativeMessages(request, 'anthropic-messages-v1');

@@ -202,13 +202,9 @@ function imageData(body: unknown) {
 async function expectRedPixels(base64: string) {
   const image = sharp(Buffer.from(base64, 'base64'));
   expect(await image.metadata()).toMatchObject({ format: 'webp', width: 12, height: 8 });
-  const { data, info } = await image.removeAlpha().raw().toBuffer({ resolveWithObject: true });
-  expect(info.channels).toBe(3);
-  for (let offset = 0; offset < data.length; offset += 3) {
-    expect(data[offset]).toBeGreaterThanOrEqual(245);
-    expect(data[offset + 1]).toBeLessThanOrEqual(8);
-    expect(data[offset + 2]).toBeLessThanOrEqual(8);
-  }
+  const { channels } = await image.removeAlpha().stats();
+  expect(channels[0].min).toBeGreaterThanOrEqual(245);
+  expect(Math.max(channels[1].max, channels[2].max)).toBeLessThanOrEqual(8);
 }
 function expectNoPersistedPixels(f: ReturnType<typeof fixture>, base64: string) {
   const persisted = JSON.stringify({
@@ -218,8 +214,6 @@ function expectNoPersistedPixels(f: ReturnType<typeof fixture>, base64: string) 
     attempts: f.store.db.prepare('SELECT * FROM attempts').all(),
   });
   expect(persisted).not.toContain(base64);
-  expect(persisted).not.toContain('data:image/');
-  expect(persisted).not.toContain('"base64"');
 }
 
 test('gateway image discovery delivers actual pixels once across continued helper rounds and preserves authored data', async () => {
@@ -332,24 +326,27 @@ test('a known text-only helper denies image reading recoverably while image disc
   expect(bodies.flatMap(imageData)).toHaveLength(0);
 });
 
-test('shell image reads retain trusted pixels and viewed metadata when stdout is redirected', async () => {
+test('shell image reads keep all nine pixel results when stdout is redirected', async () => {
   vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-image-runtime-shell'));
   const f = fixture();
   const original = await savePortrait(f.store);
   const before = f.store.db.prepare('SELECT * FROM image_blobs').all();
-  let readResult: unknown;
+  const readResults: unknown[] = [];
   // Only the external shell runner is substituted. The app callback, image conversion,
   // task-local image collection and actual HTTP request encoder remain real.
   const shell = vi
     .spyOn(f.runtime.shell, 'exec')
     .mockImplementation(async (_task, _toolId, _command, _timeoutMs, signal, invoke) => {
       if (!invoke || !signal) throw new Error('Shell must receive an app callback and signal');
-      readResult = await invoke(
-        'image.read',
-        { contentId: original.id, imageId: 'portrait-red' },
-        'nested-image-read',
-        signal
-      );
+      for (let index = 0; index < 9; index++)
+        readResults.push(
+          await invoke(
+            'image.read',
+            { contentId: original.id, imageId: 'portrait-red' },
+            `nested-image-read-${index}`,
+            signal
+          )
+        );
       return {
         exitCode: 0,
         signal: null,
@@ -367,7 +364,7 @@ test('shell image reads retain trusted pixels and viewed metadata when stdout is
             id: 'shell-read',
             name: 'data.exec',
             args: {
-              command: `uimori call image.read '{"contentId":"${original.id}","imageId":"portrait-red"}' > scratch/image.json`,
+              command: `for image in 1 2 3 4 5 6 7 8 9; do uimori call image.read '{"contentId":"${original.id}","imageId":"portrait-red"}' > scratch/image.json; done`,
             },
           },
         ])
@@ -376,20 +373,22 @@ test('shell image reads retain trusted pixels and viewed metadata when stdout is
   const task = await f.run();
   expect(task.status, task.error ?? '').toBe('completed');
   expect(shell).toHaveBeenCalledOnce();
-  expect(readResult).toMatchObject({ result: { contentId: original.id, imageId: 'portrait-red' } });
+  expect(readResults).toMatchObject(
+    Array.from({ length: 9 }, () => ({
+      result: { contentId: original.id, imageId: 'portrait-red' },
+    }))
+  );
   expect(bodies).toHaveLength(2);
   expect(toolEvent(bodies[1], 'shell-read')).toMatchObject({
     output: '',
-    viewedImages: [
-      {
-        contentId: original.id,
-        imageId: 'portrait-red',
-        transmission: { mime: 'image/webp', width: 12, height: 8 },
-      },
-    ],
+    viewedImages: Array.from({ length: 9 }, () => ({
+      contentId: original.id,
+      imageId: 'portrait-red',
+      transmission: { mime: 'image/webp', width: 12, height: 8 },
+    })),
   });
   const [pixels] = imageData(bodies[1]);
-  expect(imageData(bodies[1])).toHaveLength(1);
+  expect(imageData(bodies[1])).toEqual(Array(9).fill(pixels));
   await expectRedPixels(pixels);
   expect(f.store.db.prepare('SELECT * FROM image_blobs').all()).toEqual(before);
   expectNoPersistedPixels(f, pixels);

@@ -7,7 +7,7 @@ import type { PackageImage } from '../core/package-images.js';
 import { readImage } from './image-storage.js';
 import { withImageProcessing } from './image-processing.js';
 import { readResource } from './resource-service.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import { HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -16,7 +16,7 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.list',
     description:
-      'List stored images belonging to a content resource, including CHARX images. Search titles, descriptions and original native asset names with query. Follow nextOffset; an empty filtered page is not evidence about other resources. Metadata alone does not establish that you inspected pixels. Use image.read with contentId, imageId and this revision to inspect one image.',
+      'List saved content images, including CHARX assets. Search titles, descriptions and original asset names with query; follow nextOffset for more. Use image.read with contentId and imageId to view pixels.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -32,13 +32,12 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.read',
     description:
-      'Inspect the pixels of one stored content image discovered through image.list. Reads only an image owned by the specified content; never fetches a URL. expectedRevision detects changed content. Supplies a bounded WebP transmission copy without modifying the original. Animated images supply only their first frame, explicitly reported in the result.',
+      'View the pixels of a saved content image from image.list. Supplies WebP visual input while preserving the original. Animated images supply their first frame. Reads the current saved version.',
     inputSchema: {
       type: 'object',
       properties: {
         contentId: id,
         imageId: id,
-        expectedRevision: { type: 'integer', minimum: 1 },
       },
       required: ['contentId', 'imageId'],
       additionalProperties: false,
@@ -70,7 +69,6 @@ function imageMetadata(content: Content, image: PackageImage, names?: string[]) 
 
 export function listHelperImages(store: Store, value: unknown) {
   const args = record(value);
-  fields(args, ['contentId', 'query', 'offset', 'limit']);
   const content = owner(store, args.contentId);
   const query = args.query === undefined ? '' : text(args.query, 'image query', 200, true);
   const offset = args.offset === undefined ? 0 : number(args.offset, 'offset', 0);
@@ -108,18 +106,11 @@ export function listHelperImages(store: Store, value: unknown) {
 export async function readHelperImage(store: Store, value: unknown, signal?: AbortSignal) {
   signal?.throwIfAborted();
   const args = record(value);
-  fields(args, ['contentId', 'imageId', 'expectedRevision']);
   const content = owner(store, args.contentId);
   const imageId = text(args.imageId, 'image ID', 100);
-  if (
-    args.expectedRevision !== undefined &&
-    number(args.expectedRevision, 'expected revision') !== content.revision
-  )
-    throw new HttpError(409, 'IMAGE_CONTENT_CHANGED');
   const source = content.package.images?.find((image) => image.id === imageId);
   if (!source) throw new HttpError(404, 'IMAGE_NOT_FOUND_IN_CONTENT');
   const stored = readImage(store.db, source.blobHash);
-  if (stored.bytes.length > 64 * 1024 * 1024) throw new HttpError(400, 'HELPER_IMAGE_TOO_LARGE');
   return withImageProcessing(async () => {
     signal?.throwIfAborted();
     try {
@@ -133,6 +124,13 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
       const width = metadata.width ?? 0;
       const height = metadata.pageHeight ?? metadata.height ?? 0;
       if (!width || !height) throw new HttpError(400, 'HELPER_IMAGE_INVALID');
+      const frames = metadata.pages ?? 1;
+      const reuse =
+        metadata.format === 'webp' &&
+        frames === 1 &&
+        (metadata.orientation ?? 1) === 1 &&
+        Math.max(width, height) <= 2048 &&
+        stored.bytes.length <= MAX_BYTES;
       let edge = 2048;
       const convert = () =>
         sharp(stored.bytes, options)
@@ -140,14 +138,14 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
           .resize({ width: edge, height: edge, fit: 'inside', withoutEnlargement: true })
           .webp({ quality: 90, alphaQuality: 90 })
           .toBuffer({ resolveWithObject: true });
-      let output = await convert();
+      let output = reuse ? { data: stored.bytes, info: { width, height } } : await convert();
       while (output.data.length > MAX_BYTES) {
         signal?.throwIfAborted();
         edge = Math.max(1, Math.floor(Math.max(output.info.width, output.info.height) * 0.75));
         output = await convert();
       }
       signal?.throwIfAborted();
-      const hash = createHash('sha256').update(output.data).digest('hex');
+      const hash = reuse ? source.blobHash : createHash('sha256').update(output.data).digest('hex');
       const image: RequestImage = {
         hash,
         mime: 'image/webp',
@@ -162,7 +160,6 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
         width: image.width,
         height: image.height,
       };
-      const frames = metadata.pages ?? 1;
       return {
         result: {
           contentId: content.id,
