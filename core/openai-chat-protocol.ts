@@ -1,4 +1,4 @@
-import { requestImages, toolImageParts } from './provider-image-reference.js';
+import { toolImageParts } from './provider-image-reference.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { OpenAIProtocolError, openAIProtocol, type OpenAITurn } from './openai-protocol.js';
 import type { Json, ProviderRequest, ProviderResult, ProviderToolCall } from './transport.js';
@@ -65,7 +65,6 @@ export function encodeChat(
   request: ProviderRequest,
   protocol: 'openai-chat-v1' | 'vercel-chat-v1' | 'deepseek-chat-v1' = 'openai-chat-v1'
 ): { body: Json; context: OpenAITurn; messageMetadata?: NativeMessageMetadata } {
-  requestImages(request);
   const prepared = prepare(request, 'openai-chat-turn-v1', protocol);
   const gatewayOptions = protocol === 'vercel-chat-v1' ? vercelProviderOptions(request) : undefined;
   const deepseek = protocol === 'deepseek-chat-v1';

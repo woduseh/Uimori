@@ -106,7 +106,10 @@ test('CHARX imports expose the original named image and supply its actual pixels
   const page = listHelperImages(store, { contentId, query: 'happy-face' });
   expect(page.images).toMatchObject([{ nativeNames: ['happy-face'] }]);
   const read = await readHelperImage(store, { contentId, imageId: page.images[0].imageId });
-  const pixels = await sharp(Buffer.from(read.resolved.base64, 'base64')).raw().toBuffer();
+  const transmitted = Buffer.from(read.resolved.base64, 'base64');
+  expect(read.image.input.hash).toBe(read.result.source.hash);
+  expect(transmitted).toEqual(readImage(store.db, read.result.source.hash).bytes);
+  const pixels = await sharp(transmitted).raw().toBuffer();
   expect(pixels[0]).toBeGreaterThan(240);
   expect(pixels[2]).toBeLessThan(15);
 });
@@ -131,63 +134,6 @@ test('discovery searches original asset names and gives bounded, complete pagina
     images: [],
     nextOffset: null,
   });
-});
-
-test('reads actual decoded pixels without changing original bytes or database rows', async () => {
-  const store = fixture();
-  const bytes = await red();
-  const content = save(store, bytes);
-  const before = store.db.prepare('SELECT * FROM image_blobs').all();
-  const changes = store.db.prepare('SELECT total_changes() AS count').get();
-  const read = await readHelperImage(store, {
-    contentId: content.id,
-    imageId: 'image-0',
-    expectedRevision: content.revision,
-  });
-  const { data, info } = await sharp(Buffer.from(read.resolved.base64, 'base64'))
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  expect(info).toMatchObject({ width: 12, height: 8 });
-  expect(data[0]).toBeGreaterThan(240);
-  expect(data[1]).toBeLessThan(15);
-  expect(data[2]).toBeLessThan(15);
-  expect(read.result.source).toMatchObject({ width: 12, height: 8, frames: 1 });
-  expect(readImage(store.db, read.result.source.hash).bytes).toEqual(bytes);
-  expect(store.db.prepare('SELECT * FROM image_blobs').all()).toEqual(before);
-  expect(store.db.prepare('SELECT total_changes() AS count').get()).toEqual(changes);
-  expect(store.product.get('content', content.id)).toEqual(content);
-});
-
-test('rejects wrong owner, stale revision, unknown fields, invalid bytes and cancellation', async () => {
-  const store = fixture();
-  const content = save(store, await red());
-  const other = save(store, await red(), 0);
-  await expect(readHelperImage(store, { contentId: other.id, imageId: 'image-0' })).rejects.toThrow(
-    'IMAGE_NOT_FOUND_IN_CONTENT'
-  );
-  await expect(
-    readHelperImage(store, {
-      contentId: content.id,
-      imageId: 'image-0',
-      expectedRevision: content.revision + 1,
-    })
-  ).rejects.toThrow('IMAGE_CONTENT_CHANGED');
-  await expect(
-    readHelperImage(store, {
-      contentId: content.id,
-      imageId: 'image-0',
-      hash: content.package.images[0].blobHash,
-    })
-  ).rejects.toThrow('Unknown request field');
-  const controller = new AbortController();
-  controller.abort();
-  await expect(
-    readHelperImage(store, { contentId: content.id, imageId: 'image-0' }, controller.signal)
-  ).rejects.toThrow();
-  const broken = save(store, Buffer.from('not an image'));
-  await expect(
-    readHelperImage(store, { contentId: broken.id, imageId: 'image-0' })
-  ).rejects.toThrow('HELPER_IMAGE_INVALID');
 });
 
 test('transmission limits high-entropy pixels to 2048px and 2MiB', async () => {

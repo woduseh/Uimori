@@ -36,13 +36,10 @@ import {
 } from '../core/codex-protocol.js';
 import { assertContextBudget, type ContextBudget } from '../core/context-budget.js';
 import {
-  assertProviderRequestBytes,
   materializeProviderImages,
-  PROVIDER_IMAGE_MAX_BYTES,
   PROVIDER_REQUEST_MAX_BYTES,
   requestImages,
 } from '../core/provider-images.js';
-import { REQUEST_IMAGE_MAX_COUNT } from '../core/request-images.js';
 import {
   ProviderContractError,
   type Json,
@@ -1257,38 +1254,16 @@ export class CodexRuntime implements CodexRuntimeService {
                 resolveTurn!();
                 return;
               }
-              const images = result.images ?? [];
-              if (!result.success && images.length)
-                throw new ProviderContractError('IMAGE_INPUT_INVALID');
-              if (images.length > REQUEST_IMAGE_MAX_COUNT)
-                throw new ProviderContractError('IMAGE_INPUT_INVALID');
-              const imageItems = images.map((image) => {
-                const bytes = Buffer.from(image.base64, 'base64');
-                if (
-                  image.mime !== 'image/webp' ||
-                  !Number.isSafeInteger(image.width) ||
-                  image.width < 1 ||
-                  image.width > 16383 ||
-                  !Number.isSafeInteger(image.height) ||
-                  image.height < 1 ||
-                  image.height > 16383 ||
-                  !bytes.length ||
-                  bytes.length > PROVIDER_IMAGE_MAX_BYTES ||
-                  bytes.toString('base64') !== image.base64 ||
-                  !isValidIllustrationImage(bytes, image.mime)
-                )
-                  throw new ProviderContractError('IMAGE_INPUT_INVALID');
-                return {
-                  type: 'inputImage',
-                  imageUrl: `data:${image.mime};base64,${image.base64}`,
-                };
-              });
-              const response = {
-                contentItems: [{ type: 'inputText', text: result.text }, ...imageItems],
+              return {
+                contentItems: [
+                  { type: 'inputText', text: result.text },
+                  ...(result.images ?? []).map((image) => ({
+                    type: 'inputImage',
+                    imageUrl: `data:${image.mime};base64,${image.base64}`,
+                  })),
+                ],
                 success: result.success,
               };
-              assertProviderRequestBytes(response);
-              return response;
             } catch (caught) {
               // A thrown host operation may already have committed; never turn it into a retry hint.
               rejectTurn(caught);

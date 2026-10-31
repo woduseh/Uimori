@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { ProviderContractError } from './provider-errors.js';
 import type { ResolvedRequestImage } from './request-images.js';
 import type { Json, ProviderExecutionOptions, ProviderRequest } from './transport.js';
@@ -12,7 +11,6 @@ export {
   requestImages,
 } from './provider-image-reference.js';
 
-export const PROVIDER_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export const PROVIDER_REQUEST_MAX_BYTES = 64 * 1024 * 1024;
 const object = (value: Json): value is Record<string, Json> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -25,8 +23,7 @@ export function assertProviderRequestBytes(body: Json): void {
 /** Detach image-bearing wire bodies so frozen requests and opaque replay never contain bytes. */
 export async function materializeProviderImages(
   body: Json,
-  request: Pick<ProviderRequest, 'prompt'> &
-    Partial<Pick<ProviderRequest, 'toolImages' | 'input' | 'bootstrap'>>,
+  request: Pick<ProviderRequest, 'prompt' | 'toolImages'>,
   options: Pick<ProviderExecutionOptions, 'resolveImage'>,
   signal?: AbortSignal
 ): Promise<Json> {
@@ -56,22 +53,6 @@ export async function materializeProviderImages(
         if (!data) {
           data = await options.resolveImage(image, signal);
           signal?.throwIfAborted();
-          if (
-            data.mime !== image.mime ||
-            data.width !== image.input.width ||
-            data.height !== image.input.height ||
-            typeof data.base64 !== 'string' ||
-            !data.base64.length ||
-            data.base64.length > 4 * Math.ceil(PROVIDER_IMAGE_MAX_BYTES / 3)
-          )
-            throw new ProviderContractError('IMAGE_INPUT_INVALID');
-          const bytes = Buffer.from(data.base64, 'base64');
-          if (
-            bytes.length > PROVIDER_IMAGE_MAX_BYTES ||
-            bytes.toString('base64') !== data.base64 ||
-            createHash('sha256').update(bytes).digest('hex') !== image.input.hash
-          )
-            throw new ProviderContractError('IMAGE_INPUT_INVALID');
           resolved.set(reference, data);
         }
         const payload = slot.url ? `data:${data.mime};base64,${data.base64}` : data.base64;
@@ -85,6 +66,5 @@ export async function materializeProviderImages(
     for (const item of Object.values(value)) await visit(item);
   };
   await visit(copy);
-  assertProviderRequestBytes(copy);
   return copy;
 }
