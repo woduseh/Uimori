@@ -473,7 +473,10 @@ describe('server main runner through the actual loopback adapter', () => {
     });
     const snapshot = routedSnapshot(server.endpoint);
     snapshot.resources[0].relatedIds = ['lore-1', 'persona-1', 'unknown-private-id'];
-    expect(buildMainInput(snapshot).catalog[0].relatedIds).toEqual(['lore-1']);
+    expect(
+      buildMainInput(snapshot).catalog.find((item) => item.id === snapshot.resources[0].id)
+        ?.relatedIds
+    ).toEqual(['lore-1']);
     const observed = runnerHooks(server.origin);
     const result = await runMain(await prepareNativeRisuRun(snapshot), observed.hooks);
     expect(result.error).toBe('READ_TOOL_DENIED');

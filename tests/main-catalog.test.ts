@@ -297,3 +297,232 @@ test('catalog construction does not tokenize descriptions after the page is full
   // One candidate can be inspected to discover that the current page is full.
   expect(descriptionsRead).toBeLessThanOrEqual(result.catalog.length + 1);
 });
+
+test.each([
+  ['English title', 'Asterion', 'Asterion', 'The keeper guards an ancient seal.'],
+  ['Korean particles', '미나를 찾아요', '인물 기록', '미나에게 청월인장을 맡겼다.'],
+  ['Japanese unspaced names', '美咲に会う', '庭の記録', '静かな庭で美咲は待っていた。'],
+  ['Unicode and case', 'cafe\u0301', 'CAFÉ', 'The keeper opens at dawn.'],
+  ['Latin name with Korean particle', 'Mira', '인물 기록', 'Mira에게 비밀을 말했다.'],
+  ['Unicode Latin name with Korean particle', 'cafe\u0301', '장소 기록', 'CAFÉ의 문을 잠갔다.'],
+  ['Punctuation-only title', '+++', '+++', 'The keeper opens at dawn.'],
+])(
+  'relevant knowledge search retrieves the reviewed %s reference without unrelated hits',
+  (_label, query, title, text) => {
+    const fixed = snapshot([
+      lore(0, { title: 'Unrelated harbor', description: '', text: 'Ships return at dawn.' }),
+      lore(1, { title, description: '', text }),
+      lore(2, { chatId: 'foreign-chat', title, description: '', text }),
+    ]);
+    const event = executeTool(fixed, {
+      callId: 'relevant-reviewed',
+      name: 'knowledge.search',
+      args: { mode: 'relevant', query },
+    });
+    expect(event.denied).toBe(false);
+    expect(event.args).toMatchObject({ mode: 'relevant', query });
+    const page = event.result as any;
+    expect(page.total).toBe(1);
+    expect(page.items.map((item: any) => item.id)).toEqual(['lore-1']);
+    expect(page.items[0].nextRead.arguments.ids).toEqual(['lore-1']);
+    expect(
+      executeTool(fixed, {
+        callId: 'relevant-absent',
+        name: 'knowledge.search',
+        args: { mode: 'relevant', query: 'zqxvutterlyabsent' },
+      }).result
+    ).toMatchObject({ total: 0, items: [], nextOffset: null });
+  }
+);
+
+test('relevant search ranks exact identities before incidental prose while preserving literal search and paging', () => {
+  const fixed = snapshot([
+    lore(0, { title: 'Market', description: '', text: 'Asterion is mentioned in passing.' }),
+    lore(1, { title: 'Asterion', description: '', text: 'The keeper guards the ancient seal.' }),
+    lore(2, { id: 'Asterion', title: 'Vault record', description: '', text: 'An old brass key.' }),
+    lore(3, { title: 'Unrelated', description: '', text: 'Distant orchards.' }),
+  ]);
+  const search = (args: Record<string, unknown>) =>
+    executeTool(fixed, {
+      callId: 'rank',
+      name: 'knowledge.search',
+      args,
+    });
+  const relevant = search({ mode: 'relevant', query: 'Asterion', limit: 1 });
+  expect(relevant.denied).toBe(false);
+  const seen: string[] = [];
+  let offset: number | null = 0;
+  while (offset !== null) {
+    const event = search({ mode: 'relevant', query: 'Asterion', limit: 1, offset });
+    expect(event.denied).toBe(false);
+    const page = event.result as any;
+    expect(page.total).toBe(3);
+    expect(page.items).toHaveLength(1);
+    seen.push(page.items[0].id);
+    offset = page.nextOffset;
+  }
+  expect(new Set(seen.slice(0, 2))).toEqual(new Set(['lore-1', 'Asterion']));
+  expect(seen[2]).toBe('lore-0');
+  const metadataHit = (search({ mode: 'relevant', query: 'Asterion' }).result as any).items.find(
+    (item: any) => item.id === 'lore-1'
+  );
+  expect(metadataHit).not.toHaveProperty('match');
+  expect(metadataHit.nextRead.arguments.ids).toEqual(['lore-1']);
+  for (const mode of [undefined, 'search']) {
+    const args = { query: 'Asterion', ...(mode ? { mode } : {}) };
+    const literal = search(args);
+    expect(literal.denied).toBe(false);
+    expect((literal.result as any).items.map((item: any) => item.id)).toEqual(['lore-0', 'lore-1']);
+    expect((search({ ...args, query: 'Asterion impossible' }).result as any).total).toBe(0);
+    expect(
+      (search({ ...args, query: '' }).result as any).items.map((item: any) => item.id)
+    ).toEqual(fixed.resources.map((item) => item.id));
+  }
+  for (const query of ['', '   ']) {
+    expect(search({ mode: 'relevant', query })).toMatchObject({
+      denied: true,
+      result: { code: 'INVALID_ARGUMENTS' },
+    });
+  }
+});
+
+test.each(['CAFÉ 문을 미나에게 맡겼다.', 'CAFE\u0301의 문을 미나에게 맡겼다.'])(
+  'relevant search returns exact original late Unicode excerpts and a usable direct read: %s',
+  (phrase) => {
+    const original = 'İ'.repeat(10_000) + '😀'.repeat(5_000) + phrase;
+    const fixed = snapshot([lore(1, { title: 'Vault', description: '', text: original })]);
+    const event = executeTool(fixed, {
+      callId: 'unicode-relevant',
+      name: 'knowledge.search',
+      args: { mode: 'relevant', query: 'cafe\u0301' },
+    });
+    expect(event.denied).toBe(false);
+    const hit = (event.result as any).items[0];
+    expect(hit.match.text).toContain(phrase);
+    expect(hit.match.range.start).toBeGreaterThan(19_000);
+    expect(hit.match.text).toBe(original.slice(hit.match.range.start, hit.match.range.end));
+    expect(hit.match.text.isWellFormed()).toBe(true);
+    const read = executeTool(fixed, {
+      callId: 'unicode-direct',
+      name: hit.nextRead.name,
+      args: hit.nextRead.arguments,
+    });
+    expect(read.denied).toBe(false);
+    expect((read.result as any).items[0].read.text).toContain(phrase);
+    expect((read.result as any).items[0].read.source.hash).toBe(hit.match.source.hash);
+  }
+);
+
+test('automatic catalog ranking uses metadata without scanning reference bodies', () => {
+  const resources = [
+    lore(0, { title: 'Harbor ledger', description: '' }),
+    lore(1, { title: '청월인장', description: '북쪽 탑에 관한 기록.' }),
+  ];
+  for (const resource of resources)
+    Object.defineProperty(resource, 'text', {
+      get: () => {
+        throw new Error('Automatic catalog ranking must not scan reference bodies');
+      },
+    });
+  const fixed = snapshot(resources);
+  fixed.request = '청월인장을 찾아요.';
+  expect(buildMainInput(fixed).catalog[0].id).toBe('lore-1');
+});
+
+test('main catalog surfaces a late requested reference with fewer tokens and preserves complete discovery', () => {
+  const resources = Array.from({ length: 400 }, (_, index) => lore(index));
+  resources[399] = lore(399, {
+    title: '청월인장',
+    description: '미나에게 맡긴 인장과 북쪽 탑의 기록.',
+    text: '청월인장은 북쪽 탑에 숨겨져 있다.',
+    relatedIds: ['lore-0', 'foreign-id'],
+  });
+  resources.push(lore(400, { id: 'foreign-id', chatId: 'foreign-chat', title: '청월인장' }));
+  const fixed = snapshot(resources);
+  fixed.request = '청월인장을 찾아요.';
+  const before = structuredClone(fixed);
+  const input = buildMainInput(fixed);
+  const legacy = resourceCatalog(resources.filter((item) => item.chatId === fixed.chatId));
+  const tokens = countTextTokens(JSON.stringify(input.catalog));
+  const legacyTokens = countTextTokens(JSON.stringify(legacy.catalog));
+  expect(input.catalog[0].id).toBe('lore-399');
+  expect(input.catalog[0].relatedIds).toEqual(['lore-0']);
+  expect(tokens).toBeLessThanOrEqual(2_000);
+  expect(tokens).toBeLessThan(legacyTokens);
+  expect(legacy.catalog.map((item) => item.id)).not.toContain('lore-399');
+  expect(input.catalogPage!.total).toBe(400);
+  expect(buildMainInput(fixed)).toEqual(input);
+  const found: string[] = [];
+  let offset: number | null = 0;
+  while (offset !== null) {
+    const event = executeTool(fixed, {
+      callId: 'discover-all',
+      name: 'knowledge.search',
+      args: { offset, limit: 100 },
+    });
+    expect(event.denied).toBe(false);
+    const page = event.result as any;
+    found.push(...page.items.map((item: any) => item.id));
+    offset = page.nextOffset;
+  }
+  expect(found).toEqual(resources.slice(0, 400).map((item) => item.id));
+  const omitted = resources.find(
+    (item) => item.chatId === fixed.chatId && !input.catalog.some((listed) => listed.id === item.id)
+  )!;
+  const read = executeTool(fixed, {
+    callId: 'read-omitted',
+    name: 'knowledge.read',
+    args: { ids: [omitted.id] },
+  });
+  expect((read.result as any).items[0].read.text).toBe(omitted.text);
+  expect(fixed).toEqual(before);
+  console.log(
+    'MAIN_CATALOG_EVIDENCE',
+    JSON.stringify({
+      scenario: 'synthetic-400-entry-corpus',
+      sourceEntries: 400,
+      relevantFirstPage: input.catalog[0].id,
+      mainCatalogTokens: tokens,
+      defaultCatalogTokens: legacyTokens,
+      reachableEntries: found.length,
+    })
+  );
+});
+
+test('an oversized first catalog entry cannot hide a later relevant reference and stays searchable', () => {
+  const oversized = lore(0, {
+    title: 'Asterion '.repeat(1_100),
+    description: '',
+    text: 'Asterion archive records.',
+  });
+  const relevant = lore(1, {
+    title: 'Asterion',
+    description: 'The keeper and the seal.',
+    text: 'The seal lies below the tower.',
+  });
+  const fixed = snapshot([oversized, relevant]);
+  fixed.request = 'Asterion';
+  const before = structuredClone(fixed);
+  expect(countTextTokens(oversized.title)).toBeGreaterThan(2_000);
+  const input = buildMainInput(fixed);
+  expect(input.catalog.map((item) => item.id)).toEqual([relevant.id]);
+  expect(input.catalogPage).toMatchObject({ total: 2, listed: 1 });
+  expect(countTextTokens(JSON.stringify(input.catalog))).toBeLessThanOrEqual(2_000);
+  const discover = executeTool(fixed, {
+    callId: 'oversized-discovery',
+    name: 'knowledge.search',
+    args: { query: 'Asterion' },
+  });
+  expect(discover.denied).toBe(false);
+  expect((discover.result as any).items.map((item: any) => item.id)).toEqual([
+    oversized.id,
+    relevant.id,
+  ]);
+  const read = executeTool(fixed, {
+    callId: 'oversized-read',
+    name: 'knowledge.read',
+    args: { ids: [oversized.id] },
+  });
+  expect((read.result as any).items[0].read.text).toBe(oversized.text);
+  expect(fixed).toEqual(before);
+});

@@ -17,13 +17,15 @@ import { OUTLINE_CONTRACT, type OutlineSnapshot } from './outline.js';
 import { AUTHOR_NOTE_GUIDANCE } from './notes.js';
 import { PROMPT_COMPILER_VERSIONS } from './risu-prompt.js';
 import { packageImages } from './package-images.js';
+import { candidateTerms, createCandidateSearch } from './candidate-search.js';
 
 // These are host permissions, never instructions read from a content package.
 const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
 /** Per-entry summary length in the main catalog; the body stays behind the read tools. */
 export const CATALOG_SUMMARY_TOKENS = 80;
-/** Serialized token budget for the whole catalog list, which rides in every main request. */
+/** Default serialized token budget for a catalog list. */
 export const CATALOG_TOKENS = 6_000;
+const MAIN_CATALOG_TOKENS = 2_000;
 /** Legacy bounds retained exclusively for historical receipt verification. */
 export const KNOWLEDGE_READ_CHARS = 6_000;
 export const KNOWLEDGE_READ_MAX_CHARS = 48_000;
@@ -36,7 +38,7 @@ export type ReadBudget = {
   ranges?: (number | null)[];
 };
 export const CATALOG_READ_GUIDANCE =
-  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Request independently needed references together; wait for earlier results only when they are needed to choose the next reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Exact names favor normal search; mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read. Retrieval is optional when the supplied context is sufficient.';
+  'Relevant references may already be included in the input; do not read them again. The catalog contains summaries of additional references. If the reply needs missing detail, fetch known ids with knowledge.read({ids:[...]}), using a one-item array for a single reference. Request independently needed references together; wait for earlier results only when they are needed to choose the next reference. Use knowledge.search only when the needed entry is not identifiable from the catalog. Exact names favor normal search; mode=relevant ranks lexical matches, and mode=browse follows package/folder structure when vocabulary differs. Follow returned nextRead references; folder metadata is not evidence that the underlying text was read. Retrieval is optional when the supplied context is sufficient.';
 
 const metadata = ({ text: _text, chatId: _chatId, loreFolder: _loreFolder, ...item }: Resource) =>
   item;
@@ -72,14 +74,26 @@ export function resourceCatalog(
   {
     pinnedBodiesDelivered = true,
     tokenizer,
-  }: { pinnedBodiesDelivered?: boolean; tokenizer?: TokenizerProfileId } = {}
+    tokenBudget = CATALOG_TOKENS,
+    skipOversized = false,
+  }: {
+    pinnedBodiesDelivered?: boolean;
+    tokenizer?: TokenizerProfileId;
+    tokenBudget?: number;
+    skipOversized?: boolean;
+  } = {}
 ) {
   const allowedIds = new Set(resources.map((item) => item.id));
   const catalog: MainInput['catalog'] = [];
   for (const resource of resources) {
-    catalog.push(catalogEntry(resource, allowedIds, pinnedBodiesDelivered, tokenizer));
-    if (countTextTokens(JSON.stringify(catalog), tokenizer) > CATALOG_TOKENS) {
+    const entry = catalogEntry(resource, allowedIds, pinnedBodiesDelivered, tokenizer);
+    catalog.push(entry);
+    if (countTextTokens(JSON.stringify(catalog), tokenizer) > tokenBudget) {
       catalog.pop();
+      // A single impossible item must not hide every later entry. Otherwise preserve
+      // ranking priority and stop without tokenizing the entire remaining library.
+      if (skipOversized && countTextTokens(JSON.stringify([entry]), tokenizer) > tokenBudget)
+        continue;
       break;
     }
   }
@@ -293,11 +307,29 @@ export function buildMainInput(
     input.outline = structuredClone(snapshot.outline);
     input.contract += `\n${OUTLINE_CONTRACT}`;
   }
-  // The catalog rides uncached in every request, so a large library is listed only up to a
-  // token budget. The rest stays reachable through the read tools.
+  // Rank bounded discovery metadata; full bodies remain reachable through the read tools.
+  const rankedIds = createCandidateSearch(
+    resources.map((item) => ({
+      id: item.id,
+      title: item.title,
+      text: `${item.id} ${item.description}`,
+    }))
+  ).rankMatched([
+    { text: input.task, weight: 3 },
+    ...input.history.slice(-3).map((entry) => ({ text: entry.text, weight: 0.5 })),
+    ...(input.contextSummary ? [{ text: input.contextSummary.text, weight: 0.5 }] : []),
+  ]);
+  const byId = new Map(resources.map((item) => [item.id, item]));
+  const rankedSet = new Set(rankedIds);
+  const catalogResources = [
+    ...rankedIds.map((id) => byId.get(id)!),
+    ...resources.filter((item) => !rankedSet.has(item.id)),
+  ];
   Object.assign(
     input,
-    resourceCatalog(resources, {
+    resourceCatalog(catalogResources, {
+      tokenBudget: MAIN_CATALOG_TOKENS,
+      skipOversized: true,
       tokenizer:
         snapshot.contextPlan && 'tokenizer' in snapshot.contextPlan.budget
           ? snapshot.contextPlan.budget.tokenizer
@@ -317,6 +349,25 @@ function pageNumber(value: unknown, fallback: number, maximum: number) {
   if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > maximum)
     return null;
   return value as number;
+}
+
+// Map normalized graphemes back to their original UTF-16 coordinates. Normalizing or
+// lowercasing a whole string can change its length, so normalized indexes alone are unsafe.
+function relevantBodyOffset(text: string, terms: readonly string[]): number | undefined {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  let normalized = '';
+  const originalOffsets: number[] = [];
+  for (const part of segmenter.segment(text)) {
+    const value = part.segment.normalize('NFC').toLowerCase();
+    normalized += value;
+    for (let i = 0; i < value.length; i++) originalOffsets.push(part.index);
+  }
+  let earliest = Infinity;
+  for (const term of terms) {
+    const index = normalized.indexOf(term);
+    if (index >= 0) earliest = Math.min(earliest, originalOffsets[index]!);
+  }
+  return Number.isFinite(earliest) ? earliest : undefined;
 }
 
 export type ToolAction = {
@@ -588,7 +639,10 @@ export function executeTool(
     };
   }
 
-  if (args.mode !== undefined && (action.name !== 'knowledge.search' || args.mode !== 'search'))
+  if (
+    args.mode !== undefined &&
+    (action.name !== 'knowledge.search' || !['search', 'relevant'].includes(args.mode as string))
+  )
     return denied('INVALID_ARGUMENTS');
   const search = action.name === 'knowledge.search' || action.name === 'skills.list';
   if (
@@ -609,18 +663,53 @@ export function executeTool(
     if (args.query !== undefined && (typeof args.query !== 'string' || args.query.length > 512))
       return denied('INVALID_ARGUMENTS');
     const query = typeof args.query === 'string' ? args.query : '';
+    const relevant = action.name === 'knowledge.search' && args.mode === 'relevant';
+    if (relevant && !query.trim()) return denied('INVALID_ARGUMENTS');
     const offset = pageNumber(args.offset, 0, Number.MAX_SAFE_INTEGER);
     const limit = pageNumber(args.limit, 20, 100);
     if (offset === null || limit === null || limit === 0) return denied('INVALID_ARGUMENTS');
 
     const terms = query.toLocaleLowerCase('en').split(/\s+/u).filter(Boolean);
-    const matches = scope.filter((item) => {
+    let matches = scope.filter((item) => {
       if (action.name === 'skills.list' && item.kind !== 'skill') return false;
+      if (relevant) return true;
       if (!terms.length) return true;
       const metadataText = `${item.title} ${item.description}`.toLocaleLowerCase('en');
       const body = item.text.toLocaleLowerCase('en');
       return terms.every((term) => metadataText.includes(term) || body.includes(term));
     });
+    const literalTerms = relevant
+      ? query.normalize('NFC').toLowerCase().split(/\s+/u).filter(Boolean)
+      : [];
+    const relevantTerms = relevant ? [...new Set([...candidateTerms(query), ...literalTerms])] : [];
+    if (relevant) {
+      const byId = new Map(scope.map((item) => [item.id, item]));
+      const ids = createCandidateSearch(
+        scope.map((item) => ({
+          id: item.id,
+          title: item.title,
+          text: `${item.id} ${item.description} ${item.text}`,
+        }))
+      ).rankMatched([{ text: query, weight: 1 }]);
+      const ranked = new Set(ids);
+      for (const item of scope) {
+        if (ranked.has(item.id)) continue;
+        const searchable = `${item.id} ${item.title} ${item.description} ${item.text}`
+          .normalize('NFC')
+          .toLowerCase();
+        if (literalTerms.every((term) => searchable.includes(term))) ids.push(item.id);
+      }
+      const exact = query.trim().normalize('NFC').toLowerCase();
+      matches = ids
+        .map((id) => byId.get(id)!)
+        .sort((a, b) => {
+          const isExact = (item: Resource) =>
+            [item.title, item.id].some(
+              (value) => value.trim().normalize('NFC').toLowerCase() === exact
+            );
+          return Number(isExact(b)) - Number(isExact(a));
+        });
+    }
     const allowedIds = new Set(scope.map((item) => item.id));
     // Locate excerpts in the original text: lowercasing can change UTF-16 length.
     const patterns =
@@ -643,7 +732,7 @@ export function executeTool(
           tokenLimit: KNOWLEDGE_ITEM_TOKENS,
         },
       };
-      let index = Infinity;
+      let index = relevant ? (relevantBodyOffset(item.text, relevantTerms) ?? Infinity) : Infinity;
       for (const pattern of patterns) {
         const found = pattern.exec(item.text);
         if (found) index = Math.min(index, found.index);
@@ -662,6 +751,7 @@ export function executeTool(
         nextRead.arguments.offset = start;
         entry.nextRead = nextRead;
       }
+      if (relevant && !entry.nextRead) entry.nextRead = nextRead;
       if (
         action.name === 'knowledge.search' &&
         countTextTokens(JSON.stringify({ ...result(), items: [entry] }), profile) >
@@ -691,7 +781,7 @@ export function executeTool(
     }
     return {
       ...action,
-      args: { query, offset, limit },
+      args: { ...(relevant ? { mode: 'relevant' } : {}), query, offset, limit },
       denied: false,
       result: result(),
     };
