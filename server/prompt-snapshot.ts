@@ -21,7 +21,7 @@ import type { Store } from './store.js';
 import { DEFAULT_MAIN_PROMPT } from '../core/prompts.js';
 import { compiledPackages, type ResolvedPackage } from '../core/package-context.js';
 import { resolveTemplateVariableContext } from '../core/template-variables.js';
-import { projectedLogicalHistory } from '../core/context-projection.js';
+import { projectedLogicalHistory, selectLogicalHistory } from '../core/context-projection.js';
 import { nativeRisuPresetPending, projectNativeRisuPresetProgram } from './risu-native-preset.js';
 
 /** Pair each exact source version with its actual user request; never infer roles from prose. */
@@ -200,21 +200,7 @@ function contextFromPackages(
   input: MainInput
 ) {
   const slots = nativePromptSlots(snapshot, input);
-  const inputHistoryIds = new Set(input.history.map((entry) => entry.revision));
-  const logical = (
-    snapshot.nativeRisuExecution?.history ??
-    snapshot.logicalHistory ??
-    input.history.map((entry) => ({
-      id: `source:${entry.revision}`,
-      role: 'assistant' as const,
-      text: entry.text,
-      sourceRevision: entry.revision,
-      ...(entry.contentHash ? { sourceHash: entry.contentHash } : {}),
-    }))
-  ).filter(
-    (message) =>
-      snapshot.contextPlan || !message.sourceRevision || inputHistoryIds.has(message.sourceRevision)
-  );
+  const logical = selectLogicalHistory(snapshot, input.history);
   const current = {
     id: 'current-input',
     role: 'user' as const,

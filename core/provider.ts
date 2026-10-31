@@ -1,7 +1,11 @@
 import { createKnowledgeBrowser } from './knowledge-browse.js';
 import { KNOWLEDGE_SKILL_TOOLS } from './read-tools.js';
 import { createHash } from 'node:crypto';
-import { conversationSummary } from './context-projection.js';
+import {
+  conversationSummary,
+  projectedLogicalHistory,
+  selectLogicalHistory,
+} from './context-projection.js';
 import type { ModelInput, Resource, RunSnapshot, ToolEvent } from './types.js';
 import { executeStoryRead, STORY_READ_NAMES } from './story-context.js';
 import { validateSourceHistory } from './source-history.js';
@@ -25,7 +29,6 @@ const ALLOWED_TOOLS = KNOWLEDGE_SKILL_TOOLS.map((tool) => tool.name);
 export const CATALOG_SUMMARY_TOKENS = 80;
 /** Default serialized token budget for a catalog list. */
 export const CATALOG_TOKENS = 6_000;
-const MAIN_CATALOG_TOKENS = 2_000;
 /** Legacy bounds retained exclusively for historical receipt verification. */
 export const KNOWLEDGE_READ_CHARS = 6_000;
 export const KNOWLEDGE_READ_MAX_CHARS = 48_000;
@@ -74,12 +77,10 @@ export function resourceCatalog(
   {
     pinnedBodiesDelivered = true,
     tokenizer,
-    tokenBudget = CATALOG_TOKENS,
     skipOversized = false,
   }: {
     pinnedBodiesDelivered?: boolean;
     tokenizer?: TokenizerProfileId;
-    tokenBudget?: number;
     skipOversized?: boolean;
   } = {}
 ) {
@@ -88,11 +89,11 @@ export function resourceCatalog(
   for (const resource of resources) {
     const entry = catalogEntry(resource, allowedIds, pinnedBodiesDelivered, tokenizer);
     catalog.push(entry);
-    if (countTextTokens(JSON.stringify(catalog), tokenizer) > tokenBudget) {
+    if (countTextTokens(JSON.stringify(catalog), tokenizer) > CATALOG_TOKENS) {
       catalog.pop();
       // A single impossible item must not hide every later entry. Otherwise preserve
       // ranking priority and stop without tokenizing the entire remaining library.
-      if (skipOversized && countTextTokens(JSON.stringify([entry]), tokenizer) > tokenBudget)
+      if (skipOversized && countTextTokens(JSON.stringify([entry]), tokenizer) > CATALOG_TOKENS)
         continue;
       break;
     }
@@ -308,6 +309,11 @@ export function buildMainInput(
     input.contract += `\n${OUTLINE_CONTRACT}`;
   }
   // Rank bounded discovery metadata; full bodies remain reachable through the read tools.
+  const visibleHistory = projectedLogicalHistory(
+    snapshot,
+    selectLogicalHistory(snapshot, input.history),
+    false
+  );
   const rankedIds = createCandidateSearch(
     resources.map((item) => ({
       id: item.id,
@@ -316,7 +322,7 @@ export function buildMainInput(
     }))
   ).rankMatched([
     { text: input.task, weight: 3 },
-    ...input.history.slice(-3).map((entry) => ({ text: entry.text, weight: 0.5 })),
+    ...visibleHistory.slice(-3).map((entry) => ({ text: entry.text, weight: 0.5 })),
     ...(input.contextSummary ? [{ text: input.contextSummary.text, weight: 0.5 }] : []),
   ]);
   const byId = new Map(resources.map((item) => [item.id, item]));
@@ -328,7 +334,6 @@ export function buildMainInput(
   Object.assign(
     input,
     resourceCatalog(catalogResources, {
-      tokenBudget: MAIN_CATALOG_TOKENS,
       skipOversized: true,
       tokenizer:
         snapshot.contextPlan && 'tokenizer' in snapshot.contextPlan.budget
