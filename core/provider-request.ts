@@ -15,6 +15,7 @@ import {
   type ModelGeneration,
 } from './product.js';
 import { validateProviderPrompt } from './risu-prompt.js';
+import { validateToolImages } from './provider-image-reference.js';
 import { ProviderContractError } from './provider-errors.js';
 import {
   isVertexFileReference,
@@ -129,6 +130,7 @@ export function validateRequest(value: unknown): ProviderRequest {
     'continuationInput',
     'prompt',
     'bootstrap',
+    'toolImages',
     'toolChoice',
   ]);
   if (value.pricingSnapshot !== undefined) validatePricingSnapshot(value.pricingSnapshot);
@@ -203,6 +205,7 @@ export function validateRequest(value: unknown): ProviderRequest {
       ids.add(item.callId);
     }
   }
+  validateToolImages(value as ProviderRequest);
   keys(value.stable, ['contract', 'tools']);
   // An explicitly selected empty prompt is distinct from using the application default.
   if (typeof value.stable.contract !== 'string') reject('INVALID_STRING');

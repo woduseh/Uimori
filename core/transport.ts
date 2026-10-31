@@ -81,6 +81,8 @@ export type ProviderRequest = {
   /** Optional provider-specific JSON; currently forwarded only by the Vercel Chat adapter. */
   providerOptions?: ProviderOptions;
   prompt?: ProviderPrompt;
+  /** Host-owned image references associated with successful tool results. */
+  toolImages?: { callId: string; images: import('./request-images.js').RequestImage[] }[];
   bootstrap?: {
     callId: string;
     name: string;

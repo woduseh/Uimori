@@ -698,3 +698,39 @@ describe('OpenAI-compatible Chat pure protocol (no live calls)', () => {
     expect(() => stopped.decoder.accept(chunk({ content: 'extra' }))).toThrow('EVENT_AFTER_FINISH');
   });
 });
+
+test.each(['openai-chat-v1', 'vercel-chat-v1'] as const)(
+  '%s replays a tool image once across later rounds',
+  (protocol) => {
+    const input = request();
+    const firstTurn = encodeChat(input, protocol);
+    const decoder = new ChatDecoder(firstTurn.context);
+    decoder.accept(chunk({ tool_calls: [tool()] }, 'tool_calls'));
+    decoder.accept('[DONE]');
+    const secondInput = next(input, decoder.finish());
+    const hash = 'a'.repeat(64);
+    secondInput.toolImages = [
+      {
+        callId: 'Call-A.Original',
+        images: [
+          {
+            hash,
+            mime: 'image/webp',
+            name: 'portrait',
+            width: 1,
+            height: 1,
+            input: { hash, width: 1, height: 1 },
+          },
+        ],
+      },
+    ];
+    const second = encodeChat(secondInput, protocol);
+    expect(JSON.stringify(second.body).split('uimori-image://')).toHaveLength(2);
+    const decoder2 = new ChatDecoder(second.context);
+    decoder2.accept(chunk({ tool_calls: [tool(0, 'Call-B.Original')] }, 'tool_calls'));
+    decoder2.accept('[DONE]');
+    const third = encodeChat(next(secondInput, decoder2.finish()), protocol);
+    expect(JSON.stringify(third.body).split('uimori-image://')).toHaveLength(2);
+    expect(JSON.stringify(third.context)).not.toContain('data:image');
+  }
+);

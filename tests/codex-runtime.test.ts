@@ -170,6 +170,51 @@ describe('official Codex runtime boundary using a synthetic stdio executable', (
       },
     ]);
   });
+  it('delivers a trusted tool image in the native callback', async () => {
+    const { runtime, records } = setup('agent-normal');
+    const base64 = Buffer.from('RIFF\x04\x00\x00\x00WEBP', 'binary').toString('base64');
+    await runtime.executeAgent(connection, agentRequest(), {
+      signal: new AbortController().signal,
+      onToolCall: async () => ({
+        success: true,
+        text: 'portrait',
+        images: [{ mime: 'image/webp', base64, width: 1, height: 1 }],
+      }),
+    });
+    expect(records().find((row) => row.id === 'tool-2').result).toEqual({
+      success: true,
+      contentItems: [
+        { type: 'inputText', text: 'portrait' },
+        { type: 'inputImage', imageUrl: `data:image/webp;base64,${base64}` },
+      ],
+    });
+  });
+  it('delivers a tool image reply over 8 MiB without initial images', async () => {
+    const { runtime, records } = setup('agent-image-budget');
+    const bytes = Buffer.alloc(2 * 1024 * 1024);
+    bytes.write('RIFF', 0);
+    bytes.write('WEBP', 8);
+    const base64 = bytes.toString('base64');
+    const result = await runtime.executeAgent(connection, agentRequest(), {
+      signal: new AbortController().signal,
+      onToolCall: async () => ({
+        success: true,
+        text: 'portraits',
+        images: Array.from({ length: 4 }, () => ({
+          mime: 'image/webp',
+          base64,
+          width: 1,
+          height: 1,
+        })),
+      }),
+    });
+    expect(result.status).toBe('completed');
+    expect(records().find((row) => row.id === 'tool-2')).toMatchObject({
+      imageCount: 4,
+      wireBytes: expect.any(Number),
+    });
+    expect(records().find((row) => row.id === 'tool-2').wireBytes).toBeGreaterThan(8 * 1024 * 1024);
+  });
   it('steers user input into the active native turn and detaches when it finishes', async () => {
     const { runtime, records } = setup('agent-normal');
     let steer!: (text: string) => Promise<void>;

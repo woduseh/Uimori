@@ -1,5 +1,5 @@
 import { ProviderContractError } from './provider-errors.js';
-import type { RequestImage } from './request-images.js';
+import { validateRequestImages, type RequestImage } from './request-images.js';
 import type { Json, ProviderRequest } from './transport.js';
 import type { ProviderProtocol } from './product.js';
 
@@ -15,10 +15,67 @@ export function imageReferenceMetadata(value: string) {
   return match ? { hash: match[1], width: Number(match[2]), height: Number(match[3]) } : undefined;
 }
 
-export function requestImages(request: Pick<ProviderRequest, 'prompt'>): RequestImage[] {
-  return (request.prompt?.messages ?? []).flatMap((message) =>
-    message.content.flatMap((part) => (part.type === 'image' ? [part.image] : []))
+type ImageRequest = Pick<ProviderRequest, 'prompt'> &
+  Partial<Pick<ProviderRequest, 'toolImages' | 'input' | 'bootstrap'>>;
+
+export function validateToolImages(request: ImageRequest): void {
+  if (request.toolImages === undefined) return;
+  if (!Array.isArray(request.toolImages)) throw new ProviderContractError('IMAGE_INPUT_INVALID');
+  const results = Array.isArray(request.input?.results) ? request.input.results : [];
+  const eligible = [...(request.bootstrap ?? []), ...results].filter(
+    (item): item is Record<string, Json> =>
+      !!item &&
+      typeof item === 'object' &&
+      !Array.isArray(item) &&
+      item.denied !== true &&
+      (!('errorKind' in item) || !item.errorKind) &&
+      typeof item.callId === 'string'
   );
+  const seen = new Set<string>();
+  for (const entry of request.toolImages) {
+    if (
+      !entry ||
+      typeof entry.callId !== 'string' ||
+      seen.has(entry.callId) ||
+      !eligible.some((item) => item.callId === entry.callId)
+    )
+      throw new ProviderContractError('IMAGE_INPUT_INVALID');
+    seen.add(entry.callId);
+    try {
+      if (!validateRequestImages(entry.images).length) throw new Error();
+    } catch {
+      throw new ProviderContractError('IMAGE_INPUT_INVALID');
+    }
+  }
+}
+
+export function toolImageParts(
+  request: ProviderRequest,
+  callId: string,
+  protocol: ProviderProtocol
+): Json[] {
+  const images = request.toolImages?.find((entry) => entry.callId === callId)?.images ?? [];
+  return images.length
+    ? [
+        protocol === 'vertex-gemini-v1' || protocol === 'google-gemini-v1'
+          ? { text: `Images from tool result ${callId}:` }
+          : {
+              type: protocol === 'openai-responses-v1' ? 'input_text' : 'text',
+              text: `Images from tool result ${callId}:`,
+            },
+        ...images.map((image) => providerImagePart(image, protocol)),
+      ]
+    : [];
+}
+
+export function requestImages(request: ImageRequest): RequestImage[] {
+  validateToolImages(request);
+  return [
+    ...(request.prompt?.messages ?? []).flatMap((message) =>
+      message.content.flatMap((part) => (part.type === 'image' ? [part.image] : []))
+    ),
+    ...(request.toolImages ?? []).flatMap((entry) => entry.images),
+  ];
 }
 
 /** Unknown routed/custom models may try image input; known text-only families are rejected. */
@@ -42,7 +99,7 @@ export function imageInputSupported(protocol: ProviderProtocol, modelId: string)
 }
 
 export function assertProviderImageSupport(
-  request: Pick<ProviderRequest, 'prompt' | 'modelId'>,
+  request: ImageRequest & Pick<ProviderRequest, 'modelId'>,
   protocol: ProviderProtocol
 ): void {
   if (requestImages(request).length && imageInputSupported(protocol, request.modelId) === false)

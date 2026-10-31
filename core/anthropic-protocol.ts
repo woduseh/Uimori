@@ -1,3 +1,4 @@
+import { requestImages, toolImageParts } from './provider-image-reference.js';
 import { canonicalJson as canonical } from './canonical-json.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
@@ -179,6 +180,7 @@ export function encodeAnthropic(request: ProviderRequest): {
       reject('INVALID_TRANSLATION_SOURCE');
     }
   }
+  requestImages(request);
   const results = copy(rawResults ?? [], 'TOOL_RESULT_MISMATCH');
   if (!Array.isArray(results)) reject('TOOL_RESULT_MISMATCH');
   const plan = planNativeMessages(request, 'anthropic-messages-v1');
@@ -270,7 +272,12 @@ export function encodeAnthropic(request: ProviderRequest): {
       return {
         type: 'tool_result',
         tool_use_id: call.id,
-        content: JSON.stringify(item.result),
+        content: toolImageParts(request, call.id, 'anthropic-messages-v1').length
+          ? [
+              { type: 'text', text: JSON.stringify(item.result) },
+              ...toolImageParts(request, call.id, 'anthropic-messages-v1'),
+            ]
+          : JSON.stringify(item.result),
         ...(item.denied === true ? { is_error: true } : {}),
       };
     });
@@ -313,7 +320,12 @@ export function encodeAnthropic(request: ProviderRequest): {
           {
             type: 'tool_result',
             tool_use_id: item.callId,
-            content: JSON.stringify(item.result),
+            content: toolImageParts(request, String(item.callId), 'anthropic-messages-v1').length
+              ? [
+                  { type: 'text', text: JSON.stringify(item.result) },
+                  ...toolImageParts(request, String(item.callId), 'anthropic-messages-v1'),
+                ]
+              : JSON.stringify(item.result),
             ...(item.denied === true ? { is_error: true } : {}),
           },
         ],

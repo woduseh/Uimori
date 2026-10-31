@@ -305,7 +305,7 @@ function readHelperModel(
   if (path === undefined) {
     const source = kind === 'content' ? sourceFor(model as Content) : null;
     const readyPaths = source
-      ? [source.path, source.lorePath, source.translationGuidePath]
+      ? [source.path, source.lorePath, source.translationGuidePath, '/package/images']
       : kind === 'prompt-preset'
         ? [
             PRESET_TEMPLATE_PATH,

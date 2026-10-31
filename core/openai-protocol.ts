@@ -1,3 +1,4 @@
+import { requestImages, toolImageParts } from './provider-image-reference.js';
 import { canonicalJson as canonical } from './canonical-json.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { createHash } from 'node:crypto';
@@ -390,6 +391,7 @@ export function encodeResponses(request: ProviderRequest): {
   context: OpenAITurn;
   messageMetadata?: NativeMessageMetadata;
 } {
+  requestImages(request);
   const prepared = prepare(request, 'openai-responses-turn-v1', 'openai-responses-v1');
   const { generation, aliases, schema, previous, fresh, plan, bootstrap, continuationInput } =
     prepared;
@@ -418,6 +420,8 @@ export function encodeResponses(request: ProviderRequest): {
         status: 'completed',
       }
     );
+    const images = toolImageParts(request, String(item.callId), 'openai-responses-v1');
+    if (images.length) bootstrapInput.push({ role: 'user', content: images });
   }
   const input: Json[] = previous
     ? [
@@ -467,6 +471,11 @@ export function encodeResponses(request: ProviderRequest): {
               },
             ]),
       ];
+  if (previous)
+    for (const call of previous.pending) {
+      const images = toolImageParts(request, call.id, 'openai-responses-v1');
+      if (images.length) input.push({ role: 'user', content: images });
+    }
   if (continuationInput !== undefined)
     input.push({ role: 'user', content: [{ type: 'input_text', text: continuationInput }] });
   const reasoning: Record<string, Json> = {

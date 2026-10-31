@@ -64,9 +64,9 @@ export function planNativeMessages(
   request: ProviderRequest,
   protocol: ProviderProtocol
 ): NativeMessagePlan | undefined {
+  assertProviderImageSupport(request, protocol);
   if (!request.prompt) return;
   validateProviderPrompt(request.prompt);
-  assertProviderImageSupport(request, protocol);
   assertProviderFileSupport(request, protocol);
   const prompt = request.prompt;
   const diagnostics: MessageDiagnostic[] = [];

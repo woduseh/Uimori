@@ -25,7 +25,8 @@ export function assertProviderRequestBytes(body: Json): void {
 /** Detach image-bearing wire bodies so frozen requests and opaque replay never contain bytes. */
 export async function materializeProviderImages(
   body: Json,
-  request: Pick<ProviderRequest, 'prompt'>,
+  request: Pick<ProviderRequest, 'prompt'> &
+    Partial<Pick<ProviderRequest, 'toolImages' | 'input' | 'bootstrap'>>,
   options: Pick<ProviderExecutionOptions, 'resolveImage'>,
   signal?: AbortSignal
 ): Promise<Json> {

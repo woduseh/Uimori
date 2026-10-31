@@ -30,10 +30,12 @@
 
 ## 구현 경계
 
+도우미는 사용자가 새로 첨부하지 않아도 저장된 CHARX·콘텐츠 이미지를 `image.list`로 찾고 `image.read`로 볼 수 있어요. 필요한 이미지만 전송하며, 원본은 변경하지 않아요. 전송용 사본은 최대 2048px·2MiB이고 애니메이션은 첫 프레임만 제공해요. 이 조회는 저장된 라이브러리 자료를 기준으로 하며, 미저장 편집기 입력이나 과거 채팅의 고정된 이미지 버전을 대신하지 않아요. 조회 이미지의 수명과 연결별 전달 방식은 [도우미 이미지 도구](HELPER-TOOLS.md#stored-content-images)를 참고하세요.
+
 - `core/request-files.ts`: 형식, 한도, 연결별 입력 정책
 - `core/provider-file-reference.ts`, `core/provider-files.ts`: 명시적으로 첨부한 참조만 실제 전송 바이트로 변환
 - `server/request-files.ts`, `server/request-file-storage.ts`: 업로드 확인, 형식 검사, 원본 보관과 다운로드
 - `server/helper-attachments.ts`, `server/helper-attachment-prompt.ts`: 메시지 소유권, 정리와 모델 입력 구성
 - `web/helper-attachment-draft.ts`: 대화별 Blob 초안과 전송 확인
 
-일반 문자열이나 도구 출력에 파일 참조처럼 보이는 문자열이 있어도 저장 파일을 읽을 권한이 생기지 않아요. 다운로드는 인증된 앱 경로에서 attachment 응답으로 제공해요. 로컬 프로토콜 및 브라우저 검증은 실제 유료 공급자 전송과 구분해요.
+일반 문자열이나 도구 출력에 파일 참조처럼 보이는 문자열이 있어도 저장 파일을 읽을 권한이 생기지 않아요. 이미지 도구는 서버가 소유 자료를 확인한 이미지 참조만 별도로 등록해요. 다운로드는 인증된 앱 경로에서 attachment 응답으로 제공해요. 로컬 프로토콜 및 브라우저 검증은 실제 유료 공급자 전송과 구분해요.

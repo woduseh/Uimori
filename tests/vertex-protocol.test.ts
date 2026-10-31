@@ -869,3 +869,37 @@ describe('Vertex streamed response decoder', () => {
     expect(() => second.accept(event([], 'STOP'))).toThrow('VERTEX_DUPLICATE_TERMINAL');
   });
 });
+
+test.each(['vertex-gemini-v1', 'google-gemini-v1'] as const)(
+  '%s replays a tool image once across later rounds',
+  (protocol) => {
+    const input = request();
+    const first = encodeVertex(input, protocol);
+    const decoder = new VertexDecoder(first.context);
+    decoder.accept(event([call('call-1')], 'STOP'));
+    const secondInput = continued(input, decoder.finish());
+    const hash = 'a'.repeat(64);
+    secondInput.toolImages = [
+      {
+        callId: 'call-1',
+        images: [
+          {
+            hash,
+            mime: 'image/webp',
+            name: 'portrait',
+            width: 1,
+            height: 1,
+            input: { hash, width: 1, height: 1 },
+          },
+        ],
+      },
+    ];
+    const second = encodeVertex(secondInput, protocol);
+    expect(JSON.stringify(second.body).split('uimori-image://')).toHaveLength(2);
+    const decoder2 = new VertexDecoder(second.context);
+    decoder2.accept(event([call('call-2')], 'STOP'));
+    const third = encodeVertex(continued(secondInput, decoder2.finish()), protocol);
+    expect(JSON.stringify(third.body).split('uimori-image://')).toHaveLength(2);
+    expect(JSON.stringify(third.context)).not.toContain('data:image');
+  }
+);
