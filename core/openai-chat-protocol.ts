@@ -1,3 +1,4 @@
+import { requestImages, toolImageParts } from './provider-image-reference.js';
 import type { ProviderTextUpdate } from './provider-progress.js';
 import { OpenAIProtocolError, openAIProtocol, type OpenAITurn } from './openai-protocol.js';
 import type { Json, ProviderRequest, ProviderResult, ProviderToolCall } from './transport.js';
@@ -64,6 +65,7 @@ export function encodeChat(
   request: ProviderRequest,
   protocol: 'openai-chat-v1' | 'vercel-chat-v1' | 'deepseek-chat-v1' = 'openai-chat-v1'
 ): { body: Json; context: OpenAITurn; messageMetadata?: NativeMessageMetadata } {
+  requestImages(request);
   const prepared = prepare(request, 'openai-chat-turn-v1', protocol);
   const gatewayOptions = protocol === 'vercel-chat-v1' ? vercelProviderOptions(request) : undefined;
   const deepseek = protocol === 'deepseek-chat-v1';
@@ -91,6 +93,8 @@ export function encodeChat(
         name,
       }
     );
+    const images = toolImageParts(request, String(item.callId), protocol);
+    if (images.length) bootstrapMessages.push({ role: 'user', content: images });
   }
   const dataBlocks = !previous && !plan ? requestDataBlocks(prepared.wireInput, request.role) : [];
   const messages: Json[] = previous
@@ -117,6 +121,11 @@ export function encodeChat(
               },
             ]),
       ];
+  if (previous)
+    for (const call of previous.pending) {
+      const images = toolImageParts(request, call.id, protocol);
+      if (images.length) messages.push({ role: 'user', content: images });
+    }
   if (continuationInput !== undefined) messages.push({ role: 'user', content: continuationInput });
   if (deepseek || protocol === 'vercel-chat-v1') {
     for (const message of messages) {

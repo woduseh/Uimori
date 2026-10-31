@@ -47,7 +47,7 @@ function nativeResponse(request) {
         id: 'call-' + index,
         tool: index === 1 ? 'uimori_data_search' : 'uimori_app_call',
         status: 'completed',
-        ...request.result,
+        ...(mode === 'agent-image-budget' ? { success: request.result.success } : request.result),
       },
     },
   });
@@ -82,7 +82,17 @@ function nativeResponse(request) {
 input.on('line', (line) => {
   const request = JSON.parse(line);
   if (process.env.UIMORI_CODEX_FIXTURE_LOG) {
-    if (mode === 'image-reference-budget' && request.method === 'turn/start') {
+    if (mode === 'agent-image-budget' && request.result?.contentItems) {
+      const images = request.result.contentItems.filter((item) => item.type === 'inputImage');
+      appendFileSync(
+        process.env.UIMORI_CODEX_FIXTURE_LOG,
+        JSON.stringify({
+          id: request.id,
+          imageCount: images.length,
+          wireBytes: Buffer.byteLength(line),
+        }) + '\n'
+      );
+    } else if (mode === 'image-reference-budget' && request.method === 'turn/start') {
       const logged = {
         ...request,
         params: {

@@ -945,3 +945,30 @@ describe('Anthropic Messages stream lifecycle and usage', () => {
     ).toThrow('ANTHROPIC_EVENT_AFTER_STOP');
   });
 });
+
+test('replays a tool image once across later rounds', () => {
+  const input = request();
+  const secondInput = continued(input, turn(input));
+  const hash = 'a'.repeat(64);
+  secondInput.toolImages = [
+    {
+      callId: 'call-1',
+      images: [
+        {
+          hash,
+          mime: 'image/webp',
+          name: 'portrait',
+          width: 1,
+          height: 1,
+          input: { hash, width: 1, height: 1 },
+        },
+      ],
+    },
+  ];
+  const second = encodeAnthropic(secondInput);
+  expect(JSON.stringify(second.body).split('uimori-image://')).toHaveLength(2);
+  const thirdInput = continued(secondInput, turn(secondInput, [toolPart('call-2')]));
+  const third = encodeAnthropic(thirdInput);
+  expect(JSON.stringify(third.body).split('uimori-image://')).toHaveLength(2);
+  expect(JSON.stringify(third.context)).not.toContain('data:image');
+});

@@ -199,7 +199,7 @@ describe('authored reference image transmission', () => {
       },
     });
     const result = decoder.finish();
-    const continued = {
+    const continued: ProviderRequest = {
       ...input,
       opaqueState: result.opaqueState,
       input: {
@@ -215,7 +215,15 @@ describe('authored reference image transmission', () => {
         ],
       },
     };
-    const body = encodeResponses(continued).body;
+    continued.toolImages = [{ callId: 'call-1', images: [image] }];
+    const encodedTool = encodeResponses(continued);
+    const body = encodedTool.body;
+    expect(JSON.stringify(body).split(providerImageReference(image))).toHaveLength(3);
+    const toolWire = await materializeProviderImages(body, continued, {
+      resolveImage: () => resolved,
+    });
+    expect(JSON.stringify(toolWire)).toContain(base64);
+    expect(JSON.stringify(encodedTool.context)).not.toContain(base64);
     expect(JSON.stringify(result.opaqueState)).toContain(providerImageReference(image));
     expect(JSON.stringify(result.opaqueState)).not.toContain(base64);
     const wire = await materializeProviderImages(
@@ -224,7 +232,39 @@ describe('authored reference image transmission', () => {
       { resolveImage: () => resolved },
       signal()
     );
-    expect(JSON.stringify(wire).split(base64)).toHaveLength(2);
+    expect(JSON.stringify(wire).split(base64)).toHaveLength(3);
+    const second = new ResponsesDecoder(encodedTool.context);
+    second.accept({
+      type: 'response.completed',
+      response: {
+        id: 'image-response-2',
+        status: 'completed',
+        output: [
+          {
+            type: 'function_call',
+            id: 'fn-2',
+            call_id: 'call-2',
+            name: 'tool_0_knowledge_read',
+            arguments: '{}',
+            status: 'completed',
+          },
+        ],
+      },
+    });
+    const third: ProviderRequest = {
+      ...continued,
+      opaqueState: second.finish().opaqueState,
+      input: {
+        ...continued.input,
+        results: [
+          ...(continued.input.results as Json[]),
+          { callId: 'call-2', name: 'knowledge.read', args: {}, result: {}, denied: false },
+        ],
+      },
+    };
+    expect(
+      JSON.stringify(encodeResponses(third).body).split(providerImageReference(image))
+    ).toHaveLength(3);
     const changed = structuredClone(continued);
     const part = changed.prompt!.messages[0].content[1];
     if (part.type !== 'image') throw new Error('missing fixture image');
@@ -381,6 +421,50 @@ describe('authored reference image transmission', () => {
         await runtime.close();
         await rm(directory, { recursive: true, force: true });
       }
+    }
+  );
+});
+
+describe('trusted tool images', () => {
+  test('rejects known text-only models even without a prompt', () => {
+    const input = request();
+    input.prompt = undefined;
+    input.modelId = 'deepseek-chat';
+    input.bootstrap = [
+      { callId: 'read-1', name: 'knowledge.read', args: {}, result: {}, denied: false },
+    ];
+    input.toolImages = [{ callId: 'read-1', images: [image] }];
+    expect(() => encodeChat(input, 'deepseek-chat-v1')).toThrow('IMAGE_INPUT_UNSUPPORTED_MODEL');
+  });
+  test.each(variants)(
+    '%s sends bootstrap image references only through native image slots',
+    async (protocol) => {
+      const input = request();
+      input.prompt = undefined;
+      input.bootstrap = [
+        {
+          callId: 'read-1',
+          name: 'knowledge.read',
+          args: {},
+          result: { path: 'portrait' },
+          denied: false,
+        },
+      ];
+      input.toolImages = [{ callId: 'read-1', images: [image] }];
+      const body = encoded(input, protocol);
+      expect(JSON.stringify(body)).toContain(providerImageReference(image));
+      const wire = await materializeProviderImages(body, input, { resolveImage: () => resolved });
+      expect(JSON.stringify(wire)).toContain(base64);
+      expect(JSON.stringify(body)).not.toContain(base64);
+      input.bootstrap[0].denied = true;
+      expect(() => encoded(input, protocol)).toThrow('IMAGE_INPUT_INVALID');
+      input.bootstrap[0].denied = false;
+      (input.bootstrap[0] as (typeof input.bootstrap)[0] & { errorKind?: string }).errorKind =
+        'recoverable';
+      expect(() => encoded(input, protocol)).toThrow('IMAGE_INPUT_INVALID');
+      delete (input.bootstrap[0] as (typeof input.bootstrap)[0] & { errorKind?: string }).errorKind;
+      input.toolImages[0].callId = 'forged';
+      expect(() => encoded(input, protocol)).toThrow('IMAGE_INPUT_INVALID');
     }
   );
 });

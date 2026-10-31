@@ -36,10 +36,13 @@ import {
 } from '../core/codex-protocol.js';
 import { assertContextBudget, type ContextBudget } from '../core/context-budget.js';
 import {
+  assertProviderRequestBytes,
   materializeProviderImages,
+  PROVIDER_IMAGE_MAX_BYTES,
   PROVIDER_REQUEST_MAX_BYTES,
   requestImages,
 } from '../core/provider-images.js';
+import { REQUEST_IMAGE_MAX_COUNT } from '../core/request-images.js';
 import {
   ProviderContractError,
   type Json,
@@ -127,7 +130,12 @@ export type CodexExecutionOptions = ProviderExecutionOptions;
 export type CodexAgentRequest = CodexNativeRequest;
 /** A host result either continues the turn or completes a validated final submission. */
 export type CodexToolOutcome =
-  | { success: boolean; text: string; complete?: false }
+  | {
+      success: boolean;
+      text: string;
+      complete?: false;
+      images?: import('../core/request-images.js').ResolvedRequestImage[];
+    }
   | { success: true; text: string; complete: true };
 export type CodexAgentExecutionOptions = CodexExecutionOptions & {
   onToolCall(
@@ -826,8 +834,11 @@ export class CodexRuntime implements CodexRuntimeService {
         baseInstructions: request.baseInstructions,
         developerInstructions: request.developerInstructions,
         input: request.input ?? [{ type: 'text', text: request.text, text_elements: [] }],
-        ...(requestImages(request).length
-          ? { imagePrompt: request.prompt, maxWriteBytes: PROVIDER_REQUEST_MAX_BYTES + 1024 * 1024 }
+        ...(requestImages({ prompt: request.prompt }).length
+          ? { imagePrompt: request.prompt }
+          : {}),
+        ...(dynamicTools.length || requestImages({ prompt: request.prompt }).length
+          ? { maxWriteBytes: PROVIDER_REQUEST_MAX_BYTES + 1024 * 1024 }
           : {}),
         descriptor,
         stablePrefix: JSON.stringify([
@@ -1246,10 +1257,38 @@ export class CodexRuntime implements CodexRuntimeService {
                 resolveTurn!();
                 return;
               }
-              return {
-                contentItems: [{ type: 'inputText', text: result.text }],
+              const images = result.images ?? [];
+              if (!result.success && images.length)
+                throw new ProviderContractError('IMAGE_INPUT_INVALID');
+              if (images.length > REQUEST_IMAGE_MAX_COUNT)
+                throw new ProviderContractError('IMAGE_INPUT_INVALID');
+              const imageItems = images.map((image) => {
+                const bytes = Buffer.from(image.base64, 'base64');
+                if (
+                  image.mime !== 'image/webp' ||
+                  !Number.isSafeInteger(image.width) ||
+                  image.width < 1 ||
+                  image.width > 16383 ||
+                  !Number.isSafeInteger(image.height) ||
+                  image.height < 1 ||
+                  image.height > 16383 ||
+                  !bytes.length ||
+                  bytes.length > PROVIDER_IMAGE_MAX_BYTES ||
+                  bytes.toString('base64') !== image.base64 ||
+                  !isValidIllustrationImage(bytes, image.mime)
+                )
+                  throw new ProviderContractError('IMAGE_INPUT_INVALID');
+                return {
+                  type: 'inputImage',
+                  imageUrl: `data:${image.mime};base64,${image.base64}`,
+                };
+              });
+              const response = {
+                contentItems: [{ type: 'inputText', text: result.text }, ...imageItems],
                 success: result.success,
               };
+              assertProviderRequestBytes(response);
+              return response;
             } catch (caught) {
               // A thrown host operation may already have committed; never turn it into a retry hint.
               rejectTurn(caught);
