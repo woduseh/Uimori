@@ -57,6 +57,7 @@ Use a build matching the current app source for checks that execute `dist`. Focu
 | `npm run verify:browser-smoke` | Small browser suite for chat and global prompt settings. |
 | `npm run verify:ui` | Reader layout, editing, Markdown rendering, reading preferences and shared-control motion; accepts `--grep` and `--visual`. Renderer unit tests run separately with `npm test -- tests/prose.test.ts`. |
 | Feature-specific `verify:*` scripts | Suites such as `verify:packages`, `verify:providers`, `verify:library`, and `verify:navigation`; see [package scripts](../package.json). |
+| `npm run verify:risu-compat` | Native Risu form submission, action receipt recovery, authored controls and existing reader behavior at mobile and desktop widths. |
 | `npm run verify:browser` | Full local synthetic browser regression. |
 | `npm run verify:selfhost` | Independent HTTPS/authentication, cross-device SSE, and re-entry/session-revocation scenarios. Accepts `--grep` for diagnosis; a filtered run is not the full suite. |
 | `npm run verify:visual` | Full browser suite with extra viewport and layout checks; use `--grep` to focus it. |
