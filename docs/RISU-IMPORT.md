@@ -52,6 +52,8 @@ Uimori는 추가로 프리셋의 `jailbreakToggle`, `chainOfThought`, `promptSet
 
 네이티브 Lua는 채팅·자료 수정 번호별 격리 worker에서 초기 코드를 한 번 실행하고, 이후 콜백에서도 같은 local/global 값을 유지해요. 저장 변수와 대화는 매 호출 최신 고정값으로 갱신해요. worker 재시작·시간 초과·실행 실패·자료 변경은 그 VM을 폐기하며 영속 상태는 `getState`·채팅 변수로 보존해요. 각 authored script는 내부 RPC와 다른 스크립트의 권한을 볼 수 없는 실행 환경을 사용해요. 함수·`listenEdit` 콜백·동적 `load`는 원래 스크립트 권한을 유지하고, 서로 호출할 때 권한을 합치지 않아요. `LLM`·`axLLM`·`simpleLLM`은 허용된 원본 호출만 Uimori 호스트에 전달하며 화면 표시 콜백에서는 모델 호출을 허용하지 않아요. 미지원 API는 명시적 오류로 남아요.
 
+Risu의 새 Lua API나 이벤트는 자동으로 지원되지 않아요. 이미 지원하는 API를 조합한 카드 코드는 기존 실행 경로를 사용하지만, 새 화면 동작·저장·모델 기능은 Uimori에 연결하고 검증해야 해요. 개발용 [Lua 변경 비교 도구](DEVELOPMENT.md#risu-lua-upstream-changes)는 원본 API·래퍼·콜백 변경과 현재 브리지의 이름 노출 여부를 보고해요. 이름이 노출돼 있어도 Risu와 동일하게 동작한다는 보장은 아니며 도구가 런타임을 갱신하지 않아요.
+
 `LLM`·`axLLM`의 메시지 역할은 Risu의 `sys`를 `system`, `bot`·`char`를 `assistant`로 전달하며 내용과 순서는 유지해요. 트리거의 `v2StopPromptSending`을 기존 생성 중지 효과로 인식해요. 기존 자료의 `v2StopPrompt`·`stop`도 같은 중지 동작으로 읽어요.
 
 트리거와 Lua가 호출하는 CBS는 한 번의 네이티브 실행 안에서만 격리 worker를 재사용해요. 각 CBS 호출은 새 평가기와 최신 변수·대화 입력으로 순서대로 실행하며 결과를 캐시하지 않아요. 평가 오류나 시간 초과로 실패한 입력은 재시도하지 않고 worker를 폐기해요. Lua가 오류를 처리하고 별도의 CBS 호출을 이어가면 새 worker에서 실행하며, 실패한 평가의 변수 변경은 반영하지 않아요. 실행 종료·취소 후에는 다시 시작하지 않고 호출별 시간·메모리 제한을 유지해요.
