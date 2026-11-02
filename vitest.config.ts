@@ -6,7 +6,8 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 15000,
     // CI distributes files across independent runners; avoid contention inside each shard.
-    fileParallelism: false,
+    fileParallelism: process.env.CI === 'true',
+    maxWorkers: process.env.CI === 'true' ? 2 : 1,
     sequence: { sequencer: CiVitestSequencer },
     allowOnly: false,
   },
