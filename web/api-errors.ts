@@ -209,6 +209,15 @@ export function apiErrorDiagnostic(
             ? 'DRAFT_DISCARDED'
             : error;
     if (Object.hasOwn(messages, code)) return { code, message: messages[code] };
+    if (
+      status === 409 &&
+      /^RISU_NATIVE_ACTION_(?:FAILED|CANCELLED|INTERRUPTED|RUNNING)$/u.test(code)
+    )
+      return {
+        code,
+        message:
+          '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요. (409)',
+      };
     if (/^STORY_GUIDE_[A-Z0-9_]{1,100}$/.test(code))
       return { code, message: messages.STORY_GUIDE_FAILED };
     if (/^(?:ILLUSTRATION_|COMFYUI_|CODEX_IMAGE_)[A-Z0-9_]{1,100}$/.test(code))

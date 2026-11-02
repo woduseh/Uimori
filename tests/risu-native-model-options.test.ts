@@ -188,6 +188,8 @@ test('otherAx falls back to the frozen main model, while the receipt checks mode
       nativeScript: { method: 'LLM', event: 'start', mode: 'memory' },
     })
   ).toThrow('RISU_NATIVE_ATTEMPT_IDENTITY');
+  f.snapshot.profile!.scriptModelUnavailable = true;
+  expect(() => validateNativeScriptAttempt(f.snapshot, wire)).toThrow('RISU_NATIVE_ATTEMPT_MODEL');
 });
 
 test('Lua streaming=true collects streamed chunks and honors the requested translation model', async () => {
@@ -206,6 +208,43 @@ test('Lua streaming=true collects streamed chunks and honors the requested trans
   expect(result.variables.answer).toBe('첫 답');
   expect(f.bodies[0]).toMatchObject({ model: 'translation-model', stream: true });
   expect(f.usage.modelCalls).toBe(1);
+});
+
+test('a failed stream returns an error while retaining its partial attempt', async () => {
+  const f = fixture();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(
+          `data: ${JSON.stringify({
+            id: 'synthetic',
+            choices: [
+              {
+                index: 0,
+                delta: { role: 'assistant', content: 'unfinished' },
+                finish_reason: null,
+              },
+            ],
+            usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 },
+          })}\n\n`,
+          { headers: { 'content-type': 'text/event-stream' } }
+        )
+    )
+  );
+  expect(
+    await f.host('axLLM', { prompt: 'Continue', options: { streaming: true } }, f.signal)
+  ).toEqual({ success: false, result: 'Error: UNEXPECTED_EOF' });
+  expect(f.finishAttempt).toHaveBeenCalledWith(
+    'synthetic-attempt',
+    expect.objectContaining({
+      status: 'partial',
+      text: 'unfinished',
+      error: { code: 'UNEXPECTED_EOF' },
+      usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
+    })
+  );
+  expect(f.usage).toMatchObject({ modelCalls: 1, inputTokens: 12, outputTokens: 3 });
 });
 
 test.each([

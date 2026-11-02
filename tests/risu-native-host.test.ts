@@ -24,6 +24,7 @@ import type { RequestImage } from '../core/request-images.js';
 import type { Content } from '../core/product.js';
 import type { RunSnapshot } from '../core/types.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import { HttpError } from '../server/request-validation.js';
 
 import {
   nativeInteractionRoutes,
@@ -540,6 +541,78 @@ test('native first-message button renders, checkpoints state, and survives sourc
   }
 });
 
+test('native action replacements retain their own scene identity, including the opening', async () => {
+  const { store, chatId } = await setup();
+  const app = Fastify();
+  packagePresentationRoutes(app, store);
+  try {
+    const opening = store.source(store.chat(chatId).headRevision!);
+    await applyNativeRisuAction(
+      store,
+      chatId,
+      opening.id,
+      actionBody(store, chatId, 'choose', 'opening-identity')
+    );
+    const greeting = store.source(store.chat(chatId).headRevision!);
+    const presentation = async (sourceId: string) => {
+      const response = await app.inject(`/api/chats/${chatId}/sources/${sourceId}/presentation`);
+      expect(response.statusCode, response.body).toBe(200);
+      return response.json().nativeAction;
+    };
+    expect(greeting.id).not.toBe(opening.id);
+    expect((await presentation(greeting.id)).sourceIdentity).toBe(opening.id);
+
+    const chat = store.chat(chatId);
+    const { run } = store.createRun(
+      chatId,
+      {
+        request: 'A different scene with the same text',
+        expectedRevision: chat.headRevision,
+        expectedSettingsRevision: chat.settingsRevision,
+        idempotencyKey: 'identical-scene',
+      },
+      () => ({
+        chatId,
+        parentRevision: chat.headRevision,
+        request: 'A different scene with the same text',
+        settingsRevision: chat.settingsRevision,
+        settings: chat.settings,
+        history: store.history(chat.headRevision),
+        profile: store.product.snapshot(chatId),
+        resources: [],
+      })
+    );
+    store.startRun(run.id);
+    const other = store.completeRun(run.id, greeting.text, {
+      modelCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
+    });
+    expect(other.hash).toBe(greeting.hash);
+    expect((await presentation(other.id)).sourceIdentity).toBe(other.id);
+    const body = actionBody(store, chatId, 'choose', 'other-identity');
+    await applyNativeRisuAction(store, chatId, other.id, body);
+    const replaced = store.source(store.chat(chatId).headRevision!);
+    expect(replaced.id).not.toBe(other.id);
+    expect(replaced.hash).toBe(other.hash);
+    expect((await presentation(replaced.id)).sourceIdentity).toBe(other.id);
+    expect(
+      projections.readStoredRunSnapshot(store, replaced.runId).nativeRisuAuthored?.sourceIdentity
+    ).toBe(other.id);
+    expect((await applyNativeRisuAction(store, chatId, other.id, body)).created).toBe(false);
+    await applyNativeRisuAction(
+      store,
+      chatId,
+      replaced.id,
+      actionBody(store, chatId, 'choose', 'other-identity-again')
+    );
+    expect((await presentation(store.chat(chatId).headRevision!)).sourceIdentity).toBe(other.id);
+  } finally {
+    await app.close();
+  }
+});
+
 test('native actions freeze current notes and model roles without replacing retained source packages', async () => {
   const { store, chatId } = await setup(
     false,
@@ -603,6 +676,9 @@ end)
   // Keep a real full source snapshot as an older persisted format; current completed runs
   // normally compact it. This ensures the projection does not replace source-owned content.
   const sourceSnapshot = projections.readRunSnapshot(store, source.runId);
+  // A retained full snapshot may carry prior unavailable selections after the user repairs them.
+  sourceSnapshot.profile!.contextModelUnavailable = true;
+  sourceSnapshot.profile!.scriptModelUnavailable = true;
   store.db
     .prepare('UPDATE runs SET snapshot=? WHERE id=?')
     .run(JSON.stringify(sourceSnapshot), source.runId);
@@ -671,6 +747,8 @@ end)
   expect(reserved.models.translation?.id).toBe(next.translation.id);
   expect(reserved.contextModel?.id).toBe(next.context.id);
   expect(reserved.scriptModel?.id).toBe(next.script.id);
+  expect(reserved).not.toHaveProperty('contextModelUnavailable');
+  expect(reserved).not.toHaveProperty('scriptModelUnavailable');
   expect(projections.readStoredRunSnapshot(store, source.runId).profile?.packages).toEqual(
     sourceSnapshot.profile!.packages
   );
@@ -693,6 +771,8 @@ end)
   expect(cleared).not.toHaveProperty('authorNote');
   expect(cleared).not.toHaveProperty('contextModel');
   expect(cleared).not.toHaveProperty('scriptModel');
+  expect(cleared).not.toHaveProperty('contextModelUnavailable');
+  expect(cleared).not.toHaveProperty('scriptModelUnavailable');
   expect(cleared.models).toEqual({});
   expect(cleared.routes).toEqual({ main: null, translation: null });
   expect(readChatVariables(store, chatId).values.rawNote).toBe('');
@@ -720,6 +800,33 @@ end)
   );
   expect(reservations.at(-1)!.profile!.scriptModel?.enabled).toBe(false);
   expect(hostCalls).toBe(0);
+
+  const modelSnapshot = store.product.modelSnapshot.bind(store.product);
+  const unavailableModels = vi
+    .spyOn(store.product, 'modelSnapshot')
+    .mockImplementation((id, ...args) => {
+      if (id === next.context.id || id === next.script.id)
+        throw new HttpError(404, 'Model missing');
+      return modelSnapshot(id, ...args);
+    });
+  try {
+    const latestSource = store.chat(chatId).headRevision!;
+    await applyNativeRisuAction(
+      store,
+      chatId,
+      latestSource,
+      actionBody(store, chatId, 'captureContext', 'unavailable-context'),
+      { createHost }
+    );
+    expect(reservations.at(-1)!.profile).toMatchObject({
+      contextModelUnavailable: true,
+      scriptModelUnavailable: true,
+    });
+    expect(reservations.at(-1)!.profile).not.toHaveProperty('contextModel');
+    expect(reservations.at(-1)!.profile).not.toHaveProperty('scriptModel');
+  } finally {
+    unavailableModels.mockRestore();
+  }
 });
 
 test('form actions persist string data once and reject changed or stale requests', async () => {
