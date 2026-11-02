@@ -2460,6 +2460,12 @@ export const messages = {
     ja: 'ボットの選択を反映できませんでした。もう一度お試しください。',
     zh: '无法应用机器人的选择，请重试。',
   },
+  'native.cardFormFileUnsupported': {
+    ko: '봇 양식에서는 파일을 보낼 수 없어요. 파일 선택을 해제해 주세요.',
+    en: 'Bot forms cannot send files. Clear the file selection and try again.',
+    ja: 'ボットのフォームからファイルを送信できません。ファイルの選択を解除してください。',
+    zh: '机器人表单无法发送文件，请清除文件选择后重试。',
+  },
   'native.fileError': {
     ko: '{file}: {error}',
     en: '{file}: {error}',

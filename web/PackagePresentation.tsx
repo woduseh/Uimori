@@ -8,6 +8,7 @@ export type PackagePresentation = {
   sourceHash: string;
   format: 'plain-text' | 'risu-html';
   nativeAction?: {
+    program?: string;
     expectedHeadRevision: string;
     expectedHeadHash: string;
     expectedVariableRevision: number;

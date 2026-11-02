@@ -24,12 +24,20 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
     node.replaceWith(placeholder);
   }
   template.innerHTML = DOMPurify.sanitize(template.innerHTML, {
-    ADD_ATTR: ['risu-trigger', 'risu-btn', 'risu-ctrl', 'risu-id', 'risu-mark', 'data-risu-style'],
+    ADD_ATTR: [
+      'risu-trigger',
+      'risu-btn',
+      'risu-form',
+      'risu-ctrl',
+      'risu-id',
+      'risu-mark',
+      'data-risu-style',
+    ],
     ALLOW_DATA_ATTR: true,
     ALLOW_ARIA_ATTR: true,
     // IDs live in this message's ShadowRoot, not in the application's named-property scope.
     SANITIZE_DOM: false,
-    FORBID_TAGS: ['script', 'iframe', 'frame', 'object', 'embed', 'base', 'meta', 'link', 'form'],
+    FORBID_TAGS: ['script', 'iframe', 'frame', 'object', 'embed', 'base', 'meta', 'link'],
     FORBID_ATTR: ['srcdoc', 'formaction', 'action', 'autofocus', 'nonce'],
     RETURN_TRUSTED_TYPE: false,
   });
@@ -66,12 +74,20 @@ export function prepareRisuMessage(html: string, css = ''): PreparedRisuMessage 
   }
   const actions = new Set<string>();
   for (const node of template.content.querySelectorAll('[risu-trigger],[risu-btn]')) {
-    const kind = node.hasAttribute('risu-trigger') ? 'trigger' : 'button';
-    const name = node.getAttribute(kind === 'trigger' ? 'risu-trigger' : 'risu-btn') ?? '';
+    // Named form controls can shadow methods on HTMLFormElement.
+    const kind = Element.prototype.hasAttribute.call(node, 'risu-trigger') ? 'trigger' : 'button';
+    const name =
+      Element.prototype.getAttribute.call(node, kind === 'trigger' ? 'risu-trigger' : 'risu-btn') ??
+      '';
     if (!name || name.length > 1000) {
-      node.removeAttribute('risu-trigger');
-      node.removeAttribute('risu-btn');
+      Element.prototype.removeAttribute.call(node, 'risu-trigger');
+      Element.prototype.removeAttribute.call(node, 'risu-btn');
     } else actions.add(risuActionKey(kind, name));
+  }
+  for (const form of template.content.querySelectorAll('form[risu-form]')) {
+    const name = Element.prototype.getAttribute.call(form, 'risu-form') ?? '';
+    if (!name || name.length > 1000) Element.prototype.removeAttribute.call(form, 'risu-form');
+    else actions.add(risuActionKey('form', name));
   }
   return { html: template.innerHTML, css, actions, illustrationAnchors };
 }

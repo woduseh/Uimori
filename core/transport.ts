@@ -155,7 +155,12 @@ export type WireRecord = {
   requestContext?: import('./scene-usage.js').RequestContext;
   /** Host-only reference delivery evidence; absent on older or unsupported attempts. */
   requestLore?: import('./request-lore.js').RequestLore;
-  nativeScript?: { method: 'LLM' | 'axLLM' | 'simpleLLM'; event: string };
+  nativeScript?: {
+    method: 'LLM' | 'axLLM' | 'simpleLLM';
+    event: string;
+    /** Absent on older attempts, where axLLM always used otherAx. */
+    mode?: 'otherAx' | 'memory' | 'translate';
+  };
   /** Host-only typed judgment attribution; this is not a generative provider protocol. */
   judgment?: {
     kind:
