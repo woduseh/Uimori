@@ -2,7 +2,7 @@ import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
-export const vitestShards = 4;
+export const vitestShards = 6;
 export const browserShards = 3;
 export const requiredJobs = [
   'static',

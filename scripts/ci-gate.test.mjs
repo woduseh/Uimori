@@ -152,7 +152,7 @@ test('job diagnostics report every failed, pending, missing and duplicated requi
       'tooling: status=completed, conclusion=skipped',
       'linux-core: status=in_progress, conclusion=none',
       'selfhost: duplicate (2 matches',
-      'tests (4/4): missing',
+      'tests (6/6): missing',
       'A docs-only or partial run cannot authorize deployment.',
     ])
       assert.ok(error.message.includes(detail), detail);
@@ -209,7 +209,7 @@ test('requireCi diagnoses only the selected latest failed run and all its requir
     assert.match(error.message, /Exact-commit Quality workflow has not succeeded/);
     assert.match(error.message, /static: status=completed, conclusion=failure/);
     assert.match(error.message, /tooling: status=completed, conclusion=cancelled/);
-    assert.ok(error.message.includes('tests (4/4): missing'));
+    assert.ok(error.message.includes('tests (6/6): missing'));
     return true;
   });
   assert.equal(calls.length, 3);
