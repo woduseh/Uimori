@@ -12,6 +12,7 @@
     "start": "node dist/server/index.js",
     "reset:dev": "node scripts/reset-dev-data.mjs",
     "check": "tsc --noEmit",
+    "check:risu-lua": "node scripts/risu-lua-diff.mjs",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint . --error-on-warnings",

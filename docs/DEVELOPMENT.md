@@ -104,6 +104,21 @@ The Docker build context contains the compiler inputs, runtime vendor files, lic
 
 Actual local Risu materials are excluded from ordinary browser discovery. Set `UIMORI_RISU_SAMPLE_ROOT` for `node scripts/verify-risu-native-samples.mjs`, optionally `UIMORI_RISU_SAMPLE_PRESET` for an external `.risup`, and use `--grep` to focus cases. Source materials remain read-only; private rendered artifacts stay in ignored output directories. These loopback fixture checks do not establish live-provider quality or universal script compatibility.
 
+### Risu Lua upstream changes
+
+Run `npm run check:risu-lua -- --risu ../Risuai` to compare a local Risu Git checkout with the upstream commit recorded in the vendored snapshot. That default is a source comparison baseline, not a declaration of Uimori's Lua compatibility version. The checkout must contain both revisions, including the baseline commit; shallow history may be insufficient. Use `--base <ref> --ref <ref>` to compare two other revisions. The tool resolves both refs to commit IDs and reads committed files; uncommitted checkout changes are excluded. It does not fetch updates, execute upstream code, or modify either app.
+
+The report identifies host API additions, removals and declaration changes, Lua wrapper changes, and callback changes. It also compares names with Uimori's current Lua bridge: `exposed` means a name is present, `explicitly-unsupported` means the bridge rejects it, and `unclassified` needs inspection. Callback dispatch is reported separately as `statically-observed` or `unclassified`; dynamic dispatch is not enumerated. These are source observations, not proof of matching arguments, permissions, asynchronous behavior or persistence. Internal `*Main` functions and public wrappers remain separate names. Review changes to the connected UI, storage and provider code before adopting a new upstream feature.
+
+```powershell
+npm run check:risu-lua -- --risu ../Risuai
+node scripts/risu-lua-diff.mjs --risu ../Risuai --base <reviewed-commit> --ref HEAD --json --check
+```
+
+Use the direct Node command for machine-readable JSON without npm's command banner. Normal reporting exits successfully even when sources differ; `--check` exits 1 for detected drift, 0 for unchanged sources, and 2 for invalid input or an unreadable comparison. Parsing failures are errors, not evidence of unchanged APIs. No scheduled upstream monitor is installed by this command, and it never applies updates automatically. To review a later update, compare with the last reviewed upstream commit rather than advancing a baseline merely to clear a warning.
+
+`node --test scripts/risu-lua-diff.test.mjs` checks the detector with disposable Git fixtures. The standard tooling suite discovers these tests automatically. This verifies change detection and reporting, not actual card execution or complete Risu compatibility.
+
 ## Release checks
 
 `npm run release:check -- --area <verify:*>` runs `quality`, a matching `build`, and one selected local feature check. The default is `verify:browser-smoke`; `--full` selects `quality:full` and replaces that default with `verify:browser`. An explicit feature area remains selected alongside the full suite. `--area` rejects the full browser, gallery and visual runners; use `--full` for the complete regression. Deployment-tooling changes normally select `verify:selfhost`. Local receipt matching and reuse remain developer conveniences. Oracle deployment independently requires the exact SHA’s full GitHub CI result and runs image/DB/HTTPS checks on the host; see [ORACLE-RELEASE](ORACLE-RELEASE.md).
