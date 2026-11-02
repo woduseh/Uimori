@@ -25,8 +25,10 @@ export function nativeScriptModel(
   mode: ScriptMode = 'otherAx'
 ) {
   if (method !== 'axLLM') return snapshot.profile?.models.main;
-  if (mode === 'memory') return snapshot.profile?.contextModel;
+  if (mode === 'memory')
+    return snapshot.profile?.contextModelUnavailable ? undefined : snapshot.profile?.contextModel;
   if (mode === 'translate') return snapshot.profile?.models.translation;
+  if (snapshot.profile?.scriptModelUnavailable) return undefined;
   return snapshot.profile?.scriptModel ?? snapshot.profile?.models.main;
 }
 export function validateNativeScriptAttempt(snapshot: RunSnapshot, wire: WireRecord): void {
@@ -89,8 +91,16 @@ export function createNativeRisuHost(
     if (usage.modelCalls >= snapshot.settings.maxCalls - reserveCalls)
       throw new Error('RISU_NATIVE_MODEL_BUDGET');
     const target = nativeScriptModel(snapshot, method, mode);
-    if (!target)
-      return { success: false, result: `Error: RISU_NATIVE_MODEL_REQUIRED:${mode ?? 'main'}` };
+    if (!target) {
+      const unavailable =
+        method === 'axLLM' &&
+        ((mode === 'memory' && snapshot.profile?.contextModelUnavailable) ||
+          (mode === 'otherAx' && snapshot.profile?.scriptModelUnavailable));
+      return {
+        success: false,
+        result: `Error: RISU_NATIVE_MODEL_${unavailable ? 'UNAVAILABLE' : 'REQUIRED'}:${mode ?? 'main'}`,
+      };
+    }
     if (target.enabled === false)
       return { success: false, result: `Error: RISU_NATIVE_MODEL_DISABLED:${mode ?? 'main'}` };
     const prompt: unknown = args.prompt;
@@ -183,7 +193,10 @@ export function createNativeRisuHost(
     signal.throwIfAborted();
     return {
       success: result.status === 'completed',
-      result: result.text || result.error?.code || result.status,
+      result:
+        result.status === 'completed'
+          ? result.text
+          : `Error: ${result.error?.code ?? result.status}`,
     };
   };
 }

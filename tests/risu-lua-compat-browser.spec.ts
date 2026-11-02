@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { RisuImportResult } from '../core/risu-import.js';
 import { navigationAction } from './ui-navigation.js';
 
@@ -136,3 +136,181 @@ end`,
     await page.screenshot({ path: info.outputPath(`risu-lua-form-${width}.png`) });
   });
 }
+
+async function openRepeatedScenes(page: Page) {
+  const title = `반복 장면 ${crypto.randomUUID()}`;
+  const opening = `<section><p id="counter">Count: {{getvar::counter}}</p><button risu-trigger="duplicate">장면 추가</button><button risu-trigger="count">숫자 올리기</button></section>`;
+  const document = {
+    spec: 'chara_card_v3',
+    spec_version: '3.0',
+    data: {
+      name: title,
+      description: 'Repeated scene recovery fixture',
+      first_mes: opening,
+      extensions: {
+        risuai: {
+          defaultVariables: 'counter=0',
+          triggerscript: [
+            {
+              type: 'start',
+              effect: [
+                {
+                  type: 'triggerlua',
+                  code: `function duplicate(id)
+  addChat(id, 'char', [=[${opening}]=])
+  reloadDisplay(id)
+end
+function count(id)
+  setChatVar(id, 'counter', tonumber(getChatVar(id, 'counter')) + 1)
+  reloadDisplay(id)
+end`,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  };
+  await page.goto('/');
+  await navigationAction(page, '봇');
+  await page.getByRole('button', { name: '자료 가져오기', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '자료 가져오기', exact: true });
+  await dialog.getByLabel('Risu 파일 선택', { exact: true }).setInputFiles({
+    name: 'repeated-scenes.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(document)),
+  });
+  await expect(dialog.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await dialog.getByRole('checkbox', { name: '가져온 뒤 새 채팅도 만들기' }).check();
+  const applying = page.waitForResponse((response) =>
+    response.url().endsWith('/api/risu-imports/apply')
+  );
+  await dialog.getByRole('button', { name: '가져오고 새 채팅 열기', exact: true }).click();
+  const applied = await applying;
+  expect(applied.ok(), await applied.text()).toBe(true);
+  const imported = (await applied.json()) as RisuImportResult;
+  const surfaces = page.locator('.risu-message-surface');
+  await expect(surfaces.first().locator('#counter')).toHaveText('Count: 0');
+  await surfaces.first().getByRole('button', { name: '장면 추가', exact: true }).click();
+  await expect(surfaces).toHaveCount(2);
+  await expect(surfaces.last().locator('#counter')).toHaveText('Count: 0');
+  return { chatId: imported.chat!.id, surfaces };
+}
+
+test('a delayed successful action releases the replacement reader after a shared confirmation', async ({
+  page,
+}) => {
+  const { surfaces } = await openRepeatedScenes(page);
+  const submissions: Record<string, unknown>[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/risu-action', async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.name !== 'count') return route.continue();
+    submissions.push(body);
+    const response = await route.fetch();
+    if (submissions.length === 1) await gate;
+    await route.fulfill({ response });
+  });
+  try {
+    await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
+    // The server commits and publishes before its first HTTP response is delivered.
+    await expect(surfaces.last().locator('#counter')).toHaveText('Count: 1');
+    await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
+      'data-risu-disabled',
+      'false'
+    );
+    await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
+    await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
+      'data-risu-disabled',
+      'true'
+    );
+    release();
+    await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
+      'data-risu-disabled',
+      'false'
+    );
+    expect(submissions).toHaveLength(1);
+    await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
+    await expect(surfaces.last().locator('#counter')).toHaveText('Count: 2');
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1].idempotencyKey).not.toBe(submissions[0].idempotencyKey);
+  } finally {
+    release();
+  }
+});
+
+test('identical scenes retain separate uncertain actions and each replacement can confirm its own', async ({
+  page,
+  request,
+}) => {
+  const { chatId, surfaces } = await openRepeatedScenes(page);
+  const submissions: Record<string, unknown>[] = [];
+  await page.route('**/risu-action', async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.name !== 'count') return route.continue();
+    submissions.push(body);
+    const response = await route.fetch();
+    expect(response.ok(), await response.text()).toBe(true);
+    if (submissions.length <= 2)
+      await route.fulfill({ status: 503, json: { error: 'Synthetic lost action response' } });
+    else await route.fulfill({ response });
+  });
+  const values = async () => (await request.get(`/api/chats/${chatId}/variables`)).json();
+  const click = async (which: 'first' | 'last', status: number) => {
+    const response = page.waitForResponse((item) => item.url().endsWith('/risu-action'));
+    await surfaces[which]().getByRole('button', { name: '숫자 올리기', exact: true }).click();
+    expect((await response).status()).toBe(status);
+  };
+  await click('first', 503);
+  await expect.poll(async () => (await values()).values.counter).toBe('1');
+  await expect(surfaces.last().locator('#counter')).toHaveText('Count: 1');
+  await click('last', 503);
+  await expect.poll(async () => (await values()).values.counter).toBe('2');
+  await expect(surfaces.last().locator('#counter')).toHaveText('Count: 2');
+  await click('last', 200);
+  await click('first', 200);
+  expect(submissions).toHaveLength(4);
+  expect(submissions[0].idempotencyKey).not.toBe(submissions[1].idempotencyKey);
+  expect(submissions[2]).toEqual(submissions[1]);
+  expect(submissions[3]).toEqual(submissions[0]);
+  expect((await values()).values.counter).toBe('2');
+});
+
+test('a terminal action receipt permits a new explicit attempt while a running one keeps its key', async ({
+  page,
+}) => {
+  const { surfaces } = await openRepeatedScenes(page);
+  const submissions: Record<string, unknown>[] = [];
+  await page.route('**/risu-action', async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.name !== 'count') return route.continue();
+    submissions.push(body);
+    if (submissions.length === 1)
+      return route.fulfill({ status: 503, json: { error: 'Synthetic unknown outcome' } });
+    if (submissions.length === 2)
+      return route.fulfill({ status: 409, json: { error: 'RISU_NATIVE_ACTION_RUNNING' } });
+    if (submissions.length === 3)
+      return route.fulfill({ status: 409, json: { error: 'RISU_NATIVE_ACTION_FAILED' } });
+    return route.continue();
+  });
+  for (const status of [503, 409, 409]) {
+    const response = page.waitForResponse((item) => item.url().endsWith('/risu-action'));
+    await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
+    expect((await response).status()).toBe(status);
+    await expect(surfaces.last().locator('.risu-message-content')).toHaveAttribute(
+      'data-risu-disabled',
+      'false'
+    );
+  }
+  expect(submissions).toHaveLength(3);
+  expect(submissions[1]).toEqual(submissions[0]);
+  expect(submissions[2]).toEqual(submissions[0]);
+  await surfaces.last().getByRole('button', { name: '숫자 올리기', exact: true }).click();
+  await expect(surfaces.last().locator('#counter')).toHaveText('Count: 1');
+  expect(submissions).toHaveLength(4);
+  expect(submissions[3].idempotencyKey).not.toBe(submissions[0].idempotencyKey);
+});

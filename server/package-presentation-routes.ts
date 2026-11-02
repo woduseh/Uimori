@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { successfulTranslation, validateTranslationArtifact } from './translation-artifacts.js';
 import { buildPackagePresentation } from './package-presentation.js';
-import { nativeSourceSnapshot } from './risu-native-actions.js';
+import { nativeSourceIdentity, nativeSourceSnapshot } from './risu-native-actions.js';
 import { nativeRisuSessionKey } from './risu-native-context.js';
 import { nativeImageDisplayText } from './risu-native-images.js';
 import { readStoredRunSnapshot } from './run-projections.js';
@@ -96,6 +96,7 @@ export function packagePresentationRoutes(app: FastifyInstance, store: Store) {
           translationRevision: translation ? (job!.revision ?? 0) : null,
           nativeAction: {
             program: nativeRisuSessionKey(live.snapshot),
+            sourceIdentity: nativeSourceIdentity(source.id, stored),
             expectedHeadRevision: head,
             expectedHeadHash: store.source(head).hash,
             expectedVariableRevision: live.variables.revision,

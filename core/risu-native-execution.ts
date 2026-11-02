@@ -32,6 +32,8 @@ export type NativeRisuAuthored = {
   })[];
   commandHash?: string;
   greeting?: boolean;
+  /** Original scene identity across action-created source replacements. */
+  sourceIdentity?: string;
 };
 
 export const nativeRisuFieldKey = (attachment: ContentAttachment) =>

@@ -735,9 +735,16 @@ export class ProductStore {
     }
     const frozen = freezeCurrentPrompts(workspace);
     const contextRef = workspaceModelRef(workspace, 'context');
-    const contextModel = contextRef
-      ? this.modelSnapshot(contextRef.id, undefined, false)
-      : undefined;
+    let contextModel: ModelSnapshot | undefined;
+    if (contextRef) {
+      try {
+        contextModel = this.modelSnapshot(contextRef.id, undefined, false);
+      } catch (error) {
+        // Other work remains available; the context-dependent call reports the missing target.
+        if (!(error instanceof HttpError) || ![403, 404, 409].includes(error.statusCode))
+          throw error;
+      }
+    }
     const scriptRef = workspaceModelRef(workspace, 'script');
     let scriptModel: ModelSnapshot | undefined;
     if (scriptRef) {
@@ -767,7 +774,9 @@ export class ProductStore {
       ...resolvePackageProfile(this, p),
       ...frozen,
       ...(contextModel ? { contextModel } : {}),
+      ...(contextRef && !contextModel ? { contextModelUnavailable: true as const } : {}),
       ...(scriptModel ? { scriptModel } : {}),
+      ...(scriptRef && !scriptModel ? { scriptModelUnavailable: true as const } : {}),
       ...(collaboration?.enabled && (requiredRole === 'main' || requiredRole === 'inspect')
         ? { collaborationModels }
         : {}),

@@ -250,8 +250,11 @@ export type ProfileSnapshot = ChatProfile & {
   /** Text-only per-link projection; the original packages below remain revision-exact. */
   chatOverrides?: import('./chat-overrides.js').ChatOverrideSnapshot;
   contextModel?: ModelSnapshot;
+  /** A selected role could not be resolved at reservation; absence also supports older snapshots. */
+  contextModelUnavailable?: true;
   /** Global Lua script model resolved and frozen at reservation time. */
   scriptModel?: ModelSnapshot;
+  scriptModelUnavailable?: true;
   /** Self-contained execution evidence; never a live library dependency. */
   prompts?: Partial<Record<PromptRole, ContentRef | null>>;
   promptControls?: Record<string, import('./risu-prompt.js').ChatPromptControls>;

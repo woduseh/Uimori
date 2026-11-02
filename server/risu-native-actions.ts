@@ -18,10 +18,15 @@ import { chatVariableProfile } from './chat-variable-context.js';
 import { readChatVariables, writeChatVariablesInTransaction } from './chat-variables.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
-import { readRunSnapshot } from './run-projections.js';
+import { readRunSnapshot, readStoredRunSnapshot } from './run-projections.js';
 
 const zeroUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+/** An action can replace a scene while preserving its reader identity. */
+export function nativeSourceIdentity(sourceId: string, snapshot: RunSnapshot): string {
+  return snapshot.nativeRisuAuthored?.sourceIdentity ?? sourceId;
+}
 
 function formData(value: unknown): Record<string, string | string[]> {
   if (
@@ -193,6 +198,10 @@ export async function applyNativeRisuAction(
     else delete profile.contextModel;
     if (current.scriptModel) profile.scriptModel = current.scriptModel;
     else delete profile.scriptModel;
+    if (current.contextModelUnavailable) profile.contextModelUnavailable = true;
+    else delete profile.contextModelUnavailable;
+    if (current.scriptModelUnavailable) profile.scriptModelUnavailable = true;
+    else delete profile.scriptModelUnavailable;
   }
   const context = nativeRisuContext(captured.snapshot);
   if (!context) throw new HttpError(400, 'RISU_NATIVE_CARD_REQUIRED');
@@ -296,7 +305,20 @@ export async function applyNativeRisuAction(
     const originals = new Map(
       (captured.snapshot.logicalHistory ?? []).map((message) => [message.id, message])
     );
-    const authoredGroups = next.map((messages) => {
+    const authoredGroups = next.map((messages, index) => {
+      const original =
+        index < first
+          ? undefined
+          : greetingOnly
+            ? greeting?.revision
+            : messages
+                .filter((message) => message.role === 'char')
+                .concat(messages.filter((message) => message.role !== 'char'))
+                .map((message) => (message.id ? sourceByMessage.get(message.id) : undefined))
+                .find((revision) => revision !== undefined);
+      const identity = original
+        ? nativeSourceIdentity(original, readStoredRunSnapshot(store, store.source(original).runId))
+        : undefined;
       const requestImages: RequestImage[] = [];
       const authored: NativeRisuAuthored['messages'] = messages.map((message) => {
         const images =
@@ -314,7 +336,7 @@ export async function applyNativeRisuAction(
       });
       if (requestImages.length > REQUEST_IMAGE_MAX_COUNT)
         throw new HttpError(400, '참고 이미지는 한 장면에 8장까지 묶을 수 있어요.');
-      return { messages: authored, requestImages };
+      return { messages: authored, requestImages, sourceIdentity: identity };
     });
     return store.transaction(() => {
       check();
@@ -325,7 +347,7 @@ export async function applyNativeRisuAction(
       let head = retained;
       let lastRunId = reserved.id;
       for (let index = first; index < next.length; index++) {
-        const { messages, requestImages } = authoredGroups[index];
+        const { messages, requestImages, sourceIdentity } = authoredGroups[index];
         const request = messages
           .filter((entry) => entry.role === 'user')
           .map((entry) => entry.data)
@@ -350,6 +372,7 @@ export async function applyNativeRisuAction(
             messages,
             commandHash,
             ...(greetingOnly ? { greeting: true } : {}),
+            ...(sourceIdentity ? { sourceIdentity } : {}),
           },
           executionClock: reserved.snapshot.executionClock,
         };

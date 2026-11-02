@@ -89,6 +89,8 @@ type NativeActionCommand = {
   uncertain: boolean;
   unchanged: boolean;
   inFlight?: Promise<boolean>;
+  waiters: number;
+  confirmationFailed: boolean;
 };
 // An action can replace its source before its response arrives. Retain each unconfirmed
 // command across readers; a different authored choice remains an independent user action.
@@ -298,6 +300,7 @@ function SourceReaderContent({
       const identity = JSON.stringify({
         chatId: source.chatId,
         program: projected.nativeAction.program ?? source.id,
+        sourceIdentity: projected.nativeAction.sourceIdentity ?? source.id,
         sourceHash: source.hash,
         kind,
         name,
@@ -318,8 +321,12 @@ function SourceReaderContent({
         acknowledged: false,
         uncertain: false,
         unchanged: false,
+        waiters: 0,
+        confirmationFailed: false,
       };
       pendingNativeActions.set(identity, command);
+      const joined = !!command.inFlight;
+      if (!joined) command.confirmationFailed = false;
       const operation = (command.inFlight ??= (async () => {
         const confirmationOnly = command.acknowledged;
         if (!command.acknowledged) {
@@ -330,19 +337,44 @@ function SourceReaderContent({
             onNativeNotice?.(result.notifications.map((notice) => notice.message));
         }
         await refresh();
-        if (pendingNativeActions.get(identity) === command) pendingNativeActions.delete(identity);
         return command.unchanged || confirmationOnly;
       })());
+      command.waiters++;
       try {
-        if (await operation) return { unchanged: true };
+        const unchanged = await operation;
+        // A replaced reader must refresh itself before releasing its own action lock.
+        if (joined) await refresh();
+        if (unchanged || joined) return { unchanged: true };
       } catch (error) {
-        if (command.inFlight === operation) command.inFlight = undefined;
+        command.confirmationFailed = true;
         // An unknown outcome must retain its original key and captured revision on retry,
         // even if an SSE refresh has already published the successful state.
-        if (!command.acknowledged && !command.uncertain && definiteRejection(error)) {
+        const terminalReceipt =
+          error instanceof ApiError &&
+          error.status === 409 &&
+          [
+            'RISU_NATIVE_ACTION_FAILED',
+            'RISU_NATIVE_ACTION_CANCELLED',
+            'RISU_NATIVE_ACTION_INTERRUPTED',
+          ].includes(error.code ?? '');
+        if (
+          !command.acknowledged &&
+          (terminalReceipt || (!command.uncertain && definiteRejection(error)))
+        ) {
           if (pendingNativeActions.get(identity) === command) pendingNativeActions.delete(identity);
         } else command.uncertain = true;
         throw error;
+      } finally {
+        command.waiters--;
+        if (!command.waiters && command.inFlight === operation) {
+          command.inFlight = undefined;
+          if (
+            command.acknowledged &&
+            !command.confirmationFailed &&
+            pendingNativeActions.get(identity) === command
+          )
+            pendingNativeActions.delete(identity);
+        }
       }
     } catch (error) {
       onError((error as Error).message);
