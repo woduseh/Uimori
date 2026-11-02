@@ -1,6 +1,6 @@
 {
   "name": "uimori",
-  "version": "0.12.3",
+  "version": "0.12.4",
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",
@@ -37,6 +37,7 @@
     "verify:pricing": "node scripts/verify-model-pricing.mjs",
     "verify:global-models": "node scripts/verify-global-models.mjs",
     "verify:packages": "node scripts/verify-package-ui.mjs",
+    "verify:risu-compat": "node scripts/verify-risu-compat.mjs",
     "verify:loading": "node scripts/verify-loading.mjs",
     "verify:turn-activity": "node scripts/verify-turn-activity.mjs",
     "verify:illustration": "node scripts/verify-illustration.mjs",
