@@ -14,6 +14,7 @@ import { packageSlots } from '../core/package-context.js';
 import { createHash } from 'node:crypto';
 import { resolveControlValues } from '../core/risu-prompt.js';
 import { effectiveRisuControls, nativeToggleVariables } from '../core/risu-effective-controls.js';
+import { resolveTokenizerProfile } from '../core/tokenizer-profiles.js';
 
 export function nativeRisuSessionKey(snapshot: RunSnapshot): string {
   const revisions = nativeRisuPackages(snapshot).map(({ attachment, native }) => [
@@ -81,6 +82,13 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
     : undefined;
   const natives = entries.map((entry) => entry.native);
   const effectiveTriggers = natives.flatMap(nativeRisuTriggers);
+  let loreOffset = 0;
+  const loreSources = entries.map((entry) => {
+    const start = loreOffset;
+    loreOffset += nativeRisuLore(entry.native).length;
+    return { start, count: loreOffset - start, module: entry.native.module?.lorebook != null };
+  });
+  const botIndex = entries.indexOf(bot!);
   const base = bot?.native ?? {
     version: 1 as const,
     card: {},
@@ -123,7 +131,14 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
   return {
     native,
     effectiveTriggers,
+    loreSources: [
+      ...(botIndex < 0 ? [] : [loreSources[botIndex]]),
+      ...loreSources.filter((_, index) => index !== botIndex),
+    ],
     ...nativeRisuPromptContext(snapshot),
+    ...(snapshot.profile?.models?.main
+      ? { tokenizerProfile: resolveTokenizerProfile(snapshot.profile.models.main) }
+      : {}),
     globalVariables: nativeToggleVariables(
       controls,
       resolveControlValues(
@@ -141,6 +156,7 @@ export function nativeRisuContext(snapshot: RunSnapshot) {
     authorNote:
       snapshot.profile?.authorNote ||
       (typeof presetAuthorNote === 'string' ? presetAuthorNote : ''),
+    chatAuthorNote: snapshot.profile?.authorNote ?? '',
     variables: {
       ...resolveTemplateVariableContext(snapshot.profile).variables,
       ...snapshot.nativeRisuExecution?.variables,

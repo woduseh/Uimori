@@ -135,7 +135,7 @@ test('compares committed Risu Lua source and fails closed on invalid inputs', as
       );
       assert.equal(report.hostApis.added[0].exposure, 'unclassified');
       assert.equal(report.callbacks.dispatch.added[0].name, 'onFormSubmit');
-      assert.equal(report.callbacks.dispatch.added[0].uimori, 'unclassified');
+      assert.equal(report.callbacks.dispatch.added[0].uimori, 'statically-observed');
       assert.equal(report.callbacks.dispatch.added[1].name, 'otherButtonEvent');
       assert.equal(report.callbacks.dispatch.added[1].uimori, 'unclassified');
       assert.equal(report.callbacks.dispatch.changed[0].name, 'input');
@@ -152,7 +152,7 @@ test('compares committed Risu Lua source and fails closed on invalid inputs', as
       assert.equal(run(...compare, '--json', '--check').stdout, result.stdout);
       const normal = run(...compare);
       assert.equal(normal.status, 0, normal.stderr);
-      assert.match(normal.stdout, /onFormSubmit.*unclassified/);
+      assert.match(normal.stdout, /onFormSubmit.*statically-observed/);
       assert.match(normal.stdout, /not the exact Uimori support version/);
     });
 

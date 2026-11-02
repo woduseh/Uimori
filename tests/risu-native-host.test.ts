@@ -21,6 +21,9 @@ import { prepareNativeRisuRun, prepareNativeRisuOutput } from '../server/risu-na
 import { disposeAllNativeRisuSessions } from '../server/risu-native-runtime.js';
 import { storeImage } from '../server/image-storage.js';
 import type { RequestImage } from '../core/request-images.js';
+import type { Content } from '../core/product.js';
+import type { RunSnapshot } from '../core/types.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 
 import {
   nativeInteractionRoutes,
@@ -505,6 +508,22 @@ test('native first-message button renders, checkpoints state, and survives sourc
     expect(before.json().original.html).toContain('Choose none');
     const body = actionBody(store, chatId, 'choose', 'choose-once');
     await applyNativeRisuAction(store, chatId, first, body);
+    const legacyHash = createHash('sha256')
+      .update(
+        JSON.stringify({
+          sourceId: first,
+          kind: body.kind,
+          name: body.name,
+          expectedHeadRevision: body.expectedHeadRevision,
+          expectedHeadHash: body.expectedHeadHash,
+          expectedVariableRevision: body.expectedVariableRevision,
+        })
+      )
+      .digest('hex');
+    const receipt = store.db
+      .prepare('SELECT id FROM runs WHERE chat_id=? AND request_key=?')
+      .get(chatId, 'native-action:choose-once')!;
+    expect(store.run(String(receipt.id)).snapshot.nativeRisuAuthored?.commandHash).toBe(legacyHash);
     const head = store.chat(chatId).headRevision!;
     expect(head).not.toBe(first);
     const after = await app.inject(`/api/chats/${chatId}/sources/${head}/presentation`);
@@ -512,10 +531,291 @@ test('native first-message button renders, checkpoints state, and survives sourc
     expect(after.json().original.html).toContain('Choose yes');
     const replay = await applyNativeRisuAction(store, chatId, first, body);
     expect(replay.created).toBe(false);
+    expect(
+      (await applyNativeRisuAction(store, chatId, first, { ...body, triggerId: '' })).created
+    ).toBe(false);
     expect(store.chat(chatId).headRevision).toBe(head);
   } finally {
     await app.close();
   }
+});
+
+test('native actions freeze current notes and model roles without replacing retained source packages', async () => {
+  const { store, chatId } = await setup(
+    false,
+    '',
+    false,
+    `
+function captureContext(id)
+  setChatVar(id, 'rawNote', getAuthorsNote(id))
+  setChatVar(id, 'effectiveNote', cbs('{{authornote}}'))
+end
+listenEdit('editDisplay', function(id, text)
+  return text .. '<span>Note: ' .. getAuthorsNote(id) .. ' / ' .. cbs('{{authornote}}') .. '</span>'
+end)
+`
+  );
+  const source = store.source(store.chat(chatId).headRevision!);
+  const connection = store.product.connection({
+    title: 'Synthetic script connection',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = (title: string) =>
+    store.product.model({
+      title,
+      connectionId: connection.id,
+      modelId: 'fixture',
+      maxOutputTokens: 1024,
+      temperature: null,
+    });
+  const old = model('Old model');
+  const next = {
+    main: model('New main'),
+    translation: model('New translation'),
+    context: model('New context'),
+    script: model('New script'),
+  };
+  const setModels = (values: typeof next | null) => {
+    const current = modelWorkspace(store);
+    updateModelWorkspace(store, {
+      expectedRevision: current.revision,
+      routes: {
+        main: values ? { id: values.main.id } : null,
+        translation: values ? { id: values.translation.id } : null,
+      },
+      contextModel: values ? { id: values.context.id } : null,
+      scriptModel: values ? { id: values.script.id } : null,
+      translationPolicy: current.translationPolicy,
+    });
+  };
+  const setNote = (note: string) => {
+    const profile = store.product.profile(chatId);
+    store.product.updateProfile(chatId, {
+      expectedRevision: profile.revision,
+      image: profile.image,
+      authorNote: note,
+    });
+  };
+  setModels({ main: old, translation: old, context: old, script: old });
+  setNote('이전 노트');
+  // Keep a real full source snapshot as an older persisted format; current completed runs
+  // normally compact it. This ensures the projection does not replace source-owned content.
+  const sourceSnapshot = projections.readRunSnapshot(store, source.runId);
+  store.db
+    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(sourceSnapshot), source.runId);
+  const original = store.product.get<Content>('content', sourceSnapshot.profile!.packages![0]!.id);
+  const updated = store.product.content(
+    {
+      kind: original.kind,
+      title: 'Updated native package',
+      description: original.description,
+      text: original.text,
+      loading: original.loading,
+      relatedIds: original.relatedIds,
+      package: { ...original.package, title: 'Updated native package' },
+      expectedRevision: original.revision,
+    },
+    original.id
+  ) as Content;
+  expect(updated.revision).toBe(original.revision + 1);
+  setNote('새 작가 노트');
+  setModels(next);
+
+  const snapshotSpy = vi.spyOn(store.product, 'snapshot');
+  const display = nativeSourceSnapshot(store, chatId, source.id, sourceSnapshot);
+  expect(display.snapshot.profile?.authorNote).toBe('새 작가 노트');
+  expect(display.snapshot.profile?.packages).toEqual(sourceSnapshot.profile?.packages);
+  expect(snapshotSpy).not.toHaveBeenCalled();
+  snapshotSpy.mockRestore();
+  const app = Fastify();
+  packagePresentationRoutes(app, store);
+  try {
+    const response = await app.inject(`/api/chats/${chatId}/sources/${source.id}/presentation`);
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json().original.html).toContain('Note: 새 작가 노트 / 새 작가 노트');
+  } finally {
+    await app.close();
+  }
+
+  const reservations: RunSnapshot[] = [];
+  let hostCalls = 0;
+  const createHost = (_runId: string, snapshot: RunSnapshot) => {
+    reservations.push(snapshot);
+    return async () => {
+      hostCalls++;
+      return null;
+    };
+  };
+  await applyNativeRisuAction(
+    store,
+    chatId,
+    source.id,
+    actionBody(store, chatId, 'captureContext', 'current-context'),
+    { createHost }
+  );
+  expect(readChatVariables(store, chatId).values).toMatchObject({
+    rawNote: '새 작가 노트',
+    effectiveNote: '새 작가 노트',
+  });
+  const reserved = reservations.at(-1)!.profile!;
+  expect(reserved.packages).toEqual(sourceSnapshot.profile!.packages);
+  expect(reserved.promptPresets).toEqual(sourceSnapshot.profile!.promptPresets);
+  expect(reserved.routes).toEqual({
+    main: { id: next.main.id },
+    translation: { id: next.translation.id },
+  });
+  expect(reserved.models.main?.id).toBe(next.main.id);
+  expect(reserved.models.translation?.id).toBe(next.translation.id);
+  expect(reserved.contextModel?.id).toBe(next.context.id);
+  expect(reserved.scriptModel?.id).toBe(next.script.id);
+  expect(projections.readStoredRunSnapshot(store, source.runId).profile?.packages).toEqual(
+    sourceSnapshot.profile!.packages
+  );
+
+  const latest = store.source(store.chat(chatId).headRevision!);
+  const retained = projections.readRunSnapshot(store, latest.runId);
+  store.db
+    .prepare('UPDATE runs SET snapshot=? WHERE id=?')
+    .run(JSON.stringify(retained), latest.runId);
+  setNote('');
+  setModels(null);
+  await applyNativeRisuAction(
+    store,
+    chatId,
+    latest.id,
+    actionBody(store, chatId, 'captureContext', 'cleared-context'),
+    { createHost }
+  );
+  const cleared = reservations.at(-1)!.profile!;
+  expect(cleared).not.toHaveProperty('authorNote');
+  expect(cleared).not.toHaveProperty('contextModel');
+  expect(cleared).not.toHaveProperty('scriptModel');
+  expect(cleared.models).toEqual({});
+  expect(cleared.routes).toEqual({ main: null, translation: null });
+  expect(readChatVariables(store, chatId).values.rawNote).toBe('');
+
+  setModels(next);
+  store.product.model(
+    {
+      title: next.script.title,
+      connectionId: next.script.connectionId,
+      modelId: next.script.modelId,
+      maxOutputTokens: next.script.maxOutputTokens,
+      temperature: next.script.temperature,
+      enabled: false,
+      expectedRevision: next.script.revision,
+    },
+    next.script.id
+  );
+  const current = store.chat(chatId).headRevision!;
+  await applyNativeRisuAction(
+    store,
+    chatId,
+    current,
+    actionBody(store, chatId, 'captureContext', 'local-with-disabled-model'),
+    { createHost }
+  );
+  expect(reservations.at(-1)!.profile!.scriptModel?.enabled).toBe(false);
+  expect(hostCalls).toBe(0);
+});
+
+test('form actions persist string data once and reject changed or stale requests', async () => {
+  const { store, chatId } = await setup(
+    false,
+    '',
+    false,
+    `
+function onFormSubmit(id, name, raw)
+  local data = json.decode(raw).data
+  setChatVar(id, 'formName', name)
+  setChatVar(id, 'formValue', data.name .. '|' .. data.tags[1] .. '|' .. data.tags[2] .. '|' .. data.submit)
+  setChatVar(id, 'formPrototype', data['__proto__'])
+  local count = getChatVar(id, 'formCount')
+  setChatVar(id, 'formCount', count == 'null' and '1' or tostring(tonumber(count) + 1))
+end
+`
+  );
+  const first = store.chat(chatId).headRevision!;
+  const data = JSON.parse(
+    '{"name":"재연","tags":["독서","산책"],"submit":"확인","__proto__":"안전"}'
+  );
+  const body = { ...actionBody(store, chatId, 'survey', 'form-once'), kind: 'form', data };
+  const result = await applyNativeRisuAction(store, chatId, first, body);
+  expect(result.created).toBe(true);
+  expect(readChatVariables(store, chatId).values).toMatchObject({
+    formName: 'survey',
+    formValue: '재연|독서|산책|확인',
+    formPrototype: '안전',
+    formCount: '1',
+  });
+  const head = store.chat(chatId).headRevision;
+  expect((await applyNativeRisuAction(store, chatId, first, body)).created).toBe(false);
+  expect(readChatVariables(store, chatId).values.formCount).toBe('1');
+  await expect(
+    applyNativeRisuAction(store, chatId, first, { ...body, data: { ...data, name: '다른 이름' } })
+  ).rejects.toThrow('RISU_NATIVE_ACTION_REPLAY_CONFLICT');
+  await expect(
+    applyNativeRisuAction(store, chatId, head!, { ...body, idempotencyKey: 'stale-form' })
+  ).rejects.toThrow('RISU_NATIVE_ACTION_STATE_CHANGED');
+  expect(store.chat(chatId).headRevision).toBe(head);
+  expect(readChatVariables(store, chatId).values.formCount).toBe('1');
+});
+
+test('manual trigger IDs reach CBS and are part of the receipt', async () => {
+  const { store, chatId } = await setup(
+    false,
+    '',
+    false,
+    `
+function identify(id) setChatVar(id, 'seenId', cbs('{{trigger_id}}')) end
+`
+  );
+  const first = store.chat(chatId).headRevision!;
+  const body = { ...actionBody(store, chatId, 'identify', 'identified'), triggerId: '선택-하나' };
+  await applyNativeRisuAction(store, chatId, first, body);
+  expect(readChatVariables(store, chatId).values.seenId).toBe('선택-하나');
+  expect((await applyNativeRisuAction(store, chatId, first, body)).created).toBe(false);
+  await expect(
+    applyNativeRisuAction(store, chatId, first, { ...body, triggerId: '선택-둘' })
+  ).rejects.toThrow('RISU_NATIVE_ACTION_REPLAY_CONFLICT');
+  const current = store.chat(chatId).headRevision!;
+  const empty = { ...actionBody(store, chatId, 'identify', 'empty-identified'), triggerId: '' };
+  await applyNativeRisuAction(store, chatId, current, empty);
+  expect(readChatVariables(store, chatId).values.seenId).toBe('null');
+  const { triggerId: _omitted, ...withoutId } = empty;
+  expect((await applyNativeRisuAction(store, chatId, current, withoutId)).created).toBe(false);
+});
+
+test('malformed or oversized form payloads are rejected before an action is reserved', async () => {
+  const { store, chatId } = await setup();
+  const first = store.chat(chatId).headRevision!;
+  const body = { ...actionBody(store, chatId, 'survey', 'bad-form'), kind: 'form' };
+  for (const data of [null, [], { name: 42 }, { tags: ['하나', null] }, { file: {} }]) {
+    await expect(applyNativeRisuAction(store, chatId, first, { ...body, data })).rejects.toThrow(
+      'RISU_NATIVE_FORM_DATA_INVALID'
+    );
+  }
+  await expect(
+    applyNativeRisuAction(store, chatId, first, { ...body, data: { name: '가'.repeat(800_000) } })
+  ).rejects.toThrow('RISU_NATIVE_FORM_DATA_LIMIT');
+  await expect(
+    applyNativeRisuAction(store, chatId, first, { ...body, data: {}, triggerId: 'wrong-kind' })
+  ).rejects.toThrow('RISU_NATIVE_ACTION_FIELDS');
+  await expect(
+    applyNativeRisuAction(store, chatId, first, {
+      ...actionBody(store, chatId, 'choose', 'bad-trigger'),
+      data: {},
+    })
+  ).rejects.toThrow('RISU_NATIVE_ACTION_FIELDS');
+  expect(store.chat(chatId).headRevision).toBe(first);
+  expect(
+    store.db
+      .prepare('SELECT id FROM runs WHERE chat_id=? AND request_key=?')
+      .get(chatId, 'native-action:bad-form')
+  ).toBeUndefined();
 });
 
 test('last response replacement runs native input and output from ancestor state without replaying the old response', async () => {

@@ -287,6 +287,31 @@ export async function runSurfaceRegressions(mount: HTMLElement): Promise<string[
       await tick();
       check(calls === 0, 'removed message executed queued action');
     });
+    await run('Same-revision forms retain distinct checkbox choices and focus', () => {
+      const html = `<form risu-form="interests">
+        <label><input type="checkbox" name="interest" value="독서">독서</label>
+        <label><input type="checkbox" name="interest" value="산책" checked>산책</label>
+        <input type="checkbox" name="ambiguous" value="같음">
+        <input type="checkbox" name="ambiguous" value="같음">
+      </form>`;
+      const s = surface(html);
+      const original = [...s.root.querySelectorAll<HTMLInputElement>('input')];
+      original[0]!.click();
+      original[1]!.click();
+      original[2]!.click();
+      original[0]!.focus();
+      s.updateMessage(prepareRisuMessage(`${html}<span>Updated display</span>`), true);
+      const restored = [...s.root.querySelectorAll<HTMLInputElement>('input')];
+      check(restored[0] !== original[0], 'display did not replace the form controls');
+      check(restored[0]!.checked && !restored[1]!.checked, 'checkbox choices were reset');
+      check(s.root.activeElement === restored[0], 'checkbox focus was not restored');
+      check(!restored[2]!.checked && !restored[3]!.checked, 'ambiguous controls were restored');
+      check(
+        JSON.stringify(new FormData(s.root.querySelector('form')!).getAll('interest')) ===
+          JSON.stringify(['독서']),
+        'restored form submission does not match the selected choice'
+      );
+    });
     await run('React reading and revision updates keep the DOM and unsaved UI', async () => {
       const reactHost = document.createElement('section');
       mount.append(reactHost);

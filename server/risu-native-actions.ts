@@ -9,6 +9,7 @@ import {
   disposeNativeRisuSession,
   type NativeRisuExecutionOptions,
 } from './risu-native-runtime.js';
+import { NATIVE_LUA_LIMITS } from './risu-native-lua-session.js';
 import { captureLogicalHistory } from './prompt-snapshot.js';
 import { validateNativeImageMessageIdentity } from './risu-native-run.js';
 import { REQUEST_IMAGE_MAX_COUNT, type RequestImage } from '../core/request-images.js';
@@ -21,6 +22,40 @@ import { readRunSnapshot } from './run-projections.js';
 
 const zeroUsage = { modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+
+function formData(value: unknown): Record<string, string | string[]> {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    ![Object.prototype, null].includes(Object.getPrototypeOf(value))
+  )
+    throw new HttpError(400, 'RISU_NATIVE_FORM_DATA_INVALID');
+  const result: Record<string, string | string[]> = Object.create(null);
+  let values = 0;
+  const entries = Object.entries(value);
+  if (entries.length > NATIVE_LUA_LIMITS.valueEntries)
+    throw new HttpError(400, 'RISU_NATIVE_FORM_DATA_LIMIT');
+  for (const [key, entry] of entries) {
+    if (typeof entry === 'string') {
+      result[key] = entry;
+      values++;
+    } else if (Array.isArray(entry)) {
+      if (entry.length > NATIVE_LUA_LIMITS.valueEntries)
+        throw new HttpError(400, 'RISU_NATIVE_FORM_DATA_LIMIT');
+      if (!Array.from(entry).every((part) => typeof part === 'string'))
+        throw new HttpError(400, 'RISU_NATIVE_FORM_DATA_INVALID');
+      result[key] = [...entry];
+      values += entry.length + 1;
+    } else throw new HttpError(400, 'RISU_NATIVE_FORM_DATA_INVALID');
+  }
+  if (
+    values > NATIVE_LUA_LIMITS.valueNodes ||
+    Buffer.byteLength(JSON.stringify({ data: result })) > NATIVE_LUA_LIMITS.guestJsonBytes
+  )
+    throw new HttpError(400, 'RISU_NATIVE_FORM_DATA_LIMIT');
+  return result;
+}
 
 function groupMessages(messages: NativeRisuMessage[]): NativeRisuMessage[][] {
   const groups: NativeRisuMessage[][] = [];
@@ -59,9 +94,13 @@ export function nativeSourceSnapshot(
   const source = store.source(sourceId);
   if (source.chatId !== chatId) throw new HttpError(404, 'Source not found');
   own ??= readRunSnapshot(store, source.runId);
+  const profile = chatVariableProfile(store, chatId, own.profile);
+  const authorNote = store.product.profile(chatId).authorNote;
+  if (authorNote === undefined) delete profile.authorNote;
+  else profile.authorNote = authorNote;
   const snapshot: RunSnapshot = {
     ...own,
-    profile: chatVariableProfile(store, chatId, own.profile),
+    profile,
     history,
     parentRevision: chat.headRevision,
   };
@@ -97,9 +136,21 @@ export async function applyNativeRisuAction(
     'expectedHeadHash',
     'expectedVariableRevision',
     'idempotencyKey',
+    'data',
+    'triggerId',
   ]);
   const kind = body.kind;
-  if (kind !== 'trigger' && kind !== 'button') throw new HttpError(400, 'RISU_NATIVE_ACTION_KIND');
+  if (kind !== 'trigger' && kind !== 'button' && kind !== 'form')
+    throw new HttpError(400, 'RISU_NATIVE_ACTION_KIND');
+  if (
+    (kind !== 'form' && Object.hasOwn(body, 'data')) ||
+    (kind !== 'trigger' && Object.hasOwn(body, 'triggerId'))
+  )
+    throw new HttpError(400, 'RISU_NATIVE_ACTION_FIELDS');
+  const data = kind === 'form' ? formData(body.data) : undefined;
+  const triggerId = Object.hasOwn(body, 'triggerId')
+    ? text(body.triggerId, 'trigger ID', 1000, true) || undefined
+    : undefined;
   const name = text(body.name, 'action name', 300);
   const key = `native-action:${text(body.idempotencyKey, 'request key', 120)}`;
   const expectedHeadRevision = text(body.expectedHeadRevision, 'head revision', 100);
@@ -112,6 +163,8 @@ export async function applyNativeRisuAction(
     expectedHeadRevision,
     expectedHeadHash,
     expectedVariableRevision,
+    ...(data !== undefined ? { data } : {}),
+    ...(triggerId !== undefined ? { triggerId } : {}),
   });
   const prior = store.db
     .prepare('SELECT id FROM runs WHERE chat_id=? AND request_key=?')
@@ -125,6 +178,22 @@ export async function applyNativeRisuAction(
     return { created: false, runId: run.id };
   }
   const captured = nativeSourceSnapshot(store, chatId, sourceId);
+  // Only newly reserved actions use today's model selections. Keep the source's
+  // packages, Lua, and prompt projection, including those in older full snapshots.
+  const current = store.product.snapshot(chatId, 'inspect', captured.snapshot.parentRevision);
+  const profile = captured.snapshot.profile;
+  if (profile) {
+    profile.routes = { ...profile.routes, ...current.routes };
+    profile.models = { ...profile.models };
+    for (const role of ['main', 'translation'] as const) {
+      if (current.models[role]) profile.models[role] = current.models[role];
+      else delete profile.models[role];
+    }
+    if (current.contextModel) profile.contextModel = current.contextModel;
+    else delete profile.contextModel;
+    if (current.scriptModel) profile.scriptModel = current.scriptModel;
+    else delete profile.scriptModel;
+  }
   const context = nativeRisuContext(captured.snapshot);
   if (!context) throw new HttpError(400, 'RISU_NATIVE_CARD_REQUIRED');
   const check = () => {
@@ -165,8 +234,10 @@ export async function applyNativeRisuAction(
     const result = await executeRisuNative(
       {
         ...context,
-        event: kind === 'button' ? 'button' : 'manual',
+        event: kind === 'trigger' ? 'manual' : kind,
         argument: name,
+        ...(data !== undefined ? { meta: { data } } : {}),
+        ...(triggerId !== undefined ? { triggerId } : {}),
       },
       {
         sessionKey: nativeRisuSessionKey(captured.snapshot),

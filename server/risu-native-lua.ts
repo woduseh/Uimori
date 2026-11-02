@@ -140,6 +140,7 @@ function getCharacterLastMessage(id)
 end
 function getName(id) return __input.charName end
 function getPersonaName(id) return __input.userName end
+function getAuthorsNote(id) return __input.chatAuthorNote end
 function getDescription(id) return __input.description end
 function getCharacterFirstMessage(id) return __input.firstMessage end
 function getBackgroundEmbedding(id) return __input.backgroundHTML end
@@ -173,21 +174,34 @@ local function __awaitable(value)
   if type(value) ~= 'table' then return value end
   return setmetatable(value, {__index={await=function(self) return self end}})
 end
+local function __promise(value) return {await=function() return value end} end
+function hash(id, value) return __promise(__host('hash', {value=__encode(value, {})})) end
+function getTokens(id, value)
+  if id ~= __id or __input.event == 'display' or __input.event == 'editDisplay' then return __promise(nil) end
+  return __promise(__host('getTokens', {value=__encode(value, {})}))
+end
 local function __model(method, script, allowed, id, prompt, multimodal, options)
   if not allowed or __allowed == false or __input.event == 'display' or __input.event == 'editDisplay' then error('RISU_NATIVE_MODEL_DENIED') end
   local result = __host(method, {__nativeScript=script, prompt=__encode(prompt, {}), useMultimodal=multimodal or false, options=__encode(options or {}, {})})
   return __awaitable(__decode(result))
 end
-function cbs(text)
+local function __cbs(text)
   local result = __host('cbs', {text=text, variables=__variables, messages=__messages})
   __variables = result.variables
   return result.text
 end
+function cbs(text) return __cbs(text) end
+function getPersonaDescription(id) return __cbs(__input.persona) end
+function getLoreBooks(id, search)
+  -- Wasmoon passes Lua nil as JavaScript null, distinct from a missing comment.
+  local result = __host('cbs', {operation='getLoreBooks', search=__encode(search, {}), variables=__variables, messages=__messages})
+  __variables = result.variables
+  return __decode(result.books)
+end
 local __unsupported = {
- 'getTokens', 'sleep', 'request', 'generateImage', 'similarity', 'getCharacterImage',
+ 'sleep', 'request', 'generateImage', 'similarity', 'getCharacterImage',
  'getPersonaImage', 'setName', 'setDescription', 'setCharacterFirstMessage', 'setBackgroundEmbedding',
- 'getPersonaDescription', 'getAuthorsNote', 'getLoreBooks', 'loadLoreBooks', 'upsertLocalLoreBook',
- 'hash', 'log', 'logMain'
+ 'loadLoreBooks', 'upsertLocalLoreBook', 'log', 'logMain'
 }
 for _, name in ipairs(__unsupported) do
   _G[name] = function(...) error('RISU_NATIVE_API_UNSUPPORTED:' .. name) end
@@ -235,14 +249,19 @@ local function __dispatch()
   local value = __input.text
   if edit == 'editRequest' then value = __decode(__input.request) end
   if __callbacks[edit] then
-    for _, callback in ipairs(__callbacks[edit]) do value = callback(__id, value, __decode(__input.meta)) end
+    for _, callback in ipairs(__callbacks[edit]) do
+      local nextValue = callback(__id, value, __decode(__input.meta))
+      if edit ~= 'editDisplay' or type(nextValue) == 'string' then value = nextValue end
+    end
   else
-    local name = ({input='onInput', output='onOutput', start='onStart', button='onButtonClick'})[event]
+    local name = ({input='onInput', output='onOutput', start='onStart', button='onButtonClick', form='onFormSubmit'})[event]
     if event == 'manual' then name = __input.argument end
     local callback = name and __globals[name]
     if callback ~= nil then
       if type(callback) ~= 'function' then error('RISU_NATIVE_CALLBACK_INVALID') end
-      local result = callback(__id, __input.argument)
+      local result
+      if event == 'form' then result = callback(__id, __input.argument, __input.metaJson)
+      else result = callback(__id, __input.argument) end
       if result == false then __effects.stopChat = true end
     elseif event == 'manual' and not __input.manualHandled then error('RISU_NATIVE_TRIGGER_NOT_FOUND') end
   end

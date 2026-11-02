@@ -7,7 +7,11 @@ export {
   disposeNativeRisuSession,
   disposeAllNativeRisuSessions,
 } from './risu-native-lua-session.js';
-import { nativeRisuTriggers, type RisuContentSource } from '../core/risu-native.js';
+import { nativeRisuLore, nativeRisuTriggers, type RisuContentSource } from '../core/risu-native.js';
+import { createHash } from 'node:crypto';
+import { countTextTokens } from '../core/text-tokens.js';
+import type { TokenizerProfileId } from '../core/tokenizer-profiles.js';
+import { nativeRisuReadableLore } from './risu-native-lore.js';
 
 import { RISU_NATIVE_LUA_DISPATCH, RISU_NATIVE_LUA_PRELUDE } from './risu-native-lua.js';
 import { createNativeRisuCbsSession, type NativeRisuCbsContext } from './risu-native-cbs.js';
@@ -34,6 +38,7 @@ export interface NativeRisuExecutionInput {
   event:
     | 'manual'
     | 'button'
+    | 'form'
     | 'input'
     | 'output'
     | 'display'
@@ -44,11 +49,18 @@ export interface NativeRisuExecutionInput {
     | 'editDisplay'
     | 'editRequest';
   argument?: string;
+  triggerId?: string;
   text?: string;
   request?: NativeRisuRequestMessage[];
   meta?: Record<string, unknown>;
   globalVariables?: Record<string, string>;
   authorNote?: string;
+  /** Chat-authored note, separate from the effective CBS note with its preset fallback. */
+  chatAuthorNote?: string;
+  persona?: string;
+  tokenizerProfile?: TokenizerProfileId;
+  /** Ranges in the merged lore, preserving card versus module import semantics and lookup order. */
+  loreSources?: { start: number; count: number; module: boolean }[];
   assetUrls?: Record<string, string>;
   viewport?: NativeRisuCbsContext['viewport'];
 }
@@ -208,6 +220,7 @@ async function executeNativeRisuInvocation(
         'editDisplay',
         'editRequest',
         'button',
+        'form',
       ].includes(input.event)
     ) {
       for (const raw of Array.isArray(trigger.conditions) ? trigger.conditions : []) {
@@ -335,6 +348,7 @@ async function executeNativeRisuInvocation(
   }
   const card = record(input.native.card.data ?? input.native.card);
   const risu = record(record(card.extensions).risuai);
+  let readableLore: Record<string, unknown>[] | undefined;
   const source = `${RISU_NATIVE_LUA_PRELUDE}\nlocal function __initialize()\n${sources.map(({ code, lowLevelAccess }, index) => `__runScript(${luaSourceLiteral(code)}, ${index + 1}, ${lowLevelAccess})`).join('\n')}\nend\n${RISU_NATIVE_LUA_DISPATCH}`;
   const value = record(
     await runNativeRisuLua(
@@ -347,8 +361,11 @@ async function executeNativeRisuInvocation(
         text: input.text ?? null,
         request: input.request ?? null,
         meta: input.meta ?? {},
+        metaJson: JSON.stringify(input.meta ?? {}),
         charName: input.charName,
         userName: input.userName,
+        persona: input.persona ?? '',
+        chatAuthorNote: input.chatAuthorNote ?? '',
         description: text(card.description),
         firstMessage: text(card.first_mes),
         backgroundHTML: text(risu.backgroundHTML),
@@ -357,6 +374,15 @@ async function executeNativeRisuInvocation(
       },
       options,
       async (method, args, signal) => {
+        if (method === 'hash') {
+          const value = record(args).value;
+          return createHash('sha256').update(String(value), 'utf8').digest('hex');
+        }
+        if (method === 'getTokens') {
+          const value = record(args).value;
+          if (typeof value !== 'string') fail('RISU_NATIVE_TOKEN_ARGUMENT');
+          return countTextTokens(value as string, input.tokenizerProfile);
+        }
         if (method === 'random') {
           const payload = record(args);
           if (payload.first === null) return Math.random();
@@ -375,6 +401,20 @@ async function executeNativeRisuInvocation(
           const payload = record(args);
           state.variables = variables(payload.variables);
           state.messages = messages(payload.messages);
+          if (payload.operation === 'getLoreBooks') {
+            const entries = nativeRisuLore(input.native);
+            const books = (readableLore ??= input.loreSources
+              ? input.loreSources.flatMap(({ start, count, module }) =>
+                  nativeRisuReadableLore(input.native, entries.slice(start, start + count), module)
+                )
+              : nativeRisuReadableLore(input.native));
+            const found = [];
+            for (const book of books) {
+              if (book.comment !== payload.search) continue;
+              found.push({ ...book, content: await evaluate(text(book.content), state) });
+            }
+            return { books: found, variables: state.variables };
+          }
           return { text: await evaluate(text(payload.text), state), variables: state.variables };
         }
         if (['alertInput', 'alertSelect', 'alertConfirm'].includes(method)) {

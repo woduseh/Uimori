@@ -35,12 +35,13 @@ import { useIllustrationLayout } from './IllustrationStrip.js';
 import { illustrationActive } from './illustration-labels.js';
 import { ContextSummaryStatus } from './ContextSummaryStatus.js';
 import { formatUsd } from './pricing-display.js';
-import { api, ApiError, labels } from './api.js';
+import { api, ApiError, definiteRejection, labels } from './api.js';
 import { auxiliaryErrorDiagnostic } from './auxiliary-error.js';
 import { ProviderRejectionNotice } from './provider-rejection.js';
 import { Prose } from './Prose.js';
 import { selectedReaderText } from './reader-dom.js';
 import { RisuMessageSurface } from './RisuMessageSurface.js';
+import type { RisuAction } from './risu-message-surface.js';
 import { retainReaderNavigation } from './reader-navigation-scroll.js';
 import { RisuInteractionDialog } from './RisuInteractionDialog.js';
 import { LazyDiagnostics } from './LazyDiagnostics.js';
@@ -76,6 +77,22 @@ import { StoredRequestImages } from './RequestImages.js';
 import { SelectionRevision } from './SelectionRevision.js';
 import { SceneDeleteAction } from './SceneDeleteAction.js';
 import type { SceneDeletionResult } from '../core/scene-deletion.js';
+
+type NativeActionReceipt = {
+  created: boolean;
+  notifications?: { kind: string; message: string }[];
+};
+type NativeActionCommand = {
+  path: string;
+  body: Record<string, unknown>;
+  acknowledged: boolean;
+  uncertain: boolean;
+  unchanged: boolean;
+  inFlight?: Promise<boolean>;
+};
+// An action can replace its source before its response arrives. Retain each unconfirmed
+// command across readers; a different authored choice remains an independent user action.
+const pendingNativeActions = new Map<string, NativeActionCommand>();
 
 type ReaderMode = 'original' | 'translation';
 /** Scene header pieces the activity panel places inside its summary row. */
@@ -274,21 +291,59 @@ function SourceReaderContent({
     String(presentationRefreshKey ?? '')
   );
   const projected = presentation?.data;
-  const nativeAction = async (kind: 'trigger' | 'button', name: string) => {
+  const nativeAction: RisuAction = async (kind, name, payload) => {
     if (!projected?.nativeAction) return;
     try {
-      const result = await api<{ notifications?: { kind: string; message: string }[] }>(
-        `/chats/${source.chatId}/sources/${source.id}/risu-action`,
-        {
-          ...projected.nativeAction,
+      const path = `/chats/${source.chatId}/sources/${source.id}/risu-action`;
+      const identity = JSON.stringify({
+        chatId: source.chatId,
+        program: projected.nativeAction.program ?? source.id,
+        sourceHash: source.hash,
+        kind,
+        name,
+        ...payload,
+      });
+      const command: NativeActionCommand = pendingNativeActions.get(identity) ?? {
+        path,
+        body: {
+          expectedHeadRevision: projected.nativeAction.expectedHeadRevision,
+          expectedHeadHash: projected.nativeAction.expectedHeadHash,
+          expectedVariableRevision: projected.nativeAction.expectedVariableRevision,
           kind,
           name,
+          ...(payload?.data !== undefined ? { data: payload.data } : {}),
+          ...(payload?.triggerId !== undefined ? { triggerId: payload.triggerId } : {}),
           idempotencyKey: crypto.randomUUID(),
+        },
+        acknowledged: false,
+        uncertain: false,
+        unchanged: false,
+      };
+      pendingNativeActions.set(identity, command);
+      const operation = (command.inFlight ??= (async () => {
+        const confirmationOnly = command.acknowledged;
+        if (!command.acknowledged) {
+          const result = await api<NativeActionReceipt>(command.path, command.body);
+          command.acknowledged = true;
+          command.unchanged = result.created === false;
+          if (result.notifications?.length)
+            onNativeNotice?.(result.notifications.map((notice) => notice.message));
         }
-      );
-      if (result.notifications?.length)
-        onNativeNotice?.(result.notifications.map((notice) => notice.message));
-      await refresh();
+        await refresh();
+        if (pendingNativeActions.get(identity) === command) pendingNativeActions.delete(identity);
+        return command.unchanged || confirmationOnly;
+      })());
+      try {
+        if (await operation) return { unchanged: true };
+      } catch (error) {
+        if (command.inFlight === operation) command.inFlight = undefined;
+        // An unknown outcome must retain its original key and captured revision on retry,
+        // even if an SSE refresh has already published the successful state.
+        if (!command.acknowledged && !command.uncertain && definiteRejection(error)) {
+          if (pendingNativeActions.get(identity) === command) pendingNativeActions.delete(identity);
+        } else command.uncertain = true;
+        throw error;
+      }
     } catch (error) {
       onError((error as Error).message);
       throw error;

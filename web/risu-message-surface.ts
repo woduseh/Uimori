@@ -4,7 +4,11 @@ import { createReadingDecorator } from './reading-dom.js';
 import { risuActionKey, type PreparedRisuMessage } from './risu-message.js';
 import surfaceCss from './risu-message-surface.css?inline';
 
-export type RisuAction = (kind: 'trigger' | 'button', name: string) => Promise<void>;
+export type RisuAction = (
+  kind: 'trigger' | 'button' | 'form',
+  name: string,
+  payload?: { data?: Record<string, string | string[]>; triggerId?: string }
+) => Promise<void> | Promise<undefined | { unchanged: true }>;
 export type RisuActionState = { busy: boolean; issue: string };
 const styles = new WeakMap<Document, CSSStyleSheet>();
 
@@ -21,7 +25,9 @@ function authoredControls(content: HTMLElement) {
       node.tagName,
       id ? ['id', id] : ['name', name],
       node instanceof HTMLInputElement ? node.type : '',
-      node instanceof HTMLInputElement && node.type === 'radio' ? node.value : '',
+      node instanceof HTMLInputElement && (node.type === 'radio' || node.type === 'checkbox')
+        ? node.value
+        : '',
     ]);
     const defaults = JSON.stringify(
       node instanceof HTMLInputElement
@@ -141,14 +147,11 @@ export function mountRisuMessageSurface(
   const setDisabled = () => {
     content.dataset.risuDisabled = String(disabled || locked);
   };
-  const click = (event: Event) => {
-    const node = event.target instanceof Element ? event.target : null;
-    const target = node?.closest('[risu-trigger],[risu-btn]');
-    if (!target || !content.contains(target)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const kind = target.hasAttribute('risu-trigger') ? 'trigger' : 'button';
-    const name = target.getAttribute(kind === 'trigger' ? 'risu-trigger' : 'risu-btn') ?? '';
+  const runAction = (
+    kind: 'trigger' | 'button' | 'form',
+    name: string,
+    payload?: Parameters<RisuAction>[2]
+  ) => {
     if (!action || disabled || locked || !prepared.actions.has(risuActionKey(kind, name))) return;
     const execute = action;
     const current = generation;
@@ -156,8 +159,14 @@ export function mountRisuMessageSurface(
     setDisabled();
     onState({ busy: true, issue: '' });
     void Promise.resolve()
-      .then(() => {
-        if (alive && current === generation) return execute(kind, name);
+      .then(async () => {
+        if (alive && current === generation) return await execute(kind, name, payload);
+      })
+      .then((result) => {
+        if (!result || !result.unchanged || !alive || current !== generation) return;
+        locked = false;
+        setDisabled();
+        onState({ busy: false, issue: '' });
       })
       .catch(() => {
         if (!alive || current !== generation) return;
@@ -167,7 +176,51 @@ export function mountRisuMessageSurface(
       });
     // Success remains locked until the server's new source/variable revision arrives.
   };
+  const click = (event: Event) => {
+    const node = event.target instanceof Element ? event.target : null;
+    const target = node ? Element.prototype.closest.call(node, '[risu-trigger],[risu-btn]') : null;
+    if (!target || !content.contains(target)) return;
+    // An explicit trigger/button takes precedence over a surrounding form submission.
+    event.preventDefault();
+    event.stopPropagation();
+    const kind = Element.prototype.hasAttribute.call(target, 'risu-trigger') ? 'trigger' : 'button';
+    const name =
+      Element.prototype.getAttribute.call(
+        target,
+        kind === 'trigger' ? 'risu-trigger' : 'risu-btn'
+      ) ?? '';
+    const triggerId =
+      kind === 'trigger' ? Element.prototype.getAttribute.call(target, 'risu-id') : null;
+    runAction(kind, name, triggerId ? { triggerId } : undefined);
+  };
+  const submit = (event: Event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || !content.contains(form)) return;
+    // Even an unmarked form must never navigate or upload to an external endpoint.
+    event.preventDefault();
+    event.stopPropagation();
+    const name = Element.prototype.getAttribute.call(form, 'risu-form') ?? '';
+    if (!action || disabled || locked || !prepared.actions.has(risuActionKey('form', name))) return;
+    const submitter = event instanceof SubmitEvent ? event.submitter : null;
+    const data: Record<string, string | string[]> = Object.create(null);
+    for (const [key, value] of new FormData(form, submitter)) {
+      if (typeof value !== 'string') {
+        // An unselected file input contributes an empty File in FormData.
+        if (!value.name) continue;
+        onState({
+          busy: false,
+          issue: '봇 양식에서는 파일을 보낼 수 없어요. 파일 선택을 해제해 주세요.',
+        });
+        return;
+      }
+      if (!Object.hasOwn(data, key)) data[key] = value;
+      else if (Array.isArray(data[key])) (data[key] as string[]).push(value);
+      else data[key] = [data[key] as string, value];
+    }
+    runAction('form', name, { data });
+  };
   root.addEventListener('click', click, true);
+  root.addEventListener('submit', submit, true);
   return {
     root,
     content,
@@ -231,6 +284,7 @@ export function mountRisuMessageSurface(
       alive = false;
       generation++;
       root.removeEventListener('click', click, true);
+      root.removeEventListener('submit', submit, true);
       // The host owns the DOM lifetime; a content refresh replaces it atomically.
     },
   };

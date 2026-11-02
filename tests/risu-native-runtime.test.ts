@@ -3,12 +3,17 @@ import { join } from 'node:path';
 import { get_encoding } from 'tiktoken';
 import { NATIVE_LUA_LIMITS } from '../server/risu-native-lua-session.js';
 import type { RisuContentSource } from '../core/risu-native.js';
+import { defaultProfile } from '../core/product.js';
+import type { RunSnapshot } from '../core/types.js';
+import { nativeRisuContext } from '../server/risu-native-context.js';
+import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 import {
   executeRisuNative,
   disposeAllNativeRisuSessions,
   type NativeRisuExecutionInput,
 } from '../server/risu-native-runtime.js';
 import { readNativeRisuSample } from './fixtures/native-risu.js';
+import { nativeContent } from './fixtures/native-content.js';
 
 // Runtime permission fixtures exercise already-resolved scripts; canonical card/module grants are
 // tested separately before the host combines attachments.
@@ -327,6 +332,218 @@ describe('native Risu execution', () => {
         })
       ).request
     ).toEqual([{ role: 'system', content: 'Edited' }]);
+  });
+  it('keeps the last string through invalid editDisplay callbacks but leaves other edits unchanged', async () => {
+    const content = native([
+      lua(`listenEdit('editDisplay', function(id, value) return value .. ':first' end)
+      listenEdit('editDisplay', function() return nil end)
+      listenEdit('editDisplay', function(id, value) return value .. ':after-nil' end)
+      listenEdit('editDisplay', function() return false end)
+      listenEdit('editInput', function() return 42 end)`),
+    ]);
+    expect((await executeRisuNative({ ...input(content, 'display'), text: 'Text' })).text).toBe(
+      'Text:first:after-nil'
+    );
+    await expect(
+      executeRisuNative({ ...input(content, 'editInput'), text: 'Input' })
+    ).rejects.toThrow('RISU_NATIVE_EDIT_RESULT');
+  });
+  it('delivers form name and JSON metadata as three Lua callback arguments', async () => {
+    const content = native([
+      {
+        ...lua(`function onFormSubmit(id, name, meta)
+          local payload = json.decode(meta)
+          setChatVar(id, 'name', name)
+          setChatVar(id, 'meta', meta)
+          setChatVar(id, 'choices', payload.data.tags[1] .. ',' .. payload.data.tags[2])
+        end`),
+        conditions: [{ type: 'value', var: 'not-equal', operator: '=', value: 'different' }],
+      },
+    ]);
+    const meta = { data: { title: '안녕', tags: ['a', 'b'] } };
+    const result = await executeRisuNative({
+      ...input(content, 'form'),
+      argument: 'save',
+      meta,
+    });
+    expect(result.variables).toEqual({ name: 'save', meta: JSON.stringify(meta), choices: 'a,b' });
+  });
+  it('supports SHA-256 and model tokenizer awaitables without granting model calls', async () => {
+    const content = native([
+      lua(`function choose(id)
+        local read = async(function()
+          setChatVar(id, 'hash', hash(id, '안녕하세요 🌊'):await())
+          setChatVar(id, 'tokens', getTokens(id, '안녕하세요 세계 🌊'):await())
+          assert(getTokens('wrong-id', 'hello'):await() == nil)
+        end)
+        load('return function(f) f() end')()(read)
+      end
+      listenEdit('editDisplay', function(id, value)
+        assert(getTokens(id, 'hello'):await() == nil)
+        return value .. ':' .. hash(id, '안녕하세요 🌊'):await()
+      end)`),
+    ]);
+    const sha = '675c48e2c80d4743763ebb9d9467e1b0fbf9cd7600e55a4c2365c5a214bc002a';
+    const selected = await executeRisuNative({
+      ...input(content),
+      tokenizerProfile: 'openai-cl100k',
+    });
+    expect(selected.variables).toEqual({ hash: sha, tokens: '12' });
+    expect((await executeRisuNative(input(content))).variables.tokens).toBe('5');
+    const display = await executeRisuNative({ ...input(content, 'display'), text: 'View' });
+    expect(display.text).toBe(`View:${sha}`);
+    expect(display.variables).toEqual({});
+    expect(display.messages).toEqual(input(content).messages);
+  });
+  it('reads frozen persona, raw author note, selected tokenizer and converted card/module lore', async () => {
+    const script = lua(`function choose(id)
+      setChatVar(id, 'persona', getPersonaDescription(id))
+      setChatVar(id, 'rawNote', getAuthorsNote(id))
+      setChatVar(id, 'effectiveNote', cbs('{{authornote}}'))
+      setChatVar(id, 'triggerId', cbs('{{trigger_id}}'))
+      setChatVar(id, 'tokens', getTokens(id, '안녕하세요 세계 🌊'):await())
+      local books = getLoreBooks(id, 'entry')
+      setChatVar(id, 'books', json.encode(books))
+      books[1].content = 'changed locally'
+      setChatVar(id, 'copied', getLoreBooks(id, 'entry')[1].content)
+      setChatVar(id, 'caseCount', #getLoreBooks(id, 'Entry'))
+      setChatVar(id, 'nilCount', #getLoreBooks(id, nil))
+    end`);
+    const bot = nativeContent(
+      {
+        name: 'Test',
+        character_book: {
+          entries: [
+            {
+              name: 'entry',
+              keys: ['one', 'two'],
+              secondary_keys: ['other'],
+              content: 'Hi {{user}}',
+              insertion_order: 8,
+              constant: true,
+              selective: true,
+              extensions: { delay: 3 },
+              enabled: true,
+            },
+            {
+              name: 'Entry',
+              keys: [],
+              content: 'Other',
+              insertion_order: 0,
+              extensions: {},
+              enabled: true,
+            },
+          ],
+        },
+        extensions: { risuai: { triggerscript: [script] } },
+      },
+      { id: 'bot' }
+    );
+    const persona = nativeContent(
+      { name: 'Navigator', description: '{{char}} with {{user}}' },
+      { id: 'persona' },
+      'persona'
+    );
+    const module = {
+      ...nativeContent({ name: 'Module' }, { id: 'module' }, 'module'),
+      nativeRisu: {
+        version: 1 as const,
+        card: {},
+        assets: [],
+        sourceHash: 'b'.repeat(64),
+        module: {
+          trigger: [],
+          lorebook: [
+            {
+              comment: 'entry',
+              content: 'Module {{char}}',
+              key: 'module',
+              alwaysActive: false,
+              insertorder: 4,
+            },
+            { comment: null, content: 'nil comment' },
+            { content: 'missing comment' },
+          ],
+        },
+      },
+    };
+    const preset = importRisuPresetProgram({
+      name: 'preset',
+      promptTemplate: [{ type: 'authornote', defaultText: 'preset fallback' }],
+    });
+    const snapshot = {
+      chatId: 'read-api',
+      parentRevision: null,
+      settingsRevision: 1,
+      settings: {},
+      request: '',
+      history: [],
+      resources: [],
+      profile: {
+        ...defaultProfile('read-api'),
+        authorNote: '',
+        models: { main: { modelId: 'gpt-4-0613', connection: { protocol: 'openai' } } },
+        packages: [module, bot, persona],
+        packageAttachments: [
+          { id: 'module', revision: 1, role: 'module' },
+          { id: 'bot', revision: 1, role: 'bot' },
+          { id: 'persona', revision: 1, role: 'persona' },
+        ],
+        promptPresets: {
+          main: {
+            id: 'preset',
+            revision: 1,
+            title: 'Preset',
+            role: 'main',
+            program: preset.program,
+          },
+        },
+      },
+    } as unknown as RunSnapshot;
+    const context = nativeRisuContext(snapshot)!;
+    snapshot.profile!.models.main!.modelId = 'gpt-4o';
+    const result = await executeRisuNative({
+      ...context,
+      event: 'manual',
+      argument: 'choose',
+      triggerId: 'manual-42',
+    });
+    expect(result.variables).toMatchObject({
+      persona: 'Test with Navigator',
+      rawNote: '',
+      effectiveNote: 'preset fallback',
+      triggerId: 'manual-42',
+      tokens: '12',
+      copied: '@@activate_only_after 3\nHi Navigator',
+      caseCount: '1',
+      nilCount: '1',
+    });
+    expect(JSON.parse(result.variables.books)).toMatchObject([
+      {
+        comment: 'entry',
+        key: 'one, two',
+        secondkey: 'other',
+        insertorder: 8,
+        alwaysActive: true,
+        selective: true,
+        content: '@@activate_only_after 3\nHi Navigator',
+      },
+      {
+        comment: 'entry',
+        key: 'module',
+        insertorder: 4,
+        alwaysActive: false,
+        content: 'Module Test',
+      },
+    ]);
+    const ordinary = await executeRisuNative({
+      ...context,
+      event: 'manual',
+      argument: 'choose',
+      chatAuthorNote: 'chat note',
+    });
+    expect(ordinary.variables.rawNote).toBe('chat note');
+    expect(ordinary.variables.triggerId).toBe('null');
   });
   it('executes Harper-style V2 named triggers and real CBS without translating records', async () => {
     const content = native([
