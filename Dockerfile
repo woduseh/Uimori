@@ -18,10 +18,9 @@ FROM base AS runtime
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates bash coreutils findutils grep sed gawk jq ripgrep python3 \
   && rm -rf /var/lib/apt/lists/*
-ARG UIMORI_REVISION=""
-LABEL io.uimori.managed="true" org.opencontainers.image.revision=$UIMORI_REVISION
+# Keep the source revision out of all expensive cache keys.
+# Only a Codex version change should invalidate the Codex installation.
 ARG UIMORI_CODEX_VERSION=""
-LABEL io.uimori.codex-version=$UIMORI_CODEX_VERSION
 RUN if [ -n "$UIMORI_CODEX_VERSION" ]; then npm install --global "@openai/codex@$UIMORI_CODEX_VERSION" --no-audit --no-fund && npm cache clean --force; fi
 ENV NODE_ENV=production UIMORI_HOST=0.0.0.0 UIMORI_PORT=4310 UIMORI_DB=/data/uimori.sqlite
 COPY --from=production-dependencies /app/node_modules ./node_modules
@@ -39,3 +38,6 @@ RUN mkdir -p /data /backups /helper-workspaces /workspace \
 USER node
 EXPOSE 4310
 CMD ["node", "dist/server/index.js"]
+# Apply immutable release metadata last: a new SHA must not rerun installs.
+ARG UIMORI_REVISION=""
+LABEL io.uimori.managed="true" org.opencontainers.image.revision=$UIMORI_REVISION io.uimori.codex-version=$UIMORI_CODEX_VERSION

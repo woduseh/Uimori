@@ -58,7 +58,7 @@ CI 관문이 막히면 선택한 실행의 링크·ID·attempt·status·conclusi
 
 `--check-only --fresh`를 함께 사용하면 빈 DB 후보만 검증하고 운영 DB 복제본 검사는 생략해요. 이 조합은 새 운영 데이터 볼륨을 만들거나 전환하지 않아요. 일반 업데이트의 기존 DB 호환성을 확인하려면 `--fresh` 없이 `--check-only`를 실행해요.
 
-기본 경로는 Oracle에서 정확한 SHA를 한 번 빌드해요. 이후 모든 probe와 전환은 같은 immutable image ID를 사용해요. `UIMORI_CODEX_VERSION=latest`이면 배포 시 npm의 stable dist-tag를 조회하고 실제 버전 번호로 고정해 빌드해요. 요청값과 해석된 버전을 배포 기록에 함께 남기므로 다음 배포는 새 stable을 따라가면서 현재 이미지와 롤백 대상은 immutable하게 유지돼요. 외부 `--image`를 명시하면 이미 검증된 이미지의 exact Codex label을 사용하며 다시 최신판으로 바꾸지 않아요. 이미지에는 `io.uimori.managed=true`, `org.opencontainers.image.revision=<전체 SHA>`, `io.uimori.codex-version=<실제 버전>` label이 있어야 해요. 새 registry나 멀티아키텍처 배포 체계를 만들지는 않아요. 외부 이미지도 이 label과 현재 Codex 빌드 설정이 일치해야 하며 Oracle 호스트의 실제 부팅 검사를 통과해야 해요.
+기본 경로는 Oracle에서 정확한 SHA를 한 번 빌드해요. 이후 모든 probe와 전환은 같은 immutable image ID를 사용해요. `UIMORI_CODEX_VERSION=latest`이면 배포 시 npm의 stable dist-tag를 조회하고 실제 버전 번호로 고정해 빌드해요. 요청값과 해석된 버전을 배포 기록에 함께 남기므로 다음 배포는 새 stable을 따라가면서 현재 이미지와 롤백 대상은 immutable하게 유지돼요. 외부 `--image`를 명시하면 이미 검증된 이미지의 exact Codex label을 사용하며 다시 최신판으로 바꾸지 않아요. 이미지에는 `io.uimori.managed=true`, `org.opencontainers.image.revision=<전체 SHA>`, `io.uimori.codex-version=<실제 버전>` label이 있어야 해요. Dockerfile은 소스 커밋 SHA 라벨을 마지막에 적용해 서로 다른 SHA로 반복 빌드하더라도 Codex CLI 설치 및 런타임 의존성 레이어를 재사용해요. 단, Codex 버전이 변경되거나 Docker 캐시가 제거되면 해당 레이어를 다시 빌드하고, 앱 소스가 바뀌면 앱 빌드는 계속 실행해요. 별도 캐시 서버나 Buildx 플러그인은 필요하지 않아요. 새 registry나 멀티아키텍처 배포 체계를 만들지는 않아요. 외부 이미지도 이 label과 현재 Codex 빌드 설정이 일치해야 하며 Oracle 호스트의 실제 부팅 검사를 통과해야 해요.
 
 로컬 `dist`를 다시 만들어 원격 빌드와 비교하지 않아요. 컨트롤러는 소스 build fingerprint를 계산하고, 실제 이미지에서 해당 fingerprint와 이미지 내부 manifest·artifact hash를 검증해요. Node와 최종 dist hash는 서버 기록에 남아요.
 
