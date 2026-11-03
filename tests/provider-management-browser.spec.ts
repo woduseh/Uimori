@@ -881,7 +881,10 @@ test('PMUI08 Vertex JSON draft is validated and saved with the connection', asyn
   let uploads = 0;
   let uploadBody: unknown;
   page.on('request', (r) => {
-    if (r.method() === 'POST' && r.url().endsWith('/api/provider-management/vertex-credentials')) {
+    if (
+      r.method() === 'POST' &&
+      r.url().endsWith('/api/provider-management/vertex-credentials/validate')
+    ) {
       uploads++;
       uploadBody = r.postDataJSON();
     }
@@ -919,7 +922,7 @@ test('PMUI08 Vertex JSON draft is validated and saved with the connection', asyn
   };
   const uploaded = page.waitForResponse(
     (r) =>
-      r.url().endsWith('/api/provider-management/vertex-credentials') &&
+      r.url().endsWith('/api/provider-management/vertex-credentials/validate') &&
       r.request().method() === 'POST'
   );
   await file.setInputFiles({

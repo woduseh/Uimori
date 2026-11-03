@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import sharp from 'sharp';
+import Fastify from 'fastify';
 import { Store } from '../server/store.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
@@ -15,7 +16,11 @@ import { readUpload, storeUpload } from '../server/uploads.js';
 import type { HelperStatus, HelperTask } from '../core/helper.js';
 import type { RequestFileUpload } from '../core/request-files.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
-import type { ProviderProtocol } from '../core/product.js';
+import type { Content, ProviderProtocol } from '../core/product.js';
+import { addNativeRisuImage } from '../core/risu-native-assets.js';
+import { packageImageRoutes } from '../server/package-images.js';
+import { assertPackageImageReferences } from '../server/package-image-references.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 
 const owned: {
   store: Store;
@@ -299,75 +304,97 @@ test('a failed admission leaves no permanent file bytes or user message behind',
   expect(readUpload(f.store.path, upload.uploadId).toString()).toBe('staged input');
 });
 
-test('deleting a helper conversation releases its text images while preserving shared and unrelated images', () => {
+test('deleting helper conversations retains shared attachments and reclaims the last one', async () => {
   const f = fixture();
-  const [messageHash, editedHash, seedHash, sharedHash, unrelatedHash] = [
-    'a',
-    'b',
-    'c',
-    'd',
-    'e',
-  ].map((value) => value.repeat(64));
-  const image = (hash: string) => `![참고](/api/package-image-blobs/${hash})`;
-  for (const hash of [messageHash, editedHash, seedHash, sharedHash, unrelatedHash])
-    f.store.db
-      .prepare('INSERT INTO image_blobs VALUES(?,?,?)')
-      .run(hash, 'image/webp', Buffer.from('synthetic image'));
-  const first = f.runtime.enqueue(
+  const bytes = await sharp({
+    create: { width: 3, height: 2, channels: 3, background: '#457a96' },
+  })
+    .png()
+    .toBuffer();
+  const image = await stage(f.store, bytes, 'attached.png');
+  const task = await f.runtime.enqueueWithAttachments(
     f.conversation.id,
-    'text-images',
-    `${image(messageHash)} ${image(sharedHash)}`,
+    'attached-image',
+    '첨부 이미지를 확인해 주세요.',
     undefined,
     undefined,
     undefined,
     undefined,
+    { images: [image] },
     false
   );
-  settle(f, first);
-  const original = f.workspace
-    .messages(f.conversation.id)
-    .find((message) => message.role === 'user')!;
-  f.workspace.editMessage(
+  const hash = task.snapshot.images![0].hash;
+  settle(f, task);
+  const copy = f.workspace.copy(
     f.conversation.id,
-    original.id,
-    f.workspace.conversation(f.conversation.id).revision,
-    image(editedHash)
+    'attachment-copy',
+    f.workspace.deletionImpact(f.conversation.id).request
   );
-  f.store.db
-    .prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)')
-    .run(
-      'image-seed',
-      f.conversation.id,
-      0,
-      'assistant',
-      image(seedHash),
-      new Date().toISOString()
-    );
-  const other = f.workspace.create({ kind: 'library', workId: 'other' }, 'other');
-  f.store.db
-    .prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)')
-    .run(
-      'shared-image-seed',
-      other.id,
-      0,
-      'assistant',
-      image(sharedHash),
-      new Date().toISOString()
-    );
-
   f.runtime.deleteConversation(
     f.conversation.id,
     f.workspace.deletionImpact(f.conversation.id).request
   );
-  const exists = (hash: string) =>
-    !!f.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash);
-  expect([messageHash, editedHash, seedHash].map(exists)).toEqual([false, false, false]);
-  expect(exists(sharedHash)).toBe(true);
-  expect(exists(unrelatedHash)).toBe(true);
+  expect(readImage(f.store.db, hash).bytes.length).toBeGreaterThan(0);
+  f.runtime.deleteConversation(copy.id, f.workspace.deletionImpact(copy.id).request);
+  expect(() => readImage(f.store.db, hash)).toThrow('이미지를 찾을 수 없어요.');
+});
 
-  f.runtime.deleteConversation(other.id, f.workspace.deletionImpact(other.id).request);
-  expect(exists(sharedHash)).toBe(false);
-  expect(exists(unrelatedHash)).toBe(true);
+test('deleting helper text keeps the same uploaded image available to an unsaved resource draft', async () => {
+  const f = fixture();
+  const app = Fastify();
+  packageImageRoutes(app, f.store, { publish: () => {}, pump: () => {} });
+  try {
+    const bytes = await sharp({
+      create: { width: 3, height: 2, channels: 3, background: '#274f8a' },
+    })
+      .png()
+      .toBuffer();
+    const upload = async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/package-image-blobs',
+        payload: { mime: 'image/png', base64: bytes.toString('base64') },
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      return response.json() as { hash: string; mime: 'image/webp' };
+    };
+    const original = await upload();
+    const task = f.runtime.enqueue(
+      f.conversation.id,
+      'text-image',
+      `![참고](/api/package-image-blobs/${original.hash})`,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false
+    );
+    settle(f, task);
+    const uploaded = await upload();
+    expect(uploaded.hash).toBe(original.hash);
+    const input = fixtureBotInput('Unsaved image draft');
+    const draft = {
+      ...input,
+      package: addNativeRisuImage(input.package, {
+        id: 'draft-image',
+        title: 'Draft image',
+        description: '',
+        blobHash: uploaded.hash,
+        mime: uploaded.mime,
+        allowedUse: 'both',
+      }),
+    };
+    assertPackageImageReferences(f.store.db, draft.package.images!);
+    f.runtime.deleteConversation(
+      f.conversation.id,
+      f.workspace.deletionImpact(f.conversation.id).request
+    );
+    assertPackageImageReferences(f.store.db, draft.package.images!);
+    const saved = f.store.product.content(draft) as Content;
+    expect(saved.package.images).toMatchObject([{ blobHash: uploaded.hash }]);
+  } finally {
+    await app.close();
+  }
 });
 
 test('compacted helper history binds attachment hashes even when its message text stays unchanged', async () => {

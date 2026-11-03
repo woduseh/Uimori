@@ -424,18 +424,10 @@ export class HelperWorkspace {
       const tasks = this.store.db
         .prepare('SELECT id FROM helper_tasks WHERE conversation_id=?')
         .all(id);
-      // These records are image-retention roots until the conversation is removed.
-      // Collect candidates before the cascade, then let the shared reachability check
-      // preserve references still owned by other conversations or saved resources.
-      const imageCandidates = this.store.db
-        .prepare(`SELECT images AS value FROM helper_message_attachments WHERE conversation_id=?
-          UNION ALL SELECT text FROM helper_messages WHERE conversation_id=?
-          UNION ALL SELECT text FROM helper_seed_messages WHERE conversation_id=?
-          UNION ALL SELECT text FROM helper_message_changes WHERE conversation_id=?
-          UNION ALL SELECT text FROM helper_artifacts WHERE conversation_id=?
-          UNION ALL SELECT snapshot FROM helper_tasks WHERE conversation_id=?`)
-        .all(id, id, id, id, id, id)
-        .flatMap((row) => imageDataHashes(row.value));
+      const attachmentImages = this.store.db
+        .prepare('SELECT images FROM helper_message_attachments WHERE conversation_id=?')
+        .all(id)
+        .flatMap((row) => imageDataHashes(row.images));
       for (const scopeKey of [`helper:${id}`, ...tasks.map((task) => `artifact:${task.id}`)])
         for (const table of ['context_heads', 'context_checkpoints'])
           this.store.db.prepare(`DELETE FROM ${table} WHERE scope_key=?`).run(scopeKey);
@@ -447,7 +439,7 @@ export class HelperWorkspace {
         .map((row) => String(row.attempt_id));
       detachAttemptUsage(this.store.db, attemptIds);
       this.store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(id);
-      pruneUnusedData(this.store.db, imageCandidates);
+      pruneUnusedData(this.store.db, attachmentImages);
       pruneUnusedHelperFiles(this.store.db);
       return { deleted: true as const };
     });

@@ -45,7 +45,7 @@ test('saved service account lives in SQLite and survives reopening without netwo
   const network = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('No network'));
   const upload = await app.inject({
     method: 'POST',
-    url: '/api/provider-management/vertex-credentials',
+    url: '/api/provider-management/vertex-credentials/validate',
     payload: { serviceAccount: account },
   });
   expect(upload.statusCode, upload.body).toBe(200);
@@ -146,9 +146,23 @@ test('validating a draft and failing to save never persists its service account'
     testMode: true,
   });
   owned.push({ path, app });
-  const validate = await app.inject({
+  const vertexRows = () =>
+    app.store.db
+      .prepare("SELECT id FROM credentials WHERE id LIKE 'UIMORI_PROVIDER_VERTEX_FILE_%'")
+      .all();
+  const legacy = await app.inject({
     method: 'POST',
     url: '/api/provider-management/vertex-credentials',
+    payload: { serviceAccount: account },
+  });
+  expect(legacy.statusCode, legacy.body).toBe(410);
+  expect(legacy.json().error).toContain('새로고침');
+  expect(legacy.body).not.toContain('PRIVATE KEY');
+  expect(vertexRows()).toEqual([]);
+  expect(app.store.product.all('connection')).toEqual([]);
+  const validate = await app.inject({
+    method: 'POST',
+    url: '/api/provider-management/vertex-credentials/validate',
     payload: { serviceAccount: account },
   });
   expect(validate.statusCode, validate.body).toBe(200);
@@ -156,10 +170,6 @@ test('validating a draft and failing to save never persists its service account'
     projectId: account.project_id,
     clientEmail: account.client_email,
   });
-  const vertexRows = () =>
-    app.store.db
-      .prepare("SELECT id FROM credentials WHERE id LIKE 'UIMORI_PROVIDER_VERTEX_FILE_%'")
-      .all();
   expect(vertexRows()).toEqual([]);
   const failed = await app.inject({
     method: 'POST',

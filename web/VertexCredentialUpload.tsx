@@ -75,7 +75,7 @@ export function VertexCredentialUpload({
               )
                 throw new Error(uiMessage('providers.m402'));
               const value = await api<{ projectId: string; clientEmail: string }>(
-                '/provider-management/vertex-credentials',
+                '/provider-management/vertex-credentials/validate',
                 { serviceAccount }
               );
               if (current !== epoch.current) return;
