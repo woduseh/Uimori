@@ -2317,10 +2317,10 @@ export const messages = {
     zh: '设定的位置或插入指令 `@@{decorator}` 将保留在源码中，但不应用于当前上下文排布。',
   },
   'transfer.finding.decoratorActivation': {
-    ko: '로어의 `@@{decorator}` 규칙은 원본에 보존해요. 선택적 로어는 JEV 관련성 판단과 작문 모델의 조회로 제공해요.',
+    ko: '로어의 `@@{decorator}` 규칙은 원본에 보존해요. 선택적 로어는 JEV 관련성 판정과 본문 모델의 조회로 제공해요.',
     en: 'The lore rule `@@{decorator}` is preserved in the source. Optional lore is provided through JEV relevance checks and writing-model lookups.',
-    ja: 'ロアの規則 `@@{decorator}` はソースに保持します。任意のロアはJEVの関連性判断と作家モデルの参照で提供します。',
-    zh: '设定规则 `@@{decorator}` 将保留在源码中。可选设定通过 JEV 相关性判断和写作模型查询提供。',
+    ja: 'ロアの規則 `@@{decorator}` はソースに保持します。任意のロアはJEVの関連性判定と本文モデルの参照で提供します。',
+    zh: '设定规则 `@@{decorator}` 将保留在源码中。可选设定通过 JEV 相关性判定和正文模型查询提供。',
   },
   'transfer.finding.decoratorUnknown': {
     ko: 'Risu가 인식하지 못하는 `@@` 지시문은 가져온 로어 본문에서 제외돼요. Risu 원문에는 남아요: {names}{more, plural, =0 {} other { 외 #개}}',

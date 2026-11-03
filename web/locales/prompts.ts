@@ -444,10 +444,10 @@ export const messages = {
     zh: '还没有提示词',
   },
   'prompts.uiCreateInstructionsForWritingAndTranslation': {
-    ko: '작문과 번역에 사용할 지침을 작성해요.',
+    ko: '창작과 번역에 사용할 지침을 작성해요.',
     en: 'Define instructions for writing and translation.',
-    ja: '執筆や翻訳に使う指示を作成します。',
-    zh: '编写用于写作与翻译的指令。',
+    ja: '創作や翻訳に使う指示を作成します。',
+    zh: '编写用于创作与翻译的指令。',
   },
   'prompts.uiSearchAll': {
     ko: '전체에서 찾기',

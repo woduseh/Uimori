@@ -847,7 +847,7 @@ export const messages = {
     zh: '主要指令',
   },
   'native.text_2d2a2c8204': {
-    ko: '글로벌노트',
+    ko: '글로벌 노트',
     en: 'Global note',
     ja: 'グローバルノート',
     zh: '全局笔记',
@@ -2317,10 +2317,10 @@ export const messages = {
     zh: '由Uimori选择和插入图片（{count, number}个区间）',
   },
   'native.handoffDescription': {
-    ko: '채팅의 자동 이미지 배치가 켜졌을 때만 선택한 지시를 작문 입력에서 빼고 이미지 선택 모델에 전달해요. 원문은 유지해요. 인식한 태그: {tags}',
+    ko: '채팅의 자동 이미지 배치가 켜졌을 때만 선택한 지시를 창작 입력에서 빼고 이미지 선택 모델에 전달해요. 원문은 유지해요. 인식한 태그: {tags}',
     en: 'Only when automatic image placement is enabled, selected instructions are moved from writing input to the image selection model. Source is preserved. Recognized tags: {tags}',
-    ja: '自動画像配置が有効な場合だけ、選択した指示を作文入力から除き画像選択モデルに渡します。ソースは保持されます。認識したタグ：{tags}',
-    zh: '仅在启用自动图片排布时，将所选指令从写作输入中移出并交给图片选择模型。源码保持不变。识别的标签：{tags}',
+    ja: '自動画像配置が有効な場合だけ、選択した指示を創作入力から除き画像選択モデルに渡します。ソースは保持されます。認識したタグ：{tags}',
+    zh: '仅在启用自动图片排布时，将所选指令从创作输入中移出并交给图片选择模型。源码保持不变。识别的标签：{tags}',
   },
   'native.previewIssues': {
     ko: '미리보기에서 확인이 필요한 항목 ({count, number})',

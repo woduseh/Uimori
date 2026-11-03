@@ -40,7 +40,7 @@ import { editableResource, type PromptEditModel } from '../core/resource-editing
 import { ResourceEditorSession } from './resource-editor-session.js';
 import './prompt-editor.css';
 
-const labels: Record<PromptRole, string> = { main: '작문', translation: '번역' };
+const labels: Record<PromptRole, string> = { main: '창작', translation: '번역' };
 const defaults: Record<PromptRole, string> = {
   main: DEFAULT_MAIN_PROMPT,
   translation: DEFAULT_TRANSLATION_PROMPT,

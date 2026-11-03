@@ -321,7 +321,7 @@ for (const width of WIDTHS) {
     await expect(helper).toBeVisible();
     await expect(helper.locator('.helper-outline-selection')).toContainText('1화 · 열람권의 대가');
     const composer = helper.locator('.helper-composer textarea').last();
-    await expect(composer).toHaveValue(/선택한 구성/);
+    await expect(composer).toHaveValue(/선택한 플롯/);
     await composer.fill('내가 미리 작성한 요청을 보존해줘.');
     expect(messages).toHaveLength(0);
     if (width === 1440) await expect(panel).toBeVisible();

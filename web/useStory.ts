@@ -1534,7 +1534,7 @@ export function useStory() {
             currentPrompt.program
           )
         )
-          throw new Error('현재 프롬프트와 옵션 정의가 일치하는 조합을 선택해 주세요.');
+          throw new Error('현재 프롬프트와 옵션 정의가 일치하는 옵션 프리셋을 선택해 주세요.');
         {
           const state = await api<ChatOptionState>(`/chats/${chatId}/options`);
           if (
@@ -1545,7 +1545,7 @@ export function useStory() {
               state.program
             )
           )
-            throw new Error('채팅의 작문 프롬프트가 바뀌었어요. 옵션 조합을 다시 확인해 주세요.');
+            throw new Error('채팅의 창작 프롬프트가 바뀌었어요. 옵션 프리셋을 다시 확인해 주세요.');
           await api(`/chats/${chatId}/options/fixed`, {
             expectedRevision: state.revision,
             operationId: crypto.randomUUID(),

@@ -127,7 +127,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await page.getByLabel('평가 컨텍스트 제공').selectOption('preloaded');
   await page.getByLabel('첫 평가 단계의 추론 설정').selectOption('economized');
   await page.getByRole('button', { name: '기본', exact: true }).click();
-  await page.getByLabel('사고 강도', { exact: true }).selectOption('high');
+  await page.getByLabel('추론 강도', { exact: true }).selectOption('high');
   await page.getByRole('button', { name: '고급', exact: true }).click();
   await page.getByLabel('평가 컨텍스트 제공').scrollIntoViewIfNeeded();
   if (visualReview)

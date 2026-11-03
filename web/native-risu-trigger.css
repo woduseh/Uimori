@@ -6,12 +6,12 @@
 }
 .native-trigger-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
 }
 .native-trigger-heading h3 {
-  margin: 0 0 10px;
+  margin: 0;
 }
 .native-trigger-heading > button {
   flex-shrink: 0;

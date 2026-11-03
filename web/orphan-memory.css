@@ -13,8 +13,8 @@
   box-sizing: border-box;
   align-content: center;
 }
-.orphan-memory .context-heading p {
-  margin: 0;
+.orphan-memory .context-heading {
+  justify-content: flex-end;
 }
 .orphan-memory-text {
   white-space: pre-wrap;

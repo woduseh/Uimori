@@ -387,7 +387,7 @@ for (const externalMove of ['none', 'folder', 'unclassified'] as const) {
     });
     const editor = page.getByTestId('prompt-editor');
     await editor.getByLabel('프롬프트 관리', { exact: true }).click();
-    await editor.getByRole('button', { name: '복사본으로 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '사본으로 저장', exact: true }).click();
     const retry = editor.getByRole('button', { name: '이전 요청 확인', exact: true });
     await expect(retry).toBeEnabled();
     let finalFolder: string | null = folder.id;

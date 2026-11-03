@@ -1188,10 +1188,10 @@ export const messages = {
     zh: '无法确认聊天分支结果。再次点击将检查同一请求。',
   },
   'main.story16': {
-    ko: '현재 프롬프트와 옵션 정의가 일치하는 조합을 선택해 주세요.',
-    en: 'Select a combination matching the current prompt and option definitions.',
-    ja: '現在のプロンプトとオプション定義に合う組み合わせを選択してください。',
-    zh: '请选择与当前提示词和选项定义匹配的组合。',
+    ko: '현재 프롬프트와 옵션 정의가 일치하는 옵션 프리셋을 선택해 주세요.',
+    en: 'Select an option preset matching the current prompt and option definitions.',
+    ja: '現在のプロンプトとオプション定義に合うオプションプリセットを選択してください。',
+    zh: '请选择与当前提示词和选项定义匹配的选项预设。',
   },
   'main.story17': {
     ko: '채팅의 창작 프롬프트가 바뀌었어요. 옵션 프리셋을 다시 확인해 주세요.',

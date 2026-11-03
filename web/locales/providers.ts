@@ -2755,7 +2755,7 @@ export const messages = {
     zh: '删除停止字符串 {value0}',
   },
   'providers.m558': {
-    ko: '이전 설정의 사고 강도: {value0}',
+    ko: '이전 설정의 추론 강도: {value0}',
     en: 'Previous reasoning effort: {value0}',
     ja: '以前の推論強度、{value0}',
     zh: '旧设置的推理强度，{value0}',

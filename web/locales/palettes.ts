@@ -312,7 +312,7 @@ export const messages = {
     zh: '请求背景',
   },
   'palettes.color.shade': {
-    ko: '배경 덮개',
+    ko: '배경 오버레이',
     en: 'Overlay',
     ja: 'オーバーレイ',
     zh: '遮罩',

@@ -7,11 +7,8 @@
 .chat-variable-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-}
-.chat-variable-heading small {
-  color: var(--muted);
 }
 .chat-variable-toolbar {
   display: flex;
@@ -106,7 +103,4 @@
 
 .chat-variable-heading {
   flex-wrap: wrap;
-}
-.chat-variable-heading > small {
-  margin-left: auto;
 }
