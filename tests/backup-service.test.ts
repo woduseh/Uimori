@@ -157,3 +157,41 @@ test('HTTP creation and download require the existing session; maintenance block
     (await publicApp.inject({ method: 'POST', url: '/api/backups', payload: {} })).statusCode
   ).toBe(503);
 });
+
+test('maintenance counts an admitted backup until its asynchronous work settles', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-backup-drain-'));
+  directories.push(directory);
+  const app = await createApp({
+    dbPath: join(directory, 'app.sqlite'),
+    backupDirectory: join(directory, 'backups'),
+    buildId: 'fixture',
+    testMode: true,
+  });
+  apps.push(app);
+  let finish!: (value: never) => void;
+  const held = new Promise<never>((_resolve, reject) => {
+    finish = reject;
+  });
+  vi.mocked(fs.statfs).mockClear();
+  vi.mocked(fs.statfs).mockReturnValueOnce(held);
+  expect((await app.inject({ method: 'POST', url: '/api/backups', payload: {} })).statusCode).toBe(
+    202
+  );
+  const closed = await app.inject({
+    method: 'POST',
+    url: '/api/maintenance',
+    payload: { status: 'closed' },
+  });
+  expect(closed.json().activeWork).toBe(1);
+  const deadline = Date.now() + 5000;
+  while (!vi.mocked(fs.statfs).mock.calls.length) {
+    if (Date.now() > deadline) throw new Error('Backup did not enter the snapshot');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  finish(Object.assign(new Error('synthetic no space'), { code: 'ENOSPC' }) as never);
+  while ((await app.inject('/api/maintenance')).json().activeWork) {
+    if (Date.now() > deadline) throw new Error('Backup did not settle');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  expect((await app.inject('/api/backups')).json().status).toBe('failed');
+});

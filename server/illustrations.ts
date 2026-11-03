@@ -21,6 +21,7 @@ import { effectiveIllustrationPreset } from './illustration-presets.js';
 import { illustrationPresetStamp } from '../core/illustration-presets.js';
 import { storeImage } from './image-storage.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { pruneUnusedData } from './unused-data.js';
 import type { DatabaseSync } from 'node:sqlite';
 import type { FastifyInstance } from 'fastify';
 import { HttpError, fields, number, record, text } from './request-validation.js';
@@ -1208,6 +1209,12 @@ export function removeIllustration(
       : [{ id, chat_id: job.chatId, diagnostic: json(job.diagnostic), status: job.status }];
     if (rows.some((row) => ACTIVE.includes(row.status)))
       throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
+    const imageHashes = rows.flatMap((row) =>
+      store.db
+        .prepare('SELECT hash FROM illustration_images WHERE job_id=?')
+        .all(row.id)
+        .map((image) => String(image.hash))
+    );
     deleteIllustrationAttempts(store, rows);
     for (const row of rows) {
       store.db.prepare('DELETE FROM illustration_images WHERE job_id=?').run(row.id);
@@ -1215,6 +1222,7 @@ export function removeIllustration(
     }
     forgetIllustrationJob(store, job.sourceRevision, job.sourceHash, job.input, id);
     scheduleIllustrationPlacement(store, job.sourceRevision);
+    pruneUnusedData(store.db, imageHashes);
     store.event(job.chatId, 'illustration-layout.updated', job.sourceRevision);
     return { chatId: job.chatId, sourceRevision: job.sourceRevision };
   });

@@ -27,7 +27,11 @@ import { forgetHelperSession, type HelperSession } from './useHelperSessions.js'
 import type { HelperTaskView } from './useHelperConversation.js';
 import { deleteHelperSessionRecovery } from './helper-recovery.js';
 import { groupRecentDates, recentDateGroupLabel } from './recent-date-groups.js';
-import { pendingHelperRequest, clearPendingHelperRequest } from './helper-pending-request.js';
+import {
+  pendingHelperRequest,
+  clearPendingHelperRequest,
+  type PendingHelperRequest,
+} from './helper-pending-request.js';
 import './deletion.css';
 import './helper-session-navigation.css';
 
@@ -47,7 +51,8 @@ type Props = {
   onAcknowledge?: (ids: string[]) => void;
   onUpdate: (session: HelperConversation) => void;
   onDelete: (id: string) => void;
-  onClone?: (session: HelperConversation) => void;
+  onCloneStart: () => number;
+  onClone: (session: HelperConversation, epoch: number) => void;
   navigationHost?: HTMLElement | null;
   navigationActions?: MutableRefObject<HelperNavigationActions | null>;
   searchRequest?: number;
@@ -181,6 +186,7 @@ export function HelperSessionBar(props: Props) {
   };
   const copySession = async (session: HelperSession) => {
     if (copying) return;
+    const selectionEpoch = props.onCloneStart();
     setCopying(session.id);
     setCopyError('');
     const storageKey = `uimori:helper-copy:${session.id}`;
@@ -189,7 +195,7 @@ export function HelperSessionBar(props: Props) {
       expectedEventSequence: session.latestEventSeq ?? 0,
     };
     type CopyRequest = typeof input & { requestKey: string };
-    let pending: { request: CopyRequest; storage: Storage } | undefined;
+    let pending: PendingHelperRequest<CopyRequest> | undefined;
     try {
       pending = pendingHelperRequest(
         storageKey,
@@ -210,9 +216,15 @@ export function HelperSessionBar(props: Props) {
         pending.request
       );
       clearPendingHelperRequest(storageKey, pending);
-      props.onClone?.(value);
+      props.onClone(value, selectionEpoch);
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status)) {
+      if (
+        pending &&
+        !pending.recovered &&
+        cause instanceof ApiError &&
+        cause.status < 500 &&
+        ![408, 429].includes(cause.status)
+      ) {
         clearPendingHelperRequest(storageKey, pending);
       }
       setCopyError(
@@ -518,6 +530,7 @@ export function HelperSessionBar(props: Props) {
                   setFocusProject(created.id);
                 } catch (cause) {
                   if (
+                    !pending.recovered &&
                     cause instanceof ApiError &&
                     cause.status < 500 &&
                     ![408, 429].includes(cause.status)

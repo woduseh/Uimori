@@ -10,6 +10,7 @@ import { importChatTranscript } from '../server/chat-transcript.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { readHelperChatContext } from '../server/helper-context.js';
 import { fixtureBotInput } from './fixtures/chat.js';
+import { requestReceipt } from '../server/request-receipt.js';
 
 const owned: { app: App; path: string }[] = [];
 afterEach(async () => {
@@ -113,7 +114,8 @@ test.each(['off', 'failed'] as const)(
     };
     const complete = (
       run: ReturnType<typeof reserve>,
-      result: { brief?: StoryGuideBrief; error?: string }
+      result: { brief?: StoryGuideBrief; error?: string },
+      writerInput?: 'removed'
     ) => {
       // Seed the provider outcome at the existing execution seam, then use the real
       // completion path to keep the receipt while releasing the full input snapshot.
@@ -124,6 +126,41 @@ test.each(['off', 'failed'] as const)(
         }),
         run.id
       );
+      // This legacy-shaped writer attempt has no inclusion receipt. The completed
+      // run still provides the historical fallback for pre-receipt records.
+      const wire = {
+        connectionId: 'synthetic',
+        protocol: 'fixture-sse-v1' as const,
+        role: 'main' as const,
+        modelId: 'synthetic-writer',
+        method: 'POST' as const,
+        url: 'http://127.0.0.1:9',
+        headers: {},
+        body: { text: 'The writer request has no guide text.' },
+        bodySha256: 'a'.repeat(64),
+        stablePrefixSha256: 'b'.repeat(64),
+      };
+      const attempt = f.store.product.startAttempt(f.chat.id, run.id, null, {
+        ...wire,
+        ...(writerInput
+          ? { requestReceipt: requestReceipt(f.store.run(run.id).snapshot, wire) }
+          : {}),
+      });
+      f.store.product.finishAttempt(attempt, {
+        status: 'completed',
+        text: 'A completed synthetic scene.',
+        toolCalls: [],
+        refusal: null,
+        error: null,
+        usage: {
+          inputTokens: null,
+          outputTokens: null,
+          costUsd: null,
+          raw: null,
+          priceRevision: null,
+        },
+        opaqueState: null,
+      });
       f.store.completeRun(run.id, 'A completed synthetic scene.', {
         modelCalls: 0,
         inputTokens: null,
@@ -176,6 +213,14 @@ test.each(['off', 'failed'] as const)(
         error: 'STORY_GUIDE_PROVIDER_FAILED',
       });
     else expect(detail.latestRun).toBeUndefined();
+    if (nextGuide === 'failed') {
+      const fourth = reserve();
+      const removed = makeBrief(fourth, 'A guide removed from the final writer request.');
+      complete(fourth, { brief: removed }, 'removed');
+      const afterRemoval = (await f.app.inject(`/api/chats/${f.chat.id}/story-guide`)).json();
+      expect(afterRemoval.brief).toEqual(lastBrief);
+      expect(afterRemoval.latestRun).toEqual({ status: 'completed', used: false });
+    }
   }
 );
 

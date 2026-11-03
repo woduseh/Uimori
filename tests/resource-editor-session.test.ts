@@ -427,6 +427,7 @@ test('an uncertain new-resource save survives reopening and replays the exact fr
   first.setModel(submitted);
   vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
   await expect(first.save()).rejects.toThrow('Connection lost');
+  expect(first.snapshot().creationPending).toBe(true);
   const pending = disk.get(
     'resource-creation:new:content:bot:' + sessionStorage.getItem('uimori:editor-tab-scope')
   )?.model as { key: string; model: ContentEditModel } | undefined;
@@ -438,6 +439,7 @@ test('an uncertain new-resource save survives reopening and replays the exact fr
 
   const reopened = editor(null);
   await reopened.open();
+  expect(reopened.snapshot().creationPending).toBe(true);
   expect(reopened.snapshot().local.model).toMatchObject(later);
   vi.mocked(api).mockResolvedValueOnce({
     saved: saved(submitted, 1, 'created-once'),
@@ -456,6 +458,7 @@ test('an uncertain new-resource save survives reopening and replays the exact fr
     document: { targetId: 'created-once', baseModel: submitted },
     local: { model: later },
     dirty: true,
+    creationPending: false,
   });
   expect(disk.get('content:created-once')).toMatchObject({ model: later });
   expect(disk.get('new:content:bot')).toBeUndefined();
@@ -542,4 +545,95 @@ test('a temporary outbox write failure never sends a new resource request', asyn
   });
   await session.save();
   expect(session.snapshot().document.targetId).toBe('created');
+});
+
+test('confirming a created resource preserves a later draft and detects another writer', async () => {
+  const session = editor(null);
+  await session.open();
+  const submitted = { ...model, title: 'Sent draft' };
+  const later = { ...submitted, text: 'Later local text' };
+  const external = { ...submitted, description: 'Another window edited this' };
+  session.setModel(submitted);
+  vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
+  await expect(session.save()).rejects.toThrow('Connection lost');
+  session.setModel(later);
+  vi.mocked(api).mockResolvedValueOnce({ saved: saved(external, 2, 'created'), created: false });
+  const result = await session.save();
+
+  expect(session.snapshot()).toMatchObject({
+    document: { targetId: 'created', baseRevision: 1 },
+    local: { model: later },
+    dirty: true,
+    conflict: true,
+  });
+  expect(result).toMatchObject({ creationIntent: true });
+  expect(disk.get('content:created')).toMatchObject({ revision: 1, model: later });
+  await expect(session.save()).rejects.toThrow('저장된 자료가 바뀌었어요');
+
+  vi.mocked(api).mockResolvedValueOnce(saved(external, 2, 'created'));
+  const reopened = editor('created');
+  await reopened.open();
+  expect(reopened.snapshot()).toMatchObject({
+    local: { model: later },
+    dirty: true,
+    conflict: true,
+  });
+});
+
+test.each([400, 401, 409, 429])(
+  'a %s on a replay cannot discard an earlier uncertain creation identity',
+  async (status) => {
+    const session = editor(null);
+    await session.open();
+    const submitted = { ...model, title: 'Maybe created' };
+    session.setModel(submitted);
+    vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
+    await expect(session.save()).rejects.toThrow('Connection lost');
+    const key = `resource-creation:new:content:bot:${sessionStorage.getItem('uimori:editor-tab-scope')}`;
+    const pending = disk.get(key);
+    expect(pending).toBeDefined();
+
+    vi.mocked(api).mockRejectedValueOnce(new ApiError('Replay rejected', status));
+    await expect(session.save()).rejects.toThrow('Replay rejected');
+    expect(disk.get(key)).toEqual(pending);
+    vi.mocked(api).mockResolvedValueOnce({ saved: saved(submitted, 1, 'created'), created: false });
+    await session.save();
+    expect(api).toHaveBeenLastCalledWith(
+      '/resources/save',
+      expect.objectContaining({ idempotencyKey: pending?.token, model: submitted })
+    );
+  }
+);
+
+test('a confirmed removed creation releases its identity and retains the current input', async () => {
+  const session = editor(null);
+  await session.open();
+  const submitted = { ...model, title: 'Maybe created' };
+  const later = { ...submitted, text: 'Keep this draft' };
+  session.setModel(submitted);
+  vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
+  await expect(session.save()).rejects.toThrow('Connection lost');
+  const key = `resource-creation:new:content:bot:${sessionStorage.getItem('uimori:editor-tab-scope')}`;
+  const old = disk.get(key);
+  session.setModel(later);
+
+  vi.mocked(api).mockRejectedValueOnce(
+    new ApiError('The created copy was removed', 410, 'RESOURCE_CREATION_REMOVED')
+  );
+  await expect(session.save()).rejects.toThrow('removed');
+  expect(disk.has(key)).toBe(false);
+  expect(session.snapshot()).toMatchObject({
+    creationPending: false,
+    dirty: true,
+    local: { model: later },
+  });
+  vi.mocked(api).mockResolvedValueOnce({ saved: saved(later, 1, 'new'), created: true });
+  await session.save();
+  expect(api).toHaveBeenLastCalledWith(
+    '/resources/save',
+    expect.objectContaining({
+      idempotencyKey: expect.not.stringMatching(old!.token!),
+      model: later,
+    })
+  );
 });

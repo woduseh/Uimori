@@ -3,10 +3,11 @@ import { PROVIDER_PROTOCOLS, validateProviderEndpoint, type Connection } from '.
 import { isVertexFileReference, validCredentialRef } from '../core/credential-reference.js';
 import { fields, record, choice, number, text, boolean, HttpError } from './request-validation.js';
 import { apiKey } from './credentials.js';
+import { prepareVertexAccount, validateVertexCredential } from './vertex-credentials.js';
 import type { ProductStore } from './product-store.js';
 
 /** Parse a provider edit; secret values stay separate from the public connection record. */
-export function prepareConnection(product: ProductStore, value: unknown, id?: string) {
+function prepareConnection(product: ProductStore, value: unknown, id?: string) {
   const body = record(value);
   fields(body, [
     'title',
@@ -14,6 +15,7 @@ export function prepareConnection(product: ProductStore, value: unknown, id?: st
     'endpoint',
     'credentialRef',
     'apiKey',
+    'serviceAccount',
     'enabled',
     'displayOrder',
     'expectedRevision',
@@ -51,10 +53,16 @@ export function prepareConnection(product: ProductStore, value: unknown, id?: st
     }
     return reference;
   };
-  const credentialRef =
-    protocol === 'codex-app-server-v1'
-      ? undefined
-      : keyReference('apiKey', body.credentialRef ?? prior?.credentialRef);
+  let credentialRef: string | undefined;
+  if (Object.hasOwn(body, 'serviceAccount')) {
+    if (body.apiKey !== undefined && body.apiKey !== '')
+      throw new HttpError(400, 'Choose one credential type');
+    const write = prepareVertexAccount(body.serviceAccount);
+    writes.push(write);
+    credentialRef = write.reference;
+  } else if (protocol !== 'codex-app-server-v1') {
+    credentialRef = keyReference('apiKey', body.credentialRef ?? prior?.credentialRef);
+  }
   const sameConnection =
     prior?.protocol === protocol &&
     prior.endpoint === endpoint &&
@@ -77,6 +85,10 @@ export function saveConnection(product: ProductStore, value: unknown, id?: strin
   return product.store.transaction(() => {
     const previous = id ? product.get<Connection>('connection', id) : undefined;
     const prepared = prepareConnection(product, value, id);
+    const pending = prepared.writes.find(
+      (write) => write.reference === prepared.value.credentialRef
+    );
+    validateVertexCredential(product.store.credentials, prepared.value, pending?.value);
     const saved = product.saveInTransaction(
       'connection',
       prepared.value,

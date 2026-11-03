@@ -129,6 +129,18 @@ test('failed identity writes followed by reload cannot let an old receipt erase 
   expect(recovered.files).toEqual(sent.files);
 });
 
+test('a text-only request can reach the outbox after a failed identity write without claiming a newer draft', async () => {
+  const drafts = await import('../web/helper-attachment-draft.js');
+  await drafts.loadHelperAttachments('text-only');
+  state.writeFails = true;
+  drafts.touchHelperAttachments('text-only');
+  const sent = await drafts.freezeHelperAttachments('text-only', model);
+  expect(sent).toEqual({ draftToken: expect.any(String) });
+  drafts.touchHelperAttachments('text-only');
+  expect(drafts.helperAttachmentDraftMatches('text-only', sent.draftToken)).toBe(false);
+  expect(await drafts.acceptHelperAttachments('text-only', sent.draftToken)).toBe(false);
+});
+
 test('unsupported selections are atomic and a later model change blocks sending retained files', async () => {
   const drafts = await import('../web/helper-attachment-draft.js');
   await drafts.loadHelperAttachments('first');

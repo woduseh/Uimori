@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import {
   closeSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -35,7 +36,11 @@ import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import type { NativeTransferReceipt } from '../core/native-transfer.js';
 import { processImage } from './image-processing.js';
 import { remapTranscriptRequestImages } from './chat-media.js';
-import { acquireImportPreparation, checkImportPreparation } from './import-preparation.js';
+import {
+  acquireImportPreparation,
+  checkImportPreparation,
+  ownedImportStagingRoot,
+} from './import-preparation.js';
 import { deleteUpload, uploadDirectory, UPLOAD_MAX_AGE_MS } from './uploads.js';
 import {
   NATIVE_ARCHIVE_MAX_BYTES,
@@ -86,9 +91,12 @@ function preparedPath(store: Store, id: string) {
 /** Cleanup cannot turn a committed import into a failed response; TTL pruning retries failures. */
 export function deletePreparedArchive(store: Store, id: string): void {
   const directory = preparedPath(store, id);
-  if (activeArchives.has(directory)) return;
+  if (activeArchives.has(directory) || !ownedImportStagingRoot(store.path, archiveDirectory(store)))
+    return;
   try {
-    rmSync(directory, { recursive: true, force: true });
+    const info = lstatSync(directory);
+    if (info.isDirectory() && !info.isSymbolicLink())
+      rmSync(directory, { recursive: true, force: true });
   } catch {
     /* The next expiry prune retries. */
   }
@@ -170,14 +178,23 @@ export function exportNativeArchive(
   }
 }
 
-function pruneArchives(store: Store) {
+export function prunePreparedArchives(store: Store) {
   const directory = archiveDirectory(store);
-  if (!existsSync(directory)) return;
+  if (!ownedImportStagingRoot(store.path, directory)) return;
   for (const name of readdirSync(directory)) {
     if (!/^[a-f0-9]{32}$/u.test(name) || activeArchives.has(join(directory, name))) continue;
     const path = join(directory, name);
-    if (statSync(path).mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS)
-      rmSync(path, { recursive: true, force: true });
+    try {
+      const info = lstatSync(path);
+      if (
+        info.isDirectory() &&
+        !info.isSymbolicLink() &&
+        info.mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS
+      )
+        rmSync(path, { recursive: true, force: true });
+    } catch {
+      // Another request or a temporary filesystem error can be retried on the next sweep.
+    }
   }
 }
 
@@ -196,7 +213,7 @@ export async function prepareNativeArchive(
   let fd: number | undefined;
   let completed = false;
   try {
-    pruneArchives(store);
+    prunePreparedArchives(store);
     checkImportPreparation(signal);
     fd = openSync(source, 'r');
     mkdirSync(directory, { recursive: true });

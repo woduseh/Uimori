@@ -144,6 +144,59 @@ test('one title request is journaled, bounded and never repeated after completio
   new ChatTitleService(f.store, f.options).afterSource(f.run.id);
   expect(send).toHaveBeenCalledTimes(1);
 });
+test('a title deferred before sending resumes once and never repeats a started request', async () => {
+  const f = setup();
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const send = mockSend(undefined, success, () => pending);
+  f.service.afterSource(f.run.id, true);
+  f.service.afterSource(f.run.id, true);
+  const nextChat = f.store.chat(f.chat.id);
+  const profile = f.store.product.snapshot(f.chat.id);
+  const next = f.store.createRun(
+    f.chat.id,
+    {
+      request: 'A later scene',
+      expectedRevision: nextChat.headRevision,
+      expectedSettingsRevision: nextChat.settingsRevision,
+      idempotencyKey: randomUUID(),
+    },
+    () => ({
+      chatId: f.chat.id,
+      parentRevision: nextChat.headRevision,
+      settingsRevision: nextChat.settingsRevision,
+      settings: nextChat.settings,
+      request: 'A later scene',
+      history: f.store.history(nextChat.headRevision),
+      resources: f.store.product.resources(f.chat.id, profile),
+      profile,
+    })
+  ).run;
+  f.store.startRun(next.id);
+  f.store.completeRun(next.id, 'A later source.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
+  f.service.afterSource(next.id, true);
+  expect(send).not.toHaveBeenCalled();
+  expect(
+    f.store.db.prepare("SELECT entity_id FROM events WHERE kind='chat.title.deferred'").all()
+  ).toEqual([{ entity_id: f.run.id }]);
+  const restarted = new ChatTitleService(f.store, f.options);
+  restarted.resumeDeferred();
+  restarted.resumeDeferred();
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(send.mock.calls[0][1].input.task).request).toBe('A scene');
+  release();
+  await Promise.all(f.work);
+  restarted.resumeDeferred();
+  expect(send).toHaveBeenCalledTimes(1);
+  expect(f.store.chat(f.chat.id).title).toBe('새로운 만남');
+});
 test.each([
   'A lantern at the river. '.repeat(400),
   '강가에서 은빛 머리의 소녀가 등불을 흔들었다. 🌙 '.repeat(600),

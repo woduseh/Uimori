@@ -679,6 +679,77 @@ test('NSQ04 failed package reads recover before creation and failed profile save
   await expect(page.getByTestId('source-text')).toContainText(`안녕하세요 ${persona.title}.`);
 });
 
+test('NSQ profile recovery preserves another window’s attachments until the saved settings are chosen', async ({
+  page,
+  request,
+}) => {
+  const { bot } = await quickChatFixture(request, 1);
+  const moduleTitle = `다른 창의 모듈 ${crypto.randomUUID()}`;
+  const moduleResponse = await request.post('/api/content', {
+    data: {
+      kind: 'module',
+      title: moduleTitle,
+      description: '',
+      loading: 'pinned',
+      relatedIds: [],
+      package: nativeContent({ name: moduleTitle }, {}, 'module'),
+    },
+  });
+  expect(moduleResponse.ok(), await moduleResponse.text()).toBe(true);
+  const module = (await moduleResponse.json()) as Content;
+  let writes = 0;
+  await page.route('**/api/chats/*/profile', async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    writes++;
+    if (writes === 1) {
+      const committed = await route.fetch();
+      expect(committed.ok(), await committed.text()).toBe(true);
+      return route.abort('failed');
+    }
+    return route.continue();
+  });
+  await page.goto('/');
+  const admitted = page.waitForResponse(
+    (response) => /\/api\/chats$/.test(response.url()) && response.request().method() === 'POST'
+  );
+  await openQuickChat(page, bot);
+  const chat = (await (await admitted).json()) as Chat;
+  const dialog = page.getByRole('dialog', { name: '새 채팅', exact: true });
+  await expect(dialog.getByRole('alert')).toContainText('채팅은 하나만 만들었어요');
+  const profile = await (await request.get(`/api/chats/${chat.id}/profile`)).json();
+  const attachments = [
+    ...profile.packageAttachments,
+    { id: module.id, revision: module.revision, role: 'module' },
+  ];
+  const updated = await request.put(`/api/chats/${chat.id}/profile`, {
+    data: {
+      image: profile.image,
+      packageAttachments: attachments,
+      expectedRevision: profile.revision,
+    },
+  });
+  expect(updated.ok(), await updated.text()).toBe(true);
+  await dialog.getByRole('button', { name: '설정 저장 다시 시도', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('다른 곳에서 바뀌었어요');
+  expect(writes).toBe(1);
+  await dialog.getByRole('button', { name: '채팅에서 설정 확인', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).first().click();
+  const decision = page.getByRole('dialog', { name: '시작 설정 저장', exact: true });
+  await decision.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).click();
+  await expect(decision).toContainText('선택한 시작은 적용하지 않아요');
+  await decision.getByRole('button', { name: '저장된 설정 사용', exact: true }).click();
+  await expect(decision).toBeHidden();
+  expect(
+    await page.evaluate((id) => sessionStorage.getItem(`pending-profile:${id}`), chat.id)
+  ).toBeNull();
+  expect(
+    (await (await request.get(`/api/chats/${chat.id}/profile`)).json()).packageAttachments
+  ).toEqual(attachments);
+  expect((await (await request.get(`/api/chats/${chat.id}`)).json()).sources).toHaveLength(0);
+  expect(writes).toBe(1);
+});
+
 test('NSQ05 an uncertain chat admission stops automatic and manual resubmission', async ({
   page,
   request,
@@ -1197,6 +1268,8 @@ for (const width of [1440, 412]) {
           expect(response.ok()).toBe(true);
           expect(await response.json()).toMatchObject({ run: null });
           await route.abort('failed');
+        } else if (commands.length === 2) {
+          await route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
         } else await route.continue();
       });
     }
@@ -1209,13 +1282,18 @@ for (const width of [1440, 412]) {
       await expect(picker.getByLabel('첫 메시지 선택')).toBeDisabled();
       expect((await read()).chat.headRevision).toBeNull();
       await picker.getByRole('button', { name: /변경 결과 확인$/ }).click();
+      await expect.poll(() => commands.length).toBe(2);
+      await expect(picker.getByRole('button', { name: /변경 결과 확인$/ })).toBeEnabled();
+      await expect(picker.getByLabel('첫 메시지 선택')).toBeDisabled();
+      await picker.getByRole('button', { name: /변경 결과 확인$/ }).click();
     }
     const response = await changed;
     expect(response.request().postDataJSON().startId).toBeNull();
     expect(await response.json()).toMatchObject({ run: null });
     if (width === 1440) {
-      expect(commands).toHaveLength(2);
+      expect(commands).toHaveLength(3);
       expect(commands[1]).toEqual(commands[0]);
+      expect(commands[2]).toEqual(commands[0]);
       await expect(picker).toBeHidden();
       releaseReader?.();
     }

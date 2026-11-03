@@ -361,14 +361,23 @@ export function PromptLibrary({
     // `changeEditing` keeps the existing unsaved-draft confirmation.
     if (editing) close();
   }, [listRequest]);
-  async function placeCreated(preset: PromptPreset, created: boolean) {
+  async function placeCreated(
+    preset: PromptPreset,
+    created: boolean,
+    creationOrganizationRevision?: number | null
+  ) {
     if (!created || folder === 'all' || folder === 'unclassified') return;
-    const current = await api<LibraryOrganization>('/library/organization');
+    // An old receipt has no creation-time token; never overwrite a later move.
+    if (creationOrganizationRevision === null)
+      throw new Error(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
+    const revision =
+      creationOrganizationRevision ??
+      (await api<LibraryOrganization>('/library/organization')).revision;
     const placed = await organizer.mutate(
       '/library/organization/move',
       { items: [{ kind: 'prompt-preset', id: preset.id }], category: 'prompts', folderId: folder },
       'POST',
-      current.revision
+      revision
     );
     if (!placed) throw new Error(uiMessage('prompts.uiUnableToPlaceTheItemInTheFolder'));
   }
@@ -389,7 +398,7 @@ export function PromptLibrary({
       const copy = result.saved as PromptPreset;
       const warnings: (() => string)[] = [];
       try {
-        await placeCreated(copy, true);
+        await placeCreated(copy, true, result.creationOrganizationRevision ?? null);
       } catch (error) {
         warnings.push(() =>
           t('prompts.clonedPlacement', {

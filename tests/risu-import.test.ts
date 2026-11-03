@@ -22,6 +22,7 @@ import { uploadDirectory, uploadRoutes } from '../server/uploads.js';
 import { RISU_IMPORT_MAX_BYTES } from '../core/risu-import.js';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
+import { saveImportReceipt } from '../server/import-operations.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -68,6 +69,46 @@ const card = () => ({
 const sourceOf = (value: unknown) => ({
   name: 'synthetic-card.json',
   base64: Buffer.from(JSON.stringify(value)).toString('base64'),
+});
+
+test('a completed inline bot import keeps its original chat after many other imports', async () => {
+  const store = database();
+  const source = sourceOf(card());
+  const preview = prepareRisuImport({ source });
+  const body = { source, digest: preview.digest, allowPartial: false, idempotencyKey: 'old-risu' };
+  const first = await applyRisuImport(store, body);
+  expect(first.chat).not.toBeNull();
+  for (let index = 0; index < 260; index++)
+    saveImportReceipt(store, `other-import-${index}`, 'digest', { index });
+
+  const replay = await applyRisuImport(store, body);
+  expect(replay.receipt).toMatchObject({ id: first.receipt.id, created: false });
+  expect(replay.chat?.id).toBe(first.chat?.id);
+  expect(store.chats()).toHaveLength(1);
+  expect(store.product.all('content')).toHaveLength(1);
+});
+
+test('receipt cleanup retains protected prefixes and the newest 256 ordinary requests', () => {
+  const store = database();
+  const protectedKeys = [
+    'retry:protected',
+    'transcript:protected',
+    'resource:protected',
+    'chat:protected',
+    'risu-result:protected',
+    'CHAT:legacy-case',
+  ];
+  for (const key of protectedKeys) saveImportReceipt(store, key, 'digest', {});
+  for (let index = 0; index < 260; index++)
+    saveImportReceipt(store, `ordinary-${index}`, 'digest', { index });
+  const keys = store.db
+    .prepare('SELECT key FROM import_operations ORDER BY rowid')
+    .all()
+    .map((row) => row.key);
+  expect(keys).toEqual([
+    ...protectedKeys,
+    ...Array.from({ length: 256 }, (_, index) => `ordinary-${index + 4}`),
+  ]);
 });
 
 test('a library-only bot import preserves its opening without creating a chat, including retries', async () => {

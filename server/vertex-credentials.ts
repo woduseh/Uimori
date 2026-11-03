@@ -45,23 +45,58 @@ function accountValue(value: unknown): ServiceAccount {
   };
 }
 
+function inputAccount(value: unknown): ServiceAccount {
+  if (Buffer.byteLength(JSON.stringify(value ?? null), 'utf8') > 64 * 1024)
+    throw new HttpError(400, 'Service account JSON is too large');
+  return accountValue(value);
+}
+
+function validateAccount(
+  connection: Pick<ProviderConnection, 'protocol' | 'endpoint'>,
+  account: ServiceAccount
+) {
+  if (connection.protocol !== 'vertex-gemini-v1')
+    throw new HttpError(400, 'Vertex 연결이 필요해요.');
+  validateVertexEndpoint(connection.endpoint);
+  const project = new URL(connection.endpoint).pathname.match(/\/projects\/([^/]+)\//u)?.[1];
+  if (account.project_id !== project)
+    throw new HttpError(400, '서비스 계정과 API 주소의 프로젝트가 달라요.');
+}
+
+/** Validate a draft without writing it; only non-secret metadata goes back to the browser. */
+export function inspectVertexAccount(value: unknown) {
+  const account = inputAccount(value);
+  return { projectId: account.project_id, clientEmail: account.client_email };
+}
+
+/** Normalize a draft account for validation and storage with the connection. */
+export function prepareVertexAccount(value: unknown) {
+  const account = inputAccount(value);
+  return {
+    reference: VERTEX_FILE_PREFIX + randomBytes(16).toString('hex').toUpperCase(),
+    value: JSON.stringify(account),
+  };
+}
+
+/** Validate a connection against the saved account or the account being committed with it. */
+export function validateVertexCredential(
+  keys: CredentialStore,
+  connection: Pick<ProviderConnection, 'protocol' | 'endpoint' | 'credentialRef'>,
+  pendingValue?: string
+) {
+  const reference = connection.credentialRef;
+  if (!reference || !isVertexFileReference(reference)) return;
+  const saved = pendingValue ?? keys.get(reference);
+  if (!saved) throw new HttpError(400, '서비스 계정을 먼저 등록해 주세요.');
+  validateAccount(connection, accountValue(JSON.parse(saved)));
+}
+
 /** Uploaded account data belongs to the app DB; short-lived OAuth tokens stay in this adapter. */
 export class VertexCredentialStore {
   private readonly keys: CredentialStore;
   private readonly clients = new Map<string, GoogleAuth>();
   constructor(db: DatabaseSync) {
     this.keys = new CredentialStore(db);
-  }
-
-  upload(value: unknown) {
-    const account = accountValue(value);
-    const reference = VERTEX_FILE_PREFIX + randomBytes(16).toString('hex').toUpperCase();
-    this.keys.set(reference, JSON.stringify(account));
-    return {
-      credentialRef: reference,
-      projectId: account.project_id,
-      clientEmail: account.client_email,
-    };
   }
 
   private account(reference: string): ServiceAccount {
@@ -71,13 +106,7 @@ export class VertexCredentialStore {
   }
 
   validate(connection: Pick<ProviderConnection, 'protocol' | 'endpoint' | 'credentialRef'>) {
-    if (!connection.credentialRef || !isVertexFileReference(connection.credentialRef)) return;
-    if (connection.protocol !== 'vertex-gemini-v1')
-      throw new HttpError(400, 'Vertex 연결이 필요해요.');
-    validateVertexEndpoint(connection.endpoint);
-    const project = new URL(connection.endpoint).pathname.match(/\/projects\/([^/]+)\//u)?.[1];
-    if (this.account(connection.credentialRef).project_id !== project)
-      throw new HttpError(400, '서비스 계정과 API 주소의 프로젝트가 달라요.');
+    validateVertexCredential(this.keys, connection);
   }
 
   configured(connection: Pick<ProviderConnection, 'protocol' | 'endpoint' | 'credentialRef'>) {

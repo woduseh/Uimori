@@ -679,6 +679,7 @@ type Options = Pick<
 > & {
   executeCodexAgent?: CodexRuntimeService['executeAgent'];
   signal: AbortSignal;
+  canStart?: () => boolean;
   track: (work: Promise<void>) => void;
   streams: ResponseStreamStore;
   services?: HelperServices;
@@ -1048,7 +1049,12 @@ export class HelperRuntime {
     return this.workspace.deleteMessages(id, messageId, expectedRevision, scope);
   }
   pump() {
-    if (this.options.signal.aborted || this.controllers.size >= 2) return;
+    if (
+      this.options.signal.aborted ||
+      this.options.canStart?.() === false ||
+      this.controllers.size >= 2
+    )
+      return;
     if (
       Number(
         this.store.db.prepare("SELECT COUNT(*) AS n FROM helper_tasks WHERE status='running'").get()

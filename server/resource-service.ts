@@ -15,7 +15,7 @@ import { promptWorkspace, updatePromptWorkspace } from './prompt-workspace.js';
 import { editableResource } from '../core/resource-editing.js';
 import { HttpError } from './request-validation.js';
 
-type CreationReceipt = { kind: ResourceKind; id: string };
+type CreationReceipt = { kind: ResourceKind; id: string; organizationRevision?: number };
 
 /** Compact, durable identities: repeated admissions never create another resource. */
 function creationReceipt(operation: 'save' | 'clone', key: string, payload: unknown) {
@@ -28,6 +28,19 @@ export function readResource(store: Store, kind: ResourceKind, id: string): Save
   if (kind === 'illustration-preset') return readIllustrationPreset(store, id);
   if (kind === 'theme') return readTheme(store, id);
   return kind === 'prompt-workspace' ? promptWorkspace(store) : store.product.get(kind, id);
+}
+
+/** An existing receipt can prove that a removed target was created without creating it again. */
+function readCreatedResource(store: Store, receipt: CreationReceipt): SavedResource {
+  if (store.product.isHidden(receipt.kind, receipt.id))
+    throw new HttpError(410, 'RESOURCE_CREATION_REMOVED');
+  try {
+    return readResource(store, receipt.kind, receipt.id);
+  } catch (error) {
+    if (error instanceof HttpError && error.statusCode === 404)
+      throw new HttpError(410, 'RESOURCE_CREATION_REMOVED');
+    throw error;
+  }
 }
 
 export function saveResource(
@@ -52,7 +65,13 @@ export function saveResource(
         receipt.digest
       );
       if (previous)
-        return { saved: readResource(store, previous.kind, previous.id), created: false };
+        return {
+          saved: readCreatedResource(store, previous),
+          created: false,
+          ...(previous.organizationRevision === undefined
+            ? {}
+            : { creationOrganizationRevision: previous.organizationRevision }),
+        };
     }
     const id = edit.kind === 'prompt-workspace' ? 'current' : edit.id;
     const previous = id ? readResource(store, edit.kind, id) : null;
@@ -87,12 +106,29 @@ export function saveResource(
       );
       if (removedImage) pruneUnusedData(store.db, imageDataHashes(oldUndo));
     }
+    const organizationRevision =
+      !previous && (edit.kind === 'content' || edit.kind === 'prompt-preset')
+        ? (
+            store.db
+              .prepare('SELECT revision FROM library_organization_state WHERE id=1')
+              .get() as {
+              revision: number;
+            }
+          ).revision
+        : undefined;
     if (receipt)
       saveImportReceipt(store, receipt.receiptKey, receipt.digest, {
         kind: edit.kind,
         id: (saved as { id: string }).id,
+        ...(organizationRevision === undefined ? {} : { organizationRevision }),
       });
-    return { saved, created: previous === null };
+    return {
+      saved,
+      created: previous === null,
+      ...(organizationRevision === undefined
+        ? {}
+        : { creationOrganizationRevision: organizationRevision }),
+    };
   });
 }
 
@@ -126,9 +162,12 @@ export function cloneResource(
       >(store, receipt.receiptKey, receipt.digest);
       if (previous)
         return {
-          saved: readResource(store, previous.kind, previous.id),
+          saved: readCreatedResource(store, previous),
           created: false,
           source: previous.source,
+          ...(previous.organizationRevision === undefined
+            ? {}
+            : { creationOrganizationRevision: previous.organizationRevision }),
         };
     }
     store.product.assertAvailable(request.kind, request.sourceId);
@@ -157,6 +196,9 @@ export function cloneResource(
         kind: request.kind,
         id: (result.saved as { id: string }).id,
         source: origin,
+        ...(result.creationOrganizationRevision === undefined
+          ? {}
+          : { organizationRevision: result.creationOrganizationRevision }),
       });
     return { ...result, source: origin };
   });

@@ -1053,7 +1053,7 @@ export class Store {
     generation: number,
     owner: string,
     value: {
-      status: string;
+      status: Exclude<Job['status'], 'queued' | 'running' | 'stale'>;
       result: unknown;
       error: string | null;
       diagnostic?: import('../core/auxiliary-diagnostic.js').AuxiliaryFailureDiagnostic;
@@ -1135,7 +1135,16 @@ export class Store {
           readRunSnapshot(this, source.runId),
           this.job(row.id).input
         );
-        const live = !!snapshot.profile?.models[row.kind as 'translation' | 'image'];
+        const input = this.job(row.id).input;
+        // Image placement uses JEV, not a profile model. The attempt is recorded
+        // before sending, so any real attempt may have reached the provider.
+        // Attempts are not associated with a generation; be conservative on retries.
+        const live =
+          row.kind === 'image'
+            ? !!this.db
+                .prepare('SELECT 1 FROM attempts WHERE job_id=? AND is_synthetic=0')
+                .get(row.id)
+            : !!snapshot.profile?.models.translation;
         this.db
           .prepare('UPDATE jobs SET status=?,owner=NULL,error=?,updated_at=? WHERE id=?')
           .run(
@@ -1146,7 +1155,6 @@ export class Store {
           );
         // An interrupted automatic translation is the terminal outcome the reader was awaiting.
         // Ordinary queued jobs still resume without an extra notification.
-        const input = this.job(row.id).input;
         if (
           live &&
           row.kind === 'translation' &&

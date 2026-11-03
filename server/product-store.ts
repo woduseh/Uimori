@@ -3,7 +3,7 @@ import type { UsageKind } from '../core/usage-report.js';
 import { compareConnectionDisplayOrder, compareModelDisplayOrder } from '../core/model-order.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
 import { encodedImage, storeImage } from './image-storage.js';
-import { prepareConnection, saveConnection } from './provider-connections.js';
+import { saveConnection } from './provider-connections.js';
 import { recordContentProfileEvents } from './content-profile-events.js';
 import { detectRisuImageHandoff, type RisuImageHandoff } from '../core/risu-image-handoff.js';
 import { assertRisuContentSource } from '../core/risu-native.js';
@@ -451,9 +451,6 @@ export class ProductStore {
       );
     };
     return inTransaction ? save() : this.store.transaction(save);
-  }
-  prepareConnection(value: unknown, id?: string) {
-    return prepareConnection(this, value, id);
   }
   connection(value: unknown, id?: string) {
     return saveConnection(this, value, id);

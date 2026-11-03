@@ -1,6 +1,11 @@
 import type { Store } from './store.js';
 import { HttpError } from './request-validation.js';
 
+// These receipts carry durable target identity; general resource imports remain bounded.
+const retainedPrefixes = ['retry:', 'transcript:', 'resource:', 'chat:', 'risu-result:'] as const;
+const boundedReceipt = retainedPrefixes.map(() => 'key NOT LIKE ?').join(' AND ');
+const retainedPatterns = retainedPrefixes.map((prefix) => `${prefix}%`);
+
 export function readImportReceipt<T>(
   store: Store,
   key: string,
@@ -19,19 +24,16 @@ export function saveImportReceipt(store: Store, key: string, digest: string, res
   store.db
     .prepare('INSERT INTO import_operations VALUES(?,?,?)')
     .run(key, digest, JSON.stringify(result));
-  if (key.startsWith('retry:') || key.startsWith('transcript:') || key.startsWith('resource:'))
-    return;
-  // Retry/transcript/resource receipts preserve target identities; unrelated imports
-  // must not evict them and turn a replay into a second chat or generation.
+  if (retainedPrefixes.some((prefix) => key.startsWith(prefix))) return;
   store.db
     .prepare(
       `DELETE FROM import_operations
-       WHERE key NOT LIKE 'retry:%' AND key NOT LIKE 'transcript:%' AND key NOT LIKE 'resource:%'
+       WHERE ${boundedReceipt}
          AND rowid NOT IN (
            SELECT rowid FROM import_operations
-           WHERE key NOT LIKE 'retry:%' AND key NOT LIKE 'transcript:%' AND key NOT LIKE 'resource:%'
+           WHERE ${boundedReceipt}
            ORDER BY rowid DESC LIMIT 256
          )`
     )
-    .run();
+    .run(...retainedPatterns, ...retainedPatterns);
 }

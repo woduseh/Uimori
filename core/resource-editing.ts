@@ -26,7 +26,12 @@ export type EditorContext = {
   /** Optional current device input, not a persistent server draft. */
   model?: ResourceModel;
 };
-export type ResourceSaveResult = { saved: SavedResource; created: boolean };
+export type ResourceSaveResult = {
+  saved: SavedResource;
+  created: boolean;
+  /** Organization CAS token immediately after this resource was first registered. */
+  creationOrganizationRevision?: number;
+};
 export function editableResource(kind: ResourceKind, resource: SavedResource): ResourceModel {
   if (kind === 'theme' || kind === 'illustration-preset') {
     const { id: _id, revision: _revision, ...model } = resource as Theme | IllustrationPreset;

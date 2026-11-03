@@ -12,6 +12,9 @@ import {
 type ApiErrorDiagnostic = { code: string | null; message: string };
 
 const messages: Record<string, string> = {
+  CHAT_COPY_REMOVED: '이전에 만든 채팅 사본이 삭제됐어요. 새 사본을 만들 수 있어요.',
+  RESOURCE_CREATION_REMOVED:
+    '이전에 생성된 자료가 삭제됐어요. 현재 입력을 확인한 뒤 새로 저장할 수 있어요.',
   SCENE_DELETED_RETRY_UNAVAILABLE:
     '삭제된 장면을 포함한 작업은 다시 실행할 수 없어요. 현재 이야기에서 새 요청을 보내 주세요.',
   ...requestImageErrors,

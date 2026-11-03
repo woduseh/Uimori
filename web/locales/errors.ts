@@ -1,4 +1,16 @@
 export const messages = {
+  'errors.CHAT_COPY_REMOVED': {
+    ko: '이전에 만든 채팅 사본이 삭제됐어요. 새 사본을 만들 수 있어요.',
+    en: 'The previously created chat copy was deleted. You can create a new copy.',
+    ja: '以前作成したチャットのコピーは削除されました。新しいコピーを作成できます。',
+    zh: '之前创建的聊天副本已被删除，您可以创建新副本。',
+  },
+  'errors.RESOURCE_CREATION_REMOVED': {
+    ko: '이전에 생성된 자료가 삭제됐어요. 현재 입력을 확인한 뒤 새로 저장할 수 있어요.',
+    en: 'The previously created resource was deleted. Review your current input before saving again.',
+    ja: '以前作成された資料は削除されました。現在の入力を確認してから再度保存できます。',
+    zh: '之前创建的资料已被删除。请检查当前输入后再保存。',
+  },
   'errors.REQUEST_FILE_FORMAT_INVALID': {
     ko: '파일 형식을 읽을 수 없어요. 파일을 확인해 주세요.',
     en: 'Could not read this file format. Check the file.',

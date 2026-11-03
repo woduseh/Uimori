@@ -253,9 +253,13 @@ export function OutlinePanel({
     sending.current = true;
     setBusy(true);
     setError('');
+    let recovered = false;
     try {
       const saved = stored<Pending | null>(pendingKey, null);
-      if (saved?.body.idempotencyKey === operation.body.idempotencyKey) operation = saved;
+      if (saved?.body.idempotencyKey === operation.body.idempotencyKey) {
+        operation = saved;
+        recovered = true;
+      }
       if (!remember(operation, operation.body.idempotencyKey, true)) return;
       if (operation.kind === 'apply') {
         const result = await api<{ detail: OutlineDetail; created: { id: string }[] }>(
@@ -310,7 +314,7 @@ export function OutlinePanel({
         if (mounted.current) onClose();
       }
     } catch (cause) {
-      if (rejected(cause)) {
+      if (!recovered && rejected(cause)) {
         remember(null, operation.body.idempotencyKey);
         if (mounted.current) await load();
       }

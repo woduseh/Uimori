@@ -1,6 +1,6 @@
 import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import sharp from 'sharp';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,8 @@ import type { Illustration, IllustrationSettings } from '../core/illustration.js
 import { injectWithFixtureBot } from './fixtures/chat.js';
 import { comfyUIFixture, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 import { PNG_BASE64 } from './fixtures/illustration.js';
+import * as illustrationRunner from '../server/illustration-runner.js';
+import { claimIllustration } from '../server/illustrations.js';
 
 const owned: { directory: string; app?: App; close?: () => Promise<void> }[] = [];
 afterEach(async () => {
@@ -309,6 +311,45 @@ describe('illustration API in test mode with the synthetic generator', () => {
       (await api<Illustration>(`/api/sources/${source.id}/illustrations`, {})).id
     );
     expect(injected).toMatchObject({ status: 'failed', error: 'ILLUSTRATION_FAILED', attempt: 1 });
+  });
+  test('deleting a cancelled task while its worker settles does not block the next task', async () => {
+    const { api, respond, settings, illustrations, settleTask } = await setup();
+    const firstSource = await respond('First scene');
+    const secondSource = await respond('Second scene');
+    await settings({ generator: 'fixture', maxPerSource: 2, maxAutoRetries: 0 });
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = illustrationRunner.runIllustrationJob;
+    let first = true;
+    const runner = vi
+      .spyOn(illustrationRunner, 'runIllustrationJob')
+      .mockImplementation(async (...args) => {
+        if (!first) return original(...args);
+        first = false;
+        expect(claimIllustration(args[0], args[1], args[2])).not.toBeNull();
+        await pending;
+        return null;
+      });
+    try {
+      const a = await api<Illustration>(`/api/sources/${firstSource.id}/illustrations`, {});
+      await until(illustrations, (items) =>
+        items.some((item) => item.id === a.id && item.status === 'running')
+      );
+      const b = await api<Illustration>(`/api/sources/${secondSource.id}/illustrations`, {});
+      expect((await illustrations()).find((item) => item.id === b.id)?.status).toBe('queued');
+      await api(`/api/illustrations/${a.id}/cancel`, {});
+      expect(await api(`/api/illustrations/${a.id}`, undefined, 'DELETE')).toEqual({
+        deleted: true,
+      });
+      expect((await illustrations()).find((item) => item.id === b.id)?.status).toBe('queued');
+      release();
+      expect((await settleTask(b.id)).status).toBe('completed');
+    } finally {
+      release();
+      runner.mockRestore();
+    }
   });
   test('reference roles and ComfyUI settings validate through the API and the connectivity check reports codes', async () => {
     const { api, chat, settings, item } = await setup();

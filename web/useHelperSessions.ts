@@ -2,6 +2,11 @@ import { useI18n, message as uiMessage } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { HelperConversation, HelperScope, HelperStatus } from '../core/helper.js';
 import { activityChangedEvent, api, ApiError } from './api.js';
+import {
+  clearPendingHelperRequest,
+  pendingHelperRequest,
+  type PendingHelperRequest,
+} from './helper-pending-request.js';
 
 export type HelperSession = HelperConversation & {
   title?: string;
@@ -31,61 +36,7 @@ function remember(key: string, value: string | null) {
     // Selection remains available in the current window.
   }
 }
-type PendingHelperCreation = {
-  request: { scope: HelperScope; requestKey: string; projectId?: string | null };
-  storage: Storage;
-};
-function pendingHelperCreation(
-  key: string,
-  scope: HelperScope,
-  projectId?: string | null
-): PendingHelperCreation {
-  const local = () => localStorage;
-  const session = () => sessionStorage;
-  // This tab's fallback request takes precedence over another tab's shared request,
-  // even after a reload has made localStorage writable again.
-  for (const getStorage of [session, local]) {
-    try {
-      const storage = getStorage();
-      const saved = JSON.parse(storage.getItem(key) ?? 'null') as {
-        scope?: HelperScope;
-        requestKey?: unknown;
-        projectId?: string | null;
-      } | null;
-      if (
-        typeof saved?.requestKey === 'string' &&
-        saved.requestKey.length > 0 &&
-        JSON.stringify(saved.scope) === JSON.stringify(scope) &&
-        (saved.projectId ?? null) === (projectId ?? null)
-      )
-        return {
-          request: { scope, requestKey: saved.requestKey, ...(projectId ? { projectId } : {}) },
-          storage,
-        };
-    } catch {
-      // The other store may still hold the pending request.
-    }
-  }
-  const request = { scope, requestKey: crypto.randomUUID(), ...(projectId ? { projectId } : {}) };
-  const value = JSON.stringify(request);
-  for (const getStorage of [local, session]) {
-    try {
-      const storage = getStorage();
-      storage.setItem(key, value);
-      return { request, storage };
-    } catch {
-      // Never send a new request before its retry key has been stored.
-    }
-  }
-  throw new Error(uiMessage('helpers.m209'));
-}
-function forgetHelperCreation(key: string, pending: PendingHelperCreation | undefined) {
-  try {
-    pending?.storage.removeItem(key);
-  } catch {
-    // A storage cleanup failure must not turn an acknowledged creation into a failure.
-  }
-}
+type HelperCreationRequest = { scope: HelperScope; requestKey: string; projectId?: string | null };
 export function forgetHelperSession(conversation: HelperConversation) {
   for (const key of [
     'uimori:helper-session:all',
@@ -100,7 +51,12 @@ export function selectedHelperSession(scope: HelperScope) {
 }
 
 /** Session selection belongs to the chat; drafts and event cursors belong to each session. */
-export function useHelperSessions(open: boolean, scope: HelperScope, expanded = false) {
+export function useHelperSessions(
+  open: boolean,
+  scope: HelperScope,
+  expanded = false,
+  selectionEpoch?: { current: number }
+) {
   useI18n();
   const group = expanded ? 'all' : helperGroupKey(scope);
   const scopeKey = JSON.stringify(scope);
@@ -293,14 +249,41 @@ export function useHelperSessions(open: boolean, scope: HelperScope, expanded = 
     const creationScope: HelperScope = expanded ? { kind: 'library', workId: 'workspace' } : scope;
     const key = `uimori:helper-create:${JSON.stringify(creationScope)}${projectId ? `:project:${projectId}` : ''}`;
     const selectionVersion = selectionVersions.current.get(group) ?? 0;
-    let pending: PendingHelperCreation | undefined;
+    const epoch = selectionEpoch?.current;
+    let pending: PendingHelperRequest<HelperCreationRequest> | undefined;
     try {
-      pending = pendingHelperCreation(key, creationScope, projectId);
-      const value = await api<HelperConversation>('/helper/conversations/new', pending.request);
-      forgetHelperCreation(key, pending);
+      pending = pendingHelperRequest<HelperCreationRequest>(
+        key,
+        () => ({
+          scope: creationScope,
+          requestKey: crypto.randomUUID(),
+          ...(projectId ? { projectId } : {}),
+        }),
+        (value): value is HelperCreationRequest => {
+          if (!value || typeof value !== 'object') return false;
+          const saved = value as Partial<HelperCreationRequest>;
+          return (
+            typeof saved.requestKey === 'string' &&
+            saved.requestKey.length > 0 &&
+            JSON.stringify(saved.scope) === JSON.stringify(creationScope) &&
+            (saved.projectId ?? null) === (projectId ?? null)
+          );
+        }
+      );
+      const request = {
+        scope: creationScope,
+        requestKey: pending.request.requestKey,
+        ...(projectId ? { projectId } : {}),
+      };
+      const value = await api<HelperConversation>('/helper/conversations/new', request);
+      clearPendingHelperRequest(key, pending);
       versions.current.set(group, (versions.current.get(group) ?? 0) + 1);
       if (alive.current) {
-        if ((selectionVersions.current.get(group) ?? 0) === selectionVersion) select(value);
+        if (
+          (selectionVersions.current.get(group) ?? 0) === selectionVersion &&
+          selectionEpoch?.current === epoch
+        )
+          select(value);
         else
           setLists((old) => ({
             ...old,
@@ -309,8 +292,14 @@ export function useHelperSessions(open: boolean, scope: HelperScope, expanded = 
       }
       return value;
     } catch (cause) {
-      if (cause instanceof ApiError && cause.status < 500 && ![408, 429].includes(cause.status))
-        forgetHelperCreation(key, pending);
+      if (
+        pending &&
+        !pending.recovered &&
+        cause instanceof ApiError &&
+        cause.status < 500 &&
+        ![408, 429].includes(cause.status)
+      )
+        clearPendingHelperRequest(key, pending);
       if (alive.current)
         setErrors((old) => ({
           ...old,

@@ -41,6 +41,10 @@ The Oracle runner's `--source-ref` currently accepts a branch, not a release tag
 
 Closing maintenance blocks new writes and worker claims. In-progress work can finish and save its results; reads, login, diagnostics, cancellation, and skipping remain available. Rejected writes return `503 MAINTENANCE_CLOSED`, and the browser retains its drafts.
 
+Work queued while admission is closed resumes when it reopens. A recovered Anthropic Batch also waits for reopening before contacting its provider. Deferred automatic titles use the first eligible completed response; a title request already started is never automatically replayed. Other uncertain interrupted work keeps its existing explicit-retry rules.
+
+`activeWork` includes an already started scheduled or manual backup until it finishes, even after its HTTP request has returned. An operator can therefore wait for the snapshot before stopping the app.
+
 `UIMORI_MAINTENANCE=1` starts the app with DB admission and reads, but without task recovery or workers. It is not a read-only SQLite open; validate a copy, not the only original DB. This boot mode cannot be reopened through the API. The implementation is in [maintenance.ts](../server/maintenance.ts) and [app.ts](../server/app.ts).
 
 The Oracle runner uses these admission and boot boundaries to wait for active work, verify a candidate database copy and reopen writes after deployment. [Maintenance tests](../tests/maintenance.test.ts) cover the app gate; the [Oracle release guide](ORACLE-RELEASE.md) describes the separate image, backup and recovery checks.

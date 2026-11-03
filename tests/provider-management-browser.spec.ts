@@ -856,7 +856,7 @@ test('PMUI07 quick setup selects a cached catalog model and keeps drafts across 
   expect(observed.legacyReads).toEqual([]);
 });
 
-test('PMUI08 Vertex JSON upload validates locally and saves only the returned credential reference', async ({
+test('PMUI08 Vertex JSON draft is validated and saved with the connection', async ({
   page,
   request,
 }, info) => {
@@ -927,11 +927,10 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(serviceAccount)),
   });
-  await expect(upload.getByRole('status')).toContainText(projectId);
+  await expect(upload.getByRole('status')).toContainText(`프로젝트: ${projectId}`);
   const uploadResponse = await uploaded;
   expect(uploadResponse.ok()).toBeTruthy();
-  const { credentialRef } = (await uploadResponse.json()) as { credentialRef: string };
-  expect(credentialRef).toMatch(/^UIMORI_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/);
+  expect(await uploadResponse.json()).toEqual({ projectId, clientEmail });
   expect(uploads).toBe(1);
   expect(uploadBody).toEqual({ serviceAccount });
   await expect(form.getByLabel('API 키', { exact: true })).toHaveCount(0);
@@ -948,16 +947,48 @@ test('PMUI08 Vertex JSON upload validates locally and saves only the returned cr
     await page.screenshot({
       path: info.outputPath('provider-management-vertex-upload-mobile.png'),
     });
-  const posted = page.waitForRequest(
-    (r) => r.method() === 'POST' && r.url().endsWith('/api/connections')
+  const replacement = {
+    ...serviceAccount,
+    client_email: `replacement@${projectId}.iam.gserviceaccount.com`,
+  };
+  await file.setInputFiles({
+    name: 'synthetic-replacement.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(replacement)),
+  });
+  await expect(upload.getByRole('status')).toContainText(replacement.client_email);
+  expect(uploads).toBe(2);
+  expect(uploadBody).toEqual({ serviceAccount: replacement });
+  let rejectOnce = true;
+  await page.route('**/api/connections', async (route) => {
+    if (route.request().method() === 'POST' && rejectOnce) {
+      rejectOnce = false;
+      await route.fulfill({ status: 400, json: { error: 'Synthetic save rejection' } });
+    } else await route.continue();
+  });
+  const rejected = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/connections')
   );
   await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
-  expect((await posted).postDataJSON()).toMatchObject({
-    credentialRef,
+  expect((await rejected).status()).toBe(400);
+  await expect(form.getByRole('button', { name: '프로바이더 등록', exact: true })).toBeEnabled();
+  await expect(upload.getByRole('status')).toContainText(replacement.client_email);
+  await expect(form.getByLabel('프로바이더 이름', { exact: true })).toHaveValue(title);
+  expect((await library(request)).connections.some((item) => item.title === title)).toBe(false);
+  const posted = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/connections')
+  );
+  await form.getByRole('button', { name: '프로바이더 등록', exact: true }).click();
+  const saved = await posted;
+  expect(saved.ok()).toBeTruthy();
+  expect(saved.request().postDataJSON()).toMatchObject({
+    serviceAccount: replacement,
     endpoint,
     title,
     protocol: 'vertex-gemini-v1',
   });
+  const { credentialRef } = (await saved.json()) as { credentialRef: string };
+  expect(credentialRef).toMatch(/^UIMORI_PROVIDER_VERTEX_FILE_[A-F0-9]{32}$/);
   await expect
     .poll(async () => (await library(request)).connections.find((item) => item.title === title))
     .toMatchObject({ credentialRef, endpoint });

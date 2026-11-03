@@ -52,7 +52,7 @@ export class ChatTitleService {
   cancel(chatId: string) {
     this.active.get(chatId)?.abort();
   }
-  afterSource(runId: string) {
+  afterSource(runId: string, defer = false) {
     try {
       const run = this.store.db
         .prepare(`SELECT id,chat_id AS chatId,request,source_revision AS sourceRevision,
@@ -66,6 +66,16 @@ export class ChatTitleService {
         this.has(chatId, 'started', 'manual', 'generated', 'failed')
       )
         return;
+      const deferred = this.store.db
+        .prepare(
+          "SELECT entity_id FROM events WHERE chat_id=? AND kind='chat.title.deferred' ORDER BY seq LIMIT 1"
+        )
+        .get(chatId)?.entity_id;
+      if (deferred && deferred !== runId) return;
+      if (defer) {
+        if (!deferred) this.store.event(chatId, 'chat.title.deferred', runId);
+        return;
+      }
       this.store.event(chatId, 'chat.title.started', runId);
       const controller = new AbortController();
       this.active.set(chatId, controller);
@@ -77,6 +87,18 @@ export class ChatTitleService {
     } catch {
       // A title must never turn a successful source into a failed main execution.
     }
+  }
+  resumeDeferred() {
+    const rows = this.store.db
+      .prepare(`
+      SELECT entity_id FROM events AS deferred
+      WHERE kind='chat.title.deferred' AND NOT EXISTS (
+        SELECT 1 FROM events AS done WHERE done.chat_id=deferred.chat_id
+        AND done.kind IN ('chat.title.started','chat.title.manual','chat.title.generated','chat.title.failed')
+      ) ORDER BY seq
+    `)
+      .all();
+    for (const row of rows) this.afterSource(String(row.entity_id));
   }
   private async generate(run: TitleSource, controller: AbortController) {
     const runId = run.id,

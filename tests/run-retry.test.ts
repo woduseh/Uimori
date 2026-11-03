@@ -18,6 +18,7 @@ import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspa
 import { exportChatTranscript, importChatTranscript } from '../server/chat-transcript.js';
 import { editSource } from '../server/source-editing.js';
 import { readChatVariables, writeChatVariables } from '../server/chat-variables.js';
+import { mainJudgmentInput } from '../server/main-judgment.js';
 import {
   contextSourceRefs,
   validateContextPlan,
@@ -258,6 +259,51 @@ test('completed replacements can be replaced again and failed judgment recovery 
   expect(copy.chatId).not.toBe(chat.id);
   expect(copy.snapshot.replacement).toBeUndefined();
 });
+
+test.each(['queued', 'running'] as const)(
+  'rejudgment reports a conflict when another request is %s and preserves both runs',
+  (activeStatus) => {
+    const store = database();
+    const chat = createFixtureChat(store, 'Rejudgment admission');
+    const original = queued(store, chat.id);
+    const candidate = 'A completed candidate awaiting judgment.';
+    store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
+      JSON.stringify({
+        ...original.snapshot,
+        mainJudgmentEnabled: true,
+        mainJudgment: mainJudgmentInput(candidate),
+        mainJudgmentPending: true,
+      }),
+      original.id
+    );
+    store.startRun(original.id);
+    store.finishRun(original.id, 'failed', 'JEV_EXECUTION_FAILED', candidate);
+    const active = queued(store, chat.id, 'A different active request');
+    if (activeStatus === 'running') store.startRun(active.id);
+
+    expect(() => store.candidate(original.id, 'rejudge-active', 'unused', undefined, true)).toThrow(
+      expect.objectContaining({ statusCode: 409 })
+    );
+    expect(store.run(active.id).status).toBe(activeStatus);
+    expect(store.run(original.id)).toMatchObject({ status: 'failed', partialText: candidate });
+    expect(store.chat(chat.id).headRevision).toBeNull();
+    store.finishRun(active.id, 'cancelled', 'Run cancelled');
+    const originalKey = String(
+      store.db.prepare('SELECT request_key FROM runs WHERE id=?').get(original.id)!.request_key
+    );
+    expect(() => store.candidate(original.id, originalKey, 'unused', undefined, true)).toThrow(
+      expect.objectContaining({ statusCode: 409 })
+    );
+    const admitted = store.candidate(original.id, 'rejudge-active', 'unused', undefined, true);
+    expect(admitted.created).toBe(true);
+    expect(store.candidate(original.id, 'rejudge-active', 'unused', undefined, true)).toMatchObject(
+      {
+        created: false,
+        run: { id: admitted.run.id },
+      }
+    );
+  }
+);
 
 test.each(['compacted', 'recent'] as const)(
   'replacement clears an active checkpoint with the old response in %s only after success and preserves its record',

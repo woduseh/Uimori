@@ -82,6 +82,72 @@ test('stopped backup restores DB and companion assets, removing candidate-only f
   assert.throws(() => restoreData(source, join(source, 'nested')), /Overlapping/);
 });
 
+for (const change of ['logout', 'login', 'authority']) {
+  test(`rollback preserves the candidate when ${change} changed session authority after backup`, (t) => {
+    const { root, source, db } = fixture(t);
+    db.exec(`
+      CREATE TABLE access_sessions(token_hash TEXT PRIMARY KEY,authority_hash TEXT NOT NULL);
+      CREATE TABLE push_subscriptions(id TEXT PRIMARY KEY,session_hash TEXT REFERENCES access_sessions(token_hash) ON DELETE CASCADE);
+      INSERT INTO access_sessions VALUES('device','authority');
+      INSERT INTO push_subscriptions VALUES('subscription','device');
+    `);
+    db.close();
+    const target = join(root, 'backup');
+    copyStoppedData(source, target);
+    const backup = readFileSync(join(target, 'uimori.sqlite'));
+    const changed = new DatabaseSync(join(source, 'uimori.sqlite'));
+    changed.exec('PRAGMA foreign_keys=ON');
+    if (change === 'logout') changed.exec("DELETE FROM access_sessions WHERE token_hash='device'");
+    if (change === 'login')
+      changed.exec("INSERT INTO access_sessions VALUES('new-device','authority')");
+    if (change === 'authority')
+      changed.exec("UPDATE access_sessions SET authority_hash='changed-authority'");
+    const sessions = changed.prepare('SELECT * FROM access_sessions ORDER BY token_hash').all();
+    const subscriptions = changed.prepare('SELECT * FROM push_subscriptions').all();
+    changed.close();
+    const candidate = readFileSync(join(source, 'uimori.sqlite'));
+    writeFileSync(join(source, 'candidate-only'), 'preserve');
+
+    assert.throws(() => restoreData(target, source), /Session authority changed/);
+    assert.deepEqual(readFileSync(join(source, 'uimori.sqlite')), candidate);
+    assert.deepEqual(readFileSync(join(target, 'uimori.sqlite')), backup);
+    assert.equal(readFileSync(join(source, 'candidate-only'), 'utf8'), 'preserve');
+    const preserved = new DatabaseSync(join(source, 'uimori.sqlite'), { readOnly: true });
+    try {
+      assert.deepEqual(
+        preserved.prepare('SELECT * FROM access_sessions ORDER BY token_hash').all(),
+        sessions
+      );
+      assert.deepEqual(preserved.prepare('SELECT * FROM push_subscriptions').all(), subscriptions);
+    } finally {
+      preserved.close();
+    }
+  });
+}
+
+test('a temporary control login removed before rollback does not prevent restoration', (t) => {
+  const { root, source, db } = fixture(t);
+  db.exec(
+    "CREATE TABLE access_sessions(token_hash TEXT PRIMARY KEY,authority_hash TEXT NOT NULL); INSERT INTO access_sessions VALUES('device','authority')"
+  );
+  db.close();
+  const target = join(root, 'backup');
+  copyStoppedData(source, target);
+  const changed = new DatabaseSync(join(source, 'uimori.sqlite'));
+  changed.exec(
+    "INSERT INTO access_sessions VALUES('control','authority'); DELETE FROM access_sessions WHERE token_hash='control'; UPDATE future_jobs SET body='candidate'"
+  );
+  changed.close();
+  restoreData(target, source);
+  const restored = new DatabaseSync(join(source, 'uimori.sqlite'), { readOnly: true });
+  try {
+    assert.equal(restored.prepare('SELECT body FROM future_jobs').get().body, 'original');
+    assert.equal(restored.prepare('SELECT count(*) AS count FROM access_sessions').get().count, 1);
+  } finally {
+    restored.close();
+  }
+});
+
 test('fresh copies only credential directory and Codex login, never app settings/session databases', (t) => {
   const { root, source } = fixture(t);
   mkdirSync(join(source, 'uimori.sqlite.vertex-credentials'));

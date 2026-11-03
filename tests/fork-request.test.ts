@@ -57,6 +57,48 @@ test('an uncertain request retains its admission key for the next attempt', asyn
   expect(values.has(key)).toBe(false);
 });
 
+test.each([404, 409, 410, 429])(
+  'a later HTTP %s does not forget an earlier uncertain fork',
+  async (status) => {
+    const { values } = storageFixture();
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new TypeError('Connection lost'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'Temporary failure' }), { status })
+      )
+      .mockResolvedValueOnce(accepted());
+    await expect(requestChatFork('chat', 'source')).rejects.toThrow('Connection lost');
+    const pending = values.get(key);
+    await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({ status });
+    expect(values.get(key)).toBe(pending);
+    await expect(requestChatFork('chat', 'source')).resolves.toMatchObject({ id: 'forked-chat' });
+    expect(
+      fetch.mock.calls.map(([, options]) => JSON.parse(String(options?.body)).idempotencyKey)
+    ).toEqual([pending, pending, pending]);
+    expect(values.has(key)).toBe(false);
+  }
+);
+
+test('a terminal receipt for a deleted copy releases its retained key', async () => {
+  const { values } = storageFixture();
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockRejectedValueOnce(new TypeError('Connection lost'))
+    .mockResolvedValueOnce(Response.json({ error: 'CHAT_COPY_REMOVED' }, { status: 410 }))
+    .mockResolvedValueOnce(accepted());
+  await expect(requestChatFork('chat', 'source')).rejects.toThrow();
+  const previous = values.get(key);
+  expect(previous).toBeTruthy();
+  await expect(requestChatFork('chat', 'source')).rejects.toMatchObject({
+    status: 410,
+    code: 'CHAT_COPY_REMOVED',
+  });
+  expect(values.has(key)).toBe(false);
+  await expect(requestChatFork('chat', 'source')).resolves.toMatchObject({ id: 'forked-chat' });
+  expect(JSON.parse(String(fetch.mock.calls[2][1]?.body)).idempotencyKey).not.toBe(previous);
+});
+
 test.each([408, 500, 503])('HTTP %s retains the pending admission identity', async (status) => {
   const { values } = storageFixture();
   vi.spyOn(globalThis, 'fetch').mockResolvedValue(

@@ -1401,6 +1401,33 @@ test('operation receipt and nested service mutation commit or roll back together
   );
 });
 
+test.each([null, false, 0, ''] as const)(
+  'falsy operation result %s is replayed until completed task details are released',
+  (value) => {
+    const f = fixture();
+    const task = f.workspace.enqueue(f.conversation.id, 'receipt', 'save', snapshot(f));
+    f.workspace.start(task.id, 'owner');
+    const input = { name: 'save' };
+    expect(f.workspace.operation(task.id, 'receipt-op', input, () => value)).toBe(value);
+    expect(f.workspace.operationResult(task.id, 'receipt-op', input)).toBe(value);
+    expect(
+      f.workspace.operation(task.id, 'receipt-op', input, () => {
+        throw new Error('must not repeat');
+      })
+    ).toBe(value);
+    expect(() => f.workspace.operationResult(task.id, 'receipt-op', { name: 'other' })).toThrow(
+      'OPERATION_ID_CONFLICT'
+    );
+    expect(f.workspace.finish(task.id, 'owner', 1, 'completed', '', null)).toBe(true);
+    expect(() => f.workspace.operationResult(task.id, 'receipt-op', input)).toThrow(
+      'HELPER_TASK_NO_LONGER_ACTIVE'
+    );
+    expect(() => f.workspace.operation(task.id, 'receipt-op', input, () => value)).toThrow(
+      'HELPER_TASK_NO_LONGER_ACTIVE'
+    );
+  }
+);
+
 test('a saved change survives an explanation EOF and prevents whole-request retry after reopening the database', async () => {
   const f = fixture(),
     chat = createFixtureChat(f.store, '원 제목');

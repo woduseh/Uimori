@@ -9,6 +9,7 @@ import { nativeRisuContext } from '../server/risu-native-context.js';
 import { importRisuPresetProgram } from '../server/risu-preset-program.js';
 import {
   executeRisuNative,
+  disposeNativeRisuSession,
   disposeAllNativeRisuSessions,
   type NativeRisuExecutionInput,
 } from '../server/risu-native-runtime.js';
@@ -285,6 +286,165 @@ describe('native Risu execution', () => {
     expect(
       (await executeRisuNative(input(revised), { sessionKey: 'persistent-budget' })).variables
     ).toEqual({ revision: '2' });
+  });
+  it('does not let a cancelled invocation discard the next invocation session', async () => {
+    const content = native([
+      lua(
+        `function choose(id)
+        local result = LLM(id, getChatVar(id, 'label'))
+        setChatVar(id, 'answer', result.result)
+      end`,
+        true
+      ),
+    ]);
+    let started!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const controller = new AbortController();
+    const old = executeRisuNative(
+      { ...input(content), variables: { label: 'old' } },
+      {
+        sessionKey: 'cancelled-owner-race',
+        signal: controller.signal,
+        host: async () => {
+          started();
+          await gate; // The host can settle after the run has been cancelled.
+          return { success: true, result: 'old' };
+        },
+      }
+    ).catch((error: unknown) => error);
+    try {
+      await entered;
+      controller.abort();
+      const next = executeRisuNative(
+        { ...input(content), variables: { label: 'next' } },
+        {
+          sessionKey: 'cancelled-owner-race',
+          host: async () => ({ success: true, result: 'next' }),
+        }
+      );
+      // Observe both outcomes immediately even if the regression rejects next.
+      const outcome = next.then(
+        (value) => value,
+        (error: unknown) => error
+      );
+      release();
+      expect(await old).toBeInstanceOf(Error);
+      expect(await outcome).toMatchObject({ variables: { label: 'next', answer: 'next' } });
+    } finally {
+      release();
+      controller.abort();
+    }
+  });
+  it('discards idle Lua state when its owning run is cancelled before a later run starts', async () => {
+    const content = native([
+      lua(`local count = 0
+      function choose(id)
+        count = count + 1
+        setChatVar(id, 'count', count)
+      end`),
+    ]);
+    const key = 'cancelled-idle-owner';
+    const oldOwner = {};
+    const newOwner = {};
+    const controller = new AbortController();
+    let started!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const old = (async () => {
+      try {
+        const result = await executeRisuNative(input(content), {
+          sessionKey: key,
+          sessionOwner: oldOwner,
+          signal: controller.signal,
+        });
+        expect(result.variables.count).toBe('1');
+        started();
+        // The run is still waiting for a model after its Lua callback has finished.
+        await gate;
+      } finally {
+        disposeNativeRisuSession(key, oldOwner);
+      }
+    })();
+    try {
+      await entered;
+      controller.abort();
+      const next = await executeRisuNative(input(content), {
+        sessionKey: key,
+        sessionOwner: newOwner,
+      });
+      expect(next.variables.count).toBe('1');
+      release();
+      await old;
+      const again = await executeRisuNative(input(content), {
+        sessionKey: key,
+        sessionOwner: newOwner,
+      });
+      expect(again.variables.count).toBe('2');
+    } finally {
+      release();
+      await old;
+    }
+  });
+  it('keeps successful Lua state when a later run takes ownership', async () => {
+    const content = native([
+      lua(`local count = 0
+      function choose(id)
+        count = count + 1
+        setChatVar(id, 'count', count)
+      end`),
+    ]);
+    const key = 'successful-owner-transfer';
+    const previous = new AbortController();
+    const first = await executeRisuNative(input(content), {
+      sessionKey: key,
+      sessionOwner: {},
+      signal: previous.signal,
+    });
+    const current = {};
+    const second = await executeRisuNative(input(content), {
+      sessionKey: key,
+      sessionOwner: current,
+    });
+    expect(first.variables.count).toBe('1');
+    expect(second.variables.count).toBe('2');
+    previous.abort();
+    const third = await executeRisuNative(input(content), {
+      sessionKey: key,
+      sessionOwner: current,
+    });
+    expect(third.variables.count).toBe('3');
+  });
+  it('does not reserve sessions for invocations already cancelled before admission', async () => {
+    const content = native([
+      lua(`local count = 0
+      function choose(id)
+        count = count + 1
+        setChatVar(id, 'count', count)
+      end`),
+    ]);
+    const key = 'successful-session-before-cancelled-admissions';
+    expect((await executeRisuNative(input(content), { sessionKey: key })).variables.count).toBe(
+      '1'
+    );
+    const signal = AbortSignal.abort();
+    for (let index = 0; index < 32; index++)
+      await expect(
+        executeRisuNative(input(content), { sessionKey: `cancelled-admission-${index}`, signal })
+      ).rejects.toThrow('RISU_NATIVE_ABORTED');
+    expect((await executeRisuNative(input(content), { sessionKey: key })).variables.count).toBe(
+      '2'
+    );
   });
   it('runs original Lua button functions, preserves state, message ids and explicit reload', async () => {
     const content = native([

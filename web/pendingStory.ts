@@ -2,8 +2,10 @@ import type { ChatProfile } from '../core/product.js';
 import { api } from './api.js';
 import { validateContentAttachment } from '../core/risu-content.js';
 import { validatePackageStartRef, type PackageStartRef } from '../core/package-start.js';
+import { message as uiMessage } from './i18n.js';
 export type NewStoryProfileIntent = {
   packageAttachments?: ChatProfile['packageAttachments'];
+  profileBaseRevision?: number;
   packageStart?: PackageStartRef & {
     idempotencyKey: string;
     expectedSettingsRevision?: number;
@@ -13,6 +15,20 @@ export type NewStoryProfileIntent = {
 type PendingStoryProfile = NewStoryProfileIntent & { version: 2; kind: 'new-story-profile' };
 const pendingKey = (chatId: string) => `pending-profile:${chatId}`;
 const saving = new Map<string, Promise<void>>();
+
+export class PendingStoryProfileConflict extends Error {
+  constructor(readonly savedIntent: string) {
+    super(uiMessage('main.pendingProfileConflict'));
+  }
+}
+
+/** Discard only the exact conflicted intent the user reviewed. */
+export function acceptSavedStoryProfile(chatId: string, savedIntent: string) {
+  const key = pendingKey(chatId);
+  if (sessionStorage.getItem(key) !== savedIntent)
+    throw new Error(uiMessage('main.pendingProfileChanged'));
+  sessionStorage.removeItem(key);
+}
 
 export function savePendingStoryProfile(chatId: string, intent: NewStoryProfileIntent) {
   const pending: PendingStoryProfile = { version: 2, kind: 'new-story-profile', ...intent };
@@ -28,7 +44,10 @@ function readIntent(raw: string): NewStoryProfileIntent {
   if (
     !versioned ||
     Object.keys(pending).some(
-      (key) => !['version', 'kind', 'packageAttachments', 'packageStart'].includes(key)
+      (key) =>
+        !['version', 'kind', 'packageAttachments', 'packageStart', 'profileBaseRevision'].includes(
+          key
+        )
     )
   ) {
     throw new Error('보관한 시작 설정을 읽을 수 없어요.');
@@ -40,6 +59,12 @@ function readIntent(raw: string): NewStoryProfileIntent {
         ? pending.packageAttachments.map(validateContentAttachment)
         : null;
   if (packageAttachments === null) throw new Error('보관한 시작 패키지를 읽을 수 없어요.');
+  const profileBaseRevision = pending.profileBaseRevision;
+  if (
+    profileBaseRevision !== undefined &&
+    (!Number.isSafeInteger(profileBaseRevision) || Number(profileBaseRevision) < 1)
+  )
+    throw new Error('보관한 시작 설정을 읽을 수 없어요.');
   let packageStart: NewStoryProfileIntent['packageStart'];
   if (pending.packageStart !== undefined) {
     const opening = pending.packageStart as Record<string, unknown>;
@@ -72,6 +97,9 @@ function readIntent(raw: string): NewStoryProfileIntent {
   }
   return {
     ...(packageAttachments ? { packageAttachments } : {}),
+    ...(profileBaseRevision === undefined
+      ? {}
+      : { profileBaseRevision: Number(profileBaseRevision) }),
     ...(packageStart ? { packageStart } : {}),
   };
 }
@@ -97,15 +125,37 @@ async function applyPendingStoryProfile(chatId: string) {
     return;
   }
   const current = await api<ChatProfile>(`/chats/${chatId}/profile`);
-  const saved = await api<ChatProfile>(
-    `/chats/${chatId}/profile`,
-    {
-      image: current.image,
-      ...(intent.packageAttachments ? { packageAttachments: intent.packageAttachments } : {}),
-      expectedRevision: current.revision,
-    },
-    'PUT'
-  );
+  if (sessionStorage.getItem(key) !== raw) throw new Error(uiMessage('main.pendingProfileChanged'));
+  // New chats start at revision 1. Older pending records did not store their base:
+  // only revision 1 is safe to write; later matching attachments can be observed as saved.
+  const base = intent.profileBaseRevision ?? 1;
+  const sameAttachments =
+    intent.packageAttachments === undefined ||
+    JSON.stringify((current.packageAttachments ?? []).map(({ id, role }) => [id, role])) ===
+      JSON.stringify(intent.packageAttachments.map(({ id, role }) => [id, role]));
+  let saved: ChatProfile;
+  if (current.revision !== base) {
+    if (current.revision < base || !sameAttachments) throw new PendingStoryProfileConflict(raw);
+    saved = current;
+  } else {
+    if (intent.profileBaseRevision === undefined) {
+      intent.profileBaseRevision = base;
+      savePendingStoryProfile(chatId, intent);
+      raw = sessionStorage.getItem(key);
+      if (raw === null) throw new Error(uiMessage('main.pendingProfileChanged'));
+    }
+    saved = await api<ChatProfile>(
+      `/chats/${chatId}/profile`,
+      {
+        image: current.image,
+        ...(intent.packageAttachments ? { packageAttachments: intent.packageAttachments } : {}),
+        expectedRevision: base,
+      },
+      'PUT'
+    );
+    if (sessionStorage.getItem(key) !== raw)
+      throw new Error(uiMessage('main.pendingProfileChanged'));
+  }
   if (intent.packageStart) {
     // Record the accepted profile revision before starting. A lost start response retries
     // the identical command, without another profile write or another initial action.

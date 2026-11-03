@@ -1,7 +1,6 @@
 import { t, message as uiMessage, useI18n, translateMessage } from './i18n.js';
 import { imageInputSupported } from '../core/provider-image-reference.js';
 import { DraftRequestImages } from './RequestImages.js';
-import type { OutlineHelperRequest } from './outline-helper.js';
 import { downloadArchive } from './archive-download.js';
 import { ReaderEditingContext } from './Bookmarks.js';
 import type { NotificationIntent } from '../core/push.js';
@@ -40,7 +39,7 @@ import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
 import { ChatPromptOptions } from './ChatPromptOptions.js';
-import { HelperPanel } from './HelperPanel.js';
+import { HelperPanel, type HelperHandoff } from './HelperPanel.js';
 import { api } from './api.js';
 import { selectedHelperSession } from './useHelperSessions.js';
 import type { HelperRecentTask } from '../core/activity-feed.js';
@@ -96,6 +95,8 @@ import { contentPortraitUrl } from './content-portrait.js';
 import { ThemeBackground } from './ThemeBackground.js';
 import type { ContentRole } from '../core/risu-content.js';
 import { SourceReader } from './SourceReader.js';
+import { pendingSceneDeletions, SceneDeleteDialog } from './SceneDeleteAction.js';
+import type { SceneDeletionResult } from '../core/scene-deletion.js';
 import { TurnActivity } from './TurnActivity.js';
 import { SessionGate } from './SessionGate.js';
 import { MaintenanceBanner } from './MaintenanceBanner.js';
@@ -103,7 +104,11 @@ import { Dialog } from './Dialog.js';
 import { CodexContentWarningDialog } from './CodexContentWarningDialog.js';
 import { DeleteButton } from './DeleteButton.js';
 import { BotNavigation, NavigationQuickActions, type ChatFolder } from './BotTreeNavigation.js';
-import { completePendingStoryProfile } from './pendingStory.js';
+import {
+  completePendingStoryProfile,
+  PendingStoryProfileConflict,
+  acceptSavedStoryProfile,
+} from './pendingStory.js';
 import { useStory } from './useStory.js';
 import { useTestMode } from './useTestMode.js';
 import { ActivityStatus } from './ActivityStatus.js';
@@ -204,6 +209,27 @@ function App() {
     setThemeScope({ chatId: themeChatId || undefined, botId: themeBotId });
   }, [themeChatId, themeBotId, setThemeScope]);
   const [nativeNotices, setNativeNotices] = useState<string[]>([]);
+  const [sceneDeletion, setSceneDeletion] = useState<{
+    chatId: string;
+    sourceId: string;
+    onDeleted: (result: SceneDeletionResult) => Promise<void>;
+  } | null>(null);
+  const [sceneDeletionVersion, setSceneDeletionVersion] = useState(0);
+  const [pendingScenes, setPendingScenes] = useState<{
+    chatId: string;
+    version: number;
+    sourceIds: string[];
+  }>({ chatId: '', version: 0, sourceIds: [] });
+  useEffect(() => {
+    setPendingScenes({
+      chatId: s.selected,
+      version: sceneDeletionVersion,
+      sourceIds: pendingSceneDeletions(s.selected),
+    });
+  }, [s.selected, sceneDeletionVersion]);
+  const openSceneDeletion = (chatId: string, sourceId: string) => {
+    setSceneDeletion({ chatId, sourceId, onDeleted: s.sceneDeletionCompletion(chatId) });
+  };
   const testMode = useTestMode();
   const compact = useCompactLayout();
 
@@ -275,6 +301,7 @@ function App() {
     conversationId: string;
     taskId: string;
     sequence: number;
+    epoch: number;
   } | null>(null);
   const optionsOpen = workspacePanel === 'options';
   const helperOpen = workspacePanel === 'helper';
@@ -291,21 +318,8 @@ function App() {
     s.pendingProfile ||
     !!s.pendingRequest ||
     s.submitting.includes(s.viewKey);
-  const [outlineHelperRequest, setOutlineHelperRequest] = useState<OutlineHelperRequest>();
-  const [helperDraftRequest, setHelperDraftRequest] = useState<{
-    key: string;
-    text: string;
-    scope: HelperScope;
-    conversationId?: string;
-  }>();
-  const [helperSelection, setHelperSelection] = useState<{
-    key: string;
-    sourceId: string;
-    sourceHash: string;
-    text: string;
-    conversationId?: string;
-    scope: HelperScope;
-  }>();
+  const helperHandoffEpoch = useRef(0);
+  const [helperHandoff, setHelperHandoff] = useState<HelperHandoff>();
   const [editingSources, setEditingSources] = useState<string[]>([]);
   const onSourceEditing = useCallback((sourceId: string, editing: boolean) => {
     setEditingSources((current) =>
@@ -319,6 +333,10 @@ function App() {
   } | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSaveError, setProfileSaveError] = useState('');
+  const [profileConflict, setProfileConflict] = useState<{
+    chatId: string;
+    savedIntent: string;
+  } | null>(null);
   const currentRequestDecision =
     requestDecision?.scope === s.viewKey &&
     (requestDecision.kind === 'profile' ? s.pendingProfile : !!s.pendingRequest)
@@ -336,6 +354,7 @@ function App() {
       return false;
     if (s.pendingProfile || s.pendingRequest) {
       setProfileSaveError('');
+      setProfileConflict(null);
       setRequestDecision({ scope: s.viewKey, kind: s.pendingProfile ? 'profile' : 'admission' });
       return false;
     }
@@ -728,6 +747,7 @@ function App() {
   }
   function openRecentHelper(task: HelperRecentTask) {
     helperReturnToSidecar.current = false;
+    const epoch = ++helperHandoffEpoch.current;
     setPanel('');
     setHelperExpanded(true);
     setWorkspacePanel('helper');
@@ -735,6 +755,7 @@ function App() {
       conversationId: task.conversationId,
       taskId: task.id,
       sequence: (previous?.sequence ?? 0) + 1,
+      epoch,
     }));
   }
   function showLibrary(tab: 'bot' | 'persona' | 'module' | 'prompts' = 'bot') {
@@ -1603,16 +1624,12 @@ function App() {
                               refresh={() => s.refresh(s.selected)}
                               onError={s.setError}
                               onFork={s.fork}
-                              deletionDisabled={!!s.active || sourceEditing}
-                              onDeleted={async (result) => {
-                                try {
-                                  if (result.chatId === s.selected)
-                                    s.chooseSource(result.headRevision ?? '', true);
-                                  await s.loadChats();
-                                } catch (cause) {
-                                  s.setError((cause as Error).message);
-                                }
-                              }}
+                              deletionDisabled={
+                                !!s.active ||
+                                sourceEditing ||
+                                sceneDeletion?.chatId === source.chatId
+                              }
+                              onDeleteScene={openSceneDeletion}
                               onNativeNotice={(messages) =>
                                 setNativeNotices((previous) => [...previous, ...messages])
                               }
@@ -1630,7 +1647,9 @@ function App() {
                               onAskHelper={(sourceId, text) => {
                                 setWorkspacePanel('helper');
                                 if (s.selected)
-                                  setHelperSelection({
+                                  setHelperHandoff({
+                                    kind: 'selection',
+                                    epoch: ++helperHandoffEpoch.current,
                                     key: crypto.randomUUID(),
                                     sourceId,
                                     sourceHash: source.hash,
@@ -1808,6 +1827,21 @@ function App() {
             </div>
             {s.selected && (
               <div className="composer-dock">
+                {pendingScenes.chatId === s.selected &&
+                  pendingScenes.version === sceneDeletionVersion &&
+                  pendingScenes.sourceIds.map((sourceId) => (
+                    <NoticeBanner key={sourceId} tone="error">
+                      {t('chatmanage.unknown')}{' '}
+                      <button
+                        type="button"
+                        className="secondary"
+                        disabled={sceneDeletion?.chatId === s.selected}
+                        onClick={() => openSceneDeletion(s.selected, sourceId)}
+                      >
+                        {t('chatmanage.confirmOutcome')}
+                      </button>
+                    </NoticeBanner>
+                  ))}
                 {s.pendingProfile && (
                   <NoticeBanner tone="error">
                     {t('main.m095')}
@@ -1815,6 +1849,7 @@ function App() {
                       className="secondary"
                       onClick={() => {
                         setProfileSaveError('');
+                        setProfileConflict(null);
                         setRequestDecision({ scope: s.viewKey, kind: 'profile' });
                       }}
                     >
@@ -2382,11 +2417,10 @@ function App() {
         library={s.library}
         open={helperOpen}
         navigation={helperNavigation}
-        selection={helperSelection}
+        handoff={helperHandoff}
+        handoffEpoch={helperHandoffEpoch}
         resource={s.destination === 'library' && libraryTab === 'prompts' ? helperResource : null}
         onClearResource={clearHelperResource}
-        outlineRequest={outlineHelperRequest}
-        draftRequest={helperDraftRequest}
         outlineWorkspace={panel === 'outline'}
         scope={
           helperScope ??
@@ -2428,12 +2462,32 @@ function App() {
               >
                 {t('main.m136')}
               </button>
+              {profileConflict?.chatId === s.selected && (
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={profileSaving}
+                  onClick={() => {
+                    try {
+                      acceptSavedStoryProfile(profileConflict.chatId, profileConflict.savedIntent);
+                      setProfileConflict(null);
+                      setRequestDecision(null);
+                      void s.refresh(profileConflict.chatId).catch(s.setError);
+                    } catch (error) {
+                      setProfileSaveError((error as Error).message);
+                    }
+                  }}
+                >
+                  {t('main.pendingProfileUseSaved')}
+                </button>
+              )}
               <button
                 disabled={profileSaving}
                 onClick={() => {
                   const chatId = s.selected;
                   setProfileSaving(true);
                   setProfileSaveError('');
+                  setProfileConflict(null);
                   void (async () => {
                     try {
                       await completePendingStoryProfile(chatId);
@@ -2441,6 +2495,8 @@ function App() {
                       setRequestDecision(null);
                     } catch (error) {
                       setProfileSaveError((error as Error).message);
+                      if (error instanceof PendingStoryProfileConflict)
+                        setProfileConflict({ chatId, savedIntent: error.savedIntent });
                     } finally {
                       setProfileSaving(false);
                     }
@@ -2454,10 +2510,22 @@ function App() {
         ) : (
           <>
             <p>{t('main.m138')}</p>
+            {s.requestActivity?.confirmationBlocked && <p>{t('main.pendingRequestUnconfirmed')}</p>}
+            {s.error && <NoticeBanner tone="error">{translateMessage(s.error)}</NoticeBanner>}
             <div className="form-actions">
               <button className="secondary" onClick={() => setRequestDecision(null)}>
                 {t('main.m136')}
               </button>
+              {s.requestActivity?.confirmationBlocked && (
+                <button
+                  className="secondary"
+                  onClick={() => {
+                    if (s.forgetPendingRequest(s.requestActivity!.id)) setRequestDecision(null);
+                  }}
+                >
+                  {t('main.pendingRequestForget')}
+                </button>
+              )}
               <button
                 onClick={() => {
                   setRequestDecision(null);
@@ -2667,7 +2735,9 @@ function App() {
           onOpenHelper={() => setWorkspacePanel('helper')}
           onAskHelper={(text) => {
             const scope: HelperScope = { kind: 'chat', chatId: s.selected };
-            setHelperDraftRequest({
+            setHelperHandoff({
+              kind: 'draft',
+              epoch: ++helperHandoffEpoch.current,
               key: crypto.randomUUID(),
               text,
               scope,
@@ -2731,7 +2801,11 @@ function App() {
               setWorkspacePanel((value) => (value === 'helper' ? null : 'helper'));
             }}
             onHelp={(request) => {
-              setOutlineHelperRequest(request);
+              setHelperHandoff({
+                ...request,
+                kind: 'outline',
+                epoch: ++helperHandoffEpoch.current,
+              });
               setWorkspacePanel('helper');
             }}
           />
@@ -2754,7 +2828,9 @@ function App() {
             onAskHelper={(kind, id) => {
               const scope: HelperScope = { kind: 'chat', chatId: s.selected };
               setHelperScope(scope);
-              setHelperDraftRequest({
+              setHelperHandoff({
+                kind: 'draft',
+                epoch: ++helperHandoffEpoch.current,
                 key: crypto.randomUUID(),
                 text: t('helpers.analyzeTaskRequest', { kind, id }),
                 scope,
@@ -2816,6 +2892,24 @@ function App() {
     <ReadingPreferencesContext value={reading.settings}>
       <TransientNotice message={s.notice} />
       <ReaderEditingContext value={onSourceEditing}>{workspace}</ReaderEditingContext>
+      {sceneDeletion && (
+        <SceneDeleteDialog
+          key={`${sceneDeletion.chatId}:${sceneDeletion.sourceId}`}
+          chatId={sceneDeletion.chatId}
+          sourceId={sceneDeletion.sourceId}
+          visible={
+            sceneDeletion.chatId === s.selected && s.destination === 'story' && !helperWorkspaceOpen
+          }
+          onClose={() =>
+            setSceneDeletion((current) => (current === sceneDeletion ? null : current))
+          }
+          onError={(error) => {
+            if (sceneDeletion.chatId === s.selected && s.destination === 'story') s.setError(error);
+          }}
+          onPendingChange={() => setSceneDeletionVersion((version) => version + 1)}
+          onDeleted={sceneDeletion.onDeleted}
+        />
+      )}
       <Dialog
         open={nativeNotices.length > 0}
         title={t('main.m146')}

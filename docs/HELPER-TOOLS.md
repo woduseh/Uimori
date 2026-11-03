@@ -235,6 +235,10 @@ Existing scenes remain readable through `artifact.read` and `GET /api/helper/art
 
 Browser helper input, selection, outline selection and unacknowledged requests use the existing IndexedDB recovery store. Requests are held in memory before persistence. A failed outbox write offers an explicit send-without-storage action; it cannot promise recovery after reload. An outbox read failure is distinct from an empty outbox. Accepted requests are cleared conditionally, and cleanup or view-refresh failure does not turn server acceptance into transmission failure. Reload never automatically sends recovered requests. Admission compares a small request fingerprint before resolving current resource references, including after completed input cleanup.
 
+Helper conversation creation, copying and project creation retain their request identity across an unknown result and later confirmation errors. They use the same local/session storage precedence; cleanup checks that the stored request still matches the one being resolved.
+
+The composer waits until its conversation's draft, selection, outline and outbox have all been read. A read failure keeps those saved values intact and offers a retry; a request opened from a source or outline waits for the same recovery before changing them. A newer handoff or explicit conversation selection supersedes a still-loading handoff, so its late response cannot change the selected conversation or draft. If saving an edited draft or its selection fails, the current input remains available in the open app and a persistent notice offers to save the latest value again. Until that succeeds, reloading may restore the older stored value. A text-only request can still reach the explicit outbox decision when the attachment-identity write fails; actual attachment blobs retain their existing save requirement.
+
 Previously saved device-local artifact edit drafts remain available for inspection and copying only; this feature writes no new artifact drafts and does not automatically delete the old ones.
 
 ## 새 도우미 세션 생성

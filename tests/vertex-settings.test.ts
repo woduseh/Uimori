@@ -67,13 +67,6 @@ const serviceAccount = {
   private_key: '-----BEGIN PRIVATE KEY-----\nSYNTHETIC\n-----END PRIVATE KEY-----',
   token_uri: 'https://oauth2.googleapis.com/token',
 };
-async function vertexCredential(app: App) {
-  return (
-    await request<{ credentialRef: string }>(app, '/provider-management/vertex-credentials', {
-      serviceAccount,
-    })
-  ).credentialRef;
-}
 const vertexConnection = (changes: Record<string, unknown> = {}) => ({
   title: 'Synthetic Vertex',
   protocol: 'vertex-gemini-v1',
@@ -218,11 +211,10 @@ describe('Vertex connection and model settings with file SQLite', () => {
         { status: 200, headers: { 'content-type': 'application/json' } }
       );
     });
-    const credentialRef = await vertexCredential(app);
     const connection = await request<Connection>(
       app,
       '/connections',
-      vertexConnection({ credentialRef })
+      vertexConnection({ serviceAccount })
     );
     const catalog = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
 
@@ -260,7 +252,7 @@ describe('Vertex connection and model settings with file SQLite', () => {
     const connection = await request<Connection>(
       app,
       '/connections',
-      vertexConnection({ credentialRef: await vertexCredential(app) })
+      vertexConnection({ serviceAccount })
     );
     const listed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
     const failed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});

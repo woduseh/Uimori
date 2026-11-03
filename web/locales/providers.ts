@@ -1915,10 +1915,10 @@ export const messages = {
     zh: '已选择 JSON 认证',
   },
   'providers.m396': {
-    ko: '서버에 등록하는 중…',
-    en: 'Registering on server…',
-    ja: 'サーバーに登録中…',
-    zh: '正在添加到服务器…',
+    ko: '서버에서 확인하는 중…',
+    en: 'Checking on server…',
+    ja: 'サーバーで確認中…',
+    zh: '正在服务器上检查…',
   },
   'providers.m397': {
     ko: '다른 JSON 파일로 변경',
@@ -2887,10 +2887,10 @@ export const messages = {
     zh: '{value0} 秒',
   },
   'providers.m582': {
-    ko: '등록됨: {value0}',
-    en: 'Registered: {value0}',
-    ja: '登録済み、{value0}',
-    zh: '已注册，{value0}',
+    ko: '프로젝트: {value0}',
+    en: 'Project: {value0}',
+    ja: 'プロジェクト: {value0}',
+    zh: '项目：{value0}',
   },
   'providers.m583': {
     ko: '{value0}일 사용량',

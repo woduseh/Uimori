@@ -139,7 +139,7 @@ export function PackageStartPicker({
       }
     } catch (cause) {
       if (!mounted.current) return;
-      if (definiteRejection(cause)) {
+      if (!uncertain && definiteRejection(cause)) {
         submitted.current = null;
         setUncertain(false);
         setError((cause as Error).message);

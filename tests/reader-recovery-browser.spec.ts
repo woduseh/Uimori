@@ -224,6 +224,63 @@ test('READERREC a failed refocus lookup does not suspend an already healthy read
     .toBe(detail.sources[1].id);
 });
 
+test('READERREC leaving during a position write flushes the newer location after acknowledgement', async ({
+  page,
+  request,
+}) => {
+  const { chat, detail } = await createReadingChat(request, 'Position write on navigation', 3);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const targets: string[] = [];
+  await page.route(`**/api/chats/${chat.id}/reading-position`, async (route) => {
+    if (route.request().method() !== 'PUT') return route.continue();
+    targets.push(route.request().postDataJSON().target.sourceId);
+    if (targets.length === 1) await held;
+    await route.continue();
+  });
+  const go = async (number: number) => {
+    await page
+      .getByRole('button', { name: '장면 목록 열기', exact: true })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await page
+      .getByRole('dialog', { name: '장면 목록', exact: true })
+      .getByRole('button', { name: new RegExp(`^${number}번째 장면,`) })
+      .click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('source'))
+      .toBe(detail.sources[number - 1].id);
+    await page.evaluate(async () => {
+      for (let index = 0; index < 3; index++)
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+  };
+  try {
+    const loaded = page.waitForResponse(
+      (response) => response.url().includes('/reading-position?') && response.ok()
+    );
+    await page.goto(`/?chat=${chat.id}`);
+    await loaded;
+    await go(2);
+    await expect.poll(() => targets.length).toBe(1);
+    await go(3);
+    await navigationAction(page, '서재');
+    release();
+    const clientId = await page.evaluate(() => localStorage.getItem('uimori:reading-client'));
+    const path = `/api/chats/${chat.id}/reading-position?${new URLSearchParams({ clientId: clientId! })}`;
+    await expect
+      .poll(async () => (await (await request.get(path)).json()).own?.target.sourceId)
+      .toBe(detail.sources[2].id);
+    expect(targets).toEqual([detail.sources[1].id, detail.sources[2].id]);
+  } finally {
+    release();
+    await page.unrouteAll({ behavior: 'wait' });
+  }
+});
+
 test('READERREC confirming an uncertain request never turns into cancelling its admitted run', async ({
   page,
   request,
@@ -295,6 +352,55 @@ test('READERREC confirming an uncertain request never turns into cancelling its 
   expect(confirmed).toBe(true);
   expect(cancellations).toBe(0);
   expect((await (await request.get(`/api/chats/${chat.id}`)).json()).runs).toHaveLength(1);
+});
+
+test('READERREC an unconfirmable request can be explicitly cleared without changing the new draft', async ({
+  page,
+  request,
+}) => {
+  const chat = await (
+    await postFixtureChat(request, { data: { title: 'Unconfirmable request' } })
+  ).json();
+  const payload = {
+    request: '이전 요청',
+    expectedRevision: null,
+    expectedSettingsRevision: chat.settingsRevision,
+  };
+  await page.addInitScript(
+    ({ id, payload }) => {
+      sessionStorage.setItem(
+        `command:${id}`,
+        JSON.stringify({ id: 'unconfirmable', payload: JSON.stringify(payload) })
+      );
+    },
+    { id: chat.id, payload }
+  );
+  await page.route(`**/api/chats/${chat.id}/runs`, (route) =>
+    route.fulfill({ status: 404, json: { error: 'Confirmation unavailable' } })
+  );
+  await page.goto(`/?chat=${chat.id}`);
+  const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+  await composer.fill('나중에 작성한 초안');
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  const confirmation = page.waitForResponse(
+    (response) => response.url().endsWith(`/api/chats/${chat.id}/runs`) && response.status() === 404
+  );
+  await page
+    .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
+    .getByRole('button', { name: '접수 확인', exact: true })
+    .click();
+  await confirmation;
+  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();
+  expect(await page.evaluate((id) => sessionStorage.getItem(`command:${id}`), chat.id)).toContain(
+    'unconfirmable'
+  );
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  const decision = page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true });
+  await expect(decision).toContainText('비용이 중복될 수 있어요');
+  await decision.getByRole('button', { name: '이전 요청 기록 지우기', exact: true }).click();
+  await expect(decision).toBeHidden();
+  expect(await page.evaluate((id) => sessionStorage.getItem(`command:${id}`), chat.id)).toBeNull();
+  await expect(composer).toHaveValue('나중에 작성한 초안');
 });
 
 test('READERREC invalid view caches do not prevent opening a saved conversation', async ({

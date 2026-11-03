@@ -31,6 +31,8 @@ export type EditorState = {
   ready: boolean;
   dirty: boolean;
   saving: boolean;
+  /** The frozen creation must be confirmed before a new save intent can begin. */
+  creationPending: boolean;
   /** New edits can autosave; recovered input waits for an explicit save. */
   autosavePending: boolean;
   error: string;
@@ -90,6 +92,7 @@ export class ResourceEditorSession {
       ready: false,
       dirty: false,
       saving: false,
+      creationPending: false,
       autosavePending: false,
       error: '',
       conflict: false,
@@ -120,6 +123,7 @@ export class ResourceEditorSession {
       document: { targetId, baseRevision: revision, baseModel: model },
       ready: true,
       dirty: false,
+      creationPending: !!this.pendingCreation,
       autosavePending: false,
       conflict: false,
       error: '',
@@ -339,7 +343,10 @@ export class ResourceEditorSession {
     const saved = await api<SavedResource>(this.path());
     return { revision: saved.revision, model: editableResource(this.options.kind, saved) };
   }
-  async save(model?: ResourceModel, options?: { copy?: boolean }): Promise<ResourceSaveResult> {
+  async save(
+    model?: ResourceModel,
+    options?: { copy?: boolean }
+  ): Promise<ResourceSaveResult & { creationIntent: boolean }> {
     await this.open();
     if (this.state.saving) throw new Error(legacyMessage('shared.alreadySaving'));
     if (this.creationReadFailed)
@@ -369,7 +376,7 @@ export class ResourceEditorSession {
     const generation = this.generation;
     const previousKey = this.editorKey;
     this.loadVersion++;
-    this.emit({ saving: true, error: '' });
+    this.emit({ saving: true, creationPending: !!creation, error: '' });
     let admitted = false;
     let persisted = false;
     try {
@@ -395,18 +402,27 @@ export class ResourceEditorSession {
       const targetId =
         this.options.kind === 'prompt-workspace' ? 'current' : (result.saved as { id: string }).id;
       const savedModel = editableResource(this.options.kind, result.saved);
+      // All user-created resources start at revision 1. Old compact receipts store only
+      // the ID, so a later revision on replay also detects changes for existing receipts.
+      const changedAfterCreation = !!creation && !result.created && result.saved.revision > 1;
       if (
         generation === this.generation &&
         (!creation || this.isDirty(this.state.local, creation.model) === false)
       ) {
         this.adopt(savedModel, targetId, result.saved.revision);
       } else {
-        const dirty = this.isDirty(this.state.local, savedModel);
+        const baseline = changedAfterCreation ? creation!.model : savedModel;
+        const dirty = this.isDirty(this.state.local, baseline);
         this.emit({
-          document: { targetId, baseRevision: result.saved.revision, baseModel: savedModel },
+          document: {
+            targetId,
+            baseRevision: changedAfterCreation ? 1 : result.saved.revision,
+            baseModel: baseline,
+          },
           dirty,
           autosavePending: dirty,
-          conflict: false,
+          creationPending: false,
+          conflict: dirty && changedAfterCreation,
         });
       }
       if (creation) await deleteRecoveryIfToken(this.creationKey, creation.key).catch(() => {});
@@ -414,21 +430,26 @@ export class ResourceEditorSession {
       if (previousKey !== this.editorKey) await this.queueRecovery(true, previousKey);
       await this.queueRecovery();
       this.notifySaved();
-      return result;
+      return { ...result, creationIntent: !!creation };
     } catch (error) {
       if (
         !admitted &&
         creation &&
-        ((!persisted && !previousCreation) ||
-          (persisted &&
-            definiteRejection(error) &&
-            !(error instanceof ApiError && error.status === 429)))
+        ((error instanceof ApiError &&
+          error.status === 410 &&
+          error.code === 'RESOURCE_CREATION_REMOVED') ||
+          (!previousCreation &&
+            (!persisted ||
+              (persisted &&
+                definiteRejection(error) &&
+                !(error instanceof ApiError && error.status === 429)))))
       ) {
         this.pendingCreation = null;
         if (persisted) await deleteRecoveryIfToken(this.creationKey, creation.key).catch(() => {});
       }
       this.emit({
         error: (error as Error).message,
+        creationPending: !!this.pendingCreation,
         conflict: this.state.conflict || (error instanceof ApiError && error.status === 409),
       });
       throw error;

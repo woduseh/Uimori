@@ -15,6 +15,7 @@ import type { MainHooks } from '../server/model-runner.js';
 import type { WireRecord } from '../core/transport.js';
 import { executeTool, knowledgeReadResults } from '../core/provider.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
+import { settleWithin, stalledProviderBody } from './fixtures/stalled-provider-body.js';
 
 const sentEntries = (body: {
   questions: Record<
@@ -166,6 +167,19 @@ describe('Jev typed judgment transport', () => {
       })
     );
   });
+  it('keeps the response byte limit and records the failure once', async () => {
+    const h = hooks();
+    const send = vi.fn(async () => new Response('x'.repeat(2 * 1024 * 1024 + 1)));
+    await expect(
+      executeJevJudgment(request, '1'.repeat(64), 5000, { ...h, fetch: send })
+    ).rejects.toThrow('JEV_RESPONSE_LIMIT');
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(h.onAttemptFinish).toHaveBeenCalledTimes(1);
+    expect(h.onAttemptFinish).toHaveBeenCalledWith(
+      'attempt-1',
+      expect.objectContaining({ status: 'error', error: { code: 'JEV_RESPONSE_LIMIT' } })
+    );
+  });
   it('settles cancellation after dispatch without using a late mocked response', async () => {
     const h = hooks(),
       controller = new AbortController();
@@ -183,10 +197,70 @@ describe('Jev typed judgment transport', () => {
       'attempt-1',
       expect.objectContaining({
         status: 'cancelled',
-        usage: expect.objectContaining({ inputTokens: 100 }),
+        // Cancellation won before any response bytes were read; usage is unknown.
+        usage: expect.objectContaining({ inputTokens: null }),
       })
     );
   });
+  it('releases a response body that arrives after cancellation', async () => {
+    const h = hooks();
+    const controller = new AbortController();
+    const stalled = stalledProviderBody();
+    try {
+      await expect(
+        executeJevJudgment(request, 'e'.repeat(64), 5000, {
+          ...h,
+          signal: controller.signal,
+          fetch: async () => {
+            controller.abort();
+            return stalled.response;
+          },
+        })
+      ).rejects.toThrow('JEV_CANCELLED');
+      expect(stalled.cancellations).toBe(1);
+      expect(h.onAttemptFinish).toHaveBeenCalledTimes(1);
+    } finally {
+      stalled.release();
+    }
+  });
+  it.each(['cancel', 'timeout'] as const)(
+    '%s stops a stalled response body and finishes the attempt once',
+    async (mode) => {
+      const h = hooks();
+      const controller = new AbortController();
+      const stalled = stalledProviderBody();
+      const send = vi.fn(async () => stalled.response);
+      const pending = executeJevJudgment(request, 'f'.repeat(64), 5000, {
+        ...h,
+        signal: controller.signal,
+        timeoutMs: mode === 'timeout' ? 100 : 5000,
+        fetch: send,
+      }).then(
+        () => 'unexpected success',
+        (error: Error) => error.message
+      );
+      try {
+        await stalled.pendingRead;
+        if (mode === 'cancel') controller.abort();
+        expect(await settleWithin(pending)).toBe(
+          mode === 'cancel' ? 'JEV_CANCELLED' : 'JEV_TIMEOUT'
+        );
+        expect(stalled.cancellations).toBe(1);
+        expect(send).toHaveBeenCalledTimes(1);
+        expect(h.onAttemptFinish).toHaveBeenCalledTimes(1);
+        expect(h.onAttemptFinish).toHaveBeenCalledWith(
+          'attempt-1',
+          expect.objectContaining({
+            status: mode === 'cancel' ? 'cancelled' : 'error',
+            error: { code: mode === 'cancel' ? 'JEV_CANCELLED' : 'JEV_TIMEOUT' },
+          })
+        );
+      } finally {
+        stalled.release();
+        await pending;
+      }
+    }
+  );
 });
 describe('JEV-only lore judgment and batch supplemental reads', () => {
   it('shares one judgment across packages with colliding lore ids and one global selection budget', async () => {

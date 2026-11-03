@@ -93,27 +93,31 @@ export function useInputTranslation(options: Options) {
     const captured = scope.readDraft();
     const selectedLanguage = languageRef.current;
     if (!captured.text.trim() || captured.key !== scope.draftKey) return;
-    const proceed = await codexWarning.check(
-      `/chats/${encodeURIComponent(scope.chatId)}/codex-content-preflight`,
-      { role: 'translation', text: captured.text },
-      'translation'
-    );
-    if (!proceed) return;
-    const latestBeforeSend = current.current.readDraft();
-    if (
-      latestBeforeSend.key !== captured.key ||
-      latestBeforeSend.epoch !== captured.epoch ||
-      latestBeforeSend.revision !== captured.revision ||
-      latestBeforeSend.text !== captured.text ||
-      languageRef.current !== selectedLanguage
-    )
-      return;
     const controller = new AbortController();
     pending.current = controller;
     setBusy(true);
     setError('');
     setCandidate(null);
     try {
+      const proceed = await codexWarning.check(
+        `/chats/${encodeURIComponent(scope.chatId)}/codex-content-preflight`,
+        { role: 'translation', text: captured.text },
+        'translation',
+        controller.signal
+      );
+      const latestBeforeSend = current.current.readDraft();
+      if (
+        !proceed ||
+        pending.current !== controller ||
+        controller.signal.aborted ||
+        !current.current.available() ||
+        latestBeforeSend.key !== captured.key ||
+        latestBeforeSend.epoch !== captured.epoch ||
+        latestBeforeSend.revision !== captured.revision ||
+        latestBeforeSend.text !== captured.text ||
+        languageRef.current !== selectedLanguage
+      )
+        return;
       const result = await api<InputTranslationResult>(
         `/chats/${encodeURIComponent(scope.chatId)}/input-translation`,
         { text: captured.text, targetLanguage: selectedLanguage },

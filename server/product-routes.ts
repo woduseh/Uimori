@@ -32,7 +32,7 @@ import { PROVIDER_DEFINITIONS } from '../core/provider-definitions.js';
 import { chatOrganizationRoutes } from './chat-organization.js';
 import { libraryOrganizationRoutes } from './library-organization.js';
 import { packagePresentationRoutes } from './package-presentation-routes.js';
-import type { VertexCredentialStore } from './vertex-credentials.js';
+import { inspectVertexAccount, type VertexCredentialStore } from './vertex-credentials.js';
 import type { CodexRuntimeService } from './codex-runtime.js';
 import { assertLibraryVisible, libraryDeletionRoutes } from './library-deletion.js';
 import type { MaintenanceStatus } from './maintenance.js';
@@ -167,10 +167,8 @@ export function productRoutes(
       reply.header('Cache-Control', 'no-store');
       const b = record(request.body);
       fields(b, ['serviceAccount']);
-      if (Buffer.byteLength(JSON.stringify(b.serviceAccount ?? null), 'utf8') > 64 * 1024)
-        throw new HttpError(400, 'Service account JSON is too large');
       if (!options.credentials) throw new HttpError(503, 'Service account storage unavailable');
-      return options.credentials.upload(b.serviceAccount);
+      return inspectVertexAccount(b.serviceAccount);
     }
   );
   app.get<{ Params: { kind: string; id: string } }>(
@@ -229,16 +227,10 @@ export function productRoutes(
     assertLibraryVisible(store, 'model', request.params.id);
     return product.get('model', request.params.id);
   });
-  app.post('/api/connections', async (request) => {
-    const prepared = product.prepareConnection(request.body);
-    options.credentials?.validate(prepared.value);
-    return product.connection(request.body);
-  });
-  app.put<{ Params: { id: string } }>('/api/connections/:id', async (request) => {
-    const prepared = product.prepareConnection(request.body, request.params.id);
-    options.credentials?.validate(prepared.value);
-    return product.connection(request.body, request.params.id);
-  });
+  app.post('/api/connections', async (request) => product.connection(request.body));
+  app.put<{ Params: { id: string } }>('/api/connections/:id', async (request) =>
+    product.connection(request.body, request.params.id)
+  );
   app.post<{ Params: { id: string } }>('/api/model-presets/:id/move', (request) =>
     product.moveModel(request.params.id, request.body)
   );

@@ -136,12 +136,34 @@ export function copyStoppedData(source, destination) {
   return { copied: true, integrity: database.integrity };
 }
 
+function sessionAuthority(directory) {
+  const db = new DatabaseSync(join(directory, database), { readOnly: true });
+  try {
+    if (
+      !db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='access_sessions'").get()
+    )
+      return null;
+    return JSON.stringify(
+      db.prepare('SELECT token_hash,authority_hash FROM access_sessions ORDER BY token_hash').all()
+    );
+  } finally {
+    db.close();
+  }
+}
+
 export function restoreData(source, destination) {
   // Validate the complete backup before changing the live volume.
   inspectData(source, { integrity: true });
   safeTree(source);
   assertSeparate(source, destination);
   safeTree(destination);
+  // Maintenance still admits login/logout. A closed, idle candidate can therefore
+  // contain newer authority than its backup; restoring it would revive revoked sessions.
+  // Compare only after both applications have stopped, before changing any live files.
+  if (sessionAuthority(source) !== sessionAuthority(destination))
+    throw new Error(
+      'Session authority changed after backup; rollback refused to preserve login/logout changes'
+    );
   for (const name of readdirSync(destination)) rmSync(join(destination, name), { recursive: true });
   return copyStoppedData(source, destination);
 }

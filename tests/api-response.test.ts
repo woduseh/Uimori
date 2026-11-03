@@ -46,6 +46,16 @@ test.each(['json', 'binary'] as const)('%s reports session expiry exactly once',
   expect(b.setItem).not.toHaveBeenCalled();
 });
 
+test('a confirmed removed creation keeps its explicit error identity', async () => {
+  browser();
+  respond(410, { error: 'RESOURCE_CREATION_REMOVED' });
+  await expect(api('/resources/save', {})).rejects.toMatchObject({
+    status: 410,
+    code: 'RESOURCE_CREATION_REMOVED',
+    message: expect.stringContaining('삭제'),
+  });
+});
+
 test.each(['/session', '/session?refresh=1'])(
   'JSON session probe %s does not recursively request login',
   async (path) => {

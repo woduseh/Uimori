@@ -239,6 +239,7 @@ export async function applyNativeRisuAction(
     return result.run;
   });
   const usage: Usage = structuredClone(zeroUsage);
+  const sessionOwner = {};
   try {
     const result = await executeRisuNative(
       {
@@ -250,6 +251,7 @@ export async function applyNativeRisuAction(
       },
       {
         sessionKey: nativeRisuSessionKey(captured.snapshot),
+        sessionOwner,
         signal: options.signal,
         host: options.createHost?.(reserved.id, reserved.snapshot, usage),
       }
@@ -416,7 +418,7 @@ export async function applyNativeRisuAction(
       return { created: true, runId: lastRunId, notifications: result.effects.notifications ?? [] };
     });
   } catch (error) {
-    disposeNativeRisuSession(nativeRisuSessionKey(captured.snapshot));
+    disposeNativeRisuSession(nativeRisuSessionKey(captured.snapshot), sessionOwner);
     if (store.run(reserved.id).status === 'running')
       store.finishRun(
         reserved.id,

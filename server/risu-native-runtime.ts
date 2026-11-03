@@ -78,6 +78,8 @@ export interface NativeRisuExecutionResult {
 }
 export interface NativeRisuExecutionOptions {
   sessionKey?: string;
+  /** Shared across the callbacks of one run; prevents old cleanup from closing a newer VM. */
+  sessionOwner?: object;
   signal?: AbortSignal;
   /** External calls preserve Risu's method and arguments; the caller owns model selection. */
   host?: (method: string, args: unknown, signal: AbortSignal) => Promise<unknown>;
@@ -173,7 +175,7 @@ function compare(left: string, right: string, operator: string, numericEquality:
 /** Executes original trigger records. No imported BehaviorAction representation is involved. */
 async function executeNativeRisuInvocation(
   input: NativeRisuExecutionInput,
-  options: NativeRisuExecutionOptions,
+  options: NativeRisuExecutionOptions & { sessionOwner: object },
   evaluate: (text: string, context: NativeRisuExecutionInput) => Promise<string>
 ): Promise<NativeRisuExecutionResult> {
   const state: NativeRisuExecutionInput = {
@@ -472,11 +474,12 @@ export async function executeRisuNative(
   input: NativeRisuExecutionInput,
   options: NativeRisuExecutionOptions = {}
 ): Promise<NativeRisuExecutionResult> {
+  const owned = { ...options, sessionOwner: options.sessionOwner ?? {} };
   const cbs = createNativeRisuCbsSession(options.signal);
   try {
-    return await executeNativeRisuInvocation(input, options, cbs.evaluate);
+    return await executeNativeRisuInvocation(input, owned, cbs.evaluate);
   } catch (error) {
-    if (options.sessionKey) disposeNativeRisuSession(options.sessionKey);
+    if (options.sessionKey) disposeNativeRisuSession(options.sessionKey, owned.sessionOwner);
     throw error;
   } finally {
     await cbs.close();

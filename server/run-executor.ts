@@ -1,5 +1,5 @@
 import { Store } from './store.js';
-import { readRunStatus } from './run-projections.js';
+import { readRunStatus, readStoredRunSnapshot } from './run-projections.js';
 import { ResponseStreamStore } from './response-stream.js';
 import { Controls } from './controls.js';
 import { runMain, ModelRunError, type MainHooks } from './model-runner.js';
@@ -85,6 +85,7 @@ export function createRunExecutor({
     const judgmentSettings = jevSettings(store.db);
     const fixture = { ...controls.fixture };
     const controller = new AbortController();
+    const nativeSessionOwner = {};
     const shell = process.env.UIMORI_SHELL_ROOT ? new MainShell(store, id) : undefined;
     const anthropicBatch = new AnthropicBatchRun(store, id, batchPollIntervalMs);
     runs.set(id, controller);
@@ -128,10 +129,11 @@ export function createRunExecutor({
             fixture,
             reserveCalls: Number(judgeResponse),
             prepareRequest: async (request, usage) => {
-              const current = store.run(id).snapshot;
+              const current = readStoredRunSnapshot(store, id);
               const prepared = await prepareNativeRisuRequest(current, request, {
                 requestOrdinal: requestOrdinal++,
                 signal: controller.signal,
+                sessionOwner: nativeSessionOwner,
                 host: createNativeRisuHost(
                   store,
                   id,
@@ -216,7 +218,7 @@ export function createRunExecutor({
                 return store.product.resumeAttempt(resumeAttemptId, id, wire);
               }
               if (wire.judgment) {
-                const current = store.run(id).snapshot;
+                const current = readStoredRunSnapshot(store, id);
                 if (wire.judgment.kind === 'main-refusal') {
                   if (!current.mainJudgment) throw new Error('Missing main judgment input');
                   validateMainJudgmentWire(current.mainJudgment, wire);
@@ -309,6 +311,7 @@ export function createRunExecutor({
           } else {
             executionSnapshot = await prepareNativeRisuRun(executionSnapshot, {
               signal: controller.signal,
+              sessionOwner: nativeSessionOwner,
               host: createNativeRisuHost(
                 store,
                 id,
@@ -327,7 +330,7 @@ export function createRunExecutor({
                   .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
                   .run(
                     JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                      persistedContextSnapshot(readStoredRunSnapshot(store, id), executionSnapshot)
                     ),
                     new Date().toISOString(),
                     id
@@ -365,10 +368,10 @@ export function createRunExecutor({
                   onProgress: (plan) => {
                     store.transaction(() => {
                       assertCurrent();
-                      const current = store.run(id);
+                      const current = readStoredRunSnapshot(store, id);
                       store.db.prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?').run(
                         JSON.stringify(
-                          persistedContextSnapshot(current.snapshot, {
+                          persistedContextSnapshot(current, {
                             ...executionSnapshot,
                             contextPlan: plan,
                           })
@@ -395,7 +398,7 @@ export function createRunExecutor({
                   .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
                   .run(
                     JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, prepared.snapshot)
+                      persistedContextSnapshot(readStoredRunSnapshot(store, id), prepared.snapshot)
                     ),
                     new Date().toISOString(),
                     id
@@ -451,7 +454,7 @@ export function createRunExecutor({
                   .prepare('UPDATE runs SET snapshot=?,updated_at=? WHERE id=?')
                   .run(
                     JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                      persistedContextSnapshot(readStoredRunSnapshot(store, id), executionSnapshot)
                     ),
                     new Date().toISOString(),
                     id
@@ -490,7 +493,7 @@ export function createRunExecutor({
                   .prepare('UPDATE runs SET snapshot=? WHERE id=?')
                   .run(
                     JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                      persistedContextSnapshot(readStoredRunSnapshot(store, id), executionSnapshot)
                     ),
                     id
                   );
@@ -513,7 +516,7 @@ export function createRunExecutor({
                   .prepare('UPDATE runs SET snapshot=? WHERE id=?')
                   .run(
                     JSON.stringify(
-                      persistedContextSnapshot(store.run(id).snapshot, executionSnapshot)
+                      persistedContextSnapshot(readStoredRunSnapshot(store, id), executionSnapshot)
                     ),
                     id
                   );
@@ -551,7 +554,7 @@ export function createRunExecutor({
               assertCurrent();
               store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
                 JSON.stringify({
-                  ...store.run(id).snapshot,
+                  ...readStoredRunSnapshot(store, id),
                   mainJudgment: input,
                   mainJudgmentPending: true,
                 }),
@@ -591,6 +594,7 @@ export function createRunExecutor({
           }
           const nativeOutput = await prepareNativeRisuOutput(executionSnapshot, result.text, {
             signal: controller.signal,
+            sessionOwner: nativeSessionOwner,
             host: createNativeRisuHost(
               store,
               id,
@@ -605,7 +609,7 @@ export function createRunExecutor({
             if (nativeOutput.nativeRisuExecution)
               store.db.prepare('UPDATE runs SET snapshot=? WHERE id=?').run(
                 JSON.stringify({
-                  ...store.run(id).snapshot,
+                  ...readStoredRunSnapshot(store, id),
                   nativeRisuExecution: nativeOutput.nativeRisuExecution,
                 }),
                 id
@@ -682,10 +686,11 @@ export function createRunExecutor({
           }
         } finally {
           const status = readRunStatus(store, id);
-          if (status === 'completed' || status === 'failed' || status === 'cancelled')
-            shell?.cleanup();
-          else shell?.close();
-          if (status !== 'completed') disposeNativeRisuSession(nativeRisuSessionKey(run.snapshot));
+          if (status === 'queued' || status === 'running' || status === 'interrupted')
+            shell?.close();
+          else shell?.cleanup();
+          if (status !== 'completed')
+            disposeNativeRisuSession(nativeRisuSessionKey(run.snapshot), nativeSessionOwner);
           response?.finish(status === 'queued' || status === 'running' ? 'interrupted' : status);
           runs.delete(id);
           signal.removeEventListener('abort', onStop);

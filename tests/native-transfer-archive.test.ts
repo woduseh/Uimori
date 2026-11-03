@@ -2,7 +2,15 @@ import { legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
 import { afterEach, expect, test } from 'vitest';
 import Fastify from 'fastify';
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  existsSync,
+  readdirSync,
+  utimesSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve, relative, isAbsolute, basename } from 'node:path';
 import { Store } from '../server/store.js';
@@ -24,6 +32,8 @@ import { exportChatTranscript, importChatTranscript } from '../server/chat-trans
 import { restoreIllustrations } from '../server/illustration-copy.js';
 import type { Content } from '../core/product.js';
 import { prepareStoredRisuImport } from '../server/risu-import-prepared.js';
+import { saveImportReceipt } from '../server/import-operations.js';
+import { startImportStagingCleanup } from '../server/import-staging-cleanup.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -225,6 +235,8 @@ test('chat archive restores authored resources without execution and recovers re
   expect(
     existsSync(join(uploadDirectory(target.path), 'native-prepared', preview.preparedId))
   ).toBe(false);
+  for (let index = 0; index < 260; index++)
+    saveImportReceipt(target, `other-import-${index}`, 'digest', { index });
   expect(importChatBackupArchiveRequest(target, command).created).toBe(false);
   expect(target.chats()).toHaveLength(1);
 });
@@ -244,6 +256,13 @@ test('native archive cancellation releases the shared preparation budget before 
     id = upload(target, exported.rawPayload);
   const controller = new AbortController();
   const running = prepareNativeArchive(target, id, 'resources', controller.signal);
+  const preparedRoot = join(uploadDirectory(target.path), 'native-prepared');
+  const activePath = join(preparedRoot, readdirSync(preparedRoot)[0]);
+  const expired = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  utimesSync(activePath, expired, expired);
+  const stopCleanup = startImportStagingCleanup(target);
+  expect(existsSync(activePath)).toBe(true);
+  stopCleanup();
   const risuSource = {
     name: 'next.json',
     base64: Buffer.from(

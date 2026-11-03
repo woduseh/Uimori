@@ -10,6 +10,7 @@ import type {
   WireRecord,
 } from '../core/transport.js';
 import { loopbackProvider } from './fixtures/loopback-provider.js';
+import { settleWithin, stalledProviderBody } from './fixtures/stalled-provider-body.js';
 
 const closes: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -127,6 +128,58 @@ test('Batch diagnostic copies redact accidental credential text before any netwo
 });
 
 describe('Anthropic Batch execution', () => {
+  test.each(['poll-reject', 'poll-stall', 'results-stall'] as const)(
+    '%s cancellation settles the body and requests remote cancellation once',
+    async (mode) => {
+      const db = database();
+      const controller = new AbortController();
+      const stalled = stalledProviderBody();
+      const calls: string[] = [];
+      const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+        const path = new URL(String(url)).pathname;
+        calls.push(path);
+        if (path === '/v1/messages/batches')
+          return Response.json({
+            id: 'batch-body',
+            processing_status: mode === 'results-stall' ? 'ended' : 'in_progress',
+          });
+        if (path === '/v1/messages/batches/batch-body/cancel')
+          return Response.json({ id: 'batch-body', processing_status: 'canceling' });
+        if (
+          path === '/v1/messages/batches/batch-body' ||
+          path === '/v1/messages/batches/batch-body/results'
+        ) {
+          if (mode === 'poll-reject')
+            init?.signal?.addEventListener('abort', () => stalled.fail(new Error('aborted')), {
+              once: true,
+            });
+          return stalled.response;
+        }
+        throw new Error(`unexpected fixture request ${path}`);
+      });
+      const pending = new AnthropicBatchRun({ db } as Store, 'run-1', 5).execute(
+        connection('https://api.anthropic.com/v1'),
+        request(),
+        options(db, controller.signal, undefined, true)
+      );
+      try {
+        await stalled.pendingRead;
+        controller.abort();
+        expect(await settleWithin(pending)).toMatchObject({
+          status: 'cancelled',
+          error: { code: 'CANCELLED' },
+        });
+        expect(calls.filter((path) => path.endsWith('/cancel'))).toHaveLength(1);
+        expect(calls.filter((path) => path === '/v1/messages/batches')).toHaveLength(1);
+        if (mode !== 'poll-reject') expect(stalled.cancellations).toBe(1);
+      } finally {
+        stalled.release();
+        await pending;
+        fetch.mockRestore();
+        db.close();
+      }
+    }
+  );
   test('restarts from the durable batch id without creating a second paid request', async () => {
     const imageBytes = Buffer.from('synthetic immutable Batch image');
     const imageHash = createHash('sha256').update(imageBytes).digest('hex');

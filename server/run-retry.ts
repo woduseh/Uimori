@@ -85,6 +85,18 @@ export function retryRun(
             original.snapshot.replacement.sourceHash)
       )
         throw new HttpError(409, '이야기가 이미 진행됐어요. 현재 내용에서 새 요청을 보내 주세요.');
+      if (
+        store.db
+          .prepare("SELECT 1 FROM runs WHERE chat_id=? AND status IN ('queued','running')")
+          .get(original.chatId)
+      )
+        throw new HttpError(409, 'A run already owns this head');
+      if (
+        store.db
+          .prepare('SELECT 1 FROM runs WHERE chat_id=? AND request_key=?')
+          .get(original.chatId, key)
+      )
+        throw new HttpError(409, 'Idempotency key reused with different command');
       const id = randomUUID(),
         at = new Date().toISOString();
       const snapshot = { ...original.snapshot, judgmentRecovery: true };

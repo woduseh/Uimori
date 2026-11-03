@@ -162,6 +162,6 @@ if __name__ == "__main__":
         result = subprocess.run(["sudo", "-n", "docker", *args], capture_output=True, text=True, timeout=30)
         if result.returncode: raise RuntimeError("Docker inventory failed")
         return result.stdout.strip()
-    with (Path(app).parent / "deploy.lock").open("r") as lock:
+    with (Path(root).parent / "deploy.lock").open("r") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         print(json.dumps(collect_garbage(app, Path(root), docker)))

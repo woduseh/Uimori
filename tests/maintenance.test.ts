@@ -1,11 +1,14 @@
 import Fastify from 'fastify';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { realpath } from 'node:fs/promises';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { createApp, type App } from '../server/app.js';
 import { maintenanceState, setMaintenance, maintenanceRoutes } from '../server/maintenance.js';
+import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
+import * as transport from '../core/transport.js';
 import { createFixtureChat } from './fixtures/chat.js';
 
 const owned: { app: App; directory: string }[] = [];
@@ -16,12 +19,15 @@ afterEach(async () => {
   }
 });
 
-async function boot(options: { maintenance?: boolean; directory?: string } = {}) {
+async function boot(
+  options: { maintenance?: boolean; directory?: string; testMode?: boolean } = {}
+) {
   const directory =
     options.directory ?? (await mkdtemp(join(await realpath(tmpdir()), 'uimori-maintenance-')));
   const app = await createApp({
     dbPath: join(directory, 'story.sqlite'),
     buildId: 'maintenance-test',
+    testMode: options.testMode,
     ...(options.maintenance ? { maintenance: true } : {}),
   });
   owned.push({ app, directory });
@@ -113,6 +119,297 @@ test('a closed gate blocks new writes, keeps reads and cancellation, and survive
   });
   expect(accepted.statusCode).not.toBe(503);
 });
+
+test('automatic work queued while admission is closed resumes when it opens', async () => {
+  const { app } = await boot({ testMode: true });
+  const chat = createFixtureChat(app.store, 'Deferred translation');
+  const settings = await app.inject({
+    method: 'PATCH',
+    url: `/api/chats/${chat.id}/settings`,
+    payload: {
+      ...chat.settings,
+      autoTranslate: true,
+      expectedSettingsRevision: chat.settingsRevision,
+    },
+  });
+  expect(settings.statusCode).toBe(200);
+  app.controls.hold('run');
+  const run = await app.inject({
+    method: 'POST',
+    url: `/api/chats/${chat.id}/runs`,
+    payload: {
+      request: 'A synthetic scene.',
+      expectedRevision: null,
+      expectedSettingsRevision: settings.json().settingsRevision,
+      idempotencyKey: 'deferred-translation',
+    },
+  });
+  expect(run.statusCode).toBe(200);
+  await until(() => app.controls.snapshot().waiting.run === 1);
+  await app.inject({ method: 'POST', url: '/api/maintenance', payload: { status: 'closed' } });
+  app.controls.release('run');
+  await until(() =>
+    Boolean(app.store.db.prepare("SELECT 1 FROM jobs WHERE status='queued'").get())
+  );
+  expect(app.store.db.prepare("SELECT status FROM jobs WHERE kind='translation'").get()).toEqual({
+    status: 'queued',
+  });
+  await app.inject({ method: 'POST', url: '/api/maintenance', payload: { status: 'open' } });
+  await until(() =>
+    Boolean(app.store.db.prepare("SELECT 1 FROM jobs WHERE status='completed'").get())
+  );
+  expect(
+    app.store.db.prepare("SELECT count(*) AS n FROM jobs WHERE kind='translation'").get()
+  ).toEqual({ n: 1 });
+});
+
+test('forced maintenance boot leaves queued context recovery untouched', async () => {
+  const { app, directory } = await boot();
+  const chat = createFixtureChat(app.store, 'Pending context');
+  const now = new Date().toISOString();
+  app.store.db
+    .prepare(`INSERT INTO context_jobs
+    (id,chat_id,request_key,command,status,snapshot,created_at,updated_at)
+    VALUES(?,?,?,?,'queued',?,?,?)`)
+    .run('pending-context', chat.id, 'pending', '{}', '{"input":"keep"}', now, now);
+  await app.close();
+  owned.splice(
+    owned.findIndex((item) => item.app === app),
+    1
+  );
+  const candidate = await boot({ directory, maintenance: true });
+  expect(
+    candidate.app.store.db
+      .prepare('SELECT status,snapshot FROM context_jobs WHERE id=?')
+      .get('pending-context')
+  ).toEqual({ status: 'queued', snapshot: '{"input":"keep"}' });
+  await candidate.app.close();
+  owned.splice(
+    owned.findIndex((item) => item.app === candidate.app),
+    1
+  );
+  const normal = await boot({ directory });
+  expect(
+    normal.app.store.db
+      .prepare('SELECT status,snapshot FROM context_jobs WHERE id=?')
+      .get('pending-context')
+  ).toEqual({ status: 'interrupted', snapshot: null });
+});
+
+test('staging cleanup starts on normal listen but never on a forced maintenance boot', async () => {
+  const { app, directory } = await boot({ maintenance: true });
+  const staged = join(directory, 'risu-prepared', 'a'.repeat(32));
+  const upload = join(directory, 'uploads', `${'b'.repeat(32)}.bin`);
+  await mkdir(staged, { recursive: true });
+  await mkdir(join(directory, 'uploads'), { recursive: true });
+  await writeFile(upload, 'expired upload');
+  const expired = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  await utimes(staged, expired, expired);
+  await utimes(upload, expired, expired);
+  await app.listen({ host: '127.0.0.1', port: 0 });
+  expect(existsSync(staged)).toBe(true);
+  expect(existsSync(upload)).toBe(true);
+  setMaintenance(app.store, { closed: true, reason: 'update' });
+  await app.close();
+  owned.splice(
+    owned.findIndex((item) => item.app === app),
+    1
+  );
+  const closed = await boot({ directory, testMode: true });
+  await closed.app.listen({ host: '127.0.0.1', port: 0 });
+  expect(existsSync(staged)).toBe(true);
+  expect(existsSync(upload)).toBe(true);
+  await closed.app.inject({ method: 'POST', url: '/api/maintenance', payload: { status: 'open' } });
+  await closed.app.close();
+  owned.splice(
+    owned.findIndex((item) => item.app === closed.app),
+    1
+  );
+  const normal = await boot({ directory, testMode: true });
+  await normal.app.listen({ host: '127.0.0.1', port: 0 });
+  expect(existsSync(staged)).toBe(false);
+  expect(existsSync(upload)).toBe(false);
+});
+
+test('a persisted closed gate holds recovered Batch execution until reopening', async () => {
+  const { app, directory } = await boot({ testMode: true });
+  const chat = createFixtureChat(app.store, 'Batch recovery');
+  const profile = app.store.product.snapshot(chat.id);
+  const run = app.store.createRun(
+    chat.id,
+    {
+      request: 'Resume the scene',
+      expectedRevision: null,
+      expectedSettingsRevision: chat.settingsRevision,
+      idempotencyKey: 'batch-recovery',
+    },
+    () => ({
+      chatId: chat.id,
+      parentRevision: null,
+      settingsRevision: chat.settingsRevision,
+      settings: chat.settings,
+      request: 'Resume the scene',
+      history: [],
+      resources: app.store.product.resources(chat.id, profile),
+      profile,
+    })
+  ).run;
+  app.store.startRun(run.id);
+  const attempt = app.store.product.startAttempt(chat.id, run.id, null, {
+    connectionId: 'anthropic',
+    protocol: 'anthropic-messages-v1',
+    role: 'main',
+    modelId: 'fixture',
+    method: 'POST',
+    url: 'https://example.test/v1/messages/batches',
+    headers: {},
+    body: {},
+    bodySha256: 'batch-request',
+    stablePrefixSha256: 'stable',
+    executionMode: 'batch',
+  });
+  const now = new Date().toISOString();
+  app.store.db
+    .prepare(`INSERT INTO anthropic_batches
+    (attempt_id,run_id,ordinal,batch_id,custom_id,request_sha256,status,created_at,updated_at)
+    VALUES(?,?,0,?,?,?,'in_progress',?,?)`)
+    .run(attempt, run.id, 'batch-1', attempt, 'batch-request', now, now);
+  setMaintenance(app.store, { closed: true, reason: 'restart' });
+  await app.close();
+  owned.splice(
+    owned.findIndex((item) => item.app === app),
+    1
+  );
+
+  const restarted = await boot({ directory, testMode: true });
+  restarted.app.controls.hold('run');
+  await restarted.app.listen({ host: '127.0.0.1', port: 0 });
+  expect(restarted.app.store.run(run.id).status).toBe('queued');
+  expect((await restarted.app.inject('/api/maintenance')).json().activeWork).toBe(0);
+  await restarted.app.inject({
+    method: 'POST',
+    url: '/api/maintenance',
+    payload: { status: 'open' },
+  });
+  await until(() => restarted.app.controls.snapshot().waiting.run === 1);
+  expect(restarted.app.store.run(run.id).status).toBe('running');
+  expect(
+    restarted.app.store.db
+      .prepare('SELECT count(*) AS n FROM anthropic_batches WHERE run_id=?')
+      .get(run.id)
+  ).toEqual({ n: 1 });
+  restarted.app.controls.release('run');
+});
+
+test('queued helper work remains stopped while closed and resumes once on open', async () => {
+  const { app } = await boot({ testMode: true });
+  const connection = app.store.product.connection({
+    title: 'Fixture',
+    protocol: 'fixture-sse-v1',
+    endpoint: 'http://127.0.0.1:9',
+    enabled: true,
+  });
+  const model = app.store.product.model({
+    title: 'Fixture',
+    connectionId: connection.id,
+    modelId: 'fixture',
+    maxOutputTokens: 1024,
+    temperature: null,
+  });
+  const workspace = modelWorkspace(app.store);
+  updateModelWorkspace(app.store, {
+    expectedRevision: workspace.revision,
+    routes: workspace.routes,
+    translationPolicy: workspace.translationPolicy,
+    helperModel: { id: model.id },
+  });
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const send = vi
+    .spyOn(transport, 'executeProvider')
+    .mockImplementation(async (connection, request, options) => {
+      await options.beforeTurn?.();
+      await options.onWire?.({
+        connectionId: connection.id,
+        protocol: connection.protocol,
+        role: request.role,
+        modelId: request.modelId,
+        method: 'POST',
+        url: connection.endpoint,
+        headers: {},
+        body: {},
+        bodySha256: 'synthetic',
+        stablePrefixSha256: 'synthetic',
+      });
+      await pending;
+      return {
+        status: 'completed',
+        text: 'Done',
+        toolCalls: [],
+        refusal: null,
+        error: null,
+        usage: { inputTokens: 1, outputTokens: 1, costUsd: null, raw: null, priceRevision: null },
+        opaqueState: null,
+      };
+    });
+  try {
+    const tasks: string[] = [];
+    for (const index of [1, 2, 3]) {
+      const conversation = await app.inject({
+        method: 'POST',
+        url: '/api/helper/conversations',
+        payload: { scope: { kind: 'library', workId: `deferred-${index}` } },
+      });
+      expect(conversation.statusCode).toBe(200);
+      const task = await app.inject({
+        method: 'POST',
+        url: `/api/helper/conversations/${conversation.json().id}/messages`,
+        payload: { requestKey: `task-${index}`, text: 'Synthetic request' },
+      });
+      expect(task.statusCode).toBe(200);
+      tasks.push(task.json().id);
+    }
+    await until(() => send.mock.calls.length === 2);
+    expect(
+      app.store.db.prepare('SELECT status FROM helper_tasks WHERE id=?').get(tasks[2])
+    ).toEqual({ status: 'queued' });
+    await app.inject({ method: 'POST', url: '/api/maintenance', payload: { status: 'closed' } });
+    release();
+    await until(
+      () =>
+        Number(
+          app.store.db
+            .prepare("SELECT count(*) AS n FROM helper_tasks WHERE status='running'")
+            .get()?.n
+        ) === 0
+    );
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(
+      app.store.db.prepare('SELECT status FROM helper_tasks WHERE id=?').get(tasks[2])
+    ).toEqual({ status: 'queued' });
+    await app.inject({ method: 'POST', url: '/api/maintenance', payload: { status: 'open' } });
+    await until(() => send.mock.calls.length === 3);
+    await until(
+      () =>
+        app.store.db.prepare('SELECT status FROM helper_tasks WHERE id=?').get(tasks[2])?.status ===
+        'completed'
+    );
+    expect(send).toHaveBeenCalledTimes(3);
+  } finally {
+    release();
+    send.mockRestore();
+  }
+});
+
+async function until(condition: () => boolean) {
+  const deadline = Date.now() + 5000;
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error('Timed out waiting for background work');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
 
 test('repeating the same gate change keeps one epoch and a forced maintenance boot rejects reopening through HTTP', async () => {
   const { app, directory } = await boot();
