@@ -348,14 +348,16 @@ export class ResourceEditorSession {
       throw new Error(legacyMessage('shared.resourceChangedHelp'));
     if (model) this.setModel(model);
     const creating = !!options?.copy || !this.state.document.targetId || !!this.pendingCreation;
+    const previousCreation = this.pendingCreation;
     let prepared: ResourceModel;
     try {
-      prepared = this.prepared(this.state.local.model);
+      // A pending creation already has frozen, validated input. Confirm its admission
+      // without parsing newer unsaved fields that may still be incomplete.
+      prepared = previousCreation?.model ?? this.prepared(this.state.local.model);
     } catch (error) {
       this.emit({ error: (error as Error).message });
       throw error;
     }
-    const previousCreation = this.pendingCreation;
     if (creating && !previousCreation)
       this.pendingCreation = {
         key: crypto.randomUUID(),
