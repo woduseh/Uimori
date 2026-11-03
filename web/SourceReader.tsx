@@ -1504,10 +1504,6 @@ function SourceReaderContent({
                 }}
               />
             </label>
-            <p>{t('reader.sendThisTextWithTheCurrentSettingsThisIs')}</p>
-            <p className="muted">
-              {t('reader.replaceTheExistingResponseOnlyWhenGenerationSucceedsFailure')}
-            </p>
             <div className="form-actions">
               <button
                 type="button"
@@ -1563,7 +1559,6 @@ function SourceReaderContent({
             }}
             title={t('reader.generateIllustrations')}
           >
-            <p>{t('reader.chooseDifferentMomentsFromTheResponseTheMainImage')}</p>
             <label>
               {t('reader.maximumImages')}
               <select
@@ -1582,7 +1577,6 @@ function SourceReaderContent({
                 ))}
               </select>
             </label>
-            <p className="muted">{t('reader.fewerImagesAreMadeIfFewerMomentsSuitIllustration')}</p>
             {actionError && (
               <p className="error" role="alert">
                 {translateMessage(actionError)}

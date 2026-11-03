@@ -121,7 +121,6 @@ export function IllustrationReferencesEditor({
       data-testid="illustration-references"
     >
       <h4>{t('visuals.m028')}</h4>
-      {!!loaded.candidates.length && <small>{t('visuals.m032')}</small>}
       {loadError && (
         <NoticeBanner
           tone="error"

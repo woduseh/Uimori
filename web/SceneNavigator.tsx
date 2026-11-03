@@ -269,9 +269,6 @@ export function SceneNavigator({
         />
       ) : (
         <>
-          {sceneCount > 0 && (
-            <p className="scene-list-count">{t('reader.sceneCount', { count: sceneCount })}</p>
-          )}
           <ol className="scene-list" start={offset + 1} ref={list}>
             {page.map((entry) => (
               <li key={entry.id}>
@@ -392,16 +389,14 @@ export function SceneNavigator({
               );
             })}
         </div>
-        <button
-          type="button"
+        <IconButton
           className="scene-latest"
-          aria-label={t('reader.goToTheBottomOfTheText')}
-          title={t('reader.goToTheBottomOfTheText')}
+          label={t('reader.goToTheBottomOfTheText')}
+          icon={DownIcon}
+          size={18}
           disabled={!canGoLatest}
           onClick={onLatest}
-        >
-          <DownIcon size={18} />
-        </button>
+        />
       </nav>
       {titleEditor}
       {dialog}

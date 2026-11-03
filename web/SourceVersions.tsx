@@ -112,7 +112,6 @@ export function SourceVersions({
                   </button>
                 )}
               </div>
-              <small>{t('reader.saveTheOriginalToApplyItToTheText')}</small>
               {versions.currentRevision !== revision && (
                 <p role="alert">{t('reader.theSavedVersionChangedReopenTheEditorToReview')}</p>
               )}

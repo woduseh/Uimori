@@ -1,5 +1,5 @@
 import { t, useI18n } from './i18n.js';
-import { Plus, Trash2, Languages } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { IconButton } from './IconButton.js';
 import { TRANSLATION_GUIDE_LIMITS, type TranslationGuide } from '../core/translation-guide.js';
 import './translation-guide.css';
@@ -22,13 +22,6 @@ export function TranslationGuideEditor({
       className="translation-guide-editor"
       aria-label={t('library.botTranslationGuideEditor')}
     >
-      <div className="translation-guide-intro">
-        <Languages size={22} aria-hidden="true" />
-        <div>
-          <h3>{t('library.translationGuideWhenUsedAsABot')}</h3>
-          <p>{t('library.addThisWorkSTerminologyAndVoice')}</p>
-        </div>
-      </div>
       <label>
         {t('library.voiceAddressAndStyleInstructions')}
         <textarea
@@ -43,19 +36,17 @@ export function TranslationGuideEditor({
       <div className="translation-guide-terms-heading">
         <div>
           <h3>{t('library.namesAndTerminology')}</h3>
-          <p className="muted">{t('library.theTranslationModelUsesTerminologyAndConditions')}</p>
         </div>
-        <button
-          type="button"
+        <IconButton
           className="secondary"
+          icon={Plus}
+          size={18}
+          label={t('library.addTerm')}
           disabled={value.terms.length >= TRANSLATION_GUIDE_LIMITS.terms}
           onClick={() =>
             onChange({ ...value, terms: [...value.terms, { source: '', target: '' }] })
           }
-        >
-          <Plus size={16} aria-hidden="true" />
-          {t('library.addTerm')}
-        </button>
+        />
       </div>
       <div className="translation-guide-terms">
         {value.terms.map((item, index) => (
@@ -82,10 +73,7 @@ export function TranslationGuideEditor({
               />
             </label>
             <label className="translation-guide-term-note">
-              <span>
-                {t('library.conditionsOrDescription')}{' '}
-                <span className="muted">{t('library.optional')}</span>
-              </span>
+              <span>{t('library.conditionsOrDescription')}</span>
               <input
                 aria-label={t('library.termConditionsOrDescription', { v0: index + 1 })}
                 value={item.note ?? ''}
@@ -109,7 +97,6 @@ export function TranslationGuideEditor({
       </div>
       <details className="translation-guide-preview">
         <summary>{t('library.previewInstructionsSentToTranslation')}</summary>
-        <p className="muted">{t('library.thisPreviewsCurrentEditsSaveChangesTo')}</p>
         <pre>{JSON.stringify(value, null, 2)}</pre>
       </details>
     </section>

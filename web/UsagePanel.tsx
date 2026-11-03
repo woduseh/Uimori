@@ -294,7 +294,6 @@ export function UsagePanel({
             <section aria-label={t('visualpanels.usageCost')}>
               <h4>{t('visualpanels.usageCost')}</h4>
               <strong title={exactCost(current.totals)}>{usageCost(current.totals)}</strong>
-              {current.totals.calls > 0 && <small>{t('visualpanels.reportedEstimated')}</small>}
               {(current.totals.unknownCostCalls > 0 || current.totals.partialCalls > 0) && (
                 <small className="usage-incomplete">
                   {t('visualpanels.unknownPartialEstimateInCalls', {
@@ -363,7 +362,6 @@ export function UsagePanel({
               <section className="usage-models" aria-label={t('visualpanels.costByModel')}>
                 <header className="usage-section-heading">
                   <h3>{t('visualpanels.costByModel')}</h3>
-                  <small>{t('visualpanels.topBasedOnKnownAmounts')}</small>
                 </header>
                 {rows.slice(0, 5).map((item) => (
                   <div className="usage-model-row" key={item.id}>

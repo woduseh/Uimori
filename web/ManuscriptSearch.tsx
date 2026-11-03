@@ -246,7 +246,6 @@ export function ManuscriptSearchPanel({
           {t('transfer.m227')}
         </p>
       )}
-      {!needle && kinds.length > 0 && <p className="muted">{t('transfer.m228')}</p>}
       {busy && <LoadingState presentation="inline" label={t('transfer.m230')} />}
       {error && (
         <NoticeBanner

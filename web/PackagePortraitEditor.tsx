@@ -190,7 +190,6 @@ export function PackagePortraitEditor({
             </button>
           )}
         </div>
-        <small>{t('library.pngJpegWebpAvifGifUpTo')}</small>
         {busy && (
           <div className="package-portrait-actions">
             <LoadingState presentation="inline" label={t('library.uploadingPortrait')} />

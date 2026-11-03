@@ -377,8 +377,6 @@ export function HelperTaskResults({
 }) {
   useI18n();
   const { data, reading, failed, retry } = useTaskResults(taskId, status, visible);
-  const noOp =
-    data && data.results.length > 0 && data.results.every((result) => result.changedTargets === 0);
   return (
     <section
       className="helper-task-results"
@@ -400,12 +398,6 @@ export function HelperTaskResults({
               ))
             )}
           </ul>
-          {noOp && (
-            <p className="helper-result-note">
-              <Check size={16} aria-hidden="true" />
-              {t('helperResults.noOp')}
-            </p>
-          )}
           {data.unrecordedOperations > 0 && (
             <p className="helper-result-note">
               {t('helperResults.unrecorded', { count: formatNumber(data.unrecordedOperations) })}

@@ -795,7 +795,6 @@ export function BotNavigation(
               onChange={(event) => setTitle(event.target.value)}
             />
           </label>
-          <small>{t('transfer.m307')}</small>
           {error && (
             <p className="error" role="alert">
               {translateMessage(error)}

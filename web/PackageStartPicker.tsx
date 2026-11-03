@@ -209,7 +209,6 @@ export function PackageStartPicker({
               )}
             </details>
           )}
-          <p className="muted">{t('library.changesThisChatSFirstMessageYour')}</p>
         </>
       )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}

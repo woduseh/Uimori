@@ -92,7 +92,6 @@ export function RisuStartPreview({
           <p>{preview.issues.map((issue) => translateMessage(issue)).join(', ')}</p>
         </details>
       )}
-      <p className="muted">{t('native.text_9947febe83')}</p>
     </>
   );
 }

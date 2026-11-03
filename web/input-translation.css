@@ -9,6 +9,7 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
+  min-width: var(--control-h);
   min-height: var(--control-h);
   padding: 6px;
   border: 0;

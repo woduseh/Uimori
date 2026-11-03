@@ -1622,9 +1622,6 @@ function ContentEditor({
               {t('library.errorInputRetained', { error: translateMessage(error) })}
             </p>
           )}
-          {nativeDraftDirty && (
-            <p className="full muted">{t('library.editingTheOriginalChangesWillBeChecked')}</p>
-          )}
           <div className="library-savebar form-actions full">
             {selected && (selected.kind === 'bot' || selected.package) && onStartStory && (
               <button

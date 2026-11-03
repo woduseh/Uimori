@@ -487,14 +487,13 @@ export function OutlinePanel({
           </div>
         </div>
         <div className="outline-header-actions">
-          <button
-            type="button"
+          <IconButton
+            icon={Sparkles}
+            size={18}
+            label={t('prompts.uiHelper')}
             className={`secondary outline-helper-toggle ${helperVisible ? 'is-active' : ''}`}
             onClick={onToggleHelper}
-          >
-            <Sparkles size={16} />
-            {t('prompts.uiHelper')}
-          </button>
+          />
           <IconButton label={t('prompts.uiCloseHierarchicalOutline')} icon={X} onClick={onClose} />
         </div>
       </header>
@@ -613,9 +612,6 @@ export function OutlinePanel({
                   }}
                 >
                   <div className="outline-section-heading">
-                    {!adding && (
-                      <span className="outline-eyebrow">{t('prompts.uiEditOutline')}</span>
-                    )}
                     <h3>{adding ? t('prompts.uiNewOutline') : selected?.title}</h3>
                   </div>
                   {adding && (
@@ -690,10 +686,6 @@ export function OutlinePanel({
                       onChange={(event) => changeDraft({ ...draft, intent: event.target.value })}
                     />
                   </label>
-                  <details className="outline-field-help">
-                    <summary>{t('reader.outlineWritingHelp')}</summary>
-                    <p>{t(`prompts.guidance.${draft.level}`)}</p>
-                  </details>
                   <details className="outline-reference-picker">
                     <summary>
                       <Link2 size={15} />

@@ -224,7 +224,6 @@ function StoryGuideEditor({
                 <input
                   value={draft.work}
                   maxLength={STORY_GUIDE_LIMITS.work}
-                  placeholder={t('prompts.uiWorkTitleEditionOrSettingToReference')}
                   onChange={(event) => update('work', event.target.value)}
                 />
               </label>
@@ -259,7 +258,7 @@ function StoryGuideEditor({
               <details className="story-guide-reference">
                 <summary>{t('prompts.uiAdditionalReferences')}</summary>
                 <label>
-                  {t('prompts.uiAdditionalReferenceText')}
+                  <span className="sr-only">{t('prompts.uiAdditionalReferenceText')}</span>
                   <textarea
                     value={draft.reference}
                     maxLength={STORY_GUIDE_LIMITS.reference}

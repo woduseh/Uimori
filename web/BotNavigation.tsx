@@ -479,25 +479,23 @@ export function BotBranch(
           {!expanded && status(count ? t('transfer.d015', { v0: count }) : undefined)}
           <div className="bot-row-actions">
             {bot && (
-              <button
-                className="icon-button"
-                aria-label={t('transfer.d016', { v0: title })}
+              <IconButton
+                label={t('transfer.d016', { v0: title })}
                 title={t('transfer.m246')}
+                icon={AddIcon}
+                size={16}
                 disabled={busy}
                 onClick={() => void start(folder ?? undefined)}
-              >
-                <AddIcon size={16} />
-              </button>
+              />
             )}
             {folder && (
-              <button
-                className="icon-button"
-                aria-label={t('transfer.d017', { v0: title })}
+              <IconButton
+                label={t('transfer.d017', { v0: title })}
                 title={t('transfer.m247')}
+                icon={MoreIcon}
+                size={16}
                 onClick={() => setSettingsId(folder.id)}
-              >
-                <MoreIcon size={16} />
-              </button>
+              />
             )}
           </div>
         </div>
@@ -908,7 +906,6 @@ function FolderSettings({
             </button>
           </NoticeBanner>
         )}
-        <small>{t('transfer.m270')}</small>
         <SaveButton
           label={t('transfer.m271')}
           className="secondary"

@@ -167,16 +167,12 @@ export function NativeRisuAssetsEditor({ value, onChange, onBusyChange }: Props)
               void filesChosen(files);
             }}
           />
-          <small>{t('native.text_38094bc6f1')}</small>
         </label>
       </div>
       {missing > 0 && (
         <p className="muted native-assets-unavailable">
           {t('native.imagesMissing', { count: missing })}
         </p>
-      )}
-      {images.length > 0 && (
-        <p className="muted">{t('native.imageCount', { count: images.length })}</p>
       )}
       {busy && <LoadingState presentation="inline" label={t('native.text_d504143bb7')} />}
       {notice && (

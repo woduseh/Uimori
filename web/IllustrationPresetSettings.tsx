@@ -466,35 +466,25 @@ export function IllustrationPresetSettings({
                 </small>
               </button>
               <div className="illustration-preset-actions">
-                {preset.id.startsWith('builtin:') ? (
-                  <button
-                    disabled={busy || dirty}
-                    aria-label={t('visualpanels.editIllustrationPreset', {
-                      v0: preset.id.startsWith('builtin:')
-                        ? translateMessage(preset.title)
-                        : preset.title,
-                    })}
-                    title={t('visualpanels.duplicateAndEditIllustrationPreset', {
-                      v0: preset.id.startsWith('builtin:')
-                        ? translateMessage(preset.title)
-                        : preset.title,
-                    })}
-                    onClick={() => edit(preset)}
-                  >
-                    <Copy size={16} aria-hidden="true" /> {t('visualpanels.duplicateAndEdit2')}{' '}
-                  </button>
-                ) : (
-                  <IconButton
-                    disabled={busy || dirty}
-                    label={t('visualpanels.editIllustrationPreset', {
-                      v0: preset.id.startsWith('builtin:')
-                        ? translateMessage(preset.title)
-                        : preset.title,
-                    })}
-                    icon={Pencil}
-                    onClick={() => edit(preset)}
-                  />
-                )}
+                <IconButton
+                  className="secondary"
+                  disabled={busy || dirty}
+                  size={18}
+                  label={t('visualpanels.editIllustrationPreset', {
+                    v0: preset.id.startsWith('builtin:')
+                      ? translateMessage(preset.title)
+                      : preset.title,
+                  })}
+                  title={
+                    preset.id.startsWith('builtin:')
+                      ? t('visualpanels.duplicateAndEditIllustrationPreset', {
+                          v0: translateMessage(preset.title),
+                        })
+                      : undefined
+                  }
+                  icon={preset.id.startsWith('builtin:') ? Copy : Pencil}
+                  onClick={() => edit(preset)}
+                />
                 <ActionMenu
                   label={t('visualpanels.presetMenu', {
                     v0: preset.id.startsWith('builtin:')

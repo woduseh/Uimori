@@ -88,7 +88,6 @@ export function BotDefaultPersona({
           void save();
         }}
       >
-        <p>{t('library.botPersonaHint', { title: bot.title })}</p>
         {!saved && (
           <LoadingState
             presentation="placeholder"

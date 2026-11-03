@@ -25,7 +25,6 @@ export function LoreContextDiagnostics({
   return (
     <section className="lore-context-result" aria-label={label}>
       <h4>{label}</h4>
-      <p className="muted">{t('settings.m256')}</p>
       <dl className="lore-context-stats">
         <div>
           <dt>{t('settings.m257')}</dt>
@@ -105,7 +104,6 @@ export function LoreContextDiagnostics({
           </ol>
         </details>
       )}
-      <small className="muted">{t('settings.m268')}</small>
     </section>
   );
 }

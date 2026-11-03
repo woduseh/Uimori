@@ -427,7 +427,7 @@ export function PromptEditor({
         </div>
         <fieldset className="prompt-editor-fields" disabled={busy}>
           <label className="prompt-title-field">
-            {t('prompts.uiPromptNameRequired')}
+            {t('prompts.uiPromptName')}
             <input
               aria-label={t('prompts.uiPromptName')}
               required

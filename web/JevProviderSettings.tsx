@@ -9,6 +9,7 @@ import { JEV_PROVIDER_DEFINITION, type JevProviderStatus } from '../core/jev-pro
 import type { ProviderConnectionTest } from '../core/provider-connection-test.js';
 import { api, ApiError } from './api.js';
 import { SaveButton } from './SaveButton.js';
+import { IconButton } from './IconButton.js';
 import { RefreshIcon } from './ui-icons.js';
 import { ToggleRow } from './ToggleRow.js';
 import './JevProviderSettings.css';
@@ -283,15 +284,14 @@ export function JevProviderSettings({
             ? JEV_PROVIDER_DEFINITION.label
             : JEV_PROVIDER_DEFINITION.modelLabel}
         </h3>
-        <button
-          type="button"
+        <IconButton
           className="secondary"
+          icon={RefreshIcon}
+          size={18}
+          label={t('providers.m350')}
           disabled={busy}
           onClick={() => setRefresh((value) => value + 1)}
-        >
-          <RefreshIcon size={16} aria-hidden="true" />
-          {t('providers.m350')}
-        </button>
+        />
       </div>
       {loading && (
         <LoadingState
@@ -330,7 +330,6 @@ export function JevProviderSettings({
                       ? t('providers.m355')
                       : t('providers.m356')}
                   </span>
-                  <span>{t('providers.m579', { value0: '' })}</span>
                 </small>
               </label>
               <div className="jev-provider-links">

@@ -1,5 +1,5 @@
 import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CHAT_BACKUP_VERSION,
   type ChatBackup,
@@ -46,7 +46,6 @@ export function BackupFileImport({
   const input = useRef<HTMLInputElement>(null),
     version = useRef(0),
     lock = useRef(false);
-  const id = useId();
   useEffect(
     () => onDirtyChange(!!selection || reading || busy),
     [onDirtyChange, selection, reading, busy]
@@ -182,9 +181,6 @@ export function BackupFileImport({
       <header className="settings-group-heading archive-card-heading">
         <div>
           <h3>{t('transfer.m128')}</h3>
-          <p className="muted" id={`${id}-help`}>
-            {t('transfer.m129')}
-          </p>
         </div>
       </header>
       <div className="settings-group-body archive-management-card">
@@ -196,7 +192,6 @@ export function BackupFileImport({
               type="file"
               accept=".json,application/json,.uimori,.zip,application/zip,.sqlite,.sqlite3,.db"
               aria-label={t('transfer.m130')}
-              aria-describedby={`${id}-help`}
               disabled={disabled || busy || reading || uncertain}
               onChange={(event) => void read(event.currentTarget.files?.[0])}
             />
@@ -231,7 +226,6 @@ export function BackupFileImport({
                       ),
                   })}
                 </p>
-                <small className="muted archive-import-note">{t('transfer.m141')}</small>
               </>
             )}
             <div className="archive-import-actions">

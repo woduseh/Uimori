@@ -57,7 +57,6 @@ export function InputTranslationControls({
         ) : (
           <Languages size={17} aria-hidden="true" />
         )}
-        <span>{translation.busy ? t('prompts.uiCancel') : t('prompts.uiTranslation')}</span>
       </button>
       <label className="input-translation-language-desktop">
         <span className="sr-only">{t('prompts.uiInputTranslationLanguage')}</span>

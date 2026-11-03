@@ -360,10 +360,6 @@ export function LoreContextPolicyEditor({
       {chatId && (
         <details className="lore-context-preview">
           <summary>{t('settings.m237')}</summary>
-          <p>
-            {reset ? t('settings.m239') : t('settings.m240')}
-            {!request.trim() && t('settings.m241')}
-          </p>
           <button
             type="button"
             className="secondary"

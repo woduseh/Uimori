@@ -1329,15 +1329,12 @@ export function HelperPanel(props: Props) {
           />
         )}
         {!props.expanded && (
-          <button
+          <IconButton
             ref={closeButton}
-            type="button"
-            className="icon-button"
-            aria-label={t('helpers.m045')}
+            icon={X}
+            label={t('helpers.m045')}
             onClick={() => closePanel.current()}
-          >
-            <X size={20} />
-          </button>
+          />
         )}
       </header>
       {props.library && (
@@ -1814,7 +1811,6 @@ export function HelperPanel(props: Props) {
         onClose={() => setOutboxDecision(null)}
       >
         <p>{unpersisted[scopeKey] ? t('helpers.m075') : t('helpers.m076')}</p>
-        <p>{t('helpers.m077')}</p>
         <div className="form-actions">
           <button type="button" className="secondary" onClick={() => setOutboxDecision(null)}>
             {t('helpers.m078')}
@@ -1945,8 +1941,10 @@ export function HelperPanel(props: Props) {
                   </button>
                 )}
                 {!recoveryError && (
-                  <button
-                    type="button"
+                  <IconButton
+                    icon={CloseIcon}
+                    size={18}
+                    label={t('helpers.m078')}
                     className="secondary"
                     onClick={() => {
                       setError('');
@@ -1954,10 +1952,7 @@ export function HelperPanel(props: Props) {
                       sessions.clearError();
                       attachments.clearError();
                     }}
-                  >
-                    <CloseIcon size={18} aria-hidden="true" />
-                    {t('helpers.m078')}
-                  </button>
+                  />
                 )}
               </>
             }
