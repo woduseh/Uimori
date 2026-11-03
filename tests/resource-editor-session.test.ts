@@ -461,6 +461,36 @@ test('an uncertain new-resource save survives reopening and replays the exact fr
   expect(disk.get('new:content:bot')).toBeUndefined();
 });
 
+test('an uncertain create can be confirmed while newer unsaved input is invalid', async () => {
+  const session = editor(null);
+  await session.open();
+  const submitted = { ...model, title: 'Already admitted' };
+  session.setModel(submitted);
+  vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
+  await expect(session.save()).rejects.toThrow('Connection lost');
+  const firstRequest = vi.mocked(api).mock.lastCall?.[1] as { idempotencyKey: string };
+
+  session.pendingField('raw', true);
+  session.setField('raw', '{ incomplete');
+  session.prepareOnSave('raw', () => {
+    throw new Error('Invalid draft input');
+  });
+  vi.mocked(api).mockResolvedValueOnce({ saved: saved(submitted, 1, 'existing'), created: false });
+  await session.save();
+  expect(api).toHaveBeenLastCalledWith(
+    '/resources/save',
+    expect.objectContaining({
+      idempotencyKey: firstRequest.idempotencyKey,
+      model: submitted,
+    })
+  );
+  expect(session.snapshot()).toMatchObject({
+    document: { targetId: 'existing' },
+    local: { rawFields: { raw: '{ incomplete' } },
+    dirty: true,
+  });
+});
+
 test('a rejected create releases its frozen key and retries the edited draft as a new intent', async () => {
   const session = editor(null);
   await session.open();
