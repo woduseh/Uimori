@@ -19,16 +19,17 @@ export function saveImportReceipt(store: Store, key: string, digest: string, res
   store.db
     .prepare('INSERT INTO import_operations VALUES(?,?,?)')
     .run(key, digest, JSON.stringify(result));
-  if (key.startsWith('retry:') || key.startsWith('transcript:')) return;
-  // Retry/transcript receipts preserve target identities; unrelated resource imports
+  if (key.startsWith('retry:') || key.startsWith('transcript:') || key.startsWith('resource:'))
+    return;
+  // Retry/transcript/resource receipts preserve target identities; unrelated imports
   // must not evict them and turn a replay into a second chat or generation.
   store.db
     .prepare(
       `DELETE FROM import_operations
-       WHERE key NOT LIKE 'retry:%' AND key NOT LIKE 'transcript:%'
+       WHERE key NOT LIKE 'retry:%' AND key NOT LIKE 'transcript:%' AND key NOT LIKE 'resource:%'
          AND rowid NOT IN (
            SELECT rowid FROM import_operations
-           WHERE key NOT LIKE 'retry:%' AND key NOT LIKE 'transcript:%'
+           WHERE key NOT LIKE 'retry:%' AND key NOT LIKE 'transcript:%' AND key NOT LIKE 'resource:%'
            ORDER BY rowid DESC LIMIT 256
          )`
     )

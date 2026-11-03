@@ -70,6 +70,16 @@ beforeEach(() => {
     });
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('localStorage', { setItem: vi.fn() });
+  const storage = new Map<string, string>();
+  vi.stubGlobal('sessionStorage', {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      storage.set(key, value);
+    },
+    removeItem: (key: string) => {
+      storage.delete(key);
+    },
+  });
 });
 afterEach(async () => {
   for (const session of sessions.splice(0)) session.dispose();
@@ -164,12 +174,16 @@ test('new resources migrate ordered recovery writes to their saved ID without lo
   session.setModel(later);
   response.resolve({ saved: saved(first, 1, 'created'), created: true });
   await Promise.resolve();
-  expect(writeRecovery).toHaveBeenCalledTimes(1);
+  expect(
+    vi.mocked(writeRecovery).mock.calls.filter(([key]) => key === 'new:content:bot')
+  ).toHaveLength(1);
   stored.resolve();
   await oldWrite;
   await saving;
   expect(session.editorKey).toBe('content:created');
-  expect(vi.mocked(writeRecovery).mock.calls).toEqual([
+  expect(
+    vi.mocked(writeRecovery).mock.calls.filter(([key]) => !key.startsWith('resource-creation:'))
+  ).toEqual([
     ['new:content:bot', { token: expect.any(String), revision: null, model: first, rawFields: {} }],
     ['content:created', { token: expect.any(String), revision: 1, model: later, rawFields: {} }],
   ]);
@@ -362,4 +376,140 @@ test('a clean session with no loaded buffer cannot clear another tab recovery', 
   await clean.flush();
   expect(deleteRecoveryIfToken).not.toHaveBeenCalled();
   expect(disk.get('content:one')?.model).toMatchObject({ title: 'Other tab' });
+});
+
+test('a failed copy does not clear a pre-existing conflict or silently discard a pending admission', async () => {
+  const session = editor();
+  await session.open();
+  session.setModel({ ...model, title: 'Local changes' });
+  vi.mocked(api).mockRejectedValueOnce(new ApiError('Revision changed', 409));
+  await expect(session.save()).rejects.toThrow('Revision changed');
+  expect(session.snapshot().conflict).toBe(true);
+
+  vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
+  await expect(session.save(undefined, { copy: true })).rejects.toThrow('Connection lost');
+  expect(session.snapshot()).toMatchObject({ conflict: true, dirty: true, saving: false });
+  const pending = disk.get(
+    'resource-creation:content:one:' + sessionStorage.getItem('uimori:editor-tab-scope')
+  )?.model as { key: string; model: ContentEditModel } | undefined;
+  expect(pending).toMatchObject({
+    key: expect.any(String),
+    copy: true,
+    model: { title: 'Local changes' },
+  });
+  await expect(session.discard()).rejects.toThrow('먼저 저장을 다시 시도');
+
+  vi.mocked(api).mockResolvedValueOnce({
+    saved: saved({ ...model, title: 'Local changes' }, 1, 'copy'),
+    created: false,
+  });
+  await session.save();
+  expect(api).toHaveBeenLastCalledWith(
+    '/resources/save',
+    expect.objectContaining({
+      id: null,
+      idempotencyKey: pending?.key,
+      model: pending?.model,
+    })
+  );
+  expect(session.snapshot()).toMatchObject({
+    conflict: false,
+    dirty: false,
+    document: { targetId: 'copy' },
+  });
+});
+
+test('an uncertain new-resource save survives reopening and replays the exact frozen model', async () => {
+  const first = editor(null);
+  await first.open();
+  const submitted = { ...model, title: 'Sent draft' };
+  const later = { ...submitted, text: 'Typed after a lost response' };
+  first.setModel(submitted);
+  vi.mocked(api).mockRejectedValueOnce(new Error('Connection lost'));
+  await expect(first.save()).rejects.toThrow('Connection lost');
+  const pending = disk.get(
+    'resource-creation:new:content:bot:' + sessionStorage.getItem('uimori:editor-tab-scope')
+  )?.model as { key: string; model: ContentEditModel } | undefined;
+  expect(pending).toMatchObject({ key: expect.any(String), model: submitted });
+  first.setModel(later);
+  await first.flush();
+  first.dispose();
+  await vi.runAllTimersAsync();
+
+  const reopened = editor(null);
+  await reopened.open();
+  expect(reopened.snapshot().local.model).toMatchObject(later);
+  vi.mocked(api).mockResolvedValueOnce({
+    saved: saved(submitted, 1, 'created-once'),
+    created: false,
+  });
+  await reopened.save();
+  expect(api).toHaveBeenLastCalledWith(
+    '/resources/save',
+    expect.objectContaining({
+      id: null,
+      idempotencyKey: pending?.key,
+      model: submitted,
+    })
+  );
+  expect(reopened.snapshot()).toMatchObject({
+    document: { targetId: 'created-once', baseModel: submitted },
+    local: { model: later },
+    dirty: true,
+  });
+  expect(disk.get('content:created-once')).toMatchObject({ model: later });
+  expect(disk.get('new:content:bot')).toBeUndefined();
+});
+
+test('a rejected create releases its frozen key and retries the edited draft as a new intent', async () => {
+  const session = editor(null);
+  await session.open();
+  session.setModel({ ...model, title: 'Invalid' });
+  vi.mocked(api).mockRejectedValueOnce(new ApiError('Validation failed', 400));
+  await expect(session.save()).rejects.toThrow('Validation failed');
+  expect(
+    disk.get(
+      'resource-creation:new:content:bot:' + sessionStorage.getItem('uimori:editor-tab-scope')
+    )
+  ).toBeUndefined();
+
+  session.setModel({ ...model, title: 'Corrected' });
+  vi.mocked(api).mockResolvedValueOnce({
+    saved: saved({ ...model, title: 'Corrected' }, 1, 'new'),
+    created: true,
+  });
+  await session.save();
+  expect(api).toHaveBeenLastCalledWith(
+    '/resources/save',
+    expect.objectContaining({
+      model: expect.objectContaining({ title: 'Corrected' }),
+      idempotencyKey: expect.any(String),
+    })
+  );
+});
+
+test('a failed pending-command read blocks another creation rather than generating a new identity', async () => {
+  vi.mocked(readRecovery)
+    .mockImplementationOnce(async () => undefined)
+    .mockRejectedValueOnce(new Error('IndexedDB unavailable'));
+  const session = editor(null);
+  await session.open();
+  session.setModel({ ...model, title: 'Do not duplicate' });
+  await expect(session.save()).rejects.toThrow('복구 기록을 읽지 못했어요');
+  expect(api).not.toHaveBeenCalled();
+});
+
+test('a temporary outbox write failure never sends a new resource request', async () => {
+  const session = editor(null);
+  await session.open();
+  session.setModel({ ...model, title: 'Waiting' });
+  vi.mocked(writeRecovery).mockRejectedValueOnce(new Error('Disk unavailable'));
+  await expect(session.save()).rejects.toThrow('Disk unavailable');
+  expect(api).not.toHaveBeenCalled();
+  vi.mocked(api).mockResolvedValueOnce({
+    saved: saved({ ...model, title: 'Waiting' }, 1, 'created'),
+    created: true,
+  });
+  await session.save();
+  expect(session.snapshot().document.targetId).toBe('created');
 });

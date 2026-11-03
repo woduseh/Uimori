@@ -16,7 +16,14 @@ export function resourceRoutes(app: FastifyInstance, store: Store) {
   );
   app.post('/api/resources/clone', (request) => {
     const body = record(request.body);
-    fields(body, ['kind', 'sourceId', 'expectedSourceRevision', 'title', 'syncNativeName']);
+    fields(body, [
+      'kind',
+      'sourceId',
+      'expectedSourceRevision',
+      'title',
+      'syncNativeName',
+      'idempotencyKey',
+    ]);
     if (body.syncNativeName !== undefined && typeof body.syncNativeName !== 'boolean')
       throw new HttpError(400, '내부 이름 동기화 옵션을 확인해 주세요.');
     return cloneResource(store, {
@@ -25,17 +32,23 @@ export function resourceRoutes(app: FastifyInstance, store: Store) {
       expectedSourceRevision: number(body.expectedSourceRevision, 'source revision'),
       title: text(body.title, 'title', 200),
       ...(body.syncNativeName === undefined ? {} : { syncNativeName: body.syncNativeName }),
+      ...(body.idempotencyKey === undefined
+        ? {}
+        : { idempotencyKey: text(body.idempotencyKey, 'request key', 200) }),
     });
   });
   app.post('/api/resources/save', { bodyLimit: 48 * 1024 * 1024 }, (request) => {
     const body = record(request.body);
-    fields(body, ['kind', 'id', 'expectedRevision', 'model']);
+    fields(body, ['kind', 'id', 'expectedRevision', 'model', 'idempotencyKey']);
     return saveResource(store, {
       kind: resourceKind(body.kind),
       id: body.id == null ? null : text(body.id, 'resource ID', 100),
       expectedRevision:
         body.expectedRevision === undefined ? undefined : number(body.expectedRevision, 'revision'),
       model: record(body.model) as ResourceModel,
+      ...(body.idempotencyKey === undefined
+        ? {}
+        : { idempotencyKey: text(body.idempotencyKey, 'request key', 200) }),
     });
   });
   app.post<{ Params: { kind: string; id: string } }>('/api/resources/:kind/:id/undo', (request) => {

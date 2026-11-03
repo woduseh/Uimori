@@ -267,3 +267,73 @@ test('clone route rejects unsupported kinds, incomplete or extra fields, and inv
   expect(rows(store)).toEqual(before);
   expect(store.libraryOrganization.snapshot()).toEqual(organization);
 });
+
+test('new-resource creation has a compact durable receipt and rejects conflicting reuse of a key', async () => {
+  const { store, app } = fixture();
+  const command = {
+    kind: 'content',
+    id: null,
+    model: { ...fixtureBotInput(), title: 'Created once' },
+    idempotencyKey: 'new-content-1',
+  };
+  const request = async (body: object) =>
+    app.inject({ method: 'POST', url: '/api/resources/save', payload: body });
+  const first = await request(command);
+  expect(first.statusCode, first.body).toBe(200);
+  const second = await request(command);
+  expect(second.statusCode, second.body).toBe(200);
+  expect(second.json()).toMatchObject({ created: false, saved: { id: first.json().saved.id } });
+  expect(store.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='content'").get()!.n).toBe(
+    1
+  );
+  const receipt = store.db
+    .prepare('SELECT result FROM import_operations WHERE key=?')
+    .get('resource:save:new-content-1')!;
+  expect(JSON.parse(String(receipt.result))).toEqual({
+    kind: 'content',
+    id: first.json().saved.id,
+  });
+  const changed = await request({ ...command, model: { ...command.model, title: 'Different' } });
+  expect(changed.statusCode).toBe(409);
+  expect(store.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='content'").get()!.n).toBe(
+    1
+  );
+});
+
+test('a repeated clone returns its original identity after the source changes', async () => {
+  const { store, app } = fixture();
+  const source = store.product.promptPreset({
+    title: 'Original',
+    role: 'main',
+    program: nativePrompt('Text'),
+    values: {},
+  }) as PromptPreset;
+  const command = {
+    kind: 'prompt-preset',
+    sourceId: source.id,
+    expectedSourceRevision: source.revision,
+    title: 'Copy',
+    idempotencyKey: 'clone-preset-1',
+  };
+  const first = await postClone(app, command);
+  expect(first.statusCode, first.body).toBe(200);
+  store.product.promptPreset(
+    {
+      ...editableResource('prompt-preset', source),
+      title: 'Changed source',
+      expectedRevision: source.revision,
+    },
+    source.id
+  );
+  const beforeReplay = rows(store);
+  const again = await postClone(app, command);
+  expect(again.statusCode, again.body).toBe(200);
+  expect(rows(store)).toEqual(beforeReplay);
+  expect(again.json()).toMatchObject({
+    created: false,
+    saved: { id: first.json().saved.id, title: 'Copy' },
+    source: { id: source.id, revision: source.revision },
+  });
+  const incompatible = await postClone(app, { ...command, title: 'Another copy' });
+  expect(incompatible.statusCode).toBe(409);
+});
