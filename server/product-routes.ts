@@ -164,6 +164,14 @@ export function productRoutes(
   app.post(
     '/api/provider-management/vertex-credentials',
     { bodyLimit: 70 * 1024 },
+    async (_request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      throw new HttpError(410, '페이지를 새로고침한 뒤 서비스 계정 파일을 다시 선택해 주세요.');
+    }
+  );
+  app.post(
+    '/api/provider-management/vertex-credentials/validate',
+    { bodyLimit: 70 * 1024 },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       const b = record(request.body);

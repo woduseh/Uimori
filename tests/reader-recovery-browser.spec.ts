@@ -281,6 +281,143 @@ test('READERREC leaving during a position write flushes the newer location after
   }
 });
 
+for (const scenario of ['loaded', 'old-refresh', 'loading', 'new-move'] as const) {
+  test(`READERREC a late position acknowledgement preserves newer ownership (${scenario})`, async ({
+    page,
+    request,
+  }) => {
+    const { chat, detail } = await createReadingChat(request, 'Late position acknowledgement', 4);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let delivered!: () => void;
+    const acknowledged = new Promise<void>((resolve) => {
+      delivered = resolve;
+    });
+    let releaseRead!: () => void;
+    const heldRead = new Promise<void>((resolve) => {
+      releaseRead = resolve;
+    });
+    let readStarted!: () => void;
+    const pendingRead = new Promise<void>((resolve) => {
+      readStarted = resolve;
+    });
+    let holdRead = false;
+    let firstRevision: number | undefined;
+    const targets: string[] = [];
+    await page.route(`**/api/chats/${chat.id}/reading-position`, async (route) => {
+      if (route.request().method() !== 'PUT') return route.continue();
+      targets.push(route.request().postDataJSON().target.sourceId);
+      if (targets.length !== 1) return route.continue();
+      // The server commits this write; only its response to this tab is delayed.
+      const response = await route.fetch();
+      expect(response.ok()).toBe(true);
+      firstRevision = (await response.json()).revision;
+      await held;
+      await route.fulfill({ response });
+      delivered();
+    });
+    await page.route(`**/api/chats/${chat.id}/reading-position?*`, async (route) => {
+      if (!holdRead) return route.continue();
+      holdRead = false;
+      const response = await route.fetch();
+      readStarted();
+      await heldRead;
+      await route.fulfill({ response });
+    });
+    const go = async (number: number) => {
+      await page
+        .getByRole('button', { name: '장면 목록 열기', exact: true })
+        .filter({ visible: true })
+        .first()
+        .click();
+      await page
+        .getByRole('dialog', { name: '장면 목록', exact: true })
+        .getByRole('button', { name: new RegExp(`^${number}번째 장면,`) })
+        .click();
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get('source'))
+        .toBe(detail.sources[number - 1].id);
+      await page.evaluate(async () => {
+        for (let index = 0; index < 3; index++)
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      });
+    };
+    try {
+      const initialLoad = page.waitForResponse(
+        (response) => response.url().includes('/reading-position?') && response.ok()
+      );
+      await page.goto(`/?chat=${chat.id}`);
+      await initialLoad;
+      await go(2);
+      await expect.poll(() => firstRevision).toBeDefined();
+      await go(3);
+      const clientId = await page.evaluate(() => localStorage.getItem('uimori:reading-client'));
+      const path = `/api/chats/${chat.id}/reading-position`;
+      const updateFromOtherTab = async () => {
+        const newer = await request.put(path, {
+          data: {
+            clientId,
+            expectedRevision: firstRevision,
+            target: { chatId: chat.id, sourceId: detail.sources[0].id, representation: 'original' },
+          },
+        });
+        expect(newer.ok(), await newer.text()).toBe(true);
+        return newer.json();
+      };
+      let latest: { revision: number };
+      if (scenario === 'old-refresh') {
+        latest = await updateFromOtherTab();
+        const refreshed = page.waitForResponse(
+          (response) => response.url().includes('/reading-position?') && response.ok()
+        );
+        await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+        expect((await (await refreshed).json()).own.revision).toBe(latest.revision);
+        await navigationAction(page, '서재');
+      } else {
+        await navigationAction(page, '서재');
+        latest = await updateFromOtherTab();
+      }
+      const delayedRead = scenario === 'loading' || scenario === 'new-move';
+      holdRead = delayedRead;
+      const reload = page.waitForResponse(
+        (response) => response.url().includes('/reading-position?') && response.ok()
+      );
+      await page.goBack();
+      if (delayedRead) {
+        await pendingRead;
+        if (scenario === 'new-move') await go(4);
+      } else expect((await (await reload).json()).own.revision).toBe(latest.revision);
+      release();
+      await acknowledged;
+      releaseRead();
+      expect((await (await reload).json()).own.revision).toBe(latest.revision);
+      // Allow the old visit's post-acknowledgement continuation to enqueue any stale PUT.
+      await page.waitForTimeout(400);
+      const query = new URLSearchParams({ clientId: clientId! });
+      const current = await (await request.get(`${path}?${query}`)).json();
+      if (scenario === 'new-move') {
+        expect(current.own).toMatchObject({
+          revision: latest.revision + 1,
+          target: { sourceId: detail.sources[3].id },
+        });
+        expect(targets).toEqual([detail.sources[1].id, detail.sources[3].id]);
+      } else {
+        expect(current.own).toMatchObject({
+          revision: latest.revision,
+          target: { sourceId: detail.sources[0].id },
+        });
+        expect(targets).toEqual([detail.sources[1].id]);
+      }
+    } finally {
+      release();
+      releaseRead();
+      await page.unrouteAll({ behavior: 'wait' });
+    }
+  });
+}
+
 test('READERREC confirming an uncertain request never turns into cancelling its admitted run', async ({
   page,
   request,

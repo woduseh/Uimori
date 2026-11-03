@@ -3,9 +3,15 @@ import { fixtureIllustrationPreset } from './fixtures/illustration.js';
 import { emptyIllustrationPreset } from '../core/illustration-presets.js';
 import { saveResource } from '../server/resource-service.js';
 import { afterEach, describe, expect, test } from 'vitest';
+import Fastify from 'fastify';
 import type { Store } from '../server/store.js';
 import { HttpError } from '../server/request-validation.js';
-import { flushPendingImageCleanup } from '../server/unused-data.js';
+import { processImage } from '../server/image-processing.js';
+import { readImage } from '../server/image-storage.js';
+import { packageImageRoutes } from '../server/package-images.js';
+import { assertPackageImageReferences } from '../server/package-image-references.js';
+import { addNativeRisuImage } from '../core/risu-native-assets.js';
+import { fixtureBotInput } from './fixtures/chat.js';
 import {
   cancelIllustration,
   claimIllustration,
@@ -26,7 +32,7 @@ import {
   updateIllustrationReferences,
   updateIllustrationSettings,
 } from '../server/illustrations.js';
-import type { Connection, ModelPreset } from '../core/product.js';
+import type { Connection, Content, ModelPreset } from '../core/product.js';
 import {
   chatWithSource,
   completedSource,
@@ -74,30 +80,60 @@ function codexModel(store: Store) {
 }
 
 describe('integrated illustration audit regressions', () => {
-  test('deleting illustrations reclaims unshared images after active work ends', () => {
+  test('deleting an illustration keeps its reuploaded image available to an unsaved resource draft', async () => {
     const store = databases.create();
     const { source } = chatWithSource(store);
-    const settings = fixtureSettings({ maxPerSource: 4 });
-    const first = reserveIllustration(store, source, 'manual', { settings, testMode: true });
-    complete(store, first.id);
-    const second = reserveIllustration(store, source, 'manual', { settings, testMode: true });
-    complete(store, second.id);
-    const hash = String(
-      store.db.prepare('SELECT hash FROM illustration_images WHERE job_id=?').get(first.id)!.hash
-    );
-
-    removeIllustration(store, first.id);
-    expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeTruthy();
-    const active = reserveIllustration(store, source, 'manual', { settings, testMode: true });
-    removeIllustration(store, second.id);
-    expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeTruthy();
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings(),
+      testMode: true,
+    });
+    const claimed = claimIllustration(store, job.id, 'worker')!;
+    const normalized = await processImage(PNG);
     expect(
-      store.db.prepare('SELECT hash FROM image_cleanup_candidates WHERE hash=?').get(hash)
-    ).toBeTruthy();
-
-    cancelIllustration(store, active.id);
-    flushPendingImageCleanup(store.db);
-    expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
+      completeIllustration(
+        store,
+        job.id,
+        claimed.job.generation,
+        'worker',
+        [{ mime: normalized.mime, bytes: normalized.bytes, caption: '그림' }],
+        diagnostic()
+      )
+    ).toBe(true);
+    const hash = String(
+      store.db.prepare('SELECT hash FROM illustration_images WHERE job_id=?').get(job.id)!.hash
+    );
+    const app = Fastify();
+    packageImageRoutes(app, store, { publish: () => {}, pump: () => {} });
+    try {
+      const downloaded = readImage(store.db, hash);
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/package-image-blobs',
+        payload: { mime: downloaded.mime, base64: downloaded.bytes.toString('base64') },
+      });
+      expect(response.statusCode, response.body).toBe(200);
+      const uploaded = response.json() as { hash: string; mime: 'image/webp' };
+      expect(uploaded.hash).toBe(hash);
+      const input = fixtureBotInput('Unsaved illustration draft');
+      const draft = {
+        ...input,
+        package: addNativeRisuImage(input.package, {
+          id: 'draft-image',
+          title: 'Draft image',
+          description: '',
+          blobHash: uploaded.hash,
+          mime: uploaded.mime,
+          allowedUse: 'both',
+        }),
+      };
+      assertPackageImageReferences(store.db, draft.package.images!);
+      removeIllustration(store, job.id);
+      assertPackageImageReferences(store.db, draft.package.images!);
+      const saved = store.product.content(draft) as Content;
+      expect(saved.package.images).toMatchObject([{ blobHash: hash }]);
+    } finally {
+      await app.close();
+    }
   });
 
   test('reconcile recovers completed remote work at the generation limit without bypassing active work', () => {
