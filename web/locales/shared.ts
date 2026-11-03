@@ -1,4 +1,22 @@
 export const messages = {
+  'shared.resourceCreationUncertain': {
+    ko: '이전 자료 생성 요청의 결과가 불분명해요. 먼저 저장을 다시 시도해 주세요.',
+    en: 'The previous resource creation has an unknown outcome. Retry the same save before continuing.',
+    ja: '前回の資料作成の結果を確認できません。先に同じ保存を再試行してください。',
+    zh: '上次创建资料的结果尚不确定。请先重试同一次保存。',
+  },
+  'shared.resourceCreationReadFailed': {
+    ko: '자료 생성 요청의 복구 기록을 읽지 못했어요. 새로고침 후 다시 시도해 주세요.',
+    en: 'Could not read the resource creation recovery record. Reload the page and try again.',
+    ja: '資料作成の復旧記録を読み取れませんでした。ページを再読み込みしてから再試行してください。',
+    zh: '无法读取资料创建的恢复记录。请刷新页面后重试。',
+  },
+  'shared.resourceCloneRecordInvalid': {
+    ko: '이전 복제 요청 기록을 읽을 수 없어요.',
+    en: 'Could not read the previous duplicate request record.',
+    ja: '前回の複製リクエスト記録を読み取れません。',
+    zh: '无法读取上一次复制请求的记录。',
+  },
   'shared.loading': {
     ko: '불러오는 중이에요…',
     en: 'Loading…',

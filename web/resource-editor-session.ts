@@ -1,5 +1,5 @@
 import { legacyMessage } from './i18n.js';
-import { api, ApiError, libraryChangedKey } from './api.js';
+import { api, ApiError, definiteRejection, libraryChangedKey } from './api.js';
 import {
   editableResource,
   type ResourceKind,
@@ -39,6 +39,21 @@ export type EditorState = {
   restoreVersion: number;
 };
 
+type PendingCreation = { key: string; copy: boolean; model: ResourceModel };
+function editorTabScope(): string {
+  try {
+    const key = 'uimori:editor-tab-scope';
+    const stored = sessionStorage.getItem(key);
+    if (stored) return stored;
+    const next = crypto.randomUUID();
+    sessionStorage.setItem(key, next);
+    return next;
+  } catch {
+    // A storage-restricted tab still saves, but cannot recover an unknown result after reload.
+    return crypto.randomUUID();
+  }
+}
+
 /** The sole owner of a resource's editable model, raw input, baseline and save state. */
 export class ResourceEditorSession {
   private state: EditorState;
@@ -48,6 +63,12 @@ export class ResourceEditorSession {
   private recoveryWrites = Promise.resolve();
   private readonly recoveryTokens = new Map<string, string | undefined>();
   private generation = 0;
+  private pendingCreation: PendingCreation | null = null;
+  private creationReadFailed = false;
+  private readonly creationScope = editorTabScope();
+  private get creationKey() {
+    return `resource-creation:${this.options.editorKey}:${this.creationScope}`;
+  }
   private loadVersion = 0;
   private readonly preparations = new Map<string, (model: ResourceModel) => ResourceModel>();
   private disposed = false;
@@ -124,6 +145,22 @@ export class ResourceEditorSession {
         try {
           recovered = await readRecovery<ResourceModel>(this.editorKey);
         } catch {
+          recoveryFailed = true;
+        }
+        try {
+          const savedRequest = await readRecovery<PendingCreation>(this.creationKey);
+          const pending = savedRequest?.model;
+          if (
+            pending &&
+            typeof pending.key === 'string' &&
+            pending.key.length > 0 &&
+            typeof pending.copy === 'boolean' &&
+            pending.model &&
+            typeof pending.model === 'object'
+          )
+            this.pendingCreation = pending;
+        } catch {
+          this.creationReadFailed = true;
           recoveryFailed = true;
         }
         if (this.disposed || load !== this.loadVersion) return;
@@ -281,6 +318,7 @@ export class ResourceEditorSession {
   }
   async reloadSaved() {
     await this.open();
+    if (this.pendingCreation) throw new Error(legacyMessage('shared.resourceCreationUncertain'));
     if (this.state.saving) return;
     const load = ++this.loadVersion;
     const generation = this.generation;
@@ -304,25 +342,61 @@ export class ResourceEditorSession {
   async save(model?: ResourceModel, options?: { copy?: boolean }): Promise<ResourceSaveResult> {
     await this.open();
     if (this.state.saving) throw new Error(legacyMessage('shared.alreadySaving'));
-    if (this.state.conflict && !options?.copy)
+    if (this.creationReadFailed)
+      throw new Error(legacyMessage('shared.resourceCreationReadFailed'));
+    if (this.state.conflict && !options?.copy && !this.pendingCreation)
       throw new Error(legacyMessage('shared.resourceChangedHelp'));
     if (model) this.setModel(model);
+    const creating = !!options?.copy || !this.state.document.targetId || !!this.pendingCreation;
+    let prepared: ResourceModel;
+    try {
+      prepared = this.prepared(this.state.local.model);
+    } catch (error) {
+      this.emit({ error: (error as Error).message });
+      throw error;
+    }
+    const previousCreation = this.pendingCreation;
+    if (creating && !previousCreation)
+      this.pendingCreation = {
+        key: crypto.randomUUID(),
+        copy: !!options?.copy,
+        model: structuredClone(prepared),
+      };
+    const creation = this.pendingCreation;
     const document = this.state.document;
     const generation = this.generation;
     const previousKey = this.editorKey;
     this.loadVersion++;
     this.emit({ saving: true, error: '' });
+    let admitted = false;
+    let persisted = false;
     try {
+      // A separate, tab-owned outbox cannot overwrite another tab's unsaved editor buffer.
+      if (creation) {
+        await writeRecovery(this.creationKey, {
+          token: creation.key,
+          revision: null,
+          model: creation,
+          rawFields: {},
+        });
+        persisted = true;
+      }
       const result = await api<ResourceSaveResult>('/resources/save', {
         kind: this.options.kind,
-        id: options?.copy ? null : document.targetId,
-        expectedRevision: options?.copy ? undefined : (document.baseRevision ?? undefined),
-        model: this.prepared(this.state.local.model),
+        id: creation ? null : document.targetId,
+        expectedRevision: creation ? undefined : (document.baseRevision ?? undefined),
+        model: creation?.model ?? prepared,
+        ...(creation ? { idempotencyKey: creation.key } : {}),
       });
+      admitted = true;
+      this.pendingCreation = null;
       const targetId =
         this.options.kind === 'prompt-workspace' ? 'current' : (result.saved as { id: string }).id;
       const savedModel = editableResource(this.options.kind, result.saved);
-      if (generation === this.generation) {
+      if (
+        generation === this.generation &&
+        (!creation || this.isDirty(this.state.local, creation.model) === false)
+      ) {
         this.adopt(savedModel, targetId, result.saved.revision);
       } else {
         const dirty = this.isDirty(this.state.local, savedModel);
@@ -333,15 +407,27 @@ export class ResourceEditorSession {
           conflict: false,
         });
       }
+      if (creation) await deleteRecoveryIfToken(this.creationKey, creation.key).catch(() => {});
       // Finish old-key cleanup before storing edits under a newly created/copied resource.
       if (previousKey !== this.editorKey) await this.queueRecovery(true, previousKey);
       await this.queueRecovery();
       this.notifySaved();
       return result;
     } catch (error) {
+      if (
+        !admitted &&
+        creation &&
+        ((!persisted && !previousCreation) ||
+          (persisted &&
+            definiteRejection(error) &&
+            !(error instanceof ApiError && error.status === 429)))
+      ) {
+        this.pendingCreation = null;
+        if (persisted) await deleteRecoveryIfToken(this.creationKey, creation.key).catch(() => {});
+      }
       this.emit({
         error: (error as Error).message,
-        conflict: error instanceof ApiError && error.status === 409,
+        conflict: this.state.conflict || (error instanceof ApiError && error.status === 409),
       });
       throw error;
     } finally {

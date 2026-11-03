@@ -1,3 +1,4 @@
+import { cloneWithReceipt } from './resource-create-retry.js';
 import {
   t,
   useI18n,
@@ -430,12 +431,15 @@ export function LibraryPanel({
         setDetail(null);
         setEditing({ kind: full.kind, item: full });
       } else if (action === 'clone') {
-        const result = await api<ResourceSaveResult>('/resources/clone', {
-          kind: 'content',
-          sourceId: full.id,
-          expectedSourceRevision: full.revision,
-          title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
-        });
+        const result = await cloneWithReceipt<ResourceSaveResult>(
+          `resource-clone:content:${full.id}`,
+          {
+            kind: 'content',
+            sourceId: full.id,
+            expectedSourceRevision: full.revision,
+            title: `${full.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
+          }
+        );
         const copy = result.saved as Content;
         const warnings: string[] = [];
         try {

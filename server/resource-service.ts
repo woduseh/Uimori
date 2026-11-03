@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { readIllustrationPreset, saveIllustrationPreset } from './illustration-presets.js';
 import { imageDataHashes, pruneUnusedData } from './unused-data.js';
 import { readTheme, saveTheme } from './themes.js';
@@ -13,6 +15,15 @@ import { promptWorkspace, updatePromptWorkspace } from './prompt-workspace.js';
 import { editableResource } from '../core/resource-editing.js';
 import { HttpError } from './request-validation.js';
 
+type CreationReceipt = { kind: ResourceKind; id: string };
+
+/** Compact, durable identities: repeated admissions never create another resource. */
+function creationReceipt(operation: 'save' | 'clone', key: string, payload: unknown) {
+  const receiptKey = `resource:${operation}:${key}`;
+  const digest = createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+  return { receiptKey, digest };
+}
+
 export function readResource(store: Store, kind: ResourceKind, id: string): SavedResource {
   if (kind === 'illustration-preset') return readIllustrationPreset(store, id);
   if (kind === 'theme') return readTheme(store, id);
@@ -26,9 +37,23 @@ export function saveResource(
     id: string | null;
     expectedRevision?: number;
     model: ResourceModel;
+    idempotencyKey?: string;
   }
 ) {
   return store.transaction(() => {
+    const receipt =
+      !edit.id && edit.kind !== 'prompt-workspace' && edit.idempotencyKey
+        ? creationReceipt('save', edit.idempotencyKey, { kind: edit.kind, model: edit.model })
+        : null;
+    if (receipt) {
+      const previous = readImportReceipt<CreationReceipt>(
+        store,
+        receipt.receiptKey,
+        receipt.digest
+      );
+      if (previous)
+        return { saved: readResource(store, previous.kind, previous.id), created: false };
+    }
     const id = edit.kind === 'prompt-workspace' ? 'current' : edit.id;
     const previous = id ? readResource(store, edit.kind, id) : null;
     const oldUndo = id
@@ -62,6 +87,11 @@ export function saveResource(
       );
       if (removedImage) pruneUnusedData(store.db, imageDataHashes(oldUndo));
     }
+    if (receipt)
+      saveImportReceipt(store, receipt.receiptKey, receipt.digest, {
+        kind: edit.kind,
+        id: (saved as { id: string }).id,
+      });
     return { saved, created: previous === null };
   });
 }
@@ -75,11 +105,32 @@ export function cloneResource(
     expectedSourceRevision: number;
     title: string;
     syncNativeName?: boolean;
+    idempotencyKey?: string;
   }
 ) {
   if (request.syncNativeName && request.kind !== 'prompt-preset')
     throw new HttpError(400, '프롬프트 프리셋만 내부 이름을 함께 변경할 수 있어요.');
   return store.transaction(() => {
+    const receipt = request.idempotencyKey
+      ? creationReceipt('clone', request.idempotencyKey, {
+          kind: request.kind,
+          sourceId: request.sourceId,
+          expectedSourceRevision: request.expectedSourceRevision,
+          title: request.title,
+          syncNativeName: request.syncNativeName ?? false,
+        })
+      : null;
+    if (receipt) {
+      const previous = readImportReceipt<
+        CreationReceipt & { source: { id: string; revision: number } }
+      >(store, receipt.receiptKey, receipt.digest);
+      if (previous)
+        return {
+          saved: readResource(store, previous.kind, previous.id),
+          created: false,
+          source: previous.source,
+        };
+    }
     store.product.assertAvailable(request.kind, request.sourceId);
     const source = readResource(store, request.kind, request.sourceId);
     if (source.revision !== request.expectedSourceRevision)
@@ -99,10 +150,15 @@ export function cloneResource(
       preset.title = request.title;
       if (request.syncNativeName) preset.program.nativeRisuPreset.preset.name = request.title;
     }
-    return {
-      ...saveResource(store, { kind: request.kind, id: null, model }),
-      source: { id: request.sourceId, revision: source.revision },
-    };
+    const result = saveResource(store, { kind: request.kind, id: null, model });
+    const origin = { id: request.sourceId, revision: source.revision };
+    if (receipt)
+      saveImportReceipt(store, receipt.receiptKey, receipt.digest, {
+        kind: request.kind,
+        id: (result.saved as { id: string }).id,
+        source: origin,
+      });
+    return { ...result, source: origin };
   });
 }
 

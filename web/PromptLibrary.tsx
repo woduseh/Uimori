@@ -1,3 +1,4 @@
+import { cloneWithReceipt } from './resource-create-retry.js';
 import { useI18n, registerMessage, message as uiMessage, messageRef } from './i18n.js';
 import { IconButton } from './IconButton.js';
 import { MessageCircle } from 'lucide-react';
@@ -376,12 +377,15 @@ export function PromptLibrary({
     mutation.current = true;
     setMutating(true);
     try {
-      const result = await api<ResourceSaveResult>('/resources/clone', {
-        kind: 'prompt-preset',
-        sourceId: item.id,
-        expectedSourceRevision: item.revision,
-        title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
-      });
+      const result = await cloneWithReceipt<ResourceSaveResult>(
+        `resource-clone:prompt-preset:${item.id}`,
+        {
+          kind: 'prompt-preset',
+          sourceId: item.id,
+          expectedSourceRevision: item.revision,
+          title: `${item.title.slice(0, 197).replace(/[\uD800-\uDBFF]$/u, '')} 사본`,
+        }
+      );
       const copy = result.saved as PromptPreset;
       const warnings: (() => string)[] = [];
       try {
