@@ -216,10 +216,10 @@ export const messages = {
     zh: '已从阅读界面隐藏。请求和部分响应仍可在任务记录中查看。',
   },
   'shared.replacementCancelled': {
-    ko: '재생성을 취소했어요. 기존 응답은 유지돼요.',
-    en: 'Regeneration was cancelled. The existing response is preserved.',
-    ja: '再生成をキャンセルしました。既存の応答は保持されています。',
-    zh: '已取消重新生成。原有响应已保留。',
+    ko: '다시 쓰기를 취소했어요. 기존 응답은 유지돼요.',
+    en: 'Rewrite was cancelled. The existing response is preserved.',
+    ja: '書き直しをキャンセルしました。既存の応答は保持されています。',
+    zh: '已取消重写。原有响应已保留。',
   },
   'shared.interrupted': {
     ko: '응답 생성이 중단됐어요.',
@@ -348,10 +348,10 @@ export const messages = {
     zh: '无法在此设备上保存恢复输入。若未保存就离开，将无法恢复当前输入。',
   },
   'shared.writingTitle': {
-    ko: '작문: {title}',
+    ko: '창작: {title}',
     en: 'Writing: {title}',
-    ja: '執筆、{title}',
-    zh: '写作，{title}',
+    ja: '創作、{title}',
+    zh: '创作，{title}',
   },
   'shared.translationTitle': {
     ko: '번역: {title}',

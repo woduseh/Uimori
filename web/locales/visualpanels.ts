@@ -168,7 +168,7 @@ export const messages = {
     zh: '主题与颜色',
   },
   'visualpanels.reviewSavedTheme': {
-    ko: '테마 저장 내용 확인',
+    ko: '테마 저장본 확인',
     en: 'Review saved theme',
     ja: '保存済みテーマの確認',
     zh: '检查已保存的主题',
@@ -1170,7 +1170,7 @@ export const messages = {
     zh: '关闭编辑器',
   },
   'visualpanels.reviewSavedIllustrationPreset': {
-    ko: '삽화 프리셋 저장 내용 확인',
+    ko: '삽화 프리셋 저장본 확인',
     en: 'Review saved illustration preset',
     ja: '保存済み挿絵プリセットの確認',
     zh: '检查已保存的插图预设',

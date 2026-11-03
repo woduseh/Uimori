@@ -25,7 +25,7 @@ export const messages = {
     zh: '默认总计 64k / 每个问题 32k → 扩展至 262k token',
   },
   'providers.jevSettingsSaved': {
-    ko: 'JEV 판단 설정을 저장했어요.',
+    ko: 'JEV 판정 설정을 저장했어요.',
     en: 'JEV judgment settings saved.',
     ja: 'JEVの判定設定を保存しました。',
     zh: 'JEV 判断设置已保存。',
@@ -253,7 +253,7 @@ export const messages = {
     zh: '移动',
   },
   'providers.m42': {
-    ko: '저장 내용 변경 확인',
+    ko: '저장본 확인',
     en: 'Review saved changes',
     ja: '保存内容の変更を確認',
     zh: '查看已保存内容的更改',
@@ -577,7 +577,7 @@ export const messages = {
     zh: '启用',
   },
   'providers.m108': {
-    ko: '모델 입력에 사용',
+    ko: '이 프로바이더로 모델 추가',
     en: 'Use for model entry',
     ja: 'モデル入力に使用',
     zh: '用于模型输入',
@@ -997,7 +997,7 @@ export const messages = {
     zh: '停止生成字符串',
   },
   'providers.m190': {
-    ko: '사고 강도',
+    ko: '추론 강도',
     en: 'Reasoning effort',
     ja: '推論の強度',
     zh: '推理强度',
@@ -2671,7 +2671,7 @@ export const messages = {
     zh: '{enabled, select, true {停用} other {启用}}提供商 {name}',
   },
   'providers.m544': {
-    ko: '{value0} 모델 입력에 사용',
+    ko: '{value0} 프로바이더로 모델 추가',
     en: 'Use {value0} for model entry',
     ja: '{value0}をモデルの入力に使用',
     zh: '使用 {value0} 添加模型',

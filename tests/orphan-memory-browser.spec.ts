@@ -93,7 +93,7 @@ test('ORPHAN manual memory review preserves source records and AI review only pr
     if (sent.method() === 'POST' && /\/helper-conversations\/[^/]+\/tasks(?:\?|$)/.test(sent.url()))
       modelRequests.push(sent.url());
   });
-  await first.getByRole('button', { name: 'AI 검토 요청 초안', exact: true }).click();
+  await first.getByRole('button', { name: '도우미에게 검토 요청', exact: true }).click();
   await expect(page.getByLabel('도우미에게 요청', { exact: true })).toHaveValue(
     new RegExp(note.id)
   );

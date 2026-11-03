@@ -436,7 +436,7 @@ export function NativeRisuLoreEditor({
             </div>
             <div className="nl-fields">
               <label>
-                {folder ? t('native.text_0f5007a162') : t('native.text_178782beac')}
+                {folder ? t('native.text_0f5007a162') : t('native.text_3df0f8d368')}
                 <input
                   aria-label={folder ? t('native.text_0f5007a162') : t('native.text_3df0f8d368')}
                   value={loreText(entry.comment ?? entry.name)}

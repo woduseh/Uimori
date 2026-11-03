@@ -789,14 +789,14 @@ test('ACTUI13 recent helper jobs open their sessions without replacing the reade
   await activityNav.getByRole('button', { name: /합성 작품 도우미/ }).click();
   const panel = page.locator('.helper-panel').filter({ visible: true });
   await expect(
-    panel.getByRole('combobox', { name: '도우미 세션 선택', includeHidden: true })
+    panel.getByRole('combobox', { name: '도우미 대화 선택', includeHidden: true })
   ).toHaveValue(chat.id);
   await expect(page.getByRole('dialog', { name: '도우미 작업 기록' })).toBeVisible();
   await page.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
   await panel.getByRole('button', { name: seeded.chat.title, exact: true }).click();
   await activityNav.getByRole('button', { name: /합성 서재 도우미/ }).click();
   await expect(
-    panel.getByRole('combobox', { name: '도우미 세션 선택', includeHidden: true })
+    panel.getByRole('combobox', { name: '도우미 대화 선택', includeHidden: true })
   ).toHaveValue(library.id);
   await page.getByRole('button', { name: '도우미 작업 기록 닫기', exact: true }).click();
   await panel.getByRole('button', { name: seeded.chat.title, exact: true }).click();

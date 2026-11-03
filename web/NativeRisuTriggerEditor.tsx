@@ -53,7 +53,7 @@ export function NativeRisuTriggerEditor({
     const parsed: unknown = JSON.parse(draft.text);
     if (!record(parsed) || draft.index >= value.length)
       throw new Error('트리거 JSON 객체를 확인해 주세요.');
-    if (!prepareSave) throw new Error('트리거 JSON을 폼에 반영해 주세요.');
+    if (!prepareSave) throw new Error('트리거 JSON을 편집기에 적용해 주세요.');
     return prepareSave(
       model,
       value.map((item, i) => (i === draft.index ? parsed : item))

@@ -11,7 +11,7 @@ import './model-pricing.css';
 import './lore-context.css';
 
 const roleLabels: Record<string, string> = {
-  main: '원문',
+  main: '본문',
   translation: '번역',
   status: '이전 보조 작업',
   image: '이미지 배치',

@@ -96,10 +96,10 @@ export const messages = {
     zh: '尚无任务。',
   },
   'chatsettings.m10': {
-    ko: '‘새 채팅으로 복사’는 해당 장면까지의 독립 사본을 만들어요. 모델을 호출하지 않아요.',
-    en: '“Copy to new chat” creates an independent copy through that scene without calling a model.',
-    ja: '「新しいチャットにコピー」はそのシーンまでの独立したコピーを作ります。モデルは呼び出しません。',
-    zh: '“复制到新聊天”会创建截至该场景的独立副本，不调用模型。',
+    ko: '‘새 채팅으로 분기’는 해당 장면까지의 독립 사본을 만들어요. 모델을 호출하지 않아요.',
+    en: '“Branch to new chat” creates an independent copy through that scene without calling a model.',
+    ja: '「新しいチャットに分岐」はそのシーンまでの独立したコピーを作ります。モデルは呼び出しません。',
+    zh: '“分支到新聊天”会创建截至该场景的独立副本，不调用模型。',
   },
   'chatsettings.m11': {
     ko: '원고 읽기',
@@ -108,10 +108,10 @@ export const messages = {
     zh: '阅读原稿',
   },
   'chatsettings.m12': {
-    ko: '새 채팅으로 복사',
-    en: 'Copy to new chat',
-    ja: '新しいチャットにコピー',
-    zh: '复制到新聊天',
+    ko: '새 채팅으로 분기',
+    en: 'Branch to new chat',
+    ja: '新しいチャットに分岐',
+    zh: '分支到新聊天',
   },
   'chatsettings.m13': {
     ko: '보조 작업 목록을 불러오는 중이에요…',
@@ -534,10 +534,10 @@ export const messages = {
     zh: '基本',
   },
   'chatsettings.m88': {
-    ko: '원작 참고',
-    en: 'Canon reference',
-    ja: '原作参照',
-    zh: '原作参考',
+    ko: '작품 및 원작 참고',
+    en: 'Work & canon reference',
+    ja: '作品・原作参照',
+    zh: '作品与原作参考',
   },
   'chatsettings.m89': {
     ko: '집필 전 원작 설정과 인물 참고',
@@ -642,7 +642,7 @@ export const messages = {
     zh: '重新加载聊天选项',
   },
   'chatsettings.m112': {
-    ko: '채팅 옵션 저장 내용 확인',
+    ko: '채팅 옵션 저장본 확인',
     en: 'Review saved chat options',
     ja: '保存されたチャットオプションを確認',
     zh: '确认已保存的聊天选项',
@@ -702,10 +702,10 @@ export const messages = {
     zh: '加载保存版本将丢弃选项草稿。已预约的选项不会取消。',
   },
   'chatsettings.m122': {
-    ko: '입력 버리고 저장본 불러오기',
-    en: 'Discard input and load saved version',
-    ja: '入力を破棄して保存済みの内容を読み込む',
-    zh: '丢弃输入并加载保存版本',
+    ko: '초안 버리고 저장본 불러오기',
+    en: 'Discard draft and load saved version',
+    ja: '下書きを破棄して保存済みの内容を読み込む',
+    zh: '丢弃草稿并加载保存版本',
   },
   'chatsettings.m123': {
     ko: '입력 유지하고 계속 편집',
@@ -720,10 +720,10 @@ export const messages = {
     zh: '此聊天的固定选项',
   },
   'chatsettings.m125': {
-    ko: '따로 지정한 옵션만 이 채팅에 고정하고, 나머지는 작문 프롬프트의 기본값을 따라요.',
+    ko: '따로 지정한 옵션만 이 채팅에 고정하고, 나머지는 창작 프롬프트의 기본값을 따라요.',
     en: 'Only overridden options apply to this chat. Others follow its writing prompt defaults.',
-    ja: '個別指定したオプションだけをこのチャットに適用します。残りは使用中の執筆プロンプトの初期設定に従います。',
-    zh: '仅覆盖的选项应用于此聊天，其余沿用所用写作提示词的默认设置。',
+    ja: '個別指定したオプションだけをこのチャットに適用します。残りは使用中の創作プロンプトの初期設定に従います。',
+    zh: '仅覆盖的选项应用于此聊天，其余沿用所用创作提示词的默认设置。',
   },
   'chatsettings.m126': {
     ko: '고정 옵션 모두 해제',
@@ -750,10 +750,10 @@ export const messages = {
     zh: '预约单次选项',
   },
   'chatsettings.m130': {
-    ko: '다음 생성 옵션 예약',
-    en: 'Scheduled next generation options',
-    ja: '次の生成のオプション予約',
-    zh: '下次生成的选项预约',
+    ko: '1회 옵션 예약',
+    en: 'Schedule one-time options',
+    ja: '1回オプションを予約',
+    zh: '预约单次选项',
   },
   'chatsettings.m131': {
     ko: '예약 취소',
@@ -834,10 +834,10 @@ export const messages = {
     zh: '为此聊天指定',
   },
   'chatsettings.m144': {
-    ko: '다음 생성만 지정',
-    en: 'Set for next generation',
-    ja: '次の生成のみ指定',
-    zh: '仅为下次生成指定',
+    ko: '다음 생성에만 적용',
+    en: 'Apply to next generation only',
+    ja: '次の生成のみに適用',
+    zh: '仅应用于下次生成',
   },
   'chatsettings.m145': {
     ko: '지정 해제',
@@ -852,10 +852,10 @@ export const messages = {
     zh: '使用当前设置',
   },
   'chatsettings.m147': {
-    ko: '다음 생성만 적용',
-    en: 'Next generation only',
-    ja: '次の生成のみ適用',
-    zh: '仅用于下次生成',
+    ko: '다음 생성에만 적용',
+    en: 'Apply to next generation only',
+    ja: '次の生成のみに適用',
+    zh: '仅应用于下次生成',
   },
   'chatsettings.m148': {
     ko: '켬',
@@ -912,10 +912,10 @@ export const messages = {
     zh: '此聊天的选项',
   },
   'chatsettings.m158': {
-    ko: '공유 변수를 읽지 못했어요.',
-    en: 'Could not read shared variables.',
-    ja: '共有変数を読み込めませんでした。',
-    zh: '无法读取共享变量。',
+    ko: '카드 변수를 읽지 못했어요.',
+    en: 'Could not read card variables.',
+    ja: 'カード変数を読み込めませんでした。',
+    zh: '无法读取卡片变量。',
   },
   'chatsettings.m159': {
     ko: '입력한 초안을 브라우저에 보관하지 못했어요. 이 화면을 닫지 말아 주세요.',
@@ -936,10 +936,10 @@ export const messages = {
     zh: '无法保留保存请求。请检查浏览器存储空间。',
   },
   'chatsettings.m162': {
-    ko: '공유 변수를 저장했어요. 다음 생성부터 적용해요.',
-    en: 'Saved shared variables. Applies from next generation.',
-    ja: '共有変数を保存しました。次の生成から適用します。',
-    zh: '已保存共享变量，将从下次生成起应用。',
+    ko: '카드 변수를 저장했어요. 다음 생성부터 적용해요.',
+    en: 'Saved card variables. Applies from next generation.',
+    ja: 'カード変数を保存しました。次の生成から適用します。',
+    zh: '已保存卡片变量，将从下次生成起应用。',
   },
   'chatsettings.m163': {
     ko: '저장 결과를 확인하지 못했어요.',
@@ -960,16 +960,16 @@ export const messages = {
     zh: '当前聊天',
   },
   'chatsettings.m168': {
-    ko: '새로고침',
-    en: 'Refresh',
-    ja: '更新',
-    zh: '刷新',
+    ko: '다시 불러오기',
+    en: 'Reload',
+    ja: '再読み込み',
+    zh: '重新加载',
   },
   'chatsettings.m170': {
-    ko: '공유 변수를 불러오는 중이에요…',
-    en: 'Loading shared variables…',
-    ja: '共有変数を読み込み中…',
-    zh: '正在加载共享变量…',
+    ko: '카드 변수를 불러오는 중이에요…',
+    en: 'Loading card variables…',
+    ja: 'カード変数を読み込み中…',
+    zh: '正在加载卡片变量…',
   },
   'chatsettings.m171': {
     ko: '생성이나 스크립트 작업에서 변수를 사용 중이에요. 작업이 끝나면 저장할 수 있으며 입력한 초안은 유지돼요.',
@@ -978,9 +978,9 @@ export const messages = {
     zh: '生成或资料代码正在使用当前值。完成后可编辑和保存，输入草稿会保留。',
   },
   'chatsettings.m173': {
-    ko: '변수 저장본이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 유지했어요.',
+    ko: '변수 저장본이나 현재 소스가 바뀌었어요. 입력한 초안은 그대로 유지했어요.',
     en: 'Saved variables or the current source changed. Your draft is preserved.',
-    ja: '保存された変数または現在の原文が変わりました。下書きは保持しています。',
+    ja: '保存された変数または現在のソースが変わりました。下書きは保持しています。',
     zh: '保存的变量或当前原文已更改。输入草稿已保留。',
   },
   'chatsettings.m174': {
@@ -1056,10 +1056,10 @@ export const messages = {
     zh: '添加空字符串',
   },
   'chatsettings.m186': {
-    ko: '공유 변수 재정의 (JSON)',
-    en: 'Shared variable overrides (JSON)',
-    ja: '共有変数の上書き（JSON）',
-    zh: '共享变量覆盖值（JSON）',
+    ko: '카드 변수 재정의 (JSON)',
+    en: 'Card variable overrides (JSON)',
+    ja: 'カード変数の上書き（JSON）',
+    zh: '卡片变量覆盖值（JSON）',
   },
   'chatsettings.m187': {
     ko: '키와 문자열 값으로만 이루어진 JSON 객체여야 해요.',
@@ -1086,10 +1086,10 @@ export const messages = {
     zh: '确认保存结果',
   },
   'chatsettings.m191': {
-    ko: '공유 변수 저장',
-    en: 'Save shared variables',
-    ja: '共有変数を保存',
-    zh: '保存共享变量',
+    ko: '카드 변수 저장',
+    en: 'Save card variables',
+    ja: 'カード変数を保存',
+    zh: '保存卡片变量',
   },
   'chatsettings.overrides': {
     ko: '이 채팅에서 지정한 값 {count, number}개',

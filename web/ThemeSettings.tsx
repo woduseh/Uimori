@@ -84,7 +84,7 @@ export function ThemeSettings({
   onSaveHandlerChange?: SettingsSaveRegistration;
   active?: boolean;
 }) {
-  const { locale } = useI18n();
+  useI18n();
   const id = useId();
   const [saveConflict, setSaveConflict] = useState(false);
   const state = useThemes();
@@ -725,12 +725,10 @@ export function ThemeSettings({
                         type="color"
                         aria-label={t('visualpanels.color', {
                           v0:
-                            locale === 'ko'
-                              ? mode
-                              : mode === 'light'
-                                ? t('visualpanels.lightColors')
-                                : t('visualpanels.darkColors'),
-                          v1: locale === 'ko' ? key : translateMessage(labels[key] ?? key),
+                            mode === 'light'
+                              ? t('visualpanels.lightColors')
+                              : t('visualpanels.darkColors'),
+                          v1: translateMessage(labels[key] ?? key),
                         })}
                         value={colorInputValue(
                           draft.model.colors[mode][key] ?? baselineThemeColors[mode][key]

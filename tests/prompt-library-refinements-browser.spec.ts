@@ -134,7 +134,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     await expect(name).toHaveCount(1);
     await expect(name).toBeInViewport({ ratio: 1 });
     await expect(name).toHaveAttribute('required', '');
-    await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+    await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
     if (visualReview && role === 'main')
       await page.screenshot({ path: info.outputPath('prompt-create-name-mobile.png') });
     await expect(selection.locator('option[value="builtin"], option[value="new"]')).toHaveCount(0);
@@ -151,7 +151,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
       (response) =>
         /\/api\/resources\/save$/.test(response.url()) && response.request().method() === 'POST'
     );
-    await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
     const response = await savedResponse;
     expect(response.ok()).toBe(true);
     const saved = (await response.json()).saved as PromptPreset;
@@ -175,7 +175,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
     if (isResourceSaveRequest(request)) saveRequests++;
   });
   await regex.fill('[{"unfinished":');
-  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   await expect(editor.getByRole('alert').filter({ hasText: /JSON/ })).toBeVisible();
   await expect(regex).toHaveValue('[{"unfinished":');
   const unchanged = await request.get(`/api/prompt-presets/${savedPreset.id}`);
@@ -189,7 +189,7 @@ test('PLR03 native prompt creation saves role defaults and preserves invalid reg
   const restoredTitle = `${savedPreset.title} 복구`;
   await editor.getByLabel('프롬프트 이름', { exact: true }).fill(restoredTitle);
   const restoredResponse = waitForResourceSave(page, 'prompt-preset', savedPreset.id);
-  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   const restored = (await restoredResponse).saved as PromptPreset;
   expect(restored.revision).toBe(savedPreset.revision + 1);
   expect(restored.program).toEqual(savedPreset.program);

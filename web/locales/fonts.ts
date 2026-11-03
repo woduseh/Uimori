@@ -81,7 +81,7 @@ export const messages = {
     zh: '紧急禁用期间也不会应用自定义字体。',
   },
   'fonts.restore': {
-    ko: '기본 글꼴로 복원',
+    ko: '기본 글꼴로 되돌리기',
     en: 'Restore default fonts',
     ja: '標準フォントに戻す',
     zh: '恢复默认字体',

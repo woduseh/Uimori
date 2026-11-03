@@ -80,7 +80,7 @@ for (const width of DEFAULT_WIDTHS) {
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '역할별 모델');
     const editor = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
-    await expect(editor.getByLabel('원문 모델', { exact: true })).toHaveValue('');
+    await expect(editor.getByLabel('본문 모델', { exact: true })).toHaveValue('');
     const supportingSummary = editor.locator('summary').filter({ hasText: /^보조 작업/ });
     await expect(supportingSummary).toHaveCount(1);
     await expect(supportingSummary).toBeVisible();
@@ -90,9 +90,9 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(editor.getByLabel('채팅 제목 모델', { exact: true })).toBeHidden();
     await expect(editor.getByLabel('확장 호출 모델', { exact: true })).toBeHidden();
     const behaviorSummary = editor.locator('summary').filter({ hasText: /^작업 동작/ });
-    const mainRefusal = editor.getByRole('region', { name: '본문 서비스 거절 감지', exact: true });
+    const mainRefusal = editor.getByRole('region', { name: '본문 거절 감지', exact: true });
     const translationRefusal = editor.getByRole('region', {
-      name: '번역 서비스 거절 감지',
+      name: '번역 거절 감지',
       exact: true,
     });
     const mainThreshold = editor.getByLabel('본문 거절 확신 기준', { exact: true });
@@ -130,10 +130,10 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(translationContext).toHaveValue('full');
     await expect(translationRefusal.getByLabel('번역 작업 호출 한도')).toHaveCount(0);
     await expect(mainThreshold).toHaveValue('0.9');
-    const mainToggle = editor.getByRole('switch', { name: '본문 서비스 거절 감지 사용' });
+    const mainToggle = editor.getByRole('switch', { name: '본문 거절 감지 사용' });
     await expect(mainToggle).toBeChecked();
     await expect(editor.getByLabel('번역 거절 확신 기준', { exact: true })).toBeVisible();
-    const translationToggle = editor.getByRole('switch', { name: '번역 서비스 거절 감지 사용' });
+    const translationToggle = editor.getByRole('switch', { name: '번역 거절 감지 사용' });
     await expect(translationToggle).toBeChecked();
     await expect(mainRefusal.getByLabel('본문 거절 확신 기준', { exact: true })).toBeVisible();
     await expect(
@@ -142,7 +142,7 @@ for (const width of DEFAULT_WIDTHS) {
     await supportingSummary.click();
     for (const label of ['도우미 모델', '컨텍스트 요약 모델', '채팅 제목 모델', '확장 호출 모델'])
       await expect(editor.getByLabel(label, { exact: true })).toBeVisible();
-    for (const label of ['원문 모델', '번역 모델', '채팅 제목 모델', '확장 호출 모델'])
+    for (const label of ['본문 모델', '번역 모델', '채팅 제목 모델', '확장 호출 모델'])
       await editor.getByLabel(label, { exact: true }).selectOption(ids[0]);
     await editor.getByLabel('번역 자동 재요청 횟수').fill('2');
     await translationLimit.fill('12');
@@ -390,7 +390,7 @@ for (const width of DEFAULT_WIDTHS) {
     const settings = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     await selectChatSettingsSection(page, '생성 설정');
     const promptSelect = settings.getByRole('combobox', {
-      name: '이 채팅의 작문 프롬프트',
+      name: '이 채팅의 창작 프롬프트',
       exact: true,
     });
     await expect(promptSelect).toHaveValue('');
@@ -540,7 +540,7 @@ for (const width of DEFAULT_WIDTHS) {
         .poll(async () => (await detail(request, chat.id)).profile?.pinned?.mainModel)
         .toBe(undefined);
       await settings.getByRole('button', { name: '채팅 설정 닫기', exact: true }).click();
-      await expect(chip).toHaveAccessibleName(/작문 프롬프트 이 채팅 고정/);
+      await expect(chip).toHaveAccessibleName(/창작 프롬프트 이 채팅 고정/);
       await expect(chip.locator('svg')).toBeVisible();
       await expect(chip).toContainText(globalModel.title);
 
@@ -552,13 +552,13 @@ for (const width of DEFAULT_WIDTHS) {
         ).ok()
       ).toBe(true);
       await page.reload();
-      await expect(chip).toHaveAccessibleName(/작문 프롬프트 사용 불가/);
+      await expect(chip).toHaveAccessibleName(/창작 프롬프트 사용 불가/);
       await composer.fill('삭제한 프리셋으로는 실행하지 않기');
       await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeDisabled();
       await openChatSettings(page);
       await selectChatSettingsSection(page, '생성 설정');
       await expect(promptSelect).toHaveValue(preset.id);
-      await expect(settings.getByRole('alert')).toContainText('이 채팅에 지정한 작문 프롬프트');
+      await expect(settings.getByRole('alert')).toContainText('이 채팅에 지정한 창작 프롬프트');
       await promptSelect.selectOption('');
       await settings.getByRole('button', { name: '채팅 설정 저장', exact: true }).click();
       await expect
@@ -633,7 +633,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(
       roles.getByRole('button', { name: '프로바이더와 모델 설정', exact: true })
     ).toHaveCount(0);
-    const main = roles.getByLabel('원문 모델', { exact: true });
+    const main = roles.getByLabel('본문 모델', { exact: true });
     const translation = roles.getByLabel('번역 모델', { exact: true });
     await main.selectOption(second.id);
     if (visualReview)
@@ -747,7 +747,7 @@ for (const width of DEFAULT_WIDTHS) {
       await selectSettingsSection(page, '역할별 모델');
       const roles = page.getByRole('region', { name: '역할별 모델 설정', exact: true });
       const setup = roles.getByRole('button', { name: '프로바이더와 모델 설정', exact: true });
-      await expect(roles.getByLabel('원문 모델', { exact: true })).toBeInViewport();
+      await expect(roles.getByLabel('본문 모델', { exact: true })).toBeInViewport();
       await expect(setup).toBeInViewport();
       await expect(roles.getByText('사용 가능한 모델 없음', { exact: true })).toBeVisible();
       await expect(

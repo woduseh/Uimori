@@ -119,7 +119,7 @@ test('LOADUI08 task history loads on demand and preserves off-page reading, insp
       response.url().endsWith(`/api/chats/${seeded.chat.id}/fork`) &&
       response.request().method() === 'POST'
   );
-  await task.getByRole('button', { name: '새 채팅으로 복사', exact: true }).click();
+  await task.getByRole('button', { name: '새 채팅으로 분기', exact: true }).click();
   const forkedResponse = await forkResponse;
   expect(forkedResponse.ok()).toBeTruthy();
   const forked = (await forkedResponse.json()) as Chat;
@@ -212,7 +212,7 @@ test('LOADUI06 scene navigator respects focus and visibility settings across des
   await page.getByRole('button', { name: '읽기 설정', exact: true }).click();
   const reading = page.getByRole('dialog', { name: '읽기 설정', exact: true });
   const navigatorToggle = reading.getByRole('switch', {
-    name: '채팅 네비게이터 표시',
+    name: '장면 내비게이터 표시',
     exact: true,
   });
   await expect(navigatorToggle).toBeChecked();

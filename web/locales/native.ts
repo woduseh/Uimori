@@ -25,7 +25,7 @@ export const messages = {
     zh: '暂无块。',
   },
   'native.sourceJson': {
-    ko: '원문 JSON',
+    ko: 'JSON 소스',
     en: 'Source JSON',
     ja: 'ソースJSON',
     zh: '原始 JSON',
@@ -235,7 +235,7 @@ export const messages = {
     zh: '替换所选Risu图片文件',
   },
   'native.text_8a2c3b9aec': {
-    ko: '선택한 에셋 제거',
+    ko: '선택한 에셋 삭제',
     en: 'Remove selected asset',
     ja: '選択中のアセットを取り除く',
     zh: '移除所选资源',
@@ -271,7 +271,7 @@ export const messages = {
     zh: '移除失败。',
   },
   'native.text_3f51da3e6a': {
-    ko: '에셋 제거',
+    ko: '에셋 삭제',
     en: 'Remove asset',
     ja: 'アセットを取り除く',
     zh: '移除资源',
@@ -961,10 +961,10 @@ export const messages = {
     zh: '省略自动添加的末尾换行',
   },
   'native.text_28d932caad': {
-    ko: '정규식 JSON을 폼에 반영해 주세요.',
-    en: 'Apply regex JSON to the form.',
-    ja: '正規表現JSONをフォームに反映してください。',
-    zh: '请将正则表达式JSON应用到表单。',
+    ko: '정규식 JSON을 편집기에 적용해 주세요.',
+    en: 'Apply regex JSON to the editor.',
+    ja: '正規表現JSONをエディタに反映してください。',
+    zh: '请将正则表达式JSON应用到编辑器。',
   },
   'native.text_840a850378': {
     ko: '정규식 편집기',
@@ -1075,7 +1075,7 @@ export const messages = {
     zh: '正则执行优先级',
   },
   'native.text_ce80b34836': {
-    ko: '플래그 원문',
+    ko: '플래그 소스',
     en: 'Raw flags',
     ja: 'フラグソース',
     zh: '标志源码',
@@ -1111,16 +1111,16 @@ export const messages = {
     zh: 'Risu正则表达式JSON',
   },
   'native.text_dd964b88ac': {
-    ko: '저장을 누르면 JSON도 함께 저장해요. 폼을 계속 편집하려면 먼저 폼에 반영해 주세요.',
-    en: 'Saving includes the JSON. Apply to the form before further form edits.',
-    ja: '保存時にJSONも保存されます。フォームの編集を続けるには先に反映してください。',
-    zh: '保存时会一并保存JSON，继续编辑表单前请先应用。',
+    ko: '저장을 누르면 JSON도 함께 저장해요. 편집기를 계속 수정하려면 먼저 편집기에 적용해 주세요.',
+    en: 'Saving includes the JSON. Apply to the editor before further edits.',
+    ja: '保存時にJSONも保存されます。エディタの編集を続けるには先に反映してください。',
+    zh: '保存时会一并保存JSON，继续编辑前请先应用到编辑器。',
   },
   'native.text_5c02cb8d1c': {
-    ko: '폼에 반영',
-    en: 'Apply to form',
-    ja: 'フォームに反映',
-    zh: '应用到表单',
+    ko: '편집기에 적용',
+    en: 'Apply to editor',
+    ja: 'エディタに反映',
+    zh: '应用到编辑器',
   },
   'native.text_d688879ebd': {
     ko: '입력 되돌리기',
@@ -1183,13 +1183,13 @@ export const messages = {
     zh: '请检查无效的开关或变量值。',
   },
   'native.text_5d82dab127': {
-    ko: '변수와 토글 원문을 폼에 반영해 주세요.',
-    en: 'Apply variable and toggle source to the form.',
-    ja: '変数とトグルのソースをフォームに反映してください。',
-    zh: '请将变量和开关源码应用到表单。',
+    ko: '변수와 토글 소스를 편집기에 적용해 주세요.',
+    en: 'Apply variable and toggle source to the editor.',
+    ja: '変数とトグルのソースをエディタに反映してください。',
+    zh: '请将变量和开关源码应用到编辑器。',
   },
   'native.text_0286f638be': {
-    ko: '원문에서 편집',
+    ko: '소스에서 편집',
     en: 'Edit source',
     ja: 'ソースで編集',
     zh: '在源码中编辑',
@@ -1297,7 +1297,7 @@ export const messages = {
     zh: '源码项目',
   },
   'native.text_8ba13a8495': {
-    ko: '원문',
+    ko: '소스',
     en: 'Source',
     ja: 'ソース',
     zh: '源码',
@@ -1327,7 +1327,7 @@ export const messages = {
     zh: '删除项目',
   },
   'native.text_85cd7d3b63': {
-    ko: '토글 정의 원문',
+    ko: '토글 정의 소스',
     en: 'Toggle definition source',
     ja: 'トグル定義のソース',
     zh: '开关定义源码',
@@ -1351,7 +1351,7 @@ export const messages = {
     zh: '有未应用的源码编辑。',
   },
   'native.text_ba1543a09d': {
-    ko: '원문 적용',
+    ko: '소스 적용',
     en: 'Apply source',
     ja: 'ソースを反映',
     zh: '应用源码',
@@ -1591,10 +1591,10 @@ export const messages = {
     zh: '请检查触发器JSON对象。',
   },
   'native.text_2bf65e9272': {
-    ko: '트리거 JSON을 폼에 반영해 주세요.',
-    en: 'Apply trigger JSON to the form.',
-    ja: 'トリガーJSONをフォームに反映してください。',
-    zh: '请将触发器JSON应用到表单。',
+    ko: '트리거 JSON을 편집기에 적용해 주세요.',
+    en: 'Apply trigger JSON to the editor.',
+    ja: 'トリガーJSONをエディタに反映してください。',
+    zh: '请将触发器JSON应用到编辑器。',
   },
   'native.text_14a5c18b9e': {
     ko: '트리거 원문 JSON',
@@ -1603,10 +1603,10 @@ export const messages = {
     zh: '触发器源码JSON',
   },
   'native.text_1109f0e44c': {
-    ko: '저장을 누르면 JSON도 함께 저장해요. 다른 항목을 편집하려면 먼저 폼에 반영해 주세요.',
-    en: 'Saving includes JSON. Apply to the form before editing other items.',
-    ja: '保存時にJSONも保存されます。他の項目の編集前にフォームへ反映してください。',
-    zh: '保存时会一并保存JSON，编辑其他项目前请先应用到表单。',
+    ko: '저장을 누르면 JSON도 함께 저장해요. 다른 항목을 편집하려면 먼저 편집기에 적용해 주세요.',
+    en: 'Saving includes JSON. Apply to the editor before editing other items.',
+    ja: '保存時にJSONも保存されます。他の項目の編集前にエディタへ反映してください。',
+    zh: '保存时会一并保存JSON，编辑其他项目前请先应用到编辑器。',
   },
   'native.text_782c2d04b2': {
     ko: '편집하던 항목을 찾을 수 없어요. 입력을 되돌린 뒤 다시 확인해 주세요.',
@@ -1651,7 +1651,7 @@ export const messages = {
     zh: '触发器名称',
   },
   'native.text_8601ddaaf9': {
-    ko: 'Lua 원문',
+    ko: 'Lua 소스',
     en: 'Lua source',
     ja: 'Luaソース',
     zh: 'Lua源码',
@@ -1903,7 +1903,7 @@ export const messages = {
     zh: 'Lua、触发器与正则表达式',
   },
   'native.text_ae90c98d27': {
-    ko: '연결 모듈',
+    ko: '함께 쓰는 모듈',
     en: 'Linked modules',
     ja: '連携モジュール',
     zh: '关联模块',
@@ -1927,7 +1927,7 @@ export const messages = {
     zh: '示例对话',
   },
   'native.text_078e60fbef': {
-    ko: '카드의 글로벌노트와 대화 예시는 봇 편집에서 설정해요.',
+    ko: '카드의 글로벌 노트와 대화 예시는 봇 편집에서 설정해요.',
     en: 'Set card global notes and examples in the bot editor.',
     ja: 'カードのグローバルノートと会話例はボット編集で設定します。',
     zh: '卡片的全局笔记和示例对话请在机器人编辑器中设置。',
@@ -2293,7 +2293,7 @@ export const messages = {
     zh: '触发器{number, number}',
   },
   'native.luaNumber': {
-    ko: 'Lua 원문 {number, number}',
+    ko: 'Lua 소스 {number, number}',
     en: 'Lua source {number, number}',
     ja: 'Luaソース{number, number}',
     zh: 'Lua源码{number, number}',
@@ -2305,10 +2305,10 @@ export const messages = {
     zh: '{lore, number}条设定，{regex, number}条正则表达式，{triggers, number}个触发器',
   },
   'native.alternateMessage': {
-    ko: '대체 메시지 {number, number}',
-    en: 'Alternate message {number, number}',
-    ja: '代替メッセージ{number, number}',
-    zh: '备选消息{number, number}',
+    ko: '대체 첫 메시지 {number, number}',
+    en: 'Alternate first message {number, number}',
+    ja: '代替の最初のメッセージ {number, number}',
+    zh: '备选首条消息 {number, number}',
   },
   'native.handoffSummary': {
     ko: '이미지 선택과 삽입을 Uimori에 맡기기 ({count, number}개 범위)',

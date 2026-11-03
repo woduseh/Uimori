@@ -150,7 +150,7 @@ const ChatSettingsPanel = deferredPanel(
     default: (await import('./ChatSettingsPanel.js')).ChatSettingsPanel,
   }),
   (content, props) => (
-    <Dialog open title="채팅 설정" onClose={props.onClose} wide className="settings-dialog">
+    <Dialog open title={t('main.m003')} onClose={props.onClose} wide className="settings-dialog">
       {content}
     </Dialog>
   )
@@ -164,7 +164,7 @@ const AppSettingsPanel = deferredPanel(
     default: (await import('./WorkspacePanels.js')).AppSettingsPanel,
   }),
   (content, props) => (
-    <Dialog open title="설정" onClose={props.onClose} wide className="settings-dialog">
+    <Dialog open title={t('main.m005')} onClose={props.onClose} wide className="settings-dialog">
       {content}
     </Dialog>
   )
@@ -173,7 +173,7 @@ const AppSettingsPanel = deferredPanel(
 const TasksPanel = deferredPanel('작업 현황', async () => ({
   default: (await import('./WorkspacePanels.js')).TasksPanel,
 }));
-const OutlinePanel = deferredPanel('계층형 구성', async () => ({
+const OutlinePanel = deferredPanel('계층형 플롯', async () => ({
   default: (await import('./OutlinePanel.js')).OutlinePanel,
 }));
 

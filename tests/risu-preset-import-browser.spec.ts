@@ -58,7 +58,7 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
     buffer: Buffer.from(JSON.stringify({ name: title })),
   });
   await expect(dialog.getByRole('heading', { name: title })).toBeVisible();
-  const save = dialog.getByRole('button', { name: '작문 프롬프트로 저장', exact: true });
+  const save = dialog.getByRole('button', { name: '창작 프롬프트로 저장', exact: true });
   await expect(save).toBeDisabled();
   expect(submissions).toHaveLength(0);
   if (process.env.UIMORI_VISUAL_REVIEW === '1') {
@@ -91,7 +91,7 @@ test('RISUPRESETUI01 preserves a reviewed file and exact uncertain submission th
   await dialog.getByRole('button', { name: '프롬프트 가져오기 닫기', exact: true }).click();
   await trigger.click();
   await dialog.getByRole('button', { name: '같은 요청으로 다시 확인' }).click();
-  await expect(dialog.getByText('새 작문 프롬프트로 저장했어요.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('새 창작 프롬프트로 저장했어요.', { exact: true })).toBeVisible();
   expect(submissions).toHaveLength(2);
   expect(submissions[1]).toEqual(submissions[0]);
   expect(submissions[0]?.allowPartial).toBe(true);
@@ -152,7 +152,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
       response.url().endsWith('/api/risu-preset-imports/apply') &&
       response.request().method() === 'POST'
   );
-  await dialog.getByRole('button', { name: '작문 프롬프트로 저장', exact: true }).click();
+  await dialog.getByRole('button', { name: '창작 프롬프트로 저장', exact: true }).click();
   const saved = await savedResponse;
   expect(saved.ok(), await saved.text()).toBe(true);
   expect(promptControls((await saved.json()).preset.program)[0]).toMatchObject({
@@ -206,7 +206,7 @@ test('RISUPRESETUI02 imports a real preset document into the existing prompt edi
   await composer.getByText('고급 JSON 편집', { exact: true }).click();
   const regex = [{ in: '원래', out: '전송', type: 'editinput', ableFlag: true, flag: 'g' }];
   await composer.getByLabel('Risu 정규식 JSON', { exact: true }).fill(JSON.stringify(regex));
-  const savePreset = page.getByRole('button', { name: '프리셋 저장', exact: true });
+  const savePreset = page.getByRole('button', { name: '프롬프트 저장', exact: true });
   // Valid raw JSON is included in the ordinary save; no extra apply stage is required.
   await expect(savePreset).toBeEnabled();
   await savePreset.click();

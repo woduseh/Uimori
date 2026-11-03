@@ -60,7 +60,7 @@ export const messages = {
     zh: '附件总大小不能超过100 MB。',
   },
   'errors.FILE_INPUT_UNSUPPORTED_PROTOCOL': {
-    ko: '이 연결은 해당 파일 입력을 지원하지 않아요.',
+    ko: '이 프로바이더는 해당 파일 입력을 지원하지 않아요.',
     en: 'This connection does not support this file input.',
     ja: 'この接続はこのファイル入力に対応していません。',
     zh: '此连接不支持这种文件输入。',
@@ -78,7 +78,7 @@ export const messages = {
     zh: '此连接不支持这种文件格式。',
   },
   'errors.FILE_INPUT_TOO_LARGE': {
-    ko: '파일이 선택한 연결의 크기 한도를 넘어요. 크기를 줄여 주세요.',
+    ko: '파일이 선택한 프로바이더의 크기 한도를 넘어요. 크기를 줄여 주세요.',
     en: 'The file exceeds this connection’s size limit. Reduce its size.',
     ja: '接続のファイルサイズ上限を超えています。サイズを減らしてください。',
     zh: '文件超过连接的大小限制，请缩小文件。',
@@ -114,31 +114,31 @@ export const messages = {
     zh: '参考设置或故事已更改。请根据最新内容重新创作。',
   },
   'errors.STORY_GUIDE_CANCELLED': {
-    ko: '원작 참고가 중단됐어요.',
+    ko: '작품 및 원작 참고가 중단됐어요.',
     en: 'Canon reference stopped.',
     ja: '原作参照が中断されました。',
     zh: '原作参考已中止。',
   },
   'errors.STORY_GUIDE_TIMEOUT': {
-    ko: '원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 집필해 주세요.',
+    ko: '작품 및 원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
     en: 'Canon reference timed out. Please write again.',
     ja: '原作参照が時間内に完了しませんでした。執筆し直してください。',
     zh: '原作参考超时。请重新创作。',
   },
   'errors.STORY_GUIDE_FAILED': {
-    ko: '원작 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
+    ko: '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
     en: 'Could not prepare canon references. Check the writing model and connection.',
     ja: '原作参照を準備できませんでした。執筆モデルと接続を確認してください。',
     zh: '未能准备原作参考。请检查写作模型和连接。',
   },
   'errors.STORY_GUIDE_REFUSED': {
-    ko: '모델이 원작 참고 요청을 거절했어요.',
+    ko: '모델이 작품 및 원작 참고 요청을 거절했어요.',
     en: 'The model refused the canon reference request.',
     ja: 'モデルが原作参照を拒否しました。',
     zh: '模型拒绝了原作参考请求。',
   },
   'errors.STORY_GUIDE_CALL_BUDGET_EXHAUSTED': {
-    ko: '원작 참고에 사용할 모델 호출 횟수가 부족해요.',
+    ko: '작품 및 원작 참고에 사용할 모델 호출 횟수가 부족해요.',
     en: 'Not enough model calls remain for canon reference.',
     ja: '原作参照に使えるモデル呼び出し回数が不足しています。',
     zh: '原作参考所需的模型调用次数不足。',
@@ -156,7 +156,7 @@ export const messages = {
     zh: '需要读取更多资料才能完成分析。请缩小参考范围。',
   },
   'errors.STORY_GUIDE_PROVIDER_FAILED': {
-    ko: '원작 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
+    ko: '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
     en: 'Could not prepare canon references. Check the writing model and connection.',
     ja: '原作参照を準備できませんでした。執筆モデルと接続を確認してください。',
     zh: '未能准备原作参考。请检查写作模型和连接。',
@@ -420,7 +420,7 @@ export const messages = {
     zh: '资料文件超出64 MB。请分批导出资料。',
   },
   'errors.NATIVE_TRANSFER_MODEL_BINDINGS_REQUIRED': {
-    ko: '프롬프트의 보조 모델을 모두 연결한 뒤 가져와 주세요.',
+    ko: '프롬프트의 보조 에이전트 모델을 모두 연결한 뒤 가져와 주세요.',
     en: 'Connect all auxiliary models in the prompt before importing.',
     ja: 'プロンプトの補助モデルをすべて接続してから取り込んでください。',
     zh: '请连接提示词的全部辅助模型后再导入。',
@@ -450,7 +450,7 @@ export const messages = {
     zh: '资料修订号已更改。请检查最新资料后重新导出。',
   },
   'errors.PINNED_PROMPT_UNAVAILABLE': {
-    ko: '이 채팅에 고정한 작문 프롬프트를 사용할 수 없어요. 채팅 설정에서 사용 가능한 프롬프트를 다시 선택하거나 고정을 해제해 주세요.',
+    ko: '이 채팅에 고정한 창작 프롬프트를 사용할 수 없어요. 채팅 설정에서 사용 가능한 프롬프트를 다시 선택하거나 고정을 해제해 주세요.',
     en: 'The writing prompt pinned to this chat is unavailable. Select an available prompt or unpin it in chat settings.',
     ja: 'このチャットに固定した執筆プロンプトを使用できません。チャット設定で使用可能なプロンプトを選ぶか固定を解除してください。',
     zh: '此聊天固定的写作提示词不可用。请在聊天设置中重新选择可用提示词或取消固定。',
@@ -486,7 +486,7 @@ export const messages = {
     zh: '请验证并应用尚未应用的草稿更改后再保存。',
   },
   'errors.DRAFT_DISCARDED': {
-    ko: '편집 초안이 폐기됐어요. 새 초안을 열어 주세요.',
+    ko: '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
     en: 'The editing draft was discarded. Open a new draft.',
     ja: '編集用の下書きは破棄されました。新しい下書きを開いてください。',
     zh: '编辑草稿已丢弃。请打开新草稿。',
@@ -600,7 +600,7 @@ export const messages = {
     zh: '所选模型不支持图片输入。请更换正文模型。',
   },
   'errors.IMAGE_INPUT_UNSUPPORTED_PROTOCOL': {
-    ko: '선택한 연결로는 이미지를 전달할 수 없어요. 본문 모델의 연결을 바꿔 주세요.',
+    ko: '선택한 프로바이더로는 이미지를 전달할 수 없어요. 본문 모델의 프로바이더를 바꿔 주세요.',
     en: 'The selected connection cannot send images. Change the main model connection.',
     ja: '選択した接続では画像を送れません。本文モデルの接続を変更してください。',
     zh: '所选连接无法发送图片。请更换正文模型的连接。',
@@ -774,7 +774,7 @@ export const messages = {
     zh: '可能包含输入内容，分享前请检查。',
   },
   'errors.option.thinking': {
-    ko: '사고 강도',
+    ko: '추론 강도',
     en: 'Reasoning effort',
     ja: '思考の強度',
     zh: '推理强度',
@@ -858,7 +858,7 @@ export const messages = {
     zh: '已取消',
   },
   'errors.status.interrupted': {
-    ko: '서버 중단 (자동 재생성 안 함)',
+    ko: '서버 중단',
     en: 'Server interruption, no automatic regeneration',
     ja: 'サーバー中断（自動再生成なし）',
     zh: '服务器中断，未自动重新生成',

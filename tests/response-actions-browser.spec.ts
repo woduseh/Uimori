@@ -97,7 +97,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   // An admitted replacement that fails before source commit leaves the original readable.
   await control('fail-next', { point: 'source-transaction' });
   await reopen();
-  await dialog.getByRole('button', { name: '기존 응답 교체', exact: true }).click();
+  await dialog.getByRole('button', { name: '다시 쓰기', exact: true }).click();
   await expect
     .poll(async () =>
       (await detail(request, before.chat.id)).runs.some(
@@ -111,7 +111,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   await control('hold', { barrier: 'run' });
   try {
     await reopen();
-    await dialog.getByRole('button', { name: '기존 응답 교체', exact: true }).click();
+    await dialog.getByRole('button', { name: '다시 쓰기', exact: true }).click();
     await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
     await expect(oldScene).toBeVisible();
     await page.getByRole('button', { name: '원문 생성 취소', exact: true }).click();
@@ -125,7 +125,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
     expect((await detail(request, before.chat.id)).chat.headRevision).toBe(old.id);
     await expect(oldScene).toBeVisible();
     await expect(
-      page.getByText('재생성을 취소했어요. 기존 응답은 유지돼요.', { exact: true })
+      page.getByText('다시 쓰기를 취소했어요. 기존 응답은 유지돼요.', { exact: true })
     ).toBeVisible();
     const cancelled = (await detail(request, before.chat.id)).runs.find(
       (run) => run.snapshot.replacement?.sourceRevision === old.id && run.status === 'cancelled'
@@ -139,7 +139,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
       page.locator(`[data-testid="pending-run"][data-run-id="${cancelled.id}"]`)
     ).toHaveCount(0);
     await expect(
-      page.getByText('재생성을 취소했어요. 기존 응답은 유지돼요.', { exact: true })
+      page.getByText('다시 쓰기를 취소했어요. 기존 응답은 유지돼요.', { exact: true })
     ).toHaveCount(0);
   } finally {
     await control('release', { barrier: 'run' });
@@ -148,7 +148,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   await control('hold', { barrier: 'run' });
   try {
     await reopen();
-    await dialog.getByRole('button', { name: '기존 응답 교체', exact: true }).click();
+    await dialog.getByRole('button', { name: '다시 쓰기', exact: true }).click();
     await expect(page.getByRole('button', { name: '원문 생성 취소', exact: true })).toBeVisible();
     await expect(dialog).not.toBeVisible();
     await expect(oldScene).toBeVisible();
@@ -181,7 +181,7 @@ test('RACOM04 last response retry chooses replacement or copy and preserves the 
   await openSourceActions(first);
   await first.getByRole('button', { name: '다시 쓰기', exact: true }).last().click();
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('button', { name: '기존 응답 교체', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('button', { name: '다시 쓰기', exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: '새 채팅에서 다시 요청', exact: true }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('chat')).not.toBe(before.chat.id);
   const earlierCopyChatId = new URL(page.url()).searchParams.get('chat')!;
@@ -426,7 +426,7 @@ test('RACOM01 source footer stays compact and its menu supports touch, keyboard 
       '다시 쓰기',
       '도우미에게 물어보기',
       '삽화 생성',
-      '이 장면까지 새 채팅으로 복사',
+      '이 장면까지 새 채팅으로 분기',
       '원문 연결 정보',
       ...(before.attempts?.some((attempt) => attempt.runId === source.runId)
         ? ['본문 추정 비용']

@@ -3,7 +3,7 @@ export const messages = {
   'orphanmemory.field.description': { ko: '설명', en: 'Description', ja: '説明', zh: '说明' },
   'orphanmemory.field.text': { ko: '본문', en: 'Body', ja: '本文', zh: '正文' },
   'orphanmemory.title': {
-    ko: '연결이 끊긴 기억',
+    ko: '연결이 끊긴 기억과 로어',
     en: 'Unlinked memory',
     ja: '関連が切れた記憶',
     zh: '失去关联的记忆',
@@ -27,7 +27,7 @@ export const messages = {
     ja: '関連が切れた記憶を確認中…',
     zh: '正在检查失去关联的记忆…',
   },
-  'orphanmemory.note': { ko: '사용자 메모', en: 'Author note', ja: 'ユーザーメモ', zh: '用户笔记' },
+  'orphanmemory.note': { ko: '사용자 메모', en: 'User note', ja: 'ユーザーメモ', zh: '用户笔记' },
   'orphanmemory.imported': {
     ko: '가져온 기억',
     en: 'Imported memory',
@@ -105,7 +105,7 @@ export const messages = {
   'orphanmemory.cancel': { ko: '취소', en: 'Cancel', ja: 'キャンセル', zh: '取消' },
   'orphanmemory.applying': { ko: '적용 중…', en: 'Applying…', ja: '適用中…', zh: '正在应用…' },
   'orphanmemory.reanchored': {
-    ko: '기억을 현재 원문에 다시 연결했어요.',
+    ko: '기억을 현재 장면에 다시 연결했어요.',
     en: 'Memory relinked to the current source.',
     ja: '記憶を現在の原文に関連付けました。',
     zh: '已将记忆重新关联到当前原文。',
@@ -129,7 +129,7 @@ export const messages = {
     zh: '记忆或原文已更改。请确认最新内容后重新选择操作。',
   },
   'orphanmemory.askHelper': {
-    ko: 'AI 검토 요청 초안',
+    ko: '도우미에게 검토 요청',
     en: 'Draft AI review request',
     ja: 'AI確認依頼の下書き',
     zh: '起草 AI 检查请求',

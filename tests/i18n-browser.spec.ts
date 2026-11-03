@@ -593,7 +593,7 @@ test('I18N10 saved conflict reviews re-render field statuses and React content f
         },
       });
       expect(changed.ok(), await changed.text()).toBe(true);
-      await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+      await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
       await switchFromAnotherTab(view, 'en');
       const dialog = view.getByRole('alertdialog');
       await expect(dialog).toHaveAccessibleName('Review changed saved version');

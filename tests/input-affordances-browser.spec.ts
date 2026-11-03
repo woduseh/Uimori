@@ -137,7 +137,7 @@ test('INPUTUI03 reference notes grow within the viewport and retain their draft 
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/?chat=' + chat.id);
     await openChatSettings(page);
-    await selectChatSettingsSection(page, '원작 참고');
+    await selectChatSettingsSection(page, '작품 및 원작 참고');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     const disclosure = dialog.locator('.story-guide-settings');
     if (!(await disclosure.evaluate((node) => (node as HTMLDetailsElement).open)))
@@ -157,7 +157,7 @@ test('INPUTUI03 reference notes grow within the viewport and retain their draft 
     expect(await notes.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
     await notes.screenshot({ path: info.outputPath('growing-notes-' + width + '.png') });
     await selectChatSettingsSection(page, '사용 자료');
-    await selectChatSettingsSection(page, '원작 참고');
+    await selectChatSettingsSection(page, '작품 및 원작 참고');
     await expect(notes).toHaveValue(text);
     await notes.fill('2권까지');
     expect((await notes.boundingBox())!.height).toBeLessThan(tall);

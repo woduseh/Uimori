@@ -732,7 +732,7 @@ export const messages = {
     zh: '无法更改资料关联。（{v0}）请检查是否缺少模块或存在循环引用。',
   },
   'library.attachedPackages': {
-    ko: '장착 패키지',
+    ko: '사용 중인 자료',
     en: 'Attached packages',
     ja: '装着パッケージ',
     zh: '已关联的包',
@@ -744,13 +744,13 @@ export const messages = {
     zh: '与当前选项不符的旧选择已调整为默认值。',
   },
   'library.loadingPackagesAndRequiredModules': {
-    ko: '패키지와 필수 모듈을 불러오는 중이에요…',
+    ko: '자료와 필수 모듈을 불러오는 중이에요…',
     en: 'Loading packages and required modules…',
     ja: 'パッケージと必須モジュールを読み込み中…',
     zh: '正在加载包与必需模块…',
   },
   'library.checkPackageAttachmentsAgain': {
-    ko: '패키지 연결 다시 확인',
+    ko: '사용 자료 다시 확인',
     en: 'Check package attachments again',
     ja: 'パッケージの接続を再確認',
     zh: '重新检查包关联',
@@ -762,7 +762,7 @@ export const messages = {
     zh: '不选择',
   },
   'library.attachedPackage': {
-    ko: '연결한 패키지',
+    ko: '사용 중인 자료',
     en: 'Attached package',
     ja: '接続したパッケージ',
     zh: '已关联的包',
@@ -774,7 +774,7 @@ export const messages = {
     zh: '所属机器人，固定',
   },
   'library.requiredModuleAttachedAutomatically': {
-    ko: '필수 모듈 (자동 연결)',
+    ko: '필수 모듈 (자동 포함)',
     en: 'Required module, attached automatically',
     ja: '必須モジュール（自動接続）',
     zh: '必需模块，自动关联',
@@ -918,10 +918,10 @@ export const messages = {
     zh: '图片排布负责方',
   },
   'library.writingModel': {
-    ko: '작문 모델',
-    en: 'Writing model',
-    ja: '作家モデル',
-    zh: '写作模型',
+    ko: '본문 모델',
+    en: 'Story model',
+    ja: '本文モデル',
+    zh: '正文模型',
   },
   'library.couldNotLoadGlobalLoreDefaultsYou': {
     ko: '전역 로어 기본값을 불러오지 못했어요. 현재 채팅 설정은 계속 편집할 수 있어요.',
@@ -978,16 +978,16 @@ export const messages = {
     zh: '全局模型设置',
   },
   'library.writingPrompt': {
-    ko: '작문 프롬프트',
+    ko: '창작 프롬프트',
     en: 'Writing prompt',
-    ja: '作家プロンプト',
-    zh: '写作提示词',
+    ja: '創作プロンプト',
+    zh: '创作提示词',
   },
   'library.writingPromptForThisChat': {
-    ko: '이 채팅의 작문 프롬프트',
+    ko: '이 채팅의 창작 프롬프트',
     en: 'Writing prompt for this chat',
-    ja: 'このチャットの作家プロンプト',
-    zh: '此聊天的写作提示词',
+    ja: 'このチャットの創作プロンプト',
+    zh: '此聊天的创作提示词',
   },
   'library.loading': {
     ko: '불러오는 중…',
@@ -996,10 +996,10 @@ export const messages = {
     zh: '正在加载…',
   },
   'library.thisChatSWritingPromptIsUnavailable': {
-    ko: '이 채팅에 지정한 작문 프롬프트를 사용할 수 없어 새 원문을 생성할 수 없어요. 다른 프롬프트를 고르거나 ‘전역 따르기’로 바꿔 저장해 주세요.',
+    ko: '이 채팅에 지정한 창작 프롬프트를 사용할 수 없어 새 원문을 생성할 수 없어요. 다른 프롬프트를 고르거나 ‘전역 따르기’로 바꿔 저장해 주세요.',
     en: "This chat's writing prompt is unavailable. Choose another prompt or follow global settings, then save.",
-    ja: 'このチャットの作家プロンプトが使えず、新しい原文を生成できません。別のプロンプトを選ぶか「全体に従う」に変えて保存してください。',
-    zh: '此聊天的写作提示词不可用，无法生成新原文。请选择其他提示词或改用全局设置后保存。',
+    ja: 'このチャットの創作プロンプトが使えず、新しい原文を生成できません。別のプロンプトを選ぶか「全体に従う」に変えて保存してください。',
+    zh: '此聊天的创作提示词不可用，无法生成新原文。请选择其他提示词或改用全局设置后保存。',
   },
   'library.risuAuthorNote': {
     ko: 'Risu 작가 노트',
@@ -1062,7 +1062,7 @@ export const messages = {
     zh: '已加载最新设置。',
   },
   'library.reloadAttachmentSettings': {
-    ko: '장착 설정 다시 불러오기',
+    ko: '사용 자료 다시 불러오기',
     en: 'Reload attachment settings',
     ja: '装着設定を再読込',
     zh: '重新加载关联设置',
@@ -1824,10 +1824,10 @@ export const messages = {
     zh: '从此聊天的后续请求中排除此备注，保留过去的运行与备注历史。',
   },
   'library.confirmedRetire': {
-    ko: '확인 후 사용 중단',
-    en: 'Acknowledge and retire',
-    ja: '確認して使用を中止',
-    zh: '确认并停用',
+    ko: '사용 중지',
+    en: 'Retire',
+    ja: '使用を中止',
+    zh: '停用',
   },
   'library.back': {
     ko: '돌아가기',

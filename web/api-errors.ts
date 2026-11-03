@@ -20,15 +20,17 @@ const messages: Record<string, string> = {
   ...requestImageErrors,
   ...requestFileErrors,
   STORY_GUIDE_STALE: '참고 설정이나 이야기가 바뀌었어요. 최신 내용으로 다시 집필해 주세요.',
-  STORY_GUIDE_CANCELLED: '원작 참고가 중단됐어요.',
-  STORY_GUIDE_TIMEOUT: '원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 집필해 주세요.',
-  STORY_GUIDE_FAILED: '원작 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
-  STORY_GUIDE_REFUSED: '모델이 원작 참고 요청을 거절했어요.',
-  STORY_GUIDE_CALL_BUDGET_EXHAUSTED: '원작 참고에 사용할 모델 호출 횟수가 부족해요.',
+  STORY_GUIDE_CANCELLED: '작품 및 원작 참고가 중단됐어요.',
+  STORY_GUIDE_TIMEOUT: '작품 및 원작 참고가 제한 시간 안에 끝나지 않았어요. 다시 시도해 주세요.',
+  STORY_GUIDE_FAILED:
+    '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
+  STORY_GUIDE_REFUSED: '모델이 작품 및 원작 참고 요청을 거절했어요.',
+  STORY_GUIDE_CALL_BUDGET_EXHAUSTED: '작품 및 원작 참고에 사용할 모델 호출 횟수가 부족해요.',
   STORY_GUIDE_OUTPUT_TOO_LARGE: '참고 분석이 너무 길어요. 참고 범위를 좁혀 주세요.',
   STORY_GUIDE_READ_CALL_LIMIT:
     '추가 자료를 더 읽어야 해서 분석을 마치지 못했어요. 참고 범위를 좁혀 주세요.',
-  STORY_GUIDE_PROVIDER_FAILED: '원작 참고를 준비하지 못했어요. 집필 모델과 연결을 확인해 주세요.',
+  STORY_GUIDE_PROVIDER_FAILED:
+    '작품 및 원작 참고를 준비하지 못했어요. 본문 모델과 프로바이더를 확인해 주세요.',
   MANUSCRIPT_RANGE_CHANGED: '원고 범위가 바뀌었어요. 내보내기를 다시 열어 범위를 확인해 주세요.',
   MANUSCRIPT_EMPTY: '내보낼 원고가 아직 없어요.',
   MANUSCRIPT_RANGE_INVALID: '내보낼 장면 범위를 확인해 주세요.',
@@ -86,7 +88,8 @@ const messages: Record<string, string> = {
     '지원하지 않는 자료 파일 형식이나 버전이에요. Uimori의 자료 파일 내보내기로 만든 파일을 선택해 주세요.',
   NATIVE_TRANSFER_TOO_LARGE:
     '자료 파일이 64 MB 한도를 넘었어요. 내보낼 자료를 나누어 선택해 주세요.',
-  NATIVE_TRANSFER_MODEL_BINDINGS_REQUIRED: '프롬프트의 보조 모델을 모두 연결한 뒤 가져와 주세요.',
+  NATIVE_TRANSFER_MODEL_BINDINGS_REQUIRED:
+    '프롬프트의 보조 에이전트 모델을 모두 연결한 뒤 가져와 주세요.',
   NATIVE_TRANSFER_DRAFT_CHANGED:
     '확인한 파일 내용이 달라졌어요. 파일을 다시 선택해 내용을 확인해 주세요.',
   NATIVE_TRANSFER_IMPORT_CONFLICT:
@@ -96,7 +99,7 @@ const messages: Record<string, string> = {
   NATIVE_TRANSFER_SOURCE_CHANGED:
     '자료의 수정 번호가 달라졌어요. 최신 자료를 확인한 뒤 다시 내보내 주세요.',
   PINNED_PROMPT_UNAVAILABLE:
-    '이 채팅에 고정한 작문 프롬프트를 사용할 수 없어요. 채팅 설정에서 사용 가능한 프롬프트를 다시 선택하거나 고정을 해제해 주세요.',
+    '이 채팅에 고정한 창작 프롬프트를 사용할 수 없어요. 채팅 설정에서 사용 가능한 프롬프트를 다시 선택하거나 고정을 해제해 주세요.',
   HELPER_EFFECTS_ALREADY_COMMITTED:
     '이 요청의 변경 사항은 이미 저장됐어요. 저장된 결과를 확인하고 남은 작업만 새 요청으로 알려 주세요.',
   HELPER_TASK_NO_LONGER_ACTIVE: '도우미 작업이 이미 종료됐어요. 최신 결과를 확인해 주세요.',
@@ -104,7 +107,7 @@ const messages: Record<string, string> = {
     '도우미 대화가 변경됐어요. 최신 대화를 확인한 뒤 새 요청을 보내 주세요.',
   EDITOR_WORKSPACE_UNAVAILABLE: '선택한 편집 초안을 사용할 수 없어요. 편집기를 다시 열어 주세요.',
   DRAFT_UNAPPLIED_FIELDS: '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.',
-  DRAFT_DISCARDED: '편집 초안이 폐기됐어요. 새 초안을 열어 주세요.',
+  DRAFT_DISCARDED: '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
   CHAT_TRANSCRIPT_UNSUPPORTED_VERSION:
     '이 버전의 본문 파일은 가져올 수 없어요. 파일을 내보낸 앱과 현재 앱의 버전을 확인해 주세요.',
   CHAT_TRANSCRIPT_BOT_REQUIRED: '본문을 가져올 봇을 선택해 주세요.',
@@ -208,7 +211,11 @@ export function apiErrorDiagnostic(
         ? 'PINNED_PROMPT_UNAVAILABLE'
         : error === '미적용 초안을 검증하고 적용한 뒤 저장해 주세요.'
           ? 'DRAFT_UNAPPLIED_FIELDS'
-          : ['편집 초안이 폐기됐어요.', '초안이 폐기됐어요. 새 초안을 열어 주세요.'].includes(error)
+          : [
+                '편집 초안을 버렸어요. 새 초안을 열어 주세요.',
+                '편집 초안이 폐기됐어요.',
+                '초안이 폐기됐어요. 새 초안을 열어 주세요.',
+              ].includes(error)
             ? 'DRAFT_DISCARDED'
             : error;
     if (Object.hasOwn(messages, code)) return { code, message: messages[code] };

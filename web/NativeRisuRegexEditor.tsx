@@ -67,7 +67,7 @@ export function NativeRisuRegexEditor({
   useUnappliedEditorField(draftPath, pending);
   useEditorSavePreparation(draftPath, (model) => {
     if (!pending) return model;
-    if (!prepareSave) throw new Error('정규식 JSON을 폼에 반영해 주세요.');
+    if (!prepareSave) throw new Error('정규식 JSON을 편집기에 적용해 주세요.');
     return prepareSave(model, parseNativeRegexJson(raw));
   });
   useEffect(() => {

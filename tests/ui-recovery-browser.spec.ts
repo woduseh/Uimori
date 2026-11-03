@@ -138,7 +138,7 @@ for (const viewport of viewports) {
       await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
       await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       const editor = page.getByTestId('prompt-editor');
-      const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+      const save = editor.getByRole('button', { name: '프롬프트 저장', exact: true });
       await editorFits(page, editor, save);
       const role = editor.getByLabel('1번 블록 역할', { exact: true });
       await expect(role).toHaveValue('assistant');
@@ -222,7 +222,7 @@ for (const viewport of viewports) {
       await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
       await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       const editor = page.getByTestId('prompt-editor');
-      const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+      const save = editor.getByRole('button', { name: '프롬프트 저장', exact: true });
       await editor.locator('summary').filter({ hasText: '블록 종류' }).click();
       const blockType = editor.getByLabel('1번 블록 종류', { exact: true });
       await expect(blockType.locator('option[value="jailbreak"], option[value="cot"]')).toHaveCount(
@@ -302,7 +302,7 @@ for (const viewport of viewports) {
       await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
       await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       const editor = page.getByTestId('prompt-editor');
-      const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+      const save = editor.getByRole('button', { name: '프롬프트 저장', exact: true });
       await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
       const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
       const editView = definitions.getByRole('button', { name: '편집', exact: true });
@@ -796,7 +796,7 @@ for (const viewport of viewports) {
       await page.getByLabel('프롬프트 검색', { exact: true }).fill(title);
       await page.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
       const editor = page.getByTestId('prompt-editor');
-      const save = editor.getByRole('button', { name: '프리셋 저장', exact: true });
+      const save = editor.getByRole('button', { name: '프롬프트 저장', exact: true });
       const body = '{{#when::mood::tis::1}}Vivid {{char}}{{/when}}\nEdited {{getvar::place}}.';
       await editor.getByLabel('1번 프롬프트 본문', { exact: true }).fill(body);
       await openMenu(editor, '프롬프트 관리');

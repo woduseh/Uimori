@@ -105,7 +105,7 @@ for (const viewport of [
     await addDialog.getByRole('button', { name: '취소', exact: true }).click();
     await expect(addDialog).toBeHidden();
     await expect(add).toBeFocused();
-    await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+    await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
     await add.click();
     await expect(addDialog.getByLabel('그룹 이름', { exact: true })).toHaveValue('');
     await addDialog.getByLabel('그룹 이름', { exact: true }).fill('초안 그룹');
@@ -172,7 +172,7 @@ for (const viewport of [
     await addDialog.getByLabel('그룹 이름', { exact: true }).fill('저장할 그룹');
     await addDialog.getByRole('button', { name: '적용', exact: true }).click();
     const savedResponse = waitForResourceSave(page, 'prompt-preset', preset.id);
-    await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
     const saved = (await savedResponse).saved as PromptPreset;
     expect(saved.program.nativeRisuPreset.preset.customPromptTemplateToggle).toContain(
       '=저장할 그룹=group'
@@ -241,7 +241,7 @@ for (const viewport of [
     ).json()) as PromptPreset;
     expect(stored.program.collaboration).toEqual(preset.program.collaboration);
     const savedResponse = waitForResourceSave(page, 'prompt-preset', preset.id);
-    await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
     const saved = (await savedResponse).saved as PromptPreset;
     expect(saved.program.collaboration).toMatchObject({
       sharedInstructions: '삭제 확인 중에도 유지할 공유 지침',

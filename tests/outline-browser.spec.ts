@@ -69,7 +69,7 @@ async function open(page: Page, chatId: string, width: number) {
   await page.locator('.chat-menu').getByLabel('채팅 메뉴').click();
   await page
     .locator('.chat-menu .action-menu-body')
-    .getByRole('button', { name: '계층형 구성', exact: true })
+    .getByRole('button', { name: '계층형 플롯', exact: true })
     .click();
   const panel = page.locator('.outline-panel');
   await expect(panel).toBeVisible();
@@ -113,7 +113,7 @@ for (const width of WIDTHS) {
     await expect(panel.getByRole('alert')).toHaveCount(0);
     await expect(panel.getByRole('button', { name: '새로고침', exact: true })).toHaveCount(0);
     await expect(
-      panel.getByRole('button', { name: '도우미와 구성 시작', exact: true })
+      panel.getByRole('button', { name: '도우미와 플롯 시작', exact: true })
     ).toBeVisible();
     await page.screenshot({ path: info.outputPath(`outline-empty-${width}.png`) });
     await panel.getByRole('button', { name: '직접 추가', exact: true }).click();
@@ -181,7 +181,7 @@ for (const width of WIDTHS) {
     await expect(links.getByRole('button', { name: second.title })).toBeVisible();
     await expect(panel.locator('.outline-intent-card')).toContainText('멈출 지점');
     await page.screenshot({ path: info.outputPath(`outline-detail-light-${width}.png`) });
-    await panel.getByRole('button', { name: '이번 구성의 입력 컨텍스트 보기' }).click();
+    await panel.getByRole('button', { name: '이번 플롯의 입력 컨텍스트 보기' }).click();
     await expect(panel.locator('.outline-brief')).toContainText('감춰진 이름과 되찾는 선택');
     expect(await sourceCount(request, chat.id)).toBe(0);
     await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
@@ -328,7 +328,7 @@ for (const width of WIDTHS) {
     else await expect(panel).toBeHidden();
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.screenshot({ path: info.outputPath(`outline-helper-dark-${width}.png`) });
-    await helper.getByRole('button', { name: '구성으로 돌아가기', exact: true }).click();
+    await helper.getByRole('button', { name: '플롯으로 돌아가기', exact: true }).click();
     await expect(panel).toBeVisible();
     await choose(page, '2화 · 돌아온 출입증', width);
     await panel.getByRole('button', { name: '상세화', exact: true }).click();
@@ -399,7 +399,7 @@ for (const width of WIDTHS) {
         let panel = await open(page, chat.id, width);
         await choose(page, '1화 · 열람권의 대가', width);
         await panel.getByRole('button', { name: '이 단위 집필', exact: true }).click();
-        await expect(panel.getByRole('region', { name: '현재 구성', exact: true })).toContainText(
+        await expect(panel.getByRole('region', { name: '현재 플롯', exact: true })).toContainText(
           '두 사람이 처음으로 조건부 협력을 시작해요.'
         );
         await expect(
@@ -419,7 +419,7 @@ for (const width of WIDTHS) {
           ).nodes.find((node) => node.title === '1화 · 열람권의 대가')!;
         await expect(helper.locator('.helper-messages')).toContainText('합성 점검이에요.');
         expect(await sourceCount(request, chat.id)).toBe(1);
-        await helper.getByRole('button', { name: '구성으로 돌아가기', exact: true }).click();
+        await helper.getByRole('button', { name: '플롯으로 돌아가기', exact: true }).click();
         await expect(panel.locator('.outline-review')).toHaveCount(0);
         const before = await current();
         expect(before).not.toHaveProperty('latestReview');

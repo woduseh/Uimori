@@ -148,28 +148,28 @@ test(
       expect(editBox.width).toBeGreaterThanOrEqual(44);
       expect(editBox.height).toBeGreaterThanOrEqual(44);
       const openCombination = async () => {
-        await editor.getByLabel('옵션 조합 메뉴', { exact: true }).click();
+        await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
         await editor
-          .getByRole('button', { name: '현재 선택을 새 조합으로 저장', exact: true })
+          .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
           .click();
       };
       await openCombination();
-      const combo = page.getByRole('dialog', { name: '옵션 조합 저장', exact: true });
-      await combo.getByLabel('조합 이름', { exact: true }).fill('취소할 조합');
+      const combo = page.getByRole('dialog', { name: '옵션 프리셋 저장', exact: true });
+      await combo.getByLabel('옵션 프리셋 이름', { exact: true }).fill('취소할 조합');
       await combo.getByRole('button', { name: '취소', exact: true }).click();
       await expect(combo).toBeHidden();
       await openCombination();
       const title = `PWS 조합 ${width} ${crypto.randomUUID()}`;
-      await combo.getByLabel('조합 이름', { exact: true }).fill(title);
-      const save = combo.getByRole('button', { name: '옵션 조합 저장', exact: true });
+      await combo.getByLabel('옵션 프리셋 이름', { exact: true }).fill(title);
+      const save = combo.getByRole('button', { name: '옵션 프리셋 저장', exact: true });
       await expect(save).toHaveClass(/primary/);
       expect((await save.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       await page.screenshot({ path: info.outputPath(`prompt-combination-save-${width}.png`) });
       await save.click();
       await expect(combo).toBeHidden();
-      await expect(editor.getByLabel('옵션 조합', { exact: true }).locator('option')).toContainText(
-        [title]
-      );
+      await expect(
+        editor.getByLabel('옵션 프리셋', { exact: true }).locator('option')
+      ).toContainText([title]);
     }
     const modified = await request.put(`/api/prompt-presets/${preset.id}`, {
       data: {
@@ -192,7 +192,7 @@ test(
     await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toHaveCount(
       0
     );
-    await editor.getByLabel('옵션 조합', { exact: true }).selectOption('default');
+    await editor.getByLabel('옵션 프리셋', { exact: true }).selectOption('default');
     await expect(tone).toBeEnabled();
     await expect(tone).toHaveValue('새 기본값');
     await expect
@@ -242,7 +242,7 @@ test(
     await page.goto(`/?chat=${one.id}`);
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page
-      .getByLabel('빠른 옵션 조합', { exact: true })
+      .getByLabel('빠른 옵션 프리셋', { exact: true })
       .selectOption(`${combo.id}@${combo.revision}`);
     await expect
       .poll(
@@ -273,18 +273,18 @@ test(
     const editor = page.getByRole('region', { name: '현재 프롬프트 설정' });
     await editor.locator('summary').filter({ hasText: '창작 옵션' }).click();
     await expect(
-      editor.getByLabel('옵션 조합', { exact: true }).locator('option')
+      editor.getByLabel('옵션 프리셋', { exact: true }).locator('option')
     ).not.toContainText(['보존할 조합']);
-    await editor.getByLabel('옵션 조합 메뉴', { exact: true }).click();
-    await page.getByRole('button', { name: '조합 관리', exact: true }).click();
-    const manager = page.getByRole('dialog', { name: '옵션 조합 관리', exact: true });
+    await editor.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
+    await page.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
+    const manager = page.getByRole('dialog', { name: '옵션 프리셋 관리', exact: true });
     await expect(manager).toContainText('보존할 조합');
     await expect(manager).toContainText('적용 불가');
     await manager.getByRole('button', { name: '옵션 수정', exact: true }).click();
     await manager.locator('.prompt-option-group > summary').click();
     await expect(manager.getByLabel('문체', { exact: true })).toHaveValue('차분하게');
     await manager.getByLabel('새 옵션', { exact: true }).fill('새 지시');
-    await manager.getByRole('button', { name: '조합 저장', exact: true }).click();
+    await manager.getByRole('button', { name: '옵션 프리셋 저장', exact: true }).click();
     await expect(manager.getByText('적용 불가', { exact: false })).toHaveCount(0);
     const library = await (await request.get('/api/library')).json();
     const repaired = library.promptCombinations.find(

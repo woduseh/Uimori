@@ -303,7 +303,7 @@ export function UsagePanel({
                 </small>
               )}
             </section>
-            <section aria-label={t('visualpanels.usageCalls')}>
+            <section aria-label={t('visualpanels.calls')}>
               <h4>{t('visualpanels.calls')}</h4>
               <strong>{usageNumber(current.totals.calls)}</strong>
               {current.totals.runningCalls > 0 && (
@@ -314,7 +314,7 @@ export function UsagePanel({
                 </small>
               )}
             </section>
-            <section aria-label={t('visualpanels.usedTokens')}>
+            <section aria-label={t('visualpanels.knownTokens')}>
               <h4>{t('visualpanels.knownTokens')}</h4>
               <strong
                 title={t('visualpanels.inputOutput', {

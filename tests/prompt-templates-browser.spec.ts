@@ -167,7 +167,7 @@ test(`BPTUI01 builtin templates create editable presets at ${MOBILE_WIDTH}/${DES
     });
     const editedTitle = `${title} BPTUI01 ${width}`;
     await editor.getByLabel('프롬프트 이름', { exact: true }).fill(editedTitle);
-    await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
     await expect
       .poll(
         async () => (await (await request.get(`/api/prompt-presets/${created.id}`)).json()).title

@@ -1399,7 +1399,7 @@ export function useStory() {
         setError(
           error instanceof Error
             ? error.message
-            : '이야기 복사를 확인하지 못했어요. 다시 누르면 같은 요청을 확인해요.'
+            : '채팅 분기를 확인하지 못했어요. 다시 누르면 같은 요청을 확인해요.'
         );
     } finally {
       forkLocks.current.delete(lock);

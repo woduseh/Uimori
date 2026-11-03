@@ -237,7 +237,7 @@ test('C04V saved versions stay read-only until saved, preserve the previous draf
   await expect(scene.getByRole('combobox', { name: '비교할 저장본' })).toHaveValue(
     String(source.editRevision)
   );
-  const load = scene.getByRole('button', { name: '선택본을 초안에 불러오기' });
+  const load = scene.getByRole('button', { name: '선택한 저장본 불러오기' });
   await load.click();
   await expect(field).toHaveValue(source.text);
   expect((await detail(request, before.chat.id)).sources[0].text).toBe('Current saved manuscript.');

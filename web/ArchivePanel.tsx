@@ -37,7 +37,7 @@ export function ArchivePanel({
   useSettingsSaveHandler(onSaveHandlerChange, async () => {
     if (importDirty)
       throw new Error(
-        '데이터 관리에 선택한 가져오기 파일이 있어요. 계속 편집에서 가져오기를 완료하거나 선택을 취소해 주세요.'
+        '백업과 복원에 선택한 가져오기 파일이 있어요. 계속 편집에서 가져오기를 완료하거나 선택을 취소해 주세요.'
       );
     if (busy) return false;
     return !backupDirty || !!(await backupSave.current?.());
