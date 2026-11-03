@@ -112,7 +112,6 @@ export function HelperActivityDetails({
           onRetry={retry}
         />
       )}
-      {data?.hasEarlier && <p className="muted">{t('helpers.m121')}</p>}
       {data && !data.events.length && <p className="muted">{t('helpers.m122')}</p>}
       {data && (
         <ol className="helper-activity-stages">

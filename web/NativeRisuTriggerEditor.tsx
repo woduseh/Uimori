@@ -7,6 +7,7 @@ import {
   useEditorSavePreparation,
 } from './resource-editor.js';
 import { AddIcon } from './ui-icons.js';
+import { IconButton } from './IconButton.js';
 import './native-risu-trigger.css';
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -136,9 +137,11 @@ export function NativeRisuTriggerEditor({
     <section className="native-trigger-editor" aria-label={t('native.text_7895dc3794')}>
       <div className="native-trigger-heading">
         <h3>{t('native.text_7ff77a77f6')}</h3>
-        <button
-          type="button"
+        <IconButton
           className="ghost"
+          icon={AddIcon}
+          size={18}
+          label={t('native.text_6d5ba8d015')}
           disabled={disabled || pending}
           onClick={() => {
             onChange([
@@ -152,10 +155,7 @@ export function NativeRisuTriggerEditor({
             ]);
             setSelected(value.length);
           }}
-        >
-          <AddIcon size={18} aria-hidden="true" />
-          {t('native.text_6d5ba8d015')}
-        </button>
+        />
       </div>
       {value.length > 0 && (
         <>

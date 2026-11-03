@@ -982,7 +982,6 @@ function App() {
             <div className="reading-option-toggle">
               <div>
                 <strong>{t('main.m037')}</strong>
-                <small>{t('main.m038')}</small>
               </div>
               <label className="check">
                 <Switch
@@ -1001,7 +1000,6 @@ function App() {
             <label className="settings-row">
               <span className="settings-row-copy">
                 <strong>{t('main.m042')}</strong>
-                <small>{t('main.m043')}</small>
               </span>
               <select
                 aria-label={t('main.m042')}
@@ -1013,18 +1011,9 @@ function App() {
                 <option value="complete">{t('main.m045')}</option>
               </select>
             </label>
-          </div>
-        </section>
-
-        <section className="settings-group" aria-label={t('main.m046')}>
-          <header className="settings-group-heading">
-            <h4>{t('main.m046')}</h4>
-          </header>
-          <div className="settings-group-body">
             <label className="settings-row">
               <span className="settings-row-copy">
                 <strong>{t('main.m047')}</strong>
-                <small>{t('main.m048')}</small>
               </span>
               <select
                 aria-label={t('main.m047')}
@@ -1036,15 +1025,9 @@ function App() {
                 <option value="original">{t('main.m050')}</option>
               </select>
             </label>
-          </div>
-        </section>
-
-        <section className="settings-group" aria-label={t('main.m051')}>
-          <div className="settings-group-body">
             <label className="settings-row">
               <span className="settings-row-copy">
                 <strong>{t('main.m052')}</strong>
-                <small>{t('main.m053')}</small>
               </span>
               <select
                 aria-label={t('main.m052')}
@@ -1140,24 +1123,19 @@ function App() {
                     />
                   )}
                   {focus && (
-                    <button
-                      className="icon-button"
-                      aria-label={t('main.m060')}
-                      title={t('main.m060')}
+                    <IconButton
+                      label={t('main.m060')}
+                      icon={Minimize}
+                      size={19}
                       onClick={() => setFocus(false)}
-                    >
-                      <Minimize size={19} />
-                    </button>
+                    />
                   )}
                   {!compact && (
-                    <button
-                      className="icon-button"
-                      aria-label={t('main.m003')}
-                      title={t('main.m003')}
+                    <IconButton
+                      label={t('main.m003')}
+                      icon={SlidersHorizontal}
                       onClick={() => openChatSettings()}
-                    >
-                      <SlidersHorizontal size={20} />
-                    </button>
+                    />
                   )}
                   <ActionMenu label={t('main.m061')} className="chat-menu">
                     <div
@@ -1528,7 +1506,6 @@ function App() {
                             <ContentAvatar content={s.bot} className="first-scene-avatar" />
                           )}
                           <h2>{t('main.m091')}</h2>
-                          <p className="muted">{t('main.firstSceneRequestIdeas')}</p>
                         </div>
                       )}
                       <ReaderPages
@@ -2165,7 +2142,6 @@ function App() {
                         </div>
                       )}
                       <div className="composer-menu-group" role="group" aria-label={t('main.m122')}>
-                        <div className="composer-menu-heading">{t('main.m122')}</div>
                         <button
                           type="button"
                           className="secondary"

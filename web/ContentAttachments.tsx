@@ -13,6 +13,7 @@ import type { RisuContent, ContentAttachment } from '../core/risu-content.js';
 import { api } from './api.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import { ContentPicker } from './ContentPicker.js';
+import { IconButton } from './IconButton.js';
 import { CloseIcon, LoreIcon } from './ui-icons.js';
 import './package-authoring.css';
 const keyOf = (ref: ContentAttachment) => `${ref.id}@${ref.revision}:${ref.role}`;
@@ -212,23 +213,20 @@ export function ContentAttachments({
           )}
           {!pkg?.lore.length && <small className="chat-composition-count">{loreCount}</small>}
           {!automatic && !fixedBot && (
-            <button
-              type="button"
-              className="ghost icon-button"
+            <IconButton
+              className="ghost"
+              icon={CloseIcon}
+              size={18}
+              label={t('transfer.d030', { v0: title })}
               disabled={busy}
-              aria-label={t('transfer.d030', { v0: title })}
-              title={t('transfer.d030', { v0: title })}
               onClick={() =>
                 void changeAttachments(
                   attachments.filter((item) => item.id !== ref.id || item.role !== ref.role)
                 )
               }
-            >
-              <CloseIcon size={18} aria-hidden="true" />
-            </button>
+            />
           )}
         </header>
-        {automatic && <p className="muted">{t('library.thisModuleIsRequiredByAnAttached')}</p>}
         {!!pkg?.lore.length && (
           <details className="chat-composition-lore">
             <summary

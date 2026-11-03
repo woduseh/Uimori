@@ -256,9 +256,14 @@ export function BookmarkList({
       )}
       {loaded && !items.length && <p>{t('reader.noBookmarksYetAddOneBelowAScene')}</p>}
       {error && (
-        <p role="alert" className="error">
-          {translateMessage(error)}
-        </p>
+        <>
+          <p role="alert" className="error">
+            {translateMessage(error)}
+          </p>
+          <button type="button" onClick={() => setRevision((value) => value + 1)}>
+            {t('reader.refreshBookmarks')}
+          </button>
+        </>
       )}
       {items.map((item) => (
         <article key={item.id}>
@@ -289,9 +294,6 @@ export function BookmarkList({
           </div>
         </article>
       ))}
-      <button type="button" onClick={() => setRevision((value) => value + 1)}>
-        {t('reader.refreshBookmarks')}
-      </button>
       {editing && (
         <BookmarkEditor
           key={editing.id}

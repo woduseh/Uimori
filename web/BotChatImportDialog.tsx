@@ -113,11 +113,9 @@ export function BotChatImportDialog({
         <ContentAvatar content={bot} />
         <div>
           <strong>{bot.title}</strong>
-          <small>{t('transfer.m107')}</small>
         </div>
       </div>
       <section aria-label={t('transfer.m108')} className="chat-transcript-import">
-        <p className="muted">{t('transfer.m109')}</p>
         <label>
           {t('transfer.m110')}
           <input

@@ -149,7 +149,6 @@ export function SelectionRevision(props: Props) {
             <EditIcon size={18} aria-hidden="true" />
             {t('reader.reviseSelectedPassage2')}
           </button>
-          <p className="muted">{t('reader.selectAPassageInTheOriginalToAskThe')}</p>
         </>
       ) : (
         <>
@@ -183,7 +182,6 @@ export function SelectionRevision(props: Props) {
               }}
             />
           </label>
-          <p className="muted">{t('reader.callsTheHelperModelOnceChargesMayApplyDepending')}</p>
           {stale && (
             <NoticeBanner>
               {t('reader.theDraftOrSelectionChangedYourInputIsPreserved')}

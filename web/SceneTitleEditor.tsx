@@ -96,7 +96,6 @@ export function SceneTitleEditor({
                 onChange={(event) => setTitle(event.target.value)}
               />
             </label>
-            <small>{t('reader.leaveBlankToShowTheLinkedConfigurationTitleOr')}</small>
             <div className="form-actions">
               <SaveButton label={t('reader.saveName')} disabled={!dirty} aria-busy={busy} />
             </div>

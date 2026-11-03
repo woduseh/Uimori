@@ -251,13 +251,6 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
   return (
     <section className="chat-variables" aria-label={t('chatsettings.m164')}>
       <header className="chat-variable-heading">
-        {view && (
-          <small>
-            {t('chatsettings.overrides', {
-              count: Object.keys(view.values).length,
-            })}
-          </small>
-        )}
         <IconButton
           type="button"
           className="ghost"

@@ -386,10 +386,8 @@ export function RisuImport({
                   <option value="module">{t('transfer.m003')}</option>
                 </select>
               </label>
-              <p className="muted">{t('transfer.m025')}</p>
             </div>
           </details>
-          <p className="muted">{t('transfer.m027')}</p>
           {preview && (
             <>
               <div className="risu-import-summary risu-import-hero">

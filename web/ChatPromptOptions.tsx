@@ -1,5 +1,6 @@
 import { t, useI18n } from './i18n.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { IconButton } from './IconButton.js';
 import { CloseIcon } from './ui-icons.js';
 import type { PromptWorkspace } from '../core/product.js';
 import { ChatOptionSettings } from './ChatOptionSettings.js';
@@ -92,15 +93,12 @@ export function ChatPromptOptions(props: Props) {
     >
       <header className="chat-options-header">
         <h2>{t('chatsettings.m154')}</h2>
-        <button
+        <IconButton
           ref={closeButton}
-          type="button"
-          className="icon-button"
-          aria-label={t('chatsettings.m156')}
+          label={t('chatsettings.m156')}
+          icon={CloseIcon}
           onClick={props.onClose}
-        >
-          <CloseIcon size={20} />
-        </button>
+        />
       </header>
       {contexts.map((chatId) => (
         <ChatScopeEditor

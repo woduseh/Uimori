@@ -1144,20 +1144,18 @@ export function ConnectionEditor({
       )}
       {(screen === 'providers' || screen === 'jev') && (
         <div className="provider-editor-heading">
-          <button
-            type="button"
+          <IconButton
             className="secondary"
+            icon={BackIcon}
+            size={18}
+            label={t('providers.m82')}
             disabled={busy}
             onClick={() => navigate(screen === 'jev' ? jevReturn : 'connections')}
-          >
-            <BackIcon size={16} />
-            {t('providers.m82')}
-          </button>
+          />
         </div>
       )}
       {screen === 'providers' && (
         <section className="provider-selection" aria-label={t('providers.m87')}>
-          <h4>{t('providers.m88')}</h4>
           <div className="provider-template-grid">
             {PROVIDER_CHOICES.filter((item) => item.id !== 'fixture-sse-v1').map((item) => (
               <button

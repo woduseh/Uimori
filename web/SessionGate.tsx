@@ -117,7 +117,6 @@ export function SessionGate({ children }: { children: ReactNode }) {
             />
           </label>
           <button disabled={busy}>{t('outside.connect')}</button>
-          <small>{t('outside.tokenPrivacy')}</small>
         </form>
       )}
       {!session && !!error && (

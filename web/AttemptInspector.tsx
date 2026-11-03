@@ -89,7 +89,6 @@ function AttemptPricing({ attempt }: { attempt: Attempt }) {
       <p>
         <strong>{t('visualpanels.estimatedCost', { v0: estimatedTotal([attempt]) })}</strong>
       </p>
-      <p className="muted">{t('visualpanels.calculatedFromProviderReportedTokensAndThe')}</p>
       {attempt.pricingSnapshot ? (
         <>
           <p>
@@ -202,7 +201,6 @@ function CacheUsage({ attempt }: { attempt: Attempt }) {
           })}
         </span>
       )}
-      <small>{t('visualpanels.cacheReuseIsConfirmedByProviderReported')}</small>
     </p>
   );
 }
@@ -241,7 +239,6 @@ export function RequestLoreView({ lore }: { lore?: RequestLore | null }) {
               <RequestLoreEntries entries={uncertain} />
             </details>
           )}
-          <small className="muted">{t('visualpanels.basedOnMaterialsAttachedByTheApp')}</small>
         </>
       )}
     </section>
@@ -304,8 +301,6 @@ function AttemptTable({
       <p>
         <strong>{t('visualpanels.estimatedCost', { v0: estimatedTotal(attempts) })}</strong>
       </p>
-      <p className="muted">{t('visualpanels.calculatedFromTokensReportedByTheProvider')}</p>
-      <p className="muted">{t('visualpanels.callsWithMissingCostOrTokenRecords')}</p>
       <div className="table-scroll">
         <table>
           <thead>

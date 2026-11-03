@@ -397,13 +397,9 @@ export function AgentCollaborationEditor({
                     max={12}
                     step={1}
                     value={collaboration.maxCalls || ''}
-                    aria-describedby={`${id}-budget-note`}
                     aria-label={t('settings.m177')}
                     onChange={(event) => update({ maxCalls: Number(event.target.value) })}
                   />
-                  <small id={`${id}-budget-note`} className="muted">
-                    {t('settings.m178')}
-                  </small>
                 </label>
               </details>
               {issue && (

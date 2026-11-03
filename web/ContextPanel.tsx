@@ -2,6 +2,8 @@ import { t, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
+import { IconButton } from './IconButton.js';
+import { RefreshCw } from 'lucide-react';
 import { SOURCE_TEXT_MAX_CHARS as CONTEXT_SUMMARY_MAX_CHARS } from '../core/content-limits.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { CheckIcon, CloseIcon } from './ui-icons.js';
@@ -217,17 +219,17 @@ export function ContextPanel({
     >
       <div className="context-heading">
         <h4>{t('reader.storySummary')}</h4>
-        <button
-          type="button"
+        <IconButton
+          icon={RefreshCw}
+          size={18}
           className="secondary"
+          label={t('settings.m277')}
           disabled={busy}
           onClick={() => {
             setError('');
             void refreshAll();
           }}
-        >
-          {t('settings.m277')}
-        </button>
+        />
       </div>
       <div className="context-content">
         {detail && error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}
@@ -269,7 +271,7 @@ export function ContextPanel({
             <details className="context-priorities">
               <summary>{t('settings.m284')}</summary>
               <label>
-                {t('settings.m285')}
+                <span className="sr-only">{t('settings.m285')}</span>
                 <textarea
                   rows={3}
                   maxLength={4000}

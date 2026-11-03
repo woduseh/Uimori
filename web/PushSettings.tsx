@@ -238,7 +238,6 @@ export function PushSettings() {
               </label>
             ))}
           </div>
-          <small className="muted">{t('outside.pushPrivacy')}</small>
           <div className="settings-service-actions">
             {permission !== 'granted' && (
               <button

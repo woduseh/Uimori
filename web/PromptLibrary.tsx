@@ -738,7 +738,7 @@ export function PromptLibrary({
               {!selecting && (
                 <button
                   type="button"
-                  className={`library-create${categoryEmpty ? ' secondary' : ' primary'}`}
+                  className={`library-create ui-icon-button${categoryEmpty ? ' secondary' : ' primary'}`}
                   aria-label={t('prompts.uiNewPrompt')}
                   title={t('prompts.uiNewPrompt')}
                   disabled={!library}
@@ -746,7 +746,7 @@ export function PromptLibrary({
                     changeEditing({ preset: null, role: role === 'translation' ? role : 'main' })
                   }
                 >
-                  <AddIcon size={18} aria-hidden="true" /> <span>{t('prompts.uiNewPrompt')}</span>
+                  <AddIcon size={18} aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -777,9 +777,6 @@ export function PromptLibrary({
                   onError={onError}
                 />
               </section>
-            )}
-            {showFolders && folders.length > 0 && (
-              <h2 className="library-section-title">{t('prompts.uiAllPrompts')}</h2>
             )}
 
             <div className="library-list">

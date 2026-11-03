@@ -20,7 +20,6 @@ export function RisuExportButton({
   revision,
   title,
   disabled,
-  linkedModules = false,
   onError,
 }: {
   kind: 'content' | 'prompt-presets';
@@ -95,7 +94,6 @@ export function RisuExportButton({
         <DownloadIcon size={18} aria-hidden="true" />
         {busy ? t('transfer.m097') : t('transfer.exportFormat', { format })}
       </button>
-      {linkedModules && <small className="muted">{t('transfer.m099')}</small>}
     </>
   );
 }

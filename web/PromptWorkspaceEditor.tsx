@@ -183,7 +183,6 @@ export function PromptWorkspaceEditor({
         aria-label={t('prompts.uiCurrentPromptSettings')}
         className="prompt-editor prompt-current-settings"
       >
-        <p className="muted">{t('prompts.uiUsesTheLatestSavedPresetDefaultOptionChangesApply')}</p>
         {showRecovery && <ResourceEditorActions value={shared} hideSyncError />}
         <div className="prompt-editor-fields">
           <section className="settings-group">

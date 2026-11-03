@@ -186,9 +186,6 @@ function TurnActivityContent({
             {t('helpers.m254')}
           </p>
         )}
-        {!authored && source && source.editRevision && source.editRevision > 0 ? (
-          <p className="muted">{t('helpers.m255')}</p>
-        ) : null}
         <RunTaskDetails
           run={run}
           jobs={currentJobs}

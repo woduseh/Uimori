@@ -5,6 +5,8 @@ import { t, message, translateMessage, useI18n } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
+import { IconButton } from './IconButton.js';
+import { RefreshCw } from 'lucide-react';
 import './orphan-memory.css';
 
 const entryId = (entry: OrphanMemoryEntry) =>
@@ -149,15 +151,14 @@ export function OrphanMemoryPanel({
         <details className="orphan-memory-disclosure">
           <summary>{t('orphanmemory.count', { count: detail.entries.length })}</summary>
           <div className="context-heading">
-            <p className="muted">{t('orphanmemory.hint')}</p>
-            <button
-              type="button"
+            <IconButton
               className="secondary"
+              icon={RefreshCw}
+              size={18}
+              label={t('orphanmemory.refresh')}
               disabled={busy || loading}
               onClick={() => void load()}
-            >
-              {t('orphanmemory.refresh')}
-            </button>
+            />
           </div>
           <ul className="story-records">
             {detail.entries.map((entry) => {
