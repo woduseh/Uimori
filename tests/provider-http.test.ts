@@ -187,6 +187,40 @@ function stream(items: (Json | '[DONE]')[], stalled = false) {
     },
   };
 }
+function slowCancellation(text: string, contentType = 'text/event-stream') {
+  let acknowledge: (() => void) | undefined;
+  let cancellations = 0;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(text));
+    },
+    cancel() {
+      cancellations++;
+      return new Promise<void>((resolve) => {
+        acknowledge = resolve;
+      });
+    },
+  });
+  return {
+    response: new Response(body, { headers: { 'content-type': contentType } }),
+    get cancellations() {
+      return cancellations;
+    },
+    release() {
+      acknowledge?.();
+    },
+  };
+}
+const geminiConnection: ProviderConnection = {
+  id: 'gemini-synthetic',
+  protocol: 'google-gemini-v1',
+  endpoint: 'https://generativelanguage.googleapis.com/v1beta',
+  credentialRef: 'UIMORI_PROVIDER_HTTP_TEST',
+};
+const geminiRequest = (): ProviderRequest => ({
+  ...request(variants[0]),
+  modelId: 'gemini-3.8-flash',
+});
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -325,6 +359,119 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
         usage: { inputTokens: 5, outputTokens: 2 },
       });
       expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  test.each(variants)(
+    '$protocol returns terminal evidence without waiting for cancellation acknowledgement',
+    async (variant) => {
+      const response = slowCancellation(payload(events(variant)));
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => response.response)
+      );
+      const pending = executeProvider(connection(variant), request(variant), options(variant));
+      try {
+        expect(await settleWithin(pending)).toMatchObject({
+          status: 'completed',
+          text: '등대 🌊',
+          usage: { inputTokens: 5, outputTokens: 2 },
+        });
+        expect(response.cancellations).toBe(1);
+      } finally {
+        response.release();
+        await settleWithin(pending);
+      }
+    }
+  );
+
+  test.each(['responses', 'gemini'] as const)(
+    '%s returns observed text, usage and stream errors without waiting for cancellation acknowledgement',
+    async (protocol) => {
+      const partial =
+        protocol === 'responses'
+          ? payload(events(variants[0]).slice(0, -1))
+          : `data: ${JSON.stringify({
+              candidates: [{ content: { role: 'model', parts: [{ text: '등대 🌊' }] } }],
+              usageMetadata: { promptTokenCount: 5, candidatesTokenCount: 2, totalTokenCount: 7 },
+            })}\n\n`;
+      const response = slowCancellation(`${partial}data: invalid JSON\n\n`);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => response.response)
+      );
+      const pending = executeProvider(
+        protocol === 'responses' ? connection(variants[0]) : geminiConnection,
+        protocol === 'responses' ? request(variants[0]) : geminiRequest(),
+        options(variants[0])
+      );
+      try {
+        expect(await settleWithin(pending)).toMatchObject({
+          status: 'partial',
+          text: '등대 🌊',
+          error: { code: 'INVALID_EVENT' },
+          usage: { inputTokens: 5, outputTokens: 2 },
+        });
+        expect(response.cancellations).toBe(1);
+      } finally {
+        response.release();
+        await settleWithin(pending);
+      }
+    }
+  );
+
+  test.each(['responses', 'gemini'] as const)(
+    '%s reports an invalid content type without waiting for cancellation acknowledgement',
+    async (protocol) => {
+      const response = slowCancellation('unexpected body', 'application/octet-stream');
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => response.response)
+      );
+      const pending = executeProvider(
+        protocol === 'responses' ? connection(variants[0]) : geminiConnection,
+        protocol === 'responses' ? request(variants[0]) : geminiRequest(),
+        options(variants[0])
+      );
+      try {
+        expect(await settleWithin(pending)).toMatchObject({
+          status: 'error',
+          error: { code: 'INVALID_CONTENT_TYPE' },
+        });
+        expect(response.cancellations).toBe(1);
+      } finally {
+        response.release();
+        await settleWithin(pending);
+      }
+    }
+  );
+
+  test.each(['responses', 'gemini'] as const)(
+    '%s cancellation returns even when body cancellation is not acknowledged',
+    async (protocol) => {
+      const stalled = stalledProviderBody('text/event-stream');
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => stalled.response)
+      );
+      const controller = new AbortController();
+      const pending = executeProvider(
+        protocol === 'responses' ? connection(variants[0]) : geminiConnection,
+        protocol === 'responses' ? request(variants[0]) : geminiRequest(),
+        { ...options(variants[0]), signal: controller.signal }
+      );
+      try {
+        await stalled.pendingRead;
+        controller.abort();
+        expect(await settleWithin(pending)).toMatchObject({
+          status: 'cancelled',
+          error: { code: 'CANCELLED' },
+        });
+        expect(stalled.cancellations).toBe(1);
+      } finally {
+        stalled.release();
+        await settleWithin(pending);
+      }
     }
   );
 
@@ -518,6 +665,29 @@ describe('native provider HTTP boundary with synthetic fetch', () => {
       expect(result.status).toBe(status === 200 ? 'completed' : 'error');
       if (status === 429) expect(result.error?.code).toBe('HTTP_429');
       expect(fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  test.each(variants)(
+    '$protocol rejects unsupported generation options before credential resolution and HTTP',
+    async (variant) => {
+      const input = request(variant);
+      input.generation!.safetySettings = {};
+      const fetch = vi.fn();
+      const resolveCredential = vi.fn(() => secret);
+      const onWire = vi.fn();
+      vi.stubGlobal('fetch', fetch);
+
+      const result = await executeProvider(connection(variant), input, {
+        ...options(variant),
+        resolveCredential,
+        onWire,
+      });
+
+      expect(result.error?.code).toBe('UNSUPPORTED_GENERATION_OPTIONS');
+      expect(resolveCredential).not.toHaveBeenCalled();
+      expect(onWire).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
     }
   );
 

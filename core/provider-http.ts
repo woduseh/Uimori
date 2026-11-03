@@ -3,7 +3,6 @@ import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provi
 import { createHash } from 'node:crypto';
 import { providerFetchOptions, readProviderBody, transportFailureCode } from './provider-fetch.js';
 import { validateProviderEndpoint } from './product.js';
-import { validateModelOptions } from './model-capabilities.js';
 import { assertContextBudget } from './context-budget.js';
 import {
   createPublicTextProgress,
@@ -17,12 +16,7 @@ import {
   diagnosticResponsesBody,
   OpenAIProtocolError,
 } from './openai-protocol.js';
-import {
-  encodeChat,
-  ChatDecoder,
-  diagnosticChatBody,
-  OpenAIChatProtocolError,
-} from './openai-chat-protocol.js';
+import { encodeChat, ChatDecoder, diagnosticChatBody } from './openai-chat-protocol.js';
 import {
   encodeAnthropic,
   AnthropicDecoder,
@@ -101,7 +95,6 @@ export async function executeNativeProvider(
       options.onProgress && publicProgressAllowed(request, connection.protocol)
         ? createPublicTextProgress(request, connection.protocol, { ...options, signal })
         : undefined;
-    if (request.generation) validateModelOptions(request.generation, connection.protocol);
     let bodyValue: Json;
     let diagnostic: Json;
     let path: string;
@@ -226,7 +219,7 @@ export async function executeNativeProvider(
       });
       await progress?.(update);
     } else {
-      await response.body.cancel();
+      void response.body.cancel().catch(() => undefined);
       return failure('INVALID_CONTENT_TYPE');
     }
     if (signal.aborted) return failure('CANCELLED');
@@ -237,7 +230,6 @@ export async function executeNativeProvider(
     const code =
       error instanceof ProviderContractError ||
       error instanceof OpenAIProtocolError ||
-      error instanceof OpenAIChatProtocolError ||
       error instanceof AnthropicProtocolError
         ? error.code
         : transportFailureCode(error);
@@ -247,10 +239,7 @@ export async function executeNativeProvider(
       error instanceof AnthropicProtocolError ? error.toolArgumentDiagnostic : undefined
     );
   } finally {
-    try {
-      await reader?.cancel();
-    } catch {
-      /* Keep the recorded terminal result. */
-    }
+    // Do not wait for a remote source to acknowledge cancellation.
+    void reader?.cancel().catch(() => undefined);
   }
 }

@@ -5,7 +5,7 @@ import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatVariableState } from '../core/chat-variables.js';
-import { api, ApiError } from './api.js';
+import { api, ApiError, definiteRejection } from './api.js';
 import { RefreshIcon, SearchIcon, ResetIcon } from './ui-icons.js';
 import './chat-variables.css';
 
@@ -35,9 +35,6 @@ type Props = {
 };
 
 const encodeValues = (values: Record<string, string>) => JSON.stringify(values, null, 2);
-const definitelyRejected = (error: unknown) =>
-  error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408;
-
 function stringMap(value: unknown): Record<string, string> | null {
   if (!value || Array.isArray(value) || typeof value !== 'object') return null;
   const entries = Object.entries(value);
@@ -203,7 +200,7 @@ export function ChatVariables({ chatId, refreshKey, onChange }: Props) {
     } catch (cause) {
       if (!alive.current) return;
       setError(cause instanceof Error ? cause.message : uiMessage('chatsettings.m163'));
-      if (definitelyRejected(cause)) {
+      if (definiteRejection(cause)) {
         const rejected: Draft = {
           text: pendingDraft.text,
           revision: pendingDraft.revision,

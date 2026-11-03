@@ -62,7 +62,7 @@ import {
 import type { Section as ChatSettingsSection } from './ChatSettingsPanel.js';
 import { ReaderPages } from './ReaderPages.js';
 import { SceneNavigator } from './SceneNavigator.js';
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -215,18 +215,11 @@ function App() {
     onDeleted: (result: SceneDeletionResult) => Promise<void>;
   } | null>(null);
   const [sceneDeletionVersion, setSceneDeletionVersion] = useState(0);
-  const [pendingScenes, setPendingScenes] = useState<{
-    chatId: string;
-    version: number;
-    sourceIds: string[];
-  }>({ chatId: '', version: 0, sourceIds: [] });
-  useEffect(() => {
-    setPendingScenes({
-      chatId: s.selected,
-      version: sceneDeletionVersion,
-      sourceIds: pendingSceneDeletions(s.selected),
-    });
-  }, [s.selected, sceneDeletionVersion]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The version invalidates the session storage snapshot.
+  const pendingScenes = useMemo(
+    () => pendingSceneDeletions(s.selected),
+    [s.selected, sceneDeletionVersion]
+  );
   const openSceneDeletion = (chatId: string, sourceId: string) => {
     setSceneDeletion({ chatId, sourceId, onDeleted: s.sceneDeletionCompletion(chatId) });
   };
@@ -1827,21 +1820,19 @@ function App() {
             </div>
             {s.selected && (
               <div className="composer-dock">
-                {pendingScenes.chatId === s.selected &&
-                  pendingScenes.version === sceneDeletionVersion &&
-                  pendingScenes.sourceIds.map((sourceId) => (
-                    <NoticeBanner key={sourceId} tone="error">
-                      {t('chatmanage.unknown')}{' '}
-                      <button
-                        type="button"
-                        className="secondary"
-                        disabled={sceneDeletion?.chatId === s.selected}
-                        onClick={() => openSceneDeletion(s.selected, sourceId)}
-                      >
-                        {t('chatmanage.confirmOutcome')}
-                      </button>
-                    </NoticeBanner>
-                  ))}
+                {pendingScenes.map((sourceId) => (
+                  <NoticeBanner key={sourceId} tone="error">
+                    {t('chatmanage.unknown')}{' '}
+                    <button
+                      type="button"
+                      className="secondary"
+                      disabled={sceneDeletion?.chatId === s.selected}
+                      onClick={() => openSceneDeletion(s.selected, sourceId)}
+                    >
+                      {t('chatmanage.confirmOutcome')}
+                    </button>
+                  </NoticeBanner>
+                ))}
                 {s.pendingProfile && (
                   <NoticeBanner tone="error">
                     {t('main.m095')}

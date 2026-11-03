@@ -18,7 +18,7 @@ import {
   type RisuImportKind,
 } from '../core/risu-import.js';
 import { readCharacterCard } from './character-card-file.js';
-import { applyNativeTransfer, prepareNativeTransfer } from './native-transfer.js';
+import { applyNativeTransfer } from './native-transfer.js';
 import { deleteUpload, readUpload } from './uploads.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import { analyzeNativeRisuImport } from './risu-native-import.js';
@@ -135,7 +135,7 @@ export async function applyRisuImport(
   const file = staged
     ? staged.file
     : await normalizeTransferImages(originalFile as NativeTransferFile);
-  const prepared = staged ? { digest: bundleDigest(file) } : prepareNativeTransfer({ file });
+  const digest = bundleDigest(file);
   const result = store.transaction(() => {
     const concurrent = previous();
     if (concurrent) return concurrent;
@@ -145,7 +145,7 @@ export async function applyRisuImport(
     };
     const command = {
       file,
-      digest: prepared.digest,
+      digest,
       modelBindings: [],
       idempotencyKey: `risu:${requestKey}`,
     };

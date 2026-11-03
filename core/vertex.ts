@@ -88,13 +88,6 @@ export async function consumeSse(
   const abortReader = () => {
     void reader.cancel(signal.reason).catch(() => undefined);
   };
-  const cancelAfterTerminal = async () => {
-    try {
-      await reader.cancel();
-    } catch {
-      /* The body may already have closed between the terminal event and cancellation. */
-    }
-  };
   signal.addEventListener('abort', abortReader, { once: true });
   try {
     while (true) {
@@ -123,7 +116,7 @@ export async function consumeSse(
         throw new ProviderContractError('INVALID_UTF8');
       }
       if (await text(decoded)) {
-        await cancelAfterTerminal();
+        void reader.cancel().catch(() => undefined);
         return;
       }
     }
@@ -269,7 +262,7 @@ export async function executeGeminiProvider(
       !response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream') ||
       !response.body
     ) {
-      await response.body?.cancel();
+      void response.body?.cancel().catch(() => undefined);
       return failure('INVALID_CONTENT_TYPE');
     }
     reader = response.body.getReader();
@@ -309,10 +302,7 @@ export async function executeGeminiProvider(
         : transportFailureCode(error)
     );
   } finally {
-    try {
-      await reader?.cancel();
-    } catch {
-      /* A closed remote stream must not erase observed usage. */
-    }
+    // Do not wait for a remote source to acknowledge cancellation.
+    void reader?.cancel().catch(() => undefined);
   }
 }

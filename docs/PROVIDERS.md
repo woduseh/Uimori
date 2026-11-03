@@ -26,7 +26,7 @@ Uimori는 여러 사용자 요청을 모으는 자체 batching scheduler를 두�
 
 Batch의 `runId`·`attemptId`·`batchId`·`customId`와 요청 해시를 SQLite에 저장해요. 서버가 중단되어도 Anthropic에 생성된 Batch는 유지되므로 다음 부팅에서 같은 Run과 Batch를 다시 조회해 이어 받아요. 이미 저장된 Batch 결과와 도구 영수증도 재사용해서 같은 프로바이더 요청이나 도구를 다시 실행하지 않아요. Batch 생성 POST를 보냈는지 확정할 수 없는데 `batchId`만 저장되지 않은 아주 짧은 구간은 중복 과금을 피하기 위해 자동 재전송하지 않고 실패로 남겨요.
 
-사용자가 Run을 취소하면 로컬 Run이 즉시 취소되고, 생성된 Anthropic Batch가 있으면 조회 응답을 읽는 중에도 원격 취소를 best-effort로 요청해요. 서버 종료는 사용자 취소가 아니므로 원격 Batch를 취소하지 않아요. 취소 뒤 늦게 도착한 결과는 source로 commit하지 않아요. JEV와 Responses를 포함한 프로바이더 응답 본문 읽기도 작업 취소와 시간 제한에 따라 중단해요.
+사용자가 Run을 취소하면 로컬 Run이 즉시 취소되고, 생성된 Anthropic Batch가 있으면 조회 응답을 읽는 중에도 원격 취소를 best-effort로 요청해요. 서버 종료는 사용자 취소가 아니므로 원격 Batch를 취소하지 않아요. 취소 뒤 늦게 도착한 결과는 source로 commit하지 않아요. JEV와 Responses를 포함한 프로바이더 응답 본문 읽기도 작업 취소와 시간 제한에 따라 중단해요. 완료나 오류가 확정된 뒤에는 응답 스트림 정리를 요청하되 원격 정리 확인을 기다리지 않아, 이미 받은 결과·사용량이나 오류 반환이 정리 지연에 막히지 않아요.
 
 Anthropic Batch 추정 비용은 모델에 별도로 입력한 Batch 단가를 사용해요. Batch 단가가 없으면 미확인으로 표시하며 기본 단가에 자동 할인을 적용하지 않아요. 업데이트 전에 예약된 작업의 가격 snapshot은 당시 계산을 유지해요. 실제 청구 내역은 Anthropic이 기준이에요.
 
