@@ -540,7 +540,7 @@ async function toggleHelperTone(page: Page) {
     return;
   }
   const panel = page.locator('#helper-panel');
-  await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
+  await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
   await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
 }
 
@@ -1325,10 +1325,10 @@ test(`HELPUI01 helper panel preserves separate input, reading position and Back 
   await open(page);
   await expect(input).toHaveValue('도우미 입력 초안');
   await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(before);
-  const session = await panel.getByLabel('도우미 세션 선택', { exact: true }).inputValue();
+  const session = await panel.getByLabel('도우미 대화 선택', { exact: true }).inputValue();
   await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
   await expect(panel).toHaveClass(/helper-expanded/u);
-  await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(session);
+  await expect(panel.getByLabel('도우미 대화 선택', { exact: true })).toHaveValue(session);
   await expect(input).toHaveValue('도우미 입력 초안');
   await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBe(before);
   await panel.getByRole('button', { name: chat.title, exact: true }).click();
@@ -1399,9 +1399,9 @@ test('HELPUI17 Back clears owned tone dialogs while retaining each session draft
   await harness(page, 2);
   await page.goto(`/?chat=${chat.id}`);
   const panel = await open(page);
-  const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+  const picker = panel.getByLabel('도우미 대화 선택', { exact: true });
   const first = await picker.inputValue();
-  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(picker).not.toHaveValue(first);
   const second = await picker.inputValue();
   await picker.selectOption(first);
@@ -1808,12 +1808,12 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   expect(state.artifacts.get(artifact.id)).toHaveLength(2);
   expect(view.messages.at(-1)!.artifacts).toEqual([{ id: artifact.id, revision: 1 }]);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
-  await panel.getByRole('button', { name: '새 도우미 세션' }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화' }).click();
   await expect(panel.locator('.helper-message')).toHaveCount(0);
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('');
   await panel.getByLabel('도우미에게 요청').fill('새 작업의 초안');
-  await panel.getByLabel('도우미 세션 선택').selectOption(view.conversation.id);
+  await panel.getByLabel('도우미 대화 선택').selectOption(view.conversation.id);
   await expect(panel.getByLabel('도우미에게 요청')).toHaveValue('별도로 유지할 요청 초안');
   await panel.getByRole('button', { name: '작업 기록', exact: true }).click();
   await expect(panel.locator('[data-testid="helper-task-record"]')).toHaveCount(55);
@@ -1832,7 +1832,7 @@ test('HELPUI03 archived artifact revisions and device drafts remain readable wit
   await page.reload();
   await navigationAction(page, '서재');
   const recoveredPanel = await open(page);
-  await recoveredPanel.getByLabel('도우미 세션 선택').selectOption(view.conversation.id);
+  await recoveredPanel.getByLabel('도우미 대화 선택').selectOption(view.conversation.id);
   const recoveredCard = recoveredPanel.getByRole('region', { name: '보관된 가정 장면' });
   await expect(recoveredCard).toContainText('서버 작업을 완료하지 못했어요. (503)');
   await recoveredCard.getByText('이 기기에 남은 편집 초안 2개', { exact: true }).click();
@@ -2158,7 +2158,7 @@ test('HELPBRANCH existing branched dialogue remains usable without a new branch 
   await page.reload();
   const panel = await open(page);
   await expect(panel.locator('.helper-message.assistant')).toContainText('합성 응답 1');
-  await panel.getByLabel('도우미 세션 관리').click();
+  await panel.getByLabel('도우미 대화 관리').click();
   await expect(panel.getByRole('button', { name: /세션 분기/ })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await panel.getByLabel('도우미에게 요청').fill('이전 분기에서 계속해 줘');
@@ -2177,7 +2177,7 @@ test('HELPUI07 switching sessions isolates late responses and retains the backgr
   await page.goto(`/?chat=${chat.id}`);
   const panel = await open(page),
     input = panel.getByLabel('도우미에게 요청');
-  const picker = panel.getByLabel('도우미 세션 선택');
+  const picker = panel.getByLabel('도우미 대화 선택');
   const firstId = await picker.inputValue();
   await input.fill('첫 세션의 실행');
   await panel.getByRole('button', { name: '도우미 요청 보내기', exact: true }).click();
@@ -2187,7 +2187,7 @@ test('HELPUI07 switching sessions isolates late responses and retains the backgr
   const release = state.holdNextStream(firstTask.id);
   try {
     await expect.poll(() => state.heldStreams.has(firstTask.id)).toBe(true);
-    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
     await expect(picker).not.toHaveValue(firstId);
     await expect(input).toBeEnabled();
     await expect(input).toHaveValue('');

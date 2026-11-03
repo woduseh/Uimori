@@ -205,9 +205,9 @@ test('CTXUI03 manual no-op preserves a summary and exposes cancellable running-j
   await saveSummary(request, chat.id, '보존할 요약');
   await panel.getByRole('button', { name: '새로고침', exact: true }).click();
   await expect(panel.getByTestId('context-summary-text')).toHaveText('보존할 요약');
-  await panel.getByRole('button', { name: 'AI로 요약 압축', exact: true }).click();
+  await panel.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
   await expect(
-    panel.getByText('정리할 구간이 없어 원문과 요약을 유지했어요.', { exact: true })
+    panel.getByText('압축할 구간이 없어 원문과 요약을 유지했어요.', { exact: true })
   ).toBeVisible();
   const actual = await read<Detail>(request, `/chats/${chat.id}/context`);
   expect(actual.jobs[0]).toMatchObject({ status: 'completed', noop: true });
@@ -264,7 +264,7 @@ for (const width of [1440, 412]) {
     const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
     await composer.fill('다음 장면 초안');
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
-    await page.getByRole('button', { name: '수동 컨텍스트 압축', exact: true }).click();
+    await page.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '수동 컨텍스트 압축', exact: true });
     await expect(dialog).toBeVisible();
     await dialog.getByText('이번 요약에서 우선할 내용 (선택)', { exact: true }).click();
@@ -275,13 +275,13 @@ for (const width of [1440, 412]) {
         response.url().endsWith(`/api/chats/${chat.id}/context/compact`) &&
         response.request().method() === 'POST'
     );
-    await dialog.getByRole('button', { name: 'AI로 요약 압축', exact: true }).click();
+    await dialog.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
     const response = await accepted;
     expect(response.ok(), await response.text()).toBe(true);
     expect(response.request().postDataJSON().priorities).toBe(
       '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
     );
-    await expect(dialog).toContainText('정리할 구간이 없어 원문과 요약을 유지했어요.');
+    await expect(dialog).toContainText('압축할 구간이 없어 원문과 요약을 유지했어요.');
     await expect(priorities).toHaveValue('');
     expect((await read<Detail>(request, `/chats/${chat.id}/context`)).jobs[0].priorities).toBe(
       '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'

@@ -620,7 +620,7 @@ test('UI07 UI12 lost fork response reuses one new story and Back Forward preserv
   const failed = page.waitForEvent('requestfailed', (event) =>
     event.url().endsWith(`/api/chats/${chat.id}/fork`)
   );
-  const forkButton = page.getByRole('button', { name: '채팅 포크', exact: true });
+  const forkButton = page.getByRole('button', { name: '새 채팅으로 분기', exact: true });
   await openChatMenu(page);
   await forkButton.click();
   const fork = await acceptedChat;
@@ -724,7 +724,7 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
   });
   try {
     await openSourceActions(page.getByTestId('source'));
-    await page.getByRole('button', { name: '이 장면까지 새 채팅으로 복사', exact: true }).click();
+    await page.getByRole('button', { name: '이 장면까지 새 채팅으로 분기', exact: true }).click();
     const fork = await acceptedChat;
     // The list is named after its own bot so several expanded bots stay distinguishable.
     const list = page.getByRole('navigation', { name: chatListName });
@@ -741,7 +741,7 @@ test('UI07 UI12 late accepted fork cannot navigate after A B A or replace the cu
     await (await response).finished();
     await expect(list.getByRole('button').filter({ hasText: fork.title })).toBeVisible();
     await openChatMenu(page);
-    await expect(page.getByRole('button', { name: '채팅 포크', exact: true })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toBeEnabled();
     await page.keyboard.press('Escape');
     await expect(page).toHaveURL(selectedUrl);
     await expect(page.getByLabel('다음 장면 요청')).toHaveValue('돌아온 원본에 새로 작성한 초안');
@@ -926,7 +926,7 @@ test('UI03 UI12 new story retry retains selections, uses current content and loc
       .soft(await page.getByRole('button', { name: '시작 페르소나', exact: true }).isDisabled())
       .toBe(true);
     await expect(page.getByLabel('시작 프롬프트')).toHaveCount(0);
-    await expect(page.getByLabel('시작 옵션 조합')).toHaveCount(0);
+    await expect(page.getByLabel('시작 옵션 프리셋')).toHaveCount(0);
     expect.soft(await page.getByLabel('새 채팅 제목').isDisabled()).toBe(true);
     releaseChat();
     await expect(dialog.getByRole('alert')).toContainText('하나만 만들었어요');
@@ -1134,7 +1134,7 @@ test('UI03 starting without a model explains setup and creates a chat without ex
   await expect(dialog.getByLabel('시작 본문 모델')).toHaveCount(0);
   await dialog.getByRole('button', { name: '전역 모델 설정', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '설정', exact: true })).toBeVisible();
-  await expect(page.getByLabel('원문 모델', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('본문 모델', { exact: true })).toBeVisible();
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
   const connectionTab = settings.getByRole('tab', { name: '역할별 모델', exact: true });
   if (await connectionTab.isVisible())
@@ -1196,7 +1196,7 @@ test('UI03 UI12 global model choices survive chat creation and disabled connecti
   expect(detail.attempts).toHaveLength(0);
   await navigationAction(page, '설정');
   await selectSettingsSection(page, '역할별 모델');
-  await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(models[0].id);
+  await expect(page.getByLabel('본문 모델', { exact: true })).toHaveValue(models[0].id);
   await expect(page.getByLabel('번역 모델', { exact: true })).toHaveValue(models[1].id);
   if (visualReview) await page.screenshot({ path: info.outputPath('starting-models-mobile.png') });
   const disabled = await request.put(`/api/connections/${connection.id}`, {
@@ -1346,7 +1346,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
     .toEqual(createDefaultRisuPrompt(concurrentText, 'main'));
   await expect(await promptBody(libraryEditor)).toHaveValue(edited);
-  await libraryEditor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await libraryEditor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   const review = page.getByRole('alertdialog', { name: '변경된 저장본 확인', exact: true });
   await expect(review).toBeVisible();
   await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
@@ -1731,11 +1731,11 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
         expect((await page.locator('.sidebar').boundingBox())!.y).toBe(0);
     };
     await stableFrame();
-    for (const title of ['작업 현황', '읽기 설정', '계층형 구성']) {
+    for (const title of ['작업 현황', '읽기 설정', '계층형 플롯']) {
       await openChatMenu(page);
       await page.getByRole('button', { name: title, exact: true }).click();
       const panel =
-        title === '계층형 구성'
+        title === '계층형 플롯'
           ? page.getByRole('region', { name: title, exact: true })
           : page.getByRole('dialog', { name: title, exact: true });
       await expect(panel).toBeVisible();

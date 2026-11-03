@@ -161,7 +161,7 @@ test('EVALUI01 desktop preset evaluation opt-in persists selected story roles af
   await reconnected.goto(storyUrl);
   await openChatSettings(reconnected);
   await selectCurrentSettingsSection(reconnected, '역할별 모델');
-  await expect(reconnected.getByLabel('원문 모델', { exact: true })).toHaveValue(ref);
+  await expect(reconnected.getByLabel('본문 모델', { exact: true })).toHaveValue(ref);
   await expect(reconnected.getByLabel('번역 모델', { exact: true })).toHaveValue(ref);
   if (visualReview)
     await reconnected.screenshot({

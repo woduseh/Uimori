@@ -36,7 +36,7 @@ test('HELPREC01 failed draft reads preserve the old draft and selected source; f
   const panel = page.locator('#helper-panel');
   const input = panel.getByLabel('도우미에게 요청');
   await expect(input).toBeEnabled();
-  const conversationId = await panel.getByLabel('도우미 세션 선택').inputValue();
+  const conversationId = await panel.getByLabel('도우미 대화 선택').inputValue();
   const original = '다시 불러와야 하는 기존 초안';
   const replacement = '저장 실패 뒤에도 남아야 하는 새 초안';
   const diskValue = () =>
@@ -151,12 +151,12 @@ async function handoffFixture(page: Page, request: APIRequestContext) {
   await page.goto(`/?chat=${chat.id}`);
   await openHelper(page);
   const panel = page.locator('#helper-panel');
-  const picker = panel.getByLabel('도우미 세션 선택');
+  const picker = panel.getByLabel('도우미 대화 선택');
   const input = panel.getByLabel('도우미에게 요청');
   await expect(input).toBeEnabled();
   const first = await picker.inputValue();
   await input.fill('첫 대화의 기존 초안');
-  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(picker).not.toHaveValue(first);
   const second = await picker.inputValue();
   await expect(input).toBeEnabled();
@@ -257,7 +257,7 @@ test('HELPHANDOFF02 a newer outline handoff wins over an earlier delayed source 
     await expect(f.panel).toBeHidden();
     const chatMenu = page.locator('.chat-menu');
     await chatMenu.getByLabel('채팅 메뉴').click();
-    await chatMenu.getByRole('button', { name: '계층형 구성', exact: true }).click();
+    await chatMenu.getByRole('button', { name: '계층형 플롯', exact: true }).click();
     const outline = page.locator('.outline-panel');
     await expect(outline).toBeVisible();
     await outline

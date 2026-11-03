@@ -850,8 +850,8 @@ test('BACKGROUND upload, independent scopes, overlays, clear and reload', async 
   await expect(saveBackground).toBeEnabled();
   await page.unroute('**/api/package-image-blobs');
   await page.getByLabel('배경 흐림', { exact: true }).fill('7');
-  await page.getByLabel('밝은 모드 배경 덮개', { exact: true }).fill('25');
-  await page.getByLabel('어두운 모드 배경 덮개', { exact: true }).fill('55');
+  await page.getByLabel('밝은 모드 배경 오버레이', { exact: true }).fill('25');
+  await page.getByLabel('어두운 모드 배경 오버레이', { exact: true }).fill('55');
   let releaseSave!: () => void;
   const saveGate = new Promise<void>((resolve) => {
     releaseSave = resolve;

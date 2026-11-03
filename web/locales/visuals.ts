@@ -72,13 +72,13 @@ export const messages = {
     zh: '背景模糊',
   },
   'visuals.m013': {
-    ko: '밝은 모드 배경 덮개',
+    ko: '밝은 모드 배경 오버레이',
     en: 'Light mode background overlay',
     ja: 'ライトモードの背景オーバーレイ',
     zh: '浅色模式背景遮罩',
   },
   'visuals.m015': {
-    ko: '어두운 모드 배경 덮개',
+    ko: '어두운 모드 배경 오버레이',
     en: 'Dark mode background overlay',
     ja: 'ダークモードの背景オーバーレイ',
     zh: '深色模式背景遮罩',
@@ -150,25 +150,25 @@ export const messages = {
     zh: '场景正文',
   },
   'visuals.m028': {
-    ko: '삽화 참조 이미지',
+    ko: '삽화 참고 이미지',
     en: 'Illustration references',
     ja: '挿絵の参照画像',
     zh: '插图参考图片',
   },
   'visuals.m029': {
-    ko: '삽화 참조 이미지를 불러오는 중이에요…',
+    ko: '삽화 참고 이미지를 불러오는 중이에요…',
     en: 'Loading illustration references…',
     ja: '挿絵の参照画像を読み込み中…',
     zh: '正在加载插图参考图片…',
   },
   'visuals.m030': {
-    ko: '삽화 참조 이미지를 불러오지 못했어요.',
+    ko: '삽화 참고 이미지를 불러오지 못했어요.',
     en: 'Could not load illustration references.',
     ja: '挿絵の参照画像を読み込めませんでした。',
     zh: '无法加载插图参考图片。',
   },
   'visuals.m031': {
-    ko: '삽화 참조 이미지를 저장했어요. 다음 삽화 요청부터 사용해요.',
+    ko: '삽화 참고 이미지를 저장했어요. 다음 삽화 요청부터 사용해요.',
     en: 'Illustration references saved. They will be used for the next illustration request.',
     ja: '参照画像を保存しました。次の挿絵リクエストから使用します。',
     zh: '已保存参考图片，将用于下次插图请求。',
@@ -318,7 +318,7 @@ export const messages = {
     zh: '回复完成后自动生成插图',
   },
   'visuals.m058': {
-    ko: '장면당 최대 삽화 개수',
+    ko: '장면당 최대 삽화 수',
     en: 'Maximum illustrations per scene',
     ja: '場面ごとの挿絵上限',
     zh: '每个场景的插图上限',
@@ -330,7 +330,7 @@ export const messages = {
     zh: '自动选择的画面上限',
   },
   'visuals.m061': {
-    ko: '자동 재요청 횟수',
+    ko: '자동 재시도 횟수',
     en: 'Automatic retry count',
     ja: '自動再試行回数',
     zh: '自动重试次数',
@@ -360,7 +360,7 @@ export const messages = {
     zh: '没有Codex提供商的模型预设',
   },
   'visuals.m068': {
-    ko: '채팅의 참조 이미지 사용',
+    ko: '채팅의 참고 이미지 사용',
     en: 'Use chat reference images',
     ja: 'チャットの参照画像を使う',
     zh: '使用聊天参考图片',
@@ -432,13 +432,13 @@ export const messages = {
     zh: '保存插图设置',
   },
   'visuals.m082': {
-    ko: '삽화 설정 저장 내용 확인',
+    ko: '삽화 설정 저장본 확인',
     en: 'Review saved illustration settings',
     ja: '保存済み挿絵設定を確認',
     zh: '查看已保存的插图设置',
   },
   'visuals.m083': {
-    ko: '본문당 삽화 수',
+    ko: '장면당 최대 삽화 수',
     en: 'Illustrations per text',
     ja: '本文ごとの挿絵数',
     zh: '每篇正文的插图数量',
@@ -1074,13 +1074,13 @@ export const messages = {
     zh: '已达到Codex图片生成用量上限。',
   },
   'visuals.m210': {
-    ko: '참조 이미지를 Codex에 보낼 수 없는 형식이에요.',
+    ko: '참고 이미지를 Codex에 보낼 수 없는 형식이에요.',
     en: 'The reference image format cannot be sent to Codex.',
     ja: '参照画像はCodexに送信できない形式です。',
     zh: '参考图片格式无法发送至Codex。',
   },
   'visuals.m211': {
-    ko: '참조 이미지는 8개까지 보낼 수 있어요.',
+    ko: '참고 이미지는 8개까지 보낼 수 있어요.',
     en: 'Up to 8 reference images can be sent.',
     ja: '参照画像は最大8枚送れます。',
     zh: '最多可发送8张参考图片。',
@@ -1476,7 +1476,7 @@ export const messages = {
     zh: '正在显示默认界面以替代主题布局。{error}',
   },
   'visuals.referenceRefreshError': {
-    ko: '삽화 참조 이미지를 새로 불러오지 못했어요. 기존 선택은 유지했어요. {error}',
+    ko: '삽화 참고 이미지를 새로 불러오지 못했어요. 기존 선택은 유지했어요. {error}',
     en: 'Could not refresh illustration references. Your selections were kept. {error}',
     ja: '参照画像を更新できませんでした。選択は保持しています。{error}',
     zh: '无法刷新插图参考图片，已保留原有选择。{error}',

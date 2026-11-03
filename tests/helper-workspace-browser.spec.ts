@@ -62,7 +62,7 @@ test('HSPACE10 mobile project and conversation controls keep full touch targets 
   await choice.click();
   await expect(page.getByRole('dialog', { name: '탐색', exact: true })).toBeHidden();
   await expect(
-    page.locator('#helper-panel').getByLabel('도우미 세션 선택', { exact: true })
+    page.locator('#helper-panel').getByLabel('도우미 대화 선택', { exact: true })
   ).toHaveValue(session.id);
 });
 
@@ -90,7 +90,7 @@ test('HSPACE11 project creation, drag moves and keyboard ordering survive reload
   await page.goto('/');
   await navigationAction(page, '도우미');
   const panel = page.locator('#helper-panel');
-  const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+  const picker = panel.getByLabel('도우미 대화 선택', { exact: true });
   const history = page.getByRole('navigation', { name: '도우미 대화', exact: true });
   const search = history.getByRole('searchbox', { name: '대화 검색', exact: true });
   await search.fill('일치하지 않는 검색');
@@ -338,7 +338,7 @@ test('HSPACE03 failed-task diagnosis prepares a precise helper draft without sta
     `이 작업의 실패 원인을 확인해 주세요. 작업 종류: run, 작업 ID: ${failed.id}.`
   );
   await expect(manuscriptDraft).toHaveValue('실패 분석을 열어도 보존할 원고 요청 초안');
-  const session = await panel.getByLabel('도우미 세션 선택', { exact: true }).inputValue();
+  const session = await panel.getByLabel('도우미 대화 선택', { exact: true }).inputValue();
   expect(await (await request.get(`/api/helper/conversations/${session}/tasks`)).json()).toEqual(
     []
   );
@@ -384,7 +384,7 @@ test('HSPACE04 a prompt-card target can be explicitly attached again after expan
   await expect(input).toBeEnabled();
   await expect(chip).toContainText(`참고 자료: ${title}`);
   await input.fill('프롬프트 대상을 다시 붙여도 남길 초안');
-  const session = await panel.getByLabel('도우미 세션 선택', { exact: true }).inputValue();
+  const session = await panel.getByLabel('도우미 대화 선택', { exact: true }).inputValue();
   await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
   await expect(panel).toHaveClass(/helper-expanded/u);
   await panel.getByRole('button', { name: '프롬프트', exact: true }).click();
@@ -394,7 +394,7 @@ test('HSPACE04 a prompt-card target can be explicitly attached again after expan
   await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
   await attach();
   await expect(chip).toContainText(`참고 자료: ${title}`);
-  await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(session);
+  await expect(panel.getByLabel('도우미 대화 선택', { exact: true })).toHaveValue(session);
   await expect(input).toHaveValue('프롬프트 대상을 다시 붙여도 남길 초안');
   await page.screenshot({ path: info.outputPath('helper-reattached-prompt-2560.png') });
   expect(await (await request.get(`/api/prompt-presets/${saved.id}`)).json()).toEqual(saved);
@@ -432,7 +432,7 @@ test('HSPACE05 a contextual reopen attaches the editor after an independent work
     .filter({ hasText: session.title })
     .first()
     .click();
-  await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(session.id);
+  await expect(panel.getByLabel('도우미 대화 선택', { exact: true })).toHaveValue(session.id);
   await expect(panel.locator('details.helper-editor')).toHaveCount(0);
   await panel.getByRole('button', { name: '서재', exact: true }).click();
   await expect(panel).toBeHidden();
@@ -494,7 +494,7 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   await mainDraft.fill('작업 공간을 바꿔도 남길 원고 초안');
   await navigationAction(page, '도우미');
   const panel = page.locator('#helper-panel');
-  const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+  const picker = panel.getByLabel('도우미 대화 선택', { exact: true });
   const nav = await visibleNavigation(page);
   const history = nav.getByRole('navigation', { name: '도우미 대화', exact: true });
   await expect(panel.getByRole('navigation', { name: '도우미 대화', exact: true })).toHaveCount(0);
@@ -567,8 +567,8 @@ test('HSPACE06 shared sidebar preserves drafts and project history across search
   await search.fill(sessions[0].title);
   await expect(choice).toHaveCount(1);
   await choice.getByLabel(`${sessions[0].title} 대화 메뉴`, { exact: true }).click();
-  await expect(page.getByRole('button', { name: '세션 이름 변경', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '세션 삭제', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '대화 이름 변경', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '대화 삭제', exact: true })).toBeVisible();
   const original = await (await request.get(`/api/helper/conversations/${sessions[0].id}`)).json();
   await page.getByRole('button', { name: '대화 복사', exact: true }).click();
   await expect(picker).not.toHaveValue(sessions[0].id);
@@ -685,7 +685,7 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     }
     await navigationAction(page, '도우미');
     const panel = page.locator('#helper-panel');
-    const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+    const picker = panel.getByLabel('도우미 대화 선택', { exact: true });
     await expect(picker).not.toHaveValue('');
     const previous = await picker.inputValue();
     const helperDraft = panel.getByLabel('도우미에게 요청', { exact: true });
@@ -833,7 +833,7 @@ test('HSPACE07 project and copy retries recover the same saved result through se
   ).toEqual(copyPayloads[0]);
   await row.getByLabel(`${title} 대화 메뉴`, { exact: true }).click();
   await page.getByRole('button', { name: '대화 복사', exact: true }).click();
-  await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(copyIds[0]);
+  await expect(panel.getByLabel('도우미 대화 선택', { exact: true })).toHaveValue(copyIds[0]);
   expect(copyPayloads).toHaveLength(3);
   expect(copyPayloads[1]).toEqual(copyPayloads[0]);
   expect(copyPayloads[2]).toEqual(copyPayloads[0]);
@@ -913,7 +913,7 @@ for (const viewport of [
     await openHelper(page);
     const panel = page.locator('#helper-panel');
     const input = panel.getByLabel('도우미에게 요청', { exact: true });
-    const picker = panel.getByLabel('도우미 세션 선택', { exact: true });
+    const picker = panel.getByLabel('도우미 대화 선택', { exact: true });
     await expect(input).toBeEnabled();
     await picker.selectOption(own.id);
     await input.fill('옆에서 시작해서 크게 보아도 남을 도우미 초안');
@@ -1041,7 +1041,7 @@ for (const viewport of [
     const input = panel.getByLabel('도우미에게 요청', { exact: true });
     await expect(input).toBeEnabled();
     await input.fill('이 자료를 검토하려고 남긴 도우미 초안');
-    const session = await panel.getByLabel('도우미 세션 선택', { exact: true }).inputValue();
+    const session = await panel.getByLabel('도우미 대화 선택', { exact: true }).inputValue();
     await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
     await expect(panel).toHaveClass(/helper-expanded/u);
     await expect(editor).toBeAttached();
@@ -1053,7 +1053,7 @@ for (const viewport of [
     });
     await panel.getByRole('button', { name: '서재', exact: true }).click();
     await expect(panel).not.toHaveClass(/helper-expanded/u);
-    await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(session);
+    await expect(panel.getByLabel('도우미 대화 선택', { exact: true })).toHaveValue(session);
     await expect(input).toHaveValue('이 자료를 검토하려고 남긴 도우미 초안');
     if (viewport.width === MOBILE_WIDTH)
       await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();

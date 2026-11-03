@@ -501,7 +501,7 @@ test('READUI02 helper answers, archived scenes and public streams share reading 
       await expect(status).toContainText('“상태 카드의 모델 이름”');
       await expect(status.locator('.reading-quote')).toHaveCount(0);
       await status.locator(':scope > summary').click();
-      await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
+      await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
       await panel.getByRole('button', { name: '도우미 말투 설정', exact: true }).click();
       await expect(panel.getByRole('textbox', { name: '도우미 말투', exact: true })).toHaveValue(
         helperPersona

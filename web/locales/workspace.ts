@@ -43,10 +43,10 @@ export const messages = {
   },
   'workspace.chat': { ko: '채팅', en: 'Chat', ja: 'チャット', zh: '聊天' },
   'workspace.helperWidth': {
-    ko: '도우미 내역 폭',
-    en: 'Assistant history width',
-    ja: 'アシスタント履歴の幅',
-    zh: '助手历史宽度',
+    ko: '도우미 패널 폭',
+    en: 'Assistant panel width',
+    ja: 'アシスタントパネルの幅',
+    zh: '助手面板宽度',
   },
   'helpers.settings': {
     ko: '도우미 설정',

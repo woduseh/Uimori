@@ -139,7 +139,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     name: '설정 영역 선택',
     exact: true,
   });
-  const sections = ['사용 자료', '생성 설정', '원작 참고', '기억과 메모', '이미지'];
+  const sections = ['사용 자료', '생성 설정', '작품 및 원작 참고', '기억과 메모', '이미지'];
   if (await sectionSelector.isVisible())
     await expect(sectionSelector.locator('option')).toHaveText(sections);
   else
@@ -196,7 +196,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
   await editor.locator('.prompt-option-group > summary').first().click();
   const composer = editor;
   for (const combination of [choice.combination, second]) {
-    await composer.getByLabel('옵션 조합', { exact: true }).selectOption(combination.id);
+    await composer.getByLabel('옵션 프리셋', { exact: true }).selectOption(combination.id);
     await expect
       .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.values)
       .toEqual(combination.values);
@@ -268,7 +268,7 @@ test('P02 creative option drafts block only their own chat and survive quick cha
   await detail.fill('보존할 첫 채팅의 초안');
   await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
   let menu = await composerMenu(page);
-  await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
+  await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeDisabled();
   await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeDisabled();
   await expect(menu.getByRole('button', { name: '창작 옵션', exact: true })).toContainText(
     '미적용 확인'
@@ -278,14 +278,14 @@ test('P02 creative option drafts block only their own chat and survive quick cha
 
   await selectStoredChat(page, other);
   menu = await composerMenu(page);
-  const combinations = menu.getByLabel('빠른 옵션 조합', { exact: true });
+  const combinations = menu.getByLabel('빠른 옵션 프리셋', { exact: true });
   await expect(combinations).toBeEnabled();
-  await expect(combinations.locator('option').first()).toHaveText('조합 적용…');
+  await expect(combinations.locator('option').first()).toHaveText('옵션 프리셋 적용…');
   await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeEnabled();
   await page.screenshot({ path: info.outputPath('creative-options-other-chat-menu-412.png') });
   await combinations.selectOption(`${choice.combination.id}@${choice.combination.revision}`);
   await expect(page.locator('.transient-notice')).toContainText(
-    `“${choice.combination.title}” 조합을 적용했어요.`
+    `“${choice.combination.title}” 옵션 프리셋을 적용했어요.`
   );
   await expect
     .poll(
@@ -303,7 +303,7 @@ test('P02 creative option drafts block only their own chat and survive quick cha
 
   await selectStoredChat(page, chat);
   menu = await composerMenu(page);
-  await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
+  await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeDisabled();
   await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeDisabled();
   await menu.getByRole('button', { name: '창작 옵션', exact: true }).click();
   await expect(detail).toHaveValue('보존할 첫 채팅의 초안');
@@ -359,15 +359,15 @@ test('P03 a pending creative option reset blocks only its own chat', async ({ pa
     ).toHaveAttribute('aria-busy', 'true');
     await panel.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
     let menu = await composerMenu(page);
-    await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
+    await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeDisabled();
     await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeDisabled();
     await page.keyboard.press('Escape');
     await selectStoredChat(page, other);
     menu = await composerMenu(page);
-    await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeEnabled();
+    await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeEnabled();
     await expect(menu.getByRole('button', { name: '빠른 페르소나', exact: true })).toBeEnabled();
     await menu
-      .getByLabel('빠른 옵션 조합', { exact: true })
+      .getByLabel('빠른 옵션 프리셋', { exact: true })
       .selectOption(`${choice.combination.id}@${choice.combination.revision}`);
     await expect
       .poll(
@@ -377,9 +377,9 @@ test('P03 a pending creative option reset blocks only its own chat', async ({ pa
     await page.keyboard.press('Escape');
     await selectStoredChat(page, chat);
     menu = await composerMenu(page);
-    await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeDisabled();
+    await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeDisabled();
     releaseSave();
-    await expect(menu.getByLabel('빠른 옵션 조합', { exact: true })).toBeEnabled();
+    await expect(menu.getByLabel('빠른 옵션 프리셋', { exact: true })).toBeEnabled();
     await expect
       .poll(
         async () => (await (await request.get(`/api/chats/${chat.id}/options`)).json()).fixedValues
@@ -446,7 +446,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
   await openDetails(page, 'profile-editor');
   await selectCurrentSettingsSection(page, '역할별 모델');
   // A model saved against a disabled connection is excluded from a new role selection.
-  for (const roleLabel of ['원문 모델', '번역 모델'])
+  for (const roleLabel of ['본문 모델', '번역 모델'])
     for (const model of modelRefs) {
       await expect(
         page.getByLabel(roleLabel, { exact: true }).locator(`option[value="${model.id}"]`)
@@ -483,7 +483,7 @@ test('P04 manual model IDs and distinct main/translation routing preserve connec
     expect(activatedModels.find((item) => item.id === model.id)).toEqual(model);
   await openDetails(page, 'profile-editor');
   await selectCurrentSettingsSection(page, '역할별 모델');
-  await page.getByLabel('원문 모델', { exact: true }).selectOption(`${modelRefs[0].id}`);
+  await page.getByLabel('본문 모델', { exact: true }).selectOption(`${modelRefs[0].id}`);
   await page.getByLabel('번역 모델', { exact: true }).selectOption(`${modelRefs[1].id}`);
   await page.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
   await expect
@@ -557,7 +557,7 @@ test('P09 copying a scene creates an independent chat and keeps each tab draft',
     const firstArticle = page.locator(`[data-testid="source"][data-source-id="${source.id}"]`);
     await openSourceActions(firstArticle);
     const copyScene = firstArticle.getByRole('button', {
-      name: '이 장면까지 새 채팅으로 복사',
+      name: '이 장면까지 새 채팅으로 분기',
       exact: true,
     });
     await expect(copyScene).toBeVisible();

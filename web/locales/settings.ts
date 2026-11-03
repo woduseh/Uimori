@@ -19,7 +19,7 @@ export const messages = {
     zh: '无法加载设置，草稿已保留。',
   },
   'settings.m3': {
-    ko: '원문 모델',
+    ko: '본문 모델',
     en: 'Source model',
     ja: '原文モデル',
     zh: '原文模型',
@@ -247,7 +247,7 @@ export const messages = {
     zh: '翻译任务调用上限',
   },
   'settings.m49': {
-    ko: '본문 서비스 거절 감지',
+    ko: '본문 거절 감지',
     en: 'Writing service refusal detection',
     ja: '本文のサービス拒否検出',
     zh: '正文服务拒绝检测',
@@ -259,7 +259,7 @@ export const messages = {
     zh: '正文',
   },
   'settings.m51': {
-    ko: '본문 서비스 거절 감지 사용',
+    ko: '본문 거절 감지 사용',
     en: 'Enable writing refusal detection',
     ja: '本文のサービス拒否検出を使用',
     zh: '启用正文服务拒绝检测',
@@ -277,13 +277,13 @@ export const messages = {
     zh: '正文拒绝置信阈值',
   },
   'settings.m55': {
-    ko: '번역 서비스 거절 감지',
+    ko: '번역 거절 감지',
     en: 'Translation service refusal detection',
     ja: '翻訳のサービス拒否検出',
     zh: '翻译服务拒绝检测',
   },
   'settings.m56': {
-    ko: '번역 서비스 거절 감지 사용',
+    ko: '번역 거절 감지 사용',
     en: 'Enable translation refusal detection',
     ja: '翻訳のサービス拒否検出を使用',
     zh: '启用翻译服务拒绝检测',
@@ -295,7 +295,7 @@ export const messages = {
     zh: '翻译拒绝置信阈值',
   },
   'settings.m58': {
-    ko: '자동 재요청 횟수',
+    ko: '자동 재시도 횟수',
     en: 'Automatic retry count',
     ja: '自動再リクエスト回数',
     zh: '自动重试次数',
@@ -337,7 +337,7 @@ export const messages = {
     zh: '丢弃草稿并重新加载',
   },
   'settings.m67': {
-    ko: '역할별 모델 저장 내용 확인',
+    ko: '역할별 모델 저장본 확인',
     en: 'Review saved role model settings',
     ja: '役割別モデル設定の保存内容を確認',
     zh: '检查角色模型保存内容',
@@ -811,7 +811,7 @@ export const messages = {
     zh: '{v0}模型',
   },
   'settings.m151': {
-    ko: '메인 모델을 함께 사용해요',
+    ko: '본문 모델을 함께 사용해요',
     en: 'Use the main model',
     ja: 'メインモデルを共有',
     zh: '使用主模型',
@@ -1147,13 +1147,13 @@ export const messages = {
     zh: 'JEV相关性阈值请输入0至1。',
   },
   'settings.m212': {
-    ko: 'Jev 선택 로어 토큰 한도',
+    ko: 'JEV 선택 로어 토큰 한도',
     en: 'JEV selected lore token limit',
     ja: 'JEVの選択ロアトークン上限',
     zh: 'JEV所选设定词元上限',
   },
   'settings.m213': {
-    ko: 'Jev 판단 입력 토큰 한도',
+    ko: 'JEV 판정 입력 토큰 한도',
     en: 'JEV judgment input token limit',
     ja: 'JEVの判定入力トークン上限',
     zh: 'JEV判定输入词元上限',
@@ -1585,7 +1585,7 @@ export const messages = {
     zh: '已请求上下文压缩。',
   },
   'settings.m292': {
-    ko: 'AI로 요약 압축',
+    ko: '컨텍스트 압축',
     en: 'Compress with AI',
     ja: 'AIで要約・圧縮',
     zh: '用 AI 摘要压缩',
@@ -1615,13 +1615,13 @@ export const messages = {
     zh: '正在等待上下文压缩。',
   },
   'settings.m297': {
-    ko: '컨텍스트를 정리하고 있어요.',
+    ko: '컨텍스트를 압축하고 있어요.',
     en: 'Compressing context.',
     ja: 'コンテキストを整理中です。',
     zh: '正在整理上下文。',
   },
   'settings.m298': {
-    ko: '정리할 구간이 없어 원문과 요약을 유지했어요.',
+    ko: '압축할 구간이 없어 원문과 요약을 유지했어요.',
     en: 'Nothing to compress. Source and summary are preserved.',
     ja: '整理する区間がないため原文と要約を保持しました。',
     zh: '无可整理片段，原文和摘要已保留。',
@@ -1645,7 +1645,7 @@ export const messages = {
     zh: '任务已中断，不会自动重新运行。',
   },
   'settings.m302': {
-    ko: '컨텍스트를 정리하지 못했어요. 기존 요약을 유지해요.',
+    ko: '컨텍스트를 압축하지 못했어요. 기존 요약을 유지해요.',
     en: 'Could not compress context. The existing summary is preserved.',
     ja: 'コンテキストを整理できませんでした。既存の要約を保持します。',
     zh: '无法整理上下文，现有摘要已保留。',

@@ -71,7 +71,7 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   const updated = page.waitForResponse(
     (item) => /\/api\/resources\/save$/.test(item.url()) && item.request().method() === 'POST'
   );
-  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   const saved = (await (await updated).json()).saved as PromptPreset;
   expect(saved.program.collaboration).toMatchObject({
     maxCalls: 4,
@@ -145,12 +145,12 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   }
   await agent.locator('summary').click();
   await agent.getByRole('textbox', { name: / 지침$/ }).fill('');
-  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+  await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
   await collaboration.getByRole('switch', { name: '협업 사용' }).uncheck();
   const disabledSave = page.waitForResponse(
     (item) => /\/api\/resources\/save$/.test(item.url()) && item.request().method() === 'POST'
   );
-  await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+  await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
   const disabledResponse = await disabledSave;
   expect(disabledResponse.ok()).toBe(true);
   expect((await disabledResponse.json()).saved.program.collaboration).toMatchObject({
@@ -159,9 +159,9 @@ test('AGENTUI02 saved collaboration options reach the real preview API and trans
   });
   await editor.getByRole('tab', { name: '협업', exact: true }).click();
   await collaboration.getByRole('switch', { name: '협업 사용' }).check();
-  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+  await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
   await collaboration.getByRole('switch', { name: '협업 사용' }).uncheck();
-  await expect(editor.getByRole('button', { name: '프리셋 저장', exact: true })).toBeDisabled();
+  await expect(editor.getByRole('button', { name: '프롬프트 저장', exact: true })).toBeDisabled();
   // Saved presets keep their role. Check translation on a new draft through the normal UI.
   await editor.getByRole('tab', { name: '기본 옵션', exact: true }).click();
   await expect(editor.getByLabel('프롬프트 역할', { exact: true })).toBeDisabled();

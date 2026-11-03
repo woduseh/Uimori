@@ -66,7 +66,7 @@ for (const viewport of viewports) {
       if (isResourceSaveRequest(request) && request.postDataJSON().kind === 'prompt-preset')
         saves++;
     });
-    await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
+    await editor.getByRole('button', { name: '프롬프트 저장', exact: true }).click();
     await expect(review).toBeVisible();
     await review.getByRole('button', { name: '저장본 확인', exact: true }).click();
     await expect(review).toContainText('Changed elsewhere');

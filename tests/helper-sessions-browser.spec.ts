@@ -45,7 +45,7 @@ test('AUDIT2 helper deletion clears a recovered read error and keeps a rejected 
   const input = panel.getByLabel('도우미에게 요청');
   await expect(input).toBeEnabled();
   await input.fill('삭제 검토 중에도 유지할 초안');
-  const session = await panel.getByLabel('도우미 세션 선택').inputValue();
+  const session = await panel.getByLabel('도우미 대화 선택').inputValue();
   let releaseInitial = () => {};
   const initial = new Promise<void>((resolve) => {
     releaseInitial = resolve;
@@ -80,10 +80,10 @@ test('AUDIT2 helper deletion clears a recovered read error and keeps a rejected 
     await route.fulfill({ status: 409, json: { error: deleteFailure } });
   });
   try {
-    await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
-    await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();
-    const dialog = page.getByRole('alertdialog', { name: '도우미 세션 삭제', exact: true });
-    const remove = dialog.getByRole('button', { name: '세션 영구 삭제', exact: true });
+    await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
+    await panel.getByRole('button', { name: '대화 삭제', exact: true }).click();
+    const dialog = page.getByRole('alertdialog', { name: '도우미 대화 삭제', exact: true });
+    const remove = dialog.getByRole('button', { name: '대화 영구 삭제', exact: true });
     await expect(dialog.getByRole('status')).toContainText('삭제할 자료와 진행 중인 작업');
     await expect(remove).toBeDisabled();
     releaseInitial();
@@ -132,10 +132,10 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
   const input = panel.getByLabel('도우미에게 요청');
   await expect(input).toBeEnabled();
   await expect(panel.getByRole('heading', { name: '채팅 도우미', exact: true })).toBeVisible();
-  const picker = panel.getByLabel('도우미 세션 선택');
+  const picker = panel.getByLabel('도우미 대화 선택');
   const first = await picker.inputValue();
   await input.fill('첫 세션에 남겨 둘 초안');
-  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(picker).not.toHaveValue(first);
   await expect(input).toBeEnabled();
   await expect(input).toHaveValue('');
@@ -145,10 +145,10 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
   await expect(input).toHaveValue('첫 세션에 남겨 둘 초안');
   await picker.selectOption(second);
   await expect(input).toHaveValue('두 번째 세션 초안');
-  await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
-  await panel.getByRole('button', { name: '세션 이름 변경', exact: true }).click();
-  const rename = page.getByRole('dialog', { name: '도우미 세션 이름 변경' });
-  await rename.getByLabel('세션 이름', { exact: true }).fill('다른 결말 검토');
+  await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
+  await panel.getByRole('button', { name: '대화 이름 변경', exact: true }).click();
+  const rename = page.getByRole('dialog', { name: '도우미 대화 이름 변경' });
+  await rename.getByLabel('대화 이름', { exact: true }).fill('다른 결말 검토');
   await rename.getByRole('button', { name: '이름 저장', exact: true }).click();
   await expect(rename).toBeHidden();
   await expect(picker.locator('option:checked')).toContainText('다른 결말 검토');
@@ -176,15 +176,15 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
       });
     }
   if (!visualReview) await page.setViewportSize({ width: MOBILE_WIDTH, height: MOBILE_HEIGHT });
-  const deletion = page.getByRole('alertdialog', { name: '도우미 세션 삭제', exact: true });
+  const deletion = page.getByRole('alertdialog', { name: '도우미 대화 삭제', exact: true });
   for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await page.setViewportSize({ width, height: 900 });
     for (const dismissal of ['continue', 'Escape', 'backdrop'] as const) {
-      await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
-      await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();
+      await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
+      await panel.getByRole('button', { name: '대화 삭제', exact: true }).click();
       await expect(deletion).toContainText('이미 저장한 본편');
       const cancel = deletion.getByRole('button', { name: '계속 사용', exact: true });
-      const remove = deletion.getByRole('button', { name: '세션 영구 삭제', exact: true });
+      const remove = deletion.getByRole('button', { name: '대화 영구 삭제', exact: true });
       await expect(remove).toBeEnabled();
       const cancelBox = (await cancel.boundingBox())!;
       const removeBox = (await remove.boundingBox())!;
@@ -203,9 +203,9 @@ test('HSESSION01 sessions retain their own drafts after switching and reload, re
       expect((await request.get(`/api/helper/conversations/${second}`)).ok()).toBe(true);
     }
   }
-  await panel.getByLabel('도우미 세션 관리', { exact: true }).click();
-  await panel.getByRole('button', { name: '세션 삭제', exact: true }).click();
-  await deletion.getByRole('button', { name: '세션 영구 삭제', exact: true }).click();
+  await panel.getByLabel('도우미 대화 관리', { exact: true }).click();
+  await panel.getByRole('button', { name: '대화 삭제', exact: true }).click();
+  await deletion.getByRole('button', { name: '대화 영구 삭제', exact: true }).click();
   await expect(deletion).toBeHidden();
   await expect(picker).toHaveValue(first);
   await expect(input).toHaveValue('첫 세션에 남겨 둘 초안');
@@ -225,10 +225,10 @@ test('HSESSION03 a delayed session creation does not replace a later user select
   await openHelper(page);
   const panel = page.locator('#helper-panel'),
     input = panel.getByLabel('도우미에게 요청');
-  const picker = panel.getByLabel('도우미 세션 선택');
+  const picker = panel.getByLabel('도우미 대화 선택');
   await expect(input).toBeEnabled();
   const first = await picker.inputValue();
-  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(picker).not.toHaveValue(first);
   await expect(input).toBeEnabled();
   let release = () => {};
@@ -245,13 +245,13 @@ test('HSESSION03 a delayed session creation does not replace a later user select
     fulfilled = true;
   });
   try {
-    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
     await expect.poll(() => received).toBe(true);
     await picker.selectOption(first);
     await input.fill('응답을 기다리는 동안 내가 선택한 초안');
     release();
     await expect.poll(() => fulfilled).toBe(true);
-    await expect(panel.getByRole('button', { name: '새 도우미 세션', exact: true })).toBeEnabled();
+    await expect(panel.getByRole('button', { name: '새 도우미 대화', exact: true })).toBeEnabled();
     await expect(picker).toHaveValue(first);
     await expect(input).toHaveValue('응답을 기다리는 동안 내가 선택한 초안');
   } finally {
@@ -272,7 +272,7 @@ test('HSESSION04 current helper input survives reload and navigation without rea
   const panel = page.locator('#helper-panel'),
     input = panel.getByLabel('도우미에게 요청');
   await expect(input).toBeEnabled();
-  const picker = panel.getByLabel('도우미 세션 선택');
+  const picker = panel.getByLabel('도우미 대화 선택');
   const first = await picker.inputValue();
   await page.evaluate(
     (id) => localStorage.setItem(`uimori:helper-input:${id}`, '이전 저장소의 초안'),
@@ -288,7 +288,7 @@ test('HSESSION04 current helper input survives reload and navigation without rea
   await page.reload();
   await openHelper(page);
   await expect(input).toHaveValue('새로 입력한 원고');
-  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(input).toHaveValue('');
   await picker.selectOption(first);
   await expect(input).toHaveValue('새로 입력한 원고');
@@ -308,7 +308,7 @@ test('HSESSION05 a full localStorage uses sessionStorage to create a session and
   await openHelper(page);
   const panel = page.locator('#helper-panel');
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-  const picker = panel.getByLabel('도우미 세션 선택');
+  const picker = panel.getByLabel('도우미 대화 선택');
   const first = await picker.inputValue();
   const count = await picker.locator('option:not([disabled])').count();
   const key = `uimori:helper-create:${JSON.stringify({ kind: 'chat', chatId: chat.id })}`;
@@ -327,7 +327,7 @@ test('HSESSION05 a full localStorage uses sessionStorage to create a session and
     sentRequest = route.request().postDataJSON();
     await route.continue();
   });
-  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(picker).not.toHaveValue(first);
   await expect(picker.locator('option:not([disabled])')).toHaveCount(count + 1);
   expect(storedRequest).not.toBeNull();
@@ -349,7 +349,7 @@ for (const failure of ['transport', 'invalid-json'] as const) {
     await openHelper(page);
     const panel = page.locator('#helper-panel');
     await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-    const picker = panel.getByLabel('도우미 세션 선택');
+    const picker = panel.getByLabel('도우미 대화 선택');
     const count = await picker.locator('option:not([disabled])').count();
     const key = `uimori:helper-create:${JSON.stringify({ kind: 'chat', chatId: chat.id })}`;
     await page.evaluate(() => {
@@ -374,7 +374,7 @@ for (const failure of ['transport', 'invalid-json'] as const) {
         else await route.fulfill({ status: 200, contentType: 'application/json', body: '{' });
       } else await route.fulfill({ response });
     });
-    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
     await expect(panel.getByRole('alert')).toBeVisible();
     expect(payloads).toHaveLength(1);
     const pending = await page.evaluate((key) => sessionStorage.getItem(key), key);
@@ -390,14 +390,14 @@ for (const failure of ['transport', 'invalid-json'] as const) {
       localStorage.setItem(key, 'available');
       localStorage.removeItem(key);
     });
-    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
     await expect.poll(() => payloads.length).toBe(2);
     await expect(panel.getByRole('alert')).toBeVisible();
     expect(await page.evaluate((key) => sessionStorage.getItem(key), key)).toBe(pending);
-    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
     await expect.poll(() => ids.length).toBe(2);
     await expect(picker).toHaveValue(ids[0]);
-    await expect(panel.getByRole('button', { name: '새 도우미 세션', exact: true })).toBeEnabled();
+    await expect(panel.getByRole('button', { name: '새 도우미 대화', exact: true })).toBeEnabled();
     expect(payloads[1]).toEqual(payloads[0]);
     expect(payloads[2]).toEqual(payloads[0]);
     expect(ids[1]).toBe(ids[0]);
@@ -422,7 +422,7 @@ test('HSESSION07 unavailable creation storage explains the failure without sendi
   await openHelper(page);
   const panel = page.locator('#helper-panel');
   await expect(panel.getByLabel('도우미에게 요청')).toBeEnabled();
-  const picker = panel.getByLabel('도우미 세션 선택');
+  const picker = panel.getByLabel('도우미 대화 선택');
   const first = await picker.inputValue();
   const count = await picker.locator('option:not([disabled])').count();
   await page.evaluate(() => {
@@ -438,11 +438,11 @@ test('HSESSION07 unavailable creation storage explains the failure without sendi
     posts++;
     await route.continue();
   });
-  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(panel.getByRole('alert').locator('.notice-banner-message')).toHaveText(
     '브라우저에 대화 생성 요청을 보관하지 못했어요. 저장 공간이나 사이트 저장소 설정을 확인한 뒤 다시 시도해 주세요.'
   );
-  await expect(panel.getByRole('button', { name: '새 도우미 세션', exact: true })).toBeEnabled();
+  await expect(panel.getByRole('button', { name: '새 도우미 대화', exact: true })).toBeEnabled();
   expect(posts).toBe(0);
   await expect(picker).toHaveValue(first);
   await expect(picker.locator('option:not([disabled])')).toHaveCount(count);
@@ -480,7 +480,7 @@ test('HSESSION08 a fallback retry keeps its own request when another tab has a p
     if (payloads.length === 1) await route.abort('failed');
     else await route.fulfill({ response });
   });
-  await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+  await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
   await expect(panel.getByRole('alert')).toBeVisible();
   const pending = await page.evaluate((key) => sessionStorage.getItem(key), key);
   expect(pending).not.toBeNull();
@@ -503,29 +503,29 @@ test('HSESSION08 a fallback retry keeps its own request when another tab has a p
       if (otherIds.length === 1) await route.abort('failed');
       else await route.fulfill({ response });
     });
-    await otherPanel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await otherPanel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
     await expect(otherPanel.getByRole('alert')).toBeVisible();
     const otherPending = await other.evaluate((key) => localStorage.getItem(key), key);
     expect(otherPending).not.toBeNull();
     expect(otherPending).not.toBe(pending);
 
-    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
-    await expect(panel.getByRole('button', { name: '새 도우미 세션', exact: true })).toBeEnabled();
+    await panel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
+    await expect(panel.getByRole('button', { name: '새 도우미 대화', exact: true })).toBeEnabled();
     expect(payloads).toHaveLength(2);
     expect(payloads[1]).toEqual(payloads[0]);
     expect(ids[1]).toBe(ids[0]);
-    await expect(panel.getByLabel('도우미 세션 선택')).toHaveValue(ids[0]);
+    await expect(panel.getByLabel('도우미 대화 선택')).toHaveValue(ids[0]);
     expect(
       await page.evaluate((key) => [sessionStorage.getItem(key), localStorage.getItem(key)], key)
     ).toEqual([null, otherPending]);
 
-    await otherPanel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await otherPanel.getByRole('button', { name: '새 도우미 대화', exact: true }).click();
     await expect(
-      otherPanel.getByRole('button', { name: '새 도우미 세션', exact: true })
+      otherPanel.getByRole('button', { name: '새 도우미 대화', exact: true })
     ).toBeEnabled();
     expect(otherIds).toHaveLength(2);
     expect(otherIds[1]).toBe(otherIds[0]);
-    await expect(otherPanel.getByLabel('도우미 세션 선택')).toHaveValue(otherIds[0]);
+    await expect(otherPanel.getByLabel('도우미 대화 선택')).toHaveValue(otherIds[0]);
     expect(await other.evaluate((key) => localStorage.getItem(key), key)).toBeNull();
     const persisted = await request.get(`/api/helper/conversations?kind=chat&chatId=${chat.id}`);
     expect(persisted.ok()).toBe(true);

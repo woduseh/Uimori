@@ -15,7 +15,7 @@ import {
 } from './ui-navigation.js';
 import { openChatSettings } from './ui-navigation.js';
 
-const sections = ['사용 자료', '생성 설정', '원작 참고', '기억과 메모', '이미지'];
+const sections = ['사용 자료', '생성 설정', '작품 및 원작 참고', '기억과 메모', '이미지'];
 
 async function prepare(
   page: Page,
@@ -224,12 +224,12 @@ test('CSUI01 chat settings list and conditional details fit six widths with acce
         const owner = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
         await expect(owner).toBeVisible();
         await expect(owner).not.toHaveAttribute('multiple');
-        await expect(owner.locator('option')).toHaveText(['작문 모델', 'JEV']);
+        await expect(owner.locator('option')).toHaveText(['본문 모델', 'JEV']);
         await expect(dialog.getByLabel('원문 이미지 자동 배치', { exact: true })).toHaveCount(0);
         await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toHaveCount(0);
       }
       if (name === '생성 설정') {
-        await expect(dialog.getByLabel('원문 모델', { exact: true })).toHaveCount(0);
+        await expect(dialog.getByLabel('본문 모델', { exact: true })).toHaveCount(0);
         await expect(dialog.getByLabel('Risu 작가 노트', { exact: true })).toBeVisible();
         await expect(
           dialog.getByRole('combobox', { name: '본문 생성 후 자동 번역', exact: true })
@@ -408,7 +408,7 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await reading.getByLabel('새 원고의 기본 보기', { exact: true }).selectOption('original');
   await reading.getByLabel('본문 글꼴', { exact: true }).selectOption('serif');
   const navigatorToggle = reading.getByRole('switch', {
-    name: '채팅 네비게이터 표시',
+    name: '장면 내비게이터 표시',
     exact: true,
   });
   await expect(navigatorToggle).toBeChecked();
@@ -431,7 +431,7 @@ test('CSUI03 keyboard navigation and clean browser Back keep immediate reading p
   await expect(reading.getByLabel('새 원고의 기본 보기', { exact: true })).toHaveValue('original');
   await expect(reading.getByLabel('본문 글꼴', { exact: true })).toHaveValue('serif');
   await expect(
-    reading.getByRole('switch', { name: '채팅 네비게이터 표시', exact: true })
+    reading.getByRole('switch', { name: '장면 내비게이터 표시', exact: true })
   ).not.toBeChecked();
   await page.keyboard.press('Escape');
   await expect(reading).toBeHidden();
@@ -641,7 +641,7 @@ for (const mainId of [null, 'missing-model']) {
     await guard.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(dialog).toBeHidden();
     const global = page.getByRole('dialog', { name: '설정', exact: true });
-    await expect(global.getByLabel('원문 모델', { exact: true })).toBeVisible();
+    await expect(global.getByLabel('본문 모델', { exact: true })).toBeVisible();
     await expect
       .poll(() => global.evaluate((node) => node.contains(document.activeElement)))
       .toBe(true);
@@ -850,9 +850,11 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   });
   await page.getByLabel('다음 장면 요청', { exact: true }).fill('두 사람이 다시 만나는 장면');
   const menu = await openChatMenu(page);
-  await menu.getByRole('button', { name: '원작 참고', exact: true }).click();
+  await menu.getByRole('button', { name: '작품 및 원작 참고', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-  await expect(dialog.getByRole('heading', { name: '원작 참고', exact: true })).toBeVisible();
+  await expect(
+    dialog.getByRole('heading', { name: '작품 및 원작 참고', exact: true })
+  ).toBeVisible();
   await expect(dialog.getByRole('switch', { name: '집필 전에 원작 참고' })).not.toBeChecked();
   await expect(dialog.locator('.story-guide-settings')).toHaveAttribute('open', '');
   await dialog.getByRole('switch', { name: '집필 전에 원작 참고' }).check();
@@ -862,7 +864,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   await dialog.getByLabel('작품, 판본, 세계관', { exact: true }).fill('가상의 항구 이야기');
   await dialog.getByLabel('기준 시점과 스포일러 범위', { exact: true }).fill('2권 끝까지');
   await selectChatSettingsSection(page, '이미지');
-  await selectChatSettingsSection(page, '원작 참고');
+  await selectChatSettingsSection(page, '작품 및 원작 참고');
   await expect(dialog.getByLabel('작품, 판본, 세계관', { exact: true })).toHaveValue(
     '가상의 항구 이야기'
   );
@@ -887,7 +889,9 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     webSearch: true,
   });
 
-  await (await openChatMenu(page)).getByRole('button', { name: '원작 참고', exact: true }).click();
+  await (await openChatMenu(page))
+    .getByRole('button', { name: '작품 및 원작 참고', exact: true })
+    .click();
   await expect(dialog.locator('.story-guide-settings')).not.toHaveAttribute('open');
   await expect(dialog.getByLabel('작품, 판본, 세계관', { exact: true })).toBeHidden();
   await expect(dialog.getByRole('button', { name: '미리보기 만들기', exact: true })).toHaveCount(0);
@@ -920,7 +924,9 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     kind: 'author-note',
     text: '이 이야기에서는 두 사람이 화해했다.',
   });
-  await (await openChatMenu(page)).getByRole('button', { name: '원작 참고', exact: true }).click();
+  await (await openChatMenu(page))
+    .getByRole('button', { name: '작품 및 원작 참고', exact: true })
+    .click();
   await expect(dialog.getByLabel('가이드 미리보기', { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('원작 질문 답변', { exact: true })).toHaveCount(0);
   await expectNoOverflow(page, dialog);

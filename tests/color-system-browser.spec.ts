@@ -145,7 +145,7 @@ test('COLOR selected outline and illustration labels retain readable text and ac
   await page.locator('.chat-menu').getByLabel('채팅 메뉴').click();
   await page
     .locator('.chat-menu .action-menu-body')
-    .getByRole('button', { name: '계층형 구성', exact: true })
+    .getByRole('button', { name: '계층형 플롯', exact: true })
     .click();
   const outline = page.locator('.outline-navigation .outline-node-button');
   await outline.click();

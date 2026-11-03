@@ -172,20 +172,20 @@ for (const width of [412, 1440]) {
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
     const section = page.getByRole('region', { name: '현재 프롬프트 설정', exact: true });
     await section.locator('summary').filter({ hasText: '창작 옵션' }).click();
-    const menu = section.getByLabel('옵션 조합 메뉴', { exact: true });
+    const menu = section.getByLabel('옵션 프리셋 메뉴', { exact: true });
     await menu.click();
     await section
-      .getByRole('button', { name: '현재 선택을 새 조합으로 저장', exact: true })
+      .getByRole('button', { name: '현재 선택을 새 옵션 프리셋으로 저장', exact: true })
       .click();
-    const save = page.getByRole('dialog', { name: '옵션 조합 저장', exact: true });
+    const save = page.getByRole('dialog', { name: '옵션 프리셋 저장', exact: true });
     await expectShell(page, save, 480);
-    await save.getByLabel('조합 이름', { exact: true }).fill('Cancelled nested combination');
+    await save.getByLabel('옵션 프리셋 이름', { exact: true }).fill('Cancelled nested combination');
     await save.getByRole('button', { name: '취소', exact: true }).click();
     await expect(save).toBeHidden();
     await expectShell(page, settings, 1160);
     await menu.click();
-    await section.getByRole('button', { name: '조합 관리', exact: true }).click();
-    const manage = page.getByRole('dialog', { name: '옵션 조합 관리', exact: true });
+    await section.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
+    const manage = page.getByRole('dialog', { name: '옵션 프리셋 관리', exact: true });
     await expectShell(page, manage, 480);
     const trigger = manage.getByRole('button', {
       name: `${choice.combination.title} 삭제`,

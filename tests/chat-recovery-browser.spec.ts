@@ -82,7 +82,7 @@ for (const viewport of [
       await manager.locator(':scope > summary').click();
       const image = dialog.getByRole('combobox', { name: '이미지 배치 담당', exact: true });
       await expect(image).not.toHaveAttribute('multiple');
-      await expect(image.locator('option')).toHaveText(['작문 모델', 'JEV']);
+      await expect(image.locator('option')).toHaveText(['본문 모델', 'JEV']);
       await expect(dialog.getByLabel('원문 이미지 자동 배치', { exact: true })).toHaveCount(0);
       await expect(dialog.getByLabel('번역 이미지 자동 배치', { exact: true })).toHaveCount(0);
       const originalImage = await image.inputValue();
@@ -96,13 +96,13 @@ for (const viewport of [
         dialog.getByRole('combobox', { name: '이 채팅의 본문 모델', exact: true })
       ).toBeVisible();
       await expect(
-        dialog.getByRole('combobox', { name: '이 채팅의 작문 프롬프트', exact: true })
+        dialog.getByRole('combobox', { name: '이 채팅의 창작 프롬프트', exact: true })
       ).toBeVisible();
       const workspaceResponse = await request.get('/api/prompt-workspace');
       expect(workspaceResponse.ok()).toBe(true);
       const workspace = await workspaceResponse.json();
       const prompt = dialog.getByRole('combobox', {
-        name: '이 채팅의 작문 프롬프트',
+        name: '이 채팅의 창작 프롬프트',
         exact: true,
       });
       await expect(prompt.locator('option').first()).toHaveText(
@@ -161,7 +161,7 @@ for (const viewport of [
       await dialog.getByLabel('location 재정의 해제', { exact: true }).click();
       await expect(value('location')).toHaveValue('reading_room');
       await dialog.getByRole('button', { name: 'JSON 편집', exact: true }).click();
-      const raw = dialog.getByLabel('공유 변수 재정의 (JSON)', { exact: true });
+      const raw = dialog.getByLabel('카드 변수 재정의 (JSON)', { exact: true });
       expect(JSON.parse(await raw.inputValue())).toEqual({ trust: '' });
       await raw.fill('{"trust":');
       await selectChatSettingsSection(page, '기억과 메모');
@@ -229,7 +229,7 @@ for (const viewport of [
             json: { error: 'Synthetic lost response after commit' },
           });
         });
-        await dialog.getByRole('button', { name: '공유 변수 저장', exact: true }).click();
+        await dialog.getByRole('button', { name: '카드 변수 저장', exact: true }).click();
         const confirm = dialog.getByRole('button', { name: '저장 결과 확인', exact: true });
         await expect(confirm).toBeEnabled();
         await expect(value('trust')).toBeDisabled();
@@ -250,7 +250,7 @@ for (const viewport of [
         await expect(
           page
             .getByRole('status')
-            .filter({ hasText: '공유 변수를 저장했어요. 다음 생성부터 적용해요.' })
+            .filter({ hasText: '카드 변수를 저장했어요. 다음 생성부터 적용해요.' })
         ).toBeVisible();
         expect(bodies).toHaveLength(2);
         expect(bodies[1]).toEqual(bodies[0]);
@@ -268,7 +268,7 @@ for (const viewport of [
         await (await lateRead).finished();
         await expect(value('trust')).toHaveValue('확인 뒤 새 초안');
         await expect(
-          dialog.getByRole('button', { name: '공유 변수 저장', exact: true })
+          dialog.getByRole('button', { name: '카드 변수 저장', exact: true })
         ).toBeEnabled();
         expect((await (await request.get(endpoint)).json()).values).toEqual({ trust: '' });
         expect(

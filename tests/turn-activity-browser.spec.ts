@@ -300,7 +300,7 @@ for (const width of [MOBILE_WIDTH, 1440]) {
     await expect(task.locator('.task-heading')).toContainText('원문 완료');
     await expect(task.locator('.task-heading')).toContainText('호출 당시 작가 모델');
     await expect(task.getByRole('button', { name: '원고 읽기', exact: true })).toBeVisible();
-    await expect(task.getByRole('button', { name: '새 채팅으로 복사', exact: true })).toBeVisible();
+    await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toBeVisible();
     await expect(diagnostics.locator(':scope > details')).toHaveCount(2);
     await expect(usageSummary).toHaveText('이번 생성');
     await expect(executionSummary).toHaveText('실행과 실제 입력 확인');
@@ -341,7 +341,7 @@ for (const width of [MOBILE_WIDTH, 1440]) {
     expect(executionBounds!.width).toBeCloseTo(groupBounds!.width, 0);
     await expect(task.locator('.task-request')).toHaveText(run.request);
     await expect(task.getByRole('button', { name: '원고 읽기', exact: true })).toBeVisible();
-    await expect(task.getByRole('button', { name: '새 채팅으로 복사', exact: true })).toBeVisible();
+    await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toBeVisible();
     await executionSummary.click();
 
     for (const status of ['failed', 'partial', 'cancelled', 'refused', 'running']) {

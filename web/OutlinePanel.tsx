@@ -393,7 +393,7 @@ export function OutlinePanel({
       key: crypto.randomUUID(),
       scope: { kind: 'chat', chatId },
       target: { nodeId: node?.id ?? null, expectedRevision: node?.revision ?? null, purpose },
-      title: node?.title ?? '새 이야기 구성',
+      title: node?.title ?? '새 이야기 플롯',
       text:
         purpose === 'review'
           ? '선택한 현재 구성과 연결된 원문을 비교해 주세요. 반영된 내용, 근거가 약한 부분, 차이와 수정 방향을 원문 근거로 알려 주세요. 아직 수정하지 마세요.'

@@ -174,9 +174,9 @@ test('DEL02 prompt combinations and presets have deletion and removed prompt doe
   await selectSettingsSection(page, '현재 프롬프트');
   const settings = page.getByRole('region', { name: '현재 프롬프트 설정' });
   await settings.locator('summary').filter({ hasText: '창작 옵션' }).click();
-  await settings.getByLabel('옵션 조합 메뉴', { exact: true }).click();
-  await settings.getByRole('button', { name: '조합 관리', exact: true }).click();
-  const combinations = page.getByRole('dialog', { name: '옵션 조합 관리', exact: true });
+  await settings.getByLabel('옵션 프리셋 메뉴', { exact: true }).click();
+  await settings.getByRole('button', { name: '옵션 프리셋 관리', exact: true }).click();
+  const combinations = page.getByRole('dialog', { name: '옵션 프리셋 관리', exact: true });
   await combinations.getByRole('button', { name: '삭제 전역 조합 삭제', exact: true }).click();
   await confirm(page);
   await expect(

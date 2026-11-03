@@ -186,7 +186,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
           ).toHaveCount(0);
           await expect(pane.locator('.provider-actions')).toBeHidden();
         } else if (section === '역할별 모델') {
-          await expect(pane.getByLabel('원문 모델', { exact: true })).toBeVisible();
+          await expect(pane.getByLabel('본문 모델', { exact: true })).toBeVisible();
         } else if (section === '현재 프롬프트') {
           await expect(pane.getByLabel('현재 프롬프트 역할', { exact: true })).toBeVisible();
         } else if (section === '프로바이더와 모델') {

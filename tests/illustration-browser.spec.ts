@@ -145,7 +145,7 @@ for (const width of [360, 412]) {
     await openChatSettings(page);
     await selectChatSettingsSection(page, '이미지');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
-    const references = dialog.getByRole('region', { name: '삽화 참조 이미지', exact: true });
+    const references = dialog.getByRole('region', { name: '삽화 참고 이미지', exact: true });
     const personRole = references.getByLabel('인물 기준 이미지 참조 역할', { exact: true });
     await expect(personRole).toHaveValue('character');
     await personRole.selectOption('style');
@@ -174,7 +174,7 @@ for (const width of [360, 412]) {
       path: info.outputPath(`audit2-reference-refresh-failed-${width}.png`),
     });
     await expect(references.getByRole('alert')).toContainText(
-      '삽화 참조 이미지를 새로 불러오지 못했어요. 기존 선택은 유지했어요.'
+      '삽화 참고 이미지를 새로 불러오지 못했어요. 기존 선택은 유지했어요.'
     );
     await expect(references.getByRole('alert')).toContainText('(503)');
     const retry = references.getByRole('button', { name: '다시 불러오기', exact: true });

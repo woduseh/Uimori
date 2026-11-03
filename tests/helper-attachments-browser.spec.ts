@@ -20,7 +20,7 @@ const draftImages = (page: Page) =>
 const draftFiles = (page: Page) =>
   panelFor(page).locator('.helper-draft-attachments .helper-file-chip');
 const sessionPicker = (page: Page) =>
-  panelFor(page).getByLabel('도우미 세션 선택', { exact: true });
+  panelFor(page).getByLabel('도우미 대화 선택', { exact: true });
 const textFile = (name = '참고 자료.txt') => ({
   name,
   mimeType: 'text/plain',

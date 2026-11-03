@@ -697,12 +697,12 @@ test('PMUI03 model edits use the latest connection without changing role IDs; de
   await page.goto(`/?chat=${chat.id}`);
   await expect(page.getByRole('button', { name: /^현재 본문 모델/ })).toContainText(changed.title);
   await selectCurrentSettingsSection(page, '역할별 모델');
-  await expect(page.getByLabel('원문 모델', { exact: true })).toHaveValue(`${original.id}`);
+  await expect(page.getByLabel('본문 모델', { exact: true })).toHaveValue(`${original.id}`);
   await expect(
-    page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
+    page.getByLabel('본문 모델', { exact: true }).locator('option:checked')
   ).toContainText(changed.title + ' (모델 또는 프로바이더 비활성)');
   await expect(
-    page.getByLabel('원문 모델', { exact: true }).locator('option:checked')
+    page.getByLabel('본문 모델', { exact: true }).locator('option:checked')
   ).not.toContainText(' v');
   if (visualReview)
     await page.screenshot({ path: info.outputPath('provider-management-current-model.png') });
@@ -2140,7 +2140,7 @@ test('PMUI model presets group by provider, start collapsed and persist manual o
   await page.screenshot({ path: info.outputPath('provider-drag-order.png') });
   await page.goto('/');
   await selectCurrentSettingsSection(page, '역할별 모델');
-  const selector = page.getByLabel('원문 모델', { exact: true });
+  const selector = page.getByLabel('본문 모델', { exact: true });
   expect(
     (
       await selector
