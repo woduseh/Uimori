@@ -31,7 +31,6 @@ test('the inline form returns the sent bytes, its name and their SHA-256', () =>
     name: 'sample.json',
     bytes: payload,
     sha256: createHash('sha256').update(payload).digest('hex'),
-    staged: false,
     source,
   });
   // The digest names the file that arrived, not the decoded text or the reader's own reading.
@@ -155,12 +154,11 @@ test('the staged form is read only when the caller offers a staged reader', () =
     name: 'sample.json',
     bytes: stored,
     sha256: createHash('sha256').update(stored).digest('hex'),
-    staged: true,
     source: { name: 'sample.json', uploadId },
   });
   expect(reads).toEqual([uploadId]);
   // The inline form still works, and it never touches the staged file.
-  expect(readImportEnvelope(inline(), staged)).toMatchObject({ staged: false, bytes: payload });
+  expect(readImportEnvelope(inline(), staged)).toMatchObject({ source: inline(), bytes: payload });
   expect(reads).toEqual([uploadId]);
   // A staged file obeys the upload route's limit, not the inline one, but still holds a format.
   const large = Buffer.alloc(options.maxBytes + 1, 0x61);

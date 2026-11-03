@@ -95,7 +95,7 @@ async function stage(
 function settle(
   f: ReturnType<typeof fixture>,
   task: HelperTask,
-  status: HelperStatus = 'completed'
+  status: Exclude<HelperStatus, 'queued' | 'running'> = 'completed'
 ) {
   expect(f.workspace.start(task.id, 'attachment-test-owner')).toBeTruthy();
   const generation = f.workspace.task(task.id).generation;
@@ -297,6 +297,77 @@ test('a failed admission leaves no permanent file bytes or user message behind',
   expect(f.workspace.messages(f.conversation.id)).toEqual([]);
   expect(f.store.db.prepare('SELECT count(*) AS n FROM attachment_blobs').get()!.n).toBe(0);
   expect(readUpload(f.store.path, upload.uploadId).toString()).toBe('staged input');
+});
+
+test('deleting a helper conversation releases its text images while preserving shared and unrelated images', () => {
+  const f = fixture();
+  const [messageHash, editedHash, seedHash, sharedHash, unrelatedHash] = [
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+  ].map((value) => value.repeat(64));
+  const image = (hash: string) => `![참고](/api/package-image-blobs/${hash})`;
+  for (const hash of [messageHash, editedHash, seedHash, sharedHash, unrelatedHash])
+    f.store.db
+      .prepare('INSERT INTO image_blobs VALUES(?,?,?)')
+      .run(hash, 'image/webp', Buffer.from('synthetic image'));
+  const first = f.runtime.enqueue(
+    f.conversation.id,
+    'text-images',
+    `${image(messageHash)} ${image(sharedHash)}`,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    false
+  );
+  settle(f, first);
+  const original = f.workspace
+    .messages(f.conversation.id)
+    .find((message) => message.role === 'user')!;
+  f.workspace.editMessage(
+    f.conversation.id,
+    original.id,
+    f.workspace.conversation(f.conversation.id).revision,
+    image(editedHash)
+  );
+  f.store.db
+    .prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)')
+    .run(
+      'image-seed',
+      f.conversation.id,
+      0,
+      'assistant',
+      image(seedHash),
+      new Date().toISOString()
+    );
+  const other = f.workspace.create({ kind: 'library', workId: 'other' }, 'other');
+  f.store.db
+    .prepare('INSERT INTO helper_seed_messages VALUES(?,?,?,?,?,?)')
+    .run(
+      'shared-image-seed',
+      other.id,
+      0,
+      'assistant',
+      image(sharedHash),
+      new Date().toISOString()
+    );
+
+  f.runtime.deleteConversation(
+    f.conversation.id,
+    f.workspace.deletionImpact(f.conversation.id).request
+  );
+  const exists = (hash: string) =>
+    !!f.store.db.prepare('SELECT 1 FROM image_blobs WHERE hash=?').get(hash);
+  expect([messageHash, editedHash, seedHash].map(exists)).toEqual([false, false, false]);
+  expect(exists(sharedHash)).toBe(true);
+  expect(exists(unrelatedHash)).toBe(true);
+
+  f.runtime.deleteConversation(other.id, f.workspace.deletionImpact(other.id).request);
+  expect(exists(sharedHash)).toBe(false);
+  expect(exists(unrelatedHash)).toBe(true);
 });
 
 test('compacted helper history binds attachment hashes even when its message text stays unchanged', async () => {

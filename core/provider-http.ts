@@ -1,7 +1,7 @@
 import { redactDiagnosticJson } from './provider-diagnostic-json.js';
 import { readProviderHttpDiagnostic, type ProviderHttpDiagnostic } from './provider-http-error.js';
 import { createHash } from 'node:crypto';
-import { providerFetchOptions, transportFailureCode } from './provider-fetch.js';
+import { providerFetchOptions, readProviderBody, transportFailureCode } from './provider-fetch.js';
 import { validateProviderEndpoint } from './product.js';
 import { validateModelOptions } from './model-capabilities.js';
 import { assertContextBudget } from './context-budget.js';
@@ -208,7 +208,9 @@ export async function executeNativeProvider(
       connection.protocol === 'openai-responses-v1' &&
       contentType.startsWith('application/json')
     ) {
-      const value: unknown = await response.json();
+      const value: unknown = JSON.parse(
+        new TextDecoder().decode(await readProviderBody(response, signal))
+      );
       if (
         !value ||
         typeof value !== 'object' ||

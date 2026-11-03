@@ -58,6 +58,8 @@ for (const viewport of [
         const committed = await route.fetch();
         expect(committed.ok(), await committed.text()).toBe(true);
         await route.abort('failed');
+      } else if (requests.length === 2) {
+        await route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
       } else await route.continue();
     });
     // A selected bot that already has another authored role must not be silently removed.
@@ -95,14 +97,19 @@ for (const viewport of [
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('본문 JSON 파일')).toBeDisabled();
     await expect(openBackups).toBeDisabled();
+    await dialog.getByRole('button', { name: '같은 요청 확인', exact: true }).click();
+    await expect.poll(() => requests.length).toBe(2);
+    await expect(dialog.getByRole('button', { name: '같은 요청 확인', exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('본문 JSON 파일')).toBeDisabled();
     const responseEvent = page.waitForResponse(
       (response) =>
         response.url().endsWith('/api/chats/import-transcript') && response.status() === 200
     );
     await dialog.getByRole('button', { name: '같은 요청 확인', exact: true }).click();
     const result = await (await responseEvent).json();
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(3);
     expect(requests[1]).toEqual(requests[0]);
+    expect(requests[2]).toEqual(requests[0]);
     expect(result.created).toBe(false);
     expect(result.chat.botId).toBe(target.bot.id);
     await expect(dialog.getByRole('status')).toContainText('새 채팅으로 가져왔어요');

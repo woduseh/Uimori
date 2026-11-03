@@ -136,6 +136,7 @@ test('SCENEDEL01 cancel preserves all scenes and deleting only the middle keeps 
   }
   await dialog.getByRole('button', { name: '취소', exact: true }).click();
   await expect(dialog).toBeHidden();
+  await expect(scene(page, middle.id).getByLabel('장면 작업 메뉴', { exact: true })).toBeFocused();
   expect((await detail(request, before.chat.id)).sources.map((source) => source.id)).toEqual([
     first.id,
     middle.id,
@@ -193,6 +194,8 @@ test('SCENEDEL03 an accepted delete with a lost acknowledgement is checked again
   await page.route(path, async (route) => {
     if (route.request().method() !== 'DELETE') return route.continue();
     commands.push(route.request().postDataJSON());
+    if (commands.length === 2)
+      return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
     const accepted = await route.fetch();
     expect(accepted.ok(), await accepted.text()).toBe(true);
     if (commands.length === 1) {
@@ -210,13 +213,131 @@ test('SCENEDEL03 an accepted delete with a lost acknowledgement is checked again
   await expect(dialog.getByRole('alert')).toContainText('삭제 결과를 확인하지 못했어요.');
   await expect(dialog.getByRole('radio', { name: '이 장면만', exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: '삭제 결과 다시 확인', exact: true }).click();
+  await expect.poll(() => commands.length).toBe(2);
+  await expect(
+    dialog.getByRole('button', { name: '삭제 결과 다시 확인', exact: true })
+  ).toBeEnabled();
+  await expect(dialog.getByRole('radio', { name: '이 장면만', exact: true })).toBeDisabled();
+  await dialog.getByRole('button', { name: '삭제 결과 다시 확인', exact: true }).click();
   await expect(dialog).toBeHidden();
-  expect(commands).toHaveLength(2);
+  expect(commands).toHaveLength(3);
   expect(commands[1]).toEqual(commands[0]);
+  expect(commands[2]).toEqual(commands[0]);
   expect((await detail(request, before.chat.id)).sources.map((source) => source.id)).toEqual([
     first.id,
     last.id,
   ]);
   await expect(page.getByTestId('source')).toHaveCount(2);
   await expect(scene(page, middle.id)).toHaveCount(0);
+});
+
+test('SCENEDEL04 a deleted scene can be checked after closing and reloading', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60_000);
+  const before = await seed(request, '삭제 결과 새로고침');
+  const [first, middle, last] = before.sources;
+  const commands: unknown[] = [];
+  const storageKey = `scene-delete:${before.chat.id}:${middle.id}`;
+  await page.route(`**/api/chats/${before.chat.id}/sources/${middle.id}`, async (route) => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    commands.push(route.request().postDataJSON());
+    const accepted = await route.fetch();
+    expect(accepted.ok(), await accepted.text()).toBe(true);
+    if (commands.length === 1)
+      await route.fulfill({ status: 503, json: { message: 'Synthetic lost acknowledgement' } });
+    else await route.fulfill({ response: accepted });
+  });
+
+  await page.goto(`/?chat=${before.chat.id}`);
+  let dialog = await openDeletion(page, middle.id);
+  await dialog.getByRole('button', { name: '선택한 1개 장면 삭제', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('삭제 결과를 확인하지 못했어요.');
+  await expect(scene(page, middle.id)).toHaveCount(0);
+  await dialog.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.reload();
+  await expect(page.getByTestId('source')).toHaveCount(2);
+  const recovery = page.getByRole('alert').filter({ hasText: '삭제 결과를 확인하지 못했어요.' });
+  await expect(recovery).toBeVisible();
+  expect(commands).toHaveLength(1);
+  await recovery.getByRole('button', { name: '삭제 결과 다시 확인', exact: true }).click();
+  dialog = page.getByRole('alertdialog', { name: '장면 삭제 범위', exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('radio', { name: '이 장면만', exact: true })).toBeDisabled();
+  expect(commands).toHaveLength(1);
+  await dialog.getByRole('button', { name: '삭제 결과 다시 확인', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  expect(commands).toHaveLength(2);
+  expect(commands[1]).toEqual(commands[0]);
+  await expect(recovery).toHaveCount(0);
+  expect(await page.evaluate((key) => sessionStorage.getItem(key), storageKey)).toBeNull();
+  expect((await detail(request, before.chat.id)).sources.map((source) => source.id)).toEqual([
+    first.id,
+    last.id,
+  ]);
+});
+
+test('SCENEDEL05 a late deletion acknowledgement does not override a newer reader selection', async ({
+  page,
+  request,
+}) => {
+  test.setTimeout(60_000);
+  const before = await seed(request, '늦은 삭제 확인');
+  const [first, middle] = before.sources;
+  const otherResponse = await postFixtureChat(request, {
+    data: { title: `삭제 중 이동 ${crypto.randomUUID()}` },
+  });
+  expect(otherResponse.ok(), await otherResponse.text()).toBe(true);
+  const other = (await otherResponse.json()) as Chat;
+  const storageKey = `scene-delete:${before.chat.id}:${middle.id}`;
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let sent = false;
+  await page.route(`**/api/chats/${before.chat.id}/sources/${middle.id}`, async (route) => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    const accepted = await route.fetch();
+    expect(accepted.ok(), await accepted.text()).toBe(true);
+    sent = true;
+    await held;
+    await route.fulfill({ response: accepted });
+  });
+
+  try {
+    await page.goto(`/?chat=${before.chat.id}`);
+    const dialog = await openDeletion(page, middle.id);
+    await dialog.getByRole('button', { name: '선택한 1개 장면 삭제', exact: true }).click();
+    await expect.poll(() => sent).toBe(true);
+    await expect(scene(page, middle.id)).toHaveCount(0);
+    await page.evaluate((id) => {
+      history.pushState(null, '', `/?chat=${id}`);
+      dispatchEvent(new PopStateEvent('popstate'));
+    }, other.id);
+    await expect(page.getByTestId('source')).toHaveCount(0);
+    await page.evaluate(
+      ({ chatId, sourceId }) => {
+        history.pushState(null, '', `/?chat=${chatId}&source=${sourceId}`);
+        dispatchEvent(new PopStateEvent('popstate'));
+      },
+      { chatId: before.chat.id, sourceId: first.id }
+    );
+    await expect(scene(page, first.id)).toBeVisible();
+    release();
+    await expect
+      .poll(() => page.evaluate((key) => sessionStorage.getItem(key), storageKey))
+      .toBeNull();
+    await page.evaluate(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const current = new URL(page.url());
+    expect(current.searchParams.get('chat')).toBe(before.chat.id);
+    expect(current.searchParams.get('source')).toBe(first.id);
+  } finally {
+    release();
+  }
 });

@@ -379,6 +379,45 @@ test('ITRAN send intent invalidates a running translation without making transla
   }
 });
 
+test('ITRAN send invalidates translation even while its preflight is pending', async ({
+  page,
+  request,
+}) => {
+  const chat = await createChat(request);
+  const started = gate(),
+    released = gate(),
+    finished = gate();
+  let translationCalls = 0;
+  await page.route(`**/api/chats/${chat.id}/codex-content-preflight`, async (route) => {
+    if (route.request().postDataJSON().role !== 'translation') return route.continue();
+    started.release();
+    await released.promise;
+    await route.fulfill({ status: 200, json: { warning: false } }).catch(() => {});
+    finished.release();
+  });
+  await page.route(endpoint, async (route) => {
+    translationCalls++;
+    await answer(route, 'TOO_LATE');
+  });
+  await page.route(`**/api/chats/${chat.id}/runs`, (route) =>
+    route.fulfill({ status: 422, json: { error: 'Synthetic rejection' } })
+  );
+  try {
+    await open(page, chat.id);
+    await composer(page).fill(original);
+    await translate(page).click();
+    await started.promise;
+    await send(page).click();
+    await expect(page.getByRole('alert')).toContainText('요청을 처리할 수 없어요. (422)');
+    released.release();
+    await finished.promise;
+    await expect(composer(page)).toHaveValue(original);
+    expect(translationCalls).toBe(0);
+  } finally {
+    released.release();
+  }
+});
+
 test('ITRAN refused translation and rejected submission preserve the editable draft and undo', async ({
   page,
   request,
@@ -420,6 +459,8 @@ test('ITRAN uncertain admission retains undo across reload and cleans it only af
   const calls: Record<string, unknown>[] = [];
   await page.route(`**/api/chats/${chat.id}/runs`, async (route) => {
     calls.push(route.request().postDataJSON());
+    if (calls.length === 2)
+      return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
     const response = await route.fetch();
     expect(response.ok(), await response.text()).toBe(true);
     if (calls.length === 1) await route.abort('failed');
@@ -430,7 +471,7 @@ test('ITRAN uncertain admission retains undo across reload and cleans it only af
   await translate(page).click();
   await expect(composer(page)).toHaveValue(translated);
   await send(page).click();
-  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();
   await expect(page.getByText('번역 전 원문 보기', { exact: true })).toBeVisible();
   await page.reload();
   await expect(composer(page)).toHaveValue(translated);
@@ -440,10 +481,18 @@ test('ITRAN uncertain admission retains undo across reload and cleans it only af
     .getByRole('dialog', { name: '이전 요청 접수 확인', exact: true })
     .getByRole('button', { name: '접수 확인', exact: true })
     .click();
+  await expect.poll(() => calls.length).toBe(2);
+  await expect(page.getByRole('button', { name: '이전 요청 확인', exact: true })).toBeEnabled();
+  await expect(composer(page)).toHaveValue(translated);
+  await page.getByRole('button', { name: '이전 요청 확인', exact: true }).click();
+  const decision = page.getByRole('dialog', { name: '이전 요청 접수 확인', exact: true });
+  await expect(decision).toContainText('비용이 중복될 수 있어요');
+  await decision.getByRole('button', { name: '접수 확인', exact: true }).click();
   await expect(composer(page)).toHaveValue('');
   await expect(page.getByText('번역 전 원문 보기', { exact: true })).toHaveCount(0);
-  expect(calls).toHaveLength(2);
+  expect(calls).toHaveLength(3);
   expect(calls[1]).toEqual(calls[0]);
+  expect(calls[2]).toEqual(calls[0]);
   const saved = await detail(request, chat.id);
   expect(saved.runs).toHaveLength(1);
   expect(saved.runs[0].request).toBe(translated);

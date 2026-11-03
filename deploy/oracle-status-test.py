@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import os
+import runpy
 from pathlib import Path
 import subprocess
 import sys
@@ -85,6 +86,27 @@ class RecoveryInspection(unittest.TestCase):
         missing = self.inspect("does-not-exist")
         self.assertEqual(missing["status"], "STATUS")
         self.assertIsNone(missing["release"])
+
+    def test_status_and_cleanup_share_the_release_lock_for_a_different_checkout_root(self):
+        elsewhere = self.root / "checkout-location"; elsewhere.mkdir()
+        self.app = elsewhere / "app"; self.app.mkdir()
+        checked = []
+
+        def busy(file, _flags):
+            checked.append(Path(file.name))
+            raise BlockingIOError("deployment active")
+
+        with patch.object(status.fcntl, "flock", busy):
+            result = self.inspect()
+        self.assertIs(result["lockBusy"], True)
+        self.assertEqual(checked, [self.root / "deploy.lock"])
+
+        checked.clear()
+        with patch.dict(sys.modules, {"fcntl": SimpleNamespace(LOCK_EX=1, LOCK_NB=2, flock=busy)}), \
+             patch.object(sys, "argv", ["oracle_gc.py", str(self.app), str(self.releases)]):
+            with self.assertRaises(BlockingIOError):
+                runpy.run_path(str(Path(__file__).with_name("oracle_gc.py")), run_name="__main__")
+        self.assertEqual(checked, [self.root / "deploy.lock"])
 
 
 if __name__ == "__main__":

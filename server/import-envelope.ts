@@ -29,15 +29,8 @@ export type ImportEnvelope = {
   name: string;
   bytes: Buffer;
   sha256: string;
-  staged: boolean;
   source: ImportEnvelopeSource;
 };
-/** Without a staged reader the envelope can only be the inline form. */
-export type InlineImportEnvelope = ImportEnvelope & {
-  staged: false;
-  source: Extract<ImportEnvelopeSource, { base64: string }>;
-};
-
 /** One visible file name: trimmed, single segment, no control characters, known extension. */
 function fileName(value: unknown, options: ImportEnvelopeOptions): string {
   if (
@@ -56,11 +49,12 @@ function fileName(value: unknown, options: ImportEnvelopeOptions): string {
 /**
  * Reads the request envelope every import file screen sends. It owns the field set, the file
  * name rule, the transport encoding and the size limit, so each reader only judges its own bytes.
+ * Without a staged reader the envelope can only be the inline form.
  */
 export function readImportEnvelope(
   value: unknown,
   options: ImportEnvelopeOptions & { staged?: undefined }
-): InlineImportEnvelope;
+): ImportEnvelope & { source: Extract<ImportEnvelopeSource, { base64: string }> };
 export function readImportEnvelope(value: unknown, options: ImportEnvelopeOptions): ImportEnvelope;
 export function readImportEnvelope(value: unknown, options: ImportEnvelopeOptions): ImportEnvelope {
   const { maxBytes, invalid, tooLarge, minBytes = 1 } = options;
@@ -91,7 +85,6 @@ export function readImportEnvelope(value: unknown, options: ImportEnvelopeOption
     name,
     bytes,
     sha256: createHash('sha256').update(bytes).digest('hex'),
-    staged: readStaged !== undefined,
     source,
   };
 }

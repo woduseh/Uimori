@@ -364,6 +364,8 @@ for (const failure of ['transport', 'invalid-json'] as const) {
     const ids: string[] = [];
     await page.route('**/api/helper/conversations/new', async (route) => {
       payloads.push(route.request().postDataJSON());
+      if (payloads.length === 2)
+        return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
       const response = await route.fetch();
       expect(response.ok()).toBe(true);
       ids.push(((await response.json()) as { id: string }).id);
@@ -389,10 +391,15 @@ for (const failure of ['transport', 'invalid-json'] as const) {
       localStorage.removeItem(key);
     });
     await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
+    await expect.poll(() => payloads.length).toBe(2);
+    await expect(panel.getByRole('alert')).toBeVisible();
+    expect(await page.evaluate((key) => sessionStorage.getItem(key), key)).toBe(pending);
+    await panel.getByRole('button', { name: '새 도우미 세션', exact: true }).click();
     await expect.poll(() => ids.length).toBe(2);
     await expect(picker).toHaveValue(ids[0]);
     await expect(panel.getByRole('button', { name: '새 도우미 세션', exact: true })).toBeEnabled();
     expect(payloads[1]).toEqual(payloads[0]);
+    expect(payloads[2]).toEqual(payloads[0]);
     expect(ids[1]).toBe(ids[0]);
     await expect(picker.locator('option:not([disabled])')).toHaveCount(count + 1);
     const persisted = await request.get(`/api/helper/conversations?kind=chat&chatId=${chat.id}`);

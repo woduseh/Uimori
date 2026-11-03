@@ -25,6 +25,8 @@ import { readImage } from '../server/image-storage.js';
 import { writeRisuZip } from '../server/risu-export-codec.js';
 import { prepareNativeArchive } from '../server/native-transfer-archive.js';
 import { storeUpload, uploadDirectory } from '../server/uploads.js';
+import { startImportStagingCleanup } from '../server/import-staging-cleanup.js';
+import { saveImportReceipt } from '../server/import-operations.js';
 
 const filesystemFailure = vi.hoisted(() => ({ cleanup: '', publish: '' }));
 vi.mock('node:fs', async (original) => {
@@ -129,6 +131,8 @@ test('prepared review reuses final transformed bytes and response-loss receipt a
   expect(() => readPreparedRisuImport(store.path, preview.preparedId!)).toThrow(
     'RISU_IMPORT_DRAFT_CHANGED'
   );
+  for (let index = 0; index < 260; index++)
+    saveImportReceipt(store, `unrelated-import-${index}`, 'digest', { index });
   const retry = await applyRisuImport(store, command);
   expect(retry.receipt.created).toBe(false);
   expect(retry.receipt.id).toBe(first.receipt.id);
@@ -337,6 +341,12 @@ test('abort terminates an active worker before cleanup and concurrent preparatio
     controller.signal
   );
   const preparedId = readdirSync(join(resolve(store.path, '..'), 'risu-prepared'))[0];
+  const activePath = join(resolve(store.path, '..'), 'risu-prepared', preparedId);
+  const expired = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  utimesSync(activePath, expired, expired);
+  const stopCleanup = startImportStagingCleanup(store);
+  expect(existsSync(activePath)).toBe(true);
+  stopCleanup();
   expect(() => discardRisuImport(store.path, { preparedId, uploadId: uploaded.uploadId })).toThrow(
     'RISU_IMPORT_BUSY'
   );

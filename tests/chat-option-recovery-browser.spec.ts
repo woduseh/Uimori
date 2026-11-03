@@ -366,6 +366,8 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   let accepted: ChatOptionState | undefined;
   await page.route(`**/api/chats/${chat.id}/options/oneoff`, async (route) => {
     submissions.push(route.request().postDataJSON());
+    if (submissions.length === 2)
+      return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
     const response = await route.fetch();
     expect(response.ok(), await response.text()).toBe(true);
     if (submissions.length === 1) {
@@ -385,11 +387,16 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   const confirmSame = panel.getByRole('button', { name: '같은 요청 다시 확인', exact: true });
   await confirmSame.click();
   await expect.poll(() => submissions.length).toBe(2);
+  await expect(confirmSame).toBeVisible();
+  await expect(oneoffTone).toBeDisabled();
+  await confirmSame.click();
+  await expect.poll(() => submissions.length).toBe(3);
   await expect(confirmSame).toHaveCount(0);
   const pending = panel.getByRole('region', { name: '다음 생성 옵션 예약', exact: true });
   await expect(pending).toContainText('다음 생성 문체');
-  expect(submissions).toHaveLength(2);
+  expect(submissions).toHaveLength(3);
   expect(submissions[1]).toEqual(submissions[0]);
+  expect(submissions[2]).toEqual(submissions[0]);
   expect(submissions[0].operationId).toEqual(expect.any(String));
   expect(submissions[0].expectedRevision).toBe(remote.revision);
   const recovered = await readOptions(request, chat);

@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { providerFetchOptions, transportFailureCode } from '../core/provider-fetch.js';
+import {
+  ProviderBodyLimitError,
+  providerFetchOptions,
+  readProviderBody,
+  transportFailureCode,
+} from '../core/provider-fetch.js';
 import {
   detectImageMime,
   isValidIllustrationImage,
@@ -131,41 +136,15 @@ async function send(
     });
   }
 }
-async function readBytes(
-  response: Response,
-  maximum: number,
-  signal: AbortSignal
-): Promise<Buffer> {
-  signal.throwIfAborted();
-  const reader = response.body?.getReader();
-  if (!reader) return Buffer.alloc(0);
-  // A response body can outlive fetch's abort propagation. Close the pending
-  // read ourselves, without waiting for the remote source to acknowledge it.
-  const abortReader = () => {
-    void reader.cancel(signal.reason).catch(() => undefined);
-  };
-  signal.addEventListener('abort', abortReader, { once: true });
-  const parts: Uint8Array[] = [];
-  let length = 0;
-  try {
-    for (;;) {
-      signal.throwIfAborted();
-      const next = await reader.read();
-      signal.throwIfAborted();
-      if (next.done) break;
-      length += next.value.byteLength;
-      if (length > maximum) throw new IllustrationError('COMFYUI_RESPONSE_INVALID');
-      parts.push(next.value);
-    }
-    return Buffer.concat(parts, length);
-  } finally {
-    signal.removeEventListener('abort', abortReader);
-    void reader.cancel().catch(() => undefined);
-    reader.releaseLock();
-  }
-}
 async function readJson(response: Response, signal: AbortSignal): Promise<unknown> {
-  const text = (await readBytes(response, 8_000_000, signal)).toString('utf8');
+  let text: string;
+  try {
+    text = (await readProviderBody(response, signal, 8_000_000)).toString('utf8');
+  } catch (error) {
+    if (error instanceof ProviderBodyLimitError)
+      throw new IllustrationError('COMFYUI_RESPONSE_INVALID');
+    throw error;
+  }
   try {
     return JSON.parse(text);
   } catch {
@@ -359,9 +338,9 @@ export async function fetchComfyUIResult(
       });
     let bytes: Buffer;
     try {
-      bytes = await readBytes(view, ILLUSTRATION_MAX_IMAGE_BYTES, options.signal);
+      bytes = await readProviderBody(view, options.signal, ILLUSTRATION_MAX_IMAGE_BYTES);
     } catch (error) {
-      if (error instanceof IllustrationError)
+      if (error instanceof IllustrationError || error instanceof ProviderBodyLimitError)
         throw new IllustrationError('COMFYUI_IMAGE_INVALID', false, { comfyui: { promptId } });
       throw error;
     }

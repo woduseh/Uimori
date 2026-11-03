@@ -1,11 +1,12 @@
 import type { Chat } from '../core/types.js';
-import { api, definiteRejection } from './api.js';
+import { api, ApiError, definiteRejection } from './api.js';
 
 /** Persist admission identity before sending; UI locks belong to the calling view. */
 export async function requestChatFork(chatId: string, sourceId: string | null): Promise<Chat> {
   const key = `fork-command:${chatId}:${sourceId}`;
   const storage = sessionStorage;
-  const idempotencyKey = storage.getItem(key) || crypto.randomUUID();
+  const previous = storage.getItem(key);
+  const idempotencyKey = previous || crypto.randomUUID();
   storage.setItem(key, idempotencyKey);
 
   const clear = () => {
@@ -23,7 +24,11 @@ export async function requestChatFork(chatId: string, sourceId: string | null): 
       idempotencyKey,
     });
   } catch (error) {
-    if (definiteRejection(error)) clear();
+    if (
+      (error instanceof ApiError && error.status === 410 && error.code === 'CHAT_COPY_REMOVED') ||
+      (!previous && definiteRejection(error))
+    )
+      clear();
     throw error;
   }
   clear();

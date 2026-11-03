@@ -161,6 +161,12 @@ export const messages = {
     ja: 'この端末のアシスタントの下書きを読み込めませんでした。再読み込みしてください。',
     zh: '无法读取此设备上的助手草稿。请重新加载。',
   },
+  'helpers.draftSaveFailed': {
+    ko: '도우미 초안을 기기에 저장하지 못했어요. 화면을 닫기 전에 다시 저장하거나 내용을 보관해 주세요.',
+    en: 'Could not save the assistant draft on this device. Save it again or keep a copy before closing.',
+    ja: 'アシスタントの下書きをこの端末に保存できませんでした。閉じる前に再保存するか、内容を控えてください。',
+    zh: '无法在此设备上保存助手草稿。关闭前请重新保存或另存内容。',
+  },
   'helpers.m013': {
     ko: '구성과 도우미 대화의 채팅이 달라요.',
     en: 'The outline and assistant conversation belong to different chats.',

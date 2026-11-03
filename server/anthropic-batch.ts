@@ -13,7 +13,11 @@ import {
   readProviderHttpDiagnostic,
   type ProviderHttpDiagnostic,
 } from '../core/provider-http-error.js';
-import { providerFetchOptions, transportFailureCode } from '../core/provider-fetch.js';
+import {
+  providerFetchOptions,
+  readProviderBody,
+  transportFailureCode,
+} from '../core/provider-fetch.js';
 import { ProviderContractError } from '../core/provider-errors.js';
 import { providerCacheBoundaries } from '../core/provider-cache-diagnostics.js';
 import { validateProviderEndpoint } from '../core/product.js';
@@ -190,8 +194,12 @@ export class AnthropicBatchRun {
         diagnostic: await readProviderHttpDiagnostic(response, init.signal, secret),
       };
     try {
-      return { response, value: await response.json() };
-    } catch {
+      return {
+        response,
+        value: JSON.parse(new TextDecoder().decode(await readProviderBody(response, init.signal))),
+      };
+    } catch (error) {
+      if (init.signal.aborted) throw error;
       return { response };
     }
   }
@@ -346,7 +354,7 @@ export class AnthropicBatchRun {
         const diagnostic = await readProviderHttpDiagnostic(resultResponse, options.signal, secret);
         return failure(`HTTP_${resultResponse.status}`, 'error', diagnostic);
       }
-      const text = await resultResponse.text();
+      const text = new TextDecoder().decode(await readProviderBody(resultResponse, options.signal));
       let match: unknown | undefined;
       for (const line of text.split(/\r?\n/u)) {
         if (!line.trim()) continue;

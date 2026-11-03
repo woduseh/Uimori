@@ -1,5 +1,6 @@
 import { captureChatCopy, restoreChatCopy } from './chat-copy.js';
-import { fields, record, text } from './request-validation.js';
+import { createHash } from 'node:crypto';
+import { fields, HttpError, record, text } from './request-validation.js';
 import type { Chat, Store } from './store.js';
 
 function numberedCopyTitle(store: Store, title: string): string {
@@ -23,25 +24,76 @@ export function forkChat(store: Store, chatId: string, value: unknown): Chat {
   fields(body, ['fromRevision', 'title', 'idempotencyKey']);
   const sourceId = body.fromRevision === null ? null : text(body.fromRevision, 'source ID', 100);
   const requestKey = text(body.idempotencyKey, 'copy request', 100);
+  const requestedTitle = body.title === undefined ? null : text(body.title, 'title', 200);
+  const command = createHash('sha256')
+    .update(JSON.stringify({ chatId, sourceId, title: requestedTitle }))
+    .digest('hex');
   return store.transaction(() => {
-    const original = store.chat(chatId);
     const receiptKey = `transcript:copy:${requestKey}`;
-    // Freeze the allocated name on its existing receipt so a lost response does
-    // not choose a new number. Older receipts retain their original naming rule.
-    const saved = store.db
-      .prepare(
-        "SELECT json_extract(result,'$.automaticCopyTitle') AS title FROM import_operations WHERE key=?"
-      )
+    const row = store.db
+      .prepare('SELECT result FROM import_operations WHERE key=?')
       .get(receiptKey);
+    const saved = row
+      ? (JSON.parse(String(row.result)) as {
+          chatId: string;
+          automaticCopyTitle?: string;
+          forkCommand?: string;
+        })
+      : undefined;
+    const rememberCommand = () =>
+      store.db
+        .prepare(
+          "UPDATE import_operations SET result=json_set(result,'$.forkCommand',?) WHERE key=?"
+        )
+        .run(command, receiptKey);
+    const conflict = () => {
+      throw new HttpError(409, '다른 채팅에 같은 가져오기 ID가 사용됐어요.');
+    };
+    if (saved?.forkCommand) {
+      if (saved.forkCommand !== command) conflict();
+      if (typeof saved.chatId !== 'string' || !saved.chatId.trim())
+        throw new HttpError(409, '복사 기록을 확인할 수 없어요.');
+      if (!store.db.prepare('SELECT 1 FROM chats WHERE id=?').get(saved.chatId))
+        throw new HttpError(410, 'CHAT_COPY_REMOVED');
+      return store.chat(saved.chatId);
+    }
+    // Earlier receipts recorded the original selection in the fork event. Use it
+    // when its title also identifies the original command; otherwise validate by
+    // the older transcript digest below before recording the new command receipt.
+    if (saved) {
+      const event = store.db
+        .prepare(
+          "SELECT entity_id FROM events WHERE chat_id=? AND kind='chat.forked' ORDER BY seq LIMIT 1"
+        )
+        .get(saved.chatId);
+      if (event) {
+        const original = JSON.parse(String(event.entity_id)) as {
+          chatId: string;
+          fromRevision: string | null;
+          title: string;
+        };
+        if (original.chatId !== chatId || original.fromRevision !== sourceId) conflict();
+        if (
+          (requestedTitle !== null && requestedTitle === original.title) ||
+          (requestedTitle === null && saved.automaticCopyTitle === original.title)
+        ) {
+          rememberCommand();
+          return store.chat(saved.chatId);
+        }
+      }
+    }
+    const original = store.chat(chatId);
     const title =
-      body.title === undefined
+      requestedTitle === null
         ? saved
-          ? ((saved.title as string | null) ?? `${original.title.slice(0, 190)} (사본)`)
+          ? (saved.automaticCopyTitle ?? `${original.title.slice(0, 190)} (사본)`)
           : numberedCopyTitle(store, original.title)
-        : text(body.title, 'title', 200);
+        : requestedTitle;
     const copy = captureChatCopy(store, chatId, sourceId);
     const restored = restoreChatCopy(store, copy, `copy:${requestKey}`, title);
-    if (body.title === undefined)
+    rememberCommand();
+    if (saved) return restored;
+    if (requestedTitle === null)
       store.db
         .prepare(
           "UPDATE import_operations SET result=json_set(result,'$.automaticCopyTitle',?) WHERE key=?"

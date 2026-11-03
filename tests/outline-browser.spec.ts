@@ -230,6 +230,8 @@ for (const width of WIDTHS) {
       await page.route(`**/api/chats/${chat.id}/outline`, async (route) => {
         if (route.request().method() !== 'POST') return route.continue();
         bodies.push(route.request().postDataJSON());
+        if (bodies.length === 2)
+          return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
         const response = await route.fetch();
         expect(response.ok()).toBe(true);
         if (bodies.length === 1) await route.abort('failed');
@@ -251,9 +253,13 @@ for (const width of WIDTHS) {
       await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toBeVisible();
       panel = await open(page, chat.id, width);
       await panel.getByRole('button', { name: '요청 결과 확인' }).click();
+      await expect.poll(() => bodies.length).toBe(2);
+      await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toBeVisible();
+      await panel.getByRole('button', { name: '요청 결과 확인' }).click();
       await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toHaveCount(0);
-      expect(bodies).toHaveLength(2);
+      expect(bodies).toHaveLength(3);
       expect(bodies[1]).toEqual(bodies[0]);
+      expect(bodies[2]).toEqual(bodies[0]);
       const saved: OutlineDetail = await (
         await request.get(`/api/chats/${chat.id}/outline`)
       ).json();
@@ -272,6 +278,8 @@ for (const width of WIDTHS) {
         bodies: unknown[] = [];
       await page.route('**/api/scene-commands/*/run', async (route) => {
         bodies.push(route.request().postDataJSON());
+        if (bodies.length === 2)
+          return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
         const response = await route.fetch();
         expect(response.ok()).toBe(true);
         if (bodies.length === 1) await route.abort('failed');
@@ -285,9 +293,13 @@ for (const width of WIDTHS) {
       await expect.poll(() => sourceCount(request, chat.id)).toBe(1);
       panel = await open(page, chat.id, width);
       await panel.getByRole('button', { name: '요청 결과 확인' }).click();
+      await expect.poll(() => bodies.length).toBe(2);
+      await expect(panel.getByRole('button', { name: '요청 결과 확인' })).toBeVisible();
+      await panel.getByRole('button', { name: '요청 결과 확인' }).click();
       await expect(panel).toHaveCount(0);
-      expect(bodies).toHaveLength(2);
+      expect(bodies).toHaveLength(3);
       expect(bodies[1]).toEqual(bodies[0]);
+      expect(bodies[2]).toEqual(bodies[0]);
       expect(await sourceCount(request, chat.id)).toBe(1);
     });
 

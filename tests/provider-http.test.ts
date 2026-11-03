@@ -9,6 +9,7 @@ import {
   type WireRecord,
 } from '../core/transport.js';
 import { consumeSse } from '../core/vertex.js';
+import { settleWithin, stalledProviderBody } from './fixtures/stalled-provider-body.js';
 const secret = 'synthetic-provider-secret-never-a-real-key';
 const variants = [
   { protocol: 'openai-responses-v1', endpoint: 'https://api.openai.com/v1', path: '/responses' },
@@ -193,6 +194,54 @@ afterEach(() => {
 
 // fetch is always replaced. No live network, provider SDK, real credential environment or paid call.
 describe('native provider HTTP boundary with synthetic fetch', () => {
+  test('Responses accepts a complete JSON body with a UTF-8 BOM', async () => {
+    const variant = variants[0];
+    const terminal = events(variant).at(-1) as { response: Json };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('\uFEFF' + JSON.stringify(terminal.response), {
+            headers: { 'content-type': 'application/json' },
+          })
+      )
+    );
+    expect(
+      await executeProvider(connection(variant), request(variant), options(variant))
+    ).toMatchObject({
+      status: 'completed',
+      text: '등대 🌊',
+      usage: { inputTokens: 5, outputTokens: 2 },
+    });
+  });
+  test.each(['cancel', 'timeout'] as const)(
+    'Responses JSON %s stops a stalled body without waiting for cancel acknowledgement',
+    async (mode) => {
+      const variant = variants[0];
+      const stalled = stalledProviderBody();
+      const fetch = vi.fn(async () => stalled.response);
+      vi.stubGlobal('fetch', fetch);
+      const controller = new AbortController();
+      const pending = executeProvider(connection(variant), request(variant), {
+        ...options(variant),
+        signal: controller.signal,
+        timeoutMs: mode === 'timeout' ? 100 : 5000,
+      });
+      try {
+        await stalled.pendingRead;
+        if (mode === 'cancel') controller.abort();
+        expect(await settleWithin(pending)).toMatchObject({
+          status: mode === 'cancel' ? 'cancelled' : 'error',
+          error: { code: mode === 'cancel' ? 'CANCELLED' : 'TIMEOUT' },
+        });
+        expect(stalled.cancellations).toBe(1);
+        expect(fetch).toHaveBeenCalledTimes(1);
+      } finally {
+        stalled.release();
+        await pending;
+      }
+    }
+  );
   // DeepSeek documents both interruption reasons. Its usage normally accompanies the
   // finish chunk; compatible Chat streams may instead send a following usage-only chunk.
   test.each([

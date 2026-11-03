@@ -28,6 +28,7 @@ export function requestReceipt(
     );
   const plan = snapshot.contextPlan;
   const summary = plan?.status === 'ready' ? plan.summary : null;
+  const storyGuide = snapshot.storyGuide?.brief?.text;
   return {
     version: 1,
     model: {
@@ -54,5 +55,8 @@ export function requestReceipt(
           coveredSources: summary ? plan.compacted.length : 0,
         }
       : null,
+    ...(storyGuide
+      ? { storyGuide: { status: containsText(wire.body, storyGuide) ? 'included' : 'unverified' } }
+      : {}),
   };
 }

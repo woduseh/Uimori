@@ -11,7 +11,7 @@ import {
 } from '../core/risu-prompt.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChatOptionState } from '../core/chat-options.js';
-import { api, ApiError } from './api.js';
+import { api, ApiError, definiteRejection } from './api.js';
 import { PromptControlFields } from './PromptControlFields.js';
 import { PromptOptionGroup } from './PromptOptionGroup.js';
 import { ToggleRow } from './ToggleRow.js';
@@ -173,16 +173,16 @@ export function ChatOptionSettings(props: Props) {
       );
       dispatchEvent(new Event('chat-options-changed'));
     } catch (caught) {
-      const known = caught instanceof ApiError && caught.status < 500;
-      setUncertain(known ? null : operation);
-      if (caught instanceof ApiError && caught.status === 409) {
+      const unresolved = !!uncertain || !definiteRejection(caught);
+      setUncertain(unresolved ? operation : null);
+      if (!unresolved && caught instanceof ApiError && caught.status === 409) {
         setConflict(true);
         setSaveConflict(true);
       }
       setError(
-        known
-          ? uiMessage('chatsettings.draftError', { error: messageRef((caught as Error).message) })
-          : uiMessage('chatsettings.m109')
+        unresolved
+          ? uiMessage('chatsettings.m109')
+          : uiMessage('chatsettings.draftError', { error: messageRef((caught as Error).message) })
       );
     } finally {
       lock.current = false;

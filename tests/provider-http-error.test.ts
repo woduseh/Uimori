@@ -175,6 +175,13 @@ test('keeps empty responses empty', async () => {
   );
 });
 
+test('an empty response remains empty even when the signal was already aborted', async () => {
+  assert.deepEqual(
+    await readProviderHttpDiagnostic(new Response(null, { status: 503 }), AbortSignal.abort()),
+    { httpStatus: 503, bodyState: 'empty' }
+  );
+});
+
 test('rejects invalid UTF-8 without manufacturing replacement text', async () => {
   const result = await readProviderHttpDiagnostic(
     new Response(new Uint8Array([0xff, 0xfe]), { status: 400 }),

@@ -195,7 +195,6 @@ export async function readCardPath(path: string, name: string, workspaceDirector
       name,
       bytes: signature,
       sha256: hash.digest('hex'),
-      staged: true,
       source: { name, uploadId: 'prepared' },
     };
     if (/\.risum$/iu.test(name) || (signature[0] === 111 && signature[1] === 0)) {

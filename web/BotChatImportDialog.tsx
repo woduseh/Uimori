@@ -4,7 +4,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { useRef, useState } from 'react';
 import { validateChatTranscript, type ChatTranscript } from '../core/chat-transcript.js';
 import type { Content } from '../core/product.js';
-import { api, ApiError } from './api.js';
+import { api, definiteRejection } from './api.js';
 import { Dialog } from './Dialog.js';
 import { ContentAvatar } from './ContentAvatar.js';
 import './bot-chat-import.css';
@@ -91,13 +91,9 @@ export function BotChatImportDialog({
       );
       await onImported().catch(() => setError(retainedMessage('transfer.m104')));
     } catch (caught) {
-      const definite =
-        caught instanceof ApiError &&
-        caught.status >= 400 &&
-        caught.status < 500 &&
-        caught.status !== 408;
-      setUncertain(!definite);
-      setError(definite ? caught.message : retainedMessage('transfer.m105'));
+      const unresolved = uncertain || !definiteRejection(caught);
+      setUncertain(unresolved);
+      setError(unresolved ? retainedMessage('transfer.m105') : (caught as Error).message);
     } finally {
       lock.current = false;
       setBusy(false);

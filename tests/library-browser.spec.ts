@@ -1,10 +1,15 @@
-import { DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
+import { DESKTOP_WIDTH, DEFAULT_WIDTHS, MOBILE_WIDTH } from './fixtures/browser-viewports.js';
 import { visualReview } from './fixtures/visual-review.js';
 import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
 import type { Content, Library, PromptPreset } from '../core/product.js';
 import type { LibraryOrganization, LibraryFolder } from '../core/library-organization.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
-import { editLibraryContent, navigationAction, selectContent } from './ui-navigation.js';
+import {
+  createLibraryContent,
+  editLibraryContent,
+  navigationAction,
+  selectContent,
+} from './ui-navigation.js';
 
 async function createContent(
   request: APIRequestContext,
@@ -334,6 +339,144 @@ test('LIBUI03 prompts have independent folders and unsaved edits survive a cance
   await navigationAction(page, '프롬프트');
   await panel.getByRole('button', { name: `${prefix} Unsaved 프롬프트 편집`, exact: true }).click();
   await expect(panel.getByLabel('프롬프트 이름', { exact: true })).toHaveValue(`${prefix} Unsaved`);
+});
+
+for (const externalMove of ['none', 'folder', 'unclassified'] as const) {
+  test(`EDITORRECOVERY1 confirms an uncertain prompt copy and respects ${externalMove} placement`, async ({
+    page,
+    request,
+  }) => {
+    await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
+    const title = `EDITORRECOVERY1 ${crypto.randomUUID()}`;
+    const sourceResponse = await request.post('/api/prompt-presets', {
+      data: {
+        title,
+        role: 'main',
+        program: createDefaultRisuPrompt('Synthetic instructions', 'main'),
+      },
+    });
+    expect(sourceResponse.ok(), await sourceResponse.text()).toBe(true);
+    await page.goto('/');
+    await navigationAction(page, '프롬프트');
+    const panel = page.getByTestId('prompt-library');
+    const folder = await createFolder(page, panel, `${title} folder`);
+    await chooseFolder(panel, '전체');
+    await panel.getByLabel('프롬프트 검색', { exact: true }).fill(title);
+    await panel.getByLabel(`${title} 메뉴`, { exact: true }).click();
+    await panel.getByRole('button', { name: '폴더 이동', exact: true }).click();
+    const move = page.getByRole('dialog', { name: '자료 이동', exact: true });
+    await move.getByLabel('이동할 폴더').selectOption(folder.id);
+    await move.getByRole('button', { name: '이동', exact: true }).click();
+    await expect(move).toBeHidden();
+    await panel.getByLabel('프롬프트 검색', { exact: true }).fill('');
+    await chooseFolder(panel, folder.title);
+    await panel.getByRole('button', { name: `${title} 프롬프트 편집`, exact: true }).click();
+
+    const submissions: Record<string, unknown>[] = [];
+    let copyId = '';
+    await page.route('**/api/resources/save', async (route) => {
+      submissions.push(route.request().postDataJSON());
+      if (submissions.length === 1) {
+        const accepted = await route.fetch();
+        expect(accepted.ok(), await accepted.text()).toBe(true);
+        copyId = (await accepted.json()).saved.id;
+        await route.abort('failed');
+      } else if (submissions.length === 2) {
+        await route.fulfill({ status: 400, json: { error: 'Synthetic retry rejection' } });
+      } else await route.continue();
+    });
+    const editor = page.getByTestId('prompt-editor');
+    await editor.getByLabel('프롬프트 관리', { exact: true }).click();
+    await editor.getByRole('button', { name: '복사본으로 저장', exact: true }).click();
+    const retry = editor.getByRole('button', { name: '이전 요청 확인', exact: true });
+    await expect(retry).toBeEnabled();
+    let finalFolder: string | null = folder.id;
+    if (externalMove !== 'none') {
+      const before = await organization(request);
+      const otherTitle = `${title} external folder`;
+      const createdFolder = await request.post('/api/library/folders', {
+        data: { expectedRevision: before.revision, category: 'prompts', title: otherTitle },
+      });
+      expect(createdFolder.ok(), await createdFolder.text()).toBe(true);
+      const withFolder = (await createdFolder.json()) as LibraryOrganization;
+      const other = withFolder.folders.find((item) => item.title === otherTitle)!;
+      const moveCopy = async (revision: number, folderId: string | null) => {
+        const response = await request.post('/api/library/organization/move', {
+          data: {
+            expectedRevision: revision,
+            items: [{ kind: 'prompt-preset', id: copyId }],
+            category: 'prompts',
+            folderId,
+          },
+        });
+        expect(response.ok(), await response.text()).toBe(true);
+        return (await response.json()) as LibraryOrganization;
+      };
+      const moved = await moveCopy(withFolder.revision, other.id);
+      finalFolder = externalMove === 'folder' ? other.id : null;
+      if (externalMove === 'unclassified') await moveCopy(moved.revision, null);
+    }
+    await editor.getByLabel('프롬프트 이름', { exact: true }).fill('');
+    await retry.click();
+    await expect(
+      editor.getByRole('alert').filter({ hasText: '요청을 처리할 수 없어요' })
+    ).toBeVisible();
+    await expect(retry).toBeEnabled();
+    const placement = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/library/organization/move') &&
+        response.request().method() === 'POST'
+    );
+    await retry.click();
+    expect((await placement).status()).toBe(externalMove === 'none' ? 200 : 409);
+    await expect.poll(() => submissions.length).toBe(3);
+    expect(submissions[1]).toEqual(submissions[0]);
+    expect(submissions[2]).toEqual(submissions[0]);
+    await expect(editor.getByLabel('프롬프트 이름', { exact: true })).toHaveValue('');
+    await expect
+      .poll(
+        async () => (await organization(request)).items.find((item) => item.id === copyId)?.folderId
+      )
+      .toBe(finalFolder);
+  });
+}
+
+test('EDITORRECOVERY2 confirms an uncertain new resource despite an incomplete later title', async ({
+  page,
+  request,
+}) => {
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 800 });
+  await page.goto('/');
+  const panel = page.getByTestId('library-panel');
+  await createLibraryContent(page);
+  const name = panel.getByLabel('Risu 자료 이름', { exact: true });
+  const title = `EDITORRECOVERY2 ${crypto.randomUUID()}`;
+  await name.fill(title);
+  const submissions: Record<string, unknown>[] = [];
+  let createdId = '';
+  await page.route('**/api/resources/save', async (route) => {
+    submissions.push(route.request().postDataJSON());
+    if (submissions.length === 1) {
+      const accepted = await route.fetch();
+      expect(accepted.ok(), await accepted.text()).toBe(true);
+      createdId = (await accepted.json()).saved.id;
+      await route.abort('failed');
+    } else await route.continue();
+  });
+  await panel.getByRole('button', { name: '자료 등록', exact: true }).click();
+  const retry = panel.getByRole('button', { name: '이전 요청 확인', exact: true });
+  await expect(retry).toBeEnabled();
+  await name.fill('');
+  await retry.click();
+  await expect.poll(() => submissions.length).toBe(2);
+  expect(submissions[1]).toEqual(submissions[0]);
+  await expect(name).toHaveValue('');
+  await expect(panel.locator('.resource-editor-status').getByRole('status')).toHaveText(
+    '미저장 변경'
+  );
+  const saved = await request.get(`/api/content/${createdId}`);
+  expect(saved.ok(), await saved.text()).toBe(true);
+  expect((await saved.json()).title).toBe(title);
 });
 
 for (const destination of ['new-draft', 'list'] as const) {

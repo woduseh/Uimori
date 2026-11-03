@@ -393,15 +393,23 @@ export function LibraryPanel({
     externalTab.current = tab;
     onTabChange?.(tab);
   }
-  async function placeCreated(item: Content, cloned = false) {
+  async function placeCreated(
+    item: Content,
+    cloned = false,
+    creationOrganizationRevision?: number | null
+  ) {
     const folderId = folder === 'all' || folder === 'unclassified' ? null : folder;
     if ((!cloned && item.kind !== tab) || (folderId === null && item.kind === tab)) return;
-    const current = await api<LibraryOrganization>('/library/organization');
+    if (creationOrganizationRevision === null)
+      throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));
+    const revision =
+      creationOrganizationRevision ??
+      (await api<LibraryOrganization>('/library/organization')).revision;
     const placed = await organizer.mutate(
       '/library/organization/move',
       { items: [{ kind: 'content', id: item.id }], category: tab, folderId },
       'POST',
-      current.revision
+      revision
     );
     if (!placed) throw new Error(uiMessage('library.couldNotCompleteFolderPlacement'));
   }
@@ -443,7 +451,7 @@ export function LibraryPanel({
         const copy = result.saved as Content;
         const warnings: string[] = [];
         try {
-          await placeCreated(copy, true);
+          await placeCreated(copy, true, result.creationOrganizationRevision ?? null);
         } catch (error) {
           warnings.push(
             uiMessage('library.theResourceWasCopiedButCouldNot', {
@@ -835,7 +843,7 @@ export function LibraryPanel({
           onDeleted={() => switchTab(tab, true)}
           onDirtyChange={setDirty}
           onStartStory={onStartStory}
-          onCreated={placeCreated}
+          onCreated={(item, revision) => placeCreated(item, false, revision)}
           headerLeading={headerLeading}
           headerTrailing={headerTrailing}
         />
@@ -1373,7 +1381,7 @@ function ContentEditor({
   onDeleted: () => void;
   onStartStory?: (bot: Content) => void;
   onDirtyChange: (dirty: boolean) => void;
-  onCreated?: (content: Content) => Promise<void>;
+  onCreated?: (content: Content, creationOrganizationRevision: number | null) => Promise<void>;
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
 }) {
@@ -1416,8 +1424,8 @@ function ContentEditor({
   const editorUnavailable = busy || !state.ready;
   const editorHeading = useEditorHeadingHeight(state.ready);
   useEffect(() => {
-    onDirtyChange(dirty || busy || portraitBusy);
-  }, [dirty, busy, portraitBusy, onDirtyChange]);
+    onDirtyChange(dirty || busy || portraitBusy || state.creationPending);
+  }, [dirty, busy, portraitBusy, state.creationPending, onDirtyChange]);
   const packageSnapshot = () =>
     validateRisuContent({
       ...value.package,
@@ -1426,7 +1434,8 @@ function ContentEditor({
       body: value.text,
     });
   async function saveContent(copyKind?: 'bot' | 'persona' | 'module') {
-    if (editorUnavailable || portraitBusy || !value.title.trim()) return false;
+    if (editorUnavailable || portraitBusy || (!state.creationPending && !value.title.trim()))
+      return false;
     const version = ++saveVersion.current;
     onError('');
     setSaved('');
@@ -1434,24 +1443,28 @@ function ContentEditor({
     setError('');
     try {
       const copying = !!copyKind;
-      const pkg = copying
-        ? withNativeContentTitle(packageSnapshot(), value.title + ' 사본')
-        : packageSnapshot();
-      const model: ContentEditModel = {
-        kind: copyKind ?? value.kind,
-        title: copying ? value.title + ' 사본' : value.title,
-        description: value.description,
-        text: value.text,
-        loading: value.loading,
-        relatedIds: [],
-        package: pkg,
-      };
-      const item = (await session.save(model, { copy: copying })).saved as Content;
+      const result = state.creationPending
+        ? await session.save()
+        : await session.save(
+            {
+              kind: copyKind ?? value.kind,
+              title: copying ? value.title + ' 사본' : value.title,
+              description: value.description,
+              text: value.text,
+              loading: value.loading,
+              relatedIds: [],
+              package: copying
+                ? withNativeContentTitle(packageSnapshot(), value.title + ' 사본')
+                : packageSnapshot(),
+            } satisfies ContentEditModel,
+            { copy: copying }
+          );
+      const item = result.saved as Content;
       setSaved(uiMessage('library.savedResource', { title: item.title }));
-      if (!selected || copying) {
+      if (result.creationIntent) {
         setPlacing(true);
         try {
-          await onCreated?.(item);
+          await onCreated?.(item, result.creationOrganizationRevision ?? null);
         } catch {
           setSaveWarnings((warnings) => [
             ...warnings,
@@ -1503,13 +1516,28 @@ function ContentEditor({
           <div className="library-detail-actions">
             <ResourceEditorActions value={shared} hideSyncError />
             <SaveButton
-              type="submit"
+              type={state.creationPending ? 'button' : 'submit'}
               form={formId}
               className="primary native-editor-save"
-              disabled={editorUnavailable || !value.title.trim() || portraitBusy}
+              disabled={
+                editorUnavailable || portraitBusy || (!state.creationPending && !value.title.trim())
+              }
               aria-busy={busy}
-              label={selected ? t('library.saveChanges') : t('library.registerResource')}
-              text={selected ? t('shared.save') : t('library.register')}
+              label={
+                state.creationPending
+                  ? t('main.m130')
+                  : selected
+                    ? t('library.saveChanges')
+                    : t('library.registerResource')
+              }
+              text={
+                state.creationPending
+                  ? t('main.m130')
+                  : selected
+                    ? t('shared.save')
+                    : t('library.register')
+              }
+              onClick={state.creationPending ? () => void saveContent() : undefined}
             />
             <LibraryItemMenu title={t('library.resourceMenu')}>
               <div className="action-menu-group">
@@ -1520,7 +1548,11 @@ function ContentEditor({
                       type="button"
                       key={role}
                       disabled={
-                        editorUnavailable || !value.title.trim() || nativeDraftDirty || portraitBusy
+                        editorUnavailable ||
+                        state.creationPending ||
+                        !value.title.trim() ||
+                        nativeDraftDirty ||
+                        portraitBusy
                       }
                       onClick={() => void saveContent(role)}
                     >

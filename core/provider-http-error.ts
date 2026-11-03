@@ -1,3 +1,5 @@
+import { ProviderBodyLimitError, readProviderBody } from './provider-fetch.js';
+
 /** Owner-facing diagnostics may contain echoed input. Shared reports must project safe fields only. */
 export type ProviderHttpDiagnostic = {
   httpStatus: number;
@@ -107,33 +109,9 @@ export async function readProviderHttpDiagnostic(
     }
   }
   if (!response.body) return diagnostic;
-  const reader = response.body.getReader();
-  const abortReader = () => {
-    void reader.cancel(signal.reason).catch(() => undefined);
-  };
-  signal.addEventListener('abort', abortReader, { once: true });
-  let size = 0;
-  const chunks: Uint8Array[] = [];
   try {
-    while (true) {
-      signal.throwIfAborted();
-      const next = await reader.read();
-      signal.throwIfAborted();
-      if (next.done) break;
-      size += next.value.byteLength;
-      if (size > PROVIDER_ERROR_BODY_LIMIT) {
-        diagnostic.bodyState = 'too-large';
-        return diagnostic;
-      }
-      chunks.push(next.value);
-    }
-    if (!size) return diagnostic;
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
+    const bytes = await readProviderBody(response, signal, PROVIDER_ERROR_BODY_LIMIT);
+    if (!bytes.length) return diagnostic;
     let decoded: string;
     try {
       decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
@@ -213,11 +191,7 @@ export async function readProviderHttpDiagnostic(
     return diagnostic;
   } catch (error) {
     if (signal.aborted) throw error;
-    diagnostic.bodyState = 'unavailable';
+    diagnostic.bodyState = error instanceof ProviderBodyLimitError ? 'too-large' : 'unavailable';
     return diagnostic;
-  } finally {
-    signal.removeEventListener('abort', abortReader);
-    // Never wait indefinitely for a remote source's cancellation acknowledgement.
-    void reader.cancel().catch(() => undefined);
   }
 }

@@ -6,6 +6,7 @@ import {
 } from './fixtures/execution-observer.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
@@ -64,7 +65,8 @@ async function fixture(
   scriptStage?: 'input' | 'editRequest' | 'recovery',
   judgmentEnabled = true,
   generationStatus: 'completed' | 'partial' = 'completed',
-  mainThreshold = 0.9
+  mainThreshold = 0.9,
+  createShellWorkspace = false
 ) {
   vi.stubEnv('TYPESAFE_API_KEY', key ? 'synthetic-jev-key' : '');
   const judged: Record<string, any>[] = [];
@@ -88,6 +90,8 @@ async function fixture(
   });
   const calls: ProviderRequest[] = [];
   const output = { text: candidate };
+  let shellRoot: string | undefined;
+  let shellWorkspace: string | undefined;
   const status = async () => ({
     available: true,
     authenticated: true,
@@ -109,6 +113,12 @@ async function fixture(
     },
     execute: async (connection, request, options) => {
       calls.push(request);
+      if (shellRoot && request.role === 'main') {
+        const active = app.store.db.prepare("SELECT id FROM runs WHERE status='running'").get()!;
+        shellWorkspace = join(shellRoot, 'tasks', String(active.id));
+        mkdirSync(join(shellWorkspace, 'scratch'), { recursive: true });
+        writeFileSync(join(shellWorkspace, 'scratch', 'private.txt'), 'temporary work');
+      }
       const body = { method: 'turn/start', role: request.role, model: request.modelId };
       await options.onWire?.({
         connectionId: connection.id,
@@ -151,6 +161,10 @@ async function fixture(
     directory: await mkdtemp(join(tmpdir(), 'uimori-main-judgment-')),
   } as (typeof owned)[number];
   owned.push(owner);
+  if (createShellWorkspace) {
+    shellRoot = join(owner.directory, 'shell');
+    vi.stubEnv('UIMORI_SHELL_ROOT', shellRoot);
+  }
   const app = await createApp({
     dbPath: join(owner.directory, 'test.sqlite'),
     buildId: 'synthetic-main-judgment',
@@ -256,7 +270,16 @@ ${
   await expect
     .poll(() => app.store.run(run.id).status, { timeout: 6000 })
     .not.toMatch(/^(queued|running)$/u);
-  return { app, chat, run: observedExecution(app.store, run.id), calls, judged, output, runtime };
+  return {
+    app,
+    chat,
+    run: observedExecution(app.store, run.id),
+    calls,
+    judged,
+    output,
+    runtime,
+    shellWorkspace,
+  };
 }
 
 test.each([
@@ -403,6 +426,26 @@ test('disabled main judgment does not accept a partial generation', async () => 
   expect(f.run.sourceRevision).toBeNull();
   expect(f.judged).toHaveLength(0);
 });
+
+test.each(['partial', 'refused'] as const)(
+  'removes the writer workspace after a terminal %s result',
+  async (status) => {
+    const f = await fixture(
+      'Temporary candidate',
+      0.99,
+      8,
+      true,
+      undefined,
+      status === 'refused',
+      status === 'partial' ? 'partial' : 'completed',
+      0.9,
+      true
+    );
+    expect(f.run.status).toBe(status);
+    expect(f.shellWorkspace).toBeDefined();
+    expect(existsSync(f.shellWorkspace!)).toBe(false);
+  }
+);
 
 test('a second judgment failure keeps the same response recoverable without writer charges', async () => {
   const f = await fixture('Keep this output', 'failure');

@@ -86,7 +86,7 @@ export const admissionOpen = (store: Store, forcedClosed: boolean): boolean =>
 export function maintenanceRoutes(
   app: FastifyInstance,
   store: Store,
-  options: { forcedClosed: boolean; activeWork: () => number }
+  options: { forcedClosed: boolean; activeWork: () => number; onOpen?: () => void }
 ) {
   const state = () => maintenanceStatus(store, options.forcedClosed);
   // Closing admission must also drain already admitted asynchronous HTTP writes,
@@ -115,10 +115,12 @@ export function maintenanceRoutes(
     if (status !== 'open' && status !== 'closed') throw new HttpError(400, 'MAINTENANCE_STATUS');
     if (status === 'open' && options.forcedClosed) throw new HttpError(409, 'MAINTENANCE_BOOT');
     const reason = body.reason === undefined ? undefined : text(body.reason, 'reason', 200);
+    const wasClosed = state().status === 'closed';
     const next = setMaintenance(store, {
       closed: status === 'closed',
       ...(reason === undefined ? {} : { reason }),
     });
+    if (wasClosed && next.status === 'open') options.onOpen?.();
     return { ...state(), ...next, activeWork: activeWork() };
   });
 }

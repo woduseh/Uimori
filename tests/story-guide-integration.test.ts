@@ -3,8 +3,10 @@ import { expect, test } from 'vitest';
 import type { Run } from '../core/types.js';
 import {
   MAIN_ONLY,
+  agent,
   api,
   call,
+  collaboration,
   deferred,
   fixture,
   message,
@@ -140,6 +142,61 @@ test('a failed fresh guide continues writing without injecting the previous succ
     'Only writer scene 1.',
     'Only writer scene 2.',
   ]);
+});
+
+test('a guide cached before cancelling a prewriting advisor is not reported as used by the writer', async () => {
+  const firstAdvice = 'FIRST_GUIDE: Keep the visitor unaware of the relationship.';
+  const secondAdvice = 'SECOND_GUIDE: Preserve the unresolved harbor conversation.';
+  const advisorStarted = deferred();
+  const advisorClosed = deferred();
+  let guideCalls = 0;
+  let advisorCalls = 0;
+  let writerCalls = 0;
+  const state = await fixture(
+    async (body, target) => {
+      const input = packet(body);
+      if (input.controls.purpose === 'story-guide') {
+        guideCalls++;
+        await send(target, [message(guideCalls === 1 ? firstAdvice : secondAdvice)]);
+      } else if (body.model === state.advisorModel.modelId) {
+        advisorCalls++;
+        if (advisorCalls === 1) await send(target, [message('Continue with care.')]);
+        else {
+          target.once('close', advisorClosed.release);
+          target.writeHead(200, { 'content-type': 'text/event-stream' });
+          target.write(sse({ type: 'response.created', response: { id: 'waiting-advisor' } }));
+          advisorStarted.release();
+        }
+      } else {
+        writerCalls++;
+        expect(input.source.storyGuide.text).toBe(firstAdvice);
+        await send(target, [message('The first scene reaches the harbor.')]);
+      }
+    },
+    { collaboration: collaboration({ agents: [agent('advisor', { trigger: 'before' })] }) }
+  );
+  state.app.store.storyGuide.update(state.chat.id, { expectedRevision: 0, config: guideConfig });
+  const first = await observedCompletion(state, (await state.start()).id);
+  expect(first.status, first.error ?? '').toBe('completed');
+  const current = state.app.store.chat(state.chat.id);
+  const second = await api<Run>(state.app, `/api/chats/${state.chat.id}/runs`, {
+    ...state.command,
+    request: 'Continue after the harbor scene.',
+    expectedRevision: current.headRevision,
+    idempotencyKey: randomUUID(),
+  });
+  await advisorStarted.promise;
+  await api(state.app, `/api/runs/${second.id}/cancel`, {});
+  await observedCompletion(state, second.id);
+  await advisorClosed.promise;
+
+  expect(guideCalls).toBe(2);
+  expect(advisorCalls).toBe(2);
+  expect(writerCalls).toBe(1);
+  expect(state.app.store.storyGuide.get(state.chat.id).brief?.text).toBe(secondAdvice);
+  const detail = (await state.app.inject(`/api/chats/${state.chat.id}/story-guide`)).json();
+  expect(detail.latestRun).toMatchObject({ status: 'cancelled', used: false });
+  expect(detail.brief.text).toBe(firstAdvice);
 });
 
 test('cancelling a guide read continuation closes HTTP and preserves spent usage without starting the writer', async () => {

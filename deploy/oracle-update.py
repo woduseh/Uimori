@@ -520,7 +520,7 @@ def main():
     release = Path(args.release_dir)
     if not release.is_dir() or release.is_symlink() or (release / "oracle-summary.json").exists():
         raise RuntimeError("Stage files in a new release directory before running")
-    with open("/opt/uimori/deploy.lock", "w") as lock:
+    with (release.parent.parent / "deploy.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         runner = Runner(args)
         def interrupted(signum, _frame):

@@ -18,7 +18,7 @@ export const NATIVE_LUA_LIMITS: NativeLuaWorkerLimits = {
   luaMemoryBytes: 448 * 1024 * 1024,
 };
 type Host = (method: string, args: unknown, signal: AbortSignal) => Promise<unknown>;
-type Options = { signal?: AbortSignal; sessionKey?: string };
+type Options = { signal?: AbortSignal; sessionKey?: string; sessionOwner: object };
 const failure = (code: string) => Object.assign(new Error(code), { code, statusCode: 400 });
 const sessions = new Map<string, Session>();
 const queues = new Map<string, Promise<unknown>>();
@@ -43,6 +43,9 @@ interface Invocation {
 class Session {
   worker?: Worker;
   current?: Invocation;
+  owner?: object;
+  ownerSignal?: AbortSignal;
+  ownerAbort?: () => void;
   waitingId?: number;
   hostId = 0;
   pending = false;
@@ -66,6 +69,9 @@ class Session {
     if (this.closed) return;
     this.closed = true;
     clearTimeout(this.timer);
+    if (this.ownerAbort) this.ownerSignal?.removeEventListener('abort', this.ownerAbort);
+    this.ownerSignal = undefined;
+    this.ownerAbort = undefined;
     if (this.key && sessions.get(this.key) === this) sessions.delete(this.key);
     const current = this.current;
     this.current = undefined;
@@ -163,6 +169,15 @@ class Session {
     if (this.closed || this.current) return Promise.reject(failure('RISU_NATIVE_SESSION_BUSY'));
     if (options.signal?.aborted) return Promise.reject(failure('RISU_NATIVE_ABORTED'));
     if (executing >= 8) return Promise.reject(failure('RISU_NATIVE_BUSY'));
+    if (this.ownerAbort) this.ownerSignal?.removeEventListener('abort', this.ownerAbort);
+    // The owning run can still be awaiting a model while its Lua VM is idle.
+    // Its cancellation must discard those locals before another run can reuse them.
+    this.owner = options.sessionOwner;
+    this.ownerSignal = options.signal;
+    this.ownerAbort = options.signal
+      ? () => this.dispose(failure('RISU_NATIVE_ABORTED'))
+      : undefined;
+    if (this.ownerAbort) options.signal!.addEventListener('abort', this.ownerAbort, { once: true });
     executing++;
     return new Promise((resolve, reject) => {
       const abort = () => this.dispose(failure('RISU_NATIVE_ABORTED'));
@@ -219,8 +234,9 @@ class Session {
   }
 }
 
-export function disposeNativeRisuSession(key: string) {
-  sessions.get(key)?.dispose();
+export function disposeNativeRisuSession(key: string, owner?: object) {
+  const session = sessions.get(key);
+  if (session && (owner === undefined || session.owner === owner)) session.dispose();
 }
 export function disposeAllNativeRisuSessions() {
   for (const session of sessions.values()) session.dispose();
@@ -241,6 +257,9 @@ export async function runNativeRisuLua(
   const fingerprint = createHash('sha256').update(source).digest('hex');
   const key = options.sessionKey;
   const run = async () => {
+    // Do not install an ownerless, idle session when admission itself fails.
+    if (options.signal?.aborted) throw failure('RISU_NATIVE_ABORTED');
+    if (executing >= 8) throw failure('RISU_NATIVE_BUSY');
     let session = key ? sessions.get(key) : undefined;
     if (session && session.fingerprint !== fingerprint) {
       session.dispose();

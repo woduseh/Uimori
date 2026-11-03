@@ -32,6 +32,7 @@ import { subscribeAppHistory } from './app-history.js';
 import type { Chat, ReaderDetail, Run } from '../core/types.js';
 import type { Content, CurrentPrompt, Library, PromptPreset } from '../core/product.js';
 import type { ChatOptionState } from '../core/chat-options.js';
+import type { SceneDeletionResult } from '../core/scene-deletion.js';
 import { api, apiBinary, ApiError, definiteRejection, libraryChangedKey } from './api.js';
 import { requestChatFork } from './fork-request.js';
 import { usePromptWorkspace } from './usePromptWorkspace.js';
@@ -98,6 +99,7 @@ export type RequestActivity = {
   startedAt: string;
   runId?: string;
   status: 'sending' | 'accepted' | 'uncertain' | 'failed';
+  confirmationBlocked?: boolean;
 };
 function readCommand(key: string): { record: PendingCommand; payload: RunPayload } | null {
   try {
@@ -1033,6 +1035,26 @@ export function useStory() {
       });
     }
   };
+  const sceneDeletionCompletion = (chatId: string) => {
+    const epoch = navigation.current.epoch;
+    return async (result: SceneDeletionResult) => {
+      let reportEpoch = epoch;
+      const current = () =>
+        navigation.current.chat === chatId &&
+        navigation.current.epoch === reportEpoch &&
+        navigation.current.destination === 'story';
+      try {
+        // A late acknowledgement must not undo a newer reader selection, including A → B → A.
+        if (current() && result.chatId === chatId) {
+          chooseSource(result.headRevision ?? '', true);
+          reportEpoch = navigation.current.epoch;
+        }
+        await loadChats();
+      } catch (cause) {
+        if (current()) setError(cause instanceof Error ? cause : String(cause));
+      }
+    };
+  };
   const openTarget = (target: ReaderTarget, replace = false) => {
     explicitReadingIntent.current = replace
       ? null
@@ -1155,6 +1177,7 @@ export function useStory() {
       expectedSettingsRevision: chat.settingsRevision,
       ...(detail.profile ? { expectedProfileRevision: detail.profile.revision } : {}),
     };
+    const sentTranslationId = inputTranslation.beginSend();
     if (!previous && !payload.judgmentRecovery) {
       const proceed = await codexWarning.check(
         `/chats/${chat.id}/codex-content-preflight`,
@@ -1186,14 +1209,17 @@ export function useStory() {
         return false;
     }
     if (submitLocks.current.has(sentView)) return false;
-    const sentTranslationId = inputTranslation.beginSend();
     const preserveDraft = !!retryRun || previous?.record.preserveDraft === true;
     const idempotencyKey = previous?.record.id ?? crypto.randomUUID();
     const startedAt = previous?.record.startedAt ?? new Date().toISOString();
-    const track = (status: RequestActivity['status'], runId?: string) =>
+    const track = (
+      status: RequestActivity['status'],
+      runId?: string,
+      confirmationBlocked = false
+    ) =>
       setRequestActivities((old) => ({
         ...old,
-        [sentView]: { id: idempotencyKey, startedAt, status, runId },
+        [sentView]: { id: idempotencyKey, startedAt, status, runId, confirmationBlocked },
       }));
     submitLocks.current.add(sentView);
     setSubmitting([...submitLocks.current]);
@@ -1318,12 +1344,13 @@ export function useStory() {
         select(admitted.chatId);
       }
     } catch (error) {
-      track(definiteRejection(error) ? 'failed' : 'uncertain');
-      if (
-        definiteRejection(error) &&
-        (!previous || (error instanceof ApiError && [404, 409].includes(error.status)))
-      )
-        clearCommand(commandKey, idempotencyKey);
+      const unresolved = !!previous || !definiteRejection(error);
+      track(
+        unresolved ? 'uncertain' : 'failed',
+        undefined,
+        !!previous && error instanceof ApiError && [404, 409].includes(error.status)
+      );
+      if (!unresolved) clearCommand(commandKey, idempotencyKey);
       if (currentView.current === sentView)
         setError(error instanceof Error ? error : '요청이 접수됐는지 확인하지 못했어요.');
     }
@@ -1662,6 +1689,25 @@ export function useStory() {
       allContents.some((item) => refValue(item) === refValue(ref))
     );
   const pendingCommand = selected ? readCommand(commandStorageKey(selected)) : null;
+  function forgetPendingRequest(expectedId: string) {
+    if (!selected || submitLocks.current.has(selected)) return false;
+    const key = commandStorageKey(selected);
+    try {
+      if (readCommand(key)?.record.id !== expectedId) return false;
+      clearCommand(key, expectedId);
+    } catch {
+      setError(uiMessage('main.pendingRequestForgetFailed'));
+      return false;
+    }
+    setRequestActivities((old) => {
+      if (old[viewKey]?.id !== expectedId) return old;
+      const next = { ...old };
+      delete next[viewKey];
+      return next;
+    });
+    setError('');
+    return true;
+  }
   const pendingRequest = pendingCommand
     ? pendingCommand.payload.request || '참고 이미지 요청'
     : null;
@@ -1763,6 +1809,7 @@ export function useStory() {
     attachmentsReady,
     pendingRequest,
     pendingEditedRunId,
+    forgetPendingRequest,
     loreContextReset,
     forking,
     forkOrigin,
@@ -1780,6 +1827,7 @@ export function useStory() {
     editLoreContextReset,
     select,
     chooseSource,
+    sceneDeletionCompletion,
     openTarget,
     readerTarget,
     readingSync,

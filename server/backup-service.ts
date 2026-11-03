@@ -91,6 +91,9 @@ export class BackupService {
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
   private state: SavedState;
+  get isActive(): boolean {
+    return this.active !== null;
+  }
   constructor(
     private readonly store: Store,
     private readonly buildId: string,

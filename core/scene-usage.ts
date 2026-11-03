@@ -13,6 +13,8 @@ export type ContextReceipt = {
     status: 'included' | 'absent' | 'unverified';
     coveredSources: number;
   } | null;
+  /** Absent on older receipts; inclusion is checked against the final writer wire body. */
+  storyGuide?: { status: 'included' | 'unverified' };
 };
 
 export type SceneUsageDetail = {

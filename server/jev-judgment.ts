@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { estimateContextTokens } from '../core/context-budget.js';
 import type { Json, ProviderResult, WireRecord } from '../core/transport.js';
 import type { JevSettings } from '../core/jev-provider.js';
+import { ProviderBodyLimitError, readProviderBody } from '../core/provider-fetch.js';
 
 export const JEV_ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
 export const JEV_MODEL = 'jev-latest';
@@ -177,22 +178,17 @@ export async function executeJevJudgment(
       body: encoded,
       signal: controller.signal,
     });
-    const reader = response.body?.getReader();
-    if (!reader)
+    if (!response.body)
       throw new JevError(response.ok ? 'JEV_RESPONSE_INVALID' : `JEV_HTTP_${response.status}`);
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    while (true) {
-      const part = await reader.read();
-      if (part.done) break;
-      size += part.value.byteLength;
-      if (size > 2 * 1024 * 1024) {
-        await reader.cancel();
-        throw new JevError('JEV_RESPONSE_LIMIT');
-      }
-      chunks.push(part.value);
+    let responseText: string;
+    try {
+      responseText = (
+        await readProviderBody(response, controller.signal, 2 * 1024 * 1024)
+      ).toString('utf8');
+    } catch (error) {
+      if (error instanceof ProviderBodyLimitError) throw new JevError('JEV_RESPONSE_LIMIT');
+      throw error;
     }
-    const responseText = Buffer.concat(chunks).toString('utf8');
     if (!response.ok) {
       let errorType: unknown;
       try {

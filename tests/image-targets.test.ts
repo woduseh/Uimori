@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
+import { createApp } from '../server/app.js';
+import { JEV_ENDPOINT } from '../server/jev-judgment.js';
 import { Store, type Job, type Source } from '../server/store.js';
 import { readRunSnapshot } from '../server/run-projections.js';
 import { splitSource, validatePresentation } from '../core/auxiliary.js';
@@ -13,16 +15,20 @@ import { putImageBlob, requestImages } from '../server/package-images.js';
 import { imageCatalog, imageJobInput, latestImageJob } from '../server/package-images.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { updateTestProfile } from './fixtures/model-workspace.js';
+import type { WireRecord } from '../core/transport.js';
 
 const owned: { directory: string; store: Store }[] = [];
+function removeFixtureDirectory(directory: string, prefix: string) {
+  const path = resolve(directory),
+    rel = relative(resolve(tmpdir()), path);
+  if (isAbsolute(rel) || rel.startsWith('..') || !rel.startsWith(prefix))
+    throw new Error('Unsafe synthetic fixture cleanup');
+  rmSync(path, { recursive: true, force: true });
+}
 afterEach(() => {
   for (const { directory, store } of owned.splice(0)) {
     store.close();
-    const path = resolve(directory),
-      rel = relative(resolve(tmpdir()), path);
-    if (isAbsolute(rel) || rel.startsWith('..') || !rel.startsWith('uimori-image-targets-'))
-      throw new Error('Unsafe synthetic fixture cleanup');
-    rmSync(path, { recursive: true, force: true });
+    removeFixtureDirectory(directory, 'uimori-image-targets-');
   }
 });
 function database() {
@@ -37,9 +43,9 @@ function fixture(
     image?: boolean;
     imageTranslation?: boolean;
     portraitOnly?: boolean;
-  } = {}
+  } = {},
+  store = database()
 ) {
-  const store = database();
   const bot = fixtureBotInput('Synthetic image target owner');
   if (options.images !== false) {
     const blob = putImageBlob(store.product, {
@@ -125,6 +131,19 @@ function translate(store: Store, source: Source) {
 function images(store: Store, source: Source) {
   return store.detail(source.chatId).jobs.filter((job) => job.kind === 'image');
 }
+const imageWire = (): WireRecord => ({
+  connectionId: 'typesafe-judgment',
+  protocol: 'typesafe-systemone-v1',
+  role: 'image',
+  modelId: 'jev-latest',
+  method: 'POST',
+  url: 'https://api.typesafe.ai/v1/systemone',
+  headers: {},
+  body: {},
+  bodySha256: 'a'.repeat(64),
+  stablePrefixSha256: 'b'.repeat(64),
+  judgment: { kind: 'image-selection', inputHash: 'c'.repeat(64) },
+});
 function target(job: Job) {
   return (
     job.input as {
@@ -219,6 +238,69 @@ test('JEV ownership reserves original and translated placement despite a legacy 
   });
 });
 
+test.each(['real', 'synthetic', 'none'] as const)(
+  'restart distinguishes an image placement with %s provider attempt',
+  (attemptKind) => {
+    const { store, source, chat } = fixture({ image: true });
+    const job = images(store, source)[0];
+    const claimed = store.claimJob(job.id, 'worker-before-restart', {})!;
+    if (attemptKind === 'real') {
+      store.product.startAttempt(chat.id, null, job.id, imageWire());
+    } else if (attemptKind === 'synthetic') {
+      store.product.mockAttempt(chat.id, null, job.id, 'image', {});
+    }
+
+    store.recover();
+
+    const recovered = store.job(job.id);
+    expect(recovered.status).toBe(attemptKind === 'real' ? 'interrupted' : 'queued');
+    expect(store.queuedJobs().includes(job.id)).toBe(attemptKind !== 'real');
+    expect(
+      store.finishAuxiliary(job.id, claimed.generation, 'worker-before-restart', {
+        status: 'completed',
+        result: {
+          mock: false,
+          sourceRevision: source.id,
+          sourceHash: source.hash,
+          annotations: [],
+        },
+        error: null,
+      })
+    ).toBe(false);
+    if (attemptKind === 'real') {
+      expect(store.retryJob(job.id).status).toBe('queued');
+      expect(store.claimJob(job.id, 'explicit-retry', {})!.generation).toBeGreaterThan(
+        claimed.generation
+      );
+    }
+    expect(store.source(source.id).text).toBe(source.text);
+  }
+);
+
+test('an earlier real image attempt conservatively requires retry after another restart', () => {
+  const { store, source, chat } = fixture({ image: true });
+  const job = images(store, source)[0];
+  const first = store.claimJob(job.id, 'first-worker', {})!;
+  const attempt = store.product.startAttempt(chat.id, null, job.id, imageWire());
+  store.product.finishAttempt(attempt, {
+    status: 'error',
+    text: '',
+    toolCalls: [],
+    refusal: null,
+    error: { code: 'FIXTURE_FAILURE' },
+    usage: { inputTokens: null, outputTokens: null, costUsd: null, raw: null, priceRevision: null },
+    opaqueState: null,
+  });
+  store.failJob(job.id, first.generation, 'first-worker', 'FIXTURE_FAILURE');
+  store.retryJob(job.id);
+  store.claimJob(job.id, 'next-worker', {});
+
+  store.recover();
+
+  expect(store.job(job.id).status).toBe('interrupted');
+  expect(store.queuedJobs()).not.toContain(job.id);
+});
+
 test('the synthetic image worker preserves original provenance with a translation target', async () => {
   const { store, source } = fixture({ image: true });
   const translation = translate(store, source);
@@ -272,6 +354,72 @@ test('the synthetic image worker preserves original provenance with a translatio
       imageTarget: target(job),
     },
   });
+});
+
+test('image placement through the app pump retains its source and completed result', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'uimori-image-pump-'));
+  const app = await createApp({
+    dbPath: join(directory, 'synthetic.sqlite'),
+    buildId: 'image-pump-test',
+    testMode: true,
+  });
+  try {
+    const { store, source } = fixture({ image: true }, app.store);
+    store.credentials.set('jev', 'synthetic-jev-key');
+    vi.stubGlobal('fetch', async (url: unknown, init?: RequestInit) => {
+      expect(url).toBe(JEV_ENDPOINT);
+      const body = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          model: 'jev-latest',
+          answers: Object.fromEntries(
+            Object.entries(body.questions).map(([key, q]) => [
+              key,
+              {
+                type: 'choice',
+                choice: 'none',
+                confidence: 1,
+                probabilities: Object.fromEntries(
+                  Object.keys((q as any).criteria).map((option) => [
+                    option,
+                    option === 'none' ? 1 : 0,
+                  ])
+                ),
+              },
+            ])
+          ),
+          usage: { input_tokens: 7, output_tokens: 3 },
+        })
+      );
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/sources/${source.id}/images`,
+      headers: { host: '127.0.0.1' },
+      payload: {
+        expectedSourceHash: source.hash,
+        expectedRevision: latestImageJob(store, source.id, 'original')?.revision ?? 0,
+      },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const jobId = response.json().id as string;
+    await vi.waitFor(() => expect(store.job(jobId).status).toBe('completed'));
+    expect(store.job(jobId)).toMatchObject({
+      result: {
+        sourceRevision: source.id,
+        sourceHash: source.hash,
+        imageTarget: { mode: 'original', textHash: source.hash },
+      },
+    });
+    expect(store.source(source.id)).toEqual(source);
+    expect(
+      store.product.attempts(source.chatId).filter((attempt) => attempt.jobId === jobId)
+    ).toHaveLength(1);
+  } finally {
+    vi.unstubAllGlobals();
+    await app.close();
+    removeFixtureDirectory(directory, 'uimori-image-pump-');
+  }
 });
 
 test('automatic translation placement respects ownership, catalog availability and direct edit boundary', () => {

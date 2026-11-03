@@ -424,10 +424,18 @@ export class HelperWorkspace {
       const tasks = this.store.db
         .prepare('SELECT id FROM helper_tasks WHERE conversation_id=?')
         .all(id);
-      const attachmentImages = this.store.db
-        .prepare('SELECT images FROM helper_message_attachments WHERE conversation_id=?')
-        .all(id)
-        .flatMap((row) => imageDataHashes(row.images));
+      // These records are image-retention roots until the conversation is removed.
+      // Collect candidates before the cascade, then let the shared reachability check
+      // preserve references still owned by other conversations or saved resources.
+      const imageCandidates = this.store.db
+        .prepare(`SELECT images AS value FROM helper_message_attachments WHERE conversation_id=?
+          UNION ALL SELECT text FROM helper_messages WHERE conversation_id=?
+          UNION ALL SELECT text FROM helper_seed_messages WHERE conversation_id=?
+          UNION ALL SELECT text FROM helper_message_changes WHERE conversation_id=?
+          UNION ALL SELECT text FROM helper_artifacts WHERE conversation_id=?
+          UNION ALL SELECT snapshot FROM helper_tasks WHERE conversation_id=?`)
+        .all(id, id, id, id, id, id)
+        .flatMap((row) => imageDataHashes(row.value));
       for (const scopeKey of [`helper:${id}`, ...tasks.map((task) => `artifact:${task.id}`)])
         for (const table of ['context_heads', 'context_checkpoints'])
           this.store.db.prepare(`DELETE FROM ${table} WHERE scope_key=?`).run(scopeKey);
@@ -439,7 +447,7 @@ export class HelperWorkspace {
         .map((row) => String(row.attempt_id));
       detachAttemptUsage(this.store.db, attemptIds);
       this.store.db.prepare('DELETE FROM helper_conversations WHERE id=?').run(id);
-      pruneUnusedData(this.store.db, attachmentImages);
+      pruneUnusedData(this.store.db, imageCandidates);
       pruneUnusedHelperFiles(this.store.db);
       return { deleted: true as const };
     });
@@ -934,17 +942,9 @@ export class HelperWorkspace {
     apply: () => SynchronousResult<T>
   ): SynchronousResult<T> {
     return this.store.transaction<T>(() => {
+      const prior = this.operationResult<SynchronousResult<T>>(taskId, operationId, input);
+      if (prior !== undefined) return prior;
       const hash = createHash('sha256').update(json(input)).digest('hex');
-      const prior = this.store.db
-        .prepare('SELECT * FROM helper_operations WHERE id=?')
-        .get(operationId) as Row | undefined;
-      if (prior) {
-        if (prior.task_id !== taskId || prior.request_hash !== hash)
-          throw new HttpError(409, 'OPERATION_ID_CONFLICT');
-        const result = JSON.parse(prior.result);
-        if (result?.detailsOmitted) throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
-        return result as SynchronousResult<T>;
-      }
       if (this.task(taskId).status !== 'running')
         throw new HttpError(409, 'HELPER_TASK_NO_LONGER_ACTIVE');
       const result = apply();
@@ -1038,7 +1038,7 @@ export class HelperWorkspace {
     id: string,
     owner: string,
     generation: number,
-    status: HelperStatus,
+    status: Exclude<HelperStatus, 'queued' | 'running'>,
     text: string,
     error: string | null
   ) {

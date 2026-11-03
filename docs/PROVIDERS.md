@@ -26,7 +26,7 @@ Uimori는 여러 사용자 요청을 모으는 자체 batching scheduler를 두�
 
 Batch의 `runId`·`attemptId`·`batchId`·`customId`와 요청 해시를 SQLite에 저장해요. 서버가 중단되어도 Anthropic에 생성된 Batch는 유지되므로 다음 부팅에서 같은 Run과 Batch를 다시 조회해 이어 받아요. 이미 저장된 Batch 결과와 도구 영수증도 재사용해서 같은 프로바이더 요청이나 도구를 다시 실행하지 않아요. Batch 생성 POST를 보냈는지 확정할 수 없는데 `batchId`만 저장되지 않은 아주 짧은 구간은 중복 과금을 피하기 위해 자동 재전송하지 않고 실패로 남겨요.
 
-사용자가 Run을 취소하면 로컬 Run이 즉시 취소되고, 생성된 Anthropic Batch가 있으면 원격 취소도 best-effort로 요청해요. 서버 종료는 사용자 취소가 아니므로 원격 Batch를 취소하지 않아요. 취소 뒤 늦게 도착한 결과는 source로 commit하지 않아요.
+사용자가 Run을 취소하면 로컬 Run이 즉시 취소되고, 생성된 Anthropic Batch가 있으면 조회 응답을 읽는 중에도 원격 취소를 best-effort로 요청해요. 서버 종료는 사용자 취소가 아니므로 원격 Batch를 취소하지 않아요. 취소 뒤 늦게 도착한 결과는 source로 commit하지 않아요. JEV와 Responses를 포함한 프로바이더 응답 본문 읽기도 작업 취소와 시간 제한에 따라 중단해요.
 
 Anthropic Batch 추정 비용은 모델에 별도로 입력한 Batch 단가를 사용해요. Batch 단가가 없으면 미확인으로 표시하며 기본 단가에 자동 할인을 적용하지 않아요. 업데이트 전에 예약된 작업의 가격 snapshot은 당시 계산을 유지해요. 실제 청구 내역은 Anthropic이 기준이에요.
 
@@ -56,7 +56,7 @@ JEV 모델 화면의 **이미지를 보고 선택**, **긴 컨텍스트**는 다
 
 ## Google Agent Platform / Vertex
 
-Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 등록하고 프로젝트 ID를 global endpoint에 반영해요. 등록한 Vertex 인증을 생성과 Google Model Garden 모델 목록 조회에 함께 사용해요.
+Gemini용 `vertex-gemini-v1` 연결에서는 서비스 계정 JSON을 앱에서 등록하고 프로젝트 ID를 global endpoint에 반영해요. 파일을 확인할 때는 형식만 검사하고, 연결을 저장할 때 서비스 계정도 함께 저장해요. 저장하지 않거나 저장에 실패한 초안의 인증 정보는 DB에 남지 않아요. 교체하거나 삭제한 연결의 기존 서비스 계정은 예약·실행 중인 작업의 참조를 보호하기 위해 보존해요. 등록한 Vertex 인증을 생성과 Google Model Garden 모델 목록 조회에 함께 사용해요.
 
 ## Google AI Studio / Gemini API
 
@@ -84,7 +84,7 @@ Codex는 API 키를 입력하는 연결이 아니라 전용 실행기의 로그�
 
 `core/model-request-fields.ts`는 실행 스냅샷의 모델 ID·프로바이더 옵션·확정된 가격 스냅샷만 요청으로 옮겨요. 생성 옵션·컨텍스트 예산·도구·저장과 실행 정책은 각 요청 생성부가 결정하며, 제목과 연결 테스트는 별도 정책을 유지해요.
 
-`server/provider-connections.ts`는 연결 입력·키 저장을, `server/credentials.ts`는 DB 키 읽기/쓰기를 맡아요. 프로토콜별 encoder와 transport는 모델 요청 형식과 응답 파싱을 맡아요. 자료 편집과 과거 백업 검증이 프로바이더 전송 경로에 개입하지 않아요. 실제 지원 옵션과 응답 품질은 해당 서비스에서 확인해야 해요.
+`server/provider-connections.ts`는 연결 입력·키 저장을, `server/credentials.ts`는 DB 키 읽기/쓰기를 맡아요. 연결 저장은 최종 주소와 새로 선택하거나 기존에 저장한 Vertex 서비스 계정의 프로젝트를 같은 트랜잭션에서 검증해요. 프로토콜별 encoder와 transport는 모델 요청 형식과 응답 파싱을 맡아요. 자료 편집과 과거 백업 검증이 프로바이더 전송 경로에 개입하지 않아요. 실제 지원 옵션과 응답 품질은 해당 서비스에서 확인해야 해요.
 
 `server/main-request.ts`의 공통 측정 경로가 프로바이더별 요청과 모델별 토크나이저·예산을 함께 처리해요. 컨텍스트 계획·압축·다음 요청 분량 미리보기는 이 경로를 사용하며, 실제 전송할 요청을 기준으로 측정하고 요약 포함 여부를 확인해요. Gemini 대화는 역할과 순서를 유지한 네이티브 텍스트로 전송해요. Codex의 보수적인 두 실행 형식 측정과 도우미 전용 입력 형식도 유지해요.
 

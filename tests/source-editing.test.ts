@@ -249,7 +249,7 @@ test('failure diagnostics persist only for the current owner and generation with
   if (!frozenInput || typeof frozenInput !== 'object' || Array.isArray(frozenInput))
     throw new Error('Expected a frozen translation input object');
   const failure = {
-    status: 'failed',
+    status: 'failed' as const,
     result: {
       mock: true,
       sourceRevision: original.id,

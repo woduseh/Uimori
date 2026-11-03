@@ -13,7 +13,6 @@ export type ContextRouteHooks = {
 /** Standalone user operations; provider execution is injected by the application owner. */
 export function contextRoutes(app: FastifyInstance, store: Store, hooks: ContextRouteHooks) {
   const active = new Map<string, AbortController>();
-  store.context.recover();
   const publicJob = ({ snapshot: _snapshot, ...job }: ContextJob) => job;
   const detail = (chatId: string) => {
     const value = store.context.detail(chatId);

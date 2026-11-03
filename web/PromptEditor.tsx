@@ -52,7 +52,11 @@ type Props = {
   headingTrailing?: ReactNode;
   initialRole?: PromptRole;
   initialPreset?: PromptPreset | null;
-  onSaved?: (preset: PromptPreset, created: boolean) => Promise<void>;
+  onSaved?: (
+    preset: PromptPreset,
+    created: boolean,
+    creationOrganizationRevision: number | null
+  ) => Promise<void>;
   library: Library;
   reload?: () => Promise<void>;
   onError: (message: string) => void;
@@ -137,7 +141,10 @@ export function PromptEditor({
         .map((item) => [item.id, item])
     ).values(),
   ];
-  const dirty = [...cache.current.values()].some((session) => session.snapshot().dirty);
+  const dirty = [...cache.current.values()].some((session) => {
+    const state = session.snapshot();
+    return state.dirty || state.creationPending;
+  });
   useEffect(() => {
     onDirtyChange?.(dirty || busy);
   }, [dirty, busy, onDirtyChange]);
@@ -177,19 +184,27 @@ export function PromptEditor({
     setStatus('');
   }
   async function save(update: boolean) {
-    if (busy || !state.ready || collaborationIssue || !model.title.trim() || (update && !base))
+    if (
+      busy ||
+      !state.ready ||
+      (!state.creationPending && (collaborationIssue || !model.title.trim() || (update && !base)))
+    )
       return false;
     setError('');
     setStatus('');
     try {
       const previousKey = session.editorKey;
-      const saveModel: PromptEditModel = {
-        ...model,
-        title: model.title.trim(),
-        program: validateRisuPrompt(model.program),
-      };
-      const accepted = (await session.save(saveModel, { copy: !update && !!base }))
-        .saved as PromptPreset;
+      const result = state.creationPending
+        ? await session.save()
+        : await session.save(
+            {
+              ...model,
+              title: model.title.trim(),
+              program: validateRisuPrompt(model.program),
+            } satisfies PromptEditModel,
+            { copy: !update && !!base }
+          );
+      const accepted = result.saved as PromptPreset;
       cache.current.delete(previousKey);
       cache.current.set(session.editorKey, session);
       setLocalPresets((current) => [
@@ -201,7 +216,11 @@ export function PromptEditor({
       setPlacing(true);
       const warnings: (() => string)[] = [];
       try {
-        await onSaved?.(accepted, !update);
+        await onSaved?.(
+          accepted,
+          result.creationIntent,
+          result.creationOrganizationRevision ?? null
+        );
       } catch (caught) {
         warnings.push(() =>
           t('prompts.savedPlacement', {
@@ -241,7 +260,11 @@ export function PromptEditor({
     }
   }
   useEditorSaveCommand(session, () => {
-    if ([...cache.current.values()].some((other) => other !== session && other.snapshot().dirty))
+    if (
+      [...cache.current.values()].some(
+        (other) => other !== session && (other.snapshot().dirty || other.snapshot().creationPending)
+      )
+    )
       throw new Error(uiMessage('prompts.uiOtherRolesOrPresetsHaveUnsavedDraftsContinueEditing'));
     return save(!!base);
   });
@@ -251,10 +274,13 @@ export function PromptEditor({
       <div className="prompt-save-buttons">
         <SaveButton
           type="button"
-          label={t('prompts.uiSavePreset')}
+          label={t(state.creationPending ? 'main.m130' : 'prompts.uiSavePreset')}
+          text={state.creationPending ? t('main.m130') : undefined}
           aria-busy={busy}
           disabled={
-            busy || !!collaborationIssue || !draft.title.trim() || (!!draft.base && !draft.dirty)
+            busy ||
+            (!state.creationPending &&
+              (!!collaborationIssue || !draft.title.trim() || (!!draft.base && !draft.dirty)))
           }
           className="primary native-editor-save"
           onClick={() => void save(!!draft.base)}
@@ -266,7 +292,9 @@ export function PromptEditor({
                 <button
                   type="button"
                   className="secondary"
-                  disabled={busy || !!collaborationIssue || !draft.title.trim()}
+                  disabled={
+                    busy || state.creationPending || !!collaborationIssue || !draft.title.trim()
+                  }
                   onClick={() => void save(false)}
                 >
                   <CopyIcon size={18} aria-hidden="true" />

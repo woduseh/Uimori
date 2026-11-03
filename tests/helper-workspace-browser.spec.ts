@@ -755,6 +755,8 @@ test('HSPACE07 project and copy retries recover the same saved result through se
   await page.route('**/api/helper/projects', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     projectPayloads.push(route.request().postDataJSON());
+    if (projectPayloads.length === 2)
+      return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
     const response = await route.fetch();
     expect(response.ok()).toBe(true);
     projectIds.push(((await response.json()) as { id: string }).id);
@@ -771,9 +773,16 @@ test('HSPACE07 project and copy retries recover the same saved result through se
     await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null'), projectKey)
   ).toEqual(projectPayloads[0]);
   await project.getByRole('button', { name: '프로젝트 이름 저장', exact: true }).click();
+  await expect.poll(() => projectPayloads.length).toBe(2);
+  await expect(project.getByRole('alert')).toBeVisible();
+  expect(
+    await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null'), projectKey)
+  ).toEqual(projectPayloads[0]);
+  await project.getByRole('button', { name: '프로젝트 이름 저장', exact: true }).click();
   await expect(project).toBeHidden();
-  expect(projectPayloads).toHaveLength(2);
+  expect(projectPayloads).toHaveLength(3);
   expect(projectPayloads[1]).toEqual(projectPayloads[0]);
+  expect(projectPayloads[2]).toEqual(projectPayloads[0]);
   expect(projectIds[1]).toBe(projectIds[0]);
   expect(
     await page.evaluate(
@@ -790,11 +799,13 @@ test('HSPACE07 project and copy retries recover the same saved result through se
   await expect(history.getByRole('region', { name: renamedTitle, exact: true })).toBeVisible();
   await expect(history.getByRole('region', { name: title, exact: true })).toHaveCount(0);
   await history.getByRole('searchbox', { name: '대화 검색', exact: true }).fill(title);
-  const row = history.locator('.helper-nav-row').filter({ hasText: title });
+  const row = history.locator(`[data-conversation-id="${original.id}"]`);
   const copyPayloads: unknown[] = [];
   const copyIds: string[] = [];
   await page.route(`**/api/helper/conversations/${original.id}/copy`, async (route) => {
     copyPayloads.push(route.request().postDataJSON());
+    if (copyPayloads.length === 2)
+      return route.fulfill({ status: 409, json: { error: 'Temporary confirmation failure' } });
     const response = await route.fetch();
     expect(response.ok()).toBe(true);
     copyIds.push(((await response.json()) as { id: string }).id);
@@ -813,11 +824,19 @@ test('HSPACE07 project and copy retries recover the same saved result through se
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await history.getByLabel(`${title} 대화 메뉴`, { exact: true }).click();
+  await row.getByLabel(`${title} 대화 메뉴`, { exact: true }).click();
+  await page.getByRole('button', { name: '대화 복사', exact: true }).click();
+  await expect.poll(() => copyPayloads.length).toBe(2);
+  await expect(history.getByRole('alert')).toBeVisible();
+  expect(
+    await page.evaluate((key) => JSON.parse(sessionStorage.getItem(key) ?? 'null'), copyKey)
+  ).toEqual(copyPayloads[0]);
+  await row.getByLabel(`${title} 대화 메뉴`, { exact: true }).click();
   await page.getByRole('button', { name: '대화 복사', exact: true }).click();
   await expect(panel.getByLabel('도우미 세션 선택', { exact: true })).toHaveValue(copyIds[0]);
-  expect(copyPayloads).toHaveLength(2);
+  expect(copyPayloads).toHaveLength(3);
   expect(copyPayloads[1]).toEqual(copyPayloads[0]);
+  expect(copyPayloads[2]).toEqual(copyPayloads[0]);
   expect(copyIds[1]).toBe(copyIds[0]);
   expect(
     await page.evaluate((key) => [localStorage.getItem(key), sessionStorage.getItem(key)], copyKey)

@@ -184,7 +184,13 @@ export async function freezeHelperAttachments(
   const draft = owner.snapshot.draft;
   const invalid = helperAttachmentError(draft, model);
   if (invalid) throw new Error(invalid);
-  await owner.write;
+  try {
+    await owner.write;
+  } catch (error) {
+    // With no blobs to lose, the pending request can still reach the existing
+    // outbox decision. Its frozen token protects newer input from a late reply.
+    if (draft.images.length || draft.files.length) throw error;
+  }
   const frozen: FrozenHelperAttachments = { draftToken: draft.token };
   for (const [kind, attachments] of [
     ['images', draft.images],

@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -13,6 +14,7 @@ import type { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { HttpError } from './request-validation.js';
 import { RISU_IMPORT_MAX_UPLOAD_BYTES } from '../core/risu-import.js';
+import { ownedImportStagingRoot } from './import-preparation.js';
 
 /** A staged import file lives next to the database, never inside a request body or the archive. */
 export const UPLOAD_MAX_BYTES = RISU_IMPORT_MAX_UPLOAD_BYTES;
@@ -30,13 +32,15 @@ function uploadPath(dbPath: string, id: string): string {
 /** Removes staged files that no import consumed, so a cancelled review leaves no copy behind. */
 export function pruneUploads(dbPath: string, maxAgeMs = UPLOAD_MAX_AGE_MS): void {
   const directory = uploadDirectory(dbPath);
-  if (!existsSync(directory)) return;
+  if (!ownedImportStagingRoot(dbPath, directory)) return;
   const cutoff = Date.now() - Math.max(0, maxAgeMs);
   for (const entry of readdirSync(directory)) {
     if (!/^[a-f0-9]{32}\.bin$/u.test(entry)) continue;
     const path = join(directory, entry);
     try {
-      if (statSync(path).mtimeMs < cutoff) rmSync(path, { force: true });
+      const info = lstatSync(path);
+      if (info.isFile() && !info.isSymbolicLink() && info.mtimeMs < cutoff)
+        rmSync(path, { force: true });
     } catch {
       /* A file another request is replacing stays for the next prune. */
     }
@@ -79,11 +83,11 @@ export async function storeUpload(
       stream.on('end', () => file.end(() => settle()));
     });
   } catch (error) {
-    rmSync(path, { force: true });
+    deleteUpload(dbPath, uploadId);
     throw error;
   }
   if (!bytes) {
-    rmSync(path, { force: true });
+    deleteUpload(dbPath, uploadId);
     throw new HttpError(400, 'UPLOAD_EMPTY');
   }
   return { uploadId, bytes, sha256: digest.digest('hex') };
@@ -97,7 +101,14 @@ export function readUpload(dbPath: string, id: string, limit = UPLOAD_MAX_BYTES)
 }
 
 export function deleteUpload(dbPath: string, id: string): void {
-  rmSync(uploadPath(dbPath, id), { force: true });
+  const path = uploadPath(dbPath, id);
+  if (!ownedImportStagingRoot(dbPath, uploadDirectory(dbPath))) return;
+  try {
+    const info = lstatSync(path);
+    if (info.isFile() && !info.isSymbolicLink()) rmSync(path, { force: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }
 
 /** Streams one import file to disk. The body never becomes a parsed value or a base64 string. */

@@ -16,6 +16,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
   type MutableRefObject,
 } from 'react';
@@ -96,7 +97,11 @@ import { modelLabel } from './storyLabels.js';
 import {
   cachedHelperRecovery,
   clearHelperRecoveryIf,
-  loadHelperRecovery,
+  failedHelperRecoveryKeys,
+  helperRecoveryRevision,
+  loadHelperSessionRecovery,
+  retryHelperRecoveryWrite,
+  subscribeHelperRecovery,
   writeHelperRecovery,
 } from './helper-recovery.js';
 import './helper.css';
@@ -106,7 +111,7 @@ type Props = {
   enterSend: boolean;
   responseDisplay: ResponseDisplayMode;
   open: boolean;
-  navigation?: { conversationId: string; taskId: string; sequence: number } | null;
+  navigation?: { conversationId: string; taskId: string; sequence: number; epoch: number } | null;
   modal?: boolean;
   expanded?: boolean;
   onToggleExpanded?: () => void;
@@ -123,11 +128,10 @@ type Props = {
   onScopeChange?: (scope: HelperScope) => void;
   ready?: boolean;
   scope: HelperScope;
-  selection?: HelperSelection & { key: string; scope?: HelperScope; conversationId?: string };
   resource?: HelperResourceRef | null;
   onClearResource?: () => void;
-  outlineRequest?: OutlineHelperRequest;
-  draftRequest?: { key: string; text: string; scope: HelperScope; conversationId?: string };
+  handoff?: HelperHandoff;
+  handoffEpoch: MutableRefObject<number>;
   outlineWorkspace?: boolean;
   onClose: () => void;
   onModelSettings: () => void;
@@ -137,6 +141,23 @@ type Props = {
   modelRevision: number;
   library: Library | null;
 };
+export type HelperHandoff =
+  | ({ kind: 'outline'; epoch: number } & OutlineHelperRequest)
+  | {
+      kind: 'draft';
+      epoch: number;
+      key: string;
+      text: string;
+      scope: HelperScope;
+      conversationId?: string;
+    }
+  | ({
+      kind: 'selection';
+      epoch: number;
+      key: string;
+      scope: Extract<HelperScope, { kind: 'chat' }>;
+      conversationId?: string;
+    } & HelperSelection);
 type Outbox = Partial<FrozenHelperAttachments> & {
   retryOf?: string;
   steerTaskId?: string;
@@ -312,12 +333,20 @@ export function HelperPanel(props: Props) {
   const sessions = useHelperSessions(
     props.open && props.ready !== false,
     props.scope,
-    props.expanded
+    props.expanded,
+    props.handoffEpoch
   );
   const navigatedTask = useRef<number | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: The mutable epoch only rejects stale navigation; it is not a trigger.
   useEffect(() => {
     const target = props.navigation;
-    if (!props.open || !target || navigatedTask.current === target.sequence) return;
+    if (
+      !props.open ||
+      !target ||
+      target.epoch !== props.handoffEpoch.current ||
+      navigatedTask.current === target.sequence
+    )
+      return;
     const match = sessions.sessions.find((session) => session.id === target.conversationId);
     if (!match) return;
     navigatedTask.current = target.sequence;
@@ -389,7 +418,9 @@ export function HelperPanel(props: Props) {
     setOutboxDecision((old) => (old && (!props.open || old.scope !== scopeKey) ? null : old));
   }, [scopeKey, props.open]);
   const [hydrated, setHydrated] = useState<Record<string, boolean>>({});
+  const [recoveryReadFailed, setRecoveryReadFailed] = useState<Record<string, boolean>>({});
   const [recoveryAttempt, setRecoveryAttempt] = useState(0);
+  useSyncExternalStore(subscribeHelperRecovery, helperRecoveryRevision);
   const [outlineSelections, setOutlineSelections] = useState<
     Record<string, SelectedOutline | null>
   >({});
@@ -521,7 +552,7 @@ export function HelperPanel(props: Props) {
     draft: string;
   } | null>(null);
   const locks = useRef(new Set<string>()),
-    appliedSelections = useRef(new Set<string>());
+    appliedHandoff = useRef<string | null>(null);
   const close = useRef(props.onClose);
   close.current = props.onClose;
   const closePanel = useRef(() => props.onClose());
@@ -571,8 +602,14 @@ export function HelperPanel(props: Props) {
       ? storedOutline(scopeKey)
       : outlineSelections[scopeKey];
   const busy = busyScopes[scopeKey] ?? false;
-  const storedError = errors[scopeKey] || data.error || sessions.error || attachments.error;
-  const error = storedError === 'helper-draft-read-failed' ? t('helpers.m012') : storedError;
+  const failedRecoveryWrites = failedHelperRecoveryKeys(scopeKey);
+  const recoveryError = recoveryReadFailed[scopeKey]
+    ? t('helpers.m012')
+    : failedRecoveryWrites.length
+      ? t('helpers.draftSaveFailed')
+      : '';
+  const error =
+    recoveryError || errors[scopeKey] || data.error || sessions.error || attachments.error;
   const persona =
     personas[scopeKey] ??
     (conversation
@@ -592,20 +629,15 @@ export function HelperPanel(props: Props) {
     setModelRequired((old) => ({ ...old, [scopeKey]: false }));
     setErrors((old) => ({ ...old, [scopeKey]: message }));
   };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: recoveryAttempt explicitly retries the same conversation read.
   useEffect(() => {
     if (!scopeKey) return;
-    if (recoveryAttempt > 0) setErrors((old) => ({ ...old, [scopeKey]: '' }));
     let disposed = false;
     const restore = async () => {
-      const keys = ['helper-input', 'helper-outbox', 'helper-selection', 'helper-outline'];
       try {
-        await Promise.all(keys.map((kind) => loadHelperRecovery(`${kind}:${scopeKey}`)));
+        await loadHelperSessionRecovery(scopeKey);
       } catch {
-        if (!disposed)
-          setErrors((old) => ({
-            ...old,
-            [scopeKey]: 'helper-draft-read-failed',
-          }));
+        if (!disposed) setRecoveryReadFailed((old) => ({ ...old, [scopeKey]: true }));
         return;
       }
       if (disposed) return;
@@ -624,9 +656,7 @@ export function HelperPanel(props: Props) {
         old[scopeKey] === undefined ? { ...old, [scopeKey]: storedOutline(scopeKey) } : old
       );
       setHydrated((old) => ({ ...old, [scopeKey]: true }));
-      setErrors((old) =>
-        old[scopeKey] === 'helper-draft-read-failed' ? { ...old, [scopeKey]: '' } : old
-      );
+      setRecoveryReadFailed((old) => ({ ...old, [scopeKey]: false }));
     };
     void restore();
     return () => {
@@ -635,136 +665,99 @@ export function HelperPanel(props: Props) {
   }, [scopeKey, recoveryAttempt]);
   const editDraft = useCallback(
     (text: string) => {
-      if (!scopeKey) return;
+      if (!scopeKey || !hydrated[scopeKey]) return;
       attachments.touch();
       saveLocal(`uimori:helper-input:${scopeKey}`, text);
       setDrafts((old) => ({ ...old, [scopeKey]: text }));
     },
-    [scopeKey, attachments.touch]
+    [scopeKey, hydrated, attachments.touch]
   );
   const setOutbox = (key: string, value: Outbox | null) => {
     setOutboxes((old) => ({ ...old, [key]: value }));
   };
   const selectSession = sessions.select;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Explicit recovery retry resumes this same handoff.
   useEffect(() => {
-    const selected = props.outlineRequest;
-    if (!selected || appliedSelections.current.has(selected.key)) return;
+    const selected = props.handoff;
+    if (!selected || appliedHandoff.current === selected.key) return;
     let disposed = false;
+    const current = () => !disposed && props.handoffEpoch.current === selected.epoch;
+    if (!current()) return;
     void (async () => {
-      const owner = selected.conversationId
-        ? await api<HelperConversation>(
-            `/helper/conversations/${encodeURIComponent(selected.conversationId)}`
-          )
-        : await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
-      if (disposed || appliedSelections.current.has(selected.key)) return;
-      if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
-        throw new Error(uiMessage('helpers.m013'));
-      appliedSelections.current.add(selected.key);
-      await loadHelperRecovery(`helper-input:${owner.id}`).catch(() => null);
-      if (selected.target) {
-        setSelections((old) => ({ ...old, [owner.id]: null }));
-        saveLocal(`uimori:helper-selection:${owner.id}`, null);
-        const value = { target: selected.target, title: selected.title, request: selected.text };
-        setOutlineSelections((old) => ({ ...old, [owner.id]: value }));
-        saveLocal(`uimori:helper-outline:${owner.id}`, JSON.stringify(value));
-        setDrafts((old) => {
-          const previous = old[owner.id] ?? local(`uimori:helper-input:${owner.id}`) ?? '';
-          const next = previous.trim() ? previous : selected.text;
-          saveLocal(`uimori:helper-input:${owner.id}`, next);
-          return { ...old, [owner.id]: next };
-        });
-      }
-      selectSession(owner);
-    })().catch((cause) => {
-      if (!disposed) setErrors((old) => ({ ...old, [currentScope.current]: cause.message }));
-    });
-    return () => {
-      disposed = true;
-    };
-  }, [props.outlineRequest, selectSession]);
-  const taskStamp = tasks.map((task) => `${task.id}:${task.status}`).join('|');
-  useEffect(() => {
-    const selected = props.draftRequest;
-    if (!selected || appliedSelections.current.has(selected.key)) return;
-    let disposed = false;
-    void (async () => {
-      const owner = selected.conversationId
-        ? await api<HelperConversation>(
-            `/helper/conversations/${encodeURIComponent(selected.conversationId)}`
-          )
-        : await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
-      if (disposed || appliedSelections.current.has(selected.key)) return;
-      if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
-        throw new Error(uiMessage('helpers.m013'));
-      await loadHelperRecovery(`helper-input:${owner.id}`).catch(() => null);
-      if (disposed) return;
-      appliedSelections.current.add(selected.key);
-      setDrafts((old) => {
-        const previous = old[owner.id] ?? local(`uimori:helper-input:${owner.id}`) ?? '';
-        const next = previous.trim() ? `${previous}\n\n${selected.text}` : selected.text;
-        saveLocal(`uimori:helper-input:${owner.id}`, next);
-        return { ...old, [owner.id]: next };
-      });
-      selectSession(owner);
-    })().catch((cause) => {
-      if (!disposed) setErrors((old) => ({ ...old, [currentScope.current]: cause.message }));
-    });
-    return () => {
-      disposed = true;
-    };
-  }, [props.draftRequest, selectSession]);
-  useEffect(() => {
-    dispatchEvent(new CustomEvent(OUTLINE_REFRESH_EVENT, { detail: taskStamp }));
-  }, [taskStamp]);
-  useEffect(() => {
-    const selected = props.selection;
-    if (!selected || appliedSelections.current.has(selected.key)) return;
-    const target = selected.scope;
-    if (target?.kind !== 'chat') return;
-    let disposed = false;
-    // Resolve once from the clicked source and frozen session ID, independently of later navigation.
-    const prepare = async () => {
       let owner: HelperConversation;
       try {
         owner = selected.conversationId
           ? await api<HelperConversation>(
               `/helper/conversations/${encodeURIComponent(selected.conversationId)}`
             )
-          : await api<HelperConversation>('/helper/conversations', { scope: target });
+          : await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
       } catch (cause) {
-        if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
-        owner = await api<HelperConversation>('/helper/conversations', { scope: target });
+        if (!current()) return;
+        if (selected.kind !== 'selection' || !(cause instanceof ApiError) || cause.status !== 404)
+          throw cause;
+        owner = await api<HelperConversation>('/helper/conversations', { scope: selected.scope });
       }
-      if (disposed || appliedSelections.current.has(selected.key)) return;
-      if (JSON.stringify(owner.scope) !== JSON.stringify(target))
-        throw new Error(uiMessage('helpers.m014'));
-      const key = owner.id;
-      appliedSelections.current.add(selected.key);
-      await loadHelperRecovery(`helper-input:${key}`).catch(() => null);
-      setOutlineSelections((old) => ({ ...old, [key]: null }));
-      saveLocal(`uimori:helper-outline:${key}`, null);
-      const value: HelperSelection = {
-        sourceId: selected.sourceId,
-        sourceHash: selected.sourceHash,
-        text: selected.text,
-      };
-      setSelections((old) => ({ ...old, [key]: value }));
-      saveLocal(`uimori:helper-selection:${key}`, JSON.stringify(value));
-      setDrafts((old) => {
-        const previous = old[key] ?? local(`uimori:helper-input:${key}`) ?? '';
-        const text = previous.trim() ? previous : selectionRequest;
-        saveLocal(`uimori:helper-input:${key}`, text);
-        return { ...old, [key]: text };
-      });
+      if (!current()) return;
+      if (JSON.stringify(owner.scope) !== JSON.stringify(selected.scope))
+        throw new Error(uiMessage(selected.kind === 'selection' ? 'helpers.m014' : 'helpers.m013'));
+      try {
+        await loadHelperSessionRecovery(owner.id);
+      } catch {
+        if (current()) {
+          selectSession(owner);
+          setRecoveryReadFailed((old) => ({ ...old, [owner.id]: true }));
+        }
+        return;
+      }
+      if (!current()) return;
+      appliedHandoff.current = selected.key;
+      if (selected.kind === 'outline' && selected.target) {
+        setSelections((old) => ({ ...old, [owner.id]: null }));
+        saveLocal(`uimori:helper-selection:${owner.id}`, null);
+        const value = { target: selected.target, title: selected.title, request: selected.text };
+        setOutlineSelections((old) => ({ ...old, [owner.id]: value }));
+        saveLocal(`uimori:helper-outline:${owner.id}`, JSON.stringify(value));
+      } else if (selected.kind === 'selection') {
+        setOutlineSelections((old) => ({ ...old, [owner.id]: null }));
+        saveLocal(`uimori:helper-outline:${owner.id}`, null);
+        const value: HelperSelection = {
+          sourceId: selected.sourceId,
+          sourceHash: selected.sourceHash,
+          text: selected.text,
+        };
+        setSelections((old) => ({ ...old, [owner.id]: value }));
+        saveLocal(`uimori:helper-selection:${owner.id}`, JSON.stringify(value));
+      }
+      if (selected.kind !== 'outline' || selected.target)
+        setDrafts((old) => {
+          if (!current()) return old;
+          const previous = old[owner.id] ?? local(`uimori:helper-input:${owner.id}`) ?? '';
+          const text = selected.kind === 'selection' ? selectionRequest : selected.text;
+          const next = previous.trim()
+            ? selected.kind === 'draft'
+              ? `${previous}\n\n${text}`
+              : previous
+            : text;
+          saveLocal(`uimori:helper-input:${owner.id}`, next);
+          return { ...old, [owner.id]: next };
+        });
       selectSession(owner);
-    };
-    void prepare().catch((cause) => {
-      if (!disposed) setErrors((old) => ({ ...old, [currentScope.current]: cause.message }));
+    })().catch((cause) => {
+      if (current())
+        setErrors((old) => ({
+          ...old,
+          [currentScope.current]:
+            cause instanceof Error ? cause.message : uiMessage('helpers.m207'),
+        }));
     });
     return () => {
       disposed = true;
     };
-  }, [props.selection, selectSession]);
+  }, [props.handoff, props.handoffEpoch, selectSession, recoveryAttempt]);
+  const taskStamp = tasks.map((task) => `${task.id}:${task.status}`).join('|');
+  useEffect(() => {
+    dispatchEvent(new CustomEvent(OUTLINE_REFRESH_EVENT, { detail: taskStamp }));
+  }, [taskStamp]);
   useEffect(() => {
     const update = () => setEditor(getActiveEditorContext());
     update();
@@ -1281,6 +1274,7 @@ export function HelperPanel(props: Props) {
           navigationHost={props.navigationHost}
           onSettings={() => setSettingsOwner(scopeKey)}
           onSelect={(session) => {
+            props.handoffEpoch.current++;
             if (props.expanded && session.id !== scopeKey) {
               setFrozenEditors((old) => (session.id in old ? old : { ...old, [session.id]: null }));
               setFrozenResources((old) =>
@@ -1291,6 +1285,7 @@ export function HelperPanel(props: Props) {
             props.onSelectConversation?.();
           }}
           onCreate={(projectId) => {
+            props.handoffEpoch.current++;
             void sessions.create(projectId).then((session) => {
               if (props.expanded && session) {
                 setFrozenEditors((old) => ({ ...old, [session.id]: null }));
@@ -1304,8 +1299,13 @@ export function HelperPanel(props: Props) {
             sessions.update(value);
             if (value.id === sessions.currentId) data.updateConversation(value);
           }}
-          onDelete={(id) => sessions.remove(id)}
-          onClone={(session) => {
+          onDelete={(id) => {
+            props.handoffEpoch.current++;
+            sessions.remove(id);
+          }}
+          onCloneStart={() => ++props.handoffEpoch.current}
+          onClone={(session, epoch) => {
+            if (props.handoffEpoch.current !== epoch) return;
             if (props.expanded) {
               setFrozenEditors((old) => ({ ...old, [session.id]: null }));
               setFrozenResources((old) => ({ ...old, [session.id]: null }));
@@ -1921,7 +1921,7 @@ export function HelperPanel(props: Props) {
                     {t('helpers.m101')}{' '}
                   </button>
                 )}
-                {(!hydrated[scopeKey] || !attachments.ready) && (
+                {(recoveryReadFailed[scopeKey] || !attachments.ready) && (
                   <button
                     type="button"
                     className="secondary"
@@ -1933,19 +1933,32 @@ export function HelperPanel(props: Props) {
                     {t('helpers.m102')}
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={() => {
-                    setError('');
-                    data.setError('');
-                    sessions.clearError();
-                    attachments.clearError();
-                  }}
-                >
-                  <CloseIcon size={18} aria-hidden="true" />
-                  {t('helpers.m078')}
-                </button>
+                {!recoveryReadFailed[scopeKey] && failedRecoveryWrites.length > 0 && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      void Promise.allSettled(failedRecoveryWrites.map(retryHelperRecoveryWrite));
+                    }}
+                  >
+                    {t('prompts.uiSaveAgain')}
+                  </button>
+                )}
+                {!recoveryError && (
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() => {
+                      setError('');
+                      data.setError('');
+                      sessions.clearError();
+                      attachments.clearError();
+                    }}
+                  >
+                    <CloseIcon size={18} aria-hidden="true" />
+                    {t('helpers.m078')}
+                  </button>
+                )}
               </>
             }
           >
@@ -1960,11 +1973,12 @@ export function HelperPanel(props: Props) {
           onDrop={(event) => {
             if (!event.dataTransfer.files.length) return;
             event.preventDefault();
-            if (props.ready !== false && conversation && !busy)
+            if (props.ready !== false && conversation && hydrated[scopeKey] && !busy)
               void attachments.addFiles(Array.from(event.dataTransfer.files));
           }}
           onSubmit={(event) => {
             event.preventDefault();
+            if (!hydrated[scopeKey]) return;
             if (outbox) setOutboxDecision(outbox);
             else void send();
           }}
@@ -1972,7 +1986,7 @@ export function HelperPanel(props: Props) {
           <HelperDraftAttachments
             draft={attachments.draft}
             remove={attachments.remove}
-            disabled={busy || attachments.busy}
+            disabled={!hydrated[scopeKey] || busy || attachments.busy}
           />
           {(currentResource ||
             (displayEditor && !currentResource) ||
@@ -2017,6 +2031,7 @@ export function HelperPanel(props: Props) {
                     <button
                       type="button"
                       className="helper-chip-action"
+                      disabled={!hydrated[scopeKey]}
                       onClick={() =>
                         editDraft(
                           draft.trim()
@@ -2032,6 +2047,7 @@ export function HelperPanel(props: Props) {
                     type="button"
                     className="helper-chip-dismiss"
                     aria-label={t('helpers.m083')}
+                    disabled={!hydrated[scopeKey]}
                     onClick={() => {
                       setOutlineSelections((old) => ({ ...old, [scopeKey]: null }));
                       saveLocal(`uimori:helper-outline:${scopeKey}`, null);
@@ -2054,6 +2070,7 @@ export function HelperPanel(props: Props) {
                     type="button"
                     className="helper-chip-dismiss"
                     aria-label={t('helpers.m093')}
+                    disabled={!hydrated[scopeKey]}
                     onClick={() => {
                       if (draft === selectionRequest) editDraft('');
                       setSelections((old) => ({ ...old, [scopeKey]: null }));
@@ -2071,7 +2088,9 @@ export function HelperPanel(props: Props) {
             enterSend={props.enterSend}
             aria-label={t('helpers.m103')}
             value={draft}
-            disabled={props.ready === false || !conversation || !attachments.ready}
+            disabled={
+              props.ready === false || !conversation || !hydrated[scopeKey] || !attachments.ready
+            }
             placeholder={t('helpers.m104')}
             maxLength={REQUEST_TEXT_MAX_CHARS}
             onChange={(event) => editDraft(event.target.value)}
@@ -2092,6 +2111,7 @@ export function HelperPanel(props: Props) {
               disabled={
                 props.ready === false ||
                 !conversation ||
+                !hydrated[scopeKey] ||
                 !attachments.ready ||
                 busy ||
                 attachments.busy

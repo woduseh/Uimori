@@ -2,12 +2,18 @@ import type { SetStateAction } from 'react';
 import type { Connection, ModelPreset, ProviderProtocol } from '../core/product.js';
 import { initialModel, type ModelDraft } from './provider-model-draft.js';
 
+export type VertexAccountDraft = {
+  serviceAccount: unknown;
+  projectId: string;
+  clientEmail: string;
+};
 export type ConnectionDraft = {
   title: string;
   protocol: ProviderProtocol;
   endpoint: string;
   credentialRef: string;
   apiKey?: string | null;
+  vertexAccount?: VertexAccountDraft;
   enabled: boolean;
 };
 export const initialConnection = (): ConnectionDraft => ({
@@ -33,6 +39,9 @@ export function connectionPayload(value: ConnectionDraft) {
       ? { credentialRef: value.credentialRef.trim() }
       : {}),
     ...(value.apiKey !== undefined ? { apiKey: value.apiKey } : {}),
+    ...(value.protocol === 'vertex-gemini-v1' && value.vertexAccount
+      ? { serviceAccount: value.vertexAccount.serviceAccount }
+      : {}),
     enabled: value.enabled,
   };
 }
@@ -76,7 +85,7 @@ type Action =
   | { type: 'model.deleted'; id: string }
   | { type: 'conflict'; kind: ProviderEditorState['conflict'] };
 
-/** Two independent in-memory drafts. Navigation never discards either one or persists API keys. */
+/** Two independent in-memory drafts. Navigation never discards either one or persists secrets. */
 export function providerEditorReducer(
   state: ProviderEditorState,
   action: Action

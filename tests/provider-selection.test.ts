@@ -175,8 +175,16 @@ test('ID-based selections follow current connections while protocol changes requ
 
 test('model draft validation uses explicit matching unsaved connection without any DB writes', () => {
   const s = database();
-  const prepared = s.product.prepareConnection(connectionBody());
-  const draft = { ...prepared.value, id: 'unpersisted', revision: 1 };
+  const draft: Connection = {
+    id: 'unpersisted',
+    revision: 1,
+    title: 'Connection',
+    protocol: 'openai-chat-v1',
+    endpoint: 'http://127.0.0.1:9999/v1',
+    enabled: true,
+    catalog: [],
+    catalogError: null,
+  };
   expect(s.product.prepareModel(modelBody(draft), undefined, draft).value.source).toEqual({
     kind: 'manual',
     catalogUpdatedAt: null,

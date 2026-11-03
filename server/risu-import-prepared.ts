@@ -2,6 +2,7 @@ import { Worker } from 'node:worker_threads';
 import { randomBytes } from 'node:crypto';
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -22,7 +23,11 @@ import { readImportEnvelope } from './import-envelope.js';
 import { hasControl } from './import-envelope.js';
 import { uploadDirectory, UPLOAD_MAX_AGE_MS, UPLOAD_MAX_BYTES } from './uploads.js';
 import { bundleDigest, type PreparedBundleImage } from './resource-bundle.js';
-import { acquireImportPreparation, checkImportPreparation } from './import-preparation.js';
+import {
+  acquireImportPreparation,
+  checkImportPreparation,
+  ownedImportStagingRoot,
+} from './import-preparation.js';
 
 export type PreparedRisuImport = {
   version: 1;
@@ -46,9 +51,11 @@ function pathFor(dbPath: string, id: string) {
 }
 export function deletePreparedRisuImport(dbPath: string, id: string) {
   const path = pathFor(dbPath, id);
-  if (active.has(path)) return;
+  if (active.has(path) || !ownedImportStagingRoot(dbPath, directory(dbPath))) return;
   try {
-    rmSync(path, { recursive: true, force: true });
+    const info = lstatSync(path);
+    if (info.isDirectory() && !info.isSymbolicLink())
+      rmSync(path, { recursive: true, force: true });
   } catch {
     // A cleanup failure must not undo a successful response; expiry pruning retries it.
   }
@@ -85,11 +92,20 @@ export function readPreparedRisuImport(dbPath: string, id: string): PreparedRisu
 }
 export function prunePreparedRisuImports(dbPath: string) {
   const root = directory(dbPath);
-  if (!existsSync(root)) return;
+  if (!ownedImportStagingRoot(dbPath, root)) return;
   for (const id of readdirSync(root)) {
     if (!ID.test(id) || active.has(join(root, id))) continue;
-    if (statSync(join(root, id)).mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS)
-      deletePreparedRisuImport(dbPath, id);
+    try {
+      const info = lstatSync(join(root, id));
+      if (
+        info.isDirectory() &&
+        !info.isSymbolicLink() &&
+        info.mtimeMs < Date.now() - UPLOAD_MAX_AGE_MS
+      )
+        deletePreparedRisuImport(dbPath, id);
+    } catch {
+      // A concurrently removed or inaccessible directory can be retried later.
+    }
   }
 }
 

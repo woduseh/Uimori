@@ -5,6 +5,7 @@ import { saveResource } from '../server/resource-service.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import type { Store } from '../server/store.js';
 import { HttpError } from '../server/request-validation.js';
+import { flushPendingImageCleanup } from '../server/unused-data.js';
 import {
   cancelIllustration,
   claimIllustration,
@@ -73,6 +74,32 @@ function codexModel(store: Store) {
 }
 
 describe('integrated illustration audit regressions', () => {
+  test('deleting illustrations reclaims unshared images after active work ends', () => {
+    const store = databases.create();
+    const { source } = chatWithSource(store);
+    const settings = fixtureSettings({ maxPerSource: 4 });
+    const first = reserveIllustration(store, source, 'manual', { settings, testMode: true });
+    complete(store, first.id);
+    const second = reserveIllustration(store, source, 'manual', { settings, testMode: true });
+    complete(store, second.id);
+    const hash = String(
+      store.db.prepare('SELECT hash FROM illustration_images WHERE job_id=?').get(first.id)!.hash
+    );
+
+    removeIllustration(store, first.id);
+    expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeTruthy();
+    const active = reserveIllustration(store, source, 'manual', { settings, testMode: true });
+    removeIllustration(store, second.id);
+    expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeTruthy();
+    expect(
+      store.db.prepare('SELECT hash FROM image_cleanup_candidates WHERE hash=?').get(hash)
+    ).toBeTruthy();
+
+    cancelIllustration(store, active.id);
+    flushPendingImageCleanup(store.db);
+    expect(store.db.prepare('SELECT hash FROM image_blobs WHERE hash=?').get(hash)).toBeUndefined();
+  });
+
   test('reconcile recovers completed remote work at the generation limit without bypassing active work', () => {
     const store = databases.create();
     const { source } = chatWithSource(store);

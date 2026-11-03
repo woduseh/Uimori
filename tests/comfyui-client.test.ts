@@ -9,7 +9,12 @@ import {
   generateWithComfyUI,
   validateComfyBaseUrl,
 } from '../server/comfyui-client.js';
-import { fillComfyWorkflow, parseComfyWorkflow, IllustrationError } from '../core/illustration.js';
+import {
+  fillComfyWorkflow,
+  parseComfyWorkflow,
+  IllustrationError,
+  ILLUSTRATION_MAX_IMAGE_BYTES,
+} from '../core/illustration.js';
 import { comfyUIFixture, FIXTURE_PNG, FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -39,6 +44,51 @@ async function failure(promise: Promise<unknown>): Promise<IllustrationError> {
 }
 
 describe('remote ComfyUI client against a synthetic HTTP server', () => {
+  test.each(['metadata', 'image'] as const)(
+    'rejects an oversized %s body with the existing error code',
+    async (kind) => {
+      const maximum = kind === 'metadata' ? 8_000_000 : ILLUSTRATION_MAX_IMAGE_BYTES;
+      const chunk = new Uint8Array(1024 * 1024);
+      const cancel = vi.fn();
+      let size = 0;
+      const oversized = new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (size <= maximum) {
+              controller.enqueue(chunk);
+              size += chunk.length;
+            }
+          },
+          cancel,
+        })
+      );
+      const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        if (new URL(String(input)).pathname.startsWith('/history/'))
+          return Response.json({
+            'oversized-prompt': {
+              outputs: { '9': { images: [{ filename: 'scene.png', type: 'output' }] } },
+            },
+          });
+        return oversized;
+      });
+      const connection = { baseUrl: 'http://comfy.invalid', authorizationEnv: '' };
+      try {
+        const operation =
+          kind === 'metadata'
+            ? comfyUISystemStats(connection, { signal: signal() })
+            : fetchComfyUIResult(connection, 'oversized-prompt', { signal: signal() });
+        expect(await failure(operation)).toMatchObject({
+          code: kind === 'metadata' ? 'COMFYUI_RESPONSE_INVALID' : 'COMFYUI_IMAGE_INVALID',
+          ...(kind === 'image'
+            ? { diagnostic: { comfyui: { promptId: 'oversized-prompt' } } }
+            : {}),
+        });
+        expect(cancel).toHaveBeenCalledTimes(1);
+      } finally {
+        fetch.mockRestore();
+      }
+    }
+  );
   test('submitted workflow preserves marker-like text inside generated prompts', async () => {
     const server = await fixture();
     const template = parseComfyWorkflow(FIXTURE_WORKFLOW);

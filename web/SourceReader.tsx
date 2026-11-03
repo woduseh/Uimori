@@ -48,7 +48,14 @@ import { LazyDiagnostics } from './LazyDiagnostics.js';
 import { LoadingState } from './LoadingState.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
-import { CopyIcon, EditIcon, IllustrationIcon, ImagesIcon, RefreshIcon } from './ui-icons.js';
+import {
+  CopyIcon,
+  DeleteIcon,
+  EditIcon,
+  IllustrationIcon,
+  ImagesIcon,
+  RefreshIcon,
+} from './ui-icons.js';
 import {
   Check,
   Eye,
@@ -75,8 +82,6 @@ import { SourceVersions } from './SourceVersions.js';
 import { RequestMessage } from './RequestMessage.js';
 import { StoredRequestImages } from './RequestImages.js';
 import { SelectionRevision } from './SelectionRevision.js';
-import { SceneDeleteAction } from './SceneDeleteAction.js';
-import type { SceneDeletionResult } from '../core/scene-deletion.js';
 
 type NativeActionReceipt = {
   created: boolean;
@@ -116,7 +121,7 @@ type ReaderProps = {
   onError: (error: string) => void;
   onNativeNotice?: (messages: string[]) => void;
   onFork: (sourceId: string) => Promise<void>;
-  onDeleted?: (result: SceneDeletionResult) => Promise<void>;
+  onDeleteScene?: (chatId: string, sourceId: string) => void;
   deletionDisabled?: boolean;
   onRetry?: (mode?: 'replace' | 'copy', text?: string) => Promise<boolean>;
   retryCanReplace?: boolean;
@@ -242,7 +247,7 @@ function SourceReaderContent({
   onError,
   onNativeNotice,
   onFork,
-  onDeleted,
+  onDeleteScene,
   deletionDisabled,
   onRetry,
   retryCanReplace = false,
@@ -1431,18 +1436,31 @@ function SourceReaderContent({
                 </button>
               )}
             </div>
-            {onDeleted && (
+            {onDeleteScene && (
               <div
                 className="action-menu-group"
                 role="group"
                 aria-label={t('chatmanage.deleteScene')}
               >
-                <SceneDeleteAction
-                  chatId={source.chatId}
-                  sourceId={source.id}
-                  disabled={!!editor || !!pending || deletionDisabled}
-                  onDeleted={onDeleted}
-                />
+                <span className="delete-control">
+                  <button
+                    type="button"
+                    className="secondary delete-button"
+                    disabled={!!editor || !!pending || deletionDisabled}
+                    aria-haspopup="dialog"
+                    onClick={(event) => {
+                      const menu = event.currentTarget.closest('details');
+                      if (menu) {
+                        menu.open = false;
+                        menu.querySelector<HTMLElement>(':scope > summary')?.focus();
+                      }
+                      onDeleteScene(source.chatId, source.id);
+                    }}
+                  >
+                    <DeleteIcon size={18} aria-hidden="true" />
+                    {t('chatmanage.deleteScene')}
+                  </button>
+                </span>
               </div>
             )}
           </ActionMenu>

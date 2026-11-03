@@ -1177,6 +1177,66 @@ test('cancelled native input notifies other readers and cannot accept a late ans
   }
 });
 
+test('a cancelled native action cannot close the next action session', async () => {
+  const { store, chatId } = await setup(
+    false,
+    '',
+    false,
+    "function controlled(id) local value = alertInput(id, 'Choose'):await(); setChatVar(id, 'answer', value) end"
+  );
+  const head = store.chat(chatId).headRevision!;
+  let oldRunId = '';
+  let started!: () => void;
+  let release!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const controller = new AbortController();
+  const old = applyNativeRisuAction(
+    store,
+    chatId,
+    head,
+    actionBody(store, chatId, 'controlled', 'cancelled-controlled'),
+    {
+      signal: controller.signal,
+      createHost: (runId) => {
+        oldRunId = runId;
+        return async () => {
+          started();
+          await gate;
+          return 'old';
+        };
+      },
+    }
+  ).catch((error: unknown) => error);
+  try {
+    await entered;
+    store.finishRun(oldRunId, 'cancelled', 'Run cancelled');
+    controller.abort();
+    const next = applyNativeRisuAction(
+      store,
+      chatId,
+      head,
+      actionBody(store, chatId, 'controlled', 'next-controlled'),
+      { createHost: () => async () => 'next' }
+    );
+    const outcome = next.then(
+      (value) => value,
+      (error: unknown) => error
+    );
+    release();
+    expect(await old).toBeInstanceOf(Error);
+    expect(await outcome).toMatchObject({ created: true });
+    expect(readChatVariables(store, chatId).values.answer).toBe('next');
+  } finally {
+    release();
+    controller.abort();
+  }
+});
+
 test('Lua-authored extra messages survive independent copy and portable restore without input snapshots', async () => {
   const { store, chatId } = await setup(true);
   const source = await appendNativeSource(store, chatId, 'Native story');

@@ -4,7 +4,7 @@ import { basename, isAbsolute, join, relative } from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, expect, test } from 'vitest';
 import type { Content, PromptPreset } from '../core/product.js';
-import { editableResource } from '../core/resource-editing.js';
+import { editableResource, type ContentEditModel } from '../core/resource-editing.js';
 import { deleteLibraryItem } from '../server/library-deletion.js';
 import { putImageBlob } from '../server/package-images.js';
 import { promptWorkspace, updatePromptWorkspace } from '../server/prompt-workspace.js';
@@ -280,6 +280,11 @@ test('new-resource creation has a compact durable receipt and rejects conflictin
     app.inject({ method: 'POST', url: '/api/resources/save', payload: body });
   const first = await request(command);
   expect(first.statusCode, first.body).toBe(200);
+  store.libraryOrganization.createFolder({
+    expectedRevision: first.json().creationOrganizationRevision,
+    category: 'bot',
+    title: 'Another tab changed the organization',
+  });
   const second = await request(command);
   expect(second.statusCode, second.body).toBe(200);
   expect(second.json()).toMatchObject({ created: false, saved: { id: first.json().saved.id } });
@@ -292,12 +297,83 @@ test('new-resource creation has a compact durable receipt and rejects conflictin
   expect(JSON.parse(String(receipt.result))).toEqual({
     kind: 'content',
     id: first.json().saved.id,
+    organizationRevision: first.json().creationOrganizationRevision,
+  });
+  expect(first.json().creationOrganizationRevision + 1).toBe(
+    store.libraryOrganization.snapshot().revision
+  );
+  expect(second.json().creationOrganizationRevision).toBe(
+    first.json().creationOrganizationRevision
+  );
+  const created = first.json().saved as Content;
+  expect(created.revision).toBe(1);
+  const external = saveResource(store, {
+    kind: 'content',
+    id: created.id,
+    expectedRevision: created.revision,
+    model: {
+      ...(editableResource('content', created) as ContentEditModel),
+      description: 'Changed elsewhere',
+    },
+  }).saved as Content;
+  const afterExternalEdit = await request(command);
+  expect(afterExternalEdit.statusCode, afterExternalEdit.body).toBe(200);
+  expect(afterExternalEdit.json()).toMatchObject({
+    created: false,
+    saved: { id: created.id, revision: 2, description: external.description },
   });
   const changed = await request({ ...command, model: { ...command.model, title: 'Different' } });
   expect(changed.statusCode).toBe(409);
   expect(store.db.prepare("SELECT COUNT(*) AS n FROM versions WHERE kind='content'").get()!.n).toBe(
     1
   );
+});
+
+test('creation and clone receipts report removed targets without admitting a new resource', async () => {
+  const { store, app } = fixture();
+  const command = {
+    kind: 'content',
+    id: null,
+    model: { ...fixtureBotInput(), title: 'Later deleted' },
+    idempotencyKey: 'removed-create',
+  };
+  const send = () => app.inject({ method: 'POST', url: '/api/resources/save', payload: command });
+  const first = (await send()).json().saved as Content;
+  const clone = {
+    kind: 'content',
+    sourceId: first.id,
+    expectedSourceRevision: first.revision,
+    title: 'Also deleted',
+    idempotencyKey: 'removed-clone',
+  };
+  const copy = (await postClone(app, clone)).json().saved as Content;
+  deleteLibraryItem(store, 'content', first.id, { expectedRevision: first.revision });
+  deleteLibraryItem(store, 'content', copy.id, { expectedRevision: copy.revision });
+  const afterDeletion = rows(store);
+  for (const response of [await send(), await postClone(app, clone)]) {
+    expect(response.statusCode, response.body).toBe(410);
+    expect(response.json().message).toBe('RESOURCE_CREATION_REMOVED');
+  }
+  expect(rows(store)).toEqual(afterDeletion);
+});
+
+test('legacy compact receipts remain replayable without inventing a placement revision', async () => {
+  const { store, app } = fixture();
+  const command = {
+    kind: 'content',
+    id: null,
+    model: { ...fixtureBotInput(), title: 'Legacy' },
+    idempotencyKey: 'legacy-create',
+  };
+  const send = () => app.inject({ method: 'POST', url: '/api/resources/save', payload: command });
+  const first = (await send()).json().saved as Content;
+  store.db
+    .prepare('UPDATE import_operations SET result=? WHERE key=?')
+    .run(JSON.stringify({ kind: 'content', id: first.id }), 'resource:save:legacy-create');
+  const replay = await send();
+  expect(replay.statusCode, replay.body).toBe(200);
+  expect(replay.json()).toMatchObject({ created: false, saved: { id: first.id } });
+  expect(replay.json().creationOrganizationRevision).toBeUndefined();
 });
 
 test('a repeated clone returns its original identity after the source changes', async () => {

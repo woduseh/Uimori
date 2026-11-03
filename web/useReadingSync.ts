@@ -67,6 +67,7 @@ export function useReadingSync(options: {
   const actions = useRef<{
     key: string;
     remember: (target: ReaderTarget) => void;
+    offer: (target: ReaderTarget, revision: number) => void;
   } | null>(null);
   const pending = useRef<ReaderTarget | null>(null);
   const remember = useCallback((target: ReaderTarget) => {
@@ -81,6 +82,7 @@ export function useReadingSync(options: {
       saving = false,
       revision = 0;
     let dirty: ReaderTarget | null = null;
+    let touched = false;
     let userUntil = 0;
     let loading: Promise<void> | null = null;
     const controller = new AbortController();
@@ -114,6 +116,7 @@ export function useReadingSync(options: {
       const target = dirty;
       dirty = null;
       saving = true;
+      let accepted = false;
       try {
         // A stalled best-effort checkpoint must not hold later reading writes forever.
         const saved = await api<ReadingPosition>(
@@ -123,6 +126,7 @@ export function useReadingSync(options: {
           AbortSignal.timeout(5000)
         );
         revision = Math.max(revision, saved.revision);
+        accepted = true;
         if (alive) setState((old) => (old.key === key ? { ...old, own: saved } : old));
       } catch {
         // Do not blindly replay an uncertain or conflicting write.
@@ -130,11 +134,27 @@ export function useReadingSync(options: {
         loaded = false;
       } finally {
         saving = false;
+        // A newer location can arrive while this write is in flight. On leaving,
+        // flush it after an acknowledged write, without replaying an uncertain one.
+        if (accepted && dirty && (!alive || document.visibilityState === 'hidden')) {
+          if (!alive && actions.current?.key === key) {
+            actions.current.offer(dirty, revision);
+            dirty = null;
+          } else void save();
+        }
       }
     };
     const rememberTarget = (target: ReaderTarget) => {
+      touched = true;
       dirty = target;
       if (loaded) void save();
+    };
+    const offerTarget = (target: ReaderTarget, previousRevision: number) => {
+      // A newly opened visit owns any later reading activity in the same chat.
+      if (!touched) {
+        revision = Math.max(revision, previousRevision);
+        rememberTarget(target);
+      }
     };
     const input = (event: Event) => {
       const node = current.current.reader.current;
@@ -161,11 +181,15 @@ export function useReadingSync(options: {
         document.visibilityState !== 'visible'
       )
         return;
-      dirty = captureReaderLocation(
+      const captured = captureReaderLocation(
         node,
         chatId,
         body?.closest<HTMLElement>('[data-source-id][data-representation]') ?? undefined
       );
+      if (captured) {
+        touched = true;
+        dirty = captured;
+      }
     };
     const visibility = () => {
       if (document.visibilityState === 'hidden') void save();
@@ -177,8 +201,9 @@ export function useReadingSync(options: {
     const pagehide = () => {
       void save();
     };
-    actions.current = { key, remember: rememberTarget };
+    actions.current = { key, remember: rememberTarget, offer: offerTarget };
     if (pending.current?.chatId === chatId) {
+      touched = true;
       dirty = pending.current;
       pending.current = null;
     }

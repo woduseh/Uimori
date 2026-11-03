@@ -72,6 +72,7 @@ import { nativeTransferRoutes } from './native-transfer.js';
 import { risuImportRoutes } from './risu-import.js';
 import { applyNativeRisuAction } from './risu-native-actions.js';
 import { pruneUploads, uploadRoutes } from './uploads.js';
+import { startImportStagingCleanup } from './import-staging-cleanup.js';
 import { requestFileRoutes } from './request-files.js';
 import {
   prepareRequestImages,
@@ -282,9 +283,16 @@ export async function createApp(options: AppOptions): Promise<App> {
   const work = new Set<Promise<void>>();
   const runs = new Map<string, AbortController>();
   const jobControllers = new Map<string, AbortController>();
-  const illustrationControllers = new Map<string, AbortController>();
+  const illustrationControllers = new Map<
+    string,
+    { controller: AbortController; lane: 'render' | 'text' }
+  >();
 
   const stopping = new AbortController();
+  const forcedClosed = options.maintenance === true;
+  const admitted = () => admissionOpen(store, forcedClosed);
+  let recoveredRuns: string[] = [];
+  const deferredRuns = new Map<string, boolean>();
   const publish = (chatId: string) => {
     for (const [response, cursor] of subscribers.get(chatId) ?? []) {
       if (streamAuthority.get(response)?.() === false) {
@@ -339,6 +347,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     executeCodexAgent,
     vertexRequestTier: options.vertexRequestTier,
     signal: stopping.signal,
+    canStart: admitted,
     track,
     streams,
     services: {
@@ -384,7 +393,9 @@ export async function createApp(options: AppOptions): Promise<App> {
             cancelIllustration: (id) => {
               const job = cancelIllustration(store, id);
               afterCommit.push(() => {
-                illustrationControllers.get(id)?.abort(new Error('Illustration cancelled'));
+                illustrationControllers
+                  .get(id)
+                  ?.controller.abort(new Error('Illustration cancelled'));
                 publish(job.chatId);
               });
             },
@@ -542,8 +553,6 @@ export async function createApp(options: AppOptions): Promise<App> {
   });
 
   // Maintenance keeps admitted work finishing but starts no new external work.
-  const forcedClosed = options.maintenance === true;
-  const admitted = () => admissionOpen(store, forcedClosed);
   const pumpJobs = () => {
     if (stopping.signal.aborted || !admitted()) return;
     for (const id of store.queuedJobs()) {
@@ -558,33 +567,33 @@ export async function createApp(options: AppOptions): Promise<App> {
             const queued = store.job(id);
             if (queued.kind === 'status') throw new HttpError(410, 'SCENE_COMMENTARY_RETIRED');
             chatId = queued.chatId;
-            const source = store.sourceAtHash(queued.sourceRevision, queued.sourceHash);
-            const snapshot = store.product.resolveJobPrompt(
-              readRunSnapshot(store, source.runId),
-              queued.input
-            );
-            if (
-              queued.kind !== 'image' &&
-              !(queued.kind === 'translation' && record(queued.input).judgmentRecovery)
-            )
-              requireModel(snapshot.profile?.models[queued.kind], queued.kind);
-            if (
-              queued.kind === 'translation' &&
-              record(queued.input).autoTranslateRunId &&
-              (await autoTranslationNeedsConfirmation(
-                snapshot.profile?.models.translation,
-                source.text,
-                jevCredentials.resolve,
-                signal,
-                jevSettings(store.db)
-              ))
-            ) {
-              store.failQueuedJob(
-                id,
-                queued.generation,
-                'Codex 콘텐츠 경고를 확인해야 해요. 원문에서 번역 보기를 눌러 진행해 주세요.'
+            let mockTranslation = false;
+            if (queued.kind === 'translation') {
+              const source = store.sourceAtHash(queued.sourceRevision, queued.sourceHash);
+              const snapshot = store.product.resolveJobPrompt(
+                readRunSnapshot(store, source.runId),
+                queued.input
               );
-              return;
+              if (!record(queued.input).judgmentRecovery)
+                requireModel(snapshot.profile?.models.translation, queued.kind);
+              if (
+                record(queued.input).autoTranslateRunId &&
+                (await autoTranslationNeedsConfirmation(
+                  snapshot.profile?.models.translation,
+                  source.text,
+                  jevCredentials.resolve,
+                  signal,
+                  jevSettings(store.db)
+                ))
+              ) {
+                store.failQueuedJob(
+                  id,
+                  queued.generation,
+                  'Codex 콘텐츠 경고를 확인해야 해요. 원문에서 번역 보기를 눌러 진행해 주세요.'
+                );
+                return;
+              }
+              mockTranslation = !snapshot.profile?.models.translation;
             }
             await runAuxiliaryJob(auxiliaryBridge(store, controls, signal), id, instanceId, {
               jev: {
@@ -622,8 +631,8 @@ export async function createApp(options: AppOptions): Promise<App> {
               },
               onAttemptFinish: (attempt, result) => store.product.finishAttempt(attempt, result),
               onInput: (_id, input) => {
-                if (queued.kind === 'translation' && !snapshot.profile?.models.translation)
-                  store.product.mockAttempt(chatId, null, id, queued.kind, input);
+                if (mockTranslation)
+                  store.product.mockAttempt(chatId, null, id, 'translation', input);
               },
               onProgress: () => publish(chatId),
               cancellationStatus: 'interrupted',
@@ -658,12 +667,11 @@ export async function createApp(options: AppOptions): Promise<App> {
     if (stopping.signal.aborted || !admitted()) return;
     for (const id of queuedIllustrations(store)) {
       if (illustrationControllers.has(id)) continue;
-      const lane = (jobId: string) =>
-        (illustrationJob(store, jobId).input.task ?? 'render') === 'render' ? 'render' : 'text';
-      const kind = lane(id);
-      if ([...illustrationControllers.keys()].some((activeId) => lane(activeId) === kind)) continue;
+      const kind =
+        (illustrationJob(store, id).input.task ?? 'render') === 'render' ? 'render' : 'text';
+      if ([...illustrationControllers.values()].some((active) => active.lane === kind)) continue;
       const controller = new AbortController();
-      illustrationControllers.set(id, controller);
+      illustrationControllers.set(id, { controller, lane: kind });
       const signal = AbortSignal.any([controller.signal, stopping.signal]);
       track(
         (async () => {
@@ -723,7 +731,7 @@ export async function createApp(options: AppOptions): Promise<App> {
       );
     }
   };
-  const execute = createRunExecutor({
+  const executeRun = createRunExecutor({
     store,
     controls,
     streams,
@@ -741,9 +749,17 @@ export async function createApp(options: AppOptions): Promise<App> {
     afterSource: (id) => {
       pumpJobs();
       pumpIllustrations();
-      if (admitted()) titles.afterSource(id);
+      titles.afterSource(id, !admitted());
     },
   });
+  const execute = (id: string, resume = false) => {
+    if (stopping.signal.aborted) return;
+    if (!admitted()) {
+      deferredRuns.set(id, resume);
+      return;
+    }
+    executeRun(id, resume);
+  };
   app.addHook('onRequest', async (request) => {
     const denied = deniedBrowserRequest(network, {
       method: request.method,
@@ -924,7 +940,8 @@ export async function createApp(options: AppOptions): Promise<App> {
   illustrationRoutes(app, store, {
     publish,
     pump: pumpIllustrations,
-    abort: (id) => illustrationControllers.get(id)?.abort(new Error('Illustration cancelled')),
+    abort: (id) =>
+      illustrationControllers.get(id)?.controller.abort(new Error('Illustration cancelled')),
     testMode: options.testMode === true,
     reconcile: (id) =>
       reconcileIllustrationJob(store, id, instanceId, {
@@ -1427,8 +1444,10 @@ export async function createApp(options: AppOptions): Promise<App> {
         : reply.sendFile('index.html')
     );
   }
+  let stopImportStagingCleanup: (() => void) | undefined;
   app.addHook('preClose', async () => {
     stopping.abort(new Error('Server stopping'));
+    stopImportStagingCleanup?.();
     await pushService?.close();
     await backups.close();
     await manuscriptSearch.close();
@@ -1441,24 +1460,46 @@ export async function createApp(options: AppOptions): Promise<App> {
     disposeAllNativeRisuSessions();
     store.close();
   });
+  const resumeWork = () => {
+    if (stopping.signal.aborted || !admitted()) return;
+    for (const runId of recoveredRuns.splice(0)) execute(runId, true);
+    for (const [runId, resume] of deferredRuns) {
+      deferredRuns.delete(runId);
+      execute(runId, resume);
+    }
+    helper.pump();
+    pumpJobs();
+    pumpIllustrations();
+    titles.resumeDeferred();
+  };
   // Authentication answers first; a maintenance gate never tells an anonymous caller the state.
-  maintenanceRoutes(app, store, { forcedClosed, activeWork: () => work.size });
+  maintenanceRoutes(app, store, {
+    forcedClosed,
+    activeWork: () => work.size + Number(backups.isActive),
+    onOpen: () =>
+      queueMicrotask(() => {
+        try {
+          resumeWork();
+        } catch {
+          process.stderr.write('BACKGROUND_RESUME_FAILED\n');
+        }
+      }),
+  });
   // A maintenance boot proves DB admission and reads only: it neither recovers nor starts work.
-  pruneUploads(store.path);
-  let recoveredRuns: string[] = [];
   if (!forcedClosed) {
+    if (admitted()) pruneUploads(store.path);
+    store.context.recover();
     recoveredRuns = store.recover();
     helper.workspace.interrupt();
     streams.recover();
     flushPendingImageCleanup(store.db);
   }
   app.addHook('onListen', async () => {
+    if (!forcedClosed) stopImportStagingCleanup = startImportStagingCleanup(store, admitted);
     if (!forcedClosed && !options.testMode) backups.listen();
     if (!forcedClosed) pushService?.listen();
     if (!forcedClosed) manuscriptSearch.listen();
-    for (const runId of recoveredRuns) execute(runId, true);
-    pumpJobs();
-    pumpIllustrations();
+    resumeWork();
   });
   return app;
 }

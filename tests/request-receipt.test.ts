@@ -5,6 +5,7 @@ import type { RunSnapshot } from '../core/types.js';
 import type { Json, WireRecord } from '../core/transport.js';
 import { requestReceipt } from '../server/request-receipt.js';
 import { nativeContent } from './fixtures/native-content.js';
+import { defaultStoryGuideConfig } from '../core/story-guide.js';
 
 const summary = '이전 장면의 "약속"\n아직 밝혀지지 않은 사실이에요.';
 const wire = (body: Json): WireRecord => ({
@@ -94,4 +95,26 @@ test('missing frozen identity is not reconstructed and a plan without summary re
   expect(receipt.summary).toEqual({ status: 'absent', coveredSources: 0 });
   delete captured.contextPlan;
   expect(requestReceipt(captured, wire({ text: 'Older unsupported context' })).summary).toBeNull();
+});
+
+test('story guide receipt records final writer input inclusion without retaining the guide text', () => {
+  const captured = snapshot();
+  const text = 'GUIDE_ONLY: keep this secret from the visitor.';
+  captured.storyGuide = {
+    revision: 1,
+    config: { ...defaultStoryGuideConfig(), enabled: true },
+    brief: {
+      fingerprint: 'a'.repeat(64),
+      text,
+      createdAt: '2026-11-03T00:00:00.000Z',
+      parentRevision: null,
+      configRevision: 1,
+      modelTitle: 'writer',
+    },
+  };
+  const included = requestReceipt(captured, wire({ input: JSON.stringify({ text }) }));
+  const removed = requestReceipt(captured, wire({ input: 'A request hook removed the guide.' }));
+  expect(included.storyGuide).toEqual({ status: 'included' });
+  expect(removed.storyGuide).toEqual({ status: 'unverified' });
+  expect(JSON.stringify(included)).not.toContain(text);
 });

@@ -61,12 +61,12 @@ const count = (s: Store) =>
   Number((s.db.prepare('SELECT COUNT(*) AS n FROM provider_settings').get() as { n: number }).n);
 const stamp = '2026-09-07T00:00:00.000Z';
 
-test('prepare is read only and create/update enforce the same CAS contract', () => {
+test('model preparation is read only and create/update enforce the same CAS contract', () => {
   const s = database();
   const p = s.product;
-  expect(p.prepareConnection(connectionBody()).value.catalog).toEqual([]);
   expect(count(s)).toBe(0);
   const c = p.connection(connectionBody()) as Connection;
+  expect(c.catalog).toEqual([]);
   expect(p.prepareModel(modelBody(c)).value.source).toEqual({
     kind: 'manual',
     catalogUpdatedAt: null,
@@ -85,7 +85,6 @@ test('prepare is read only and create/update enforce the same CAS contract', () 
   expect(() => p.prepareModel(modelBody(c), m.id)).toThrow('Invalid revision');
   expect(() => p.connection(connectionBody(), c.id)).toThrow('Invalid revision');
   p.connection(editConnection(c, { title: 'Renamed' }), c.id);
-  expect(() => p.prepareConnection(editConnection(c), c.id)).toThrow('Revision conflict');
   expect(() => p.connection(editConnection(c), c.id)).toThrow('Revision conflict');
   expect(p.get<ModelPreset>('model', m.id)).toEqual(updated);
   expect(() => p.get<ModelPreset>('model', m.id, 1)).toThrow('Setting not found');

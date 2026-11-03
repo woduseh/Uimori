@@ -31,7 +31,7 @@ const activeSession = () =>
   (focused ? sessions.get(focused) : null) ?? [...sessions.values()].at(-1) ?? null;
 const conflictReviewEvent = 'uimori-resource-conflict-review';
 export function requestResourceConflictReview(session: ResourceEditorSession) {
-  if (session.snapshot().conflict)
+  if (session.snapshot().conflict && !session.snapshot().creationPending)
     window.dispatchEvent(new CustomEvent(conflictReviewEvent, { detail: session }));
 }
 export function ResourceEditorLeaveWarning() {
@@ -72,7 +72,7 @@ export function hasUnsavedResourceEditor(kind: string, id: string) {
     return (
       session.options.kind === kind &&
       (kind === 'prompt-workspace' ? id === 'current' : state.document.targetId === id) &&
-      (state.dirty || state.saving)
+      (state.dirty || state.saving || state.creationPending)
     );
   });
 }
@@ -95,7 +95,7 @@ export function useEditorSaveCommand(session: ResourceEditorSession, save: () =>
 }
 export const saveActiveEditor = () => {
   const session = activeSession();
-  if (session?.snapshot().conflict) {
+  if (session?.snapshot().conflict && !session.snapshot().creationPending) {
     requestResourceConflictReview(session);
     return Promise.resolve(false);
   }
@@ -375,17 +375,22 @@ export function ResourceEditorStatus({
         </span>
       )}
       {state.dirty && state.recovery === 'saved' && <small>{t('shared.recoverySaved')}</small>}
+      {state.creationPending && !state.saving && (
+        <small role="alert">{t('shared.resourceCreationUncertain')}</small>
+      )}
       {state.recovery === 'failed' && <small role="alert">{t('shared.recoveryFailure')}</small>}
       {state.conflict && (
         <small role="alert">
           {t('shared.resourceChanged')}{' '}
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => requestResourceConflictReview(session)}
-          >
-            {t('shared.reviewSaved')}
-          </button>
+          {!state.creationPending && (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => requestResourceConflictReview(session)}
+            >
+              {t('shared.reviewSaved')}
+            </button>
+          )}
         </small>
       )}
       {state.ready && !hideSyncError && state.error && (

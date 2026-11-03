@@ -129,6 +129,7 @@ export function ProviderConnectionForm({
                 endpoint: definition.endpointDefault,
                 credentialRef: '',
                 apiKey: undefined,
+                vertexAccount: undefined,
               });
             }}
           >
@@ -154,12 +155,15 @@ export function ProviderConnectionForm({
         {vertex && (
           <VertexCredentialUpload
             credentialRef={connection.credentialRef}
+            account={connection.vertexAccount}
             disabled={operationBusy}
             onBusy={onUploadBusy}
             onRegistered={(value) =>
               onChange((current) => ({
                 ...current,
-                credentialRef: value.credentialRef,
+                credentialRef: '',
+                apiKey: undefined,
+                vertexAccount: value,
                 endpoint: vertexEndpoint(value.projectId),
               }))
             }

@@ -3,23 +3,24 @@ import { useEffect, useRef, useState } from 'react';
 import { NoticeBanner } from './NoticeBanner.js';
 import { CredentialFileIcon, UploadIcon } from './ui-icons.js';
 import { api, ApiError } from './api.js';
+import type { VertexAccountDraft } from './provider-editor-state.js';
 
-type RegisteredCredential = { credentialRef: string; projectId: string; clientEmail: string };
 export function VertexCredentialUpload({
   credentialRef,
+  account,
   disabled,
   onRegistered,
   onBusy,
 }: {
   credentialRef: string;
+  account?: VertexAccountDraft;
   disabled: boolean;
-  onRegistered: (credential: RegisteredCredential) => void;
+  onRegistered: (credential: VertexAccountDraft) => void;
   onBusy: (value: boolean) => void;
 }) {
   useI18n();
   const [uploading, setUploading] = useState(false),
     [error, setError] = useState('');
-  const [registered, setRegistered] = useState<RegisteredCredential>();
   const epoch = useRef(0);
   useEffect(
     () => () => {
@@ -27,7 +28,7 @@ export function VertexCredentialUpload({
     },
     []
   );
-  const stored = credentialRef.startsWith('UIMORI_PROVIDER_VERTEX_FILE_');
+  const selected = Boolean(account) || credentialRef.startsWith('UIMORI_PROVIDER_VERTEX_FILE_');
   return (
     <section className="vertex-credential-upload full" aria-label={t('providers.m392')}>
       <div className="provider-section-heading">
@@ -35,12 +36,12 @@ export function VertexCredentialUpload({
           <CredentialFileIcon size={18} aria-hidden="true" />
           {t('providers.m393')}
         </strong>
-        {stored && <span className="provider-status">{t('providers.m394')}</span>}
+        {selected && <span className="provider-status">{t('providers.m394')}</span>}
       </div>
       <label className="vertex-upload-field">
         <span>
           <UploadIcon size={16} aria-hidden="true" />
-          {uploading ? t('providers.m396') : stored ? t('providers.m397') : t('providers.m398')}
+          {uploading ? t('providers.m396') : selected ? t('providers.m397') : t('providers.m398')}
         </span>
         <input
           type="file"
@@ -73,13 +74,12 @@ export function VertexCredentialUpload({
                 (serviceAccount as Record<string, unknown>).type !== 'service_account'
               )
                 throw new Error(uiMessage('providers.m402'));
-              const value = await api<RegisteredCredential>(
+              const value = await api<{ projectId: string; clientEmail: string }>(
                 '/provider-management/vertex-credentials',
                 { serviceAccount }
               );
               if (current !== epoch.current) return;
-              setRegistered(value);
-              onRegistered(value);
+              onRegistered({ ...value, serviceAccount });
             } catch (caught) {
               if (current === epoch.current)
                 setError(
@@ -98,11 +98,11 @@ export function VertexCredentialUpload({
           }}
         />
       </label>
-      {stored && registered?.credentialRef === credentialRef && (
+      {account && (
         <p role="status">
-          {t('providers.m582', { value0: registered.projectId })}
+          {t('providers.m582', { value0: account.projectId })}
           <br />
-          <small>{registered.clientEmail}</small>
+          <small>{account.clientEmail}</small>
         </p>
       )}
       {error && <NoticeBanner tone="error">{translateMessage(error)}</NoticeBanner>}

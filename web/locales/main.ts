@@ -1,4 +1,46 @@
 export const messages = {
+  'main.pendingProfileConflict': {
+    ko: '시작 설정이 다른 곳에서 바뀌었어요. 저장된 설정을 유지하면 선택한 시작은 적용하지 않아요.',
+    en: 'The starting settings changed elsewhere. Keeping the saved settings will skip the selected opening.',
+    ja: '開始設定が別の場所で変更されました。保存済みの設定を使うと、選択した開始は適用されません。',
+    zh: '开始设置已在其他位置更改。使用已保存的设置将不会应用所选开场。',
+  },
+  'main.pendingProfileChanged': {
+    ko: '시작 설정 복구 기록이 바뀌었어요. 다시 확인해 주세요.',
+    en: 'The saved starting request changed. Please check it again.',
+    ja: '保存した開始リクエストが変更されました。もう一度確認してください。',
+    zh: '保存的开始请求已更改，请重新确认。',
+  },
+  'main.pendingProfileUseSaved': {
+    ko: '저장된 설정 사용',
+    en: 'Use saved settings',
+    ja: '保存済みの設定を使う',
+    zh: '使用已保存的设置',
+  },
+  'main.pendingProfileOpen': {
+    ko: '채팅에서 설정 확인',
+    en: 'Review settings in chat',
+    ja: 'チャットで設定を確認',
+    zh: '在聊天中检查设置',
+  },
+  'main.pendingRequestUnconfirmed': {
+    ko: '이전 요청의 접수 여부를 확인할 수 없어요. 기록을 지운 뒤 다시 보내면 작업과 비용이 중복될 수 있어요. 현재 초안은 유지돼요.',
+    en: 'The previous request could not be confirmed. Clearing its record and sending again may duplicate work and costs. Your current draft stays.',
+    ja: '前回のリクエストの受付を確認できません。記録を消して再送すると、作業や費用が重複する場合があります。現在の下書きは保持されます。',
+    zh: '无法确认上次请求是否被接收。清除记录后重新发送可能导致重复执行和费用。当前草稿会保留。',
+  },
+  'main.pendingRequestForget': {
+    ko: '이전 요청 기록 지우기',
+    en: 'Clear previous request record',
+    ja: '前回のリクエスト記録を消す',
+    zh: '清除上次请求记录',
+  },
+  'main.pendingRequestForgetFailed': {
+    ko: '이전 요청 기록을 지우지 못했어요. 브라우저 저장 공간을 확인해 주세요.',
+    en: 'Could not clear the previous request record. Check browser storage.',
+    ja: '前回のリクエスト記録を消せませんでした。ブラウザーの保存領域を確認してください。',
+    zh: '无法清除上次请求记录，请检查浏览器存储空间。',
+  },
   'main.modelPickerTitle': {
     ko: '이 채팅의 본문 모델',
     en: 'Writing model for this chat',

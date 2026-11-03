@@ -4,11 +4,12 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
 import { useEffect, useRef, useState } from 'react';
 import type { Chat } from '../core/types.js';
-import type { Content, Library } from '../core/product.js';
+import { defaultProfile, type Content, type Library } from '../core/product.js';
 import { api } from './api.js';
 import { refValue } from './content-ref.js';
 import {
   completePendingStoryProfile,
+  PendingStoryProfileConflict,
   savePendingStoryProfile,
   type NewStoryProfileIntent,
 } from './pendingStory.js';
@@ -123,6 +124,7 @@ export function NewStory({
   const initializedStart = useRef<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [profileConflict, setProfileConflict] = useState(false);
   const created = useRef<Chat | null>(null);
   const uncertain = useRef(false);
   const submitted = useRef<StorySelection | null>(null);
@@ -303,6 +305,7 @@ export function NewStory({
     creating.current = true;
     setBusy(true);
     setError('');
+    setProfileConflict(false);
     try {
       const selection = (submitted.current ??= captureSelection());
       if (!created.current) {
@@ -329,6 +332,7 @@ export function NewStory({
           // leaves the new chat blocked until its original choices are saved.
           savePendingStoryProfile(chat.id, {
             ...selection.profile,
+            profileBaseRevision: defaultProfile(chat.id).revision,
             ...(selection.profile.packageStart
               ? {
                   packageStart: {
@@ -345,6 +349,7 @@ export function NewStory({
       await onCreated(chat);
     } catch (err) {
       setConfigure(true);
+      setProfileConflict(err instanceof PendingStoryProfileConflict);
       setError(
         uncertain.current && !created.current
           ? retainedMessage('transfer.m320')
@@ -720,6 +725,21 @@ export function NewStory({
         )}
       </div>
       <div className="new-story-submit">
+        {profileConflict && created.current && (
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => {
+              if (created.current)
+                void onCreated(created.current).catch((cause) =>
+                  setError((cause as Error).message)
+                );
+            }}
+          >
+            {t('main.pendingProfileOpen')}
+          </button>
+        )}
         <button
           className="primary"
           disabled={

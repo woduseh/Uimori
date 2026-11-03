@@ -30,7 +30,7 @@ def inspect(app, releases, run_id=""):
                 "image": state["Image"], "dataVolumes": [m.get("Name") for m in state["Mounts"] if m["Destination"] == "/data"]}
 
     def lock_busy():
-        lock_path = Path(app).parent / "deploy.lock"
+        lock_path = Path(releases).parent / "deploy.lock"
         if lock_path.exists():
             with lock_path.open("r") as lock:
                 try:

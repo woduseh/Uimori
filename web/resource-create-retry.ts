@@ -28,7 +28,12 @@ export async function cloneWithReceipt<T>(
     sessionStorage.removeItem(storageKey);
     return result;
   } catch (error) {
-    if (definiteRejection(error) && !(error instanceof ApiError && error.status === 429))
+    if (
+      (error instanceof ApiError &&
+        error.status === 410 &&
+        error.code === 'RESOURCE_CREATION_REMOVED') ||
+      (!raw && definiteRejection(error) && !(error instanceof ApiError && error.status === 429))
+    )
       sessionStorage.removeItem(storageKey);
     throw error;
   }

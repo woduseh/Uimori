@@ -8,6 +8,7 @@ import { forkChat } from '../server/chat-fork.js';
 import { Store } from '../server/store.js';
 import type { RunSnapshot } from '../core/types.js';
 import { readChatVariables } from '../server/chat-variables.js';
+import { chatDeletionImpact, deleteChat } from '../server/chat-deletion.js';
 
 const owned: { directory: string; store?: Store }[] = [];
 beforeEach(() => {
@@ -76,6 +77,99 @@ function source(store: Store, chatId: string, value: string) {
 }
 
 describe('independent stored-story fork without generation', () => {
+  test('a matching receipt proves the copied chat was deleted without treating a different command as terminal', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Deleted copy');
+    const original = source(store, chat.id, 'Original scene.');
+    const command = { fromRevision: original.id, idempotencyKey: 'deleted-copy' };
+    const copy = forkChat(store, chat.id, command);
+    deleteChat(store, copy.id, chatDeletionImpact(store, copy.id).request);
+    expect(() => forkChat(store, chat.id, command)).toThrowError(
+      expect.objectContaining({ statusCode: 410, message: 'CHAT_COPY_REMOVED' })
+    );
+    expect(() => forkChat(store, chat.id, { ...command, fromRevision: null })).toThrowError(
+      expect.objectContaining({ statusCode: 409 })
+    );
+    expect(store.chats()).toHaveLength(1);
+  });
+
+  test('a legacy receipt without a verified command does not claim a deleted copy is resolved', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Legacy deleted copy');
+    const original = source(store, chat.id, 'Original scene.');
+    const command = { fromRevision: original.id, idempotencyKey: 'legacy-deleted-copy' };
+    const copy = forkChat(store, chat.id, command);
+    store.db
+      .prepare(
+        "UPDATE import_operations SET result=json_remove(result,'$.forkCommand') WHERE key=?"
+      )
+      .run('transcript:copy:legacy-deleted-copy');
+    deleteChat(store, copy.id, chatDeletionImpact(store, copy.id).request);
+    let failure: unknown;
+    try {
+      forkChat(store, chat.id, command);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toMatchObject({ statusCode: 410, message: 'CHAT_COPY_REMOVED' });
+    expect(store.chats()).toHaveLength(1);
+  });
+  test('replaying a completed copy preserves its independently changed folder and emits no new event', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Copy replay');
+    const original = source(store, chat.id, 'Original scene.');
+    const command = { fromRevision: original.id, idempotencyKey: 'copy-folder-replay' };
+    const copy = forkChat(store, chat.id, command);
+    const botId = store.organization.metadata(chat.id)!.botId;
+    const folder = store.organization.createFolder(botId, { title: 'My copied stories' });
+    const moved = store.organization.move(copy.id, {
+      expectedRevision: copy.organizationRevision,
+      folderId: folder.id,
+    });
+    const events = store.db
+      .prepare('SELECT COUNT(*) AS n FROM events WHERE chat_id=?')
+      .get(copy.id)!.n;
+
+    expect(forkChat(store, chat.id, command)).toEqual(moved);
+    expect(
+      store.db.prepare('SELECT COUNT(*) AS n FROM events WHERE chat_id=?').get(copy.id)!.n
+    ).toBe(events);
+  });
+
+  test('replaying a completed copy uses the original command after the source is edited', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Edited after copy');
+    const original = source(store, chat.id, 'Before editing.');
+    const command = { fromRevision: original.id, idempotencyKey: 'copy-edited-replay' };
+    const copy = forkChat(store, chat.id, command);
+    store.editSource(original.id, { expectedRevision: 0, text: 'After editing.' });
+
+    const replay = forkChat(store, chat.id, command);
+    expect(replay.id).toBe(copy.id);
+    expect(store.source(replay.headRevision!).text).toBe('Before editing.');
+    expect(store.chats()).toHaveLength(2);
+  });
+
+  test('a preexisting copy receipt is recovered and upgraded using its recorded fork event', async () => {
+    const store = await database();
+    const chat = createFixtureChat(store, 'Legacy copy');
+    const original = source(store, chat.id, 'Legacy scene.');
+    const command = { fromRevision: original.id, idempotencyKey: 'old-copy-receipt' };
+    const copy = forkChat(store, chat.id, command);
+    store.db
+      .prepare(
+        "UPDATE import_operations SET result=json_remove(result,'$.forkCommand') WHERE key=?"
+      )
+      .run('transcript:copy:old-copy-receipt');
+    store.editSource(original.id, { expectedRevision: 0, text: 'Changed later.' });
+
+    expect(forkChat(store, chat.id, command).id).toBe(copy.id);
+    expect(() => forkChat(store, chat.id, { ...command, title: 'Different title' })).toThrow(
+      '다른 채팅에 같은 가져오기 ID'
+    );
+  });
+
   test('numbers independent copies while repeated keys remain durable and conflicting selections are rejected', async () => {
     const store = await database();
     const chat = createFixtureChat(store, 'Names');
