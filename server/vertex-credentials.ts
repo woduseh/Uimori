@@ -109,16 +109,6 @@ export class VertexCredentialStore {
     validateVertexCredential(this.keys, connection);
   }
 
-  configured(connection: Pick<ProviderConnection, 'protocol' | 'endpoint' | 'credentialRef'>) {
-    if (!connection.credentialRef) return false;
-    try {
-      this.validate(connection);
-      return this.keys.status(connection.credentialRef).configured;
-    } catch {
-      return false;
-    }
-  }
-
   /** Use the same Vertex credential as generation for non-generating metadata requests. */
   async accessToken(connection: ProviderConnection, signal: AbortSignal): Promise<string> {
     if (isVertexAdcReference(connection.credentialRef)) return vertexAccessToken(signal);

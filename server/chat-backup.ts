@@ -252,7 +252,7 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
     if (concurrent) return concurrent;
     const receipt = importResourceBundle(store, {
       file,
-      digest: inspectBundle(file).digest,
+      digest: bundleDigest(file),
       idempotencyKey: `resources:${key}`,
       modelBindings: [],
     });

@@ -21,7 +21,7 @@ import type {
   RisuImportSource,
   RisuImportStagedSource,
 } from '../core/risu-import.js';
-import { ApiError, api } from './api.js';
+import { api, definiteRejection } from './api.js';
 import { SelectionCheckbox } from './BooleanControls.js';
 import { Dialog } from './Dialog.js';
 import { IconButton } from './IconButton.js';
@@ -273,12 +273,7 @@ export function RisuImport({
       setUncertain(false);
       await refreshAndOpen(imported);
     } catch (cause) {
-      const confirmedFailure =
-        !uncertain &&
-        cause instanceof ApiError &&
-        cause.status >= 400 &&
-        cause.status < 500 &&
-        cause.status !== 408;
+      const confirmedFailure = !uncertain && definiteRejection(cause);
       setUncertain(!confirmedFailure);
       if (confirmedFailure) submission.current = null;
       setError((cause as Error).message);

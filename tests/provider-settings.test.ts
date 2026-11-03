@@ -23,6 +23,7 @@ import {
 } from '../server/provider-archive.js';
 import { installJevFixture, configureJevFixture } from './fixtures/jev.js';
 import { generationFromModel } from '../core/model-capabilities.js';
+import { settleWithin, stalledProviderBody } from './fixtures/stalled-provider-body.js';
 
 const roots: Record<ProviderProtocol, string> = {
   'fixture-sse-v1': 'http://127.0.0.1:9/turn',
@@ -957,6 +958,40 @@ describe('provider settings, catalogs and archive contracts', () => {
       expect(failed.catalog).toEqual(listed.catalog);
       expect(failed.catalogError).toBe('CATALOG_UNAVAILABLE');
       expect(JSON.stringify(failed)).not.toContain('SYNTHETIC_NOT_SECRET');
+    }
+  });
+
+  test('oversized catalog preserves the saved list without waiting for cancellation acknowledgement', async () => {
+    const app = await application();
+    const connection = await request<Connection>(
+      app,
+      '/connections',
+      connectionBody('openai-chat-v1')
+    );
+    vi.mocked(fetch).mockResolvedValueOnce(response({ data: [{ id: 'kept' }] }));
+    const listed = await request<Connection>(app, `/connections/${connection.id}/catalog`, {});
+    const stalled = stalledProviderBody();
+    const oversized = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(1_000_001));
+      },
+      cancel() {
+        return stalled.response.body!.cancel();
+      },
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(oversized));
+    const refresh = request<Connection>(app, `/connections/${connection.id}/catalog`, {});
+    try {
+      const failed = await settleWithin(refresh);
+      expect(failed).toMatchObject({
+        catalog: listed.catalog,
+        catalogError: 'CATALOG_UNAVAILABLE',
+        catalogUpdatedAt: listed.catalogUpdatedAt,
+      });
+      expect(stalled.cancellations).toBe(1);
+    } finally {
+      stalled.release();
+      await refresh;
     }
   });
 

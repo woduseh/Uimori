@@ -11,6 +11,7 @@ import {
   googleGeminiModelEntry,
   vertexPublisherModelEntry,
 } from '../core/provider-catalog.js';
+import { readProviderBody } from '../core/provider-fetch.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
 import { AccessSessions, AccessSessionRateLimitError } from './access-session.js';
@@ -348,30 +349,9 @@ export function productRoutes(
           product.authorize(previous);
           const response = await fetch(url, { method: 'GET', signal, redirect: 'error', headers });
           if (!response.ok || !response.body) throw new Error('Catalog unavailable');
-          const reader = response.body.getReader();
-          const parts: Uint8Array[] = [];
-          const abort = () => {
-            void reader.cancel().catch(() => {});
-          };
-          signal.addEventListener('abort', abort, { once: true });
-          try {
-            if (signal.aborted) throw new Error('Catalog timeout');
-            while (true) {
-              const next = await reader.read();
-              if (signal.aborted) throw new Error('Catalog timeout');
-              if (next.done) break;
-              totalSize += next.value.length;
-              if (totalSize > 1000000) throw new Error('Catalog too large');
-              parts.push(next.value);
-            }
-          } finally {
-            signal.removeEventListener('abort', abort);
-            await reader.cancel().catch(() => {});
-            reader.releaseLock();
-          }
-          const body = JSON.parse(
-            new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(parts))
-          );
+          const bytes = await readProviderBody(response, signal, 1_000_000 - totalSize);
+          totalSize += bytes.length;
+          const body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
           if (c.protocol === 'fixture-sse-v1') {
             collected.push(
               ...parseCatalog(body).map((m) => ({
