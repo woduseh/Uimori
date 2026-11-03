@@ -906,10 +906,10 @@ export const messages = {
     zh: '场景名称',
   },
   'reader.leaveBlankToShowTheLinkedConfigurationTitleOr': {
-    ko: '비워 두면 연결된 구성 제목이나 요청을 표시해요.',
-    en: 'Leave blank to show the linked configuration title or request.',
-    ja: '空欄にすると、関連する構成のタイトルやリクエストを表示します。',
-    zh: '留空时显示关联配置的标题或请求。',
+    ko: '비워 두면 연결된 플롯 제목이나 요청을 표시해요.',
+    en: 'Leave blank to show the linked plot title or request.',
+    ja: '空欄にすると、関連するプロットのタイトルやリクエストを表示します。',
+    zh: '留空时显示关联大纲的标题或请求。',
   },
   'reader.saveName': {
     ko: '이름 저장',

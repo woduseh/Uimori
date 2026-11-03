@@ -547,10 +547,10 @@ export const messages = {
     zh: '最后场景的设定',
   },
   'settings.m105': {
-    ko: '수동 컨텍스트 압축',
-    en: 'Manual context compression',
-    ja: '手動コンテキスト圧縮',
-    zh: '手动上下文压缩',
+    ko: '컨텍스트 압축',
+    en: 'Context compression',
+    ja: 'コンテキスト圧縮',
+    zh: '上下文压缩',
   },
   'settings.m106': {
     ko: '사용하는 프롬프트가 바뀌었어요.',

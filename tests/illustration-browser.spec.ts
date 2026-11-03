@@ -146,7 +146,7 @@ for (const width of [360, 412]) {
     await selectChatSettingsSection(page, '이미지');
     const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
     const references = dialog.getByRole('region', { name: '삽화 참고 이미지', exact: true });
-    const personRole = references.getByLabel('인물 기준 이미지 참조 역할', { exact: true });
+    const personRole = references.getByLabel('인물 기준 이미지 참고 역할', { exact: true });
     await expect(personRole).toHaveValue('character');
     await personRole.selectOption('style');
     failRefresh = true;
@@ -184,7 +184,7 @@ for (const width of [360, 412]) {
     await expect(references.getByRole('alert')).toBeHidden();
     await expect(references.locator('figure')).toHaveCount(initial.candidates.length + 1);
     await expect(personRole).toHaveValue('style');
-    await expect(references.getByLabel('갱신 후 새 이미지 참조 역할', { exact: true })).toHaveValue(
+    await expect(references.getByLabel('갱신 후 새 이미지 참고 역할', { exact: true })).toHaveValue(
       ''
     );
     const [acknowledged] = await Promise.all([
@@ -192,12 +192,12 @@ for (const width of [360, 412]) {
         (response) =>
           new URL(response.url()).pathname === path && response.request().method() === 'PUT'
       ),
-      references.getByRole('button', { name: '삽화 참조 저장', exact: true }).click(),
+      references.getByRole('button', { name: '삽화 참고 저장', exact: true }).click(),
     ]);
     expect(acknowledged.ok()).toBe(true);
     await acknowledged.json();
     await expect(
-      references.getByRole('button', { name: '삽화 참조 저장', exact: true })
+      references.getByRole('button', { name: '삽화 참고 저장', exact: true })
     ).toBeDisabled();
     expect(referenceWrites).toEqual([
       { expectedRevision: saved.revision, references: [{ ref: person.ref, role: 'style' }] },

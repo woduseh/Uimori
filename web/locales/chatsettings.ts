@@ -204,10 +204,10 @@ export const messages = {
     zh: '按角色设置模型',
   },
   'chatsettings.m28': {
-    ko: '원문 작문 번역 도우미 컨텍스트 요약 채팅 제목 확장 호출 스크립트 거절 판정 모델 선택',
+    ko: '원문 본문 창작 작문 번역 도우미 컨텍스트 요약 채팅 제목 확장 호출 스크립트 거절 판정 모델 선택',
     en: 'Original writing translation assistant helper context summary chat title extension call script refusal model selection',
-    ja: '原文 執筆 翻訳 アシスタント コンテキスト 要約 チャット タイトル 拡張 呼び出し スクリプト 拒否 モデル 選択',
-    zh: '原文 写作 翻译 助手 上下文 摘要 聊天 标题 扩展 调用 脚本 拒绝 模型 选择',
+    ja: '原文 本文 創作 執筆 翻訳 アシスタント コンテキスト 要約 チャット タイトル 拡張 呼び出し スクリプト 拒否 モデル 選択',
+    zh: '原文 正文 创作 写作 翻译 助手 上下文 摘要 聊天 标题 扩展 调用 脚本 拒绝 模型 选择',
   },
   'chatsettings.m29': {
     ko: '현재 프롬프트',

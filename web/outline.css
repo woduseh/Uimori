@@ -227,8 +227,11 @@
   font-size: var(--font-heading);
   letter-spacing: -0.035em;
   line-height: 1.35;
-  margin: 7px 0 0;
+  margin: 0;
   overflow-wrap: anywhere;
+}
+.outline-detail-heading h3 {
+  margin-top: 7px;
 }
 .outline-eyebrow {
   font-size: var(--font-small);

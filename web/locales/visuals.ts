@@ -174,7 +174,7 @@ export const messages = {
     zh: '已保存参考图片，将用于下次插图请求。',
   },
   'visuals.m032': {
-    ko: 'Codex 삽화에 최대 8개를 참조해요. ComfyUI에는 적용되지 않아요.',
+    ko: 'Codex 삽화에 최대 8개를 참고해요. ComfyUI에는 적용되지 않아요.',
     en: 'Use up to 8 references for Codex illustrations. Not used by ComfyUI.',
     ja: 'Codexの挿絵に最大8枚を参照します。ComfyUIには適用されません。',
     zh: 'Codex插图最多使用8张参考图片，不适用于ComfyUI。',
@@ -186,15 +186,15 @@ export const messages = {
     zh: '重新加载',
   },
   'visuals.m035': {
-    ko: '이 채팅에 등록한 이미지나 장착한 자료의 이미지가 없어요.',
-    en: 'No images are registered for this chat or its attached resources.',
-    ja: 'このチャットや装着資料に画像がありません。',
-    zh: '此聊天及其已附资料中没有图片。',
+    ko: '이 채팅에 등록한 이미지나 사용 중인 자료의 이미지가 없어요.',
+    en: 'No images are registered for this chat or its active resources.',
+    ja: 'このチャットや使用中の資料に画像がありません。',
+    zh: '此聊天及其使用中的资料中没有图片。',
   },
   'visuals.m036': {
-    ko: '{v0} 참조 역할',
+    ko: '{v0} 참고 역할',
     en: 'Reference role for {v0}',
-    ja: '{v0}の参照用途',
+    ja: '{v0}の参考用途',
     zh: '{v0}的参考用途',
   },
   'visuals.m037': {
@@ -216,9 +216,9 @@ export const messages = {
     zh: '画风',
   },
   'visuals.m040': {
-    ko: '삽화 참조 저장',
+    ko: '삽화 참고 저장',
     en: 'Save illustration references',
-    ja: '参照画像を保存',
+    ja: '参考画像を保存',
     zh: '保存插图参考图片',
   },
   'visuals.m041': {

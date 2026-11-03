@@ -235,7 +235,7 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   await expect(
     form.getByLabel('모델 계열', { exact: true }).locator('option[value=""]')
   ).toHaveText('자동, 공통 옵션');
-  await form.getByLabel('사고 강도', { exact: true }).selectOption('max');
+  await form.getByLabel('추론 강도', { exact: true }).selectOption('max');
   await form.getByRole('button', { name: '고급', exact: true }).click();
   const providerOptions = form.getByLabel('providerOptions (JSON)', { exact: true });
   await expect(providerOptions).toBeHidden();
@@ -258,7 +258,7 @@ test('PMUI providerOptions is available only for Vercel models and is saved as J
   await openProviderModel(page, saved.title);
   await expect(form.getByLabel('모델 계열', { exact: true })).toHaveValue('anthropic');
   await form.getByLabel('모델 계열', { exact: true }).selectOption('google');
-  await form.getByLabel('사고 강도', { exact: true }).selectOption('HIGH');
+  await form.getByLabel('추론 강도', { exact: true }).selectOption('HIGH');
   await form.getByRole('button', { name: '모델 변경 저장', exact: true }).click();
   await expect
     .poll(
@@ -1106,7 +1106,7 @@ const providerOptionCases = [
     protocol: 'vercel-chat-v1',
     endpoint: 'https://ai-gateway.vercel.sh/v1',
     modelId: 'openai/gpt-5.6-sol',
-    choices: { '사고 강도': 'high', '서비스 등급': 'flex', Verbosity: 'high' },
+    choices: { '추론 강도': 'high', '서비스 등급': 'flex', Verbosity: 'high' },
     saved: { reasoningEffort: 'high', serviceTier: 'flex', verbosity: 'high' },
     absent: ['thinkingLevel'],
     hidden: ['Thinking Level', 'Output Effort', '실행 방식'],
@@ -1126,7 +1126,7 @@ const providerOptionCases = [
     endpoint:
       'https://aiplatform.googleapis.com/v1/projects/synthetic-parameters/locations/global/publishers/google/models',
     modelId: 'gemini-3.8-flash',
-    choices: { '사고 강도': 'HIGH', '서비스 등급': 'flex' },
+    choices: { '추론 강도': 'HIGH', '서비스 등급': 'flex' },
     saved: { thinkingLevel: 'HIGH', serviceTier: 'flex' },
     absent: ['outputEffort'],
     hidden: ['Verbosity', '사고 모드', '실행 방식'],
@@ -1136,7 +1136,7 @@ const providerOptionCases = [
     endpoint: 'https://api.openai.com/v1',
     modelId: 'gpt-5.6-sol',
     choices: {
-      '사고 강도': 'none',
+      '추론 강도': 'none',
       Verbosity: 'high',
       '서비스 등급': 'flex',
       '캐시 방식': 'automatic',
@@ -1157,7 +1157,7 @@ const providerOptionCases = [
     endpoint: 'https://api.anthropic.com/v1',
     modelId: 'claude-opus-5',
     choices: {
-      '사고 강도': 'high',
+      '추론 강도': 'high',
       '실행 방식': 'batch',
       '사고 모드': 'disabled',
       '캐시 방식': 'explicit',
@@ -1178,7 +1178,7 @@ const providerOptionCases = [
     endpoint: 'https://api.anthropic.com/v1',
     modelId: 'claude-fable-5-1',
     choices: {
-      '사고 강도': 'max',
+      '추론 강도': 'max',
       '실행 방식': 'realtime',
       '캐시 방식': 'automatic',
       '캐시 유지 시간': '1h',
@@ -1197,7 +1197,7 @@ for (const [index, item] of providerOptionCases.entries()) {
     const observed = observe(page),
       prefix = 'PMUI11 ' + Date.now();
     const tabFor = (label: string) =>
-      ['사고 강도', '서비스 등급', '실행 방식'].includes(label) ? '기본' : '고급';
+      ['추론 강도', '서비스 등급', '실행 방식'].includes(label) ? '기본' : '고급';
     const title = prefix + ' ' + item.modelId,
       connection = await api<Connection>(request, '/connections', {
         title,
@@ -1302,7 +1302,7 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await form.getByLabel('프로바이더', { exact: true }).selectOption(`${connection.id}`);
   await form.getByLabel('모델 프리셋 이름').fill(title);
   await form.getByLabel('모델 ID', { exact: true }).fill('gpt-5.6-sol');
-  const strength = form.getByLabel('사고 강도', { exact: true });
+  const strength = form.getByLabel('추론 강도', { exact: true });
   await strength.selectOption('none');
   await form.getByRole('button', { name: '고급', exact: true }).click();
   await form.getByLabel('Verbosity', { exact: true }).selectOption('low');
@@ -1310,7 +1310,7 @@ test('PMUI12 changing provider clears unrepresentable options, keeps common fiel
   await form.getByRole('button', { name: '기본', exact: true }).click();
   await form.getByLabel('프로바이더', { exact: true }).selectOption(`${anthropic.id}`);
   await expect(
-    form.getByLabel('이전 설정의 사고 강도: reasoningEffort', { exact: true })
+    form.getByLabel('이전 설정의 추론 강도: reasoningEffort', { exact: true })
   ).toHaveCount(0);
   await expect(form.getByLabel('모델 ID', { exact: true })).toHaveValue('');
   await expect(form.getByLabel('모델 프리셋 이름')).toHaveValue(title);
@@ -1782,32 +1782,32 @@ for (const [index, item] of [
     endpoint:
       'https://aiplatform.googleapis.com/v1/projects/synthetic-new-models/locations/global/publishers/google/models',
     modelId: 'gemini-3.5-flash-lite',
-    options: { '사고 강도': ['MINIMAL', 'MEDIUM', 'HIGH'] },
-    choices: { '사고 강도': 'MINIMAL' },
+    options: { '추론 강도': ['MINIMAL', 'MEDIUM', 'HIGH'] },
+    choices: { '추론 강도': 'MINIMAL' },
     saved: { thinkingLevel: 'MINIMAL', temperature: null },
   },
   {
     protocol: 'vercel-chat-v1',
     endpoint: 'https://ai-gateway.vercel.sh/v1',
     modelId: 'spacexai/grok-4.6',
-    options: { '사고 강도': ['low', 'medium', 'high', 'xhigh'] },
-    choices: { '사고 강도': 'xhigh' },
+    options: { '추론 강도': ['low', 'medium', 'high', 'xhigh'] },
+    choices: { '추론 강도': 'xhigh' },
     saved: { reasoningEffort: 'xhigh' },
   },
   {
     protocol: 'vercel-chat-v1',
     endpoint: 'https://ai-gateway.vercel.sh/v1',
     modelId: 'openai/gpt-5.6-sol',
-    options: { '사고 강도': ['none', 'low', 'medium', 'high', 'xhigh'] },
-    choices: { '사고 강도': 'xhigh' },
+    options: { '추론 강도': ['none', 'low', 'medium', 'high', 'xhigh'] },
+    choices: { '추론 강도': 'xhigh' },
     saved: { reasoningEffort: 'xhigh' },
   },
   ...['deepseek-v4-pro', 'deepseek-v4-flash'].map((modelId) => ({
     protocol: 'deepseek-chat-v1',
     endpoint: 'https://api.deepseek.com/v1',
     modelId,
-    options: { '사고 강도': ['none', 'low', 'high', 'max'] },
-    choices: { '사고 강도': modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
+    options: { '추론 강도': ['none', 'low', 'high', 'max'] },
+    choices: { '추론 강도': modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
     saved: { reasoningEffort: modelId === 'deepseek-v4-pro' ? 'max' : 'none' },
   })),
 ].entries()) {

@@ -265,7 +265,7 @@ for (const width of [1440, 412]) {
     await composer.fill('다음 장면 초안');
     await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
     await page.getByRole('button', { name: '컨텍스트 압축', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: '수동 컨텍스트 압축', exact: true });
+    const dialog = page.getByRole('dialog', { name: '컨텍스트 압축', exact: true });
     await expect(dialog).toBeVisible();
     await dialog.getByText('이번 요약에서 우선할 내용 (선택)', { exact: true }).click();
     const priorities = dialog.getByLabel('압축 우선순위', { exact: true });
@@ -287,7 +287,7 @@ for (const width of [1440, 412]) {
       '미라가 아직 모르는 사실과 인물 호칭을 유지해요.'
     );
     await page.screenshot({ path: info.outputPath(`composer-context-${width}.png`) });
-    await dialog.getByRole('button', { name: '수동 컨텍스트 압축 닫기', exact: true }).click();
+    await dialog.getByRole('button', { name: '컨텍스트 압축 닫기', exact: true }).click();
     await expect(composer).toHaveValue('다음 장면 초안');
     await expect(page.getByRole('button', { name: '입력창 더보기', exact: true })).toBeFocused();
   });

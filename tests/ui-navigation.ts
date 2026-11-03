@@ -225,7 +225,7 @@ export async function selectStartPrompt(
 ) {
   await openNewStoryOptions(page);
   await expect(page.getByLabel('시작 프롬프트', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('시작 옵션 조합', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('시작 옵션 프리셋', { exact: true })).toHaveCount(0);
   const workspace = await (await page.request.get('/api/prompt-workspace')).json();
   expect(
     (
