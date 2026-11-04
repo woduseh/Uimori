@@ -77,7 +77,7 @@ export function illustrationTargetSet(targets: IllustrationTarget[]): {
 export type IllustrationPromptMode = 'none' | 'comfyui' | 'codex';
 const storyboardContract = (mode: IllustrationPromptMode) =>
   [
-    'Choose up to maxTargets new moments from the whole story response in narrative order. Favor a meaningful visual or emotional change. Use one cut per moment and exclude moments in existingTargets.',
+    'Choose up to maxTargets distinct new moments in narrative order. Favor meaningful visual or emotional changes beyond existingTargets. Let the requested direction guide both the choice of moments and how each is framed.',
     `Return only JSON: {"heroIndex": number|null, "targets": [{"startAnchor":string,"endAnchor":string,"focus":string,"visualBrief":string${mode === 'codex' ? ',"prompt":{"prompt":string,"caption":string}' : mode === 'comfyui' ? ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}' : ''}}], "skipReason"?:string}. Blocks are [id, text] pairs. Use exact supplied short IDs as anchors; the host restores stored anchors. Each endAnchor is unique and is where the depicted event has finished being narrated; insert AFTER it. startAnchor is at or before endAnchor. focus identifies the exact instant in the scene language. ${mode === 'none' ? 'visualBrief gives the renderer a complete visual description of that instant.' : 'visualBrief records the subjects, action and defining visual facts that must survive a redraw. Put the full rendering description in prompt.'}`,
     'Set heroIndex to the selected cut that best introduces the scene above the text without spoiling a surprise. When allowSkip is true and no suitable new moment remains, return {"heroIndex":null,"targets":[],"skipReason":string}. Otherwise choose at least one cut.',
     ILLUSTRATION_VISUAL_DIRECTION,
@@ -124,6 +124,8 @@ export function storyboardRequest(
         generator: options.generator,
         allowSkip: scene.allowSkip || options.existingTargets.length > 0,
         styleGuidance: scene.styleGuidance,
+        ...(scene.characterProfiles?.length ? { characterProfiles: scene.characterProfiles } : {}),
+        ...(scene.direction ? { direction: scene.direction } : {}),
         ...(options.generator === 'comfyui' ? { negativeGuidance: scene.negativeGuidance } : {}),
         ...(options.promptMode === 'codex'
           ? { attachedReferences: illustrationReferenceLabels(scene.references ?? []) }

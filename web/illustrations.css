@@ -158,9 +158,46 @@
   display: grid;
   gap: 6px;
 }
-.illustration-references select {
+.asset-grid.illustration-reference-options {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+}
+.illustration-reference-options select {
   width: 100%;
-  font-size: var(--font-small);
+}
+.illustration-references > h5,
+.illustration-references > p,
+.illustration-character-profiles > h5,
+.illustration-character-profiles > p {
+  margin: 0;
+}
+.illustration-character-profiles,
+.illustration-character-profile {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.illustration-character-profile {
+  padding-block: 12px;
+  border-top: var(--hairline) solid var(--line);
+}
+.illustration-character-profile label:not(.settings-row) {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.illustration-character-profile input,
+.illustration-character-profile textarea {
+  width: 100%;
+}
+.illustration-character-profile textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+.illustration-profile-add {
+  justify-self: start;
+}
+.illustration-request-dialog .dialog-body > label + label {
+  margin-top: 12px;
 }
 
 /* Finished cuts belong to the manuscript, not a diagnostic card stack. */

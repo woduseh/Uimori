@@ -41,6 +41,7 @@ import {
   parseComfyWorkflow,
   type FrozenIllustrationReference,
   type Illustration,
+  type IllustrationCharacterProfile,
   type IllustrationDiagnostic,
   type IllustrationImage,
   type IllustrationImageMime,
@@ -229,19 +230,23 @@ export function illustrationReferences(store: Store, chatId: string): Illustrati
   const row = store.db
     .prepare('SELECT revision,body FROM illustration_references WHERE chat_id=?')
     .get(chatId) as Row | undefined;
+  // Existing rows stored only the reference array; newer rows also contain authored profiles.
+  const saved = row ? parse(row.body) : [];
   return {
     chatId,
     revision: row ? Number(row.revision) : 0,
-    references: row ? (parse(row.body) as IllustrationReference[]) : [],
+    references: Array.isArray(saved) ? saved : saved.references,
+    characterProfiles: Array.isArray(saved) ? [] : (saved.characterProfiles ?? []),
   };
 }
 export function updateIllustrationReferences(
   store: Store,
   chatId: string,
-  value: unknown
+  value: unknown,
+  options: { allowUnavailableReferences?: boolean } = {}
 ): IllustrationReferences {
   const b = record(value);
-  fields(b, ['expectedRevision', 'references']);
+  fields(b, ['expectedRevision', 'references', 'characterProfiles']);
   if (!Array.isArray(b.references) || b.references.length > 8)
     throw new HttpError(400, 'Invalid illustration references');
   const references: IllustrationReference[] = b.references.map((entry) => {
@@ -257,17 +262,49 @@ export function updateIllustrationReferences(
     const prior = illustrationReferences(store, chatId);
     if (prior.revision !== number(b.expectedRevision, 'reference revision', 0))
       throw new HttpError(409, '삽화 참조 이미지가 변경됐어요. 새로고침한 뒤 저장해 주세요.');
+    // Older clients must not clear profiles they do not know about.
+    const rawProfiles = Object.hasOwn(b, 'characterProfiles')
+      ? b.characterProfiles
+      : prior.characterProfiles;
+    if (!Array.isArray(rawProfiles) || rawProfiles.length > 32)
+      throw new HttpError(400, 'Invalid illustration character profiles');
+    const characterProfiles: IllustrationCharacterProfile[] = rawProfiles.map((entry) => {
+      const item = record(entry);
+      fields(item, ['id', 'name', 'appearance', 'referenceRef']);
+      return {
+        id: text(item.id, 'character profile id', 100),
+        name: text(item.name, 'character profile name', 200),
+        appearance: text(item.appearance, 'character appearance', 2000),
+        ...(item.referenceRef === undefined
+          ? {}
+          : { referenceRef: text(item.referenceRef, 'character reference', 300) }),
+      };
+    });
+    if (new Set(characterProfiles.map((item) => item.id)).size !== characterProfiles.length)
+      throw new HttpError(400, 'Duplicate illustration character profile');
     const candidates = new Set(
       illustrationReferenceCandidates(store, chatId).map((asset) => asset.id)
     );
     for (const item of references)
-      if (!candidates.has(item.ref))
+      if (!candidates.has(item.ref) && !options.allowUnavailableReferences)
         throw new HttpError(400, '이 채팅에서 사용할 수 없는 이미지 참조예요.');
+    const previous = new Map(prior.characterProfiles.map((item) => [item.id, item.referenceRef]));
+    for (const item of characterProfiles)
+      if (
+        item.referenceRef &&
+        !candidates.has(item.referenceRef) &&
+        previous.get(item.id) !== item.referenceRef &&
+        !options.allowUnavailableReferences
+      )
+        throw new HttpError(400, '이 채팅에서 사용할 수 없는 인물 참고 이미지예요.');
+    const linked = new Set(characterProfiles.flatMap((item) => item.referenceRef ?? []));
+    if (new Set([...references.map((item) => item.ref), ...linked]).size > 8)
+      throw new HttpError(400, '삽화 참고 이미지는 최대 8개까지 사용할 수 있어요.');
     store.db
       .prepare(
         'INSERT INTO illustration_references(chat_id,revision,body) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,body=excluded.body'
       )
-      .run(chatId, prior.revision + 1, json(references));
+      .run(chatId, prior.revision + 1, json({ references, characterProfiles }));
     store.event(chatId, 'illustration-references.updated', chatId);
     return illustrationReferences(store, chatId);
   });
@@ -280,7 +317,11 @@ export function frozenIllustrationReferences(
   const candidates = new Map(
     illustrationReferenceCandidates(store, chatId).map((asset) => [asset.id, asset])
   );
-  return illustrationReferences(store, chatId).references.flatMap((item) => {
+  const current = illustrationReferences(store, chatId);
+  const linked = new Set(current.characterProfiles.flatMap((item) => item.referenceRef ?? []));
+  const references = new Map(current.references.map((item) => [item.ref, item]));
+  for (const ref of linked) references.set(ref, { ref, role: 'character' });
+  return [...references.values()].flatMap((item) => {
     const asset = candidates.get(item.ref);
     if (!asset) return [];
     return [{ ...item, title: asset.title, mime: asset.mime, hash: asset.hash, url: asset.url }];
@@ -518,7 +559,12 @@ export type ReserveOptions = {
   fixture?: { failures?: number; delayMs?: number };
   maxTargets?: number;
   requestKey?: string;
+  direction?: string;
 };
+function oneOffDirection(value: unknown, name: string): string | undefined {
+  if (value === undefined) return undefined;
+  return text(value, name, 8000, true).trim() || undefined;
+}
 function frozenInput(
   store: Store,
   source: Source,
@@ -532,12 +578,14 @@ function frozenInput(
     options.testMode && settings.generator === 'fixture' ? 'fixture' : preset.generator;
   if (options.testMode && settings.generator === 'none')
     throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
+  const characterProfiles = illustrationReferences(store, source.chatId).characterProfiles;
   const base = {
     preset: illustrationPresetStamp(preset),
     version: 1 as const,
     settingsRevision: settings.revision,
     styleGuidance: preset.styleGuidance,
     maxAutoRetries: settings.maxAutoRetries,
+    ...(characterProfiles.length ? { characterProfiles } : {}),
   };
   if (generator === 'codex') {
     if (!settings.codex.model) throw new HttpError(409, 'ILLUSTRATION_MODEL_REQUIRED');
@@ -638,6 +686,9 @@ export function reserveIllustrationPlan(
           ({ startAnchor, endAnchor, focus }) => ({ startAnchor, endAnchor, focus })
         ),
         ...(options.requestKey ? { requestKey: options.requestKey } : {}),
+        ...(origin === 'manual' && options.direction
+          ? { direction: oneOffDirection(options.direction, 'illustration direction') }
+          : {}),
       },
     };
     return insertIllustrationJob(store, source, origin, input);
@@ -827,7 +878,8 @@ export function completeIllustrationPlacement(
 export function regenerateIllustration(
   store: Store,
   id: string,
-  testMode = false
+  testMode = false,
+  changeRequest?: string
 ): IllustrationJobRow {
   return store.transaction(() => {
     const job = illustrationJob(store, id);
@@ -837,10 +889,37 @@ export function regenerateIllustration(
     if (ACTIVE.includes(job.status)) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
     assertIllustrationSlot(store, source.id, job);
     const { prompt: _prompt, ...target } = job.input.target;
+    const requestedChange = oneOffDirection(changeRequest, 'illustration change request');
+    let redraw: IllustrationJobInput['redraw'];
+    if (requestedChange) {
+      const displayedId = illustrationPresentation(store, source.id, source.hash)?.targets[
+        target.id
+      ]?.displayedJobId;
+      const original =
+        job.status === 'completed' && images(store, job.id).length
+          ? job
+          : displayedId
+            ? illustrationJob(store, displayedId)
+            : undefined;
+      const image = original && images(store, original.id)[0];
+      const originalPrompt =
+        image?.prompt || image?.revisedPrompt
+          ? {
+              prompt: image.prompt || image.revisedPrompt!,
+              negativePrompt: original?.diagnostic?.prompt?.negativePrompt ?? '',
+              caption: image.caption,
+            }
+          : undefined;
+      redraw = {
+        changeRequest: requestedChange,
+        ...(originalPrompt ? { originalPrompt } : {}),
+      };
+    }
     const input = {
       ...frozenInput(store, source, illustrationSettings(store), { testMode }),
       task: 'render' as const,
       target,
+      ...(redraw ? { redraw } : {}),
     };
     const next = insertIllustrationJob(store, source, 'manual', input);
     selectRequestedIllustration(store, source.id, source.hash, input, next.id);
@@ -1330,7 +1409,7 @@ export function illustrationRoutes(
   );
   app.post<{ Params: { id: string } }>('/api/sources/:id/illustrations', async (request) => {
     const b = record(request.body ?? {});
-    fields(b, ['expectedSourceHash', 'fixture', 'maxTargets', 'idempotencyKey']);
+    fields(b, ['expectedSourceHash', 'fixture', 'maxTargets', 'idempotencyKey', 'direction']);
     const source = store.source(request.params.id);
     if (
       b.expectedSourceHash !== undefined &&
@@ -1356,6 +1435,7 @@ export function illustrationRoutes(
           : number(b.maxTargets, 'maxTargets', 1, ILLUSTRATION_MAX_PER_SOURCE),
       requestKey:
         b.idempotencyKey === undefined ? undefined : text(b.idempotencyKey, 'idempotencyKey', 200),
+      direction: oneOffDirection(b.direction, 'illustration direction'),
     });
     hooks.publish(job.chatId);
     hooks.pump();
@@ -1396,8 +1476,14 @@ export function illustrationRoutes(
     }
   );
   app.post<{ Params: { id: string } }>('/api/illustrations/:id/regenerate', async (request) => {
-    fields(record(request.body ?? {}), []);
-    const job = regenerateIllustration(store, request.params.id, hooks.testMode);
+    const body = record(request.body ?? {});
+    fields(body, ['changeRequest']);
+    const job = regenerateIllustration(
+      store,
+      request.params.id,
+      hooks.testMode,
+      oneOffDirection(body.changeRequest, 'illustration change request')
+    );
     hooks.publish(job.chatId);
     hooks.pump();
     return projectIllustration(store, job);

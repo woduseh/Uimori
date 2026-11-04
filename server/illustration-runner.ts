@@ -139,7 +139,13 @@ function scene(
     allowSkip: input.target ? false : allowSkip,
     targeted: !!input.target,
     styleGuidance: input.styleGuidance,
+    characterProfiles: input.characterProfiles?.map(({ name, appearance }) => ({
+      name,
+      appearance,
+    })),
     negativeGuidance: input.comfyui?.negativeGuidance ?? '',
+    ...(input.plan?.direction ? { direction: input.plan.direction } : {}),
+    ...(input.redraw ? { redraw: input.redraw } : {}),
     bot: body('bot'),
     persona: body('persona'),
   };
@@ -329,15 +335,25 @@ export async function runIllustrationJob(
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
     // Only automatic runs may decide that a scene has nothing worth drawing.
     const context = scene(source, snapshot, input, job.origin === 'automatic');
+    const labeledReferences = (input.codex?.references ?? []).map(({ title, ...reference }) => {
+      const names = input.characterProfiles
+        ?.filter((profile) => profile.referenceRef === reference.ref)
+        .map((profile) => profile.name);
+      return {
+        ...reference,
+        title,
+        label: names?.length ? `${names.join(', ')} (${title})` : title,
+      };
+    });
     const references =
       input.generator === 'codex' && input.task !== 'placement' && input.task !== 'plan'
-        ? (input.codex?.references ?? []).flatMap((reference) => {
+        ? labeledReferences.flatMap((reference) => {
             const loaded = loadIllustrationReference(store, reference);
             return loaded
               ? [
                   {
                     role: reference.role,
-                    label: reference.title,
+                    label: reference.label,
                     mime: loaded.mime,
                     bytes: loaded.bytes,
                   },
@@ -348,7 +364,7 @@ export async function runIllustrationJob(
     if (input.codex?.promptModel)
       context.references =
         input.task === 'plan'
-          ? input.codex.references.map(({ role, title }) => ({ role, label: title }))
+          ? labeledReferences.map(({ role, label }) => ({ role, label }))
           : references.map(({ role, label }) => ({ role, label }));
     const promptMode =
       input.generator === 'comfyui'

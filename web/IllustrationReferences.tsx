@@ -2,10 +2,15 @@ import { t, useI18n, translateMessage, message as uiMessage } from './i18n.js';
 import { TransientNotice } from './TransientNotice.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
+import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { IllustrationReferenceRole, IllustrationReferences } from '../core/illustration.js';
-import { api } from './api.js';
+import type {
+  IllustrationCharacterProfile,
+  IllustrationReferenceRole,
+  IllustrationReferences,
+} from '../core/illustration.js';
+import { api, ApiError } from './api.js';
 import { SaveButton } from './SaveButton.js';
 import { RefreshIcon } from './ui-icons.js';
 import './settings-actions.css';
@@ -20,7 +25,7 @@ type Candidate = {
 };
 type Loaded = IllustrationReferences & { candidates: Candidate[] };
 
-/** Per-chat reference roles for Codex illustration turns; ComfyUI ignores them for now. */
+/** Per-chat visual identities and reference roles. */
 export function IllustrationReferencesEditor({
   chatId,
   refreshKey,
@@ -37,30 +42,47 @@ export function IllustrationReferencesEditor({
   useI18n();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [roles, setRoles] = useState<Record<string, IllustrationReferenceRole | ''>>({});
+  const [profiles, setProfiles] = useState<IllustrationCharacterProfile[]>([]);
   const [dirty, setDirty] = useState(false);
   const dirtyDraft = useRef(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [conflict, setConflict] = useState(false);
+  const [reviewConflict, setReviewConflict] = useState(false);
   const lock = useRef(false);
+  const loadEpoch = useRef(0);
   const load = useCallback(async () => {
+    const epoch = ++loadEpoch.current;
     setLoadError('');
     try {
       const value = await api<Loaded>(
         `/chats/${encodeURIComponent(chatId)}/illustration-references`
       );
-      setLoaded(value);
+      if (epoch !== loadEpoch.current) return null;
+      setLoaded((current) =>
+        current && dirtyDraft.current
+          ? {
+              ...value,
+              revision: current.revision,
+              references: current.references,
+              characterProfiles: current.characterProfiles,
+            }
+          : value
+      );
       return value;
     } catch (error) {
-      setLoadError((error as Error).message);
+      if (epoch === loadEpoch.current) setLoadError((error as Error).message);
       return null;
     }
   }, [chatId]);
   const refresh = useCallback(async () => {
     const value = await load();
-    // Role edits made while the read was pending still own the draft.
-    if (value && !dirtyDraft.current)
+    // Edits made while the read was pending still own the draft.
+    if (value && !dirtyDraft.current) {
       setRoles(Object.fromEntries(value.candidates.map((item) => [item.ref, item.role ?? ''])));
+      setProfiles(value.characterProfiles);
+    }
   }, [load]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reader asset changes reload candidates; a dirty draft keeps its roles.
   useEffect(() => {
@@ -86,9 +108,30 @@ export function IllustrationReferencesEditor({
       </section>
     );
   const selected = loaded.candidates.filter((item) => roles[item.ref]);
+  const linked = new Set(profiles.flatMap((item) => item.referenceRef ?? []));
+  const used = new Set([...selected.map((item) => item.ref), ...linked]);
+  const markDirty = () => {
+    dirtyDraft.current = true;
+    setDirty(true);
+    setMessage('');
+  };
+  const editProfile = (id: string, patch: Partial<IllustrationCharacterProfile>) => {
+    setProfiles((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...patch } : item))
+    );
+    markDirty();
+  };
   const save = async () => {
     if (lock.current) return false;
     if (!dirty) return true;
+    if (conflict) {
+      setReviewConflict(true);
+      return false;
+    }
+    if (profiles.some((item) => !item.name.trim() || !item.appearance.trim())) {
+      onError(uiMessage('visuals.profileRequired'));
+      return false;
+    }
     lock.current = true;
     setSaving(true);
     setMessage('');
@@ -98,16 +141,27 @@ export function IllustrationReferencesEditor({
         {
           expectedRevision: loaded.revision,
           references: selected.map((item) => ({ ref: item.ref, role: roles[item.ref] })),
+          characterProfiles: profiles,
         },
         'PUT'
       );
-      setLoaded({ ...loaded, revision: value.revision, references: value.references });
+      loadEpoch.current++;
+      setLoaded({
+        ...loaded,
+        revision: value.revision,
+        references: value.references,
+        characterProfiles: value.characterProfiles,
+      });
       dirtyDraft.current = false;
       setDirty(false);
+      setConflict(false);
       setMessage(uiMessage('visuals.m031'));
       return true;
     } catch (error) {
-      onError((error as Error).message);
+      if (error instanceof ApiError && error.status === 409) {
+        setConflict(true);
+        setReviewConflict(true);
+      } else onError((error as Error).message);
       return false;
     } finally {
       lock.current = false;
@@ -139,6 +193,105 @@ export function IllustrationReferencesEditor({
           {t('visuals.referenceRefreshError', { error: translateMessage(loadError) })}
         </NoticeBanner>
       )}
+      {conflict && (
+        <NoticeBanner
+          tone="error"
+          actions={
+            <button type="button" className="secondary" onClick={() => setReviewConflict(true)}>
+              {t('shared.reviewSaved')}
+            </button>
+          }
+        >
+          {t('visuals.m089')}
+        </NoticeBanner>
+      )}
+      <div className="illustration-character-profiles">
+        <h5>{t('visuals.characterProfiles')}</h5>
+        {profiles.map((profile, index) => (
+          <fieldset key={profile.id} className="illustration-character-profile">
+            <legend>{t('visuals.characterProfileNumber', { count: index + 1 })}</legend>
+            <label>
+              {t('visuals.characterName')}
+              <input
+                type="text"
+                required
+                maxLength={200}
+                value={profile.name}
+                disabled={saving}
+                onChange={(event) => editProfile(profile.id, { name: event.target.value })}
+              />
+            </label>
+            <label>
+              {t('visuals.characterAppearance')}
+              <textarea
+                required
+                maxLength={2000}
+                rows={3}
+                value={profile.appearance}
+                disabled={saving}
+                onChange={(event) => editProfile(profile.id, { appearance: event.target.value })}
+              />
+            </label>
+            <label className="settings-row">
+              <span className="settings-row-copy">{t('visuals.characterReference')}</span>
+              <select
+                aria-label={t('visuals.characterReference')}
+                value={profile.referenceRef ?? ''}
+                disabled={saving}
+                onChange={(event) => {
+                  const ref = event.target.value;
+                  editProfile(profile.id, { referenceRef: ref || undefined });
+                }}
+              >
+                <option value="">{t('visuals.noCharacterReference')}</option>
+                {profile.referenceRef &&
+                  !loaded.candidates.some((item) => item.ref === profile.referenceRef) && (
+                    <option value={profile.referenceRef}>
+                      {t('visuals.unavailableCharacterReference')}
+                    </option>
+                  )}
+                {loaded.candidates.map((item) => (
+                  <option
+                    key={item.ref}
+                    value={item.ref}
+                    disabled={!used.has(item.ref) && used.size >= 8}
+                  >
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="form-actions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={saving}
+                onClick={() => {
+                  setProfiles((current) => current.filter((item) => item.id !== profile.id));
+                  markDirty();
+                }}
+              >
+                {t('visuals.removeCharacterProfile')}
+              </button>
+            </div>
+          </fieldset>
+        ))}
+        <button
+          type="button"
+          className="secondary illustration-profile-add"
+          disabled={saving || profiles.length >= 32}
+          onClick={() => {
+            setProfiles((current) => [
+              ...current,
+              { id: crypto.randomUUID(), name: '', appearance: '' },
+            ]);
+            markDirty();
+          }}
+        >
+          {t('visuals.addCharacterProfile')}
+        </button>
+      </div>
+      <h5>{t('visuals.referenceImages')}</h5>
       {!loaded.candidates.length && <p className="muted">{t('visuals.m035')}</p>}
       <div className="asset-grid illustration-reference-options">
         {loaded.candidates.map((item) => (
@@ -147,16 +300,14 @@ export function IllustrationReferencesEditor({
             <figcaption>{item.title}</figcaption>
             <select
               aria-label={t('visuals.m036', { v0: item.title })}
-              value={roles[item.ref] ?? ''}
-              disabled={saving || (!roles[item.ref] && selected.length >= 8)}
+              value={linked.has(item.ref) ? 'character' : (roles[item.ref] ?? '')}
+              disabled={saving || linked.has(item.ref) || (!used.has(item.ref) && used.size >= 8)}
               onChange={(event) => {
-                dirtyDraft.current = true;
                 setRoles({
                   ...roles,
                   [item.ref]: event.target.value as IllustrationReferenceRole | '',
                 });
-                setDirty(true);
-                setMessage('');
+                markDirty();
               }}
             >
               <option value="">{t('visuals.m037')}</option>
@@ -166,7 +317,7 @@ export function IllustrationReferencesEditor({
           </figure>
         ))}
       </div>
-      {(loaded.candidates.length > 0 || dirty) && (
+      {(loaded.candidates.length > 0 || profiles.length > 0 || dirty) && (
         <div className="form-actions settings-save-actions">
           <SaveButton
             type="button"
@@ -178,6 +329,74 @@ export function IllustrationReferencesEditor({
         </div>
       )}
       <TransientNotice message={message} />
+      <SaveConflictDialog
+        open={reviewConflict}
+        title={t('visuals.reviewReferences')}
+        onClose={() => setReviewConflict(false)}
+        readSaved={async () => {
+          const value = await api<Loaded>(
+            `/chats/${encodeURIComponent(chatId)}/illustration-references`
+          );
+          const adopt = (keepDraft: boolean) => {
+            loadEpoch.current++;
+            setLoaded(value);
+            if (!keepDraft) {
+              setRoles(
+                Object.fromEntries(value.candidates.map((item) => [item.ref, item.role ?? '']))
+              );
+              setProfiles(value.characterProfiles);
+              dirtyDraft.current = false;
+              setDirty(false);
+            }
+            setConflict(false);
+            setLoadError('');
+            setReviewConflict(false);
+          };
+          return () => ({
+            content: (
+              <>
+                {value.characterProfiles.map((profile) => (
+                  <div className="settings-row" key={profile.id}>
+                    <span className="settings-row-copy">{profile.name}</span>
+                    <span className="settings-row-control">
+                      {profile.appearance}
+                      {profile.referenceRef && (
+                        <>
+                          {' '}
+                          —{' '}
+                          {value.candidates.find((item) => item.ref === profile.referenceRef)
+                            ?.title ?? t('visuals.unavailableCharacterReference')}
+                        </>
+                      )}
+                    </span>
+                  </div>
+                ))}
+                {value.references.map((reference) => (
+                  <div className="settings-row" key={reference.ref}>
+                    <span className="settings-row-copy">
+                      {value.candidates.find((item) => item.ref === reference.ref)?.title ??
+                        t('visuals.unavailableCharacterReference')}
+                    </span>
+                    <span className="settings-row-control">
+                      {t(reference.role === 'character' ? 'visuals.m038' : 'visuals.m039')}
+                    </span>
+                  </div>
+                ))}
+              </>
+            ),
+            actions: (
+              <>
+                <button type="button" className="secondary" onClick={() => adopt(false)}>
+                  {t('visuals.useSavedReferences')}
+                </button>
+                <button type="button" className="primary" onClick={() => adopt(true)}>
+                  {t('visuals.keepReferenceDraft')}
+                </button>
+              </>
+            ),
+          });
+        }}
+      />
     </section>
   );
 }

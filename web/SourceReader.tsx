@@ -705,6 +705,7 @@ function SourceReaderContent({
     });
   const [startPickerOpen, setStartPickerOpen] = useState(false);
   const [illustrationCount, setIllustrationCount] = useState(1);
+  const [illustrationDirection, setIllustrationDirection] = useState('');
   const illustrationRequestKey = useRef('');
   const previousHash = useRef(source.hash);
   useLayoutEffect(() => {
@@ -1383,7 +1384,8 @@ function SourceReaderContent({
                   )
                 }
                 onClick={() => {
-                  illustrationRequestKey.current = crypto.randomUUID();
+                  if (!illustrationRequestKey.current)
+                    illustrationRequestKey.current = crypto.randomUUID();
                   setIllustrationDialog(true);
                 }}
               >
@@ -1554,6 +1556,7 @@ function SourceReaderContent({
           </Dialog>
           <Dialog
             open={illustrationDialog}
+            className="illustration-request-dialog"
             onClose={() => {
               if (pending !== 'illustrate') setIllustrationDialog(false);
             }}
@@ -1577,6 +1580,19 @@ function SourceReaderContent({
                 ))}
               </select>
             </label>
+            <label>
+              {t('reader.illustrationDirection')}
+              <textarea
+                rows={3}
+                maxLength={8000}
+                value={illustrationDirection}
+                disabled={pending === 'illustrate'}
+                onChange={(event) => {
+                  setIllustrationDirection(event.target.value);
+                  illustrationRequestKey.current = crypto.randomUUID();
+                }}
+              />
+            </label>
             {actionError && (
               <p className="error" role="alert">
                 {translateMessage(actionError)}
@@ -1599,9 +1615,12 @@ function SourceReaderContent({
                     await api(`/sources/${source.id}/illustrations`, {
                       expectedSourceHash: source.hash,
                       maxTargets: illustrationCount,
+                      direction: illustrationDirection.trim() || undefined,
                       idempotencyKey: illustrationRequestKey.current,
                     });
                     setIllustrationDialog(false);
+                    setIllustrationDirection('');
+                    illustrationRequestKey.current = '';
                     await refresh();
                   })
                 }

@@ -1,4 +1,8 @@
 import { captureIllustrations, restoreIllustrations } from './illustration-copy.js';
+import {
+  captureIllustrationReferences,
+  restoreIllustrationReferences,
+} from './illustration-reference-copy.js';
 import { captureBookmarks, restoreBookmarks } from './reading-state.js';
 import { captureChatAuthoring, restoreChatAuthoring } from './chat-copy-authoring.js';
 import {
@@ -60,6 +64,7 @@ export function captureChatCopy(
       checkpoints,
       messages,
       authoring: captureChatAuthoring(store, chatId, history),
+      illustrationReferences: captureIllustrationReferences(store, chatId, binary),
       settings: chat.settings,
       profile: {
         image: profile.image,
@@ -116,6 +121,8 @@ export function restoreChatCopy(
       ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,values_json=excluded.values_json`)
       .run(chatId, variables.revision, JSON.stringify(variables.values));
     if (copy.state.authoring) restoreChatAuthoring(store, chatId, history, copy.state.authoring);
+    if (copy.state.illustrationReferences)
+      restoreIllustrationReferences(store, chatId, copy.state.illustrationReferences, readBinary);
     if (copy.state.messages) restoreCopiedMessages(store, copy.state.messages, history);
     restoreSceneTitles(
       store,
