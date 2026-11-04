@@ -14,6 +14,10 @@ Transmission uses WebP at most 2048 pixels on its longest side and 2 MiB. An exi
 
 `uimori call image.read` also works inside `data.exec`, independently of redirected or truncated stdout; `viewedImages` records the sources. There is no separate image-count cap for these tool reads; the existing context and transport budgets apply. Image preparation owns conversion, and transport trusts the host-produced image data instead of decoding and hashing it again. Bytes stay task-local while events and continuation state keep references or metadata. Compaction receives the images before releasing their replay copies and retains IDs/revisions for rereading.
 
+## Illustration appearance profiles
+
+The illustration operations default to the current chat. Pass an explicit `chatId` to work from the library or target another chat. Image refs must belong to the selected chat or its attached packages. `illustration.image.list` and `illustration.image.read` let the helper find and inspect reference images from uploads and attached packages. The returned `ref` can also link an image to an appearance profile. `illustration.profiles.read` reads the saved profiles and revision. `illustration.profiles.save` accepts one or more profiles at that revision. A single request can add characters and edit existing ones together. Every entry must validate before any change is saved. Omitted fields on an edit keep their values. A null `referenceRef` removes the link. Users can ask for suggestions in the conversation and request a save after choosing a design.
+
 ## Conversation history and task results
 
 `GET /api/helper/conversations?kind=all` lists existing library and chat helper conversations together. Chat rows include `chatTitle`; each conversation retains its original scope, identity, history and deletion ownership. The existing `kind=library` and `kind=chat&chatId=...` filters still select their original scopes. Listing performs no migration or conversation creation.

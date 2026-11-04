@@ -531,6 +531,10 @@ export function useStory() {
       stream.onmessage = (event) => {
         if (!alive || navigation.current.chat !== selected) return;
         const message = JSON.parse(event.data) as { kind: string; seq?: number; entityId?: string };
+        if (message.kind === 'illustration-references.updated' || message.kind === 'snapshot')
+          dispatchEvent(
+            new CustomEvent('uimori-illustration-references-changed', { detail: selected })
+          );
         if (
           message.kind === 'native.interaction.requested' ||
           message.kind === 'native.interaction.resolved' ||

@@ -2,16 +2,22 @@ import { createHash } from 'node:crypto';
 import sharp from 'sharp';
 import type { ProviderTool } from '../core/transport.js';
 import type { RequestImage, ResolvedRequestImage } from '../core/request-images.js';
-import type { Content } from '../core/product.js';
+import type { Asset, Content } from '../core/product.js';
 import type { PackageImage } from '../core/package-images.js';
 import { readImage } from './image-storage.js';
 import { withImageProcessing } from './image-processing.js';
 import { readResource } from './resource-service.js';
-import { HttpError, number, record, text } from './request-validation.js';
+import { illustrationReferenceCandidates } from './illustrations.js';
+import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const id = { type: 'string', minLength: 1, maxLength: 100 } as const;
+const paging = {
+  query: { type: 'string', maxLength: 200 },
+  offset: { type: 'integer', minimum: 0 },
+  limit: { type: 'integer', minimum: 1, maximum: 20 },
+} as const;
 export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.list',
@@ -21,9 +27,7 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
       type: 'object',
       properties: {
         contentId: id,
-        query: { type: 'string', maxLength: 200 },
-        offset: { type: 'integer', minimum: 0 },
-        limit: { type: 'integer', minimum: 1, maximum: 20 },
+        ...paging,
       },
       required: ['contentId'],
       additionalProperties: false,
@@ -40,6 +44,23 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
         imageId: id,
       },
       required: ['contentId', 'imageId'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'illustration.image.list',
+    description:
+      'Find illustration reference images in the current chat and its attached packages. Search by character, title, description, outfit or location. Use a returned ref with illustration.image.read to see the image.',
+    inputSchema: { type: 'object', properties: paging, required: [], additionalProperties: false },
+  },
+  {
+    name: 'illustration.image.read',
+    description:
+      'View an illustration reference image from the current chat by its ref. The visual input shows the first frame of animated images.',
+    inputSchema: {
+      type: 'object',
+      properties: { ref: { type: 'string', minLength: 1, maxLength: 300 } },
+      required: ['ref'],
       additionalProperties: false,
     },
   },
@@ -67,12 +88,17 @@ function imageMetadata(content: Content, image: PackageImage, names?: string[]) 
   };
 }
 
-export function listHelperImages(store: Store, value: unknown) {
-  const args = record(value);
-  const content = owner(store, args.contentId);
+function imagePage(args: ReturnType<typeof record>) {
   const query = args.query === undefined ? '' : text(args.query, 'image query', 200, true);
   const offset = args.offset === undefined ? 0 : number(args.offset, 'offset', 0);
   const limit = args.limit === undefined ? 10 : number(args.limit, 'limit', 1, 20);
+  return { query, offset, limit, terms: query.toLocaleLowerCase().split(/\s+/u).filter(Boolean) };
+}
+
+export function listHelperImages(store: Store, value: unknown) {
+  const args = record(value);
+  const content = owner(store, args.contentId);
+  const { query, offset, limit, terms } = imagePage(args);
   const all = content.package.images ?? [];
   const nativeNames = new Map<string, string[]>();
   for (const asset of content.package.nativeRisu?.assets ?? []) {
@@ -80,7 +106,6 @@ export function listHelperImages(store: Store, value: unknown) {
     if (names) names.push(asset.name);
     else nativeNames.set(asset.imageId, [asset.name]);
   }
-  const terms = query.toLocaleLowerCase().split(/\s+/u).filter(Boolean);
   const matching = all.filter((image) => {
     const names = nativeNames.get(image.id) ?? [];
     const searchable = [image.id, image.title, image.description, ...names]
@@ -102,7 +127,66 @@ export function listHelperImages(store: Store, value: unknown) {
   };
 }
 
-/** Transmission bytes are ephemeral: neither originals nor converted copies are written. */
+function referenceMetadata(asset: Asset) {
+  return {
+    ref: asset.id,
+    title: asset.title,
+    description: asset.description.slice(0, 500),
+    descriptionTruncated: asset.description.length > 500,
+    actor: asset.actor,
+    ...(asset.packageOwner ? { packageTitle: asset.packageOwner.title } : {}),
+    outfit: asset.outfit,
+    location: asset.location,
+  };
+}
+
+export function listIllustrationHelperImages(store: Store, chatId: string, value: unknown) {
+  const args = record(value);
+  fields(args, ['query', 'offset', 'limit']);
+  const { offset, limit, terms } = imagePage(args);
+  const all = illustrationReferenceCandidates(store, chatId);
+  const matching = terms.length
+    ? all.filter((asset) => {
+        const haystack = [
+          asset.id,
+          asset.title,
+          asset.description,
+          asset.actor,
+          asset.packageOwner?.title,
+          asset.outfit,
+          asset.location,
+        ]
+          .join('\n')
+          .toLocaleLowerCase();
+        return terms.every((term) => haystack.includes(term));
+      })
+    : all;
+  const images = matching.slice(offset, offset + limit).map(referenceMetadata);
+  return {
+    images,
+    matching: matching.length,
+    total: all.length,
+    nextOffset: offset + images.length < matching.length ? offset + images.length : null,
+  };
+}
+
+export async function readIllustrationHelperImage(
+  store: Store,
+  chatId: string,
+  value: unknown,
+  signal?: AbortSignal
+) {
+  signal?.throwIfAborted();
+  const args = record(value);
+  fields(args, ['ref']);
+  const ref = text(args.ref, 'illustration image ref', 300);
+  const asset = illustrationReferenceCandidates(store, chatId).find(
+    (candidate) => candidate.id === ref
+  );
+  if (!asset) throw new HttpError(404, 'ILLUSTRATION_REFERENCE_NOT_FOUND');
+  return prepareHelperImage(store, asset.hash, asset.title, referenceMetadata(asset), signal);
+}
+
 export async function readHelperImage(store: Store, value: unknown, signal?: AbortSignal) {
   signal?.throwIfAborted();
   const args = record(value);
@@ -110,7 +194,28 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
   const imageId = text(args.imageId, 'image ID', 100);
   const source = content.package.images?.find((image) => image.id === imageId);
   if (!source) throw new HttpError(404, 'IMAGE_NOT_FOUND_IN_CONTENT');
-  const stored = readImage(store.db, source.blobHash);
+  return prepareHelperImage(
+    store,
+    source.blobHash,
+    `${content.title} — ${source.title}`,
+    {
+      contentId: content.id,
+      revision: content.revision,
+      ...imageMetadata(content, source),
+    },
+    signal
+  );
+}
+
+/** Transmission bytes are ephemeral: neither originals nor converted copies are written. */
+async function prepareHelperImage<T extends object>(
+  store: Store,
+  sourceHash: string,
+  title: string,
+  metadataFields: T,
+  signal?: AbortSignal
+) {
+  const stored = readImage(store.db, sourceHash);
   return withImageProcessing(async () => {
     signal?.throwIfAborted();
     try {
@@ -145,11 +250,11 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
         output = await convert();
       }
       signal?.throwIfAborted();
-      const hash = reuse ? source.blobHash : createHash('sha256').update(output.data).digest('hex');
+      const hash = reuse ? sourceHash : createHash('sha256').update(output.data).digest('hex');
       const image: RequestImage = {
         hash,
         mime: 'image/webp',
-        name: `${content.title} — ${source.title}`.slice(0, 300).replace(/[\uD800-\uDBFF]$/u, ''),
+        name: title.slice(0, 300).replace(/[\uD800-\uDBFF]$/u, ''),
         width: output.info.width,
         height: output.info.height,
         input: { hash, width: output.info.width, height: output.info.height },
@@ -162,10 +267,8 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
       };
       return {
         result: {
-          contentId: content.id,
-          revision: content.revision,
-          ...imageMetadata(content, source),
-          source: { hash: source.blobHash, mime: stored.mime, width, height, frames },
+          ...metadataFields,
+          source: { hash: sourceHash, mime: stored.mime, width, height, frames },
           transmission: { mime: image.mime, width: image.width, height: image.height },
           ...(frames > 1
             ? { notice: 'Only the first frame of this animated image is supplied.' }

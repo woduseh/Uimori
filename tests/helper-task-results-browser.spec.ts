@@ -12,21 +12,34 @@ import { openHelper } from './ui-navigation.js';
 test.setTimeout(60000);
 
 /** Persist a real conversation and completed answer through a local synthetic SSE provider. */
-async function seed(request: APIRequestContext) {
+async function seed(request: APIRequestContext, profiles?: { name: string; appearance: string }[]) {
+  let sendProfiles = !!profiles;
   const provider = createServer(async (incoming, response) => {
     for await (const _chunk of incoming) {
       // Drain the input; this fixture does not claim model-quality or live-provider coverage.
     }
     response.writeHead(200, { 'content-type': 'text/event-stream' });
-    response.end(
-      [
-        { type: 'text_delta', delta: '요청 내용을 확인했어요.' },
-        { type: 'usage', inputTokens: 120, outputTokens: 12, costUsd: null },
-        { type: 'done', reason: 'stop' },
-      ]
-        .map((event) => `data: ${JSON.stringify(event)}\n\n`)
-        .join('')
-    );
+    const events = sendProfiles
+      ? [
+          {
+            type: 'tool_delta',
+            index: 0,
+            id: 'save-profiles',
+            name: 'app.call',
+            argumentsDelta: JSON.stringify({
+              name: 'illustration.profiles.save',
+              arguments: { expectedRevision: 0, profiles },
+            }),
+          },
+          { type: 'done', reason: 'tool_calls' },
+        ]
+      : [
+          { type: 'text_delta', delta: '요청 내용을 확인했어요.' },
+          { type: 'usage', inputTokens: 120, outputTokens: 12, costUsd: null },
+          { type: 'done', reason: 'stop' },
+        ];
+    sendProfiles = false;
+    response.end(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''));
   });
   await new Promise<void>((resolve, reject) => {
     provider.once('error', reject);
@@ -80,7 +93,12 @@ async function seed(request: APIRequestContext) {
     expect(opened.ok(), await opened.text()).toBe(true);
     const conversation = (await opened.json()) as HelperConversation;
     const admitted = await request.post(`/api/helper/conversations/${conversation.id}/messages`, {
-      data: { requestKey: randomUUID(), text: '자료를 변경하지 않고 간단히 답해 주세요.' },
+      data: {
+        requestKey: randomUUID(),
+        text: profiles
+          ? '두 인물의 외형을 삽화 참고에 저장해 줘.'
+          : '자료를 변경하지 않고 간단히 답해 주세요.',
+      },
     });
     expect(admitted.ok(), await admitted.text()).toBe(true);
     const task = (await admitted.json()) as HelperTaskView;
@@ -123,6 +141,38 @@ async function seed(request: APIRequestContext) {
 
 const usageValue = (results: Locator, label: string) =>
   results.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]');
+
+test('an appearance result opens both saved characters in the chat image settings', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await seed(request, [
+    { name: '미라', appearance: '은빛 단발' },
+    { name: '준', appearance: '검은 곱슬머리' },
+  ]);
+  const { characterProfiles: profiles, revision } = await (
+    await request.get(`/api/chats/${chat.id}/illustration-references`)
+  ).json();
+  await page.goto(`/?chat=${chat.id}`);
+  await openHelper(page);
+  await page.getByRole('button', { name: '준 인물 외형 열기', exact: true }).click();
+  const editor = page.getByTestId('illustration-references');
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('textbox', { name: '외형', exact: true }).nth(1)).toHaveValue(
+    '검은 곱슬머리'
+  );
+  const changed = await request.put(`/api/chats/${chat.id}/illustration-references`, {
+    data: {
+      expectedRevision: revision,
+      references: [],
+      characterProfiles: [profiles[0], { ...profiles[1], appearance: '짧은 곱슬머리' }],
+    },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  await expect(editor.getByRole('textbox', { name: '외형', exact: true }).nth(1)).toHaveValue(
+    '짧은 곱슬머리'
+  );
+});
 
 test('HRESULT01 ordinary answers show usage without a permanent empty-change message', async ({
   page,

@@ -94,6 +94,13 @@ export function IllustrationReferencesEditor({
     void refresh();
   }, [refresh, refreshKey]);
   useEffect(() => {
+    const changed = (event: Event) => {
+      if ((event as CustomEvent<string>).detail === chatId) void refresh();
+    };
+    window.addEventListener('uimori-illustration-references-changed', changed);
+    return () => window.removeEventListener('uimori-illustration-references-changed', changed);
+  }, [chatId, refresh]);
+  useEffect(() => {
     onDirtyChange?.(dirty || saving);
   }, [dirty, saving, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);

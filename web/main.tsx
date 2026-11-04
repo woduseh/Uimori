@@ -801,7 +801,13 @@ function App() {
         s.showLibrary();
       } else if (target.kind === 'settings' && target.setting?.startsWith('chat.')) {
         if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
-        setSettingsSection(target.setting === 'chat.maxCalls' ? 'runtime' : 'prompts');
+        setSettingsSection(
+          target.setting === 'chat.illustrationProfiles'
+            ? 'images'
+            : target.setting === 'chat.maxCalls'
+              ? 'runtime'
+              : 'prompts'
+        );
         setPanel('story');
       } else {
         setSettingsTab(

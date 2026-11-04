@@ -53,6 +53,7 @@ const settingsLabels: Record<string, string> = {
   'chat.mainModel': 'helperResults.chatMainModel',
   'chat.mainPromptPreset': 'helperResults.chatMainPromptPreset',
   'chat.maxCalls': 'helperResults.chatMaxCalls',
+  'chat.illustrationProfiles': 'visuals.characterProfiles',
   'model.pricing': 'helperResults.modelPricing',
 };
 const targetIcons = {
