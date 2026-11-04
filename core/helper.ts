@@ -158,8 +158,10 @@ export type HelperEvent = {
   data: unknown;
 };
 export type HelperTaskResultTarget = {
-  kind: import('./resource-editing.js').ResourceKind | 'settings';
+  kind: import('./resource-editing.js').ResourceKind | 'settings' | 'illustration';
   id: string;
+  /** Scene destinations include their owning chat; other result kinds do not need it. */
+  chatId?: string;
   title: string;
   revision: number;
   setting?: string;

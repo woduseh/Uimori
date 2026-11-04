@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BookOpen, Check, FileText, Image, Palette, Settings2 } from 'lucide-react';
+import { BookOpen, Check, Clock3, FileText, Image, Palette, Settings2 } from 'lucide-react';
 import type {
   HelperStatus,
   HelperTaskAttemptUsage,
@@ -54,6 +54,7 @@ const settingsLabels: Record<string, string> = {
   'chat.mainPromptPreset': 'helperResults.chatMainPromptPreset',
   'chat.maxCalls': 'helperResults.chatMaxCalls',
   'chat.illustrationProfiles': 'visuals.characterProfiles',
+  'chat.illustrationReferences': 'visuals.m028',
   'model.pricing': 'helperResults.modelPricing',
 };
 const targetIcons = {
@@ -62,7 +63,14 @@ const targetIcons = {
   'prompt-workspace': FileText,
   theme: Palette,
   'illustration-preset': Image,
+  illustration: Image,
   settings: Settings2,
+};
+const illustrationOutcomes: Record<string, string> = {
+  'illustration.generate': 'helperResults.illustrationQueued',
+  'illustration.cut.redraw': 'helperResults.illustrationRedrawQueued',
+  'illustration.cuts.place': 'helperResults.illustrationPlaced',
+  'illustration.continuity.save': 'helperResults.illustrationContinuitySaved',
 };
 const active = (status: HelperStatus) => status === 'running' || status === 'queued';
 
@@ -174,6 +182,8 @@ function ResultTarget({
   const globalSetting = target.id === 'global' && target.kind === 'settings';
   const title = globalSetting ? t(settingLabel || 'helperResults.globalSettings') : target.title;
   const subtitle = !globalSetting && settingLabel ? t(settingLabel) : undefined;
+  const outcome = target.kind === 'illustration' ? illustrationOutcomes[operation] : undefined;
+  const queued = operation === 'illustration.generate' || operation === 'illustration.cut.redraw';
   const content = (
     <>
       <Icon size={16} aria-hidden="true" />
@@ -190,7 +200,16 @@ function ResultTarget({
         </span>
       ) : (
         <span className="helper-result-saved">
-          {deleted ? (
+          {outcome ? (
+            <>
+              {queued ? (
+                <Clock3 size={16} aria-hidden="true" />
+              ) : (
+                <Check size={16} aria-hidden="true" />
+              )}
+              {t(outcome)}
+            </>
+          ) : deleted ? (
             t('helperResults.deleted')
           ) : (
             <>
@@ -210,6 +229,7 @@ function ResultTarget({
         aria-label={t('helperResults.openTarget', {
           title: subtitle ? `${title} ${subtitle}` : title,
         })}
+        aria-description={outcome ? t(outcome) : undefined}
         disabled={opening}
         aria-busy={opening}
         onClick={() => void open()}

@@ -227,6 +227,30 @@ export const messages = {
     ja: '保存済み',
     zh: '已保存',
   },
+  'helperResults.illustrationQueued': {
+    ko: '삽화 예약됨',
+    en: 'Illustration queued',
+    ja: '挿絵を予約済み',
+    zh: '插图已排队',
+  },
+  'helperResults.illustrationRedrawQueued': {
+    ko: '다시 그리기 예약됨',
+    en: 'Redraw queued',
+    ja: '描き直しを予約済み',
+    zh: '重绘已排队',
+  },
+  'helperResults.illustrationPlaced': {
+    ko: '배치 변경됨',
+    en: 'Placement changed',
+    ja: '配置を変更済み',
+    zh: '布局已更改',
+  },
+  'helperResults.illustrationContinuitySaved': {
+    ko: '연속성 저장됨',
+    en: 'Continuity saved',
+    ja: '連続性を保存済み',
+    zh: '连续性已保存',
+  },
   'helperResults.internalCalls': {
     ko: '보고된 내부 모델 호출',
     en: 'Reported internal model calls',

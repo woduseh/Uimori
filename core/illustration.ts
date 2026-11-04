@@ -2,6 +2,7 @@ import type {
   IllustrationStoryboard,
   IllustrationTarget,
   IllustrationMoment,
+  SelectedIllustrationMoment,
   IllustrationPlacementInput,
   IllustrationDisplay,
 } from './illustration-storyboard.js';
@@ -113,14 +114,19 @@ export type FrozenIllustrationReference = IllustrationReference & {
 
 export type IllustrationJobInput = {
   version: 1;
+  /** Copied stale cuts retain their last moment but have no verified anchors in the new chat. */
+  unplacedMoment?: Pick<IllustrationTarget, 'focus' | 'visualBrief'>;
   /** Captured at reservation, including text-only profiles. Missing on older jobs. */
   characterProfiles?: IllustrationCharacterProfile[];
+  /** Chat-authored appearance notes applicable to this scene at reservation. */
+  sceneAppearanceNotes?: string[];
   /** Missing on existing single-image jobs. */
   task?: 'plan' | 'render' | 'placement';
   plan?: {
     maxTargets: number;
     requestKey?: string;
     existingTargets: IllustrationMoment[];
+    selectedMoments?: SelectedIllustrationMoment[];
     /** One-off manual planning direction, frozen with this reservation. */
     direction?: string;
   };
@@ -217,6 +223,9 @@ export type IllustrationImage = {
   revisedPrompt?: string;
 };
 export type Illustration = {
+  unplacedMoment?: Pick<IllustrationTarget, 'focus' | 'visualBrief'>;
+  /** Original render hash when a saved image is displayed against a revised source. */
+  generatedSourceHash?: string;
   id: string;
   task: 'plan' | 'render' | 'placement';
   target?: Omit<IllustrationTarget, 'prompt' | 'visualBrief'>;
@@ -312,6 +321,7 @@ export type IllustrationPlan =
 export type IllustrationScene = {
   text: string;
   characterProfiles?: Pick<IllustrationCharacterProfile, 'name' | 'appearance'>[];
+  sceneAppearanceNotes?: string[];
   styleGuidance: string;
   negativeGuidance: string;
   bot: string | null;
@@ -326,7 +336,7 @@ export type IllustrationScene = {
 };
 // Shared visual semantics; each backend retains its own output grammar and execution contract.
 export const ILLUSTRATION_VISUAL_DIRECTION =
-  'The scene determines who is present and what happens. Use each depicted character’s profile and notes for their recognizable features, adapting clothing and appearance to the moment. Follow the style guidance for this generator and use its examples as visual references.';
+  'The scene determines who is present and what happens. Use character profiles for recognizable features and scene appearance notes for temporary details such as clothing or carried objects. Follow the style guidance for this generator and use its examples as visual references.';
 
 export const ILLUSTRATION_PROMPT_FIELDS = [
   'prompt: Describe the scene in English. Use tags for simple concepts and natural language for relationships, occlusion and materials. Follow any ComfyUI-specific grammar in styleGuidance and preserve requested trigger words, literal fragments and weights. Otherwise use ordinary visual descriptions.',
@@ -369,6 +379,9 @@ export function illustrationPromptRequest(
         scene: scene.targeted ? scene.text : excerptScene(scene.text),
         styleGuidance: scene.styleGuidance,
         ...(scene.characterProfiles?.length ? { characterProfiles: scene.characterProfiles } : {}),
+        ...(scene.sceneAppearanceNotes?.length
+          ? { sceneAppearanceNotes: scene.sceneAppearanceNotes }
+          : {}),
         negativeGuidance: scene.negativeGuidance,
         ...(scene.redraw ? { redraw: scene.redraw } : {}),
         characterNotes: {

@@ -31,6 +31,7 @@ export type ChatCopyState = {
   /** Authored preferences only; derived guide results belong to the original execution. */
   storyGuide?: import('./story-guide.js').StoryGuideConfig;
   sceneTitles?: { atIndex: number; title: string }[];
+  illustrationContinuity?: { scenes: number[]; text: string }[];
   bookmarks?: import('./reading-state.js').PortableBookmark[];
   authoring?: ChatCopyAuthoring;
   illustrationReferences?: {
@@ -65,8 +66,11 @@ export type PortableIllustration = {
   height?: number;
   stale?: boolean;
   sourceHash?: string;
+  /** Unverified positions are not portable; the last visual intent is. */
+  unplacedMoment?: { focus: string; visualBrief: string };
   target?: {
     focus: string;
+    visualBrief?: string;
     start: PortableIllustrationAnchor;
     end: PortableIllustrationAnchor;
     hero: boolean;

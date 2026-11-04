@@ -35,6 +35,7 @@ export type IllustrationTarget = PlannedIllustration & {
   order: number;
 };
 export type IllustrationMoment = Pick<PlannedIllustration, 'startAnchor' | 'endAnchor' | 'focus'>;
+export type SelectedIllustrationMoment = IllustrationMoment & { direction?: string };
 export type IllustrationPlacementInput = {
   target: Extract<ImageTarget, { mode: 'translation' }>;
   targetSetHash: string;
@@ -45,7 +46,25 @@ export type IllustrationPresentation = {
   revision: number;
   sourceHash: string;
   heroTargetId: string | null;
-  targets: Record<string, { latestRequestedJobId: string; displayedJobId: string | null }>;
+  targets: Record<
+    string,
+    {
+      latestRequestedJobId: string;
+      displayedJobId: string | null;
+      /** A user-selected moment supersedes the render's original anchors for display and redraw. */
+      placedTarget?: IllustrationTarget;
+    }
+  >;
+  /** The last explicit placement of each cut still awaiting review after an edit. */
+  detached?: Record<
+    string,
+    {
+      sourceHash: string;
+      latestRequestedJobId: string;
+      displayedJobId: string | null;
+      placedTarget: IllustrationTarget;
+    }
+  >;
   translation?: {
     target: Extract<ImageTarget, { mode: 'translation' }>;
     targetSetHash: string;
@@ -75,11 +94,29 @@ export function illustrationTargetSet(targets: IllustrationTarget[]): {
 }
 
 export type IllustrationPromptMode = 'none' | 'comfyui' | 'codex';
-const storyboardContract = (mode: IllustrationPromptMode) =>
-  [
-    'Choose up to maxTargets distinct new moments in narrative order. Favor meaningful visual or emotional changes beyond existingTargets. Let the requested direction guide both the choice of moments and how each is framed.',
-    `Return only JSON: {"heroIndex": number|null, "targets": [{"startAnchor":string,"endAnchor":string,"focus":string,"visualBrief":string${mode === 'codex' ? ',"prompt":{"prompt":string,"caption":string}' : mode === 'comfyui' ? ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}' : ''}}], "skipReason"?:string}. Blocks are [id, text] pairs. Use exact supplied short IDs as anchors; the host restores stored anchors. Each endAnchor is unique and is where the depicted event has finished being narrated; insert AFTER it. startAnchor is at or before endAnchor. focus identifies the exact instant in the scene language. ${mode === 'none' ? 'visualBrief gives the renderer a complete visual description of that instant.' : 'visualBrief records the subjects, action and defining visual facts that must survive a redraw. Put the full rendering description in prompt.'}`,
-    'Set heroIndex to the selected cut that best introduces the scene above the text without spoiling a surprise. When allowSkip is true and no suitable new moment remains, return {"heroIndex":null,"targets":[],"skipReason":string}. Otherwise choose at least one cut.',
+function storyboardContract(mode: IllustrationPromptMode, selected: boolean): string {
+  const promptField =
+    mode === 'codex'
+      ? ',"prompt":{"prompt":string,"caption":string}'
+      : mode === 'comfyui'
+        ? ',"prompt":{"prompt":string,"negativePrompt":string,"caption":string}'
+        : '';
+  const fields = `"visualBrief":string${promptField}`;
+  const task = selected
+    ? [
+        'Write one illustration prompt for each selected moment. Depict the specified instant within its passage, using its direction for framing and treatment. Use its supplied moment ID.',
+        `Return only JSON: {"heroIndex":number,"targets":[{"id":string,${fields}}]}. Blocks are [id, text] pairs. Set heroIndex to the cut that best introduces the scene.`,
+      ]
+    : [
+        'Choose up to maxTargets distinct new moments in narrative order. Favor meaningful visual or emotional changes beyond existingTargets. Let the requested direction guide both the choice of moments and how each is framed.',
+        `Return only JSON: {"heroIndex": number|null, "targets": [{"startAnchor":string,"endAnchor":string,"focus":string,${fields}}], "skipReason"?:string}. Blocks are [id, text] pairs. Use exact supplied short IDs as anchors; the host restores stored anchors. Each endAnchor is unique and is where the depicted event has finished being narrated; insert AFTER it. startAnchor is at or before endAnchor. focus identifies the exact instant in the scene language.`,
+        'Set heroIndex to the selected cut that best introduces the scene above the text without spoiling a surprise. When allowSkip is true and no suitable new moment remains, return {"heroIndex":null,"targets":[],"skipReason":string}. Otherwise choose at least one cut.',
+      ];
+  return [
+    ...task,
+    mode === 'none'
+      ? 'visualBrief gives the renderer a complete visual description of that instant.'
+      : 'visualBrief records the subjects, action and defining visual facts that must survive a redraw. Put the full rendering description in prompt.',
     ILLUSTRATION_VISUAL_DIRECTION,
     ...(mode === 'none'
       ? []
@@ -88,7 +125,7 @@ const storyboardContract = (mode: IllustrationPromptMode) =>
           mode === 'codex' ? CODEX_ILLUSTRATION_PROMPT_FIELDS : ILLUSTRATION_PROMPT_FIELDS,
         ]),
   ].join('\n\n');
-
+}
 export function storyboardRequest(
   model: ModelSnapshot,
   scene: IllustrationScene,
@@ -96,6 +133,7 @@ export function storyboardRequest(
   options: {
     maxTargets: number;
     existingTargets: IllustrationMoment[];
+    selectedMoments?: SelectedIllustrationMoment[];
     generator: string;
     promptMode: IllustrationPromptMode;
   },
@@ -107,24 +145,40 @@ export function storyboardRequest(
   return {
     ...base,
     stable: {
-      contract: storyboardContract(options.promptMode),
+      contract: storyboardContract(options.promptMode, !!options.selectedMoments),
       tools: [],
     },
     input: {
-      task: 'Plan the illustrations and their positions.',
+      task: options.selectedMoments
+        ? 'Prepare the selected illustrations.'
+        : 'Plan the illustrations and their positions.',
       controls: { purpose: 'illustration-plan' },
       source: {
         blocks: blocks.map(({ anchor, text }) => [aliases.get(anchor)!, text]),
-        maxTargets: options.maxTargets,
-        existingTargets: options.existingTargets.map((target) => ({
-          ...target,
-          startAnchor: aliases.get(target.startAnchor) ?? target.startAnchor,
-          endAnchor: aliases.get(target.endAnchor) ?? target.endAnchor,
-        })),
+        ...(options.selectedMoments
+          ? {
+              selectedMoments: options.selectedMoments.map((target, index) => ({
+                ...target,
+                id: `m${index}`,
+                startAnchor: aliases.get(target.startAnchor)!,
+                endAnchor: aliases.get(target.endAnchor)!,
+              })),
+            }
+          : {
+              maxTargets: options.maxTargets,
+              existingTargets: options.existingTargets.map((target) => ({
+                ...target,
+                startAnchor: aliases.get(target.startAnchor) ?? target.startAnchor,
+                endAnchor: aliases.get(target.endAnchor) ?? target.endAnchor,
+              })),
+              allowSkip: scene.allowSkip || options.existingTargets.length > 0,
+            }),
         generator: options.generator,
-        allowSkip: scene.allowSkip || options.existingTargets.length > 0,
         styleGuidance: scene.styleGuidance,
         ...(scene.characterProfiles?.length ? { characterProfiles: scene.characterProfiles } : {}),
+        ...(scene.sceneAppearanceNotes?.length
+          ? { sceneAppearanceNotes: scene.sceneAppearanceNotes }
+          : {}),
         ...(scene.direction ? { direction: scene.direction } : {}),
         ...(options.generator === 'comfyui' ? { negativeGuidance: scene.negativeGuidance } : {}),
         ...(options.promptMode === 'codex'
@@ -167,10 +221,15 @@ export function parseStoryboard(
   maxTargets: number,
   promptMode: IllustrationPromptMode,
   allowSkip: boolean,
-  existing: IllustrationMoment[] = []
+  existing: IllustrationMoment[] = [],
+  selected?: SelectedIllustrationMoment[]
 ): IllustrationStoryboard {
   const value = object(text);
-  if (!Array.isArray(value.targets) || value.targets.length > maxTargets)
+  if (
+    !Array.isArray(value.targets) ||
+    value.targets.length > maxTargets ||
+    (selected && value.targets.length !== selected.length)
+  )
     throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
   if (!value.targets.length) {
     if (!allowSkip) throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
@@ -182,10 +241,16 @@ export function parseStoryboard(
     Number(value.heroIndex) >= value.targets.length
   )
     throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
+  const hero = value.targets[Number(value.heroIndex)];
+  let entries = value.targets;
+  if (selected) {
+    const byId = new Map(entries.map((entry) => [entry?.id, entry]));
+    entries = selected.map((_, index) => byId.get(`m${index}`));
+  }
   const anchors = new Map(blocks.map((block, index) => [block.anchor, index]));
   const seen = new Set(existing.map((target) => target.endAnchor));
   let previous = -1;
-  const targets = value.targets.map((raw): PlannedIllustration => {
+  const targets = entries.map((raw, index): PlannedIllustration => {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw))
       throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID', true);
     const entry = raw as Record<string, unknown>;
@@ -194,8 +259,9 @@ export function parseStoryboard(
       // Existing saved requests/fixtures may still use full anchors; new wire inputs do not.
       return blocks.find((_, index) => `s${index.toString(36)}` === supplied)?.anchor ?? supplied;
     };
-    const startAnchor = resolveAnchor(entry.startAnchor),
-      endAnchor = resolveAnchor(entry.endAnchor);
+    const fixed = selected?.[index];
+    const startAnchor = fixed?.startAnchor ?? resolveAnchor(entry.startAnchor),
+      endAnchor = fixed?.endAnchor ?? resolveAnchor(entry.endAnchor);
     const start = anchors.get(startAnchor),
       end = anchors.get(endAnchor);
     if (
@@ -223,12 +289,12 @@ export function parseStoryboard(
     return {
       startAnchor,
       endAnchor,
-      focus: required(entry.focus),
+      focus: fixed?.focus ?? required(entry.focus),
       visualBrief: required(entry.visualBrief),
       ...(prompt ? { prompt } : {}),
     };
   });
-  return { heroIndex: Number(value.heroIndex), targets };
+  return { heroIndex: entries.indexOf(hero), targets };
 }
 
 /** Fixed moment, not the entire response. This prevents the renderer choosing the climax again. */

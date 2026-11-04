@@ -342,7 +342,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   };
   const helper: HelperRuntime = new HelperRuntime(store, {
     owner: instanceId,
-
+    testMode: options.testMode === true,
     resolveCredential,
     executeCodex,
     executeCodexAgent,
@@ -353,7 +353,10 @@ export async function createApp(options: AppOptions): Promise<App> {
     streams,
     services: {
       sceneUpdated,
-      illustrationReferencesUpdated: publish,
+      illustrationsUpdated: (chatId, queued) => {
+        publish(chatId);
+        if (queued) pumpIllustrations();
+      },
       task: (task, name, args, operationId) => {
         const afterCommit: (() => void)[] = [];
         const invoke = () =>

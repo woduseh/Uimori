@@ -18,7 +18,14 @@ export function illustrationPresentation(
     .get(illustrationPresentationKey(sourceId));
   if (!row) return null;
   const value = JSON.parse(String(row.value)) as IllustrationPresentation;
-  return sourceHash && value.sourceHash !== sourceHash ? null : value;
+  if (!sourceHash || value.sourceHash === sourceHash) return value;
+  // An edit may restore a text hash with verified placements from an earlier revision.
+  if (
+    Object.values(value.detached ?? {}).some((entry) => entry.sourceHash === sourceHash) &&
+    store.source(sourceId).hash === sourceHash
+  )
+    return newIllustrationPresentation(sourceHash, value);
+  return null;
 }
 export function saveIllustrationPresentation(
   store: Store,
@@ -33,18 +40,45 @@ export function saveIllustrationPresentation(
     .run(illustrationPresentationKey(sourceId), JSON.stringify(value));
   store.event(store.source(sourceId).chatId, 'illustration-layout.updated', sourceId);
 }
-export function newIllustrationPresentation(sourceHash: string): IllustrationPresentation {
-  return { version: 1, revision: 0, sourceHash, heroTargetId: null, targets: {} };
+export function newIllustrationPresentation(
+  sourceHash: string,
+  previous?: IllustrationPresentation | null
+): IllustrationPresentation {
+  const value: IllustrationPresentation = {
+    version: 1,
+    revision: previous?.revision ?? 0,
+    sourceHash,
+    heroTargetId: null,
+    targets: {},
+  };
+  const detached = { ...previous?.detached };
+  if (previous)
+    for (const [id, entry] of Object.entries(previous.targets)) {
+      if (entry.placedTarget)
+        detached[id] = {
+          ...entry,
+          placedTarget: entry.placedTarget,
+          sourceHash: previous.sourceHash,
+        };
+    }
+  for (const [id, entry] of Object.entries(detached)) {
+    if (entry.sourceHash === sourceHash) {
+      const { sourceHash: _hash, ...target } = entry;
+      value.targets[id] = target;
+    } else (value.detached ??= {})[id] = entry;
+  }
+  return value;
 }
 export function illustrationDisplay(
   presentation: IllustrationPresentation | null,
-  input: IllustrationJobInput
+  id?: string
 ): IllustrationDisplay | undefined {
-  const id = input.target?.id;
-  if (!id || !presentation?.targets[id]) return;
-  const target = presentation.targets[id];
+  if (!id || !presentation) return;
+  const target = presentation.targets[id] ?? presentation.detached?.[id];
+  if (!target) return;
   return {
-    ...target,
+    latestRequestedJobId: target.latestRequestedJobId,
+    displayedJobId: target.displayedJobId,
     revision: presentation.revision,
     hero: presentation.heroTargetId === id,
     ...(presentation.translation && Object.hasOwn(presentation.translation.afterByTarget, id)
@@ -105,35 +139,13 @@ export function changeIllustrationHero(
     return value;
   });
 }
-/** Deleting a visible attempt can reveal an older successful image of the same target. */
-export function forgetIllustrationJob(
-  store: Store,
-  sourceId: string,
-  sourceHash: string,
-  input: IllustrationJobInput,
-  jobId: string
-): void {
-  const value = illustrationPresentation(store, sourceId, sourceHash);
-  const id = input.target?.id;
-  const target = id && value?.targets[id];
-  if (!value || !id || !target) return;
-  const remaining = store.db
-    .prepare(`SELECT j.id,j.status,EXISTS(SELECT 1 FROM illustration_images i WHERE i.job_id=j.id) AS hasImage
-    FROM illustration_jobs j WHERE source_revision=? AND source_hash=? AND json_extract(input,'$.target.id')=? AND id!=?
-    ORDER BY created_at DESC,id DESC`)
-    .all(sourceId, sourceHash, id, jobId);
-  if (!remaining.length) {
-    delete value.targets[id];
-    if (value.heroTargetId === id) value.heroTargetId = null;
-    if (value.translation) delete value.translation.afterByTarget[id];
-  } else {
-    if (target.latestRequestedJobId === jobId)
-      target.latestRequestedJobId = String(remaining[0].id);
-    if (target.displayedJobId === jobId)
-      target.displayedJobId =
-        (remaining.find((row) => row.status === 'completed' && row.hasImage)?.id as
-          | string
-          | undefined) ?? null;
-  }
+/** All attempts of a cut are removed together, across its explicitly updated placements. */
+export function forgetIllustrationTarget(store: Store, sourceId: string, targetId: string): void {
+  const value = illustrationPresentation(store, sourceId);
+  if (!value || (!value.targets[targetId] && !value.detached?.[targetId])) return;
+  delete value.targets[targetId];
+  if (value.detached) delete value.detached[targetId];
+  if (value.heroTargetId === targetId) value.heroTargetId = null;
+  if (value.translation) delete value.translation.afterByTarget[targetId];
   saveIllustrationPresentation(store, sourceId, value);
 }

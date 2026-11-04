@@ -139,6 +139,7 @@ function scene(
     allowSkip: input.target ? false : allowSkip,
     targeted: !!input.target,
     styleGuidance: input.styleGuidance,
+    sceneAppearanceNotes: input.sceneAppearanceNotes,
     characterProfiles: input.characterProfiles?.map(({ name, appearance }) => ({
       name,
       appearance,
@@ -382,12 +383,19 @@ export async function runIllustrationJob(
           (block) =>
             !input.plan!.existingTargets.some((target) => target.endAnchor === block.anchor)
         );
-        const targets = available.slice(0, input.plan.maxTargets).map((block) => ({
-          startAnchor: block.anchor,
-          endAnchor: block.anchor,
-          focus: `모의 삽화: ${block.text.slice(0, 100)}`,
-          visualBrief: block.text,
-        }));
+        const targets =
+          input.plan.selectedMoments?.map(({ startAnchor, endAnchor, focus, direction }) => ({
+            startAnchor,
+            endAnchor,
+            focus,
+            visualBrief: direction ?? focus,
+          })) ??
+          available.slice(0, input.plan.maxTargets).map((block) => ({
+            startAnchor: block.anchor,
+            endAnchor: block.anchor,
+            focus: `모의 삽화: ${block.text.slice(0, 100)}`,
+            visualBrief: block.text,
+          }));
         storyboard = {
           heroIndex: targets.length ? Math.min(1, targets.length - 1) : null,
           targets,
@@ -410,7 +418,8 @@ export async function runIllustrationJob(
           input.plan.maxTargets,
           promptMode,
           context.allowSkip || input.plan.existingTargets.length > 0,
-          input.plan.existingTargets
+          input.plan.existingTargets,
+          input.plan.selectedMoments
         );
       }
       hooks.signal.throwIfAborted();

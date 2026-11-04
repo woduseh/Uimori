@@ -2,7 +2,7 @@ import { inferUsageKind, usageOnlyWire, usageOnlyResult } from './usage-accounti
 import type { UsageKind } from '../core/usage-report.js';
 import { compareConnectionDisplayOrder, compareModelDisplayOrder } from '../core/model-order.js';
 import { SOURCE_TEXT_MAX_CHARS } from '../core/content-limits.js';
-import { encodedImage, storeImage } from './image-storage.js';
+import { encodedImage, storeImage, type StoredImage } from './image-storage.js';
 import { saveConnection } from './provider-connections.js';
 import { recordContentProfileEvents } from './content-profile-events.js';
 import { detectRisuImageHandoff, type RisuImageHandoff } from '../core/risu-image-handoff.js';
@@ -1088,7 +1088,38 @@ export class ProductStore {
       'location',
       'allowedUse',
     ]);
-    const { mime, bytes } = decodeImage(b.mime, b.base64);
+    const image = decodeImage(b.mime, b.base64);
+    return this.insertAsset(chatId, image.mime, image.hash, b, image);
+  }
+
+  /** Link a verified illustration blob to the chat without fetching or re-encoding its pixels. */
+  reuseIllustrationAsset(chatId: string, image: { hash: string; mime: string; caption: string }) {
+    const row = this.db
+      .prepare(`SELECT body FROM assets a WHERE chat_id=? AND hash=?
+      AND NOT EXISTS (SELECT 1 FROM library_hidden WHERE kind='asset' AND id=a.id)
+      ORDER BY rowid LIMIT 1`)
+      .get(chatId, image.hash);
+    if (row) return parse(row.body) as Asset;
+    const caption = image.caption.trim();
+    const asset = this.insertAsset(chatId, image.mime, image.hash, {
+      title: caption.slice(0, 200).replace(/[\uD800-\uDBFF]$/u, '') || '삽화',
+      description: caption.slice(0, 2000).replace(/[\uD800-\uDBFF]$/u, ''),
+      actor: '',
+      outfit: '',
+      location: '',
+      allowedUse: 'profile',
+    });
+    this.store.event(chatId, 'asset.created', asset.id);
+    return asset;
+  }
+
+  private insertAsset(
+    chatId: string,
+    mime: string,
+    hash: string,
+    b: Record<string, unknown>,
+    upload?: StoredImage
+  ) {
     const id = randomUUID();
     const result: Asset = {
       id,
@@ -1096,7 +1127,7 @@ export class ProductStore {
       revision: 1,
       title: text(b.title, 'title', 200),
       mime,
-      hash: createHash('sha256').update(bytes).digest('hex'),
+      hash,
       description: text(b.description, 'description', 2000, true),
       actor: text(b.actor, 'actor', 200, true),
       outfit: text(b.outfit, 'outfit', 200, true),
@@ -1104,7 +1135,7 @@ export class ProductStore {
       allowedUse: choice(b.allowedUse, ['profile', 'inline', 'both'], 'asset use'),
       url: `/api/assets/${id}`,
     };
-    storeImage(this.db, { hash: result.hash, mime, bytes });
+    if (upload) storeImage(this.db, upload);
     this.db
       .prepare('INSERT INTO assets VALUES(?,?,?,?)')
       .run(id, chatId, json(result), result.hash);

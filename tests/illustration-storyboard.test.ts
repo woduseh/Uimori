@@ -31,6 +31,9 @@ import {
   changeIllustrationHero,
 } from '../server/illustration-presentation.js';
 import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
+import { placeIllustrationCuts } from '../server/helper-illustration-placement.js';
+import { inspectIllustrationCut } from '../server/helper-illustration-cuts.js';
+import { generateHelperIllustrations } from '../server/helper-illustration-generation.js';
 import {
   fixtureSettings,
   chatWithSource,
@@ -138,6 +141,61 @@ test('planning atomically reserves cuts, prioritizes the hero and cannot fan out
   expect(illustrationSlots(store, source.id).total).toBe(2);
 });
 
+test('a chapter request reserves all exact moments atomically and renders them from the frozen selection', async () => {
+  const store = databases.create();
+  const { chat, source } = chatWithSource(store);
+  const next = completedSource(store, chat.id, 'A door opens.\n\nThe light goes out.');
+  settings(store);
+  const moments = [source, next].flatMap((scene) =>
+    splitSource(scene)
+      .map(({ anchor, text }) => ({
+        sourceId: scene.id,
+        expectedSourceHash: scene.hash,
+        startAnchor: anchor,
+        endAnchor: anchor,
+        focus: text,
+        direction: 'In silhouette',
+      }))
+      .reverse()
+  );
+  const generate = (cuts: typeof moments) =>
+    generateHelperIllustrations(store, chat.id, { moments: cuts }, { testMode: true });
+  expect(() => generate([...moments, moments[3]])).toThrow('ILLUSTRATION_TARGET_CONFLICT');
+  expect(() => generate([moments[0], { ...moments[3], startAnchor: 'missing' }])).toThrow(
+    'ILLUSTRATION_TARGET_UNAVAILABLE'
+  );
+  expect(() =>
+    generate([moments[0], { ...moments[3], expectedSourceHash: '0'.repeat(64) }])
+  ).toThrow('ILLUSTRATION_SOURCE_CHANGED');
+  expect(queuedIllustrations(store)).toEqual([]);
+  const reserved = generate(moments);
+  expect(reserved.plans.map((plan) => plan.count)).toEqual([2, 2]);
+  for (const plan of reserved.plans) {
+    const blocks = splitSource(store.source(plan.sourceId));
+    const fixed = illustrationJob(store, plan.jobId).input.plan!.selectedMoments!;
+    expect(fixed.map((item) => item.startAnchor)).toEqual(blocks.map((item) => item.anchor));
+    expect((await runIllustrationJob(store, plan.jobId, 'worker', hooks(store)))?.status).toBe(
+      'completed'
+    );
+    const cuts = queuedIllustrations(store)
+      .map((id) => illustrationJob(store, id))
+      .filter((job) => job.input.target?.planId === plan.jobId);
+    expect(cuts).toHaveLength(2);
+    for (const cut of cuts) {
+      const selected = fixed.find((x) => x.startAnchor === cut.input.target!.startAnchor)!;
+      expect(cut.input.target).toMatchObject({
+        endAnchor: selected.endAnchor,
+        focus: selected.focus,
+        visualBrief: selected.direction,
+      });
+      expect((await runIllustrationJob(store, cut.id, 'worker', hooks(store)))?.status).toBe(
+        'completed'
+      );
+    }
+  }
+  expect(() => generate([moments[0]])).toThrow('ILLUSTRATION_TARGET_CONFLICT');
+});
+
 test('regeneration keeps the old picture, failed siblings are independent and copy restores groups and verified anchors', async () => {
   const store = databases.create();
   const { source, chat } = chatWithSource(store);
@@ -196,6 +254,209 @@ test('regeneration keeps the old picture, failed siblings are independent and co
   ).toEqual([]);
   expect(restoredCuts.flatMap((cut) => cut.images)).toHaveLength(3);
 });
+
+test('placing a cut after an edit keeps original images and job evidence through redraw, copy and deletion', async () => {
+  const store = databases.create();
+  const { chat, source } = chatWithSource(store);
+  settings(store);
+  const plan = reserveIllustrationPlan(store, source, 'manual', { testMode: true, maxTargets: 2 });
+  await runIllustrationJob(store, plan.id, 'planner', hooks(store));
+  const jobs = queuedIllustrations(store);
+  for (const id of jobs) await runIllustrationJob(store, id, 'renderer', hooks(store));
+  const original = illustrationJob(store, jobs[0]);
+  const picture = illustrationsForSources(store, [source.id]).find(
+    (job) => job.id === original.id
+  )!;
+  const revision = illustrationPresentation(store, source.id)!.revision;
+  const edited = store.editSource(source.id, {
+    text: 'A closed door.\n\nMira lights the lantern on the pier.',
+    expectedRevision: 0,
+  });
+  const anchor = splitSource(edited)[1].anchor;
+  const move = {
+    jobId: original.id,
+    expectedSourceHash: edited.hash,
+    expectedPresentationRevision: revision,
+    startAnchor: anchor,
+    endAnchor: anchor,
+    focus: 'Mira on the pier',
+    visualBrief: 'The silver lantern.',
+  };
+  expect(() =>
+    placeIllustrationCuts(store, chat.id, {
+      placements: [move, { ...move, jobId: jobs[1], endAnchor: 'unknown' }],
+    })
+  ).toThrow();
+  expect(illustrationPresentation(store, source.id)!.sourceHash).toBe(source.hash);
+  const result = placeIllustrationCuts(store, chat.id, { placements: [move] });
+  expect(result.placements[0]).toMatchObject({ revision: revision + 1, changed: true });
+  expect(() => placeIllustrationCuts(store, chat.id, { placements: [move] })).toThrow(
+    'ILLUSTRATION_PRESENTATION_CHANGED'
+  );
+  expect(
+    placeIllustrationCuts(store, chat.id, {
+      placements: [{ ...move, expectedPresentationRevision: revision + 1 }],
+    }).changed
+  ).toBe(false);
+  expect(illustrationJob(store, original.id)).toEqual(original);
+  expect(queuedIllustrations(store)).toEqual([]);
+  expect(illustrationSlots(store, source.id)).toEqual({ active: 0, total: 1 });
+  const cuts = illustrationsForSources(store, [source.id]);
+  expect(cuts.find((job) => job.id === original.id)).toMatchObject({
+    sourceHash: edited.hash,
+    generatedSourceHash: source.hash,
+    target: { endAnchor: anchor },
+    images: picture.images,
+  });
+  expect(cuts.find((job) => job.id === jobs[1])!.sourceHash).toBe(source.hash);
+  const copy = captureChatCopy(store, chat.id);
+  const restored = restoreChatCopy(store, copy, 'reanchored');
+  const restoredSource = store.source(restored.headRevision!);
+  const restoredCut = illustrationsForSources(store, [restoredSource.id]).find((job) => job.target);
+  expect(restoredCut?.target?.endAnchor).toBe(splitSource(restoredSource)[1].anchor);
+  expect(restoredCut?.images[0].hash).toBe(picture.images[0].hash);
+  const redo = regenerateIllustration(store, original.id, true);
+  expect(redo.input.target).toMatchObject({
+    endAnchor: anchor,
+    focus: 'Mira on the pier',
+    visualBrief: 'The silver lantern.',
+  });
+  expect(redo.sourceHash).toBe(edited.hash);
+  expect(() =>
+    placeIllustrationCuts(store, chat.id, {
+      placements: [
+        {
+          ...move,
+          expectedPresentationRevision: illustrationPresentation(store, source.id)!.revision,
+        },
+      ],
+    })
+  ).toThrow('ILLUSTRATION_ACTIVE');
+  await runIllustrationJob(store, redo.id, 'redraw', hooks(store));
+  removeIllustration(store, redo.id);
+  expect(illustrationSlots(store, source.id).total).toBe(0);
+  expect(
+    illustrationsForSources(store, [source.id])
+      .filter((job) => job.task === 'render')
+      .map((job) => job.id)
+  ).toEqual([jobs[1]]);
+});
+
+test.each(['move', 'plan'])(
+  'revising a %s layout keeps other stale cuts and their authored moments portable',
+  async (flow) => {
+    const store = databases.create();
+    const { chat, source } = chatWithSource(store);
+    settings(store);
+    const first = reserveIllustrationPlan(store, source, 'manual', {
+      testMode: true,
+      maxTargets: 2,
+    });
+    await runIllustrationJob(store, first.id, 'planner', hooks(store));
+    const ids = queuedIllustrations(store);
+    for (const id of ids) await runIllustrationJob(store, id, 'render', hooks(store));
+    const v2 = store.editSource(source.id, {
+      text: 'At the shore.\n\nAt the gate.',
+      expectedRevision: 0,
+    });
+    const note = (index: number) => ({
+      focus: `Chosen focus ${index}`,
+      visualBrief: `Chosen brief ${index}`,
+    });
+    const position = (id: string, scene: typeof source, index: number, revision: number) => ({
+      jobId: id,
+      expectedSourceHash: scene.hash,
+      expectedPresentationRevision: revision,
+      startAnchor: splitSource(scene)[index].anchor,
+      endAnchor: splitSource(scene)[index].anchor,
+    });
+    const before = illustrationPresentation(store, source.id)!.revision;
+    placeIllustrationCuts(store, chat.id, {
+      placements: ids.map((id, i) => ({ ...position(id, v2, i, before), ...note(i) })),
+    });
+    const v3 = store.editSource(source.id, {
+      text: 'Shoreline.\n\nGatehouse.\n\nDoorway.',
+      expectedRevision: 1,
+    });
+    if (flow === 'move') {
+      placeIllustrationCuts(store, chat.id, { placements: [position(ids[0], v3, 0, before + 1)] });
+    } else {
+      const extra = reserveIllustrationPlan(store, v3, 'manual', { testMode: true, maxTargets: 1 });
+      await runIllustrationJob(store, extra.id, 'planner', hooks(store));
+      for (const id of queuedIllustrations(store))
+        await runIllustrationJob(store, id, 'render', hooks(store));
+    }
+    const other = illustrationsForSources(store, [source.id]).find((item) => item.id === ids[1])!;
+    expect(other).toMatchObject({ sourceHash: v2.hash, target: { focus: note(1).focus } });
+    const frozen = illustrationJob(store, ids[1]).input.target!;
+    expect(inspectIllustrationCut(store, chat.id, { imageId: other.images[0].id })).toMatchObject({
+      sourceHash: v2.hash,
+      currentSourceHash: v3.hash,
+      generatedSourceHash: source.hash,
+      target: note(1),
+      generatedFocus: frozen.focus,
+      generatedVisualBrief: frozen.visualBrief,
+    });
+    expect(illustrationSlots(store, source.id).total).toBe(1);
+    const copy = captureChatCopy(store, chat.id);
+    const stale = copy.illustrations.find((item) => item.group === ids[1])!;
+    expect(stale).toMatchObject({ stale: true, sourceHash: v2.hash, unplacedMoment: note(1) });
+    const fork = restoreChatCopy(store, copy, 'detached');
+    const forkSource = store.source(fork.headRevision!);
+    const restored = illustrationsForSources(store, [forkSource.id]).find(
+      (item) => item.unplacedMoment?.focus === note(1).focus
+    )!;
+    expect(restored.sourceHash).toBe(v2.hash);
+    expect(
+      inspectIllustrationCut(store, fork.id, { imageId: restored.images[0].id })
+    ).toMatchObject({
+      unplacedMoment: note(1),
+      target: null,
+      generatedSourceHash: null,
+      generatedFocus: null,
+      generatedVisualBrief: null,
+    });
+    expect(illustrationSlots(store, forkSource.id).total).toBe(1);
+    const reverted = store.editSource(forkSource.id, { text: v2.text, expectedRevision: 0 });
+    expect(reverted.hash).toBe(v2.hash);
+    expect(illustrationSlots(store, forkSource.id).total).toBe(0);
+    expect(() => regenerateIllustration(store, restored.id, true)).toThrow(
+      'ILLUSTRATION_TARGET_UNAVAILABLE'
+    );
+    expect(
+      captureChatCopy(store, fork.id).illustrations.find((item) => item.group === restored.id)
+    ).toMatchObject({ stale: true, unplacedMoment: note(1) });
+    placeIllustrationCuts(store, fork.id, {
+      placements: [
+        position(
+          restored.id,
+          reverted,
+          1,
+          illustrationPresentation(store, forkSource.id)!.revision
+        ),
+      ],
+    });
+    expect(
+      illustrationPresentation(store, forkSource.id)!.targets[restored.id].placedTarget
+    ).toMatchObject(note(1));
+    expect(regenerateIllustration(store, restored.id, true).input.target).toMatchObject({
+      ...note(1),
+      endAnchor: splitSource(reverted)[1].anchor,
+    });
+    placeIllustrationCuts(store, chat.id, {
+      placements: [position(ids[1], v3, 1, illustrationPresentation(store, source.id)!.revision)],
+    });
+    expect(
+      illustrationPresentation(store, source.id)!.targets[other.target!.id].placedTarget
+    ).toMatchObject(note(1));
+    if (flow === 'plan') {
+      removeIllustration(store, ids[0]);
+      expect(Object.keys(illustrationPresentation(store, source.id)!.detached ?? {})).toHaveLength(
+        0
+      );
+    }
+  }
+);
 
 test('translation completion schedules once, keeps old mapping from overwriting a new translation and copies it without re-generation', async () => {
   const store = databases.create();
@@ -389,6 +650,88 @@ test('compact wire aliases preserve every source paragraph and round-trip to can
     startAnchor: blocks[0].anchor,
     endAnchor: blocks[1].anchor,
   });
+  const fixed = [
+    {
+      startAnchor: blocks[0].anchor,
+      endAnchor: blocks[1].anchor,
+      focus: 'Mira lowers the lantern',
+      direction: 'Low angle',
+    },
+  ];
+  const exact = storyboardRequest(
+    model,
+    scene,
+    source,
+    {
+      maxTargets: 1,
+      existingTargets: [],
+      selectedMoments: fixed,
+      generator: 'codex',
+      promptMode: 'codex',
+    },
+    undefined
+  );
+  expect(exact.input.source).toMatchObject({
+    selectedMoments: [
+      {
+        id: 'm0',
+        startAnchor: 's0',
+        endAnchor: 's1',
+        focus: fixed[0].focus,
+        direction: 'Low angle',
+      },
+    ],
+  });
+  const draft = {
+    id: 'm0',
+    startAnchor: 's1',
+    endAnchor: 's1',
+    focus: 'A different instant',
+    visualBrief: 'Mira in profile',
+    prompt: { prompt: '  Mira holds a lantern. ', caption: 'A lantern' },
+  };
+  const parse = (targets: unknown[]) =>
+    parseStoryboard(
+      JSON.stringify({ heroIndex: 0, targets }),
+      blocks,
+      1,
+      'codex',
+      false,
+      [],
+      fixed
+    );
+  expect(parse([draft]).targets).toMatchObject([
+    {
+      startAnchor: fixed[0].startAnchor,
+      endAnchor: fixed[0].endAnchor,
+      focus: fixed[0].focus,
+      prompt: { prompt: draft.prompt.prompt },
+    },
+  ]);
+  expect(() => parse([])).toThrow('ILLUSTRATION_STORYBOARD_INVALID');
+  expect(() => parse([{ ...draft, id: 'wrong' }])).toThrow('ILLUSTRATION_STORYBOARD_INVALID');
+  const both = blocks.map(({ anchor, text }) => ({
+    startAnchor: anchor,
+    endAnchor: anchor,
+    focus: text,
+  }));
+  const reordered = parseStoryboard(
+    JSON.stringify({
+      heroIndex: 0,
+      targets: [{ ...draft, id: 'm1', visualBrief: 'second' }, draft],
+    }),
+    blocks,
+    2,
+    'codex',
+    false,
+    [],
+    both
+  );
+  expect(reordered.heroIndex).toBe(1);
+  expect(reordered.targets.map(({ focus, visualBrief }) => [focus, visualBrief])).toEqual([
+    [both[0].focus, draft.visualBrief],
+    [both[1].focus, 'second'],
+  ]);
   const target = { ...result.targets[0], id: 'target-uuid' };
   const placement = {
     target: {
