@@ -16,19 +16,19 @@ const templates = [
     id: 'pheme',
     title: 'Phēmē RP',
     role: 'main',
-    description: 'v5.4.1. 인물과 대화하며 이야기를 이어 가요.',
+    description: 'v5.5.0. 인물과 대화하며 이야기를 이어 가요.',
   },
   {
     id: 'pheme-novel',
     title: 'Phēmē 소설',
     role: 'main',
-    description: 'v5.4.1. 요청한 장면이나 회차를 소설 원고로 써요.',
+    description: 'v5.5.0. 요청한 장면이나 회차를 소설 원고로 써요.',
   },
   {
     id: 'hermeneia',
     title: 'Hermēneía',
     role: 'translation',
-    description: 'v1.1.0. 원문의 의미와 문체를 살려 한국어로 번역해요.',
+    description: 'v1.2.0. 원문의 의미와 문체를 살려 한국어로 번역해요.',
   },
 ] as const;
 
