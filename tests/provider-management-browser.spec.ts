@@ -104,6 +104,15 @@ test('PMUI01 mobile template registration selects the connection, reports catalo
   await expect(
     form.getByLabel('프로바이더 프로토콜').locator('option[value="fixture-sse-v1"]')
   ).toHaveCount(0);
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme);
+    const colors = await form.locator('.provider-save-actions').evaluate((actions) => ({
+      actions: getComputedStyle(actions).backgroundColor,
+      dialog: getComputedStyle(actions.closest('dialog')!).backgroundColor,
+    }));
+    expect(colors.actions).toBe(colors.dialog);
+  }
   await form.getByLabel('프로바이더 프로토콜').selectOption('openai-responses-v1');
   await expect(form.getByLabel('API 기본 주소')).toHaveValue('https://api.openai.com/v1');
   await form.getByText('연결 안내', { exact: true }).click();

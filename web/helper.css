@@ -297,6 +297,21 @@ details.helper-context-chip[open] {
   color: var(--text);
   background: var(--panel);
 }
+@media (max-width: 767px), (pointer: coarse) {
+  .helper-context-chip:has(> .helper-chip-dismiss) {
+    padding-block: 0;
+    padding-inline-end: 0;
+  }
+  .helper-chip-action {
+    min-width: var(--control-h);
+    min-height: var(--control-h);
+  }
+  .helper-chip-dismiss {
+    width: var(--control-h);
+    height: var(--control-h);
+    min-height: var(--control-h);
+  }
+}
 .helper-composer [role="alert"] {
   max-height: 20dvh;
   overflow: auto;
@@ -523,10 +538,12 @@ details.helper-context-chip[open] {
   z-index: 32;
   box-shadow: none;
 }
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .app-shell.panel-overlay.helper-open {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+@media (max-width: 767px) {
   .panel-overlay > .helper-panel {
     width: 100vw;
     border-left: 0;
@@ -719,7 +736,7 @@ details.helper-context-chip pre,
 .app-shell.focus-reading.helper-open.helper-expanded {
   grid-template-columns: minmax(0, 1fr);
 }
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   .app-shell.helper-open.helper-expanded {
     grid-template-columns: minmax(0, 1fr);
   }

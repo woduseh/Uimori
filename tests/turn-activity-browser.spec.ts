@@ -166,10 +166,10 @@ test('TURNUI01 independent response panels, lazy inspector and reload persistenc
   await second.locator(':scope > summary').click();
   await expect(first).toHaveAttribute('open', '');
   await expect(second).toHaveAttribute('open', '');
-  await first.getByText('실행과 실제 입력 확인', { exact: true }).click();
+  await first.getByText('실행 확인', { exact: true }).click();
   await expect(first.locator('pre').last()).toContainText('snapshot');
   expect(state.runReads).toHaveLength(1);
-  await first.getByText('실행과 실제 입력 확인', { exact: true }).click();
+  await first.getByText('실행 확인', { exact: true }).click();
   await expect(first.getByRole('textbox')).toHaveCount(0);
   await first.locator(':scope > summary').click();
   await page.reload();
@@ -303,7 +303,7 @@ for (const width of [MOBILE_WIDTH, 1440]) {
     await expect(task.getByRole('button', { name: '새 채팅으로 분기', exact: true })).toBeVisible();
     await expect(diagnostics.locator(':scope > details')).toHaveCount(2);
     await expect(usageSummary).toHaveText('이번 생성');
-    await expect(executionSummary).toHaveText('실행과 실제 입력 확인');
+    await expect(executionSummary).toHaveText('실행 확인');
     await expect(usage).not.toHaveAttribute('open');
     await expect(execution).not.toHaveAttribute('open');
     await expect(task.getByText(/요청 1,234, 응답 87 토큰/)).not.toBeVisible();

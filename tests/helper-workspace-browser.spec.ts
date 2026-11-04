@@ -5,6 +5,7 @@ import type { HelperConversation, HelperConversationSummary, HelperScope } from 
 import type { ChatDetail } from '../core/types.js';
 import { createDefaultRisuPrompt } from '../core/prompt-defaults.js';
 import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
+import { nativePrompt } from './fixtures/native-prompt.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import {
   DESKTOP_HEIGHT,
@@ -15,6 +16,7 @@ import {
 import {
   navigationAction,
   openHelper,
+  openSourceActions,
   selectSettingsSection,
   visibleNavigation,
 } from './ui-navigation.js';
@@ -468,6 +470,123 @@ async function expectWithinViewport(page: Page, expanded = false) {
   expect(box!.x + box!.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1);
   if (expanded) expect(box!.x + box!.width).toBeCloseTo(page.viewportSize()!.width, 0);
 }
+
+for (const collapsed of [false, true]) {
+  test(`HSPACE13 tablet work panels retain full reader and helper width with sidebar collapsed=${collapsed}`, async ({
+    page,
+    request,
+  }, info) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.addInitScript(
+      (value) => localStorage.setItem('uimori:sidebar-collapsed', String(value)),
+      collapsed
+    );
+    const { chat, detail } = await createReadingChat(
+      request,
+      `태블릿 작업 공간 ${randomUUID()}`,
+      1
+    );
+    const created = await request.post('/api/prompt-presets', {
+      data: {
+        title: '태블릿 창작 옵션',
+        role: 'main',
+        program: nativePrompt('', { customPromptTemplateToggle: 'tone=문체=text' }),
+      },
+    });
+    expect(created.ok(), await created.text()).toBe(true);
+    const preset = (await created.json()) as { id: string };
+    const profile = detail.profile!;
+    const pinned = await request.put(`/api/chats/${chat.id}/profile`, {
+      data: {
+        expectedRevision: profile.revision,
+        image: profile.image,
+        packageAttachments: profile.packageAttachments,
+        pinned: { ...profile.pinned, mainPromptPresetId: preset.id },
+      },
+    });
+    expect(pinned.ok(), await pinned.text()).toBe(true);
+    await page.setViewportSize({ width: 800, height: 800 });
+    await page.goto(`/?chat=${chat.id}`);
+    const reader = page.locator('.story-workspace');
+    const mainDraft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+    await mainDraft.fill('패널 이동 후에도 남는 원고 초안');
+    await openHelper(page);
+    const panel = page.locator('#helper-panel');
+    const helperDraft = panel.getByLabel('도우미에게 요청', { exact: true });
+    await helperDraft.fill('화면 크기가 달라져도 남는 도우미 초안');
+
+    for (const width of [766, 768, 800, 1022]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expect
+        .poll(async () => Math.round((await reader.boundingBox())?.width ?? 0))
+        .toBe(width);
+    }
+    await panel.getByRole('button', { name: '도우미 크게 보기', exact: true }).click();
+    await expect(panel).toHaveClass(/helper-expanded/u);
+    for (const width of [766, 768, 800, 1022]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expect
+        .poll(async () => Math.round((await panel.boundingBox())?.width ?? 0))
+        .toBe(width);
+      await expect(helperDraft).toHaveValue('화면 크기가 달라져도 남는 도우미 초안');
+      if (width === 800)
+        await page.screenshot({ path: info.outputPath(`helper-tablet-${collapsed}.png`) });
+    }
+    await page.setViewportSize({ width: 1024, height: 800 });
+    await expect(page.locator('.app-shell > .sidebar')).toBeVisible();
+    await expect
+      .poll(async () => {
+        const box = await panel.boundingBox();
+        return box ? Math.round(box.x + box.width) : 0;
+      })
+      .toBe(1024);
+    await expect.poll(async () => (await panel.boundingBox())?.width ?? 0).toBeGreaterThan(500);
+
+    await panel.getByRole('button', { name: chat.title, exact: true }).click();
+    await expect(panel).not.toHaveClass(/helper-expanded/u);
+    await expect(helperDraft).toHaveValue('화면 크기가 달라져도 남는 도우미 초안');
+    await panel.getByRole('button', { name: '도우미 닫기', exact: true }).click();
+    await expect(mainDraft).toHaveValue('패널 이동 후에도 남는 원고 초안');
+
+    await page.setViewportSize({ width: 800, height: 800 });
+    await page.getByRole('button', { name: '입력창 더보기', exact: true }).click();
+    await page.getByRole('button', { name: '창작 옵션', exact: true }).click();
+    await expect(page.locator('#chat-prompt-options')).toBeVisible();
+    for (const width of [766, 768, 800, 1022]) {
+      await page.setViewportSize({ width, height: 800 });
+      await expect
+        .poll(async () => Math.round((await reader.boundingBox())?.width ?? 0))
+        .toBe(width);
+    }
+    await page.getByRole('button', { name: '창작 옵션 닫기', exact: true }).click();
+    await expect(mainDraft).toHaveValue('패널 이동 후에도 남는 원고 초안');
+  });
+}
+
+test('HSPACE14 the mobile source context can be removed with a full touch target without losing a custom draft', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await createReadingChat(request, `원문 문맥 ${randomUUID()}`, 1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/?chat=${chat.id}`);
+  const source = page.getByTestId('source').first();
+  await openSourceActions(source);
+  await source.getByRole('button', { name: '도우미에게 물어보기', exact: true }).click();
+  const panel = page.locator('#helper-panel');
+  const chip = panel.locator('.helper-selection');
+  const remove = chip.getByRole('button', { name: '선택 해제', exact: true });
+  await expect(remove).toBeVisible();
+  const box = await remove.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.width).toBeGreaterThanOrEqual(44);
+  expect(box!.height).toBeGreaterThanOrEqual(44);
+  const draft = panel.getByLabel('도우미에게 요청', { exact: true });
+  await draft.fill('선택을 해제해도 보존할 사용자 초안');
+  await remove.click();
+  await expect(chip).toHaveCount(0);
+  await expect(draft).toHaveValue('선택을 해제해도 보존할 사용자 초안');
+});
 
 test('HSPACE06 shared sidebar preserves drafts and project history across search, copy and project removal', async ({
   page,

@@ -93,6 +93,42 @@ test('generic errors keep provider/internal text hidden and retain deletion conf
   expect(await rejected(409, deletion, 'DELETE')).toMatchObject({ message: deletion });
 });
 
+test.each(['FAILED', 'CANCELLED', 'INTERRUPTED', 'RUNNING'] as const)(
+  'Risu native action %s retains its diagnostic while its displayed conflict follows the UI language',
+  async (state) => {
+    setLocale('ko');
+    const code = `RISU_NATIVE_ACTION_${state}`;
+    const result = await rejected(409, code);
+    const original =
+      '현재 상태에서는 이 요청을 완료할 수 없어요. 설정과 작업 상태를 확인해 주세요. (409)';
+    expect(result).toMatchObject({ status: 409, code, message: original });
+    for (const [locale, expected] of [
+      [
+        'en',
+        'This request cannot complete in the current state. Check settings and task status. (409)',
+      ],
+      ['ja', '現在の状態ではこの依頼を完了できません。設定と作業状態を確認してください。(409)'],
+      ['zh', '当前状态下无法完成此请求。请检查设置和任务状态。(409)'],
+      ['ko', original],
+    ] as const) {
+      setLocale(locale);
+      expect(result.displayMessage).toBe(expected);
+      expect(translateMessage(result.message)).toBe(expected);
+      expect(result.message).toBe(original);
+      expect(result.code).toBe(code);
+    }
+  }
+);
+
+test('authored deletion conflict details remain literal after a language change', async () => {
+  const detail = '삭제할 수 없는 제목: 사용자 원고 (fixture).';
+  const result = await rejected(409, detail, 'DELETE');
+  setLocale('en');
+  expect(result.message).toBe(detail);
+  expect(result.displayMessage).toBe(detail);
+  expect(result.code).toBeNull();
+});
+
 test.each(['en', 'ja', 'zh'] as const)(
   'API errors keep Korean message and stable codes in %s UI',
   async (locale) => {

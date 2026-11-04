@@ -26,6 +26,40 @@ async function openPrompt(page: Page, preset: PromptPreset) {
   return page.getByTestId('prompt-editor');
 }
 
+/** A visible SVG can still be clipped to 1px by a parent, so compare its paintable area. */
+async function expectVisibleSaveIcon(button: Locator) {
+  const icon = button.locator('svg');
+  await expect(icon).toBeVisible();
+  const visible = await icon.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    let left = box.left;
+    let right = box.right;
+    let top = box.top;
+    let bottom = box.bottom;
+    for (
+      let parent = node.parentElement;
+      parent && parent.tagName !== 'BUTTON';
+      parent = parent.parentElement
+    ) {
+      const style = getComputedStyle(parent);
+      if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0')
+        return { width: 0, height: 0 };
+      const bounds = parent.getBoundingClientRect();
+      if (style.overflowX !== 'visible' || style.clipPath !== 'none') {
+        left = Math.max(left, bounds.left);
+        right = Math.min(right, bounds.right);
+      }
+      if (style.overflowY !== 'visible' || style.clipPath !== 'none') {
+        top = Math.max(top, bounds.top);
+        bottom = Math.min(bottom, bounds.bottom);
+      }
+    }
+    return { width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+  });
+  expect(visible.width).toBeGreaterThanOrEqual(16);
+  expect(visible.height).toBeGreaterThanOrEqual(16);
+}
+
 async function actionPair(dialog: Locator, confirmName: string, emphasis: 'primary' | 'delete') {
   await expect(dialog).toBeVisible();
   await dialog.evaluate(async (node) => {
@@ -93,6 +127,23 @@ for (const viewport of [
     const editor = await openPrompt(page, preset);
     await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
     const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
+    if (viewport.name === 'mobile') {
+      for (const width of [320, MOBILE_WIDTH]) {
+        await page.setViewportSize({ width, height: MOBILE_HEIGHT });
+        const save = editor.getByRole('button', { name: '프롬프트 저장', exact: true });
+        await expectVisibleSaveIcon(save);
+        for (const name of ['토글 구성', '기본 변수', '편집', '미리보기', '소스']) {
+          const box = await definitions.getByRole('button', { name, exact: true }).boundingBox();
+          expect(box).not.toBeNull();
+          expect(box!.width).toBeGreaterThanOrEqual(44);
+          expect(box!.height).toBeGreaterThanOrEqual(44);
+        }
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
+        ).toBeLessThanOrEqual(1);
+      }
+      await page.setViewportSize(viewport);
+    }
     const add = definitions
       .getByRole('button', { name: '그룹 추가', exact: true })
       .filter({ visible: true });
@@ -289,6 +340,14 @@ for (const viewport of [
     await page.goto('/');
     await navigationAction(page, '서재');
     await editLibraryContent(page, content.title);
+    const save = page.getByRole('button', { name: '변경사항 저장', exact: true });
+    if (viewport.name === 'mobile') {
+      for (const width of [320, MOBILE_WIDTH]) {
+        await page.setViewportSize({ width, height: MOBILE_HEIGHT });
+        await expectVisibleSaveIcon(save);
+      }
+      await page.setViewportSize(viewport);
+    }
     await selectPackageSection(page, '에셋');
     const library = page.getByTestId('library-panel');
     const images = library.getByLabel('Risu 이미지 목록', { exact: true });
@@ -326,8 +385,26 @@ for (const viewport of [
     );
     const stored = (await (await request.get(`/api/content/${content.id}`)).json()) as Content;
     expect(stored.package!.images).toEqual(content.package!.images);
+    let releaseSave: () => void = () => {};
+    if (viewport.name === 'mobile') {
+      const saveGate = new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      });
+      await page.route('**/api/resources/save', async (route) => {
+        await saveGate;
+        await route.continue();
+      });
+    }
     const savedResponse = waitForContentSave(page, content.id);
-    await library.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+    try {
+      await save.click();
+      if (viewport.name === 'mobile') {
+        await expect(save).toHaveAttribute('aria-busy', 'true');
+        await expectVisibleSaveIcon(save);
+      }
+    } finally {
+      releaseSave();
+    }
     const saved = await savedResponse;
     expect(saved.package!.images).toMatchObject([
       { id: 'keep', description: '취소와 제거 후에도 유지할 설명' },

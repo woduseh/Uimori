@@ -1136,7 +1136,7 @@ function App() {
                       onClick={() => openChatSettings()}
                     />
                   )}
-                  <ActionMenu label={t('main.m061')} className="chat-menu">
+                  <ActionMenu label={t('main.m061')} className="chat-menu" viewport>
                     <div
                       className="action-menu-group"
                       role="group"

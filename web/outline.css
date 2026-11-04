@@ -441,6 +441,11 @@
   font-weight: 400;
   margin-top: 3px;
 }
+.outline-reference-picker > summary > small {
+  display: inline;
+  margin: 0;
+  margin-inline-start: 8px;
+}
 .outline-writing-card {
   border-color: var(--accent);
   background: var(--surface-raised);

@@ -1080,7 +1080,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   await source.locator('.folio').click();
   await expect(source.getByTestId('turn-activity')).toHaveCount(0);
   await expect(source).not.toContainText('이번 생성');
-  await expect(source).not.toContainText('실행과 실제 입력 확인');
+  await expect(source).not.toContainText('실행 확인');
   const draft = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
   await draft.fill('시작문을 바꿔도 남겨 둘 다음 장면 초안');
   await source.getByLabel('장면 작업 메뉴', { exact: true }).click();
@@ -1158,7 +1158,7 @@ test('NSUI10 authored opening switches in the same chat, retains the draft, and 
   await activity.locator(':scope > summary').click();
   await expect(activity).toContainText('번역');
   await expect(activity).not.toContainText('이번 생성');
-  await expect(activity).not.toContainText('실행과 실제 입력 확인');
+  await expect(activity).not.toContainText('실행 확인');
   expect((await read()).attempts).toHaveLength(0);
   expect(mainRequests).toEqual([]);
   await page.screenshot({ path: info.outputPath('opening-manual-translation-mobile-dark.png') });

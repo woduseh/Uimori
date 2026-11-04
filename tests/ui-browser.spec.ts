@@ -1754,6 +1754,39 @@ for (const width of [MOBILE_WIDTH, DESKTOP_WIDTH]) {
   });
 }
 
+test('UI chat menu keeps its last action reachable in a short medium viewport', async ({
+  page,
+  request,
+}, info) => {
+  const chat = await seed(request, `짧은 화면 메뉴 ${Date.now()}`, '합성 장면', 1);
+  await page.setViewportSize({ width: 700, height: 600 });
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByTestId('source')).toHaveCount(1);
+  await openChatMenu(page);
+
+  const trigger = page.locator('.chat-menu > summary');
+  const menu = page.locator('.chat-menu > .action-menu-body');
+  await expect(menu).toBeVisible();
+  await expect(menu).toBeInViewport({ ratio: 1 });
+  await menu.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  const lastAction = menu.getByRole('button', { name: `${chat.title} 채팅 삭제`, exact: true });
+  await expect(lastAction).toBeInViewport({ ratio: 1 });
+  const menuBox = (await menu.boundingBox())!;
+  const actionBox = (await lastAction.boundingBox())!;
+  expect(actionBox.y).toBeGreaterThanOrEqual(menuBox.y);
+  expect(actionBox.y + actionBox.height).toBeLessThanOrEqual(menuBox.y + menuBox.height + 1);
+  if (visualReview) await page.screenshot({ path: info.outputPath('chat-menu-short-700.png') });
+
+  await lastAction.focus();
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+});
+
 test('UI common dialogs stay centered with mobile margins, internal scrolling and native dismissal', async ({
   page,
   request,

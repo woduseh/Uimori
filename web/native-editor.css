@@ -620,13 +620,17 @@
     min-width: 44px;
     padding-inline: 8px;
   }
-  .native-editor-save > span {
+  /* Keep the save/pending icon visible while hiding only the toolbar label. */
+  .native-editor-save .settings-save-content > span {
     position: absolute;
     width: 1px;
     height: 1px;
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+  .native-editor-save .settings-save-label::after {
+    content: none;
   }
 }
 .library-page-editing .library-content-editor {

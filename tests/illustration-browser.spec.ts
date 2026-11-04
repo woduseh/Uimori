@@ -514,6 +514,13 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   await dialog.getByLabel('최대 컷 수').selectOption('3');
   await dialog.getByRole('button', { name: '삽화 만들기', exact: true }).click();
   await expect(scene.getByTestId('illustration-task')).toHaveAttribute('data-status', 'running');
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  const cancel = scene.getByTestId('illustration-task').getByRole('button', { name: '취소' });
+  await expect(cancel).toBeVisible();
+  const cancelBox = (await cancel.boundingBox())!;
+  expect(cancelBox.width).toBeGreaterThanOrEqual(44);
+  expect(cancelBox.height).toBeGreaterThanOrEqual(44);
+  await page.setViewportSize({ width: DESKTOP_WIDTH, height: 1000 });
   const input = page.getByLabel('다음 장면 요청', { exact: true });
   await input.fill('두 사람의 다음 이야기를 이어줘.');
   await expect(page.getByRole('button', { name: '원문 생성', exact: true })).toBeEnabled();
@@ -581,6 +588,14 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   );
   await expect(scene.getByTestId('illustration')).toHaveCount(3);
   await page.setViewportSize({ width: MOBILE_WIDTH, height: 844 });
+  for (const control of [
+    scene.locator('[data-placement="hero"]').getByRole('button', { name: '접기', exact: true }),
+    scene.getByRole('button', { name: '모두 접기', exact: true }),
+  ]) {
+    const box = (await control.boundingBox())!;
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
   await scene.locator('[data-placement="hero"]').scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath('storyboard-mobile.png') });
   await scene
@@ -682,6 +697,21 @@ test('ILUI05 styled Markdown keeps its message tree, shows progress and reconnec
     .toBe(3);
   await expect(scene.locator('[data-placement="inline"]')).toHaveCount(2);
   await expect(scene.getByTestId('illustration-supplement')).toHaveCount(0);
+  const slot = surface.locator('.illustration-slot').first();
+  const originalAppFont = await page.evaluate(() =>
+    document.documentElement.style.getPropertyValue('--app-font-family')
+  );
+  await page.evaluate(() =>
+    document.documentElement.style.setProperty('--app-font-family', '"Courier New", monospace')
+  );
+  await expect(slot).toHaveCSS('font-family', /Courier New/u);
+  await slot.evaluate((node) => node.style.setProperty('--font-ui', 'Georgia, serif'));
+  await expect(slot).toHaveCSS('font-family', /Georgia/u);
+  await slot.evaluate((node) => node.style.removeProperty('--font-ui'));
+  await page.evaluate(
+    (value) => document.documentElement.style.setProperty('--app-font-family', value),
+    originalAppFont
+  );
   expect(
     await surface.evaluate(
       (host) =>

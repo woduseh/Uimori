@@ -780,10 +780,10 @@ export const messages = {
     zh: '请求下一个场景',
   },
   'main.m111': {
-    ko: '장면 요청…',
-    en: 'Request a scene…',
-    ja: 'シーンを依頼…',
-    zh: '请求场景…',
+    ko: '요청…',
+    en: 'Write…',
+    ja: '依頼…',
+    zh: '请求…',
   },
   'main.m112': {
     ko: '참고 이미지 첨부',

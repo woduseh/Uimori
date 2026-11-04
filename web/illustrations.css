@@ -283,11 +283,21 @@
 .illustration-task svg {
   flex: none;
 }
+@media (max-width: 767px), (pointer: coarse) {
+  .illustration-toolbar button,
+  .illustration-actions button,
+  .illustration-actions .quiet,
+  .illustration-state .illustration-actions button,
+  .illustration-task .illustration-actions button {
+    min-width: var(--control-h);
+    min-height: var(--control-h);
+  }
+}
 
 /* App-owned cards stay in light DOM; only their positions are slotted into the message. */
 .illustration-slot {
   color: var(--text);
-  font-family: var(--font-ui, sans-serif);
+  font-family: var(--font-ui, var(--app-font-family, sans-serif));
   font-size: var(--font-body);
 }
 .illustration-phases {
