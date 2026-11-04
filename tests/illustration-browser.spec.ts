@@ -352,7 +352,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('3');
   expect(await conflictDialog.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   await conflictDialog.press('Escape');
-  await expect(section.getByRole('alert').filter({ hasText: '초안은 유지했어요' })).toBeVisible();
+  await expect(section.getByRole('alert')).toContainText('최신 설정을 불러와 주세요');
   await expect(limit).toHaveValue('4');
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기', exact: true }).click();
   const reloadDialog = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
@@ -366,7 +366,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
     else await route.continue();
   });
   await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
-  await expect(reloadDialog.getByRole('alert')).toContainText('초안은 유지했어요');
+  await expect(reloadDialog.getByRole('alert')).toContainText('설정을 불러오지 못했어요');
   await expect(limit).toHaveValue('4');
   await page.unroute('**/api/illustration-settings');
   await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
