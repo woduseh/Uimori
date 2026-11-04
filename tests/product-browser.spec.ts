@@ -191,7 +191,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
       .filter({ has: page.getByRole('heading', { name: added.title, exact: true }) })
   ).not.toContainText('v1');
   const editor = await promptTab(page);
-  await editor.getByLabel('현재 프롬프트 프리셋', { exact: true }).selectOption(choice.prompt.id);
+  await editor.getByLabel('현재 프롬프트', { exact: true }).selectOption(choice.prompt.id);
   await editor.getByText('창작 옵션', { exact: true }).click();
   await editor.locator('.prompt-option-group > summary').first().click();
   const composer = editor;
@@ -208,7 +208,7 @@ test('P01 packages use latest settings and prompt-owned creative choices replace
     JSON.stringify('0')
   );
   await expect(composer.getByLabel('합성 상세도', { exact: true })).toHaveValue('1');
-  await expect(editor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeEnabled();
+  await expect(editor.getByLabel('현재 프롬프트', { exact: true })).toBeEnabled();
   const run = await send(page, '(OOC: Continue the harbor scene.) SYNTHETIC_P01');
   await expect
     .poll(

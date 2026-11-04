@@ -558,8 +558,8 @@ test('HELPMESSAGE edits saved requests and answers without rerunning completed w
     user = panel.locator(`[data-message-id="${view.messages[0].id}"]`),
     answer = panel.locator(`[data-message-id="${view.messages[1].id}"]`);
   await panel.getByLabel('도우미에게 요청').fill('다음 요청으로 남겨 둘 초안');
-  await user.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
-  await page.getByRole('button', { name: '문맥용 요청 수정', exact: true }).click();
+  await user.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true }).click();
   await user.getByLabel('요청 수정 내용', { exact: true }).fill('수정한 보관 요청');
   await user.getByRole('button', { name: '입력 저장', exact: true }).click();
   await expect(user.getByTestId('source-request')).toHaveText('수정한 보관 요청');
@@ -645,11 +645,11 @@ test('HELPMESSAGE conflict review preserves request and response drafts in older
     const saved = view.messages[index];
     const article = panel.locator(`[data-message-id="${saved.id}"]`);
     await article
-      .getByLabel(role === 'user' ? '요청과 문맥 메뉴' : '메시지 메뉴', { exact: true })
+      .getByLabel(role === 'user' ? '요청 및 컨텍스트 메뉴' : '메시지 메뉴', { exact: true })
       .click();
     await page
       .getByRole('button', {
-        name: role === 'user' ? '문맥용 요청 수정' : '응답 수정',
+        name: role === 'user' ? '컨텍스트용 요청 수정' : '응답 수정',
         exact: true,
       })
       .click();
@@ -768,7 +768,7 @@ test('HELPMESSAGE pair and following deletion discard loaded older messages whil
   for (const messageId of removedPair)
     await expect(panel.locator(`[data-message-id="${messageId}"]`)).toHaveCount(0);
   const oldRequest = panel.locator(`[data-message-id="${followingStart}"]`);
-  await oldRequest.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
+  await oldRequest.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
   await page.getByRole('button', { name: '여기부터 삭제', exact: true }).click();
   const followingConfirmation = page.getByRole('alertdialog', {
     name: '여기부터 삭제',
@@ -1016,7 +1016,7 @@ test('HELPUI12 helper settings event refreshes an open model editor without repl
   await expect(draft).toHaveValue('9');
   await editor.getByRole('button', { name: '역할별 모델 설정 저장' }).click();
   const conflict = page.getByRole('alertdialog', {
-    name: '역할별 모델 저장 내용 확인',
+    name: '역할별 모델 저장본 확인',
     exact: true,
   });
   await expect(conflict).toBeVisible();
@@ -1988,8 +1988,8 @@ test('HELPUI05 explicitly retries a saved edited request, preserves composer and
   await details.locator(':scope > summary').click();
   await expect(details.getByText('모델: 이전 시도의 도우미 모델', { exact: true })).toBeVisible();
   await panel.getByLabel('도우미에게 요청').fill('새 요청 작성 중');
-  await panel.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
-  await page.getByRole('button', { name: '문맥용 요청 수정', exact: true }).click();
+  await panel.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
+  await page.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true }).click();
   await panel.getByLabel('요청 수정 내용').fill('고친 요청');
   await panel.getByRole('button', { name: '입력 저장', exact: true }).click();
   await expect(panel.getByTestId('source-request')).toHaveText('고친 요청');
@@ -2071,7 +2071,7 @@ for (const width of DEFAULT_WIDTHS) {
         )
     ).toBe(true);
     await expect(fullText).toBeHidden();
-    await expect(record.getByText('작업에 실패했어요', { exact: true })).toBeVisible();
+    await expect(record.getByText('실패', { exact: true })).toBeVisible();
     await expect(record.getByText('SYNTHETIC_FAILURE', { exact: true })).toBeVisible();
     await expect(
       record.getByText('저장한 변경 1건, 다음 요청 옵션', { exact: true })
@@ -2387,7 +2387,7 @@ test('DISPLAY helper incomplete saved answers stay collapsed and committed chang
   const row = panel.locator(`.helper-task[data-task-id="${task.id}"]`);
   await row.getByTestId('helper-task-activity').locator(':scope > summary').click();
   await row.getByRole('button', { name: '진행 중인 도우미 작업 취소', exact: true }).click();
-  await expect(row).toContainText('작업을 취소했어요');
+  await expect(row).toContainText('취소됨');
   expect(state.streamReads.get(task.id) ?? 0).toBe(0);
   await row.locator('.partial-response > summary').click();
   await expect(row.locator('.streaming-text')).toHaveText('취소 직전 받은 내용');
@@ -2594,7 +2594,7 @@ test('HELPACTIVITY observed stages retain tool errors and cancellation on deskto
   await page.screenshot({ path: info.outputPath('helper-activity-mobile.png'), fullPage: true });
   await row.getByRole('button', { name: '진행 중인 도우미 작업 취소', exact: true }).click();
   await expect(row.getByTestId('helper-task-activity').locator(':scope > summary')).toContainText(
-    '작업을 취소했어요'
+    '취소됨'
   );
   await expect(panel.getByTestId('helper-current-activity')).toHaveCount(0);
   await expect(row.getByTestId('helper-task-activity')).not.toHaveAttribute('open');

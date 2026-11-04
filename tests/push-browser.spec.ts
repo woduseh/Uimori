@@ -354,7 +354,7 @@ test('PWUI07 a worker notification focuses a semantic scene without reloading; a
   expect(page.url()).toBe(before);
   await expect(editor).toHaveValue('저장하지 않은 원고 초안');
   await page.screenshot({ path: info.outputPath('notification-edit-preserved.png') });
-  await scene.getByRole('button', { name: '수정 취소', exact: true }).click();
+  await scene.getByRole('button', { name: '편집 취소', exact: true }).click();
   await banner.getByRole('button', { name: '알림으로 이동', exact: true }).click();
   await expect
     .poll(() => new URL(page.url()).searchParams.get('source'))

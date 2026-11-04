@@ -550,7 +550,7 @@ test('PMUI02 connection clone requires review and stale edits retain their draft
   );
   await form.getByRole('button', { name: '프로바이더 변경 저장', exact: true }).click();
   expect((await put).postDataJSON().expectedRevision).toBe(1);
-  const conflictDialog = page.getByRole('alertdialog', { name: '저장 내용 변경 확인' });
+  const conflictDialog = page.getByRole('alertdialog', { name: '저장본 확인' });
   await expect(
     conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true })
   ).toBeFocused();

@@ -381,7 +381,7 @@ test('DECISION settings role model conflict review keeps the editable draft and 
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   await editor.getByRole('button', { name: '역할별 모델 설정 저장', exact: true }).click();
-  const dialog = page.getByRole('alertdialog', { name: '역할별 모델 저장 내용 확인', exact: true });
+  const dialog = page.getByRole('alertdialog', { name: '역할별 모델 저장본 확인', exact: true });
   await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   const row = dialog
     .getByLabel('현재 저장본')
@@ -511,7 +511,7 @@ test('DECISION settings chat prompt option conflict review preserves local value
   const remoteRevision = ((await remote.json()) as ChatOptionState).revision;
   const save = panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true });
   await save.click();
-  const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장 내용 확인', exact: true });
+  const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장본 확인', exact: true });
   {
     let failReview = true;
     await page.route(`**/api/chats/${chat.id}/options`, async (route) => {
@@ -539,7 +539,7 @@ test('DECISION settings chat prompt option conflict review preserves local value
   await expect(dialog).toHaveCSS('opacity', '1');
   await page.screenshot({ path: test.info().outputPath('option-review-chat-412.png') });
   await expect(dialog.getByLabel('현재 저장본')).not.toContainText('보존할 내 문체');
-  await dialog.getByRole('button', { name: '채팅 옵션 저장 내용 확인 닫기', exact: true }).click();
+  await dialog.getByRole('button', { name: '채팅 옵션 저장본 확인 닫기', exact: true }).click();
   await expect(field).toHaveValue('보존할 내 문체');
   // Reviewing or dismissing a conflict cannot silently grant a newer CAS revision.
   await save.click();

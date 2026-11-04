@@ -423,7 +423,7 @@ for (const width of DEFAULT_WIDTHS) {
     await expect(settings.getByText(/다른 요청에서 채팅 설정이 바뀌었어요/)).toBeVisible();
     // Generation owns one save action; profile reload remains in the material settings.
     await selectChatSettingsSection(page, '사용 자료');
-    await settings.getByRole('button', { name: '장착 설정 다시 불러오기', exact: true }).click();
+    await settings.getByRole('button', { name: '사용 자료 다시 불러오기', exact: true }).click();
     await selectChatSettingsSection(page, '생성 설정');
     await expect(promptSelect).toHaveValue('');
     await promptSelect.selectOption(preset.id);

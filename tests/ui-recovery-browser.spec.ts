@@ -307,7 +307,7 @@ for (const viewport of viewports) {
       const definitions = editor.getByRole('region', { name: '토글 정의 편집기', exact: true });
       const editView = definitions.getByRole('button', { name: '편집', exact: true });
       const previewView = definitions.getByRole('button', { name: '미리보기', exact: true });
-      const rawView = definitions.getByRole('button', { name: '원문', exact: true });
+      const rawView = definitions.getByRole('button', { name: '소스', exact: true });
       await expect(editView).toHaveAttribute('aria-pressed', 'true');
       await expect(
         definitions.getByRole('button', { name: '토글 구성', exact: true })
@@ -349,11 +349,11 @@ for (const viewport of viewports) {
       await expect(save).toBeDisabled();
       await chooseGroup('기본 입력');
       await rawView.click();
-      let raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      let raw = definitions.getByLabel('토글 정의 소스', { exact: true });
       await expect(raw).toHaveValue(declarations);
       const duplicateKey = `${declarations}\nshort=Duplicate key=text`;
       await raw.fill(duplicateKey);
-      await definitions.getByRole('button', { name: '원문 적용', exact: true }).click();
+      await definitions.getByRole('button', { name: '소스 적용', exact: true }).click();
       await expect(
         editor.getByRole('alert').filter({ hasText: 'RISU_NATIVE_PRESET_TOGGLE_KEY' })
       ).toBeVisible();
@@ -382,7 +382,7 @@ for (const viewport of viewports) {
       await editView.click();
       await definitions.getByRole('button', { name: '토글 구성', exact: true }).click();
       await rawView.click();
-      raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      raw = definitions.getByLabel('토글 정의 소스', { exact: true });
       await expect(raw).toHaveValue(declarations);
       await editView.click();
 
@@ -464,7 +464,7 @@ for (const viewport of viewports) {
 
       // Both valid raw documents survive tab switches and are included in the ordinary save.
       await rawView.click();
-      raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      raw = definitions.getByLabel('토글 정의 소스', { exact: true });
       const editedSource = await raw.inputValue();
       const withPendingSource = `${editedSource}\nsecond unknown line`;
       await raw.fill(withPendingSource);
@@ -472,7 +472,7 @@ for (const viewport of viewports) {
       await editor.getByRole('tab', { name: '구성', exact: true }).click();
       await editor.getByRole('tab', { name: '변수와 토글', exact: true }).click();
       await rawView.click();
-      raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      raw = definitions.getByLabel('토글 정의 소스', { exact: true });
       await expect(raw).toHaveValue(withPendingSource);
       await definitions.getByRole('button', { name: '기본 변수', exact: true }).click();
       const rawDefaults = definitions.getByLabel('Risu 기본 변수', { exact: true });
@@ -480,7 +480,7 @@ for (const viewport of viewports) {
       await rawDefaults.fill(withPendingDefaults);
       await expect(save).toBeEnabled();
       await definitions.getByRole('button', { name: '토글 구성', exact: true }).click();
-      raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+      raw = definitions.getByLabel('토글 정의 소스', { exact: true });
       await expect(raw).toHaveValue(withPendingSource);
       const responsePromise = nextSave(page);
       await save.click();
@@ -587,8 +587,8 @@ for (const viewport of viewports) {
         '변수와 토글 초기값',
         '배경 HTML과 CSS',
         'Lua, 트리거, 정규식',
-        '연결 모듈',
-        '원문 JSON',
+        '함께 쓰는 모듈',
+        'JSON 소스',
       ])
         await expect(advancedNav.getByRole('button', { name: label, exact: true })).toBeVisible();
 
@@ -596,7 +596,7 @@ for (const viewport of viewports) {
       await advancedWorkspaceFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-display-${viewport.name}.png`) });
 
-      await advancedNav.getByRole('button', { name: '연결 모듈', exact: true }).click();
+      await advancedNav.getByRole('button', { name: '함께 쓰는 모듈', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
       const moduleEditor = editor.getByLabel('패키지 모듈과 기능 편집', { exact: true });
       const modulePicker = moduleEditor.getByRole('button', {
@@ -664,7 +664,7 @@ for (const viewport of viewports) {
       await advancedWorkspaceFits(page, editor);
       await page.screenshot({ path: info.outputPath(`bot-advanced-scripts-${viewport.name}.png`) });
       await editor.getByLabel('트리거 이름', { exact: true }).fill('Edited arrival trigger');
-      await editor.getByLabel('Lua 원문', { exact: true }).fill('return "edited"');
+      await editor.getByLabel('Lua 소스', { exact: true }).fill('return "edited"');
       await editor.getByText('실행 조건과 순서 (원문 편집)', { exact: true }).click();
       const triggerRaw = editor.getByLabel('트리거 원문 JSON', { exact: true });
       const pendingTriggerRaw = '{"unfinished":';
@@ -690,7 +690,7 @@ for (const viewport of viewports) {
       await page.screenshot({ path: info.outputPath(`bot-advanced-regex-${viewport.name}.png`) });
 
       // An unapplied source document remains byte-for-byte intact while visiting other advanced panes.
-      await advancedNav.getByRole('button', { name: '원문 JSON', exact: true }).click();
+      await advancedNav.getByRole('button', { name: 'JSON 소스', exact: true }).click();
       const raw = editor.getByLabel('Risu 원문 JSON', { exact: true });
       const pendingRaw = '{"unfinished":';
       await raw.fill(pendingRaw);
@@ -701,7 +701,7 @@ for (const viewport of viewports) {
       );
       await advancedNav.getByRole('button', { name: '배경 HTML과 CSS', exact: true }).click();
       await advancedWorkspaceFits(page, editor);
-      await advancedNav.getByRole('button', { name: '원문 JSON', exact: true }).click();
+      await advancedNav.getByRole('button', { name: 'JSON 소스', exact: true }).click();
       await expect(raw).toHaveValue(pendingRaw);
       await editor.getByRole('button', { name: '입력 되돌리기', exact: true }).click();
       await editor.getByRole('tab', { name: '첫 메시지', exact: true }).click();

@@ -121,7 +121,7 @@ for (const width of [360, 1440]) {
     await scene.getByRole('button', { name: '원문 수정', exact: true }).click();
     const field = scene.getByRole('textbox', { name: '원문 수정 내용', exact: true });
     const save = scene.getByRole('button', { name: '원문 저장', exact: true });
-    const cancel = scene.getByRole('button', { name: '수정 취소', exact: true });
+    const cancel = scene.getByRole('button', { name: '편집 취소', exact: true });
     const open = scene.getByRole('button', { name: '선택 구절 퇴고', exact: true });
     await expect(open).toBeDisabled();
     await choose(field);

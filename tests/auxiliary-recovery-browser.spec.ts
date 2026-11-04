@@ -94,7 +94,7 @@ test('translation failures show safe causes while retired status jobs stay hidde
       await expect(failure).toContainText(code);
       await expect(failure).not.toContainText('구간을 자동');
       await expect(
-        failure.getByRole('button', { name: '현재 설정으로 번역 재시도' })
+        failure.getByRole('button', { name: '현재 설정으로 번역 다시 시도' })
       ).toBeVisible();
     }
     jobs[1].error = 'TRANSLATION_REFUSAL_CHECK_FAILED';

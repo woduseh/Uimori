@@ -452,7 +452,7 @@ test('UI05 UI10 late auxiliary completion and retry preserve source and current 
       await turnActivity.locator(':scope > summary').click();
     await turnActivity
       .locator(`[data-testid="job-translation"][data-job-id="${failed.id}"]`)
-      .getByRole('button', { name: '현재 설정으로 번역 재시도', exact: true })
+      .getByRole('button', { name: '현재 설정으로 번역 다시 시도', exact: true })
       .click();
     await expect
       .poll(
@@ -1320,7 +1320,7 @@ test('UI17 prompts use latest settings and concurrent edits preserve unsaved tex
   await expect
     .poll(async () => (await (await request.get('/api/prompt-workspace')).json()).main.program)
     .toEqual(createDefaultRisuPrompt('Latest library writing prompt.', 'main'));
-  await expect(editor.getByLabel('현재 프롬프트 프리셋', { exact: true })).toHaveValue(first.id);
+  await expect(editor.getByLabel('현재 프롬프트', { exact: true })).toHaveValue(first.id);
   await expect(editor.getByRole('button', { name: '최신 저장본 적용', exact: true })).toHaveCount(
     0
   );
@@ -1649,7 +1649,7 @@ test('UI18 two-tab conflicts preserve reloadable drafts and manual translation s
       .getByRole('button', { name: '현재 입력 유지', exact: true })
       .click();
     expect((await data(request, chat.id)).sources[0].text).toBe(winner);
-    await page.getByRole('button', { name: '수정 취소', exact: true }).click();
+    await page.getByRole('button', { name: '편집 취소', exact: true }).click();
     expect(
       await page.evaluate(
         (id) => sessionStorage.getItem(`uimori:text-draft:${id}:original`),
@@ -1962,7 +1962,7 @@ test('UI whole-source translation retains completed results across retry and can
     if ((await activity.getAttribute('open')) === null)
       await activity.locator(':scope > summary').click();
     const retry = scene
-      .getByRole('button', { name: '현재 설정으로 번역 재시도', exact: true })
+      .getByRole('button', { name: '현재 설정으로 번역 다시 시도', exact: true })
       .filter({ visible: true })
       .first();
     await expect(retry).toBeVisible();

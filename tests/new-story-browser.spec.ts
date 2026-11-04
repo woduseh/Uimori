@@ -982,7 +982,7 @@ test('NSUI02 native authoring preserves raw drafts and starts with the rendered 
   await library.getByRole('tab', { name: '첫 메시지', exact: true }).click();
   await library.getByLabel('기본 첫 메시지', { exact: true }).fill('<selector> Edited');
   await library.getByRole('tab', { name: '고급 설정', exact: true }).click();
-  await library.getByRole('button', { name: '원문 JSON', exact: true }).click();
+  await library.getByRole('button', { name: 'JSON 소스', exact: true }).click();
   await library.getByLabel('Risu 원문 JSON').fill('[{"unfinished":');
   const save = library.getByRole('button', { name: '변경사항 저장', exact: true });
   await expect(save).toBeEnabled();
