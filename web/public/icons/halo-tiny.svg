@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+<title>Kozeki Ui halo, compact 16px</title><rect width="64" height="64" rx="12" fill="#14141b"/>
+<g stroke="#f1e2d5" fill="none" stroke-linecap="butt" stroke-linejoin="round">
+<circle cx="32" cy="32" r="26.5" stroke-width="3.5"/>
+<circle cx="32" cy="32" r="15.3" stroke-width="3.2"/>
+<path d="M32 16v12.4 M35.2 32H48.2" stroke-width="3.2"/>
+<circle cx="32" cy="32" r="3.6" stroke-width="3"/>
+</g></svg>

@@ -39,6 +39,30 @@ test('manifest has stable root identity and valid standalone/maskable icons with
   expect(readFileSync('web/index.html', 'utf8')).toContain('rel="manifest"');
 });
 
+test('favicon sizes and transparent in-app halo stay consistent', async () => {
+  for (const [name, size] of [
+    ['icons/favicon-16.png', 16],
+    ['icons/favicon-32.png', 32],
+    ['icons/favicon-48.png', 48],
+    ['favicon.png', 64],
+    ['icons/apple-touch-icon.png', 180],
+  ] as const) {
+    const metadata = await sharp(join('web/public', name)).metadata();
+    expect(metadata.format).toBe('png');
+    expect([metadata.width, metadata.height]).toEqual([size, size]);
+  }
+
+  const logo = readFileSync('web/public/icons/halo-mark.svg', 'utf8');
+  expect(logo).not.toContain('<rect');
+  const { data } = await sharp(Buffer.from(logo))
+    .resize(64, 64)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  expect(data[3]).toBe(0);
+  expect(data.some((channel, index) => index % 4 === 3 && channel > 0)).toBe(true);
+});
+
 test('service worker activation is cache-free and never intercepts or replays authoring/network requests', async () => {
   const callbacks = new Map<
     string,
