@@ -431,6 +431,12 @@ export const messages = {
     ja: '最大枚数',
     zh: '最多图片数',
   },
+  'reader.illustrationDirection': {
+    ko: '이번 삽화 연출 (선택)',
+    en: 'Direction for these illustrations (optional)',
+    ja: '今回の挿絵の演出（任意）',
+    zh: '本次插图构思（可选）',
+  },
   'reader.images': {
     ko: '컷',
     en: ' images',

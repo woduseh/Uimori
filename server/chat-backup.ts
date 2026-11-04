@@ -1,5 +1,9 @@
 import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import { remapChatAuthoring } from './chat-copy-authoring.js';
+import {
+  checkedPortableIllustrationReferences,
+  remapIllustrationPackageReferences,
+} from './illustration-reference-copy.js';
 import { mapCopiedMessageTexts } from './chat-copy-messages.js';
 import { rewriteTranscriptMedia, remapTranscriptRequestImages } from './chat-media.js';
 import type { Store } from './store.js';
@@ -47,6 +51,8 @@ function checkedBackup(value: unknown, binary = false): ChatBackup {
     const copy = record(raw);
     validateChatTranscript(copy.transcript);
     const state = record(copy.state);
+    if (state.illustrationReferences !== undefined)
+      checkedPortableIllustrationReferences(state.illustrationReferences);
     if (state.storyGuide !== undefined)
       state.storyGuide = normalizeStoryGuideConfig(state.storyGuide);
     validateChatVariableState(state.variables);
@@ -121,6 +127,12 @@ export function importPreparedChatBackup(
     );
     const chats = original.chats.map((originalCopy, index) => {
       const copy = structuredClone(originalCopy);
+      if (copy.state.illustrationReferences)
+        remapIllustrationPackageReferences(
+          copy.state.illustrationReferences,
+          copy.transcript.packageAttachments,
+          remap
+        );
       copy.transcript.packageAttachments = copy.transcript.packageAttachments.map((ref) => ({
         ...ref,
         id: remap.get(ref.id)!,
@@ -244,6 +256,13 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
         base64: converted.bytes.toString('base64'),
       });
     }
+    if (copy.state.illustrationReferences)
+      for (const image of checkedPortableIllustrationReferences(copy.state.illustrationReferences)
+        .images) {
+        const converted = await processImage(Buffer.from(image.base64, 'base64'));
+        image.mime = converted.mime;
+        image.base64 = converted.bytes.toString('base64');
+      }
     copies.push(copy);
   }
   return store.transaction(() => {
@@ -263,6 +282,12 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
       ])
     );
     const chats = copies.map((copy, index) => {
+      if (copy.state.illustrationReferences)
+        remapIllustrationPackageReferences(
+          copy.state.illustrationReferences,
+          copy.transcript.packageAttachments,
+          remap
+        );
       copy.transcript.packageAttachments = copy.transcript.packageAttachments.map((ref) => ({
         ...ref,
         id: remap.get(ref.id)!,

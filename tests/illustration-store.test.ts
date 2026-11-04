@@ -624,6 +624,7 @@ describe('illustration storage on the current schema', () => {
       chatId: chat.id,
       revision: 0,
       references: [],
+      characterProfiles: [],
     });
     expect(
       http(() =>
@@ -641,6 +642,7 @@ describe('illustration storage on the current schema', () => {
       chatId: chat.id,
       revision: 1,
       references: [{ ref: asset.id, role: 'character' }],
+      characterProfiles: [],
     });
     expect(
       http(() =>
@@ -684,5 +686,79 @@ describe('illustration storage on the current schema', () => {
       }
     );
     expect(withoutReferences.input.codex?.references).toEqual([]);
+  });
+  test('character appearances freeze at reservation, link images without duplicating roles and survive old clients', () => {
+    const store = databases.create();
+    const { chat, source } = chatWithSource(store);
+    const asset = store.product.createAsset(chat.id, {
+      title: '인물 초상',
+      mime: 'image/png',
+      base64: PNG_BASE64,
+      description: '',
+      actor: '',
+      outfit: '',
+      location: '',
+      allowedUse: 'both',
+    });
+    const profiles = [
+      { id: 'mira', name: '미라', appearance: '짧은 은발과 초록 눈', referenceRef: asset.id },
+      { id: 'june', name: '준', appearance: '검은 곱슬머리' },
+    ];
+    const saved = updateIllustrationReferences(store, chat.id, {
+      expectedRevision: 0,
+      references: [{ ref: asset.id, role: 'style' }],
+      characterProfiles: profiles,
+    });
+    expect(saved.characterProfiles).toEqual(profiles);
+    expect(frozenIllustrationReferences(store, chat.id)).toMatchObject([
+      { ref: asset.id, role: 'character' },
+    ]);
+    const codex = codexModel(store);
+    const job = reserveIllustration(store, source, 'manual', {
+      settings: fixtureSettings({
+        generator: 'codex',
+        codex: { model: { id: codex.id }, useReferences: true },
+      }),
+    });
+    const changed = updateIllustrationReferences(store, chat.id, {
+      expectedRevision: saved.revision,
+      references: [],
+      characterProfiles: [{ ...profiles[0], appearance: '긴 머리' }, profiles[1]],
+    });
+    expect(illustrationJob(store, job.id).input.characterProfiles).toEqual(profiles);
+    expect(illustrationJob(store, job.id).input.codex?.references).toMatchObject([
+      { ref: asset.id, role: 'character' },
+    ]);
+    const oldClient = updateIllustrationReferences(store, chat.id, {
+      expectedRevision: changed.revision,
+      references: [],
+    });
+    expect(oldClient.characterProfiles).toEqual(changed.characterProfiles);
+    expect(
+      http(() =>
+        updateIllustrationReferences(store, chat.id, {
+          expectedRevision: changed.revision,
+          references: [],
+          characterProfiles: [],
+        })
+      ).statusCode
+    ).toBe(409);
+    expect(
+      http(() =>
+        updateIllustrationReferences(store, chat.id, {
+          expectedRevision: oldClient.revision,
+          references: [],
+          characterProfiles: null,
+        })
+      ).statusCode
+    ).toBe(400);
+    store.db.prepare('DELETE FROM assets WHERE id=?').run(asset.id);
+    const textOnlyAfterRemoval = updateIllustrationReferences(store, chat.id, {
+      expectedRevision: oldClient.revision,
+      references: [],
+      characterProfiles: oldClient.characterProfiles,
+    });
+    expect(textOnlyAfterRemoval.characterProfiles).toEqual(oldClient.characterProfiles);
+    expect(frozenIllustrationReferences(store, chat.id)).toEqual([]);
   });
 });

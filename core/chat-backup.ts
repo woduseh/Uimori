@@ -33,6 +33,21 @@ export type ChatCopyState = {
   sceneTitles?: { atIndex: number; title: string }[];
   bookmarks?: import('./reading-state.js').PortableBookmark[];
   authoring?: ChatCopyAuthoring;
+  illustrationReferences?: {
+    references: import('./illustration.js').IllustrationReference[];
+    characterProfiles: import('./illustration.js').IllustrationCharacterProfile[];
+    images: {
+      ref: string;
+      title: string;
+      description: string;
+      actor: string;
+      outfit: string;
+      location: string;
+      allowedUse: 'profile' | 'inline' | 'both';
+      mime: string;
+      base64: string;
+    }[];
+  };
   messages?: CopiedMessageState[];
   variables: ChatVariableState;
   checkpoints: (ChatVariableState | null)[];

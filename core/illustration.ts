@@ -90,10 +90,18 @@ export function defaultIllustrationSettings(): IllustrationSettings {
 }
 
 export type IllustrationReference = { ref: string; role: IllustrationReferenceRole };
+/** Chat-authored visual identity, independent of a particular scene or image. */
+export type IllustrationCharacterProfile = {
+  id: string;
+  name: string;
+  appearance: string;
+  referenceRef?: string;
+};
 export type IllustrationReferences = {
   chatId: string;
   revision: number;
   references: IllustrationReference[];
+  characterProfiles: IllustrationCharacterProfile[];
 };
 /** Resolved at reservation; the worker re-reads bytes by ref and verifies the hash. */
 export type FrozenIllustrationReference = IllustrationReference & {
@@ -105,9 +113,19 @@ export type FrozenIllustrationReference = IllustrationReference & {
 
 export type IllustrationJobInput = {
   version: 1;
+  /** Captured at reservation, including text-only profiles. Missing on older jobs. */
+  characterProfiles?: IllustrationCharacterProfile[];
   /** Missing on existing single-image jobs. */
   task?: 'plan' | 'render' | 'placement';
-  plan?: { maxTargets: number; requestKey?: string; existingTargets: IllustrationMoment[] };
+  plan?: {
+    maxTargets: number;
+    requestKey?: string;
+    existingTargets: IllustrationMoment[];
+    /** One-off manual planning direction, frozen with this reservation. */
+    direction?: string;
+  };
+  /** Context for a new render; retrying the render retains these exact inputs. */
+  redraw?: { changeRequest: string; originalPrompt?: IllustrationPrompt };
   target?: IllustrationTarget;
   placement?: IllustrationPlacementInput;
   generator: ActiveIllustrationGenerator;
@@ -293,6 +311,7 @@ export type IllustrationPlan =
   | { kind: 'generate'; prompt: IllustrationPrompt };
 export type IllustrationScene = {
   text: string;
+  characterProfiles?: Pick<IllustrationCharacterProfile, 'name' | 'appearance'>[];
   styleGuidance: string;
   negativeGuidance: string;
   bot: string | null;
@@ -300,12 +319,14 @@ export type IllustrationScene = {
   /** Automatic runs may decline; manual requests always try to draw. */
   allowSkip: boolean;
   targeted?: boolean;
+  direction?: string;
+  redraw?: IllustrationJobInput['redraw'];
   /** Only labels and roles are shared with a separate Codex prompt model. */
   references?: readonly Pick<CodexIllustrationInputReference, 'role' | 'label'>[];
 };
 // Shared visual semantics; each backend retains its own output grammar and execution contract.
 export const ILLUSTRATION_VISUAL_DIRECTION =
-  'Use the scene and character notes for subjects, actions and identities. Use styleGuidance for their visible treatment: preserve its defining traits and exclusions, adapting flexible details to the moment. Apply only guidance intended for the current generator. Treat style examples as references for rendering.';
+  'The scene determines who is present and what happens. Use each depicted character’s profile and notes for their recognizable features, adapting clothing and appearance to the moment. Follow the style guidance for this generator and use its examples as visual references.';
 
 export const ILLUSTRATION_PROMPT_FIELDS = [
   'prompt: Describe the scene in English. Use tags for simple concepts and natural language for relationships, occlusion and materials. Follow any ComfyUI-specific grammar in styleGuidance and preserve requested trigger words, literal fragments and weights. Otherwise use ordinary visual descriptions.',
@@ -339,13 +360,17 @@ export function illustrationPromptRequest(
     generation,
     contextBudget: contextBudgetForModel(model),
     input: {
-      task: 'Write the illustration prompt JSON for this scene.',
+      task: scene.redraw
+        ? 'Write a new prompt for the same moment with the requested change. Carry forward visual details from the previous prompt that still fit the scene and current style.'
+        : 'Write the illustration prompt JSON for this scene.',
       controls: { purpose: 'illustration-prompt', allowSkip: scene.allowSkip },
       source: {
         allowSkip: scene.allowSkip,
         scene: scene.targeted ? scene.text : excerptScene(scene.text),
         styleGuidance: scene.styleGuidance,
+        ...(scene.characterProfiles?.length ? { characterProfiles: scene.characterProfiles } : {}),
         negativeGuidance: scene.negativeGuidance,
+        ...(scene.redraw ? { redraw: scene.redraw } : {}),
         characterNotes: {
           bot: scene.bot === null ? null : excerptScene(scene.bot, ILLUSTRATION_EXCERPT_TOKENS.bot),
           persona:

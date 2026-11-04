@@ -36,6 +36,7 @@ import { readImportReceipt, saveImportReceipt } from './import-operations.js';
 import type { NativeTransferReceipt } from '../core/native-transfer.js';
 import { processImage } from './image-processing.js';
 import { remapTranscriptRequestImages } from './chat-media.js';
+import { checkedPortableIllustrationReferences } from './illustration-reference-copy.js';
 import {
   acquireImportPreparation,
   checkImportPreparation,
@@ -120,6 +121,12 @@ export function exportNativeArchive(
       if (!/^archive:[a-f0-9]{64}$/u.test(image.base64)) invalid();
       hashes.add(image.base64.slice(8));
     }
+    if (copy.state.illustrationReferences)
+      for (const image of checkedPortableIllustrationReferences(copy.state.illustrationReferences)
+        .images) {
+        if (!/^archive:[a-f0-9]{64}$/u.test(image.base64)) invalid();
+        hashes.add(image.base64.slice(8));
+      }
     for (const entry of [
       ...copy.transcript.entries,
       ...(copy.state.messages ?? []).map((message) => ({
@@ -264,6 +271,8 @@ export async function prepareNativeArchive(
         fields(copy, ['transcript', 'state', 'illustrations']);
         validateChatTranscript(copy.transcript);
         const state = record(copy.state);
+        if (state.illustrationReferences !== undefined)
+          checkedPortableIllustrationReferences(state.illustrationReferences);
         validateChatVariableState(state.variables);
         if (!Array.isArray(state.checkpoints) || !Array.isArray(copy.illustrations)) invalid();
         for (const checkpoint of state.checkpoints)
@@ -352,6 +361,16 @@ export async function prepareNativeArchive(
           image.base64 = `archive:${blob!.hash}`;
           image.mime = 'image/webp';
         }
+        if (copy.state.illustrationReferences)
+          for (const image of checkedPortableIllustrationReferences(
+            copy.state.illustrationReferences
+          ).images) {
+            if (!/^archive:[a-f0-9]{64}$/u.test(image.base64)) invalid();
+            const blob = converted.get(image.base64.slice(8));
+            if (!blob) invalid();
+            image.base64 = `archive:${blob!.hash}`;
+            image.mime = blob!.mime;
+          }
       }
     manifest.images = [...blobs.values()].map(({ path: _path, ...image }) => image);
     const metadataBytes = Buffer.byteLength(JSON.stringify(manifest));

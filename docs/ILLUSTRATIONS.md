@@ -12,8 +12,8 @@
    - Codex: **설정 → 에이전트**에서 ChatGPT 구독으로 로그인한 뒤, Codex 프로바이더의 모델 프리셋을 **Codex 삽화 모델**로 선택해요. **Codex 생성 환경 → 프롬프트 모델**에서 장면을 고르고 그림 프롬프트를 작성할 모델도 선택해요. 같은 Codex 모델을 두 역할에 선택하거나 다른 텍스트 모델에 작성을 맡길 수 있어요. 기존 설정은 사용하던 Codex 삽화 모델로 프롬프트 모델을 초기화해요. 이후 선택을 지우면 다시 고를 때까지 새 삽화를 예약할 수 없어요.
    - ComfyUI: 원격 PC의 주소(`http://192.168.0.10:8188` 같은 형식)와 장면을 그림 설명으로 옮기는 **프롬프트 모델**(어떤 텍스트 모델 프리셋이든 가능)을 지정해요. ComfyUI에서 **Export (API)**로 저장한 워크플로 JSON은 아래 설명의 **삽화 프리셋**에 저장하고 선택해요. **ComfyUI 연결 확인** 버튼은 `GET /system_stats`만 호출해 버전·장치를 보여줘요.
 2. 자동 생성을 켜면 새 본문이 저장될 때 삽화 계획을 예약해요. **자동으로 고를 최대 컷 수**의 기본은 1이에요. 기존 설정을 열어도 자동 생성량이 늘어나지 않아요. 최대 4컷을 선택해도 그릴 순간이 두 곳이면 두 컷만 만들며, 자동 또는 추가 요청은 적절한 새 순간이 없으면 **생략**할 수 있어요.
-3. 각 장면의 ⋯ → **삽화 생성**에서 최대 컷 수를 골라 직접 요청해요. 완료된 그림에는 **접기**와 작은 ⋯ 메뉴가 있어요. **대표 삽화로 지정 / 본문 위치로 보내기**, **현재 설정으로 다시 그리기**, **생성 상세**, **삽화 삭제**를 제공해요. 다시 그리는 동안 기존 그림을 유지하고 성공했을 때만 교체해요. 실패한 작업에는 **다시 요청**, 접수된 ComfyUI 작업에는 **결과 확인**, 진행 중 작업에는 **취소**가 있어요.
-4. 채팅 설정 → 이미지의 **삽화 참고 이미지**에서 채팅에 등록한 이미지나 사용 중인 자료의 이미지를 **캐릭터 디자인** 또는 **그림체**로 지정해요. Codex 경로에서만 사용하며 ComfyUI에는 아직 보내지 않아요.
+3. 각 장면의 ⋯ → **삽화 생성**에서 최대 컷 수를 골라 직접 요청해요. 원하는 시점이나 구도가 있으면 연출 요청을 함께 적을 수 있어요. 이번 계획에서 순간을 고르고 그림 프롬프트를 작성할 때 적용해요. 완료된 그림에는 **접기**와 작은 ⋯ 메뉴가 있어요. **대표 삽화로 지정 / 본문 위치로 보내기**, **현재 설정으로 다시 그리기**, **생성 상세**, **삽화 삭제**를 제공해요. 다시 그릴 때 변경 요청을 적으면 같은 순간의 기존 프롬프트를 참고해 새 그림을 만들어요. 비워 두면 현재 설정으로 새로 해석해요. 다시 그리는 동안 기존 그림을 유지하고 성공했을 때만 교체해요. 실패한 작업에는 **다시 요청**, 접수된 ComfyUI 작업에는 **결과 확인**, 진행 중 작업에는 **취소**가 있어요.
+4. 채팅 설정 → 이미지의 **삽화 참고**에서 채팅에 등록한 이미지나 사용 중인 자료의 이미지를 **캐릭터 디자인** 또는 **그림체**로 지정해요. 인물의 이름과 외형을 글로 저장하거나 참고 이미지를 연결할 수도 있어요. Codex와 ComfyUI 모두 계획과 다시 그리기에 외형 메모를 사용해요. 실제 참고 이미지는 참조를 켠 Codex에만 첨부해요.
 
 ## 컷 계획과 읽기
 
@@ -122,7 +122,7 @@ ComfyUI 결과 확인 간격은 화면에서 설정하지 않으며 새 환경�
 - 상태는 `queued → running → completed | failed | cancelled | interrupted`예요. 취소는 `generation`을 올려 늦게 도착한 결과를 버리고, 서버 재시작은 `running`을 `interrupted`로 바꾸며 자동 재생하지 않아요(`queued`는 다시 실행해요).
 - 생성 결과는 업로드와 같은 64MiB 입력 한도를 사용하고 WebP 변환 뒤 공통 `image_blobs`에 저장해요. `illustration_images`는 이미지 참조를 보관하고 `/api/illustration-images/:id`로 읽어요. 캡션·프롬프트·Codex의 revised prompt는 함께 저장해요. 자동 생략은 이미지 없는 `completed`이며 `diagnostic.skipped`에 이유를 남겨요.
 - Reader(`GET /api/chats/:id/reader`)는 페이지 안 장면의 `illustrations`를 돌려 주고, SSE 이벤트 `illustration.*`와 `illustration-layout.updated`는 해당 장면만 갱신해요. Reader에는 큰 프롬프트·워크플로·전체 계획을 반복 전송하지 않고 생성 상세에서 따로 읽어요. 표시 변경만으로 native HTML을 다시 만들지 않아요. 작업 현황(`reader.activity`)에는 `kind: 'illustration'`으로 나타나며 `activeJobs` 계산에는 넣지 않아 본문 진행 표시를 막지 않아요.
-- 독립 채팅 복사와 개별 백업은 현재 표시하는 성공 결과, 동일 컷의 변형 그룹, 대표 지정, 검증 가능한 원문·번역 위치를 가져와요. 원문 ID가 바뀌므로 문단 index와 텍스트 hash를 검증한 뒤 새 anchor를 만들고, 일치하지 않는 위치는 보조 영역으로 내려요. 기존 위치 없는 백업도 그대로 읽어요. 진행 중인 생성·실패 작업·모델 호출 기록을 재생하지 않아요. 새 사본의 이미지 참조는 원본 채팅 삭제와 독립적이에요.
+- 독립 채팅 복사와 개별 백업은 현재 표시하는 성공 결과, 동일 컷의 변형 그룹, 대표 지정, 검증 가능한 원문·번역 위치를 가져와요. 원문 ID가 바뀌므로 문단 index와 텍스트 hash를 검증한 뒤 새 anchor를 만들고, 일치하지 않는 위치는 보조 영역으로 내려요. 기존 위치 없는 백업도 그대로 읽어요. 진행 중인 생성·실패 작업·모델 호출 기록을 재생하지 않아요. 인물 외형과 참고 이미지 선택도 복원해요. 채팅에 등록한 참고 이미지는 새 사본에 복사하고, 자료에 속한 참고 이미지는 복원한 자료에 다시 연결해요.
 - 참조 이미지는 예약 시 `{ref, role, title, mime, hash, url}`로 고정하고 실행 시 hash가 같은 원본만 읽어요. Codex 전송용 사본은 방향을 보정하고 긴 변을 최대 1536px로 축소해요(확대·자르기 없음). 작은 정지 이미지에는 불필요한 재인코딩을 하지 않으며 애니메이션은 전송용 첫 프레임을 사용해요. 원본 bytes·hash는 저장소에서 바꾸지 않아요. 사이에 삭제된 이미지는 빠지고 작업은 계속돼요.
 - 생성 이미지도 실제 디코더로 읽고 고품질 WebP로 변환해 공통 BLOB 저장소에 보관해요. 이름·설명은 이미지 바이트와 분리해요. 입력 파일·픽셀·프레임 한도는 공통 이미지 처리 경계가 관리해요.
 
@@ -170,12 +170,12 @@ JEV 키 미설정·응답 오류·8초 시간 초과·입력 예산 초과는 `u
 | `POST /api/illustration-presets/selection` | `{scope: global/bot/chat, targetId?, presetId: string/null, expectedRevision}`. 선택 수정 번호는 자료 수정 번호와 별개예요. |
 | `GET /api/illustration-presets/:id/export`, `DELETE /api/illustration-presets/:id` | 파일 내보내기·삭제. 삭제에는 `expectedRevision`이 필요해요. |
 | `POST /api/illustration-settings/comfyui/test` | `{baseUrl, authorizationEnv}`로 `system_stats` 확인. 주소 검증 실패는 400, 연결·응답 실패는 502이며 `{code, comfyui}` 진단을 반환해요. |
-| `GET/PUT /api/chats/:id/illustration-references` | 채팅별 참조 역할. 후보는 채팅 이미지와 장착 자료 이미지. |
-| `POST /api/sources/:id/illustrations` | 수동 계획 예약. `expectedSourceHash?`, `maxTargets?`(기본 1), `idempotencyKey?`. 반환은 이미지가 아닌 `task: plan` 작업이며 이후 렌더 작업이 추가돼요. 테스트 모드에서만 `fixture`. |
+| `GET/PUT /api/chats/:id/illustration-references` | 채팅별 참조 역할과 인물 외형. 후보는 채팅 이미지와 장착 자료 이미지. |
+| `POST /api/sources/:id/illustrations` | 수동 계획 예약. `expectedSourceHash?`, `maxTargets?`(기본 1), `idempotencyKey?`, `direction?`. 반환은 이미지가 아닌 `task: plan` 작업이며 이후 렌더 작업이 추가돼요. 테스트 모드에서만 `fixture`. |
 | `PATCH /api/sources/:id/illustration-presentation` | `{expectedSourceHash, expectedRevision, heroTargetId: string/null}`. 대표 선택만 변경. |
 | `GET /api/sources/:id/illustration-usage` | 현재 원문의 삽화 호출·토큰을 단계별로 조회. 새 작업은 예약하지 않아요. |
 | `POST /api/sources/:id/illustration-placement` | `{expectedSourceHash}`로 현재 타깃의 번역 위치 연결을 명시적으로 다시 요청. 그림은 새로 만들지 않아요. |
-| `POST /api/illustrations/:id/regenerate` | 같은 타깃을 최신 설정으로 다시 그리는 새 작업. 성공 전까지 기존 그림 유지. |
+| `POST /api/illustrations/:id/regenerate` | 같은 타깃을 최신 설정으로 다시 그리는 새 작업. 선택 입력 `changeRequest`로 이번 컷의 변경을 요청해요. 성공 전까지 기존 그림 유지. |
 | `GET /api/chats/:id/illustrations`, `GET /api/illustrations/:id` | 목록과 고정 입력을 포함한 상세. |
 | `POST /api/illustrations/:id/retry`, `/cancel`, `DELETE /api/illustrations/:id` | 실패 작업의 고정 입력 재시도·해당 작업 취소. 새 컷의 삭제는 그 타깃의 그림/생성 기록만 삭제하고, 계획 기록 삭제는 생성된 컷을 지우지 않아요. |
 | `POST /api/illustrations/:id/reconcile` | 기록된 ComfyUI `prompt_id`의 결과만 읽어 저장. 새 생성 없음. 대상이 아니면 409 `ILLUSTRATION_NOT_RECONCILABLE`. |

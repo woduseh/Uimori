@@ -129,6 +129,8 @@ describe('illustration API in test mode with the synthetic generator', () => {
     );
     const saved = await settings({ generator: 'fixture', maxPerSource: 1, maxAutoRetries: 0 });
     expect(saved.revision).toBe(2);
+    for (const direction of [42, 'x'.repeat(8001)])
+      await api(`/api/sources/${source.id}/illustrations`, { direction }, 'POST', 400);
     await api(
       '/api/illustration-settings',
       { expectedRevision: 1, ...saved, revision: undefined },
@@ -137,6 +139,10 @@ describe('illustration API in test mode with the synthetic generator', () => {
     );
     const queued = await api<Illustration>(`/api/sources/${source.id}/illustrations`, {
       expectedSourceHash: source.hash,
+      direction: '  등불을 중심으로 그려 주세요.  ',
+    });
+    expect(await api(`/api/illustrations/${queued.id}`)).toMatchObject({
+      input: { plan: { direction: '등불을 중심으로 그려 주세요.' } },
     });
     expect(queued).toMatchObject({
       status: 'queued',
@@ -153,6 +159,8 @@ describe('illustration API in test mode with the synthetic generator', () => {
     );
     const done = await settle(queued.id);
     expect(done.status).toBe('completed');
+    for (const changeRequest of [42, 'x'.repeat(8001)])
+      await api(`/api/illustrations/${done.id}/regenerate`, { changeRequest }, 'POST', 400);
     expect(done.images).toHaveLength(1);
     const image = await app.inject({ url: done.images[0].url });
     expect(image.statusCode).toBe(200);
@@ -354,7 +362,13 @@ describe('illustration API in test mode with the synthetic generator', () => {
   test('reference roles and ComfyUI settings validate through the API and the connectivity check reports codes', async () => {
     const { api, chat, settings, item } = await setup();
     const empty = await api(`/api/chats/${chat.id}/illustration-references`);
-    expect(empty).toEqual({ chatId: chat.id, revision: 0, references: [], candidates: [] });
+    expect(empty).toEqual({
+      chatId: chat.id,
+      revision: 0,
+      references: [],
+      characterProfiles: [],
+      candidates: [],
+    });
     await api(
       `/api/chats/${chat.id}/illustration-references`,
       { expectedRevision: 0, references: [{ ref: 'missing', role: 'style' }] },

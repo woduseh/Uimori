@@ -216,15 +216,24 @@ export function useIllustrationLayout({
 function useIllustrationAction({ refresh, onError }: Actions) {
   const locked = useRef(false);
   const [busy, setBusy] = useState(false);
-  const act = async (path: string, body: unknown = {}, method = 'POST') => {
+  const act = async (
+    path: string,
+    body: unknown = {},
+    method = 'POST',
+    onAccepted?: () => void,
+    onRejected?: (message: string) => void
+  ) => {
     if (locked.current) return;
     locked.current = true;
     setBusy(true);
+    let accepted = false;
     try {
       await api(path, body, method);
+      accepted = true;
+      onAccepted?.();
       await refresh();
     } catch (cause) {
-      onError((cause as Error).message);
+      (accepted ? onError : (onRejected ?? onError))((cause as Error).message);
       await refresh().catch(() => undefined);
     } finally {
       locked.current = false;
@@ -237,10 +246,12 @@ function TaskButtons({
   job,
   busy,
   act,
+  onRedraw,
 }: {
   job: Illustration;
   busy: boolean;
   act: (path: string) => Promise<void>;
+  onRedraw?: (opener: HTMLButtonElement) => void;
 }) {
   useI18n();
   return (
@@ -267,12 +278,12 @@ function TaskButtons({
           {t('visuals.m109')}
         </button>
       )}
-      {job.error === 'ILLUSTRATION_CODEX_CONTENT_BLOCKED' && job.target && (
+      {job.error === 'ILLUSTRATION_CODEX_CONTENT_BLOCKED' && job.target && onRedraw && (
         <button
           type="button"
           className="secondary"
           disabled={busy}
-          onClick={() => void act(`/illustrations/${job.id}/regenerate`)}
+          onClick={(event) => onRedraw(event.currentTarget)}
         >
           {t('visuals.m110')}
         </button>
@@ -394,6 +405,15 @@ function IllustrationCard({
   useI18n();
   const { job, picture, stale } = cut;
   const active = illustrationActive(job);
+  const [redrawOpen, setRedrawOpen] = useState(false);
+  const [changeRequest, setChangeRequest] = useState('');
+  const [redrawError, setRedrawError] = useState('');
+  const redrawOpener = useRef<HTMLElement | null>(null);
+  const openRedraw = (opener: HTMLElement) => {
+    redrawOpener.current = opener;
+    setRedrawError('');
+    setRedrawOpen(true);
+  };
   const { busy, act } = useIllustrationAction({ refresh, onError });
   const element = useRef<HTMLElement>(null);
   const [ready, setReady] = useState(!!picture?.images.length);
@@ -486,7 +506,12 @@ function IllustrationCard({
                     type="button"
                     className="secondary"
                     disabled={busy || active}
-                    onClick={() => void act(`/illustrations/${job.id}/regenerate`)}
+                    onClick={(event) =>
+                      openRedraw(
+                        event.currentTarget.closest('details')?.querySelector('summary') ??
+                          event.currentTarget
+                      )
+                    }
                   >
                     {t('visuals.m129')}
                   </button>
@@ -540,7 +565,7 @@ function IllustrationCard({
             })}
             {!active && job.error && <small> {job.error}</small>}
           </p>
-          <TaskButtons job={job} busy={busy} act={act} />
+          <TaskButtons job={job} busy={busy} act={act} onRedraw={openRedraw} />
         </div>
       )}
       {illustrationSkipped(job) && (
@@ -563,6 +588,58 @@ function IllustrationCard({
           </details>
         )}
       </div>
+      <Dialog
+        open={redrawOpen}
+        onClose={() => {
+          if (!busy) setRedrawOpen(false);
+        }}
+        onAfterClose={() => redrawOpener.current?.focus()}
+        title={t('visuals.m129')}
+      >
+        <label>
+          {t('visuals.redrawChangeRequest')}
+          <textarea
+            rows={3}
+            maxLength={8000}
+            value={changeRequest}
+            disabled={busy}
+            onChange={(event) => setChangeRequest(event.target.value)}
+          />
+        </label>
+        {redrawError && (
+          <p className="error" role="alert">
+            {translateMessage(redrawError)}
+          </p>
+        )}
+        <div className="form-actions">
+          <button
+            type="button"
+            className="secondary"
+            disabled={busy}
+            onClick={() => setRedrawOpen(false)}
+          >
+            {t('reader.close')}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void act(
+                `/illustrations/${picture?.id ?? job.id}/regenerate`,
+                { changeRequest: changeRequest.trim() || undefined },
+                'POST',
+                () => {
+                  setRedrawOpen(false);
+                  setChangeRequest('');
+                },
+                setRedrawError
+              )
+            }
+          >
+            {busy ? t('reader.reserving') : t('visuals.m129')}
+          </button>
+        </div>
+      </Dialog>
       <Dialog
         open={detailOpen}
         onClose={() => setDetailOpen(false)}

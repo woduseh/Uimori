@@ -1,4 +1,4 @@
-import { legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
+import { legacyChatBackupFixture, legacyChatBackupWithBot } from './fixtures/legacy-backup.js';
 import { afterEach, expect, test } from 'vitest';
 import Fastify from 'fastify';
 import { createHash, randomBytes } from 'node:crypto';
@@ -34,6 +34,12 @@ import type { Content } from '../core/product.js';
 import { prepareStoredRisuImport } from '../server/risu-import-prepared.js';
 import { saveImportReceipt } from '../server/import-operations.js';
 import { startImportStagingCleanup } from '../server/import-staging-cleanup.js';
+import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
+import {
+  frozenIllustrationReferences,
+  illustrationReferences,
+  updateIllustrationReferences,
+} from '../server/illustrations.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -239,6 +245,79 @@ test('chat archive restores authored resources without execution and recovers re
     saveImportReceipt(target, `other-import-${index}`, 'digest', { index });
   expect(importChatBackupArchiveRequest(target, command).created).toBe(false);
   expect(target.chats()).toHaveLength(1);
+});
+
+test('chat copies and backups preserve character appearances and remap only their owned images', async () => {
+  const source = database();
+  const original = await bot(source);
+  const chat = createFixtureChat(source, 'Character references', { botId: original.id });
+  const local = source.product.createAsset(chat.id, {
+    title: '채팅 초상',
+    mime: 'image/png',
+    base64: png.toString('base64'),
+    description: '',
+    actor: '',
+    outfit: '',
+    location: '',
+    allowedUse: 'both',
+  });
+  const packageRef = `package:${original.id}:bot:asset-0`;
+  const profiles = [
+    { id: 'one', name: '하나', appearance: '푸른 눈과 긴 머리', referenceRef: local.id },
+    { id: 'two', name: '둘', appearance: '은빛 머리', referenceRef: packageRef },
+    { id: 'three', name: '셋', appearance: '주근깨' },
+  ];
+  updateIllustrationReferences(source, chat.id, {
+    expectedRevision: 0,
+    references: [{ ref: packageRef, role: 'style' }],
+    characterProfiles: profiles,
+  });
+  const copy = captureChatCopy(source, chat.id);
+  expect(copy.state.illustrationReferences?.images).toHaveLength(1);
+  const localCopy = restoreChatCopy(source, copy, 'character-local-copy');
+  const localSaved = illustrationReferences(source, localCopy.id);
+  expect(localSaved.characterProfiles[0].referenceRef).not.toBe(local.id);
+  expect(localSaved.characterProfiles[1].referenceRef).toBe(packageRef);
+  expect(source.product.assets(localCopy.id)).toHaveLength(1);
+
+  const archive = await bytes(exportChatBackupArchive(source, chat.id));
+  const target = database();
+  const preview = await prepareNativeArchive(target, upload(target, archive), 'chat');
+  const restored = importChatBackupArchiveRequest(target, {
+    preparedId: preview.preparedId,
+    digest: preview.digest,
+    idempotencyKey: 'characters-archive',
+  }).chat;
+  const jsonTarget = database();
+  const jsonChat = (
+    await importChatBackup(jsonTarget, {
+      backup: legacyChatBackupFixture(source, chat.id),
+      idempotencyKey: 'characters-json',
+    })
+  ).chat;
+  for (const [owner, result] of [
+    [target, restored],
+    [jsonTarget, jsonChat],
+  ] as const) {
+    const saved = illustrationReferences(owner, result.id);
+    const importedBot = owner.product
+      .profile(result.id)
+      .packageAttachments!.find((item) => item.role === 'bot')!;
+    const importedPackageRef = `package:${importedBot.id}:bot:asset-0`;
+    const assets = owner.product.assets(result.id);
+    expect(assets).toHaveLength(1);
+    expect(assets[0].title).toBe('채팅 초상');
+    expect(saved.characterProfiles).toEqual([
+      { ...profiles[0], referenceRef: assets[0].id },
+      { ...profiles[1], referenceRef: importedPackageRef },
+      profiles[2],
+    ]);
+    expect(saved.references).toEqual([{ ref: importedPackageRef, role: 'style' }]);
+    expect(frozenIllustrationReferences(owner, result.id)).toMatchObject([
+      { ref: importedPackageRef, role: 'character' },
+      { ref: assets[0].id, role: 'character' },
+    ]);
+  }
 });
 
 test('native archive cancellation releases the shared preparation budget before another Risu worker starts', async () => {
