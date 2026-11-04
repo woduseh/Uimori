@@ -40,6 +40,7 @@ import {
   illustrationReferences,
   updateIllustrationReferences,
 } from '../server/illustrations.js';
+import { remapIllustrationPackageReferences } from '../server/illustration-reference-copy.js';
 
 const owned: { directory: string; store: Store }[] = [];
 afterEach(() => {
@@ -77,7 +78,12 @@ const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWNIK1/1HwAFVQKH+f6iOwAAAABJRU5ErkJggg==',
   'base64'
 );
-async function bot(store: Store, imageCount = 1) {
+async function bot(
+  store: Store,
+  imageCount = 1,
+  kind: 'bot' | 'module' = 'bot',
+  modules: { id: string; revision: number }[] = []
+) {
   const processed = await processImage(png),
     image = putImageBlob(store.product, {
       mime: processed.mime,
@@ -94,10 +100,12 @@ async function bot(store: Store, imageCount = 1) {
         mime: image.mime,
         allowedUse: 'both',
       })),
-    }
+      modules,
+    },
+    kind
   );
   return store.product.content({
-    kind: 'bot',
+    kind,
     title: pkg.title,
     description: pkg.description,
     text: pkg.body,
@@ -249,7 +257,13 @@ test('chat archive restores authored resources without execution and recovers re
 
 test('chat copies and backups preserve character appearances and remap only their owned images', async () => {
   const source = database();
-  const original = await bot(source);
+  const descendant = await bot(source, 1, 'module');
+  const intermediate = await bot(source, 0, 'module', [
+    { id: descendant.id, revision: descendant.revision },
+  ]);
+  const original = await bot(source, 1, 'bot', [
+    { id: intermediate.id, revision: intermediate.revision },
+  ]);
   const chat = createFixtureChat(source, 'Character references', { botId: original.id });
   const local = source.product.createAsset(chat.id, {
     title: '채팅 초상',
@@ -262,22 +276,29 @@ test('chat copies and backups preserve character appearances and remap only thei
     allowedUse: 'both',
   });
   const packageRef = `package:${original.id}:bot:asset-0`;
+  const descendantRef = `package:${descendant.id}:module:asset-0`;
   const profiles = [
     { id: 'one', name: '하나', appearance: '푸른 눈과 긴 머리', referenceRef: local.id },
     { id: 'two', name: '둘', appearance: '은빛 머리', referenceRef: packageRef },
     { id: 'three', name: '셋', appearance: '주근깨' },
+    { id: 'four', name: '넷', appearance: '검은 곱슬머리', referenceRef: descendantRef },
   ];
   updateIllustrationReferences(source, chat.id, {
     expectedRevision: 0,
-    references: [{ ref: packageRef, role: 'style' }],
+    references: [
+      { ref: packageRef, role: 'style' },
+      { ref: descendantRef, role: 'style' },
+    ],
     characterProfiles: profiles,
   });
   const copy = captureChatCopy(source, chat.id);
+  expect(copy.transcript.packageAttachments.some((item) => item.id === descendant.id)).toBe(false);
   expect(copy.state.illustrationReferences?.images).toHaveLength(1);
   const localCopy = restoreChatCopy(source, copy, 'character-local-copy');
   const localSaved = illustrationReferences(source, localCopy.id);
   expect(localSaved.characterProfiles[0].referenceRef).not.toBe(local.id);
   expect(localSaved.characterProfiles[1].referenceRef).toBe(packageRef);
+  expect(localSaved.characterProfiles[3].referenceRef).toBe(descendantRef);
   expect(source.product.assets(localCopy.id)).toHaveLength(1);
 
   const archive = await bytes(exportChatBackupArchive(source, chat.id));
@@ -304,6 +325,14 @@ test('chat copies and backups preserve character appearances and remap only thei
       .profile(result.id)
       .packageAttachments!.find((item) => item.role === 'bot')!;
     const importedPackageRef = `package:${importedBot.id}:bot:asset-0`;
+    const importedBotContent = owner.product.get<Content>('content', importedBot.id);
+    const importedIntermediate = owner.product.get<Content>(
+      'content',
+      importedBotContent.package.modules![0].id
+    );
+    const importedDescendantId = importedIntermediate.package.modules![0].id;
+    expect(importedDescendantId).not.toBe(descendant.id);
+    const importedDescendantRef = `package:${importedDescendantId}:module:asset-0`;
     const assets = owner.product.assets(result.id);
     expect(assets).toHaveLength(1);
     expect(assets[0].title).toBe('채팅 초상');
@@ -311,13 +340,44 @@ test('chat copies and backups preserve character appearances and remap only thei
       { ...profiles[0], referenceRef: assets[0].id },
       { ...profiles[1], referenceRef: importedPackageRef },
       profiles[2],
+      { ...profiles[3], referenceRef: importedDescendantRef },
     ]);
-    expect(saved.references).toEqual([{ ref: importedPackageRef, role: 'style' }]);
+    expect(saved.references).toEqual([
+      { ref: importedPackageRef, role: 'style' },
+      { ref: importedDescendantRef, role: 'style' },
+    ]);
     expect(frozenIllustrationReferences(owner, result.id)).toMatchObject([
       { ref: importedPackageRef, role: 'character' },
+      { ref: importedDescendantRef, role: 'character' },
       { ref: assets[0].id, role: 'character' },
     ]);
   }
+});
+
+test('package reference remapping matches the complete owner, role and image shape', () => {
+  const copy = {
+    references: [
+      { ref: 'package:owner:part:module:portrait', role: 'style' as const },
+      { ref: 'package:owner:part:unknown:portrait', role: 'style' as const },
+      { ref: 'package:missing:module:portrait', role: 'style' as const },
+    ],
+    characterProfiles: [
+      {
+        id: 'one',
+        name: '인물',
+        appearance: '외형',
+        referenceRef: 'package:owner:part:module:portrait',
+      },
+    ],
+    images: [],
+  };
+  remapIllustrationPackageReferences(copy, new Map([['owner:part', 'new-owner']]));
+  expect(copy.references.map((item) => item.ref)).toEqual([
+    'package:new-owner:module:portrait',
+    'package:owner:part:unknown:portrait',
+    'package:missing:module:portrait',
+  ]);
+  expect(copy.characterProfiles[0].referenceRef).toBe('package:new-owner:module:portrait');
 });
 
 test('native archive cancellation releases the shared preparation budget before another Risu worker starts', async () => {

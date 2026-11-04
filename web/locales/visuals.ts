@@ -253,6 +253,12 @@ export const messages = {
     ja: '利用できない画像',
     zh: '不可用的图片',
   },
+  'visuals.unavailableReferenceNumber': {
+    ko: '사용할 수 없는 참고 이미지 {count}',
+    en: 'Unavailable reference image {count}',
+    ja: '利用できない参照画像 {count}',
+    zh: '不可用的参考图片 {count}',
+  },
   'visuals.removeCharacterProfile': {
     ko: '인물 삭제',
     en: 'Remove character',

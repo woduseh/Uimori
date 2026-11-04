@@ -761,4 +761,53 @@ describe('illustration storage on the current schema', () => {
     expect(textOnlyAfterRemoval.characterProfiles).toEqual(oldClient.characterProfiles);
     expect(frozenIllustrationReferences(store, chat.id)).toEqual([]);
   });
+  test('temporarily unavailable reference roles can be retained or removed, but not invented or changed', () => {
+    const store = databases.create();
+    const { chat } = chatWithSource(store);
+    const asset = store.product.createAsset(chat.id, {
+      title: '자료 이미지',
+      mime: 'image/png',
+      base64: PNG_BASE64,
+      description: '',
+      actor: '',
+      outfit: '',
+      location: '',
+      allowedUse: 'both',
+    });
+    const profiles = [{ id: 'one', name: '하나', appearance: '푸른 눈' }];
+    const saved = updateIllustrationReferences(store, chat.id, {
+      expectedRevision: 0,
+      references: [{ ref: asset.id, role: 'style' }],
+      characterProfiles: profiles,
+    });
+    store.db.prepare('DELETE FROM assets WHERE id=?').run(asset.id);
+    const kept = updateIllustrationReferences(store, chat.id, {
+      expectedRevision: saved.revision,
+      references: saved.references,
+      characterProfiles: [{ ...profiles[0], appearance: '푸른 눈과 은발' }],
+    });
+    expect(kept.references).toEqual(saved.references);
+    expect(
+      http(() =>
+        updateIllustrationReferences(store, chat.id, {
+          expectedRevision: kept.revision,
+          references: [{ ref: asset.id, role: 'character' }],
+        })
+      ).statusCode
+    ).toBe(400);
+    expect(
+      http(() =>
+        updateIllustrationReferences(store, chat.id, {
+          expectedRevision: kept.revision,
+          references: [{ ref: 'invented', role: 'style' }],
+        })
+      ).statusCode
+    ).toBe(400);
+    expect(
+      updateIllustrationReferences(store, chat.id, {
+        expectedRevision: kept.revision,
+        references: [],
+      }).references
+    ).toEqual([]);
+  });
 });

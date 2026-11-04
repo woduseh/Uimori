@@ -40,17 +40,13 @@ export function captureIllustrationReferences(
 /** Imported packages get new identities; their image IDs and attachment roles stay stable. */
 export function remapIllustrationPackageReferences(
   copy: PortableReferences,
-  attachments: { id: string; role: string }[],
   remap: Map<string, string>
 ): void {
   const ref = (value: string) => {
-    for (const attachment of attachments) {
-      const oldPrefix = `package:${attachment.id}:${attachment.role}:`;
-      const nextId = remap.get(attachment.id);
-      if (nextId && value.startsWith(oldPrefix))
-        return `package:${nextId}:${attachment.role}:${value.slice(oldPrefix.length)}`;
-    }
-    return value;
+    const match = /^package:(.+):(bot|persona|module):([^:]+)$/u.exec(value);
+    if (!match) return value;
+    const nextId = remap.get(match[1]);
+    return nextId ? `package:${nextId}:${match[2]}:${match[3]}` : value;
   };
   copy.references = copy.references.map((item) => ({ ...item, ref: ref(item.ref) }));
   copy.characterProfiles = copy.characterProfiles.map((item) => ({

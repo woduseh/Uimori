@@ -285,8 +285,13 @@ export function updateIllustrationReferences(
     const candidates = new Set(
       illustrationReferenceCandidates(store, chatId).map((asset) => asset.id)
     );
+    const previousRoles = new Map(prior.references.map((item) => [item.ref, item.role]));
     for (const item of references)
-      if (!candidates.has(item.ref) && !options.allowUnavailableReferences)
+      if (
+        !candidates.has(item.ref) &&
+        previousRoles.get(item.ref) !== item.role &&
+        !options.allowUnavailableReferences
+      )
         throw new HttpError(400, '이 채팅에서 사용할 수 없는 이미지 참조예요.');
     const previous = new Map(prior.characterProfiles.map((item) => [item.id, item.referenceRef]));
     for (const item of characterProfiles)

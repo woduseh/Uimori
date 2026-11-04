@@ -315,6 +315,74 @@ for (const width of [360, 1280]) {
   });
 }
 
+test('editing appearance preserves an unavailable saved reference until explicitly cleared', async ({
+  page,
+  request,
+}) => {
+  const created = await postFixtureChat(request, { data: { title: '분리된 참고 이미지' } });
+  expect(created.ok()).toBe(true);
+  const chat = (await created.json()) as Chat;
+  const image = await sharp({
+    create: { width: 80, height: 80, channels: 3, background: '#6688aa' },
+  })
+    .png()
+    .toBuffer();
+  const upload = await request.post(`/api/chats/${chat.id}/assets`, {
+    data: {
+      title: '잠시 없는 그림체',
+      description: '',
+      actor: '',
+      outfit: '',
+      location: '',
+      allowedUse: 'both',
+      mime: 'image/png',
+      base64: image.toString('base64'),
+    },
+  });
+  expect(upload.ok()).toBe(true);
+  const asset = await upload.json();
+  const path = `/api/chats/${chat.id}/illustration-references`;
+  const initial = await request.put(path, {
+    data: {
+      expectedRevision: 0,
+      references: [{ ref: asset.id, role: 'style' }],
+      characterProfiles: [{ id: 'one', name: '미라', appearance: '은발' }],
+    },
+  });
+  expect(initial.ok()).toBe(true);
+  await page.setViewportSize({ width: 360, height: 915 });
+  await page.goto(`/?chat=${chat.id}`);
+  await openChatSettings(page);
+  await selectChatSettingsSection(page, '이미지');
+  const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
+  const references = dialog.getByRole('region', { name: '삽화 참고', exact: true });
+  await references.getByRole('textbox', { name: '외형', exact: true }).fill('은발과 초록 눈');
+  const removed = await request.delete(`/api/chats/${chat.id}/assets/${asset.id}`, { data: {} });
+  expect(removed.ok()).toBe(true);
+  await dialog.locator('.chat-settings-image-management > summary').click();
+  const assets = dialog.getByRole('region', { name: '이 이야기의 이미지', exact: true });
+  await assets
+    .getByLabel('PNG 또는 JPEG 이미지', { exact: true })
+    .setInputFiles({ name: 'refresh.png', mimeType: 'image/png', buffer: image });
+  await assets.getByLabel('이미지 이름', { exact: true }).fill('새 후보');
+  await assets.getByLabel('이미지 설명', { exact: true }).fill('갱신 확인');
+  await assets.getByRole('button', { name: '이미지 등록', exact: true }).click();
+  await expect(references.getByLabel('새 후보 참고 역할')).toBeVisible();
+  const unavailable = references.getByLabel('사용할 수 없는 참고 이미지 1', { exact: true });
+  await expect(unavailable).toHaveValue('style');
+  await references.getByRole('button', { name: '삽화 참고 저장' }).click();
+  await expect(references.getByRole('button', { name: '삽화 참고 저장' })).toBeDisabled();
+  const kept = (await (await request.get(path)).json()) as IllustrationReferences;
+  expect(kept.references).toEqual([{ ref: asset.id, role: 'style' }]);
+  expect(kept.characterProfiles[0].appearance).toBe('은발과 초록 눈');
+  await unavailable.selectOption('');
+  await references.getByRole('button', { name: '삽화 참고 저장' }).click();
+  await expect(references.getByRole('button', { name: '삽화 참고 저장' })).toBeDisabled();
+  expect(((await (await request.get(path)).json()) as IllustrationReferences).references).toEqual(
+    []
+  );
+});
+
 test('ILUI01 scene menu requests an illustration, shows the stored image, retries a failure and deletes', async ({
   page,
   request,
@@ -515,6 +583,84 @@ for (const width of [360, DESKTOP_WIDTH]) {
     expect(await redraw.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
   });
 }
+
+test('ILUI-DIRECTION source edits rotate an uncertain reservation key while retaining direction', async ({
+  page,
+  request,
+}) => {
+  const { chat, source } = await seed(request);
+  await settings(request, {
+    generator: 'fixture',
+    automatic: false,
+    maxPerSource: 3,
+    maxAutoRetries: 0,
+  });
+  const reservations: Record<string, unknown>[] = [];
+  await page.route(`**/api/sources/${source.id}/illustrations`, async (route) => {
+    reservations.push(route.request().postDataJSON());
+    if (reservations.length === 1) {
+      const accepted = await route.fetch();
+      expect(accepted.ok()).toBe(true);
+      return route.abort('failed');
+    }
+    return route.continue();
+  });
+  await page.goto(`/?chat=${chat.id}`);
+  const scene = page.getByTestId('source').first();
+  const openManual = async () => {
+    await openSourceActions(scene);
+    await page.getByTestId('illustrate').click();
+  };
+  await openManual();
+  const dialog = page.getByRole('dialog', { name: '삽화 생성', exact: true });
+  const direction = dialog.getByRole('textbox', {
+    name: '이번 삽화 연출 (선택)',
+    exact: true,
+  });
+  const directionText = '등불을 내려놓는 손을 가까이 보여 주세요.';
+  await direction.fill(directionText);
+  await dialog.getByRole('button', { name: '삽화 만들기', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toBeVisible();
+  await expect(direction).toHaveValue(directionText);
+  await expect
+    .poll(async () =>
+      (await illustrations(request, chat.id)).some(
+        (item) => item.task === 'render' && item.status === 'completed'
+      )
+    )
+    .toBe(true);
+  await page.keyboard.press('Escape');
+  const revisedText = '기록이 바뀐 강가에서 미라가 등불을 내려놓았다.';
+  const edit = await request.put(`/api/sources/${source.id}/text`, {
+    data: { text: revisedText, expectedRevision: source.editRevision ?? 0 },
+  });
+  expect(edit.ok()).toBe(true);
+  const revised = (await edit.json()) as { hash: string };
+  expect(revised.hash).not.toBe(source.hash);
+  await expect(scene).toContainText(revisedText);
+  await openManual();
+  await expect(direction).toHaveValue(directionText);
+  const [admitted] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === `/api/sources/${source.id}/illustrations` &&
+        response.request().method() === 'POST'
+    ),
+    dialog.getByRole('button', { name: '삽화 만들기', exact: true }).click(),
+  ]);
+  expect(reservations).toHaveLength(2);
+  expect(reservations[0]).toMatchObject({
+    expectedSourceHash: source.hash,
+    direction: directionText,
+  });
+  expect(reservations[1]).toMatchObject({
+    expectedSourceHash: revised.hash,
+    direction: directionText,
+  });
+  expect(reservations[1].idempotencyKey).not.toBe(reservations[0].idempotencyKey);
+  expect(admitted.ok()).toBe(true);
+  await expect(dialog).toBeHidden();
+});
 
 test('ILUI-DIRECTION blocked illustration without an image opens the change request dialog', async ({
   page,
