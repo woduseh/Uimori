@@ -16,6 +16,7 @@ import {
   openSourceActions,
   sourceAction,
   openChatMenu,
+  openHelper,
 } from './ui-navigation.js';
 import { postFixtureChat } from './fixtures/chat.js';
 import { test, expect, type Page, type APIRequestContext, type Locator } from '@playwright/test';
@@ -1785,6 +1786,60 @@ test('UI chat menu keeps its last action reachable in a short medium viewport', 
   await page.keyboard.press('Escape');
   await expect(menu).not.toBeVisible();
   await expect(trigger).toBeFocused();
+});
+
+test('UI menus ignore independent helper scrolling but close when their own reader scrolls', async ({
+  page,
+  request,
+}) => {
+  const chat = await seed(request, `스크롤 중 메뉴 ${Date.now()}`, longPrompt, 1);
+  await page.setViewportSize({ width: 1440, height: 880 });
+  await page.goto(`/?chat=${chat.id}`);
+  await expect(page.getByTestId('source')).toHaveCount(1);
+  await openHelper(page);
+  await expect(page.locator('.app-shell')).toHaveClass(/panel-docked/u);
+  const helper = page.locator('#helper-panel');
+  await expect(helper.getByLabel('도우미에게 요청', { exact: true })).toBeEnabled();
+  const helperScroll = helper.locator('.helper-messages');
+  await helperScroll.evaluate((node) => {
+    node.addEventListener('scroll', () => node.setAttribute('data-test-scrolled', 'yes'), {
+      once: true,
+    });
+  });
+  const menu = await openChatMenu(page);
+  const menuItem = menu.locator('button').first();
+  await menuItem.focus();
+  await expect(menuItem).toBeFocused();
+
+  // Simulate a growing response and let the real helper ResizeObserver scroll it into view.
+  await helper.locator('.helper-thread-content').evaluate((node) => {
+    const addition = document.createElement('div');
+    addition.style.height = '1600px';
+    addition.style.flex = 'none';
+    node.append(addition);
+  });
+  await expect(helperScroll).toHaveAttribute('data-test-scrolled', 'yes');
+  await expect.poll(() => helperScroll.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+  await expect(menu).toBeVisible();
+  await expect(menuItem).toBeFocused();
+  await page.keyboard.press('Escape');
+
+  const reader = page.locator('[data-reader-scrollport]');
+  await reader.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  const scene = page.getByTestId('source');
+  await openSourceActions(scene);
+  const sceneMenu = scene.getByLabel('장면 작업 메뉴', { exact: true }).locator('..');
+  await expect(sceneMenu).toHaveAttribute('open', '');
+  await reader.evaluate((node) => {
+    node.addEventListener('scroll', () => node.setAttribute('data-test-scrolled', 'yes'), {
+      once: true,
+    });
+    node.scrollTop = 150;
+  });
+  await expect(reader).toHaveAttribute('data-test-scrolled', 'yes');
+  await expect(sceneMenu).not.toHaveAttribute('open', '');
 });
 
 test('UI common dialogs stay centered with mobile margins, internal scrolling and native dismissal', async ({

@@ -23,7 +23,6 @@ export function ActionMenu({
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
   const [open, setOpen] = useState(false);
-  const body = useRef<HTMLDivElement>(null);
   const [sheet, setSheet] = useState(false);
   // Narrow screens open every menu as a bottom sheet (CSS): a popover anchored to its trigger has
   // no room above or below once it holds more than a few rows, and gets clipped by the header.
@@ -38,11 +37,17 @@ export function ActionMenu({
   useLayoutEffect(() => {
     if (!open || (!viewport && !sheet)) return;
     const scroll = (event: Event) => {
-      if (event.target instanceof Node && body.current?.contains(event.target)) return;
-      if (ref.current && !ref.current.querySelector('dialog[open]')) ref.current.open = false;
+      const node = ref.current;
+      if (
+        node &&
+        event.target instanceof Node &&
+        event.target.contains(node) &&
+        !node.querySelector('dialog[open]')
+      )
+        node.open = false;
     };
-    // An anchored popover drifts from its trigger when the page scrolls, so it closes; a sheet is
-    // pinned to the viewport behind a scrim and only closes by pointer, Escape or blur.
+    // Close only when scrolling can move the trigger; other panels scroll independently. A sheet
+    // is pinned to the viewport and only closes by pointer, Escape or blur.
     if (!sheet) document.addEventListener('scroll', scroll, true);
     return () => {
       document.removeEventListener('scroll', scroll, true);
@@ -151,7 +156,6 @@ export function ActionMenu({
         <span className="sr-only">{label}</span>
       </summary>
       <div
-        ref={body}
         className="action-menu-body"
         onClick={(event) => {
           // Choosing an item closes the menu, unless the item opens something inside it (a
