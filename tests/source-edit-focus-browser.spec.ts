@@ -166,7 +166,7 @@ for (const [label, viewport] of [
     await expect(field).toHaveValue(source.text);
     await insideReader(field);
     await field.fill('A second cancelled synthetic edit.');
-    await scene.getByRole('button', { name: '수정 취소', exact: true }).click();
+    await scene.getByRole('button', { name: '편집 취소', exact: true }).click();
     await expect(field).toHaveCount(0);
     await expect(trigger).toBeFocused();
     await insideReader(trigger);
@@ -198,7 +198,7 @@ for (const [label, viewport] of [
     await insideReader(translation);
     await translation.fill('저장 버튼 배치를 확인하는 합성 번역이에요.');
     const translationSave = scene.getByRole('button', { name: '번역 저장', exact: true });
-    const translationCancel = scene.getByRole('button', { name: '수정 취소', exact: true });
+    const translationCancel = scene.getByRole('button', { name: '편집 취소', exact: true });
     for (const button of [translationSave, translationCancel]) {
       const bounds = await button.boundingBox();
       expect(bounds!.width).toBeGreaterThanOrEqual(44);
@@ -398,7 +398,7 @@ for (const [width, height, mode] of [
       else
         await scene
           .getByRole('button', {
-            name: action === 'cancel' ? '수정 취소' : '번역 저장',
+            name: action === 'cancel' ? '편집 취소' : '번역 저장',
             exact: true,
           })
           .click();

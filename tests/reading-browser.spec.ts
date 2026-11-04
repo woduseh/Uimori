@@ -243,7 +243,7 @@ test('READUI01 native source and translation keep text and copies while shared r
     await expect(edit).toBeInViewport();
     await edit.click();
     await expect(source.getByLabel('원문 수정 내용', { exact: true })).toHaveValue(sourceText);
-    await source.getByRole('button', { name: '수정 취소', exact: true }).click();
+    await source.getByRole('button', { name: '편집 취소', exact: true }).click();
     expect(await authored.textContent()).toBe(textBefore);
     settings = await readingDialog(page);
     await settings.getByRole('button', { name: '읽기 스타일 초기화', exact: true }).click();

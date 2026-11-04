@@ -246,12 +246,8 @@ test('HSPACE12 activity tabs keep unread counts until acknowledgement and includ
   const active = history.locator('[data-activity-section="running"]');
   const recent = history.locator('[data-activity-section="recent"]');
   await expect(unread.locator('[data-conversation-id]')).toHaveCount(2);
-  await expect(unread.locator(`[data-conversation-id="${completed.id}"]`)).toContainText(
-    '완료했어요'
-  );
-  await expect(unread.locator(`[data-conversation-id="${failed.id}"]`)).toContainText(
-    '작업에 실패했어요'
-  );
+  await expect(unread.locator(`[data-conversation-id="${completed.id}"]`)).toContainText('완료');
+  await expect(unread.locator(`[data-conversation-id="${failed.id}"]`)).toContainText('실패');
   await expect(active.locator('[data-conversation-id]')).toHaveCount(1);
   await expect(recent.locator('[data-conversation-id]')).toHaveCount(4);
   for (const id of ids)

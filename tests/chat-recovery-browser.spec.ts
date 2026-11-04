@@ -53,7 +53,7 @@ for (const viewport of [
         .getByLabel('Jev 관련성 기준', { exact: true })
         .boundingBox();
       const budgetBox = await dialog
-        .getByLabel('Jev 선택 로어 토큰 한도', { exact: true })
+        .getByLabel('JEV 선택 로어 토큰 한도', { exact: true })
         .boundingBox();
       expect(thresholdBox).not.toBeNull();
       expect(budgetBox).not.toBeNull();
@@ -193,10 +193,10 @@ for (const viewport of [
       });
       expect(concurrent.ok(), await concurrent.text()).toBe(true);
       // The refresh reports the conflict before a stale write is allowed; do not click a disabled save.
-      await dialog.getByRole('button', { name: /새로고침/, exact: false }).click();
+      await dialog.getByRole('button', { name: /다시 불러오기/, exact: false }).click();
       await expect(
         dialog.getByText(
-          '변수 저장본이나 현재 원문이 바뀌었어요. 입력한 초안은 그대로 유지했어요.',
+          '변수 저장본이나 현재 소스가 바뀌었어요. 입력한 초안은 그대로 유지했어요.',
           { exact: true }
         )
       ).toBeVisible();
@@ -238,7 +238,7 @@ for (const viewport of [
         await expect(dialog.locator('.chat-variable-readbacks pre').first()).toContainText(
           '"trust": ""'
         );
-        const refresh = dialog.getByRole('button', { name: '새로고침', exact: true });
+        const refresh = dialog.getByRole('button', { name: '다시 불러오기', exact: true });
         await expect(refresh).toBeEnabled();
         holdReads = true;
         await refresh.click();

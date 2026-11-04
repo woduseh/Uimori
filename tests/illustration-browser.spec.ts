@@ -325,9 +325,9 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await expect(generator).toHaveValue('');
   await generator.selectOption('fixture');
   await expect(section.getByLabel('응답 완료 후 자동 삽화 생성', { exact: true })).toBeVisible();
-  const limit = section.getByLabel('장면당 최대 삽화 개수', { exact: true });
+  const limit = section.getByLabel('장면당 최대 삽화 수', { exact: true });
   await limit.fill('3');
-  await section.getByLabel('자동 재요청 횟수', { exact: true }).fill('2');
+  await section.getByLabel('자동 재시도 횟수', { exact: true }).fill('2');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
   await expect(
     page.locator('.transient-notice[role="status"]').filter({ hasText: '삽화 설정을 저장했어요' })
@@ -343,7 +343,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await settings(request, { maxAutoRetries: 3 });
   await limit.fill('4');
   await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
-  const conflictDialog = page.getByRole('alertdialog', { name: '삽화 설정 저장 내용 확인' });
+  const conflictDialog = page.getByRole('alertdialog', { name: '삽화 설정 저장본 확인' });
   await expect(
     conflictDialog.getByRole('button', { name: '현재 입력 유지', exact: true })
   ).toBeFocused();
@@ -370,7 +370,7 @@ test('ILUI02 mobile settings save illustration limits with CAS and expose the ge
   await expect(limit).toHaveValue('4');
   await page.unroute('**/api/illustration-settings');
   await reloadDialog.getByRole('button', { name: '초안 버리고 불러오기' }).click();
-  await expect(section.getByLabel('자동 재요청 횟수', { exact: true })).toHaveValue('3');
+  await expect(section.getByLabel('자동 재시도 횟수', { exact: true })).toHaveValue('3');
   await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
   await page.screenshot({ path: info.outputPath('illustration-settings-mobile.png') });
 });
@@ -447,7 +447,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
   await expect(section.getByRole('alert')).toContainText('설정을 불러오지 못했어요');
   await page.unroute('**/api/illustration-settings');
-  await section.getByLabel('장면당 최대 삽화 개수').fill('5');
+  await section.getByLabel('장면당 최대 삽화 수').fill('5');
   await section.getByRole('button', { name: '저장된 설정 다시 불러오기' }).click();
   const guard = page.getByRole('alertdialog', { name: '삽화 설정 다시 불러오기' });
   for (const width of DEFAULT_WIDTHS) {
@@ -458,7 +458,7 @@ test('ILUI03 illustration editors use full width and seconds preserve stored mil
   }
   await page.keyboard.press('Escape');
   await expect(guard).toBeHidden();
-  await expect(section.getByLabel('장면당 최대 삽화 개수')).toHaveValue('5');
+  await expect(section.getByLabel('장면당 최대 삽화 수')).toHaveValue('5');
 });
 
 test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planning never blocks the next chat', async ({

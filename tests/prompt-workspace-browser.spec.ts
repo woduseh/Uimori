@@ -120,7 +120,7 @@ test(
     await navigationAction(page, '설정');
     await selectSettingsSection(page, '현재 프롬프트');
     await editor.getByLabel('현재 프롬프트 역할').selectOption('translation');
-    await editor.getByLabel('현재 프롬프트 프리셋').selectOption(preset.id);
+    await editor.getByLabel('현재 프롬프트', { exact: true }).selectOption(preset.id);
     await expect
       .poll(
         async () => (await (await request.get('/api/prompt-workspace')).json()).translation.presetId
@@ -139,7 +139,7 @@ test(
       .toBe('직접 수정');
     for (const width of [1440, MOBILE_WIDTH]) {
       await page.setViewportSize({ width, height: 900 });
-      const presetChoice = editor.getByLabel('현재 프롬프트 프리셋');
+      const presetChoice = editor.getByLabel('현재 프롬프트', { exact: true });
       const editPrompt = editor.getByRole('button', { name: '프롬프트 편집', exact: true });
       const choiceBox = (await presetChoice.boundingBox())!;
       const editBox = (await editPrompt.boundingBox())!;
@@ -530,7 +530,7 @@ test('PWS04 shared workspace load failures recover in model and prompt settings'
   ready = true;
   await reload.click();
   const prompts = settings.getByRole('region', { name: '현재 프롬프트 설정' });
-  await expect(prompts.getByLabel('현재 프롬프트 프리셋', { exact: true })).toBeVisible();
+  await expect(prompts.getByLabel('현재 프롬프트', { exact: true })).toBeVisible();
   await expect(prompts.getByTestId('prompt-composer')).toHaveCount(0);
   await expect(prompts.getByRole('button', { name: '현재 설정 저장', exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(

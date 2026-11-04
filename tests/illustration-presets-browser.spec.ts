@@ -195,7 +195,7 @@ test('IPUI02 stale edits are not overwritten and can be saved as a new copy', as
   });
   expect(remote.ok()).toBe(true);
   await editor.getByRole('button', { name: '프리셋 저장', exact: true }).click();
-  const conflictDialog = page.getByRole('alertdialog', { name: '삽화 프리셋 저장 내용 확인' });
+  const conflictDialog = page.getByRole('alertdialog', { name: '삽화 프리셋 저장본 확인' });
   await conflictDialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(conflictDialog.getByLabel('현재 저장본')).toContainText('saved in another window');
   await expect(conflictDialog.getByLabel('현재 저장본')).not.toContainText(
@@ -266,7 +266,7 @@ test('IPUI03 invalid recipes never save and the close guard preserves failed dra
   const runtime = await (await request.get('/api/illustration-settings')).json();
   const nextCount = runtime.maxPerSource === 8 ? 7 : runtime.maxPerSource + 1;
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
-  await settings.getByLabel('장면당 최대 삽화 개수').fill(String(nextCount));
+  await settings.getByLabel('장면당 최대 삽화 수').fill(String(nextCount));
   await page.route('**/api/resources/save', (route) =>
     route.fulfill({ status: 503, json: { error: 'Synthetic save failure' } })
   );

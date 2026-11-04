@@ -144,7 +144,7 @@ for (const width of [412, 1440]) {
     });
     await scope.check();
     await expect(reserve).toBeDisabled();
-    await panel.getByRole('button', { name: '합성 문체 다음 생성만 지정', exact: true }).click();
+    await panel.getByRole('button', { name: '합성 문체 다음 생성에만 적용', exact: true }).click();
     await expect(tone).toHaveValue('범위를 바꾼 뒤의 문체');
     await expect(reserve).toBeEnabled();
     await scope.uncheck();
@@ -181,7 +181,7 @@ for (const width of [412, 1440]) {
     await scope.uncheck();
     await expect(tone).toHaveValue('범위를 바꾼 뒤의 문체');
     await expect(save).toBeDisabled();
-    const pending = panel.getByRole('region', { name: '다음 생성 옵션 예약', exact: true });
+    const pending = panel.getByRole('region', { name: '1회 옵션 예약', exact: true });
     await expect(pending).toContainText('한 번만 쓸 문체');
     expect((await readOptions(request, chat)).pending).toHaveLength(1);
     await page.screenshot({ path: info.outputPath(`chat-option-scope-fixed-${width}.png`) });
@@ -253,7 +253,7 @@ test('OPTIONREVIEW1 failed reads expose retry; one shared draft survives scope c
       writes.push(entry.postDataJSON());
   });
   await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
-  const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장 내용 확인', exact: true });
+  const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장본 확인', exact: true });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   const discarded = dialog.getByRole('region', { name: '유지할 수 없는 입력', exact: true });
@@ -266,17 +266,17 @@ test('OPTIONREVIEW1 failed reads expose retry; one shared draft survives scope c
     dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true })
   ).toBeVisible();
   await expect(
-    dialog.getByRole('button', { name: '입력 버리고 저장본 불러오기', exact: true })
+    dialog.getByRole('button', { name: '초안 버리고 저장본 불러오기', exact: true })
   ).toBeVisible();
   expect(await dialog.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(
     1
   );
-  for (const name of ['입력 유지하고 계속 편집', '입력 버리고 저장본 불러오기'])
+  for (const name of ['입력 유지하고 계속 편집', '초안 버리고 저장본 불러오기'])
     await expect(dialog.getByRole('button', { name, exact: true })).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: info.outputPath('chat-option-discarded-input-review-412.png') });
   const persisted = await readOptions(request, chat);
   const writesBeforeChoice = writes.length;
-  await dialog.getByRole('button', { name: '입력 버리고 저장본 불러오기', exact: true }).click();
+  await dialog.getByRole('button', { name: '초안 버리고 저장본 불러오기', exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(panel.getByLabel('합성 문체', { exact: true })).toHaveCount(0);
   await expect(
@@ -302,14 +302,14 @@ test('OPTIONREVIEW3 saved-version adoption keeps dormant oneoff intent while edi
   const scope = panel.getByRole('switch', { name: '다음 생성에만 적용', exact: true });
   await panel.locator('.chat-option-group > summary').first().click();
   await scope.check();
-  await panel.getByRole('button', { name: '독립 메모 다음 생성만 지정', exact: true }).click();
+  await panel.getByRole('button', { name: '독립 메모 다음 생성에만 적용', exact: true }).click();
   await expect(panel.getByLabel('독립 메모', { exact: true })).toHaveValue('원래 고정 메모');
   await scope.uncheck();
   await panel.getByRole('button', { name: '합성 문체 개별 지정', exact: true }).click();
   await panel.getByLabel('합성 문체', { exact: true }).fill('내가 편집한 문체');
   const remote = await externalFixed(request, chat, '외부에서 저장한 메모');
   await panel.getByRole('button', { name: '채팅 고정 옵션 저장', exact: true }).click();
-  const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장 내용 확인', exact: true });
+  const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장본 확인', exact: true });
   await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
   await expect(dialog).toBeHidden();
@@ -339,7 +339,7 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
     .click();
   const scope = panel.getByRole('switch', { name: '다음 생성에만 적용', exact: true });
   await scope.check();
-  await panel.getByRole('button', { name: '합성 문체 다음 생성만 지정', exact: true }).click();
+  await panel.getByRole('button', { name: '합성 문체 다음 생성에만 적용', exact: true }).click();
   const oneoffTone = panel.getByLabel('합성 문체', { exact: true }).last();
   await oneoffTone.fill('다음 생성 문체');
   const remote = await externalFixed(request, chat, '외부 고정 메모');
@@ -349,13 +349,13 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   const stage = panel.getByRole('button', { name: '1회 옵션 예약', exact: true });
   await expect(stage).toBeEnabled();
   await stage.click();
-  const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장 내용 확인', exact: true });
+  const dialog = page.getByRole('alertdialog', { name: '채팅 옵션 저장본 확인', exact: true });
   await dialog.getByRole('button', { name: '저장본 확인', exact: true }).click();
   await expect(
     dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true })
   ).toBeVisible();
   await expect(
-    dialog.getByRole('button', { name: '입력 버리고 저장본 불러오기', exact: true })
+    dialog.getByRole('button', { name: '초안 버리고 저장본 불러오기', exact: true })
   ).toBeVisible();
   await page.screenshot({ path: info.outputPath('chat-option-explicit-recovery-review-1440.png') });
   await dialog.getByRole('button', { name: '입력 유지하고 계속 편집', exact: true }).click();
@@ -392,7 +392,7 @@ test('OPTIONREVIEW2 conflicted oneoff and cancel actions stay available; a lost 
   await confirmSame.click();
   await expect.poll(() => submissions.length).toBe(3);
   await expect(confirmSame).toHaveCount(0);
-  const pending = panel.getByRole('region', { name: '다음 생성 옵션 예약', exact: true });
+  const pending = panel.getByRole('region', { name: '1회 옵션 예약', exact: true });
   await expect(pending).toContainText('다음 생성 문체');
   expect(submissions).toHaveLength(3);
   expect(submissions[1]).toEqual(submissions[0]);

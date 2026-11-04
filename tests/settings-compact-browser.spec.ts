@@ -684,7 +684,7 @@ test('SCUILEAVE global illustration settings retain failed drafts and save befor
       .filter({ hasText: /^생성 환경$/ })
       .click();
     const settings = page.getByRole('dialog', { name: '설정', exact: true });
-    const count = settings.getByLabel('장면당 최대 삽화 개수', { exact: true });
+    const count = settings.getByLabel('장면당 최대 삽화 수', { exact: true });
     await count.fill('0');
     await settings.getByRole('button', { name: '설정 닫기', exact: true }).click();
     const confirm = page.getByRole('alertdialog', { name: '미저장 설정 확인', exact: true });

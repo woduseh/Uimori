@@ -279,7 +279,7 @@ test('RACOM07 cancelled request dismissal waits for acknowledgement, recovers tr
     await expect(pending.getByRole('textbox', { name: '요청 수정 내용', exact: true })).toHaveValue(
       editDraft
     );
-    await pending.getByRole('button', { name: '요청 수정 취소', exact: true }).click();
+    await pending.getByRole('button', { name: '요청 편집 취소', exact: true }).click();
 
     await otherPage.goto(`/?chat=${before.chat.id}`);
     const otherPending = otherPage.locator(`[data-testid="pending-run"][data-run-id="${run.id}"]`);

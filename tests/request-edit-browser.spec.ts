@@ -85,8 +85,8 @@ for (const width of DEFAULT_WIDTHS) {
     const message = source.getByTestId('source-request');
     await message.hover();
     if (width !== DESKTOP_WIDTH) await message.click();
-    await source.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
-    await source.getByRole('button', { name: '문맥용 요청 수정', exact: true }).click();
+    await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
+    await source.getByRole('button', { name: '컨텍스트용 요청 수정', exact: true }).click();
     await page.getByRole('textbox', { name: '요청 수정 내용' }).fill('저장된 수정 입력');
     await page.getByRole('button', { name: '입력 저장' }).click();
     await expect(message).toContainText('저장된 수정 입력');
@@ -98,22 +98,24 @@ for (const width of DEFAULT_WIDTHS) {
       .toBe('저장된 수정 입력');
     await message.hover();
     if (width !== DESKTOP_WIDTH) await message.click();
-    await source.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
-    await source.getByRole('button', { name: '입력을 문맥에서 제외' }).click();
+    await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
+    await source.getByRole('button', { name: '입력을 컨텍스트에서 제외' }).click();
     await expect(message).toHaveClass(/request-context-disabled/);
     await expect
       .poll(async () => (await readerSource(request, chat.id)).sceneContext?.requestEnabled)
       .toBe(false);
 
-    await source.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
-    await source.getByRole('button', { name: '장면을 문맥에서 제외' }).click();
+    await source.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
+    await source.getByRole('button', { name: '장면을 컨텍스트에서 제외' }).click();
     await expect(source).toHaveClass(/scene-context-muted/);
-    await expect(source.locator('.scene-context-notice')).toContainText('이후 생성 문맥에서 제외');
+    await expect(source.locator('.scene-context-notice')).toContainText(
+      '이후 생성 컨텍스트에서 제외'
+    );
     await page.reload();
     const restored = page.getByTestId('source').first();
     await expect(restored).toHaveClass(/scene-context-muted/);
-    await restored.getByLabel('요청과 문맥 메뉴', { exact: true }).click();
-    await restored.getByRole('button', { name: '장면을 문맥에 포함' }).click();
+    await restored.getByLabel('요청 및 컨텍스트 메뉴', { exact: true }).click();
+    await restored.getByRole('button', { name: '장면을 컨텍스트에 포함' }).click();
     await expect(restored).not.toHaveClass(/scene-context-muted/);
     const after = await detail(request, chat.id);
     expect(after.runs.find((item) => item.id === run.id)?.request).toBe('원래 합성 요청');

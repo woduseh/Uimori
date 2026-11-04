@@ -262,7 +262,7 @@ test('RISUDISCARDUI01 discarding a review closes and resets it while ordinary cl
   );
   await dialog.getByRole('button', { name: '봇 가져오기', exact: true }).click();
   expect((await applied).status()).toBe(201);
-  await expect(dialog.getByText('봇을 서재에 등록했어요.', { exact: false })).toBeVisible();
+  await expect(dialog.getByText('봇을 서재로 가져왔어요.', { exact: false })).toBeVisible();
   expect(await (await request.get('/api/chats')).json()).toEqual(beforeChats);
 });
 
@@ -289,7 +289,7 @@ test('RISUKINDUI03 bot import defaults to the library and appears in navigation 
   await dialog.getByRole('button', { name: '봇 가져오기', exact: true }).click();
   const imported = (await (await pending).json()) as RisuImportResult;
   expect(imported.chat).toBeNull();
-  await expect(dialog.getByText('봇을 서재에 등록했어요.', { exact: false })).toBeVisible();
+  await expect(dialog.getByText('봇을 서재로 가져왔어요.', { exact: false })).toBeVisible();
   expect(await (await request.get('/api/chats')).json()).toHaveLength(before.length);
   await dialog.getByRole('button', { name: '자료 가져오기 닫기', exact: true }).click();
   const nav = await visibleNavigation(page);

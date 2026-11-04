@@ -205,7 +205,7 @@ test('I18N08 source and saved translation editors preserve unsaved text, selecti
         ])
       ).toEqual([3, 8]);
     }
-    await scene.getByRole('button', { name: '수정 취소', exact: true }).click();
+    await scene.getByRole('button', { name: '편집 취소', exact: true }).click();
   }
   const after: ChatDetail = await (await request.get(`/api/chats/${chat.id}`)).json();
   expect(after.sources).toEqual(detail.sources);

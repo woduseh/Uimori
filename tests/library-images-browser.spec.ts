@@ -229,10 +229,10 @@ test('LIMG01 representative image upload, unset and existing inline selection pr
     .getByRole('button')
     .filter({ has: page.locator(`img[src="/api/package-image-blobs/${profile.blobHash}"]`) })
     .click();
-  await library.getByRole('button', { name: '선택한 에셋 제거', exact: true }).click();
+  await library.getByRole('button', { name: '선택한 에셋 삭제', exact: true }).click();
   await page
     .getByRole('alertdialog', { name: '이 에셋을 자료에서 제거할까요?', exact: true })
-    .getByRole('button', { name: '에셋 제거', exact: true })
+    .getByRole('button', { name: '에셋 삭제', exact: true })
     .click();
   const removed = await save(page, library, reused);
   const completion = page.locator('.transient-notice').filter({ hasText: original.title });

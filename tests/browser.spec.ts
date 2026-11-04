@@ -311,7 +311,7 @@ test('F05 failed auxiliary result retries independently while a later source is 
     .getByTestId('source')
     .getByTestId('job-translation')
     .filter({ hasText: '실패' })
-    .getByRole('button', { name: '현재 설정으로 번역 재시도' })
+    .getByRole('button', { name: '현재 설정으로 번역 다시 시도' })
     .click();
   await expect
     .poll(async () =>

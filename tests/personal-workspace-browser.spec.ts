@@ -76,7 +76,7 @@ for (const width of [1440, 412]) {
     const saved = await save(page);
     expect(saved.title).toBe(`${original.title} changed`);
     await selectPackageSection(page, '고급 설정');
-    await page.getByRole('button', { name: '원문 JSON', exact: true }).click();
+    await page.getByRole('button', { name: 'JSON 소스', exact: true }).click();
     await page.getByLabel('Risu 원문 편집 대상', { exact: true }).selectOption('card');
     const raw = page.getByLabel('Risu 원문 JSON', { exact: true });
     const card = JSON.parse(await raw.inputValue());

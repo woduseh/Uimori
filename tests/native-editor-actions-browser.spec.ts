@@ -156,8 +156,8 @@ for (const viewport of [
     await definitions.getByRole('button', { name: '그룹 삭제', exact: true }).click();
     await confirmation.getByRole('button', { name: '그룹 삭제', exact: true }).click();
     await expect(confirmation).toBeHidden();
-    await definitions.getByRole('button', { name: '원문', exact: true }).click();
-    const raw = definitions.getByLabel('토글 정의 원문', { exact: true });
+    await definitions.getByRole('button', { name: '소스', exact: true }).click();
+    const raw = definitions.getByLabel('토글 정의 소스', { exact: true });
     expect(await raw.inputValue()).toContain('keep=보존할 입력=text');
     expect(await raw.inputValue()).not.toContain('초안');
     expect(await raw.inputValue()).not.toContain('취소할');
@@ -295,14 +295,14 @@ for (const viewport of [
     await images.getByRole('button', { name: '유지할 이미지', exact: true }).click();
     await library.getByLabel('이미지 설명', { exact: true }).fill('취소와 제거 후에도 유지할 설명');
     await images.getByRole('button', { name: '제거할 이미지', exact: true }).click();
-    const removeButton = library.getByRole('button', { name: '선택한 에셋 제거', exact: true });
+    const removeButton = library.getByRole('button', { name: '선택한 에셋 삭제', exact: true });
     const dialog = page.getByRole('alertdialog', {
       name: '이 에셋을 자료에서 제거할까요?',
       exact: true,
     });
     await removeButton.click();
     await expect(dialog).toContainText('원본 파일은 삭제하지 않아요.');
-    await actionPair(dialog, '에셋 제거', 'delete');
+    await actionPair(dialog, '에셋 삭제', 'delete');
     await page.screenshot({ path: info.outputPath(`asset-remove-${viewport.name}.png`) });
     await dialog.getByRole('button', { name: '취소', exact: true }).click();
     await expect(dialog).toBeHidden();
@@ -314,7 +314,7 @@ for (const viewport of [
     await expect(dialog).toBeHidden();
     await expect(images.getByRole('button')).toHaveCount(2);
     await removeButton.click();
-    await dialog.getByRole('button', { name: '에셋 제거', exact: true }).click();
+    await dialog.getByRole('button', { name: '에셋 삭제', exact: true }).click();
     await expect(dialog).toBeHidden();
     await expect(images.getByRole('button')).toHaveCount(1);
     await expect(
