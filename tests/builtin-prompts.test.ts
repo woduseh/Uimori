@@ -80,7 +80,7 @@ test('bundled native presets are editable independent copies with fixed modes an
       const enabled = structuredClone(template.program);
       enabled.collaboration!.enabled = true;
       expect(validateEditableRisuPrompt(enabled)).toEqual(enabled);
-      expect(promptControls(template.program)).toHaveLength(novel ? 45 : 44);
+      expect(promptControls(template.program)).toHaveLength(novel ? 47 : 46);
       expect(promptControls(template.program).map((control) => control.id)).not.toContain(
         'pheme_session_mode'
       );
