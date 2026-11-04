@@ -95,7 +95,7 @@ export type RunSnapshot = {
   mainJudgmentPending?: true;
   /** Bounded input receipt for the host judgment of the unmodified model response. */
   mainJudgment?: {
-    version: 'main-refusal-jev-v2';
+    version: 'main-refusal-jev-v2' | 'main-refusal-jev-v3';
     candidateHash: string;
     response: string;
     threshold: number;

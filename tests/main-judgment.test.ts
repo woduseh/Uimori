@@ -13,6 +13,7 @@ import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { createApp, type App } from '../server/app.js';
 import {
   mainJudgmentInput,
+  mainJudgmentInputHash,
   mainJudgmentRequest,
   validateMainJudgmentWire,
 } from '../server/main-judgment.js';
@@ -331,7 +332,7 @@ test('preserves the whole Unicode response and only asks about service refusal',
   const candidate = '😀'.repeat(5000);
   const input = mainJudgmentInput(candidate);
   expect(input).toEqual({
-    version: 'main-refusal-jev-v2',
+    version: 'main-refusal-jev-v3',
     candidateHash: createHash('sha256').update(candidate).digest('hex'),
     response: candidate,
     threshold: 0.9,
@@ -339,6 +340,31 @@ test('preserves the whole Unicode response and only asks about service refusal',
   expect(mainJudgmentRequest(input).state).toEqual({ response: candidate });
   expect(Object.keys(mainJudgmentRequest(input).questions)).toEqual(['explicitRefusal']);
   expect(mainJudgmentRequest(input).questions.explicitRefusal.type).toBe('noul');
+});
+
+test('authenticates a v2 refusal receipt only against its original question and input', () => {
+  const current = mainJudgmentInput('I cannot help with that.');
+  const prior = { ...current, version: 'main-refusal-jev-v2' as const };
+  const wire: WireRecord = {
+    connectionId: 'typesafe-judgment',
+    protocol: 'typesafe-systemone-v1',
+    role: 'main',
+    modelId: 'jev-latest',
+    url: JEV_ENDPOINT,
+    method: 'POST',
+    headers: {},
+    body: { model: 'jev-latest', ...mainJudgmentRequest(prior) },
+    bodySha256: 'e27713c41bf04dbf1125593a0dc404302e8b231f4f0695cd2006dda34de25b64',
+    stablePrefixSha256: 'b61c8e3ca5f63b9d82911f9cec0aca415907c335625b346719f87517701f5e81',
+    judgment: { kind: 'main-refusal', inputHash: digest({ version: prior.version, input: prior }) },
+  };
+  expect(() => validateMainJudgmentWire(prior, wire)).not.toThrow();
+  expect(() =>
+    validateMainJudgmentWire(current, {
+      ...wire,
+      judgment: { kind: 'main-refusal', inputHash: mainJudgmentInputHash(current) },
+    })
+  ).toThrow('MAIN_JUDGMENT_ATTEMPT_MISMATCH');
 });
 
 test.each([
