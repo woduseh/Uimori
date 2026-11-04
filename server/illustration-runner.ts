@@ -29,7 +29,10 @@ import type { RunSnapshot } from '../core/types.js';
 import {
   CODEX_ILLUSTRATION_INSTRUCTIONS,
   CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
+  CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS,
+  codexIllustrationPromptRequest,
   codexIllustrationText,
+  codexPreparedIllustrationText,
   fillComfyWorkflow,
   illustrationPromptRequest,
   IllustrationError,
@@ -211,6 +214,22 @@ export async function runIllustrationJob(
     updateIllustrationDiagnostic(store, jobId, generation, owner, diagnostic);
     await hooks.onProgress?.();
   };
+  const finish = async (images: GeneratedIllustration[]): Promise<IllustrationOutcome> => {
+    const generated = await Promise.all(
+      images.map(async (image) => ({
+        ...image,
+        ...(await processImage(Buffer.from(image.bytes))),
+      }))
+    );
+    diagnostic.stage = 'store';
+    if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
+    const stored = completeIllustration(store, jobId, generation, owner, generated, diagnostic);
+    await hooks.onProgress?.();
+    if (!stored) return { status: 'cancelled', code: 'ILLUSTRATION_SUPERSEDED', images: 0 };
+    return diagnostic.skipped !== undefined
+      ? { status: 'skipped', code: null, images: 0 }
+      : { status: 'completed', code: null, images: generated.length };
+  };
   await hooks.onProgress?.();
   const recordAttempt = async (wire: WireRecord) => {
     const id = await hooks.onAttemptStart(wire);
@@ -273,12 +292,68 @@ export async function runIllustrationJob(
     }
     return result.text;
   };
+  const preparePrompt = async (
+    model: ModelSnapshot,
+    request: ProviderRequest,
+    options: { allowSkip: boolean; connection?: Connection; preservePrompt?: boolean }
+  ): Promise<IllustrationPlan> => {
+    const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
+    let plan: IllustrationPlan;
+    if (input.target?.prompt) {
+      plan = { kind: 'generate', prompt: input.target.prompt };
+    } else if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash) {
+      plan = { kind: 'generate', prompt: diagnostic.prompt };
+    } else {
+      // An old prompt cannot authorize reuse when today's reconstructed input changed.
+      delete diagnostic.prompt;
+      delete diagnostic.promptRequestHash;
+      diagnostic.stage = 'prompt';
+      await progress();
+      plan = parseIllustrationPlan(
+        await textRequest(model, request, options.connection),
+        options.allowSkip,
+        { preservePrompt: options.preservePrompt }
+      );
+    }
+    if (plan.kind === 'generate') {
+      diagnostic.prompt = plan.prompt;
+      diagnostic.promptRequestHash = requestHash;
+    }
+    return plan;
+  };
   try {
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
     await hooks.gate?.();
     if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
     // Only automatic runs may decide that a scene has nothing worth drawing.
     const context = scene(source, snapshot, input, job.origin === 'automatic');
+    const references =
+      input.generator === 'codex' && input.task !== 'placement' && input.task !== 'plan'
+        ? (input.codex?.references ?? []).flatMap((reference) => {
+            const loaded = loadIllustrationReference(store, reference);
+            return loaded
+              ? [
+                  {
+                    role: reference.role,
+                    label: reference.title,
+                    mime: loaded.mime,
+                    bytes: loaded.bytes,
+                  },
+                ]
+              : [];
+          })
+        : [];
+    if (input.codex?.promptModel)
+      context.references =
+        input.task === 'plan'
+          ? input.codex.references.map(({ role, title }) => ({ role, label: title }))
+          : references.map(({ role, label }) => ({ role, label }));
+    const promptMode =
+      input.generator === 'comfyui'
+        ? 'comfyui'
+        : input.generator === 'codex' && input.codex?.promptModel
+          ? 'codex'
+          : 'none';
     if (input.task === 'plan') {
       if (!input.plan) throw new IllustrationError('ILLUSTRATION_STORYBOARD_INVALID');
       diagnostic.stage = 'planning';
@@ -301,13 +376,13 @@ export async function runIllustrationJob(
           ...(!targets.length ? { skipReason: '새로운 시각적 순간이 없어요.' } : {}),
         };
       } else {
-        const model = input.comfyui?.promptModel ?? input.codex?.model;
+        const model = input.comfyui?.promptModel ?? input.codex?.promptModel ?? input.codex?.model;
         if (!model) throw new IllustrationError('ILLUSTRATION_MODEL_REQUIRED');
         const request = storyboardRequest(
           model,
           context,
           source,
-          { ...input.plan, generator: input.generator },
+          { ...input.plan, generator: input.generator, promptMode },
           generationFromModel(model)
         );
         const text = await textRequest(model, request);
@@ -315,7 +390,7 @@ export async function runIllustrationJob(
           text,
           splitSource(source),
           input.plan.maxTargets,
-          input.generator === 'comfyui',
+          promptMode,
           context.allowSkip || input.plan.existingTargets.length > 0,
           input.plan.existingTargets
         );
@@ -397,21 +472,26 @@ export async function runIllustrationJob(
       if (!input.codex || !hooks.generateCodexImage)
         throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
       const model = input.codex.model;
+      let preparedPrompt: IllustrationPlan | undefined;
+      if (input.codex.promptModel) {
+        const promptModel = input.codex.promptModel;
+        const request = codexIllustrationPromptRequest(
+          promptModel,
+          context,
+          generationFromModel(promptModel)
+        );
+        preparedPrompt = await preparePrompt(promptModel, request, {
+          allowSkip: context.allowSkip,
+          preservePrompt: true,
+        });
+        if (preparedPrompt.kind === 'skip') diagnostic.skipped = preparedPrompt.reason;
+      }
+      if (preparedPrompt?.kind === 'skip') return await finish([]);
       const connection = await authorizedConnection(hooks, model);
-      const references = input.codex.references.flatMap((reference) => {
-        const loaded = loadIllustrationReference(store, reference);
-        return loaded
-          ? [
-              {
-                role: reference.role,
-                label: reference.title,
-                mime: loaded.mime,
-                bytes: loaded.bytes,
-              },
-            ]
-          : [];
-      });
-      const imageText = codexIllustrationText(context, references);
+      const imageText =
+        preparedPrompt?.kind === 'generate'
+          ? codexPreparedIllustrationText(preparedPrompt.prompt.prompt, references)
+          : codexIllustrationText(context, references);
       diagnostic.stage = 'content-check';
       await progress();
       diagnostic.contentCheck = await checkCodexIllustrationContent(
@@ -446,7 +526,10 @@ export async function runIllustrationJob(
               modelId: model.modelId,
               contextBudget: contextBudgetForModel(model),
               reasoningEffort: model.reasoningEffort,
-              developerInstructions: CODEX_ILLUSTRATION_INSTRUCTIONS,
+              developerInstructions:
+                preparedPrompt?.kind === 'generate'
+                  ? CODEX_PREPARED_ILLUSTRATION_INSTRUCTIONS
+                  : CODEX_ILLUSTRATION_INSTRUCTIONS,
               text: imageText,
               outputSchema: CODEX_ILLUSTRATION_OUTPUT_SCHEMA,
               references: imageReferences,
@@ -482,7 +565,13 @@ export async function runIllustrationJob(
       generated = result.images.map((image) => ({
         mime: image.mime,
         bytes: image.bytes,
-        caption: caption.unavailable ? '' : caption.caption,
+        caption:
+          preparedPrompt?.kind === 'generate'
+            ? preparedPrompt.prompt.caption
+            : caption.unavailable
+              ? ''
+              : caption.caption,
+        ...(preparedPrompt?.kind === 'generate' ? { prompt: preparedPrompt.prompt.prompt } : {}),
         ...(result.revisedPrompt ? { revisedPrompt: result.revisedPrompt } : {}),
       }));
     } else if (input.generator === 'comfyui') {
@@ -492,28 +581,13 @@ export async function runIllustrationJob(
       const model = input.comfyui.promptModel;
       const connection = await authorizedConnection(hooks, model);
       const request = illustrationPromptRequest(model, context, generationFromModel(model));
-      const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
-      let plan: IllustrationPlan;
-      if (input.target?.prompt) {
-        plan = { kind: 'generate', prompt: input.target.prompt };
-      } else if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash) {
-        plan = { kind: 'generate', prompt: diagnostic.prompt };
-      } else {
-        // An old prompt cannot authorize reuse when today's reconstructed input changed.
-        delete diagnostic.prompt;
-        delete diagnostic.promptRequestHash;
-        diagnostic.stage = 'prompt';
-        await progress();
-        plan = parseIllustrationPlan(
-          await textRequest(model, request, connection),
-          context.allowSkip
-        );
-      }
+      const plan = await preparePrompt(model, request, {
+        allowSkip: context.allowSkip,
+        connection,
+      });
       if (plan.kind === 'skip') diagnostic.skipped = plan.reason;
       else {
         const prompt = plan.prompt;
-        diagnostic.prompt = prompt;
-        diagnostic.promptRequestHash = requestHash;
         diagnostic.stage = 'generate';
         await progress();
         const filled = fillComfyWorkflow(workflow, {
@@ -549,20 +623,7 @@ export async function runIllustrationJob(
         }));
       }
     } else throw new IllustrationError('ILLUSTRATION_GENERATOR_UNCONFIGURED');
-    generated = await Promise.all(
-      generated.map(async (image) => ({
-        ...image,
-        ...(await processImage(Buffer.from(image.bytes))),
-      }))
-    );
-    diagnostic.stage = 'store';
-    if (hooks.signal.aborted) throw new IllustrationError('ILLUSTRATION_CANCELLED');
-    const stored = completeIllustration(store, jobId, generation, owner, generated, diagnostic);
-    await hooks.onProgress?.();
-    if (!stored) return { status: 'cancelled', code: 'ILLUSTRATION_SUPERSEDED', images: 0 };
-    return diagnostic.skipped !== undefined
-      ? { status: 'skipped', code: null, images: 0 }
-      : { status: 'completed', code: null, images: generated.length };
+    return await finish(generated);
   } catch (error) {
     const aborted = hooks.signal.aborted;
     const code = aborted

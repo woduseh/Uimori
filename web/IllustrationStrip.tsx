@@ -635,7 +635,12 @@ function IllustrationCard({
                 )}
               </>
             )}
-            {detail.diagnostic?.revisedPrompt && <pre>{detail.diagnostic.revisedPrompt}</pre>}
+            {detail.diagnostic?.revisedPrompt && (
+              <>
+                <h4>{t('visuals.codexRevisedPrompt')}</h4>
+                <pre>{detail.diagnostic.revisedPrompt}</pre>
+              </>
+            )}
             {detail.diagnostic?.comfyui && (
               <pre>{JSON.stringify(detail.diagnostic.comfyui, null, 2)}</pre>
             )}

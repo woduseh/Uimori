@@ -16,6 +16,8 @@ import {
   queuedIllustrations,
   illustrationsForSources,
   retryIllustration,
+  regenerateIllustration,
+  updateIllustrationSettings,
   updateIllustrationReferences,
 } from '../server/illustrations.js';
 import type { Store } from '../server/store.js';
@@ -261,6 +263,51 @@ describe('illustration runner with the synthetic generator', () => {
 });
 
 describe('illustration runner through the Codex image turn', () => {
+  test.each([
+    {
+      origin: 'manual' as const,
+      reply: 'invalid prompt JSON',
+      status: 'failed',
+      code: 'ILLUSTRATION_PROMPT_INVALID',
+    },
+    {
+      origin: 'automatic' as const,
+      reply: '{"skip":true,"reason":"Only dialogue"}',
+      status: 'skipped',
+      code: null,
+    },
+  ])(
+    'a separate prompt model stops Codex dispatch for $origin $status output',
+    async ({ origin, reply, status, code }) => {
+      const store = databases.create();
+      const { source } = chatWithSource(store);
+      const imageModel = codexModel(store);
+      const { provider, model } = await promptModel(store, () => reply);
+      const job = reserveIllustration(store, source, origin, {
+        settings: fixtureSettings({
+          generator: 'codex',
+          maxAutoRetries: 0,
+          codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
+        }),
+      });
+      const generateCodexImage =
+        vi.fn<NonNullable<IllustrationRunnerHooks['generateCodexImage']>>();
+      const observed = hooks(store, { generateCodexImage });
+      expect(await runIllustrationJob(store, job.id, 'worker', observed.options)).toEqual({
+        status,
+        code,
+        images: 0,
+      });
+      expect(provider.requests).toHaveLength(1);
+      expect(generateCodexImage).not.toHaveBeenCalled();
+      expect(observed.wires).toHaveLength(1);
+      const saved = illustrationJob(store, job.id);
+      expect(saved.status).toBe(status === 'skipped' ? 'completed' : status);
+      if (status === 'skipped') expect(saved.diagnostic?.skipped).toBe('Only dialogue');
+      expect(store.source(source.id).text).toBe(source.text);
+    }
+  );
+
   test('sends the scene, guidance and role-labeled references, records the attempt and stores the caption', async () => {
     const store = databases.create();
     const { chat, source } = chatWithSource(store);
@@ -287,6 +334,7 @@ describe('illustration runner through the Codex image turn', () => {
         codex: { model: { id: model.id }, useReferences: true },
       }),
     });
+    expect(job.input.codex?.promptModel).toBeUndefined();
     const captured: { connection: Connection; request: CodexImageRequest }[] = [];
     const observed = hooks(store, {
       generateCodexImage: async (connection, request, options) => {
@@ -416,6 +464,232 @@ describe('illustration runner through the Codex image turn', () => {
     ).toEqual({ status: 'requeued', code: 'CODEX_IMAGE_NOT_GENERATED', images: 0 });
     expect(illustrationJob(store, missing.id)).toMatchObject({ status: 'queued', attempt: 2 });
   });
+});
+
+test('selecting Codex as the prompt model still plans first and renders from the prepared prompt', async () => {
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  const model = codexModel(store);
+  const plan = reserveIllustrationPlan(store, source, 'manual', {
+    maxTargets: 1,
+    settings: fixtureSettings({
+      generator: 'codex',
+      codex: { model: { id: model.id }, promptModel: { id: model.id } },
+    }),
+  });
+  const prompt = '  A "silver lantern" floats above the river.\n';
+  const calls: string[] = [];
+  const executeCodex = vi.fn<NonNullable<IllustrationRunnerHooks['executeCodex']>>(
+    async (_connection, request) => {
+      calls.push('plan');
+      const source = request.input.source as { blocks: [string, string][] };
+      return {
+        status: 'completed',
+        text: JSON.stringify({
+          heroIndex: 0,
+          targets: [
+            {
+              startAnchor: source.blocks[0][0],
+              endAnchor: source.blocks[0][0],
+              focus: 'The lantern',
+              visualBrief: 'A lantern above the river',
+              prompt: { prompt, caption: '은빛 등불' },
+            },
+          ],
+        }),
+        toolCalls: [],
+        refusal: null,
+        error: null,
+        usage: { inputTokens: 20, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
+        opaqueState: null,
+      };
+    }
+  );
+  const generateCodexImage = vi.fn<NonNullable<IllustrationRunnerHooks['generateCodexImage']>>(
+    async (_connection, request) => {
+      calls.push('image');
+      expect(JSON.parse(request.text).prompt).toBe(prompt);
+      return {
+        status: 'completed',
+        images: [{ mime: 'image/png', bytes: PNG }],
+        revisedPrompt: null,
+        text: '{"caption":"은빛 등불"}',
+        error: null,
+        usage: { inputTokens: 20, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
+      };
+    }
+  );
+  const observed = hooks(store, { executeCodex, generateCodexImage });
+  expect((await runIllustrationJob(store, plan.id, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  expect(generateCodexImage).not.toHaveBeenCalled();
+  const [cut] = queuedIllustrations(store);
+  expect((await runIllustrationJob(store, cut, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  expect(executeCodex).toHaveBeenCalledTimes(1);
+  expect(generateCodexImage).toHaveBeenCalledTimes(1);
+  expect(calls).toEqual(['plan', 'image']);
+});
+
+test('one separate Codex planning call prepares every cut and passes each prompt unchanged to image generation', async () => {
+  const store = databases.create();
+  const { chat, source } = chatWithSource(store);
+  const reference = store.product.createAsset(chat.id, {
+    title: 'Mira character reference',
+    mime: 'image/png',
+    base64: PNG_BASE64,
+    description: '',
+    actor: 'Mira',
+    outfit: '',
+    location: '',
+    allowedUse: 'both',
+  }) as { id: string };
+  updateIllustrationReferences(store, chat.id, {
+    expectedRevision: 0,
+    references: [{ ref: reference.id, role: 'character' }],
+  });
+  const imageModel = codexModel(store);
+  const prompts = [
+    '  Mira holds a "blue lantern".\nKeep the silver trim.\n',
+    '\tA quiet pier — before sunrise.  ',
+  ];
+  const { provider, model } = await promptModel(store, (body) =>
+    JSON.stringify({
+      heroIndex: 1,
+      targets: body.input.source.blocks.map(([anchor, text]: [string, string], index: number) => ({
+        startAnchor: anchor,
+        endAnchor: anchor,
+        focus: text,
+        visualBrief: text,
+        prompt: { prompt: prompts[index], caption: `별도 프롬프트 컷 ${index + 1}` },
+      })),
+    })
+  );
+  const plan = reserveIllustrationPlan(store, source, 'manual', {
+    maxTargets: 2,
+    settings: fixtureSettings({
+      generator: 'codex',
+      codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
+    }),
+  });
+  const captured: CodexImageRequest[] = [];
+  const observed = hooks(store, {
+    generateCodexImage: async (_connection, request) => {
+      captured.push(request);
+      return {
+        status: 'completed',
+        images: [{ mime: 'image/png', bytes: PNG }],
+        revisedPrompt: null,
+        text: '{"caption":"생성된 그림"}',
+        error: null,
+        usage: { inputTokens: 20, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
+      };
+    },
+  });
+  expect((await runIllustrationJob(store, plan.id, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  const cuts = queuedIllustrations(store);
+  expect(cuts).toHaveLength(2);
+  for (const id of cuts)
+    expect((await runIllustrationJob(store, id, 'worker', observed.options))?.status).toBe(
+      'completed'
+    );
+  expect(provider.requests).toHaveLength(1);
+  const plannedSource = JSON.parse(provider.requests[0].body).input.source;
+  expect(plannedSource.attachedReferences).toEqual([
+    { attachment: 1, role: 'character design reference', label: 'Mira character reference' },
+  ]);
+  expect(provider.requests[0].body).not.toContain(PNG_BASE64);
+  expect(captured.map((request) => JSON.parse(request.text).prompt)).toEqual([
+    prompts[1],
+    prompts[0],
+  ]);
+  expect(captured.every((request) => request.modelId === imageModel.modelId)).toBe(true);
+  expect(captured.map((request) => request.references)).toEqual([
+    [{ mime: 'image/png', base64: PNG_BASE64 }],
+    [{ mime: 'image/png', base64: PNG_BASE64 }],
+  ]);
+  expect(illustrationJob(store, cuts[0]).diagnostic?.prompt).toMatchObject({
+    prompt: prompts[1],
+    caption: '별도 프롬프트 컷 2',
+  });
+  expect(store.source(source.id).text).toBe(source.text);
+});
+
+test('Codex redraw prepares a fresh prompt and retries reuse that prompt without another model call', async () => {
+  const store = databases.create();
+  const { source } = chatWithSource(store);
+  const imageModel = codexModel(store);
+  const originalPrompt = 'Original blue lantern';
+  const redrawPrompt = '  Redraw the "blue lantern".\n';
+  const { provider, model } = await promptModel(store, (body) => {
+    const blocks = body.input.source.blocks as [string, string][] | undefined;
+    return JSON.stringify(
+      blocks
+        ? {
+            heroIndex: 0,
+            targets: [
+              {
+                startAnchor: blocks[0][0],
+                endAnchor: blocks[0][0],
+                focus: 'Mira',
+                visualBrief: 'Mira with a lantern',
+                prompt: { prompt: originalPrompt, caption: '첫 등불' },
+              },
+            ],
+          }
+        : { prompt: redrawPrompt, caption: '다시 그린 등불' }
+    );
+  });
+  const { revision, ...body } = fixtureSettings({
+    generator: 'codex',
+    maxAutoRetries: 0,
+    codex: { model: { id: imageModel.id }, promptModel: { id: model.id } },
+  });
+  updateIllustrationSettings(store, { expectedRevision: revision, ...body }, true);
+  const plan = reserveIllustrationPlan(store, source, 'manual', { maxTargets: 1 });
+  const prompts: string[] = [];
+  let rejectNext = false;
+  const observed = hooks(store, {
+    generateCodexImage: async (_connection, request) => {
+      prompts.push(JSON.parse(request.text).prompt);
+      const fail = rejectNext;
+      rejectNext = false;
+      return {
+        status: fail ? 'error' : 'completed',
+        images: fail ? [] : [{ mime: 'image/png', bytes: PNG }],
+        revisedPrompt: null,
+        text: '{"caption":"등불"}',
+        error: fail ? { code: 'CODEX_IMAGE_NOT_GENERATED' } : null,
+        usage: { inputTokens: 20, outputTokens: 5, costUsd: null, raw: null, priceRevision: null },
+      };
+    },
+  });
+  expect((await runIllustrationJob(store, plan.id, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  const [cut] = queuedIllustrations(store);
+  expect((await runIllustrationJob(store, cut, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  const redraw = regenerateIllustration(store, cut);
+  expect(redraw.input.target?.prompt).toBeUndefined();
+  rejectNext = true;
+  expect(await runIllustrationJob(store, redraw.id, 'worker', observed.options)).toEqual({
+    status: 'failed',
+    code: 'CODEX_IMAGE_NOT_GENERATED',
+    images: 0,
+  });
+  retryIllustration(store, redraw.id);
+  expect((await runIllustrationJob(store, redraw.id, 'worker', observed.options))?.status).toBe(
+    'completed'
+  );
+  expect(provider.requests).toHaveLength(2);
+  expect(prompts).toEqual([originalPrompt, redrawPrompt, redrawPrompt]);
+  expect(store.source(source.id).text).toBe(source.text);
 });
 
 describe('illustration runner through a prompt model and remote ComfyUI', () => {

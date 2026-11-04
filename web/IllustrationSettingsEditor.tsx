@@ -118,13 +118,15 @@ function IllustrationEnvironmentEditor({
     selected: ModelRef | null,
     models: Library['models'],
     onChange: (ref: ModelRef | null) => void,
-    emptyLabel = t('visuals.m042')
+    emptyLabel = t('visuals.m042'),
+    description?: string
   ) => {
     const model = library.models.find((item) => item.id === selected?.id);
     return (
       <label className="settings-row">
         <span className="settings-row-copy">
           <span>{label}</span>
+          {description && <small>{description}</small>}
         </span>
         <span className="settings-row-control">
           <select
@@ -368,6 +370,14 @@ function IllustrationEnvironmentEditor({
               codexModels,
               (ref) => change({ ...draft, codex: { ...draft.codex, model: ref } }),
               codexModels.length ? t('visuals.m042') : t('visuals.m066')
+            )}
+            {selector(
+              t('visuals.m077'),
+              draft.codex.promptModel,
+              library.models,
+              (ref) => change({ ...draft, codex: { ...draft.codex, promptModel: ref } }),
+              t('visuals.m042'),
+              t('visuals.codexPromptModelDescription')
             )}
             <label className="settings-row settings-row-toggle">
               <span className="settings-row-copy">{t('visuals.m068')}</span>

@@ -1,4 +1,10 @@
 export const messages = {
+  'visualpanels.setupNeededSelectPromptModel': {
+    ko: '설정 필요, 프롬프트 모델을 선택하고 모델과 프로바이더를 사용하도록 설정해 주세요.',
+    en: 'Setup needed. Select a prompt model and enable the model and provider.',
+    ja: '設定が必要です。プロンプトモデルを選び、モデルとプロバイダーを有効にしてください。',
+    zh: '需要设置。请选择提示词模型，并启用模型和提供商。',
+  },
   'visualpanels.fullLoreText': {
     ko: '전문',
     en: 'Full text',
