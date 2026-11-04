@@ -850,7 +850,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   });
   await page.getByLabel('다음 장면 요청', { exact: true }).fill('두 사람이 다시 만나는 장면');
   const menu = await openChatMenu(page);
-  await menu.getByRole('button', { name: '작품 및 원작 참고', exact: true }).click();
+  await menu.getByRole('button', { name: '원작 참고', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '채팅 설정', exact: true });
   await expect(
     dialog.getByRole('heading', { name: '작품 및 원작 참고', exact: true })
@@ -860,6 +860,9 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
   await dialog.getByRole('switch', { name: '집필 전에 원작 참고' }).check();
   const search = dialog.getByRole('checkbox', { name: '원작 정보를 웹에서 확인' });
   await expect(search).not.toBeChecked();
+  await expect(
+    dialog.getByText('검색 비용이 추가될 수 있고, 기준 시점 이후의 내용이 포함될 수 있어요.')
+  ).toHaveCount(0);
   await search.check();
   await dialog.getByLabel('작품, 판본, 세계관', { exact: true }).fill('가상의 항구 이야기');
   await dialog.getByLabel('기준 시점과 스포일러 범위', { exact: true }).fill('2권 끝까지');
@@ -889,9 +892,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     webSearch: true,
   });
 
-  await (await openChatMenu(page))
-    .getByRole('button', { name: '작품 및 원작 참고', exact: true })
-    .click();
+  await (await openChatMenu(page)).getByRole('button', { name: '원작 참고', exact: true }).click();
   await expect(dialog.locator('.story-guide-settings')).not.toHaveAttribute('open');
   await expect(dialog.getByLabel('작품, 판본, 세계관', { exact: true })).toBeHidden();
   await expect(dialog.getByRole('button', { name: '미리보기 만들기', exact: true })).toHaveCount(0);
@@ -924,9 +925,7 @@ test('CSUI10 original-work reference preserves optional settings, last brief and
     kind: 'author-note',
     text: '이 이야기에서는 두 사람이 화해했다.',
   });
-  await (await openChatMenu(page))
-    .getByRole('button', { name: '작품 및 원작 참고', exact: true })
-    .click();
+  await (await openChatMenu(page)).getByRole('button', { name: '원작 참고', exact: true }).click();
   await expect(dialog.getByLabel('가이드 미리보기', { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel('원작 질문 답변', { exact: true })).toHaveCount(0);
   await expectNoOverflow(page, dialog);

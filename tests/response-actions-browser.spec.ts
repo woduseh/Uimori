@@ -358,9 +358,7 @@ test('RACOM08 cancelled request opens its specific task record and lazily recove
   const card = dialog.locator(`[data-testid="run"][data-run-id="${run.id}"]`);
   await expect(card.locator('.task-request')).toHaveText(run.request);
   await expect(card.locator('.run-task-details > .error')).toHaveCount(0);
-  await expect(
-    card.getByText('실행과 실제 입력 확인', { exact: true }).locator('..')
-  ).toHaveAttribute('open');
+  await expect(card.getByText('실행 확인', { exact: true }).locator('..')).toHaveAttribute('open');
   const partial = card.locator('.partial-response');
   await expect(partial).not.toHaveAttribute('open');
   expect(streamReads).toBe(0);
@@ -767,7 +765,7 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     }
     const current = before.runs.at(-1)!;
     const card = panel.locator(`[data-testid="run"][data-run-id="${current.id}"]`);
-    const diagnostics = card.getByText('실행과 실제 입력 확인', { exact: true });
+    const diagnostics = card.getByText('실행 확인', { exact: true });
     const fullLoaded = page.waitForResponse((response) =>
       response.url().endsWith(`/api/runs/${current.id}`)
     );
@@ -795,7 +793,7 @@ test('TSKUI01 task overview screenshots wait for real run, job and attempt data 
     expect(attemptsResponse.ok()).toBe(true);
     const attempts = (await attemptsResponse.json()) as unknown[];
     await expect(usage.getByRole('table')).toBeVisible();
-    await expect(usage.getByRole('rowheader')).toHaveText(['원문']);
+    await expect(usage.getByRole('rowheader')).toHaveText(['본문']);
     await expect(usage.getByRole('rowheader', { name: '채팅 제목', exact: true })).toHaveCount(0);
     await expect(usage.getByText(new RegExp(`^전송 시도 ${attempts.length}회`))).toBeVisible();
     await expect(panel.getByRole('status').filter({ hasText: /불러오는 중/ })).toHaveCount(0);

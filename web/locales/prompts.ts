@@ -1121,12 +1121,6 @@ export const messages = {
     ja: '原作情報をウェブで確認',
     zh: '通过网络搜索核实原作信息',
   },
-  'prompts.uiStoryGuideWebSearchScope': {
-    ko: '검색 비용이 추가될 수 있고, 기준 시점 이후의 내용이 포함될 수 있어요.',
-    en: 'Search may add costs and include spoilers beyond your reference point.',
-    ja: '検索費用が増えたり、基準時点より後の内容が含まれたりする場合があります。',
-    zh: '搜索可能产生额外费用，并包含参考时间点之后的剧透。',
-  },
   'prompts.uiStoryGuideWebSources': {
     ko: '웹 검색 출처',
     en: 'Web search sources',

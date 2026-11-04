@@ -14,6 +14,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { TransientNotice } from './TransientNotice.js';
 import { SaveButton } from './SaveButton.js';
 import { Dialog } from './Dialog.js';
+import { CheckIcon } from './ui-icons.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import './palettes.css';
 
@@ -272,9 +273,10 @@ export function PaletteSettings({
               }
             />
           </label>
-          <div className="theme-library-actions">
+          <div className="theme-library-actions palette-mode-select">
             {(['light', 'dark'] as const).map((value) => (
               <button key={value} aria-pressed={mode === value} onClick={() => setMode(value)}>
+                <CheckIcon className="palette-mode-check" size={16} aria-hidden="true" />
                 {t(value === 'light' ? 'palettes.light' : 'palettes.dark')}
               </button>
             ))}

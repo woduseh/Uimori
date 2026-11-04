@@ -1446,10 +1446,10 @@ export const messages = {
     zh: '{v0}，{v1}，管理任务',
   },
   'visuals.m285': {
-    ko: '실행과 실제 입력 확인',
-    en: 'Review run and actual inputs',
-    ja: '実行と実際の入力を確認',
-    zh: '查看运行与实际输入',
+    ko: '실행 확인',
+    en: 'Run details',
+    ja: '実行を確認',
+    zh: '查看运行',
   },
   'visuals.blur': {
     ko: '배경 흐림: {value}px',

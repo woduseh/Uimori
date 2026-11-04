@@ -311,6 +311,11 @@
   font-size: var(--font-body);
   line-height: 1.5;
 }
+.provider-template strong,
+.provider-template > small {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .provider-template > small {
   grid-column: 2;
   font-size: var(--font-small);
@@ -463,6 +468,9 @@
   padding: 14px 0;
   border-top: var(--hairline) solid var(--line);
   z-index: 1;
+}
+:root[data-theme="dark"] .provider-management-form > .provider-actions {
+  background: var(--panel);
 }
 .provider-save-actions {
   justify-content: flex-end;

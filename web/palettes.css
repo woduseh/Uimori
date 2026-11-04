@@ -1,6 +1,9 @@
 .palette-editor-section {
   margin-top: 16px;
 }
+.palette-editor-section > .theme-library-actions > button {
+  flex-basis: auto;
+}
 .palette-management-list {
   margin: 12px 0;
 }
@@ -23,6 +26,18 @@
 .palette-editor > label {
   display: grid;
   gap: 6px;
+}
+.palette-mode-select > button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--text);
+}
+.palette-mode-check {
+  visibility: hidden;
+  color: var(--accent-text);
+}
+.palette-mode-select > button[aria-pressed="true"] .palette-mode-check {
+  visibility: visible;
 }
 .palette-color-fields {
   display: grid;

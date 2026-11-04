@@ -164,6 +164,7 @@ const revisionErrors = new Set([
   'Prompt preset changed; refresh before saving',
   '초안이 변경됐어요. 현재 입력은 유지하고 변경 내용을 확인해 주세요.',
 ]);
+const nativeActionConflict = /^RISU_NATIVE_ACTION_(?:FAILED|CANCELLED|INTERRUPTED|RUNNING)$/u;
 const roles: Record<string, string> = {
   main: '본문',
   translation: '번역',
@@ -219,10 +220,7 @@ export function apiErrorDiagnostic(
             ? 'DRAFT_DISCARDED'
             : error;
     if (Object.hasOwn(messages, code)) return { code, message: messages[code] };
-    if (
-      status === 409 &&
-      /^RISU_NATIVE_ACTION_(?:FAILED|CANCELLED|INTERRUPTED|RUNNING)$/u.test(code)
-    )
+    if (status === 409 && nativeActionConflict.test(code))
       return {
         code,
         message:
@@ -319,6 +317,8 @@ export function apiErrorDisplay(error: unknown, status: number, method: string):
   if (code === 'MODEL_UNAVAILABLE' || code?.startsWith('MODEL_UNAVAILABLE:'))
     return display('errors.modelUnavailable');
   if (code === 'REVISION_CONFLICT') return display('errors.revisionConflict');
+  if (status === 409 && code && nativeActionConflict.test(code))
+    return display('errors.conflict', { status });
   if (code?.startsWith('CHAT_TRANSCRIPT_') && Object.hasOwn(messages, code))
     return display('errors.transcriptInvalid');
   if (code && /^(?:ILLUSTRATION_|COMFYUI_|CODEX_IMAGE_)[A-Z0-9_]{1,100}$/u.test(code)) {

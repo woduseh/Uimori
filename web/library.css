@@ -575,27 +575,6 @@
   background: var(--surface-raised);
   min-width: 0;
 }
-/* Row actions stay quiet until the row is hovered or focused; touch shows them fully. */
-.library-list-item > .library-start-chat,
-.library-list-item > .library-item-menu {
-  opacity: 0.45;
-}
-.library-list-item:focus-within > .library-start-chat,
-.library-list-item:focus-within > .library-item-menu {
-  opacity: 1;
-}
-@media (hover: hover) {
-  .library-list-item:hover > .library-start-chat,
-  .library-list-item:hover > .library-item-menu {
-    opacity: 1;
-  }
-}
-@media (hover: none), (pointer: coarse) {
-  .library-list-item > .library-start-chat,
-  .library-list-item > .library-item-menu {
-    opacity: 1;
-  }
-}
 .library-open-content {
   display: flex;
   align-items: center;

@@ -104,6 +104,7 @@
   .settings-dialog > .dialog-header:has(.settings-section-select) {
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr) 44px;
+    gap: 4px;
   }
   .settings-dialog > .dialog-header > .settings-section-select {
     grid-column: 2;
@@ -115,6 +116,8 @@
     background-color: transparent;
     font-size: var(--font-heading);
     font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .settings-dialog > .dialog-header:has(.settings-section-select) > h2 {
     position: absolute;

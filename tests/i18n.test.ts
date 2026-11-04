@@ -73,6 +73,33 @@ describe('UI locale presentation boundary', () => {
     expect(formatMessage('unknown.explicit.key', 'ja')).toBe('unknown.explicit.key');
   });
 
+  test('all built-in layout and palette labels have translations without changing their definitions', async () => {
+    const { BUILTIN_THEMES } = await import('../core/themes.js');
+    const { BUILTIN_PALETTES } = await import('../core/theme-palettes.js');
+    const { setLocale, translateMessage } = await import('../web/i18n.js');
+    const definitions = JSON.stringify({ themes: BUILTIN_THEMES, palettes: BUILTIN_PALETTES });
+    const names = [
+      ['builtin:cinematic', 'Cinematic', 'シネマティック', '电影感'],
+      ['builtin:letter', 'Letter', '便箋', '信笺'],
+      ['builtin:scrapbook', 'Scrapbook', 'スクラップブック', '剪贴簿'],
+      ['builtin:classic-frame', 'Classic Frame', 'クラシックフレーム', '经典边框'],
+    ] as const;
+    for (const [index, locale] of (['en', 'ja', 'zh'] as const).entries()) {
+      setLocale(locale);
+      for (const [id, ...expected] of names) {
+        const theme = BUILTIN_THEMES.find((item) => item.id === id)!;
+        expect(translateMessage(theme.title)).toBe(expected[index]);
+      }
+      for (const item of [...BUILTIN_THEMES, ...BUILTIN_PALETTES]) {
+        expect(translateMessage(item.title)).not.toMatch(/[가-힣]/u);
+        expect(translateMessage(item.description)).not.toMatch(/[가-힣]/u);
+      }
+    }
+    expect(JSON.stringify({ themes: BUILTIN_THEMES, palettes: BUILTIN_PALETTES })).toBe(
+      definitions
+    );
+  });
+
   test('retained message identity survives identical Japanese translations and leaves literal user arguments alone', async () => {
     const { message, messageRef, setLocale, t, translateMessage } = await import('../web/i18n.js');
     setLocale('ja');

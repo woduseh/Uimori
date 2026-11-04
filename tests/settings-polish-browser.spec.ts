@@ -281,8 +281,8 @@ test('SPUI03 usage keeps no-call periods compact without hiding free or unconfir
   await expect(panel.locator('summary').filter({ hasText: '모델별 상세' })).toHaveCount(0);
   await expect(panel.locator('summary').filter({ hasText: '일별 및 용도별 상세' })).toHaveCount(0);
   await expect(panel).toContainText('시각 미확인 3회, US$0.03는 기간 합계에서 제외했어요.');
-  await expect(panel.locator('.usage-note').filter({ hasText: '상세 집계 시작' })).toContainText(
-    '상세 집계 시작: 2026. 4. 1.'
+  await expect(panel.locator('.usage-note').filter({ hasText: '상세 집계 시작' })).toHaveText(
+    '상세 집계 시작: 2026. 4. 1. 삭제된 과거 기록은 복원하지 않아요.'
   );
   for (const theme of ['dark', 'light']) {
     await selectSettingsSection(page, '일반');

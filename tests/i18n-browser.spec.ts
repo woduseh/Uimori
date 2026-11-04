@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { ChatDetail } from '../core/types.js';
+import { emptyTheme, type Theme } from '../core/themes.js';
 import { createReadingChat } from './fixtures/personal-workspace.js';
 import {
   navigationAction,
@@ -174,6 +175,96 @@ async function switchFromAnotherTab(page: Page, locale: string) {
   }, locale);
   await expect(page.locator('html')).toHaveAttribute('lang', locale);
 }
+
+test('I18N built-in layouts follow the UI language while a matching custom theme stays literal', async ({
+  page,
+  request,
+}) => {
+  const originalTitle = '시네마틱';
+  const originalDescription = '가장자리로 스며드는 등장인물과 긴 이야기를 담은 장면';
+  const response = await request.post('/api/resources/save', {
+    data: {
+      kind: 'theme',
+      model: { ...emptyTheme(originalTitle), description: originalDescription },
+    },
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+  const saved = ((await response.json()) as { saved: Theme }).saved;
+  try {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '테마와 색상');
+    const before = await (await request.get('/api/themes')).json();
+    const custom = page.locator('.theme-card').filter({
+      has: page.locator(`[data-layout="${saved.id}"]`),
+    });
+    const cases = [
+      {
+        locale: 'en',
+        names: ['Cinematic', 'Letter', 'Scrapbook', 'Classic Frame'],
+      },
+      {
+        locale: 'ja',
+        names: ['シネマティック', '便箋', 'スクラップブック', 'クラシックフレーム'],
+      },
+      {
+        locale: 'zh',
+        names: ['电影感', '信笺', '剪贴簿', '经典边框'],
+      },
+    ] as const;
+    const ids = ['cinematic', 'letter', 'scrapbook', 'classic-frame'];
+    for (const { locale, names } of cases) {
+      await switchFromAnotherTab(page, locale);
+      for (const [index, id] of ids.entries()) {
+        const card = page.locator('.theme-card').filter({
+          has: page.locator(`[data-layout="builtin:${id}"]`),
+        });
+        await expect(card.locator('.theme-choice-title > span')).toHaveText(names[index]);
+        await expect(card.locator('small')).not.toContainText(/[가-힣]/u);
+      }
+      await expect(custom.locator('.theme-choice-title > span')).toHaveText(originalTitle);
+      await expect(custom.locator('small')).toHaveText(originalDescription);
+    }
+    const after = await (await request.get('/api/themes')).json();
+    expect(after).toEqual(before);
+  } finally {
+    const deleted = await request.delete(`/api/themes/${saved.id}`, {
+      data: { expectedRevision: saved.revision },
+    });
+    expect(deleted.ok(), await deleted.text()).toBe(true);
+  }
+});
+
+test('I18N compact composer labels fit one row and keep their full accessible names', async ({
+  page,
+  request,
+}) => {
+  const { chat } = await createReadingChat(request, '좁은 화면 입력창 번역 fixture', 1);
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto(`/?chat=${chat.id}`);
+  const input = page.locator('#request');
+  await expect(input).toBeVisible();
+  const cases = [
+    ['ko', '다음 장면 요청', '요청…'],
+    ['en', 'Request next scene', 'Write…'],
+    ['ja', '次のシーンを依頼', '依頼…'],
+    ['zh', '请求下一个场景', '请求…'],
+  ] as const;
+  for (const [locale, name, placeholder] of cases) {
+    await switchFromAnotherTab(page, locale);
+    await expect(input).toHaveAccessibleName(name);
+    await expect(input).toHaveAttribute('placeholder', placeholder);
+    expect(
+      await input.evaluate((element) => Math.ceil(element.getBoundingClientRect().height))
+    ).toBeLessThanOrEqual(48);
+  }
+  await input.fill('A draft stays editable.');
+  await expect(input).toHaveValue('A draft stays editable.');
+  expect(await input.evaluate((element) => element.getBoundingClientRect().width)).toBeGreaterThan(
+    250
+  );
+});
 
 test('I18N08 source and saved translation editors preserve unsaved text, selection and DOM identity', async ({
   page,

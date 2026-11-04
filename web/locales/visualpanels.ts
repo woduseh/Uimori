@@ -1872,7 +1872,7 @@ export const messages = {
     zh: '用途未分类',
   },
   'visualpanels.detailedTrackingBeganDeletedHistoricalRecordsAre': {
-    ko: '상세 집계 시작: {v0} . 삭제된 과거 기록은 복원하지 않아요.',
+    ko: '상세 집계 시작: {v0} 삭제된 과거 기록은 복원하지 않아요.',
     en: 'Detailed tracking began: {v0}. Deleted historical records are not restored.',
     ja: '詳細集計の開始：{v0}。削除済みの過去の記録は復元しません。',
     zh: '详细统计起始日期：{v0}。不会恢复已删除的历史记录。',
@@ -2062,6 +2062,54 @@ export const messages = {
     en: 'A simple default reading layout',
     ja: 'すっきりした基本の読書レイアウト',
     zh: '简洁的默认阅读布局',
+  },
+  'visualpanels.layoutCinematic': {
+    ko: '시네마틱',
+    en: 'Cinematic',
+    ja: 'シネマティック',
+    zh: '电影感',
+  },
+  'visualpanels.layoutCinematicDescription': {
+    ko: '가장자리로 스며드는 등장인물과 긴 이야기를 담은 장면',
+    en: 'A scene for long stories, with characters fading in at the edge',
+    ja: '端から浮かぶ登場人物と長い物語を収めるシーン',
+    zh: '人物从画面边缘渐显，容纳长篇故事的场景',
+  },
+  'visualpanels.layoutLetter': {
+    ko: '편지지',
+    en: 'Letter',
+    ja: '便箋',
+    zh: '信笺',
+  },
+  'visualpanels.layoutLetterDescription': {
+    ko: '작은 인물 사진과 섬세한 줄, 여백이 있는 한 장의 편지',
+    en: 'A letter with a small portrait, delicate lines, and open space',
+    ja: '小さな人物写真と繊細な線、余白のある一通の手紙',
+    zh: '小幅人物照片、细线与留白交织成的一封信',
+  },
+  'visualpanels.layoutScrapbook': {
+    ko: '스크랩북',
+    en: 'Scrapbook',
+    ja: 'スクラップブック',
+    zh: '剪贴簿',
+  },
+  'visualpanels.layoutScrapbookDescription': {
+    ko: '테이프로 붙인 인물 사진과 나란히 놓인 기록',
+    en: 'A record beside a taped-in portrait',
+    ja: 'テープで貼った人物写真に並ぶ記録',
+    zh: '与胶带固定的人物照片并排的记录',
+  },
+  'visualpanels.layoutClassicFrame': {
+    ko: '클래식 프레임',
+    en: 'Classic Frame',
+    ja: 'クラシックフレーム',
+    zh: '经典边框',
+  },
+  'visualpanels.layoutClassicFrameDescription': {
+    ko: '얇은 사각 프레임 안에 인물과 이야기를 나란히 담은 정갈한 장면',
+    en: 'A clean scene with the character and story side by side in a thin frame',
+    ja: '細い四角の枠に人物と物語を並べた端正なシーン',
+    zh: '人物与故事并排置于细矩形边框内的整洁场景',
   },
   'visualpanels.layoutLibrary': {
     ko: '서재',
