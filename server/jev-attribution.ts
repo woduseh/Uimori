@@ -22,7 +22,18 @@ export function validateTranslationJudgmentWire(
     (expectedResponse !== undefined && response !== expectedResponse)
   )
     throw new HttpError(400, 'TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
-  const request = translationJudgmentRequest(response);
+  const currentHash = translationJudgmentInputHash(sourceHash, response, judgment);
+  const version =
+    wire.judgment?.inputHash === currentHash
+      ? 'translation-refusal-jev-v3'
+      : 'translation-refusal-jev-v2';
+  if (
+    version === 'translation-refusal-jev-v2' &&
+    wire.judgment?.inputHash !==
+      translationJudgmentInputHash(sourceHash, response, judgment, version)
+  )
+    throw new HttpError(400, 'TRANSLATION_JUDGMENT_ATTEMPT_MISMATCH');
+  const request = translationJudgmentRequest(sourceHash, response, version);
   const body = { model: JEV_MODEL, ...request };
   const digest = (value: unknown) =>
     createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -36,7 +47,6 @@ export function validateTranslationJudgmentWire(
     wire.method !== 'POST' ||
     wire.agentId ||
     wire.nativeScript ||
-    wire.judgment.inputHash !== translationJudgmentInputHash(sourceHash, response, judgment) ||
     !isDeepStrictEqual(wire.body, body) ||
     wire.bodySha256 !== digest(body) ||
     wire.stablePrefixSha256 !== digest(request.questions)

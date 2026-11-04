@@ -19,7 +19,7 @@ export async function checkCodexIllustrationContent(
     questions: {
       explicitSexualContent: {
         type: 'noul',
-        instructions: `Would generating the requested illustration require depicting graphic sexual activity, genital-focused sexual contact, penetration, masturbation, oral sex or comparably pornographic imagery? Evaluate the specified moment and art direction, not unrelated background events. ${CODEX_SEXUAL_CONTENT_BOUNDARY}`,
+        instructions: `Would the requested illustration itself need to depict sexually explicit content? Judge the moment and art direction selected for this image. ${CODEX_SEXUAL_CONTENT_BOUNDARY}`,
       },
     },
   };

@@ -221,7 +221,8 @@ describe('JEV-only existing image placement', () => {
     const readImage = vi.fn(() => original);
     const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
-      expect(body.state.selectionVersion).toBe('image-selection-jev-v4');
+      expect(body.state.selectionVersion).toBe('image-selection-jev-v5');
+      expect(body.questions.block_0.instructions).toContain('candidate pictures');
       expect(body.state.settings).toEqual({ images: true, longContext: false });
       expect(Object.keys(body.assets).length).toBeLessThanOrEqual(16);
       expect(Object.keys(body.assets)).toHaveLength(body.state.assets.length);
@@ -394,6 +395,9 @@ describe('JEV-only existing image placement', () => {
     });
     expect(JSON.stringify(wire)).not.toContain('test-jev-secret');
     const sent = JSON.parse(String(send.mock.calls[0][1]?.body));
+    expect(sent.questions.block_0.criteria.asset_0).toContain('Morning pier portrait');
+    expect(sent.questions.block_0.criteria.asset_1).toContain('Mountain');
+    expect(sent.questions.block_0.instructions).not.toContain('candidate pictures');
     expect(sent.state).not.toHaveProperty('sourceHash');
     expect(sent.state.assets[0]).toMatchObject({
       id: 'asset_0',
@@ -582,48 +586,76 @@ describe('JEV-only existing image placement', () => {
     expect(state.evaluatedAssets).toBeLessThan(2000);
     expect(state.totalAssets).toBe(2000);
   });
-  it('accepts exact historic full and projected wires while rejecting archive tampering', () => {
-    const request = legacyRequest();
-    const { sourceHash: _sourceHash, assets: catalog, ...state } = request.state;
-    const projected = {
-      ...request,
-      state: {
-        ...state,
-        assets: catalog.map(({ revision: _revision, hash: _hash, ...asset }) => asset),
-      },
-    };
-    const inputHash = createHash('sha256')
-      .update(JSON.stringify({ version: 'image-selection-jev-v1', request }))
-      .digest('hex');
-    expect(imageJudgmentInputHash(request)).toBe(inputHash);
-    for (const archived of [request, projected]) {
-      const body = { model: JEV_MODEL, ...archived } as Json;
-      const wire: WireRecord = {
-        connectionId: 'typesafe-judgment',
-        protocol: 'typesafe-systemone-v1',
-        role: 'image',
-        modelId: JEV_MODEL,
-        method: 'POST',
-        url: 'https://api.typesafe.ai/v1/systemone',
-        headers: { 'content-type': 'application/json' },
-        body,
-        bodySha256: createHash('sha256').update(JSON.stringify(body)).digest('hex'),
-        stablePrefixSha256: createHash('sha256')
-          .update(JSON.stringify(request.questions))
-          .digest('hex'),
-        judgment: { kind: 'image-selection', inputHash },
+  it.each([
+    ['image-selection-jev-v1', null],
+    ['image-selection-jev-v3', '60902f75148370a9962cf1fe5030ede4ffcab900dbc2d9b268e624f10a699494'],
+    ['image-selection-jev-v4', '50e9886ed2a14f15fff046903ee28b27bfbf9e86f95abb80156a3f2a36029440'],
+  ] as const)(
+    'accepts historic full and projected %s wires and rejects tampering',
+    (version, capturedHash) => {
+      const request = legacyRequest();
+      if (version !== 'image-selection-jev-v1') {
+        Object.assign(request, {
+          state: {
+            selectionVersion: version,
+            ...(version === 'image-selection-jev-v4'
+              ? { settings: { images: false, longContext: false } }
+              : {}),
+            ...request.state,
+          },
+        });
+        for (const question of Object.values(request.questions))
+          question.instructions = question.instructions.replace(
+            'Use asset metadata',
+            "Only this question's criteria are eligible. Use asset metadata"
+          );
+      }
+      const { sourceHash: _sourceHash, assets: catalog, ...state } = request.state;
+      const projected = {
+        ...request,
+        state: {
+          ...state,
+          assets: catalog.map(({ revision: _revision, hash: _hash, ...asset }) => asset),
+        },
       };
-      expect(() => validateImageJudgmentWire(source, assets, wire)).not.toThrow();
-      expect(() =>
-        validateImageJudgmentWire(source, [{ ...assets[0], hash: 'f'.repeat(64) }, assets[1]], wire)
-      ).toThrow('IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
-      const changed = structuredClone(body) as { state: { guidance: string } };
-      changed.state.guidance = 'tampered';
-      expect(() =>
-        validateImageJudgmentWire(source, assets, { ...wire, body: changed as Json })
-      ).toThrow('IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
+      const inputHash = createHash('sha256')
+        .update(JSON.stringify({ version, request }))
+        .digest('hex');
+      if (capturedHash) expect(inputHash).toBe(capturedHash);
+      expect(imageJudgmentInputHash(request)).toBe(inputHash);
+      for (const archived of [request, projected]) {
+        const body = { model: JEV_MODEL, ...archived } as Json;
+        const wire: WireRecord = {
+          connectionId: 'typesafe-judgment',
+          protocol: 'typesafe-systemone-v1',
+          role: 'image',
+          modelId: JEV_MODEL,
+          method: 'POST',
+          url: 'https://api.typesafe.ai/v1/systemone',
+          headers: { 'content-type': 'application/json' },
+          body,
+          bodySha256: createHash('sha256').update(JSON.stringify(body)).digest('hex'),
+          stablePrefixSha256: createHash('sha256')
+            .update(JSON.stringify(request.questions))
+            .digest('hex'),
+          judgment: { kind: 'image-selection', inputHash },
+        };
+        expect(() => validateImageJudgmentWire(source, assets, wire)).not.toThrow();
+        expect(() =>
+          validateImageJudgmentWire(
+            source,
+            [{ ...assets[0], hash: 'f'.repeat(64) }, assets[1]],
+            wire
+          )
+        ).toThrow('IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
+        const changed = structuredClone(body) as { state: { guidance: string } };
+        changed.state.guidance = 'tampered';
+        expect(() =>
+          validateImageJudgmentWire(source, assets, { ...wire, body: changed as Json })
+        ).toThrow('IMAGE_JUDGMENT_ATTEMPT_MISMATCH');
+      }
     }
-  });
+  );
   it('retrieves a relevant tail asset from 10000 records in the actual serialized request', async () => {
     const many: AssetEntry[] = Array.from({ length: 10000 }, (_, i) => ({
       ...assets[1],
@@ -677,7 +709,7 @@ describe('JEV-only existing image placement', () => {
     );
     const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
-      expect(body.state.selectionVersion).toBe('image-selection-jev-v3');
+      expect(body.state.selectionVersion).toBe('image-selection-jev-v5');
       expect(estimateContextTokens(body)).toBeLessThanOrEqual(IMAGE_JUDGMENT_LIMITS.inputTokens);
       const own = names.map((name, index) => {
         const found = body.state.assets.find(

@@ -40,7 +40,7 @@ export function codexContentWarningRequest(
       questions: {
         explicitSexualContent: {
           type: 'noul',
-          instructions: `Would revising only \`selectedPassage\` according to \`revisionInstruction\` require graphically sexual or pornographic output? The task is passage revision, not continuing the scene. ${boundary}`,
+          instructions: `Would the requested edit require sexually explicit content in the resulting passage? ${boundary}`,
         },
       },
     };
@@ -50,7 +50,7 @@ export function codexContentWarningRequest(
       questions: {
         explicitSexualContent: {
           type: 'noul',
-          instructions: `Would a faithful translation of \`source\` require reproducing graphically sexual or pornographic content, such as explicit sex acts, genital-focused sexual contact, penetration, masturbation, oral sex, or comparably detailed erotic description? ${boundary}`,
+          instructions: `Would a faithful translation of the source passage need to reproduce sexually explicit content? ${boundary}`,
         },
       },
     };
@@ -62,7 +62,7 @@ export function codexContentWarningRequest(
     questions: {
       explicitSexualContent: {
         type: 'noul',
-        instructions: `Would fulfilling \`request\` in the supplied \`recentContext\`, including an instruction to continue the current scene, require generating graphically sexual or pornographic content, such as explicit sex acts, genital-focused sexual contact, penetration, masturbation, oral sex, or comparably detailed erotic description? ${boundary}`,
+        instructions: `Would fulfilling the request require sexually explicit output? Use the recent scene, when provided, to interpret a request to continue. ${boundary}`,
       },
     },
   };
