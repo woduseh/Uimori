@@ -7,7 +7,7 @@ import { HELPER_TASK_TOOLS } from './helper-task-tools.js';
 import { HELPER_DATA_TOOLS } from './helper-data-tools.js';
 import { HELPER_SCENE_TOOLS } from './helper-scene-tools.js';
 import { HELPER_IMAGE_TOOLS } from './helper-image-tools.js';
-import { HELPER_ILLUSTRATION_PROFILE_TOOLS } from './helper-illustration-profiles.js';
+import { HELPER_ILLUSTRATION_TOOLS } from './helper-illustration-workflow.js';
 import { helperOptionTools } from './chat-options.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { HttpError } from './request-validation.js';
@@ -48,7 +48,7 @@ const TOOLS: ProviderTool[] = [
   ...HELPER_TASK_TOOLS,
   ...HELPER_SCENE_TOOLS,
   ...HELPER_IMAGE_TOOLS,
-  ...HELPER_ILLUSTRATION_PROFILE_TOOLS,
+  ...HELPER_ILLUSTRATION_TOOLS,
   {
     name: 'chat.list',
     description: 'List available chats and their current heads.',
@@ -277,7 +277,7 @@ const chatToolNames = new Set([
   'chat.fork',
   'illustration.image.list',
   'illustration.image.read',
-  ...HELPER_ILLUSTRATION_PROFILE_TOOLS.map((tool) => tool.name),
+  ...HELPER_ILLUSTRATION_TOOLS.map((tool) => tool.name),
   ...HELPER_SCENE_TOOLS.map((tool) => tool.name),
   'outline.read',
   'outline.write',
@@ -292,6 +292,10 @@ const dataToolNames = new Set(HELPER_DATA_TOOLS.map((tool) => tool.name));
 const writingReadNames = new Set(MAIN_READ_TOOLS.map((tool) => tool.name));
 const readNames = new Set([
   'illustration.profiles.read',
+  'illustration.continuity.read',
+  'illustration.cuts.list',
+  'illustration.scene.read',
+  'illustration.cut.read',
   ...HELPER_IMAGE_TOOLS.map((tool) => tool.name),
   'data.exec',
   ...dataToolNames,
@@ -373,7 +377,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.tools',
     description:
-      'Discover app operations for exact data search/read, inspecting saved images and managing illustration profiles, read-only SQL, editing resources/themes, saved original or translated scenes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or reading archived independent scenes. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
+      'Discover app operations for exact data search/read, viewing images and planning, generating or editing illustrations, read-only SQL, editing resources/themes, saved original or translated scenes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or reading archived independent scenes. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
     inputSchema: schema(
       {
         names: { type: 'array', maxItems: 4, items: str },

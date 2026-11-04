@@ -18,6 +18,13 @@ Transmission uses WebP at most 2048 pixels on its longest side and 2 MiB. An exi
 
 The illustration operations default to the current chat. Pass an explicit `chatId` to work from the library or target another chat. Image refs must belong to the selected chat or its attached packages. `illustration.image.list` and `illustration.image.read` let the helper find and inspect reference images from uploads and attached packages. The returned `ref` can also link an image to an appearance profile. `illustration.profiles.read` reads the saved profiles and revision. `illustration.profiles.save` accepts one or more profiles at that revision. A single request can add characters and edit existing ones together. Every entry must validate before any change is saved. Omitted fields on an edit keep their values. A null `referenceRef` removes the link. Users can ask for suggestions in the conversation and request a save after choosing a design.
 
+### Work with generated illustrations
+
+- Use `chat.read` for scene IDs, `illustration.scene.read` for original paragraphs and anchors, and `illustration.cuts.list` to find existing cuts before suggesting a chapter-wide shot list. `illustration.generate` accepts selected moments across multiple scenes, their current hashes, focus and optional framing direction. It returns queue reservations. Rendering continues in the normal illustration queue.
+- Use `illustration.cut.read` on a specific variation to compare the picture with the manuscript or appearance profiles. Metadata and stored prompts can also be inspected without sending pixels. `illustration.cut.redraw` reserves a new render of that moment with the requested changes. `illustration.cuts.place` moves a successful cut to a verified passage of its own scene without rendering it again.
+- Use `illustration.references.save` to change roles and character links for several references at once. A completed cut's image ID can supply the exact image for a reference. Read the current reference revision first. Explicitly unlink profiles when switching a linked character reference to style.
+- Use `illustration.continuity.read/save` for temporary visual details across an inclusive range of existing scenes. Overlapping notes can be edited or removed separately. Future scenes can be included by extending the range after they exist.
+
 ## Conversation history and task results
 
 `GET /api/helper/conversations?kind=all` lists existing library and chat helper conversations together. Chat rows include `chatTitle`; each conversation retains its original scope, identity, history and deletion ownership. The existing `kind=library` and `kind=chat&chatId=...` filters still select their original scopes. Listing performs no migration or conversation creation.

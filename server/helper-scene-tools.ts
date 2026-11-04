@@ -135,12 +135,18 @@ export const HELPER_SCENE_TOOLS: ProviderTool[] = [
 ];
 
 const digest = (value: string) => createHash('sha256').update(value).digest('hex');
-export function helperSceneSource(store: Store, chatId: string, id: string) {
-  const chat = store.chat(chatId);
+export function helperSceneSource(
+  store: Store,
+  chatId: string,
+  id: string,
+  ancestry?: ReadonlySet<string>
+) {
   // Fork ancestry can contain another chat's originals: those are readable through story
   // tools, but direct editing must never mutate the fork's shared parent.
-  if (!store.history(chat.headRevision).some((item) => item.revision === id))
-    throw new HttpError(404, 'Scene is not in the current chat ancestry');
+  const inAncestry = ancestry
+    ? ancestry.has(id)
+    : store.history(store.chat(chatId).headRevision).some((item) => item.revision === id);
+  if (!inAncestry) throw new HttpError(404, 'Scene is not in the current chat ancestry');
   const source = store.source(id);
   if (source.chatId !== chatId) throw new HttpError(409, 'Scene belongs to another chat');
   return source;

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { removeDeletedContinuityScenes } from './illustration-continuity.js';
 import { readerRunDismissalKey } from './run-reader-state.js';
 import type { FastifyInstance } from 'fastify';
 import type { Store } from './store.js';
@@ -150,6 +151,7 @@ export function deleteScenes(
     assertChatIdleForDeletion(store, chatId);
     const removed = scope === 'only' ? [history[index]] : history.slice(index);
     const ids = new Set(removed.map((source) => source.revision));
+    removeDeletedContinuityScenes(store, chatId, ids);
     const sources = store.db
       .prepare('SELECT id,run_id,parent_revision,text FROM sources WHERE chat_id=?')
       .all(chatId);

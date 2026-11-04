@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { splitSource, type SourceBlock } from '../core/auxiliary.js';
 import type { PortableIllustration, PortableIllustrationAnchor } from '../core/chat-backup.js';
-import type { IllustrationJobInput } from '../core/illustration.js';
 import { illustrationTargetSet, type IllustrationTarget } from '../core/illustration-storyboard.js';
 import type { Store } from './store.js';
 import {
@@ -40,20 +39,37 @@ export function captureIllustrations(
   for (const [entry, reference] of history.entries()) {
     const source = store.source(reference.revision);
     const blocks = splitSource(source);
-    const presentation = illustrationPresentation(store, source.id, source.hash);
+    const presentation = illustrationPresentation(store, source.id);
     const translation = successfulTranslation(store, source);
     const rows = store.db
-      .prepare(`SELECT j.id,j.source_hash,j.input,i.position,i.mime,i.body,i.hash${binary ? '' : ',b.bytes'} FROM illustration_jobs j
+      .prepare(`SELECT j.id,j.source_hash,json_extract(j.input,'$.target') AS target,json_extract(j.input,'$.unplacedMoment') AS unplaced,i.position,i.mime,i.body,i.hash${binary ? '' : ',b.bytes'} FROM illustration_jobs j
       JOIN illustration_images i ON i.job_id=j.id JOIN image_blobs b ON b.hash=i.hash
       WHERE j.source_revision=? AND j.status='completed' ORDER BY j.created_at,j.id,i.position`)
-      .all(source.id);
-    for (const row of rows) {
-      const input = JSON.parse(String(row.input)) as IllustrationJobInput;
-      const target = input.target;
-      const selected = target && presentation?.targets[target.id];
-      if (selected && selected.displayedJobId !== row.id) continue;
+      .all(source.id)
+      .map((row) => ({
+        row,
+        target: row.target ? (JSON.parse(String(row.target)) as IllustrationTarget) : undefined,
+      }));
+    // A stale layout may already have been replaced after a manuscript edit. In that
+    // case the Reader shows the most recent successful render for each cut.
+    const visible = new Map<string, string>();
+    for (const { row, target } of rows) {
+      visible.set(target?.id ?? String(row.id), String(row.id));
+    }
+    for (const { row, target: originalTarget } of rows) {
+      const key = originalTarget?.id ?? String(row.id);
+      const detached = presentation?.detached?.[key];
+      const selected = presentation?.targets[key] ?? detached;
+      if ((selected ? selected.displayedJobId : visible.get(key)) !== row.id) continue;
+      const target = selected?.placedTarget ?? originalTarget;
+      const unplaced: PortableIllustration['unplacedMoment'] = row.unplaced
+        ? JSON.parse(String(row.unplaced))
+        : undefined;
       const body = JSON.parse(String(row.body));
-      const stale = row.source_hash !== source.hash;
+      const placementHash =
+        detached?.sourceHash ??
+        (selected?.placedTarget ? presentation!.sourceHash : String(row.source_hash));
+      const stale = placementHash !== source.hash || (!target && !!unplaced);
       const start = target && !stale ? portableAnchor(blocks, target.startAnchor) : undefined;
       const end = target && !stale ? portableAnchor(blocks, target.endAnchor) : undefined;
       const mapped = target && presentation?.translation;
@@ -74,11 +90,19 @@ export function captureIllustrations(
           : Buffer.from(row.bytes as Uint8Array).toString('base64'),
         title: String(body.caption ?? ''),
         ...(body.width && body.height ? { width: body.width, height: body.height } : {}),
-        ...(stale ? { stale: true, sourceHash: String(row.source_hash) } : {}),
+        ...(stale ? { stale: true, sourceHash: placementHash } : {}),
+        ...(stale && (target || unplaced)
+          ? {
+              unplacedMoment: target
+                ? { focus: target.focus, visualBrief: target.visualBrief }
+                : unplaced,
+            }
+          : {}),
         ...(target && start && end
           ? {
               target: {
                 focus: target.focus,
+                ...(target.visualBrief ? { visualBrief: target.visualBrief } : {}),
                 start,
                 end,
                 hero: presentation?.heroTargetId === target.id,
@@ -121,6 +145,7 @@ export function restoreIllustrations(
     const blocks = splitSource(source);
     const startAnchor = restoredAnchor(blocks, first.target?.start);
     const endAnchor = restoredAnchor(blocks, first.target?.end);
+    const unplaced = first.stale && first.unplacedMoment;
     const target: IllustrationTarget | undefined =
       !first.stale &&
       first.target &&
@@ -132,7 +157,10 @@ export function restoreIllustrations(
             id: randomUUID(),
             order: first.target.end.index,
             focus: first.target.focus,
-            visualBrief: first.target.focus,
+            visualBrief:
+              typeof first.target.visualBrief === 'string'
+                ? first.target.visualBrief
+                : first.target.focus,
             startAnchor,
             endAnchor,
           }
@@ -160,6 +188,11 @@ export function restoreIllustrations(
           settingsRevision: 1,
           styleGuidance: '',
           maxAutoRetries: 0,
+          ...(unplaced &&
+          typeof unplaced.focus === 'string' &&
+          typeof unplaced.visualBrief === 'string'
+            ? { unplacedMoment: { focus: unplaced.focus, visualBrief: unplaced.visualBrief } }
+            : {}),
           ...(target ? { target } : {}),
         }),
         time,

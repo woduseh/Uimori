@@ -1,11 +1,14 @@
 import type { Usage } from '../core/types.js';
 import type { IllustrationUsageReport } from '../core/illustration.js';
 import { successfulTranslation } from './translation-artifacts.js';
+import { sceneAppearanceNotes } from './illustration-continuity.js';
 import {
   illustrationTargetSet,
   type IllustrationStoryboard,
   type IllustrationTarget,
+  type SelectedIllustrationMoment,
 } from '../core/illustration-storyboard.js';
+import { splitSource } from '../core/auxiliary.js';
 import {
   illustrationPresentation,
   newIllustrationPresentation,
@@ -13,7 +16,7 @@ import {
   illustrationDisplay,
   selectCompletedIllustration,
   selectRequestedIllustration,
-  forgetIllustrationJob,
+  forgetIllustrationTarget,
   changeIllustrationHero,
 } from './illustration-presentation.js';
 import { detachAttemptUsage } from './usage-accounting.js';
@@ -420,9 +423,15 @@ function images(store: Store, jobId: string): IllustrationImage[] {
 export function projectIllustration(
   store: Store,
   row: IllustrationJobRow,
-  presentation = illustrationPresentation(store, row.sourceRevision, row.sourceHash)
+  presentation = illustrationPresentation(store, row.sourceRevision)
 ): Illustration {
-  const target = row.input.target;
+  const key = row.input.target?.id ?? row.id;
+  const detached = presentation?.detached?.[key];
+  const placedTarget = presentation?.targets[key]?.placedTarget ?? detached?.placedTarget;
+  const target = placedTarget ?? row.input.target;
+  const sourceHash =
+    detached?.sourceHash ??
+    (placedTarget && presentation ? presentation.sourceHash : row.sourceHash);
   return {
     id: row.id,
     task: row.input.task ?? 'render',
@@ -438,10 +447,16 @@ export function projectIllustration(
           },
         }
       : {}),
-    ...(target && presentation ? { display: illustrationDisplay(presentation, row.input) } : {}),
+    ...(target && (detached || presentation?.sourceHash === sourceHash)
+      ? { display: illustrationDisplay(presentation, target.id) }
+      : {}),
     chatId: row.chatId,
     sourceRevision: row.sourceRevision,
-    sourceHash: row.sourceHash,
+    sourceHash,
+    ...(sourceHash !== row.sourceHash ? { generatedSourceHash: row.sourceHash } : {}),
+    ...(!placedTarget && row.input.unplacedMoment
+      ? { unplacedMoment: row.input.unplacedMoment }
+      : {}),
     origin: row.origin,
     generator: row.input.generator,
     ...(row.input.preset ? { preset: row.input.preset } : {}),
@@ -503,11 +518,7 @@ export function illustrationsForSources(store: Store, sourceIds: string[]): Illu
       .all(json(sourceIds)) as Row[]
   ).map((row) => {
     const presentation = presentations.get(row.source_revision);
-    const item = projectIllustration(
-      store,
-      mapRow(row),
-      presentation?.sourceHash === row.source_hash ? presentation : null
-    );
+    const item = projectIllustration(store, mapRow(row), presentation ?? null);
     if (item.diagnostic) {
       const {
         prompt: _prompt,
@@ -544,12 +555,16 @@ export function illustrationSlots(
     FROM illustration_jobs j WHERE source_revision=? AND source_hash=?`)
     .all(sourceId, sourceHash);
   const targets = new Set<string>();
+  const presentation = illustrationPresentation(store, sourceId, sourceHash);
+  for (const [id, entry] of Object.entries(presentation?.targets ?? {}))
+    if (entry.placedTarget && entry.displayedJobId) targets.add(id);
   let active = 0,
     planned = 0;
   for (const row of rows) {
     const input = parse(row.input) as IllustrationJobInput;
     const running = ACTIVE.includes(row.status as IllustrationStatus);
     if (input.task === 'placement') continue;
+    if (input.unplacedMoment && !presentation?.targets[String(row.id)]) continue;
     if (running) active++;
     if (input.task === 'plan') {
       if (running) planned += input.plan?.maxTargets ?? 1;
@@ -565,6 +580,7 @@ export type ReserveOptions = {
   maxTargets?: number;
   requestKey?: string;
   direction?: string;
+  selectedMoments?: SelectedIllustrationMoment[];
 };
 function oneOffDirection(value: unknown, name: string): string | undefined {
   if (value === undefined) return undefined;
@@ -584,6 +600,7 @@ function frozenInput(
   if (options.testMode && settings.generator === 'none')
     throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
   const characterProfiles = illustrationReferences(store, source.chatId).characterProfiles;
+  const scopedNotes = sceneAppearanceNotes(store, source.chatId, source.id);
   const base = {
     preset: illustrationPresetStamp(preset),
     version: 1 as const,
@@ -591,6 +608,7 @@ function frozenInput(
     styleGuidance: preset.styleGuidance,
     maxAutoRetries: settings.maxAutoRetries,
     ...(characterProfiles.length ? { characterProfiles } : {}),
+    ...(scopedNotes.length ? { sceneAppearanceNotes: scopedNotes } : {}),
   };
   if (generator === 'codex') {
     if (!settings.codex.model) throw new HttpError(409, 'ILLUSTRATION_MODEL_REQUIRED');
@@ -681,15 +699,37 @@ export function reserveIllustrationPlan(
       throw new HttpError(409, 'ILLUSTRATION_PLAN_ACTIVE');
     const available = settings.maxPerSource - illustrationSlots(store, source.id).total;
     if (available <= 0) throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
-    const maxTargets = Math.min(available, options.maxTargets ?? 1);
+    const existingTargets = illustrationTargets(store, source).map(
+      ({ startAnchor, endAnchor, focus }) => ({ startAnchor, endAnchor, focus })
+    );
+    let selectedMoments = options.selectedMoments;
+    if (selectedMoments) {
+      if (!selectedMoments.length)
+        throw new HttpError(400, 'Select at least one illustration moment.');
+      if (selectedMoments.length > available)
+        throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+      const positions = new Map(splitSource(source).map(({ anchor, index }) => [anchor, index]));
+      const ends = new Set(existingTargets.map((target) => target.endAnchor));
+      for (const moment of selectedMoments) {
+        const start = positions.get(moment.startAnchor);
+        const end = positions.get(moment.endAnchor);
+        if (start === undefined || end === undefined || start > end)
+          throw new HttpError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+        if (ends.has(moment.endAnchor)) throw new HttpError(409, 'ILLUSTRATION_TARGET_CONFLICT');
+        ends.add(moment.endAnchor);
+      }
+      selectedMoments = [...selectedMoments].sort(
+        (a, b) => positions.get(a.endAnchor)! - positions.get(b.endAnchor)!
+      );
+    }
+    const maxTargets = selectedMoments?.length ?? Math.min(available, options.maxTargets ?? 1);
     const input: IllustrationJobInput = {
       ...frozenInput(store, source, settings, options),
       task: 'plan',
       plan: {
         maxTargets,
-        existingTargets: illustrationTargets(store, source).map(
-          ({ startAnchor, endAnchor, focus }) => ({ startAnchor, endAnchor, focus })
-        ),
+        existingTargets,
+        ...(selectedMoments ? { selectedMoments } : {}),
         ...(options.requestKey ? { requestKey: options.requestKey } : {}),
         ...(origin === 'manual' && options.direction
           ? { direction: oneOffDirection(options.direction, 'illustration direction') }
@@ -724,10 +764,13 @@ export function illustrationTargets(
   const ids = Object.values(presentation.targets).map((target) => target.latestRequestedJobId);
   return store.db
     .prepare(
-      'SELECT input FROM illustration_jobs WHERE id IN (SELECT value FROM json_each(?)) ORDER BY created_at,id'
+      'SELECT id,input FROM illustration_jobs WHERE id IN (SELECT value FROM json_each(?)) ORDER BY created_at,id'
     )
     .all(json(ids))
-    .map((row) => (parse(row.input) as IllustrationJobInput).target)
+    .map((row) => {
+      const target = (parse(row.input) as IllustrationJobInput).target;
+      return presentation.targets[target?.id ?? String(row.id)]?.placedTarget ?? target;
+    })
     .filter((target): target is IllustrationTarget => !!target);
 }
 /** This short transaction is the only place a completed plan can create render jobs. */
@@ -748,8 +791,9 @@ export function completeIllustrationStoryboard(
       throw new IllustrationError('ILLUSTRATION_TARGET_CONFLICT');
     const previous = illustrationPresentation(store, source.id);
     const current =
-      previous?.sourceHash === source.hash ? previous : newIllustrationPresentation(source.hash);
-    if (previous && previous.sourceHash !== source.hash) current.revision = previous.revision;
+      previous?.sourceHash === source.hash
+        ? previous
+        : newIllustrationPresentation(source.hash, previous);
     const queuedAt = now();
     for (const [index, planned] of storyboard.targets.entries()) {
       const target: IllustrationTarget = {
@@ -884,16 +928,32 @@ export function regenerateIllustration(
   store: Store,
   id: string,
   testMode = false,
-  changeRequest?: string
+  changeRequest?: string,
+  selectedImageId?: string
 ): IllustrationJobRow {
   return store.transaction(() => {
     const job = illustrationJob(store, id);
     const source = store.source(job.sourceRevision);
-    if (source.hash !== job.sourceHash) throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
-    if (!job.input.target) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+    const presented = illustrationPresentation(store, source.id, source.hash)?.targets[
+      job.input.target?.id ?? job.id
+    ];
+    if (
+      source.hash !== job.sourceHash &&
+      !(
+        presented?.placedTarget &&
+        (presented.displayedJobId === job.id || presented.latestRequestedJobId === job.id)
+      )
+    )
+      throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+    const moment = presented?.placedTarget ?? job.input.target;
+    if (!moment) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
     if (ACTIVE.includes(job.status)) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
-    assertIllustrationSlot(store, source.id, job);
-    const { prompt: _prompt, ...target } = job.input.target;
+    assertIllustrationSlot(store, source.id, {
+      ...job,
+      sourceHash: source.hash,
+      input: { ...job.input, target: moment },
+    });
+    const { prompt: _prompt, ...target } = moment;
     const requestedChange = oneOffDirection(changeRequest, 'illustration change request');
     let redraw: IllustrationJobInput['redraw'];
     if (requestedChange) {
@@ -906,7 +966,11 @@ export function regenerateIllustration(
           : displayedId
             ? illustrationJob(store, displayedId)
             : undefined;
-      const image = original && images(store, original.id)[0];
+      const originals = original ? images(store, original.id) : [];
+      const image = selectedImageId
+        ? originals.find((item) => item.id === selectedImageId)
+        : originals[0];
+      if (selectedImageId && !image) throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
       const originalPrompt =
         image?.prompt || image?.revisedPrompt
           ? {
@@ -1156,6 +1220,19 @@ export function retryIllustration(store: Store, id: string): Illustration {
       throw new HttpError(409, 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
     if (!job.input.codex && !job.input.comfyui && !job.input.fixture)
       throw new HttpError(409, job.error ?? 'ILLUSTRATION_GENERATOR_UNCONFIGURED');
+    const placement = illustrationPresentation(store, job.sourceRevision);
+    const target = job.input.target;
+    const detached = target && placement?.detached?.[target.id];
+    const moved = target && (placement?.targets[target.id]?.placedTarget ?? detached?.placedTarget);
+    if (
+      moved &&
+      (job.sourceHash !== (detached?.sourceHash ?? placement?.sourceHash) ||
+        moved.startAnchor !== target.startAnchor ||
+        moved.endAnchor !== target.endAnchor ||
+        moved.focus !== target.focus ||
+        moved.visualBrief !== target.visualBrief)
+    )
+      throw new HttpError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
     store.sourceAtHash(job.sourceRevision, job.sourceHash);
     assertIllustrationSlot(store, job.sourceRevision, job);
     if (job.input.comfyui?.disabled) throw new HttpError(409, 'CONNECTION_NOT_AUTHORIZED');
@@ -1254,10 +1331,11 @@ function assertIllustrationSlot(store: Store, sourceId: string, job: Illustratio
   const target = job.input.target?.id;
   const alreadyCounted =
     target &&
-    store.db
-      .prepare(`SELECT 1 FROM illustration_jobs j WHERE source_revision=? AND source_hash=? AND json_extract(input,'$.target.id')=?
+    (illustrationPresentation(store, sourceId, job.sourceHash)?.targets[target]?.displayedJobId ||
+      store.db
+        .prepare(`SELECT 1 FROM illustration_jobs j WHERE source_revision=? AND source_hash=? AND json_extract(input,'$.target.id')=?
     AND status='completed' AND EXISTS(SELECT 1 FROM illustration_images i WHERE i.job_id=j.id) LIMIT 1`)
-      .get(sourceId, job.sourceHash, target);
+        .get(sourceId, job.sourceHash, target));
   if (
     !alreadyCounted &&
     illustrationSlots(store, sourceId).total >= illustrationSettings(store).maxPerSource
@@ -1300,14 +1378,12 @@ export function removeIllustration(
   return store.transaction(() => {
     const job = illustrationJob(store, id);
     if (ACTIVE.includes(job.status)) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
-    const targetId = job.input.target?.id;
-    const rows = targetId
-      ? (store.db
-          .prepare(
-            "SELECT * FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND json_extract(input,'$.target.id')=?"
-          )
-          .all(job.sourceRevision, job.sourceHash, targetId) as Row[])
-      : [{ id, chat_id: job.chatId, diagnostic: json(job.diagnostic), status: job.status }];
+    const targetId = job.input.target?.id ?? job.id;
+    const rows = store.db
+      .prepare(
+        "SELECT * FROM illustration_jobs WHERE source_revision=? AND COALESCE(json_extract(input,'$.target.id'),id)=?"
+      )
+      .all(job.sourceRevision, targetId) as Row[];
     if (rows.some((row) => ACTIVE.includes(row.status)))
       throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
     deleteIllustrationAttempts(store, rows);
@@ -1315,7 +1391,7 @@ export function removeIllustration(
       store.db.prepare('DELETE FROM illustration_images WHERE job_id=?').run(row.id);
       store.db.prepare('DELETE FROM illustration_jobs WHERE id=?').run(row.id);
     }
-    forgetIllustrationJob(store, job.sourceRevision, job.sourceHash, job.input, id);
+    forgetIllustrationTarget(store, job.sourceRevision, targetId);
     scheduleIllustrationPlacement(store, job.sourceRevision);
     store.event(job.chatId, 'illustration-layout.updated', job.sourceRevision);
     return { chatId: job.chatId, sourceRevision: job.sourceRevision };

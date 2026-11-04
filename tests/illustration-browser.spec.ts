@@ -498,6 +498,7 @@ for (const width of [360, DESKTOP_WIDTH]) {
     await page.goto(`/?chat=${chat.id}`);
     const scene = page.getByTestId('source').first();
     const openManual = async () => {
+      await scene.getByLabel('장면 작업 메뉴', { exact: true }).scrollIntoViewIfNeeded();
       await openSourceActions(scene);
       await page.getByTestId('illustrate').click();
     };
@@ -574,6 +575,13 @@ for (const width of [360, DESKTOP_WIDTH]) {
           ).length
       )
       .toBe(2);
+    const redrawn = (await illustrations(request, chat.id)).find(
+      (item) =>
+        item.task === 'render' && item.id !== originalImage.id && item.status === 'completed'
+    )!;
+    await expect(card).toHaveAttribute('data-illustration-id', redrawn.id);
+    await expect(card).toHaveAttribute('data-status', 'completed');
+    await expect(card.locator('img').first()).toHaveJSProperty('complete', true);
     expect((await detail(request, chat.id)).sources[0].text).toBe(source.text);
     await openManual();
     await expect(direction).toHaveValue('');

@@ -799,10 +799,17 @@ function App() {
         setLibraryTab('prompts');
         setPromptToEdit(target.id);
         s.showLibrary();
+      } else if (target.kind === 'illustration') {
+        const chatId =
+          target.chatId ?? s.detail?.sources.find((source) => source.id === target.id)?.chatId;
+        if (!chatId) throw new Error(uiMessage('helperResults.openFailed'));
+        s.openTarget({ chatId, sourceId: target.id, representation: 'original' });
+        setPanel('');
       } else if (target.kind === 'settings' && target.setting?.startsWith('chat.')) {
         if (s.selected !== target.id || s.destination !== 'story') s.select(target.id);
         setSettingsSection(
-          target.setting === 'chat.illustrationProfiles'
+          target.setting === 'chat.illustrationProfiles' ||
+            target.setting === 'chat.illustrationReferences'
             ? 'images'
             : target.setting === 'chat.maxCalls'
               ? 'runtime'
@@ -830,6 +837,7 @@ function App() {
       s.destination === 'library' &&
       (target.kind === 'content' ||
         target.kind === 'prompt-preset' ||
+        target.kind === 'illustration' ||
         (target.kind === 'settings' && target.setting?.startsWith('chat.')))
     )
       setPendingNavigation(() => () => void go().catch((error) => s.setError(error.message)));

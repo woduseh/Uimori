@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { expect, test, type APIRequestContext, type Locator } from '@playwright/test';
 import type { HelperConversation, HelperTaskResultsView } from '../core/helper.js';
 import type { Content, ModelWorkspace } from '../core/product.js';
-import type { Chat } from '../core/types.js';
+import type { Chat, ChatDetail } from '../core/types.js';
 import type { HelperTaskView } from '../web/useHelperConversation.js';
 import { postFixtureChat, fixtureBotInput } from './fixtures/chat.js';
 import { DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
@@ -141,6 +141,129 @@ async function seed(request: APIRequestContext, profiles?: { name: string; appea
 
 const usageValue = (results: Locator, label: string) =>
   results.getByText(label, { exact: true }).locator('xpath=following-sibling::dd[1]');
+
+for (const width of DEFAULT_WIDTHS) {
+  test(`HRESULT-ILLUSTRATION queued and placed results open their scene and references without losing a draft at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const { chat, task } = await seed(request);
+    const created = await postFixtureChat(request, { data: { title: '삽화 결과 목적지' } });
+    expect(created.ok()).toBe(true);
+    const destination = (await created.json()) as Chat;
+    const sources: string[] = [];
+    for (const marker of ['기록할 첫 장면', '나중에 이어진 장면']) {
+      const before = (await (
+        await request.get(`/api/chats/${destination.id}`)
+      ).json()) as ChatDetail;
+      const started = await request.post(`/api/chats/${destination.id}/runs`, {
+        data: {
+          request: marker,
+          expectedRevision: before.chat.headRevision,
+          expectedSettingsRevision: before.chat.settingsRevision,
+          idempotencyKey: randomUUID(),
+        },
+      });
+      expect(started.ok(), await started.text()).toBe(true);
+      const run = (await started.json()) as { id: string };
+      await expect
+        .poll(async () => {
+          const current = (await (
+            await request.get(`/api/chats/${destination.id}`)
+          ).json()) as ChatDetail;
+          return current.runs.find((item) => item.id === run.id)?.status;
+        })
+        .toBe('completed');
+      const current = (await (
+        await request.get(`/api/chats/${destination.id}`)
+      ).json()) as ChatDetail;
+      sources.push(current.sources.find((source) => source.runId === run.id)!.id);
+    }
+    const operations = [
+      ['illustration.generate', '강가 첫 장면', '삽화 예약됨'],
+      ['illustration.cut.redraw', '등불을 든 손', '다시 그리기 예약됨'],
+      ['illustration.cuts.place', '다리 문단 뒤', '배치 변경됨'],
+      ['illustration.continuity.save', '미라의 옷차림', '연속성 저장됨'],
+    ];
+    const projection: HelperTaskResultsView = {
+      taskId: task.id,
+      status: 'completed',
+      results: [
+        ...operations.map(([operation, title], index) => ({
+          eventSeq: index + 1,
+          receiptId: `illustration-result-${index}`,
+          operation,
+          requestedTargets: 1,
+          changedTargets: 1,
+          targets: [
+            {
+              kind: 'illustration' as const,
+              id: sources[0],
+              chatId: destination.id,
+              title,
+              revision: 1,
+            },
+          ],
+        })),
+        {
+          eventSeq: 5,
+          receiptId: 'references',
+          operation: 'illustration.references.assign',
+          requestedTargets: 1,
+          changedTargets: 1,
+          targets: [
+            {
+              kind: 'settings',
+              id: destination.id,
+              title: destination.title,
+              revision: 1,
+              setting: 'chat.illustrationReferences',
+            },
+          ],
+        },
+      ],
+      unrecordedOperations: 0,
+      usage: { toolExecutions: 5, latestInputEstimate: null, attempts: [] },
+    };
+    await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+      route.fulfill({ json: projection })
+    );
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    const composer = page.getByRole('textbox', { name: '다음 장면 요청', exact: true });
+    await composer.fill('계속 쓸 원고 요청 초안');
+    await openHelper(page);
+    const results = page
+      .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+      .getByTestId('helper-task-results');
+    for (const [, title, outcome] of operations) {
+      const target = results.getByRole('button', { name: `${title} 열기`, exact: true });
+      await expect(target).toContainText(outcome);
+      await expect(target).toHaveAttribute('aria-description', outcome);
+    }
+    expect(await results.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`helper-illustration-results-${width}.png`) });
+    await results
+      .getByRole('button', { name: '삽화 결과 목적지 삽화 참고 열기', exact: true })
+      .click();
+    await expect(page.getByTestId('illustration-references')).toBeVisible();
+    await page.goto(`/?chat=${chat.id}`);
+    await expect(composer).toHaveValue('계속 쓸 원고 요청 초안');
+    await openHelper(page);
+    await results.getByRole('button', { name: '강가 첫 장면 열기', exact: true }).click();
+    await expect
+      .poll(() => {
+        const params = new URL(page.url()).searchParams;
+        return [params.get('chat'), params.get('source'), params.get('mode')];
+      })
+      .toEqual([destination.id, sources[0], 'original']);
+    await expect(
+      page.locator(`[data-testid="source"][data-source-id="${sources[0]}"]`)
+    ).toBeVisible();
+    await page.goto(`/?chat=${chat.id}`);
+    await expect(composer).toHaveValue('계속 쓸 원고 요청 초안');
+  });
+}
 
 test('an appearance result opens both saved characters in the chat image settings', async ({
   page,

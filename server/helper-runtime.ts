@@ -115,11 +115,15 @@ import type { HelperAttachments } from './helper-attachments.js';
 import { measureProviderRequest } from './main-request.js';
 import { HelperWorkspace, helperCallOperationId } from './helper-workspace.js';
 import { forkChat } from './chat-fork.js';
+import { readIllustrationProfiles } from './helper-illustration-profiles.js';
+import { applyHelperIllustration } from './helper-illustration-workflow.js';
 import {
-  readIllustrationProfiles,
-  saveIllustrationProfiles,
-} from './helper-illustration-profiles.js';
-import { recordHelperTaskResult } from './helper-task-results.js';
+  inspectIllustrationCut,
+  listIllustrationCuts,
+  readIllustrationCutImage,
+  readIllustrationScene,
+} from './helper-illustration-cuts.js';
+import { readIllustrationContinuity } from './illustration-continuity.js';
 import { chatTitle, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import type { ResponseStreamStore } from './response-stream.js';
@@ -138,7 +142,9 @@ import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
 type HelperImageRead = Awaited<
-  ReturnType<typeof readHelperImage | typeof readIllustrationHelperImage>
+  ReturnType<
+    typeof readHelperImage | typeof readIllustrationHelperImage | typeof readIllustrationCutImage
+  >
 >;
 type CollectImage = (read: HelperImageRead) => void;
 /** Keep complete recent turns; an oversized turn belongs wholly to the summary. */
@@ -300,10 +306,23 @@ function smallerHelperRead(
       };
     case 'preset.validate':
     case 'illustration.profiles.read':
+    case 'illustration.cuts.list':
     case 'illustration.image.list':
       return {
         name: 'app.call',
         arguments: { name, arguments: { ...args, limit: 1 } },
+      };
+    case 'illustration.scene.read':
+      return {
+        name: 'app.call',
+        arguments: {
+          name,
+          arguments: {
+            ...args,
+            limit: 1,
+            maxBlockChars: Math.min(1000, Number(args.maxBlockChars ?? 1000)),
+          },
+        },
       };
     case 'artifact.read':
       return {
@@ -668,7 +687,7 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
 
 export type HelperServices = {
   sceneUpdated?: (sourceId: string) => void;
-  illustrationReferencesUpdated?: (chatId: string) => void;
+  illustrationsUpdated?: (chatId: string, queued: boolean) => void;
   task?: (
     task: HelperTask,
     name: string,
@@ -693,6 +712,7 @@ type Options = Pick<
   track: (work: Promise<void>) => void;
   streams: ResponseStreamStore;
   services?: HelperServices;
+  testMode?: boolean;
   owner: string;
 };
 
@@ -2258,19 +2278,31 @@ export class HelperRuntime {
       return describeHelperTools(args, task.snapshot.outline?.target.purpose === 'review');
     if (name === 'image.list') return listHelperImages(this.store, args);
     const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
-    if (name === 'illustration.image.list' || name === 'illustration.image.read') {
+    if (
+      name === 'illustration.image.list' ||
+      name === 'illustration.image.read' ||
+      name === 'illustration.cut.read'
+    ) {
       if (!chatId) throw new HttpError(400, 'Use chat.list to find a chat and supply its chatId.');
+      if (name === 'illustration.cut.read' && args.includeImage === false)
+        return inspectIllustrationCut(this.store, chatId, args);
       if (name === 'illustration.image.list')
         return listIllustrationHelperImages(this.store, chatId, args);
     }
-    if (name === 'image.read' || name === 'illustration.image.read') {
+    if (
+      name === 'image.read' ||
+      name === 'illustration.image.read' ||
+      name === 'illustration.cut.read'
+    ) {
       const model = task.snapshot.model;
       if (imageInputSupported(model.connection.protocol, model.modelId) === false)
         throw new HttpError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
       const read =
         name === 'image.read'
           ? await readHelperImage(this.store, args, hooks.signal)
-          : await readIllustrationHelperImage(this.store, chatId!, args, hooks.signal);
+          : name === 'illustration.cut.read'
+            ? await readIllustrationCutImage(this.store, chatId!, args, hooks.signal)
+            : await readIllustrationHelperImage(this.store, chatId!, args, hooks.signal);
       this.workspace.assertRunning(task.id);
       collectImage(read);
       return read.result;
@@ -2375,37 +2407,30 @@ export class HelperRuntime {
       );
     }
     const scope = task.snapshot.scope;
-    if (name === 'illustration.profiles.read' || name === 'illustration.profiles.save') {
+    if (name.startsWith('illustration.')) {
       if (scope.kind !== 'chat')
         throw new HttpError(400, 'Use chat.list to find a chat and supply its chatId.');
-      if (name === 'illustration.profiles.read')
-        return readIllustrationProfiles(this.store, scope.chatId, args);
-      const receiptId = `${task.id}:${operationId}`;
-      const saved = this.workspace.operation(
-        task.id,
-        receiptId,
-        { name, args, chatId: scope.chatId },
-        () => {
-          const result = saveIllustrationProfiles(this.store, scope.chatId, args);
-          recordHelperTaskResult(this.workspace, task, {
-            receiptId,
-            operation: name,
-            requestedTargets: result.profiles.length,
-            targets: result.profiles
-              .filter((profile) => profile.changed)
-              .map((profile) => ({
-                kind: 'settings',
-                id: scope.chatId,
-                title: profile.name,
-                revision: result.revision,
-                setting: 'chat.illustrationProfiles',
-              })),
-          });
-          return result;
-        }
+      switch (name) {
+        case 'illustration.profiles.read':
+          return readIllustrationProfiles(this.store, scope.chatId, args);
+        case 'illustration.cuts.list':
+          return listIllustrationCuts(this.store, scope.chatId, args);
+        case 'illustration.scene.read':
+          return readIllustrationScene(this.store, scope.chatId, args);
+        case 'illustration.continuity.read':
+          return readIllustrationContinuity(this.store, scope.chatId, args);
+      }
+      return applyHelperIllustration(
+        this.store,
+        this.workspace,
+        task,
+        scope.chatId,
+        name,
+        args,
+        operationId,
+        this.options.testMode === true,
+        this.options.services?.illustrationsUpdated
       );
-      if (saved.changed) this.options.services?.illustrationReferencesUpdated?.(scope.chatId);
-      return saved;
     }
     if (HELPER_SCENE_TOOLS.some((tool) => tool.name === name)) {
       if (scope.kind !== 'chat')

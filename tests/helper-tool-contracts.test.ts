@@ -4,7 +4,13 @@ import {
   DEFAULT_ILLUSTRATION_PRESET_ID,
 } from '../core/illustration-presets.js';
 import { illustrationPresetCatalog } from '../server/illustration-presets.js';
-import { illustrationReferences, updateIllustrationReferences } from '../server/illustrations.js';
+import {
+  illustrationJob,
+  illustrationReferences,
+  illustrationsForChat,
+  updateIllustrationReferences,
+  updateIllustrationSettings,
+} from '../server/illustrations.js';
 import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { describeHelperTools, helperToolTraits } from '../server/helper-app-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -18,7 +24,7 @@ import { ChatOverridesStore } from '../server/chat-overrides.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
-import { completedSource, PNG_BASE64 } from './fixtures/illustration.js';
+import { completedSource, fixtureSettings, PNG_BASE64 } from './fixtures/illustration.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import type { Content } from '../core/product.js';
@@ -158,12 +164,13 @@ function result<T>(request: transport.ProviderRequest, id: string): T {
 async function submit(
   f: Awaited<ReturnType<typeof fixture>>,
   request: string,
-  expectedStatus: HelperTask['status'] = 'completed'
+  expectedStatus: HelperTask['status'] = 'completed',
+  requestKey = randomUUID()
 ) {
   const response = await f.app.inject({
     method: 'POST',
     url: '/api/helper/conversations/' + f.conversation.id + '/messages',
-    payload: { requestKey: randomUUID(), text: request },
+    payload: { requestKey, text: request },
   });
   expect(response.statusCode).toBe(200);
   const task = response.json<HelperTask>();
@@ -1390,6 +1397,204 @@ test('helper app gateway discovers and authors illustration presets without sele
       .events(f.conversation.id)
       .some((event) => event.kind === 'illustration-preset.updated')
   ).toBe(true);
+});
+
+test('the library helper proposes cuts, illustrates exact passages across scenes, and redraws only the selected image', async () => {
+  const f = await fixture('library');
+  const target = createFixtureChat(f.store, 'A night at the pier', { botId: f.bot.id });
+  const scenes = [
+    completedSource(f.store, target.id, 'Mira stepped outside.\n\nHer lantern went dark.'),
+    completedSource(f.store, target.id, 'Jun reached the river.\n\nThe reflection remained.'),
+  ];
+  const { revision, ...settings } = fixtureSettings({ maxPerSource: 2 });
+  updateIllustrationSettings(f.store, { ...settings, expectedRevision: revision }, true);
+  const receiptCount = (taskId: string) =>
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(taskId)
+      ?.n;
+  const act = (id: string, name: string, args: Record<string, unknown>) =>
+    call(id, 'app.call', { name, arguments: { chatId: target.id, ...args } });
+  type Moment = {
+    sourceId: string;
+    expectedSourceHash: string;
+    startAnchor: string;
+    endAnchor: string;
+    focus: string;
+  };
+  let moments: Moment[] = [];
+  const propose = mockSend((request, round) => {
+    if (!round)
+      return calls(
+        ...scenes.map((scene, i) =>
+          act(String(i), 'illustration.scene.read', { sourceId: scene.id })
+        )
+      );
+    moments = scenes.map((scene, i) => {
+      const { sourceHash, blocks } = result<{
+        sourceHash: string;
+        blocks: { anchor: string; text: string }[];
+      }>(request, String(i));
+      expect(blocks[1].text).toBe(scene.text.split('\n\n')[1]);
+      return {
+        sourceId: scene.id,
+        expectedSourceHash: sourceHash,
+        startAnchor: blocks[1].anchor,
+        endAnchor: blocks[1].anchor,
+        focus: blocks[1].text,
+      };
+    });
+    return structuredClone(success);
+  });
+  const proposal = await submit(f, 'Suggest two moments from A night at the pier.');
+  expect(receiptCount(proposal.id)).toBe(0);
+  expect(illustrationsForChat(f.store, target.id)).toEqual([]);
+  propose.mockRestore();
+  const coat = 'Mira wears the borrowed red coat.';
+  const generate = mockSend((request, round) => {
+    if (!round)
+      return calls(
+        act('coat', 'illustration.continuity.save', {
+          expectedRevision: 0,
+          edits: [{ fromSourceId: scenes[0].id, toSourceId: scenes[0].id, text: coat }],
+        })
+      );
+    if (round === 1) {
+      expect(result(request, 'coat')).toMatchObject({ changed: true });
+      return calls(act('draw', 'illustration.generate', { moments }));
+    }
+    expect(result(request, 'draw')).toMatchObject({ chatId: target.id, count: 2 });
+    return structuredClone(success);
+  });
+  const requestKey = randomUUID();
+  const requestText = 'Keep the borrowed coat in the first scene only, then draw both moments.';
+  const reserved = await submit(f, requestText, 'completed', requestKey);
+  expect(receiptCount(reserved.id)).toBe(2);
+  expect((await submit(f, requestText, 'completed', requestKey)).id).toBe(reserved.id);
+  const renders = () =>
+    illustrationsForChat(f.store, target.id).filter((job) => job.task === 'render');
+  await vi.waitFor(() =>
+    expect(renders().filter((job) => job.status === 'completed')).toHaveLength(2)
+  );
+  for (const moment of moments) {
+    const cut = renders().find((job) => job.sourceRevision === moment.sourceId)!;
+    expect(cut.target).toMatchObject({
+      startAnchor: moment.startAnchor,
+      endAnchor: moment.endAnchor,
+      focus: moment.focus,
+    });
+    const input = illustrationJob(f.store, cut.id).input;
+    if (moment.sourceId === scenes[0].id)
+      expect(input).toMatchObject({ sceneAppearanceNotes: [coat] });
+    else expect(input).not.toHaveProperty('sceneAppearanceNotes');
+  }
+  expect(illustrationsForChat(f.store, f.chat.id)).toEqual([]);
+  generate.mockRestore();
+
+  const changeRequest = 'Keep the reflection and cool the light.';
+  type Cut = {
+    currentSourceHash: string;
+    latestJobId: string;
+    presentationRevision: number;
+    images: { imageId: string }[];
+  };
+  let chosen: Cut;
+  let redrawId = '';
+  const redraw = mockSend((request, round) => {
+    if (!round) return calls(act('cuts', 'illustration.cuts.list', { sourceId: scenes[1].id }));
+    if (round === 1) {
+      const { cuts } = result<{ cuts: Cut[] }>(request, 'cuts');
+      expect(cuts).toHaveLength(1);
+      chosen = cuts[0];
+      return calls(act('view', 'illustration.cut.read', { imageId: chosen.images[0].imageId }));
+    }
+    if (round === 2) {
+      expect(request.toolImages).toContainEqual({
+        callId: 'view',
+        images: [expect.objectContaining({ mime: 'image/webp' })],
+      });
+      return calls(
+        act('style', 'illustration.references.save', {
+          expectedRevision: 0,
+          assignments: [{ imageId: chosen.images[0].imageId, role: 'style' }],
+        }),
+        act('redraw', 'illustration.cut.redraw', {
+          imageId: chosen.images[0].imageId,
+          expectedSourceHash: chosen.currentSourceHash,
+          expectedLatestJobId: chosen.latestJobId,
+          expectedPresentationRevision: chosen.presentationRevision,
+          changeRequest,
+        })
+      );
+    }
+    expect(result(request, 'style')).toMatchObject({ changed: true, revision: 1 });
+    redrawId = result<{ jobId: string }>(request, 'redraw').jobId;
+    return structuredClone(success);
+  });
+  const redrawn = await submit(
+    f,
+    'Inspect the river reflection, use it as a style reference and redraw only that cut with cooler light.'
+  );
+  expect(receiptCount(redrawn.id)).toBe(2);
+  expect(illustrationReferences(f.store, target.id).references).toEqual([
+    { ref: expect.any(String), role: 'style' },
+  ]);
+  await vi.waitFor(() => expect(illustrationJob(f.store, redrawId).status).toBe('completed'));
+  expect(illustrationJob(f.store, redrawId)).toMatchObject({
+    chatId: target.id,
+    sourceRevision: scenes[1].id,
+    input: { redraw: { changeRequest } },
+  });
+  expect(renders().filter((job) => job.sourceRevision === scenes[0].id)).toHaveLength(1);
+  expect(illustrationsForChat(f.store, f.chat.id)).toEqual([]);
+  redraw.mockRestore();
+
+  const revised = f.store.editSource(scenes[0].id, {
+    text: 'Outside on the pier, the lantern went dark.',
+    expectedRevision: 0,
+  });
+  const beforeMove = renders().map((job) => ({
+    jobId: job.id,
+    images: job.images.map((image) => image.id),
+  }));
+  mockSend((request, round) => {
+    if (!round)
+      return calls(
+        act('revised', 'illustration.scene.read', { sourceId: revised.id }),
+        act('stale', 'illustration.cuts.list', { sourceId: revised.id })
+      );
+    if (round === 1) {
+      const { blocks } = result<{ blocks: { anchor: string }[] }>(request, 'revised');
+      const { cuts } = result<{
+        cuts: (Cut & { displayedJobId: string })[];
+      }>(request, 'stale');
+      expect(cuts[0].currentSourceHash).toBe(revised.hash);
+      return calls(
+        act('place', 'illustration.cuts.place', {
+          placements: [
+            {
+              jobId: cuts[0].displayedJobId,
+              expectedSourceHash: revised.hash,
+              expectedPresentationRevision: cuts[0].presentationRevision,
+              startAnchor: blocks[0].anchor,
+              endAnchor: blocks[0].anchor,
+            },
+          ],
+        })
+      );
+    }
+    expect(result(request, 'place')).toMatchObject({ changed: true });
+    return structuredClone(success);
+  });
+  await submit(
+    f,
+    'I rewrote the opening. Move its illustration to the new paragraph and keep the drawing.'
+  );
+  expect(
+    renders().map((job) => ({ jobId: job.id, images: job.images.map((image) => image.id) }))
+  ).toEqual(beforeMove);
+  expect(renders().find((job) => job.sourceRevision === revised.id)).toMatchObject({
+    sourceHash: revised.hash,
+    generatedSourceHash: scenes[0].hash,
+  });
 });
 
 test('helper gateway follows browse results into an exact reference read without adding native tools or saving', async () => {

@@ -1,5 +1,9 @@
 import { captureIllustrations, restoreIllustrations } from './illustration-copy.js';
 import {
+  captureIllustrationContinuity,
+  restoreIllustrationContinuity,
+} from './illustration-continuity.js';
+import {
   captureIllustrationReferences,
   restoreIllustrationReferences,
 } from './illustration-reference-copy.js';
@@ -51,6 +55,7 @@ export function captureChatCopy(
     transcript,
     state: {
       storyGuide: store.storyGuide.get(chatId).config,
+      illustrationContinuity: captureIllustrationContinuity(store, chatId, history),
       sceneTitles: history.flatMap((source, atIndex) => {
         const title = titles.get(source.revision);
         return title ? [{ atIndex, title }] : [];
@@ -107,6 +112,7 @@ export function restoreChatCopy(
     store.settings(chatId, imported.chat.settingsRevision, copy.state.settings);
     if (copy.state.storyGuide)
       store.storyGuide.update(chatId, { expectedRevision: 0, config: copy.state.storyGuide });
+    restoreIllustrationContinuity(store, chatId, history, copy.state.illustrationContinuity);
     for (const [index, source] of history.entries()) {
       const checkpoint = copy.state.checkpoints[index];
       if (checkpoint)
