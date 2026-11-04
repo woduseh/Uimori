@@ -27,10 +27,12 @@ function BookmarkEditor({
   item,
   onSaved,
   onClose,
+  onSaveError,
 }: {
   item: Bookmark;
   onSaved: (value: Bookmark) => void;
   onClose: () => void;
+  onSaveError?: () => void;
 }) {
   useI18n();
   const [title, setTitle] = useState(item.title);
@@ -51,8 +53,10 @@ function BookmarkEditor({
     lock.current = true;
     setBusy(true);
     setError('');
+    let attempted = false;
     try {
       if (!title.trim()) throw new Error(uiMessage('reader.enterABookmarkName'));
+      attempted = true;
       onSaved(
         await api<Bookmark>(
           `/bookmarks/${item.id}`,
@@ -63,6 +67,7 @@ function BookmarkEditor({
       return true;
     } catch (caught) {
       setError((caught as Error).message);
+      if (attempted) onSaveError?.();
       throw caught;
     } finally {
       lock.current = false;
@@ -230,12 +235,14 @@ export function BookmarkList({
   const [loaded, setLoaded] = useState(false);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState('');
+  const [mutationFailed, setMutationFailed] = useState(false);
   const [editing, setEditing] = useState<Bookmark | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision is an explicit reload.
   useEffect(() => {
     const controller = new AbortController();
     setLoaded(false);
     setError('');
+    setMutationFailed(false);
     void api<Bookmark[]>(`/chats/${chatId}/bookmarks`, undefined, 'GET', controller.signal)
       .then((value) => {
         if (!controller.signal.aborted) {
@@ -256,14 +263,14 @@ export function BookmarkList({
       )}
       {loaded && !items.length && <p>{t('reader.noBookmarksYetAddOneBelowAScene')}</p>}
       {error && (
-        <>
-          <p role="alert" className="error">
-            {translateMessage(error)}
-          </p>
-          <button type="button" onClick={() => setRevision((value) => value + 1)}>
-            {t('reader.refreshBookmarks')}
-          </button>
-        </>
+        <p role="alert" className="error">
+          {translateMessage(error)}
+        </p>
+      )}
+      {(error || mutationFailed) && (
+        <button type="button" onClick={() => setRevision((value) => value + 1)}>
+          {t('reader.refreshBookmarks')}
+        </button>
       )}
       {items.map((item) => (
         <article key={item.id}>
@@ -290,6 +297,7 @@ export function BookmarkList({
               description={t('reader.onlyTheBookmarkIsDeletedTheManuscriptIsPreserved')}
               iconOnly
               onDeleted={() => setItems((old) => old.filter((value) => value.id !== item.id))}
+              onError={() => setMutationFailed(true)}
             />
           </div>
         </article>
@@ -299,6 +307,7 @@ export function BookmarkList({
           key={editing.id}
           item={editing}
           onClose={() => setEditing(null)}
+          onSaveError={() => setMutationFailed(true)}
           onSaved={(updated) => {
             setItems((old) => old.map((item) => (item.id === updated.id ? updated : item)));
             setEditing(null);

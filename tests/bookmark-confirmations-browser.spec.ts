@@ -93,7 +93,7 @@ test('AUDIT2 bookmark retry replaces the old error with loading and preserves sa
     const { list } = await openBookmarks(page, chat.id);
     await expect(list.getByRole('alert')).toBeVisible();
     await expect(list.getByRole('alert')).toContainText('(503)');
-    await list.getByRole('button', { name: '책갈피 새로 고침', exact: true }).click();
+    await list.getByRole('button', { name: '책갈피 다시 불러오기', exact: true }).click();
     await expect.poll(() => reads).toBe(2);
     await expect(list.getByRole('status')).toContainText('책갈피를 불러오는 중이에요…');
     await expect(list.getByRole('alert')).toHaveCount(0);
@@ -150,7 +150,7 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await expect(editor.getByLabel('책갈피 메모')).toHaveValue('취소해도 남아야 하는 메모');
     expect(await savedBookmarks(request, chat.id)).toEqual([bookmark]);
     await close.click();
-    await confirmation.getByRole('button', { name: '수정 버리고 닫기', exact: true }).click();
+    await confirmation.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
     await expect(editor).toHaveCount(0);
     await expect(navigator).toBeVisible();
     await expect(opener).toBeFocused();
@@ -191,6 +191,8 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     const native = nativeDialogs(page);
     await page.setViewportSize({ width, height: 900 });
     const { list } = await openBookmarks(page, chat.id);
+    const refresh = list.getByRole('button', { name: '책갈피 다시 불러오기', exact: true });
+    await expect(refresh).toHaveCount(0);
     await list.getByRole('button', { name: `${bookmark.title} 책갈피 편집`, exact: true }).click();
     const editor = page.locator('dialog.bookmark-dialog');
     const confirmation = page.getByRole('alertdialog', { name: '미저장 책갈피 확인', exact: true });
@@ -215,8 +217,27 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await confirmation.getByRole('button', { name: '계속 편집', exact: true }).click();
     await expect(editor.getByLabel('책갈피 메모')).toHaveValue('충돌해도 남는 초안');
     await editor.getByRole('button', { name: '책갈피 편집 닫기', exact: true }).click();
-    await confirmation.getByRole('button', { name: '수정 버리고 닫기', exact: true }).click();
-    await list.getByRole('button', { name: '책갈피 새로 고침', exact: true }).click();
+    await confirmation.getByRole('button', { name: '초안 버리고 닫기', exact: true }).click();
+    await expect(refresh).toBeVisible();
+    const listPath = `**/api/chats/${chat.id}/bookmarks`;
+    let failRefresh = true;
+    await page.route(listPath, async (route) => {
+      if (route.request().method() === 'GET' && failRefresh) {
+        failRefresh = false;
+        return route.fulfill({ status: 503, json: { error: 'Synthetic refresh failure' } });
+      }
+      await route.continue();
+    });
+    try {
+      await refresh.click();
+      await expect(list.getByRole('alert')).toContainText('(503)');
+      await expect(list.getByRole('button', { name: bookmark.title, exact: true })).toBeVisible();
+      await refresh.click();
+      await expect(list.getByRole('button', { name: latest.title, exact: true })).toBeVisible();
+      await expect(refresh).toHaveCount(0);
+    } finally {
+      await page.unroute(listPath);
+    }
     await list.getByRole('button', { name: `${latest.title} 책갈피 편집`, exact: true }).click();
     await editor.getByLabel('책갈피 이름').fill('   ');
     await expect(
@@ -249,7 +270,7 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
         confirmation.getByRole('button', { name: '계속 편집', exact: true })
       ).toBeDisabled();
       await expect(
-        confirmation.getByRole('button', { name: '수정 버리고 닫기', exact: true })
+        confirmation.getByRole('button', { name: '초안 버리고 닫기', exact: true })
       ).toBeDisabled();
       await expect(
         confirmation.getByRole('button', { name: '저장 중…', exact: true })
@@ -293,6 +314,8 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     const before = await (await request.get(`/api/chats/${chat.id}/transcript`)).json();
     await page.setViewportSize({ width, height: 900 });
     const { navigator, list } = await openBookmarks(page, chat.id);
+    const refresh = list.getByRole('button', { name: '책갈피 다시 불러오기', exact: true });
+    await expect(refresh).toHaveCount(0);
     const opener = list.getByRole('button', { name: `${bookmark.title} 책갈피 삭제`, exact: true });
     const confirmation = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
     await opener.click();
@@ -327,7 +350,10 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     await expect(confirmation.getByRole('alert')).toContainText('책갈피가 변경됐어요');
     expect(await savedBookmarks(request, chat.id)).toEqual([latest]);
     await confirmation.getByRole('button', { name: '취소', exact: true }).click();
-    await list.getByRole('button', { name: '책갈피 새로 고침', exact: true }).click();
+    await expect(refresh).toBeVisible();
+    await refresh.click();
+    await expect(list.getByRole('button', { name: latest.title, exact: true })).toBeVisible();
+    await expect(refresh).toHaveCount(0);
     await list.getByRole('button', { name: `${latest.title} 책갈피 삭제`, exact: true }).click();
 
     let release!: () => void;
@@ -370,3 +396,43 @@ for (const width of [DESKTOP_WIDTH, MOBILE_WIDTH]) {
     expect(native).toEqual([]);
   });
 }
+
+test('BMCONF04 a lost deletion response can be checked without repeating the deletion', async ({
+  page,
+  request,
+}) => {
+  const { chat, bookmark } = await seedBookmark(request, MOBILE_WIDTH);
+  const before = await (await request.get(`/api/chats/${chat.id}/transcript`)).json();
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  const { list } = await openBookmarks(page, chat.id);
+  const path = `**/api/bookmarks/${bookmark.id}`;
+  let deletions = 0;
+  let deletionStatus = 0;
+  await page.route(path, async (route) => {
+    if (route.request().method() !== 'DELETE') return route.continue();
+    deletions++;
+    deletionStatus = (await route.fetch()).status();
+    await route.abort('failed');
+  });
+  try {
+    await list.getByRole('button', { name: `${bookmark.title} 책갈피 삭제`, exact: true }).click();
+    const confirmation = page.getByRole('alertdialog', { name: '삭제 확인', exact: true });
+    await confirmation.getByRole('button', { name: '영구 삭제', exact: true }).click();
+    await expect(confirmation.getByRole('alert')).toBeVisible();
+    expect(deletionStatus).toBe(200);
+    expect(deletions).toBe(1);
+    expect(await savedBookmarks(request, chat.id)).toEqual([]);
+
+    await confirmation.getByRole('button', { name: '취소', exact: true }).click();
+    const refresh = list.getByRole('button', { name: '책갈피 다시 불러오기', exact: true });
+    await expect(refresh).toBeVisible();
+    await refresh.click();
+    await expect(list).toContainText('아직 책갈피가 없어요');
+    await expect(refresh).toHaveCount(0);
+    expect(deletions).toBe(1);
+    const after = await (await request.get(`/api/chats/${chat.id}/transcript`)).json();
+    expect(after.entries).toEqual(before.entries);
+  } finally {
+    await page.unroute(path);
+  }
+});
