@@ -294,27 +294,29 @@ export async function runIllustrationJob(
   };
   const preparePrompt = async (
     model: ModelSnapshot,
-    request: ProviderRequest,
-    options: { allowSkip: boolean; connection?: Connection; preservePrompt?: boolean }
+    context: IllustrationScene,
+    connection?: Connection
   ): Promise<IllustrationPlan> => {
-    const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
-    let plan: IllustrationPlan;
     if (input.target?.prompt) {
-      plan = { kind: 'generate', prompt: input.target.prompt };
-    } else if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash) {
-      plan = { kind: 'generate', prompt: diagnostic.prompt };
-    } else {
-      // An old prompt cannot authorize reuse when today's reconstructed input changed.
-      delete diagnostic.prompt;
-      delete diagnostic.promptRequestHash;
-      diagnostic.stage = 'prompt';
-      await progress();
-      plan = parseIllustrationPlan(
-        await textRequest(model, request, options.connection),
-        options.allowSkip,
-        { preservePrompt: options.preservePrompt }
-      );
+      diagnostic.prompt = input.target.prompt;
+      return { kind: 'generate', prompt: input.target.prompt };
     }
+    const codex = input.generator === 'codex';
+    const buildRequest = codex ? codexIllustrationPromptRequest : illustrationPromptRequest;
+    const request = buildRequest(model, context, generationFromModel(model));
+    const requestHash = createHash('sha256').update(JSON.stringify(request)).digest('hex');
+    if (diagnostic.prompt && diagnostic.promptRequestHash === requestHash)
+      return { kind: 'generate', prompt: diagnostic.prompt };
+    // An old prompt cannot authorize reuse when today's reconstructed input changed.
+    delete diagnostic.prompt;
+    delete diagnostic.promptRequestHash;
+    diagnostic.stage = 'prompt';
+    await progress();
+    const plan = parseIllustrationPlan(
+      await textRequest(model, request, connection),
+      context.allowSkip,
+      { preservePrompt: codex }
+    );
     if (plan.kind === 'generate') {
       diagnostic.prompt = plan.prompt;
       diagnostic.promptRequestHash = requestHash;
@@ -474,16 +476,7 @@ export async function runIllustrationJob(
       const model = input.codex.model;
       let preparedPrompt: IllustrationPlan | undefined;
       if (input.codex.promptModel) {
-        const promptModel = input.codex.promptModel;
-        const request = codexIllustrationPromptRequest(
-          promptModel,
-          context,
-          generationFromModel(promptModel)
-        );
-        preparedPrompt = await preparePrompt(promptModel, request, {
-          allowSkip: context.allowSkip,
-          preservePrompt: true,
-        });
+        preparedPrompt = await preparePrompt(input.codex.promptModel, context);
         if (preparedPrompt.kind === 'skip') diagnostic.skipped = preparedPrompt.reason;
       }
       if (preparedPrompt?.kind === 'skip') return await finish([]);
@@ -580,11 +573,7 @@ export async function runIllustrationJob(
       const workflow = parseComfyWorkflow(input.comfyui.workflow);
       const model = input.comfyui.promptModel;
       const connection = await authorizedConnection(hooks, model);
-      const request = illustrationPromptRequest(model, context, generationFromModel(model));
-      const plan = await preparePrompt(model, request, {
-        allowSkip: context.allowSkip,
-        connection,
-      });
+      const plan = await preparePrompt(model, context, connection);
       if (plan.kind === 'skip') diagnostic.skipped = plan.reason;
       else {
         const prompt = plan.prompt;
