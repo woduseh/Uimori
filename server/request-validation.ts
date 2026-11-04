@@ -25,6 +25,7 @@ export const text = (value: unknown, name: string, max = 4000, empty = false): s
     throw new HttpError(400, `Invalid ${name}`);
   return value;
 };
+export const chatTitle = (value: unknown): string => text(value, 'chat title', Infinity);
 export const number = (value: unknown, name: string, min = 1, max = 1e9): number => {
   if (!Number.isSafeInteger(value) || Number(value) < min || Number(value) > max)
     throw new HttpError(400, `Invalid ${name}`);

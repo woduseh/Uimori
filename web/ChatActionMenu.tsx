@@ -172,7 +172,6 @@ function ChatTitleEditor({
         <input
           aria-label={t('transfer.m221')}
           value={draft}
-          maxLength={200}
           required
           disabled={disabled || saving}
           onChange={(event) => setDraft(event.target.value)}

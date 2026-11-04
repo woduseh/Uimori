@@ -62,8 +62,8 @@ export function connectionTestRequest(model: ModelPreset, connection: Connection
       connection,
       tokenizer: resolveTokenizerProfile({ ...model, connection }),
     }),
-    stable: { contract: 'API 연결 테스트 중이니 OK만 답해주세요.', tools: [] },
-    input: { task: 'API 연결 테스트 중이니 OK만 답해주세요.', controls: {} },
+    stable: { contract: 'Reply with OK to confirm this connection.', tools: [] },
+    input: { task: 'Reply with OK to confirm this connection.', controls: {} },
   };
 }
 

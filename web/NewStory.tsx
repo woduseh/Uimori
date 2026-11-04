@@ -1,4 +1,4 @@
-import { t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
+import { getLocale, t, useI18n, translateMessage, message as retainedMessage } from './i18n.js';
 import { LoadingState } from './LoadingState.js';
 import { NoticeBanner } from './NoticeBanner.js';
 import { RisuStartPreview } from './RisuStartPreview.js';
@@ -272,8 +272,7 @@ export function NewStory({
       start && selectedBot.package ? resolvePackageStart(selectedBot.package, start) : null;
     if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
     return structuredClone({
-      title:
-        title.trim() || (selectedBot ? `${selectedBot.title}의 채팅`.slice(0, 100) : '새로운 채팅'),
+      title: title.trim() || (selectedBot ? `${selectedBot.title}의 채팅` : '새로운 채팅'),
       autoTitle: !title.trim(),
       bot: selectedBot ?? null,
       persona: selectedPersona ?? null,
@@ -317,6 +316,7 @@ export function NewStory({
         created.current = await api<Chat>('/chats', {
           title: selection.title,
           autoTitle: selection.autoTitle,
+          ...(selection.autoTitle ? { titleLocale: getLocale() } : {}),
           botId: selection.bot!.id,
           folderId: initialFolder?.id ?? null,
           persona: selection.persona
@@ -710,7 +710,6 @@ export function NewStory({
                 aria-label={t('transfer.m351')}
                 placeholder={t('transfer.m350')}
                 value={title}
-                maxLength={100}
                 onChange={(e) => setTitle(e.target.value)}
                 disabled={locked}
               />

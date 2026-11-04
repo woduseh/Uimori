@@ -1,4 +1,4 @@
-import type { Connection, ModelGeneration, ModelPreset } from '../core/product.js';
+import type { Connection, ModelPreset } from '../core/product.js';
 import type { ProviderRequest } from '../core/transport.js';
 import {
   generationFromModel,
@@ -15,7 +15,7 @@ export function titleRequest(
   connection: Connection,
   input: { contract: string; task: string }
 ): ProviderRequest {
-  const generation: ModelGeneration = { ...generationFromModel(model), maxOutputTokens: 256 };
+  const generation = generationFromModel(model);
   if (protocolOptionKeys(connection.protocol).includes('cacheMode')) {
     generation.cacheMode = 'disabled';
     delete generation.cacheTtl;

@@ -769,7 +769,7 @@ export class HelperWorkspace {
       if (status === 'delivered')
         this.store.db
           .prepare("UPDATE helper_messages SET text=text || ? WHERE task_id=? AND role='user'")
-          .run(`\n\n추가 사용자 지시:\n${instruction.text}`, taskId);
+          .run(`\n\nAdditional user instruction:\n${instruction.text}`, taskId);
       this.event(this.taskState(taskId).conversationId, taskId, 'task.instruction-updated', {
         instructionId,
         status,
@@ -873,7 +873,7 @@ export class HelperWorkspace {
       // The current call receives selection separately; later turns retain it as conversation
       // text after completed-task snapshots are released. Editing still uses the exact request.
       const message = snapshot.selection
-        ? `${request}\n\n선택한 원문 ${snapshot.selection.sourceId} (SHA-256: ${snapshot.selection.sourceHash}):\n${snapshot.selection.text}`
+        ? `${request}\n\nSelected passage ${snapshot.selection.sourceId} (SHA-256: ${snapshot.selection.sourceHash}):\n${snapshot.selection.text}`
         : request;
       const messageId = randomUUID();
       this.store.db

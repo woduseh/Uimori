@@ -210,6 +210,17 @@ describe('independent stored-story fork without generation', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  test('continues numbering legacy truncated copy titles while keeping the full base', async () => {
+    const store = await database();
+    const base = '가'.repeat(200);
+    const chat = createFixtureChat(store, base);
+    const suffix = ' (사본 3)';
+    createFixtureChat(store, base.slice(0, 200 - suffix.length) + suffix);
+    expect(forkChat(store, chat.id, { fromRevision: null, idempotencyKey: 'copy' }).title).toBe(
+      base + ' (사본 4)'
+    );
+  });
+
   test.each(['Names · 새 이야기 · 새 이야기', 'Names (사본)', 'Names · 사본 2', 'Names (사본 2)'])(
     'copying %s continues the numbered family without stacking suffixes',
     async (title) => {

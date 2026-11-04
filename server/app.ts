@@ -1,3 +1,4 @@
+import { supportedLocale } from '../core/ui-locale.js';
 import { PushService, pushRoutes } from './push-service.js';
 import type { PushSender } from './push-transport.js';
 import { basename } from 'node:path';
@@ -25,7 +26,7 @@ import { resourceRoutes } from './resource-routes.js';
 import { rejudgeTranslation, sourceVersions } from './source-editing.js';
 import { setSceneTitle } from './scene-titles.js';
 import { updateSceneContext } from './scene-context.js';
-import { HttpError, fields, number, record, text } from './request-validation.js';
+import { chatTitle, HttpError, fields, number, record, text } from './request-validation.js';
 import { promptWorkspaceRoutes } from './prompt-workspace.js';
 import { loreContextDefaultRoutes } from './lore-context-defaults.js';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -1038,7 +1039,7 @@ export async function createApp(options: AppOptions): Promise<App> {
   );
   app.post('/api/chats', async (request) => {
     const body: RecordBody = record(request.body);
-    fields(body, ['title', 'botId', 'folderId', 'autoTitle', 'persona']);
+    fields(body, ['title', 'botId', 'folderId', 'autoTitle', 'titleLocale', 'persona']);
     if (body.autoTitle !== undefined && typeof body.autoTitle !== 'boolean')
       throw new HttpError(400, 'Invalid automatic title choice');
     let persona: import('../core/product.js').ContentRef | null | undefined;
@@ -1051,14 +1052,14 @@ export async function createApp(options: AppOptions): Promise<App> {
         revision: number(ref.revision, 'persona revision'),
       };
     }
-    const chat = store.createChat(text(body.title, 'title', 120), {
+    const chat = store.createChat(chatTitle(body.title), {
       ...(body.botId === undefined ? {} : { botId: text(body.botId, 'bot ID', 100) }),
       ...(body.folderId === undefined
         ? {}
         : { folderId: body.folderId === null ? null : text(body.folderId, 'folder ID', 100) }),
       ...(persona === undefined ? {} : { persona }),
     });
-    if (body.autoTitle === true) titles.enroll(chat.id);
+    if (body.autoTitle === true) titles.enroll(chat.id, supportedLocale(body.titleLocale));
     return chat;
   });
   app.patch<{ Params: { id: string } }>('/api/chats/:id/title', async (request) => {
@@ -1066,7 +1067,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     fields(body, ['title', 'expectedTitleRevision']);
     const chat = store.renameChat(
       request.params.id,
-      text(body.title, 'chat title', 200),
+      chatTitle(body.title),
       number(body.expectedTitleRevision, 'title revision', 0)
     );
     titles.cancel(chat.id);
@@ -1223,7 +1224,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     const result = store.candidate(
       request.params.id,
       text(body.idempotencyKey, 'idempotency key', 120),
-      body.title === undefined ? '후보 분기' : text(body.title, 'title', 200),
+      body.title === undefined ? '후보 분기' : chatTitle(body.title),
       (snapshot) => requireModel(snapshot.profile?.models.main, 'main')
     );
     if (result.created) {

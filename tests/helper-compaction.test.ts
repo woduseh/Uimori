@@ -17,7 +17,6 @@ import { decodeAnthropicMessage, encodeAnthropic } from '../core/anthropic-proto
 import {
   CONTEXT_CONTINUATION_GUIDANCE,
   CONTEXT_RETRIEVAL_GUIDANCE,
-  CONTEXT_SUMMARY_SEMANTICS,
 } from '../core/context-summary-policy.js';
 import { generationFromModel } from '../core/model-capabilities.js';
 import { editableResource } from '../core/resource-editing.js';
@@ -500,8 +499,9 @@ test('helper compaction resumes completed library reads and exact writes within 
   let originalSnapshot: HelperTask['snapshot'] | undefined;
   const log = script(f, (request) => {
     if (request.role === 'context') {
-      expect(request.stable.contract).toContain(CONTEXT_CONTINUATION_GUIDANCE);
-      expect(request.stable.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
+      expect(request.input.task).not.toBe(f.request);
+      expect(request.input.source).toMatchObject({ originalRequest: f.request });
+      expect(request.stable.contract).not.toContain(CONTEXT_CONTINUATION_GUIDANCE);
       // An old model plan must not become the host's record of pending work.
       return summarized(
         'The relevant evidence was checked. Next: save the draft and read the library.'
@@ -960,11 +960,12 @@ test('small helper compaction stays above 85%, preserves exact writes, and waits
   let helperCalls = 0;
   const log = script(f, (request) => {
     if (request.role === 'context') {
-      expect(request.stable.contract).toContain(CONTEXT_SUMMARY_SEMANTICS);
+      expect(request.stable.tools).toEqual([]);
       expect(Number(request.input.controls?.targetSummaryTokens)).toBeGreaterThan(1);
       expect(request.generation?.maxOutputTokens).toBe(8192);
       expect(Number(request.input.controls?.targetSummaryTokens)).toBeLessThanOrEqual(4096);
-      expect(Number(request.input.controls?.targetSummaryTokens)).toBeGreaterThan(2048);
+      if (helperCalls === 1)
+        expect(Number(request.input.controls?.targetSummaryTokens)).toBeGreaterThan(2048);
       expect(f.workspace.task(f.currentTaskId).snapshot.contextModel?.maxOutputTokens).toBe(8192);
       return summarized();
     }

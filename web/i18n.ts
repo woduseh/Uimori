@@ -2,16 +2,13 @@ import { useSyncExternalStore } from 'react';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { messages } from './locales/index.js';
 
-export const UI_LOCALES = ['ko', 'en', 'ja', 'zh'] as const;
-export type UiLocale = (typeof UI_LOCALES)[number];
+import { supportedLocale, type UiLocale } from '../core/ui-locale.js';
+export { supportedLocale, UI_LOCALES, type UiLocale } from '../core/ui-locale.js';
 export type MessageReference = { readonly uiMessage: string };
 export type MessageValues = Record<string, string | number | boolean | Date | MessageReference>;
 export const UI_LANGUAGE_KEY = 'uimori:ui-language';
 export const localeChangedEvent = 'uimori:ui-language-changed';
 const intlLocales = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
-export function supportedLocale(value: unknown): UiLocale {
-  return UI_LOCALES.includes(value as UiLocale) ? (value as UiLocale) : 'ko';
-}
 function readLocale(): UiLocale {
   try {
     return supportedLocale(localStorage.getItem(UI_LANGUAGE_KEY));

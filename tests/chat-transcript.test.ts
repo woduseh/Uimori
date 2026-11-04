@@ -209,6 +209,16 @@ describe('Markdown manuscript export', () => {
     ).toThrow('MANUSCRIPT_EMPTY');
   });
 
+  test('long story titles survive transcript transfer and numbered copies', async () => {
+    const store = await database();
+    const title = 'The night the tide carried our city home — '.repeat(8).trim();
+    const chat = createFixtureChat(store, title);
+    const transcript = exportChatTranscript(store, chat.id);
+    expect(validateChatTranscript(transcript).title).toBe(title);
+    const copy = forkChat(store, chat.id, { fromRevision: null, idempotencyKey: randomUUID() });
+    expect(copy.title).toBe(title + ' (사본 1)');
+  });
+
   test('only validated scene numbers reach the missing translation message', () => {
     expect(apiErrorDiagnostic('MANUSCRIPT_TRANSLATION_MISSING:0,2:2', 409, 'POST')).toEqual({
       code: 'MANUSCRIPT_TRANSLATION_MISSING',
