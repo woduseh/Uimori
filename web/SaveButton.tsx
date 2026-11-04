@@ -41,15 +41,21 @@ export function SaveButton({
       disabled={disabled || busy}
       aria-busy={ariaBusy}
     >
-      {busy ? (
+      {text ? (
+        <span className="settings-save-label" data-pending-label={pendingText}>
+          <span className="settings-save-content">
+            {busy ? (
+              <RunningIcon size={18} className="activity-spinner" aria-hidden="true" />
+            ) : (
+              <Icon size={18} aria-hidden="true" />
+            )}
+            <span>{busy ? pendingText : translateMessage(text)}</span>
+          </span>
+        </span>
+      ) : busy ? (
         <RunningIcon size={18} className="activity-spinner" aria-hidden="true" />
       ) : (
         <Icon size={18} aria-hidden="true" />
-      )}
-      {text && (
-        <span className="settings-save-label" data-pending-label={pendingText}>
-          <span>{busy ? pendingText : translateMessage(text)}</span>
-        </span>
       )}
     </button>
   );

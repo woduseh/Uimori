@@ -89,7 +89,7 @@
   width: 100%;
   min-width: 0;
   min-height: var(--control-h);
-  padding: 5px 28px 5px 9px;
+  padding: 5px 8px 5px 9px;
   border: var(--hairline) solid var(--line);
   border-radius: var(--radius-control);
   background-color: var(--surface);

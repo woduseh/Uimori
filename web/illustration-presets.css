@@ -88,6 +88,9 @@
   flex: none;
   justify-content: center;
 }
+.illustration-preset-editor-actions > .ui-icon-button {
+  border-color: var(--line);
+}
 .illustration-preset-editor-actions > .illustration-preset-copy-save {
   gap: 6px;
   padding-inline: 8px;

@@ -5,7 +5,7 @@ import { cutsFor, type Cut } from './illustration-progress.js';
 import { IllustrationUsageLine, IllustrationPlacementButton } from './IllustrationActivity.js';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Illustration, IllustrationImage, IllustrationDetail } from '../core/illustration.js';
-import { CloseIcon, RefreshIcon, RunningIcon } from './ui-icons.js';
+import { RefreshIcon, RunningIcon, StopIcon } from './ui-icons.js';
 import { api } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { DeleteButton } from './DeleteButton.js';
@@ -252,7 +252,7 @@ function TaskButtons({
           disabled={busy}
           onClick={() => void act(`/illustrations/${job.id}/cancel`)}
         >
-          <CloseIcon size={16} aria-hidden="true" />
+          <StopIcon size={16} aria-hidden="true" />
           {t('visuals.m107')}
         </button>
       )}

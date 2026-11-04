@@ -20,6 +20,7 @@ import {
   FolderIcon,
   LibraryIcon,
   MoreIcon,
+  NewChatIcon,
   RunningIcon,
   SearchIcon,
 } from './ui-icons.js';
@@ -552,7 +553,7 @@ export function BotBranch(
                   disabled={busy}
                   onClick={(event) => openFromMenu(event, () => void start(undefined, true))}
                 >
-                  <AddIcon size={18} aria-hidden="true" />
+                  <NewChatIcon size={18} aria-hidden="true" />
                   {t('transfer.configureNewChat')}
                 </button>
               )}

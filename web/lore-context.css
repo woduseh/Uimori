@@ -252,6 +252,7 @@
 .lore-context-actions.settings-form-footer {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 4px;
@@ -260,6 +261,7 @@
 .lore-context-actions.settings-form-footer > .ui-icon-button {
   flex: 0 0 var(--control-h);
   padding: 0;
+  border-color: var(--line);
 }
 .settings-form-footer > .settings-save-button {
   margin-left: auto;

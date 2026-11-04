@@ -37,6 +37,7 @@ import {
   ModelIcon,
   PromptIcon,
   AgentIcon,
+  HelperIcon,
   DataIcon,
   BackIcon,
   IllustrationIcon,
@@ -192,7 +193,7 @@ export function TasksPanel({
                       className="secondary"
                       onClick={() => onAskHelper('run', run.id)}
                     >
-                      <AgentIcon size={18} aria-hidden="true" />
+                      <HelperIcon size={18} aria-hidden="true" />
                       {t('helpers.analyzeTask')}
                     </button>
                   )}

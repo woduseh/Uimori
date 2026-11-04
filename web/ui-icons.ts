@@ -9,6 +9,7 @@ export {
   Plug as ConnectionIcon,
   Cpu as ModelIcon,
   BotMessageSquare as AgentIcon,
+  Sparkles as HelperIcon,
   Settings as SettingsIcon,
   Database as DataIcon,
   ArrowLeft as BackIcon,

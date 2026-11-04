@@ -111,7 +111,7 @@
     justify-self: end;
   }
   .translation-guide-terms-heading {
-    align-items: flex-start;
+    align-items: center;
     flex-wrap: wrap;
   }
 }

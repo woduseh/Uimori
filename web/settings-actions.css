@@ -5,36 +5,48 @@
   gap: 8px;
   white-space: nowrap;
 }
-.settings-save-button > svg {
+.settings-save-button svg {
   flex: none;
 }
 .settings-save-label {
   display: inline-grid;
+  place-items: center;
 }
-.settings-save-label > span,
+.settings-save-content,
 .settings-save-label::after {
   grid-area: 1 / 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 .settings-save-label::after {
   content: attr(data-pending-label);
+  padding-inline-start: 26px;
   visibility: hidden;
+  pointer-events: none;
 }
 .settings-save-actions {
   justify-content: flex-end;
 }
+.settings-save-actions > .ui-icon-button {
+  border-color: var(--line);
+}
 .settings-save-actions > .settings-save-button {
-  margin-left: auto;
   background: var(--accent);
   color: var(--accent-ink);
 }
 .profile-savebar.settings-save-actions > [role="status"] {
   width: auto;
+  margin-right: auto;
 }
 .provider-save-actions {
   justify-content: flex-end;
 }
-.provider-save-actions > .delete-control {
+.provider-save-actions > .delete-control,
+.provider-save-actions > .provider-delete-key {
   margin-right: auto;
+  flex: none;
 }
 .provider-save-actions > .ui-icon-button,
 .provider-save-actions > .delete-control > .icon-only {
@@ -42,8 +54,10 @@
   width: var(--control-h);
   height: var(--control-h);
   padding: 0;
+  border-color: var(--line);
 }
 .provider-save-actions > .settings-save-button {
+  flex: none;
   background: var(--accent);
   color: var(--accent-ink);
 }

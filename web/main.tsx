@@ -34,7 +34,7 @@ import { RequestPreviewDialog } from './RequestPreviewDialog.js';
 import { ManuscriptExportDialog } from './ManuscriptExportDialog.js';
 import { ManuscriptSearchPanel } from './ManuscriptSearch.js';
 import { IconButton } from './IconButton.js';
-import { PinIcon, CloseIcon, DownIcon } from './ui-icons.js';
+import { PinIcon, CloseIcon, DownIcon, HelperIcon } from './ui-icons.js';
 import { ActionMenu } from './ActionMenu.js';
 import { useCompactLayout } from './useCompactLayout.js';
 import { subscribeAppHistory } from './app-history.js';
@@ -76,7 +76,6 @@ import {
   ListTree,
   Maximize,
   Menu,
-  MessageCircle,
   Minimize,
   RefreshCw,
   SlidersHorizontal,
@@ -918,7 +917,7 @@ function App() {
     <IconButton
       className="destination-helper"
       label={t('main.m027')}
-      icon={MessageCircle}
+      icon={HelperIcon}
       aria-expanded={helperOpen}
       aria-controls="helper-panel"
       onClick={() => {
@@ -1114,7 +1113,7 @@ function App() {
                   {!compact && !helperOpen && (
                     <IconButton
                       label={t('main.m027')}
-                      icon={MessageCircle}
+                      icon={HelperIcon}
                       aria-expanded={false}
                       aria-controls="helper-panel"
                       onClick={() => {
@@ -1192,7 +1191,7 @@ function App() {
                               setWorkspacePanel('helper');
                             }}
                           >
-                            <MessageCircle size={18} aria-hidden="true" />
+                            <HelperIcon size={18} aria-hidden="true" />
                             {t('main.m062')}
                           </button>
                         </>

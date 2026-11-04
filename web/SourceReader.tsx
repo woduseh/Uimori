@@ -52,6 +52,7 @@ import {
   CopyIcon,
   DeleteIcon,
   EditIcon,
+  HelperIcon,
   IllustrationIcon,
   ImagesIcon,
   RefreshIcon,
@@ -64,7 +65,6 @@ import {
   Info,
   Languages,
   ListRestart,
-  MessageCircleQuestion,
   ReceiptText,
   Save,
   X,
@@ -1334,7 +1334,7 @@ function SourceReaderContent({
                     onAskHelper(source.id, selected || source.text);
                   }}
                 >
-                  <MessageCircleQuestion size={18} aria-hidden="true" />
+                  <HelperIcon size={18} aria-hidden="true" />
                   {t('reader.askTheHelper')}
                 </button>
               )}

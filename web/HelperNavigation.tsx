@@ -1,22 +1,19 @@
 import { useEffect, useRef, useState, type DragEvent, type RefObject } from 'react';
 import {
-  AlertCircle,
   ArrowDown,
   ArrowUp,
   Check,
-  CircleCheck,
-  CircleStop,
   ChevronDown,
   ChevronRight,
   Folder,
   FolderPlus,
   Inbox,
-  LoaderCircle,
   MessageCircle,
   Pencil,
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react';
+import { AddIcon, DoneIcon, IssueIcon, RunningIcon, StopIcon } from './ui-icons.js';
 import type { HelperProject } from '../core/helper.js';
 import type { HelperSession } from './useHelperSessions.js';
 import { t, useI18n, formatDate, formatNumber } from './i18n.js';
@@ -216,12 +213,12 @@ export function HelperNavigation(props: Props) {
     const Icon =
       section === 'unread'
         ? session.lastTaskStatus === 'completed'
-          ? CircleCheck
+          ? DoneIcon
           : session.lastTaskStatus === 'cancelled' || session.lastTaskStatus === 'interrupted'
-            ? CircleStop
-            : AlertCircle
+            ? StopIcon
+            : IssueIcon
         : section === 'running'
-          ? LoaderCircle
+          ? RunningIcon
           : MessageCircle;
     const detail =
       section === 'unread' && session.lastTaskStatus
@@ -465,7 +462,7 @@ export function HelperNavigation(props: Props) {
                           props.onCreate(project.id);
                         }}
                       >
-                        <MessageCircle size={18} aria-hidden="true" />
+                        <AddIcon size={18} aria-hidden="true" />
                         {t('helpers.m173')}
                       </button>
                       <button type="button" onClick={() => props.onRenameProject(project)}>

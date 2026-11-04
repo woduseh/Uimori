@@ -342,7 +342,7 @@ export function JevProviderSettings({
               {status.hasSavedKey && (
                 <button
                   type="button"
-                  className="secondary"
+                  className="secondary provider-delete-key"
                   disabled={busy || unresolved || !!apiKey || conflict}
                   onClick={() => void save(true)}
                 >
