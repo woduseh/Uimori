@@ -46,7 +46,7 @@ test.each([
   [409, 'MODEL_REQUIRED:translation-refusal', '번역 거절 판정'],
   [409, 'MODEL_REQUIRED:helper', '도우미 모델'],
   [409, 'HELPER_EFFECTS_ALREADY_COMMITTED', '남은 작업만 새 요청'],
-  [409, 'ILLUSTRATION_ACTIVE', '아직 생성 중'],
+  [409, 'ILLUSTRATION_ACTIVE', '이 컷은 생성 중'],
 ] as const)('business error %s %s has its own recovery message', async (status, code, message) => {
   const result = await rejected(status, code);
   expect(result).toMatchObject({ code, status });
@@ -135,8 +135,8 @@ test.each(['en', 'ja', 'zh'] as const)(
     setLocale(locale);
     const result = await rejected(409, 'ILLUSTRATION_ACTIVE');
     expect(result.code).toBe('ILLUSTRATION_ACTIVE');
-    expect(result.message).toContain('아직 생성 중');
-    expect(result.displayMessage).not.toContain('아직 생성 중');
+    expect(result.message).toBe('이 컷은 생성 중이에요.');
+    expect(result.displayMessage).not.toBe(result.message);
     expect(translateMessage(result.message)).toBe(result.displayMessage);
     const required = await rejected(409, 'MODEL_REQUIRED:translation-refusal');
     expect(required.code).toBe('MODEL_REQUIRED:translation-refusal');
