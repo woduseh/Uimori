@@ -353,6 +353,7 @@ export async function createApp(options: AppOptions): Promise<App> {
     streams,
     services: {
       sceneUpdated,
+      illustrationReferencesUpdated: publish,
       task: (task, name, args, operationId) => {
         const afterCommit: (() => void)[] = [];
         const invoke = () =>

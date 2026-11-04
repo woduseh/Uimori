@@ -103,13 +103,23 @@ import type { RequestFileUpload } from '../core/request-files.js';
 import { assertProviderFileSupport } from '../core/provider-file-reference.js';
 import { assertProviderImageSupport } from '../core/provider-image-reference.js';
 import { helperAttachmentPrompt } from './helper-attachment-prompt.js';
-import { listHelperImages, readHelperImage } from './helper-image-tools.js';
+import {
+  listHelperImages,
+  readHelperImage,
+  listIllustrationHelperImages,
+  readIllustrationHelperImage,
+} from './helper-image-tools.js';
 import { imageInputSupported } from '../core/provider-image-reference.js';
 import { withNativeHostContext } from '../core/provider-messages.js';
 import type { HelperAttachments } from './helper-attachments.js';
 import { measureProviderRequest } from './main-request.js';
 import { HelperWorkspace, helperCallOperationId } from './helper-workspace.js';
 import { forkChat } from './chat-fork.js';
+import {
+  readIllustrationProfiles,
+  saveIllustrationProfiles,
+} from './helper-illustration-profiles.js';
+import { recordHelperTaskResult } from './helper-task-results.js';
 import { chatTitle, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import type { ResponseStreamStore } from './response-stream.js';
@@ -127,7 +137,9 @@ import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
-type HelperImageRead = Awaited<ReturnType<typeof readHelperImage>>;
+type HelperImageRead = Awaited<
+  ReturnType<typeof readHelperImage | typeof readIllustrationHelperImage>
+>;
 type CollectImage = (read: HelperImageRead) => void;
 /** Keep complete recent turns; an oversized turn belongs wholly to the summary. */
 function recentHelperHistory(
@@ -287,6 +299,8 @@ function smallerHelperRead(
         },
       };
     case 'preset.validate':
+    case 'illustration.profiles.read':
+    case 'illustration.image.list':
       return {
         name: 'app.call',
         arguments: { name, arguments: { ...args, limit: 1 } },
@@ -654,6 +668,7 @@ function completedReadReferences(previous: HelperReadReference[], events: ToolEv
 
 export type HelperServices = {
   sceneUpdated?: (sourceId: string) => void;
+  illustrationReferencesUpdated?: (chatId: string) => void;
   task?: (
     task: HelperTask,
     name: string,
@@ -2242,11 +2257,20 @@ export class HelperRuntime {
     if (name === 'app.tools')
       return describeHelperTools(args, task.snapshot.outline?.target.purpose === 'review');
     if (name === 'image.list') return listHelperImages(this.store, args);
-    if (name === 'image.read') {
+    const chatId = task.snapshot.scope.kind === 'chat' ? task.snapshot.scope.chatId : null;
+    if (name === 'illustration.image.list' || name === 'illustration.image.read') {
+      if (!chatId) throw new HttpError(400, 'Use chat.list to find a chat and supply its chatId.');
+      if (name === 'illustration.image.list')
+        return listIllustrationHelperImages(this.store, chatId, args);
+    }
+    if (name === 'image.read' || name === 'illustration.image.read') {
       const model = task.snapshot.model;
       if (imageInputSupported(model.connection.protocol, model.modelId) === false)
         throw new HttpError(400, 'IMAGE_INPUT_UNSUPPORTED_MODEL');
-      const read = await readHelperImage(this.store, args, hooks.signal);
+      const read =
+        name === 'image.read'
+          ? await readHelperImage(this.store, args, hooks.signal)
+          : await readIllustrationHelperImage(this.store, chatId!, args, hooks.signal);
       this.workspace.assertRunning(task.id);
       collectImage(read);
       return read.result;
@@ -2351,6 +2375,38 @@ export class HelperRuntime {
       );
     }
     const scope = task.snapshot.scope;
+    if (name === 'illustration.profiles.read' || name === 'illustration.profiles.save') {
+      if (scope.kind !== 'chat')
+        throw new HttpError(400, 'Use chat.list to find a chat and supply its chatId.');
+      if (name === 'illustration.profiles.read')
+        return readIllustrationProfiles(this.store, scope.chatId, args);
+      const receiptId = `${task.id}:${operationId}`;
+      const saved = this.workspace.operation(
+        task.id,
+        receiptId,
+        { name, args, chatId: scope.chatId },
+        () => {
+          const result = saveIllustrationProfiles(this.store, scope.chatId, args);
+          recordHelperTaskResult(this.workspace, task, {
+            receiptId,
+            operation: name,
+            requestedTargets: result.profiles.length,
+            targets: result.profiles
+              .filter((profile) => profile.changed)
+              .map((profile) => ({
+                kind: 'settings',
+                id: scope.chatId,
+                title: profile.name,
+                revision: result.revision,
+                setting: 'chat.illustrationProfiles',
+              })),
+          });
+          return result;
+        }
+      );
+      if (saved.changed) this.options.services?.illustrationReferencesUpdated?.(scope.chatId);
+      return saved;
+    }
     if (HELPER_SCENE_TOOLS.some((tool) => tool.name === name)) {
       if (scope.kind !== 'chat')
         throw new HttpError(400, 'chat.list로 채팅을 찾고 chatId를 지정해 주세요.');

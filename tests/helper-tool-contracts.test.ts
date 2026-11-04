@@ -4,6 +4,8 @@ import {
   DEFAULT_ILLUSTRATION_PRESET_ID,
 } from '../core/illustration-presets.js';
 import { illustrationPresetCatalog } from '../server/illustration-presets.js';
+import { illustrationReferences, updateIllustrationReferences } from '../server/illustrations.js';
+import { readHelperTaskResults } from '../server/helper-task-results.js';
 import { describeHelperTools, helperToolTraits } from '../server/helper-app-tools.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -16,7 +18,7 @@ import { ChatOverridesStore } from '../server/chat-overrides.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { createFixtureChat, fixtureBotInput } from './fixtures/chat.js';
-import { completedSource } from './fixtures/illustration.js';
+import { completedSource, PNG_BASE64 } from './fixtures/illustration.js';
 import { chatOverrideHash } from '../core/chat-overrides.js';
 import { encodeAnthropic } from '../core/anthropic-protocol.js';
 import type { Content } from '../core/product.js';
@@ -1176,6 +1178,171 @@ test('resource patches leave real receipts so a later failure cannot offer a dup
   expect(retry.statusCode).toBe(409);
   expect(retry.body).toContain('HELPER_EFFECTS_ALREADY_COMMITTED');
 });
+
+test('helper proposals are read-only and mixed profile edits share one revision and receipt', async () => {
+  const f = await fixture();
+  const other = createFixtureChat(f.store, 'Other', { botId: f.bot.id });
+  const portrait = f.store.product.createAsset(f.chat.id, {
+    title: 'Portrait',
+    description: '',
+    actor: '',
+    outfit: '',
+    location: '',
+    allowedUse: 'both',
+    mime: 'image/png',
+    base64: PNG_BASE64,
+  });
+  const original = {
+    id: 'first',
+    name: 'Mira',
+    appearance: 'Silver hair',
+    referenceRef: portrait.id,
+  };
+  const selected = [{ ref: portrait.id, role: 'style' as const }];
+  const before = updateIllustrationReferences(f.store, f.chat.id, {
+    expectedRevision: 0,
+    references: selected,
+    characterProfiles: [original],
+  });
+  const appCall = (id: string, name: string, args: Record<string, unknown> = {}) =>
+    call(id, 'app.call', { name, arguments: args });
+  const read = 'illustration.profiles.read',
+    save = 'illustration.profiles.save';
+  const propose = mockSend((request, round) => {
+    if (!round) return calls(appCall('read', read));
+    expect(result(request, 'read')).toMatchObject({
+      revision: before.revision,
+      characterProfiles: [original],
+      references: selected,
+    });
+    return { ...structuredClone(success), text: 'Mira could wear her silver hair in a braid.' };
+  });
+  const draft = await submit(f, 'Suggest an appearance for Mira.');
+  expect(illustrationReferences(f.store, f.chat.id)).toEqual(before);
+  expect(readHelperTaskResults(f.store, draft.id).results).toEqual([]);
+  propose.mockRestore();
+  const add = { name: 'Jun', appearance: 'Dark curls' };
+  const edit = { profileId: original.id, appearance: 'Silver braid' };
+  const batch = { expectedRevision: 1, profiles: [add, edit] };
+  mockSend((request, round) => {
+    if (!round)
+      return calls(
+        appCall('other', save, {
+          chatId: other.id,
+          expectedRevision: 0,
+          profiles: [{ ...add, referenceRef: portrait.id }],
+        }),
+        appCall('duplicate', save, { ...batch, profiles: [add, edit, edit] }),
+        appCall('missing-image', save, {
+          ...batch,
+          profiles: [add, { ...edit, referenceRef: 'absent' }],
+        })
+      );
+    if (round === 1) {
+      expect(event(request, 'other').denied).toBe(true);
+      expect(event(request, 'other').result).toMatchObject({
+        error: '이 채팅에서 사용할 수 없는 인물 참고 이미지예요.',
+      });
+      expect(event(request, 'duplicate').denied).toBe(true);
+      expect(event(request, 'missing-image').denied).toBe(true);
+      expect(illustrationReferences(f.store, f.chat.id)).toEqual(before);
+      return calls(appCall('batch', save, batch));
+    }
+    if (round === 2) {
+      expect(result(request, 'batch')).toMatchObject({
+        revision: 2,
+        profiles: [
+          { name: 'Jun', changed: true },
+          { profileId: original.id, changed: true },
+        ],
+      });
+      return calls(
+        appCall('stale', save, batch),
+        appCall('noop', save, { expectedRevision: 2, profiles: [edit] })
+      );
+    }
+    expect(event(request, 'stale')).toMatchObject({
+      denied: true,
+      result: { retryMode: 'refresh_then_retry' },
+    });
+    expect(result(request, 'noop')).toMatchObject({ changed: false, revision: 2 });
+    return structuredClone(success);
+  });
+  const saved = await submit(f, 'Save Jun and give Mira a silver braid.');
+  expect(illustrationReferences(f.store, f.chat.id)).toMatchObject({
+    revision: 2,
+    references: selected,
+    characterProfiles: [
+      { ...original, appearance: 'Silver braid' },
+      { name: 'Jun', appearance: 'Dark curls' },
+    ],
+  });
+  expect(illustrationReferences(f.store, other.id).revision).toBe(0);
+  const effects = readHelperTaskResults(f.store, saved.id);
+  expect(effects.unrecordedOperations).toBe(0);
+  expect(
+    effects.results.map((item) => [
+      item.requestedTargets,
+      item.changedTargets,
+      item.targets.map((target) => target.title),
+    ])
+  ).toEqual([
+    [2, 2, ['Jun', 'Mira']],
+    [1, 0, []],
+  ]);
+});
+
+test.each(['library', 'chat'] as const)(
+  'illustration profiles can target a chat from %s and default to its full cast',
+  async (scope) => {
+    const f = await fixture(scope);
+    const target = createFixtureChat(f.store, 'Target cast', { botId: f.bot.id });
+    const cast = Array.from({ length: 32 }, (_, i) => ({
+      id: String(i),
+      name: `Character ${i}`,
+      appearance: `Portrait ${i}`,
+    }));
+    const { revision } = updateIllustrationReferences(f.store, target.id, {
+      expectedRevision: 0,
+      references: [],
+      characterProfiles: cast,
+    });
+    mockSend((request, round) => {
+      if (!round)
+        return calls(
+          call('cast', 'app.call', {
+            name: 'illustration.profiles.read',
+            arguments: { chatId: target.id },
+          })
+        );
+      if (round === 1) {
+        expect(result(request, 'cast')).toMatchObject({
+          revision,
+          characterProfiles: cast,
+          nextOffset: null,
+        });
+        return calls(
+          call('save', 'app.call', {
+            name: 'illustration.profiles.save',
+            arguments: {
+              chatId: target.id,
+              expectedRevision: revision,
+              profiles: [{ profileId: cast[31].id, appearance: 'Red scarf' }],
+            },
+          })
+        );
+      }
+      expect(result(request, 'save')).toMatchObject({ chatId: target.id, changed: true });
+      return structuredClone(success);
+    });
+    const task = await submit(f, 'Update the last character in Target cast.');
+    expect(readHelperTaskResults(f.store, task.id).results[0].targets[0].id).toBe(target.id);
+    expect(illustrationReferences(f.store, target.id).characterProfiles[31].appearance).toBe(
+      'Red scarf'
+    );
+    expect(illustrationReferences(f.store, f.chat.id).revision).toBe(0);
+  }
+);
 
 test('helper app gateway discovers and authors illustration presets without selecting or generating them', async () => {
   const f = await fixture('library');

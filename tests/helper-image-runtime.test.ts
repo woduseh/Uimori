@@ -95,8 +95,11 @@ function fixture(
     store,
     runtime,
     conversation,
-    async run(request = 'Inspect the named image and describe its visible color.') {
-      const task = runtime.enqueue(conversation.id, randomUUID(), request);
+    async run(
+      request = 'Inspect the named image and describe its visible color.',
+      conversationId = conversation.id
+    ) {
+      const task = runtime.enqueue(conversationId, randomUUID(), request);
       await Promise.all(work);
       return runtime.workspace.task(task.id);
     },
@@ -253,6 +256,90 @@ test('gateway image discovery delivers actual pixels once across continued helpe
   expect(f.store.product.get('content', original.id)).toEqual(original);
   expect(f.store.db.prepare('SELECT * FROM image_blobs').all()).toEqual(originalBlobs);
   expectNoPersistedPixels(f, pixels);
+});
+
+test('illustration image tools use the current chat or the explicitly selected chat', async () => {
+  const f = fixture();
+  const bot = await savePortrait(f.store);
+  const chat = f.store.createChat('Harbor', { botId: bot.id });
+  const other = f.store.createChat('Elsewhere', { botId: bot.id });
+  const asset = {
+    title: 'Portrait',
+    mime: 'image/png',
+    base64: (
+      await sharp({ create: { width: 12, height: 8, channels: 3, background: '#ff0000' } })
+        .png()
+        .toBuffer()
+    ).toString('base64'),
+    description: '',
+    actor: 'Mira',
+    outfit: '',
+    location: '',
+    allowedUse: 'both',
+  };
+  const local = f.store.product.createAsset(chat.id, asset);
+  const foreign = f.store.product.createAsset(other.id, asset);
+  const packageRef = `package:${bot.id}:bot:portrait-red`;
+  const conversation = f.runtime.workspace.open({ kind: 'chat', chatId: chat.id });
+  const bodies = intercept((body, round) => {
+    if (round === 0)
+      return answer(body, [
+        call('list', 'illustration.image.list', {}),
+        call('by-owner', 'illustration.image.list', { query: bot.title }),
+      ]);
+    if (round === 1)
+      return answer(body, [
+        call('foreign', 'illustration.image.read', { ref: foreign.id }),
+        call('other-read', 'illustration.image.read', { ref: foreign.id, chatId: other.id }),
+      ]);
+    if (round === 2)
+      return answer(body, [
+        call('local', 'illustration.image.read', { ref: local.id }),
+        call('package', 'illustration.image.read', { ref: packageRef }),
+      ]);
+    return answer(body);
+  });
+  const task = await f.run('Inspect the two portraits in this chat.', conversation.id);
+  expect(task.status, task.error ?? '').toBe('completed');
+  expect(toolEvent(bodies[1], 'list').images).toEqual([
+    expect.objectContaining({ ref: local.id, actor: 'Mira' }),
+    expect.objectContaining({ ref: packageRef, title: 'Red portrait' }),
+  ]);
+  expect(toolEvent(bodies[1], 'by-owner').images).toEqual([
+    expect.objectContaining({ ref: packageRef, packageTitle: bot.title }),
+  ]);
+  expect(toolEvent(bodies[2], 'foreign')).toMatchObject({
+    error: 'ILLUSTRATION_REFERENCE_NOT_FOUND',
+  });
+  expect(toolEvent(bodies[2], 'other-read')).toMatchObject({ ref: foreign.id });
+  expect(imageData(bodies[2])).toHaveLength(1);
+  await expectRedPixels(imageData(bodies[2])[0]);
+  expect(toolEvent(bodies[3], 'local')).toMatchObject({ ref: local.id });
+  expect(toolEvent(bodies[3], 'package')).toMatchObject({ ref: packageRef });
+  const pixels = imageData(bodies[3]);
+  expect(pixels).toHaveLength(3);
+  for (const image of pixels) await expectRedPixels(image);
+  expect(JSON.stringify(f.runtime.workspace.events(conversation.id))).not.toContain(pixels[0]);
+});
+
+test('a library helper can discover and view illustration images in a named chat', async () => {
+  const f = fixture();
+  const bot = await savePortrait(f.store);
+  const { id: chatId } = f.store.createChat('Harbor', { botId: bot.id });
+  const ref = `package:${bot.id}:bot:portrait-red`;
+  const bodies = intercept((body, round) => {
+    if (round === 0) return answer(body, [call('find', 'illustration.image.list', { chatId })]);
+    if (round === 1) {
+      const found = toolEvent(body, 'find').images[0].ref;
+      return answer(body, [call('see', 'illustration.image.read', { chatId, ref: found })]);
+    }
+    return answer(body);
+  });
+  const task = await f.run('Inspect the illustration reference in Harbor.');
+  expect(task.status, task.error ?? '').toBe('completed');
+  expect(toolEvent(bodies[2], 'see')).toMatchObject({ ref });
+  expect(imageData(bodies[2])).toHaveLength(1);
+  await expectRedPixels(imageData(bodies[2])[0]);
 });
 
 test('native helper tool callbacks return decoded image pixels without persisting binary results', async () => {
