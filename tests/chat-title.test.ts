@@ -134,10 +134,8 @@ test('one title request is journaled, bounded and never repeated after completio
   const request = send.mock.calls[0][1];
   expect(request.role).toBe('title');
   expect(request.stable.tools).toEqual([]);
-  expect(request.generation?.maxOutputTokens).toBe(256);
-  expect(request.stable.contract).toContain('15~35자');
-  expect(request.stable.contract).toContain('식별력');
-  expect(request.stable.contract).toContain('참고 자료');
+  expect(request.generation?.maxOutputTokens).toBe(1024);
+  expect(request.stable.contract).toContain('in Korean');
   expect(f.store.product.attempts(f.chat.id)).toMatchObject([
     { role: 'title', status: 'completed' },
   ]);

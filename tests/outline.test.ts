@@ -511,11 +511,21 @@ describe('hierarchical composition', () => {
     expect(store.outline.node(episode.id).intent).toBe(intent);
     const key = randomUUID();
     const generated = store.outline.sceneCommand(episode.id, { idempotencyKey: key });
-    expect(generated.request).toBe('선택한 구성에 따라 이 단위를 집필해 주세요.');
+    expect(generated.request).toBe('Write the selected outline unit.');
     expect(generated.request).not.toContain(intent);
     expect(
       store.outline.sceneCommand(episode.id, { idempotencyKey: key, request: generated.request })
     ).toEqual(generated);
+    const legacyRequest = '선택한 구성에 따라 이 단위를 집필해 주세요.';
+    store.db
+      .prepare('UPDATE scene_commands SET request=? WHERE id=?')
+      .run(legacyRequest, generated.id);
+    for (const idempotencyKey of [key, randomUUID()]) {
+      expect(
+        store.outline.sceneCommand(episode.id, { idempotencyKey, additionalInstruction: '' })
+          .request
+      ).toBe(legacyRequest);
+    }
     const next = find(store, chat.id, '2화 장부의 첫 장');
     const request = '명시한 집필 요청\n'.repeat(2500) + '요청의 끝';
     const explicit = { idempotencyKey: randomUUID(), request };
@@ -933,7 +943,7 @@ describe('hierarchical composition', () => {
     compose(store, chat.id);
     const episode = find(store, chat.id, '1화 잠긴 문');
     const command = store.outline.sceneCommand(episode.id, { idempotencyKey: randomUUID() });
-    expect(command.request).toBe('선택한 구성에 따라 이 단위를 집필해 주세요.');
+    expect(command.request).toBe('Write the selected outline unit.');
     expect(store.outline.node(episode.id).progress.state).toBe('scheduled');
 
     const { run, source } = write(store, chat.id, command.id, '문은 잠겨 있었다.');
@@ -1114,7 +1124,7 @@ describe('hierarchical composition', () => {
     const first = store.outline.sceneCommand(beat.id, { idempotencyKey: randomUUID() });
     const one = write(store, chat.id, first.id, '자물쇠를 발견했다.');
     const second = store.outline.sceneCommand(beat.id, { idempotencyKey: randomUUID() });
-    expect(second.request).toBe('선택한 구성에 따라 이 단위를 집필해 주세요.');
+    expect(second.request).toBe('Write the selected outline unit.');
     const two = write(store, chat.id, second.id, '문 뒤에서 작은 소리가 났다.');
     expect(two.run.snapshot.outline?.path.at(-1)?.id).toBe(beat.id);
     expect(two.run.snapshot.outline?.sources).toEqual([

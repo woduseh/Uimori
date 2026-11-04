@@ -35,7 +35,7 @@ test.each(['openai-responses-v1', 'anthropic-messages-v1', 'fixture-sse-v1'] as 
     expect(request).toMatchObject({
       role: 'title',
       modelId: model.modelId,
-      generation: { maxOutputTokens: 256, temperature: null },
+      generation: { maxOutputTokens: model.maxOutputTokens, temperature: null },
       contextBudget: { estimator: 'model-local-v1', tokenizer: 'generic' },
       stable: { contract: input.contract, tools: [] },
       input: { task: input.task, controls: {} },
@@ -54,7 +54,7 @@ test('title cache policy does not rewrite saved Responses options', () => {
   const original = structuredClone(model);
   const request = titleRequest(model, connection, input);
   expect(request.generation).toMatchObject({
-    maxOutputTokens: 256,
+    maxOutputTokens: model.maxOutputTokens,
     reasoningEffort: 'high',
     verbosity: 'low',
     cacheMode: 'disabled',

@@ -73,8 +73,7 @@ test('manual title API rejects stale revisions including A to B to A and records
 test('manual title API validates text and revision without mutating state', async () => {
   const { app, create, rename } = await setup();
   const chat = await create();
-  for (const title of ['', '   ', 'x'.repeat(201)])
-    expect((await rename(chat, title)).statusCode).toBe(400);
+  for (const title of ['', '   ']) expect((await rename(chat, title)).statusCode).toBe(400);
   for (const expectedTitleRevision of [-1, 0.5, '0', null]) {
     const response = await app.inject({
       method: 'PATCH',
@@ -84,9 +83,9 @@ test('manual title API validates text and revision without mutating state', asyn
     expect(response.statusCode).toBe(400);
   }
   expect(app.store.chat(chat.id)).toEqual(chat);
-  const accepted = await rename(chat, 'x'.repeat(200));
+  const accepted = await rename(chat, 'x'.repeat(240));
   expect(accepted.statusCode).toBe(200);
-  expect(accepted.json<Chat>().title).toHaveLength(200);
+  expect(accepted.json<Chat>().title).toHaveLength(240);
 });
 
 test('automatic title enrollment needs explicit opt-in and a configured title model without provider calls', async () => {
@@ -148,6 +147,7 @@ test('real transport completes HTTP runs and invokes the automatic title helper 
     translationPolicy: workspace.translationPolicy,
     titleModel: { id: model.id },
   });
+  const generatedTitle = '霧の港で月を待つ'.repeat(32);
   const bodies: transport.ProviderRequest[] = [];
   // Preserve executeProvider, validation, wire journaling, encoder and SSE parser; replace I/O only.
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
@@ -159,7 +159,7 @@ test('real transport completes HTTP runs and invokes the automatic title helper 
     const events = [
       {
         type: 'text_delta',
-        delta: request.role === 'title' ? '첫 만남의 기록' : 'Synthetic completed source.',
+        delta: request.role === 'title' ? generatedTitle : 'Synthetic completed source.',
       },
       { type: 'usage', inputTokens: 1, outputTokens: 2, costUsd: null },
       { type: 'done', reason: 'stop' },
@@ -168,7 +168,7 @@ test('real transport completes HTTP runs and invokes the automatic title helper 
       headers: { 'content-type': 'text/event-stream' },
     });
   });
-  const chat = await create({ autoTitle: true });
+  const chat = await create({ autoTitle: true, titleLocale: 'ja' });
   async function complete() {
     const current = app.store.chat(chat.id);
     const result = await app.inject({
@@ -190,7 +190,7 @@ test('real transport completes HTTP runs and invokes the automatic title helper 
     return runId;
   }
   const firstRun = await complete();
-  await vi.waitFor(() => expect(app.store.chat(chat.id).title).toBe('첫 만남의 기록'), {
+  await vi.waitFor(() => expect(app.store.chat(chat.id).title).toBe(generatedTitle), {
     timeout: 6000,
     interval: 20,
   });
@@ -201,11 +201,11 @@ test('real transport completes HTTP runs and invokes the automatic title helper 
   expect(bodies.filter((request) => request.role === 'title')).toHaveLength(1);
   expect(bodies.filter((request) => request.role === 'main')).toHaveLength(2);
   expect(bodies.find((request) => request.role === 'title')).toMatchObject({
-    stable: { tools: [] },
-    generation: { maxOutputTokens: 256 },
+    stable: { tools: [], contract: expect.stringContaining('in Japanese') },
+    generation: { maxOutputTokens: 1024 },
   });
   expect(
     app.store.product.attempts(chat.id).filter((attempt) => attempt.role === 'title')
   ).toHaveLength(1);
-  expect(app.store.chat(chat.id).title).toBe('첫 만남의 기록');
+  expect(app.store.chat(chat.id).title).toBe(generatedTitle);
 });

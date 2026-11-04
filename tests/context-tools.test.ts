@@ -6,10 +6,6 @@ import { nativePrompt } from './fixtures/native-prompt.js';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { estimateContextTokens } from '../core/context-budget.js';
-import {
-  CONTEXT_RETRIEVAL_GUIDANCE,
-  CONTEXT_SUMMARY_SEMANTICS,
-} from '../core/context-summary-policy.js';
 import { defaultProfile, type ModelSnapshot } from '../core/product.js';
 import type { RunSnapshot, ToolEvent } from '../core/types.js';
 import type { Json } from '../core/transport.js';
@@ -218,7 +214,7 @@ const completed = () =>
 type Body = {
   role: string;
   stable: { contract: string; tools: { name: string }[] };
-  input: { source: Record<string, Json>; results: ToolEvent[] };
+  input: { task: string; source: Record<string, Json>; results: ToolEvent[] };
   prompt?: { messages: { content: { text: string }[] }[] };
   bootstrap?: ToolEvent[];
   opaqueState?: Json;
@@ -476,11 +472,14 @@ describe('host read compaction and provider continuation inside one main run', (
         (body) => {
           expect(body).toMatchObject({
             generation: { maxOutputTokens: Math.min(output, 4096) },
-            stable: { contract: expect.stringContaining(CONTEXT_SUMMARY_SEMANTICS) },
-            input: { controls: { targetSummaryTokens: goal }, task: fixed.request },
+            stable: { tools: [] },
+            input: {
+              controls: { targetSummaryTokens: goal },
+              source: { originalRequest: fixed.request },
+            },
           });
           expect(JSON.parse(body.input.source.part as string)).toEqual([event]);
-          expect(body.stable.contract).toContain(CONTEXT_RETRIEVAL_GUIDANCE);
+          expect(body.input.task).not.toBe(fixed.request);
           return completed();
         },
       ]);

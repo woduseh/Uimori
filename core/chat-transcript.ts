@@ -2,7 +2,6 @@ import { CONTENT_ROLES, type ContentAttachment } from './risu-content.js';
 import { validateRequestImages, type RequestImage } from './request-images.js';
 import type { ImportedMemoryOrigin } from './notes.js';
 import {
-  CHAT_TITLE_MAX_CHARS,
   REQUEST_TEXT_MAX_CHARS,
   SOURCE_TEXT_MAX_CHARS,
   TRANSLATION_TEXT_MAX_CHARS,
@@ -23,7 +22,6 @@ export const CHAT_TRANSCRIPT_LIMITS = {
   noteText: 32_000,
   author: 200,
   attachments: 300,
-  title: CHAT_TITLE_MAX_CHARS,
 } as const;
 
 export type ChatTranscriptEntry = {
@@ -99,7 +97,7 @@ export function validateChatTranscript(value: unknown): ChatTranscript {
   if (body.version !== CHAT_TRANSCRIPT_VERSION) fail('CHAT_TRANSCRIPT_UNSUPPORTED_VERSION');
   const exportedAt = string(body.exportedAt, 40, 'CHAT_TRANSCRIPT_INVALID_TIME');
   if (!Number.isFinite(Date.parse(exportedAt))) fail('CHAT_TRANSCRIPT_INVALID_TIME');
-  const title = string(body.title, CHAT_TRANSCRIPT_LIMITS.title, 'CHAT_TRANSCRIPT_INVALID_TITLE');
+  const title = string(body.title, Infinity, 'CHAT_TRANSCRIPT_INVALID_TITLE');
   const packageAttachments = list(
     body.packageAttachments,
     'CHAT_TRANSCRIPT_INVALID_REFERENCE',

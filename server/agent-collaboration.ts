@@ -457,7 +457,7 @@ export function createAgentCollaboration(
         const event = await consult(callId, {
           agentId: agent.id,
           question:
-            '현재 사용자 요청과 설정된 지침에 따라 맡은 관점에서 도움이 될 판단과 선택지를 제안해 주세요. 기존 자료의 사실과 새로운 창작 제안을 구분해 주세요.',
+            'Advise the writer on the current request from your assigned perspective. Distinguish established facts from creative suggestions.',
         });
         bootstrap.push(event);
         await hooks.onToolEvent(structuredClone(event));

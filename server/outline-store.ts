@@ -715,7 +715,14 @@ export class OutlineStore {
         ? text(body.request, 'scene request', REQUEST_TEXT_MAX_CHARS)
         : additionalInstruction.trim()
           ? additionalInstruction
-          : '선택한 구성에 따라 이 단위를 집필해 주세요.';
+          : 'Write the selected outline unit.';
+    const matchesStoredRequest = (stored: string) =>
+      (body.request === undefined && body.additionalInstruction === undefined) ||
+      request === stored ||
+      // A client can replay an empty instruction for an existing pre-English reservation.
+      (body.request === undefined &&
+        !additionalInstruction.trim() &&
+        stored === '선택한 구성에 따라 이 단위를 집필해 주세요.');
     const key = text(body.idempotencyKey, 'command key', 120);
     return this.store.transaction(() => {
       const node = this.node(id);
@@ -735,10 +742,7 @@ export class OutlineStore {
         )
           throw new HttpError(409, '이 집필 요청 키는 다른 구성 예약에 사용됐어요.');
         const command = this.store.story.command(prior.id);
-        if (
-          (body.request !== undefined || body.additionalInstruction !== undefined) &&
-          request !== command.request
-        )
+        if (!matchesStoredRequest(command.request))
           throw new HttpError(409, '집필 요청 키가 다른 내용에 사용됐어요.');
         return command;
       }
@@ -756,10 +760,7 @@ export class OutlineStore {
         throw new HttpError(409, '이미 이 구성의 원문을 생성하고 있어요.');
       if (node.progress.state === 'scheduled' && node.progress.commandId) {
         const command = this.store.story.command(node.progress.commandId);
-        if (
-          (body.request !== undefined || body.additionalInstruction !== undefined) &&
-          request !== command.request
-        )
+        if (!matchesStoredRequest(command.request))
           throw new HttpError(409, '이 구성은 다른 요청문으로 이미 예약됐어요.');
         return command;
       }
