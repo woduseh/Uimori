@@ -117,14 +117,12 @@
 .illustration-environment-options {
   min-width: 0;
 }
-.illustration-environment .settings-row-control :is(input, select) {
+.illustration-environment .settings-row-control input[type="url"],
+.illustration-environment .settings-row-control input[type="text"] {
   width: min(100%, 340px);
 }
 .illustration-environment .settings-row-control input[type="number"] {
   width: 120px;
-}
-.illustration-environment .settings-row-control > small {
-  max-width: 340px;
 }
 .illustration-environment .illustration-test {
   padding-bottom: 14px;

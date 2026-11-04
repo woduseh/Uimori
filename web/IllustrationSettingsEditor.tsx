@@ -118,16 +118,11 @@ function IllustrationEnvironmentEditor({
     selected: ModelRef | null,
     models: Library['models'],
     onChange: (ref: ModelRef | null) => void,
-    emptyLabel = t('visuals.m042'),
-    description?: string
+    emptyLabel = t('visuals.m042')
   ) => {
-    const model = library.models.find((item) => item.id === selected?.id);
     return (
       <label className="settings-row">
-        <span className="settings-row-copy">
-          <span>{label}</span>
-          {description && <small>{description}</small>}
-        </span>
+        <span className="settings-row-copy">{label}</span>
         <span className="settings-row-control">
           <select
             aria-label={label}
@@ -140,20 +135,20 @@ function IllustrationEnvironmentEditor({
             )}
             {models
               .filter((item) => canSelect(item) || item.id === selected?.id)
-              .map((item) => (
-                <option key={item.id} value={item.id} disabled={!canSelect(item)}>
-                  {item.title} (
-                  {canSelect(item)
-                    ? library.connections.find((connection) => connection.id === item.connectionId)
-                        ?.title
-                    : t('visuals.m044')}
-                  )
-                </option>
-              ))}
+              .map((item) => {
+                const enabled = canSelect(item);
+                const detail = enabled
+                  ? library.connections.find((connection) => connection.id === item.connectionId)
+                      ?.title
+                  : t('visuals.m044');
+                return (
+                  <option key={item.id} value={item.id} disabled={!enabled}>
+                    {item.title}
+                    {detail && detail !== item.title ? ` (${detail})` : ''}
+                  </option>
+                );
+              })}
           </select>
-          {selected && (!model || !canSelect(model)) && (
-            <small role="status">{t('visuals.m045')}</small>
-          )}
         </span>
       </label>
     );
@@ -222,8 +217,10 @@ function IllustrationEnvironmentEditor({
         return true;
       })
       .catch((caught: Error) => {
-        setSaveError(caught.message);
-        if (caught instanceof ApiError && caught.status === 409) setSaveConflict(true);
+        if (caught instanceof ApiError && caught.status === 409) {
+          setSaveError(uiMessage('visuals.m089'));
+          setSaveConflict(true);
+        } else setSaveError(caught.message);
         return false;
       })
       .finally(() => {
@@ -283,11 +280,6 @@ function IllustrationEnvironmentEditor({
       aria-label={t('visuals.m048')}
       className="settings-section settings-group illustration-settings illustration-environment"
     >
-      <div className="settings-group-heading">
-        <div>
-          <h3>{t('visuals.m049')}</h3>
-        </div>
-      </div>
       <fieldset disabled={busy} className="illustration-environment-fields">
         <div className="settings-group-body illustration-automatic-settings">
           {testMode && (
@@ -359,10 +351,7 @@ function IllustrationEnvironmentEditor({
           className="illustration-preset-disclosure illustration-environment-disclosure"
           open={activeGenerator === 'codex'}
         >
-          <summary>
-            {t('visuals.m063')}
-            {activeGenerator === 'codex' && <small>{t('visuals.m064')}</small>}
-          </summary>
+          <summary>{t('visuals.m063')}</summary>
           <fieldset className="settings-group-body illustration-environment-options">
             {selector(
               t('visuals.m065'),
@@ -371,13 +360,8 @@ function IllustrationEnvironmentEditor({
               (ref) => change({ ...draft, codex: { ...draft.codex, model: ref } }),
               codexModels.length ? t('visuals.m042') : t('visuals.m066')
             )}
-            {selector(
-              t('visuals.m077'),
-              draft.codex.promptModel,
-              library.models,
-              (ref) => change({ ...draft, codex: { ...draft.codex, promptModel: ref } }),
-              t('visuals.m042'),
-              t('visuals.codexPromptModelDescription')
+            {selector(t('visuals.m077'), draft.codex.promptModel, library.models, (ref) =>
+              change({ ...draft, codex: { ...draft.codex, promptModel: ref } })
             )}
             <label className="settings-row settings-row-toggle">
               <span className="settings-row-copy">{t('visuals.m068')}</span>
@@ -403,10 +387,7 @@ function IllustrationEnvironmentEditor({
           className="illustration-preset-disclosure illustration-environment-disclosure"
           open={activeGenerator === 'comfyui'}
         >
-          <summary>
-            {t('visuals.m069')}
-            {activeGenerator === 'comfyui' && <small>{t('visuals.m064')}</small>}
-          </summary>
+          <summary>{t('visuals.m069')}</summary>
           <fieldset className="settings-group-body illustration-environment-options">
             <label className="settings-row">
               <span className="settings-row-copy">{t('visuals.m070')}</span>
@@ -547,12 +528,11 @@ function IllustrationEnvironmentEditor({
           discardLabel={t('visuals.m088')}
         />
       </Dialog>
-      {conflict && dirty && <NoticeBanner tone="error">{t('visuals.m089')}</NoticeBanner>}
-      {saveError && (
-        <NoticeBanner tone="error">
-          {t('visuals.draftError', { error: translateMessage(saveError) })}
-        </NoticeBanner>
-      )}
+      {conflict && dirty ? (
+        <NoticeBanner tone="error">{t('visuals.m089')}</NoticeBanner>
+      ) : saveError ? (
+        <NoticeBanner tone="error">{translateMessage(saveError)}</NoticeBanner>
+      ) : null}
       <TransientNotice message={message} />
       {loadError && !confirmReload && (
         <NoticeBanner tone="error">{translateMessage(loadError)}</NoticeBanner>
