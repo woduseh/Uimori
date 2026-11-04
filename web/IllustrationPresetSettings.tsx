@@ -291,20 +291,27 @@ export function IllustrationPresetSettings({
     environment &&
     (effective.generator === 'codex' ? environment.codex.model : environment.comfyui.promptModel);
   const model = library.models.find((item) => item.id === modelRef?.id);
+  const promptModelRef = effective.generator === 'codex' ? environment?.codex.promptModel : null;
+  const promptModel = library.models.find((item) => item.id === promptModelRef?.id);
   const modelReady = !!model && isModelSelectable(model, library.models, library.connections);
+  const promptModelReady =
+    effective.generator !== 'codex' ||
+    (!!promptModel && isModelSelectable(promptModel, library.models, library.connections));
   const codexConnection =
     model && library.connections.find((item) => item.id === model.connectionId);
   const readiness = !environment
     ? t('visualpanels.openTheDefaultGenerationEnvironmentToCheck')
     : !modelReady
       ? t('visualpanels.setupNeededSelectAModelAndEnable')
-      : effective.generator === 'codex' && codexConnection?.protocol !== 'codex-app-server-v1'
-        ? t('visualpanels.setupNeededSelectAModelFromA')
-        : effective.generator === 'comfyui' && !environment.comfyui.baseUrl.trim()
-          ? t('visualpanels.setupNeededEnterAComfyuiAddressIn')
-          : effective.generator === 'comfyui' && !effective.comfyui.workflow.trim()
-            ? t('visualpanels.setupNeededSaveAComfyuiWorkflowIn')
-            : '';
+      : !promptModelReady
+        ? t('visualpanels.setupNeededSelectPromptModel')
+        : effective.generator === 'codex' && codexConnection?.protocol !== 'codex-app-server-v1'
+          ? t('visualpanels.setupNeededSelectAModelFromA')
+          : effective.generator === 'comfyui' && !environment.comfyui.baseUrl.trim()
+            ? t('visualpanels.setupNeededEnterAComfyuiAddressIn')
+            : effective.generator === 'comfyui' && !effective.comfyui.workflow.trim()
+              ? t('visualpanels.setupNeededSaveAComfyuiWorkflowIn')
+              : '';
   const conflict =
     !!draft?.id &&
     !!catalog.presets.find((item) => item.id === draft.id && item.revision !== draft.revision);
@@ -360,6 +367,12 @@ export function IllustrationPresetSettings({
               (environment ? t('visualpanels.noModelSelected') : t('visualpanels.checking'))}
           </span>
         </p>
+        {effective.generator === 'codex' && (
+          <p className="ui-meta-row">
+            <span>{t('visualpanels.promptModel')}</span>
+            <span>{promptModel?.title ?? t('visualpanels.noModelSelected')}</span>
+          </p>
+        )}
         {readiness && <p role="status">{readiness}</p>}
       </section>
       <details className="illustration-preset-disclosure">

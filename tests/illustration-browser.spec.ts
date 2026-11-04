@@ -630,6 +630,110 @@ test('ILUI04 storyboard places a hero and inline cuts, folds persist, and planni
   );
 });
 
+test('ILUI06 Codex settings require a prompt model and persist separate or shared Codex selections', async ({
+  page,
+  request,
+}, info) => {
+  const created = await postFixtureChat(request, { data: { title: 'Codex 프롬프트 모델 선택' } });
+  expect(created.ok()).toBe(true);
+  const chat = (await created.json()) as Chat;
+  const models: { id: string }[] = [];
+  for (const entry of [
+    {
+      title: 'Codex 그림 담당',
+      protocol: 'codex-app-server-v1',
+      endpoint: 'codex://local',
+      modelId: 'gpt-5.4',
+    },
+    {
+      title: '별도 프롬프트 담당',
+      protocol: 'fixture-sse-v1',
+      endpoint: 'http://127.0.0.1:9/not-called',
+      modelId: 'prompt-fixture',
+    },
+  ]) {
+    const connected = await request.post('/api/connections', {
+      data: {
+        title: entry.title,
+        protocol: entry.protocol,
+        endpoint: entry.endpoint,
+        enabled: true,
+      },
+    });
+    expect(connected.ok(), await connected.text()).toBe(true);
+    const connection = (await connected.json()) as { id: string };
+    const modeled = await request.post('/api/model-presets', {
+      data: {
+        title: entry.title,
+        connectionId: connection.id,
+        modelId: entry.modelId,
+        maxOutputTokens: 2048,
+        temperature: null,
+      },
+    });
+    expect(modeled.ok(), await modeled.text()).toBe(true);
+    const model = (await modeled.json()) as { id: string };
+    models.push({ id: model.id });
+  }
+  const current = (await (
+    await request.get('/api/illustration-settings')
+  ).json()) as IllustrationSettings;
+  const baseline = await settings(request, {
+    generator: 'none',
+    codex: { ...current.codex, model: models[0], promptModel: null },
+  });
+  const generationRequests: string[] = [];
+  page.on('request', (entry) => {
+    if (entry.method() === 'POST' && /\/(runs|illustrations)$/.test(new URL(entry.url()).pathname))
+      generationRequests.push(entry.url());
+  });
+  await page.setViewportSize({ width: MOBILE_WIDTH, height: 900 });
+  const openSettings = async () => {
+    await page.goto(`/?chat=${chat.id}`);
+    await navigationAction(page, '설정');
+    await selectSettingsSection(page, '삽화');
+    for (const label of ['생성 환경', '프리셋']) {
+      const management = page.getByText(label, { exact: true });
+      if ((await management.locator('..').getAttribute('open')) === null) await management.click();
+    }
+  };
+  await openSettings();
+  const section = page.getByRole('region', { name: '삽화 설정', exact: true });
+  const prompt = section.getByRole('combobox', { name: '프롬프트 모델', exact: true });
+  await expect(prompt).toHaveValue('');
+  await expect(prompt.locator('option[value=""]')).toHaveText('모델 미지정');
+  await expect(page.locator('.illustration-preset-current')).toContainText('프롬프트 모델을 선택');
+  await prompt.selectOption(models[1].id);
+  await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
+  await expect(section.getByRole('button', { name: '삽화 설정 저장', exact: true })).toBeDisabled();
+  const selected = (await (
+    await request.get('/api/illustration-settings')
+  ).json()) as IllustrationSettings;
+  expect(selected.codex).toEqual({ ...baseline.codex, promptModel: models[1] });
+  expect(selected.comfyui).toEqual(baseline.comfyui);
+  await openSettings();
+  await expect(prompt).toHaveValue(models[1].id);
+  await expect(section.getByLabel('Codex 삽화 모델', { exact: true })).toHaveValue(models[0].id);
+  await prompt.scrollIntoViewIfNeeded();
+  expect(await section.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(
+    1
+  );
+  await page.screenshot({ path: info.outputPath('codex-separate-prompt-model-mobile.png') });
+  await prompt.selectOption(models[0].id);
+  await section.getByRole('button', { name: '삽화 설정 저장', exact: true }).click();
+  await expect(section.getByRole('button', { name: '삽화 설정 저장', exact: true })).toBeDisabled();
+  await openSettings();
+  await expect(prompt).toHaveValue(models[0].id);
+  const shared = (await (
+    await request.get('/api/illustration-settings')
+  ).json()) as IllustrationSettings;
+  expect(shared.codex).toEqual({ ...baseline.codex, promptModel: models[0] });
+  await expect(page.locator('.illustration-preset-current')).not.toContainText(
+    '프롬프트 모델을 선택'
+  );
+  expect(generationRequests).toEqual([]);
+});
+
 test('ILUI05 styled Markdown keeps its message tree, shows progress and reconnects edited translations', async ({
   page,
   request,

@@ -442,7 +442,7 @@ test('preset selection chooses its shared environment without changing global se
   updateIllustrationSettings(store, {
     ...body,
     expectedRevision: revision,
-    codex: { ...body.codex, model: { id: model.id } },
+    codex: { ...body.codex, model: { id: model.id }, promptModel: { id: model.id } },
     comfyui: {
       ...body.comfyui,
       baseUrl: 'http://example.invalid:8188',

@@ -57,12 +57,12 @@ function setup(stage: 'plan' | 'placement' | 'prompt' | 'image') {
   const settings = fixtureSettings({
     generator: stage === 'prompt' ? 'comfyui' : 'codex',
     maxAutoRetries: 5,
-    codex: { model: { id: model.id } },
+    codex: { model: { id: model.id }, promptModel: { id: model.id } },
     comfyui: { baseUrl: 'http://127.0.0.1:1', promptModel: { id: model.id } },
   });
   if (stage === 'prompt')
     fixtureIllustrationPreset(store, { comfyui: { workflow: FIXTURE_WORKFLOW } });
-  if (stage === 'prompt' || stage === 'image')
+  if (stage === 'prompt')
     return { store, source, job: reserveIllustration(store, source, 'manual', { settings }) };
   const plan = reserveIllustrationPlan(store, source, 'manual', { settings, maxTargets: 1 });
   if (stage === 'plan') return { store, source, job: plan };
@@ -80,11 +80,18 @@ function setup(stage: 'plan' | 'placement' | 'prompt' | 'image') {
           endAnchor: block.anchor,
           focus: 'The lantern',
           visualBrief: block.text,
+          prompt: {
+            prompt: 'A lantern above a quiet river.',
+            caption: 'The lantern',
+            negativePrompt: '',
+          },
         },
       ],
     },
     { stage: 'planning', attempts: [], retries: [] }
   );
+  if (stage === 'image')
+    return { store, source, job: illustrationJob(store, queuedIllustrations(store)[0]) };
   store.editTranslation(source.id, {
     expectedRevision: 0,
     expectedSourceHash: source.hash,

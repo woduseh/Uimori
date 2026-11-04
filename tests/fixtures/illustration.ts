@@ -35,8 +35,17 @@ export function reserveIllustration(
   const slots = illustrationSlots(store, source.id);
   if (slots.active > 0) throw new HttpError(409, 'ILLUSTRATION_ACTIVE');
   if (slots.total >= settings.maxPerSource) throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
-  const job = reserveIllustrationPlan(store, source, origin, { ...options, maxTargets: 1 });
+  const legacyCodex = settings.codex.model !== null && settings.codex.promptModel === null;
+  const job = reserveIllustrationPlan(store, source, origin, {
+    ...options,
+    settings: legacyCodex
+      ? { ...settings, codex: { ...settings.codex, promptModel: settings.codex.model } }
+      : settings,
+    maxTargets: 1,
+  });
   const { task: _task, plan: _plan, ...input } = job.input;
+  // A legacy image turn predates the separate prompt-model snapshot.
+  if (legacyCodex && input.codex) delete input.codex.promptModel;
   store.db
     .prepare('UPDATE illustration_jobs SET input=? WHERE id=?')
     .run(JSON.stringify(input), job.id);

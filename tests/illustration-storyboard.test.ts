@@ -66,21 +66,23 @@ test('storyboard requires distinct real moments, preserves narrative order and a
     prompt: { prompt: block.text, negativePrompt: '', caption: '장면' },
   }));
   const valid = { heroIndex: 1, targets };
-  expect(parseStoryboard(JSON.stringify(valid), blocks, 4, true, false).targets).toHaveLength(2);
+  expect(parseStoryboard(JSON.stringify(valid), blocks, 4, 'comfyui', false).targets).toHaveLength(
+    2
+  );
   expect(() =>
     parseStoryboard(
       JSON.stringify({ ...valid, targets: [targets[0], targets[0]] }),
       blocks,
       4,
-      true,
+      'comfyui',
       false
     )
   ).toThrow('ILLUSTRATION_STORYBOARD_INVALID');
-  expect(() => parseStoryboard(JSON.stringify(valid), blocks, 1, true, false)).toThrow(
+  expect(() => parseStoryboard(JSON.stringify(valid), blocks, 1, 'comfyui', false)).toThrow(
     'ILLUSTRATION_STORYBOARD_INVALID'
   );
   expect(() =>
-    parseStoryboard(JSON.stringify(valid), blocks, 4, true, false, [targets[0]])
+    parseStoryboard(JSON.stringify(valid), blocks, 4, 'comfyui', false, [targets[0]])
   ).toThrow('ILLUSTRATION_STORYBOARD_INVALID');
   expect(
     parseIllustrationPlacement(
@@ -361,7 +363,7 @@ test('compact wire aliases preserve every source paragraph and round-trip to can
     model,
     scene,
     source,
-    { maxTargets: 2, existingTargets: [], generator: 'codex' },
+    { maxTargets: 2, existingTargets: [], generator: 'codex', promptMode: 'none' },
     undefined
   );
   const input = request.input.source as { blocks: [string, string][] };
@@ -380,7 +382,7 @@ test('compact wire aliases preserve every source paragraph and round-trip to can
     }),
     blocks,
     2,
-    false,
+    'none',
     false
   );
   expect(result.targets[0]).toMatchObject({

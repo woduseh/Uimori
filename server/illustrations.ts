@@ -111,7 +111,7 @@ export function validateIllustrationSettings(
   if (b.generator === 'fixture' && !options.testMode)
     throw new HttpError(400, 'Fixture generator requires test mode');
   const codex = record(b.codex);
-  fields(codex, ['model', 'useReferences']);
+  fields(codex, ['model', 'useReferences', 'promptModel']);
   const comfyui = record(b.comfyui);
   fields(comfyui, ['baseUrl', 'authorizationEnv', 'timeoutMs', 'pollIntervalMs', 'promptModel']);
   const baseUrl = text(comfyui.baseUrl, 'ComfyUI address', 2000, true).trim();
@@ -135,6 +135,7 @@ export function validateIllustrationSettings(
     codex: {
       model: modelRef(codex.model, 'Codex illustration model'),
       useReferences: boolean(codex.useReferences, 'useReferences'),
+      promptModel: modelRef(codex.promptModel, 'Codex illustration prompt model'),
     },
     comfyui: {
       baseUrl: baseUrl
@@ -160,13 +161,16 @@ export function illustrationSettings(store: Store): IllustrationSettings {
   const saved = row ? (parse(row.body) as Partial<IllustrationSettings>) : {};
   const defaults = defaultIllustrationSettings();
   const { generator, ...environment } = saved;
+  const codex = { ...defaults.codex, ...(saved.codex ?? {}) };
+  // Only pre-existing settings without the field inherit their selected Codex model.
+  if (!Object.hasOwn(saved.codex ?? {}, 'promptModel')) codex.promptModel = codex.model;
   return {
     ...defaults,
     ...environment,
     ...(generator === 'fixture' ? { generator } : {}),
     // A legacy disabled generator must not suddenly enable automatic work.
     ...(generator === 'none' ? { automatic: false } : {}),
-    codex: { ...defaults.codex, ...(saved.codex ?? {}) },
+    codex,
     comfyui: { ...defaults.comfyui, ...(saved.comfyui ?? {}) },
   };
 }
@@ -188,9 +192,20 @@ export function updateIllustrationSettings(
     const prior = illustrationSettings(store);
     if (prior.revision !== number(expectedRevision, 'illustration settings revision'))
       throw new HttpError(409, '삽화 설정이 변경됐어요. 새로고침한 뒤 저장해 주세요.');
-    const next = validateIllustrationSettings(rest, { revision: prior.revision + 1, testMode });
+    const suppliedCodex = record(rest.codex);
+    const next = validateIllustrationSettings(
+      {
+        ...rest,
+        // Older clients do not know this field and must not clear a newer selection.
+        codex: Object.hasOwn(suppliedCodex, 'promptModel')
+          ? suppliedCodex
+          : { ...suppliedCodex, promptModel: prior.codex.promptModel },
+      },
+      { revision: prior.revision + 1, testMode }
+    );
     assertModelSelection(store.product, next.codex.model, prior.codex.model);
     assertCodexModel(store, next.codex.model);
+    assertModelSelection(store.product, next.codex.promptModel, prior.codex.promptModel);
     assertModelSelection(store.product, next.comfyui.promptModel, prior.comfyui.promptModel);
     store.db.prepare('UPDATE illustration_settings SET body=? WHERE id=1').run(json(next));
     return next;
@@ -526,14 +541,17 @@ function frozenInput(
   };
   if (generator === 'codex') {
     if (!settings.codex.model) throw new HttpError(409, 'ILLUSTRATION_MODEL_REQUIRED');
+    if (!settings.codex.promptModel) throw new HttpError(409, 'ILLUSTRATION_PROMPT_MODEL_REQUIRED');
     const model = store.product.modelSnapshot(settings.codex.model.id, 'illustration');
     if (model.connection.protocol !== 'codex-app-server-v1')
       throw new HttpError(409, 'ILLUSTRATION_CODEX_CONNECTION_REQUIRED');
+    const promptModel = store.product.modelSnapshot(settings.codex.promptModel.id, 'illustration');
     return {
       ...base,
       generator: 'codex',
       codex: {
         model,
+        promptModel,
         references: settings.codex.useReferences
           ? frozenIllustrationReferences(store, source.chatId)
           : [],
@@ -1391,7 +1409,10 @@ export function illustrationRoutes(
       generation: job.generation,
       input: job.input,
       usage: illustrationUsage(store, [job.id]),
-      modelTitle: job.input.codex?.model.title ?? job.input.comfyui?.promptModel.title,
+      modelTitle:
+        (job.input.task === 'plan' ? job.input.codex?.promptModel?.title : undefined) ??
+        job.input.codex?.model.title ??
+        job.input.comfyui?.promptModel.title,
     };
   });
   app.post<{ Params: { id: string } }>('/api/illustrations/:id/retry', async (request) => {

@@ -365,6 +365,18 @@ export const messages = {
     ja: 'チャットの参照画像を使う',
     zh: '使用聊天参考图片',
   },
+  'visuals.codexRevisedPrompt': {
+    ko: 'Codex가 반환한 수정 프롬프트',
+    en: 'Revised prompt returned by Codex',
+    ja: 'Codexが返した修正プロンプト',
+    zh: 'Codex返回的修改后提示词',
+  },
+  'visuals.codexPromptModelDescription': {
+    ko: '장면 구성과 삽화 요청을 준비해요. Codex 모델도 선택할 수 있어요.',
+    en: 'Prepares scene composition and illustration requests. Codex models are also available.',
+    ja: 'シーン構成と挿絵のリクエストを準備します。Codexモデルも選べます。',
+    zh: '准备场景构成和插图请求。也可以选择Codex模型。',
+  },
   'visuals.m069': {
     ko: 'ComfyUI 생성 환경',
     en: 'ComfyUI generation environment',
@@ -948,10 +960,10 @@ export const messages = {
     zh: 'Codex插图模型必须使用Codex连接的模型预设。',
   },
   'visuals.m189': {
-    ko: '설정 → 삽화에서 ComfyUI용 프롬프트 모델을 선택해 주세요.',
-    en: 'Select a ComfyUI prompt model in Settings → Illustrations.',
-    ja: '設定 → 挿絵でComfyUI用プロンプトモデルを選んでください。',
-    zh: '请在设置 → 插图中选择ComfyUI提示词模型。',
+    ko: '설정 → 삽화에서 프롬프트 모델을 선택해 주세요.',
+    en: 'Select a prompt model in Settings → Illustrations.',
+    ja: '設定 → 挿絵でプロンプトモデルを選んでください。',
+    zh: '请在设置 → 插图中选择提示词模型。',
   },
   'visuals.m190': {
     ko: '원문이 바뀌었어요. 새로고침한 뒤 다시 요청해 주세요.',
