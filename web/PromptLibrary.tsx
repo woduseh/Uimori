@@ -1,7 +1,6 @@
 import { cloneWithReceipt } from './resource-create-retry.js';
 import { useI18n, registerMessage, message as uiMessage, messageRef } from './i18n.js';
 import { IconButton } from './IconButton.js';
-import { MessageCircle } from 'lucide-react';
 import { LoadingState } from './LoadingState.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { SelectionCheckbox } from './BooleanControls.js';
@@ -13,6 +12,7 @@ import {
   DownIcon,
   UpIcon,
   EditIcon,
+  HelperIcon,
   MoveIcon,
   OptionsIcon,
   PromptIcon,
@@ -842,7 +842,7 @@ export function PromptLibrary({
                         {t('prompts.uiEdit2')}
                       </button>
                       <button type="button" className="secondary" onClick={() => onAskHelper(item)}>
-                        <MessageCircle size={18} aria-hidden="true" />
+                        <HelperIcon size={18} aria-hidden="true" />
                         {t('prompts.uiAskHelper')}
                       </button>
                       <button

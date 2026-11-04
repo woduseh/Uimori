@@ -1,6 +1,7 @@
 import { t, useI18n, translateMessage, formatDate, formatNumber } from './i18n.js';
 import { activityStatusLabel } from './ActivityStatus.js';
-import { AlertCircle, Check, LoaderCircle, MessageCircle } from 'lucide-react';
+import { Check, MessageCircle } from 'lucide-react';
+import { DoneIcon, IssueIcon, RunningIcon, StopIcon } from './ui-icons.js';
 import { useState } from 'react';
 import { ActivitySection } from './ActivitySection.js';
 import { navigationTimeLabel } from './navigation-time.js';
@@ -105,6 +106,12 @@ export function ActivityNavigation({
             const chat = chatById.get(chatId)!;
             const relevant = items.find((item) => item.actionable) ?? items[0];
             const available = items.filter((item) => item.canAcknowledge);
+            const UnreadIcon =
+              relevant.status === 'completed'
+                ? DoneIcon
+                : relevant.status === 'cancelled' || relevant.status === 'interrupted'
+                  ? StopIcon
+                  : IssueIcon;
             return (
               <div className="activity-nav-entry" key={chatId}>
                 <button
@@ -112,10 +119,14 @@ export function ActivityNavigation({
                   className="activity-nav-link"
                   onClick={() => openItem(chatId, relevant)}
                 >
-                  <AlertCircle
+                  <UnreadIcon
                     size={16}
                     className={
-                      relevant.actionable ? 'activity-nav-warning' : 'activity-nav-success'
+                      relevant.actionable
+                        ? 'activity-nav-warning'
+                        : relevant.status === 'completed'
+                          ? 'activity-nav-success'
+                          : undefined
                     }
                     aria-hidden="true"
                   />
@@ -168,7 +179,7 @@ export function ActivityNavigation({
                 className="activity-nav-link"
                 onClick={() => onSelect(chatId)}
               >
-                <LoaderCircle size={16} aria-hidden="true" />
+                <RunningIcon size={16} aria-hidden="true" />
                 <span className="activity-nav-copy">
                   <strong>{title(chat)}</strong>
                   <small>

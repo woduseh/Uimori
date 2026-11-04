@@ -298,9 +298,6 @@ input[type="search"]::-webkit-search-cancel-button {
     mask: var(--chevron) center / 16px 16px no-repeat;
     rotate: 90deg;
   }
-  select:where(:not([multiple], [size])):open::picker-icon {
-    rotate: -90deg;
-  }
   select:where(:not([multiple], [size])):open {
     border-color: var(--focus-ring);
   }
@@ -602,7 +599,8 @@ details[open] > summary::before {
 .action-menu > summary::before,
 .library-item-menu > summary::before,
 .turn-activity > summary::before,
-.pc-composer-fold > summary::before {
+.pc-composer-fold > summary::before,
+.input-translation-language-mobile > summary::before {
   content: none;
 }
 fieldset {

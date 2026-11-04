@@ -18,6 +18,12 @@ export function InputTranslationControls({
   const languageTrigger = useRef<HTMLElement>(null);
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   useEffect(() => {
+    if (disabled && languageMenu.current?.open) {
+      languageMenu.current.open = false;
+      setLanguageMenuOpen(false);
+    }
+  }, [disabled]);
+  useEffect(() => {
     if (!languageMenuOpen) return;
     const outside = (event: PointerEvent) => {
       const menu = languageMenu.current;
@@ -58,25 +64,17 @@ export function InputTranslationControls({
           <Languages size={17} aria-hidden="true" />
         )}
       </button>
-      <label className="input-translation-language-desktop">
-        <span className="sr-only">{t('prompts.uiInputTranslationLanguage')}</span>
-        <select
-          aria-label={t('prompts.uiInputTranslationLanguage')}
-          value={translation.language}
-          disabled={disabled}
-          onChange={(event) => translation.changeLanguage(event.target.value)}
-        >
-          {INPUT_TRANSLATION_LANGUAGES.map((language) => (
-            <option key={language.code} value={language.code}>
-              {t(`prompts.language.${language.code}`)}
-            </option>
-          ))}
-        </select>
-      </label>
       <details
         ref={languageMenu}
         className="input-translation-language-mobile"
-        onToggle={(event) => setLanguageMenuOpen(event.currentTarget.open)}
+        onToggle={(event) => {
+          if (disabled && event.currentTarget.open) {
+            event.currentTarget.open = false;
+            setLanguageMenuOpen(false);
+            return;
+          }
+          setLanguageMenuOpen(event.currentTarget.open);
+        }}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
         }}
@@ -90,10 +88,14 @@ export function InputTranslationControls({
       >
         <summary
           ref={languageTrigger}
+          aria-disabled={disabled || undefined}
           aria-label={t('prompts.inputLanguageNamed', {
             name: t(`prompts.language.${current.code}`),
           })}
           title={t('prompts.inputLanguageNamed', { name: t(`prompts.language.${current.code}`) })}
+          onClick={(event) => {
+            if (disabled) event.preventDefault();
+          }}
         >
           {current.code.toUpperCase()}
         </summary>

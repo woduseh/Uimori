@@ -15,7 +15,7 @@ import { backgroundStyle } from './ThemeBackground.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { IconButton } from './IconButton.js';
 import { SaveButton } from './SaveButton.js';
-import { CloseIcon, ResetIcon } from './ui-icons.js';
+import { ResetIcon, UndoIcon } from './ui-icons.js';
 
 export function ThemeBackgroundSettings({
   scope,
@@ -223,7 +223,7 @@ export function ThemeBackgroundSettings({
         {dirty && (
           <IconButton
             label={t('visuals.m020')}
-            icon={CloseIcon}
+            icon={UndoIcon}
             disabled={disabled || busy}
             onClick={() => {
               setDraft(selected ?? inherited);

@@ -1216,7 +1216,6 @@ export function HelperPanel(props: Props) {
       <span>
         {confirmedModel ? (savedModelPreset?.title ?? modelDescription) : props.modelTitle}
       </span>
-      <ChevronDown size={14} aria-hidden="true" />
     </button>
   );
   return (

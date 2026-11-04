@@ -6,6 +6,7 @@ import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { ReaderEditingContext } from './Bookmarks.js';
 import { SaveButton } from './SaveButton.js';
+import { CheckIcon } from './ui-icons.js';
 
 export function SceneTitleEditor({
   item,
@@ -97,7 +98,12 @@ export function SceneTitleEditor({
               />
             </label>
             <div className="form-actions">
-              <SaveButton label={t('reader.saveName')} disabled={!dirty} aria-busy={busy} />
+              <SaveButton
+                icon={CheckIcon}
+                label={t('reader.saveName')}
+                disabled={!dirty}
+                aria-busy={busy}
+              />
             </div>
           </fieldset>
           {error && (

@@ -4,7 +4,7 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { Dialog } from './Dialog.js';
 import { DraftDiscardActions } from './DraftDiscardActions.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
-import { RefreshIcon } from './ui-icons.js';
+import { UndoIcon } from './ui-icons.js';
 import { SaveButton } from './SaveButton.js';
 import './settings-actions.css';
 import { useEffect, useRef, useState } from 'react';
@@ -182,7 +182,7 @@ export function SettingsEditor({
           >
             {dirty && (
               <button type="button" className="secondary" onClick={() => setConfirmReload(true)}>
-                <RefreshIcon size={18} aria-hidden="true" />
+                <UndoIcon size={18} aria-hidden="true" />
                 {t('settings.m94')}
               </button>
             )}

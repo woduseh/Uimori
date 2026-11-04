@@ -1122,8 +1122,8 @@ export function ConnectionEditor({
               <ConnectionIcon size={28} aria-hidden="true" />
               <h4>{t('providers.m78')}</h4>
               <button type="button" disabled={busy} onClick={newConnection}>
+                <AddIcon size={18} aria-hidden="true" />
                 {t('providers.m72')}
-                <ForwardIcon size={18} aria-hidden="true" />
               </button>
             </div>
           )}

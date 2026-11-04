@@ -23,6 +23,7 @@ import {
 import { api, ApiError } from './api.js';
 import { ActionMenu } from './ActionMenu.js';
 import { IconButton } from './IconButton.js';
+import { EditIcon } from './ui-icons.js';
 import { DismissibleError } from './DismissibleError.js';
 import { Prose } from './Prose.js';
 import { OUTLINE_REFRESH_EVENT, type OutlineHelperRequest } from './outline-helper.js';
@@ -772,7 +773,7 @@ export function OutlinePanel({
                     <ActionMenu label={t('prompts.uiManageOutline')}>
                       <div className="action-menu-group">
                         <button type="button" disabled={disabled} onClick={edit}>
-                          <PenLine size={16} />
+                          <EditIcon size={16} />
                           {t('prompts.uiEditOutline2')}
                         </button>
                         {selected.level !== 'beat' && (
