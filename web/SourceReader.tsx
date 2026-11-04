@@ -711,6 +711,7 @@ function SourceReaderContent({
   useLayoutEffect(() => {
     if (previousHash.current !== source.hash) {
       previousHash.current = source.hash;
+      if (illustrationRequestKey.current) illustrationRequestKey.current = crypto.randomUUID();
       setMode('original');
     }
   }, [source.hash]);

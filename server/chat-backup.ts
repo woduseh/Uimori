@@ -125,14 +125,13 @@ export function importPreparedChatBackup(
         importedIds.get(entry.key)!,
       ])
     );
+    const contentRemap = new Map(
+      file.contents.map((entry) => [entry.source.id, importedIds.get(entry.key)!])
+    );
     const chats = original.chats.map((originalCopy, index) => {
       const copy = structuredClone(originalCopy);
       if (copy.state.illustrationReferences)
-        remapIllustrationPackageReferences(
-          copy.state.illustrationReferences,
-          copy.transcript.packageAttachments,
-          remap
-        );
+        remapIllustrationPackageReferences(copy.state.illustrationReferences, contentRemap);
       copy.transcript.packageAttachments = copy.transcript.packageAttachments.map((ref) => ({
         ...ref,
         id: remap.get(ref.id)!,
@@ -281,13 +280,15 @@ export async function importChatBackup(store: Store, value: unknown): Promise<Ch
         receipt.items.find((item) => item.key === entry.key)!.id,
       ])
     );
+    const contentRemap = new Map(
+      file.contents.map((entry) => [
+        entry.source.id,
+        receipt.items.find((item) => item.key === entry.key)!.id,
+      ])
+    );
     const chats = copies.map((copy, index) => {
       if (copy.state.illustrationReferences)
-        remapIllustrationPackageReferences(
-          copy.state.illustrationReferences,
-          copy.transcript.packageAttachments,
-          remap
-        );
+        remapIllustrationPackageReferences(copy.state.illustrationReferences, contentRemap);
       copy.transcript.packageAttachments = copy.transcript.packageAttachments.map((ref) => ({
         ...ref,
         id: remap.get(ref.id)!,

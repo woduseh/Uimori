@@ -24,6 +24,11 @@ type Candidate = {
   role: IllustrationReferenceRole | null;
 };
 type Loaded = IllustrationReferences & { candidates: Candidate[] };
+const rolesOf = (value: Loaded): Record<string, IllustrationReferenceRole | ''> =>
+  Object.fromEntries([
+    ...value.references.map((item) => [item.ref, item.role]),
+    ...value.candidates.map((item) => [item.ref, item.role ?? '']),
+  ]);
 
 /** Per-chat visual identities and reference roles. */
 export function IllustrationReferencesEditor({
@@ -80,7 +85,7 @@ export function IllustrationReferencesEditor({
     const value = await load();
     // Edits made while the read was pending still own the draft.
     if (value && !dirtyDraft.current) {
-      setRoles(Object.fromEntries(value.candidates.map((item) => [item.ref, item.role ?? ''])));
+      setRoles(rolesOf(value));
       setProfiles(value.characterProfiles);
     }
   }, [load]);
@@ -107,7 +112,9 @@ export function IllustrationReferencesEditor({
         />
       </section>
     );
-  const selected = loaded.candidates.filter((item) => roles[item.ref]);
+  const candidates = new Set(loaded.candidates.map((item) => item.ref));
+  const unavailable = loaded.references.filter((item) => !candidates.has(item.ref));
+  const selected = [...loaded.candidates, ...unavailable].filter((item) => roles[item.ref]);
   const linked = new Set(profiles.flatMap((item) => item.referenceRef ?? []));
   const used = new Set([...selected.map((item) => item.ref), ...linked]);
   const markDirty = () => {
@@ -293,6 +300,33 @@ export function IllustrationReferencesEditor({
       </div>
       <h5>{t('visuals.referenceImages')}</h5>
       {!loaded.candidates.length && <p className="muted">{t('visuals.m035')}</p>}
+      {unavailable.map((item, index) => (
+        <label className="settings-row" key={item.ref}>
+          <span className="settings-row-copy">
+            {t('visuals.unavailableReferenceNumber', { count: index + 1 })}
+          </span>
+          <select
+            aria-label={t('visuals.unavailableReferenceNumber', { count: index + 1 })}
+            value={linked.has(item.ref) ? 'character' : (roles[item.ref] ?? '')}
+            disabled={saving || linked.has(item.ref)}
+            onChange={(event) => {
+              setRoles((current) => ({
+                ...current,
+                [item.ref]: event.target.value as IllustrationReferenceRole | '',
+              }));
+              markDirty();
+            }}
+          >
+            <option value="">{t('visuals.m037')}</option>
+            <option value="character" disabled={item.role !== 'character'}>
+              {t('visuals.m038')}
+            </option>
+            <option value="style" disabled={item.role !== 'style'}>
+              {t('visuals.m039')}
+            </option>
+          </select>
+        </label>
+      ))}
       <div className="asset-grid illustration-reference-options">
         {loaded.candidates.map((item) => (
           <figure key={item.ref}>
@@ -339,11 +373,9 @@ export function IllustrationReferencesEditor({
           );
           const adopt = (keepDraft: boolean) => {
             loadEpoch.current++;
-            setLoaded(value);
+            setLoaded(keepDraft ? { ...value, references: loaded.references } : value);
             if (!keepDraft) {
-              setRoles(
-                Object.fromEntries(value.candidates.map((item) => [item.ref, item.role ?? '']))
-              );
+              setRoles(rolesOf(value));
               setProfiles(value.characterProfiles);
               dirtyDraft.current = false;
               setDirty(false);
