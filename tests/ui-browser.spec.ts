@@ -1056,9 +1056,7 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   await expect(page.getByLabel('다음 장면 요청')).toHaveValue('복구 전에는 보내지 않는 합성 초안');
   await page.getByRole('button', { name: '원문 생성', exact: true }).click();
   await recovery.getByRole('button', { name: '시작 설정 다시 저장', exact: true }).click();
-  await expect(page.getByRole('button', { name: '시작 설정 다시 저장', exact: true })).toHaveCount(
-    0
-  );
+  await expect(recovery).toBeHidden();
   const restored = await data(request, chat.id);
   expect(restored.profile!.packageAttachments).toEqual([{ id: bot.id, revision: 1, role: 'bot' }]);
   expect(await (await request.get('/api/prompt-workspace')).json()).toMatchObject({
@@ -1066,7 +1064,8 @@ test('UI03 UI12 failed starting profile read survives reload and recovers frozen
   });
   expect(restored.profile!.routes).toEqual(currentModels.routes);
   expect(restored.profile!.image).toBe(true);
-  expect(restored.profile!.revision).toBe(original.revision + 2);
+  // The competing save already recorded the intended attachments.
+  expect(restored.profile!.revision).toBe((await update.json()).revision);
   expect(restored.runs).toHaveLength(0);
   expect(restored.attempts).toHaveLength(0);
   expect(chatPosts).toBe(1);

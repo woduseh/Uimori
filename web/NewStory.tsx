@@ -272,7 +272,7 @@ export function NewStory({
       start && selectedBot.package ? resolvePackageStart(selectedBot.package, start) : null;
     if (start && !opening) throw new Error('선택한 시작을 다시 확인해 주세요.');
     return structuredClone({
-      title: title.trim() || (selectedBot ? `${selectedBot.title}의 채팅` : '새로운 채팅'),
+      title: title.trim() || t('transfer.defaultChatTitle', { bot: selectedBot.title }),
       autoTitle: !title.trim(),
       bot: selectedBot ?? null,
       persona: selectedPersona ?? null,

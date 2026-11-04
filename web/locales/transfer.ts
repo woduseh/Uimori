@@ -1,5 +1,11 @@
 /** App-owned transfer, navigation, and new-chat presentation only. */
 export const messages = {
+  'transfer.defaultChatTitle': {
+    ko: '{bot}의 채팅',
+    en: 'Chat with {bot}',
+    ja: '{bot}とのチャット',
+    zh: '与{bot}的聊天',
+  },
   'transfer.configureNewChat': {
     ko: '설정 후 새 채팅',
     en: 'Configure new chat',
