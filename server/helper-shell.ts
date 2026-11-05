@@ -79,7 +79,10 @@ function typedShellFlags(name: string, flags: unknown): Record<string, unknown> 
   for (const [key, value] of Object.entries(record(flags))) {
     const field = properties[key];
     if (!field || typeof value !== 'string')
-      throw new HttpError(400, `SHELL_INVALID_OPTION:${key}`);
+      throw new HttpError(
+        400,
+        `SHELL_INVALID_OPTION:${key}: ${name} has no --${key.replace(/[A-Z]/gu, (c) => `-${c.toLowerCase()}`)} option. Check uimori tools ${name}.`
+      );
     if (field.type === 'boolean') {
       if (value !== 'true' && value !== 'false')
         throw new HttpError(400, `SHELL_INVALID_BOOLEAN:${key}`);
@@ -98,7 +101,10 @@ function typedShellFlags(name: string, flags: unknown): Record<string, unknown> 
     } else if (field.type === 'string') {
       result[key] = value;
     } else {
-      throw new HttpError(400, `SHELL_USE_JSON_INPUT:${key}`);
+      throw new HttpError(
+        400,
+        `SHELL_USE_JSON_INPUT:${key}: ${key} is not a simple string, number or boolean. Pass all arguments as a JSON object or with --input <file|->.`
+      );
     }
   }
   return result;

@@ -45,6 +45,12 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
         result: { manuscript: 'PRIVATE_RESULT_BODY' },
       });
     workspace.event(conversation.id, task.id, 'tool.finished', {
+      name: 'data.exec',
+      denied: false,
+      status: 'failed',
+      result: { exitCode: 7, output: 'PRIVATE_SHELL_OUTPUT' },
+    });
+    workspace.event(conversation.id, task.id, 'tool.finished', {
       name: 'resource.patch',
       denied: true,
       errorKind: 'recoverable',
@@ -59,6 +65,9 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
       denied: true,
       error: 'EDITOR_SAVE_REQUIRED',
     });
+    expect(
+      helperActivityStages(activity).find((stage) => stage.events[0].name === 'data.exec')
+    ).toMatchObject({ state: 'issue', events: [{ denied: false, status: 'failed' }] });
     expect(activity.events.at(-1)).toMatchObject({ text: '가'.repeat(1000), textTruncated: true });
     expect(JSON.stringify(activity)).not.toContain('PRIVATE_');
     expect(activity.events[0].seq).toBeLessThan(activity.events.at(-1)!.seq);
@@ -68,6 +77,9 @@ test('helper activity projects bounded diagnostics and keeps denied tools visibl
     releaseCompletedHelperInputs(store.db, task.id);
     const retained = readHelperActivity(store, task.id);
     expect(retained.status).toBe('completed');
+    expect(
+      helperActivityStages(retained).find((stage) => stage.events[0].name === 'data.exec')
+    ).toMatchObject({ state: 'issue', events: [{ denied: false, status: 'failed' }] });
     expect(retained.events.at(-2)).toMatchObject({
       name: 'resource.patch',
       denied: true,

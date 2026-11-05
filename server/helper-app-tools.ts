@@ -328,6 +328,8 @@ const readNames = new Set([
   'scene.search',
   'scene.versions',
 ]);
+/** Tools whose read/write effect depends on their action argument. */
+const conditionalNames = new Set(['chat.lore', 'library.organize']);
 const writingNames = new Set([
   ...writingReadNames,
   'chat.fork',
@@ -340,12 +342,20 @@ const writingNames = new Set([
 export function helperToolTraits(name: string, args: Record<string, unknown> = {}) {
   const data = dataToolNames.has(name);
   const writingRead = writingReadNames.has(name);
+  const readOnly = !!(
+    helperResourceOperation(name, args)?.readOnly ||
+    readNames.has(name) ||
+    presentationReadOnly(name) ||
+    (conditionalNames.has(name) && args.action === 'read')
+  );
   return {
-    readOnly:
-      helperResourceOperation(name, args)?.readOnly ||
-      readNames.has(name) ||
-      presentationReadOnly(name) ||
-      ((name === 'chat.lore' || name === 'library.organize') && args.action === 'read'),
+    readOnly,
+    /** Catalog effect; conditional tools are mixed until an action is supplied. */
+    effect: (conditionalNames.has(name) && args.action === undefined
+      ? 'mixed'
+      : readOnly
+        ? 'read'
+        : 'write') as 'read' | 'write' | 'mixed',
     reviewAllowed: data || name === 'app.tools' || name === 'outline.read' || writingRead,
     direct:
       name === 'image.list' ||
@@ -387,7 +397,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.tools',
     description:
-      'Find Uimori operations by purpose; current library/chat scope ranks applicable tools first. Supply a name for its exact schema (up to 4 names) or query for a compact catalog. Invoke with app.call. Shared bot/persona appearance defaults use resource.read and resource.patch; illustration.profiles.* edits chat-only overrides.',
+      'Find Uimori operations by purpose. query returns a ranked catalog whose top 3 matches include exact schemas; names returns exact schemas for up to 4 operations. Operation names rank first; current library/chat scope breaks relevance ties. Invoke with app.call.',
     inputSchema: schema(
       {
         names: { type: 'array', maxItems: 4, items: str },
@@ -421,43 +431,48 @@ export function helperGatewayTools(review: boolean): ProviderTool[] {
     : HELPER_GATEWAY_TOOLS;
 }
 
-/** Discovery hints are not aliases for execution names or additional write permissions. */
-const discoveryHints: Record<
-  string,
-  { terms: string; summary: string; scope: 'chat' | 'library' }
-> = {
-  'resource.read': {
-    terms:
-      'appearance profile profiles default shared bot persona library resource inspect 기본 외형 프로필 라이브러리',
-    summary:
-      'Read saved shared bot/persona appearance defaults and their revision and source.appearanceProfilesPath.',
-    scope: 'library',
-  },
-  'resource.patch': {
-    terms:
-      'appearance profile profiles default shared bot persona library resource save edit 기본 외형 프로필 라이브러리',
-    summary:
-      'Edit shared bot/persona defaults at source.appearanceProfilesPath using the current revision.',
-    scope: 'library',
-  },
-  'illustration.profiles.read': {
-    terms:
-      'appearance profile profiles character chat local override illustration 채팅 외형 프로필',
-    summary: 'Read chat-local and inherited character appearance profiles; requires a chat.',
-    scope: 'chat',
-  },
-  'illustration.profiles.save': {
-    terms:
-      'appearance profile profiles character chat local override illustration 채팅 외형 프로필',
-    summary: 'Save chat-local character appearance overrides; requires a chat.',
-    scope: 'chat',
-  },
+/** Search synonyms supplement owning descriptions; they are not execution aliases. */
+const discoveryTerms: Record<string, string> = {
+  'resource.read': 'library inspect 기본 외형 프로필 라이브러리',
+  'resource.patch': 'library save edit 기본 외형 프로필 라이브러리',
+  'illustration.profiles.read': 'local override 채팅 외형 프로필',
+  'illustration.profiles.save': 'local override 채팅 외형 프로필',
 };
+/** Splits names, descriptions and camelCase schema fields into lowercase search words. */
+function searchWords(text: string) {
+  return text
+    .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, '$1 $2')
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+const searchIndex = new Map(
+  HELPER_APP_TOOLS.map((tool) => [
+    tool.name,
+    {
+      name: new Set(searchWords(tool.name)),
+      all: new Set(
+        searchWords(
+          `${tool.name} ${tool.description} ${discoveryTerms[tool.name] ?? ''} ${Object.keys(
+            (tool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}
+          ).join(' ')}`
+        )
+      ),
+    },
+  ])
+);
+const matchesWord = (words: Set<string>, term: string) => {
+  for (const word of words) if (word.startsWith(term)) return true;
+  return false;
+};
+/** Ranked query results whose exact schemas are returned without a second lookup. */
+const DETAILED_MATCHES = 3;
 
 type ToolCatalog = {
   tools: (Pick<ProviderTool, 'name' | 'description'> & {
     required: string[];
     effect: 'read' | 'write' | 'mixed';
+    inputSchema?: Json;
   })[];
   total: number;
   nextOffset: number | null;
@@ -507,45 +522,40 @@ export function describeHelperTools(
     Number(offset) < 0
   )
     throw new HttpError(400, 'INVALID_ARGUMENTS');
-  const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
-  const searchable = (tool: ProviderTool) =>
-    `${tool.name} ${tool.description} ${discoveryHints[tool.name]?.terms ?? ''} ${Object.keys(
-      (tool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}
-    ).join(' ')}`.toLowerCase();
-  const found = allowed.filter((tool) => terms.every((term) => searchable(tool).includes(term)));
-  // Rank name matches ahead of incidental description matches for every operation.
-  // The two appearance-profile ownerships are the only explicit scope overrides.
-  if (terms.length)
-    found.sort((a, b) => {
-      const relevance = (tool: ProviderTool) => {
-        const name = tool.name.toLowerCase();
-        const hint = discoveryHints[tool.name];
-        return (
-          (name === query.toLowerCase() ? 1000 : 0) +
-          (scope && hint ? (hint.scope === scope ? 100 : -100) : 0) +
-          terms.reduce(
-            (score, term) =>
-              score + (name.includes(term) ? 10 : hint?.terms.includes(term) ? 4 : 1),
-            0
-          )
-        );
-      };
-      return relevance(b) - relevance(a);
-    });
+  const terms = searchWords(query);
+  const found = allowed.filter((tool) => {
+    const words = searchIndex.get(tool.name)?.all;
+    return !!words && terms.every((term) => matchesWord(words, term));
+  });
+  // Exact names rank first, then name words. Scope only breaks relevance ties;
+  // chat tools remain discoverable from the library for an explicit chatId.
+  if (terms.length || scope === 'library') {
+    const exact = query.trim().toLowerCase();
+    const rank = (tool: ProviderTool) => {
+      const name = searchIndex.get(tool.name)?.name ?? new Set<string>();
+      return (
+        (tool.name.toLowerCase() === exact ? 1000 : 0) +
+        terms.reduce((score, term) => score + (matchesWord(name, term) ? 10 : 0), 0) +
+        (scope && chatToolNames.has(tool.name) === (scope === 'chat') ? 1 : 0)
+      );
+    };
+    const ranks = new Map(found.map((tool) => [tool.name, rank(tool)]));
+    found.sort((a, b) => (ranks.get(b.name) ?? 0) - (ranks.get(a.name) ?? 0));
+  }
   return {
-    tools: found.slice(Number(offset), Number(offset) + 20).map((tool) => ({
-      name: tool.name,
-      description:
-        discoveryHints[tool.name]?.summary ??
-        (tool.description.length > 260 ? `${tool.description.slice(0, 257)}…` : tool.description),
-      required: (tool.inputSchema as { required?: string[] }).required ?? [],
-      effect:
-        tool.name === 'chat.lore' || tool.name === 'library.organize'
-          ? 'mixed'
-          : helperToolTraits(tool.name).readOnly
-            ? 'read'
-            : 'write',
-    })),
+    tools: found.slice(Number(offset), Number(offset) + 20).map((tool, index) => {
+      const detailed = terms.length > 0 && Number(offset) + index < DETAILED_MATCHES;
+      return {
+        name: tool.name,
+        description:
+          detailed || tool.description.length <= 260
+            ? tool.description
+            : `${tool.description.slice(0, 257)}…`,
+        required: (tool.inputSchema as { required?: string[] }).required ?? [],
+        effect: helperToolTraits(tool.name).effect,
+        ...(detailed ? { inputSchema: tool.inputSchema } : {}),
+      };
+    }),
     total: found.length,
     nextOffset: Number(offset) + 20 < found.length ? Number(offset) + 20 : null,
   };

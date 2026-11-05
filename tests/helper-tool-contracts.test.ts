@@ -510,9 +510,9 @@ test('conditional reads remain distinct from writes and the narrower outline rev
   );
 });
 
-test('discovery favors tools for the current scope without hiding explicit operations', () => {
-  const library = describeHelperTools({ query: 'appearance profile' }, false, 'library');
-  const chat = describeHelperTools({ query: 'appearance profile' }, false, 'chat');
+test('discovery uses current scope to break relevance ties without hiding explicit operations', () => {
+  const library = describeHelperTools({ query: 'shared appearance' }, false, 'library');
+  const chat = describeHelperTools({ query: 'shared appearance' }, false, 'chat');
   if (!('total' in library) || !('total' in chat)) throw new Error('Expected catalog');
   expect(library.tools.slice(0, 2).map((tool) => tool.name)).toEqual([
     'resource.read',
@@ -525,6 +525,44 @@ test('discovery favors tools for the current scope without hiding explicit opera
   expect(
     describeHelperTools({ names: ['illustration.profiles.read'] }, false, 'library').tools
   ).toHaveLength(1);
+});
+
+test('discovery keeps shared and chat-local profiles searchable in English and Korean', () => {
+  for (const query of ['library profile', 'shared profiles', '기본 외형', '라이브러리 프로필']) {
+    const result = describeHelperTools({ query }, false, 'library');
+    expect(result.tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['resource.read', 'resource.patch'])
+    );
+  }
+  expect(
+    describeHelperTools({ query: '채팅 프로필' }, false, 'chat').tools.map((tool) => tool.name)
+  ).toEqual(['illustration.profiles.read', 'illustration.profiles.save']);
+  expect(() => describeHelperTools({ names: ['프로필'] })).toThrow('UNKNOWN_APP_TOOL');
+});
+
+test('discovery ranks operation names before scope and returns exact schemas for the top three matches', () => {
+  const settings = describeHelperTools({ query: 'settings' }, false, 'library');
+  expect(settings.tools.slice(0, 2).map((tool) => tool.name)).toEqual([
+    'settings.read',
+    'settings.update',
+  ]);
+  const exact = describeHelperTools({ query: 'illustration.profiles.read' }, false, 'library');
+  expect(exact.tools[0]?.name).toBe('illustration.profiles.read');
+
+  const query = describeHelperTools({ query: 'appearanceProfiles' }, false, 'library');
+  expect(query.tools.map((tool) => tool.name)).toEqual(
+    expect.arrayContaining(['resource.read', 'resource.patch'])
+  );
+  expect(query.tools.length).toBeGreaterThan(3);
+  for (const [index, tool] of query.tools.entries()) {
+    if (index < 3)
+      expect(tool).toMatchObject(describeHelperTools({ names: [tool.name] }).tools[0]!);
+    else expect(tool).not.toHaveProperty('inputSchema');
+  }
+  const later = describeHelperTools({ query: 'appearanceProfiles', offset: 3 });
+  expect(later.tools.length).toBeGreaterThan(0);
+  for (const tool of later.tools) expect(tool).not.toHaveProperty('inputSchema');
+  for (const tool of describeHelperTools({}).tools) expect(tool).not.toHaveProperty('inputSchema');
 });
 
 test('the full helper catalog includes actionable metadata and ranks exact operations', () => {

@@ -7,6 +7,8 @@ import sharp from 'sharp';
 import { Store } from '../server/store.js';
 import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
+import { readHelperActivity } from '../server/helper-activity.js';
+import { helperActivityStages } from '../web/helper-activity.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { storeImage } from '../server/image-storage.js';
 import {
@@ -423,43 +425,74 @@ test('a library helper can discover and view illustration images in a named chat
   await expectRedPixels(imageData(bodies[2])[0]);
 });
 
-test('native helper tool callbacks return decoded image pixels without persisting binary results', async () => {
-  let contentId = '';
-  let pixels = '';
-  const executeCodexAgent = vi.fn<
-    NonNullable<ConstructorParameters<typeof HelperRuntime>[1]['executeCodexAgent']>
-  >(async (_connection, _request, options) => {
-    const outcome = await options.onToolCall(
-      {
-        callId: 'native-read',
-        name: 'app.call',
-        arguments: { name: 'image.read', arguments: { contentId, imageId: 'portrait-red' } },
-      },
-      options.signal
-    );
-    expect(outcome.success).toBe(true);
-    expect(JSON.parse(outcome.text)).toMatchObject({ contentId, imageId: 'portrait-red' });
-    if (outcome.complete)
-      throw new Error('Image reads must return a tool result, not finish the task');
-    expect(outcome.images).toHaveLength(1);
-    pixels = outcome.images![0].base64;
-    await expectRedPixels(pixels);
-    return {
-      status: 'completed',
-      text: 'The portrait is red.',
-      toolCalls: [],
-      refusal: null,
-      error: null,
-      usage: { inputTokens: 10, outputTokens: 4, costUsd: null, raw: null, priceRevision: null },
-      opaqueState: null,
-    } satisfies ProviderResult;
-  });
-  const f = fixture({ executeCodexAgent });
-  contentId = (await savePortrait(f.store)).id;
-  expect(await f.run()).toMatchObject({ status: 'completed' });
-  expect(executeCodexAgent).toHaveBeenCalledOnce();
-  expectNoPersistedPixels(f, pixels);
-});
+test.each([false, true])(
+  'native image results retain pixels with failed shell=%s',
+  async (failedShell) => {
+    if (failedShell) vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-image-runtime-shell'));
+    let contentId = '';
+    let pixels = '';
+    const executeCodexAgent = vi.fn<
+      NonNullable<ConstructorParameters<typeof HelperRuntime>[1]['executeCodexAgent']>
+    >(async (_connection, _request, options) => {
+      const outcome = await options.onToolCall(
+        {
+          callId: 'native-read',
+          name: failedShell ? 'data.exec' : 'app.call',
+          arguments: failedShell
+            ? { command: 'uimori call image.read --input scratch/image.json; exit 7' }
+            : { name: 'image.read', arguments: { contentId, imageId: 'portrait-red' } },
+        },
+        options.signal
+      );
+      expect(outcome.success).toBe(!failedShell);
+      expect(JSON.parse(outcome.text)).toMatchObject(
+        failedShell
+          ? { exitCode: 7, viewedImages: [{ contentId, imageId: 'portrait-red' }] }
+          : { contentId, imageId: 'portrait-red' }
+      );
+      if (outcome.complete)
+        throw new Error('Image reads must return a tool result, not finish the task');
+      expect(outcome.images).toHaveLength(1);
+      pixels = outcome.images![0].base64;
+      await expectRedPixels(pixels);
+      return {
+        status: 'completed',
+        text: 'The portrait is red.',
+        toolCalls: [],
+        refusal: null,
+        error: null,
+        usage: { inputTokens: 10, outputTokens: 4, costUsd: null, raw: null, priceRevision: null },
+        opaqueState: null,
+      } satisfies ProviderResult;
+    });
+    const f = fixture({ executeCodexAgent });
+    contentId = (await savePortrait(f.store)).id;
+    if (failedShell)
+      vi.spyOn(f.runtime.shell, 'exec').mockImplementation(
+        async (_task, _toolId, _command, _timeoutMs, signal, invoke) => {
+          if (!invoke || !signal) throw new Error('Missing shell app callback');
+          await invoke(
+            'image.read',
+            { contentId, imageId: 'portrait-red' },
+            'native-image',
+            signal
+          );
+          return {
+            exitCode: 7,
+            signal: null,
+            timedOut: false,
+            truncated: false,
+            output: 'command failed',
+            outputFile: 'scratch/native-image.log',
+            applied: [],
+          };
+        }
+      );
+    expect(await f.run()).toMatchObject({ status: 'completed' });
+    expect(executeCodexAgent).toHaveBeenCalledOnce();
+    expectNoPersistedPixels(f, pixels);
+  }
+);
 
 test('a known text-only helper denies image reading recoverably while image discovery still works', async () => {
   const f = fixture({ modelId: 'deepseek-chat' });
@@ -494,7 +527,11 @@ test('a known text-only helper denies image reading recoverably while image disc
   expect(bodies.flatMap(imageData)).toHaveLength(0);
 });
 
-test('shell image reads keep all nine pixel results when stdout is redirected', async () => {
+test.each([
+  { exitCode: 0, timedOut: false },
+  { exitCode: 7, timedOut: false },
+  { exitCode: null, timedOut: true },
+])('shell image reads preserve redirected pixels with outcome %j', async (outcome) => {
   vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-image-runtime-shell'));
   const f = fixture();
   const original = await savePortrait(f.store);
@@ -516,9 +553,9 @@ test('shell image reads keep all nine pixel results when stdout is redirected', 
           )
         );
       return {
-        exitCode: 0,
+        exitCode: outcome.exitCode,
         signal: null,
-        timedOut: false,
+        timedOut: outcome.timedOut,
         truncated: false,
         output: '',
         outputFile: 'scratch/redirected-image.log',
@@ -541,6 +578,11 @@ test('shell image reads keep all nine pixel results when stdout is redirected', 
   const task = await f.run();
   expect(task.status, task.error ?? '').toBe('completed');
   expect(shell).toHaveBeenCalledOnce();
+  expect(
+    helperActivityStages(readHelperActivity(f.store, task.id)).find(
+      (stage) => stage.events[0].name === 'data.exec'
+    )
+  ).toMatchObject({ state: outcome.exitCode === 0 ? 'completed' : 'issue' });
   expect(readResults).toMatchObject(
     Array.from({ length: 9 }, () => ({
       result: { contentId: original.id, imageId: 'portrait-red' },
@@ -548,6 +590,7 @@ test('shell image reads keep all nine pixel results when stdout is redirected', 
   );
   expect(bodies).toHaveLength(2);
   expect(toolEvent(bodies[1], 'shell-read')).toMatchObject({
+    ...outcome,
     output: '',
     viewedImages: Array.from({ length: 9 }, () => ({
       contentId: original.id,
@@ -562,10 +605,15 @@ test('shell image reads keep all nine pixel results when stdout is redirected', 
   expectNoPersistedPixels(f, pixels);
 });
 
-test.each(['image.read', 'shell image.read with a save'] as const)(
+test.each([
+  'image.read',
+  'shell image.read with a save',
+  'failed shell image.read with a save',
+] as const)(
   'automatic compaction of %s shows pixels to the context model and retains exact provenance',
   async (mode) => {
-    const shellWrite = mode === 'shell image.read with a save';
+    const shellWrite = mode !== 'image.read';
+    const failedShell = mode.startsWith('failed');
     if (shellWrite) vi.stubEnv('UIMORI_SHELL_ROOT', join(tmpdir(), 'uimori-image-runtime-shell'));
     const f = fixture({ inputTokenLimit: 8192 });
     const original = await savePortrait(f.store);
@@ -596,7 +644,7 @@ test.each(['image.read', 'shell image.read with a save'] as const)(
           );
           applied = saved.applied ?? [];
           return {
-            exitCode: 0,
+            exitCode: failedShell ? 7 : 0,
             signal: null,
             timedOut: false,
             truncated: false,
@@ -664,13 +712,16 @@ test.each(['image.read', 'shell image.read with a save'] as const)(
           name: 'data.exec',
           args: { command },
           result: {
-            exitCode: 0,
+            exitCode: failedShell ? 7 : 0,
             signal: null,
             timedOut: false,
             truncated: false,
             output: '',
             outputFile: 'scratch/image-save.log',
             applied,
+            ...(failedShell
+              ? { guidance: expect.stringContaining('never replay committed edits') }
+              : {}),
             viewedImages: [
               expect.objectContaining({ contentId: original.id, imageId: 'portrait-red' }),
             ],

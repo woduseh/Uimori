@@ -288,7 +288,7 @@ function continuation(request: transport.ProviderRequest) {
     | undefined;
 }
 
-test('large-model helper compacts repeated read context before the hard input limit', async () => {
+test('large-model helper preserves repeated exact evidence while below the context pressure threshold', async () => {
   const f = await fixture({ fixed: false });
   f.updateModel(f.helperModel.id, { inputTokenLimit: 272_000 });
   const sentence =
@@ -299,30 +299,29 @@ test('large-model helper compacts repeated read context before the hard input li
   };
   let helperCalls = 0;
   const log = script(f, (request) => {
-    if (request.role === 'context')
-      return summarized('Reviewed the long source; no edits were made.');
+    expect(request.role).toBe('helper');
     if (++helperCalls === 1)
       return tools(
         tool('large-evidence', 'resource.read', { kind: 'content', id: 'large-evidence' })
       );
     if (helperCalls === 2) {
-      // Preserve the first direct inspection, even when an early summary could save tokens.
+      // Both initial inspection and later reasoning retain the original evidence.
       expect(events(request).some((event) => event.callId === 'large-evidence')).toBe(true);
       expect(continuation(request)).toBeUndefined();
       return tools(tool('invalid-catalog', 'app.tools', { names: [] }));
     }
-    expect(continuation(request)).toMatchObject({ segment: 1, reason: 'host-compaction' });
+    expect(continuation(request)).toBeUndefined();
+    expect(events(request).find((event) => event.callId === 'large-evidence')?.result).toEqual(
+      f.readValue
+    );
     return structuredClone(success);
   });
   const task = await f.run();
   expect(task.status, task.error ?? '').toBe('completed');
   expect(log.requests[0].role).toBe('helper');
   expect(log.requests.at(-1)?.role).toBe('helper');
-  expect(log.requests.some((request) => request.role === 'context')).toBe(true);
-  const decisions = compactions(f, task);
-  expect(decisions).toMatchObject([{ applied: true }]);
-  expect(decisions[0].beforeTokens).toBeLessThan(272_000 * 0.85);
-  expect(decisions[0].afterTokens).toBeLessThan(decisions[0].beforeTokens);
+  expect(log.requests).toHaveLength(3);
+  expect(compactions(f, task)).toEqual([]);
 });
 
 test('a fitting recent turn does not spend a summary call when nothing older can be compacted', async () => {
@@ -810,9 +809,13 @@ test('completed read references retain returned ranges and revisions while allow
   expect(task.snapshot.context).toEqual({ activeRevision: 0, checkpoint: null });
 });
 
-test.each(['resource.read', 'resource.readMany'] as const)(
-  'forced compaction retains exact small %s evidence and requested app schemas',
-  async (readName) => {
+test.each([
+  ['resource.read', false],
+  ['resource.readMany', false],
+  ['resource.read', true],
+] as const)(
+  'forced compaction retains exact small %s evidence and app schemas (query: %s)',
+  async (readName, querySchema) => {
     const f = await fixture();
     const compactionSource = Array.from({ length: 1_400 }, (_, index) =>
       index.toString(36).padStart(4, '0')
@@ -860,7 +863,11 @@ test.each(['resource.read', 'resource.readMany'] as const)(
             context: 1200,
             limit: 50,
           }),
-          tool('schema', 'app.tools', { names: [readName, 'resource.patch'] }),
+          tool(
+            'schema',
+            'app.tools',
+            querySchema ? { query: 'scene.versions' } : { names: [readName, 'resource.patch'] }
+          ),
           tool(
             'field',
             readName,
@@ -876,9 +883,11 @@ test.each(['resource.read', 'resource.readMany'] as const)(
         })
       );
       const schema = refs.find((item) => item.name === 'app.tools')?.returned as {
-        tools: { name: string }[];
+        tools: { name: string; inputSchema: unknown }[];
       };
-      expect(schema.tools.map((item) => item.name)).toEqual([readName, 'resource.patch']);
+      if (querySchema) expect(schema.tools[0].name).toBe('scene.versions');
+      else expect(schema.tools.map((item) => item.name)).toEqual([readName, 'resource.patch']);
+      expect(schema.tools.every((item) => !!item.inputSchema)).toBe(true);
       expect(JSON.stringify(schema).length).toBeLessThan(8_000);
       return structuredClone(success);
     });
