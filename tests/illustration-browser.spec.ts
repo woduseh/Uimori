@@ -473,6 +473,46 @@ test('ILUI01 scene menu requests an illustration, shows the stored image, retrie
   expect((await detail(request, chat.id)).sources[0].text).toBe(source.text);
 });
 
+test('ILUI-MOBILE-SHEET illustration actions stay above mobile composer controls', async ({
+  page,
+  request,
+}, info) => {
+  const { chat, source } = await seed(request);
+  await settings(request, {
+    generator: 'fixture',
+    automatic: false,
+    maxPerSource: 3,
+    maxAutoRetries: 0,
+  });
+  await page.setViewportSize({ width: 376, height: 700 });
+  await page.goto(`/?chat=${chat.id}`);
+  // A positioned composer (including mobile floating controls) must never cover the sheet.
+  await page.addStyleTag({ content: '.composer-dock { position: relative; z-index: 24; }' });
+  const requested = await request.post(`/api/sources/${source.id}/illustrations`, {
+    data: { maxTargets: 1 },
+  });
+  expect(requested.ok(), await requested.text()).toBe(true);
+  const card = page.getByTestId('illustration').filter({ visible: true }).first();
+  await expect(card).toHaveAttribute('data-status', 'completed');
+  await card.getByLabel('삽화 작업 메뉴', { exact: true }).click();
+  const deletion = card.locator('.action-menu-body').getByRole('button', { name: /삽화 삭제/u });
+  await expect(deletion).toBeVisible();
+  const actionBox = (await deletion.boundingBox())!;
+  const composerBox = (await page.locator('.composer-dock').boundingBox())!;
+  expect(actionBox.y + actionBox.height).toBeGreaterThan(composerBox.y);
+  expect(
+    await deletion.evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      return button.contains(
+        document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+      );
+    })
+  ).toBe(true);
+  await page.screenshot({ path: info.outputPath('illustration-mobile-sheet.png') });
+  await deletion.click();
+  await expect(page.getByRole('alertdialog', { name: '삭제 확인', exact: true })).toBeVisible();
+});
+
 for (const width of [360, DESKTOP_WIDTH]) {
   test(`ILUI-DIRECTION manual direction and redraw changes preserve drafts and submit once at ${width}px`, async ({
     page,

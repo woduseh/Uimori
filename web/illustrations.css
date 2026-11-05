@@ -410,3 +410,11 @@
   margin-top: 12px;
   font-size: var(--font-body);
 }
+
+/* Inline illustration sheets must paint above the composer and its floating controls.
+   Scope the stacking lift to an open mobile cut menu; the normal reader stays untouched. */
+@media (max-width: 600px) {
+  .reader-stage:has(.illustration-cut .action-menu[open]) {
+    z-index: 25;
+  }
+}
