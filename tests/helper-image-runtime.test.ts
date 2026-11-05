@@ -9,6 +9,12 @@ import { HelperRuntime } from '../server/helper-runtime.js';
 import { ResponseStreamStore } from '../server/response-stream.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
 import { storeImage } from '../server/image-storage.js';
+import {
+  listHelperImages,
+  readHelperImage,
+  listIllustrationHelperImages,
+  readIllustrationHelperImage,
+} from '../server/helper-image-tools.js';
 import { nativeContent } from './fixtures/native-content.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 import type { ProviderResult } from '../core/transport.js';
@@ -106,9 +112,9 @@ function fixture(
   };
 }
 
-async function savePortrait(store: Store) {
+async function savePortrait(store: Store, size = { width: 12, height: 8 }, withVariant = false) {
   const bytes = await sharp({
-    create: { width: 12, height: 8, channels: 3, background: '#ff0000' },
+    create: { width: size.width, height: size.height, channels: 3, background: '#ff0000' },
   })
     .png()
     .toBuffer();
@@ -126,12 +132,28 @@ async function savePortrait(store: Store) {
           blobHash: hash,
           allowedUse: 'both',
         },
+        ...(withVariant
+          ? [
+              {
+                id: 'kimono-red',
+                title: 'Kimono',
+                description: 'Alternative outfit',
+                mime: 'image/png' as const,
+                blobHash: hash,
+                allowedUse: 'both' as const,
+              },
+            ]
+          : []),
       ],
     }
   );
   pkg.nativeRisu.assets = [
     { name: 'original-happy-face', uri: 'embeded://assets/portrait.png', imageId: 'portrait-red' },
+    ...(withVariant
+      ? [{ name: 'original-kimono', uri: 'embeded://assets/kimono.png', imageId: 'kimono-red' }]
+      : []),
   ];
+  pkg.portraitImageId = 'portrait-red';
   return store.product.content({
     kind: 'bot',
     title: pkg.title,
@@ -239,7 +261,7 @@ test('gateway image discovery delivers actual pixels once across continued helpe
   expect(task.status, task.error ?? '').toBe('completed');
   expect(bodies).toHaveLength(4);
   expect(toolEvent(bodies[1], 'list').images).toMatchObject([
-    { imageId: 'portrait-red', nativeNames: ['original-happy-face'] },
+    { imageId: 'portrait-red', nativeNames: ['original-happy-face'], isPortrait: true },
   ]);
   expect(toolEvent(bodies[2], 'read')).toMatchObject({
     contentId: original.id,
@@ -256,6 +278,46 @@ test('gateway image discovery delivers actual pixels once across continued helpe
   expect(f.store.product.get('content', original.id)).toEqual(original);
   expect(f.store.db.prepare('SELECT * FROM image_blobs').all()).toEqual(originalBlobs);
   expectNoPersistedPixels(f, pixels);
+});
+
+test('thumbnail reads resize the transmitted pixels without changing saved originals', async () => {
+  const f = fixture();
+  const bot = await savePortrait(f.store, { width: 1400, height: 900 }, true);
+  const chat = f.store.createChat('Portrait comparison', { botId: bot.id });
+  const ref = 'package:' + bot.id + ':bot:portrait-red';
+  const originalBlobs = f.store.db.prepare('SELECT * FROM image_blobs').all();
+  expect(listHelperImages(f.store, { contentId: bot.id }).images).toMatchObject([
+    { imageId: 'portrait-red', isPortrait: true, nativeNames: ['original-happy-face'] },
+    { imageId: 'kimono-red', isPortrait: false, nativeNames: ['original-kimono'] },
+  ]);
+  expect(
+    listIllustrationHelperImages(f.store, chat.id, { query: 'original-happy-face' }).images
+  ).toMatchObject([{ ref, isPortrait: true }]);
+  expect(
+    listIllustrationHelperImages(f.store, chat.id, { query: 'original-kimono' }).images
+  ).toMatchObject([{ ref: 'package:' + bot.id + ':bot:kimono-red', isPortrait: false }]);
+
+  const full = await readHelperImage(f.store, { contentId: bot.id, imageId: 'portrait-red' });
+  const thumbnail = await readHelperImage(f.store, {
+    contentId: bot.id,
+    imageId: 'portrait-red',
+    mode: 'thumbnail',
+  });
+  const linked = await readIllustrationHelperImage(f.store, chat.id, { ref, mode: 'thumbnail' });
+  expect(full.result.transmission).toMatchObject({ width: 1400, height: 900 });
+  expect(thumbnail.result.transmission).toMatchObject({ width: 512, mode: 'thumbnail' });
+  expect(linked.result.transmission).toEqual(thumbnail.result.transmission);
+  expect(linked.resolved.base64).toEqual(thumbnail.resolved.base64);
+  expect(thumbnail.result.transmission.height).toBeLessThanOrEqual(512);
+  expect(thumbnail.resolved.base64).not.toEqual(full.resolved.base64);
+  expect(await sharp(Buffer.from(thumbnail.resolved.base64, 'base64')).metadata()).toMatchObject({
+    format: 'webp',
+    width: 512,
+  });
+  await expect(
+    readHelperImage(f.store, { contentId: bot.id, imageId: 'portrait-red', mode: 'invalid' })
+  ).rejects.toThrow('Invalid image read mode');
+  expect(f.store.db.prepare('SELECT * FROM image_blobs').all()).toEqual(originalBlobs);
 });
 
 test('illustration image tools use the current chat or the explicitly selected chat', async () => {
@@ -286,6 +348,7 @@ test('illustration image tools use the current chat or the explicitly selected c
       return answer(body, [
         call('list', 'illustration.image.list', {}),
         call('by-owner', 'illustration.image.list', { query: bot.title }),
+        call('by-native', 'illustration.image.list', { query: 'original-happy-face' }),
       ]);
     if (round === 1)
       return answer(body, [
@@ -295,18 +358,26 @@ test('illustration image tools use the current chat or the explicitly selected c
     if (round === 2)
       return answer(body, [
         call('local', 'illustration.image.read', { ref: local.id }),
-        call('package', 'illustration.image.read', { ref: packageRef }),
+        call('package', 'illustration.image.read', { ref: packageRef, mode: 'thumbnail' }),
       ]);
     return answer(body);
   });
   const task = await f.run('Inspect the two portraits in this chat.', conversation.id);
   expect(task.status, task.error ?? '').toBe('completed');
   expect(toolEvent(bodies[1], 'list').images).toEqual([
-    expect.objectContaining({ ref: local.id, actor: 'Mira' }),
-    expect.objectContaining({ ref: packageRef, title: 'Red portrait' }),
+    expect.objectContaining({ ref: local.id, actor: 'Mira', isPortrait: false }),
+    expect.objectContaining({
+      ref: packageRef,
+      title: 'Red portrait',
+      isPortrait: true,
+      nativeNames: ['original-happy-face'],
+    }),
   ]);
   expect(toolEvent(bodies[1], 'by-owner').images).toEqual([
     expect.objectContaining({ ref: packageRef, packageTitle: bot.title }),
+  ]);
+  expect(toolEvent(bodies[1], 'by-native').images).toMatchObject([
+    { ref: packageRef, isPortrait: true },
   ]);
   expect(toolEvent(bodies[2], 'foreign')).toMatchObject({
     error: 'ILLUSTRATION_REFERENCE_NOT_FOUND',
@@ -315,7 +386,10 @@ test('illustration image tools use the current chat or the explicitly selected c
   expect(imageData(bodies[2])).toHaveLength(1);
   await expectRedPixels(imageData(bodies[2])[0]);
   expect(toolEvent(bodies[3], 'local')).toMatchObject({ ref: local.id });
-  expect(toolEvent(bodies[3], 'package')).toMatchObject({ ref: packageRef });
+  expect(toolEvent(bodies[3], 'package')).toMatchObject({
+    ref: packageRef,
+    transmission: { mode: 'thumbnail' },
+  });
   const pixels = imageData(bodies[3]);
   expect(pixels).toHaveLength(3);
   for (const image of pixels) await expectRedPixels(image);

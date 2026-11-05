@@ -4,14 +4,23 @@ import type { ProviderTool } from '../core/transport.js';
 import type { RequestImage, ResolvedRequestImage } from '../core/request-images.js';
 import type { Asset, Content } from '../core/product.js';
 import type { PackageImage } from '../core/package-images.js';
+import type { RisuContent } from '../core/risu-content.js';
 import { readImage } from './image-storage.js';
 import { withImageProcessing } from './image-processing.js';
 import { readResource } from './resource-service.js';
 import { illustrationReferenceCandidates } from './illustrations.js';
+import { resolvePackageProfile } from './package-features.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
 const MAX_BYTES = 2 * 1024 * 1024;
+type ImageReadMode = 'full' | 'thumbnail';
+const readModeSchema = { type: 'string', enum: ['full', 'thumbnail'] };
+function readMode(args: ReturnType<typeof record>): ImageReadMode {
+  if (args.mode === undefined || args.mode === 'full') return 'full';
+  if (args.mode === 'thumbnail') return 'thumbnail';
+  throw new HttpError(400, 'Invalid image read mode');
+}
 const id = { type: 'string', minLength: 1, maxLength: 100 } as const;
 const paging = {
   query: { type: 'string', maxLength: 200 },
@@ -22,7 +31,7 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.list',
     description:
-      'List saved content images, including CHARX assets. Search titles, descriptions and original asset names with query; follow nextOffset for more. Use image.read with contentId and imageId to view pixels.',
+      'List saved content images, including CHARX assets. Search titles, descriptions and original asset names with query; the package portrait is marked isPortrait. Follow nextOffset for more. Use image.read with mode:thumbnail to preview before inspecting full pixels.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -36,12 +45,13 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.read',
     description:
-      'View the pixels of a saved content image from image.list. Supplies WebP visual input while preserving the original. Animated images supply their first frame. Reads the current saved version.',
+      'View saved image pixels as WebP; mode:thumbnail limits the longest edge to 512px, while omitted/full uses up to 2048px. Animated images supply their first frame. The saved original is unchanged.',
     inputSchema: {
       type: 'object',
       properties: {
         contentId: id,
         imageId: id,
+        mode: readModeSchema,
       },
       required: ['contentId', 'imageId'],
       additionalProperties: false,
@@ -50,16 +60,16 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.image.list',
     description:
-      'Find illustration reference images in the current chat and its attached packages. Search by character, title, description, outfit or location. Use a returned ref with illustration.image.read to see the image.',
+      'Find chat and attached-package reference images; isPortrait marks package cover art and nativeNames names original CHARX assets. Search names/character/outfit/location; read only relevant refs, preferably as thumbnails first.',
     inputSchema: { type: 'object', properties: paging, required: [], additionalProperties: false },
   },
   {
     name: 'illustration.image.read',
     description:
-      'View an illustration reference image from the current chat by its ref. The visual input shows the first frame of animated images.',
+      'View one illustration reference by ref. Use mode:thumbnail for a 512px preview; omitted/full returns up to 2048px. Animated images show the first frame.',
     inputSchema: {
       type: 'object',
-      properties: { ref: { type: 'string', minLength: 1, maxLength: 300 } },
+      properties: { ref: { type: 'string', minLength: 1, maxLength: 300 }, mode: readModeSchema },
       required: ['ref'],
       additionalProperties: false,
     },
@@ -78,6 +88,7 @@ function imageMetadata(content: Content, image: PackageImage, names?: string[]) 
       .map((asset) => asset.name);
   return {
     imageId: image.id,
+    isPortrait: content.package.portraitImageId === image.id,
     title: image.title,
     description: image.description.slice(0, 500),
     descriptionTruncated: image.description.length > 500,
@@ -127,14 +138,24 @@ export function listHelperImages(store: Store, value: unknown) {
   };
 }
 
-function referenceMetadata(asset: Asset) {
+function referenceMetadata(asset: Asset, packages: RisuContent[]) {
+  const owner = asset.packageOwner;
+  const pkg =
+    owner && packages.find((item) => item.id === owner.id && item.revision === owner.revision);
+  const nativeNames =
+    pkg?.nativeRisu?.assets
+      .filter((item) => item.imageId === owner?.imageId)
+      .map((item) => item.name) ?? [];
   return {
     ref: asset.id,
     title: asset.title,
     description: asset.description.slice(0, 500),
     descriptionTruncated: asset.description.length > 500,
     actor: asset.actor,
-    ...(asset.packageOwner ? { packageTitle: asset.packageOwner.title } : {}),
+    ...(owner ? { packageTitle: owner.title } : {}),
+    isPortrait: !!(pkg && owner && pkg.portraitImageId === owner.imageId),
+    nativeNames: nativeNames.slice(0, 4).map((name) => name.slice(0, 200)),
+    nativeNamesTruncated: nativeNames.length > 4 || nativeNames.some((name) => name.length > 200),
     outfit: asset.outfit,
     location: asset.location,
   };
@@ -144,24 +165,29 @@ export function listIllustrationHelperImages(store: Store, chatId: string, value
   const args = record(value);
   fields(args, ['query', 'offset', 'limit']);
   const { offset, limit, terms } = imagePage(args);
-  const all = illustrationReferenceCandidates(store, chatId);
+  const packages =
+    resolvePackageProfile(store.product, store.product.profile(chatId)).packages ?? [];
+  const all = illustrationReferenceCandidates(store, chatId).map((asset) =>
+    referenceMetadata(asset, packages)
+  );
   const matching = terms.length
-    ? all.filter((asset) => {
+    ? all.filter((image) => {
         const haystack = [
-          asset.id,
-          asset.title,
-          asset.description,
-          asset.actor,
-          asset.packageOwner?.title,
-          asset.outfit,
-          asset.location,
+          image.ref,
+          image.title,
+          image.description,
+          image.actor,
+          image.packageTitle,
+          ...image.nativeNames,
+          image.outfit,
+          image.location,
         ]
           .join('\n')
           .toLocaleLowerCase();
         return terms.every((term) => haystack.includes(term));
       })
     : all;
-  const images = matching.slice(offset, offset + limit).map(referenceMetadata);
+  const images = matching.slice(offset, offset + limit);
   return {
     images,
     matching: matching.length,
@@ -178,18 +204,30 @@ export async function readIllustrationHelperImage(
 ) {
   signal?.throwIfAborted();
   const args = record(value);
-  fields(args, ['ref']);
+  fields(args, ['ref', 'mode']);
+  const mode = readMode(args);
   const ref = text(args.ref, 'illustration image ref', 300);
   const asset = illustrationReferenceCandidates(store, chatId).find(
     (candidate) => candidate.id === ref
   );
   if (!asset) throw new HttpError(404, 'ILLUSTRATION_REFERENCE_NOT_FOUND');
-  return prepareHelperImage(store, asset.hash, asset.title, referenceMetadata(asset), signal);
+  const packages =
+    resolvePackageProfile(store.product, store.product.profile(chatId)).packages ?? [];
+  return prepareHelperImage(
+    store,
+    asset.hash,
+    asset.title,
+    referenceMetadata(asset, packages),
+    signal,
+    mode
+  );
 }
 
 export async function readHelperImage(store: Store, value: unknown, signal?: AbortSignal) {
   signal?.throwIfAborted();
   const args = record(value);
+  fields(args, ['contentId', 'imageId', 'mode']);
+  const mode = readMode(args);
   const content = owner(store, args.contentId);
   const imageId = text(args.imageId, 'image ID', 100);
   const source = content.package.images?.find((image) => image.id === imageId);
@@ -203,7 +241,8 @@ export async function readHelperImage(store: Store, value: unknown, signal?: Abo
       revision: content.revision,
       ...imageMetadata(content, source),
     },
-    signal
+    signal,
+    mode
   );
 }
 
@@ -213,7 +252,8 @@ export async function prepareHelperImage<T extends object>(
   sourceHash: string,
   title: string,
   metadataFields: T,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  mode: ImageReadMode = 'full'
 ) {
   const stored = readImage(store.db, sourceHash);
   return withImageProcessing(async () => {
@@ -230,13 +270,14 @@ export async function prepareHelperImage<T extends object>(
       const height = metadata.pageHeight ?? metadata.height ?? 0;
       if (!width || !height) throw new HttpError(400, 'HELPER_IMAGE_INVALID');
       const frames = metadata.pages ?? 1;
+      const edgeLimit = mode === 'thumbnail' ? 512 : 2048;
       const reuse =
         metadata.format === 'webp' &&
         frames === 1 &&
         (metadata.orientation ?? 1) === 1 &&
-        Math.max(width, height) <= 2048 &&
+        Math.max(width, height) <= edgeLimit &&
         stored.bytes.length <= MAX_BYTES;
-      let edge = 2048;
+      let edge = edgeLimit;
       const convert = () =>
         sharp(stored.bytes, options)
           .rotate()
@@ -269,7 +310,12 @@ export async function prepareHelperImage<T extends object>(
         result: {
           ...metadataFields,
           source: { hash: sourceHash, mime: stored.mime, width, height, frames },
-          transmission: { mime: image.mime, width: image.width, height: image.height },
+          transmission: {
+            mime: image.mime,
+            width: image.width,
+            height: image.height,
+            ...(mode === 'thumbnail' ? { mode } : {}),
+          },
           ...(frames > 1
             ? { notice: 'Only the first frame of this animated image is supplied.' }
             : {}),

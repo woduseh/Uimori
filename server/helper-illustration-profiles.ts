@@ -2,7 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { IllustrationCharacterProfile } from '../core/illustration.js';
 import type { ProviderTool } from '../core/transport.js';
-import { illustrationReferences, updateIllustrationReferences } from './illustrations.js';
+import {
+  frozenIllustrationReferences,
+  illustrationReferences,
+  updateIllustrationReferences,
+} from './illustrations.js';
 import { fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 
@@ -10,7 +14,7 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.profiles.read',
     description:
-      'Read character appearance profiles, selected image references and the chat’s revision. Use illustration.image.list to find reference images.',
+      'Read appearance profiles, explicit references, effectiveReferences (actual character/style roles and linked profileIds) and revision. Find image refs via illustration.image.list.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -23,7 +27,7 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.profiles.save',
     description:
-      'Save the requested character appearances together in the current chat. For an extraction, use traits described in the source or visible in the reference. For an original design, follow the user’s brief. Create with name and appearance, or pass the existing profile’s id as profileId and only the fields to change. Use referenceRef to link an image or null to unlink it. Use the revision from illustration.profiles.read as expectedRevision.',
+      'Save character appearances together in this chat. Extract visible/source-backed traits, or follow the brief for original designs. Create with name and appearance; edit using profileId. referenceRef links the character image for generation (null unlinks); no second references.save is needed. Use expectedRevision from profiles.read. The result includes effectiveReferences, so do not reread solely to confirm a successful save.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -50,6 +54,20 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
   },
 ];
 
+function effectiveReferences(
+  store: Store,
+  chatId: string,
+  profiles: IllustrationCharacterProfile[]
+) {
+  return frozenIllustrationReferences(store, chatId).map(({ ref, role }) => ({
+    ref,
+    role,
+    profileIds: profiles
+      .filter((profile) => profile.referenceRef === ref)
+      .map((profile) => profile.id),
+  }));
+}
+
 export function readIllustrationProfiles(
   store: Store,
   chatId: string,
@@ -63,6 +81,7 @@ export function readIllustrationProfiles(
     chatId,
     revision,
     references,
+    effectiveReferences: effectiveReferences(store, chatId, characterProfiles),
     characterProfiles: characterProfiles.slice(offset, offset + limit),
     total: characterProfiles.length,
     nextOffset: offset + limit < characterProfiles.length ? offset + limit : null,
@@ -113,6 +132,7 @@ export function saveIllustrationProfiles(
     return {
       profileId: profile.id,
       name: profile.name,
+      referenceRef: profile.referenceRef ?? null,
       changed: !isDeepStrictEqual(previous, profile),
     };
   });
@@ -124,5 +144,11 @@ export function saveIllustrationProfiles(
         characterProfiles: [...next.values()],
       }).revision
     : current.revision;
-  return { chatId, revision, profiles, changed };
+  return {
+    chatId,
+    revision,
+    profiles,
+    changed,
+    effectiveReferences: effectiveReferences(store, chatId, [...next.values()]),
+  };
 }
