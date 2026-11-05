@@ -1,5 +1,8 @@
+import { editableResource } from '../core/resource-editing.js';
+import { withIllustrationAppearanceProfiles } from '../core/illustration-profiles.js';
 import { readIllustrationAppearanceProfiles } from '../core/illustration-profiles.js';
 import type { Content } from '../core/product.js';
+import type { PackageImage } from '../core/package-images.js';
 import sharp from 'sharp';
 import { MOBILE_WIDTH, DESKTOP_WIDTH, DEFAULT_WIDTHS } from './fixtures/browser-viewports.js';
 import { test, expect, type APIRequestContext } from '@playwright/test';
@@ -10,6 +13,7 @@ import type {
   IllustrationSettings,
 } from '../core/illustration.js';
 import { fixtureBotInput, postFixtureChat } from './fixtures/chat.js';
+import { nativeContent } from './fixtures/native-content.js';
 import {
   navigationAction,
   openChatSettings,
@@ -206,7 +210,7 @@ for (const width of [360, 412]) {
       {
         expectedRevision: saved.revision,
         references: [{ ref: person.ref, role: 'style' }],
-        characterProfiles: [],
+        chatCharacterProfiles: [],
       },
     ]);
     const accepted = (await (await request.get(path)).json()) as IllustrationReferences;
@@ -259,7 +263,7 @@ for (const width of [360, 1280]) {
     const role = references.getByLabel('미라 초상 참고 역할');
     await expect(role).toHaveValue('style');
     await references.getByRole('button', { name: '인물 추가' }).click();
-    const profile = references.getByRole('group', { name: '인물 1' });
+    const profile = references.locator('.illustration-character-profile').first();
     await profile.getByLabel('이름', { exact: true }).fill('미라');
     await profile.getByRole('textbox', { name: '외형', exact: true }).fill('짧은 은발과 초록 눈');
     await profile.getByLabel('참고 이미지 (선택)').selectOption(asset.id);
@@ -1380,7 +1384,7 @@ test('ILUI05 styled Markdown keeps its message tree, shows progress and reconnec
 });
 
 for (const width of DEFAULT_WIDTHS) {
-  test(`ILLUSTRATION-PROFILES native bot default appearances save and reopen at ${width}px`, async ({
+  test(`ILLUSTRATION-PROFILES dedicated appearance tab saves package image references at ${width}px`, async ({
     page,
     request,
   }, info) => {
@@ -1388,9 +1392,34 @@ for (const width of DEFAULT_WIDTHS) {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     const title = `기본 외형 ${width} ${Date.now()}`;
-    const created = await request.post('/api/content', {
-      data: fixtureBotInput(title, '미라는 녹색 눈과 검은 머리의 인물이다.'),
+    const imageResponse = await request.post('/api/package-image-blobs', {
+      data: {
+        mime: 'image/png',
+        base64: (
+          await sharp({
+            create: { width: 96, height: 128, channels: 3, background: '#826c94' },
+          })
+            .png()
+            .toBuffer()
+        ).toString('base64'),
+      },
     });
+    expect(imageResponse.ok(), await imageResponse.text()).toBe(true);
+    const image = (await imageResponse.json()) as { hash: string; mime: PackageImage['mime'] };
+    const input = fixtureBotInput(title, '미라는 녹색 눈과 검은 머리의 인물이다.');
+    input.package = nativeContent(input.package.nativeRisu!.card, {
+      images: [
+        {
+          id: 'mira-reference',
+          title: '미라 참고 이미지',
+          description: '',
+          blobHash: image.hash,
+          mime: image.mime,
+          allowedUse: 'inline',
+        },
+      ],
+    });
+    const created = await request.post('/api/content', { data: input });
     expect(created.ok(), await created.text()).toBe(true);
     const bot = (await created.json()) as Content;
     const open = async () => {
@@ -1399,7 +1428,15 @@ for (const width of DEFAULT_WIDTHS) {
       await page.getByRole('searchbox', { name: '서재 검색', exact: true }).fill(title);
       await page.getByRole('button', { name: `${title} 상세 보기`, exact: true }).click();
       await page.getByRole('button', { name: '편집', exact: true }).click();
+      const navigation = page.getByLabel('자료 편집 영역', { exact: true });
+      const titles = await navigation.locator('button').allTextContents();
+      const appearanceIndex = titles.indexOf('기본 인물 외형');
+      expect(appearanceIndex).toBeGreaterThan(0);
+      expect(titles[appearanceIndex - 1]).toBe('번역 지침');
+      expect(titles[appearanceIndex + 1]).toBe('고급 설정');
       await selectPackageSection(page, '기본 정보');
+      await expect(page.getByRole('button', { name: '인물 추가', exact: true })).toBeHidden();
+      await selectPackageSection(page, '기본 인물 외형');
     };
     await open();
     const editor = page.getByRole('region', { name: '기본 인물 외형', exact: true });
@@ -1407,23 +1444,42 @@ for (const width of DEFAULT_WIDTHS) {
     await editor.getByLabel('이름', { exact: true }).fill('미라');
     const appearance = '녹색 눈, 검은 머리. 나이와 평소 의상은 정해져 있지 않다.';
     await editor.getByRole('textbox', { name: '외형', exact: true }).fill(appearance);
-    const saving = page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/resources/save') && response.request().method() === 'POST'
+    await editor.getByRole('button', { name: '참조 이미지 선택', exact: true }).click();
+    const picker = page.getByRole('dialog', { name: '참조 이미지 선택', exact: true });
+    await expect(picker.locator('img')).toHaveAttribute(
+      'src',
+      `/api/package-image-blobs/${image.hash}`
     );
-    await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
-    const savedResponse = await saving;
+    await picker.getByRole('button', { name: '미라 참고 이미지', exact: true }).click();
+    const save = async () => {
+      const saving = page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/resources/save') && response.request().method() === 'POST'
+      );
+      await page.getByRole('button', { name: '변경사항 저장', exact: true }).click();
+      return saving;
+    };
+    const savedResponse = await save();
     expect(savedResponse.ok(), await savedResponse.text()).toBe(true);
     const saved = (await savedResponse.json()).saved as Content;
     expect(readIllustrationAppearanceProfiles(saved.package.nativeRisu.card)).toEqual([
-      { id: expect.any(String), name: '미라', appearance },
+      { id: expect.any(String), name: '미라', appearance, referenceImageId: 'mira-reference' },
     ]);
+    expect(saved.package.images).toEqual(bot.package.images);
     expect(saved.text).toBe(bot.text);
     await open();
     await expect(editor.getByLabel('이름', { exact: true })).toHaveValue('미라');
     await expect(editor.getByRole('textbox', { name: '외형', exact: true })).toHaveValue(
       appearance
     );
+    await expect(
+      editor.getByRole('img', { name: '미라 참고 이미지', exact: true })
+    ).toHaveAttribute('src', `/api/package-image-blobs/${image.hash}`);
+    expect(
+      await editor
+        .getByRole('img')
+        .evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)
+    ).toBe(true);
     await editor.scrollIntoViewIfNeeded();
     expect(await editor.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
       true
@@ -1440,8 +1496,117 @@ for (const width of DEFAULT_WIDTHS) {
     const inherited = await request.get(`/api/chats/${chat.id}/illustration-references`);
     expect(inherited.ok(), await inherited.text()).toBe(true);
     expect((await inherited.json()).characterProfiles).toEqual([
+      {
+        id: expect.any(String),
+        name: '미라',
+        appearance,
+        referenceRef: `package:${bot.id}:bot:mira-reference`,
+      },
+    ]);
+    await editor.getByRole('button', { name: '이미지 연결 해제', exact: true }).click();
+    await expect(editor.getByRole('img')).toHaveCount(0);
+    const unlinkedResponse = await save();
+    expect(unlinkedResponse.ok(), await unlinkedResponse.text()).toBe(true);
+    const unlinked = (await unlinkedResponse.json()).saved as Content;
+    expect(readIllustrationAppearanceProfiles(unlinked.package.nativeRisu.card)).toEqual([
       { id: expect.any(String), name: '미라', appearance },
     ]);
+    expect(unlinked.package.images).toEqual(bot.package.images);
+    await open();
+    await expect(editor.getByRole('img')).toHaveCount(0);
+    await expect(editor.getByLabel('이름', { exact: true })).toHaveValue('미라');
     expect(errors).toEqual([]);
+  });
+}
+
+for (const width of DEFAULT_WIDTHS) {
+  test(`ILLUSTRATION-INHERIT chat appearance edit restore and own deletion at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const input = fixtureBotInput(`상속 편집 ${width}`);
+    input.package.nativeRisu!.card = withIllustrationAppearanceProfiles(
+      input.package.nativeRisu!.card,
+      [{ id: 'mira', name: '미라', appearance: '검은 머리와 녹색 눈' }]
+    );
+    const created = await request.post('/api/content', { data: input });
+    expect(created.ok()).toBe(true);
+    const bot = (await created.json()) as Content;
+    const started = await request.post('/api/chats', {
+      data: { title: `상속 ${width}`, botId: bot.id },
+    });
+    expect(started.ok()).toBe(true);
+    const chat = (await started.json()) as Chat;
+    const path = `/api/chats/${chat.id}/illustration-references`;
+    await page.setViewportSize({ width, height: 1000 });
+    const open = async () => {
+      await page.goto(`/?chat=${chat.id}`);
+      await openChatSettings(page);
+      await selectChatSettingsSection(page, '이미지');
+    };
+    await open();
+    const references = page.getByTestId('illustration-references');
+    const row = references.locator('.illustration-character-profile').first();
+    const appearance = row.getByRole('textbox', { name: '외형', exact: true });
+    await expect(row.locator('.illustration-profile-summary')).toHaveText(
+      '미라검은 머리와 녹색 눈'
+    );
+    await expect(appearance).toHaveCount(0);
+    await expect(row.getByRole('button', { name: /삭제/ })).toHaveCount(0);
+    await row.getByRole('button', { name: /편집/ }).click();
+    await expect(appearance).toBeEditable();
+    await appearance.fill('은발과 녹색 눈');
+    await row.getByLabel('이름', { exact: true }).fill('미라 별명');
+    const save = references.getByRole('button', { name: '삽화 참고 저장' });
+    await save.click();
+    await expect(save).toBeDisabled();
+    const overridden = (await (await request.get(path)).json()) as IllustrationReferences;
+    expect(overridden.chatCharacterProfiles).toEqual([
+      {
+        ...overridden.defaultCharacterProfiles[0],
+        name: '미라 별명',
+        appearance: '은발과 녹색 눈',
+      },
+    ]);
+    const model = editableResource('content', bot);
+    if (!('package' in model)) throw new Error('Expected content model');
+    model.package.nativeRisu.card = withIllustrationAppearanceProfiles(
+      model.package.nativeRisu.card,
+      [{ id: 'mira', name: '미라', appearance: '갈색 머리와 녹색 눈' }]
+    );
+    const updated = await request.post('/api/resources/save', {
+      data: { kind: 'content', id: bot.id, expectedRevision: bot.revision, model },
+    });
+    expect(updated.ok(), await updated.text()).toBe(true);
+    await open();
+    await expect(appearance).toHaveValue('은발과 녹색 눈');
+    await row.getByRole('button', { name: /복원/ }).click();
+    await expect(row.locator('.illustration-profile-summary')).toHaveText(
+      '미라갈색 머리와 녹색 눈'
+    );
+    await expect(appearance).toHaveCount(0);
+    await save.click();
+    await expect(save).toBeDisabled();
+    expect((await (await request.get(path)).json()).chatCharacterProfiles).toEqual([]);
+    await references.getByRole('button', { name: '인물 추가', exact: true }).click();
+    const own = references.locator('.illustration-character-profile').last();
+    await own.getByLabel('이름', { exact: true }).fill('준');
+    await own.getByRole('textbox', { name: '외형', exact: true }).fill('짧은 갈색 머리');
+    await save.click();
+    await expect(save).toBeDisabled();
+    await own.getByRole('button', { name: /삭제/ }).click();
+    await save.click();
+    await expect(save).toBeDisabled();
+    const restored = (await (await request.get(path)).json()) as IllustrationReferences;
+    expect(restored.chatCharacterProfiles).toEqual([]);
+    expect(restored.characterProfiles).toEqual(restored.defaultCharacterProfiles);
+    expect(
+      await references.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)
+    ).toBe(true);
+    await references.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: info.outputPath(`illustration-inheritance-${width}.png`),
+      fullPage: true,
+    });
   });
 }

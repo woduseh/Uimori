@@ -30,19 +30,7 @@ export function defaultIllustrationProfiles(
     );
   });
 }
-/** A chat-authored identity takes priority by stable ID or character name. */
-export function inheritIllustrationProfiles(
-  defaults: IllustrationCharacterProfile[],
-  overrides: IllustrationCharacterProfile[]
-): IllustrationCharacterProfile[] {
-  const key = (name: string) => name.trim().normalize('NFKC').toLocaleLowerCase('en-US');
-  const ids = new Set(overrides.map((item) => item.id));
-  const names = new Set(overrides.map((item) => key(item.name)));
-  return [
-    ...defaults.filter((item) => !ids.has(item.id) && !names.has(key(item.name))),
-    ...overrides,
-  ];
-}
+export { inheritIllustrationProfiles } from '../core/illustration-profiles.js';
 
 /** Retain storyboard identities on redraw while explicit current profiles remain authoritative. */
 export function redrawIllustrationCanon(

@@ -5,11 +5,17 @@ export const messages = {
     ja: '既定の人物の外見',
     zh: '默认人物外貌',
   },
-  'visuals.defaultAppearancesHelp': {
-    ko: '이 봇이나 페르소나를 쓰는 채팅이 공유해요.',
-    en: 'Shared across chats using this bot or persona.',
-    ja: 'このボットやペルソナを使うチャットで共有します。',
-    zh: '使用此机器人或用户角色的聊天共享这些设置。',
+  'visuals.chooseReferenceImage': {
+    ko: '참조 이미지 선택',
+    en: 'Choose reference image',
+    ja: '参照画像を選択',
+    zh: '选择参考图片',
+  },
+  'visuals.unlinkReferenceImage': {
+    ko: '이미지 연결 해제',
+    en: 'Unlink image',
+    ja: '画像の関連付けを解除',
+    zh: '取消图片关联',
   },
   'visuals.countMode': {
     ko: '자동 생성 컷 수',
@@ -221,12 +227,6 @@ export const messages = {
     ja: '再読み込み',
     zh: '重新加载',
   },
-  'visuals.m035': {
-    ko: '이 채팅에 등록한 이미지나 사용 중인 자료의 이미지가 없어요.',
-    en: 'No images are registered for this chat or its active resources.',
-    ja: 'このチャットや使用中の資料に画像がありません。',
-    zh: '此聊天及其使用中的资料中没有图片。',
-  },
   'visuals.m036': {
     ko: '{v0} 참고 역할',
     en: 'Reference role for {v0}',
@@ -300,6 +300,30 @@ export const messages = {
     en: 'Remove character',
     ja: '人物を削除',
     zh: '移除人物',
+  },
+  'visuals.editCharacterAppearance': {
+    ko: '{name} 외형 편집',
+    en: 'Edit {name} appearance',
+    ja: '{name}の外見を編集',
+    zh: '编辑{name}的外貌',
+  },
+  'visuals.restoreCharacterAppearance': {
+    ko: '{name} 외형 기본값 복원',
+    en: 'Restore {name} default appearance',
+    ja: '{name}の外見を既定に戻す',
+    zh: '恢复{name}的默认外貌',
+  },
+  'visuals.removeNamedCharacter': {
+    ko: '{name} 인물 삭제',
+    en: 'Remove character {name}',
+    ja: '人物{name}を削除',
+    zh: '移除人物{name}',
+  },
+  'visuals.duplicateCharacterName': {
+    ko: '같은 이름의 인물은 하나만 사용할 수 있어요.',
+    en: 'Use only one character with each name.',
+    ja: '同じ名前の人物は1人だけ使用できます。',
+    zh: '每个姓名只能使用一个人物。',
   },
   'visuals.addCharacterProfile': {
     ko: '인물 추가',

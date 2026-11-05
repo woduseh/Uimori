@@ -178,6 +178,7 @@
   min-width: 0;
 }
 .illustration-character-profile {
+  position: relative;
   padding-block: 12px;
   border-top: var(--hairline) solid var(--line);
 }
@@ -193,6 +194,32 @@
 .illustration-character-profile textarea {
   min-height: 72px;
   resize: vertical;
+}
+.illustration-character-profile > label:first-of-type {
+  padding-inline-end: 44px;
+}
+.illustration-profile-action {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 0;
+}
+.illustration-profile-summary {
+  padding-inline-end: 44px;
+  overflow-wrap: anywhere;
+}
+.illustration-profile-summary p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.illustration-profile-reference img {
+  width: 48px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-control);
+}
+.illustration-profile-reference select {
+  min-width: 0;
 }
 .illustration-profile-add {
   justify-self: start;

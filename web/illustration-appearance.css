@@ -1,0 +1,88 @@
+.appearance-editor {
+  display: grid;
+  gap: 20px;
+  max-width: 860px;
+  min-width: 0;
+}
+.appearance-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+.appearance-row + .appearance-row {
+  border-top: var(--hairline) solid var(--line);
+  padding-top: 20px;
+}
+.appearance-portrait {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+.appearance-image-picker {
+  width: 88px;
+  height: 112px;
+  padding: 0;
+  overflow: hidden;
+}
+.appearance-image-picker img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.appearance-fields,
+.appearance-fields label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.appearance-fields {
+  gap: 12px;
+}
+.appearance-fields input,
+.appearance-fields textarea {
+  width: 100%;
+  min-width: 0;
+}
+.appearance-fields textarea {
+  line-height: 1.7;
+  resize: vertical;
+}
+.appearance-add {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.appearance-image-choices {
+  display: grid;
+  gap: 8px;
+}
+.appearance-image-choices > button {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: start;
+}
+.appearance-image-choices img {
+  width: 48px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-control);
+}
+.appearance-image-choices span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .appearance-row {
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .appearance-image-picker {
+    width: 64px;
+    height: 84px;
+  }
+}

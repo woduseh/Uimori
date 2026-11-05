@@ -5,6 +5,12 @@ import { NoticeBanner } from './NoticeBanner.js';
 import { SaveConflictDialog } from './SaveConflictDialog.js';
 import { useSettingsSaveHandler, type SettingsSaveRegistration } from './useSettingsSaveHandler.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  inheritIllustrationProfiles,
+  illustrationProfileNameKey,
+} from '../core/illustration-profiles.js';
+import { IconButton } from './IconButton.js';
 import type {
   IllustrationCharacterProfile,
   IllustrationReferenceRole,
@@ -47,7 +53,7 @@ export function IllustrationReferencesEditor({
   useI18n();
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [roles, setRoles] = useState<Record<string, IllustrationReferenceRole | ''>>({});
-  const [profiles, setProfiles] = useState<IllustrationCharacterProfile[]>([]);
+  const [chatProfiles, setProfiles] = useState<IllustrationCharacterProfile[]>([]);
   const [dirty, setDirty] = useState(false);
   const dirtyDraft = useRef(false);
   const [saving, setSaving] = useState(false);
@@ -86,7 +92,7 @@ export function IllustrationReferencesEditor({
     // Edits made while the read was pending still own the draft.
     if (value && !dirtyDraft.current) {
       setRoles(rolesOf(value));
-      setProfiles(value.characterProfiles);
+      setProfiles(value.chatCharacterProfiles);
     }
   }, [load]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Reader asset changes reload candidates; a dirty draft keeps its roles.
@@ -122,6 +128,7 @@ export function IllustrationReferencesEditor({
   const candidates = new Set(loaded.candidates.map((item) => item.ref));
   const unavailable = loaded.references.filter((item) => !candidates.has(item.ref));
   const selected = [...loaded.candidates, ...unavailable].filter((item) => roles[item.ref]);
+  const profiles = inheritIllustrationProfiles(loaded.defaultCharacterProfiles, chatProfiles);
   const linked = new Set(profiles.flatMap((item) => item.referenceRef ?? []));
   const used = new Set([...selected.map((item) => item.ref), ...linked]);
   const markDirty = () => {
@@ -131,7 +138,15 @@ export function IllustrationReferencesEditor({
   };
   const editProfile = (id: string, patch: Partial<IllustrationCharacterProfile>) => {
     setProfiles((current) =>
-      current.map((item) => (item.id === id ? { ...item, ...patch } : item))
+      current.map((item) => {
+        if (item.id !== id) return item;
+        const base = loaded.defaultCharacterProfiles.find(
+          (candidate) =>
+            candidate.id === item.id ||
+            illustrationProfileNameKey(candidate.name) === illustrationProfileNameKey(item.name)
+        );
+        return { ...item, id: base?.id ?? item.id, ...patch };
+      })
     );
     markDirty();
   };
@@ -142,8 +157,13 @@ export function IllustrationReferencesEditor({
       setReviewConflict(true);
       return false;
     }
-    if (profiles.some((item) => !item.name.trim() || !item.appearance.trim())) {
+    if (chatProfiles.some((item) => !item.name.trim() || !item.appearance.trim())) {
       onError(uiMessage('visuals.profileRequired'));
+      return false;
+    }
+    const names = chatProfiles.map((item) => illustrationProfileNameKey(item.name));
+    if (new Set(names).size !== names.length) {
+      onError(uiMessage('visuals.duplicateCharacterName'));
       return false;
     }
     lock.current = true;
@@ -155,7 +175,7 @@ export function IllustrationReferencesEditor({
         {
           expectedRevision: loaded.revision,
           references: selected.map((item) => ({ ref: item.ref, role: roles[item.ref] })),
-          characterProfiles: profiles,
+          chatCharacterProfiles: chatProfiles,
         },
         'PUT'
       );
@@ -165,7 +185,10 @@ export function IllustrationReferencesEditor({
         revision: value.revision,
         references: value.references,
         characterProfiles: value.characterProfiles,
+        defaultCharacterProfiles: value.defaultCharacterProfiles,
+        chatCharacterProfiles: value.chatCharacterProfiles,
       });
+      setProfiles(value.chatCharacterProfiles);
       dirtyDraft.current = false;
       setDirty(false);
       setConflict(false);
@@ -221,75 +244,125 @@ export function IllustrationReferencesEditor({
       )}
       <div className="illustration-character-profiles">
         <h5>{t('visuals.characterProfiles')}</h5>
-        {profiles.map((profile, index) => (
-          <fieldset key={profile.id} className="illustration-character-profile">
-            <legend>{t('visuals.characterProfileNumber', { count: index + 1 })}</legend>
-            <label>
-              {t('visuals.characterName')}
-              <input
-                type="text"
-                required
-                maxLength={200}
-                value={profile.name}
-                disabled={saving}
-                onChange={(event) => editProfile(profile.id, { name: event.target.value })}
-              />
-            </label>
-            <label>
-              {t('visuals.characterAppearance')}
-              <textarea
-                required
-                maxLength={2000}
-                rows={3}
-                value={profile.appearance}
-                disabled={saving}
-                onChange={(event) => editProfile(profile.id, { appearance: event.target.value })}
-              />
-            </label>
-            <label className="settings-row">
-              <span className="settings-row-copy">{t('visuals.characterReference')}</span>
-              <select
-                aria-label={t('visuals.characterReference')}
-                value={profile.referenceRef ?? ''}
-                disabled={saving}
-                onChange={(event) => {
-                  const ref = event.target.value;
-                  editProfile(profile.id, { referenceRef: ref || undefined });
-                }}
-              >
-                <option value="">{t('visuals.noCharacterReference')}</option>
-                {profile.referenceRef &&
-                  !loaded.candidates.some((item) => item.ref === profile.referenceRef) && (
-                    <option value={profile.referenceRef}>
-                      {t('visuals.unavailableCharacterReference')}
-                    </option>
-                  )}
-                {loaded.candidates.map((item) => (
-                  <option
-                    key={item.ref}
-                    value={item.ref}
-                    disabled={!used.has(item.ref) && used.size >= 8}
-                  >
-                    {item.title}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="form-actions">
-              <button
-                type="button"
-                className="secondary"
+        {profiles.map((profile) => {
+          const override = chatProfiles.find((item) => item.id === profile.id);
+          const inherited = !override;
+          const defaultProfile = loaded.defaultCharacterProfiles.find(
+            (item) =>
+              item.id === profile.id ||
+              illustrationProfileNameKey(item.name) === illustrationProfileNameKey(profile.name)
+          );
+          const image = loaded.candidates.find((item) => item.ref === profile.referenceRef);
+          return (
+            <fieldset
+              key={defaultProfile?.id ?? profile.id}
+              className={`illustration-character-profile${inherited ? ' illustration-profile-inherited' : ''}`}
+              aria-label={profile.name || t('visuals.addCharacterProfile')}
+            >
+              <IconButton
+                className="illustration-profile-action"
+                icon={inherited ? Pencil : defaultProfile ? RotateCcw : Trash2}
+                label={t(
+                  inherited
+                    ? 'visuals.editCharacterAppearance'
+                    : defaultProfile
+                      ? 'visuals.restoreCharacterAppearance'
+                      : 'visuals.removeNamedCharacter',
+                  { name: profile.name }
+                )}
                 disabled={saving}
                 onClick={() => {
-                  setProfiles((current) => current.filter((item) => item.id !== profile.id));
+                  setProfiles((current) =>
+                    inherited
+                      ? [...current, { ...profile }]
+                      : current.filter((item) => item.id !== profile.id)
+                  );
                   markDirty();
                 }}
-              >
-                {t('visuals.removeCharacterProfile')}
-              </button>
-            </div>
-          </fieldset>
-        ))}
+              />
+              {inherited ? (
+                <div className="illustration-profile-summary">
+                  <strong>{profile.name}</strong>
+                  <p>{profile.appearance}</p>
+                </div>
+              ) : (
+                <>
+                  <label>
+                    {t('visuals.characterName')}
+                    <input
+                      type="text"
+                      required
+                      maxLength={200}
+                      value={profile.name}
+                      readOnly={inherited}
+                      disabled={saving}
+                      onChange={(event) => editProfile(profile.id, { name: event.target.value })}
+                    />
+                  </label>
+                  <label>
+                    {t('visuals.characterAppearance')}
+                    <textarea
+                      required
+                      maxLength={2000}
+                      rows={3}
+                      value={profile.appearance}
+                      readOnly={inherited}
+                      disabled={saving}
+                      onChange={(event) =>
+                        editProfile(profile.id, { appearance: event.target.value })
+                      }
+                    />
+                  </label>
+                </>
+              )}
+              {(!inherited || profile.referenceRef) && (
+                <label className="settings-row illustration-profile-reference">
+                  <span className="settings-row-copy">{t('visuals.characterReference')}</span>
+                  <span className="settings-row-control">
+                    {image && <img src={image.url} alt={image.title} loading="lazy" />}
+                    {inherited ? (
+                      <span>
+                        {image?.title ??
+                          t(
+                            profile.referenceRef
+                              ? 'visuals.unavailableCharacterReference'
+                              : 'visuals.noCharacterReference'
+                          )}
+                      </span>
+                    ) : (
+                      <select
+                        aria-label={t('visuals.characterReference')}
+                        value={profile.referenceRef ?? ''}
+                        disabled={saving}
+                        onChange={(event) => {
+                          const ref = event.target.value;
+                          editProfile(profile.id, { referenceRef: ref || undefined });
+                        }}
+                      >
+                        <option value="">{t('visuals.noCharacterReference')}</option>
+                        {profile.referenceRef &&
+                          !loaded.candidates.some((item) => item.ref === profile.referenceRef) && (
+                            <option value={profile.referenceRef}>
+                              {t('visuals.unavailableCharacterReference')}
+                            </option>
+                          )}
+                        {loaded.candidates.map((item) => (
+                          <option
+                            key={item.ref}
+                            value={item.ref}
+                            disabled={!used.has(item.ref) && used.size >= 8}
+                          >
+                            {item.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </span>
+                </label>
+              )}
+            </fieldset>
+          );
+        })}
         <button
           type="button"
           className="secondary illustration-profile-add"
@@ -305,8 +378,9 @@ export function IllustrationReferencesEditor({
           {t('visuals.addCharacterProfile')}
         </button>
       </div>
-      <h5>{t('visuals.referenceImages')}</h5>
-      {!loaded.candidates.length && <p className="muted">{t('visuals.m035')}</p>}
+      {(loaded.candidates.length > 0 || unavailable.length > 0) && (
+        <h5>{t('visuals.referenceImages')}</h5>
+      )}
       {unavailable.map((item, index) => (
         <label className="settings-row" key={item.ref}>
           <span className="settings-row-copy">
@@ -383,7 +457,7 @@ export function IllustrationReferencesEditor({
             setLoaded(keepDraft ? { ...value, references: loaded.references } : value);
             if (!keepDraft) {
               setRoles(rolesOf(value));
-              setProfiles(value.characterProfiles);
+              setProfiles(value.chatCharacterProfiles);
               dirtyDraft.current = false;
               setDirty(false);
             }

@@ -107,6 +107,8 @@ export type IllustrationReferences = {
   revision: number;
   references: IllustrationReference[];
   characterProfiles: IllustrationCharacterProfile[];
+  defaultCharacterProfiles: IllustrationCharacterProfile[];
+  chatCharacterProfiles: IllustrationCharacterProfile[];
 };
 /** Resolved at reservation; the worker re-reads bytes by ref and verifies the hash. */
 export type FrozenIllustrationReference = IllustrationReference & {
