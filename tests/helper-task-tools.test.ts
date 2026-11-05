@@ -11,6 +11,7 @@ import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace
 import { Store } from '../server/store.js';
 import * as transport from '../core/transport.js';
 import { createFixtureChat } from './fixtures/chat.js';
+import { startToolDiagnostic } from '../server/execution-diagnostics.js';
 
 const owned: { store: Store; path: string }[] = [];
 afterEach(() => {
@@ -118,6 +119,262 @@ test('completed run inspection is compact and retry returns the forked chat and 
   expect(newTask.id).not.toBe(run.id);
   expect(newTask.chatId).not.toBe(chat.id);
   expect(f.store.run(newTask.id).chatId).toBe(newTask.chatId);
+});
+
+test.each([
+  { basis: 'last', inputTokens: 50, cachedInputTokens: 30, reasoningTokens: 2 },
+  { basis: 'total', inputTokens: 500, cachedInputTokens: 300, reasoningTokens: 20 },
+  { basis: undefined, inputTokens: 50, cachedInputTokens: null, reasoningTokens: null },
+])('native attempt details follow the recorded token basis $basis', (expected) => {
+  const f = fixture();
+  const chat = createFixtureChat(f.store, '네이티브 사용량');
+  const run = queuedRun(f.store, chat.id);
+  f.store.startRun(run.id);
+  const attempt = f.store.product.startAttempt(chat.id, run.id, null, {
+    connectionId: 'native',
+    protocol: 'codex-app-server-v1',
+    role: 'main',
+    modelId: 'model',
+    method: 'RPC',
+    url: 'codex://local',
+    headers: {},
+    body: {},
+    bodySha256: 'x',
+    stablePrefixSha256: 'y',
+  });
+  f.store.product.finishAttempt(attempt, {
+    status: 'completed',
+    text: '',
+    toolCalls: [],
+    refusal: null,
+    error: null,
+    opaqueState: null,
+    usage: {
+      inputTokens: expected.inputTokens,
+      outputTokens: 10,
+      costUsd: null,
+      priceRevision: null,
+      raw: {
+        ...(expected.basis ? { tokenUsageBasis: expected.basis } : {}),
+        tokenUsage: {
+          total: { inputTokens: 500, cachedInputTokens: 300, reasoningOutputTokens: 20 },
+          last: { inputTokens: 50, cachedInputTokens: 30, reasoningOutputTokens: 2 },
+        },
+      },
+    },
+  });
+  const view = invokeTaskTool(
+    f.store,
+    f.current,
+    'task.inspect',
+    {
+      kind: 'run',
+      id: run.id,
+      includeDiagnostics: true,
+    },
+    randomUUID(),
+    f.actions
+  ) as any;
+  expect(view.diagnostics.attempts.items[0]).toMatchObject({
+    id: attempt,
+    inputTokens: expected.inputTokens,
+    cachedInputTokens: expected.cachedInputTokens,
+    reasoningTokens: expected.reasoningTokens,
+  });
+});
+
+test('optional execution detail pages preserve completed diagnostics and leave unfinished tools unknown', () => {
+  const f = fixture();
+  const chat = createFixtureChat(f.store, '진단 조회');
+  const run = queuedRun(f.store, chat.id);
+  f.store.startRun(run.id);
+  const attemptId = f.store.product.startAttempt(chat.id, run.id, null, {
+    connectionId: 'native',
+    protocol: 'codex-app-server-v1',
+    role: 'main',
+    modelId: 'model',
+    method: 'POST',
+    url: 'http://127.0.0.1:9',
+    headers: {},
+    body: {},
+    bodySha256: 'x',
+    stablePrefixSha256: 'y',
+  });
+  f.store.product.finishAttempt(attemptId, {
+    status: 'completed',
+    text: 'PRIVATE_PROVIDER_OUTPUT',
+    toolCalls: [],
+    refusal: null,
+    error: null,
+    opaqueState: null,
+    usage: {
+      inputTokens: 20,
+      outputTokens: 8,
+      costUsd: null,
+      priceRevision: null,
+      raw: {
+        tokenUsageBasis: 'total',
+        tokenUsage: { total: { cachedInputTokens: 7, reasoningOutputTokens: 3 } },
+        nativeActivity: {
+          items: [
+            { id: 'PRIVATE_NATIVE_ID', type: 'webSearch', status: 'completed' },
+            { type: 'webSearch', status: 'failed' },
+          ],
+          contextCompactions: [{ type: 'contextCompaction', status: 'completed' }],
+          omittedItems: 2,
+          omittedContextCompactions: 0,
+        },
+      },
+    },
+  });
+  for (let index = 0; index < 21; index++) {
+    const event = {
+      callId: `call-${index}`,
+      name: 'knowledge.read',
+      args: { offset: index },
+      result: { items: [], text: 'PRIVATE_OUTPUT' },
+      denied: false,
+    };
+    startToolDiagnostic(f.store.db, { kind: 'run', id: run.id, origin: 'writer' }, event);
+    f.store.tool(run.id, event, { elapsedMs: index });
+  }
+  startToolDiagnostic(
+    f.store.db,
+    { kind: 'run', id: run.id, origin: 'writer' },
+    {
+      callId: 'unfinished',
+      name: 'data.exec',
+      args: { command: 'echo work' },
+    }
+  );
+  f.store.completeRun(run.id, '완성된 장면', {
+    modelCalls: 1,
+    inputTokens: 3,
+    outputTokens: 4,
+    costUsd: null,
+  });
+  expect(f.invoke('task.inspect', 'run', run.id)).not.toHaveProperty('diagnostics');
+  const first = invokeTaskTool(
+    f.store,
+    f.current,
+    'task.inspect',
+    {
+      kind: 'run',
+      id: run.id,
+      includeDiagnostics: true,
+    },
+    randomUUID(),
+    f.actions
+  ) as any;
+  expect(first.diagnostics.tools).toMatchObject({ total: 22, offset: 0, nextOffset: 20 });
+  expect(first.diagnostics.tools.items).toHaveLength(20);
+  expect(first.diagnostics.attempts.items[0]).toMatchObject({
+    id: attemptId,
+    cachedInputTokens: 7,
+    reasoningTokens: 3,
+    nativeActivity: {
+      byType: [
+        { type: 'webSearch', statuses: { completed: 1, failed: 1 } },
+        { type: 'contextCompaction', statuses: { completed: 1 } },
+      ],
+      omittedItems: 2,
+      omittedContextCompactions: 0,
+    },
+  });
+  expect(first.diagnostics.tools.items[0]).toMatchObject({
+    name: 'knowledge.read',
+    state: 'finished',
+    elapsedMs: 0,
+  });
+  const last = invokeTaskTool(
+    f.store,
+    f.current,
+    'task.inspect',
+    {
+      kind: 'run',
+      id: run.id,
+      includeDiagnostics: true,
+      toolsOffset: 20,
+    },
+    randomUUID(),
+    f.actions
+  ) as any;
+  expect(last.diagnostics.tools).toMatchObject({ total: 22, offset: 20, nextOffset: null });
+  expect(last.diagnostics.tools.items[1]).toMatchObject({
+    name: 'data.exec',
+    state: 'started',
+    effect: 'unknown',
+  });
+  expect(JSON.stringify({ first, last })).not.toContain('PRIVATE_OUTPUT');
+  expect(JSON.stringify({ first, last })).not.toContain('PRIVATE_NATIVE_ID');
+  expect(JSON.stringify({ first, last })).not.toContain('PRIVATE_PROVIDER_OUTPUT');
+  expect(f.store.run(run.id).toolEvents).toEqual([]);
+});
+
+test('helper diagnostic details pair started and finished events without inferring an unfinished effect', () => {
+  const f = fixture();
+  const conversation = f.workspace.open({ kind: 'library', workId: 'event-pair' });
+  const task = f.workspace.enqueue(conversation.id, 'request', 'inspect', {
+    scope: conversation.scope,
+    model: {} as never,
+    history: [],
+    persona: '',
+    limits: { totalCalls: 3, helperCalls: 2 },
+  });
+  f.workspace.event(conversation.id, task.id, 'tool.started', {
+    name: 'data.exec',
+    callId: 'finished',
+    startedAt: '2026-01-01T00:00:00.000Z',
+    argsPreview: '{"command":"echo ok"}',
+    argsChars: 21,
+    argsSha256: 'hash',
+  });
+  f.workspace.event(conversation.id, task.id, 'tool.finished', {
+    name: 'data.exec',
+    callId: 'finished',
+    denied: false,
+    elapsedMs: 9,
+    result: { output: 'PRIVATE_TOOL_OUTPUT' },
+  });
+  f.workspace.event(conversation.id, task.id, 'tool.started', {
+    name: 'data.exec',
+    callId: 'unfinished',
+    argsPreview: '{"command":"echo later"}',
+  });
+  f.workspace.event(conversation.id, task.id, 'tool.finished', {
+    name: 'legacy.read',
+    callId: 'legacy',
+    denied: false,
+    result: 'PRIVATE_LEGACY_OUTPUT',
+  });
+  const view = invokeTaskTool(
+    f.store,
+    f.current,
+    'task.inspect',
+    {
+      kind: 'helper',
+      id: task.id,
+      includeDiagnostics: true,
+    },
+    randomUUID(),
+    f.actions
+  ) as any;
+  expect(view.diagnostics.tools).toMatchObject({ total: 3, nextOffset: null });
+  expect(view.diagnostics.tools.items[0]).toMatchObject({
+    callId: 'finished',
+    state: 'finished',
+    argsPreview: '{"command":"echo ok"}',
+    outcome: { denied: false, elapsedMs: 9 },
+  });
+  expect(view.diagnostics.tools.items[1]).toMatchObject({
+    callId: 'unfinished',
+    state: 'started',
+    effect: 'unknown',
+    outcome: null,
+  });
+  expect(view.diagnostics.tools.items[2]).toMatchObject({ callId: 'legacy', state: 'finished' });
+  expect(JSON.stringify(view)).not.toContain('PRIVATE_TOOL_OUTPUT');
+  expect(JSON.stringify(view)).not.toContain('PRIVATE_LEGACY_OUTPUT');
 });
 
 test('cancellation routes to the existing run transition and rejects inactive or self targets', () => {

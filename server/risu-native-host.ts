@@ -16,6 +16,7 @@ import type { NativeRisuExecutionOptions } from './risu-native-runtime.js';
 import { requestNativeInteraction } from './risu-native-interactions.js';
 import { NativeScriptImageError, nativeScriptImages } from './risu-native-script-images.js';
 import { HttpError, record } from './request-validation.js';
+import { uncertainAttemptResult } from './usage-accounting.js';
 
 type Hooks = Pick<MainHooks, 'resolveCredential' | 'executeCodex' | 'vertexRequestTier'>;
 type ScriptMode = NonNullable<NonNullable<WireRecord['nativeScript']>['mode']>;
@@ -161,29 +162,42 @@ export function createNativeRisuHost(
       prompt: { compilerVersion: PROMPT_COMPILER_VERSION, messages, cachePlan: [], values: {} },
     };
     let attemptId: string | undefined;
-    const result = await executeProvider(transportConnection(connection), request, {
-      ...hooks,
-      resolveImage,
-      signal,
-      timeoutMs: target.timeoutMs,
-      beforeTurn: async () => {
-        authorize();
-      },
-      onWire: async (wire) => {
-        authorize();
-        const attributed: WireRecord = {
-          ...wire,
-          nativeScript: {
-            method: method as 'LLM' | 'axLLM' | 'simpleLLM',
-            event,
-            ...(mode ? { mode } : {}),
-          },
-        };
-        validateNativeScriptAttempt(snapshot, attributed);
-        attemptId = store.product.startAttempt(snapshot.chatId, runId, null, attributed);
-        usage.modelCalls++;
-      },
-    });
+    let result: Awaited<ReturnType<typeof executeProvider>>;
+    try {
+      result = await executeProvider(transportConnection(connection), request, {
+        ...hooks,
+        resolveImage,
+        signal,
+        timeoutMs: target.timeoutMs,
+        beforeTurn: async () => {
+          authorize();
+        },
+        onWire: async (wire) => {
+          authorize();
+          const attributed: WireRecord = {
+            ...wire,
+            nativeScript: {
+              method: method as 'LLM' | 'axLLM' | 'simpleLLM',
+              event,
+              ...(mode ? { mode } : {}),
+            },
+          };
+          validateNativeScriptAttempt(snapshot, attributed);
+          attemptId = store.product.startAttempt(snapshot.chatId, runId, null, attributed);
+          usage.modelCalls++;
+        },
+      });
+    } catch (error) {
+      if (attemptId) {
+        usage.inputTokens = usage.outputTokens = usage.costUsd = null;
+        try {
+          store.product.finishAttempt(attemptId, uncertainAttemptResult(signal.aborted));
+        } catch {
+          // Preserve the original execution failure if diagnostic settlement also fails.
+        }
+      }
+      throw error;
+    }
     if (attemptId) {
       for (const key of ['inputTokens', 'outputTokens', 'costUsd'] as const)
         usage[key] =

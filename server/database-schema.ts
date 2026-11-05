@@ -9,6 +9,7 @@ import { initOutline, initOutlineWorkspace } from './outline-store.js';
 import { initLoreContextDefaults } from './lore-context-defaults.js';
 import { initStoryGuide } from './story-guide-store.js';
 import { initRequestFilesSchema } from './request-file-storage.js';
+import { initExecutionDiagnostics } from './execution-diagnostics.js';
 
 export const DATABASE_SCHEMA_VERSION = 15;
 const FORMAT = 'uimori-personal-v1';
@@ -74,6 +75,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initRequestFilesSchema(db);
     initSceneContext(db);
     initDatabaseReadIndexes(db);
+    initExecutionDiagnostics(db);
     return;
   }
   try {
@@ -84,6 +86,7 @@ export function initializeDatabaseSchema(db: DatabaseSync, initializeFresh: () =
     initStoryGuide(db);
     initSceneContext(db);
     initIllustrations(db);
+    initExecutionDiagnostics(db);
     initOutline(db);
     initLoreContextDefaults(db);
     db.exec(`

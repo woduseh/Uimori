@@ -43,7 +43,7 @@
 Theme resources and selection: `core/themes.ts`, `server/themes.ts`, `web/ThemeContext.tsx`, `web/ThemeSettings.tsx`, `web/ThemeFrame.tsx`. [Authoring and usage](THEME-AUTHORING.md).
 Standalone palettes and uploaded fonts: `core/theme-palettes.ts`, `core/fonts.ts`, `server/fonts.ts`, `web/PaletteSettings.tsx`, `web/FontContext.tsx`, `web/FontSettings.tsx`. Helper registration and selection: `server/helper-presentation-tools.ts`.
 
-Operational failures remain in task status, provider error details and execution inputs; there is no separate anonymous diagnostic-report generator. See [Troubleshooting](DIAGNOSTICS.md).
+Operational failures remain in task status, provider error details and execution inputs. `server/execution-diagnostics.ts`, `server/product-store.ts` and `server/helper-task-tools.ts` own bounded retained tool traces, provider attempt timing and opt-in paged diagnosis; there is no separate anonymous diagnostic-report generator. See [Troubleshooting](DIAGNOSTICS.md).
 
 Saved-text lifetime is implemented in `server/text-retention.ts`; pending image reclamation uses `server/unused-data.ts`. Import retry receipts are shared in `server/import-operations.ts`. See [DATA-MIGRATIONS](DATA-MIGRATIONS.md) for the current storage contract, not historical execution-replay assumptions.
 Scene deletion and manual orphan-memory review: `server/scene-deletion.ts`, `server/orphan-memory.ts`, `web/SceneDeleteAction.tsx`, `web/OrphanMemoryPanel.tsx`. See [deletion](DELETION.md).

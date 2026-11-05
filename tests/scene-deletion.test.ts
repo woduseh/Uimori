@@ -11,6 +11,7 @@ import { updateSceneContext } from '../server/scene-context.js';
 import { Store } from '../server/store.js';
 import { createFixtureChat } from './fixtures/chat.js';
 import { createTestDirectory } from './fixtures/test-directory.js';
+import { recordToolDiagnostic } from '../server/execution-diagnostics.js';
 
 const owned: { store: Store; remove: () => void }[] = [];
 afterEach(() => {
@@ -104,6 +105,17 @@ test('deleting only B preserves C identity, text and hash, reconnects it to A an
     idempotencyKey: 'independent-copy',
   });
   const copyBefore = store.history(copied.headRevision);
+  const tool = {
+    callId: 'audit',
+    name: 'story.search',
+    args: { query: 'Scene B: the bridge.' },
+    result: { items: [] },
+    denied: false,
+  };
+  for (const source of [a, b, c])
+    recordToolDiagnostic(store.db, { kind: 'run', id: source.runId, origin: 'writer' }, tool);
+  const copiedRunId = store.source(copied.headRevision!).runId;
+  recordToolDiagnostic(store.db, { kind: 'run', id: copiedRunId, origin: 'writer' }, tool);
   expect(copyBefore.map((source) => source.revision)).not.toContain(b.id);
   const variables = readChatVariables(store, chatId);
   const impact = sceneDeletionImpact(store, chatId, b.id);
@@ -114,6 +126,26 @@ test('deleting only B preserves C identity, text and hash, reconnects it to A an
     orphanNoteCount: { only: 1, following: 1 },
   });
   const result = deleteScenes(store, chatId, b.id, request(f));
+  expect(
+    store.db
+      .prepare('SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE run_id=?')
+      .get(a.runId)!.n
+  ).toBe(1);
+  expect(
+    store.db
+      .prepare('SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE run_id=?')
+      .get(b.runId)!.n
+  ).toBe(0);
+  expect(
+    store.db
+      .prepare('SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE run_id=?')
+      .get(c.runId)!.n
+  ).toBe(0);
+  expect(
+    store.db
+      .prepare('SELECT COUNT(*) AS n FROM execution_tool_diagnostics WHERE run_id=?')
+      .get(copiedRunId)!.n
+  ).toBe(1);
   expect(result).toMatchObject({ deleted: true, sourceIds: [b.id], headRevision: c.id });
   expect(store.history(store.chat(chatId).headRevision).map((source) => source.revision)).toEqual([
     a.id,

@@ -132,6 +132,55 @@ function observed(overrides: Partial<StoryGuideHooks> = {}) {
   return { hooks, wires, results };
 }
 
+test('guide read diagnostics surround actual host execution without changing the provider receipt', async () => {
+  const source = await snapshot();
+  const starts: unknown[] = [];
+  const finishes: unknown[] = [];
+  const log = observed({
+    onToolStart: (event, origin) => {
+      starts.push({ event, origin });
+    },
+    onToolDiagnostic: (event, timing, origin) => {
+      finishes.push({ event, timing, origin });
+    },
+  });
+  vi.mocked(fetch)
+    .mockImplementationOnce(async () =>
+      sse(
+        {
+          type: 'tool_delta',
+          index: 0,
+          id: 'guide-read',
+          name: 'story.read',
+          argumentsDelta: '{"sceneNumber":1}',
+        },
+        { type: 'done', reason: 'tool_calls' }
+      )
+    )
+    .mockImplementationOnce(async () => completed());
+  const result = await prepareStoryGuide(source, log.hooks);
+  expect(result.error).toBeNull();
+  expect(starts).toEqual([
+    {
+      origin: 'story-guide',
+      event: { callId: 'guide-read', name: 'story.read', args: { sceneNumber: 1 } },
+    },
+  ]);
+  expect(finishes).toEqual([
+    expect.objectContaining({
+      origin: 'story-guide',
+      timing: expect.objectContaining({ elapsedMs: expect.any(Number) }),
+      event: expect.objectContaining({ callId: 'guide-read', name: 'story.read', denied: false }),
+    }),
+  ]);
+  const second = JSON.parse(String(vi.mocked(fetch).mock.calls[1]![1]!.body));
+  expect(second.input.results[0]).toMatchObject({
+    callId: 'guide-read',
+    name: 'story.read',
+    denied: false,
+  });
+});
+
 beforeEach(() => {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async () => completed());
 });

@@ -66,6 +66,13 @@ export type ToolEvent = {
     ranges?: (number | null)[];
   };
 };
+/** Execution-only metadata, never part of a provider-visible tool receipt. */
+export type ToolEventTiming = {
+  elapsedMs?: number;
+  finishedAt?: string;
+  originalResultChars?: number | null;
+  diagnosticArgs?: Record<string, unknown>;
+};
 export type Usage = {
   modelCalls: number;
   inputTokens: number | null;

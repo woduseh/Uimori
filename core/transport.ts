@@ -165,6 +165,7 @@ export type WireRecord = {
   judgment?: {
     kind:
       | 'lore-selection'
+      | 'codex-content-preflight'
       | 'translation-refusal'
       | 'image-selection'
       | 'main-refusal'

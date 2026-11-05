@@ -1,5 +1,12 @@
 import { buildMainInput, executeTool, knowledgeReadResults, type ToolAction } from './provider.js';
-import type { ModelInput, Resource, RunSnapshot, ToolEvent, Usage } from './types.js';
+import type {
+  ModelInput,
+  Resource,
+  RunSnapshot,
+  ToolEvent,
+  ToolEventTiming,
+  Usage,
+} from './types.js';
 
 /** Explicit synthetic behavior, never saved as user chat settings or sent to a provider. */
 export type FixtureGeneration = { preset?: 'calm' | 'vivid'; mode?: 'direct' | 'research' };
@@ -61,7 +68,8 @@ export async function executeFixtureMain(
   hooks: {
     signal: AbortSignal;
     onInput: (input: ModelInput) => void | Promise<void>;
-    onToolEvent: (event: ToolEvent) => void | Promise<void>;
+    onToolStart?: (event: Pick<ToolEvent, 'callId' | 'name' | 'args'>) => void | Promise<void>;
+    onToolEvent: (event: ToolEvent, timing?: ToolEventTiming) => void | Promise<void>;
   },
   options: FixtureGeneration = {}
 ): Promise<{ text: string; usage: Usage }> {
@@ -91,9 +99,11 @@ export async function executeFixtureMain(
         text: step.text,
         usage: { modelCalls, inputTokens: null, outputTokens: null, costUsd: null },
       };
+    const started = performance.now();
+    await hooks.onToolStart?.(step.action);
     const event = executeTool(fixed, step.action, hooks.signal);
     results.push(event);
-    await hooks.onToolEvent(structuredClone(event));
+    await hooks.onToolEvent(structuredClone(event), { elapsedMs: performance.now() - started });
     checkAbort(hooks.signal);
     if (event.denied) throw new Error('Read tool request denied');
   }

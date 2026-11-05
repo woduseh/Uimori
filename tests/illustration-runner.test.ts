@@ -1609,9 +1609,23 @@ test.each(['complete', 'context-limit'] as const)(
     const observed = hooks(store);
     const result = await runIllustrationJob(store, plan.id, 'worker', observed.options);
     if (handlerError) throw handlerError;
+    const recorded = store.db
+      .prepare(
+        'SELECT data FROM execution_tool_diagnostics WHERE illustration_job_id=? ORDER BY seq'
+      )
+      .all(plan.id)
+      .map((row) => JSON.parse(String(row.data)));
+    expect(recorded.length).toBeGreaterThan(0);
+    expect(recorded[0]).toMatchObject({
+      name: 'illustration.sources.search',
+      state: 'finished',
+      elapsedMs: expect.any(Number),
+    });
+    expect(JSON.stringify(recorded)).not.toContain(description);
     if (mode === 'complete') {
       expect(result, JSON.stringify(observed.finishes)).toMatchObject({ status: 'completed' });
       expect(provider.requests).toHaveLength(14);
+      expect(recorded).toHaveLength(13);
       expect(
         illustrationJob(store, queuedIllustrations(store)[0]).input.target?.prompt?.prompt
       ).toContain('emerald eyes');

@@ -1,4 +1,5 @@
 import { illustrationResearch, ILLUSTRATION_RESEARCH_TOOLS } from './illustration-research.js';
+import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import { checkCodexIllustrationContent } from './illustration-content-check.js';
 import type { JevHooks } from './jev-judgment.js';
 import { jevSettings } from './jev-settings.js';
@@ -337,6 +338,18 @@ export async function runIllustrationJob(
         opaqueState = result.opaqueState ?? undefined;
         for (const call of result.toolCalls) {
           signal.throwIfAborted();
+          const started = performance.now();
+          startToolDiagnostic(
+            store.db,
+            {
+              kind: 'illustration',
+              id: jobId,
+              generation,
+              owner,
+              origin: 'illustration',
+            },
+            { callId: call.id, name: call.name, args: call.arguments }
+          );
           let output: import('../core/transport.js').Json;
           let denied = false;
           try {
@@ -345,13 +358,26 @@ export async function runIllustrationJob(
             denied = true;
             output = { error: error instanceof Error ? error.message : 'Invalid read' };
           }
-          results.push({
+          const event = {
             callId: call.id,
             name: call.name,
             args: call.arguments,
             result: output,
             denied,
-          });
+          };
+          results.push(event);
+          recordToolDiagnostic(
+            store.db,
+            {
+              kind: 'illustration',
+              id: jobId,
+              generation,
+              owner,
+              origin: 'illustration',
+            },
+            event,
+            { elapsedMs: performance.now() - started }
+          );
         }
         continue;
       }

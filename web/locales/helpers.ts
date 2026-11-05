@@ -1566,10 +1566,10 @@ export const messages = {
     zh: '模型：{model}',
   },
   'helpers.m311': {
-    ko: '실행 요청 {calls}회, 누적 입력 {input} / 출력 {output} 토큰',
-    en: 'Execution requests: {calls}, Total input: {input} / Output: {output} tokens',
-    ja: '実行リクエスト{calls}回、累計入力{input} / 出力{output}トークン',
-    zh: '执行请求{calls}次，累计输入{input} / 输出{output}词元',
+    ko: '실행 요청 {calls}회, 출력 {output} 토큰',
+    en: 'Execution requests: {calls}, Output: {output} tokens',
+    ja: '実行リクエスト{calls}回、出力{output}トークン',
+    zh: '执行请求{calls}次，输出{output}词元',
   },
   'helpers.m312': {
     ko: '저장한 작업: {labels}',

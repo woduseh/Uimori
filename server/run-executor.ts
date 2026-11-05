@@ -31,6 +31,7 @@ import { jevSettings } from './jev-settings.js';
 import { AnthropicBatchRun } from './anthropic-batch.js';
 import { readRequestImage } from './request-images.js';
 import { MainShell } from './main-shell.js';
+import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import type { Usage } from '../core/types.js';
 import {
   applyStoryGuide,
@@ -162,7 +163,24 @@ export function createRunExecutor({
               if (run.snapshot.profile && !run.snapshot.profile.models.main)
                 store.product.mockAttempt(run.chatId, id, null, 'main', input);
             },
-            onToolEvent: (event) => store.tool(id, event),
+            onToolStart: (event, origin) =>
+              startToolDiagnostic(
+                store.db,
+                {
+                  kind: 'run',
+                  id,
+                  origin: origin ?? (event.name === 'agents.read' ? 'advisor' : 'writer'),
+                },
+                event
+              ),
+            onToolEvent: (event, timing) => store.tool(id, event, timing),
+            onToolDiagnostic: (event, timing, origin) =>
+              recordToolDiagnostic(
+                store.db,
+                { kind: 'run', id, origin: origin ?? 'writer' },
+                event,
+                timing
+              ),
             replayToolEvents: run.toolEvents,
             evaluationRunId: id,
             resolveCredential,

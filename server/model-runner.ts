@@ -2,7 +2,7 @@ import { buildCodexNativeRequest } from '../core/codex-protocol.js';
 import { ProviderContractError, type ProviderExecutionOptions } from '../core/transport.js';
 import type { CodexAgentExecutionOptions } from './codex-runtime.js';
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
-import { toolCorrectionOutcome } from '../core/tool-outcome.js';
+import { toolCorrectionOutcome, toolResultChars } from '../core/tool-outcome.js';
 import { estimateContextTokens, MIN_INPUT_TOKEN_LIMIT } from '../core/context-budget.js';
 import { tokenizerInfo } from '../core/text-tokens.js';
 import { executeTool, KNOWLEDGE_READ_TOKENS, KNOWLEDGE_READ_MAX_TOKENS } from '../core/provider.js';
@@ -17,7 +17,7 @@ import {
   type ProviderRequest,
   transportConnection,
 } from '../core/transport.js';
-import type { ModelInput, RunSnapshot, ToolEvent, Usage } from '../core/types.js';
+import type { ModelInput, RunSnapshot, ToolEvent, ToolEventTiming, Usage } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
 import { EVALUATION_TOOL_ROUND_LIMIT } from '../core/evaluation-tool-config.js';
 import { createHash } from 'node:crypto';
@@ -33,6 +33,7 @@ import { createAgentCollaboration } from './agent-collaboration.js';
 import { compactableRead, compactToolReads } from './context-tool-compaction.js';
 import { requestLore } from './request-lore.js';
 import { requestReceipt } from './request-receipt.js';
+import { uncertainAttemptResult } from './usage-accounting.js';
 
 export type MainResult = {
   status: 'completed' | 'refused' | 'partial' | 'error' | 'cancelled';
@@ -61,7 +62,17 @@ export type MainHooks = {
   resolveImage?: import('../core/transport.js').ProviderExecutionOptions['resolveImage'];
   signal: AbortSignal;
   onInput: (input: ModelInput) => void | Promise<void>;
-  onToolEvent: (event: ToolEvent) => void | Promise<void>;
+  onToolStart?: (
+    event: Pick<ToolEvent, 'callId' | 'name' | 'args'>,
+    origin?: 'story-guide'
+  ) => void | Promise<void>;
+  onToolEvent: (event: ToolEvent, timing?: ToolEventTiming) => void | Promise<void>;
+  /** Diagnostic-only reads that must never become replay receipts. */
+  onToolDiagnostic?: (
+    event: ToolEvent,
+    timing?: ToolEventTiming,
+    origin?: 'story-guide'
+  ) => void | Promise<void>;
   /** Durable tool receipts used only when resuming a recoverable Batch Run. */
   replayToolEvents?: readonly ToolEvent[];
   /** Stable reservation identity for evaluation tool receipts during Batch recovery. */
@@ -190,10 +201,13 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     if (event) replayEvents.delete(key);
     return event ? structuredClone(event) : undefined;
   };
-  const persistOrReplay = async (expected: ToolEvent): Promise<boolean> => {
+  const persistOrReplay = async (
+    expected: ToolEvent,
+    timing?: ToolEventTiming
+  ): Promise<boolean> => {
     const saved = takeReplay(expected.callId, expected.name);
     if (!saved) {
-      await hooks.onToolEvent(structuredClone(expected));
+      await hooks.onToolEvent(structuredClone(expected), timing);
       return true;
     }
     return isDeepStrictEqual(saved, expected);
@@ -233,8 +247,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
     }
     const terminals = result.toolCalls.filter((call) => call.name === 'story.submit');
     if (terminals.length) {
+      const started = performance.now();
       const call = terminals[0],
         content = call.arguments.content;
+      const fresh = !replayEvents.has(JSON.stringify([call.id, call.name]));
+      if (fresh)
+        await hooks.onToolStart?.({ callId: call.id, name: call.name, args: call.arguments });
       if (
         !storySubmissionEnabled(fixed) ||
         terminals.length !== 1 ||
@@ -245,8 +263,20 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         typeof content !== 'string' ||
         !content.trim() ||
         content.length > STORY_SUBMIT_MAX_CHARS
-      )
+      ) {
+        if (fresh)
+          await hooks.onToolDiagnostic?.(
+            {
+              callId: call.id,
+              name: call.name,
+              args: {},
+              denied: true,
+              result: { code: 'INVALID_STORY_SUBMISSION' },
+            },
+            { elapsedMs: performance.now() - started, diagnosticArgs: call.arguments }
+          );
         return fail('INVALID_STORY_SUBMISSION');
+      }
       if (signal.aborted) return fail('CANCELLED');
       const preset = fixed.profile?.promptPresets?.main;
       const event: ToolEvent = {
@@ -267,13 +297,20 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           },
         },
       };
-      if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+      if (
+        !(await persistOrReplay(event, {
+          elapsedMs: performance.now() - started,
+          diagnosticArgs: call.arguments,
+        }))
+      )
+        return fail('BATCH_RECOVERY_TOOL_MISMATCH');
       return { status: 'completed', text: content, error: null, usage };
     }
     const evaluationTerminals = result.toolCalls.filter(
       (call) => call.name === 'eval_submit_artifact'
     );
     if (evaluationTerminals.length) {
+      const started = performance.now();
       if (
         !evaluation ||
         evaluationTerminals.length !== 1 ||
@@ -311,6 +348,12 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           return undefined;
         }
       }
+      if (!savedTerminal)
+        await hooks.onToolStart?.({
+          callId: terminalCall.id,
+          name: terminalCall.name,
+          args: terminalCall.arguments,
+        });
       const submitted = evaluation.submit(
         evaluationTerminals[0],
         evaluationTerminals[0].recoveredFromTruncation === true
@@ -319,7 +362,13 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         if (evaluationRounds > EVALUATION_TOOL_ROUND_LIMIT)
           return fail('MODEL_CALL_BUDGET_EXHAUSTED');
         results.push(submitted.event);
-        if (!(await persistOrReplay(submitted.event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+        if (
+          !(await persistOrReplay(submitted.event, {
+            elapsedMs: performance.now() - started,
+            diagnosticArgs: evaluationTerminals[0].arguments,
+          }))
+        )
+          return fail('BATCH_RECOVERY_TOOL_MISMATCH');
         opaqueState = result.opaqueState;
         return undefined;
       }
@@ -339,7 +388,13 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           correctionCount: submitted.artifact.correctionCount,
         },
       };
-      if (!(await persistOrReplay(event))) return fail('BATCH_RECOVERY_TOOL_MISMATCH');
+      if (
+        !(await persistOrReplay(event, {
+          elapsedMs: performance.now() - started,
+          diagnosticArgs: evaluationTerminals[0].arguments,
+        }))
+      )
+        return fail('BATCH_RECOVERY_TOOL_MISMATCH');
       return { status: 'completed', text: submitted.artifact.text, error: null, usage };
     }
     opaqueState = result.opaqueState;
@@ -348,6 +403,8 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       // Transport only decodes. Exact frozen bindings separate state actions from read permissions.
       const action = { callId: call.id, name: call.name, args: call.arguments };
       const saved = takeReplay(call.id, call.name);
+      const started = performance.now();
+      if (!saved) await hooks.onToolStart?.(action);
       let event: ToolEvent;
       if (saved) {
         if (call.name === 'agents.consult' && collaboration) {
@@ -370,6 +427,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         event = evaluation?.allNames.includes(call.name as (typeof evaluation.allNames)[number])
           ? evaluation.execute(call)
           : await executeMainTool(action, signal);
+      const originalResultChars = toolResultChars(event.result);
       if (!saved && event.name === 'data.exec' && !event.denied)
         event = prepareShellEvent?.(event, result.toolCalls.slice(callIndex + 1)) ?? event;
       readHeadroomTokens = Math.max(0, readHeadroomTokens - readTokens(event));
@@ -377,7 +435,11 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       if (collaboration && (event.name === 'agents.consult' || contextReadNames.has(event.name)))
         advisorContext.set(event.callId, structuredClone(event));
       // Persist each real result immediately. Recovery reuses the durable receipt instead.
-      if (!saved) await hooks.onToolEvent(structuredClone(event));
+      if (!saved)
+        await hooks.onToolEvent(structuredClone(event), {
+          elapsedMs: performance.now() - started,
+          originalResultChars,
+        });
       const outcome = toolCorrectionOutcome(event);
       if (outcome === 'denied') return fail('READ_TOOL_DENIED');
     }
@@ -457,6 +519,7 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
         return fail('CONTEXT_TOOL_COMPACTION_NO_PROGRESS');
       if (before > inputLimit * 0.85 && latestRead !== lastUnhelpfulRead) {
         try {
+          const started = performance.now();
           const history = [...completedToolHistory, ...results];
           const compacted = await compactToolReads(fixed, history, hooks, usage, (projection) => {
             const projected = build(projection).request;
@@ -468,19 +531,22 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
           // 85% is a soft trigger, not a second admission limit. Keep a valid original
           // continuation when summarization fails to reduce it; never admit an oversized body.
           const applied = after < before && after <= inputLimit;
-          await hooks.onToolEvent({
-            callId: `host-compaction-${usage.modelCalls}`,
-            name: 'context.compact',
-            args: {},
-            denied: false,
-            result: {
-              reason: 'tool-results',
-              applied,
-              beforeTokens: before,
-              afterTokens: after,
-              compactedReads: results.filter(compactableRead).length,
+          await hooks.onToolEvent(
+            {
+              callId: `host-compaction-${usage.modelCalls}`,
+              name: 'context.compact',
+              args: {},
+              denied: false,
+              result: {
+                reason: 'tool-results',
+                applied,
+                beforeTokens: before,
+                afterTokens: after,
+                compactedReads: results.filter(compactableRead).length,
+              },
             },
-          });
+            { elapsedMs: performance.now() - started }
+          );
           if (applied) {
             // Discard opaque continuation only after adopting the replacement history.
             opaqueState = undefined;
@@ -665,6 +731,15 @@ export async function runMain(snapshot: RunSnapshot, hooks: MainHooks): Promise<
       // A native-input rejection (for example prefill) must keep its existing actionable code.
       if (attemptId === undefined && error instanceof ProviderContractError)
         return fail(error.code);
+      if (attemptId !== undefined) {
+        const uncertain = uncertainAttemptResult(hooks.signal.aborted);
+        addUsage(usage, uncertain);
+        try {
+          await hooks.onAttemptFinish(attemptId, uncertain);
+        } catch {
+          // Preserve the original execution failure if diagnostic settlement also fails.
+        }
+      }
       throw new ModelRunError(error, structuredClone(usage));
     }
     await pendingTools;

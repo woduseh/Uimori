@@ -309,7 +309,7 @@ test('HRESULT01 ordinary answers show usage without a permanent empty-change mes
   const results = answer.getByTestId('helper-task-results');
   const summary = results.locator('summary');
   await expect(summary).toContainText('사용량');
-  await expect(summary).toContainText('입력 120');
+  await expect(summary).toContainText('마지막 입력 120');
   await expect(summary).toContainText('출력 12 토큰');
   await expect(summary).not.toContainText('·');
   await expect(summary).not.toContainText('도구');
@@ -322,6 +322,64 @@ test('HRESULT01 ordinary answers show usage without a permanent empty-change mes
 });
 
 for (const width of DEFAULT_WIDTHS) {
+  test(`HRESULT03 compact usage separates the last input from cumulative cached traffic at ${width}px`, async ({
+    page,
+    request,
+  }, info) => {
+    const { chat, task } = await seed(request);
+    const inputs = [180000, 190000, 187479, 90040];
+    const cached = [160000, 170000, 140473, 77002];
+    const projection: HelperTaskResultsView = {
+      taskId: task.id,
+      status: 'completed',
+      results: [],
+      unrecordedOperations: 0,
+      usage: {
+        latestInputTokens: 90040,
+        latestInputEstimate: 113453,
+        latestInputLimit: 272000,
+        toolExecutions: 19,
+        attempts: inputs.map((inputTokens, index) => ({
+          id: `synthetic-${index}`,
+          purpose: 'helper',
+          status: 'completed',
+          inputTokens,
+          outputTokens: index === 3 ? 1689 : 8000,
+          cachedInputTokens: cached[index],
+          reasoningTokens: null,
+          costUsd: null,
+          internalModelCalls: null,
+        })),
+      },
+    };
+    await page.route(`**/api/helper/tasks/${task.id}/results`, (route) =>
+      route.fulfill({ json: projection })
+    );
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/?chat=${chat.id}`);
+    await openHelper(page);
+    const results = page
+      .locator(`.helper-message.assistant[data-task-id="${task.id}"]`)
+      .getByTestId('helper-task-results');
+    const summary = results.locator('summary');
+    await expect(summary).toContainText('마지막 입력 90.04K');
+    await expect(summary).toContainText('출력 25.69K 토큰');
+    await expect(summary).not.toContainText('647');
+    await expect(results.getByRole('meter')).not.toBeVisible();
+    await page.screenshot({ path: info.outputPath(`helper-usage-compact-${width}.png`) });
+    await summary.click();
+    await expect(usageValue(results, '마지막 요청 입력')).toHaveText('90,040');
+    await expect(usageValue(results, '누적 입력 토큰')).toHaveText('647,519');
+    await expect(usageValue(results, '입력 중 캐시 토큰')).toHaveText('547,475');
+    await expect(results).toContainText(
+      '누적 입력은 각 요청에 다시 보낸 문맥과 캐시 입력을 포함해요.'
+    );
+    await expect(results.getByRole('meter')).toHaveAttribute('value', '113453');
+    expect(await results.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true
+    );
+    await page.screenshot({ path: info.outputPath(`helper-usage-details-${width}.png`) });
+  });
   test(`HRESULT02 actual results retain partial usage and recover from refresh/open failures at ${width}px`, async ({
     page,
     request,
@@ -433,7 +491,7 @@ for (const width of DEFAULT_WIDTHS) {
     ).toHaveCount(0);
     await expect(results.getByText('이전 도우미', { exact: true })).toBeVisible();
     await expect(results.getByText('새 도우미', { exact: true })).toBeVisible();
-    await expect(results.locator('summary')).toContainText('입력 1,000');
+    await expect(results.locator('summary')).toContainText('입력 추정 850');
     await expect(results.locator('summary')).toContainText('출력 90 토큰');
     await expect(results.locator('summary')).toContainText('도구 7회');
     await expect(results.locator('summary')).toContainText('일부 미확인');

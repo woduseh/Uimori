@@ -47,6 +47,8 @@ export type StoryGuideHooks = Pick<
   | 'vertexRequestTier'
   | 'onAttemptStart'
   | 'onAttemptFinish'
+  | 'onToolDiagnostic'
+  | 'onToolStart'
   | 'initialUsage'
 >;
 export type StoryGuideOptions = {
@@ -382,12 +384,21 @@ export async function prepareStoryGuide(
     try {
       for (const call of result.toolCalls) {
         checkAbort();
-        results.push(
-          executeTool(
-            snapshot,
-            { callId: call.id, name: call.name, args: call.arguments },
-            hooks.signal
-          )
+        const started = performance.now();
+        await hooks.onToolStart?.(
+          { callId: call.id, name: call.name, args: call.arguments },
+          'story-guide'
+        );
+        const event = executeTool(
+          snapshot,
+          { callId: call.id, name: call.name, args: call.arguments },
+          hooks.signal
+        );
+        results.push(event);
+        await hooks.onToolDiagnostic?.(
+          event,
+          { elapsedMs: performance.now() - started },
+          'story-guide'
         );
       }
     } catch {

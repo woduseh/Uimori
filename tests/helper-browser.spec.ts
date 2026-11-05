@@ -1643,7 +1643,7 @@ test('HELPUI02 cursor deltas stay sequential, skip diagnostic view reloads and r
   first.usage = { ...first.usage, modelCalls: 2, inputTokens: 25 };
   state.emit('attempt.finished');
   state.emit('tool.finished');
-  await expect(firstTaskStatus).toContainText('실행 요청 2회, 누적 입력 25');
+  await expect(firstTaskStatus).toContainText('실행 요청 2회, 출력 10 토큰');
   expect(state.viewReads).toBe(viewsBeforeDiagnostics + 1);
   await input.fill('뒤이어 처리할 작업');
   await panel.getByRole('button', { name: '다음 요청', exact: true }).click();

@@ -52,8 +52,12 @@ export function usageOnlyWire(wire: Partial<WireRecord>): Partial<WireRecord> {
     modelId: wire.modelId,
     pricingStartedAt: wire.pricingStartedAt,
     executionMode: wire.executionMode,
+    // Scene/chat deletion reconstructs the running request without this marker. A late result
+    // may then settle numeric usage, but cannot restore even a content-free error code.
+    diagnosticRetention: 'safe-code-v1',
+    ...(wire.judgment ? { judgment: { kind: wire.judgment.kind } } : {}),
     ...(pricing ? { pricingSnapshot: { ...pricing, sourceUrl: undefined, notes: [] } } : {}),
-  };
+  } as Partial<WireRecord>;
 }
 export function usageOnlyResult(result: ProviderResult, estimate: CostEstimate) {
   return {

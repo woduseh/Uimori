@@ -61,6 +61,7 @@ import { disposeAllNativeRisuSessions } from './risu-native-runtime.js';
 import { validateImageJudgmentWire } from './image-judgment.js';
 import { validateTranslationJudgmentWire } from './jev-attribution.js';
 import { runAuxiliaryJob } from './product-auxiliary.js';
+import { recordToolDiagnostic, startToolDiagnostic } from './execution-diagnostics.js';
 import { auxiliaryBridge } from './auxiliary-bridge.js';
 import { productRoutes } from './product-routes.js';
 import { providerConnectionTestRoutes } from './provider-connection-test.js';
@@ -620,7 +621,8 @@ export async function createApp(options: AppOptions): Promise<App> {
                   source.text,
                   jevCredentials.resolve,
                   signal,
-                  jevSettings(store.db)
+                  jevSettings(store.db),
+                  { store, chatId, jobId: id }
                 ))
               ) {
                 store.failQueuedJob(
@@ -671,6 +673,31 @@ export async function createApp(options: AppOptions): Promise<App> {
                 if (mockTranslation)
                   store.product.mockAttempt(chatId, null, id, 'translation', input);
               },
+              onToolStart: (_id, event, generation) =>
+                startToolDiagnostic(
+                  store.db,
+                  {
+                    kind: 'job',
+                    id,
+                    generation,
+                    owner: instanceId,
+                    origin: 'translation',
+                  },
+                  event
+                ),
+              onToolEvent: (_id, event, timing, generation) =>
+                recordToolDiagnostic(
+                  store.db,
+                  {
+                    kind: 'job',
+                    id,
+                    generation,
+                    owner: instanceId,
+                    origin: 'translation',
+                  },
+                  event,
+                  timing
+                ),
               onProgress: () => publish(chatId),
               cancellationStatus: 'interrupted',
             });

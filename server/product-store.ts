@@ -952,9 +952,9 @@ export class ProductStore {
     return id;
   }
   finishAttempt(id: string, result: ProviderResult) {
-    const row = this.db.prepare('SELECT request,usage_detached FROM attempts WHERE id=?').get(id) as
-      | Row
-      | undefined;
+    const row = this.db
+      .prepare('SELECT request,usage_detached,started_at FROM attempts WHERE id=?')
+      .get(id) as Row | undefined;
     const request = row ? parse(row.request) : null;
     const anthropicBatch =
       request?.executionMode === 'batch' && request?.protocol === 'anthropic-messages-v1';
@@ -993,24 +993,48 @@ export class ProductStore {
         })),
         notes: [...estimatedCost.notes, 'ANTHROPIC_BATCH_50_PERCENT'],
       };
+    const finishedAt = new Date().toISOString();
+    const elapsedMs = Date.parse(finishedAt) - Date.parse(String(row?.started_at));
+    const executionDiagnostic = {
+      finishedAt,
+      elapsedMs: Number.isFinite(elapsedMs) && elapsedMs >= 0 ? elapsedMs : null,
+      ...(request?.judgment?.kind === 'codex-content-preflight'
+        ? { purpose: 'codex-content-preflight' }
+        : {}),
+    };
+    const safeDetachedError =
+      request?.diagnosticRetention === 'safe-code-v1' &&
+      typeof result.error?.code === 'string' &&
+      /^[A-Z][A-Z0-9_]{1,95}$/u.test(result.error.code)
+        ? result.error.code
+        : null;
     const safe = {
       ...structuredClone(result),
       estimatedCost,
       opaqueState: result.opaqueState === null ? null : '[provider continuation withheld]',
+      executionDiagnostic,
     };
     this.db
       .prepare(
-        "UPDATE attempts SET status=?,response=?,input_tokens=?,output_tokens=?,cost_usd=?,raw_usage=?,price_revision=?,error=?,estimated_usd=?,estimated_subtotal_usd=?,estimate_status=?,request=CASE WHEN usage_detached=1 THEN '{}' ELSE request END WHERE id=? AND status='running'"
+        "UPDATE attempts SET status=?,response=?,input_tokens=?,output_tokens=?,cost_usd=?,raw_usage=?,price_revision=?,error=?,estimated_usd=?,estimated_subtotal_usd=?,estimate_status=?,request=CASE WHEN usage_detached=1 AND json_type(request,'$.judgment.kind')='text' THEN json_object('judgment',json_object('kind',json_extract(request,'$.judgment.kind'))) WHEN usage_detached=1 THEN '{}' ELSE request END WHERE id=? AND status='running'"
       )
       .run(
         result.status,
-        json(row?.usage_detached ? usageOnlyResult(result, estimatedCost) : safe),
+        json(
+          row?.usage_detached
+            ? {
+                ...usageOnlyResult(result, estimatedCost),
+                ...(safeDetachedError ? { error: { code: safeDetachedError } } : {}),
+                executionDiagnostic,
+              }
+            : safe
+        ),
         result.usage.inputTokens,
         result.usage.outputTokens,
         result.usage.costUsd,
         row?.usage_detached ? null : json(result.usage.raw),
         row?.usage_detached ? null : result.usage.priceRevision,
-        row?.usage_detached ? null : (result.error?.code ?? null),
+        row?.usage_detached ? safeDetachedError : (result.error?.code ?? null),
         estimatedCost.usd,
         estimatedCost.subtotalUsd,
         estimatedCost.status,

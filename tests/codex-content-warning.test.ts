@@ -7,6 +7,7 @@ import type { ProviderResult } from '../core/transport.js';
 import { createApp, type App } from '../server/app.js';
 import { autoTranslationNeedsConfirmation } from '../server/codex-content-warning.js';
 import type { CodexRuntimeService } from '../server/codex-runtime.js';
+import { JEV_ENDPOINT } from '../server/jev-judgment.js';
 import { injectWithFixtureBot, setFixtureModelRoutes } from './fixtures/chat.js';
 import { installJevFixture } from './fixtures/jev.js';
 import { modelWorkspace, updateModelWorkspace } from '../server/prompt-workspace.js';
@@ -176,7 +177,9 @@ test('Codex preflight warns through JEV for main and translation while remaining
       translationModel,
       'Synthetic source text.',
       () => undefined,
-      new AbortController().signal
+      new AbortController().signal,
+      undefined,
+      { store: app.store, chatId: chat.id }
     )
   ).toBe(true);
   expect(
@@ -184,7 +187,9 @@ test('Codex preflight warns through JEV for main and translation while remaining
       undefined,
       'Text',
       () => undefined,
-      new AbortController().signal
+      new AbortController().signal,
+      undefined,
+      { store: app.store, chatId: chat.id }
     )
   ).toBe(false);
 
@@ -196,13 +201,26 @@ test('Codex preflight warns through JEV for main and translation while remaining
   expect(main).toEqual({ warning: true });
   expect(judgments.at(-1)?.state).toEqual({ request: 'Continue the scene.' });
   expect(judgments.at(-1)?.questions.explicitSexualContent?.type).toBe('noul');
+  const mainAttempt = app.store.db.prepare('SELECT * FROM attempts WHERE chat_id=?').get(chat.id)!;
+  expect(mainAttempt).toMatchObject({
+    role: 'main',
+    usage_kind: 'judgment',
+    usage_detached: 1,
+    status: 'completed',
+    input_tokens: 7,
+    output_tokens: 3,
+  });
+  expect(JSON.stringify(mainAttempt)).not.toContain('Continue the scene.');
+  expect(JSON.stringify(mainAttempt)).not.toContain('synthetic-jev-test-key');
 
   expect(
     await autoTranslationNeedsConfirmation(
       translationModel,
       'Synthetic source text.',
       () => 'synthetic-jev-test-key',
-      new AbortController().signal
+      new AbortController().signal,
+      undefined,
+      { store: app.store, chatId: chat.id }
     )
   ).toBe(true);
 
@@ -254,4 +272,51 @@ test('Codex preflight warns through JEV for main and translation while remaining
     request: 'Continue.',
     recentContext: 'A quiet completed scene.',
   });
+
+  const beforeFailure = Number(app.store.db.prepare('SELECT COUNT(*) AS n FROM attempts').get()!.n);
+  vi.stubGlobal('fetch', async (url: Parameters<typeof fetch>[0]) => {
+    expect(url).toBe(JEV_ENDPOINT);
+    throw new Error('Synthetic transport failure');
+  });
+  expect(
+    await api(app, `/api/chats/${chat.id}/codex-content-preflight`, {
+      role: 'main',
+      text: 'Private failed draft.',
+    })
+  ).toEqual({ warning: false });
+  const failed = app.store.db.prepare('SELECT * FROM attempts ORDER BY rowid DESC LIMIT 1').get()!;
+  expect(failed).toMatchObject({
+    status: 'error',
+    error: 'JEV_EXECUTION_FAILED',
+    usage_kind: 'judgment',
+  });
+  expect(Number(app.store.db.prepare('SELECT COUNT(*) AS n FROM attempts').get()!.n)).toBe(
+    beforeFailure + 1
+  );
+  expect(JSON.stringify(failed)).not.toContain('Private failed draft.');
+
+  const cancelled = new AbortController();
+  vi.stubGlobal('fetch', async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+    cancelled.abort();
+    throw init?.signal?.reason;
+  });
+  expect(
+    await autoTranslationNeedsConfirmation(
+      translationModel,
+      'Private cancelled translation.',
+      () => 'synthetic-jev-test-key',
+      cancelled.signal,
+      undefined,
+      { store: app.store, chatId: chat.id }
+    )
+  ).toBe(true);
+  const interrupted = app.store.db
+    .prepare('SELECT * FROM attempts ORDER BY rowid DESC LIMIT 1')
+    .get()!;
+  expect(interrupted).toMatchObject({
+    status: 'cancelled',
+    error: 'JEV_CANCELLED',
+    role: 'translation',
+  });
+  expect(JSON.stringify(interrupted)).not.toContain('Private cancelled translation.');
 });

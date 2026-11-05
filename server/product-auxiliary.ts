@@ -41,7 +41,7 @@ import {
   type WireRecord,
   transportConnection,
 } from '../core/transport.js';
-import type { ImageTarget, RunSnapshot, ToolEvent } from '../core/types.js';
+import type { ImageTarget, RunSnapshot, ToolEvent, ToolEventTiming } from '../core/types.js';
 import { createEvaluationToolSession } from './evaluation-session.js';
 import { EVALUATION_TOOL_ROUND_LIMIT } from '../core/evaluation-tool-config.js';
 import {
@@ -61,6 +61,7 @@ import type { AuxiliaryFailureDiagnostic } from '../core/auxiliary-diagnostic.js
 import { MAIN_READ_TOOLS } from '../core/read-tools.js';
 import { judgeTranslationRefusal } from './translation-judgment.js';
 import { JevError, type JevHooks } from './jev-judgment.js';
+import { uncertainAttemptResult } from './usage-accounting.js';
 
 type MaybePromise<T> = T | Promise<T>;
 type JobKind = Exclude<TaskRole, 'main'>;
@@ -136,7 +137,17 @@ export type AuxiliaryJobHooks = {
   onAttemptStart: (wire: WireRecord) => MaybePromise<string>;
   onAttemptFinish: (id: string, result: ProviderResult) => MaybePromise<void>;
   onInput?: (jobId: string, input: AuxiliaryInput) => MaybePromise<void>;
-  onToolEvent?: (jobId: string, event: ToolEvent) => MaybePromise<void>;
+  onToolStart?: (
+    jobId: string,
+    event: Pick<ToolEvent, 'callId' | 'name' | 'args'>,
+    generation: number
+  ) => MaybePromise<void>;
+  onToolEvent?: (
+    jobId: string,
+    event: ToolEvent,
+    timing: ToolEventTiming | undefined,
+    generation: number
+  ) => MaybePromise<void>;
   onProgress?: () => MaybePromise<void>;
   timeoutMs?: number;
   vertexRequestTier?: 'standard' | 'flex';
@@ -435,32 +446,44 @@ export async function runAuxiliaryJob(
     let attemptId: string | undefined;
     const remainingTimeout = diagnostics?.remainingMs();
     if (remainingTimeout === 0) throw new AuxiliaryExecutionError('AUXILIARY_PROVIDER_TIMEOUT');
-    const result = await executeProvider(transportConnection(authorized), body, {
-      signal: hooks.signal,
-      resolveCredential: hooks.resolveCredential,
-      executeCodex: hooks.executeCodex,
-      vertexRequestTier: hooks.vertexRequestTier,
-      timeoutMs:
-        remainingTimeout ??
-        hooks.timeoutMs ??
-        target.timeoutMs ??
-        (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
-      onWire: async (wire) => {
-        attemptId = await hooks.onAttemptStart(
-          job.kind === 'translation'
-            ? {
-                ...wire,
-                requestLore: requestLore(executionSnapshot, body, wire, {
-                  pinned: input.context.packages?.pinned ?? [],
-                  catalog: input.catalog,
-                  sourceOnly: mode === 'source-only',
-                }),
-              }
-            : wire
-        );
-        lastAttemptId = attemptId;
-      },
-    });
+    let result: ProviderResult;
+    try {
+      result = await executeProvider(transportConnection(authorized), body, {
+        signal: hooks.signal,
+        resolveCredential: hooks.resolveCredential,
+        executeCodex: hooks.executeCodex,
+        vertexRequestTier: hooks.vertexRequestTier,
+        timeoutMs:
+          remainingTimeout ??
+          hooks.timeoutMs ??
+          target.timeoutMs ??
+          (isGeminiProtocol(target.connection.protocol) ? 300_000 : undefined),
+        onWire: async (wire) => {
+          attemptId = await hooks.onAttemptStart(
+            job.kind === 'translation'
+              ? {
+                  ...wire,
+                  requestLore: requestLore(executionSnapshot, body, wire, {
+                    pinned: input.context.packages?.pinned ?? [],
+                    catalog: input.catalog,
+                    sourceOnly: mode === 'source-only',
+                  }),
+                }
+              : wire
+          );
+          lastAttemptId = attemptId;
+        },
+      });
+    } catch (error) {
+      if (attemptId !== undefined) {
+        try {
+          await hooks.onAttemptFinish(attemptId, uncertainAttemptResult(hooks.signal.aborted));
+        } catch {
+          // Preserve the original execution failure if diagnostic settlement also fails.
+        }
+      }
+      throw error;
+    }
     // Keep diagnostic output and usage even when a refusal or malformed body cannot become an artifact.
     if (attemptId !== undefined)
       await hooks.onAttemptFinish(
@@ -602,6 +625,7 @@ export async function runAuxiliaryJob(
         },
       },
       onInput: (value) => hooks.onInput?.(jobId, value),
+      onToolStart: (value) => hooks.onToolStart?.(jobId, value, generation),
       prepareToolEvent: (event, next, remainingActions) => {
         if (
           !target ||
@@ -648,7 +672,7 @@ export async function runAuxiliaryJob(
           return event;
         return tooLarge(event);
       },
-      onToolEvent: (value) => hooks.onToolEvent?.(jobId, value),
+      onToolEvent: (value, timing) => hooks.onToolEvent?.(jobId, value, timing, generation),
     });
   };
   try {

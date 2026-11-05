@@ -1,9 +1,27 @@
 export const messages = {
   'helperResults.inputSummary': {
-    ko: '입력 {count}',
-    en: 'Input {count}',
-    ja: '入力 {count}',
-    zh: '输入 {count}',
+    ko: '마지막 입력 {count}',
+    en: 'Last input {count}',
+    ja: '直近の入力 {count}',
+    zh: '最近输入 {count}',
+  },
+  'helperResults.inputEstimateSummary': {
+    ko: '입력 추정 {count}',
+    en: 'Estimated input {count}',
+    ja: '推定入力 {count}',
+    zh: '估算输入 {count}',
+  },
+  'helperResults.latestInput': {
+    ko: '마지막 요청 입력',
+    en: 'Last request input',
+    ja: '直近のリクエスト入力',
+    zh: '最近一次请求输入',
+  },
+  'helperResults.cumulativeExplanation': {
+    ko: '누적 입력은 각 요청에 다시 보낸 문맥과 캐시 입력을 포함해요.',
+    en: 'Cumulative input includes context sent again on each request and cached input.',
+    ja: '累積入力には、各リクエストで再送した文脈とキャッシュ入力が含まれます。',
+    zh: '累计输入包含每次请求重复发送的上下文和缓存输入。',
   },
   'helperResults.outputSummary': {
     ko: '출력 {count} 토큰',
