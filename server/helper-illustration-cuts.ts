@@ -3,12 +3,16 @@ import { cutsFor } from '../core/illustration-cuts.js';
 import type { Json, ProviderTool } from '../core/transport.js';
 import { prepareHelperImage } from './helper-image-tools.js';
 import { helperSceneSource } from './helper-scene-tools.js';
-import { illustrationPresentation } from './illustration-presentation.js';
+import {
+  illustrationPresentation,
+  saveIllustrationPresentation,
+} from './illustration-presentation.js';
 import {
   illustrationJob,
   illustrationsForSources,
   projectIllustration,
   regenerateIllustration,
+  removeIllustration,
 } from './illustrations.js';
 import { fields, HttpError, number, text } from './request-validation.js';
 import type { Store } from './store.js';
@@ -29,11 +33,12 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.scene.read',
     description:
-      'Read original scene paragraphs with their exact anchors and current sourceHash. Use them to select an illustration moment or move a cut. Pages preserve manuscript order. maxBlockChars optionally shortens each excerpt; start and end are full UTF-16 offsets.',
+      'Read original scene paragraphs with their exact anchors and current sourceHash. Use them to select an illustration moment or move a cut. Pages preserve manuscript order. Supply anchor to center a page on one exact paragraph without guessing its index. maxBlockChars optionally shortens excerpts; start and end are full UTF-16 offsets.',
     inputSchema: schema(
       {
         sourceId: id,
         expectedSourceHash: hash,
+        anchor: id,
         ...paging,
         maxBlockChars: { type: 'integer', minimum: 1 },
       },
@@ -70,6 +75,38 @@ export const HELPER_ILLUSTRATION_CUT_TOOLS: ProviderTool[] = [
       ['imageId', 'expectedSourceHash', 'expectedPresentationRevision']
     ),
   },
+  {
+    name: 'illustration.cut.revise',
+    description:
+      'Replace the anchors, focus or visual brief of an image-less failed cut and queue a new render. Use targetId, latestJobId, currentSourceHash and presentationRevision from cuts.list. The old failure remains in history. This does not bypass prompt preparation or content checks.',
+    inputSchema: schema(
+      {
+        targetId: id,
+        expectedLatestJobId: id,
+        expectedSourceHash: hash,
+        expectedPresentationRevision: { type: 'integer', minimum: 0 },
+        startAnchor: id,
+        endAnchor: id,
+        focus: { type: 'string', minLength: 1, maxLength: 8000 },
+        visualBrief: { type: 'string', minLength: 1, maxLength: 8000 },
+        changeRequest: { type: 'string', maxLength: 8000 },
+      },
+      ['targetId', 'expectedLatestJobId', 'expectedSourceHash', 'expectedPresentationRevision']
+    ),
+  },
+  {
+    name: 'illustration.cut.delete',
+    description:
+      'Permanently delete the specified cut and its associated render history/images after an explicit user request. Use latestJobId, source hash and presentation revision from cuts.list; never delete queued or running work. This cannot be undone.',
+    inputSchema: schema(
+      {
+        expectedLatestJobId: id,
+        expectedSourceHash: hash,
+        expectedPresentationRevision: { type: 'integer', minimum: 0 },
+      },
+      ['expectedLatestJobId', 'expectedSourceHash', 'expectedPresentationRevision']
+    ),
+  },
 ];
 
 type Args = Record<string, unknown>;
@@ -80,19 +117,30 @@ function page(args: Args) {
   };
 }
 export function readIllustrationScene(store: Store, chatId: string, args: Args) {
-  fields(args, ['sourceId', 'expectedSourceHash', 'offset', 'limit', 'maxBlockChars']);
+  fields(args, ['sourceId', 'expectedSourceHash', 'anchor', 'offset', 'limit', 'maxBlockChars']);
   const source = helperSceneSource(store, chatId, text(args.sourceId, 'source ID', 100));
   if (args.expectedSourceHash !== undefined && args.expectedSourceHash !== source.hash)
     throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
-  const { offset, limit } = page(args);
+  const { offset: requestedOffset, limit } = page(args);
   const maxChars =
     args.maxBlockChars === undefined ? undefined : number(args.maxBlockChars, 'block characters');
   const all = splitSource(source);
+  const anchorIndex =
+    args.anchor === undefined
+      ? -1
+      : all.findIndex((block) => block.anchor === text(args.anchor, 'anchor', 100));
+  if (args.anchor !== undefined && anchorIndex < 0)
+    throw new HttpError(404, 'ILLUSTRATION_ANCHOR_NOT_FOUND');
+  if (args.anchor !== undefined && args.offset !== undefined)
+    throw new HttpError(400, 'Specify anchor or offset, not both');
+  const offset =
+    anchorIndex < 0 ? requestedOffset : Math.max(0, anchorIndex - Math.floor(limit / 2));
   return {
     chatId,
     sourceId: source.id,
     sourceHash: source.hash,
     editRevision: source.editRevision ?? 0,
+    offset,
     blocks: all.slice(offset, offset + limit).map((block) =>
       maxChars && block.text.length > maxChars
         ? {
@@ -302,6 +350,133 @@ export function redrawIllustrationCut(store: Store, chatId: string, args: Args, 
       targetId: job.target.id,
       focus: job.target.focus,
       status: next.status,
+    };
+  });
+}
+
+/** The presentation's latest-job identity is the CAS owner even when no image exists. */
+function currentCut(store: Store, chatId: string, args: Args, permitStale = false) {
+  const job = illustrationJob(store, text(args.expectedLatestJobId, 'latest job ID', 100));
+  if (job.chatId !== chatId || (job.input.task ?? 'render') !== 'render' || !job.input.target)
+    throw new HttpError(404, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+  const source = helperSceneSource(store, chatId, job.sourceRevision);
+  if (
+    source.hash !== text(args.expectedSourceHash, 'source hash', 64) ||
+    (!permitStale && source.hash !== job.sourceHash)
+  )
+    throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+  const presentation = illustrationPresentation(store, source.id);
+  if (!permitStale && presentation?.sourceHash !== source.hash)
+    throw new HttpError(409, 'ILLUSTRATION_SOURCE_CHANGED');
+  if (
+    !presentation ||
+    presentation.revision !== number(args.expectedPresentationRevision, 'presentation revision', 0)
+  )
+    throw new HttpError(409, 'ILLUSTRATION_PRESENTATION_CHANGED');
+  const entry =
+    presentation.targets[job.input.target.id] ??
+    (permitStale ? presentation.detached?.[job.input.target.id] : undefined);
+  if (!entry || entry.latestRequestedJobId !== job.id)
+    throw new HttpError(409, 'ILLUSTRATION_CUT_CHANGED');
+  return { job, source, presentation, entry };
+}
+
+export function reviseFailedIllustrationCut(
+  store: Store,
+  chatId: string,
+  args: Args,
+  testMode = false
+) {
+  fields(args, [
+    'targetId',
+    'expectedLatestJobId',
+    'expectedSourceHash',
+    'expectedPresentationRevision',
+    'startAnchor',
+    'endAnchor',
+    'focus',
+    'visualBrief',
+    'changeRequest',
+  ]);
+  return store.transaction(() => {
+    const { job, source, presentation, entry } = currentCut(store, chatId, args);
+    if (text(args.targetId, 'target ID', 100) !== job.input.target!.id)
+      throw new HttpError(409, 'ILLUSTRATION_CUT_CHANGED');
+    if (!['failed', 'cancelled', 'interrupted'].includes(job.status) || entry.displayedJobId)
+      throw new HttpError(409, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+    const before = entry.placedTarget ?? job.input.target!;
+    const startAnchor =
+      args.startAnchor === undefined
+        ? before.startAnchor
+        : text(args.startAnchor, 'start anchor', 100);
+    const endAnchor =
+      args.endAnchor === undefined ? before.endAnchor : text(args.endAnchor, 'end anchor', 100);
+    const blocks = splitSource(source);
+    const index = new Map(blocks.map(({ anchor, index }) => [anchor, index]));
+    if (
+      index.get(startAnchor) === undefined ||
+      index.get(endAnchor) === undefined ||
+      index.get(startAnchor)! > index.get(endAnchor)!
+    )
+      throw new HttpError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+    if (
+      Object.keys(presentation.targets).some(
+        (other) =>
+          other !== before.id &&
+          (presentation.targets[other].placedTarget?.endAnchor ??
+            illustrationJob(store, presentation.targets[other].latestRequestedJobId).input.target
+              ?.endAnchor) === endAnchor
+      )
+    )
+      throw new HttpError(409, 'ILLUSTRATION_TARGET_CONFLICT');
+    const focus = args.focus === undefined ? before.focus : text(args.focus, 'focus', 8000);
+    const visualBrief =
+      args.visualBrief === undefined
+        ? args.focus === undefined
+          ? before.visualBrief
+          : focus
+        : text(args.visualBrief, 'visual brief', 8000);
+    entry.placedTarget = { ...before, startAnchor, endAnchor, focus, visualBrief };
+    if (
+      presentation.translation &&
+      (startAnchor !== before.startAnchor ||
+        endAnchor !== before.endAnchor ||
+        focus !== before.focus)
+    )
+      delete presentation.translation.afterByTarget[before.id];
+    saveIllustrationPresentation(store, source.id, presentation);
+    const newJob = regenerateIllustration(
+      store,
+      job.id,
+      testMode,
+      args.changeRequest === undefined
+        ? undefined
+        : text(args.changeRequest, 'change request', 8000, true)
+    );
+    return {
+      chatId,
+      sourceId: source.id,
+      editRevision: source.editRevision ?? 0,
+      targetId: before.id,
+      jobId: newJob.id,
+      status: newJob.status,
+      focus,
+    };
+  });
+}
+
+export function deleteIllustrationCut(store: Store, chatId: string, args: Args) {
+  fields(args, ['expectedLatestJobId', 'expectedSourceHash', 'expectedPresentationRevision']);
+  return store.transaction(() => {
+    const { job, source } = currentCut(store, chatId, args, true);
+    const targetId = job.input.target!.id;
+    removeIllustration(store, job.id);
+    return {
+      deleted: true,
+      chatId,
+      sourceId: source.id,
+      editRevision: source.editRevision ?? 0,
+      targetId,
     };
   });
 }

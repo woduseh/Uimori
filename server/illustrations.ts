@@ -739,6 +739,75 @@ export function reserveIllustrationPlan(
     return insertIllustrationJob(store, source, origin, input);
   });
 }
+/** Exact manual moments need no full-scene storyboard model pass. Render jobs still
+ * prepare their prompts and pass the normal image-content check. */
+export function reserveSelectedIllustrations(
+  store: Store,
+  source: Source,
+  selectedMoments: SelectedIllustrationMoment[],
+  options: ReserveOptions = {}
+): IllustrationJobRow[] {
+  return store.transaction(() => {
+    if (!selectedMoments.length)
+      throw new HttpError(400, 'Select at least one illustration moment.');
+    const settings = options.settings ?? illustrationSettings(store);
+    const presentation = illustrationPresentation(store, source.id);
+    const current =
+      presentation?.sourceHash === source.hash
+        ? presentation
+        : newIllustrationPresentation(source.hash, presentation);
+    if (
+      store.db
+        .prepare(
+          "SELECT 1 FROM illustration_jobs WHERE source_revision=? AND source_hash=? AND status IN ('queued','running') AND json_extract(input,'$.task')='plan'"
+        )
+        .get(source.id, source.hash)
+    )
+      throw new HttpError(409, 'ILLUSTRATION_PLAN_ACTIVE');
+    if (selectedMoments.length > settings.maxPerSource - illustrationSlots(store, source.id).total)
+      throw new HttpError(409, 'ILLUSTRATION_LIMIT_REACHED');
+    const blocks = splitSource(source);
+    const indexes = new Map(blocks.map((block) => [block.anchor, block.index]));
+    const used = new Set(illustrationTargets(store, source).map((target) => target.endAnchor));
+    for (const moment of selectedMoments) {
+      const start = indexes.get(moment.startAnchor),
+        end = indexes.get(moment.endAnchor);
+      if (start === undefined || end === undefined || start > end)
+        throw new HttpError(400, 'ILLUSTRATION_TARGET_UNAVAILABLE');
+      if (used.has(moment.endAnchor)) throw new HttpError(409, 'ILLUSTRATION_TARGET_CONFLICT');
+      used.add(moment.endAnchor);
+    }
+    const recipe = frozenInput(store, source, settings, options);
+    const queuedAt = now();
+    const sorted = [...selectedMoments].sort(
+      (a, b) => indexes.get(a.endAnchor)! - indexes.get(b.endAnchor)!
+    );
+    const jobs = sorted.map((moment, index) => {
+      const target: IllustrationTarget = {
+        id: randomUUID(),
+        order: index,
+        startAnchor: moment.startAnchor,
+        endAnchor: moment.endAnchor,
+        focus: moment.focus,
+        visualBrief: moment.direction?.trim() || moment.focus,
+      };
+      const job = insertIllustrationJob(
+        store,
+        source,
+        'manual',
+        { ...recipe, task: 'render', target },
+        queuedAt
+      );
+      current.targets[target.id] = { latestRequestedJobId: job.id, displayedJobId: null };
+      if (!current.heroTargetId) current.heroTargetId = target.id;
+      return job;
+    });
+    saveIllustrationPresentation(store, source.id, current);
+    scheduleIllustrationPlacement(store, source.id);
+    return jobs;
+  });
+}
+
 function insertIllustrationJob(
   store: Store,
   source: Source,

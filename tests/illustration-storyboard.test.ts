@@ -32,7 +32,13 @@ import {
 } from '../server/illustration-presentation.js';
 import { captureChatCopy, restoreChatCopy } from '../server/chat-copy.js';
 import { placeIllustrationCuts } from '../server/helper-illustration-placement.js';
-import { inspectIllustrationCut } from '../server/helper-illustration-cuts.js';
+import {
+  inspectIllustrationCut,
+  readIllustrationScene,
+  listIllustrationCuts,
+  reviseFailedIllustrationCut,
+  deleteIllustrationCut,
+} from '../server/helper-illustration-cuts.js';
 import { generateHelperIllustrations } from '../server/helper-illustration-generation.js';
 import {
   fixtureSettings,
@@ -170,23 +176,25 @@ test('a chapter request reserves all exact moments atomically and renders them f
   expect(queuedIllustrations(store)).toEqual([]);
   const reserved = generate(moments);
   expect(reserved.plans.map((plan) => plan.count)).toEqual([2, 2]);
+  expect(reserved.plans.flatMap((plan) => plan.jobIds)).toHaveLength(4);
+  expect(queuedIllustrations(store)).toHaveLength(4);
+  expect(
+    illustrationsForSources(store, [source.id, next.id]).every((job) => job.task === 'render')
+  ).toBe(true);
   for (const plan of reserved.plans) {
-    const blocks = splitSource(store.source(plan.sourceId));
-    const fixed = illustrationJob(store, plan.jobId).input.plan!.selectedMoments!;
-    expect(fixed.map((item) => item.startAnchor)).toEqual(blocks.map((item) => item.anchor));
-    expect((await runIllustrationJob(store, plan.jobId, 'worker', hooks(store)))?.status).toBe(
-      'completed'
+    const selected = moments.filter((moment) => moment.sourceId === plan.sourceId);
+    const jobs = plan.jobIds.map((id) => illustrationJob(store, id));
+    expect(jobs).toHaveLength(2);
+    expect(jobs.map((job) => job.input.target!.endAnchor)).toEqual(
+      selected.map((item) => item.endAnchor).reverse()
     );
-    const cuts = queuedIllustrations(store)
-      .map((id) => illustrationJob(store, id))
-      .filter((job) => job.input.target?.planId === plan.jobId);
-    expect(cuts).toHaveLength(2);
-    for (const cut of cuts) {
-      const selected = fixed.find((x) => x.startAnchor === cut.input.target!.startAnchor)!;
+    for (const cut of jobs) {
+      const fixed = selected.find((item) => item.endAnchor === cut.input.target!.endAnchor)!;
+      expect(cut.input).not.toHaveProperty('plan');
       expect(cut.input.target).toMatchObject({
-        endAnchor: selected.endAnchor,
-        focus: selected.focus,
-        visualBrief: selected.direction,
+        startAnchor: fixed.startAnchor,
+        focus: fixed.focus,
+        visualBrief: fixed.direction,
       });
       expect((await runIllustrationJob(store, cut.id, 'worker', hooks(store)))?.status).toBe(
         'completed'
@@ -194,6 +202,143 @@ test('a chapter request reserves all exact moments atomically and renders them f
     }
   }
   expect(() => generate([moments[0]])).toThrow('ILLUSTRATION_TARGET_CONFLICT');
+});
+
+test('failed image-less cuts can be revised with guards, then removed without touching siblings', async () => {
+  const store = databases.create();
+  const { chat, source } = chatWithSource(store);
+  settings(store);
+  const blocks = splitSource(source);
+  const first = generateHelperIllustrations(
+    store,
+    chat.id,
+    {
+      moments: [
+        {
+          sourceId: source.id,
+          expectedSourceHash: source.hash,
+          startAnchor: blocks[0].anchor,
+          endAnchor: blocks[0].anchor,
+          focus: 'The lantern',
+        },
+      ],
+    },
+    { testMode: true }
+  );
+  const failedId = first.plans[0].jobId;
+  cancelIllustration(store, failedId);
+  const listing = listIllustrationCuts(store, chat.id, { sourceId: source.id });
+  const cut = listing.cuts[0];
+  expect(cut).toMatchObject({
+    latestJobId: failedId,
+    status: 'cancelled',
+    displayedJobId: null,
+    images: [],
+  });
+  const guards = {
+    targetId: cut.targetId,
+    expectedLatestJobId: failedId,
+    expectedSourceHash: source.hash,
+    expectedPresentationRevision: cut.presentationRevision,
+  };
+  expect(() =>
+    reviseFailedIllustrationCut(store, chat.id, { ...guards, endAnchor: 'not-an-anchor' }, true)
+  ).toThrow('ILLUSTRATION_TARGET_UNAVAILABLE');
+  expect(illustrationPresentation(store, source.id)!.revision).toBe(cut.presentationRevision);
+  const next = reviseFailedIllustrationCut(
+    store,
+    chat.id,
+    {
+      ...guards,
+      startAnchor: blocks[1].anchor,
+      endAnchor: blocks[1].anchor,
+      focus: 'Mira waits on the pier',
+      visualBrief: 'A calm portrait at the pier',
+    },
+    true
+  );
+  const replacement = illustrationJob(store, next.jobId);
+  expect(replacement.input.target).toMatchObject({
+    id: cut.targetId,
+    startAnchor: blocks[1].anchor,
+    endAnchor: blocks[1].anchor,
+    focus: 'Mira waits on the pier',
+    visualBrief: 'A calm portrait at the pier',
+  });
+  expect(illustrationJob(store, failedId).status).toBe('cancelled');
+  expect(() => reviseFailedIllustrationCut(store, chat.id, guards, true)).toThrow(
+    'ILLUSTRATION_PRESENTATION_CHANGED'
+  );
+  const current = listIllustrationCuts(store, chat.id, { sourceId: source.id }).cuts[0];
+  const deletion = {
+    expectedLatestJobId: next.jobId,
+    expectedSourceHash: source.hash,
+    expectedPresentationRevision: current.presentationRevision,
+  };
+  expect(() => deleteIllustrationCut(store, chat.id, deletion)).toThrow('ILLUSTRATION_ACTIVE');
+  cancelIllustration(store, next.jobId);
+  expect(deleteIllustrationCut(store, chat.id, deletion)).toMatchObject({
+    deleted: true,
+    targetId: cut.targetId,
+  });
+  expect(listIllustrationCuts(store, chat.id, { sourceId: source.id }).cuts).toEqual([]);
+  expect(illustrationSlots(store, source.id).total).toBe(0);
+});
+
+test('obsolete failed cuts remain removable after their manuscript was edited', () => {
+  const store = databases.create();
+  const { chat, source } = chatWithSource(store);
+  settings(store);
+  const anchor = splitSource(source)[0].anchor;
+  const result = generateHelperIllustrations(
+    store,
+    chat.id,
+    {
+      moments: [
+        {
+          sourceId: source.id,
+          expectedSourceHash: source.hash,
+          startAnchor: anchor,
+          endAnchor: anchor,
+          focus: 'The lantern',
+        },
+      ],
+    },
+    { testMode: true }
+  );
+  const jobId = result.plans[0].jobId;
+  cancelIllustration(store, jobId);
+  const changed = store.editSource(source.id, {
+    text: 'The same evening, seen from the opposite pier.',
+    expectedRevision: 0,
+  });
+  const cut = listIllustrationCuts(store, chat.id, { sourceId: changed.id }).cuts[0];
+  expect(cut.stale).toBe(true);
+  expect(
+    deleteIllustrationCut(store, chat.id, {
+      expectedLatestJobId: jobId,
+      expectedSourceHash: changed.hash,
+      expectedPresentationRevision: cut.presentationRevision,
+    })
+  ).toMatchObject({ deleted: true });
+  expect(listIllustrationCuts(store, chat.id, { sourceId: changed.id }).cuts).toEqual([]);
+});
+
+test('illustration scene reads can center on an exact anchor without guessing its offset', () => {
+  const store = databases.create();
+  const { chat, source } = chatWithSource(store);
+  const blocks = splitSource(source);
+  const page = readIllustrationScene(store, chat.id, {
+    sourceId: source.id,
+    expectedSourceHash: source.hash,
+    anchor: blocks[1].anchor,
+    limit: 1,
+  });
+  expect(page.blocks.map((block) => block.anchor)).toEqual([blocks[1].anchor]);
+  expect(page.offset).toBe(1);
+  expect(() =>
+    readIllustrationScene(store, chat.id, { sourceId: source.id, anchor: 'invalid' })
+  ).toThrow('ILLUSTRATION_ANCHOR_NOT_FOUND');
 });
 
 test('regeneration keeps the old picture, failed siblings are independent and copy restores groups and verified anchors', async () => {

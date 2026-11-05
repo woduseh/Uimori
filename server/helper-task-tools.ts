@@ -1,5 +1,6 @@
 import { helperCallOperationId } from './helper-workspace.js';
 import type { Json, ProviderTool } from '../core/transport.js';
+import type { IllustrationDiagnostic, IllustrationJobInput } from '../core/illustration.js';
 import type { HelperTask } from '../core/helper.js';
 import { HttpError, choice, fields, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
@@ -17,11 +18,12 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.list',
     description:
-      'Find recent task IDs, including queued work with no provider attempt yet. Defaults to active work in the current chat; a library helper without a chat sees all work. Returns only kind, ID, chat ID, status, auxiliary kind and update time.',
+      'Find recent task IDs, including queued work with no provider attempt yet. Filter by kind, status or chatId. Defaults to active work in the current chat; a library helper without a chat sees all work. Returns only kind, ID, chat ID, status, auxiliary kind and update time.',
     inputSchema: {
       type: 'object',
       properties: {
         chatId: id,
+        kind,
         status: { type: 'string', enum: ['active', 'failed', 'all'] },
         limit: { type: 'integer', minimum: 1, maximum: 20 },
       },
@@ -31,10 +33,15 @@ export const HELPER_TASK_TOOLS: ProviderTool[] = [
   {
     name: 'task.inspect',
     description:
-      'Inspect one known run, auxiliary job, illustration job or helper task by exact ID. Returns compact status, error, usage and available actions without manuscript or execution snapshots. For helpers, committedEffects lists durable receipt-backed effects (20 per page); pass nextOffset as effectsOffset. It confirms the recorded commit, not current resource state or task success. Missing tool/callId is unknown, and no receipt is not proof that an uncertain action had no effect. Inspection never retries a write.',
+      'Inspect one known run, auxiliary job, illustration job or helper task by exact ID. Returns compact status, error, usage and available actions without manuscript or execution snapshots. Illustration inspection also reports the failed stage, target and available prompt status; includePrompt:true explicitly includes any stored prepared prompt (refusals may have none). For helpers, committedEffects lists durable receipt-backed effects (20 per page); pass nextOffset as effectsOffset. It confirms the recorded commit, not current resource state or task success. Missing tool/callId is unknown, and no receipt is not proof that an uncertain action had no effect. Inspection never retries a write.',
     inputSchema: {
       type: 'object',
-      properties: { kind, id, effectsOffset: { type: 'integer', minimum: 0 } },
+      properties: {
+        kind,
+        id,
+        effectsOffset: { type: 'integer', minimum: 0 },
+        includePrompt: { type: 'boolean' },
+      },
       required: ['kind', 'id'],
       additionalProperties: false,
     },
@@ -78,6 +85,16 @@ type TaskView = {
     costUsd: number | null;
   } | null;
   committedEffects?: ReturnType<typeof inspectCommittedEffects>;
+  illustration?: {
+    task: string;
+    sourceId: string;
+    targetId: string | null;
+    stage: string | null;
+    hasPreparedPrompt: boolean;
+    contentCheckStatus: string | null;
+    unavailableReason: string | null;
+    preparedPrompt?: { prompt: string; caption: string; negativePrompt: string } | null;
+  };
   diagnostics?: {
     attemptsByPurpose: {
       purpose: string;
@@ -211,11 +228,15 @@ function helperDiagnostics(store: Store, id: string): NonNullable<TaskView['diag
 }
 
 function listTasks(store: Store, current: HelperTask, args: Record<string, unknown>) {
-  fields(record(args), ['chatId', 'status', 'limit']);
+  fields(record(args), ['chatId', 'kind', 'status', 'limit']);
   const status =
     args.status === undefined
       ? 'active'
       : choice(args.status, ['active', 'failed', 'all'], 'task status');
+  const selectedKind =
+    args.kind === undefined
+      ? null
+      : choice(args.kind, ['run', 'job', 'illustration', 'helper'], 'task kind');
   const limit = args.limit === undefined ? 10 : number(args.limit, 'task limit', 1, 20);
   const chatId =
     args.chatId === undefined
@@ -233,12 +254,18 @@ function listTasks(store: Store, current: HelperTask, args: Record<string, unkno
       UNION ALL SELECT 'helper',t.id,c.chat_id,t.status,NULL,t.updated_at
         FROM helper_tasks t JOIN helper_conversations c ON c.id=t.conversation_id
     ) WHERE (? IS NULL OR chatId=?)
+      AND (? IS NULL OR kind=?)
       AND (?='all' OR (?='active' AND status IN ('queued','running'))
         OR (?='failed' AND status IN ('failed','interrupted','partial','cancelled','refused','stale')))
     ORDER BY updatedAt DESC,id DESC LIMIT ?`
     )
-    .all(chatId, chatId, status, status, status, limit) as Row[];
-  return { status, ...(chatId ? { chatId } : {}), tasks };
+    .all(chatId, chatId, selectedKind, selectedKind, status, status, status, limit) as Row[];
+  return {
+    status,
+    ...(selectedKind ? { kind: selectedKind } : {}),
+    ...(chatId ? { chatId } : {}),
+    tasks,
+  };
 }
 
 type CommittedEffect = {
@@ -310,7 +337,8 @@ function inspect(
   currentTaskId: string,
   target: Kind,
   id: string,
-  effectsOffset = 0
+  effectsOffset = 0,
+  includePrompt = false
 ): TaskView {
   if (target === 'helper') {
     const task = row(
@@ -401,17 +429,32 @@ function inspect(
   }
   const illustration = row(
     store,
-    'SELECT id,chat_id,status,error,created_at,updated_at FROM illustration_jobs WHERE id=?',
+    'SELECT id,chat_id,source_revision,status,error,input,diagnostic,created_at,updated_at FROM illustration_jobs WHERE id=?',
     id
   );
   const active = ['queued', 'running'].includes(illustration.status);
   const eligible = ['failed', 'cancelled', 'interrupted'].includes(illustration.status);
+  const input = JSON.parse(String(illustration.input)) as IllustrationJobInput;
+  const diagnostic = illustration.diagnostic
+    ? (JSON.parse(String(illustration.diagnostic)) as IllustrationDiagnostic)
+    : null;
+  const preparedPrompt = diagnostic?.prompt ?? input.target?.prompt ?? null;
   return {
     kind: target,
     id,
     chatId: illustration.chat_id,
     status: illustration.status,
     error: illustration.error,
+    illustration: {
+      task: input.task ?? 'render',
+      sourceId: illustration.source_revision,
+      targetId: input.target?.id ?? null,
+      stage: diagnostic?.stage ?? null,
+      hasPreparedPrompt: !!preparedPrompt,
+      contentCheckStatus: diagnostic?.contentCheck?.status ?? null,
+      unavailableReason: diagnostic?.codex?.unavailableReason ?? null,
+      ...(includePrompt ? { preparedPrompt } : {}),
+    },
     usage: projectedUsage(
       store.db
         .prepare(
@@ -436,12 +479,28 @@ export function invokeTaskTool(
   actions: TaskControlActions
 ) {
   if (name === 'task.list') return listTasks(store, current, args);
-  fields(record(args), name === 'task.inspect' ? ['kind', 'id', 'effectsOffset'] : ['kind', 'id']);
+  fields(
+    record(args),
+    name === 'task.inspect' ? ['kind', 'id', 'effectsOffset', 'includePrompt'] : ['kind', 'id']
+  );
   const target = choice(args.kind, ['run', 'job', 'illustration', 'helper'], 'task kind');
   const targetId = text(args.id, 'task ID', 100);
   const effectsOffset =
     name === 'task.inspect' ? number(args.effectsOffset ?? 0, 'effects offset', 0) : 0;
-  const before = inspect(store, current.id, target, targetId, effectsOffset);
+  if (
+    name === 'task.inspect' &&
+    args.includePrompt !== undefined &&
+    typeof args.includePrompt !== 'boolean'
+  )
+    throw new HttpError(400, 'Invalid includePrompt');
+  const before = inspect(
+    store,
+    current.id,
+    target,
+    targetId,
+    effectsOffset,
+    args.includePrompt === true
+  );
   if (name === 'task.inspect') return before;
   if (target === 'helper' && targetId === current.id)
     throw new HttpError(409, 'CURRENT_HELPER_TASK');

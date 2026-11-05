@@ -12,6 +12,8 @@ import {
 } from './helper-illustration-generation.js';
 import {
   redrawIllustrationCut,
+  reviseFailedIllustrationCut,
+  deleteIllustrationCut,
   HELPER_ILLUSTRATION_CUT_TOOLS,
 } from './helper-illustration-cuts.js';
 import {
@@ -81,13 +83,23 @@ export function applyHelperIllustration(
         const result = generateHelperIllustrations(store, chatId, args, { testMode });
         return finish(
           result,
-          result.plans.length,
+          result.count,
           result.plans.map((p) => scene(p.sourceId, p.focus, p.revision))
         );
       }
       case 'illustration.cut.redraw': {
         const result = redrawIllustrationCut(store, chatId, args, testMode);
         return finish(result, 1, [scene(result.sourceId, result.focus, result.editRevision)]);
+      }
+      case 'illustration.cut.revise': {
+        const result = reviseFailedIllustrationCut(store, chatId, args, testMode);
+        return finish(result, 1, [scene(result.sourceId, result.focus, result.editRevision)]);
+      }
+      case 'illustration.cut.delete': {
+        const result = deleteIllustrationCut(store, chatId, args);
+        return finish(result, 1, [
+          scene(result.sourceId, 'Removed illustration cut', result.editRevision),
+        ]);
       }
       case 'illustration.cuts.place': {
         const result = placeIllustrationCuts(store, chatId, args);
@@ -132,6 +144,11 @@ export function applyHelperIllustration(
     }
   });
   if (changed)
-    publish?.(chatId, name === 'illustration.generate' || name === 'illustration.cut.redraw');
+    publish?.(
+      chatId,
+      name === 'illustration.generate' ||
+        name === 'illustration.cut.redraw' ||
+        name === 'illustration.cut.revise'
+    );
   return saved;
 }
