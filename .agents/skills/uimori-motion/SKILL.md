@@ -17,44 +17,46 @@ Paths below are relative to the repository root. Timing and easing values live i
 | Mobile action sheet | Same menu owners | Open without travel or scale. Keep the existing `SHEET_MEDIA` breakpoint and scrim. |
 | On/off switch | `web/BooleanControls.tsx`, `web/boolean-controls.css` | Animate the existing thumb and colors, without bounce or a mount-time entrance. |
 
-Read `docs/DEVELOPMENT.md` for verification. Read `docs/THEME-AUTHORING.md` only if the change touches the theme boundary.
+Read `docs/THEME-AUTHORING.md` only if the change touches the theme boundary.
 
-## Workflow
+## Design intent and constraints
 
-1. Identify the requested control, its existing state owner, and the smallest shared styling change. For a review-only request, report findings without editing.
-2. Before changing behavior, list plausible failures: immediate re-open, conditional unmount, nested confirmation, focus restoration, menu edge flipping, small viewports and reduced motion. Reuse existing browser coverage; add only missing cases.
-3. Preserve native `showModal()` / `close()`, `details[open]`, checkbox state and existing event handling. CSS follows those states. Do not add exit timers, closing states, delayed unmounts or new wrappers just for animation.
-4. Use the shared timing and `--motion-ease-out` tokens only when continuity helps explain a state change. Menus and dialogs do not animate. Avoid introducing additional durations.
-5. Gate new animation and transition rules on `prefers-reduced-motion: no-preference`. Keep stable, visible, usable styles outside that block. Existing reduced-motion token overrides remain in place.
-6. Verify the affected flows on the real synthetic app, then inspect the captured screens. Report the exact checks, limitations and artifact paths, not just that screenshots were produced.
+Motion should make controls feel responsive without delaying actions, obscuring
+state or changing the manuscript. Preserve the existing state owner, native
+`showModal()` / `close()`, `details[open]`, checkbox semantics, focus behavior
+and dismissal. Menus and dialogs open and close immediately; avoid exit timers,
+extra closing states or wrappers introduced solely for animation.
 
-## Boundaries and pitfalls
-
-- Existing component structure, theme contract and focus behavior take priority over reference snippets. Do not import `t-*` wrappers or the entire upstream token catalog.
-- Use explicit transition properties. Avoid `transition: all`, permanent `will-change`, blur, bounce, per-item stagger and animation-driven React renders.
-- Do not add decorative entrance effects. A retained transform can change fixed-position descendants' containing block.
-- Keep native modal coordinates stable, including viewport-positioned controls nested inside it. Do not delay actions or focus.
-- Respect actual viewport menu placement rather than only the requested top/bottom preference. Mobile sheets retain their existing geometry and dismissal.
-- Do not animate source/translation text, wrap words for fake streaming, or rebuild Risu/Shadow DOM content. Do not blanket-disable author CSS with a universal animation selector.
-- Keep the existing sidebar transition, skeletons and activity indicators unless they are explicitly in scope. A new motion settings screen or backend/runtime skill loader is unnecessary.
+- Keep modal geometry and anchored menu placement stable, including
+  viewport-positioned descendants and small screens. Mobile sheets retain their
+  existing layout and dismissal behavior.
+- Animate switch thumbs and colors only where helpful. Use specific transition
+  properties and existing easing/timing tokens; avoid `transition: all`,
+  permanent `will-change`, blur, bounce, per-item stagger and animation-driven
+  React renders.
+- Respect `prefers-reduced-motion`: new motion belongs behind
+  `no-preference`, while base controls remain visible and usable.
+- Do not animate source/translation text, rebuild Risu/Shadow DOM content or
+  broadly override author CSS. Preserve existing sidebar transitions, skeletons and activity indicators
+  unless they are in scope. Keep the existing theme and component contracts.
 
 ## Verification
 
-Run from the repository root after a matching build:
+Choose checks for the affected behavior using `docs/DEVELOPMENT.md`. Reuse
+existing browser coverage and add only meaningful missing cases. Relevant risks
+include focus and Escape handling, repeated open/close, nested confirmations,
+menu placement, small viewports and reduced-motion preferences. Inspect rendered
+results where geometry or animation is affected.
 
-```sh
-npm run quality
-npm run build
-npm run verify:ui -- --grep 'MOTION|UI common dialogs|UI settings categories'
-```
+Useful targeted checks after a matching build:
 
-The motion cases verify that menus and dialogs emit no animation events, final control state, rapid re-entry, reduced-motion behavior, screenshots and videos. Existing common-dialog cases own Tab/Escape/focus coverage. When menu or nested-dialog behavior is affected, also run:
+- Motion controls: `npm run verify:ui -- --grep 'MOTION|UI common dialogs|UI settings categories'`
+- Menu or nested-dialog interactions: `npm run verify:browser -- --grep 'RACOM01|DEL01|THEMES invalid'`
+- Shared surface/theme changes: `npm run verify:liquid-gallery`
 
-```sh
-npm run verify:browser -- --grep 'RACOM01|DEL01|THEMES invalid'
-```
-
-Use `npm run verify:liquid-gallery` when shared surface CSS might affect the long reader or theme boundary. Do not run a full unrelated suite merely to increase a test count. Use `--visual` for additional geometry/screens; it is not a benchmark. Artifacts live under `output/playwright/<run-id>/`; inspect representative mobile/desktop and light/dark views. Synthetic Chromium checks do not prove physical-device, Safari/Firefox or live-provider behavior.
+Run applicable project quality/build gates, not unrelated suites for their own
+sake. Screenshots and synthetic Chromium tests do not establish behavior in
+every browser or on physical devices.
 
 ## Design references
 
