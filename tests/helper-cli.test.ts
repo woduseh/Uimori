@@ -87,3 +87,15 @@ test('CLI still displays help in command positions', async () => {
     expect(stdout).toContain('Usage:');
   }
 });
+
+test('CLI forwards a selected export to the active bridge', async () => {
+  const { stdout } = await runCli('export', '{"scope":"library","id":"resource-1"}');
+  expect(JSON.parse(stdout)).toEqual({
+    path: '/export',
+    payload: {
+      taskId: 'cli-test-task',
+      toolId: 'cli-test-tool',
+      arguments: { scope: 'library', id: 'resource-1' },
+    },
+  });
+});

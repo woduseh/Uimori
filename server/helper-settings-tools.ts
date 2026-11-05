@@ -61,7 +61,7 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'usage.read',
     description:
-      'Read usage totals for inclusive Seoul calendar dates. Omitted breakdown returns totals, undated usage and coverage only; choose days, models, kinds or all for those breakdowns in the same call. Reported, estimated, partial and unknown costs retain their distinct meanings.',
+      'Read spending, cost and token usage totals for inclusive Seoul calendar dates. Omitted breakdown returns totals, undated usage and coverage only; choose days, models, kinds or all for those breakdowns in the same call. Reported, estimated, partial and unknown costs retain their distinct meanings.',
     inputSchema: schema(
       {
         from: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },

@@ -33,6 +33,12 @@ Prefer one canonical argument shape instead of schema unions:
 
 When a semantic condition cannot be represented portably without a union, keep the simple object schema and validate the condition in the host runtime.
 
+## Provider continuation state
+
+OpenAI Responses/Chat (including compatible gateways), Anthropic Messages and Gemini use internal `*-turn-v2` continuation records. Each adapter retains its complete native transcript once. The already completed host-result prefix is bound by its count and canonical SHA-256 digest instead of a second copy of every result body. Later requests still validate the exact prefix, pending call IDs/names, used IDs, fixed configuration and state hash. Native thinking signatures, media and steering remain in their provider transcript positions.
+
+V1 continuation blobs are rejected without a compatibility fallback. Finish active or resumable Batch runs before switching builds; an old continuation cannot be resumed as v2. This format change does not rewrite authored resources, completed outputs or mutation receipts. It reduces host continuation storage and preparation work, not the transcript tokens required by a stateless provider API.
+
 ## Pagination and results
 
 Helper `resource.read` accepts either one `path` or up to sixteen `paths` from one resource/revision. Batch `nextIndex` continues unreturned paths; per-item `nextOffset` continues text. `chat.lore` lists compact items by default and reads original/override field pages through a selector. Both contracts bound the complete serialized response; they do not send full editing models by default.

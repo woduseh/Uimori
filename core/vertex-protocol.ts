@@ -51,7 +51,7 @@ function copy(value: unknown, code = 'INVALID_VERTEX_EVENT'): Json {
 }
 const hash = (value: Json): string => createHash('sha256').update(canonical(value)).digest('hex');
 const nonempty = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
-const VERSION = 'vertex-gemini-turn-v1' as const;
+const VERSION = 'vertex-gemini-turn-v2' as const;
 type PendingCall = { hostId: string; name: string; partIndex: number; providerId?: string };
 export type VertexTurn = {
   version: typeof VERSION;
@@ -60,7 +60,8 @@ export type VertexTurn = {
   bindingHash: string;
   phase: 'request' | ProviderResult['status'];
   contents: Json[];
-  completedResults: Json[];
+  completedResultCount: number;
+  completedResultsHash: string;
   pending: PendingCall[];
   usedIds: string[];
   stateHash: string;
@@ -75,7 +76,11 @@ function readTurn(value: Json): VertexTurn {
     !nonempty(value.modelId) ||
     !nonempty(value.bindingHash) ||
     !Array.isArray(value.contents) ||
-    !Array.isArray(value.completedResults) ||
+    typeof value.completedResultCount !== 'number' ||
+    !Number.isSafeInteger(value.completedResultCount) ||
+    value.completedResultCount < 0 ||
+    typeof value.completedResultsHash !== 'string' ||
+    !/^[a-f0-9]{64}$/u.test(value.completedResultsHash) ||
     !Array.isArray(value.pending) ||
     !Array.isArray(value.usedIds) ||
     !nonempty(value.stateHash)
@@ -155,15 +160,12 @@ export function encodeVertex(
     if (
       previous.phase !== 'tool_calls' ||
       !previous.pending.length ||
-      results.length !== previous.completedResults.length + previous.pending.length
+      results.length !== previous.completedResultCount + previous.pending.length
     )
       reject('TOOL_RESULT_MISMATCH');
-    if (
-      canonical(results.slice(0, previous.completedResults.length)) !==
-      canonical(previous.completedResults)
-    )
+    if (hash(results.slice(0, previous.completedResultCount)) !== previous.completedResultsHash)
       reject('TOOL_RESULT_MISMATCH');
-    const fresh = results.slice(previous.completedResults.length);
+    const fresh = results.slice(previous.completedResultCount);
     const indexed = new Map<string, Record<string, Json>>();
     for (const result of fresh) {
       if (
@@ -334,7 +336,8 @@ export function encodeVertex(
       bindingHash,
       phase: 'request',
       contents: structuredClone(contents),
-      completedResults: results,
+      completedResultCount: results.length,
+      completedResultsHash: hash(results),
       pending: [],
       usedIds: [...usedIds],
     }),

@@ -6,7 +6,6 @@ import {
   encodeAnthropic,
   AnthropicDecoder,
   decodeAnthropicMessage,
-  type AnthropicTurn,
 } from '../core/anthropic-protocol.js';
 import { encodeVertex, VertexDecoder } from '../core/vertex-protocol.js';
 
@@ -428,7 +427,12 @@ describe('native provider wire (synthetic, no live calls)', () => {
         );
       const before = structuredClone(r);
       const encoded = encodeAnthropic(r);
-      if (!inserted) expect(encoded.context).toEqual(legacyAnthropicTurn);
+      if (!inserted) {
+        expect(encoded.context.messages).toEqual(legacyAnthropicTurn.messages);
+        expect(() => encodeAnthropic({ ...r, opaqueState: legacyAnthropicTurn })).toThrow(
+          'INVALID_ANTHROPIC_CONTINUATION'
+        );
+      }
       const parts = [
         { type: 'thinking', thinking: 'private reasoning', signature: 'signed-thinking' },
         {
@@ -448,7 +452,7 @@ describe('native provider wire (synthetic, no live calls)', () => {
           stop_reason: 'tool_use',
           stop_sequence: null,
         },
-        inserted ? encoded.context : (legacyAnthropicTurn as AnthropicTurn)
+        encoded.context
       );
       const continuation = encodeAnthropic(next(r, result));
       const body = wire(continuation.body);

@@ -9,6 +9,7 @@ import {
 } from './provider-messages.js';
 export { OpenAIProtocolError as OpenAIChatProtocolError } from './openai-protocol.js';
 const {
+  hash,
   object,
   nonempty,
   copy,
@@ -65,7 +66,7 @@ export function encodeChat(
   request: ProviderRequest,
   protocol: 'openai-chat-v1' | 'vercel-chat-v1' | 'deepseek-chat-v1' = 'openai-chat-v1'
 ): { body: Json; context: OpenAITurn; messageMetadata?: NativeMessageMetadata } {
-  const prepared = prepare(request, 'openai-chat-turn-v1', protocol);
+  const prepared = prepare(request, 'openai-chat-turn-v2', protocol);
   const gatewayOptions = protocol === 'vercel-chat-v1' ? vercelProviderOptions(request) : undefined;
   const deepseek = protocol === 'deepseek-chat-v1';
   const { generation, aliases, schema, previous, fresh, plan, bootstrap, continuationInput } =
@@ -215,12 +216,13 @@ export function encodeChat(
     body: copy(body, 'INVALID_OPENAI_REQUEST'),
     messageMetadata: nativeMessageMetadata(plan),
     context: seal({
-      version: 'openai-chat-turn-v1',
+      version: 'openai-chat-turn-v2',
       modelId: request.modelId,
       bindingHash: prepared.bindingHash,
       phase: 'request',
       input: structuredClone(messages),
-      completedResults: prepared.results,
+      completedResultCount: prepared.results.length,
+      completedResultsHash: hash(prepared.results),
       aliases,
       pending: [],
       usedIds: [...(previous?.usedIds ?? [])],
