@@ -64,3 +64,22 @@ export function validateIllustrationAppearanceProfiles(
   }
   return structuredClone(value) as IllustrationAppearanceProfile[];
 }
+
+/** Character identity matching shared by inheritance and chat editors. */
+export const illustrationProfileNameKey = (name: string): string =>
+  name.trim().normalize('NFKC').toLocaleLowerCase('en-US');
+
+/** Overrides replace a whole identity by stable ID or normalized name. */
+export function inheritIllustrationProfiles(
+  defaults: IllustrationCharacterProfile[],
+  overrides: IllustrationCharacterProfile[]
+): IllustrationCharacterProfile[] {
+  const ids = new Set(overrides.map((item) => item.id));
+  const names = new Set(overrides.map((item) => illustrationProfileNameKey(item.name)));
+  return [
+    ...defaults.filter(
+      (item) => !ids.has(item.id) && !names.has(illustrationProfileNameKey(item.name))
+    ),
+    ...overrides,
+  ];
+}

@@ -626,6 +626,8 @@ describe('illustration storage on the current schema', () => {
       revision: 0,
       references: [],
       characterProfiles: [],
+      defaultCharacterProfiles: [],
+      chatCharacterProfiles: [],
     });
     expect(
       http(() =>
@@ -644,6 +646,8 @@ describe('illustration storage on the current schema', () => {
       revision: 1,
       references: [{ ref: asset.id, role: 'character' }],
       characterProfiles: [],
+      defaultCharacterProfiles: [],
+      chatCharacterProfiles: [],
     });
     expect(
       http(() =>

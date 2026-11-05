@@ -49,7 +49,7 @@ Risu 본문의 일반 문단·제목·구분선·인용·목록·표·코드 블
 
 프롬프트 모델에는 읽기 전용 `illustration.sources.search`·`illustration.sources.read`만 제공해요. 삽화 예약 당시 고정한 봇·페르소나·모듈의 native CHARX 설명과 lore, 삽화 예약 당시 고정한 기존 성공 그림의 캡션·프롬프트를 검색하거나 필요한 경로만 페이지로 읽어요. native 자료의 읽기는 도우미와 같은 경로·페이지 읽기를 재사용해요. 나이·정체성 등 중요한 시각 정보가 부족하면 관련 고정 자료를 조회하고, 독립적인 조회는 필요에 따라 함께 요청하도록 안내해요. 전체 lore를 프롬프트에 넣지 않고, 일반 모델 입력 예산과 하나의 전체 시간 제한 안에서 필요한 만큼 도구 루프를 실행해요. 수정 도구는 없으며 번역 위치 연결에는 이 도구를 제공하지 않아요. 저장 후 자료가 바뀌거나 기존 그림이 삭제돼도 재시도의 참고 텍스트는 바뀌지 않아요. 이전 그림의 픽셀을 이 도구로 직접 읽지는 않아요.
 
-봇·페르소나 기본 편집의 **기본 인물 외형**은 native CCv3 `data.extensions.uimori.illustrationProfiles`에 저장해 같은 자료를 쓰는 채팅이 공유해요. 배열 항목은 `{id, name, appearance, referenceImageId?}`이고 CHARX 가져오기·내보내기에서 보존해요. 같은 ID 또는 이름의 채팅 외형이 기본값보다 우선하며 기존 채팅 전용 프로필도 그대로 사용해요. 참고 이미지 역할만 저장한다고 공유 기본값이 채팅 복사본으로 고정되지는 않아요. `referenceImageId`는 명시적으로 고른 자료 내 이미지 ID이며 native JSON에서 지정할 수 있어요. 초상화를 자동으로 특정 인물에게 연결하거나 외형·나이를 추측하지 않아요. 도우미에게 봇·페르소나의 공유 기본 외형 등록을 요청할 수도 있어요. `resource.read`의 `source.appearanceProfilesPath`를 확인하고 `resource.patch`의 `set`으로 전체 배열을 저장해요. 둘을 함께 바꾸려면 `resource.patchMany`를 사용해요. 채팅 전용 외형은 기존 `illustration.profiles.save`로 저장해요.
+봇·페르소나와 독립 native 모듈 편집의 **번역 지침 → 기본 인물 외형 → 고급 설정** 탭에서 기본 인물 외형을 편집해요. 외형은 native CCv3 `data.extensions.uimori.illustrationProfiles`에 저장해 같은 자료를 쓰는 채팅이 공유해요. 배열 항목은 `{id, name, appearance, referenceImageId?}`이고 CHARX 가져오기·내보내기에서 보존해요. 같은 ID 또는 이름의 채팅 외형이 기본값보다 우선하며 기존 채팅 전용 프로필도 그대로 사용해요. 참고 이미지 역할만 저장한다고 공유 기본값이 채팅 복사본으로 고정되지는 않아요. 채팅에서는 상속한 이름과 외형을 본문으로 보여주고, **편집**하면 이미지 연결을 포함한 전체 값을 채팅 전용으로 복사해요. **복원**하면 복사본을 지우고 최신 기본 외형을 다시 따라요. 채팅에서 추가한 인물은 자유롭게 편집하거나 삭제해요. 각 인물의 이미지 선택에서 현재 자료의 기존 이미지를 골라 연결하고 미리 보거나 연결을 해제할 수 있어요. 새 이미지는 에셋 탭에서 추가해요. `referenceImageId`는 선택한 자료 내 이미지 ID이며 이미지 자체나 다른 자료를 변경하지 않아요. 초상화를 자동으로 특정 인물에게 연결하거나 외형·나이를 추측하지 않아요. 도우미에게 봇·페르소나의 공유 기본 외형 등록을 요청할 수도 있어요. `resource.read`의 `source.appearanceProfilesPath`를 확인하고 `resource.patch`의 `set`으로 전체 배열을 저장해요. 둘을 함께 바꾸려면 `resource.patchMany`를 사용해요. 채팅 전용 외형은 기존 `illustration.profiles.save`로 저장해요.
 
 ## 삽화 프리셋
 
@@ -186,7 +186,7 @@ JEV 키 미설정·응답 오류·8초 시간 초과·입력 예산 초과는 `u
 | `POST /api/illustration-presets/selection` | `{scope: global/bot/chat, targetId?, presetId: string/null, expectedRevision}`. 선택 수정 번호는 자료 수정 번호와 별개예요. |
 | `GET /api/illustration-presets/:id/export`, `DELETE /api/illustration-presets/:id` | 파일 내보내기·삭제. 삭제에는 `expectedRevision`이 필요해요. |
 | `POST /api/illustration-settings/comfyui/test` | `{baseUrl, authorizationEnv}`로 `system_stats` 확인. 주소 검증 실패는 400, 연결·응답 실패는 502이며 `{code, comfyui}` 진단을 반환해요. |
-| `GET/PUT /api/chats/:id/illustration-references` | 채팅별 참조 역할과 인물 외형. 후보는 채팅 이미지와 장착 자료 이미지. |
+| `GET/PUT /api/chats/:id/illustration-references` | 채팅별 참조 역할과 인물 외형. `defaultCharacterProfiles`는 공유 기본값, `chatCharacterProfiles`는 채팅 재정의, `characterProfiles`는 적용 결과예요. PUT은 `chatCharacterProfiles`를 저장하며 기존 `characterProfiles` 입력도 지원해요. 후보는 채팅 이미지와 장착 자료 이미지. |
 | `POST /api/sources/:id/illustrations` | 수동 계획 예약. `expectedSourceHash?`, `maxTargets?`(기본 1), `idempotencyKey?`, `direction?`. 반환은 이미지가 아닌 `task: plan` 작업이며 이후 렌더 작업이 추가돼요. 테스트 모드에서만 `fixture`. |
 | `PATCH /api/sources/:id/illustration-presentation` | `{expectedSourceHash, expectedRevision, heroTargetId: string/null}`. 대표 선택만 변경. |
 | `GET /api/sources/:id/illustration-usage` | 현재 원문의 삽화 호출·토큰을 단계별로 조회. 새 작업은 예약하지 않아요. |

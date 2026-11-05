@@ -1,6 +1,10 @@
+import {
+  illustrationProfileNameKey,
+  inheritIllustrationProfiles,
+} from '../core/illustration-profiles.js';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import type { IllustrationCharacterProfile } from '../core/illustration.js';
+import { type IllustrationCharacterProfile } from '../core/illustration.js';
 import type { ProviderTool } from '../core/transport.js';
 import {
   frozenIllustrationReferences,
@@ -117,18 +121,28 @@ export function saveIllustrationProfiles(
   const current = illustrationReferences(store, chatId);
   if (current.revision !== expectedRevision)
     throw new HttpError(409, 'Illustration profiles changed. Read them again before saving.');
-  const next = new Map(current.characterProfiles.map((profile) => [profile.id, profile]));
+  const next = new Map(current.chatCharacterProfiles.map((profile) => [profile.id, profile]));
+  const effective = new Map(current.characterProfiles.map((profile) => [profile.id, profile]));
   const seen = new Set<string>();
   const profiles = args.profiles.map((entry) => {
     const edit = record(entry);
     fields(edit, ['profileId', 'name', 'appearance', 'referenceRef']);
     const id = edit.profileId === undefined ? undefined : text(edit.profileId, 'profile ID', 100);
-    const previous = id ? next.get(id) : undefined;
+    const previous = id
+      ? effective.get(id)
+      : typeof edit.name === 'string'
+        ? [...effective.values()].find(
+            (item) =>
+              illustrationProfileNameKey(item.name) ===
+              illustrationProfileNameKey(edit.name as string)
+          )
+        : undefined;
     if (id && !previous) throw new HttpError(404, 'Unknown illustration profile');
-    if (id && seen.has(id)) throw new HttpError(400, 'Duplicate illustration profile ID');
     const profile = editedProfile(edit, previous);
+    if (seen.has(profile.id)) throw new HttpError(400, 'Duplicate illustration profile ID');
     seen.add(profile.id);
-    next.set(profile.id, profile);
+    if (!isDeepStrictEqual(previous, profile)) next.set(profile.id, profile);
+    effective.set(profile.id, profile);
     return {
       profileId: profile.id,
       name: profile.name,
@@ -141,7 +155,7 @@ export function saveIllustrationProfiles(
     ? updateIllustrationReferences(store, chatId, {
         expectedRevision,
         references: current.references,
-        characterProfiles: [...next.values()],
+        chatCharacterProfiles: [...next.values()],
       }).revision
     : current.revision;
   return {
@@ -149,6 +163,10 @@ export function saveIllustrationProfiles(
     revision,
     profiles,
     changed,
-    effectiveReferences: effectiveReferences(store, chatId, [...next.values()]),
+    effectiveReferences: effectiveReferences(
+      store,
+      chatId,
+      inheritIllustrationProfiles(current.defaultCharacterProfiles, [...next.values()])
+    ),
   };
 }

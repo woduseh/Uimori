@@ -1,7 +1,10 @@
 import {
+  illustrationProfileNameKey,
+  inheritIllustrationProfiles,
+} from '../core/illustration-profiles.js';
+import {
   defaultIllustrationProfiles,
   redrawIllustrationCanon,
-  inheritIllustrationProfiles,
 } from './illustration-profile-defaults.js';
 import type { Usage } from '../core/types.js';
 import type { IllustrationUsageReport } from '../core/illustration.js';
@@ -261,14 +264,15 @@ export function illustrationReferences(store: Store, chatId: string): Illustrati
     .get(chatId) as Row | undefined;
   // Existing rows stored only the reference array; newer rows also contain authored profiles.
   const saved = row ? parse(row.body) : [];
+  const defaultCharacterProfiles = defaultIllustrationProfiles(store, chatId);
+  const chatCharacterProfiles = Array.isArray(saved) ? [] : (saved.characterProfiles ?? []);
   return {
     chatId,
     revision: row ? Number(row.revision) : 0,
     references: Array.isArray(saved) ? saved : saved.references,
-    characterProfiles: inheritIllustrationProfiles(
-      defaultIllustrationProfiles(store, chatId),
-      Array.isArray(saved) ? [] : (saved.characterProfiles ?? [])
-    ),
+    defaultCharacterProfiles,
+    chatCharacterProfiles,
+    characterProfiles: inheritIllustrationProfiles(defaultCharacterProfiles, chatCharacterProfiles),
   };
 }
 export function updateIllustrationReferences(
@@ -278,7 +282,7 @@ export function updateIllustrationReferences(
   options: { allowUnavailableReferences?: boolean } = {}
 ): IllustrationReferences {
   const b = record(value);
-  fields(b, ['expectedRevision', 'references', 'characterProfiles']);
+  fields(b, ['expectedRevision', 'references', 'characterProfiles', 'chatCharacterProfiles']);
   if (!Array.isArray(b.references) || b.references.length > 8)
     throw new HttpError(400, 'Invalid illustration references');
   const references: IllustrationReference[] = b.references.map((entry) => {
@@ -295,9 +299,12 @@ export function updateIllustrationReferences(
     if (prior.revision !== number(b.expectedRevision, 'reference revision', 0))
       throw new HttpError(409, '삽화 참조 이미지가 변경됐어요. 새로고침한 뒤 저장해 주세요.');
     // Older clients must not clear profiles they do not know about.
-    const rawProfiles = Object.hasOwn(b, 'characterProfiles')
-      ? b.characterProfiles
-      : prior.characterProfiles;
+    const explicitOverrides = Object.hasOwn(b, 'chatCharacterProfiles');
+    const rawProfiles = explicitOverrides
+      ? b.chatCharacterProfiles
+      : Object.hasOwn(b, 'characterProfiles')
+        ? b.characterProfiles
+        : prior.chatCharacterProfiles;
     if (!Array.isArray(rawProfiles) || rawProfiles.length > 32)
       throw new HttpError(400, 'Invalid illustration character profiles');
     const characterProfiles: IllustrationCharacterProfile[] = rawProfiles.map((entry) => {
@@ -334,10 +341,36 @@ export function updateIllustrationReferences(
         !options.allowUnavailableReferences
       )
         throw new HttpError(400, '이 채팅에서 사용할 수 없는 인물 참고 이미지예요.');
-    const linked = new Set(characterProfiles.flatMap((item) => item.referenceRef ?? []));
+    const sharedProfiles = prior.defaultCharacterProfiles;
+    const overrides = characterProfiles
+      .filter(
+        (profile) =>
+          explicitOverrides ||
+          !Object.hasOwn(b, 'characterProfiles') ||
+          !sharedProfiles.some(
+            (shared) =>
+              shared.id === profile.id &&
+              shared.name === profile.name &&
+              shared.appearance === profile.appearance &&
+              shared.referenceRef === profile.referenceRef
+          )
+      )
+      .map((profile) => {
+        if (prior.chatCharacterProfiles.some((item) => item.id === profile.id)) return profile;
+        const shared =
+          sharedProfiles.find((item) => item.id === profile.id) ??
+          sharedProfiles.find(
+            (item) =>
+              illustrationProfileNameKey(item.name) === illustrationProfileNameKey(profile.name)
+          );
+        return shared ? { ...profile, id: shared.id } : profile;
+      });
+    if (new Set(overrides.map((item) => item.id)).size !== overrides.length)
+      throw new HttpError(400, 'Duplicate illustration character profile');
+    const effectiveProfiles = inheritIllustrationProfiles(sharedProfiles, overrides);
+    const linked = new Set(effectiveProfiles.flatMap((item) => item.referenceRef ?? []));
     if (new Set([...references.map((item) => item.ref), ...linked]).size > 8)
       throw new HttpError(400, '삽화 참고 이미지는 최대 8개까지 사용할 수 있어요.');
-    const sharedProfiles = defaultIllustrationProfiles(store, chatId);
     store.db
       .prepare(
         'INSERT INTO illustration_references(chat_id,revision,body) VALUES(?,?,?) ON CONFLICT(chat_id) DO UPDATE SET revision=excluded.revision,body=excluded.body'
@@ -347,16 +380,7 @@ export function updateIllustrationReferences(
         prior.revision + 1,
         json({
           references,
-          characterProfiles: characterProfiles.filter(
-            (profile) =>
-              !sharedProfiles.some(
-                (shared) =>
-                  shared.id === profile.id &&
-                  shared.name === profile.name &&
-                  shared.appearance === profile.appearance &&
-                  shared.referenceRef === profile.referenceRef
-              )
-          ),
+          characterProfiles: overrides,
         })
       );
     store.event(chatId, 'illustration-references.updated', chatId);
