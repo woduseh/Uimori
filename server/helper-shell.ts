@@ -588,7 +588,12 @@ export class HelperShell {
         for (const item of selected) {
           const file = `chats/${item.id}/scenes.json`;
           if (task.chats.has(item.id)) {
-            assertExistingWorkspaceFile(this.taskDir(taskId), file);
+            const directory = this.taskDir(taskId);
+            assertExistingWorkspaceFile(directory, file);
+            assertExistingWorkspaceFile(directory, `chats/${item.id}/metadata.json`);
+            for (const [path, target] of task.files)
+              if (target.kind === 'scene' && path === `chats/${item.id}/scenes/${target.id}.txt`)
+                assertExistingWorkspaceFile(directory, path);
             reused.push(file);
           } else {
             this.exportChat(taskId, task, {
