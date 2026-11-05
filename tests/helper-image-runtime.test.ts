@@ -297,7 +297,12 @@ test('thumbnail reads resize the transmitted pixels without changing saved origi
     listIllustrationHelperImages(f.store, chat.id, { query: 'original-kimono' }).images
   ).toMatchObject([{ ref: 'package:' + bot.id + ':bot:kimono-red', isPortrait: false }]);
 
-  const full = await readHelperImage(f.store, { contentId: bot.id, imageId: 'portrait-red' });
+  const full = await readHelperImage(f.store, {
+    contentId: bot.id,
+    imageId: 'portrait-red',
+    mode: 'full',
+  });
+  const automatic = await readHelperImage(f.store, { contentId: bot.id, imageId: 'portrait-red' });
   const thumbnail = await readHelperImage(f.store, {
     contentId: bot.id,
     imageId: 'portrait-red',
@@ -305,6 +310,8 @@ test('thumbnail reads resize the transmitted pixels without changing saved origi
   });
   const linked = await readIllustrationHelperImage(f.store, chat.id, { ref, mode: 'thumbnail' });
   expect(full.result.transmission).toMatchObject({ width: 1400, height: 900 });
+  expect(automatic.result.transmission).toMatchObject({ width: 512, mode: 'thumbnail' });
+  expect(automatic.resolved.base64).toEqual(thumbnail.resolved.base64);
   expect(thumbnail.result.transmission).toMatchObject({ width: 512, mode: 'thumbnail' });
   expect(linked.result.transmission).toEqual(thumbnail.result.transmission);
   expect(linked.resolved.base64).toEqual(thumbnail.resolved.base64);
@@ -690,7 +697,7 @@ test.each(['image.read', 'shell image.read with a save'] as const)(
           returned: expect.objectContaining({
             contentId: original.id,
             imageId: 'portrait-red',
-            transmission: { mime: 'image/webp', width: 12, height: 8 },
+            transmission: expect.objectContaining({ mime: 'image/webp', width: 12, height: 8 }),
           }),
         })
       );

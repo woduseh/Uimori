@@ -301,7 +301,8 @@ export async function readIllustrationCutImage(
     metadata.hash,
     metadata.caption || 'Illustration',
     metadata,
-    signal
+    signal,
+    'full'
   );
 }
 

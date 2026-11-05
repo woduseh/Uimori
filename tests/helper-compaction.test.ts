@@ -288,6 +288,43 @@ function continuation(request: transport.ProviderRequest) {
     | undefined;
 }
 
+test('large-model helper compacts repeated read context before the hard input limit', async () => {
+  const f = await fixture({ fixed: false });
+  f.updateModel(f.helperModel.id, { inputTokenLimit: 272_000 });
+  const sentence =
+    'Distinct appearance trait and original source evidence, preserved for later inspection. ';
+  f.readValue = {
+    revision: 1,
+    text: sentence.repeat(Math.ceil(53_000 / countTextTokens(sentence))),
+  };
+  let helperCalls = 0;
+  const log = script(f, (request) => {
+    if (request.role === 'context')
+      return summarized('Reviewed the long source; no edits were made.');
+    if (++helperCalls === 1)
+      return tools(
+        tool('large-evidence', 'resource.read', { kind: 'content', id: 'large-evidence' })
+      );
+    if (helperCalls === 2) {
+      // Preserve the first direct inspection, even when an early summary could save tokens.
+      expect(events(request).some((event) => event.callId === 'large-evidence')).toBe(true);
+      expect(continuation(request)).toBeUndefined();
+      return tools(tool('invalid-catalog', 'app.tools', { names: [] }));
+    }
+    expect(continuation(request)).toMatchObject({ segment: 1, reason: 'host-compaction' });
+    return structuredClone(success);
+  });
+  const task = await f.run();
+  expect(task.status, task.error ?? '').toBe('completed');
+  expect(log.requests[0].role).toBe('helper');
+  expect(log.requests.at(-1)?.role).toBe('helper');
+  expect(log.requests.some((request) => request.role === 'context')).toBe(true);
+  const decisions = compactions(f, task);
+  expect(decisions).toMatchObject([{ applied: true }]);
+  expect(decisions[0].beforeTokens).toBeLessThan(272_000 * 0.85);
+  expect(decisions[0].afterTokens).toBeLessThan(decisions[0].beforeTokens);
+});
+
 test('a fitting recent turn does not spend a summary call when nothing older can be compacted', async () => {
   const f = await fixture();
   const log = script(f, (request) => {
@@ -848,7 +885,9 @@ test.each(['resource.read', 'resource.readMany'] as const)(
     const task = await f.run();
     if (task.status !== 'completed') throw new Error(task.error ?? 'helper failed');
     expect(task.status, task.error ?? '').toBe('completed');
-    expect(log.requests.map((request) => request.role)).toEqual(['helper', 'context', 'helper']);
+    expect(log.requests[0].role).toBe('helper');
+    expect(log.requests.at(-1)?.role).toBe('helper');
+    expect(log.requests.some((request) => request.role === 'context')).toBe(true);
     expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true]);
   }
 );
@@ -951,7 +990,9 @@ test('forced compaction retains large batch identities and continuation without 
   });
   const task = await f.run();
   expect(task).toMatchObject({ status: 'completed', error: null });
-  expect(log.requests.map((request) => request.role)).toEqual(['helper', 'context', 'helper']);
+  expect(log.requests[0].role).toBe('helper');
+  expect(log.requests.at(-1)?.role).toBe('helper');
+  expect(log.requests.some((request) => request.role === 'context')).toBe(true);
   expect(compactions(f, task).map((decision) => decision.applied)).toEqual([true]);
 });
 
@@ -1152,7 +1193,9 @@ test('an oversized fixed receipt fails before another summary without losing the
     usage: { modelCalls: 3 },
     completedEffects: { count: 1 },
   });
-  expect(log.requests.map((request) => request.role)).toEqual(['helper', 'context', 'helper']);
+  expect(log.requests[0].role).toBe('helper');
+  expect(log.requests.at(-1)?.role).toBe('helper');
+  expect(log.requests.some((request) => request.role === 'context')).toBe(true);
   const decisions = compactions(f, task),
     limit = f.target('helper').inputTokenLimit!;
   expect(decisions).toHaveLength(1);

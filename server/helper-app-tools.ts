@@ -377,7 +377,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.tools',
     description:
-      'Discover app operations for data search/SQL, images and illustrations, resources/themes, saved scenes and translations, settings, notes, outlines, lore, context summaries, original stories and archived scenes. Omit names for a paged catalog filtered by query; supply names for exact schemas of up to 4 operations. Invoke through app.call.',
+      'Find Uimori operations by purpose; current library/chat scope ranks applicable tools first. Supply a name for its exact schema (up to 4 names) or query for a compact catalog. Invoke with app.call. Shared bot/persona appearance defaults use resource.read and resource.patch; illustration.profiles.* edits chat-only overrides.',
     inputSchema: schema(
       {
         names: { type: 'array', maxItems: 4, items: str },
@@ -411,6 +411,39 @@ export function helperGatewayTools(review: boolean): ProviderTool[] {
     : HELPER_GATEWAY_TOOLS;
 }
 
+/** Discovery hints are not aliases for execution names or additional write permissions. */
+const discoveryHints: Record<
+  string,
+  { terms: string; summary: string; scope: 'chat' | 'library' }
+> = {
+  'resource.read': {
+    terms:
+      'appearance profile profiles default shared bot persona library resource inspect 기본 외형 프로필 라이브러리',
+    summary:
+      'Read saved shared bot/persona appearance defaults and their revision and source.appearanceProfilesPath.',
+    scope: 'library',
+  },
+  'resource.patch': {
+    terms:
+      'appearance profile profiles default shared bot persona library resource save edit 기본 외형 프로필 라이브러리',
+    summary:
+      'Edit shared bot/persona defaults at source.appearanceProfilesPath using the current revision.',
+    scope: 'library',
+  },
+  'illustration.profiles.read': {
+    terms:
+      'appearance profile profiles character chat local override illustration 채팅 외형 프로필',
+    summary: 'Read chat-local and inherited character appearance profiles; requires a chat.',
+    scope: 'chat',
+  },
+  'illustration.profiles.save': {
+    terms:
+      'appearance profile profiles character chat local override illustration 채팅 외형 프로필',
+    summary: 'Save chat-local character appearance overrides; requires a chat.',
+    scope: 'chat',
+  },
+};
+
 type ToolCatalog = {
   tools: Pick<ProviderTool, 'name' | 'description'>[];
   total: number;
@@ -418,13 +451,19 @@ type ToolCatalog = {
 };
 export function describeHelperTools(
   args: { names: string[] },
-  review?: boolean
+  review?: boolean,
+  scope?: 'chat' | 'library'
 ): { tools: ProviderTool[] };
 export function describeHelperTools(
   args: Record<string, unknown>,
-  review?: boolean
+  review?: boolean,
+  scope?: 'chat' | 'library'
 ): { tools: ProviderTool[] } | ToolCatalog;
-export function describeHelperTools(args: Record<string, unknown>, review = false) {
+export function describeHelperTools(
+  args: Record<string, unknown>,
+  review = false,
+  scope?: 'chat' | 'library'
+) {
   const allowed = review
     ? HELPER_APP_TOOLS.filter((tool) => helperToolTraits(tool.name).reviewAllowed)
     : HELPER_APP_TOOLS;
@@ -456,13 +495,27 @@ export function describeHelperTools(args: Record<string, unknown>, review = fals
   )
     throw new HttpError(400, 'INVALID_ARGUMENTS');
   const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
-  const found = allowed.filter((t) =>
-    terms.every((term) => `${t.name} ${t.description}`.toLowerCase().includes(term))
-  );
+  const found = allowed.filter((tool) => {
+    const searchable =
+      `${tool.name} ${tool.description} ${discoveryHints[tool.name]?.terms ?? ''}`.toLowerCase();
+    return terms.every((term) => searchable.includes(term));
+  });
+  // Preserve the existing catalog order when browsing without a query.
+  if (terms.length && scope)
+    found.sort((a, b) => {
+      const scopeRank = (tool: ProviderTool) =>
+        discoveryHints[tool.name]?.scope === scope ||
+        (!discoveryHints[tool.name] &&
+          (chatToolNames.has(tool.name) ? 'chat' : 'library') === scope)
+          ? 1
+          : 0;
+      return scopeRank(b) - scopeRank(a);
+    });
   return {
-    tools: found
-      .slice(Number(offset), Number(offset) + 20)
-      .map((t) => ({ name: t.name, description: t.description.split('. ')[0] })),
+    tools: found.slice(Number(offset), Number(offset) + 20).map((tool) => ({
+      name: tool.name,
+      description: discoveryHints[tool.name]?.summary ?? tool.description.split('. ')[0],
+    })),
     total: found.length,
     nextOffset: Number(offset) + 20 < found.length ? Number(offset) + 20 : null,
   };

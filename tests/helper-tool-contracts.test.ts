@@ -510,6 +510,42 @@ test('conditional reads remain distinct from writes and the narrower outline rev
   );
 });
 
+test('discovery favors tools for the current scope without hiding explicit operations', () => {
+  const library = describeHelperTools({ query: 'appearance profile' }, false, 'library');
+  const chat = describeHelperTools({ query: 'appearance profile' }, false, 'chat');
+  if (!('total' in library) || !('total' in chat)) throw new Error('Expected catalog');
+  expect(library.tools.slice(0, 2).map((tool) => tool.name)).toEqual([
+    'resource.read',
+    'resource.patch',
+  ]);
+  expect(chat.tools.slice(0, 2).map((tool) => tool.name)).toEqual([
+    'illustration.profiles.read',
+    'illustration.profiles.save',
+  ]);
+  expect(
+    describeHelperTools({ names: ['illustration.profiles.read'] }, false, 'library').tools
+  ).toHaveLength(1);
+});
+
+test('library appearance profiles return a specific switch-tool recovery', async () => {
+  const f = await fixture('library');
+  mockSend((request, round) => {
+    if (round === 0) return calls(call('wrong-scope', 'illustration.profiles.read', {}));
+    expect(event(request, 'wrong-scope')).toMatchObject({
+      denied: true,
+      errorKind: 'recoverable',
+      result: {
+        code: 'ILLUSTRATION_PROFILE_CHAT_ONLY',
+        retryMode: 'switch_tool',
+        outcome: 'unchanged',
+        nextAction: { tool: 'resource.read' },
+      },
+    });
+    return success;
+  });
+  await submit(f, 'Inspect shared appearance without finding a chat.');
+});
+
 test('helper read events retain recoverable argument and missing-scene errors', async () => {
   const f = await fixture();
   mockSend((request, round) => {

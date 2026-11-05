@@ -17,8 +17,8 @@ const MAX_BYTES = 2 * 1024 * 1024;
 type ImageReadMode = 'full' | 'thumbnail';
 const readModeSchema = { type: 'string', enum: ['full', 'thumbnail'] };
 function readMode(args: ReturnType<typeof record>): ImageReadMode {
-  if (args.mode === undefined || args.mode === 'full') return 'full';
-  if (args.mode === 'thumbnail') return 'thumbnail';
+  if (args.mode === undefined || args.mode === 'thumbnail') return 'thumbnail';
+  if (args.mode === 'full') return 'full';
   throw new HttpError(400, 'Invalid image read mode');
 }
 const id = { type: 'string', minLength: 1, maxLength: 100 } as const;
@@ -31,7 +31,7 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.list',
     description:
-      'List saved content images, including CHARX assets. Search titles, descriptions and original asset names with query; the package portrait is marked isPortrait. Follow nextOffset for more. Use image.read with mode:thumbnail to preview before inspecting full pixels.',
+      'List saved content images, including CHARX assets. Search titles, descriptions and original asset names with query; the package portrait is marked isPortrait. Follow nextOffset for more; image.read previews at 512px by default.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -45,7 +45,7 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'image.read',
     description:
-      'View saved image pixels as WebP; mode:thumbnail limits the longest edge to 512px, while omitted/full uses up to 2048px. Animated images supply their first frame. The saved original is unchanged.',
+      'View saved image pixels as WebP; omitted/thumbnail uses up to 512px, explicit mode:full up to 2048px. Animated images supply their first frame. The saved original is unchanged.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -66,7 +66,7 @@ export const HELPER_IMAGE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.image.read',
     description:
-      'View one illustration reference by ref. Use mode:thumbnail for a 512px preview; omitted/full returns up to 2048px. Animated images show the first frame.',
+      'View one illustration reference by ref; omitted/thumbnail previews at 512px, explicit mode:full returns up to 2048px. Animated images show the first frame.',
     inputSchema: {
       type: 'object',
       properties: { ref: { type: 'string', minLength: 1, maxLength: 300 }, mode: readModeSchema },
@@ -253,7 +253,7 @@ export async function prepareHelperImage<T extends object>(
   title: string,
   metadataFields: T,
   signal?: AbortSignal,
-  mode: ImageReadMode = 'full'
+  mode: ImageReadMode = 'thumbnail'
 ) {
   const stored = readImage(store.db, sourceHash);
   return withImageProcessing(async () => {
