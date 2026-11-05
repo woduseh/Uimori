@@ -109,7 +109,7 @@ export function helperContext(
   if (checkpoint) {
     const plan = store.context.checkpoint(checkpoint).plan;
     if (
-      !isDeepStrictEqual(plan.compacted, refs(history).slice(0, plan.compacted.length)) ||
+      !isDeepStrictEqual(plan.compacted, refs(history.slice(0, plan.compacted.length))) ||
       !isDeepStrictEqual(
         plan.recentSourceRevisions,
         history

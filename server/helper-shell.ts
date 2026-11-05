@@ -608,15 +608,15 @@ export class HelperShell {
       throw new Error('EDITOR_SAVE_REQUIRED');
     const content = readFileSync(path, 'utf8');
     if (Buffer.byteLength(content) > 16_000_000) throw new Error('SHELL_APPLY_TOO_LARGE');
-    if (sha(content) === target.hash)
-      return { changed: false, id: target.id, revision: target.revision };
+    const digest = sha(content);
+    if (digest === target.hash) return { changed: false, id: target.id, revision: target.revision };
 
-    const operationId = `${taskId}:shell:${toolId}:${sha(rel)}:${target.revision}:${sha(content)}`;
+    const operationId = `${taskId}:shell:${toolId}:${sha(rel)}:${target.revision}:${digest}`;
     const input = {
       kind: target.kind,
       id: target.id,
       revision: target.revision,
-      digest: sha(content),
+      digest,
     };
     const prior = this.workspace.operationResult<{
       id: string;
@@ -803,32 +803,57 @@ export class HelperShell {
     }
     if (libraryChanged) this.writeLibraryIndex(taskId, task.files);
     if (!name.startsWith('scene.')) return;
-    const ids = [
+    const ids = new Set([
       args.sourceId,
       ...(Array.isArray(args.items) ? args.items.map((item: any) => item.sourceId) : []),
       ...(Array.isArray(payload.sourceIds) ? payload.sourceIds : []),
-    ];
-    for (const id of new Set(ids)) {
-      if (typeof id !== 'string') continue;
-      for (const [path, target] of task.files) {
-        if (target.kind !== 'scene' || target.id !== id || path === refreshedPath) continue;
-        const filename = join(this.taskDir(taskId), path);
-        if (existsSync(filename) && sha(readFileSync(filename, 'utf8')) !== target.hash) continue;
-        const source = this.store.source(id);
-        write(filename, source.text);
-        task.files.set(path, {
-          ...target,
-          revision: source.editRevision ?? 0,
-          hash: sha(source.text),
-          metadata: sceneMetadata(
-            source.text,
-            target.metadata.sceneNumber,
-            target.metadata.sceneEnabled
-          ),
-        });
-        this.writeSceneIndex(taskId, target.chatId, task.files);
+    ]);
+    const pathsBySource = new Map<string, [string, Extract<FileTarget, { kind: 'scene' }>][]>();
+    for (const [path, target] of task.files) {
+      if (target.kind !== 'scene' || !ids.has(target.id) || path === refreshedPath) continue;
+      const paths = pathsBySource.get(target.id) ?? [];
+      paths.push([path, target]);
+      pathsBySource.set(target.id, paths);
+    }
+    const updatedChats = new Set<string>();
+    let failed = false;
+    let failure: unknown;
+    try {
+      for (const id of ids) {
+        if (typeof id !== 'string') continue;
+        for (const [path, target] of pathsBySource.get(id) ?? []) {
+          const filename = join(this.taskDir(taskId), path);
+          if (existsSync(filename) && sha(readFileSync(filename, 'utf8')) !== target.hash) continue;
+          const source = this.store.source(id);
+          write(filename, source.text);
+          task.files.set(path, {
+            ...target,
+            revision: source.editRevision ?? 0,
+            hash: sha(source.text),
+            metadata: sceneMetadata(
+              source.text,
+              target.metadata.sceneNumber,
+              target.metadata.sceneEnabled
+            ),
+          });
+          updatedChats.add(target.chatId);
+        }
+      }
+    } catch (error) {
+      failed = true;
+      failure = error;
+    } finally {
+      // Keep completed projections indexed even if a later source could not be refreshed.
+      for (const chatId of updatedChats) {
+        try {
+          this.writeSceneIndex(taskId, chatId, task.files);
+        } catch (error) {
+          if (!failed) failure = error;
+          failed = true;
+        }
       }
     }
+    if (failed) throw failure;
   }
 
   async exec(
