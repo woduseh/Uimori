@@ -370,6 +370,8 @@ describe('illustration API in test mode with the synthetic generator', () => {
       revision: 0,
       references: [],
       characterProfiles: [],
+      defaultCharacterProfiles: [],
+      chatCharacterProfiles: [],
       candidates: [],
     });
     await api(
