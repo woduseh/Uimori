@@ -615,7 +615,12 @@ linuxTest(
       `set -e
 ${cli} tools --query appearance --offset 3 > scratch/catalog.json
 ${cli} tools resource.patch > scratch/schema.json
+${cli} tools --names resource.read,task.inspect > scratch/names.json
 ${cli} call resource.read --kind content --id some-id --limit 2 --include-bodies false > scratch/read.json
+${cli} call task.inspect --kind helper --id task-1 --include-prompt true --effects-offset 2 > scratch/inspect.json
+${cli} call chat.rename --title 123 --expected-revision 2 > scratch/rename.json
+${cli} call image.list --content-id image-owner --limit 3 > scratch/image-list.json
+${cli} call task.inspect --kind helper --id task-1 --include-prompt maybe > scratch/rejected.json && exit 5 || test "$?" = 1
 ${cli} --help > scratch/help.txt
 cat scratch/read.json`,
       5000,
@@ -629,15 +634,25 @@ cat scratch/read.json`,
     expect(calls).toEqual([
       { name: 'app.tools', args: { query: 'appearance', offset: 3 } },
       { name: 'app.tools', args: { names: ['resource.patch'] } },
+      { name: 'app.tools', args: { names: ['resource.read', 'task.inspect'] } },
       {
         name: 'resource.read',
         args: { kind: 'content', id: 'some-id', limit: 2, includeBodies: false },
       },
+      {
+        name: 'task.inspect',
+        args: { kind: 'helper', id: 'task-1', includePrompt: true, effectsOffset: 2 },
+      },
+      { name: 'chat.rename', args: { title: '123', expectedRevision: 2 } },
+      { name: 'image.list', args: { contentId: 'image-owner', limit: 3 } },
     ]);
     expect(executed.outputBytes).toBeGreaterThan(0);
     expect(executed.output).toContain('some-id');
     const taskDir = join(f.root, 'tasks', f.task.id);
     expect(readFileSync(join(taskDir, 'scratch/help.txt'), 'utf8')).toContain('uimori tools');
+    expect(readFileSync(join(taskDir, 'scratch/rejected.json'), 'utf8')).toContain(
+      'SHELL_INVALID_BOOLEAN:includePrompt'
+    );
   }
 );
 

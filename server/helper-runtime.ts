@@ -124,7 +124,7 @@ import {
   readIllustrationScene,
 } from './helper-illustration-cuts.js';
 import { readIllustrationContinuity } from './illustration-continuity.js';
-import { chatTitle, HttpError, number, record, text } from './request-validation.js';
+import { chatTitle, fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
 import type { ResponseStreamStore } from './response-stream.js';
 import {
@@ -414,21 +414,24 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
       code
     );
   const wrongProfileScope = code === 'ILLUSTRATION_PROFILE_CHAT_ONLY';
-  const retryMode = stopped
-    ? 'never'
-    : wrongProfileScope
-      ? 'switch_tool'
-      : unknownSqlColumn || patch
-        ? 'correct_arguments'
-        : status === 409 || status === 404
-          ? 'refresh_then_retry'
-          : status === 400
-            ? 'correct_arguments'
-            : status === 413 || code === 'DATA_QUERY_TIMEOUT'
-              ? 'narrow_read'
-              : readOnly
-                ? 'never'
-                : 'inspect_outcome';
+  const needsChat = code === 'CHAT_SCOPE_REQUIRED';
+  const retryMode = needsChat
+    ? 'correct_arguments'
+    : stopped
+      ? 'never'
+      : wrongProfileScope
+        ? 'switch_tool'
+        : unknownSqlColumn || patch
+          ? 'correct_arguments'
+          : status === 409 || status === 404
+            ? 'refresh_then_retry'
+            : status === 400
+              ? 'correct_arguments'
+              : status === 413 || code === 'DATA_QUERY_TIMEOUT'
+                ? 'narrow_read'
+                : readOnly
+                  ? 'never'
+                  : 'inspect_outcome';
   return {
     error: message,
     code,
@@ -444,23 +447,29 @@ function helperToolError(error: unknown, readOnly: boolean, toolName: string) {
           },
         }
       : {}),
-    nextAction: wrongProfileScope
+    nextAction: needsChat
       ? {
-          tool: 'resource.read',
+          tool: 'chat.list',
           guidance:
-            'Find the shared bot/persona content ID, read its revision and source.appearanceProfilesPath, then use resource.patch with the full {id,name,appearance,referenceImageId?} array. Do not search for a chat.',
+            'Choose the target chatId and pass it to the original operation. Chat-only tools cannot use a library default scope.',
         }
-      : unknownSqlColumn
-        ? 'Call db.query without sql to inspect available columns, then correct the SQL query. Do not repeat the unchanged query.'
-        : retryMode === 'refresh_then_retry'
-          ? 'Read the affected source or task state again in the same scope before changing the request.'
-          : retryMode === 'correct_arguments'
-            ? 'Correct the arguments using the discovered tool schema; do not repeat the same request.'
-            : retryMode === 'narrow_read'
-              ? 'Read fewer items or a smaller range in the same scope.'
-              : retryMode === 'inspect_outcome'
-                ? 'Inspect the task and committed effects before another write. Do not automatically replay it.'
-                : 'Stop this operation and explain the condition; do not repeat it unchanged.',
+      : wrongProfileScope
+        ? {
+            tool: 'resource.read',
+            guidance:
+              'Find the shared bot/persona content ID, read its revision and source.appearanceProfilesPath, then use resource.patch with the full {id,name,appearance,referenceImageId?} array. Do not search for a chat.',
+          }
+        : unknownSqlColumn
+          ? 'Call db.query without sql to inspect available columns, then correct the SQL query. Do not repeat the unchanged query.'
+          : retryMode === 'refresh_then_retry'
+            ? 'Read the affected source or task state again in the same scope before changing the request.'
+            : retryMode === 'correct_arguments'
+              ? 'Correct the arguments using the discovered tool schema; do not repeat the same request.'
+              : retryMode === 'narrow_read'
+                ? 'Read fewer items or a smaller range in the same scope.'
+                : retryMode === 'inspect_outcome'
+                  ? 'Inspect the task and committed effects before another write. Do not automatically replay it.'
+                  : 'Stop this operation and explain the condition; do not repeat it unchanged.',
   };
 }
 
@@ -1306,6 +1315,32 @@ export class HelperRuntime {
           output = execution.result;
           denied = execution.denied ?? false;
           errorKind = execution.errorKind;
+          // A nonzero shell exit is not a successful Codex tool invocation. Keep
+          // stdout, outputFile and any confirmed receipts for safe recovery.
+          if (
+            call.name === 'data.exec' &&
+            !denied &&
+            !errorKind &&
+            output &&
+            typeof output === 'object'
+          ) {
+            const shell = output as Record<string, any>;
+            if (
+              shell.timedOut === true ||
+              typeof shell.error === 'string' ||
+              (shell.exitCode !== undefined && shell.exitCode !== 0)
+            ) {
+              denied = true;
+              errorKind = 'recoverable';
+              output = {
+                ...shell,
+                guidance:
+                  Array.isArray(shell.applied) && shell.applied.length
+                    ? 'The shell failed after confirmed app changes. Inspect recorded effects before any retry; never replay committed edits.'
+                    : 'The shell command failed. Inspect its exit status and saved outputFile; correct the command or query before retrying.',
+              };
+            }
+          }
           if (!denied && !errorKind && collected.length) {
             imageReads.set(wireCall.id, collected);
             if (call.name === 'data.exec')
@@ -2312,7 +2347,7 @@ export class HelperRuntime {
       name === 'illustration.image.read' ||
       name === 'illustration.cut.read'
     ) {
-      if (!chatId) throw new HttpError(400, 'Use chat.list to find a chat and supply its chatId.');
+      if (!chatId) throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
       if (name === 'illustration.cut.read' && args.includeImage === false)
         return inspectIllustrationCut(this.store, chatId, args);
       if (name === 'illustration.image.list')
@@ -2418,7 +2453,26 @@ export class HelperRuntime {
     }
     if (HELPER_DATA_TOOLS.some((tool) => tool.name === name))
       return invokeDataTool(this.store, task, name, args, hooks.signal);
-    if (name === 'chat.list') return this.store.chats();
+    if (name === 'chat.list') {
+      fields(args, ['query', 'offset', 'limit']);
+      const query =
+        args.query === undefined ? '' : text(args.query, 'chat query', 200, true).toLowerCase();
+      const offset = number(args.offset ?? 0, 'offset', 0);
+      const limit = number(args.limit ?? 20, 'limit', 1, 50);
+      const all = this.store.chats().filter((chat) => chat.title.toLowerCase().includes(query));
+      const chats = all.slice(offset, offset + limit).map((chat) => ({
+        id: chat.id,
+        title: chat.title,
+        headRevision: chat.headRevision,
+        titleRevision: chat.titleRevision,
+        lastActivityAt: chat.lastActivityAt,
+      }));
+      return {
+        chats,
+        total: all.length,
+        nextOffset: offset + chats.length < all.length ? offset + chats.length : null,
+      };
+    }
     const resourceOperation = helperResourceOperation(name, args);
     if (resourceOperation) {
       if (resourceOperation.readOnly) return invokeResourceTool(this.store, name, args);
@@ -2442,7 +2496,7 @@ export class HelperRuntime {
           400,
           name.startsWith('illustration.profiles.')
             ? 'ILLUSTRATION_PROFILE_CHAT_ONLY: Shared bot/persona defaults use resource.read and resource.patch at source.appearanceProfilesPath; no chat is needed.'
-            : 'CHAT_SCOPE_REQUIRED: Supply chatId for this illustration operation.'
+            : 'CHAT_SCOPE_REQUIRED'
         );
       switch (name) {
         case 'illustration.profiles.read':
@@ -2467,8 +2521,7 @@ export class HelperRuntime {
       );
     }
     if (HELPER_SCENE_TOOLS.some((tool) => tool.name === name)) {
-      if (scope.kind !== 'chat')
-        throw new HttpError(400, 'chat.list로 채팅을 찾고 chatId를 지정해 주세요.');
+      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
       const invoke = () =>
         name === 'scene.search' && args.regex === true
           ? invokeSceneRegexSearch(this.store, scope.chatId, args, hooks.signal)
@@ -2489,26 +2542,31 @@ export class HelperRuntime {
       return result;
     }
     if (name === 'chat.read') {
-      if (scope.kind !== 'chat')
-        throw new HttpError(400, 'chat.list로 채팅을 찾고 chatId를 지정해 주세요.');
+      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
+      fields(args, ['includePreview', 'offset', 'limit']);
       if (args.includePreview !== undefined && typeof args.includePreview !== 'boolean')
         throw new HttpError(400, 'Invalid includePreview');
+      const offset = number(args.offset ?? 0, 'offset', 0);
+      const limit = number(args.limit ?? 50, 'limit', 1, 100);
       const chat = this.store.chat(scope.chatId);
       let sceneNumber = 0;
+      const messages = this.store.history(chat.headRevision).map((item) => {
+        const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
+        if (sceneEnabled) sceneNumber++;
+        return {
+          id: item.revision,
+          hash: item.contentHash,
+          sceneNumber: sceneEnabled ? sceneNumber : null,
+          sceneEnabled,
+          originalLength: item.text.length,
+          ...(args.includePreview ? { preview: textTokenExcerpt(item.text, 60).text } : {}),
+        };
+      });
       return {
         chat,
-        messages: this.store.history(chat.headRevision).map((item) => {
-          const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
-          if (sceneEnabled) sceneNumber++;
-          return {
-            id: item.revision,
-            hash: item.contentHash,
-            sceneNumber: sceneEnabled ? sceneNumber : null,
-            sceneEnabled,
-            originalLength: item.text.length,
-            ...(args.includePreview ? { preview: textTokenExcerpt(item.text, 60).text } : {}),
-          };
-        }),
+        messages: messages.slice(offset, offset + limit),
+        total: messages.length,
+        nextOffset: offset + limit < messages.length ? offset + limit : null,
       };
     }
     if (name.startsWith('options.')) {
@@ -2518,7 +2576,7 @@ export class HelperRuntime {
         : this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, invoke);
     }
     if (name === 'chat.lore') {
-      if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
       const service = new ChatOverridesStore(this.store);
       if (args.action === 'read') return readHelperChatLore(this.store, scope.chatId, args);
       if (args.action !== 'patch' && args.action !== 'remove')
@@ -2540,7 +2598,7 @@ export class HelperRuntime {
     }
     if (name === 'editor.read') return readHelperEditor(task.snapshot.editor, args);
     if (name === 'chat.rename' || name === 'chat.fork') {
-      if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
       this.workspace.assertRunning(task.id);
       return this.workspace.operation(task.id, `${task.id}:${operationId}`, { name, args }, () => {
         if (name === 'chat.rename')
@@ -2570,7 +2628,7 @@ export class HelperRuntime {
       });
     }
     if (name === 'outline.read' || name === 'outline.write') {
-      if (scope.kind !== 'chat') throw new HttpError(403, 'CHAT_SCOPE_REQUIRED');
+      if (scope.kind !== 'chat') throw new HttpError(400, 'CHAT_SCOPE_REQUIRED');
       if (name === 'outline.read')
         return readHelperOutline(this.store, scope.chatId, args, task.snapshot.writing);
       this.workspace.assertRunning(task.id);

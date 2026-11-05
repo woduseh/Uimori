@@ -527,6 +527,99 @@ test('discovery favors tools for the current scope without hiding explicit opera
   ).toHaveLength(1);
 });
 
+test('the full helper catalog includes actionable metadata and ranks exact operations', () => {
+  const seen = new Map<string, { required: string[]; effect: string; description: string }>();
+  let offset = 0;
+  for (;;) {
+    const page = describeHelperTools({ offset }, false, 'library');
+    if (!('nextOffset' in page)) throw new Error('Expected catalog');
+    for (const tool of page.tools) {
+      expect(seen.has(tool.name)).toBe(false);
+      expect(tool.description.length).toBeGreaterThan(0);
+      expect(['read', 'write', 'mixed']).toContain(tool.effect);
+      seen.set(tool.name, tool);
+    }
+    if (page.nextOffset === null) {
+      expect(seen.size).toBe(page.total);
+      break;
+    }
+    offset = page.nextOffset;
+  }
+  expect(seen.get('resource.patch')).toMatchObject({
+    effect: 'write',
+    required: ['kind', 'id', 'expectedRevision', 'changes'],
+  });
+  expect(seen.get('chat.lore')).toMatchObject({ effect: 'mixed', required: ['action'] });
+  expect(seen.get('task.inspect')).toMatchObject({ effect: 'read', required: ['kind', 'id'] });
+  const query = describeHelperTools({ query: 'generate illustration' }, false, 'chat');
+  if (!('total' in query)) throw new Error('Expected ranked catalog');
+  expect(query.tools[0]?.name).toBe('illustration.generate');
+});
+
+test('chat discovery and scene indexes stay compact and follow nextOffset', async () => {
+  const f = await fixture('chat');
+  for (let index = 0; index < 3; index++)
+    createFixtureChat(f.store, `Paginated catalog ${index}`, { botId: f.bot.id });
+  for (let index = 0; index < 3; index++)
+    completedSource(f.store, f.chat.id, `An original scene ${index}`);
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('first-chats', 'chat.list', { query: 'Paginated catalog', limit: 2 }),
+        call('scene-page', 'chat.read', { offset: 1, limit: 1, includePreview: true })
+      );
+    if (round === 1) {
+      const first = result<{
+        chats: { id: string; title: string; settings?: unknown }[];
+        total: number;
+        nextOffset: number;
+      }>(request, 'first-chats');
+      expect(first).toMatchObject({ total: 3, nextOffset: 2 });
+      expect(first.chats).toHaveLength(2);
+      expect(first.chats[0]).not.toHaveProperty('settings');
+      expect(result(request, 'scene-page')).toMatchObject({
+        total: 3,
+        nextOffset: 2,
+        messages: [expect.objectContaining({ sceneNumber: 2, preview: 'An original scene 1' })],
+      });
+      return calls(
+        call('last-chats', 'chat.list', {
+          query: 'Paginated catalog',
+          offset: first.nextOffset,
+          limit: 2,
+        })
+      );
+    }
+    expect(result(request, 'last-chats')).toMatchObject({ total: 3, nextOffset: null });
+    return success;
+  });
+  await submit(f, 'Inspect the second story scene and find paged chats.');
+});
+
+test('library chat-only tools explain how to select a chat instead of telling the model to stop', async () => {
+  const f = await fixture('library');
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        call('chat-read', 'chat.read', {}),
+        call('scene-read', 'scene.read', { sourceId: 'scene', target: 'original' })
+      );
+    for (const id of ['chat-read', 'scene-read'])
+      expect(event(request, id)).toMatchObject({
+        denied: true,
+        errorKind: 'recoverable',
+        result: {
+          code: 'CHAT_SCOPE_REQUIRED',
+          retryMode: 'correct_arguments',
+          outcome: 'unchanged',
+          nextAction: { tool: 'chat.list' },
+        },
+      });
+    return success;
+  });
+  await submit(f, 'Inspect a chat from the library scope.');
+});
+
 test('library appearance profiles return a specific switch-tool recovery', async () => {
   const f = await fixture('library');
   mockSend((request, round) => {

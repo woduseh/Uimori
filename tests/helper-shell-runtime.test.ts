@@ -137,6 +137,38 @@ const toolResult = (body: any) =>
   JSON.parse(body.messages.findLast((message: any) => message.role === 'tool').content);
 
 linuxTest(
+  'nonzero data.exec exit is a failed model tool result with preserved diagnostics',
+  async () => {
+    const f = await fixture();
+    const bodies = provider((body, round) =>
+      round === 0
+        ? answer(body, {
+            id: 'shell-fail',
+            arguments: { command: 'echo missing-file >&2; exit 7' },
+          })
+        : answer(body)
+    );
+    const task = await f.run('Inspect a missing local file.');
+    expect(task.status).toBe('completed');
+    expect(bodies).toHaveLength(2);
+    expect(toolResult(bodies[1])).toMatchObject({
+      exitCode: 7,
+      timedOut: false,
+      guidance: expect.stringContaining('failed'),
+      outputFile: expect.stringMatching(/^scratch\/exec-/),
+    });
+    const finished = f.runtime.workspace
+      .events(f.conversation.id)
+      .find(
+        (event) =>
+          event.kind === 'tool.finished' &&
+          (event.data as { callId?: string }).callId === 'shell-fail'
+      );
+    expect(finished?.data).toMatchObject({ denied: true, errorKind: 'recoverable' });
+  }
+);
+
+linuxTest(
   'committed apply remains recorded when Runner response is lost and stops automatic replay',
   async () => {
     const f = await fixture();
