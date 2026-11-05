@@ -92,7 +92,7 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'theme.list',
     effect: 'read',
     description:
-      'List compact theme and palette metadata with current selections and preference revision. Read theme styles/colors with resource.read kind=theme and palette colors with palette.list.',
+      'List available themes and palettes with compact metadata, current selections and preference revision. Read theme styles/colors with resource.read kind=theme and palette colors with palette.list.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -216,7 +216,7 @@ const resourceTools: ResourceToolDefinition[] = [
         ? { kind: args.kind, id: null }
         : null,
     description:
-      'Create an independent copy of a saved bot/persona/module or prompt preset without reading or resending its full model. Requires sourceId, expectedSourceRevision and the new display title. Returns a new id/revision and the copied source id/revision; patch the returned id to edit the copy. Preserves prompt blocks, controls, defaults and current values. Native preset name is independent and preserved by default; syncNativeName:true updates it to the new title. Content copies follow native naming and start with no relatedIds. Does not copy unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and never edits the source. Singleton prompt-workspace is not supported.',
+      'Create an independent copy (duplicate) of a saved bot/persona/module or prompt preset without reading or resending its full model. Requires sourceId, expectedSourceRevision and the new display title. Returns a new id/revision and the copied source id/revision; patch the returned id to edit the copy. Preserves prompt blocks, controls, defaults and current values. Native preset name is independent and preserved by default; syncNativeName:true updates it to the new title. Content copies follow native naming and start with no relatedIds. Does not copy unsaved editor input, saved option combinations, folder placement, active selections, chat history or undo history, and never edits the source. Singleton prompt-workspace is not supported.',
     inputSchema: {
       type: 'object',
       properties: {

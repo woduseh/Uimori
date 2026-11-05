@@ -1,6 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  constants,
+  closeSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { join, relative, resolve, dirname } from 'node:path';
 import type { HelperTask } from '../core/helper.js';
@@ -16,7 +27,7 @@ import { applyHelperResourceMutation } from './helper-resource-undo.js';
 import { helperSceneSource } from './helper-scene-tools.js';
 import { HELPER_SHELL_GUIDE } from './helper-shell-guide.js';
 import { HELPER_APP_TOOLS, HELPER_GATEWAY_TOOLS } from './helper-app-tools.js';
-import { HttpError, record } from './request-validation.js';
+import { fields, HttpError, record } from './request-validation.js';
 import type { Store } from './store.js';
 import type { HelperWorkspace } from './helper-workspace.js';
 import { shellRunnerRpc as rpc } from './shell-transport.js';
@@ -60,7 +71,11 @@ type FileTarget =
       hash: string;
       metadata: SceneMetadata;
     };
-type TaskFiles = { files: Map<string, FileTarget>; task: HelperTask };
+type TaskFiles = {
+  files: Map<string, FileTarget>;
+  chats: Map<string, string | null>;
+  task: HelperTask;
+};
 export type HelperShellAppResult = {
   result: unknown;
   denied?: boolean;
@@ -132,6 +147,83 @@ function write(path: string, text: string) {
 function json(path: string, value: unknown) {
   write(path, JSON.stringify(value, null, 2) + '\n');
 }
+
+/** Never follow workspace symlinks or claim a file made outside this export. */
+function workspacePath(base: string, file: string) {
+  const path = resolve(base, file);
+  const rel = relative(base, path);
+  if (!rel || rel === '..' || rel.startsWith('../') || rel.startsWith('..\\'))
+    throw new HttpError(400, 'SHELL_PATH_INVALID');
+  const baseStat = lstatSync(base);
+  if (!baseStat.isDirectory() || baseStat.isSymbolicLink() || realpathSync(base) !== base)
+    throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+  let current = base;
+  for (const part of relative(base, dirname(path)).split(/[\\/]/u).filter(Boolean)) {
+    current = join(current, part);
+    try {
+      mkdirSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
+    const stat = lstatSync(current);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(current) !== current)
+      throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+  }
+  return path;
+}
+
+function writeWorkspaceFile(base: string, file: string, text: string, createOnly = false) {
+  const path = workspacePath(base, file);
+  if (!createOnly) {
+    try {
+      const stat = lstatSync(path);
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink > 1)
+        throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+  try {
+    const fd = openSync(
+      path,
+      constants.O_WRONLY |
+        constants.O_CREAT |
+        (createOnly ? constants.O_EXCL : constants.O_TRUNC) |
+        (constants.O_NOFOLLOW ?? 0)
+    );
+    try {
+      writeFileSync(fd, text, 'utf8');
+    } finally {
+      closeSync(fd);
+    }
+  } catch (error) {
+    if (['EEXIST', 'ELOOP'].includes((error as NodeJS.ErrnoException).code ?? ''))
+      throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+    throw error;
+  }
+}
+
+function assertNewWorkspaceFile(base: string, file: string) {
+  const path = workspacePath(base, file);
+  try {
+    lstatSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+  throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+}
+
+function assertExistingWorkspaceFile(base: string, file: string) {
+  const path = workspacePath(base, file);
+  try {
+    const stat = lstatSync(path);
+    if (stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1) return;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+}
 /** A transport failure cannot undo saves whose receipts already committed. */
 export class HelperShellExecutionError extends Error {
   constructor(
@@ -202,23 +294,23 @@ export class HelperShell {
     id: string,
     kind: ResourceKind,
     files: Map<string, FileTarget>,
-    file = `library/${id}/resource.json`
+    file = `library/${id}/resource.json`,
+    createOnly = false
   ) {
     if (!safeId(id)) return;
     const resource = readResource(this.store, kind, id);
     const data = editableResource(kind, resource);
     const base = dirname(file);
     const content = JSON.stringify(data, null, 2) + '\n';
-    write(join(this.taskDir(taskId), file), content);
-    files.set(file, {
+    const target: FileTarget = {
       kind: 'resource',
       id,
       resourceKind: kind,
       title: 'title' in resource ? resource.title : '',
       revision: resource.revision,
       hash: sha(content),
-    });
-    json(join(this.taskDir(taskId), base, 'manifest.json'), {
+    };
+    const manifest = {
       id,
       kind,
       revision: resource.revision,
@@ -232,7 +324,11 @@ export class HelperShell {
               'Edit native content, not derived title/description/text. Other authored fields keep the existing resource save contract.',
           }
         : {}),
-    });
+    };
+    const output: [string, string][] = [
+      [file, content],
+      [join(base, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n'],
+    ];
 
     if (kind === 'content') {
       const native = (resource as Content).package.nativeRisu;
@@ -252,29 +348,62 @@ export class HelperShell {
             content: entry.content ?? '',
           })
         );
-        write(
-          join(this.taskDir(taskId), base, 'lorebook.jsonl'),
-          lines.join('\n') + (lines.length ? '\n' : '')
-        );
+        output.push([join(base, 'lorebook.jsonl'), lines.join('\n') + (lines.length ? '\n' : '')]);
       }
     }
+    const directory = this.taskDir(taskId);
+    if (createOnly) for (const [name] of output) assertNewWorkspaceFile(directory, name);
+    for (const [index, [name, body]] of output.entries()) {
+      writeWorkspaceFile(directory, name, body, createOnly);
+      // Existing refreshes may have committed even if a secondary projection fails.
+      if (!createOnly && index === 0) files.set(file, target);
+    }
+    if (createOnly) files.set(file, target);
   }
 
   private writeLibraryIndex(taskId: string, files: Map<string, FileTarget>) {
-    const index = [...files].flatMap(([file, target]) =>
-      target.kind === 'resource' && file === `library/${target.id}/resource.json`
-        ? [
-            JSON.stringify({
-              id: target.id,
-              kind: target.resourceKind,
-              title: target.title,
-              revision: target.revision,
-              file,
-            }),
-          ]
-        : []
+    const rows = this.store.db
+      .prepare(
+        "SELECT v.id,v.kind,v.revision,json_extract(v.body,'$.title') AS title FROM versions v WHERE v.kind IN ('content','prompt-preset') AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY v.kind,v.id"
+      )
+      .all() as { id: string; kind: ResourceKind; revision: number; title: string }[];
+    const index = rows
+      .filter((row) => safeId(row.id))
+      .map((row) => {
+        const file = `library/${row.id}/resource.json`;
+        const target = files.get(file);
+        return {
+          ...row,
+          file,
+          materialized: target?.kind === 'resource',
+          ...(target?.kind === 'resource' ? { projectedRevision: target.revision } : {}),
+        };
+      });
+    writeWorkspaceFile(
+      this.taskDir(taskId),
+      'library/index.jsonl',
+      index.map((item) => JSON.stringify(item)).join('\n') + (index.length ? '\n' : '')
     );
-    write(join(this.taskDir(taskId), 'library/index.jsonl'), index.join('\n') + '\n');
+    return index;
+  }
+
+  private writeChatIndex(taskId: string, chats: Map<string, string | null>) {
+    const index = this.store
+      .chats()
+      .filter((chat) => safeId(chat.id))
+      .map((chat) => ({
+        id: chat.id,
+        title: chat.title,
+        headRevision: chat.headRevision,
+        materialized: chats.has(chat.id),
+        ...(chats.has(chat.id) ? { projectedHeadRevision: chats.get(chat.id) } : {}),
+      }));
+    writeWorkspaceFile(
+      this.taskDir(taskId),
+      'chats/index.jsonl',
+      index.map((item) => JSON.stringify(item)).join('\n') + (index.length ? '\n' : '')
+    );
+    return index;
   }
 
   private sceneIndexEntry(file: string, target: Extract<FileTarget, { kind: 'scene' }>) {
@@ -288,7 +417,11 @@ export class HelperShell {
         ? [this.sceneIndexEntry(path, target)]
         : []
     );
-    json(join(this.taskDir(taskId), `chats/${chat}/scenes.json`), scenes);
+    writeWorkspaceFile(
+      this.taskDir(taskId),
+      `chats/${chat}/scenes.json`,
+      JSON.stringify(scenes, null, 2) + '\n'
+    );
   }
 
   private exportTask(task: HelperTask) {
@@ -296,61 +429,9 @@ export class HelperShell {
     if (this.tasks.has(task.id)) return;
     mkdirSync(join(base, 'scratch'), { recursive: true });
     const files = new Map<string, FileTarget>();
-    const resources = this.store.db
-      .prepare(
-        "SELECT v.id, v.kind FROM versions v WHERE v.kind IN ('content','prompt-preset') AND NOT EXISTS(SELECT 1 FROM library_hidden h WHERE h.kind=v.kind AND h.id=v.id) ORDER BY v.kind,v.id"
-      )
-      .all() as { id: string; kind: ResourceKind }[];
-    for (const r of resources) {
-      if (!safeId(r.id)) continue;
-      this.exportResource(task.id, r.id, r.kind, files);
-    }
+    const chats = new Map<string, string | null>();
     this.writeLibraryIndex(task.id, files);
-    const chats = this.store.chats();
-    write(
-      join(base, 'chats/index.jsonl'),
-      chats
-        .map(({ id, title, headRevision }) => JSON.stringify({ id, title, headRevision }))
-        .join('\n') + '\n'
-    );
-    for (const chat of chats) {
-      if (!safeId(chat.id)) continue;
-      const dir = `chats/${chat.id}`;
-      json(join(base, dir, 'metadata.json'), {
-        id: chat.id,
-        title: chat.title,
-        headRevision: chat.headRevision,
-      });
-      let sceneNumber = 0;
-      const scenes: ReturnType<typeof this.sceneIndexEntry>[] = [];
-      const history = this.store.history(chat.headRevision);
-      const edits = this.store.db
-        .prepare(`SELECT source_id AS sourceId,MAX(revision) AS revision FROM source_edits
-          WHERE source_id IN (SELECT value FROM json_each(?)) GROUP BY source_id`)
-        .all(JSON.stringify(history.map((item) => item.revision))) as {
-        sourceId: string;
-        revision: number;
-      }[];
-      const editRevisions = new Map(edits.map((edit) => [edit.sourceId, edit.revision]));
-      for (const item of history) {
-        if (!safeId(item.revision)) continue;
-        const file = `${dir}/scenes/${item.revision}.txt`;
-        write(join(base, file), item.text);
-        const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
-        if (sceneEnabled) sceneNumber++;
-        const target = {
-          kind: 'scene' as const,
-          id: item.revision,
-          chatId: chat.id,
-          revision: editRevisions.get(item.revision) ?? 0,
-          hash: sha(item.text),
-          metadata: sceneMetadata(item.text, sceneEnabled ? sceneNumber : null, sceneEnabled),
-        };
-        files.set(file, target);
-        scenes.push(this.sceneIndexEntry(file, target));
-      }
-      json(join(base, dir, 'scenes.json'), scenes);
-    }
+    this.writeChatIndex(task.id, chats);
     if (task.snapshot.editor?.model) {
       json(join(base, 'editor/input.json'), task.snapshot.editor.model);
       json(join(base, 'editor/metadata.json'), {
@@ -403,9 +484,10 @@ export class HelperShell {
         'Use rg, jq, grep, find, Python, or Bash freely.\n' +
         'GUIDE.md explains Uimori content concepts, source authority and how to choose a read path; read relevant sections when unfamiliar.\n' +
         'Use `uimori tools --query <term>` to find operations, `uimori tools <operation>` for its schema, `uimori call <operation> --key value` for simple arguments and `--input <file|->` for nested JSON. `uimori --help` shows syntax.\n' +
-        'library/index.jsonl lists saved resources; library/<id>/resource.json is editable.\n' +
-        'library/<id>/lorebook.jsonl is a derived search index and cannot be applied.\n' +
-        'chats/index.jsonl lists chats; chats/<id>/scenes.json has saved scene order, sizes, previews and enabled state; chats/<id>/scenes/*.txt are editable originals.\n' +
+        'library/index.jsonl and chats/index.jsonl list saved items; materialized:false means their body files are not present.\n' +
+        'Use `uimori export \'{"scope":"library","id":"..."}\'` or `uimori export \'{"scope":"chats","id":"..."}\'` to prepare an item; use all:true for all. Repeated exports preserve existing working files.\n' +
+        'Use data.search for full live searches, or export all before searching workspace bodies. An unmaterialized file is not evidence of an absent match.\n' +
+        'Materialized library/<id>/resource.json and chats/<id>/scenes/*.txt are editable; lorebook.jsonl is a derived index. chats/<id>/scenes.json holds saved scene metadata.\n' +
         'current/scenes.json indexes the fixed task-admission scene snapshot in current/scenes/*.txt. current/ and chats/ may differ; do not mix their versions.\n' +
         'For live summary, notes and story-guide data use uimori call context.read; for chat lore overrides use uimori call chat.lore with action=read. These are live reads, not fixed current/ snapshots.\n' +
         'editor/ and current/ are reserved task snapshots, not live editable resources.\n' +
@@ -416,7 +498,113 @@ export class HelperShell {
         'Use `uimori refresh <path>` for current saved data. Clean files refresh in place; dirty files stay intact and latestPath names a separate editable file. Reconcile into latestPath and apply it.\n' +
         'Do not mistake edited files for saved state before apply returns success.\n'
     );
-    this.tasks.set(task.id, { files, task });
+    this.tasks.set(task.id, { files, chats, task });
+  }
+
+  private exportChat(
+    taskId: string,
+    task: TaskFiles,
+    chat: { id: string; title: string; headRevision: string | null }
+  ) {
+    const dir = `chats/${chat.id}`;
+    const history = this.store.history(chat.headRevision);
+    const edits = this.store.db
+      .prepare(`SELECT source_id AS sourceId,MAX(revision) AS revision FROM source_edits
+        WHERE source_id IN (SELECT value FROM json_each(?)) GROUP BY source_id`)
+      .all(JSON.stringify(history.map((item) => item.revision))) as {
+      sourceId: string;
+      revision: number;
+    }[];
+    const editRevisions = new Map(edits.map((edit) => [edit.sourceId, edit.revision]));
+    const output: [string, string][] = [];
+    const targets: [string, Extract<FileTarget, { kind: 'scene' }>][] = [];
+    const scenes: ReturnType<typeof this.sceneIndexEntry>[] = [];
+    let sceneNumber = 0;
+    for (const item of history) {
+      if (!safeId(item.revision)) continue;
+      const file = `${dir}/scenes/${item.revision}.txt`;
+      const sceneEnabled = item.sceneContext?.sceneEnabled !== false;
+      if (sceneEnabled) sceneNumber++;
+      const target = {
+        kind: 'scene' as const,
+        id: item.revision,
+        chatId: chat.id,
+        revision: editRevisions.get(item.revision) ?? 0,
+        hash: sha(item.text),
+        metadata: sceneMetadata(item.text, sceneEnabled ? sceneNumber : null, sceneEnabled),
+      };
+      output.push([file, item.text]);
+      targets.push([file, target]);
+      scenes.push(this.sceneIndexEntry(file, target));
+    }
+    output.push(
+      [`${dir}/metadata.json`, JSON.stringify(chat, null, 2) + '\n'],
+      [`${dir}/scenes.json`, JSON.stringify(scenes, null, 2) + '\n']
+    );
+    const base = this.taskDir(taskId);
+    for (const [file] of output) assertNewWorkspaceFile(base, file);
+    for (const [file, content] of output) writeWorkspaceFile(base, file, content, true);
+    for (const [file, target] of targets) task.files.set(file, target);
+    task.chats.set(chat.id, chat.headRevision);
+  }
+
+  private exportData(taskId: string, args: Record<string, unknown>) {
+    fields(args, ['scope', 'id', 'all']);
+    if (args.id !== undefined && (typeof args.id !== 'string' || !safeId(args.id)))
+      throw new HttpError(400, 'SHELL_EXPORT_ID_INVALID');
+    if (args.all !== undefined && typeof args.all !== 'boolean')
+      throw new HttpError(400, 'SHELL_EXPORT_ALL_INVALID');
+    const task = this.tasks.get(taskId);
+    if (!task) throw new HttpError(400, 'SHELL_WORKSPACE_MISSING');
+    const exported: string[] = [];
+    const reused: string[] = [];
+    if (args.scope === 'library') {
+      const index = this.writeLibraryIndex(taskId, task.files);
+      const selected = index.filter((row) => args.all === true || row.id === args.id);
+      if (args.id && !selected.length) throw new HttpError(404, 'SHELL_EXPORT_NOT_FOUND');
+      try {
+        for (const item of selected) {
+          const target = task.files.get(item.file);
+          if (target) {
+            if (target.kind !== 'resource' || target.resourceKind !== item.kind)
+              throw new HttpError(409, 'SHELL_EXPORT_PATH_CONFLICT');
+            assertExistingWorkspaceFile(this.taskDir(taskId), item.file);
+            reused.push(item.file);
+          } else {
+            this.exportResource(taskId, item.id, item.kind, task.files, item.file, true);
+            exported.push(item.file);
+          }
+        }
+      } finally {
+        if (exported.length) this.writeLibraryIndex(taskId, task.files);
+      }
+      return { index: 'library/index.jsonl', count: index.length, exported, reused };
+    }
+    if (args.scope === 'chats') {
+      const index = this.writeChatIndex(taskId, task.chats);
+      const selected = index.filter((row) => args.all === true || row.id === args.id);
+      if (args.id && !selected.length) throw new HttpError(404, 'SHELL_EXPORT_NOT_FOUND');
+      try {
+        for (const item of selected) {
+          const file = `chats/${item.id}/scenes.json`;
+          if (task.chats.has(item.id)) {
+            assertExistingWorkspaceFile(this.taskDir(taskId), file);
+            reused.push(file);
+          } else {
+            this.exportChat(taskId, task, {
+              id: item.id,
+              title: item.title,
+              headRevision: item.headRevision,
+            });
+            exported.push(file);
+          }
+        }
+      } finally {
+        if (exported.length) this.writeChatIndex(taskId, task.chats);
+      }
+      return { index: 'chats/index.jsonl', count: index.length, exported, reused };
+    }
+    throw new HttpError(400, 'SHELL_EXPORT_SCOPE_REQUIRED: use library or chats');
   }
 
   private execution(taskId: unknown, toolId: unknown) {
@@ -472,7 +660,10 @@ export class HelperShell {
       rmSync(socket, { force: true });
       const server = createServer((req, res) => {
         const route = req.url ?? '';
-        if (!['/apply', '/refresh', '/tools', '/call'].includes(route) || req.method !== 'POST') {
+        if (
+          !['/apply', '/refresh', '/export', '/tools', '/call'].includes(route) ||
+          req.method !== 'POST'
+        ) {
           res.writeHead(404).end();
           return;
         }
@@ -498,9 +689,11 @@ export class HelperShell {
                 ? await this.appCall(taskId, toolId, route, input)
                 : {
                     result:
-                      route === '/refresh'
-                        ? this.refresh(taskId, input.path)
-                        : this.apply(taskId, toolId, input.path),
+                      route === '/export'
+                        ? this.exportData(taskId, record(input.arguments ?? {}))
+                        : route === '/refresh'
+                          ? this.refresh(taskId, input.path)
+                          : this.apply(taskId, toolId, input.path),
                   };
             res.writeHead(response.fatalError ? 500 : response.denied ? 400 : 200, {
               'content-type': 'application/json',
@@ -770,7 +963,6 @@ export class HelperShell {
           : name.startsWith('resource.') || name === 'image.update-metadata'
             ? [args]
             : [];
-    let libraryChanged = false;
     for (const item of resources) {
       if (!item || typeof item !== 'object') continue;
       const id = String(item.id ?? item.contentId ?? '');
@@ -786,10 +978,8 @@ export class HelperShell {
       );
       if (name === 'resource.delete') {
         for (const [file] of targets) task.files.delete(file);
-        libraryChanged = true;
         continue;
       }
-      if (!targets.length) targets.push([`library/${id}/resource.json`, undefined]);
       for (const [file, existing] of targets) {
         if (file === refreshedPath) continue;
         const path = join(this.taskDir(taskId), file);
@@ -798,10 +988,10 @@ export class HelperShell {
           continue;
         if (!existing && existsSync(path)) continue;
         this.exportResource(taskId, id, resourceKind, task.files, file);
-        libraryChanged = true;
       }
     }
-    if (libraryChanged) this.writeLibraryIndex(taskId, task.files);
+    if (resources.length) this.writeLibraryIndex(taskId, task.files);
+    if (name === 'chat.rename' || name === 'chat.fork') this.writeChatIndex(taskId, task.chats);
     if (!name.startsWith('scene.')) return;
     const ids = new Set([
       args.sourceId,

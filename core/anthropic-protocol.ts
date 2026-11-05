@@ -58,7 +58,7 @@ function copy(value: unknown, code = 'INVALID_ANTHROPIC_EVENT'): Json {
   return structuredClone(value);
 }
 const hash = (value: Json) => createHash('sha256').update(canonical(value)).digest('hex');
-const VERSION = 'anthropic-messages-turn-v1' as const;
+const VERSION = 'anthropic-messages-turn-v2' as const;
 type ToolName = { name: string; wireName: string };
 type PendingCall = { id: string; name: string; wireName: string; index: number };
 export type AnthropicTurn = {
@@ -69,7 +69,8 @@ export type AnthropicTurn = {
   bindingHash: string;
   phase: 'request' | ProviderResult['status'];
   messages: Json[];
-  completedResults: Json[];
+  completedResultCount: number;
+  completedResultsHash: string;
   pending: PendingCall[];
   usedIds: string[];
   toolNames: ToolName[];
@@ -86,7 +87,11 @@ function readTurn(value: Json): AnthropicTurn {
     !nonempty(value.modelId) ||
     !nonempty(value.bindingHash) ||
     !Array.isArray(value.messages) ||
-    !Array.isArray(value.completedResults) ||
+    typeof value.completedResultCount !== 'number' ||
+    !Number.isSafeInteger(value.completedResultCount) ||
+    value.completedResultCount < 0 ||
+    typeof value.completedResultsHash !== 'string' ||
+    !/^[a-f0-9]{64}$/u.test(value.completedResultsHash) ||
     !Array.isArray(value.pending) ||
     !Array.isArray(value.usedIds) ||
     !Array.isArray(value.toolNames) ||
@@ -221,13 +226,12 @@ export function encodeAnthropic(request: ProviderRequest): {
       previous.pending.length === 0;
     if (
       (!paused && (previous.phase !== 'tool_calls' || !previous.pending.length)) ||
-      results.length !== previous.completedResults.length + previous.pending.length ||
-      canonical(results.slice(0, previous.completedResults.length)) !==
-        canonical(previous.completedResults)
+      results.length !== previous.completedResultCount + previous.pending.length ||
+      hash(results.slice(0, previous.completedResultCount)) !== previous.completedResultsHash
     )
       reject('TOOL_RESULT_MISMATCH');
     const fresh = new Map<string, Record<string, Json>>();
-    for (const item of results.slice(previous.completedResults.length)) {
+    for (const item of results.slice(previous.completedResultCount)) {
       if (
         !object(item) ||
         !nonempty(item.callId) ||
@@ -424,7 +428,8 @@ export function encodeAnthropic(request: ProviderRequest): {
       bindingHash,
       phase: 'request',
       messages: structuredClone(messages),
-      completedResults: results,
+      completedResultCount: results.length,
+      completedResultsHash: hash(results),
       pending: [],
       usedIds: [...usedIds],
       toolNames,

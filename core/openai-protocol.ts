@@ -55,12 +55,13 @@ export type OpenAIToolAlias = { name: string; providerName: string };
 export type OpenAIPendingCall = { id: string; name: string; providerName: string };
 export type OpenAITurn = {
   webSearch?: true;
-  version: 'openai-responses-turn-v1' | 'openai-chat-turn-v1';
+  version: 'openai-responses-turn-v2' | 'openai-chat-turn-v2';
   modelId: string;
   bindingHash: string;
   phase: 'request' | ProviderResult['status'];
   input: Json[];
-  completedResults: Json[];
+  completedResultCount: number;
+  completedResultsHash: string;
   pending: OpenAIPendingCall[];
   usedIds: string[];
   aliases: OpenAIToolAlias[];
@@ -74,9 +75,14 @@ function readTurn(value: Json): OpenAITurn {
   if (!object(value) || !nonempty(value.stateHash)) return reject('INVALID_OPENAI_CONTINUATION');
   const { stateHash, ...body } = value;
   if (
+    (value.version !== 'openai-responses-turn-v2' && value.version !== 'openai-chat-turn-v2') ||
     hash(body) !== stateHash ||
     !Array.isArray(value.input) ||
-    !Array.isArray(value.completedResults) ||
+    typeof value.completedResultCount !== 'number' ||
+    !Number.isSafeInteger(value.completedResultCount) ||
+    value.completedResultCount < 0 ||
+    typeof value.completedResultsHash !== 'string' ||
+    !/^[a-f0-9]{64}$/u.test(value.completedResultsHash) ||
     !Array.isArray(value.pending) ||
     !Array.isArray(value.usedIds) ||
     !Array.isArray(value.aliases)
@@ -96,7 +102,7 @@ function prepare(
     | 'openai-responses-v1'
     | 'openai-chat-v1'
     | 'vercel-chat-v1'
-    | 'deepseek-chat-v1' = version === 'openai-chat-turn-v1'
+    | 'deepseek-chat-v1' = version === 'openai-chat-turn-v2'
     ? 'openai-chat-v1'
     : 'openai-responses-v1'
 ) {
@@ -178,13 +184,12 @@ function prepare(
     if (
       previous.phase !== 'tool_calls' ||
       !previous.pending.length ||
-      results.length !== previous.completedResults.length + previous.pending.length ||
-      canonical(results.slice(0, previous.completedResults.length)) !==
-        canonical(previous.completedResults)
+      results.length !== previous.completedResultCount + previous.pending.length ||
+      hash(results.slice(0, previous.completedResultCount)) !== previous.completedResultsHash
     )
       reject('TOOL_RESULT_MISMATCH');
     const index = new Map<string, Record<string, Json>>();
-    for (const result of results.slice(previous.completedResults.length)) {
+    for (const result of results.slice(previous.completedResultCount)) {
       if (
         !object(result) ||
         !nonempty(result.callId) ||
@@ -370,6 +375,7 @@ function diagnostic(value: Json): Json {
 }
 // Shared only by the two OpenAI wire protocols; neither helper performs network or host tool execution.
 export const openAIProtocol = {
+  hash,
   reject,
   object,
   nonempty,
@@ -391,7 +397,7 @@ export function encodeResponses(request: ProviderRequest): {
   context: OpenAITurn;
   messageMetadata?: NativeMessageMetadata;
 } {
-  const prepared = prepare(request, 'openai-responses-turn-v1', 'openai-responses-v1');
+  const prepared = prepare(request, 'openai-responses-turn-v2', 'openai-responses-v1');
   const { generation, aliases, schema, previous, fresh, plan, bootstrap, continuationInput } =
     prepared;
   const cache = plan ? undefined : planProviderCache(request, 'openai-responses-v1');
@@ -537,13 +543,14 @@ export function encodeResponses(request: ProviderRequest): {
     body: copy(body, 'INVALID_OPENAI_REQUEST'),
     messageMetadata: nativeMessageMetadata(plan),
     context: seal({
-      version: 'openai-responses-turn-v1',
+      version: 'openai-responses-turn-v2',
       ...(request.webSearch ? { webSearch: true as const } : {}),
       modelId: request.modelId,
       bindingHash: prepared.bindingHash,
       phase: 'request',
       input: structuredClone(input),
-      completedResults: prepared.results,
+      completedResultCount: prepared.results.length,
+      completedResultsHash: hash(prepared.results),
       aliases,
       pending: [],
       usedIds: [...(previous?.usedIds ?? [])],

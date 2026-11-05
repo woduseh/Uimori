@@ -15,6 +15,7 @@ an object; --input - reads stdin. Use uimori tools <operation> for its exact sch
 Examples:
   uimori tools --query appearance
   uimori tools resource.patch
+  uimori export '{"scope":"library","id":"<content-id>"}'
   uimori call resource.read --kind content --id <content-id>
   uimori call resource.patch --input patch.json
 `;

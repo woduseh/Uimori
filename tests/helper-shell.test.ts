@@ -3,7 +3,15 @@ import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import { join, resolve } from 'node:path';
@@ -85,6 +93,31 @@ async function fixture() {
   return { ...f, child };
 }
 
+function exportData(shell: HelperShell, taskId: string, scope: 'library' | 'chats', id?: string) {
+  return (
+    shell as unknown as {
+      exportData: (
+        taskId: string,
+        args: Record<string, unknown>
+      ) => {
+        exported: string[];
+        reused: string[];
+        count: number;
+      };
+    }
+  ).exportData(taskId, { scope, ...(id ? { id } : { all: true }) });
+}
+
+async function prepareFiles(
+  f: Awaited<ReturnType<typeof fixture>>,
+  scope: 'library' | 'chats',
+  id: string
+) {
+  const command = `node ${resolve('runner/uimori.mjs')} export '${JSON.stringify({ scope, id })}'`;
+  const result = await f.shell.exec(f.task, `prepare-${scope}`, command, 5000);
+  expect(result.exitCode).toBe(0);
+}
+
 test('an unavailable runner still exports current saved scene revisions and the frozen snapshot', async () => {
   const f = workspaceFixture();
   try {
@@ -103,6 +136,7 @@ test('an unavailable runner still exports current saved scene revisions and the 
     f.store.editSource(first.id, { text: '중간 수정', expectedRevision: 0 });
     f.store.editSource(first.id, { text: '최신 원문🙂\n다음 줄', expectedRevision: 1 });
     await expect(f.shell.exec(f.workspace.task(task.id), 'export', 'true', 1000)).rejects.toThrow();
+    exportData(f.shell, task.id, 'chats', chat.id);
 
     const base = join(f.root, 'tasks', task.id);
     const saved = JSON.parse(readFileSync(join(base, `chats/${chat.id}/scenes.json`), 'utf8'));
@@ -173,6 +207,7 @@ test('batch scene projection refresh preserves drafts and writes each affected i
     });
     f.workspace.start(task.id, 'shell-fixture');
     await expect(f.shell.exec(f.workspace.task(task.id), 'export', 'true', 1000)).rejects.toThrow();
+    exportData(f.shell, task.id, 'chats');
 
     const base = join(f.root, 'tasks', task.id);
     const file = (group: number, index: number) =>
@@ -274,6 +309,7 @@ test('portable apply retains its content-bound receipt and does not save twice',
   const f = workspaceFixture();
   try {
     await expect(f.shell.exec(f.task, 'export', 'true', 1000)).rejects.toThrow();
+    exportData(f.shell, f.task.id, 'library', f.resource.id);
     const relative = `library/${f.resource.id}/resource.json`;
     const filename = join(f.root, 'tasks', f.task.id, relative);
     const model = JSON.parse(readFileSync(filename, 'utf8')) as ContentEditModel;
@@ -322,11 +358,209 @@ test('portable apply retains its content-bound receipt and does not save twice',
   }
 });
 
+test('on-demand exports keep complete catalogs, live bases, frozen snapshots and drafts', async () => {
+  const f = workspaceFixture();
+  try {
+    const other = f.store.product.content(fixtureBotInput('Unprepared', 'Other body'));
+    const chats = [
+      createFixtureChat(f.store, 'Selected chat'),
+      createFixtureChat(f.store, 'Other chat'),
+    ];
+    const first = completedSource(f.store, chats[0].id, 'Frozen scene');
+    completedSource(f.store, chats[1].id, 'Other story');
+    const conversation = f.workspace.open({ kind: 'chat', chatId: chats[0].id });
+    const task = f.workspace.enqueue(conversation.id, 'lazy-export', 'Inspect', {
+      ...f.task.snapshot,
+      scope: conversation.scope,
+      writing: helperWritingSnapshot(f.store, chats[0].id),
+    });
+    f.workspace.start(task.id, 'shell-fixture');
+    await expect(f.shell.exec(f.workspace.task(task.id), 'export', 'true', 1000)).rejects.toThrow();
+    const base = join(f.root, 'tasks', task.id);
+    const library = () =>
+      readFileSync(join(base, 'library/index.jsonl'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+    const chatIndex = () =>
+      readFileSync(join(base, 'chats/index.jsonl'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line));
+    const resourceFile = join(base, 'library', f.resource.id, 'resource.json');
+    const sceneFile = join(base, 'chats', chats[0].id, 'scenes', `${first.id}.txt`);
+    expect(library()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: f.resource.id, materialized: false }),
+        expect.objectContaining({ id: other.id, materialized: false }),
+      ])
+    );
+    expect(chatIndex()).toEqual(
+      expect.arrayContaining(
+        chats.map((chat) => expect.objectContaining({ id: chat.id, materialized: false }))
+      )
+    );
+    expect(existsSync(resourceFile)).toBe(false);
+    expect(existsSync(sceneFile)).toBe(false);
+
+    const current = readResource(f.store, 'content', f.resource.id);
+    const edited = editableResource('content', current) as ContentEditModel;
+    edited.package.nativeRisu.card.creator_notes = 'Saved before export';
+    saveResource(f.store, {
+      kind: 'content',
+      id: f.resource.id,
+      expectedRevision: current.revision,
+      model: edited,
+    });
+    f.store.editSource(first.id, { text: 'Live before export', expectedRevision: 0 });
+    expect(exportData(f.shell, task.id, 'library', f.resource.id).exported).toEqual([
+      `library/${f.resource.id}/resource.json`,
+    ]);
+    expect(exportData(f.shell, task.id, 'chats', chats[0].id).exported).toEqual([
+      `chats/${chats[0].id}/scenes.json`,
+    ]);
+    expect(
+      JSON.parse(readFileSync(resourceFile, 'utf8')).package.nativeRisu.card.creator_notes
+    ).toBe('Saved before export');
+    expect(readFileSync(sceneFile, 'utf8')).toBe('Live before export');
+    expect(readFileSync(join(base, 'current/scenes', `${first.id}.txt`), 'utf8')).toBe(
+      'Frozen scene'
+    );
+    expect(existsSync(join(base, 'library', other.id, 'resource.json'))).toBe(false);
+    expect(existsSync(join(base, 'chats', chats[1].id, 'scenes.json'))).toBe(false);
+
+    const draft = 'local draft preserved';
+    writeFileSync(resourceFile, draft);
+    writeFileSync(sceneFile, 'local scene draft');
+    const newer = readResource(f.store, 'content', f.resource.id);
+    const newerModel = editableResource('content', newer) as ContentEditModel;
+    newerModel.package.nativeRisu.card.creator_notes = 'Saved after export';
+    saveResource(f.store, {
+      kind: 'content',
+      id: f.resource.id,
+      expectedRevision: newer.revision,
+      model: newerModel,
+    });
+    f.store.editSource(first.id, { text: 'Live after export', expectedRevision: 1 });
+    expect(exportData(f.shell, task.id, 'library', f.resource.id).reused).toEqual([
+      `library/${f.resource.id}/resource.json`,
+    ]);
+    expect(exportData(f.shell, task.id, 'chats', chats[0].id).reused).toEqual([
+      `chats/${chats[0].id}/scenes.json`,
+    ]);
+    expect(readFileSync(resourceFile, 'utf8')).toBe(draft);
+    expect(readFileSync(sceneFile, 'utf8')).toBe('local scene draft');
+    expect(library()).toContainEqual(
+      expect.objectContaining({
+        id: f.resource.id,
+        revision: newer.revision + 1,
+        projectedRevision: newer.revision,
+        materialized: true,
+      })
+    );
+    expect(chatIndex()).toContainEqual(
+      expect.objectContaining({
+        id: chats[0].id,
+        materialized: true,
+        projectedHeadRevision: first.id,
+      })
+    );
+
+    const clone = f.store.product.content(fixtureBotInput('New resource', 'Body'));
+    f.shell.refreshAfterMutation(
+      task.id,
+      'resource.clone',
+      { kind: 'content', sourceId: f.resource.id },
+      { id: clone.id }
+    );
+    expect(library()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: clone.id, materialized: false }),
+        expect.objectContaining({ id: other.id, materialized: false }),
+      ])
+    );
+    expect(existsSync(join(base, 'library', clone.id, 'resource.json'))).toBe(false);
+    f.store.db.prepare('INSERT INTO library_hidden(kind,id) VALUES(?,?)').run('content', clone.id);
+    f.shell.refreshAfterMutation(task.id, 'resource.delete', { kind: 'content', id: clone.id }, {});
+    expect(library().some((entry: { id: string }) => entry.id === clone.id)).toBe(false);
+    expect(() => exportData(f.shell, task.id, 'library', clone.id)).toThrow(
+      'SHELL_EXPORT_NOT_FOUND'
+    );
+    expect(() => exportData(f.shell, task.id, 'library', '../outside')).toThrow(
+      'SHELL_EXPORT_ID_INVALID'
+    );
+    expect(exportData(f.shell, task.id, 'library')).toMatchObject({
+      exported: expect.arrayContaining([`library/${other.id}/resource.json`]),
+      reused: [`library/${f.resource.id}/resource.json`],
+    });
+    expect(exportData(f.shell, task.id, 'chats')).toMatchObject({
+      exported: [`chats/${chats[1].id}/scenes.json`],
+      reused: [`chats/${chats[0].id}/scenes.json`],
+    });
+    expect(readFileSync(resourceFile, 'utf8')).toBe(draft);
+    expect(readFileSync(sceneFile, 'utf8')).toBe('local scene draft');
+  } finally {
+    f.shell.close();
+    f.store.close();
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test('on-demand exports reject unregistered files without claiming them', async () => {
+  const f = workspaceFixture();
+  try {
+    await expect(f.shell.exec(f.task, 'export', 'true', 1000)).rejects.toThrow();
+    const base = join(f.root, 'tasks', f.task.id);
+    const resourceDir = join(base, 'library', f.resource.id);
+    mkdirSync(resourceDir);
+    writeFileSync(join(resourceDir, 'manifest.json'), 'do not overwrite');
+    expect(() => exportData(f.shell, f.task.id, 'library', f.resource.id)).toThrow(
+      'SHELL_EXPORT_PATH_CONFLICT'
+    );
+    expect(readFileSync(join(resourceDir, 'manifest.json'), 'utf8')).toBe('do not overwrite');
+    expect(existsSync(join(resourceDir, 'resource.json'))).toBe(false);
+    const internal = f.shell as unknown as { tasks: Map<string, { files: Map<string, unknown> }> };
+    expect(internal.tasks.get(f.task.id)!.files.has(`library/${f.resource.id}/resource.json`)).toBe(
+      false
+    );
+  } finally {
+    f.shell.close();
+    f.store.close();
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+linuxTest('on-demand exports reject symlinked directories', async () => {
+  const f = workspaceFixture();
+  try {
+    const other = f.store.product.content(fixtureBotInput('Symlink fixture', 'Body'));
+    await expect(f.shell.exec(f.task, 'export', 'true', 1000)).rejects.toThrow();
+    const base = join(f.root, 'tasks', f.task.id);
+    const outside = join(f.dir, 'outside');
+    mkdirSync(outside);
+    writeFileSync(join(outside, 'resource.json'), 'outside must survive');
+    symlinkSync(outside, join(base, 'library', other.id), 'dir');
+    expect(() => exportData(f.shell, f.task.id, 'library', other.id)).toThrow(
+      'SHELL_EXPORT_PATH_CONFLICT'
+    );
+    expect(readFileSync(join(outside, 'resource.json'), 'utf8')).toBe('outside must survive');
+    const internal = f.shell as unknown as { tasks: Map<string, { files: Map<string, unknown> }> };
+    expect(internal.tasks.get(f.task.id)!.files.has(`library/${other.id}/resource.json`)).toBe(
+      false
+    );
+  } finally {
+    f.shell.close();
+    f.store.close();
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
 linuxTest(
   'shell finds resources and applies canonical changes through existing saves',
   async () => {
     const f = await fixture();
     const file = `library/${f.resource.id}/resource.json`;
+    await prepareFiles(f, 'library', f.resource.id);
     const read = await f.shell.exec(
       f.task,
       'read',
@@ -374,7 +608,7 @@ node ${resolve('runner/uimori.mjs')} apply ${file}`;
 linuxTest('external revision change rejects stale shell edits instead of overwriting', async () => {
   const f = await fixture();
   const file = `library/${f.resource.id}/resource.json`;
-  await f.shell.exec(f.task, 'read', 'cat INDEX.md | head -3', 5000);
+  await prepareFiles(f, 'library', f.resource.id);
   const latest = readResource(f.store, 'content', f.resource.id) as Content;
   const model = editableResource('content', latest) as ContentEditModel;
   model.package.nativeRisu.card.creator_notes = 'External change';
@@ -427,7 +661,7 @@ linuxTest(
     const exported = await f.shell.exec(
       f.workspace.task(task.id),
       'export',
-      'cat INDEX.md | head -5',
+      `node ${resolve('runner/uimori.mjs')} export '${JSON.stringify({ scope: 'chats', id: chat.id })}' > scratch/export.json; cat INDEX.md | head -5`,
       5000
     );
     expect(exported.exitCode).toBe(0);
@@ -486,6 +720,7 @@ linuxTest('native Linux text edits apply to saved scenes and retain edit revisio
   const chat = createFixtureChat(f.store, 'Shell scene');
   const source = completedSource(f.store, chat.id, 'Initial scene narrative');
   const file = `chats/${chat.id}/scenes/${source.id}.txt`;
+  await prepareFiles(f, 'chats', chat.id);
   const command = `printf '%s' 'Edited scene narrative' > ${file}; node ${resolve('runner/uimori.mjs')} apply ${file}`;
   const result = await f.shell.exec(f.task, 'scene', command, 5000);
   expect(result.exitCode).toBe(0);
@@ -539,7 +774,7 @@ linuxTest(
   'JSON formatting is a no-op and derived-only edits preserve DB, undo and local input',
   async () => {
     const f = await fixture();
-    await f.shell.exec(f.task, 'export', 'true', 5000);
+    await prepareFiles(f, 'library', f.resource.id);
     const { filename, model } = fileModel(f);
     const command = `node ${resolve('runner/uimori.mjs')} apply library/${f.resource.id}/resource.json`;
     writeFileSync(filename, JSON.stringify(model));
@@ -568,7 +803,7 @@ linuxTest(
   'native apply uses existing helper undo and a repeated apply does not save twice',
   async () => {
     const f = await fixture();
-    await f.shell.exec(f.task, 'export', 'true', 5000);
+    await prepareFiles(f, 'library', f.resource.id);
     const { filename, model } = fileModel(f);
     model.package.nativeRisu.card.creator_notes = 'Undo this native change';
     writeFileSync(filename, JSON.stringify(model));
@@ -589,10 +824,10 @@ linuxTest(
   }
 );
 linuxTest(
-  'app mutations refresh clean files and register clones without overwriting dirty files',
+  'app mutations refresh clean files and catalog clones without overwriting dirty files',
   async () => {
     const f = await fixture();
-    await f.shell.exec(f.task, 'export', 'true', 5000);
+    await prepareFiles(f, 'library', f.resource.id);
     const patch = (value: string) =>
       appMutation(
         f,
@@ -625,6 +860,8 @@ linuxTest(
     );
     const relative = `library/${clone.id}/resource.json`;
     const clonedFile = join(f.root, 'tasks', f.task.id, relative);
+    expect(existsSync(clonedFile)).toBe(false);
+    await prepareFiles(f, 'library', clone.id);
     const clonedModel = JSON.parse(readFileSync(clonedFile, 'utf8'));
     clonedModel.package.nativeRisu.card.creator_notes = 'Edited clone';
     writeFileSync(clonedFile, JSON.stringify(clonedModel));
@@ -653,7 +890,7 @@ linuxTest(
   'committed apply remains successful when metadata refresh fails and retry is a no-op',
   async () => {
     const f = await fixture();
-    await f.shell.exec(f.task, 'export', 'true', 5000);
+    await prepareFiles(f, 'library', f.resource.id);
     const { filename, model } = fileModel(f);
     model.package.nativeRisu.card.creator_notes = 'Saved despite refresh failure';
     writeFileSync(filename, JSON.stringify(model));
@@ -689,6 +926,7 @@ linuxTest('task cancellation aborts the runner before delayed file edits and app
   const f = await fixture();
   const controller = new AbortController();
   const file = `library/${f.resource.id}/resource.json`;
+  await prepareFiles(f, 'library', f.resource.id);
   const pending = f.shell.exec(
     f.task,
     'cancel',
@@ -841,6 +1079,7 @@ linuxTest(
     const f = await fixture();
     const cli = `node ${resolve('runner/uimori.mjs')}`;
     const applied = { operationId: 'shell:unknown:app:1', outcome: 'succeeded' };
+    await prepareFiles(f, 'library', f.resource.id);
     const invoke = vi.fn(async () => ({
       result: { error: 'STORAGE_RESPONSE_LOST', outcome: 'unknown' },
       fatalError: new Error('STORAGE_RESPONSE_LOST'),
@@ -910,7 +1149,7 @@ linuxTest(
     const f = await fixture();
     const file = `library/${f.resource.id}/resource.json`;
     const cli = `node ${resolve('runner/uimori.mjs')}`;
-    await f.shell.exec(f.task, 'export', 'true', 5000);
+    await prepareFiles(f, 'library', f.resource.id);
     const saveExternal = (name: string) => {
       const saved = readResource(f.store, 'content', f.resource.id);
       const model = editableResource('content', saved) as ContentEditModel;
@@ -970,7 +1209,11 @@ linuxTest(
       .split('\n')
       .map((line) => JSON.parse(line));
     expect(index.filter((entry) => entry.id === f.resource.id)).toEqual([
-      expect.objectContaining({ file, revision: f.resource.revision + 1 }),
+      expect.objectContaining({
+        file,
+        revision: f.resource.revision + 3,
+        projectedRevision: f.resource.revision + 1,
+      }),
     ]);
     const stale = await f.shell.exec(f.task, 'still-stale', `${cli} apply ${file}`, 5000);
     expect(stale.exitCode).toBe(1);
@@ -986,7 +1229,7 @@ linuxTest(
     const source = completedSource(f.store, chat.id, 'Original scene');
     const file = `chats/${chat.id}/scenes/${source.id}.txt`;
     const cli = `node ${resolve('runner/uimori.mjs')}`;
-    await f.shell.exec(f.task, 'export', 'true', 5000);
+    await prepareFiles(f, 'chats', chat.id);
     const filename = join(f.root, 'tasks', f.task.id, file);
     const sceneIndex = () =>
       JSON.parse(
@@ -1072,7 +1315,7 @@ linuxTest(
     const source = completedSource(f.store, chat.id, 'Historical original');
     const file = `chats/${chat.id}/scenes/${source.id}.txt`;
     const cli = `node ${resolve('runner/uimori.mjs')}`;
-    await f.shell.exec(f.task, 'export', 'true', 5000);
+    await prepareFiles(f, 'chats', chat.id);
     const taskDir = join(f.root, 'tasks', f.task.id);
     writeFileSync(join(taskDir, file), 'Preserved local draft');
     const refreshed = await f.shell.exec(f.task, 'refresh', `${cli} refresh ${file}`, 5000);

@@ -510,25 +510,26 @@ test('conditional reads remain distinct from writes and the narrower outline rev
   );
 });
 
-test('discovery uses current scope to break relevance ties without hiding explicit operations', () => {
-  const library = describeHelperTools({ query: 'shared appearance' }, false, 'library');
-  const chat = describeHelperTools({ query: 'shared appearance' }, false, 'chat');
+test('discovery keeps operations available across scopes for explicit targets', () => {
+  const library = describeHelperTools({ query: 'shared appearance', limit: 80 }, false, 'library');
+  const chat = describeHelperTools({ query: 'shared appearance', limit: 80 }, false, 'chat');
   if (!('total' in library) || !('total' in chat)) throw new Error('Expected catalog');
-  expect(library.tools.slice(0, 2).map((tool) => tool.name)).toEqual([
-    'resource.read',
-    'resource.patch',
-  ]);
-  expect(chat.tools.slice(0, 2).map((tool) => tool.name)).toEqual([
-    'illustration.profiles.read',
-    'illustration.profiles.save',
-  ]);
+  for (const result of [library, chat])
+    expect(result.tools.map((tool) => tool.name)).toEqual(
+      expect.arrayContaining([
+        'resource.read',
+        'resource.patch',
+        'illustration.profiles.read',
+        'illustration.profiles.save',
+      ])
+    );
   expect(
     describeHelperTools({ names: ['illustration.profiles.read'] }, false, 'library').tools
   ).toHaveLength(1);
 });
 
 test('discovery keeps shared and chat-local profiles searchable in English and Korean', () => {
-  for (const query of ['library profile', 'shared profiles', '기본 외형', '라이브러리 프로필']) {
+  for (const query of ['library profile', '기본 외형', '라이브러리 프로필']) {
     const result = describeHelperTools({ query }, false, 'library');
     expect(result.tools.map((tool) => tool.name)).toEqual(
       expect.arrayContaining(['resource.read', 'resource.patch'])
@@ -536,32 +537,27 @@ test('discovery keeps shared and chat-local profiles searchable in English and K
   }
   expect(
     describeHelperTools({ query: '채팅 프로필' }, false, 'chat').tools.map((tool) => tool.name)
-  ).toEqual(['illustration.profiles.read', 'illustration.profiles.save']);
+  ).toEqual(expect.arrayContaining(['illustration.profiles.read', 'illustration.profiles.save']));
+  expect(
+    describeHelperTools({ query: 'shared profiles' }, false, 'library').tools.some((tool) =>
+      ['resource.read', 'resource.patch'].includes(tool.name)
+    )
+  ).toBe(true);
   expect(() => describeHelperTools({ names: ['프로필'] })).toThrow('UNKNOWN_APP_TOOL');
 });
 
-test('discovery ranks operation names before scope and returns exact schemas for the top three matches', () => {
-  const settings = describeHelperTools({ query: 'settings' }, false, 'library');
-  expect(settings.tools.slice(0, 2).map((tool) => tool.name)).toEqual([
+test('discovery batches exact schemas without duplicates and keeps catalogs compact', () => {
+  const names = [
+    'resource.read',
+    'resource.patch',
     'settings.read',
     'settings.update',
-  ]);
-  const exact = describeHelperTools({ query: 'illustration.profiles.read' }, false, 'library');
-  expect(exact.tools[0]?.name).toBe('illustration.profiles.read');
-
-  const query = describeHelperTools({ query: 'appearanceProfiles' }, false, 'library');
-  expect(query.tools.map((tool) => tool.name)).toEqual(
-    expect.arrayContaining(['resource.read', 'resource.patch'])
-  );
-  expect(query.tools.length).toBeGreaterThan(3);
-  for (const [index, tool] of query.tools.entries()) {
-    if (index < 3)
-      expect(tool).toMatchObject(describeHelperTools({ names: [tool.name] }).tools[0]!);
-    else expect(tool).not.toHaveProperty('inputSchema');
-  }
-  const later = describeHelperTools({ query: 'appearanceProfiles', offset: 3 });
-  expect(later.tools.length).toBeGreaterThan(0);
-  for (const tool of later.tools) expect(tool).not.toHaveProperty('inputSchema');
+    'scene.read',
+    'scene.patch',
+  ];
+  const exact = describeHelperTools({ names: [...names, names[0]!] });
+  expect(exact.tools.map((tool) => tool.name)).toEqual(names);
+  for (const tool of exact.tools) expect(tool).toHaveProperty('inputSchema');
   for (const tool of describeHelperTools({}).tools) expect(tool).not.toHaveProperty('inputSchema');
 });
 

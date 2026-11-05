@@ -163,8 +163,12 @@ linuxTest(
           event.kind === 'tool.finished' &&
           (event.data as { callId?: string }).callId === 'shell-fail'
       );
-    expect(finished?.data).toMatchObject({ denied: false, status: 'failed' });
-    expect(finished?.data).not.toHaveProperty('errorKind');
+    expect(finished?.data).toMatchObject({
+      denied: false,
+      status: 'failed',
+      errorKind: null,
+      detailsOmitted: true,
+    });
   }
 );
 
@@ -174,7 +178,8 @@ linuxTest(
     const f = await fixture();
     const bot = f.store.product.content(fixtureBotInput('Lost response fixture', 'Original'));
     const file = `library/${bot.id}/resource.json`;
-    const command = `python3 - <<'PY'
+    const command = `${process.execPath} ${resolve('runner/uimori.mjs')} export '${JSON.stringify({ scope: 'library', id: bot.id })}' > scratch/export.json
+python3 - <<'PY'
 import json
 p='${file}'
 x=json.load(open(p))

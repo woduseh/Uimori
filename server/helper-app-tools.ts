@@ -397,12 +397,13 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.tools',
     description:
-      'Find Uimori operations by purpose. query returns a ranked catalog whose top 3 matches include exact schemas; names returns exact schemas for up to 4 operations. Operation names rank first; current library/chat scope breaks relevance ties. Invoke with app.call.',
+      'Find Uimori operations using an English purpose or exact operation name. query returns ranked matches with complete schemas (3 by default; limit/offset page results); an exact name selects that operation only. names returns exact schemas for selected operations. Without query/names, browse a compact catalog. Invoke with app.call.',
     inputSchema: schema(
       {
-        names: { type: 'array', maxItems: 4, items: str },
+        names: { type: 'array', minItems: 1, items: str },
         query: str,
         offset: { type: 'integer', minimum: 0 },
+        limit: { type: 'integer', minimum: 1 },
       },
       [],
       [{ names: ['outline.read'] }]
@@ -425,7 +426,7 @@ export function helperGatewayTools(review: boolean): ProviderTool[] {
         ...tool,
         description:
           tool.name === 'app.tools'
-            ? 'Discover the allowed read-only outline and story/reference operations. No names returns a paged catalog; names returns exact schemas. Call through app.call.'
+            ? 'Discover allowed read-only outline and story/reference operations using an English purpose or exact name. Query matches include complete schemas (3 by default; limit/offset page results); names selects exact schemas. Without query/names, browse a compact catalog. Call through app.call.'
             : 'Execute an allowed read-only outline or story/reference operation. Writes are unavailable during review. Preserve returned versions and coverage.',
       }))
     : HELPER_GATEWAY_TOOLS;
@@ -433,40 +434,114 @@ export function helperGatewayTools(review: boolean): ProviderTool[] {
 
 /** Search synonyms supplement owning descriptions; they are not execution aliases. */
 const discoveryTerms: Record<string, string> = {
-  'resource.read': 'library inspect 기본 외형 프로필 라이브러리',
-  'resource.patch': 'library save edit 기본 외형 프로필 라이브러리',
+  'resource.read': 'shared library inspect 기본 외형 프로필 라이브러리',
+  'resource.patch': 'shared library save edit 기본 외형 프로필 라이브러리',
   'illustration.profiles.read': 'local override 채팅 외형 프로필',
   'illustration.profiles.save': 'local override 채팅 외형 프로필',
 };
-/** Splits names, descriptions and camelCase schema fields into lowercase search words. */
+const searchStopWords = new Set(
+  'a an the this that these those my me i it its of for to in into on at by and or with from can could would please how did'.split(
+    ' '
+  )
+);
+/** Split camelCase and normalize ordinary English plurals, preserving other languages. */
 function searchWords(text: string) {
   return text
     .replace(/([\p{Ll}\p{N}])(\p{Lu})/gu, '$1 $2')
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
-    .filter(Boolean);
+    .filter((word) => word && !searchStopWords.has(word))
+    .map((word) =>
+      /^[a-z]{3,}s$/u.test(word) && !/(?:ss|us|is)$/u.test(word)
+        ? word.endsWith('ies')
+          ? `${word.slice(0, -3)}y`
+          : word.slice(0, -1)
+        : word
+    );
+}
+
+/** Index schema vocabulary, never example values or enum payloads. */
+function* schemaSearchText(schema: Json): Generator<string> {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return;
+  if (typeof schema.description === 'string') yield schema.description;
+  const properties = schema.properties;
+  if (properties && typeof properties === 'object' && !Array.isArray(properties))
+    for (const [name, child] of Object.entries(properties)) {
+      yield name;
+      yield* schemaSearchText(child);
+    }
+  for (const key of ['items', 'anyOf', 'oneOf', 'allOf']) {
+    const child = schema[key];
+    if (Array.isArray(child)) {
+      for (const variant of child) yield* schemaSearchText(variant);
+    } else if (child !== undefined) yield* schemaSearchText(child);
+  }
 }
 const searchIndex = new Map(
-  HELPER_APP_TOOLS.map((tool) => [
-    tool.name,
-    {
-      name: new Set(searchWords(tool.name)),
-      all: new Set(
-        searchWords(
-          `${tool.name} ${tool.description} ${discoveryTerms[tool.name] ?? ''} ${Object.keys(
-            (tool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {}
-          ).join(' ')}`
-        )
-      ),
-    },
-  ])
+  HELPER_APP_TOOLS.map((tool) => {
+    // Names and explicit synonyms outweigh incidental references in usage guidance.
+    const primary = searchWords(`${tool.name} ${discoveryTerms[tool.name] ?? ''}`);
+    const words = [
+      ...primary,
+      ...primary,
+      ...primary,
+      ...searchWords(`${tool.description} ${[...schemaSearchText(tool.inputSchema)].join(' ')}`),
+    ];
+    const frequencies = new Map<string, number>();
+    for (const word of words) frequencies.set(word, (frequencies.get(word) ?? 0) + 1);
+    return [tool.name, { frequencies, length: words.length }] as const;
+  })
 );
-const matchesWord = (words: Set<string>, term: string) => {
-  for (const word of words) if (word.startsWith(term)) return true;
-  return false;
-};
-/** Ranked query results whose exact schemas are returned without a second lookup. */
-const DETAILED_MATCHES = 3;
+
+/** BM25 over the allowed registry; rare terms and shorter focused descriptions rank higher. */
+function searchHelperTools(allowed: ProviderTool[], query: string, scope?: 'chat' | 'library') {
+  const exact = HELPER_APP_TOOLS.find(
+    (tool) => tool.name.toLowerCase() === query.trim().toLowerCase()
+  );
+  if (exact) return allowed.includes(exact) ? [exact] : [];
+  const terms = [...new Set(searchWords(query))];
+  if (!terms.length || !allowed.length) return [];
+  const documents = allowed.map((tool) => ({ tool, index: searchIndex.get(tool.name)! }));
+  const averageLength =
+    documents.reduce((sum, doc) => sum + doc.index.length, 0) / documents.length;
+  const k1 = 1.2,
+    b = 0.75;
+  const scores = new Map(allowed.map((tool) => [tool.name, 0]));
+  const covered = new Map(allowed.map((tool) => [tool.name, 0]));
+  for (const term of terms) {
+    const frequencies = documents.map((doc) =>
+      [...doc.index.frequencies].reduce(
+        (sum, [word, frequency]) => sum + (word.startsWith(term) ? frequency : 0),
+        0
+      )
+    );
+    const documentFrequency = frequencies.filter((frequency) => frequency > 0).length;
+    const idf = Math.log(
+      1 + (documents.length - documentFrequency + 0.5) / (documentFrequency + 0.5)
+    );
+    for (const [index, doc] of documents.entries()) {
+      const frequency = frequencies[index]!;
+      if (frequency > 0) covered.set(doc.tool.name, covered.get(doc.tool.name)! + 1);
+      const score =
+        (idf * frequency * (k1 + 1)) /
+        (frequency + k1 * (1 - b + (b * doc.index.length) / averageLength));
+      scores.set(doc.tool.name, scores.get(doc.tool.name)! + score);
+    }
+  }
+  const applicability = (tool: ProviderTool) =>
+    Number(scope !== undefined && chatToolNames.has(tool.name) === (scope === 'chat'));
+  // Preserve precise keyword combinations; partial matches remain available
+  // when ordinary intent words have no literal counterpart in the registry.
+  return allowed
+    .filter((tool) => scores.get(tool.name)! > 0)
+    .sort(
+      (a, b) =>
+        Number(covered.get(b.name) === terms.length) -
+          Number(covered.get(a.name) === terms.length) ||
+        scores.get(b.name)! - scores.get(a.name)! ||
+        applicability(b) - applicability(a)
+    );
+}
 
 type ToolCatalog = {
   tools: (Pick<ProviderTool, 'name' | 'description'> & {
@@ -495,18 +570,17 @@ export function describeHelperTools(
   const allowed = review
     ? HELPER_APP_TOOLS.filter((tool) => helperToolTraits(tool.name).reviewAllowed)
     : HELPER_APP_TOOLS;
-  if (Object.keys(args).some((key) => !['names', 'query', 'offset'].includes(key)))
+  if (Object.keys(args).some((key) => !['names', 'query', 'offset', 'limit'].includes(key)))
     throw new HttpError(400, 'INVALID_ARGUMENTS');
   if (args.names !== undefined) {
     if (
       !Array.isArray(args.names) ||
       !args.names.length ||
-      args.names.length > 4 ||
       args.names.some((n) => typeof n !== 'string')
     )
       throw new HttpError(400, 'INVALID_ARGUMENTS');
     return {
-      tools: args.names.map((name) => {
+      tools: [...new Set(args.names)].map((name) => {
         const tool = allowed.find((t) => t.name === name);
         if (!tool) throw new HttpError(400, `UNKNOWN_APP_TOOL:${String(name)}`);
         return tool;
@@ -515,48 +589,38 @@ export function describeHelperTools(
   }
   const query = args.query ?? '';
   const offset = args.offset ?? 0;
+  const searching = typeof query === 'string' && query.trim().length > 0;
+  const limit = args.limit ?? (searching ? 3 : 20);
   if (
     typeof query !== 'string' ||
     query.length > 200 ||
     !Number.isSafeInteger(offset) ||
-    Number(offset) < 0
+    Number(offset) < 0 ||
+    !Number.isSafeInteger(limit) ||
+    Number(limit) < 1
   )
     throw new HttpError(400, 'INVALID_ARGUMENTS');
-  const terms = searchWords(query);
-  const found = allowed.filter((tool) => {
-    const words = searchIndex.get(tool.name)?.all;
-    return !!words && terms.every((term) => matchesWord(words, term));
-  });
-  // Exact names rank first, then name words. Scope only breaks relevance ties;
-  // chat tools remain discoverable from the library for an explicit chatId.
-  if (terms.length || scope === 'library') {
-    const exact = query.trim().toLowerCase();
-    const rank = (tool: ProviderTool) => {
-      const name = searchIndex.get(tool.name)?.name ?? new Set<string>();
-      return (
-        (tool.name.toLowerCase() === exact ? 1000 : 0) +
-        terms.reduce((score, term) => score + (matchesWord(name, term) ? 10 : 0), 0) +
-        (scope && chatToolNames.has(tool.name) === (scope === 'chat') ? 1 : 0)
-      );
-    };
-    const ranks = new Map(found.map((tool) => [tool.name, rank(tool)]));
-    found.sort((a, b) => (ranks.get(b.name) ?? 0) - (ranks.get(a.name) ?? 0));
-  }
+  const found = searching ? searchHelperTools(allowed, query, scope) : [...allowed];
+  if (!searching && scope === 'library')
+    found.sort((a, b) => Number(chatToolNames.has(a.name)) - Number(chatToolNames.has(b.name)));
+  const page = found.slice(
+    Number(offset),
+    Number(offset) + Math.min(Number(limit), allowed.length)
+  );
   return {
-    tools: found.slice(Number(offset), Number(offset) + 20).map((tool, index) => {
-      const detailed = terms.length > 0 && Number(offset) + index < DETAILED_MATCHES;
+    tools: page.map((tool) => {
       return {
         name: tool.name,
         description:
-          detailed || tool.description.length <= 260
+          searching || tool.description.length <= 260
             ? tool.description
             : `${tool.description.slice(0, 257)}…`,
         required: (tool.inputSchema as { required?: string[] }).required ?? [],
         effect: helperToolTraits(tool.name).effect,
-        ...(detailed ? { inputSchema: tool.inputSchema } : {}),
+        ...(searching ? { inputSchema: tool.inputSchema } : {}),
       };
     }),
     total: found.length,
-    nextOffset: Number(offset) + 20 < found.length ? Number(offset) + 20 : null,
+    nextOffset: Number(offset) + page.length < found.length ? Number(offset) + page.length : null,
   };
 }
