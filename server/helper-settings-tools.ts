@@ -9,9 +9,9 @@ import {
   promptWorkspace,
   updateModelWorkspace,
 } from './prompt-workspace.js';
-import { fields, HttpError, number, record, text } from './request-validation.js';
+import { choice, fields, HttpError, number, record, text } from './request-validation.js';
 import type { Store } from './store.js';
-import { usageReport } from './usage-report.js';
+import { USAGE_BREAKDOWNS, usageReport } from './usage-report.js';
 import { isDeepStrictEqual } from 'node:util';
 import type { HelperTask, HelperTaskResultTarget } from '../core/helper.js';
 import type { HelperWorkspace } from './helper-workspace.js';
@@ -61,11 +61,12 @@ export const HELPER_SETTINGS_TOOLS: ProviderTool[] = [
   {
     name: 'usage.read',
     description:
-      'Read the existing usage report for inclusive Seoul calendar dates. Reported, estimated, partial and unknown costs retain their distinct meanings.',
+      'Read usage totals for inclusive Seoul calendar dates. Omitted breakdown returns totals, undated usage and coverage only; choose days, models, kinds or all for those breakdowns in the same call. Reported, estimated, partial and unknown costs retain their distinct meanings.',
     inputSchema: schema(
       {
         from: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
         to: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+        breakdown: { type: 'string', enum: [...USAGE_BREAKDOWNS, 'all'] },
       },
       ['from', 'to']
     ),
@@ -189,8 +190,16 @@ export function invokeHelperSettingsTool(
     }));
   }
   if (name === 'usage.read') {
-    fields(args, ['from', 'to']);
-    return usageReport(store, args);
+    fields(args, ['from', 'to', 'breakdown']);
+    const breakdown =
+      args.breakdown === undefined
+        ? undefined
+        : choice(args.breakdown, [...USAGE_BREAKDOWNS, 'all'], 'usage breakdown');
+    return usageReport(
+      store,
+      { from: args.from, to: args.to },
+      breakdown === 'all' ? USAGE_BREAKDOWNS : breakdown ? [breakdown] : []
+    );
   }
   if (name === 'settings.read') {
     fields(args, []);

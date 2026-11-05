@@ -35,6 +35,7 @@ import {
 } from '../server/themes.js';
 import { saveResource, undoResource } from '../server/resource-service.js';
 import { invokeResourceTool } from '../server/helper-resource-tools.js';
+import { invokePresentationTool } from '../server/helper-presentation-tools.js';
 import { fixtureBotInput } from './fixtures/chat.js';
 
 const owned: { directory: string; store: Store; app?: App }[] = [];
@@ -191,6 +192,66 @@ test('helper uses the same save, guide, list and undo contract without changing 
   });
   expect(() => readTheme(store, result.id)).toThrow();
 });
+test('helper theme discovery omits styles while exact reads and guarded selection retain them', () => {
+  const store = database();
+  const saved = save(store, 'Discoverable theme');
+  const before = themeCatalog(store);
+  const catalog = invokeResourceTool(store, 'theme.list', {}) as {
+    themes: { id: string }[];
+    palettes: { id: string }[];
+    preferences: ReturnType<typeof themePreferences>;
+  };
+  expect(catalog.themes.find((theme) => theme.id === saved.id)).toEqual({
+    id: saved.id,
+    revision: saved.revision,
+    title: 'Discoverable theme',
+    description: saved.description,
+  });
+  for (const entry of catalog.themes)
+    expect(Object.keys(entry).sort()).toEqual(['description', 'id', 'revision', 'title']);
+  expect(catalog.palettes).toEqual(
+    before.palettes?.map(({ colors: _colors, ...metadata }) => metadata)
+  );
+  expect(catalog.preferences).toEqual(before.preferences);
+  expect(themeCatalog(store)).toEqual(before);
+
+  expect(
+    invokeResourceTool(store, 'resource.read', {
+      kind: 'theme',
+      id: saved.id,
+      path: '/messageCss',
+    })
+  ).toMatchObject({ id: saved.id, revision: saved.revision, text: saved.messageCss });
+  const builtin = BUILTIN_THEMES.find((theme) => theme.templateHtml.length > 0)!;
+  expect(
+    invokeResourceTool(store, 'resource.read', {
+      kind: 'theme',
+      id: builtin.id,
+      path: '/templateHtml',
+      textLimit: 10000,
+    })
+  ).toMatchObject({ text: builtin.templateHtml, nextOffset: null });
+  expect(
+    invokeResourceTool(store, 'resource.read', {
+      kind: 'theme',
+      id: saved.id,
+      path: '/colors/light/accent',
+    })
+  ).toMatchObject({ text: '#123456' });
+  expect(invokePresentationTool(store, 'palette.list', {})).toEqual({
+    palettes: before.palettes,
+    preferences: before.preferences,
+  });
+  expect(
+    invokePresentationTool(store, 'theme.select', {
+      scope: 'global',
+      dimension: 'theme',
+      themeId: saved.id,
+      expectedRevision: catalog.preferences.revision,
+    })
+  ).toMatchObject({ defaultThemeId: saved.id, revision: catalog.preferences.revision + 1 });
+});
+
 test('HTTP API saves, exports, selects, validates and deletes a theme', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-theme-api-'));
   const app = await createApp({

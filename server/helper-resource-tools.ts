@@ -92,7 +92,7 @@ const resourceTools: ResourceToolDefinition[] = [
     name: 'theme.list',
     effect: 'read',
     description:
-      'List saved and built-in presentation themes with current selections. Themes do not affect model inputs.',
+      'List compact theme and palette metadata with current selections and preference revision. Read theme styles/colors with resource.read kind=theme and palette colors with palette.list.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
@@ -358,7 +358,24 @@ export function invokeResourceTool(
       contract:
         'Save with resource.save kind=illustration-preset. Required title and generator (codex or comfyui), optional description and styleGuidance, comfyui: {workflow, negativeGuidance}. workflow is API-format JSON with {{prompt}}, {{negative}}, {{seed}} placeholders; an empty workflow is valid for Codex but cannot generate with ComfyUI. The selected recipe chooses the generator and uses its shared local environment. No provider IDs, credentials, automatic-generation policies or chat reference images belong here. Portable exports are v2; v1 infers comfyui when a workflow exists, otherwise codex. Saving an in-use preset affects future reservations; existing jobs and retries keep frozen input. Saving a new preset does not select it. User selection priority: chat, bot, global. No image generation on save.',
     };
-  if (name === 'theme.list') return themeCatalog(store);
+  if (name === 'theme.list') {
+    const catalog = themeCatalog(store);
+    return {
+      themes: catalog.themes.map(({ id, revision, title, description }) => ({
+        id,
+        revision,
+        title,
+        description,
+      })),
+      palettes: catalog.palettes?.map((palette) => ({
+        id: palette.id,
+        ...('revision' in palette ? { revision: palette.revision } : {}),
+        title: palette.title,
+        description: palette.description,
+      })),
+      preferences: catalog.preferences,
+    };
+  }
   if (name === 'theme.guide')
     return {
       colors: THEME_COLOR_KEYS,

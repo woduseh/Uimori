@@ -1416,9 +1416,6 @@ export class HelperRuntime {
           const originalResultChars = JSON.stringify(event.result).length;
           if (helperRead(event)) {
             // A shell script is input, not read output; only its result uses the read budget.
-            const providedTokens = countTextTokens(
-              JSON.stringify(call.name === 'data.exec' ? event.result : event)
-            );
             // Keep completed evidence for the existing compaction path. Only a
             // single result beyond this model's entire input capacity is narrowed;
             // fixed and accumulated context pass the complete-request admission.
@@ -1427,6 +1424,9 @@ export class HelperRuntime {
               estimateContextTokens(call.name === 'data.exec' ? event.result : event, budget) >
               budget.inputTokenLimit
             ) {
+              const providedTokens = countTextTokens(
+                JSON.stringify(call.name === 'data.exec' ? event.result : event)
+              );
               const args = record(call.arguments);
               const nextRead = smallerHelperRead(
                 call.name,

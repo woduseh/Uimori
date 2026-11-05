@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '../server/store.js';
 import { usageReport, usageCsv } from '../server/usage-report.js';
+import { invokeHelperSettingsTool } from '../server/helper-settings-tools.js';
 import { detachAttemptUsage, helperUsageKind, inferUsageKind } from '../server/usage-accounting.js';
 import { deleteChat } from '../server/chat-deletion.js';
 import { createFixtureChat } from './fixtures/chat.js';
@@ -122,6 +123,19 @@ test('reported values win over frozen estimates; partial, unknown, zero, failed 
   expect(report.models.reduce((sum, item) => sum + item.calls, 0)).toBe(5);
   expect(report.kinds.reduce((sum, item) => sum + item.calls, 0)).toBe(5);
   expect(report.undated).toMatchObject({ calls: 1, reportedUsd: 2 });
+  const { days, models, kinds, ...totals } = report;
+  expect(invokeHelperSettingsTool(store, 'usage.read', query)).toEqual(totals);
+  for (const [breakdown, rows] of Object.entries({ days, models, kinds }))
+    expect(invokeHelperSettingsTool(store, 'usage.read', { ...query, breakdown })).toEqual({
+      ...totals,
+      [breakdown]: rows,
+    });
+  expect(invokeHelperSettingsTool(store, 'usage.read', { ...query, breakdown: 'all' })).toEqual(
+    report
+  );
+  expect(() =>
+    invokeHelperSettingsTool(store, 'usage.read', { ...query, breakdown: 'invalid' })
+  ).toThrow('Invalid usage breakdown');
   store.product.finishAttempt(reported, result(99));
   expect(usageReport(store, query)).toEqual(report);
   expect(() => usageReport(store, { from: '2026-02-30', to: '2026-09-27' })).toThrow();

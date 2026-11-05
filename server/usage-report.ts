@@ -35,8 +35,22 @@ function period(value: unknown) {
   const until = new Date(Date.parse(`${to}T00:00:00+09:00`) + 86400_000).toISOString();
   return { from, to, after, until, group: query.group };
 }
-/** A single attempt is a billable attempt. No run/helper rollups or live repricing are added. */
-export function usageReport(store: Store, value: unknown): UsageReport {
+export const USAGE_BREAKDOWNS = ['days', 'models', 'kinds'] as const;
+type Breakdown = (typeof USAGE_BREAKDOWNS)[number];
+type SelectedUsageReport = Omit<UsageReport, Breakdown> & Partial<Pick<UsageReport, Breakdown>>;
+
+export function usageReport(store: Store, value: unknown): UsageReport;
+export function usageReport(
+  store: Store,
+  value: unknown,
+  breakdowns: readonly Breakdown[]
+): SelectedUsageReport;
+/** A single attempt remains a billable attempt; summary reads need no grouped queries or rows. */
+export function usageReport(
+  store: Store,
+  value: unknown,
+  breakdowns: readonly Breakdown[] = USAGE_BREAKDOWNS
+): SelectedUsageReport {
   const { from, to, after, until } = period(value);
   const predicate = 'is_synthetic=0 AND started_at>=? AND started_at<?';
   const db = store.db;
@@ -47,21 +61,33 @@ export function usageReport(store: Store, value: unknown): UsageReport {
     totals: db
       .prepare(`SELECT ${aggregates} FROM attempts WHERE ${predicate}`)
       .get(after, until) as UsageTotals,
-    days: db
-      .prepare(
-        `SELECT date(started_at,'+9 hours') AS day,${aggregates} FROM attempts WHERE ${predicate} GROUP BY day ORDER BY day`
-      )
-      .all(after, until) as UsageReport['days'],
-    models: db
-      .prepare(
-        `SELECT model_id AS modelId,connection_id AS connectionId,${aggregates} FROM attempts WHERE ${predicate} GROUP BY connection_id,model_id ORDER BY reportedUsd+estimatedUsd+partialUsd DESC,calls DESC,connection_id,model_id`
-      )
-      .all(after, until) as UsageReport['models'],
-    kinds: db
-      .prepare(
-        `SELECT usage_kind AS kind,${aggregates} FROM attempts WHERE ${predicate} GROUP BY usage_kind ORDER BY calls DESC,usage_kind`
-      )
-      .all(after, until) as UsageReport['kinds'],
+    ...(breakdowns.includes('days')
+      ? {
+          days: db
+            .prepare(
+              `SELECT date(started_at,'+9 hours') AS day,${aggregates} FROM attempts WHERE ${predicate} GROUP BY day ORDER BY day`
+            )
+            .all(after, until) as UsageReport['days'],
+        }
+      : {}),
+    ...(breakdowns.includes('models')
+      ? {
+          models: db
+            .prepare(
+              `SELECT model_id AS modelId,connection_id AS connectionId,${aggregates} FROM attempts WHERE ${predicate} GROUP BY connection_id,model_id ORDER BY reportedUsd+estimatedUsd+partialUsd DESC,calls DESC,connection_id,model_id`
+            )
+            .all(after, until) as UsageReport['models'],
+        }
+      : {}),
+    ...(breakdowns.includes('kinds')
+      ? {
+          kinds: db
+            .prepare(
+              `SELECT usage_kind AS kind,${aggregates} FROM attempts WHERE ${predicate} GROUP BY usage_kind ORDER BY calls DESC,usage_kind`
+            )
+            .all(after, until) as UsageReport['kinds'],
+        }
+      : {}),
     undated: db
       .prepare(`SELECT ${aggregates} FROM attempts WHERE is_synthetic=0 AND started_at IS NULL`)
       .get() as UsageTotals,

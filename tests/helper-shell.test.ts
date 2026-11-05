@@ -1,4 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { createServer } from 'node:http';
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
@@ -144,6 +145,176 @@ test('an unavailable runner still exports current saved scene revisions and the 
         expectedRevision: saved[0].revision,
       })
     ).toThrow('Source revision conflict');
+  } finally {
+    f.shell.close();
+    f.store.close();
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test('batch scene projection refresh preserves drafts and writes each affected index once', async () => {
+  const f = workspaceFixture();
+  try {
+    const chats = [
+      createFixtureChat(f.store, 'First batch'),
+      createFixtureChat(f.store, 'Second batch'),
+    ];
+    const groups = chats.map((chat) =>
+      Array.from({ length: 8 }, (_, index) =>
+        completedSource(f.store, chat.id, `${chat.title} original ${index}`)
+      )
+    );
+    updateSceneContext(f.store, groups[0][1].id, { expectedRevision: 0, sceneEnabled: false });
+    const conversation = f.workspace.open({ kind: 'chat', chatId: chats[0].id });
+    const task = f.workspace.enqueue(conversation.id, 'batch-projection', 'Edit scenes', {
+      ...f.task.snapshot,
+      scope: conversation.scope,
+      writing: helperWritingSnapshot(f.store, chats[0].id),
+    });
+    f.workspace.start(task.id, 'shell-fixture');
+    await expect(f.shell.exec(f.workspace.task(task.id), 'export', 'true', 1000)).rejects.toThrow();
+
+    const base = join(f.root, 'tasks', task.id);
+    const file = (group: number, index: number) =>
+      join(base, 'chats', chats[group].id, 'scenes', `${groups[group][index].id}.txt`);
+    const index = (group: number) =>
+      JSON.parse(readFileSync(join(base, 'chats', chats[group].id, 'scenes.json'), 'utf8')) as {
+        sourceId: string;
+        revision: number;
+        sceneNumber: number | null;
+        preview: string;
+      }[];
+    const internals = f.shell as unknown as {
+      refresh: (taskId: string, path: string) => { latestPath: string };
+      writeSceneIndex: (taskId: string, chatId: string, files: Map<string, unknown>) => void;
+    };
+
+    writeFileSync(file(0, 0), 'First local draft');
+    writeFileSync(file(1, 1), 'Second local draft');
+    f.store.editSource(groups[0][0].id, { text: 'First external revision', expectedRevision: 0 });
+    const latest = internals.refresh(task.id, `chats/${chats[0].id}/scenes/${groups[0][0].id}.txt`);
+    expect(latest.latestPath).toMatch(/^scratch\/refresh-.*\/scene\.txt$/u);
+
+    for (const [group, sources] of groups.entries())
+      for (const [position, source] of sources.entries())
+        f.store.editSource(source.id, {
+          text: `Saved ${group}:${position}`,
+          expectedRevision: group === 0 && position === 0 ? 1 : 0,
+        });
+
+    const ids = groups.flat().map((source) => source.id);
+    const indexWrites = vi.spyOn(internals, 'writeSceneIndex');
+    f.shell.refreshAfterMutation(
+      task.id,
+      'scene.patchMany',
+      { items: ids.map((sourceId) => ({ sourceId })) },
+      { sourceIds: ids }
+    );
+    expect(indexWrites).toHaveBeenCalledTimes(2);
+    expect(indexWrites.mock.calls.map((call) => call[1])).toEqual(chats.map((chat) => chat.id));
+    expect(readFileSync(file(0, 0), 'utf8')).toBe('First local draft');
+    expect(readFileSync(file(1, 1), 'utf8')).toBe('Second local draft');
+    expect(readFileSync(join(base, latest.latestPath), 'utf8')).toBe('Saved 0:0');
+    expect(readFileSync(file(0, 1), 'utf8')).toBe('Saved 0:1');
+    expect(index(0)[0]).toMatchObject({ revision: 0, preview: 'First batch original 0' });
+    expect(index(0)[1]).toMatchObject({ revision: 1, preview: 'Saved 0:1', sceneNumber: null });
+    expect(index(1)[1]).toMatchObject({ revision: 0, preview: 'Second batch original 1' });
+    expect(index(1)[2]).toMatchObject({ revision: 1, preview: 'Saved 1:2' });
+    expect(readFileSync(join(base, 'current', 'scenes', `${groups[0][1].id}.txt`), 'utf8')).toBe(
+      'First batch original 1'
+    );
+
+    const first = groups[0][2].id;
+    const fails = groups[1][2].id;
+    f.store.editSource(first, { text: 'Saved before projection error', expectedRevision: 1 });
+    f.store.editSource(fails, { text: 'Saved but not projected', expectedRevision: 1 });
+    const source = f.store.source.bind(f.store);
+    const sourceRead = vi.spyOn(f.store, 'source').mockImplementation((id) => {
+      if (id === fails) throw new Error('Projection source failed');
+      return source(id);
+    });
+    expect(() =>
+      f.shell.refreshAfterMutation(
+        task.id,
+        'scene.patchMany',
+        { items: [{ sourceId: first }, { sourceId: fails }] },
+        { sourceIds: [first, fails] }
+      )
+    ).toThrow('Projection source failed');
+    sourceRead.mockRestore();
+    expect(readFileSync(file(0, 2), 'utf8')).toBe('Saved before projection error');
+    expect(index(0)[2]).toMatchObject({ revision: 2, preview: 'Saved before projection error' });
+    expect(readFileSync(file(1, 2), 'utf8')).toBe('Saved 1:2');
+    expect(index(1)[2]).toMatchObject({ revision: 1, preview: 'Saved 1:2' });
+    expect(f.store.source(fails).text).toBe('Saved but not projected');
+
+    f.store.editSource(first, { text: 'Saved before index error', expectedRevision: 2 });
+    const firstIndex = join(base, 'chats', chats[0].id, 'scenes.json');
+    rmSync(firstIndex);
+    mkdirSync(firstIndex);
+    expect(() =>
+      f.shell.refreshAfterMutation(
+        task.id,
+        'scene.patchMany',
+        { items: [{ sourceId: first }, { sourceId: fails }] },
+        { sourceIds: [first, fails] }
+      )
+    ).toThrow();
+    expect(readFileSync(file(0, 2), 'utf8')).toBe('Saved before index error');
+    expect(readFileSync(file(1, 2), 'utf8')).toBe('Saved but not projected');
+    expect(index(1)[2]).toMatchObject({ revision: 2, preview: 'Saved but not projected' });
+  } finally {
+    f.shell.close();
+    f.store.close();
+    rmSync(f.dir, { recursive: true, force: true });
+  }
+});
+
+test('portable apply retains its content-bound receipt and does not save twice', async () => {
+  const f = workspaceFixture();
+  try {
+    await expect(f.shell.exec(f.task, 'export', 'true', 1000)).rejects.toThrow();
+    const relative = `library/${f.resource.id}/resource.json`;
+    const filename = join(f.root, 'tasks', f.task.id, relative);
+    const model = JSON.parse(readFileSync(filename, 'utf8')) as ContentEditModel;
+    model.package.nativeRisu.card.creator_notes = 'Saved once 🙂';
+    const content = JSON.stringify(model);
+    writeFileSync(filename, content);
+
+    const toolId = 'portable-apply';
+    const session = `${f.task.id}:${toolId}`;
+    const internals = f.shell as unknown as {
+      active: Map<string, unknown>;
+      applied: Map<string, unknown[]>;
+      apply: (
+        taskId: string,
+        toolId: string,
+        path: string
+      ) => {
+        changed: boolean;
+        receiptId?: string;
+      };
+    };
+    internals.active.set(session, {
+      controller: new AbortController(),
+      sequence: 0,
+      pending: new Set(),
+    });
+    internals.applied.set(session, []);
+    const digest = (value: string) => createHash('sha256').update(value).digest('hex');
+    const expectedReceipt = `${f.task.id}:shell:${toolId}:${digest(relative)}:${f.resource.revision}:${digest(content)}`;
+    const result = internals.apply(f.task.id, toolId, relative);
+    expect(result).toMatchObject({ changed: true, receiptId: expectedReceipt });
+    expect(internals.apply(f.task.id, toolId, relative)).toMatchObject({ changed: false });
+    expect(internals.applied.get(session)).toHaveLength(1);
+    expect((readResource(f.store, 'content', f.resource.id) as Content).description).toBe(
+      'Saved once 🙂'
+    );
+    expect(
+      f.store.db
+        .prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?')
+        .get(f.task.id)?.n
+    ).toBe(1);
   } finally {
     f.shell.close();
     f.store.close();
