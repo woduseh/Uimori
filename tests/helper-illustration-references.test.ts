@@ -2,6 +2,10 @@ import { afterEach, expect, test } from 'vitest';
 import sharp from 'sharp';
 import { saveIllustrationReferenceAssignments } from '../server/helper-illustration-references.js';
 import {
+  readIllustrationProfiles,
+  saveIllustrationProfiles,
+} from '../server/helper-illustration-profiles.js';
+import {
   claimIllustration,
   completeIllustration,
   frozenIllustrationReferences,
@@ -159,4 +163,72 @@ test('batch assignments move character links and change explicit roles together,
   expect(illustrationReferences(store, chat.id).references).toEqual([
     { ref: three, role: 'style' },
   ]);
+});
+
+test('a profile batch links character images and reports effective roles without another save', () => {
+  const store = databases.create();
+  const { chat } = chatWithSource(store);
+  const [first, second, style] = ['First', 'Second', 'Art style'].map(
+    (title) =>
+      store.product.createAsset(chat.id, {
+        title,
+        mime: 'image/png',
+        base64: PNG_BASE64,
+        description: '',
+        actor: '',
+        outfit: '',
+        location: '',
+        allowedUse: 'both',
+      }).id
+  );
+  updateIllustrationReferences(store, chat.id, {
+    expectedRevision: 0,
+    references: [{ ref: style, role: 'style' }],
+    characterProfiles: [],
+  });
+  const saved = saveIllustrationProfiles(store, chat.id, {
+    expectedRevision: 1,
+    profiles: [
+      { name: 'Mira', appearance: 'Silver hair', referenceRef: first },
+      { name: 'Jun', appearance: 'Dark curls', referenceRef: second },
+    ],
+  });
+  expect(saved.changed).toBe(true);
+  expect(saved.revision).toBe(2);
+  expect(saved.profiles).toMatchObject([
+    { name: 'Mira', referenceRef: first, changed: true },
+    { name: 'Jun', referenceRef: second, changed: true },
+  ]);
+  expect(saved.effectiveReferences).toEqual(
+    expect.arrayContaining([
+      { ref: style, role: 'style', profileIds: [] },
+      { ref: first, role: 'character', profileIds: [saved.profiles[0].profileId] },
+      { ref: second, role: 'character', profileIds: [saved.profiles[1].profileId] },
+    ])
+  );
+  expect(frozenIllustrationReferences(store, chat.id)).toMatchObject([
+    { ref: style, role: 'style' },
+    { ref: first, role: 'character' },
+    { ref: second, role: 'character' },
+  ]);
+  expect(readIllustrationProfiles(store, chat.id, {}).effectiveReferences).toEqual(
+    saved.effectiveReferences
+  );
+  expect(
+    saveIllustrationProfiles(store, chat.id, {
+      expectedRevision: 2,
+      profiles: [{ profileId: saved.profiles[0].profileId, referenceRef: first }],
+    })
+  ).toMatchObject({ changed: false, revision: 2 });
+
+  const unlinked = saveIllustrationProfiles(store, chat.id, {
+    expectedRevision: 2,
+    profiles: [{ profileId: saved.profiles[0].profileId, referenceRef: null }],
+  });
+  expect(unlinked).toMatchObject({
+    changed: true,
+    revision: 3,
+    profiles: [{ referenceRef: null }],
+  });
+  expect(unlinked.effectiveReferences.some((item) => item.ref === first)).toBe(false);
 });

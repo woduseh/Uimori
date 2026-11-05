@@ -12,7 +12,7 @@ export const HELPER_ILLUSTRATION_REFERENCE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.references.save',
     description:
-      'Assign reference images together using the revision from illustration.profiles.read. For each image supply a candidate ref, or an imageId from a completed cut to reuse that exact variation. Set role to character, style, or null to clear its explicit role. When provided, profileIds replaces the people linked to that image; use an empty list to unlink them. Linked images guide character design. Omitted roles and links stay as saved.',
+      'Assign reference images together using the revision from illustration.profiles.read. For each image supply a candidate ref, or an imageId from a completed cut to reuse that exact variation. Set role to character, style, or null to clear its explicit role. When provided, profileIds replaces the people linked to that image; use an empty list to unlink them. Linked images guide character design. For a character image linked through referenceRef, use illustration.profiles.save instead; this tool is for explicit style roles, reassignment and generated-cut promotion. Omitted roles and links stay as saved.',
     inputSchema: {
       type: 'object',
       properties: {
