@@ -170,6 +170,106 @@ test('task.list finds queued work before any provider attempt and scopes to the 
   expect(listed.tasks.some((task) => task.id === otherQueued.id)).toBe(false);
 });
 
+test('illustration inspection identifies a refusal stage and shows prepared prompts only on request', () => {
+  const f = fixture();
+  const chat = createFixtureChat(f.store, '삽화 실패 진단');
+  const run = queuedRun(f.store, chat.id);
+  f.store.startRun(run.id);
+  const source = f.store.completeRun(run.id, 'An evening at the pier.', {
+    modelCalls: 0,
+    inputTokens: null,
+    outputTokens: null,
+    costUsd: null,
+  });
+  const at = new Date().toISOString();
+  const insert = (id: string, task: string, stage: string, prompt?: object) => {
+    f.store.db
+      .prepare(
+        "INSERT INTO illustration_jobs(id,chat_id,source_revision,source_hash,origin,status,input,diagnostic,error,created_at,updated_at) VALUES(?,?,?,?,'manual','failed',?,?,?, ?,?)"
+      )
+      .run(
+        id,
+        chat.id,
+        source.id,
+        source.hash,
+        JSON.stringify({
+          version: 1,
+          generator: 'codex',
+          task,
+          target:
+            task === 'render'
+              ? {
+                  id: 'target-1',
+                  startAnchor: 'a',
+                  endAnchor: 'b',
+                  focus: 'Pier',
+                  visualBrief: 'Evening',
+                  order: 0,
+                }
+              : undefined,
+        }),
+        JSON.stringify({
+          stage,
+          attempts: [],
+          retries: [],
+          ...(prompt ? { prompt } : {}),
+          ...(stage === 'generate' ? { contentCheck: { status: 'allowed', inputHash: 'x' } } : {}),
+        }),
+        stage === 'planning' ? 'ILLUSTRATION_PROMPT_REFUSED' : 'CODEX_IMAGE_UNAVAILABLE',
+        at,
+        at
+      );
+  };
+  const refused = randomUUID(),
+    renderer = randomUUID();
+  insert(refused, 'plan', 'planning');
+  const prepared = { prompt: 'A calm pier illustration', caption: '부두', negativePrompt: '' };
+  insert(renderer, 'render', 'generate', prepared);
+  const a = f.invoke('task.inspect', 'illustration', refused) as Record<string, any>;
+  expect(a.illustration).toMatchObject({
+    task: 'plan',
+    stage: 'planning',
+    hasPreparedPrompt: false,
+    targetId: null,
+  });
+  expect(a.illustration).not.toHaveProperty('preparedPrompt');
+  const b = f.invoke('task.inspect', 'illustration', renderer) as Record<string, any>;
+  expect(b.illustration).toMatchObject({
+    stage: 'generate',
+    hasPreparedPrompt: true,
+    contentCheckStatus: 'allowed',
+  });
+  expect(JSON.stringify(b)).not.toContain('A calm pier illustration');
+  const detail = invokeTaskTool(
+    f.store,
+    f.current,
+    'task.inspect',
+    {
+      kind: 'illustration',
+      id: renderer,
+      includePrompt: true,
+    },
+    'detail',
+    f.actions
+  ) as Record<string, any>;
+  expect(detail.illustration.preparedPrompt).toEqual(prepared);
+  const found = invokeTaskTool(
+    f.store,
+    f.current,
+    'task.list',
+    {
+      chatId: chat.id,
+      kind: 'illustration',
+      status: 'failed',
+    },
+    'list',
+    f.actions
+  ) as unknown as { kind: string; tasks: { kind: string }[] };
+  expect(found.kind).toBe('illustration');
+  expect(found.tasks).toHaveLength(2);
+  expect(found.tasks.every((item) => item.kind === 'illustration')).toBe(true);
+});
+
 test('failed auxiliary job keeps its kind and usage while retrying through the job owner', () => {
   const f = fixture();
   const chat = createFixtureChat(f.store, '보조 작업');

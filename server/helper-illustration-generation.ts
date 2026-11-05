@@ -1,7 +1,7 @@
 import type { SelectedIllustrationMoment } from '../core/illustration-storyboard.js';
 import type { ProviderTool } from '../core/transport.js';
 import { helperSceneSource } from './helper-scene-tools.js';
-import { reserveIllustrationPlan } from './illustrations.js';
+import { reserveSelectedIllustrations } from './illustrations.js';
 import { fields, HttpError, record, text } from './request-validation.js';
 import type { Source, Store } from './store.js';
 
@@ -9,7 +9,7 @@ export const HELPER_ILLUSTRATION_GENERATION_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.generate',
     description:
-      'Queue illustrations for the requested moments, across one or more scenes. Use original paragraph anchors and source hashes from illustration.scene.read. Specify the exact instant in focus and optional visual direction for each cut. The batch reserves all cuts together. Rendering runs in the background.',
+      'Queue illustrations for the requested moments, across one or more scenes. Use original paragraph anchors and source hashes from illustration.scene.read. Specify the exact instant in focus and optional visual direction for each cut. Explicitly selected moments are queued directly for prompt preparation and rendering; automatic storyboarding is separate. Rendering runs in the background.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -90,13 +90,14 @@ export function generateHelperIllustrations(
       });
     }
     const plans = Array.from(groups.values(), ({ source, selectedMoments }) => {
-      const job = reserveIllustrationPlan(store, source, 'manual', { ...options, selectedMoments });
+      const jobs = reserveSelectedIllustrations(store, source, selectedMoments, options);
       return {
         sourceId: source.id,
         revision: source.editRevision ?? 0,
         focus: selectedMoments[0].focus,
-        jobId: job.id,
-        count: selectedMoments.length,
+        jobId: jobs[0].id,
+        jobIds: jobs.map((job) => job.id),
+        count: jobs.length,
       };
     });
     return { chatId, plans, count: moments.length };

@@ -13,12 +13,14 @@ import {
   illustrationJob,
   queuedIllustrations,
   reserveIllustrationPlan,
+  reserveSelectedIllustrations,
 } from '../server/illustrations.js';
 import type { Store } from '../server/store.js';
 import { illustrationErrorMessage } from '../web/illustration-labels.js';
 import { FIXTURE_WORKFLOW } from './fixtures/comfyui-server.js';
 import {
   chatWithSource,
+  completedSource,
   fixtureIllustrationPreset,
   fixtureSettings,
   illustrationDatabases,
@@ -170,6 +172,68 @@ for (const stage of ['plan', 'placement', 'prompt'] as const) {
     expect(store.source(source.id).text).toBe(source.text);
   });
 }
+test('a manually selected cut sends only its exact passage to prompt preparation, not the full scene', async () => {
+  const store = databases.create();
+  const { chat } = chatWithSource(store);
+  const unrelated =
+    'UNRELATED_SCENE_MARKER_' + 'not needed for the selected illustration '.repeat(2000);
+  const source = completedSource(store, chat.id, 'A lantern lights the pier.\n\n' + unrelated);
+  const connection = store.product.connection({
+    title: 'Synthetic prompt',
+    protocol: 'codex-app-server-v1',
+    endpoint: 'codex://local',
+    enabled: true,
+  });
+  const model = store.product.model({
+    title: 'Synthetic prompt model',
+    connectionId: connection.id,
+    modelId: 'gpt-5.4',
+    maxOutputTokens: 1024,
+    temperature: null,
+  });
+  const settings = fixtureSettings({
+    generator: 'codex',
+    codex: { model: { id: model.id }, promptModel: { id: model.id } },
+  });
+  const first = splitSource(source)[0];
+  const [job] = reserveSelectedIllustrations(
+    store,
+    source,
+    [
+      {
+        startAnchor: first.anchor,
+        endAnchor: first.anchor,
+        focus: 'The lantern',
+        direction: 'Gentle portrait lighting',
+      },
+    ],
+    { settings }
+  );
+  expect(job.input.task).toBe('render');
+  expect(job.input.plan).toBeUndefined();
+  const executeCodex = vi.fn<NonNullable<IllustrationRunnerHooks['executeCodex']>>(
+    async (_connection, request) => {
+      const supplied = JSON.stringify(request);
+      expect(supplied).toContain('The lantern');
+      expect(supplied).toContain('Gentle portrait lighting');
+      expect(supplied).not.toContain('UNRELATED_SCENE_MARKER_');
+      return result('refused');
+    }
+  );
+  const generateCodexImage = vi.fn(() => {
+    throw new Error('Image generation must not start after refusal');
+  });
+  const outcome = await runIllustrationJob(
+    store,
+    job.id,
+    'worker',
+    hooks(store, { executeCodex, generateCodexImage })
+  );
+  expect(outcome).toMatchObject({ status: 'failed', code: 'ILLUSTRATION_PROMPT_REFUSED' });
+  expect(illustrationJob(store, job.id).diagnostic?.stage).toBe('prompt');
+  expect(executeCodex).toHaveBeenCalledTimes(1);
+});
+
 function runtime(mode: string, output?: string) {
   const directory = mkdtempSync(join(tmpdir(), 'uimori-illustration-stdio-'));
   const log = join(directory, 'requests.jsonl');
