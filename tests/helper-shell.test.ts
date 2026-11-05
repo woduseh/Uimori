@@ -499,6 +499,17 @@ test('on-demand exports keep complete catalogs, live bases, frozen snapshots and
     });
     expect(readFileSync(resourceFile, 'utf8')).toBe(draft);
     expect(readFileSync(sceneFile, 'utf8')).toBe('local scene draft');
+    for (const missing of [sceneFile, join(base, 'chats', chats[0].id, 'metadata.json')]) {
+      const previous = readFileSync(missing, 'utf8');
+      rmSync(missing);
+      expect(() => exportData(f.shell, task.id, 'chats', chats[0].id)).toThrow(
+        'SHELL_EXPORT_PATH_CONFLICT'
+      );
+      expect(existsSync(missing)).toBe(false);
+      expect(readFileSync(resourceFile, 'utf8')).toBe(draft);
+      if (missing !== sceneFile) expect(readFileSync(sceneFile, 'utf8')).toBe('local scene draft');
+      writeFileSync(missing, previous);
+    }
   } finally {
     f.shell.close();
     f.store.close();
