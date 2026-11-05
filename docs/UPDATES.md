@@ -8,21 +8,21 @@ Use this path for source installations; see [SELF-HOST](SELF-HOST.md#저장과-�
 
 Read the target release notes and [data compatibility](DATA-MIGRATIONS.md#현재-버전) before updating. Finish active generation and edits. Download the app's consistent SQLite snapshot, record the running app/image version, and preserve external Codex login files separately. Stop the server before switching code or restoring data. Do not use `reset:dev` or `docker compose down -v` to update an existing workspace.
 
-**v0.12.9 keeps SQLite schema 15**, used by releases since v0.4.0. A compatible schema-15 workspace can update in place after the normal backup. There is no direct conversion from older databases, including schema 12 from v0.3.1. Keep those files with their matching application version; do not edit the schema number or substitute an empty database to bypass a compatibility error.
+**v0.12.10 keeps SQLite schema 15**, used by releases since v0.4.0. A compatible schema-15 workspace can update in place after the normal backup. There is no direct conversion from older databases, including schema 12 from v0.3.1. Keep those files with their matching application version; do not edit the schema number or substitute an empty database to bypass a compatibility error.
 
-This release lets the helper manage character appearances, choose exact illustration moments across scenes, inspect generated images, and move or redraw existing cuts. Existing conversations, images and stored resources remain intact; no data migration is required. See the [v0.12.9 notes](releases/v0.12.9.md). When updating from before v0.12.6, an already open page may need to be reloaded before selecting a Vertex credential file again; see the [v0.12.6 notes](releases/v0.12.6.md).
+This patch improves how the helper discovers package portraits and CHARX image names, previews thumbnails, and confirms character reference links with fewer redundant tool calls. Existing conversations, images and stored resources remain intact; no data migration is required. See the [v0.12.10 notes](releases/v0.12.10.md). When updating from before v0.12.6, an already open page may need to be reloaded before selecting a Vertex credential file again; see the [v0.12.6 notes](releases/v0.12.6.md).
 
 When updating from before v0.11.1, startup preserves an independent old prompt body as a library preset before changing the current prompt to a preset reference. New requests use the selected source and explicit option overrides. Keep the pre-update backup for rollback, and review the [v0.11.1 notes](releases/v0.11.1.md) for retired APIs and evaluation settings. Existing helper conversation personas, manuscripts and historical execution records remain readable.
 
 Finish queued or running evaluation Batch work under its original runtime before updating. Both retained evaluation modes now require a valid final submission, and the retired `source-bound` mode is disabled for new execution. The new runtime does not emulate the previous evaluation protocol.
 
-Use the published `v0.12.9` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
+Use the published `v0.12.10` tag for a reproducible source installation. Updating the source or publishing a GitHub release never updates an already running server.
 
 From a clean source checkout, with the existing server stopped:
 
 ```sh
 git fetch origin --tags
-git switch --detach v0.12.9
+git switch --detach v0.12.10
 npm ci
 npm run dev
 ```
