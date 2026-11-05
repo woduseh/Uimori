@@ -9,7 +9,7 @@ const usage = `Usage:
   uimori refresh <relative-file-path>
   uimori export [JSON | --input <file|->]
 
-Simple --kebab-case flags become camelCase fields and are typed against the
+Simple --camelCase and --kebab-case flags map to schema fields and are typed against the
 operation's actual schema. Arrays and nested objects use JSON or --input. JSON arguments must be
 an object; --input - reads stdin. Use uimori tools <operation> for its exact schema.
 Examples:
@@ -32,7 +32,7 @@ function input(args) {
     for (let i = 0; i < args.length; i += 2) {
       const flag = args[i];
       const value = args[i + 1];
-      if (!/^--[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u.test(flag ?? '') || value === undefined)
+      if (!/^--[a-z][a-zA-Z0-9]*(?:-[a-z0-9]+)*$/u.test(flag ?? '') || value === undefined)
         throw Error(`Expected --key value pairs, JSON or --input <file|->. See uimori --help.`);
       const key = flag.slice(2).replace(/-([a-z0-9])/gu, (_, letter) => letter.toUpperCase());
       if (Object.hasOwn(parsed, key)) throw Error(`Repeated option ${flag}`);

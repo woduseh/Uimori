@@ -1038,8 +1038,8 @@ ${cli} tools resource.patch > scratch/schema.json
 ${cli} tools --names resource.read,task.inspect > scratch/names.json
 ${cli} call resource.read --kind content --id some-id --limit 2 --include-bodies false > scratch/read.json
 ${cli} call task.inspect --kind helper --id task-1 --include-prompt true --effects-offset 2 > scratch/inspect.json
-${cli} call chat.rename --title 123 --expected-revision 2 > scratch/rename.json
-${cli} call image.list --content-id image-owner --limit 3 > scratch/image-list.json
+${cli} call chat.rename --title 123 --expectedRevision 2 > scratch/rename.json
+${cli} call image.list --contentId image-owner --limit 3 > scratch/image-list.json
 ${cli} call task.inspect --kind helper --id task-1 --include-prompt maybe > scratch/rejected.json && exit 5 || test "$?" = 1
 ${cli} call resource.read --missing-field value > scratch/invalid-option.json && exit 5 || test "$?" = 1
 ${cli} call resource.patch --changes value > scratch/json-required.json && exit 5 || test "$?" = 1

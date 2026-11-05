@@ -155,11 +155,12 @@ function query(db: DatabaseSync, args: Record<string, unknown>) {
       })),
       examples: [
         "SELECT id,title,revision FROM agent_resources WHERE kind='bot' ORDER BY title LIMIT 20",
+        "SELECT id,json_extract(document,'$.card.description') description FROM agent_resources WHERE kind='persona' AND id=?",
         'SELECT title,attachments FROM agent_chats WHERE id=?',
         'SELECT helper_task_id,SUM(input_tokens) input_tokens,COUNT(*) calls FROM agent_usage WHERE helper_task_id IS NOT NULL GROUP BY helper_task_id ORDER BY input_tokens DESC LIMIT 10',
       ],
       guidance:
-        'SELECT/CTE over these views only. JSON functions are available. document contains authored native fields once. Use data.search/read for excerpts and exact field hashes. Read schemas once; do not SELECT * from large documents. SQL usage is provider-reported, not local estimates.',
+        'SELECT/CTE over these views only. agent_resources.document has roots card/module for content and program/values for prompt presets. The exported /package/nativeRisu/card maps to SQL $.card (not $.package.nativeRisu.card). Use resource.read source paths for typed reads/edits, or data.search/read for excerpts and exact field hashes. Read schemas once; select only needed fields. SQL usage is provider-reported, not local estimates.',
     };
   const sql = string(args.sql, '', 12_000).trim().replace(/;\s*$/u, '');
   if (!sql) throw new Error('DATA_SQL_REQUIRED');

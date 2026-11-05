@@ -138,6 +138,7 @@ import { HELPER_TASK_LIMITS, HELPER_TOOL_CALL_LIMIT } from '../core/helper.js';
 import { helperWebSearchCapability } from '../core/helper-web-search.js';
 import { ChatOverridesStore } from './chat-overrides.js';
 import { ChatOptionsStore, invokeHelperOptions } from './chat-options.js';
+import { helperArgumentDiagnostic, helperResultDiagnostic } from './helper-diagnostics.js';
 
 const asJson = (value: unknown): Json => JSON.parse(JSON.stringify(value)) as Json;
 const MAX_EXACT_HELPER_READ_TOKENS = 2_000;
@@ -1273,6 +1274,19 @@ export class HelperRuntime {
         callIds.add(call.id);
       }
       const executeCall = async (wireCall: ProviderResult['toolCalls'][number]) => {
+        toolSignal.throwIfAborted();
+        const args = helperArgumentDiagnostic(wireCall.arguments);
+        const startedAt = new Date().toISOString();
+        this.workspace.event(task.conversationId, id, 'tool.started', {
+          callId: wireCall.id,
+          name:
+            wireCall.name === 'app.call' && typeof wireCall.arguments.name === 'string'
+              ? wireCall.arguments.name
+              : wireCall.name,
+          startedAt,
+          queueMs,
+          ...args,
+        });
         const toolStarted = performance.now();
         const collected: HelperImageRead[] = [];
         const collectImage: CollectImage = (read) => {
@@ -1298,6 +1312,7 @@ export class HelperRuntime {
             denied: true,
             errorKind: 'recoverable' as const,
             elapsedMs: 0,
+            finishedAt: new Date().toISOString(),
           };
         let output: unknown,
           denied = false,
@@ -1374,6 +1389,7 @@ export class HelperRuntime {
           errorKind,
           fatalError,
           elapsedMs: Math.round(performance.now() - toolStarted),
+          finishedAt: new Date().toISOString(),
         };
       };
       const isDataRead = (call: ProviderResult['toolCalls'][number]) => {
@@ -1403,8 +1419,10 @@ export class HelperRuntime {
         if (failed?.status === 'rejected') throw failed.reason;
         for (const completion of completed) {
           const preparationStarted = performance.now();
-          const { wireCall, call, fatalError, elapsedMs } = completion;
+          const { wireCall, call, fatalError, elapsedMs, finishedAt } = completion;
           let { output, denied, errorKind } = completion;
+          const originalDiagnostics = helperResultDiagnostic(call.name, output);
+          const failedShell = call.name === 'data.exec' && shellFailed(output);
           const event: ToolEvent = {
             callId: wireCall.id,
             name: wireCall.name,
@@ -1474,11 +1492,14 @@ export class HelperRuntime {
             callId: wireCall.id,
             name: call.name,
             denied,
-            ...(call.name === 'data.exec' && shellFailed(output) ? { status: 'failed' } : {}),
+            ...(failedShell ? { status: 'failed' } : {}),
             result: output,
+            ...originalDiagnostics,
+            ...helperResultDiagnostic(call.name, output),
             originalResultChars,
             providedResultChars: JSON.stringify(output).length,
             elapsedMs: elapsedMs + Math.round(performance.now() - preparationStarted),
+            finishedAt,
             queueMs,
             ...(errorKind ? { errorKind } : {}),
           });

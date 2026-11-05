@@ -52,7 +52,9 @@ export function releaseCompletedHelperInputs(db: DatabaseSync, taskId: string): 
     'denied',json(CASE WHEN json_extract(data,'$.denied') THEN 'true' ELSE 'false' END),'errorKind',json_extract(data,'$.errorKind'),
     'originalResultChars',json_extract(data,'$.originalResultChars'),
     'elapsedMs',json_extract(data,'$.elapsedMs'),'queueMs',json_extract(data,'$.queueMs'),
-    'providedResultChars',json_extract(data,'$.providedResultChars'),'detailsOmitted',json('true'))
+    'providedResultChars',json_extract(data,'$.providedResultChars'),'detailsOmitted',json('true'),
+    'finishedAt',json_extract(data,'$.finishedAt'),
+    'errorCode',json_extract(data,'$.errorCode'),'shell',json_extract(data,'$.shell'))
     WHERE task_id=? AND kind='tool.finished'`).run(taskId);
   db.prepare(`UPDATE helper_operations SET result=json_object('detailsOmitted',json('true'))
     WHERE task_id=? AND json_type(result,'$.artifactRef') IS NULL`).run(taskId);
