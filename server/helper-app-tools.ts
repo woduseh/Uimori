@@ -377,7 +377,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.tools',
     description:
-      'Discover app operations for exact data search/read, viewing images and planning, generating or editing illustrations, read-only SQL, editing resources/themes, saved original or translated scenes, settings, notes, outlines, lore overrides, context summaries, reading original stories, or reading archived independent scenes. No names: compact paged catalog filtered by query. With names: exact schemas for up to 4 operations. Invoke them through app.call; the native tool set never changes mid-continuation.',
+      'Discover app operations for data search/SQL, images and illustrations, resources/themes, saved scenes and translations, settings, notes, outlines, lore, context summaries, original stories and archived scenes. Omit names for a paged catalog filtered by query; supply names for exact schemas of up to 4 operations. Invoke through app.call.',
     inputSchema: schema(
       {
         names: { type: 'array', maxItems: 4, items: str },
@@ -391,7 +391,7 @@ export const HELPER_GATEWAY_TOOLS: ProviderTool[] = [
   {
     name: 'app.call',
     description:
-      'Execute a discovered app operation using its exact name and arguments. Read app.tools schema when unfamiliar. Clear user edit requests include saving; proposals do not. Existing revision checks, source scope, and successful-write receipts remain unchanged. Use data.exec for free-form local search and transformation; app.call can save typed application changes.',
+      'Execute an app operation using its exact name and argument schema from app.tools. Follow its revision, source scope and save contract.',
     inputSchema: schema(
       { name: str, arguments: { type: 'object' } },
       ['name', 'arguments'],

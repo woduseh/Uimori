@@ -942,3 +942,11 @@ test('a wide render target retains its brief and final event while bounding only
   expect(countTextTokens(input.excerpt)).toBeLessThanOrEqual(ILLUSTRATION_EXCERPT_TOKENS.target);
   expect(store.source(source.id).text).toBe(source.text);
 });
+
+test('variable count respects its minimum and allows zero only when configured', () => {
+  const empty = JSON.stringify({ heroIndex: null, targets: [], skipReason: 'No visual moment.' });
+  expect(parseStoryboard(empty, [], 10, 'none', true, [], undefined, 0).targets).toEqual([]);
+  expect(() => parseStoryboard(empty, [], 10, 'none', true, [], undefined, 1)).toThrow(
+    'ILLUSTRATION_STORYBOARD_INVALID'
+  );
+});

@@ -1,5 +1,7 @@
 import type { Illustration } from './illustration.js';
 
+export const ILLUSTRATION_MAX_PER_SOURCE = 10;
+
 export type Cut = { key: string; job: Illustration; picture?: Illustration; stale: boolean };
 
 /** A target owns one reading position, even while a newer render is pending or failed. */

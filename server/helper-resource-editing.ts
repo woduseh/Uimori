@@ -1,3 +1,4 @@
+import { validateIllustrationAppearanceProfiles } from '../core/illustration-profiles.js';
 import { countTextTokens, textTokenExcerpt } from '../core/text-tokens.js';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -145,6 +146,7 @@ function sourceFor(content: Content) {
   return {
     path,
     translationGuidePath: `${path}/extensions/uimori/translationGuide`,
+    appearanceProfilesPath: `${path}/extensions/uimori/illustrationProfiles`,
     lorePath:
       standaloneModule || native.module?.lorebook != null
         ? '/package/nativeRisu/module/lorebook'
@@ -281,7 +283,7 @@ export function readHelperEditor(editor: HelperEditor | undefined, args: JsonObj
   );
 }
 
-function readHelperModel(
+export function readHelperModel(
   kind: ResourceKind,
   id: string,
   revision: number | null,
@@ -305,7 +307,13 @@ function readHelperModel(
   if (path === undefined) {
     const source = kind === 'content' ? sourceFor(model as Content) : null;
     const readyPaths = source
-      ? [source.path, source.lorePath, source.translationGuidePath, '/package/images']
+      ? [
+          source.path,
+          source.lorePath,
+          source.translationGuidePath,
+          source.appearanceProfilesPath,
+          '/package/images',
+        ]
       : kind === 'prompt-preset'
         ? [
             PRESET_TEMPLATE_PATH,
@@ -489,7 +497,7 @@ function scalar(value: unknown): boolean {
 function allowedValue(value: unknown): boolean {
   return scalar(value) || (Array.isArray(value) && value.every(scalar));
 }
-function guidePath(segments: string[]): boolean {
+function extensionPath(segments: string[], field: string): boolean {
   return (
     segments.length === 6 &&
     segments[0] === 'package' &&
@@ -497,8 +505,11 @@ function guidePath(segments: string[]): boolean {
     ['card', 'module'].includes(segments[2]!) &&
     segments[3] === 'extensions' &&
     segments[4] === 'uimori' &&
-    segments[5] === 'translationGuide'
+    segments[5] === field
   );
+}
+function guidePath(segments: string[]): boolean {
+  return extensionPath(segments, 'translationGuide');
 }
 function listPath(segments: string[]): 'lore' | 'terms' | 'prompt' | null {
   if (
@@ -753,8 +764,14 @@ export function patchHelperResource(
         changedPaths.push(change.path);
         continue;
       }
-      if (kind === 'content' && change.op === 'set' && guidePath(segments)) {
-        if (!object(change.value)) throw new HttpError(400, '번역 지침 객체가 필요해요.');
+      if (
+        kind === 'content' &&
+        change.op === 'set' &&
+        (guidePath(segments) || extensionPath(segments, 'illustrationProfiles'))
+      ) {
+        const field = segments[5]!;
+        if (field === 'illustrationProfiles') validateIllustrationAppearanceProfiles(change.value);
+        else if (!object(change.value)) throw new HttpError(400, '번역 지침 객체가 필요해요.');
         const document =
           segments[2] === 'card'
             ? (model as Content).package.nativeRisu.card
@@ -765,10 +782,10 @@ export function patchHelperResource(
         if (extensions.uimori != null && !object(extensions.uimori))
           throw new HttpError(400, '기존 Uimori 확장 필드를 확인해 주세요.');
         const uimori = object(extensions.uimori) ? extensions.uimori : {};
-        if (isDeepStrictEqual(uimori.translationGuide, change.value)) continue;
+        if (isDeepStrictEqual(uimori[field], change.value)) continue;
         document.extensions = {
           ...extensions,
-          uimori: { ...uimori, translationGuide: structuredClone(change.value) },
+          uimori: { ...uimori, [field]: structuredClone(change.value) },
         };
         changedPaths.push(change.path);
         continue;

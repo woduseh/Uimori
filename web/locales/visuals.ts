@@ -1,4 +1,40 @@
 export const messages = {
+  'visuals.defaultAppearances': {
+    ko: '기본 인물 외형',
+    en: 'Default character appearances',
+    ja: '既定の人物の外見',
+    zh: '默认人物外貌',
+  },
+  'visuals.defaultAppearancesHelp': {
+    ko: '이 봇이나 페르소나를 쓰는 채팅이 공유해요.',
+    en: 'Shared across chats using this bot or persona.',
+    ja: 'このボットやペルソナを使うチャットで共有します。',
+    zh: '使用此机器人或用户角色的聊天共享这些设置。',
+  },
+  'visuals.countMode': {
+    ko: '자동 생성 컷 수',
+    en: 'Automatic cut count',
+    ja: '自動生成のカット数',
+    zh: '自动生成镜头数',
+  },
+  'visuals.countFixed': {
+    ko: '고정 상한',
+    en: 'Fixed limit',
+    ja: '固定上限',
+    zh: '固定上限',
+  },
+  'visuals.countAuto': {
+    ko: '내용에 맞게 선택',
+    en: 'Choose by content',
+    ja: '内容に合わせて選択',
+    zh: '按内容选择',
+  },
+  'visuals.countMin': {
+    ko: '최소 컷 수',
+    en: 'Minimum cuts',
+    ja: '最小カット数',
+    zh: '最少镜头数',
+  },
   'visuals.fallbackCount': {
     ko: '본문 밖 삽화 {count}컷{attention, select, true {, 확인할 작업 있음} other {}}',
     en: '{count, plural, one {# illustration outside the text} other {# illustrations outside the text}}{attention, select, true {, Needs attention} other {}}',

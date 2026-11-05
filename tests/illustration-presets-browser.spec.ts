@@ -264,7 +264,7 @@ test('IPUI03 invalid recipes never save and the close guard preserves failed dra
   await page.keyboard.press('Escape');
   await expect(editor.getByLabel('삽화 그림 지침')).toHaveValue('preserved user direction');
   const runtime = await (await request.get('/api/illustration-settings')).json();
-  const nextCount = runtime.maxPerSource === 8 ? 7 : runtime.maxPerSource + 1;
+  const nextCount = runtime.maxPerSource === 10 ? 9 : runtime.maxPerSource + 1;
   const settings = page.getByRole('dialog', { name: '설정', exact: true });
   await settings.getByLabel('장면당 최대 삽화 수').fill(String(nextCount));
   await page.route('**/api/resources/save', (route) =>

@@ -1,3 +1,7 @@
+import {
+  illustrationProfilesValue,
+  validateIllustrationAppearanceProfiles,
+} from './illustration-profiles.js';
 import { RISU_ASSET_MAX } from './risu-limits.js';
 import { translationGuideValue, validateTranslationGuide } from './translation-guide.js';
 import {
@@ -131,6 +135,8 @@ export function assertRisuContentSource(value: unknown): asserts value is RisuCo
     if (!document) continue;
     const guide = translationGuideValue(document as Record<string, unknown>);
     if (guide !== undefined) validateTranslationGuide(guide);
+    const profiles = illustrationProfilesValue(document as Record<string, unknown>);
+    if (profiles !== undefined) validateIllustrationAppearanceProfiles(profiles);
   }
   for (const asset of source.assets) {
     const a = object(asset);

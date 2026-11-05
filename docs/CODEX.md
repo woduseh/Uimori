@@ -78,3 +78,11 @@ Remove-Item Env:UIMORI_CODEX_PREFLIGHT
 설치 사전 검사 결과는 `output/codex-preflight/summary.json`에 남아요. 실제 바이너리 버전과 빈 인증 상태를 기록하고 `generate-json-schema --experimental`에서 `dynamicTools`의 function 형식, `item/tool/call` 요청, 텍스트 도구 응답 계약을 확인해요. schema 적합성은 실제 모델의 도구 선택·실행 성공과는 별도예요. 합성 stdio 검사는 인증 취소·오류 가림·정상 이벤트·시간 초과·종료 경합·내장 도구 진행과 최종 응답 분리·환경/승인 경계·대기 취소·attempt 선기록·한 턴 안의 연속 도구 호출·중복 호출 차단·취소 후 늦은 응답을 확인해요. 앱 통합 검사는 일반 역할과 native 도우미, 등록 제안, export/import, 비활성 프로바이더 및 인증/Origin 경계를 확인해요. `npm run verify:providers`에는 390px의 Codex 설정·모의 로그인·취소·연결 해제 검사가 포함돼요. 이 검사들은 실제 구독 모델 응답 품질·소모량을 입증하지 않아요.
 
 공식 계약: [App Server](https://learn.chatgpt.com/docs/app-server), [인증](https://learn.chatgpt.com/docs/auth), [설정 schema](https://learn.chatgpt.com/config-schema.json).
+
+### 서버 내부의 명시적 다중 턴 세션
+
+`CodexRuntime.createSession(connection)`은 소비자가 소유하고 `finally`에서 `close()`하는 메모리 내 세션이에요. `execute`, `executeAgent`, `generateImage`를 순서대로 호출하면 첫 턴의 격리 프로세스와 ephemeral thread를 재사용해요. 기존 단일 턴 메서드는 계속 요청마다 프로세스를 닫아요. 세션은 연결·모델·기본/개발자 지침·도구 권한을 고정하며 동시 턴을 거절해요. 다른 사용자나 독립 작업에 세션을 공유하거나 DB에 재개 정보를 저장하지 않아요.
+
+각 턴의 취소·시간 제한·접속 검사를 유지하고, 실패하거나 결과가 불확실한 턴 뒤에는 세션을 닫아 재사용하지 않아요. 누적 텍스트 입력과 출력은 선택 모델의 입력 예산으로 검사해요. 내부 이미지·도구 토큰은 여전히 로컬 추정 밖이에요. 같은 원문 hash와 storyboard 계획의 연속된 Codex 삽화 컷은 이 세션을 사용하되 **컷마다 별도 턴·작업·attempt·결과**를 유지해요. 성공한 컷은 즉시 저장하고 실패한 컷만 기존 정책에 따라 재시도해요. 다른 계획·채팅·연결, 다시 그리기, 세션 입력 예산이나 고정 설정에 맞지 않는 요청은 독립 실행해요. 한 컷의 변형 여러 장을 서로 다른 컷으로 배정하지 않아요. 실제 모델의 시각적 연속성은 합성 프로토콜 검사로 보장하지 않아요.
+
+세션의 로컬 이력에는 호스트 도구의 인수·텍스트 응답도 포함해요. Codex가 보고한 누적 입력·출력 토큰이 있으면 다음 턴은 그 값에 새 요청 추정을 더한 값도 입력 예산 안에 들어야 해요. 이는 숨은 추론·도구·이미지 문맥을 정확히 재구성하는 계량기가 아니며, 누적 사용량은 실제 활성 문맥보다 크게 잡힐 수 있어요. 도구·이미지·추론 항목이 있었는데 사용 가능한 토큰 보고가 없으면 그 세션의 다음 턴은 거절하고 삽화는 독립 실행해요.

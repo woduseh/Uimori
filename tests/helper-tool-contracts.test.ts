@@ -1053,6 +1053,101 @@ test('invalid native batch input rolls back and can be corrected in the same hel
   ).toEqual({ n: 1 });
 });
 
+test('app.call saves shared bot and persona appearance defaults atomically and preserves native data', async () => {
+  const f = await fixture('library');
+  const input = fixtureBotInput('Persona', 'Persona body');
+  input.package.nativeRisu.card.extensions = {
+    vendor: { sentinel: 17 },
+    uimori: { translationGuide: { instructions: 'Keep this guide', terms: [] } },
+  };
+  const persona = f.store.product.content({ ...input, kind: 'persona' }) as Content;
+  const originals = [f.bot, persona];
+  const profiles = [{ id: 'shared', name: 'Shared character', appearance: 'Silver hair' }];
+  const path = '/package/nativeRisu/card/extensions/uimori/illustrationProfiles';
+  const items = (revisionDelta: number, malformed = false) =>
+    originals.map((content, index) => ({
+      kind: 'content',
+      id: content.id,
+      expectedRevision: content.revision + revisionDelta,
+      changes: [
+        {
+          op: 'set',
+          path,
+          value: malformed && index === 1 ? [{ ...profiles[0], appearance: '' }] : profiles,
+        },
+      ],
+    }));
+  mockSend((request, round) => {
+    if (round === 0)
+      return calls(
+        ...originals.map((content, index) =>
+          call(`read-${index}`, 'app.call', {
+            name: 'resource.read',
+            arguments: { kind: 'content', id: content.id },
+          })
+        )
+      );
+    if (round === 1) {
+      for (const index of [0, 1])
+        expect(result(request, `read-${index}`)).toMatchObject({
+          source: { appearanceProfilesPath: path },
+        });
+      return calls(
+        call('malformed', 'app.call', {
+          name: 'resource.patchMany',
+          arguments: { items: items(0, true) },
+        })
+      );
+    }
+    if (round === 2) {
+      expect(event(request, 'malformed')).toMatchObject({
+        denied: true,
+        result: { outcome: 'unchanged' },
+      });
+      for (const original of originals)
+        expect(f.store.product.get('content', original.id)).toEqual(original);
+      expect(f.store.db.prepare('SELECT COUNT(*) AS n FROM resource_undo').get()).toEqual({ n: 0 });
+      return calls(
+        call('save-defaults', 'app.call', {
+          name: 'resource.patchMany',
+          arguments: { items: items(0) },
+        })
+      );
+    }
+    if (round === 3) {
+      expect(result(request, 'save-defaults')).toMatchObject({
+        items: originals.map((content) => ({
+          id: content.id,
+          revision: content.revision + 1,
+          changedPaths: [path],
+        })),
+      });
+      return calls(call('noop', 'app.call', { name: 'resource.patch', arguments: items(1)[0] }));
+    }
+    expect(result(request, 'noop')).toMatchObject({
+      id: f.bot.id,
+      revision: f.bot.revision + 1,
+      changedPaths: [],
+    });
+    return structuredClone(success);
+  });
+  const task = await submit(f, '봇과 페르소나에 공유 외형 기본값을 저장해줘');
+  for (const original of originals) {
+    const saved = f.store.product.get<Content>('content', original.id);
+    const card = structuredClone(saved.package.nativeRisu.card);
+    expect((card.extensions as any).uimori.illustrationProfiles).toEqual(profiles);
+    delete (card.extensions as any).uimori.illustrationProfiles;
+    const before = structuredClone(original.package.nativeRisu.card);
+    if (!(before.extensions as any)?.uimori) delete (card.extensions as any).uimori;
+    if (!before.extensions) delete card.extensions;
+    expect(card).toEqual(before);
+    expect(saved.revision).toBe(original.revision + 1);
+  }
+  expect(
+    f.store.db.prepare('SELECT COUNT(*) AS n FROM helper_operations WHERE task_id=?').get(task.id)
+  ).toEqual({ n: 2 });
+});
+
 test('library schema exposes folder CAS and item identity for a discovered read-create-move flow', async () => {
   const f = await fixture('library');
   mockSend((request, round) => {
