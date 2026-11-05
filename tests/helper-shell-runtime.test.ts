@@ -137,7 +137,7 @@ const toolResult = (body: any) =>
   JSON.parse(body.messages.findLast((message: any) => message.role === 'tool').content);
 
 linuxTest(
-  'nonzero data.exec exit is a failed model tool result with preserved diagnostics',
+  'nonzero data.exec exit preserves diagnostics without denying the tool invocation',
   async () => {
     const f = await fixture();
     const bodies = provider((body, round) =>
@@ -154,7 +154,6 @@ linuxTest(
     expect(toolResult(bodies[1])).toMatchObject({
       exitCode: 7,
       timedOut: false,
-      guidance: expect.stringContaining('failed'),
       outputFile: expect.stringMatching(/^scratch\/exec-/),
     });
     const finished = f.runtime.workspace
@@ -164,7 +163,8 @@ linuxTest(
           event.kind === 'tool.finished' &&
           (event.data as { callId?: string }).callId === 'shell-fail'
       );
-    expect(finished?.data).toMatchObject({ denied: true, errorKind: 'recoverable' });
+    expect(finished?.data).toMatchObject({ denied: false, status: 'failed' });
+    expect(finished?.data).not.toHaveProperty('errorKind');
   }
 );
 

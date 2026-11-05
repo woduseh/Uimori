@@ -48,6 +48,7 @@ export function releaseCompletedHelperInputs(db: DatabaseSync, taskId: string): 
     WHERE id=? AND status='completed'`).run(taskId);
   db.prepare(`UPDATE helper_events SET data=json_object('name',json_extract(data,'$.name'),
     'callId',json_extract(data,'$.callId'),
+    'status',json_extract(data,'$.status'),
     'denied',json(CASE WHEN json_extract(data,'$.denied') THEN 'true' ELSE 'false' END),'errorKind',json_extract(data,'$.errorKind'),
     'originalResultChars',json_extract(data,'$.originalResultChars'),
     'elapsedMs',json_extract(data,'$.elapsedMs'),'queueMs',json_extract(data,'$.queueMs'),

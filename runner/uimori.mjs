@@ -24,7 +24,7 @@ function input(args) {
   let parsed;
   if (args.length === 2 && args[0] === '--input') {
     parsed = JSON.parse(readFileSync(args[1] === '-' ? 0 : args[1], 'utf8'));
-  } else if (args.length === 1 && args[0].startsWith('{')) {
+  } else if (args.length === 1 && args[0].trimStart().startsWith('{')) {
     parsed = JSON.parse(args[0]);
   } else {
     parsed = {};
@@ -45,14 +45,18 @@ function input(args) {
 
 try {
   const [command, ...args] = process.argv.slice(2);
-  if (!command || command === '--help' || command === 'help' || args.includes('--help')) {
+  if (
+    !command || command === '--help' || command === 'help' ||
+    (args.length === 1 && args[0] === '--help') ||
+    (command === 'call' && args.length === 2 && args[1] === '--help')
+  ) {
     process.stdout.write(usage);
   } else {
     let payload;
     if ((command === 'apply' || command === 'refresh') && args.length === 1) {
       payload = { path: args[0] };
     } else if (command === 'tools') {
-      payload = args.length === 1 && !args[0].startsWith('-') && !args[0].startsWith('{')
+      payload = args.length === 1 && !args[0].startsWith('-') && !args[0].trimStart().startsWith('{')
         ? { arguments: { names: [args[0]] } }
         : args.length && args[0].startsWith('--') && args[0] !== '--input'
           ? { flagArguments: input(args) }

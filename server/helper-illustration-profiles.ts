@@ -18,7 +18,7 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.profiles.read',
     description:
-      'Read appearance profiles, explicit references, effectiveReferences (actual character/style roles and linked profileIds) and revision. Find image refs via illustration.image.list.',
+      'Read chat-local appearance profiles, explicit references, effectiveReferences (actual character/style roles and linked profileIds) and revision. Find image refs via illustration.image.list. Shared bot/persona defaults are library resources read with resource.read.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -31,7 +31,7 @@ export const HELPER_ILLUSTRATION_PROFILE_TOOLS: ProviderTool[] = [
   {
     name: 'illustration.profiles.save',
     description:
-      'Save character appearances together in this chat. Extract visible/source-backed traits, or follow the brief for original designs. Create with name and appearance; edit using profileId. referenceRef links the character image for generation (null unlinks); no second references.save is needed. Use expectedRevision from profiles.read. The result includes effectiveReferences, so do not reread solely to confirm a successful save.',
+      'Save character appearances together in this chat. Extract visible/source-backed traits, or follow the brief for original designs. Create with name and appearance; edit using profileId. referenceRef links the character image for generation (null unlinks); no second references.save is needed. Use expectedRevision from profiles.read. The result includes effectiveReferences, so do not reread solely to confirm a successful save. Shared bot/persona defaults are edited with resource.patch instead.',
     inputSchema: {
       type: 'object',
       properties: {

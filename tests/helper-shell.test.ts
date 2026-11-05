@@ -621,6 +621,8 @@ ${cli} call task.inspect --kind helper --id task-1 --include-prompt true --effec
 ${cli} call chat.rename --title 123 --expected-revision 2 > scratch/rename.json
 ${cli} call image.list --content-id image-owner --limit 3 > scratch/image-list.json
 ${cli} call task.inspect --kind helper --id task-1 --include-prompt maybe > scratch/rejected.json && exit 5 || test "$?" = 1
+${cli} call resource.read --missing-field value > scratch/invalid-option.json && exit 5 || test "$?" = 1
+${cli} call resource.patch --changes value > scratch/json-required.json && exit 5 || test "$?" = 1
 ${cli} --help > scratch/help.txt
 cat scratch/read.json`,
       5000,
@@ -652,6 +654,12 @@ cat scratch/read.json`,
     expect(readFileSync(join(taskDir, 'scratch/help.txt'), 'utf8')).toContain('uimori tools');
     expect(readFileSync(join(taskDir, 'scratch/rejected.json'), 'utf8')).toContain(
       'SHELL_INVALID_BOOLEAN:includePrompt'
+    );
+    expect(readFileSync(join(taskDir, 'scratch/invalid-option.json'), 'utf8')).toContain(
+      'SHELL_INVALID_OPTION:missingField: resource.read has no --missing-field option. Check uimori tools resource.read.'
+    );
+    expect(readFileSync(join(taskDir, 'scratch/json-required.json'), 'utf8')).toContain(
+      'SHELL_USE_JSON_INPUT:changes: changes is not a simple string, number or boolean. Pass all arguments as a JSON object or with --input <file|->.'
     );
   }
 );

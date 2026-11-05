@@ -200,14 +200,25 @@ function retryRequest(workspace: HelperWorkspace, request: string, retryOf?: str
   ].join('\n\n');
 }
 
-const CONTRACT = `Complete the user's Uimori task and reply in their language. Save requested edits; for reviews, comparisons and proposals, return findings. Resolve routine choices independently; ask when missing input materially changes the result. ${AUTHOR_NOTE_GUIDANCE}
-Use the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Discover unfamiliar operations with app.tools. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
+const CONTRACT = `Complete the user's Uimori task and reply in their language. Save requested edits; for reviews, comparisons and proposals, return findings. Resolve routine choices and carry out authorized work without per-step confirmation; ask when missing input materially changes the result. ${AUTHOR_NOTE_GUIDANCE}
+Choose and combine the tools suited to the task: app operations, data.exec for workspace search and transformation, or shell workspace files described in INDEX.md. Reuse known schemas and successful results; use app.tools only for unfamiliar operations or arguments. Group independent work when useful, and use returned revisions and receipts directly instead of rereading only to confirm success. Distinguish live saved resources, frozen chat history and unsaved editor input. Base visual claims on inspected pixels.
 Edit saved targets using their recorded revisions and preserve unrelated fields. For workspace-file edits, use uimori apply to save; for app operations, follow their own save contracts. Reconcile conflicts against the latest version and report changes from successful receipts. If the target has an unsaved editor draft, ask the user to save it first. For translation guides, preserve established terms and distinguish proposed choices from authored facts.
 For questions about an original work, use the configured edition, references and spoiler position. Distinguish source evidence from model knowledge. For price updates use the provider's official page, date, currency and units; retain unverified rates unchanged. Cite web evidence only after a search returns it.
 Finish within the remaining host calls.
 ${CONTEXT_DERIVED_GUIDANCE}
 ${CONTEXT_RETRIEVAL_GUIDANCE}
 Reply concisely with the result and any unresolved decision or conflict.`;
+
+/** Command outcome is independent of denial; failed output remains ordinary read evidence. */
+function shellFailed(result: unknown) {
+  if (!result || typeof result !== 'object') return false;
+  const shell = result as { timedOut?: unknown; error?: unknown; exitCode?: unknown };
+  return (
+    shell.timedOut === true ||
+    typeof shell.error === 'string' ||
+    (shell.exitCode !== undefined && shell.exitCode !== 0)
+  );
+}
 
 /** Unknown, denied and mutating exchanges keep their exact arguments and results. */
 function helperRead(event: ToolEvent) {
@@ -662,13 +673,12 @@ function helperReadMetadata(value: unknown): Json | undefined {
 }
 function retainedSchema(event: ToolEvent) {
   const name = event.name === 'app.call' ? event.args.name : event.name;
-  const args = event.name === 'app.call' ? event.args.arguments : event.args;
+  const tools = (event.result as { tools?: { inputSchema?: unknown }[] } | null)?.tools;
   return (
     helperRead(event) &&
     name === 'app.tools' &&
-    Array.isArray(record(args).names) &&
-    event.result !== null &&
-    typeof event.result === 'object' &&
+    Array.isArray(tools) &&
+    tools.some((tool) => tool.inputSchema) &&
     countTextTokens(JSON.stringify(event.result)) <= MAX_EXACT_HELPER_READ_TOKENS
   );
 }
@@ -1219,8 +1229,7 @@ export class HelperRuntime {
     const callIds = new Set<string>(),
       readData = new Set<string>();
     let readRevision = 0,
-      lastCompactedReadRevision = -1,
-      lastDeliveredReadRevision = -1;
+      lastCompactedReadRevision = -1;
     let contextBase = task.snapshot.context ?? { activeRevision: 0, checkpoint: null };
     const selected = helperHistoryForContext(this.store, task.snapshot.history, contextBase);
     let history = selected.history;
@@ -1315,32 +1324,22 @@ export class HelperRuntime {
           output = execution.result;
           denied = execution.denied ?? false;
           errorKind = execution.errorKind;
-          // A nonzero shell exit is not a successful Codex tool invocation. Keep
-          // stdout, outputFile and any confirmed receipts for safe recovery.
+          // A nonzero exit is still ordinary shell output (rg/grep use 1 for no match).
+          // Keep it as read evidence with its images; only native Codex receives a
+          // failed status. A failure after confirmed saves must not be replayed.
           if (
             call.name === 'data.exec' &&
             !denied &&
             !errorKind &&
-            output &&
-            typeof output === 'object'
-          ) {
-            const shell = output as Record<string, any>;
-            if (
-              shell.timedOut === true ||
-              typeof shell.error === 'string' ||
-              (shell.exitCode !== undefined && shell.exitCode !== 0)
-            ) {
-              denied = true;
-              errorKind = 'recoverable';
-              output = {
-                ...shell,
-                guidance:
-                  Array.isArray(shell.applied) && shell.applied.length
-                    ? 'The shell failed after confirmed app changes. Inspect recorded effects before any retry; never replay committed edits.'
-                    : 'The shell command failed. Inspect its exit status and saved outputFile; correct the command or query before retrying.',
-              };
-            }
-          }
+            shellFailed(output) &&
+            Array.isArray((output as { applied?: unknown }).applied) &&
+            (output as { applied: unknown[] }).applied.length
+          )
+            output = {
+              ...record(output),
+              guidance:
+                'The shell failed after confirmed app changes. Inspect recorded effects before any retry; never replay committed edits.',
+            };
           if (!denied && !errorKind && collected.length) {
             imageReads.set(wireCall.id, collected);
             if (call.name === 'data.exec')
@@ -1475,6 +1474,7 @@ export class HelperRuntime {
             callId: wireCall.id,
             name: call.name,
             denied,
+            ...(call.name === 'data.exec' && shellFailed(output) ? { status: 'failed' } : {}),
             result: output,
             originalResultChars,
             providedResultChars: JSON.stringify(output).length,
@@ -1558,22 +1558,9 @@ export class HelperRuntime {
         // A new call ID or write receipt alone is not new reading material. After either
         // adoption or fallback, retry the soft trigger only for new data; a hard crossing
         // must be reconsidered because the original request can no longer be sent.
-        // The provider limit protects correctness; a separate early trigger avoids
-        // repeatedly resending expensive successful reads on large-context models.
-        // Codex owns its native tool replay. Let the helper inspect each new read
-        // at least once before cost-only compaction; the hard limit still wins.
-        const costlyReads =
-          target.connection.protocol !== 'codex-app-server-v1' &&
-          !!task.snapshot.contextModel &&
-          readRevision > 0 &&
-          lastDeliveredReadRevision === readRevision &&
-          inputLimit >= 128_000 &&
-          estimate > 48_000 &&
-          (pendingImageReads.length > 0 ||
-            estimateContextTokens(results.filter(helperRead), budget) > 12_000);
         const shouldCompact =
           !providerPaused &&
-          (estimate > inputLimit * 0.85 || costlyReads) &&
+          estimate > inputLimit * 0.85 &&
           (readRevision !== lastCompactedReadRevision || estimate > inputLimit);
         if (shouldCompact && (hasSummaryInput || estimate > inputLimit)) {
           const preserved = [
@@ -1780,7 +1767,10 @@ export class HelperRuntime {
             // Codex owns replay after this callback; only external HTTP rounds need the cache.
             imageReads.delete(event.callId);
             return {
-              success: !event.denied && !event.errorKind,
+              success:
+                !event.denied &&
+                !event.errorKind &&
+                !(event.name === 'data.exec' && shellFailed(event.result)),
               text: JSON.stringify(event.result),
               ...(images?.length ? { images } : {}),
             };
@@ -1813,8 +1803,6 @@ export class HelperRuntime {
         );
         await nativeState?.pending;
         signal.throwIfAborted();
-        // The just-completed provider turn received the current read evidence.
-        lastDeliveredReadRevision = readRevision;
         helperCalls++;
         if (
           target.connection.protocol === 'anthropic-messages-v1' &&
