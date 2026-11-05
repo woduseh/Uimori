@@ -343,6 +343,7 @@ describe('Completed execution payload retention', () => {
     expect(toolEvents.map((e) => e.data)).toEqual(
       Array.from({ length: 5 }, (_, i) => ({
         name: 'resource.read',
+        status: null,
         callId: `read-${i}`,
         denied: false,
         errorKind: null,
